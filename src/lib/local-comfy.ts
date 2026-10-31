@@ -282,9 +282,11 @@ export function browserSupport(
 
 /**
  * Can a page at this address ask for the permission at all? Chrome turns it down for a page on plain http at a network
- * address (a self-hosted studio on the LAN); https and localhost are fine.
+ * address (a self-hosted studio on the LAN); https and localhost are fine, and so is any page the browser itself calls
+ * secure (`secure`: window.isSecureContext).
  */
-export function pageCanReach(origin: string): boolean {
+export function pageCanReach(origin: string, secure?: boolean): boolean {
+  if (secure === true) return true;
   try {
     const u = new URL(origin);
     return u.protocol === "https:" || LOCAL_HOSTS.has(u.hostname === "::1" ? "[::1]" : u.hostname) || u.hostname.endsWith(".localhost");

@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { visitorStatus } from "@/server/account-gpu";
+import { computerView, visitorStatus } from "@/server/account-gpu";
 import { requestViewer } from "@/server/auth";
 import { aiHelper, localSummary } from "@/server/llm";
 import { PROVIDERS } from "@/server/providers";
@@ -34,12 +34,16 @@ export async function GET(request?: Request) {
     setSetting("onboarded", "1");
     onboarded = true;
   }
+  // ComfyUI runs on the owner's computer: what the owner's Fuobe tab there last said (ComfyUI stays "configured", so runs
+  // wait for that tab instead of turning into demos).
+  const ownerGpu = getSetting("comfyWhere") === "computer" ? computerView("owner") : undefined;
   return Response.json({
     providers,
     demoMode: getSetting("demoMode"),
     engineMode,
     cloudProvider: getSetting("cloudProvider"),
     onboarded,
+    ...(ownerGpu && { ownerGpu }),
     // Settings → Models & licences: the models switched off, so pickers leave them out (absent while everything is on).
     ...(access && { access }),
     // The text LLM: the AI helper setting, whether Claude takes text steps, and the local server (no keys).

@@ -83,6 +83,8 @@ export const packLabel = (name: string) => name.replace(/^ComfyUI[-_]/i, "").rep
 export interface ReadinessContext {
   /** An account's own GPU (isolated workflows aren't supported there yet). */
   account: boolean;
+  /** A ComfyUI on someone's own computer, which their Fuobe tab runs (it reaches no second ComfyUI yet). */
+  computer?: boolean;
   /** The owner has an isolated worker set up. */
   isolatedUrl?: boolean;
   /** The tool's output kind, for labels ("Video model"). */
@@ -130,6 +132,7 @@ export function workflowReadiness(id: string, inv: GpuInventory, idx: Requiremen
   const base: WorkflowReadiness = { state: "unknown", needs: [], have: [], vram: { needGb: 0, fit: "any" }, firstRun: [], unvalidated: false, unobservable: [] };
   if (!w || !inv.reachable) return base;
   const out: WorkflowReadiness = { ...base, state: "ready", firstRun: w.firstRun, unvalidated: !w.validated, vram: vramFit(w.vramGb, inv) };
+  if (w.isolated && ctx.computer) return { ...out, state: "unsupported", reason: "This one needs a second ComfyUI running alongside the first, which Fuobe doesn't connect from your computer yet." };
   if (w.isolated && ctx.account) return { ...out, state: "unsupported", reason: "This one needs a second ComfyUI running alongside the first, which Your GPU doesn't connect yet." };
   if (w.isolated && !ctx.isolatedUrl) {
     out.needs.push({ key: "isolated-worker", kind: "isolated-worker", label: "A second ComfyUI (the isolated worker)", detail: "Some add-ons change process-wide settings, so they run on a separate ComfyUI." });

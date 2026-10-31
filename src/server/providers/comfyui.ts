@@ -175,15 +175,24 @@ function relayPrincipal(): Principal {
   return account ? `acct:${account}` : "owner";
 }
 
+/**
+ * Said when a workflow for the isolated worker (LatentSync 1.6, ThinkSound) would go to someone's computer: it needs a
+ * second ComfyUI beside the first, which the tab doesn't reach yet. Refused before anything is staged or queued.
+ */
+export const ISOLATED_ON_COMPUTER = "This one needs a second ComfyUI running alongside the first, which Fuobe doesn't connect from your computer yet.";
+
 /** Said when something would call a ComfyUI that only the person's own tab may reach. */
 export const ON_COMPUTER_ONLY = "This ComfyUI is on your own computer: only your Fuobe tab there talks to it.";
 
 /** The most an account's ComfyUI may send back for one output file, and how long it may take. */
 export const OWN_OUTPUT_LIMITS = { maxBytes: 2 ** 30, deadlineMs: 15 * 60_000 };
 
-/** A result a computer sent in (relay:<task>/view?…&n=…): the file its task received, for that task's principal only. */
+/**
+ * A result a computer sent in (relay:<task>/view?…&n=…): the file its task received, for that task's principal only:
+ * whose run this is (an account, as its tenant; else the owner), whatever ComfyUI's place is now, as poll and cancel.
+ */
 export function relayFile(url: string): { path: string; contentType?: string } | null {
-  const principal = computerScope();
+  const principal = relayPrincipal();
   const m = /^relay:([A-Za-z0-9_-]{16})\/view\?(.*)$/.exec(url);
   const n = m ? Number(new URLSearchParams(m[2]).get("n")) : NaN;
   return principal && m && Number.isInteger(n) ? receivedFile(principal, m[1], n) : null;
@@ -1627,6 +1636,7 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   // On someone's computer: kept here for the run's task, under the name ComfyUI will get from their tab.
   const computer = computerScope();
   if (computer) {
+    if (worker === "isolated") throw new ProviderError(ISOLATED_ON_COMPUTER);
     const staged = stageInput(computer, data, contentType, name);
     rememberSent(staged, data, contentType, name);
     return staged;
@@ -1839,6 +1849,7 @@ export const comfyProvider: ProviderAdapter = {
 
   async submit({ route, input, generationId, model }) {
     const worker = workerFor(route.endpoint);
+    if (worker === "isolated" && computerScope()) throw new ProviderError(ISOLATED_ON_COMPUTER);
     // A route's own graph settings (Fuobe Speak's InfiniteTalk recipe) go in unless the run sets them.
     const asked = route.extra ? { ...input, extra: { ...route.extra, ...input.extra } } : input;
     const { manifest, workflow: wf, meta } = await prepareWorkflow(route.endpoint, asked, {

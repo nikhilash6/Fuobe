@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { loopbackFetch } from "@/lib/gpu/browser-check";
-import { browserSupport, localBase, pageCanReach, portsToLook, sameFinder, settled, type Finder, type PortLook, type SystemStats } from "@/lib/local-comfy";
-import { rememberedComfy } from "./computer-runtime";
+import { browserSupport, localBase, pageCanReach, portsToLook, sameFinder, settled, type Finder, type PortLook, type SystemStats } from "@/lib/local-comfy";import { rememberedComfy } from "./computer-runtime";
 
 /**
  * Finding the ComfyUI on this computer from the page ("Use the ComfyUI on this computer"). It looks at the ports
@@ -75,8 +74,10 @@ export function useComputerSupport(): "ok" | "safari" | "phone" | "http" {
   const coarse = window.matchMedia("(pointer: coarse)").matches && !window.matchMedia("(hover: hover)").matches;
   const b = browserSupport(navigator as Navigator & { userAgentData?: { mobile?: boolean; platform?: string } }, { narrow, coarse });
   if (b !== "ok") return b;
-  return pageCanReach(window.location.origin) ? "ok" : "http";
+  return pageCanReach(window.location.origin, window.isSecureContext) ? "ok" : "http";
 }
+
+export { usePagePlace } from "./use-page-place";
 
 const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
 

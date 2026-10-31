@@ -376,6 +376,9 @@ describe("which browsers can reach the ComfyUI on this computer", () => {
     expect(pageCanReach("http://127.0.0.1:3370")).toBe(true);
     expect(pageCanReach("http://192.168.1.20:3000")).toBe(false);
     expect(pageCanReach("http://studio.lan")).toBe(false);
+    // Whatever the address, a page the browser itself calls secure may ask.
+    expect(pageCanReach("http://studio.test:3375", true)).toBe(true);
+    expect(pageCanReach("http://192.168.1.20:3000", false)).toBe(false);
   });
 });
 

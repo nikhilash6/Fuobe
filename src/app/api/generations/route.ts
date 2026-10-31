@@ -2,13 +2,16 @@ import { connection } from "next/server";
 import { CONNECT_GPU_HEADER, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { missingFilesMessage } from "@/lib/missing-files";
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
-import { requestViewer } from "@/server/auth";
+import { requestViewer, validToken } from "@/server/auth";
 import { accountEngineMode } from "@/server/account-keys";
+import { computerScope, ISOLATED_ON_COMPUTER, workerFor } from "@/server/providers/comfyui";
+import { getSetting } from "@/server/settings";
+import { RUNS_ON_COMPUTER_NOTE } from "@/lib/relay";
 import { OPERATION_LABELS } from "@/lib/catalog/types";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
 import { db } from "@/server/db";
-import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, createGenerations, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
+import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, ConnectComfyError, createGenerations, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
 import { ensureTrashPurge, listOptionsFrom } from "@/server/library";
 import { hit, unhit } from "@/server/rate";
 import { GenerationRequestSchema } from "@/server/request-schema";
@@ -50,6 +53,8 @@ const refuse = (status: number, error: string, extra: Record<string, unknown> = 
 /** Start a generation; `?preview=1` only says what it would run as (model, operation, jobs, outputs, cost). */
 export async function POST(request: Request) {
   const viewer = requestViewer(request);
+  // An API token (a script, the CLI, MCP): never a page that can open a dialog or keep a tab open.
+  const token = validToken(request.headers.get("authorization"));
   const account = viewer.kind === "account" ? viewer.account : null;
   const preview = new URL(request.url).searchParams.get("preview") === "1";
   // Without a viewer only a price check: a run is the owner's or an account's, never "nobody, so the owner".
@@ -128,6 +133,12 @@ export async function POST(request: Request) {
         if ("error" in own) return refused(own);
       }
       if (planned) {
+        // A workflow for the isolated worker (LatentSync 1.6, ThinkSound) on someone's computer: its tab reaches no second
+        // ComfyUI yet. Said now, before anything is staged or queued.
+        if (planned.route.provider === "comfyui" && workerFor(planned.route.endpoint) === "isolated" && onOwn(() => computerScope())) {
+          if (account) unhit(`run:${account.id}`);
+          return refuse(422, ISOLATED_ON_COMPUTER, { code: "isolated-on-computer" });
+        }
         // A 3D model from someone else's ComfyUI is finished on this server (decimate, web GLB, turntable): accounts
         // don't get Image to 3D until that finish runs under an account's own limits.
         if (account && outputKind(planned.op, planned.model) === "model3d") {
@@ -159,6 +170,8 @@ export async function POST(request: Request) {
       return refuse(429, ACCOUNT_MESSAGES.activeRuns, {}, { "Retry-After": "30" });
     }
     const items = onOwn(() => createGenerations(req));
+    // A script's open-source run while ComfyUI is on the owner's computer: it waits for the owner's Fuobe tab there.
+    if (viewer.kind === "owner" && token && getSetting("comfyWhere") === "computer" && items.some((g) => g.provider === "comfyui")) notes.push(RUNS_ON_COMPUTER_NOTE);
     // What the run leaves out or changes (a model that replaced a retired one, a LoRA that runs only on a GPU, a length the API rounds).
     const all = [...new Set([...notes, ...items.flatMap((g) => g.notes ?? [])])];
     return Response.json({ items, ...(all.length && { notes: all }), ...(gpuWarning && { gpuWarning }) }, { status: 201 });
@@ -167,6 +180,12 @@ export async function POST(request: Request) {
     // A price check of a paid model the account has no key for says so, without opening "Add your key".
     if (refusal && !preview) return refused(refusal);
     if (account && !preview) unhit(`run:${account.id}`);
-    return Response.json({ error: (e as Error).message, ...(refusal && { code: refusal.code, ...(refusal.provider && { provider: refusal.provider }) }) }, { status: 422 });
+    // Nothing connected runs this, and ComfyUI could: the owner's own browser (never a script's token) opens "Connect
+    // your GPU" for it, and the run starts once it is connected.
+    const connect = e instanceof ConnectComfyError && viewer.kind === "owner" && !preview && !token;
+    return Response.json(
+      { error: (e as Error).message, ...(refusal && { code: refusal.code, ...(refusal.provider && { provider: refusal.provider }) }), ...(connect && { code: "connect-gpu" }) },
+      { status: 422, ...(connect && { headers: { [CONNECT_GPU_HEADER]: "1" } }) },
+    );
   }
 }

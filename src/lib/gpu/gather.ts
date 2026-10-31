@@ -12,8 +12,8 @@ import type { CheckLine, GpuInventory, GpuProblem, RequirementIndex } from "./ty
  * fails leaves its part empty and is listed in `errors`: a partial inventory still counts.
  */
 export interface GatherOptions {
-  /** How the copy names the place: "at your link" (a tunnel) or "on this computer" (browser-direct). */
-  where?: "link" | "computer";
+  /** How the copy names the place: "at your link" (a tunnel), "on this computer" (browser-direct), or the studio's own server address. */
+  where?: "link" | "computer" | "install";
   /** A targeted re-check: only these classes (per-class reads) and folders. */
   classes?: string[];
   folders?: string[];
@@ -45,8 +45,11 @@ const PROBLEM_TEXT: Record<GpuProblem, string> = {
 
 /** A ComfyUI on the person's own computer that doesn't answer (read from their tab, there's no link). */
 const COMPUTER_UNREACHABLE = "ComfyUI isn't answering on this computer. Start it, then check again.";
+/** The studio's own ComfyUI (the owner's server address) that doesn't answer. */
+const INSTALL_UNREACHABLE = "ComfyUI at the server address didn't answer. Is it running?";
 
-export const problemText = (p: GpuProblem, where: "link" | "computer" = "link"): string => (where === "computer" && p === "unreachable" ? COMPUTER_UNREACHABLE : PROBLEM_TEXT[p]);
+export const problemText = (p: GpuProblem, where: "link" | "computer" | "install" = "link"): string =>
+  p === "unreachable" && where === "computer" ? COMPUTER_UNREACHABLE : p === "unreachable" && where === "install" ? INSTALL_UNREACHABLE : PROBLEM_TEXT[p];
 
 const clip = (s: unknown, n: number) => String(s ?? "").slice(0, n);
 

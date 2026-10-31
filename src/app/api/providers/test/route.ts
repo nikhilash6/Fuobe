@@ -2,6 +2,7 @@ import { candidateValues, isTestProvider, PROVIDER_SETTINGS, settingProblem } fr
 import { testCivitaiKey } from "@/server/loras";
 import { testAiToolkit } from "@/server/training";
 import { PROVIDERS } from "@/server/providers";
+import { hostedAddressRefusal } from "@/server/providers/comfy-address";
 import { validateSetting, withCandidates, type SettingName } from "@/server/settings";
 
 /**
@@ -9,10 +10,11 @@ import { validateSetting, withCandidates, type SettingName } from "@/server/sett
  * name), the test runs with those unsaved values instead of the saved ones, so Settings can check a
  * key or an address before saving it. `field` names the setting being checked (else the first
  * unsaved one), so a provider that reaches several servers tests that one: the Anthropic key is
- * checked with Anthropic even when text steps run on Ollama. Nothing is stored here.
+ * checked with Anthropic even when text steps run on Ollama. Nothing is stored here. `place: "hosted"` (the page isn't
+ * on this server's machine) refuses a ComfyUI address on this machine or its network without calling it.
  */
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { provider?: unknown; value?: unknown; values?: unknown; field?: unknown };
+  const body = (await request.json().catch(() => ({}))) as { provider?: unknown; value?: unknown; values?: unknown; field?: unknown; place?: unknown };
   const provider = body.provider;
   // The civitai key isn't a model provider's (it downloads LoRAs), nor is AI-Toolkit (it trains them).
   const adapter =
@@ -28,6 +30,13 @@ export async function POST(request: Request) {
   const focus = typeof body.field === "string" && settings.includes(body.field) ? body.field : Object.keys(values)[0];
   const check = adapter.test.bind(adapter);
   const test = () => check({ focus });
+  // The page says it isn't on this server's machine: a ComfyUI address on this machine or its network is never called
+  // for it (it would be the server's own, not the owner's computer). Only ever skips a test.
+  if (provider === "comfyui" && body.place === "hosted") {
+    const field = focus === "comfyIsolatedUrl" ? "comfyIsolatedUrl" : "comfyUrl";
+    const refused = await hostedAddressRefusal(field, values[field]);
+    if (refused) return Response.json(refused);
+  }
   try {
     const res = await withCandidates(values, test);
     // A rejected key that doesn't look like one: say what it should look like.

@@ -280,6 +280,9 @@ export const RELAY_WORDS = {
   switched: "This run stopped because ComfyUI now runs somewhere else. Press Retry.",
 } as const;
 
+/** A script's open-source run (an API token) while the owner's ComfyUI is on the owner's computer. */
+export const RUNS_ON_COMPUTER_NOTE = "Runs when Fuobe is open on your computer.";
+
 /** The words for a tab's own failure. */
 export function tabFailureWords(reason: TabFailure, status?: number): string {
   switch (reason) {

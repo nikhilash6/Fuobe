@@ -19,6 +19,7 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { LOCAL_SUFFIXES } from "@/lib/page-place";
 
 const DATA_DIR = path.resolve(/*turbopackIgnore: true*/ process.env.FUOBE_DATA_DIR ?? path.join(process.cwd(), "data"));
 const FILE = path.join(DATA_DIR, "auth.json");
@@ -639,8 +640,6 @@ function hostName(host: string): string {
   return (colon >= 0 && colon === h.lastIndexOf(":") ? h.slice(0, colon) : h).replace(/\.$/, "");
 }
 
-/** Names nobody on the internet can point at this machine: this machine, the LAN, reserved suffixes. */
-const LOCAL_SUFFIXES = [".localhost", ".local", ".lan", ".home.arpa", ".internal", ".localdomain"];
 
 /**
  * Is this a name the studio may be reached at without a password? A page on attacker.example can

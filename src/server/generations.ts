@@ -508,10 +508,15 @@ export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef
     if (cloud) throw new AccountRunError(paidAllowed() ? { error: addKeyMessage(cloud), code: "add-key", provider: cloud } : { error: OPEN_ONLY_RUN, code: "open-only" });
     if (routes.every((r) => r.provider === "llm")) throw new Error(llmMissing(routes[0]));
     const names = [...new Set(routes.map((r) => provider(r.provider).label))].join(" or ");
-    throw new Error(`Connect ${names} in Settings to run this model`);
+    const message = `Connect ${names} in Settings to run this model`;
+    // ComfyUI could run it: the owner's own browser opens "Connect your GPU" for it (generations/route.ts).
+    throw routes.some((r) => r.provider === "comfyui") ? new ConnectComfyError(message) : new Error(message);
   }
   return { route: routes[0], demo: true };
 }
+
+/** A run nothing connected can make, and ComfyUI could: connecting a GPU is the way (same words as before). */
+export class ConnectComfyError extends Error {}
 
 /** Text steps depend on which LLM the route may use (the open model never calls Claude). */
 const routeReady = (r: ModelRoute) => (r.provider === "llm" ? llmBackends(r).length > 0 : provider(r.provider).isConfigured());

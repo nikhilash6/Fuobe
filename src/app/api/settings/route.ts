@@ -4,7 +4,8 @@ import { getSetting, publicSettings, setSetting, SETTINGS, validateSetting, type
 
 export async function GET() {
   await connection();
-  return Response.json({ settings: publicSettings() });
+  // allowPrivate (FUOBE_ALLOW_PRIVATE_URLS): a hosted page may send a private address (a VPN such as Tailscale) to test.
+  return Response.json({ settings: publicSettings(), allowPrivate: process.env.FUOBE_ALLOW_PRIVATE_URLS === "1" });
 }
 
 export async function PUT(request: Request) {

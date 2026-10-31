@@ -178,7 +178,7 @@ export async function probe(t: ServerTarget, o: ProbeOptions): Promise<GpuInvent
   const entry = { promise: null as unknown as Promise<GpuInventory>, lines: [] as CheckLine[], listeners: new Set<(l: CheckLine) => void>(), full: !targeted };
   if (o.onLine) entry.listeners.add(o.onLine);
   const opts: GatherOptions = {
-    where: "link",
+    where: t.kind === "install" ? "install" : "link",
     onLine: (l) => {
       entry.lines.push(l);
       for (const fn of entry.listeners) fn(l);

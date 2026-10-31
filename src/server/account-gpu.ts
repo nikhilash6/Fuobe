@@ -4,7 +4,8 @@ import net from "node:net";
 import { isCloudProvider, type CloudProvider } from "@/lib/your-keys";
 import { accountEngineMode, accountProviders, paidAllowed } from "./account-keys";
 import { accountGpu, type Account, type AccountGpu } from "./auth";
-import { runnerFacts } from "./computer/tasks";
+import type { OwnerGpuView } from "@/lib/connections";
+import { runnerFacts, type Principal } from "./computer/tasks";
 import { offeredSummary } from "./model-access";
 import { PROVIDERS } from "./providers";
 import { blockedForAccounts, fetchPublic, isLoopbackGpu } from "./remote-fetch";
@@ -139,6 +140,26 @@ export function lastGpuDevice(id: string): string | undefined {
   const hit = globalThis.__fuobeAccountGpus?.get(id);
   if (!gpu || hit?.url !== gpu.url) return undefined;
   return /^[a-z]+/i.exec(hit.info.device ?? "")?.[0].toLowerCase();
+}
+
+/**
+ * What someone's computer's Fuobe tab last said (an account's "this computer", or the owner's when ComfyUI runs on the
+ * owner's computer): its GPU, memory, ComfyUI version and port, the guard and the cross-site setting, and whether it
+ * is open now. Never an address, a token or anything of the server's.
+ */
+export function computerView(principal: Principal): OwnerGpuView {
+  const f = runnerFacts(principal);
+  return {
+    mode: "computer" as const,
+    online: !!f?.online,
+    ...(f?.comfy && { comfy: f.comfy }),
+    ...(f?.guard !== undefined && { guard: f.guard }),
+    ...(f?.device && { device: f.device }),
+    ...(f?.vramBytes && { vramBytes: f.vramBytes }),
+    ...(f?.version && { version: f.version }),
+    ...(f?.port && { port: f.port }),
+    ...(f?.cors && { cors: f.cors }),
+  };
 }
 
 /** What a visitor's status strip shows (GET /api/status): its own GPU, never the install's providers, servers or Demo mode. */

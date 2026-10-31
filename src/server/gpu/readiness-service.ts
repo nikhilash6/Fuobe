@@ -18,7 +18,7 @@ import { urlHash, type ReadTarget } from "./target";
  */
 
 export function contextFor(t: ReadTarget): ReadinessContext {
-  return { account: t.kind === "account" || (t.kind === "computer" && t.key !== "install"), isolatedUrl: t.kind === "install" && !!getSetting("comfyIsolatedUrl") };
+  return { account: t.kind === "account" || (t.kind === "computer" && t.key !== "install"), computer: t.kind === "computer", isolatedUrl: t.kind === "install" && !!getSetting("comfyIsolatedUrl") };
 }
 
 export function readinessOf(tool: Tool, inv: GpuInventory, idx: RequirementIndex, ctx: ReadinessContext): ToolReadiness {
@@ -96,7 +96,7 @@ export function readinessView(t: ReadTarget): ReadinessView {
   if (!snap) return { ...base, checkedAt: null };
   const inv = snap.inventory;
   if (!inv.reachable) {
-    return { ...base, checkedAt: snap.checkedAt, stale: snap.stale, problem: inv.problem ?? "unreachable", problemText: problemText(inv.problem ?? "unreachable", t.via === "browser" ? "computer" : "link"), ...(inv.problemDetail && { problemDetail: inv.problemDetail }) };
+    return { ...base, checkedAt: snap.checkedAt, stale: snap.stale, problem: inv.problem ?? "unreachable", problemText: problemText(inv.problem ?? "unreachable", t.via === "browser" ? "computer" : t.kind === "install" ? "install" : "link"), ...(inv.problemDetail && { problemDetail: inv.problemDetail }) };
   }
   return { ...base, checkedAt: snap.checkedAt, stale: snap.stale, report: viewsOf(t, snap).report };
 }

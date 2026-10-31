@@ -147,6 +147,13 @@ export function savedSetting(name: SettingName): string {
   return candidates.exit(() => getSetting(name));
 }
 
+/** Where the saved value in effect comes from: saved here, an environment variable, or the built-in default (or nothing). */
+export function settingSource(name: SettingName): "saved" | "env" | "default" {
+  const def: SettingDef = SETTINGS[name];
+  const row = db().prepare("SELECT value FROM settings WHERE key = ?").get(def.key) as { value: string } | undefined;
+  return row && row.value !== "" ? "saved" : envValue(def) ? "env" : "default";
+}
+
 export function getSetting(name: SettingName): string {
   const def: SettingDef = SETTINGS[name];
   const candidate = candidates.getStore()?.[name];

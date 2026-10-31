@@ -11,7 +11,8 @@ export type TestProvider = "fal" | "replicate" | "comfyui" | "llm" | "civitai" |
 export const PROVIDER_SETTINGS = {
   fal: ["falKey"],
   replicate: ["replicateToken"],
-  comfyui: ["comfyUrl", "comfyToken", "comfyIsolatedUrl"],
+  // comfyWhere "server": a server address tested while ComfyUI runs on the owner's computer is tested as a server.
+  comfyui: ["comfyUrl", "comfyToken", "comfyIsolatedUrl", "comfyWhere"],
   // Claude, and the local model servers of Settings → AI helper (Ollama, LM Studio, Unsloth Studio, any OpenAI-compatible one).
   llm: [
     "anthropicKey",
@@ -159,6 +160,26 @@ export interface ConnectionState {
   onboarded?: boolean;
   /** Settings → Demo mode: auto (a demo when no provider hosts the model), on (always a demo), off (never). */
   demoMode?: string;
+  /** The owner's ComfyUI runs on the owner's computer: what its Fuobe tab last said (GET /api/status). */
+  ownerGpu?: OwnerGpuView;
+}
+
+/** The owner's computer, as its Fuobe tab last said (the same view as an account's "this computer"). */
+export interface OwnerGpuView {
+  mode: "computer";
+  online: boolean;
+  comfy?: "down" | "no-setting";
+  guard?: boolean;
+  device?: string;
+  vramBytes?: number;
+  version?: string;
+  port?: number;
+  cors?: "exact" | "any" | "other";
+}
+
+/** "Online", "ComfyUI not running", "Needs a setting" or "Offline": a computer's ComfyUI in a few words. */
+export function computerWords(g: { online?: boolean; comfy?: "down" | "no-setting" }): string {
+  return g.online ? "Online" : g.comfy === "down" ? "ComfyUI not running" : g.comfy === "no-setting" ? "Needs a setting" : "Offline";
 }
 
 const CLOUD_PROVIDERS = ["fal", "replicate"] as const;
@@ -238,18 +259,28 @@ export interface ConnectionItem {
   unused: boolean;
 }
 
-/** One line per connection for Settings' status strip, in the order the page lists them. */
-export function connectionSummary(s: ConnectionState): ConnectionItem[] {
+/**
+ * One line per connection for Settings' status strip, in the order the page lists them. ComfyUI on the owner's
+ * computer reads as "Your GPU · Your computer · Online" (or what's wrong); on a hosted studio with nothing connected,
+ * "Your GPU · Connect" (`place`: where the page is, lib/page-place.ts).
+ */
+export function connectionSummary(s: ConnectionState, place?: "here" | "network" | "hosted" | null): ConnectionItem[] {
   const key = (id: "fal" | "replicate", label: string): ConnectionItem => {
     const ok = !!s.providers[id]?.configured;
     return { id, label, ok, text: ok ? "Key set" : "Not set", href: `#${id}`, unused: s.engineMode === "open" };
   };
   const comfy = !!s.providers.comfyui?.configured;
   const llm = !!s.providers.llm?.configured;
+  const unused = s.engineMode === "cloud";
+  const gpu: ConnectionItem = s.ownerGpu
+    ? { id: "comfyui", label: "Your GPU", ok: s.ownerGpu.online, text: `Your computer · ${computerWords(s.ownerGpu)}`, href: "#comfyui", unused }
+    : !comfy && place === "hosted"
+      ? { id: "comfyui", label: "Your GPU", ok: false, text: "Connect", href: "#comfyui", unused }
+      : { id: "comfyui", label: "ComfyUI", ok: comfy, text: comfy ? "Online" : "Offline", href: "#comfyui", unused };
   return [
     key("fal", "fal.ai"),
     key("replicate", "Replicate"),
-    { id: "comfyui", label: "ComfyUI", ok: comfy, text: comfy ? "Online" : "Offline", href: "#comfyui", unused: s.engineMode === "cloud" },
+    gpu,
     { id: "llm", label: "AI helper", ok: llm, text: llm ? "On" : "Off", href: "#text-ai", unused: false },
   ];
 }

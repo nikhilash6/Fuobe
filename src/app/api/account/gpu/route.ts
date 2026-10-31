@@ -1,10 +1,10 @@
 import { connection } from "next/server";
 import { z } from "zod";
-import { checkGpuAddress, GpuError, testGpu } from "@/server/account-gpu";
+import { checkGpuAddress, computerView, GpuError, testGpu } from "@/server/account-gpu";
 import { accountGpu, gpuLink, requestAccount, setAccountGpu } from "@/server/auth";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES } from "@/server/account-files";
 import { clearAccountLoras } from "@/server/account-loras";
-import { forgetComputer, runnerFacts } from "@/server/computer/tasks";
+import { forgetComputer } from "@/server/computer/tasks";
 import { dropSnapshots } from "@/server/gpu/snapshots";
 import { hit } from "@/server/rate";
 
@@ -20,27 +20,14 @@ const account = async (request: Request) => requestAccount(request);
 const notAccount = () => Response.json({ error: "Your GPU is for accounts. The studio's own ComfyUI is in Settings → Open-source engine." }, { status: 400 });
 
 /** What a computer's tab last said: its GPU, memory, ComfyUI version and port, and whether it is open now. */
-function computerView(id: string) {
-  const f = runnerFacts(`acct:${id}`);
-  return {
-    mode: "computer" as const,
-    online: !!f?.online,
-    ...(f?.comfy && { comfy: f.comfy }),
-    ...(f?.guard !== undefined && { guard: f.guard }),
-    ...(f?.device && { device: f.device }),
-    ...(f?.vramBytes && { vramBytes: f.vramBytes }),
-    ...(f?.version && { version: f.version }),
-    ...(f?.port && { port: f.port }),
-    ...(f?.cors && { cors: f.cors }),
-  };
-}
+const accountComputer = (id: string) => computerView(`acct:${id}`);
 
 export async function GET(request: Request) {
   await connection();
   const a = await account(request);
   if (!a) return notAccount();
   const gpu = accountGpu(a.id);
-  if (gpu?.mode === "computer") return Response.json({ gpu: computerView(a.id) });
+  if (gpu?.mode === "computer") return Response.json({ gpu: accountComputer(a.id) });
   const link = gpuLink(gpu);
   return Response.json({ gpu: link ? { mode: "link", url: link.url, hasToken: !!link.token } : null });
 }
@@ -63,7 +50,7 @@ export async function PUT(request: Request) {
       clearAccountLoras(a.id);
       dropSnapshots(`acct:${a.id}`);
     }
-    return Response.json({ gpu: computerView(a.id) });
+    return Response.json({ gpu: accountComputer(a.id) });
   }
   const body = parsed.data as { url: string; token?: string };
   try {

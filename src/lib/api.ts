@@ -4,7 +4,8 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { AssistThread, AssistThreadSummary, AssistThreadView } from "./assist";
-import type { TestProvider } from "./connections";
+import type { OwnerGpuView, TestProvider } from "./connections";
+import { pagePlace } from "./page-place";
 import type { ElementKind, StudioElement } from "./catalog/elements";
 import type { Engine, Generation, GenerationRequest, MediaKind, ReviewStatus } from "./catalog/types";
 import {
@@ -847,20 +848,35 @@ export interface StatusInfo {
     keys?: CloudProvider[];
     paidAllowed?: boolean;
   };
+  /**
+   * The owner's ComfyUI runs on the owner's computer (Settings): what the owner's Fuobe tab there last said. Never
+   * `viewer` (that is a visitor's view of the studio).
+   */
+  ownerGpu?: OwnerGpuView;
 }
 
-/** A connection test's answer (POST /api/providers/test). */
+/** The viewer's own GPU for the status strip and the header pill: an account's, or the owner's computer. */
+export function ownGpuOf(s: StatusInfo | undefined): NonNullable<StatusInfo["viewer"]>["gpu"] | undefined {
+  if (s?.viewer) return s.viewer.gpu;
+  const g = s?.ownerGpu;
+  return g ? { connected: true, mode: "computer", online: g.online, ...(g.comfy && { comfy: g.comfy }), ...(g.device && { device: g.device }), ...(g.vramBytes && { vramBytes: g.vramBytes }) } : undefined;
+}
+
+/** A connection test's answer (POST /api/providers/test). `code` "on-your-computer": a hosted page's local address, not called. */
 export interface ConnectionTest {
   ok: boolean;
   detail: string;
+  code?: "on-your-computer";
 }
 
 /**
  * Test a provider, with unsaved values (by setting name) in place of the saved ones when given.
  * `field` is the setting being checked (the Anthropic key, Ollama's address…), so the test checks that one.
+ * `place: "hosted"`: the page isn't on the server's machine (lib/page-place.ts), so a ComfyUI address on the server's
+ * own machine or network is refused without a call.
  */
-export async function testConnection(provider: TestProvider, values?: Record<string, string>, field?: string): Promise<ConnectionTest> {
-  const res = await fetch("/api/providers/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, values, field }) });
+export async function testConnection(provider: TestProvider, values?: Record<string, string>, field?: string, o: { place?: "hosted" } = {}): Promise<ConnectionTest> {
+  const res = await fetch("/api/providers/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, values, field, ...(o.place && { place: o.place }) }) });
   const body = (await res.json().catch(() => null)) as ConnectionTest | null;
   return body && typeof body.ok === "boolean" ? body : { ok: false, detail: `The test didn't answer (${res.status})` };
 }
@@ -1310,6 +1326,9 @@ export function watchGuestRefusals(): void {
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
     if (res.status === 401 && res.headers.get("x-fuobe-guest") === "1" && method !== "GET" && method !== "HEAD") open(res, "guest", requestPath(input));
     if (res.status === 403 && res.headers.get("x-fuobe-connect-gpu") === "1") open(res, "gpu", requestPath(input));
+    // The owner's run with nothing connected that runs it, on a hosted studio: "Connect your GPU" too (a page on the
+    // server's own machine keeps its toast: its ComfyUI is in Settings).
+    if (res.status === 422 && res.headers.get("x-fuobe-connect-gpu") === "1" && pagePlace(window.location.hostname) === "hosted") open(res, "gpu", requestPath(input));
     // A run started here, on the ComfyUI on this computer: the tab that runs it asks for it at once.
     if (res.status === 201 && method === "POST" && requestPath(input) === "/api/generations") {
       window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));

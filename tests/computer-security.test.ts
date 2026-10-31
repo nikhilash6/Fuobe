@@ -20,7 +20,8 @@ const { resetRates } = await import("@/server/rate");
 const { setSetting } = await import("@/server/settings");
 const tasks = await import("@/server/computer/tasks");
 const { onComputer, outputFetch } = await import("@/server/providers/comfyui");
-const { accountMayChange, accountOwnRead, guestRead } = await import("@/lib/guest-access");
+const guestAccess = await import("@/lib/guest-access");
+const { accountMayChange, accountOwnRead, guestRead } = guestAccess;
 
 type Principal = import("@/server/computer/tasks").Principal;
 
@@ -238,6 +239,62 @@ describe("one account can't touch another's jobs", () => {
     const mine = await onComputer(`acct:${a}`, () => outputFetch(url));
     expect(mine.status).toBe(200);
     expect(Buffer.from(await mine.arrayBuffer()).equals(FAKE_PNG)).toBe(true);
+  });
+});
+
+describe("the owner's computer and an account's never mix", () => {
+  it("the owner's job is 404 to an account on every route, and an account's computer never claims it", async () => {
+    setSetting("comfyWhere", "computer");
+    const t = waitingTask("owner");
+    expect((await call("a", "POST", "/api/gpu/computer/beat", { body: { device: "device-a-0002" } })).status).toBe(200);
+    expect((await call("a", "POST", "/api/gpu/computer/claim", { body: { device: "device-a-0002" } })).status).toBe(204);
+    const c = await claimed("owner", "device-owner-0001");
+    expect(c.id).toBe(t.id);
+    expect((await call("a", "GET", `/api/gpu/computer/tasks/${c.id}/inputs/0`, { headers: { "x-fuobe-lease": c.lease } })).status).toBe(404);
+    expect((await call("a", "POST", `/api/gpu/computer/tasks/${c.id}/report`, { headers: { "x-fuobe-lease": c.lease }, body: { event: "sent", promptId: c.promptId } })).status).toBe(404);
+    expect((await put("a", c.id, 0, c.lease, FAKE_PNG)).status).toBe(404);
+    expect((await call("a", "GET", `/api/gpu/computer/tasks/${c.id}/outputs/0`, { headers: { "x-fuobe-lease": c.lease } })).status).toBe(404);
+    expect((await call("a", "POST", `/api/gpu/computer/tasks/${c.id}/release`, { body: { lease: c.lease } })).status).toBe(404);
+    expect(state(c.id)).toBe("sending");
+    expect((await call("owner", "GET", `/api/gpu/computer/tasks/${c.id}/inputs/0`, { headers: { "x-fuobe-lease": c.lease } })).status).toBe(200);
+  });
+
+  it("the owner's computer never claims an account's job, even while it runs the owner's", async () => {
+    setSetting("comfyWhere", "computer");
+    waitingTask(`acct:${a}`);
+    expect((await call("owner", "POST", "/api/gpu/computer/beat", { body: { device: "device-owner-0002" } })).status).toBe(200);
+    expect((await call("owner", "POST", "/api/gpu/computer/claim", { body: { device: "device-owner-0002" } })).status).toBe(204);
+  });
+
+  it("an account's run goes to its own computer, or nowhere, never the owner's, whatever the owner's Settings say", async () => {
+    const { asAccount } = await import("@/server/generations");
+    const { computerScope } = await import("@/server/providers/comfyui");
+    setSetting("comfyWhere", "computer");
+    expect((await call("owner", "POST", "/api/gpu/computer/beat", { body: { device: "device-owner-0003" } })).status).toBe(200);
+    expect(computerScope()).toBe("owner");
+    expect(asAccount(a, () => computerScope())).toBe(`acct:${a}`);
+    expect(asAccount(link, () => computerScope())).toBeUndefined();
+    const none = auth.createAccount("no-gpu@example.com", "long enough").id;
+    expect(asAccount(none, () => computerScope())).toBeUndefined();
+  });
+
+  it("the owner's results are read only as the owner", async () => {
+    const { relayFile } = await import("@/server/providers/comfyui");
+    const { asAccount } = await import("@/server/generations");
+    setSetting("comfyWhere", "computer");
+    const t = waitingTask("owner");
+    const url = `relay:${t.id}/view?filename=x.png&n=0`;
+    expect(asAccount(a, () => relayFile(url))).toBeNull();
+    expect((await onComputer(`acct:${a}`, () => outputFetch(url))).status).toBe(404);
+  });
+
+  it("the owner's connection settings and tests stay the owner's", () => {
+    const { ownerOnly } = guestAccess;
+    expect(ownerOnly("POST", "/api/providers/test")).toBe(true);
+    expect(ownerOnly("PUT", "/api/settings")).toBe(true);
+    // Reading them: not an account's (its own read list) nor a guest's.
+    expect(accountOwnRead("/api/settings")).toBe(false);
+    expect(guestRead("/api/settings")).toEqual({ kind: "closed" });
   });
 });
 

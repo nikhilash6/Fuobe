@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { candidateValues, connectionSummary, FIRST_RUN_KEY, FIRST_RUN_SCRIPT, isTestProvider, nothingConnected, settingProblem, showFirstRun, type ConnectionState } from "@/lib/connections";
+import { candidateValues, connectionSummary, FIRST_RUN_KEY, FIRST_RUN_SCRIPT, isTestProvider, nothingConnected, PROVIDER_SETTINGS, settingProblem, showFirstRun, type ConnectionState } from "@/lib/connections";
 
 /** Settings' "Save & test", the first-run guide's rule and the connection status strip (R4-02, R4-03, R4-33). */
 
@@ -136,6 +136,24 @@ describe("first-run guide and status strip", () => {
       ["llm", "Off", false, false],
     ]);
     expect(s.map((c) => c.href)).toEqual(["#fal", "#replicate", "#comfyui", "#text-ai"]);
+  });
+
+  it("says the owner's computer as Your GPU, and Connect on a hosted studio with nothing connected", () => {
+    const gpu = (g: ConnectionState["ownerGpu"], place?: "here" | "network" | "hosted") => connectionSummary({ ...state(["comfyui"], "open"), ownerGpu: g }, place).find((c) => c.id === "comfyui");
+    expect(gpu({ mode: "computer", online: true, device: "cuda:0 NVIDIA GeForce RTX 5090" })).toMatchObject({ label: "Your GPU", text: "Your computer · Online", ok: true, href: "#comfyui" });
+    expect(gpu({ mode: "computer", online: false, comfy: "down" })).toMatchObject({ label: "Your GPU", text: "Your computer · ComfyUI not running", ok: false });
+    expect(gpu({ mode: "computer", online: false, comfy: "no-setting" })).toMatchObject({ text: "Your computer · Needs a setting", ok: false });
+    expect(gpu({ mode: "computer", online: false }, "hosted")).toMatchObject({ text: "Your computer · Offline", ok: false });
+    const hosted = connectionSummary(state([], "open"), "hosted").find((c) => c.id === "comfyui");
+    expect(hosted).toMatchObject({ label: "Your GPU", text: "Connect", ok: false, href: "#comfyui" });
+    // On the server's own machine, or once a server ComfyUI answers: as before.
+    expect(connectionSummary(state([], "open"), "here").find((c) => c.id === "comfyui")).toMatchObject({ label: "ComfyUI", text: "Offline" });
+    expect(connectionSummary(state(["comfyui"], "open"), "hosted").find((c) => c.id === "comfyui")).toMatchObject({ label: "ComfyUI", text: "Online" });
+  });
+
+  it("lets a ComfyUI test say where ComfyUI runs, so a server address is tested as a server", () => {
+    expect(PROVIDER_SETTINGS.comfyui).toContain("comfyWhere");
+    expect(candidateValues("comfyui", { comfyUrl: "https://gpu.example.com", comfyWhere: "server" })).toEqual({ comfyUrl: "https://gpu.example.com", comfyWhere: "server" });
   });
 
   it("quotes a first image and clip on the default paid models", () => {
