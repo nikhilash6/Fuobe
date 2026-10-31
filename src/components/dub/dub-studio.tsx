@@ -16,7 +16,7 @@ import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useEngine, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cueProblems } from "@/lib/av/cue-edit";
 import { BACKGROUND_DB, crowdedLines, dubResult, languageStage, ONE_SHOT_MODELS, priceLine, reviewCues, takeLines, translateKey, voiceOnly, type DubPrice, type DubSessionView, type DubStage, type OneShotModel } from "@/lib/av/dub";
@@ -72,7 +72,7 @@ export function DubStudio({ tabs }: { tabs?: React.ReactNode }) {
   // A dub removed elsewhere (another tab) just closes.
   const open = sessions.data?.find((s) => s.id === openId);
   return (
-    <ToolShell title="Audio" tabs={tabs}>
+    <ToolShell title="Audio" tabs={tabs} selfHostedOnly>
       {open ? (
         <SessionView key={open.id} s={open} onBack={() => show(null)} />
       ) : openId && sessions.isLoading ? (
@@ -94,7 +94,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   const [engine, , engineMode] = useEngine();
   // A dub doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // upload and Translate are off, instead of a run the server refuses.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const { create } = useDubActions();
   const [video, setVideo] = useState<SlotValue | null>(null);
   const [duration, setDuration] = useState<number | undefined>(undefined);
@@ -237,14 +237,14 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
  * only" for a guest or an account: a dub doesn't run on their own GPU yet).
  */
 function PriceNote({ price, loading, error, hint }: { price?: DubPrice; loading?: boolean; error?: Error | null; hint?: string }) {
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   if (loading) return <Skeleton className="h-4 w-20" aria-label="Pricing" />;
   if (error) return <span className="max-w-[16rem] text-right text-[12px] leading-snug text-muted-foreground">{error.message}</span>;
   if (!price) return null;
   const extra = price.unpriced.length ? `${price.unpriced.join(" and ")} bill${price.unpriced.length === 1 ? "s" : ""} by the provider's own rate (per character or token).` : undefined;
   return (
     <span className="text-right text-[12px] leading-snug" title={[extra, hint].filter(Boolean).join(" ") || undefined}>
-      <span className="font-medium tabular-nums">{visitor && !price.demo && price.engine === "open" ? "Self-hosted only" : priceLine(price)}</span>
+      <span className="font-medium tabular-nums">{visitor && (price.demo || price.engine === "open") ? "Self-hosted only" : priceLine(price)}</span>
       {price.steps > 1 && <span className="block text-muted-foreground">{price.steps} steps</span>}
     </span>
   );

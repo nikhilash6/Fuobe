@@ -16,7 +16,7 @@ import { useRun, useRunPreview } from "@/components/photodump/hooks";
 import { ResultsGrid } from "@/components/photodump/results";
 import { RunLine } from "@/components/photodump/steps";
 import { TurnaroundButton } from "@/components/turnaround/turnaround-dialog";
-import { useElements, useEngine, useGenerations, useIsVisitor, useSaveElement } from "@/lib/api";
+import { useElements, useEngine, useGenerations, useLikelyVisitor, useSaveElement } from "@/lib/api";
 import { castFieldVisible, castNameFor, randomCast, SHEET_MAX_REFS, type CastAnswers, type CastFieldData } from "@/lib/catalog/packs";
 import { sheetPictures } from "@/lib/catalog/turnaround";
 import type { Generation } from "@/lib/catalog/types";
@@ -156,7 +156,7 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
   const [engine, setEngine] = useEngine();
   // A sheet doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // uploads and Create are off, instead of a run the server refuses.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const [mode, setMode] = useState<Mode>("reference");
   const [photos, setPhotos] = useState<SlotValue[]>([]);
   const [details, setDetails] = useState("");
@@ -203,7 +203,7 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
   return (
     <PageShell wide>
       <PageHeader title="Character Sheet" description="Build your AI avatar: a consistent character for your videos, from a reference or defined from scratch.">
-        <EngineSwitch value={engine} onChange={setEngine} />
+        <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
       {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Character Sheet runs on a self-hosted Fuobe for now.</SelfHostNote>}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { fileToSlot } from "@/components/studio/media-slot";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useEngine, useIsVisitor } from "@/lib/api";
+import { useEngine, useLikelyVisitor } from "@/lib/api";
 import {
   ANIMATION_MODES,
   AUTO_SECONDS,
@@ -148,7 +148,7 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
   const router = useRouter();
   const [engine, setEngine] = useEngine();
   // An explainer doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   // The estimate's problem (no narrator voice yet…) is a hint until Generate is pressed.
   const [tried, setTried] = useState(false);
   const genre = genreInfo("education");
@@ -263,7 +263,7 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
         <SidebarTrigger className="md:hidden" />
         <h1 className="truncate font-heading text-[22px] leading-none">Explainer</h1>
         <div className="ml-auto">
-          <EngineSwitch value={engine} onChange={setEngine} />
+          <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
       </header>
       <div className="mx-auto grid w-full max-w-[1240px] min-w-0 flex-1 gap-8 px-3 pt-6 pb-16 sm:px-6 lg:grid-cols-[minmax(0,520px)_minmax(0,1fr)]">
@@ -462,7 +462,8 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
       </div>
 
       <Sheet open={stylesOpen} onOpenChange={setStylesOpen}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-[640px]">
+        {/* The Sheet's own width is set for its side (data-[side=right]:…): only the same variant overrides it. */}
+        <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-[640px]">
           <SheetHeader>
             <SheetTitle>Styles</SheetTitle>
             <SheetDescription>One visual style for the whole video.</SheetDescription>

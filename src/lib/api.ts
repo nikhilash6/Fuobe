@@ -1178,6 +1178,30 @@ export function useIsVisitor(): boolean {
   return hydrated && !!v && !v.owner;
 }
 
+/** Who used this browser last (VIEWER_KEY), or null. Read after hydration only: the server's HTML can't know it. */
+function lastViewer(): string | null {
+  try {
+    return localStorage.getItem(VIEWER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A guest or an account, as useIsVisitor, but from the first paint: true until the viewer is known to be the owner. For
+ * the tools that run on a self-hosted Fuobe only: a guest's first paint already has their words, the note and the
+ * buttons that are off, so nothing changes or moves when the viewer comes. The owner's page switches instead, at
+ * hydration in a browser the owner used last (VIEWER_KEY), where the note is hidden from the first paint too
+ * (src/components/self-host-note.tsx).
+ */
+export function useLikelyVisitor(): boolean {
+  const v = useViewer().data;
+  const hydrated = useHydrated();
+  if (!hydrated) return true;
+  if (v) return !v.owner;
+  return lastViewer() !== "owner";
+}
+
 /**
  * The studio's owner, once known (and after hydration, as useIsVisitor): what only the owner can do (Assist's Create
  * and Schedule, the Library's folders, shares and Trash) shows from then on, so a visitor never sees it flash in and out.

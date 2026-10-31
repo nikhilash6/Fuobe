@@ -20,6 +20,8 @@ const OPTIONS: { value: Engine; label: string; icon: typeof Cloud; tip: string }
  * icon-only below the sm breakpoint so titles keep their line on phones (`compact` does the same
  * for `sm`, e.g. in Assist's one-row footer); the tooltips and aria labels still name each engine.
  * `wordless`: no "Add key" on a phone either, in a header that has no room for it (the lock and the label still say it).
+ * `selfHostedOnly`: a tool that runs on a self-hosted Fuobe only (its page says so to a guest or an account), where
+ * anyone but the owner gets a plain badge: no way to Your GPU or a key, which wouldn't run it.
  */
 export function EngineSwitch({
   value,
@@ -27,12 +29,14 @@ export function EngineSwitch({
   size = "md",
   compact = size === "md",
   wordless,
+  selfHostedOnly,
 }: {
   value: Engine;
   onChange: (e: Engine) => void;
   size?: "sm" | "md";
   compact?: boolean;
   wordless?: boolean;
+  selfHostedOnly?: boolean;
 }) {
   const mode = useEngineMode();
   // Until hydrated, the server's switch (as useEngineMode): a viewer or status that lands mid-hydration must not change it.
@@ -57,12 +61,12 @@ export function EngineSwitch({
         <o.icon className="size-3.5" />
         <span className={cn(compact && "hidden sm:inline")}>{text}</span>
         {/* A phone has room for two words: what to do about the lock. */}
-        {compact && !wordless && locked?.addKey && <span className="sm:hidden">Add key</span>}
+        {compact && !wordless && !selfHostedOnly && locked?.addKey && <span className="sm:hidden">Add key</span>}
       </>
     );
     // An account opens "Add your key" right here (a plain click; Settings → Your keys in a new tab), or Your GPU when
     // the studio runs open-source models only: the way to paid models is its own key.
-    if (locked) {
+    if (locked && !selfHostedOnly) {
       return (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -101,7 +105,13 @@ export function EngineSwitch({
             {body}
           </span>
         </TooltipTrigger>
-        <TooltipContent>{mode === "open" ? "This studio runs open-source models, free on your own GPU" : "This studio runs paid cloud models"}</TooltipContent>
+        <TooltipContent>
+          {selfHostedOnly
+            ? `${o.value === "open" ? "Open-source models" : "Paid cloud models"} · runs on a self-hosted Fuobe`
+            : mode === "open"
+              ? "This studio runs open-source models, free on your own GPU"
+              : "This studio runs paid cloud models"}
+        </TooltipContent>
       </Tooltip>
     );
   }

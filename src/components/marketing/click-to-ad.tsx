@@ -13,7 +13,7 @@ import { ImageList } from "@/components/brand/image-list";
 import { AddFromLink, priceText, ProductThumb, UploadProductButton } from "@/components/brand/products";
 import { SelfHostNote } from "@/components/self-host-note";
 import type { SlotValue } from "@/components/studio/media-slot";
-import { uploadFile, useIsVisitor } from "@/lib/api";
+import { uploadFile, useLikelyVisitor } from "@/lib/api";
 import { AD_STYLES, END_CARD, KIT_LABELS, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -154,7 +154,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   const [busy, setBusy] = useState(false);
   // A product is saved to the studio's library and an ad doesn't run on an account's own GPU or key yet: a guest or an
   // account is told so up front, and can't add a product or start one.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const resultsRef = useRef<HTMLDivElement>(null);
   const product = products.data?.find((p) => p.id === productId) ?? null;
   const brand = useBrand(product?.brandId).data?.brand;
@@ -222,7 +222,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   );
   const est = useEstimate<RunEstimate>("/api/marketing/click-to-ad/estimate", body);
   const blocker = !product ? "Select a product or enter a product URL" : !product.images.length ? `${product.name} has no images` : !desc.trim() ? "Add a description" : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   const writeScript = async () => {
     if (!productId) return;
@@ -257,7 +257,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
 
   return (
     <div className="flex min-h-svh min-w-0 flex-col">
-      <MarketingHeader title="Click to Ad" active="click" engine={engine} onEngine={setEngine} />
+      <MarketingHeader title="Click to Ad" active="click" engine={engine} onEngine={setEngine} selfHostedOnly />
       <div className="mx-auto w-full min-w-0 max-w-[980px] flex-1 space-y-5 px-3 pt-6 pb-20 sm:px-6 sm:pt-10">
         <div className="pb-2 text-center">
           <h2 className="font-heading text-display text-balance">Make a video ad in one click</h2>
@@ -446,7 +446,8 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
           </Step>
         )}
 
-        <div ref={resultsRef} className="scroll-mt-28 pt-6">
+        {/* A guest or an account has no video ads here and can't make one (the note at the top says why). */}
+        <div ref={resultsRef} className={cn("scroll-mt-28 pt-6", visitor && "hidden")}>
           <h2 className="mb-4 font-heading text-[24px]">Your video ads</h2>
           <RunsList
             feature="click-to-ad"

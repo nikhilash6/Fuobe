@@ -18,7 +18,7 @@ import { Feed } from "@/components/studio/feed";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SketchEditor, type Stroke } from "@/components/studio/sketch-editor";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
-import { useEngine, useGenerations, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import {
   CLICK_OPEN_PROBLEM,
   chooseEraser,
@@ -74,7 +74,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const [engine, setEngine, engineMode] = useEngine();
   // Removing an object doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front,
   // and the upload, the mask preview and Remove are off, instead of a run the server refuses.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const source = useSourceClip(REMOVE.maxBytes);
   const clip = source.clip;
@@ -239,7 +239,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const preview = useGeneration(previewOf?.id ?? null).data;
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide>
+    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title="Remove anything from a video"

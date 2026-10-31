@@ -19,7 +19,7 @@ import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useEngine, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { formatCueTime } from "@/lib/av/cue-edit";
 import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
 import { keepOffered, offered } from "@/lib/model-access";
@@ -57,14 +57,14 @@ async function findCuts(src: string, duration: number, onProgress: (p: number) =
 
 /** visitor: a guest or an account, whose own GPU doesn't run Katana yet (the page says so). */
 const money = (usd: number | null | undefined, demo?: boolean, open?: boolean, visitor?: boolean) =>
-  demo ? "Demo · free" : open ? (visitor ? "Self-hosted only" : "Free · your GPU") : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
+  visitor && (demo || open) ? "Self-hosted only" : demo ? "Demo · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
 
 /** Katana: rebuild a reference edit with your subject, shot for shot. */
 export function KatanaStudio() {
   const [engine] = useEngine();
   // An edit doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // uploads and Recreate are off, instead of a run the server refuses.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const jobs = useKatanaJobs();
   const { start } = useKatanaActions();
   const [reference, setReference] = useState<SlotValue | null>(null);
@@ -110,7 +110,7 @@ export function KatanaStudio() {
     : null;
   const preview = useKatanaPreview(useDeferredValue(body));
   const shown = segments ?? preview.data?.segments ?? null;
-  const blocker = !reference
+  const setupBlocker = !reference
     ? "Add the reference edit"
     : reference.uploading
       ? "Uploading…"
@@ -127,6 +127,8 @@ export function KatanaStudio() {
               : preview.error
                 ? (preview.error as Error).message
                 : null;
+  // A guest or an account reads why Recreate is off, not a step on an upload that is off too.
+  const blocker = visitor ? "Katana runs on a self-hosted Fuobe for now" : setupBlocker;
 
   const scan = async () => {
     if (!reference || !meta || scanning !== null) return;
@@ -155,7 +157,7 @@ export function KatanaStudio() {
   };
 
   return (
-    <ToolShell title="Katana">
+    <ToolShell title="Katana" selfHostedOnly>
       <ToolHero title="Recreate the edit. Make it yours." subtitle="Drop a reference edit and up to 5 photos of your subject — Katana rebuilds it shot for shot, at the original cut times, with the original sound.">
         {visitor && <SelfHostNote className="mt-3 max-w-xl">Katana runs on a self-hosted Fuobe for now.</SelfHostNote>}
       </ToolHero>

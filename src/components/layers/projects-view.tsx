@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LibraryGrid } from "@/components/studio/media-slot";
 import { PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
-import { uploadFile, useHydrated, useIsOwner, useIsVisitor, useViewer } from "@/lib/api";
+import { uploadFile, useHydrated, useIsOwner, useLikelyVisitor, useViewer } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { LayerProject } from "@/lib/layers";
 import { cn } from "@/lib/utils";
@@ -197,8 +197,9 @@ function ProjectsInner() {
   const file = useRef<HTMLInputElement>(null);
   const hydrated = useHydrated();
   // A project is saved to the studio's library, which is its owner's: a guest or an account is told so up front, and
-  // nothing is uploaded only to be refused. The empty list's Upload shows once the owner is known (useIsOwner).
-  const visitor = useIsVisitor();
+  // nothing is uploaded only to be refused, and no list of projects they can't make is shown. The empty list's Upload
+  // shows once the owner is known (useIsOwner).
+  const visitor = useLikelyVisitor();
   const isOwner = useIsOwner();
   const viewer = useViewer().data;
   const [picking, setPicking] = useState(false);
@@ -298,7 +299,7 @@ function ProjectsInner() {
             </Popover>
           </div>
           {visitor ? (
-            <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Layers projects aren&apos;t on free accounts yet.</SelfHostNote>
+            <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Layers runs on a self-hosted Fuobe for now.</SelfHostNote>
           ) : (
             <p className="mt-3 text-[12px] text-muted-foreground">Upload an image, or pick one you already generated. Images only — JPG, PNG or WebP.</p>
           )}
@@ -307,7 +308,7 @@ function ProjectsInner() {
           </p>
         </section>
 
-        <section className="mt-14" aria-labelledby="my-projects">
+        <section className={cn("mt-14", visitor && "hidden")} aria-labelledby="my-projects">
           <h2 id="my-projects" className="font-heading text-[24px]">
             My projects
           </h2>

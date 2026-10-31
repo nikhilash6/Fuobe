@@ -16,7 +16,7 @@ import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useCreateGeneration, useEngine, useGenerations, useHydrated, useIsVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { useCreateGeneration, useEngine, useGenerations, useHydrated, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
   MAX_3D_PROMPT,
   MODEL3D_FEATURE,
@@ -127,7 +127,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const [engine, setEngine, engineMode] = useEngine();
   // A 3D model is finished on this server, so accounts don't get Image to 3D yet, even on their own GPU or key: said up
   // front, and the uploads and Make it 3D are off, instead of a run the server refuses.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const create = useCreateGeneration();
   const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d"], limit: 24 });
@@ -164,7 +164,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const sides = Object.fromEntries(VIEW_SIDES.flatMap((s) => (views[s] ? [[s, views[s]!.ref]] : []))) as Partial<Record<ViewSide, string>>;
   const input: Model3dInput = { engine, mode, modelId: modelId ?? undefined, photo: photo?.ref, views: sides, prompt: mode === "text" ? text : mode === "objects" ? object : undefined };
   const uploading = !!photo?.uploading || VIEW_SIDES.some((s) => views[s]?.uploading);
-  const blocker = model3dBlocker(input) ?? (uploading ? "Uploading…" : null);
+  // A guest or an account reads why the button is off, not a step on an upload that is off too.
+  const blocker = visitor ? "Image to 3D runs on a self-hosted Fuobe for now" : (model3dBlocker(input) ?? (uploading ? "Uploading…" : null));
   // The price before anything is attached: placeholders stand in for the files and the words.
   const priced: GenerationRequest | null = modelId
     ? model3dRequest({ ...input, photo: input.photo ?? PLACEHOLDER, views: { front: PLACEHOLDER, left: PLACEHOLDER, ...sides }, prompt: input.prompt?.trim() || "an object" })
@@ -186,7 +187,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const items = (results.data ?? []).filter((g) => g.feature !== "image-to-3d-step");
   const setSide = (s: ViewSide) => (v: SlotValue | null) => setViews((cur) => ({ ...cur, [s]: v }));
   return (
-    <ToolShell title="Image to 3D">
+    <ToolShell title="Image to 3D" selfHostedOnly>
       <Suspense fallback={null}>
         <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} />
       </Suspense>
@@ -330,8 +331,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
               </Button>
               <p className="mt-2 text-[12px] text-muted-foreground" aria-live="polite">
-                {blocker ? `${blocker} · ` : ""}
-                {preview.isError ? (preview.error as Error).message : (price ?? "Working out the price…")}
+                {visitor ? blocker : <>{blocker ? `${blocker} · ` : ""}{preview.isError ? (preview.error as Error).message : (price ?? "Working out the price…")}</>}
               </p>
               <p className="mt-1 text-[12px] text-muted-foreground">
                 {mode === "splat"

@@ -15,7 +15,7 @@ import { withoutOwnGpu } from "@/lib/catalog/engines";
 import { FORMATS, formatModels, looksLikeWebsite, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
 import { SelfHostNote } from "@/components/self-host-note";
 import { formatCost } from "@/lib/format";
-import { useIsOwner, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { addRuns, send, useBrands, useEstimate } from "./hooks";
@@ -108,7 +108,7 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
   // Models switched off in Settings → Models & licences leave the menu, and the pick falls back to one that is on.
   const access = useModelAccess();
   // A guest or an account: Marketing Studio runs on a self-hosted Fuobe only, so no model reads "on your GPU".
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const choices = keepOffered(formatModels(f, engine, { product: !!draft.product, avatar: !!draft.avatar }), (c) => offered(access, c.id, engine));
   const model = choices.find((c) => c.id === draft.modelId) ?? choices[0];
   const summary = [draft.aspectRatio, f.durations && `${draft.duration}s`, draft.batch > 1 && `×${draft.batch}`].filter(Boolean).join(" · ");
@@ -293,7 +293,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   // A run doesn't go to an account's own GPU or key yet (only the studios' generations do): said up front, with no
   // upload slots and no Generate, instead of a run the server refuses. The slots show once the owner is known
   // (useIsOwner), so a visitor never sees them and then gone.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const isOwner = useIsOwner();
   const set = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
   const f = FORMATS[draft.format];
@@ -344,7 +344,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       : badSite
         ? "Enter a valid website URL"
         : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? (visitor ? "Self-hosted only" : "Free") : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   // Until a template is picked or you start on the composer it stays slim (the attachment tiles fold
   // away), so the template gallery behind it stays in view.
@@ -386,7 +386,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
 
   return (
     <div className="flex min-h-svh min-w-0 flex-col">
-      <MarketingHeader title="Marketing Studio" active="studio" engine={engine} onEngine={setEngine} />
+      <MarketingHeader title="Marketing Studio" active="studio" engine={engine} onEngine={setEngine} selfHostedOnly />
       <Suspense fallback={null}>
         <UrlParams onTemplate={pickTemplate} onTab={setTab} />
       </Suspense>

@@ -26,7 +26,7 @@ import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/compone
 import { openInStudio } from "@/components/swap-studio/hooks";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { useEngine, useGenerations, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterOptions, type CharacterQuality } from "@/lib/catalog/character-swap";
 import {
   chooseMaker,
@@ -103,7 +103,7 @@ const seedOf = (s: string): number | undefined => (s.trim() === "" ? undefined :
 export function GenjutsuStudio() {
   const [engine, setEngine, engineMode] = useEngine();
   // Genjutsu doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const [mode, setModeState] = useState<GenjutsuMode>("motion");
   const source = useSourceClip(GENJUTSU.maxBytes);
@@ -475,7 +475,7 @@ export function GenjutsuStudio() {
   const tabs = <ModeTabsRow mode={mode} onMode={setMode} />;
 
   return (
-    <ToolShell title="Genjutsu" tabs={tabs} header={<SetupCode setup={setup} onPaste={apply} />} wide>
+    <ToolShell title="Genjutsu" tabs={tabs} header={<SetupCode setup={setup} onPaste={apply} />} wide selfHostedOnly>
       {!clip && (
         <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint} Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}>
           {isCharacter && (
@@ -936,7 +936,7 @@ function SourceBadge({ source }: { source: Maker["source"] }) {
 /** The models for this mode and engine, one line each (where it comes from, what it's good at, its limits, its licence). */
 function MakerList({ options, value, onChange }: { options: Maker[]; value: string; onChange: (id: string) => void }) {
   // A guest or an account: open weights run on a self-hosted Fuobe only, not on their own GPU yet.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   return (
     <div role="radiogroup" aria-label="Model" onKeyDown={radioKeys} className="space-y-1.5">
       {options.map((m) => (

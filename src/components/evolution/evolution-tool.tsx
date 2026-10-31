@@ -17,7 +17,7 @@ import { clipDuration, clipSize, useSourceClip } from "@/components/shorts/use-s
 import { Feed } from "@/components/studio/feed";
 import { fileToList, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
-import { useEngine, useGenerations, useIsVisitor } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
 import { DIRECTION_CUT_NOTE, directionPrompt, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "@/lib/catalog/evolution";
 import { chainState } from "@/lib/catalog/shorts";
 import { downloadHref, downloadName } from "@/lib/library";
@@ -58,7 +58,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
   const [engine] = useEngine();
   // Evolution doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and
   // the upload and Evolve are off, instead of a run the server refuses.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const source = useSourceClip(EVOLUTION.maxBytes);
   const clip = source.clip;
   const trimmer = useRef<VideoTrimmerHandle>(null);
@@ -159,7 +159,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
   };
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide>
+    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title="Take a clip further"

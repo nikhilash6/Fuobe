@@ -9,7 +9,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
-import { useEngine, useIsOwner, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import {
   clipShapeProblem,
   rangeProblem,
@@ -54,7 +54,7 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
   const [range, setRange] = useState<TrimRange | null>(null);
   // A short doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // upload and Generate are off, instead of a run the server refuses.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
 
   // Hand-offs: /shorts?tab=history, ?preset=shorts-claymation, ?video=/api/files/….
   useEffect(() => {
@@ -100,7 +100,7 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
         </div>
         <div className="ml-auto shrink-0">
           {/* A phone's header has room for the title and the tabs, not "Add key" too. */}
-          <EngineSwitch value={engine} onChange={setEngine} wordless />
+          <EngineSwitch value={engine} onChange={setEngine} wordless selfHostedOnly />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">

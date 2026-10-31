@@ -13,7 +13,7 @@ import { LookCard } from "@/components/shorts/preset-card";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { ClipBar, ClipDrop, costText, Field, Segmented, tabKeys } from "@/components/shorts/ui";
 import { clipDuration, clipSize, useSourceClip } from "@/components/shorts/use-source-clip";
-import { uploadFile, useEngine, useIsVisitor, useModelAccess } from "@/lib/api";
+import { uploadFile, useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import {
   clampFps,
@@ -76,7 +76,7 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
   const [engine, setEngine, engineMode] = useEngine();
   // A render doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // upload, the preview and Generate are off, instead of a run the server refuses.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
     // eslint-disable-next-line react-hooks/set-state-in-effect -- read once after hydration
@@ -111,7 +111,7 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
         </div>
         <div className="ml-auto shrink-0">
           {/* A phone's header has room for the tabs, not "Add key" too. */}
-          <EngineSwitch value={engine} onChange={setEngine} wordless />
+          <EngineSwitch value={engine} onChange={setEngine} wordless selfHostedOnly />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">

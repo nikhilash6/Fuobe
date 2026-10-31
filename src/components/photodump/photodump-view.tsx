@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { fileToList, type SlotValue } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
-import { useElements, useEngine, useGenerations, useIsOwner, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useElements, useEngine, useGenerations, useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { customPack, DEFAULT_ASPECT, MAX_PACK_REFS, MAX_SELFIE_MB, PACKS, PHOTODUMP_ASPECTS, PHOTODUMP_MODELS, PHOTODUMP_SOUL, soulIdOf, type Pack } from "@/lib/catalog/packs";
 import type { Generation } from "@/lib/catalog/types";
@@ -152,7 +152,7 @@ export function PhotodumpView() {
   // A set doesn't run on an account's own GPU or key yet (only the studios' generations do), and a pack of your own is
   // saved to the owner's library: said up front, and the upload and Generate are off. The packs stay open. Create pack
   // shows once the owner is known (useIsOwner), so a visitor never sees it in the grid and then gone.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const isOwner = useIsOwner();
   const [step, setStep] = useState(0);
   const [reached, setReached] = useState(0);
@@ -224,7 +224,7 @@ export function PhotodumpView() {
   return (
     <PageShell wide>
       <PageHeader title="Photodump" description="A whole set of photos of you in one go — from one selfie (Instadump) or a saved character, in a pack of styles.">
-        <EngineSwitch value={engine} onChange={setEngine} />
+        <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
       {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Photodump runs on a self-hosted Fuobe for now.</SelfHostNote>}
       <div className="mb-6">
@@ -289,7 +289,7 @@ export function PhotodumpView() {
               );
             })}
           </div>
-          {!shown.length && <p className="py-10 text-center text-[14px] text-muted-foreground">{tab === "mine" && !needle ? "No packs of your own yet — create one from your reference photos." : `No packs match “${q}”`}</p>}
+          {!shown.length && <p className="py-10 text-center text-[14px] text-muted-foreground">{tab === "mine" && !needle ? (visitor ? "Packs of your own are saved on a self-hosted Fuobe." : "No packs of your own yet — create one from your reference photos.") : `No packs match “${q}”`}</p>}
           <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
             <p className="min-w-0 truncate text-[13px]">{pack ? <><span className="font-medium">{pack.name}</span> · {pack.count} photos</> : <span className="text-muted-foreground">Pick a pack to continue</span>}</p>
             <Button disabled={!pack} onClick={() => go(1)}>

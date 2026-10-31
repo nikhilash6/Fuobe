@@ -17,7 +17,7 @@ import { NarratorChip } from "@/components/faceless/narrator";
 import { StyleArt } from "@/components/faceless/style-art";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { uploadFile, useEngine, useHydrated, useIsVisitor } from "@/lib/api";
+import { uploadFile, useEngine, useHydrated, useLikelyVisitor } from "@/lib/api";
 import {
   ANIMATION_STYLES,
   CF_LENGTHS,
@@ -88,7 +88,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
   // The estimate's problem (no narrator voice yet…) is a hint until Generate is pressed.
   const [tried, setTried] = useState(false);
   // A series doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const [exampleRow, exampleFade] = useEdgeFade<HTMLDivElement>();
   const file = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -219,7 +219,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
         <SidebarTrigger className="md:hidden" />
         <h1 className="truncate font-heading text-[22px] leading-none">Content Factory</h1>
         <div className="ml-auto">
-          <EngineSwitch value={engine} onChange={setEngine} />
+          <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-12 px-3 pb-16 sm:px-6">

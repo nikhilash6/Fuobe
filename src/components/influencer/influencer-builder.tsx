@@ -16,7 +16,7 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useEngine, useGenerations, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import {
   categoriesFor,
@@ -98,7 +98,7 @@ function RunInfo({ preview, loading, blocker, visitor }: { preview?: RunPreview 
   if (blocker) return <p className="text-[12.5px] text-destructive">{blocker}</p>;
   if (!preview) return <p className="h-5 text-[12.5px] text-muted-foreground">{loading ? "Pricing…" : ""}</p>;
   if (preview.error) return <p className="text-[12.5px] text-destructive">{preview.error}</p>;
-  const cost = preview.demo ? "Demo · free" : preview.costUsd === 0 ? (visitor ? "Self-hosted only" : "Free · your GPU") : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
+  const cost = visitor && (preview.demo || preview.costUsd === 0) ? "Self-hosted only" : preview.demo ? "Demo · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
   return (
     <div className="space-y-0.5 text-[12.5px] text-muted-foreground" aria-live="polite">
       <p>
@@ -121,7 +121,7 @@ export function InfluencerBuilder() {
   const [engine, setEngine] = useEngine();
   // A sheet doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // uploads and Generate are off. The builder itself stays open to play with.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const wide = useWide();
   const [state, setState] = useState<InfluencerState>(INFLUENCER_START);
   const [active, setActive] = useState("tier");
@@ -203,7 +203,7 @@ export function InfluencerBuilder() {
   return (
     <PageShell wide>
       <PageHeader title="AI Influencer" description="Build an original character, game-style: pick a character type, then a look in up to 18 categories or Shuffle, and get a character sheet to save as a character.">
-        <EngineSwitch value={engine} onChange={setEngine} />
+        <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
       {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">AI Influencer runs on a self-hosted Fuobe for now.</SelfHostNote>}
 

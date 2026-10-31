@@ -11,7 +11,7 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { useEngine, useIsVisitor } from "@/lib/api";
+import { useEngine, useLikelyVisitor } from "@/lib/api";
 import { GENRE_IDEAS, GENRES, MAX_IDEA, MAX_SCRIPT, wordCount, youtubeKind, YOUTUBE_ERROR, type FacelessGenre } from "@/lib/catalog/faceless";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -44,7 +44,7 @@ export function FacelessHome() {
   const [genreRow, genreFade] = useEdgeFade<HTMLDivElement>();
   const [ideaRow, ideaFade] = useEdgeFade<HTMLDivElement>();
   // A channel doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Next.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
 
   const checkRef = (v: string) => {
     const bad = v.trim() && !youtubeKind(v);
@@ -78,7 +78,7 @@ export function FacelessHome() {
         <SidebarTrigger className="md:hidden" />
         <h1 className="truncate font-heading text-[22px] leading-none">Faceless Studio</h1>
         <div className="ml-auto">
-          <EngineSwitch value={engine} onChange={setEngine} />
+          <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-12 px-3 pb-16 sm:px-6">

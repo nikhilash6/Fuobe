@@ -24,7 +24,7 @@ import {
 } from "@/lib/catalog/content-factory";
 import { formatLength } from "@/lib/catalog/faceless";
 import type { Engine } from "@/lib/catalog/types";
-import { useIsVisitor } from "@/lib/api";
+import { useLikelyVisitor } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { claudePrompt, type SeriesAsk } from "./hooks";
@@ -273,11 +273,11 @@ export function PresetGrid({ value, onPick }: { value: string | null; onPick: (p
  * account reads "Self-hosted only" for the open engine: a series doesn't run on their own GPU yet.
  */
 export function SeriesPriceLine({ data, loading, engine, className }: { data: SeriesEstimate | undefined; loading?: boolean; engine: Engine; className?: string }) {
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
   const p = data.price;
   const each = p.episodes > 1 ? ` · ${p.episodes} × ${usd(p.perEpisode)}` : "";
-  const price = data.demo ? "Demo · free" : engine === "open" ? (visitor ? "Self-hosted only" : "Free · your GPU") : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
+  const price = visitor && (data.demo || engine === "open") ? "Self-hosted only" : data.demo ? "Demo · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
   return (
     <span className={cn("inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5", className)}>
       <Popover>

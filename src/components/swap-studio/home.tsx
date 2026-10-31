@@ -11,11 +11,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useEngine, useIsVisitor } from "@/lib/api";
+import { useEngine, useLikelyVisitor } from "@/lib/api";
 import { characterLicenceLine } from "@/lib/catalog/character-swap";
 import { SWAP_STUDIO, type SwapProjectCard } from "@/lib/catalog/swap-studio";
 import { STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
 import { toastError } from "@/lib/refusals";
+import { cn } from "@/lib/utils";
 import { useCreateSwapProject, useDeleteSwapProject, useSwapProjects } from "./hooks";
 
 const STEPS = [
@@ -43,7 +44,7 @@ export function SwapStudioHome() {
   const [confirm, setConfirm] = useState<SwapProjectCard | null>(null);
   const nameId = useId();
   // A project is saved to the studio's library, which is its owner's: a guest or an account is told so up front.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
 
   const start = () =>
     create.mutate(
@@ -55,7 +56,7 @@ export function SwapStudioHome() {
     );
 
   return (
-    <ToolShell title="Character Swap Studio" engineSwitch={false} header={<EngineSwitch value={engine} onChange={setEngine} />} wide>
+    <ToolShell title="Character Swap Studio" engineSwitch={false} header={<EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />} wide>
       <ToolHero
         title="Swap a character through whole clips"
         subtitle="Put your character into whole clips, shot by shot: pick who to swap, check each shot, keep the best take."
@@ -84,7 +85,7 @@ export function SwapStudioHome() {
             {visitor ? "New project" : `New project · ${engine === "open" ? "your GPU" : "cloud"}`}
           </Button>
         </form>
-        {visitor && <SelfHostNote className="mt-3 max-w-lg">Free accounts can&apos;t save projects here yet.</SelfHostNote>}
+        {visitor && <SelfHostNote className="mt-3 max-w-lg">Character Swap runs on a self-hosted Fuobe for now.</SelfHostNote>}
       </ToolHero>
 
       <ol className="mx-auto mt-8 grid max-w-[1040px] gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="How it works">
@@ -101,7 +102,8 @@ export function SwapStudioHome() {
         ))}
       </ol>
 
-      <section className="mt-8" aria-labelledby="swap-projects">
+      {/* A guest or an account has no projects here and can't make one (the note above says why). */}
+      <section className={cn("mt-8", visitor && "hidden")} aria-labelledby="swap-projects">
         <h2 id="swap-projects" className="mb-3 text-[15px] font-semibold">
           Projects
         </h2>

@@ -15,7 +15,7 @@ import { useRun, useRunPreview } from "@/components/photodump/hooks";
 import { RunLine, Steps } from "@/components/photodump/steps";
 import { CharacterPicker } from "@/components/photodump/subject";
 import { UploadBox } from "@/components/photodump/upload-box";
-import { useEngine, useGenerations, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { FASHION, FASHION_MODELS, FASHION_START, FASHION_STEPS, fashionBlocker, fashionReducer, getTemplate, type FashionState } from "@/lib/catalog/packs";
 import type { Generation } from "@/lib/catalog/types";
@@ -75,7 +75,7 @@ export function FashionView() {
   const [engine, setEngine] = useEngine();
   // A shoot doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // steps that run or upload are off. The templates stay open to browse.
-  const visitor = useIsVisitor();
+  const visitor = useLikelyVisitor();
   const [garment, setGarment] = useState<SlotValue | null>(null);
   const [pickedOutfit, setOutfitModel] = useState<string>();
   const [pickedSet, setSetModel] = useState<string>();
@@ -148,7 +148,7 @@ export function FashionView() {
               <RotateCcw /> Start over
             </Button>
           )}
-          <EngineSwitch value={engine} onChange={setEngine} />
+          <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
       </PageHeader>
       {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Fashion Factory runs on a self-hosted Fuobe for now.</SelfHostNote>}
