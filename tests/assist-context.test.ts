@@ -247,7 +247,7 @@ describe("modes", () => {
 
   it("the offline planner follows a loaded skill's hints and turns 'remember that' into a memory", () => {
     expect(agent.offlinePlan("a cozy cafe", "cloud", { kind: "video", aspect: "9:16", style: "handheld" })).toMatchObject({
-      input: { jobs: [{ model_id: "seedance-2-5", aspect_ratio: "9:16", prompt: "a cozy cafe. handheld" }] },
+      input: { jobs: [{ model_id: "minimax-h3", aspect_ratio: "9:16", prompt: "a cozy cafe. handheld" }] },
     });
     expect(agent.offlinePlan("a cozy cafe", "cloud", { kind: "image", outputs: 4, aspect: "1:1" })).toMatchObject({ input: { jobs: [{ outputs: 4, aspect_ratio: "1:1" }] } });
     expect(agent.offlinePlan("Remember that I always want vertical 9:16 videos", "cloud")).toEqual({ tool: "remember", input: { text: "I always want vertical 9:16 videos.", category: "Convention" }, say: "I'll remember that for every chat." });

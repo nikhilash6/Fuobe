@@ -68,6 +68,8 @@ export const LOADER_FOLDERS = {
   // comfyui-oss-4 additions
   OpticalFlowLoader: { model_name: 'optical_flow' },
   LoadMoGeModel: { model_name: 'geometry_estimation' },
+  // MiniMax H3 video: larryvrh's turbo LoRA loader (ComfyUI-MiniMax-H3-Turbo) reads models/loras.
+  MiniMaxH3TurboLoRA: { lora_name: 'loras' },
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
 const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode']);

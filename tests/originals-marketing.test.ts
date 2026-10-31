@@ -40,14 +40,17 @@ async function prepare(id: string, input: GenInput, op: Operation) {
 describe("Fuobe Marketing Image", () => {
   const m = getModel(MARKETING_IMAGE_MODEL)!;
 
-  it("runs Qwen-Image-Edit 2511 (and Qwen-Image 2512 without a photo) on both engines", () => {
+  it("runs Qwen-Image 2.1 on your GPU (edit with up to 4 references, text to image without a photo) and hosted Qwen-Image-Edit 2511", () => {
     expect(m).toMatchObject({ vendor: "Fuobe Original", engines: ["open", "cloud"], kind: "image" });
     const open = onEngine(m, "open");
     expect(open.routes.map((r) => [r.op, r.endpoint])).toEqual([
-      ["edit", "qwen-image-edit-2511-multi"],
-      ["t2i", "qwen-image-2512-t2i"],
+      ["edit", "qwen-image-21-edit"],
+      ["t2i", "qwen-image-21-t2i"],
     ]);
-    expect(open.options.maxImages).toBe(3);
+    expect(open.options.maxImages).toBe(4);
+    // Neither Qwen-Image 2.1 graph takes a negative prompt; the hosted half keeps one.
+    expect(open.options.negativePrompt).toBe(false);
+    expect(onEngine(m, "cloud").options.negativePrompt).toBe(true);
     const cloud = onEngine(m, "cloud");
     expect(cloud.routes.map((r) => [r.op, r.provider, r.endpoint, r.loraEndpoint])).toEqual([
       ["edit", "fal", "fal-ai/qwen-image-edit-2511", "fal-ai/qwen-image-edit-2511/lora"],
@@ -78,12 +81,12 @@ describe("Fuobe Marketing Image", () => {
   });
 
   it("runs a Standalone product shot of one photo on the product-shot graph on the user's GPU", async () => {
-    const shot = await prepare("qwen-image-edit-2511-multi", { prompt: "on wet marble", images: ["product.png"], extra: { productShot: true } }, "edit");
+    const shot = await prepare("qwen-image-21-edit", { prompt: "on wet marble", images: ["product.png"], extra: { productShot: true } }, "edit");
     expect(shot.manifest.id).toBe("product-shot-qwen-edit-2509");
     expect(JSON.stringify(shot.workflow)).not.toContain("productShot");
     // Two photos (or no flag): the multi-reference edit.
-    expect((await prepare("qwen-image-edit-2511-multi", { prompt: "x", images: ["a.png", "b.png"], extra: { productShot: true } }, "edit")).manifest.id).toBe("qwen-image-edit-2511-multi");
-    expect((await prepare("qwen-image-edit-2511-multi", { prompt: "x", images: ["a.png"] }, "edit")).manifest.id).toBe("qwen-image-edit-2511-multi");
+    expect((await prepare("qwen-image-21-edit", { prompt: "x", images: ["a.png", "b.png"], extra: { productShot: true } }, "edit")).manifest.id).toBe("qwen-image-21-edit");
+    expect((await prepare("qwen-image-21-edit", { prompt: "x", images: ["a.png"] }, "edit")).manifest.id).toBe("qwen-image-21-edit");
   });
 });
 

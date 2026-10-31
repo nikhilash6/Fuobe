@@ -488,9 +488,13 @@ model("wan-2-6", "Wan 2.6", "Alibaba Wan", "wan", "video", "Multi-shot Wan with 
 model("wan-2-5", "Wan 2.5", "Alibaba Wan", "wan", "video", "Audio-driven video up to 1080p",
       [("t2v", "fal-ai/wan-25-preview/text-to-video"), ("i2v", "fal-ai/wan-25-preview/image-to-video")],
       badges=["audio"], pricing=("second", 0.15, "1080p"), defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"})
+# Hosted MiniMax H3 makes its own sound. fal takes a whole number of seconds from 5 to 15 and bills each second by the
+# resolution (its pricing record, docs/research/new-models-7.json): 480P $0.05, 768P $0.06, 2K $0.13, 4K $0.16. Without
+# a resolution fal renders 2K, so 768P is set as the default (H3's native size, the open model's too).
 model("minimax-h3", "MiniMax H3", "MiniMax", "hailuo", "video", "Expressive characters and dynamic action",
       [("t2v", "minimax/h3/text-to-video"), ("i2v", "minimax/h3/image-to-video", "fal", "+flf2v"), ("ref2v", "minimax/h3/reference-to-video")],
-      badges=["new"], defaults={"aspectRatio": "16:9"})
+      badges=["top", "new", "audio"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
+      pricing=("second", 0.06, "768P; 480P $0.05, 2K $0.13, 4K $0.16", {"byResolution": {"480P": 0.05, "768P": 0.06, "2K": 0.13, "4K": 0.16}}))
 model("minimax-h3-max", "MiniMax H3 Max", "MiniMax", "hailuo", "video", "Top-tier MiniMax with extend",
       [("t2v", "minimax/h3-max/text-to-video"), ("i2v", "minimax/h3-max/image-to-video", "fal", "+flf2v"), ("ref2v", "minimax/h3-max/reference-to-video"),
        ("extend", "minimax/h3-max/extend-video")],

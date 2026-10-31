@@ -26,6 +26,7 @@ import { finishSteps, mosaicPixels, unionMasks } from "@/lib/soul-post";
 import { ANGLES_ORIGINAL, MOSAIC_SCALE } from "@/lib/catalog/open-tools";
 import { computeDimensions } from "@/lib/comfy";
 import { captionFromWords, parseCaption } from "@/lib/ideogram-caption";
+import { h3Frames, h3Prompt } from "@/lib/h3-prompt";
 import {
   CHAIN_LIST_SLACK,
   LAST_FRAME_CHAIN,
@@ -1513,6 +1514,17 @@ async function submitNow(
       const words = prompt;
       prompt = parseCaption(words) ?? (await ideogramCaption(words, computeDimensions(plan.params.aspectRatio, plan.params.resolution, {})).catch(() => captionFromWords(words)));
       update(id, { prompt });
+    }
+    // MiniMax H3 on your GPU reads its own layout (src/lib/h3-prompt.ts): the words (after any Enhance) go into it, with the
+    // start (and end) frame's alignment line for the clip's length on H3's frame grid. It becomes the run's prompt, so Reuse
+    // makes the same clip. An orbit keeps its words as they are: the Orbit LoRA reads its own caption style.
+    const h3Op = plan.op === "t2v" || plan.op === "i2v" || plan.op === "flf2v" ? plan.op : undefined;
+    if (plan.model.options.promptFormat === "minimax-h3" && h3Op && prompt && plan.params.extra?.orbit !== true) {
+      const wrapped = h3Prompt(prompt, h3Op, h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5));
+      if (wrapped !== prompt) {
+        prompt = wrapped;
+        update(id, { prompt });
+      }
     }
     const input: GenInput = {
       ...plan.params,

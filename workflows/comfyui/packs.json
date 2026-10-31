@@ -80,6 +80,15 @@
     "subdir": null,
     "folders": []
   },
+  "ComfyUI-MiniMax-H3-Turbo": {
+    "repo": "https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo",
+    "commit": "77bfa67575b14e3be6214f1747732e540c68b5dd",
+    "registry": { "id": "comfyui-minimax-h3-turbo", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
   "ComfyUI-QwenASR": {
     "repo": "https://github.com/1038lab/ComfyUI-QwenASR",
     "commit": "3f9a652a617e578e4e3bd090e3dbc75274bf4775",
@@ -204,6 +213,15 @@
     "requirementsTxt": true,
     "isolated": false,
     "subdir": "worker_nodes/h3_character_swap",
+    "folders": []
+  },
+  "plaguekind-nodes": {
+    "repo": "https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes",
+    "commit": "d58d006a4ea32c25c06499f2ff104f0852a045a6",
+    "registry": { "id": "plaguekind-nodes", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
     "folders": []
   }
 }

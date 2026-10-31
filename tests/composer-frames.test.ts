@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
-import { frameSupport, framesBlocker, framesDuration, keyframeChain } from "@/lib/catalog/keyframes";
+import { FRAMES_MODELS, frameSupport, framesBlocker, framesDuration, framesNote, keyframeChain } from "@/lib/catalog/keyframes";
 import { planGeneration } from "@/lib/catalog/plan";
 import {
   addFrame,
@@ -92,6 +92,25 @@ describe("Frames mode in the Video studio composer", () => {
   it("makes one film on the open chain", () => {
     const sent = framesRequest(framesOf("a", "b", "c"), ctxFor("oss-wan22-14b-fast", 8));
     expect(sent).toMatchObject({ op: "keyframes", images: ["/api/files/a.png", "/api/files/b.png", "/api/files/c.png"], params: { duration: 8, keyframeTimes: [0, 4, 8], numOutputs: 1 } });
+  });
+
+  it("works with MiniMax H3 as the studio's default: its start and end frames, and the Frames model for every frame", () => {
+    expect(VIDEO_STUDIO.defaultModels).toEqual({ cloud: "minimax-h3", open: "oss-minimax-h3" });
+    const h3 = getModel("oss-minimax-h3")!;
+    expect(frameSupport(h3)).toBe("ends");
+    expect(keyframeChain(h3)).toBeUndefined();
+    expect(FRAMES_MODELS.open.id).toBe("oss-wan22-14b");
+    const fs = framesOf("a", "b", "c");
+    const sent = framesRequest(fs, ctxFor("oss-minimax-h3", 5));
+    expect(sent).toMatchObject({ images: [fs[0].value.ref], endImage: fs[2].value.ref, params: { duration: 5, keyframeTimes: undefined } });
+    expect(sent.op).toBeUndefined();
+    const plan = planGeneration({ feature: "video", modelId: "oss-minimax-h3", prompt: "x", inputs: { images: sent.images, endImage: sent.endImage }, params: sent.params }, getModel, getPreset);
+    expect(plan.op).toBe("flf2v");
+    expect(framesBlocker(h3, 3)).toBeNull();
+    expect(framesNote(h3, 3)).toBe("MiniMax H3 takes a start and an end frame, so it uses frames 1 and 3 and leaves out the middle one — Wan 2.2 14B follows every frame.");
+    // Hosted MiniMax H3 takes the ends too; FLUX 3 Max follows every frame in the cloud.
+    expect(frameSupport(getModel("minimax-h3")!)).toBe("ends");
+    expect(framesNote(getModel("minimax-h3")!, 3)).toMatch(/— FLUX 3 Max follows every frame.$/);
   });
 
   it("holds Generate while a frame is still uploading, so no frame is left out of the run", () => {

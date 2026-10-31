@@ -399,6 +399,8 @@ const open: ModelDef[] = [
     routes: [comfy("t2i", "sdxl-t2i")],
     options: { aspectRatios: IMG_AR, seed: true, negativePrompt: true },
     defaults: { aspectRatio: "1:1" },
+    // Out of the Image picker; links and earlier runs still resolve.
+    hidden: true,
   }),
   o({
     id: "oss-qwen-edit",
@@ -503,13 +505,62 @@ const open: ModelDef[] = [
   }),
 
   // ---------------- Video
+  // MiniMax H3: text, image and start + end frame to video with its own sound, on the fl2va model. Fast runs larryvrh's
+  // turbo v4 LoRA (8 steps) with SLA attention; Best (params.extra.quality) runs the 20-step graph without them
+  // (resolveWorkflowId). The prompt is wrapped in H3's own layout on the server (promptFormat; src/lib/h3-prompt.ts), and
+  // the canvas and frame count follow H3's grid (the provider). The graphs are not validated yet (validated: false).
+  o({
+    id: "oss-minimax-h3",
+    name: "MiniMax H3",
+    vendor: "MiniMax",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Video with its own synchronized sound from words, a start frame, or start and end frames · about 2-3 min for a 5 s clip on a 32 GB GPU",
+    badges: ["new", "top", "audio"],
+    routes: [
+      comfy("t2v", "minimax-h3-t2v", "turbo v4 LoRA, 8 steps"),
+      comfy("i2v", "minimax-h3-i2v", "turbo v4 LoRA, 8 steps; the clip takes the start frame's shape"),
+      comfy("flf2v", "minimax-h3-flf2v", "turbo v4 LoRA, 8 steps; the clip takes the start frame's shape"),
+    ],
+    options: {
+      aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"],
+      durations: [3, 5, 10, 15],
+      resolutions: ["768p"],
+      seed: true,
+      endFrame: true,
+      audio: "always",
+      promptFormat: "minimax-h3",
+      controls: [
+        {
+          param: "quality",
+          label: "Quality",
+          values: ["fast", "best"],
+          default: "fast",
+          labels: { fast: "Fast · 8 steps", best: "Best · 20 steps, about 2.3x longer" },
+        },
+      ],
+    },
+    defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },
+  }),
+  o({
+    id: "oss-ltx25",
+    name: "LTX-2.5",
+    vendor: "Lightricks",
+    family: "ltx",
+    kind: "video",
+    tagline: "Open video with native synchronized audio, up to 10s",
+    badges: ["audio", "new", "top"],
+    routes: [comfy("t2v", "ltx25-t2v"), comfy("i2v", "ltx25-i2v")],
+    options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [5, 8, 10], resolutions: ["720p", "1080p"], seed: true, negativePrompt: true, audio: "always" },
+    defaults: { aspectRatio: "16:9", duration: 5, resolution: "720p" },
+  }),
   o({
     id: "oss-wan22-14b-fast",
     name: "Wan 2.2 14B Lightning",
     vendor: "Alibaba Wan",
     family: "wan",
     kind: "video",
-    tagline: "Best open video model with Lightx2v 4-step LoRAs — minutes, not hours",
+    tagline: "The fast open choice: Wan 2.2 14B with Lightx2v 4-step LoRAs, minutes per clip",
     badges: ["fast", "top"],
     routes: [comfy("t2v", "wan22-t2v-14b-lightx2v", "Lightx2v 4-step"), comfy("i2v", "wan22-i2v-14b-lightx2v", "Lightx2v 4-step"), comfy("flf2v", "wan22-flf2v-14b"), KEYFRAME_FILM],
     options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [3, 5], resolutions: ["480p", "720p"], seed: true, negativePrompt: true, endFrame: true },
@@ -536,18 +587,6 @@ const open: ModelDef[] = [
     badges: ["fast"],
     routes: [comfy("t2v", "wan22-ti2v-5b"), comfy("i2v", "wan22-ti2v-5b-i2v")],
     options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [3, 5], resolutions: ["720p"], seed: true, negativePrompt: true },
-    defaults: { aspectRatio: "16:9", duration: 5, resolution: "720p" },
-  }),
-  o({
-    id: "oss-ltx25",
-    name: "LTX-2.5",
-    vendor: "Lightricks",
-    family: "ltx",
-    kind: "video",
-    tagline: "Open video with native synchronized audio, up to 10s",
-    badges: ["audio", "new"],
-    routes: [comfy("t2v", "ltx25-t2v"), comfy("i2v", "ltx25-i2v")],
-    options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [5, 8, 10], resolutions: ["720p", "1080p"], seed: true, negativePrompt: true, audio: "always" },
     defaults: { aspectRatio: "16:9", duration: 5, resolution: "720p" },
   }),
   o({
@@ -2036,14 +2075,15 @@ const originals: ModelDef[] = [
       open: [
         // A Standalone product shot (params.extra.productShot, one product photo) runs product-shot-qwen-edit-2509 instead:
         // cut out with BiRefNet, put on white, relit into the scene by the White_to_Scene LoRA.
-        comfy("edit", "qwen-image-edit-2511-multi", "Qwen-Image-Edit 2511 with up to 3 references (product, person, setting) and the template's prompt"),
-        comfy("t2i", "qwen-image-2512-t2i", "Qwen-Image 2512 when there is no product photo"),
+        comfy("edit", "qwen-image-21-edit", "Qwen-Image 2.1 with up to 4 references (product, person, setting) and the template's prompt"),
+        comfy("t2i", "qwen-image-21-t2i", "Qwen-Image 2.1 when there is no product photo"),
       ],
-      tagline: "Product shots, ads, posters and listings from your product photo · Qwen-Image-Edit 2511 free on your GPU (24 GB), or hosted on fal",
+      tagline: "Product shots, ads, posters and listings from your product photo · Qwen-Image 2.1 free on your GPU (20 GB), or hosted on fal",
       options: { aspectRatios: IMG_AR, maxImages: 10, maxOutputs: 4, seed: true, negativePrompt: true },
     }),
-    // TextEncodeQwenImageEditPlus takes three pictures, and the edit keeps the first one's shape.
-    engineOptions: { open: { maxImages: 3 } },
+    // Qwen-Image 2.1's edit graph reads up to four pictures and keeps the first one's shape. Neither of its graphs takes a
+    // negative prompt, so the open half has none (the hosted half keeps it).
+    engineOptions: { open: { maxImages: 4, negativePrompt: false } },
   },
   {
     ...original({

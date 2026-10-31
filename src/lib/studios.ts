@@ -89,7 +89,8 @@ export const VIDEO_STUDIO: StudioConfig = {
   presetPicker: "motion",
   // Kling 4.0's Frames mode: up to 10 keyframes (FLUX 3 Max on the cloud, Wan 2.2 14B clip by clip on the open engine).
   frames: true,
-  defaultModels: { cloud: "seedance-2-5", open: "oss-wan22-14b-fast" },
+  // MiniMax H3 on both engines: hosted on fal, and on your GPU. Frames mode runs its own model (FRAMES_MODELS).
+  defaultModels: { cloud: "minimax-h3", open: "oss-minimax-h3" },
   suggestions: [
     "A paper boat drifts down a rain-soaked street gutter, macro, slow motion",
     "FPV drone dives off a sea cliff at sunrise and skims the waves",
@@ -126,7 +127,7 @@ export const UPSCALE_STUDIO: StudioConfig = {
   ops: ["upscale-image", "upscale-video"],
   feed: { features: ["upscale"] },
   slots: [{ key: "image", label: "Image", accept: "image", required: true }],
-  defaultModels: { cloud: "topaz-image", open: "oss-upscale-image" },
+  defaultModels: { cloud: "topaz-image", open: "oss-seedvr2-image" },
   promptOptional: true,
   hidePrompt: true,
   modelPrompt: "Optional: details to keep or bring out, e.g. “the lettering on the shop sign”",
@@ -387,7 +388,9 @@ export const VIDEO_EDIT_STUDIO: StudioConfig = {
   multiRef: { label: "Add ref", max: 4 },
   // A clip edit that keeps the clip's length is priced on its seconds, and one outside the model's window is refused.
   clipFacts: true,
-  defaultModels: { cloud: "kling-o3", open: "oss-wan22-fun-control" },
+  // On your GPU: Fuobe Mixed Media, the first v2v model in the picker that runs on a clip and words alone (Genjutsu
+  // Restyle also needs the restyled first frame).
+  defaultModels: { cloud: "kling-o3", open: "fuobe-mixed-media" },
   related: { href: "/genjutsu?mode=swap", label: "Swap an object or restyle it with Genjutsu" },
 };
 
@@ -415,7 +418,8 @@ export const REFRAME_STUDIO: StudioConfig = {
   ops: ["reframe"],
   feed: { features: ["reframe"] },
   slots: [{ key: "video", label: "Video", accept: "video", required: true }],
-  defaultModels: { cloud: "luma-ray-3-2", open: "oss-wan22-vace-reframe" },
+  // MiniMax H3 Max Reframe keeps the clip's sound and timing; Luma Ray 3.2 stays in the picker.
+  defaultModels: { cloud: "minimax-h3-max-reframe", open: "oss-wan22-vace-reframe" },
   promptOptional: true,
 };
 

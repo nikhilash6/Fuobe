@@ -47,16 +47,19 @@ describe("offline planner (U18)", () => {
     expect(jobs).toHaveLength(2);
     expect(jobs[0]).toMatchObject({ model_id: "nano-banana-pro", prompt: "A product ad for a matte black perfume bottle — hero still" });
     expect(jobs[0].after).toBeUndefined();
+    // MiniMax H3, the Video studio's default, makes one shot a clip: a 3-shot clip runs on the next model in Best that cuts shots.
     expect(jobs[1]).toMatchObject({ model_id: "seedance-2-5", after: 0, shots: 3 });
     expect(p.say).toMatch(/still first, then animate it as a 3-shot clip/);
     // The open engine picks the open defaults (the Image studio's is Ideogram 4).
-    expect((agent.offlinePlan("A photo of a lighthouse, then animate it", "open")!.input as { jobs: { model_id: string }[] }).jobs.map((j) => j.model_id)).toEqual(["oss-ideogram-4", "oss-wan22-14b-fast"]);
+    expect((agent.offlinePlan("A photo of a lighthouse, then animate it", "open")!.input as { jobs: { model_id: string }[] }).jobs.map((j) => j.model_id)).toEqual(["oss-ideogram-4", "oss-minimax-h3"]);
   });
 
   it("reads 'N portraits' as N takes and 'N-shot' video as one multi-shot clip", () => {
     expect(agent.offlinePlan("4 portraits of a jazz singer in a smoky club", "cloud")).toMatchObject({ input: { jobs: [{ model_id: "nano-banana-pro", outputs: 4 }] } });
     const shot = agent.offlinePlan("a 3-shot video of a fox running through snow", "cloud")!;
     expect(shot.input).toMatchObject({ jobs: [{ model_id: "seedance-2-5", shots: 3 }] });
+    expect(agent.offlinePlan("a 3-shot video of a fox running through snow", "open")).toMatchObject({ input: { jobs: [{ model_id: "oss-ltx25", shots: 3 }] } });
+    expect(agent.offlinePlan("a video of a fox running through snow", "cloud")).toMatchObject({ input: { jobs: [{ model_id: "minimax-h3" }] } });
     expect((shot.input as { jobs: { outputs?: number }[] }).jobs[0].outputs).toBeUndefined();
     // Still a storyboard when it asks for frames.
     expect(agent.offlinePlan("6 frames of a heist in Paris", "cloud")).toMatchObject({ tool: "create_storyboard", input: { frames: 6 } });

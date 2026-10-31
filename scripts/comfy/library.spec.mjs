@@ -159,6 +159,10 @@ export const CUSTOM_NODE_REPOS = {
   // Krea 2 Inpaint needs (not installed on the validation server: krea2-inpaint / krea2-outpaint list it with `packs`).
   'comfyui-krea2edit': 'https://github.com/lbouaraba/comfyui-krea2edit',
   'ComfyUI-Krea2-Ostris-Edit': 'https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit',
+  // MiniMax H3 video (minimax-h3-t2v / i2v / flf2v): larryvrh's turbo LoRA loader and sampler (Apache-2.0, v1.2.3) and
+  // PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel needs Triton). Pinned in install-comfyui.sh.
+  'ComfyUI-MiniMax-H3-Turbo': 'https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo/tree/77bfa67575b14e3be6214f1747732e540c68b5dd',
+  'plaguekind-nodes': 'https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes/tree/d58d006a4ea32c25c06499f2ff104f0852a045a6',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -172,6 +176,9 @@ export const PACK_CLASSES = {
   // Installed on the validation server, but a ComfyUI with comfyui-workflow-encrypt names that pack as these classes' module.
   'comfyui-krea2edit': /^Krea2Edit(ModelPatch|GroundedEncode)$/,
   'ComfyUI-Krea2-Ostris-Edit': /^(TextEncodeKrea2OstrisEdit|Krea2OstrisEditModelPatch)$/,
+  // MiniMax H3 video. The turbo classes need naming here: a ComfyUI with comfyui-workflow-encrypt reports that pack as their module.
+  'ComfyUI-MiniMax-H3-Turbo': /^MiniMaxH3Turbo(LoRA|Sampler)$/,
+  'plaguekind-nodes': /^H3(SLAAttention|AdaLNLoRAFix)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -230,6 +237,12 @@ export const KNOWN_MODELS = {
   'h3_character_swap_v1.5.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/d06323b7c8e70e97cdab48b78a1e05f786c8cba9/h3_character_swap_v1.5.safetensors' },
   'h3_character_swap_pro4500_1000.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/a665bb7e3bb9804e487d2925f67744f554c8ad49/h3_character_swap_pro4500_1000.safetensors' },
   'H3-Person-Remover-V1.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA/resolve/fe136b3dc93aea993b9f194d48ea9859fdc2de14/H3-Person-Remover-V1.safetensors' },
+  // MiniMax H3 video (minimax-h3-*): the first+last-frame model (pruned int8), Comfy-Org's int8 video VAE (the file the official H3
+  // templates load), larryvrh's turbo v4 LoRA (Apache-2.0) and pablodawson's 360 Orbit LoRA, each at a pinned revision.
+  'minimax_h3_fl2va_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors' },
+  'minimax_h3_video_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors' },
+  'minimax_h3_turbo_v4_step600_ema.safetensors': { folder: 'loras', url: 'https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/43a74557ac3f6539db8e0f2a959d03feb7a81480/minimax_h3_turbo_v4_step600_ema.safetensors' },
+  'minimax_h3_flf2v_lora_v1.safetensors': { folder: 'loras', url: 'https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA/resolve/5ddbc2dbbe95edbbdaf5017c3e934b1d01791697/minimax_h3_flf2v_lora_v1.safetensors' },
   'depth_anything_3_mono_large.safetensors': { folder: 'geometry_estimation', url: 'https://huggingface.co/Comfy-Org/Depth-Anything-3/resolve/main/geometry_estimation/depth_anything_3_mono_large.safetensors' },
   // comfyui-oss-3 additions (docs/research/comfyui-oss-3.json, sizes from the Hugging Face tree API)
   // MOSS-Image (research #7 §4.4): Comfy-Org's int8 / w4a8 set (the Comfy template's) at a pinned commit, and Spectrallic's SFT with the
@@ -342,6 +355,26 @@ export const KNOWN_MODELS = {
   'qwen3vl_4b_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors' },
   'qwen3.5_9b_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_int8_convrot.safetensors', variants: ['qwen3.5_9b_bf16.safetensors'] },
 };
+
+// MiniMax H3 video (minimax-h3-*): licence and note text the seven graphs share.
+const H3_LICENSE =
+  'MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; ' +
+  'commercial use above US$20M yearly revenue needs MiniMax\'s written authorization; show "MiniMax H3" on the product\'s interface; no outputs used to improve other AI models · ' +
+  'Qwen3-VL-32B base Apache-2.0';
+const H3_LICENSE_FAST = `${H3_LICENSE} · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT`;
+const H3_NOTES_FIRST_FRAME =
+  'The first frame is resized to width x height with no crop, so the canvas should have the still\'s shape (an "auto" aspect ratio sizes it from the still).';
+const H3_NOTES_CANVAS =
+  'Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). ' +
+  'frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s).';
+const H3_NOTES_LAYOUT =
+  'The prompt reads best in MiniMax\'s layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape ' +
+  'and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it.';
+const H3_NOTES_FILES =
+  'Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (2.81 GB) ' +
+  'and the audio VAE (0.61 GB).';
+const H3_NOTES_COMMON = `${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FILES}`;
+const H3_NOTES_TIME = 'With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768.';
 
 const WAN_NEG_EN =
   'bright colors, overexposed, static, blurry details, subtitles, style, artwork, painting, still image, overall gray, worst quality, low quality, JPEG artifacts, ugly, deformed, extra fingers, poorly drawn hands, poorly drawn face, malformed, disfigured, fused fingers, motionless, cluttered background, three legs, crowded background, walking backwards';
@@ -1304,6 +1337,157 @@ export const SPEC = [
     limits: { maxWidth: 1920, maxHeight: 1920, maxFrames: 241, dimensionMultiple: 64, frameStep: 8 },
     vramGb: 24,
     notes: 'First-frame conditioning (strength 0.7 base pass, 1.0 refine). Same size/frames rules as ltx25-t2v. Image is resized to longer side 1536 before conditioning; give it the output aspect ratio.',
+  },
+  // ---- MiniMax H3 as a video model: text, image and start + end frame to video with sound, on the fl2va model.
+  // Fast: larryvrh's turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85) and the AdaLN LoRA fix. Best (-hq): the
+  // same model without them, 20 steps res_multistep, core nodes only. Orbit: pablodawson's 360 Orbit LoRA, with the still
+  // as both first and last frame. Not yet validated.
+  {
+    id: 'minimax-h3-t2v',
+    title: 'MiniMax H3 Text to Video + Audio (turbo v4, 8 steps)',
+    capability: 't2v',
+    handBuilt: 'hand-built/minimax-h3-t2v.json',
+    packs: ['ComfyUI-MiniMax-H3-Turbo', 'plaguekind-nodes'],
+    bindings: {
+      prompt: [b('131', 'prompt')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], loraStrength: [b('134', 'strength')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8, loraStrength: 1 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: H3_LICENSE_FAST,
+    notes:
+      'Text to video with sound: MiniMaxH3ImageToVideo with no frames given, the fl2va pruned int8 model with the turbo v4 LoRA at 1.0 (MiniMaxH3TurboLoRA, ' +
+      'MiniMaxH3TurboSampler), BasicScheduler simple 8 steps, H3SLAAttention (sparsity 0.85, block 64, int8 QK; needs Triton) and H3AdaLNLoRAFix (port), CFG 1. ' +
+      `${H3_NOTES_COMMON} ${H3_NOTES_TIME}`,
+  },
+  {
+    id: 'minimax-h3-i2v',
+    title: 'MiniMax H3 Image to Video + Audio (turbo v4, 8 steps)',
+    capability: 'i2v',
+    handBuilt: 'hand-built/minimax-h3-i2v.json',
+    packs: ['ComfyUI-MiniMax-H3-Turbo', 'plaguekind-nodes'],
+    bindings: {
+      prompt: [b('131', 'prompt')], image: [b('138', 'image')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], loraStrength: [b('134', 'strength')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8, loraStrength: 1 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: H3_LICENSE_FAST,
+    notes:
+      'Image to video with sound: image = the first frame (MiniMaxH3ImageToVideo first_frame), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, ' +
+      `8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON} ${H3_NOTES_TIME}`,
+  },
+  {
+    id: 'minimax-h3-flf2v',
+    title: 'MiniMax H3 Start + End Frame to Video + Audio (turbo v4, 8 steps)',
+    capability: 'flf2v',
+    handBuilt: 'hand-built/minimax-h3-flf2v.json',
+    packs: ['ComfyUI-MiniMax-H3-Turbo', 'plaguekind-nodes'],
+    bindings: {
+      prompt: [b('131', 'prompt')], image: [b('138', 'image')], endImage: [b('140', 'image')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], loraStrength: [b('134', 'strength')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8, loraStrength: 1 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: H3_LICENSE_FAST,
+    notes:
+      'Start and end frame to video with sound: image = the first frame, endImage = the last (cover-cropped to the canvas), the fl2va pruned int8 model with ' +
+      `the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON} ${H3_NOTES_TIME}`,
+  },
+  {
+    id: 'minimax-h3-t2v-hq',
+    title: 'MiniMax H3 Text to Video + Audio (20 steps)',
+    capability: 't2v',
+    handBuilt: 'hand-built/minimax-h3-t2v-hq.json',
+    bindings: {
+      prompt: [b('131', 'prompt')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 20 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: H3_LICENSE,
+    notes:
+      'Text to video with sound, the sharper setting: the fl2va pruned int8 model without the turbo LoRA, BasicScheduler simple 20 steps, KSamplerSelect res_multistep, ' +
+      `CFG 1; core nodes only. About 2.3 times as long as minimax-h3-t2v. ${H3_NOTES_COMMON}`,
+  },
+  {
+    id: 'minimax-h3-i2v-hq',
+    title: 'MiniMax H3 Image to Video + Audio (20 steps)',
+    capability: 'i2v',
+    handBuilt: 'hand-built/minimax-h3-i2v-hq.json',
+    bindings: {
+      prompt: [b('131', 'prompt')], image: [b('138', 'image')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 20 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: H3_LICENSE,
+    notes:
+      'Image to video with sound, the sharper setting: image = the first frame, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; ' +
+      `core nodes only. About 2.3 times as long as minimax-h3-i2v. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON}`,
+  },
+  {
+    id: 'minimax-h3-flf2v-hq',
+    title: 'MiniMax H3 Start + End Frame to Video + Audio (20 steps)',
+    capability: 'flf2v',
+    handBuilt: 'hand-built/minimax-h3-flf2v-hq.json',
+    bindings: {
+      prompt: [b('131', 'prompt')], image: [b('138', 'image')], endImage: [b('140', 'image')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 20 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: H3_LICENSE,
+    notes:
+      'Start and end frame to video with sound, the sharper setting: image = the first frame, endImage = the last, the fl2va pruned int8 model without the turbo LoRA, ' +
+      `20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-flf2v. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON}`,
+  },
+  {
+    id: 'minimax-h3-orbit',
+    title: 'MiniMax H3 360-degree orbit of a still + Audio (Orbit LoRA, 28 steps)',
+    capability: 'i2v',
+    handBuilt: 'hand-built/minimax-h3-orbit.json',
+    bindings: {
+      prompt: [b('131', 'prompt')], image: [b('138', 'image')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 73, fps: 24, steps: 28 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 32,
+    license: `${H3_LICENSE} · pablodawson's 360 Orbit LoRA under the same MiniMax H3 Community License`,
+    notes:
+      'A camera orbit around one frozen instant: image (LoadImage 138) is both the first and the last frame of MiniMaxH3ImageToVideo. The fl2va pruned int8 model ' +
+      "with pablodawson's 360 Orbit LoRA (minimax_h3_flf2v_lora_v1, LoraLoaderModelOnly at 1.0), MiniMaxH3SigmaShift 12 / 3, BasicScheduler simple 28 steps, " +
+      "KSamplerSelect res_multistep, CFG 1; core nodes only. 73 frames (3.04 s) is the LoRA's training length. The prompt reads best in the LoRA's own caption style: " +
+      'one frozen instant, the camera in one continuous 360-degree orbit, everything holding its place, camera parallax the only movement. The LoRA was trained ' +
+      `without sound; the graph still decodes H3's audio. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_CANVAS} ${H3_NOTES_FILES} With the Orbit LoRA (0.16 GB).`,
   },
   {
     id: 'infinitetalk-native',

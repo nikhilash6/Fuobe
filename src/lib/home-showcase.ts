@@ -119,6 +119,7 @@ export const HOME_SKILLS = ["product-photoshoot", "ugc-video", "thumbnail-genera
  * branch merges. Fewer than 6 left, the catalog's other new open models fill in.
  */
 export const HOME_NEW_OPEN = [
+  "oss-minimax-h3",
   "oss-qwen-image-21",
   "oss-ideogram-4",
   "oss-krea2-realism",

@@ -35,6 +35,10 @@ declare -A NODES=(
   # reason; the code was read at this commit (no network, exec or download paths in the nodes). It needs einops and
   # safetensors only, both already installed below. Weights: the DBS_WEIGHTS block at the end of this script.
   [ComfyUI-DBS]="https://github.com/hiroki-abe-58/ComfyUI-DBS f656e53434b5485c148a2866fbd6ddc6b6152ed6"
+  # MiniMax H3 video (minimax-h3-t2v / i2v / flf2v): larryvrh's turbo LoRA loader and sampler (Apache-2.0, v1.2.3, no
+  # dependencies) and PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel imports triton, installed below).
+  [ComfyUI-MiniMax-H3-Turbo]="https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo 77bfa67575b14e3be6214f1747732e540c68b5dd"
+  [plaguekind-nodes]="https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes d58d006a4ea32c25c06499f2ff104f0852a045a6"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.

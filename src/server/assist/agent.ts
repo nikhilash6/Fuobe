@@ -1,7 +1,8 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { nanoid } from "nanoid";
-import { getModel } from "@/lib/catalog";
+import { getModel, MODELS as CATALOG_MODELS } from "@/lib/catalog";
+import { filterModels, studioBest } from "@/lib/composer";
 import { AUDIO_STUDIO, EDIT_STUDIO, IMAGE_STUDIO, MUSIC_STUDIO, VIDEO_STUDIO } from "@/lib/studios";
 import {
   ASSIST_EFFORTS,
@@ -1025,6 +1026,15 @@ export function offlinePlan(message: string, preferred: Engine, hint?: SkillMeta
   const withSound = /\b(with|plus|and) (sound|audio|sfx|sound effects)\b/.test(t);
   // A studio's default, or the next model that is on when Settings → Models & licences switched it off.
   const pick = (d: { cloud: string; open: string }) => offeredDefault(engine === "open" && d.open ? d.open : d.cloud, engine === "open" && d.open ? "open" : "cloud")!;
+  // A clip cut into shots ("a 3-shot ad") runs on the Video studio's default when it makes shots, else on the next model in
+  // the studio's Best list that does (MiniMax H3 makes one shot a clip: Seedance 2.5 in the cloud, LTX-2.5 on your GPU).
+  const videoModel = () => {
+    const id = pick(VIDEO_STUDIO.defaultModels);
+    if (!shots || getModel(id)?.options.multiShot) return id;
+    const ops = VIDEO_STUDIO.pickerOps ?? VIDEO_STUDIO.ops;
+    const best = studioBest(filterModels(CATALOG_MODELS, { kind: "video", ops }), engine, id, ops);
+    return best.find((b) => b !== id && getModel(b)?.options.multiShot && offeredDefault(b, engine) === b) ?? id;
+  };
   const textModel = engine === "open" ? "oss-text-llm" : "text-llm";
   const styled = (p: string) => (hint?.style ? `${p}. ${hint.style}` : p);
   // The video settings a clip takes from the words: its length (one the model lists) and its own sound.
@@ -1042,7 +1052,7 @@ export function offlinePlan(message: string, preferred: Engine, hint?: SkillMeta
     const subject = oneTake(beforeThen, stills);
     const n = Math.max(1, Math.min(4, stills ? num(stills[1]) : 1));
     const stillModel = pick(images.length ? EDIT_STUDIO.defaultModels : IMAGE_STUDIO.defaultModels);
-    const clipModel = pick(VIDEO_STUDIO.defaultModels);
+    const clipModel = videoModel();
     const still = { model_id: stillModel, prompt: styled(subject), ...(images.length && { images: images.slice(0, 4) }), ...(aspect && { aspect_ratio: aspect }) };
     const motion = `${subject}. The still comes to life: smooth, cinematic camera motion, natural movement.`;
     const clip = (after: number) => ({ model_id: clipModel, prompt: motion, after, ...(shots && { shots }), ...(aspect && { aspect_ratio: aspect }), ...clipParams(clipModel) });
@@ -1117,7 +1127,7 @@ export function offlinePlan(message: string, preferred: Engine, hint?: SkillMeta
   const studio = isVideo ? VIDEO_STUDIO : images.length ? EDIT_STUDIO : IMAGE_STUDIO;
   const n = Math.max(1, Math.min(4, takes ?? (isVideo ? 1 : 2)));
   const multi = isVideo && shots ? shots : undefined;
-  const modelId = pick(studio.defaultModels);
+  const modelId = isVideo ? videoModel() : pick(studio.defaultModels);
   const job = {
     model_id: modelId,
     prompt: styled(take ? oneTake(text, take) : text),

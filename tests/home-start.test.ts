@@ -84,14 +84,14 @@ describe("the line under Home's composer", () => {
   });
 
   it("names the paid model and its price when a key for one of its providers is set", () => {
-    expect(startLine(state(["fal"]), q.video, "cloud", "video")?.text).toMatch(/^Start runs Seedance 2\.5 · about \$[\d.]+ a 5 s clip$/);
+    expect(startLine(state(["fal"]), q.video, "cloud", "video")?.text).toMatch(/^Start runs MiniMax H3 · about \$0\.30 a 5 s clip$/);
     expect(startLine(state(["replicate"]), q.image, "cloud", "image")?.text).toMatch(/^Start runs Nano Banana Pro · about/);
     expect(startLine(state(["fal"]), q.edit, "cloud", "edit")?.text).toMatch(/^Start runs Nano Banana Pro after you add the photo · /);
   });
 
   it("says it's a demo when the key set is for a provider that doesn't host the model", () => {
-    // Only Replicate: Seedance 2.5 is on fal.ai alone.
-    expect(startLine(state(["replicate"]), q.video, "cloud", "video")).toEqual({ text: "Seedance 2.5 needs a fal.ai key, so Start runs a free demo" });
+    // Only Replicate: hosted MiniMax H3 is on fal.ai alone.
+    expect(startLine(state(["replicate"]), q.video, "cloud", "video")).toEqual({ text: "MiniMax H3 needs a fal.ai key, so Start runs a free demo" });
     // Demo mode off: it won't run at all.
     expect(startLine(state(["replicate"], { demoMode: "off" }), q.video, "cloud", "video")?.text).toMatch(/so Start can't run it yet$/);
     expect(startLine(state(["fal"], { demoMode: "on" }), q.image, "cloud", "image")?.text).toMatch(/Demo mode is on/);
@@ -101,7 +101,7 @@ describe("the line under Home's composer", () => {
     expect(startLine(state(["comfyui"]), q.image, "cloud", "image")).toEqual({ text: "No paid API is connected, so Start runs a free demo", other: "open" });
     expect(startLine(state(["comfyui"]), q.image, "open", "image")?.text).toMatch(/^Start runs .+ on your GPU · Free$/);
     expect(startLine(state(["fal"]), q.image, "open", "image")).toEqual({ text: "ComfyUI isn't connected, so Start runs a free demo", other: "cloud" });
-    // A Replicate key doesn't run Seedance, so it isn't offered for Video.
+    // A Replicate key doesn't run hosted MiniMax H3, so it isn't offered for Video.
     expect(startLine(state(["replicate"]), q.video, "open", "video")).toEqual({ text: "ComfyUI isn't connected, so Start runs a free demo" });
     // Nothing connected: Home's demo notice says it instead.
     expect(startLine(state([]), q.image, "cloud", "image")).toBeNull();

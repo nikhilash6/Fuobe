@@ -334,8 +334,8 @@ describe("variants resolve as prepareWorkflow runs them", () => {
   it("picks the pose, the product shot, EXR frames, the single-track mux and the clip count", () => {
     expect(resolveWorkflowId("wan22-i2v-14b", { ...base, extra: { cameraMotion: "dolly-in" } })).toBe("wan22-fun-camera-14b");
     expect(resolveWorkflowId("wan22-i2v-14b", base)).toBe("wan22-i2v-14b");
-    expect(resolveWorkflowId("qwen-image-edit-2511-multi", { ...base, op: "edit", extra: { productShot: true } })).toBe("product-shot-qwen-edit-2509");
-    expect(resolveWorkflowId("qwen-image-edit-2511-multi", { ...base, op: "edit", images: 2, extra: { productShot: true } })).toBe("qwen-image-edit-2511-multi");
+    expect(resolveWorkflowId("qwen-image-21-edit", { ...base, op: "edit", extra: { productShot: true } })).toBe("product-shot-qwen-edit-2509");
+    expect(resolveWorkflowId("qwen-image-21-edit", { ...base, op: "edit", images: 2, extra: { productShot: true } })).toBe("qwen-image-21-edit");
     expect(resolveWorkflowId("video-concat-{n}", { ...base, op: "concat", clips: 3 })).toBe("video-concat-3");
     if (has("video-mux-audio-replace")) expect(resolveWorkflowId("video-mux-audio", { ...base, op: "mux" })).toBe("video-mux-audio-replace");
     if (has("video-export-exr")) expect(resolveWorkflowId("video-export-pro-chunked", { ...base, op: "export-video", format: "exr" })).toBe("video-export-exr");

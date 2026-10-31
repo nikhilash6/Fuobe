@@ -6259,20 +6259,39 @@ export const CLOUD_MODELS: ModelDef[] = [
         "2K",
         "4K"
       ],
+      "durations": [
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
       "endFrame": true,
       "maxImages": 9,
       "maxVideos": 3,
       "maxAudios": 3
     },
     "badges": [
-      "new"
+      "top",
+      "new",
+      "audio"
     ],
     "defaults": {
-      "aspectRatio": "16:9"
+      "aspectRatio": "16:9",
+      "duration": 5,
+      "resolution": "768P"
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.05
+      "usd": 0.06,
+      "note": "768P; 480P $0.05, 2K $0.13, 4K $0.16",
+      "byResolution": {
+        "480P": 0.05,
+        "768P": 0.06,
+        "2K": 0.13,
+        "4K": 0.16
+      }
     }
   },
   {

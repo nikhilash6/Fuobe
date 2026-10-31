@@ -476,6 +476,19 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "Ostris' Krea 2 edit nodes (Krea 2 Inpaint); MIT code. The inpaint LoRA it runs is under the Krea 2 Community License",
   }),
+  // MiniMax H3 video (minimax-h3-t2v / i2v / flf2v), pinned in install-comfyui.sh.
+  pack("ComfyUI-MiniMax-H3-Turbo", "https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo/tree/77bfa67575b14e3be6214f1747732e540c68b5dd", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "larryvrh's turbo LoRA loader and sampler for MiniMax H3 (8 steps); Apache-2.0 code, and the turbo v4 LoRA is Apache-2.0. The MiniMax H3 weights it runs leave out the US, the EU, the UK and South Korea",
+  }),
+  pack("plaguekind-nodes", "https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes/tree/d58d006a4ea32c25c06499f2ff104f0852a045a6", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "PlagueKind's H3 SLA attention (needs Triton) and AdaLN LoRA fix for MiniMax H3; MIT code",
+  }),
 ];
 
 export const nodePack = (name: string): NodePack | undefined => NODE_PACKS.find((p) => p.name === name);

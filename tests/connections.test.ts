@@ -157,7 +157,7 @@ describe("first-run guide and status strip", () => {
   });
 
   it("quotes a first image and clip on the default paid models", () => {
-    expect(starterPriceLine()).toMatch(/^Nano Banana Pro ≈ \$[\d.]+ an image · Seedance 2\.5 ≈ \$[\d.]+ a 5 s clip$/);
+    expect(starterPriceLine()).toMatch(/^Nano Banana Pro ≈ \$[\d.]+ an image · MiniMax H3 ≈ \$0\.30 a 5 s clip$/);
   });
 });
 

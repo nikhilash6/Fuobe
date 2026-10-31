@@ -15,8 +15,19 @@ export const CAMERA_POSE_GRAPH: Record<string, string> = { "wan22-i2v-14b": "wan
 /**
  * Fuobe Marketing Image's Standalone product shot (params.extra.productShot with one product photo) runs the product-shot
  * graph: the product cut out with BiRefNet, put on white and relit into the scene (Qwen-Image-Edit 2509 + White_to_Scene).
+ * The key is Marketing Image's open edit graph.
  */
-export const PRODUCT_SHOT_GRAPH: Record<string, string> = { "qwen-image-edit-2511-multi": "product-shot-qwen-edit-2509" };
+export const PRODUCT_SHOT_GRAPH: Record<string, string> = { "qwen-image-21-edit": "product-shot-qwen-edit-2509" };
+
+/** MiniMax H3's Quality control: "best" (params.extra.quality) runs the 20-step graph without the turbo LoRA. */
+export const H3_BEST_GRAPH: Record<string, string> = {
+  "minimax-h3-t2v": "minimax-h3-t2v-hq",
+  "minimax-h3-i2v": "minimax-h3-i2v-hq",
+  "minimax-h3-flf2v": "minimax-h3-flf2v-hq",
+};
+
+/** MiniMax H3's 360-degree orbit of a still (params.extra.orbit): the Orbit LoRA graph, with the still as first and last frame. */
+export const H3_ORBIT_GRAPH: Record<string, string> = { "minimax-h3-i2v": "minimax-h3-orbit" };
 
 export interface VariantRequest {
   op: string;
@@ -48,5 +59,10 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   if (posed && typeof r.extra.cameraMotion === "string" && r.extra.cameraMotion) endpoint = posed;
   const shot = PRODUCT_SHOT_GRAPH[endpoint];
   if (shot && r.extra.productShot === true && r.images === 1 && r.has(shot)) endpoint = shot;
+  // MiniMax H3: an orbit runs the Orbit LoRA graph (whatever the quality), else Best runs the 20-step graph.
+  const orbit = H3_ORBIT_GRAPH[endpoint];
+  const best = H3_BEST_GRAPH[endpoint];
+  if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
+  else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
   return endpoint;
 }

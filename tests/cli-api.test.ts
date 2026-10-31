@@ -62,7 +62,7 @@ describe("GET /api/models", () => {
   });
 
   it("names the studios' default models, and follows the engine mode", async () => {
-    expect((await models()).body.defaults).toMatchObject({ image: { cloud: "nano-banana-pro", open: "oss-ideogram-4" }, video: { cloud: "seedance-2-5", open: "oss-wan22-14b-fast" } });
+    expect((await models()).body.defaults).toMatchObject({ image: { cloud: "nano-banana-pro", open: "oss-ideogram-4" }, video: { cloud: "minimax-h3", open: "oss-minimax-h3" } });
     setSetting("engineMode", "open");
     try {
       const { body } = await models("?kind=image");

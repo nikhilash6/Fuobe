@@ -589,8 +589,11 @@ export interface ModelOptions {
   /**
    * The prompt the model reads, when it isn't plain words: "ideogram4" = an Ideogram 4 JSON caption. The server writes
    * one from the words before the run (src/lib/ideogram-caption.ts) and keeps it as the run's prompt.
+   * "minimax-h3" = MiniMax H3's layout: an alignment line for the start (and end) frame, then integrated_multimodal_description,
+   * overall_soundscape and non_diegetic_music. The server wraps the words in it (src/lib/h3-prompt.ts) and keeps the result
+   * as the run's prompt; words already in the layout pass through.
    */
-  promptFormat?: "ideogram4";
+  promptFormat?: "ideogram4" | "minimax-h3";
   /**
    * LoRAs the model's recipe always loads (Fuobe Try-On's try-on LoRA): every run carries them before the user's own
    * (an API's LoRA cap leaves out the user's first), their trigger words leading the prompt. A ComfyUI graph that loads

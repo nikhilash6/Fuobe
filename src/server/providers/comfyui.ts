@@ -39,6 +39,7 @@ import {
 } from "@/lib/comfy";
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
+import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
 import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
@@ -1125,22 +1126,31 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     else if (soundLength) values.duration = soundLength;
     else if (ctx.op === "trim") values.duration = 0; // from the start time to the end
   }
+  // MiniMax H3 stretches the start frame to the canvas with no crop: a clip from a still (or the orbit of one) always takes the
+  // still's shape, so an aspect ratio left over from a text draft can't distort it.
+  const h3 = isH3Graph(manifest.id);
+  const aspectRatio = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || b.image) ? "auto" : input.aspectRatio;
   if (b.width || b.height) {
     const multiple = Number(manifest.limits?.dimensionMultiple ?? 16);
     // With motion paths the frame keeps the start image's shape, so the paths need no cropping;
     // "auto" keeps the source clip's shape when its header told us.
     const srcAspect = (extra.motionPaths as MotionPaths | undefined)?.aspect;
     // "auto" keeps the source clip's shape when its header told us, else the start frame's (image-to-video).
-    const still = input.aspectRatio === "auto" && !clip?.width ? ctx.media?.(String(values.image ?? "")) : undefined;
+    const still = aspectRatio === "auto" && !clip?.width ? ctx.media?.(String(values.image ?? "")) : undefined;
     const src = clip?.width && clip.height ? clip : still?.width && still.height ? still : undefined;
-    const shape = srcAspect ? `${srcAspect[0]}:${srcAspect[1]}` : input.aspectRatio === "auto" ? (src ? `${src.width}:${src.height}` : undefined) : input.aspectRatio;
-    const dims = computeDimensions(shape, input.resolution, { width: Number(d.width ?? 1024), height: Number(d.height ?? 1024) }, multiple);
-    // Respect the workflow's size limits while keeping the aspect ratio.
-    const maxW = Number(manifest.limits?.maxWidth ?? Infinity);
-    const maxH = Number(manifest.limits?.maxHeight ?? Infinity);
-    const k = Math.min(1, maxW / dims.width, maxH / dims.height);
-    values.width = Math.max(multiple, Math.floor((dims.width * k) / multiple) * multiple);
-    values.height = Math.max(multiple, Math.floor((dims.height * k) / multiple) * multiple);
+    const shape = srcAspect ? `${srcAspect[0]}:${srcAspect[1]}` : aspectRatio === "auto" ? (src ? `${src.width}:${src.height}` : undefined) : aspectRatio;
+    if (h3) {
+      // H3's own canvas (ComfyUI's adapt_canvas): 768 px on the short side, at most 768 × 1344, multiples of 32.
+      Object.assign(values, h3Canvas(shape));
+    } else {
+      const dims = computeDimensions(shape, input.resolution, { width: Number(d.width ?? 1024), height: Number(d.height ?? 1024) }, multiple);
+      // Respect the workflow's size limits while keeping the aspect ratio.
+      const maxW = Number(manifest.limits?.maxWidth ?? Infinity);
+      const maxH = Number(manifest.limits?.maxHeight ?? Infinity);
+      const k = Math.min(1, maxW / dims.width, maxH / dims.height);
+      values.width = Math.max(multiple, Math.floor((dims.width * k) / multiple) * multiple);
+      values.height = Math.max(multiple, Math.floor((dims.height * k) / multiple) * multiple);
+    }
   }
   // An end card appended to an ad (video-append-endcard): the card is encoded at the ad's own size and frame rate,
   // so the ad's packets are copied as they are. Only the ad's header knows them.
@@ -1148,7 +1158,15 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     if (!clip?.width || !clip.height || !clip.fps) throw new ProviderError("Couldn't read the ad's size and frame rate, so the end card can't be added");
     Object.assign(values, { width: clip.width, height: clip.height, fps: Math.round(clip.fps * 1000) / 1000 });
   }
-  if (b.frames && span) values.frames = computeFrames(span, fps, Number(d.frameStep ?? 4), manifest.limits?.maxFrames);
+  if (b.frames && span) {
+    if (h3) {
+      // H3's 17n + 5 grid at 24 fps (3 s → 73, 5 s → 124, 10 s → 243, 15 s → 362): the clip h3Prompt's end-frame mark names.
+      const cap = Number(manifest.limits?.maxFrames ?? Infinity);
+      let frames = h3Frames(span);
+      while (frames > cap) frames -= 17;
+      values.frames = frames;
+    } else values.frames = computeFrames(span, fps, Number(d.frameStep ?? 4), manifest.limits?.maxFrames);
+  }
   // Lip re-sync and a talking avatar run as long as the voice (its header, or the length the run was given); a voice past
   // the frame cap is refused, not cut.
   const voiceLength =
