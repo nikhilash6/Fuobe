@@ -53,7 +53,7 @@ export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] 
   const cats = ["All", ...new Set(list.map((p) => p.category))];
   return (
     <>
-      <div className="scrollbar-none mb-2 flex gap-1 overflow-x-auto" role="tablist" aria-label="Categories">
+      <div className="scrollbar-none mb-2 flex shrink-0 gap-1 overflow-x-auto" role="tablist" aria-label="Categories">
         {cats.map((c) => (
           <button
             key={c}
@@ -67,27 +67,30 @@ export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] 
         ))}
       </div>
       <CoverScrollBox value={box}>
-        <div ref={box} className="grid max-h-72 grid-cols-3 gap-1.5 overflow-y-auto">
-          {cat === "All" && (
-            <button type="button" aria-pressed={!value} onClick={() => onPick(undefined)} className={cn(tileClass, !value && "ring-2")}>
-              <CoverTile
-                cover={undefined}
-                picked={!value}
-                className="aspect-video w-full rounded-md"
-                fallback={
-                  <span className="absolute inset-0 grid place-items-center text-muted-foreground">
-                    <Ban className="size-5" />
-                  </span>
-                }
-              />
-              <span className="w-full truncate px-0.5 text-[12px] font-medium">{noneLabel}</span>
-            </button>
-          )}
-          {list
-            .filter((p) => cat === "All" || p.category === cat)
-            .map((p) => (
-              <PresetTile key={p.id} preset={p} picked={value === p.id} onPick={() => onPick(p.id)} />
-            ))}
+        {/* The box scrolls and gives way in the picker (min-h-0); the grid inside keeps its rows whole. */}
+        <div ref={box} className="max-h-[28rem] min-h-0 overflow-y-auto overscroll-contain">
+          <div className="grid grid-cols-3 gap-1.5">
+            {cat === "All" && (
+              <button type="button" aria-pressed={!value} onClick={() => onPick(undefined)} className={cn(tileClass, !value && "ring-2")}>
+                <CoverTile
+                  cover={undefined}
+                  picked={!value}
+                  className="aspect-video w-full rounded-md"
+                  fallback={
+                    <span className="absolute inset-0 grid place-items-center text-muted-foreground">
+                      <Ban className="size-5" />
+                    </span>
+                  }
+                />
+                <span className="w-full truncate px-0.5 text-[12px] font-medium">{noneLabel}</span>
+              </button>
+            )}
+            {list
+              .filter((p) => cat === "All" || p.category === cat)
+              .map((p) => (
+                <PresetTile key={p.id} preset={p} picked={value === p.id} onPick={() => onPick(p.id)} />
+              ))}
+          </div>
         </div>
       </CoverScrollBox>
     </>
@@ -96,8 +99,27 @@ export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] 
 
 const prefetch = () => void loadFullCatalog();
 
+/**
+ * A picker opens on the side of its chip with more of the screen (below a chip in the upper half), and is as tall as
+ * that room allows: its scroll box gives way (min-h-0), the categories and Mix's sliders keep their height, and the
+ * covers get up to 28rem, four rows. The side is picked as it opens, so a list still loading (a short box) doesn't keep
+ * it on the side with less room.
+ */
+const POPOVER_HEIGHT = "max-h-[var(--radix-popover-content-available-height)]";
+
+function usePickerSide() {
+  const chip = useRef<HTMLButtonElement>(null);
+  const [side, setSide] = useState<"top" | "bottom">("top");
+  const measure = () => {
+    const r = chip.current?.getBoundingClientRect();
+    if (r) setSide(window.innerHeight - r.bottom > r.top ? "bottom" : "top");
+  };
+  return { chip, side, measure };
+}
+
 export function PresetChip({ type, value, onChange }: { type: "motion" | "effect"; value?: string; onChange: (id?: string) => void }) {
   const [open, setOpen] = useState(false);
+  const { chip, side, measure } = usePickerSide();
   const catalog = useCatalog();
   const list = catalog.presets?.[type] ?? null;
   const selected = value ? catalog.getPreset(value) : undefined;
@@ -111,16 +133,18 @@ export function PresetChip({ type, value, onChange }: { type: "motion" | "effect
         open={open}
         onOpenChange={(o) => {
           setOpen(o);
-          if (o) prefetch();
+          if (!o) return;
+          measure();
+          prefetch();
         }}
       >
         <PopoverTrigger asChild>
-          <Chip icon={Icon} active={!!value} onPointerEnter={prefetch} onFocus={prefetch} className={cn(value && !selected && "[&>svg]:animate-spin")}>
+          <Chip ref={chip} icon={Icon} active={!!value} onPointerEnter={prefetch} onFocus={prefetch} className={cn(value && !selected && "[&>svg]:animate-spin")}>
             {cover && <CoverTile cover={cover} className="size-4 rounded-full" />}
             {selected?.name ?? (value ? "Loading…" : type === "motion" ? "Camera motion" : "Effect")}
           </Chip>
         </PopoverTrigger>
-        <PopoverContent className="w-[min(92vw,460px)] p-2" align="start" side="top" collisionPadding={12} aria-label={type === "motion" ? "Camera motions" : "Effects"}>
+        <PopoverContent className={cn(POPOVER_HEIGHT, "w-[min(92vw,460px)] p-2")} align="start" side={side} collisionPadding={12} aria-label={type === "motion" ? "Camera motions" : "Effects"}>
           <PresetGrid
             list={list}
             value={value}
@@ -151,6 +175,7 @@ export function MixChip({
   onChange: (patch: { presetStrength?: number; mix?: { presetId: string; strength: number } | undefined }) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { chip, side, measure } = usePickerSide();
   const catalog = useCatalog();
   const second = mix ? catalog.getPreset(mix.presetId) : undefined;
   const cover = second && presetCover(second.id);
@@ -161,16 +186,18 @@ export function MixChip({
         open={open}
         onOpenChange={(o) => {
           setOpen(o);
-          if (o) prefetch();
+          if (!o) return;
+          measure();
+          prefetch();
         }}
       >
         <PopoverTrigger asChild>
-          <Chip icon={cover ? undefined : Shuffle} active={!!mix} onPointerEnter={prefetch} onFocus={prefetch}>
+          <Chip ref={chip} icon={cover ? undefined : Shuffle} active={!!mix} onPointerEnter={prefetch} onFocus={prefetch}>
             {cover && <CoverTile cover={cover} className="size-4 rounded-full" />}
             {second ? `+ ${second.name}` : "Mix"}
           </Chip>
         </PopoverTrigger>
-        <PopoverContent className="w-[min(92vw,460px)] space-y-3 p-3" align="start" side="top" collisionPadding={12} aria-label="Mix">
+        <PopoverContent className={cn(POPOVER_HEIGHT, "w-[min(92vw,460px)] space-y-3 p-3")} align="start" side={side} collisionPadding={12} aria-label="Mix">
           <div className="space-y-2.5">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[12px]">
