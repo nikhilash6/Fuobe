@@ -11,8 +11,9 @@ import { LogoField } from "@/components/brand/brand-kit-form";
 import { areaCls, ColorList, inputCls } from "@/components/brand/fields";
 import { ImageList } from "@/components/brand/image-list";
 import { AddFromLink, priceText, ProductThumb, UploadProductButton } from "@/components/brand/products";
+import { SelfHostNote } from "@/components/self-host-note";
 import type { SlotValue } from "@/components/studio/media-slot";
-import { uploadFile } from "@/lib/api";
+import { uploadFile, useIsVisitor } from "@/lib/api";
 import { AD_STYLES, END_CARD, KIT_LABELS, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -151,6 +152,9 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   const [script, setScript] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
   const [busy, setBusy] = useState(false);
+  // A product is saved to the studio's library and an ad doesn't run on an account's own GPU or key yet: a guest or an
+  // account is told so up front, and can't add a product or start one.
+  const visitor = useIsVisitor();
   const resultsRef = useRef<HTMLDivElement>(null);
   const product = products.data?.find((p) => p.id === productId) ?? null;
   const brand = useBrand(product?.brandId).data?.brand;
@@ -234,6 +238,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
     }
   };
   const generate = async () => {
+    if (visitor) return;
     if (blocker) return void toast(blocker, { id: "c2a-blocker" });
     setBusy(true);
     try {
@@ -257,15 +262,16 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
         <div className="pb-2 text-center">
           <h2 className="font-heading text-display text-balance">Make a video ad in one click</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">Drop a product link, get a 9:16 ad with voiceover and captions — ready for TikTok, Reels and Shorts. No filming, no editing, no brief.</p>
+          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Click to Ad runs on a self-hosted Fuobe for now.</SelfHostNote>}
         </div>
 
         <Step n={1} title="Your product" hint="Paste the product's own page, or pick one you saved." done={!!product}>
-          <AddFromLink limit={1} withBrand placeholder="https://yourshop.com/products/…" onAdded={(ps, extra) => ps[0] && choose(ps[0], extra.brand)} />
+          <AddFromLink limit={1} withBrand placeholder="https://yourshop.com/products/…" onAdded={(ps, extra) => ps[0] && choose(ps[0], extra.brand)} disabled={visitor} />
           {reading && <KitProgress />}
           <div className="mt-5">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-[12px] font-medium text-muted-foreground">Or select your product</p>
-              <UploadProductButton variant="ghost" onSaved={(p) => choose(p)} />
+              <UploadProductButton variant="ghost" onSaved={(p) => choose(p)} disabled={visitor} />
             </div>
             {products.data?.length ? (
               <div className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -432,7 +438,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
                 {est.data?.steps.length ? ` · ${est.data.steps.length} steps` : ""}
               </p>
               {cost && <span className="font-mono text-[13px] text-muted-foreground">{cost}</span>}
-              <Button size="lg" onClick={() => void generate()} aria-disabled={!!blocker || busy} className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")} title={blocker}>
+              <Button size="lg" onClick={() => void generate()} disabled={visitor} aria-disabled={!!blocker || busy} className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")} title={blocker}>
                 {busy ? <Loader2 className="animate-spin" /> : <Wand2 />} Generate video
               </Button>
             </div>

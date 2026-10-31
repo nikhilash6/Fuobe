@@ -113,12 +113,32 @@ function ProductForm({ onOpenChange, brandId, product, onSaved }: { onOpenChange
   );
 }
 
-/** "Add product from link": reads the page, adds what it finds. */
-export function AddFromLink({ brandId, onAdded, limit = 3, withBrand, className, placeholder = "Paste a product link" }: { brandId?: string | null; onAdded?: (ps: Product[], extra: { brand?: { logo?: string; colors: string[]; name?: string } }) => void; limit?: number; withBrand?: boolean; className?: string; placeholder?: string }) {
+/** Refusals that say what this visitor can't do here (a tool, the owner's library, a GPU first): not worth a retry. */
+const REFUSED = new Set(["own-gpu-tool", "library", "connect-gpu"]);
+
+/** "Add product from link": reads the page, adds what it finds. disabled: a visitor, who can't save a product here. */
+export function AddFromLink({
+  brandId,
+  onAdded,
+  limit = 3,
+  withBrand,
+  className,
+  placeholder = "Paste a product link",
+  disabled,
+}: {
+  brandId?: string | null;
+  onAdded?: (ps: Product[], extra: { brand?: { logo?: string; colors: string[]; name?: string } }) => void;
+  limit?: number;
+  withBrand?: boolean;
+  className?: string;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
   const { read } = useProductActions();
   const [url, setUrl] = useState("");
   const [slow, setSlow] = useState(false);
   const go = () => {
+    if (disabled) return;
     // The server's own rule (it would refuse the link anyway), before the "Reading…" and the kit animation start.
     const link = normalizeWebsite(url);
     if (!link) return void toast("Use a valid product link.");
@@ -136,8 +156,12 @@ export function AddFromLink({ brandId, onAdded, limit = 3, withBrand, className,
           setUrl("");
           onAdded?.(r.duplicate ? [r.duplicate] : r.products, { brand: r.brand });
         },
-        // A refusal that opened its own card (sign up, connect your GPU): the card alone, no "try again" toast on top.
-        onError: (e) => (refusalShown(e) ? toast.dismiss(id) : toast.error((e as Error).message, { id, description: "Try again, or add it by hand." })),
+        // A refusal that opened its own card (sign up, connect your GPU): the card alone, no "try again" toast on top. One
+        // that says what isn't open to this visitor gets no "try again" either: trying again wouldn't change it.
+        onError: (e) =>
+          refusalShown(e)
+            ? toast.dismiss(id)
+            : toast.error((e as Error).message, { id, description: REFUSED.has((e as { code?: string }).code ?? "") ? undefined : "Try again, or add it by hand." }),
         onSettled: () => clearTimeout(t),
       },
     );
@@ -152,9 +176,9 @@ export function AddFromLink({ brandId, onAdded, limit = 3, withBrand, className,
     >
       <div className="relative min-w-0 flex-1">
         <Link2 className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={placeholder} aria-label="Product link" className={cn(inputCls, "pl-8")} />
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={placeholder} aria-label="Product link" disabled={disabled} className={cn(inputCls, "pl-8 disabled:opacity-60")} />
       </div>
-      <Button type="submit" variant="outline" disabled={read.isPending}>
+      <Button type="submit" variant="outline" disabled={read.isPending || disabled}>
         {read.isPending ? <Loader2 className="animate-spin" /> : <Plus />} Add
       </Button>
       {read.isPending && slow && <span className="sr-only">This is taking longer than usual</span>}
@@ -211,12 +235,12 @@ export function ProductCard({ product, selected, onToggle, onEdit, onDelete, dis
   );
 }
 
-/** The "Upload product" button with its dialog. */
-export function UploadProductButton({ brandId, onSaved, variant = "outline" }: { brandId?: string | null; onSaved?: (p: Product) => void; variant?: "outline" | "ghost" | "secondary" }) {
+/** The "Upload product" button with its dialog. disabled: a visitor, who can't save a product here. */
+export function UploadProductButton({ brandId, onSaved, variant = "outline", disabled }: { brandId?: string | null; onSaved?: (p: Product) => void; variant?: "outline" | "ghost" | "secondary"; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant={variant} onClick={() => setOpen(true)}>
+      <Button variant={variant} onClick={() => setOpen(true)} disabled={disabled}>
         <Upload /> Upload product
       </Button>
       <ProductDialog open={open} onOpenChange={setOpen} brandId={brandId} onSaved={onSaved} />

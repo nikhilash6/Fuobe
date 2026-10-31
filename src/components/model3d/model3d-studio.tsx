@@ -15,7 +15,8 @@ import { FailedTile, PendingTile } from "@/components/studio/feed";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
-import { useCreateGeneration, useEngine, useGenerations, useHydrated, useModelAccess, useStatus } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useCreateGeneration, useEngine, useGenerations, useHydrated, useIsVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
   MAX_3D_PROMPT,
   MODEL3D_FEATURE,
@@ -124,6 +125,9 @@ function ModePicker({ mode, onChange }: { mode: Model3dMode; onChange: (m: Model
 /** Image to 3D: a photo, several photos, words, an object in a photo or a splat → a model to spin, download, rig and animate. */
 export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const [engine, setEngine, engineMode] = useEngine();
+  // A 3D model is finished on this server, so accounts don't get Image to 3D yet, even on their own GPU or key: said up
+  // front, and the uploads and Make it 3D are off, instead of a run the server refuses.
+  const visitor = useIsVisitor();
   const access = useModelAccess();
   const create = useCreateGeneration();
   const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d"], limit: 24 });
@@ -169,6 +173,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const price = priceLine(preview.data);
   const cloudAllowed = engineMode !== "open";
   const go = () => {
+    if (visitor) return;
     if (blocker) return void toast(blocker, { id: "3d-blocker" });
     create.mutate(model3dRequest(input), {
       onSuccess: () => toast.success(mode === "splat" ? "Making your splat" : mode === "text" && engine === "open" ? "Drawing the object, then building it in 3D" : "Building your 3D model"),
@@ -183,7 +188,9 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
       <Suspense fallback={null}>
         <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} />
       </Suspense>
-      <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]} />
+      <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]}>
+        {visitor && <SelfHostNote className="mt-3 max-w-xl">Image to 3D runs on a self-hosted Fuobe for now.</SelfHostNote>}
+      </ToolHero>
       <ModePicker mode={mode} onChange={pickMode} />
       {rigHint && (
         <p role="status" className="mx-auto mt-4 max-w-[880px] rounded-2xl border bg-brand-faint px-4 py-3 text-[13px] text-brand-text">
@@ -206,7 +213,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
           <Panel title="Photos of each side" aside={<span className="text-[12px] text-muted-foreground">{Object.keys(sides).length} of 4</span>}>
             {/* Four 80 px slots in a row when the panel has room for them (22rem), two by two when it doesn't. */}
             <div className="@container">
-              <div className="grid grid-cols-2 justify-items-center gap-2 @[22rem]:grid-cols-4">
+              {/* A guest's or an account's photos would be uploaded for a model that can't be made here. */}
+              <div inert={visitor} className={cn("grid grid-cols-2 justify-items-center gap-2 @[22rem]:grid-cols-4", visitor && "opacity-50")}>
                 {VIEW_SIDES.map((s) => (
                   <div key={s} className="flex flex-col items-center gap-1">
                     <MediaSlot label={SIDE_LABELS[s]} kind="image" value={views[s] ?? null} onChange={setSide(s)} required={s === "front"} size="lg" caption />
@@ -241,14 +249,16 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
           </Panel>
         ) : (
           <div className="grid min-w-0 gap-3">
-            <MediaDrop
-              kind="image"
-              value={photo}
-              onChange={setPhoto}
-              title={mode === "objects" ? "Add a photo" : "Add a photo of the object"}
-              hint={mode === "objects" ? "A room, a shelf, a street: anything with the object in it" : "One object, plain background, well lit"}
-              compact
-            />
+            <div inert={visitor} className={cn("min-w-0", visitor && "opacity-50")}>
+              <MediaDrop
+                kind="image"
+                value={photo}
+                onChange={setPhoto}
+                title={mode === "objects" ? "Add a photo" : "Add a photo of the object"}
+                hint={mode === "objects" ? "A room, a shelf, a street: anything with the object in it" : "One object, plain background, well lit"}
+                compact
+              />
+            </div>
             {mode === "objects" && (
               <Panel title="What to take out">
                 <Label htmlFor="m3d-object" className="sr-only">
@@ -314,7 +324,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                   </p>
                 )}
               </div>
-              <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending}>
+              <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
               </Button>
               <p className="mt-2 text-[12px] text-muted-foreground" aria-live="polite">

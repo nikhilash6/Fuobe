@@ -258,10 +258,11 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                 <ReferenceCard reference={{ kind: "preset", presetId: preset.id, title: `Preset: ${preset.name}` }} analysis={null} styleId={preset.brief.styleId} />
               ) : null}
               <div className="flex flex-wrap items-center gap-1.5">
+                {/* A guest's or an account's clip would be uploaded and read for a series that can't start here. */}
                 <button
                   type="button"
                   onClick={() => file.current?.click()}
-                  disabled={uploading || create.isPending}
+                  disabled={uploading || create.isPending || visitor}
                   className="inline-flex h-8 items-center gap-1.5 rounded-full bg-secondary px-3 text-[13px] font-medium hover:bg-accent disabled:opacity-60"
                 >
                   {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
@@ -270,9 +271,10 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                 <button
                   type="button"
                   onClick={() => setLinkOpen((v) => !v)}
-                  aria-expanded={linkOpen}
+                  disabled={visitor}
+                  aria-expanded={linkOpen && !visitor}
                   aria-controls={ids.link}
-                  className={cn("inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium", linkOpen ? "bg-brand-faint text-brand-text" : "bg-secondary hover:bg-accent")}
+                  className={cn("inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium disabled:opacity-60", linkOpen && !visitor ? "bg-brand-faint text-brand-text" : "bg-secondary hover:bg-accent")}
                 >
                   <Link2 className="size-3.5" /> TikTok or Instagram link
                 </button>
@@ -284,7 +286,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                 </span>
                 <input ref={file} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" hidden onChange={(e) => (void onFile(e.target.files?.[0]), (e.target.value = ""))} />
               </div>
-              {linkOpen && (
+              {linkOpen && !visitor && (
                 <div id={ids.link} className="space-y-1.5 rounded-2xl bg-muted/60 p-2.5">
                   <form
                     className="flex min-w-0 items-center gap-2"

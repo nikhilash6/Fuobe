@@ -18,7 +18,8 @@ import { frameDiff, openVideo, releaseVideo, sampleFrames } from "@/components/a
 import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
-import { useEngine, useModelAccess } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEngine, useIsVisitor, useModelAccess } from "@/lib/api";
 import { formatCueTime } from "@/lib/av/cue-edit";
 import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
 import { keepOffered, offered } from "@/lib/model-access";
@@ -59,6 +60,9 @@ const money = (usd: number | null | undefined, demo?: boolean, open?: boolean) =
 /** Katana: rebuild a reference edit with your subject, shot for shot. */
 export function KatanaStudio() {
   const [engine] = useEngine();
+  // An edit doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // uploads and Recreate are off, instead of a run the server refuses.
+  const visitor = useIsVisitor();
   const jobs = useKatanaJobs();
   const { start } = useKatanaActions();
   const [reference, setReference] = useState<SlotValue | null>(null);
@@ -140,6 +144,7 @@ export function KatanaStudio() {
   };
 
   const go = () => {
+    if (visitor) return;
     if (blocker || !body) return void toast(blocker ?? "Not ready yet", { id: "katana-blocker" });
     start.mutate(body, {
       onSuccess: (j) => toast.success(`Katana started · ${j.segments.length} segment${j.segments.length === 1 ? "" : "s"}`),
@@ -149,9 +154,12 @@ export function KatanaStudio() {
 
   return (
     <ToolShell title="Katana">
-      <ToolHero title="Recreate the edit. Make it yours." subtitle="Drop a reference edit and up to 5 photos of your subject — Katana rebuilds it shot for shot, at the original cut times, with the original sound." />
+      <ToolHero title="Recreate the edit. Make it yours." subtitle="Drop a reference edit and up to 5 photos of your subject — Katana rebuilds it shot for shot, at the original cut times, with the original sound.">
+        {visitor && <SelfHostNote className="mt-3 max-w-xl">Katana runs on a self-hosted Fuobe for now.</SelfHostNote>}
+      </ToolHero>
       <div className="mx-auto mt-8 grid max-w-[1040px] gap-4 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
-        <div className="min-w-0 space-y-3">
+        {/* A guest's or an account's files would be uploaded for an edit that can't start here. */}
+        <div inert={visitor} className={cn("min-w-0 space-y-3", visitor && "opacity-50")}>
           <MediaDrop
             kind="video"
             value={reference}
@@ -225,7 +233,7 @@ export function KatanaStudio() {
         </div>
         <div className="min-w-0 space-y-3">
           <Panel title="Your subject" aside={<span className="text-[12px] text-muted-foreground">{photos.length}/5</span>}>
-            <div className="flex flex-wrap gap-2">
+            <div inert={visitor} className={cn("flex flex-wrap gap-2", visitor && "opacity-50")}>
               {photos.map((p) => (
                 <MediaSlot key={p.id} label="Photo" kind="image" value={p} onChange={(v) => setPhotos((xs) => (v ? xs.map((x) => (x.id === p.id ? { ...v, id: p.id } : x)) : xs.filter((x) => x.id !== p.id)))} size="lg" />
               ))}
@@ -285,7 +293,7 @@ export function KatanaStudio() {
                 (blocker ?? "Pricing…")
               )}
             </p>
-            <Button size="lg" className={cn("rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={start.isPending || scanning !== null}>
+            <Button size="lg" className={cn("rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={start.isPending || scanning !== null || visitor}>
               {start.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Recreate
             </Button>
           </div>

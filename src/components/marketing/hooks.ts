@@ -14,8 +14,8 @@ import { responseError } from "@/lib/refusals";
 
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
-  const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw Object.assign(responseError(res, body.error ?? `Request failed (${res.status})`), { status: res.status });
+  const body = (await res.json().catch(() => ({}))) as T & { error?: string; code?: string };
+  if (!res.ok) throw Object.assign(responseError(res, body.error ?? `Request failed (${res.status})`), { status: res.status, code: body.code });
   return body;
 }
 

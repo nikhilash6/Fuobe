@@ -84,23 +84,39 @@ export function Field({ label, htmlFor, hint, children }: { label: string; htmlF
   );
 }
 
-/** "Upload a video to edit": click, drop, or pick from the Library. */
-export function ClipDrop({ accept, limits, onFile, onLibrary }: { accept: string; limits: string; onFile: (f: File) => void; onLibrary: (url: string, name?: string) => void }) {
+/**
+ * "Upload a video to edit": click, drop, or pick from the Library. disabled: a tool that can't run here for this
+ * visitor (the page says why), so nothing is uploaded only to be refused.
+ */
+export function ClipDrop({
+  accept,
+  limits,
+  onFile,
+  onLibrary,
+  disabled,
+}: {
+  accept: string;
+  limits: string;
+  onFile: (f: File) => void;
+  onLibrary: (url: string, name?: string) => void;
+  disabled?: boolean;
+}) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [lib, setLib] = useState(false);
   return (
     <div
+      aria-disabled={disabled || undefined}
       onDragOver={(e) => {
         e.preventDefault();
-        setOver(true);
+        if (!disabled) setOver(true);
       }}
       onDragLeave={() => setOver(false)}
       onDrop={(e) => {
         e.preventDefault();
         setOver(false);
         const f = e.dataTransfer.files?.[0];
-        if (f) onFile(f);
+        if (f && !disabled) onFile(f);
       }}
       className={cn(
         "flex flex-col items-center gap-3 rounded-xl border border-dashed border-border-strong px-4 py-7 text-center transition-colors",
@@ -113,12 +129,17 @@ export function ClipDrop({ accept, limits, onFile, onLibrary }: { accept: string
         <p className="mt-0.5 text-[12px] text-muted-foreground">{limits}</p>
       </div>
       <div className="flex flex-wrap justify-center gap-2">
-        <button type="button" onClick={() => input.current?.click()} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-medium text-primary-foreground hover:bg-primary/90">
+        <button
+          type="button"
+          onClick={() => input.current?.click()}
+          disabled={disabled}
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-medium text-primary-foreground hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+        >
           <Upload className="size-3.5" /> Choose a video
         </button>
-        <Popover open={lib} onOpenChange={setLib}>
+        <Popover open={lib && !disabled} onOpenChange={setLib}>
           <PopoverTrigger asChild>
-            <button type="button" className="inline-flex h-8 items-center gap-1.5 rounded-full border bg-background px-3.5 text-[13px] font-medium hover:bg-accent">
+            <button type="button" disabled={disabled} className="inline-flex h-8 items-center gap-1.5 rounded-full border bg-background px-3.5 text-[13px] font-medium hover:bg-accent disabled:pointer-events-none disabled:opacity-50">
               <Library className="size-3.5" /> From library
             </button>
           </PopoverTrigger>
@@ -136,12 +157,13 @@ export function ClipDrop({ accept, limits, onFile, onLibrary }: { accept: string
           </PopoverContent>
         </Popover>
       </div>
-      <p className="text-[11px] text-muted-foreground">or drop it here</p>
+      <p className={cn("text-[11px] text-muted-foreground", disabled && "invisible")}>or drop it here</p>
       <input
         ref={input}
         type="file"
         accept={accept}
         hidden
+        disabled={disabled}
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) onFile(f);

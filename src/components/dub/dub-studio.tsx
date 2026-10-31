@@ -15,7 +15,8 @@ import { SourceLanguageSelect, TargetLanguages } from "@/components/av/language-
 import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
-import { useEngine, useModelAccess } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEngine, useIsVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cueProblems } from "@/lib/av/cue-edit";
 import { BACKGROUND_DB, crowdedLines, dubResult, languageStage, ONE_SHOT_MODELS, priceLine, reviewCues, takeLines, translateKey, voiceOnly, type DubPrice, type DubSessionView, type DubStage, type OneShotModel } from "@/lib/av/dub";
@@ -91,6 +92,9 @@ export function DubStudio({ tabs }: { tabs?: React.ReactNode }) {
 
 function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   const [engine, , engineMode] = useEngine();
+  // A dub doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // upload and Translate are off, instead of a run the server refuses.
+  const visitor = useIsVisitor();
   const { create } = useDubActions();
   const [video, setVideo] = useState<SlotValue | null>(null);
   const [duration, setDuration] = useState<number | undefined>(undefined);
@@ -112,6 +116,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   const body = video && !video.uploading && usable.length ? { engine, mode: oneShot ? ("oneshot" as const) : ("steps" as const), model: oneShot ? model : undefined, video: video.ref, source, targets: usable, duration } : null;
   const price = useDubPrice(body);
   const start = () => {
+    if (visitor) return;
     if (blocker || !body) return void toast(blocker, { id: "dub-blocker" });
     create.mutate(
       { ...body, title: video!.name?.replace(/\.[a-z0-9]+$/i, "") },
@@ -128,20 +133,25 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   };
   return (
     <div className="pb-10">
-      <ToolHero title="Speak every language" subtitle="Translate the speech, keep the speaker's voice and re-sync the lips. Review every line before it's spoken." />
+      <ToolHero title="Speak every language" subtitle="Translate the speech, keep the speaker's voice and re-sync the lips. Review every line before it's spoken.">
+        {visitor && <SelfHostNote className="mt-3 max-w-xl">Translate &amp; dub runs on a self-hosted Fuobe for now.</SelfHostNote>}
+      </ToolHero>
       <div className="mx-auto mt-8 max-w-[760px] space-y-3">
-        <MediaDrop
-          kind="video"
-          value={video}
-          onChange={(v) => {
-            setVideo(v);
-            if (!v) setDuration(undefined);
-          }}
-          onDuration={setDuration}
-          title="Add the video to translate"
-          hint="MP4, MOV or WebM up to 200 MB · one clear speaker works best"
-          compact
-        />
+        {/* A guest's or an account's video would be uploaded for a dub that can't start here. */}
+        <div inert={visitor} className={cn(visitor && "opacity-50")}>
+          <MediaDrop
+            kind="video"
+            value={video}
+            onChange={(v) => {
+              setVideo(v);
+              if (!v) setDuration(undefined);
+            }}
+            onDuration={setDuration}
+            title="Add the video to translate"
+            hint="MP4, MOV or WebM up to 200 MB · one clear speaker works best"
+            compact
+          />
+        </div>
         <Panel title="How">
           <div role="radiogroup" aria-label="How to dub" className="grid gap-2 sm:grid-cols-2">
             <ModeCard on={!oneShot} icon={<Languages className="size-4" />} title="Review the script first" onClick={() => setMode("steps")} note={engineMode === "open" ? "Transcribe and translate, edit every line, then voice it." : "Transcribe and translate, edit every line, then voice it. Cloud and open source."} />
@@ -206,7 +216,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
           </p>
           <div className="flex shrink-0 items-center gap-3 self-end sm:self-auto">
             <PriceNote price={price.data} loading={price.isFetching && !price.data} error={price.error as Error | null} hint={oneShot ? undefined : "Translating costs little; you'll see the voice's price before it speaks"} />
-            <Button size="lg" className={cn("shrink-0 rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={start} disabled={create.isPending} aria-describedby={blocker ? "dub-blocker" : undefined}>
+            <Button size="lg" className={cn("shrink-0 rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={start} disabled={create.isPending || visitor} aria-describedby={blocker ? "dub-blocker" : undefined}>
               {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
               {oneShot ? "Dub it" : "Translate"}
             </Button>

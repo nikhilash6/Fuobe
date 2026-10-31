@@ -5,6 +5,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { MediaThumb } from "@/components/studio/result-media";
 import { VideoTrimmer, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
@@ -12,7 +13,7 @@ import { LookCard } from "@/components/shorts/preset-card";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { ClipBar, ClipDrop, costText, Field, Segmented, tabKeys } from "@/components/shorts/ui";
 import { clipDuration, clipSize, useSourceClip } from "@/components/shorts/use-source-clip";
-import { uploadFile, useEngine, useModelAccess } from "@/lib/api";
+import { uploadFile, useEngine, useIsVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import {
   clampFps,
@@ -73,6 +74,9 @@ const MODE_OPTIONS: { value: MixedMode; label: string; title: string }[] = [
 export function MixedStudio({ models, frameModels }: { models: Record<Engine, RestyleModelInfo[]>; frameModels: Record<Engine, RestyleModelInfo[]> }) {
   const [tab, setTab] = useState<Tab>("presets");
   const [engine, setEngine, engineMode] = useEngine();
+  // A render doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // upload, the preview and Generate are off, instead of a run the server refuses.
+  const visitor = useIsVisitor();
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
     // eslint-disable-next-line react-hooks/set-state-in-effect -- read once after hydration
@@ -123,8 +127,9 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
               <p className="mx-auto mt-2 max-w-[560px] text-body text-pretty text-muted-foreground">
                 33 looks, each with its own colours and materials. Preview one frame first, then render the clip frame by frame at the rate you choose — on Fuobe Mixed Media, free on your GPU.
               </p>
+              {visitor && <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Mixed Media runs on a self-hosted Fuobe for now.</SelfHostNote>}
             </div>
-            <Workspace engine={engine} models={models[engine]} frameModels={frameModels[engine]} />
+            <Workspace visitor={visitor} engine={engine} models={models[engine]} frameModels={frameModels[engine]} />
           </>
         )}
       </div>
@@ -173,7 +178,7 @@ function How({ onStart, cloud }: { onStart: () => void; cloud: boolean }) {
   );
 }
 
-function Workspace({ engine, models, frameModels }: { engine: Engine; models: RestyleModelInfo[]; frameModels: RestyleModelInfo[] }) {
+function Workspace({ visitor, engine, models, frameModels }: { visitor: boolean; engine: Engine; models: RestyleModelInfo[]; frameModels: RestyleModelInfo[] }) {
   const [hasClip, setHasClip] = useState(false);
   const [presetId, setPresetId] = useState<string | null>(null);
   const preset = MIXED_PRESETS.find((p) => p.id === presetId) ?? null;
@@ -250,7 +255,7 @@ function Workspace({ engine, models, frameModels }: { engine: Engine; models: Re
         )}
       </section>
       <aside ref={panel} id="mm-editor" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-16 lg:max-h-[calc(100svh-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
-        <Editor engine={engine} models={models} frameModels={frameModels} preset={preset} values={values} setValues={setValues} onClip={setHasClip} />
+        <Editor visitor={visitor} engine={engine} models={models} frameModels={frameModels} preset={preset} values={values} setValues={setValues} onClip={setHasClip} />
       </aside>
       {preset && !panelVisible && (
         <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 lg:hidden">
@@ -275,6 +280,7 @@ const LIMITS = "MP4 or MOV · 1 to 10 s · up to 50 MB · at least 4 FPS";
 type FpsChoice = number | "manual";
 
 function Editor({
+  visitor,
   engine,
   models: restyleModels,
   frameModels,
@@ -283,6 +289,8 @@ function Editor({
   setValues,
   onClip,
 }: {
+  /** A guest or an account: the upload, the preview and Generate are off (the page says it runs on a self-hosted Fuobe). */
+  visitor: boolean;
   engine: Engine;
   models: RestyleModelInfo[];
   frameModels: RestyleModelInfo[];
@@ -405,7 +413,7 @@ function Editor({
     setAnchorOff(false);
   }
 
-  const blocker = !preset
+  const setupBlocker = !preset
     ? "Pick a preset first"
     : !clip
       ? "Add a clip"
@@ -424,6 +432,7 @@ function Editor({
                 : estimate.error
                   ? (estimate.error as Error).message
                   : null;
+  const blocker = visitor ? "Mixed Media runs on a self-hosted Fuobe for now" : setupBlocker;
 
   // One preview and one render per click: a second click while one is on its way does nothing,
   // and the server answers a repeated request id with what the first one started.
@@ -481,6 +490,7 @@ function Editor({
           <ClipDrop
             accept={MIXED.accept}
             limits={LIMITS}
+            disabled={visitor}
             onFile={(f) => {
               const err = source.pick(f);
               if (err) toast.error(err);
@@ -655,7 +665,7 @@ function Editor({
         <button
           type="button"
           onClick={makePreview}
-          disabled={previewBusy}
+          disabled={previewBusy || visitor}
           aria-disabled={!!blocker || previewBusy}
           className={cn(
             "flex h-9 w-full items-center justify-center gap-2 rounded-full border text-[13px] font-medium",
@@ -703,7 +713,7 @@ function Editor({
         <button
           type="button"
           onClick={generate}
-          disabled={actions.render.isPending}
+          disabled={actions.render.isPending || visitor}
           aria-disabled={!!blocker || actions.render.isPending}
           aria-describedby={blocker ? "mm-blocker" : undefined}
           className={cn(

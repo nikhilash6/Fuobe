@@ -15,7 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { LibraryGrid } from "@/components/studio/media-slot";
 import { PageShell } from "@/components/page-shell";
-import { uploadFile, useHydrated } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { uploadFile, useHydrated, useIsVisitor, useViewer } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { LayerProject } from "@/lib/layers";
 import { cn } from "@/lib/utils";
@@ -195,6 +196,10 @@ function ProjectsInner() {
   });
   const file = useRef<HTMLInputElement>(null);
   const hydrated = useHydrated();
+  // A project is saved to the studio's library, which is its owner's: a guest or an account is told so up front, and
+  // nothing is uploaded only to be refused.
+  const visitor = useIsVisitor();
+  const viewer = useViewer().data;
   const [picking, setPicking] = useState(false);
   const [renaming, setRenaming] = useState<LayerProject | null>(null);
   const [draft, setDraft] = useState("");
@@ -208,14 +213,16 @@ function ProjectsInner() {
   const deep = params.get("image");
   const link = deep ? `${bfcacheId}|${params.toString()}` : null;
   useEffect(() => {
-    if (!deep || !link || started.current === link) return;
+    // Once it's known who is looking: a guest's or an account's link opens nothing (the page says why).
+    if (!deep || !link || started.current === link || !viewer) return;
     started.current = link;
+    if (!viewer.owner) return;
     if (!deep.startsWith("/api/files/")) {
       toast.error("Only images from your library can be edited here. Pick an image or upload one.");
       return;
     }
     void open(deep, { generationId: params.get("generation") ?? undefined, name: params.get("name") ?? undefined });
-  }, [deep, link, params, open]);
+  }, [deep, link, params, open, viewer]);
 
   const items = projects.data ?? [];
 
@@ -226,7 +233,7 @@ function ProjectsInner() {
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes("Files")) {
             e.preventDefault();
-            setDragging(true);
+            if (!visitor) setDragging(true);
           }
         }}
         onDragLeave={(e) => {
@@ -236,7 +243,7 @@ function ProjectsInner() {
           e.preventDefault();
           setDragging(false);
           const f = e.dataTransfer.files[0];
-          if (f) void openFile(f);
+          if (f && !visitor) void openFile(f);
         }}
       >
         <section className="mx-auto max-w-[820px] pt-[4vh] text-center">
@@ -266,12 +273,12 @@ function ProjectsInner() {
                 }}
               />
             )}
-            <Button size="lg" className="rounded-full px-5" onClick={() => file.current?.click()} disabled={!!busy}>
+            <Button size="lg" className="rounded-full px-5" onClick={() => file.current?.click()} disabled={!!busy || visitor}>
               {busy ? <Loader2 className="animate-spin" /> : <Upload />} Upload Media
             </Button>
-            <Popover open={picking} onOpenChange={setPicking}>
+            <Popover open={picking && !visitor} onOpenChange={setPicking}>
               <PopoverTrigger asChild>
-                <Button size="lg" variant="secondary" className="rounded-full px-5" disabled={!!busy}>
+                <Button size="lg" variant="secondary" className="rounded-full px-5" disabled={!!busy || visitor}>
                   <Library /> From your library
                 </Button>
               </PopoverTrigger>
@@ -289,7 +296,11 @@ function ProjectsInner() {
               </PopoverContent>
             </Popover>
           </div>
-          <p className="mt-3 text-[12px] text-muted-foreground">Upload an image, or pick one you already generated. Images only — JPG, PNG or WebP.</p>
+          {visitor ? (
+            <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Layers projects aren&apos;t on free accounts yet.</SelfHostNote>
+          ) : (
+            <p className="mt-3 text-[12px] text-muted-foreground">Upload an image, or pick one you already generated. Images only — JPG, PNG or WebP.</p>
+          )}
           <p className="mx-auto mt-4 flex max-w-md items-center justify-center gap-2 rounded-full bg-muted px-3 py-1.5 text-[12px] text-muted-foreground md:hidden">
             <MonitorSmartphone className="size-3.5 shrink-0" /> Layers works best on a larger screen — on a phone you can preview and download.
           </p>
@@ -343,11 +354,13 @@ function ProjectsInner() {
                 <EmptyTitle className="font-heading text-[22px]">Your edit projects will appear here</EmptyTitle>
                 <EmptyDescription>Upload an image to separate it into editable layers — every project you start is saved here.</EmptyDescription>
               </EmptyHeader>
-              <EmptyContent>
-                <Button className="rounded-full" onClick={() => file.current?.click()} disabled={!!busy}>
-                  <Upload /> Upload Media
-                </Button>
-              </EmptyContent>
+              {!visitor && (
+                <EmptyContent>
+                  <Button className="rounded-full" onClick={() => file.current?.click()} disabled={!!busy}>
+                    <Upload /> Upload Media
+                  </Button>
+                </EmptyContent>
+              )}
             </Empty>
           )}
         </section>

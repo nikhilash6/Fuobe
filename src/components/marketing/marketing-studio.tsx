@@ -12,8 +12,9 @@ import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { BrandChip } from "@/components/brand/brand-dialog";
 import { inputCls } from "@/components/brand/fields";
 import { FORMATS, formatModels, looksLikeWebsite, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
+import { SelfHostNote } from "@/components/self-host-note";
 import { formatCost } from "@/lib/format";
-import { useModelAccess } from "@/lib/api";
+import { useIsVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { addRuns, send, useBrands, useEstimate } from "./hooks";
@@ -286,6 +287,9 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   const [engaged, setEngaged] = useState(false);
   const composer = useRef<HTMLDivElement>(null);
   const prompt = useRef<HTMLTextAreaElement>(null);
+  // A run doesn't go to an account's own GPU or key yet (only the studios' generations do): said up front, with no
+  // upload slots and no Generate, instead of a run the server refuses.
+  const visitor = useIsVisitor();
   const set = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
   const f = FORMATS[draft.format];
   const template = draft.templateId ? TEMPLATE_INDEX.get(draft.templateId) : undefined;
@@ -328,7 +332,13 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   );
   const est = useEstimate<RunEstimate>("/api/marketing/estimate", draft.avatar?.uploading || draft.voiceSample?.uploading ? null : body);
   const badSite = !!f.oneOf?.includes("website") && !!draft.website.trim() && !looksLikeWebsite(draft.website);
-  const blocker = draft.product === null && f.product === "required" ? "Attach a product to generate" : badSite ? "Enter a valid website URL" : est.data?.blocker;
+  const blocker = visitor
+    ? "Marketing Studio runs on a self-hosted Fuobe for now"
+    : draft.product === null && f.product === "required"
+      ? "Attach a product to generate"
+      : badSite
+        ? "Enter a valid website URL"
+        : est.data?.blocker;
   const cost = est.data && !est.data.blocker ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   // Until a template is picked or you start on the composer it stays slim (the attachment tiles fold
@@ -341,6 +351,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
     });
 
   const generate = async () => {
+    if (visitor) return;
     if (blocker) {
       setEngaged(true);
       toast(blocker, { id: "marketing-blocker" });
@@ -380,6 +391,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">
             Product shots, motion, UGC presenters, ads, posters and listings — from Fuobe&apos;s templates, on {engine === "open" ? "your own GPU, free" : "Fuobe Marketing Image or partner models in the cloud"}.
           </p>
+          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Marketing Studio runs on a self-hosted Fuobe for now.</SelfHostNote>}
         </div>
         <div role="tablist" aria-label="View" className="mx-auto mt-4 flex w-fit rounded-full bg-muted p-0.5">
           {(["templates", "generations"] as const).map((t) => (
@@ -443,9 +455,10 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
                 </button>
               </div>
             )}
-            {f.product !== "none" && <ProductSlot value={draft.product} onChange={(p) => set({ product: p })} required={f.product === "required"} brandId={brandId} pulse={pulse === "product"} />}
-            {f.avatar !== "none" && <AvatarSlot value={draft.avatar} onChange={(a) => set({ avatar: a })} pulse={pulse === "avatar"} />}
-            {f.pipeline !== "ugc" && <MediaSlot label="Reference" kind="image" value={draft.reference} onChange={(v) => set({ reference: v })} />}
+            {/* A guest or an account gets no upload slots: nothing is uploaded for a run that can't start here. */}
+            {!visitor && f.product !== "none" && <ProductSlot value={draft.product} onChange={(p) => set({ product: p })} required={f.product === "required"} brandId={brandId} pulse={pulse === "product"} />}
+            {!visitor && f.avatar !== "none" && <AvatarSlot value={draft.avatar} onChange={(a) => set({ avatar: a })} pulse={pulse === "avatar"} />}
+            {!visitor && f.pipeline !== "ugc" && <MediaSlot label="Reference" kind="image" value={draft.reference} onChange={(v) => set({ reference: v })} />}
           </div>
           <textarea
             ref={prompt}
@@ -490,6 +503,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
                 <button
                   type="button"
                   onClick={() => void generate()}
+                  disabled={visitor}
                   aria-label={template ? "Recreate template" : "Generate"}
                   aria-disabled={!!blocker || busy}
                   className={cn("grid size-10 shrink-0 place-items-center rounded-full text-primary-foreground transition-colors", blocker ? "bg-primary/70 hover:bg-primary/80" : "bg-primary hover:bg-primary/90")}

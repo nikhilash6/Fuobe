@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { SelfHostNote } from "@/components/self-host-note";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +16,7 @@ import { useRun, useRunPreview } from "@/components/photodump/hooks";
 import { ResultsGrid } from "@/components/photodump/results";
 import { RunLine } from "@/components/photodump/steps";
 import { TurnaroundButton } from "@/components/turnaround/turnaround-dialog";
-import { useElements, useEngine, useGenerations, useSaveElement } from "@/lib/api";
+import { useElements, useEngine, useGenerations, useIsVisitor, useSaveElement } from "@/lib/api";
 import { castFieldVisible, castNameFor, randomCast, SHEET_MAX_REFS, type CastAnswers, type CastFieldData } from "@/lib/catalog/packs";
 import { sheetPictures } from "@/lib/catalog/turnaround";
 import type { Generation } from "@/lib/catalog/types";
@@ -153,6 +154,9 @@ export function SaveCharacter({ item, extra, defaultName }: { item: Generation; 
  */
 export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData[]; defaults: CastAnswers }) {
   const [engine, setEngine] = useEngine();
+  // A sheet doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // uploads and Create are off, instead of a run the server refuses.
+  const visitor = useIsVisitor();
   const [mode, setMode] = useState<Mode>("reference");
   const [photos, setPhotos] = useState<SlotValue[]>([]);
   const [details, setDetails] = useState("");
@@ -180,11 +184,13 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
           : null;
   const preview = useRunPreview("/api/photodump/character", body);
   const addFiles = (files: Iterable<File>) => {
+    if (visitor) return;
     const list = [...files].filter((f) => /^image\//.test(f.type));
     if (photos.length + list.length > SHEET_MAX_REFS) toast(`Maximum ${SHEET_MAX_REFS} images`);
     list.slice(0, SHEET_MAX_REFS - photos.length).forEach((f) => fileToList(f, setPhotos, "image"));
   };
   const create = () => {
+    if (visitor) return;
     if (mode === "reference" && !photos.length) return toast("Upload at least 1 image");
     if (!body) return toast(mode === "describe" ? "Describe your character first" : "Wait for the uploads to finish");
     run.mutate(body, {
@@ -199,6 +205,7 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
       <PageHeader title="Character Sheet" description="Build your AI avatar: a consistent character for your videos, from a reference or defined from scratch.">
         <EngineSwitch value={engine} onChange={setEngine} />
       </PageHeader>
+      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Character Sheet runs on a self-hosted Fuobe for now.</SelfHostNote>}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section className="min-w-0 space-y-4">
           <div role="tablist" aria-label="How to build it" className="scrollbar-none inline-flex max-w-full overflow-x-auto rounded-full bg-muted p-0.5">
@@ -220,12 +227,13 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
                   addFiles(e.dataTransfer.files);
                 }}
                 onPaste={(e) => addFiles(e.clipboardData.files)}
-                className={cn("rounded-2xl border border-dashed transition-colors", over && "border-primary bg-brand-faint")}
+                className={cn("rounded-2xl border border-dashed transition-colors", over && !visitor && "border-primary bg-brand-faint")}
               >
                 <button
                   type="button"
                   onClick={() => fileInput.current?.click()}
-                  className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl px-4 py-10 text-center outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  disabled={visitor}
+                  className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl px-4 py-10 text-center outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:pointer-events-none disabled:opacity-50"
                 >
                   <ImagePlus className="size-6 text-muted-foreground" />
                   <span className="text-[14px] font-medium">Drop images here</span>
@@ -291,7 +299,7 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
             <div className="min-w-0 flex-1">
               <RunLine preview={body ? preview.data : undefined} loading={preview.isFetching} />
             </div>
-            <Button onClick={create} disabled={run.isPending || uploading}>
+            <Button onClick={create} disabled={run.isPending || uploading || visitor}>
               {run.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} {run.isPending ? "Submitting..." : "Create AI Avatar"}
             </Button>
           </div>
