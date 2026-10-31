@@ -9,7 +9,7 @@ import { downloadBlob } from "@/components/ads/render";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Slider } from "@/components/ui/slider";
-import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
+import { kindOfFile, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { uploadFile, useViewer } from "@/lib/api";
 import { applyPreset, CONTROLS, describeGrade, FRAGMENT, isNeutral, NEUTRAL, PRESETS, uniforms, VERTEX, type Grade } from "@/lib/grade";
 import { cn } from "@/lib/utils";
@@ -131,10 +131,13 @@ function loseContext(r: GradeRenderer | null | undefined) {
 /** Bundled still the looks are previewed on before anything is loaded. */
 const SAMPLE = "/samples/grade-sample.jpg";
 
+/** What is being graded: a file on the server (a library pick, ?image=, the sample), or one picked here (`file`, read from this browser). */
+type Input = { url: string; kind: "image" | "video"; file?: File };
+
 function Grader() {
   const sp = useSearchParams();
   const initial = sp.get("video") ? { url: sp.get("video")!, kind: "video" as const } : sp.get("image") ? { url: sp.get("image")!, kind: "image" as const } : null;
-  const [input, setInput] = useState<{ url: string; kind: "image" | "video" } | null>(initial);
+  const [input, setInput] = useState<Input | null>(initial);
   const [source, setSource] = useState<Source | null>(null);
   // A clip handed over with its grade (?preset=, a Fuobe DoP colour-grade effect) opens with that grade picked.
   const handed = PRESETS.find((p) => p.id === sp.get("preset"));
@@ -186,6 +189,13 @@ function Grader() {
       cancelled = true;
       release(loaded);
     };
+  }, [input]);
+
+  // A file picked here is read from this browser (a blob: address): let it go once another replaces it or the page closes.
+  useEffect(() => {
+    const url = input?.url;
+    if (!url?.startsWith("blob:")) return;
+    return () => URL.revokeObjectURL(url);
   }, [input]);
 
   // The looks are previewed on a bundled sample until the user brings their own picture.
@@ -267,7 +277,17 @@ function Grader() {
     setGrade((g) => ({ ...g, [k]: v }));
   };
 
+  /** A picked file's upload, made the first time the owner saves a grade of it (the stage reads it from this browser). */
+  const uploadedSource = useRef<{ file: File; url: string } | null>(null);
+  /** Where the graded file came from, as the library keeps it: a file on the server, never this browser's blob: address. */
+  const sourceUrl = async (from: Input): Promise<string> => {
+    if (!from.file) return from.url;
+    if (uploadedSource.current?.file !== from.file) uploadedSource.current = { file: from.file, url: (await uploadFile(from.file)).url };
+    return uploadedSource.current.url;
+  };
+
   const record = async (file: File, kind: "image" | "video") => {
+    const from = await sourceUrl(input!);
     const asset = await uploadFile(file);
     const res = await fetch("/api/generations/local", {
       method: "POST",
@@ -277,7 +297,7 @@ function Grader() {
         modelId: "local-color-grade",
         op: "grade",
         prompt: describeGrade(grade, PRESETS.find((p) => p.id === preset)?.name),
-        inputs: kind === "video" ? { video: input!.url } : { images: [input!.url] },
+        inputs: kind === "video" ? { video: from } : { images: [from] },
         params: { extra: { grade } },
         output: { url: asset.url, kind, contentType: asset.contentType },
       }),
@@ -374,17 +394,20 @@ function Grader() {
   const groups = useMemo(() => [...new Set(CONTROLS.map((c) => c.group))], []);
   const neutral = isNeutral(grade);
 
-  const open = (next: { url: string; kind: "image" | "video" }) => {
+  const open = (next: Input) => {
     loseContext(renderer.current);
     renderer.current = null;
     setSource(null);
     setSaved(null);
     setInput(next);
   };
+  /** A library pick. */
   const pick = (v: SlotValue | null) => {
     if (!v?.ref || v.uploading) return;
     open({ url: v.ref, kind: v.kind === "video" ? "video" : "image" });
   };
+  /** A file picked or dropped here: graded in this browser, so anyone can grade their own (uploaded only when the owner saves). */
+  const pickFile = (f: File) => open({ url: URL.createObjectURL(f), kind: kindOfFile(f) === "video" ? "video" : "image", file: f });
 
   return (
     <div className="flex flex-col lg:h-svh">
@@ -393,7 +416,7 @@ function Grader() {
         <h1 className="font-heading text-[22px] leading-none">Color grading</h1>
         <span className="ml-2 hidden rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success sm:inline">Free · runs in your browser</span>
         <div className="ml-auto flex items-center gap-2">
-          {input && <MediaSlot label="Replace" kind={input.kind} value={null} onChange={pick} />}
+          {input && <MediaSlot label="Replace" kind={input.kind} value={null} onChange={pick} onFile={pickFile} />}
         </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 sm:px-6 lg:flex-row">
@@ -413,8 +436,8 @@ function Grader() {
                 <p className="mt-1 text-[13px]">Drop a file, or pick one from your library. Nothing is uploaded until you save.</p>
               </div>
               <div className="flex gap-2">
-                <MediaSlot label="Image" kind="image" value={null} onChange={pick} size="lg" />
-                <MediaSlot label="Video" kind="video" value={null} onChange={pick} size="lg" />
+                <MediaSlot label="Image" kind="image" value={null} onChange={pick} onFile={pickFile} size="lg" />
+                <MediaSlot label="Video" kind="video" value={null} onChange={pick} onFile={pickFile} size="lg" />
               </div>
               <button
                 type="button"
