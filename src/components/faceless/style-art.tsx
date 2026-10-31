@@ -309,7 +309,9 @@ export function StyleCard({ styleId, selected, onSelect, compact, tabStop }: { s
         )}
       </div>
       <div className="px-2.5 py-2">
-        <p className="truncate text-[13px] font-medium">{s.name}</p>
+        <p className="line-clamp-2 text-[13px] leading-tight font-medium" title={s.name}>
+          {s.name}
+        </p>
         {!compact && <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{s.description}</p>}
       </div>
     </button>

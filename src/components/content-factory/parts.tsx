@@ -251,7 +251,9 @@ export function PresetGrid({ value, onPick }: { value: string | null; onPick: (p
               )}
             </div>
             <div className="p-3">
-              <p className="truncate text-[14px] font-medium">{p.name}</p>
+              <p className="line-clamp-2 text-[14px] leading-tight font-medium" title={p.name}>
+                {p.name}
+              </p>
               <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">{p.tagline}</p>
               <p className="mt-2 text-[12px] font-medium text-brand-text">{on ? "In use" : "Use as reference"}</p>
             </div>
