@@ -119,6 +119,10 @@ An account can delete itself: `DELETE /api/auth/me` with `{ "password" }`. When 
 deleted (by itself or by the owner), its runs are stopped and removed, and its uploads and results
 are deleted with it.
 
+An account changes its password in **Settings → Account**: `PATCH /api/auth/me` with
+`{ "current", "next" }` (at least 8 characters, 5 tries a minute). Every other browser signed in to
+the account is signed out; the browser that changed it gets a new session.
+
 ## Your GPU
 
 An account connects its own ComfyUI in **Settings → Your GPU**, or from the "Connect your GPU" card,

@@ -66,6 +66,8 @@ export interface Account {
   /** scrypt hash of the password ("salt:hash", hex), as the install password's. */
   hash: string;
   createdAt: number;
+  /** When the account last changed its password (Settings → Account): its sign-ins from before then were ended. */
+  passwordChangedAt?: number;
   /** The last sign-up or log-in. */
   lastLoginAt?: number;
   /** Switched off by the owner (Settings → Accounts): signed out, and can't log in. */
@@ -212,14 +214,16 @@ export function setPassword(pw: string | null): void {
 
 const sign = (secret: string, payload: string) => crypto.createHmac("sha256", secret).update(payload).digest("base64url");
 
+const fingerprint = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
+
 /**
- * The key a session is signed with. An owner's also holds the password's fingerprint, so a new password (FUOBE_PASSWORD
- * after a restart, or the Settings one) ends every owner sign-in at once, and the secret alone (auth.json) can't make an
- * owner cookie. An account's is the secret alone, so the owner's new password doesn't sign every account out.
+ * The key a session is signed with: the secret and a password's fingerprint. The owner's password (FUOBE_PASSWORD, or
+ * the Settings one): a new one (after a restart, or in Settings) ends every owner sign-in at once, and the secret alone
+ * (auth.json) can't make an owner cookie. An account's own password hash: its new password ends its other sign-ins,
+ * and the owner's new password signs no account out.
  */
-function keyFor(d: AuthFile, owner: boolean): string {
-  if (!owner) return d.secret;
-  return `${d.secret}.${crypto.createHash("sha256").update(envPassword() || d.password || "").digest("hex")}`;
+function keyFor(d: AuthFile, who: "owner" | Pick<Account, "hash">): string {
+  return `${d.secret}.${fingerprint(who === "owner" ? envPassword() || d.password || "" : who.hash)}`;
 }
 
 /**
@@ -234,8 +238,17 @@ export function createSession(accountId?: string): { value: string; maxAge: numb
   }
   const exp = Date.now() + SESSION_MS;
   const payload = accountId ? `${exp}.${accountId}` : String(exp);
-  return { value: `${payload}.${sign(keyFor(d, !accountId), payload)}`, maxAge: SESSION_DAYS * 86_400 };
+  // An account that isn't there gets a cookie nothing takes (sessionViewer finds no account for it).
+  const who = accountId ? { hash: d.accounts?.find((a) => a.id === accountId)?.hash ?? "" } : "owner";
+  return { value: `${payload}.${sign(keyFor(d, who), payload)}`, maxAge: SESSION_DAYS * 86_400 };
 }
+
+/**
+ * An account cookie made before account keys held the password's fingerprint was signed with the secret alone. It is
+ * still taken (it ends with its 30 days, so a deploy signs nobody out) until the account first changes its password.
+ */
+const legacyAccountMac = (d: AuthFile, account: Account, payload: string, mac: string) =>
+  !account.passwordChangedAt && same(Buffer.from(mac), Buffer.from(sign(d.secret, payload)));
 
 /** Who a session cookie belongs to: the owner, an account that still exists, or nobody. */
 export type Viewer = { kind: "owner" } | { kind: "account"; account: Account };
@@ -258,12 +271,16 @@ export function sessionViewer(value: string | undefined): Viewer | null {
   const mac = parts[parts.length - 1];
   const d = read();
   if (!d.secret || !mac || !liveExpiry(exp)) return null;
-  if (!same(Buffer.from(mac), Buffer.from(sign(keyFor(d, parts.length === 2), parts.slice(0, -1).join("."))))) return null;
+  const payload = parts.slice(0, -1).join(".");
+  // An account's key holds its password's fingerprint: the account comes first.
+  const account = parts.length === 3 ? d.accounts?.find((a) => a.id === parts[1]) : undefined;
+  if (parts.length === 3 && !account) return null;
+  const signed = same(Buffer.from(mac), Buffer.from(sign(keyFor(d, account ?? "owner"), payload)));
+  if (!signed && !(account && legacyAccountMac(d, account, payload, mac))) return null;
   // Signed out with Sign out: a copy of the cookie (another tab's, a stolen one) is refused too.
   if (d.signedOut?.length && d.signedOut.some((s) => s.hash === cookieHash(value))) return null;
-  if (parts.length === 2) return { kind: "owner" };
-  const account = d.accounts?.find((a) => a.id === parts[1]);
-  return account && !account.disabled ? { kind: "account", account } : null;
+  if (!account) return { kind: "owner" };
+  return account.disabled ? null : { kind: "account", account };
 }
 
 const cookieHash = (value: string) => crypto.createHash("sha256").update(value).digest("hex");
@@ -349,6 +366,25 @@ export async function verifyAccount(email: string, password: string): Promise<Ac
     })()));
   const ok = await verifyHashAsync(password, stored);
   return account && ok ? account : null;
+}
+
+/**
+ * An account changes its own password (Settings → Account): the current one first. A new hash changes the account's
+ * session key (keyFor), so every sign-in it had ends, this browser's too: the caller gives this browser a new cookie.
+ */
+export async function setAccountPassword(id: string, current: string, next: string): Promise<Account> {
+  if (next.length < 8) throw new AccountError("Use at least 8 characters", 400);
+  const account = accountById(id);
+  if (!account) throw new AccountError("No such account", 404);
+  if (!(await verifyAccount(account.email, current))) throw new AccountError("The current password is wrong", 403);
+  const salt = crypto.randomBytes(16);
+  const hash = `${salt.toString("hex")}:${(await scrypt(next, salt)).toString("hex")}`;
+  // Read again: the file may have changed while the passwords were hashed.
+  const d = read();
+  if (!d.accounts?.some((a) => a.id === id)) throw new AccountError("No such account", 404);
+  const changed = { hash, passwordChangedAt: Date.now() };
+  write({ ...d, accounts: d.accounts.map((a) => (a.id === id ? { ...a, ...changed } : a)) });
+  return { ...account, ...changed };
 }
 
 /** How often a log-in is written down: each write rewrites the whole accounts file. */

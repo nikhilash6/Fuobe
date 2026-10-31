@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { z } from "zod";
-import { accountGpu, authEnabled, publicSignup, SESSION_COOKIE, sessionCookieOf, sessionViewer, validToken, verifyAccount } from "@/server/auth";
+import { AccountError, accountGpu, authEnabled, createSession, publicSignup, SESSION_COOKIE, sessionCookieOf, sessionViewer, setAccountPassword, validToken, verifyAccount } from "@/server/auth";
 import { runnerFacts } from "@/server/computer/tasks";
 import { getSetting } from "@/server/settings";
 import { removeAccount } from "@/server/account-sweep";
@@ -47,4 +47,35 @@ export async function DELETE(request: Request) {
   await removeAccount(session.account.id);
   jar.delete(SESSION_COOKIE);
   return new Response(null, { status: 204 });
+}
+
+const NewPassword = z.object({
+  current: z.string().max(500),
+  next: z.string().min(8, "Use at least 8 characters").max(500, "Use at most 500 characters"),
+});
+
+/**
+ * An account changes its password (the current one first, to be sure). Its other sign-ins end; this browser gets a new
+ * session cookie. Five password checks a minute per account, as for deleting it.
+ */
+export async function PATCH(request: Request) {
+  const jar = await cookies();
+  const session = sessionViewer(sessionCookieOf(request));
+  if (session?.kind !== "account") return Response.json({ error: "Sign in to change your password" }, { status: 403 });
+  const parsed = NewPassword.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    const next = parsed.error.issues.find((i) => i.path[0] === "next");
+    return Response.json({ error: next?.message ?? "Enter your current password and a new one" }, { status: 400 });
+  }
+  const rate = hit(`password-me:${session.account.id}`, 5, 60_000);
+  if (!rate.ok) return Response.json({ error: "Too many tries. Wait a minute, then try again." }, { status: 429, headers: { "Retry-After": String(rate.retryAfterS) } });
+  try {
+    await setAccountPassword(session.account.id, parsed.data.current, parsed.data.next);
+  } catch (e) {
+    if (e instanceof AccountError) return Response.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
+  const s = createSession(session.account.id);
+  jar.set(SESSION_COOKIE, s.value, { httpOnly: true, sameSite: "lax", secure: new URL(request.url).protocol === "https:", path: "/", maxAge: s.maxAge });
+  return Response.json({ ok: true });
 }

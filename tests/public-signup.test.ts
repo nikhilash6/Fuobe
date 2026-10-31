@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -5,6 +6,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { NextRequest } from "next/server";
 // Route handlers call connection(); outside a request scope it would throw.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
+// Route handlers set the session cookie through cookies() (no request scope in a test): a jar that only records.
+const jar = vi.hoisted(() => ({ set: vi.fn(), delete: vi.fn(), get: vi.fn() }));
+vi.mock("next/headers", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/headers")>()), cookies: async () => jar }));
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-signup-"));
 process.env.FUOBE_DATA_DIR = dir;
@@ -406,5 +410,75 @@ describe("one reading of the session cookie (audit: proxy and routes must agree 
     expect(await list.json()).toEqual({ items: [] });
     const run = await POST(raw("/api/generations", doubled(), "POST"));
     expect(run.status).toBe(401);
+  });
+});
+
+describe("an account changes its password (Settings → Account)", () => {
+  const me = () => import("@/app/api/auth/me/route");
+  const patch = (cookie: string, body: unknown) =>
+    new Request("http://localhost:3000/api/auth/me", {
+      method: "PATCH",
+      headers: { "content-type": "application/json", cookie: `${auth.SESSION_COOKIE}=${cookie}` },
+      body: JSON.stringify(body),
+    });
+  const secret = () => (JSON.parse(fs.readFileSync(path.join(dir, "auth.json"), "utf8")) as { secret: string }).secret;
+  /** An account cookie signed with the secret alone, as before account keys held the password's fingerprint. */
+  const legacy = (id: string) => {
+    const payload = `${Date.now() + 86_400_000}.${id}`;
+    return `${payload}.${crypto.createHmac("sha256", secret()).update(payload).digest("base64url")}`;
+  };
+  afterEach(() => jar.set.mockClear());
+
+  it("needs the current password, ends every other sign-in, and keeps this browser signed in", async () => {
+    const a = auth.createAccount("new-password@example.com", "first password");
+    const here = auth.createSession(a.id).value;
+    const elsewhere = auth.createSession(a.id).value;
+    const old = legacy(a.id);
+    const owner = auth.createSession().value;
+    // A cookie from before this change still works, until the account changes its password.
+    expect(auth.sessionViewer(old)?.kind).toBe("account");
+
+    const wrong = await (await me()).PATCH(patch(here, { current: "not my password", next: "second password" }));
+    expect(wrong.status).toBe(403);
+    expect((await wrong.json()).error).toMatch(/current password is wrong/);
+    const short = await (await me()).PATCH(patch(here, { current: "first password", next: "short" }));
+    expect(short.status).toBe(400);
+    expect((await short.json()).error).toMatch(/8 characters/);
+    expect(auth.sessionViewer(here)?.kind).toBe("account");
+    expect(jar.set).not.toHaveBeenCalled();
+
+    const ok = await (await me()).PATCH(patch(here, { current: "first password", next: "second password" }));
+    expect(ok.status).toBe(200);
+    // Every cookie the account had is refused now: this browser's old one, another browser's, one from before.
+    for (const cookie of [here, elsewhere, old]) expect(auth.sessionViewer(cookie)).toBeNull();
+    // This browser has a new one, which works.
+    expect(jar.set).toHaveBeenCalledWith(auth.SESSION_COOKIE, expect.any(String), expect.objectContaining({ httpOnly: true, path: "/" }));
+    const fresh = jar.set.mock.calls[0][1] as string;
+    expect(auth.sessionViewer(fresh)).toMatchObject({ kind: "account", account: { id: a.id } });
+    expect(legacy(a.id)).not.toBe(fresh);
+    expect(auth.sessionViewer(legacy(a.id))).toBeNull();
+    // The new password logs in, the old one doesn't, and the owner is still signed in.
+    expect(auth.checkAccount("new-password@example.com", "second password")?.id).toBe(a.id);
+    expect(auth.checkAccount("new-password@example.com", "first password")).toBeNull();
+    expect(auth.validSession(owner)).toBe(true);
+    // The old cookie can't try again.
+    expect((await (await me()).PATCH(patch(here, { current: "second password", next: "third password" }))).status).toBe(403);
+  });
+
+  it("allows five tries a minute, then answers 429", async () => {
+    const a = auth.createAccount("password-guesser@example.com", "the real one");
+    const cookie = auth.createSession(a.id).value;
+    for (let i = 0; i < 5; i++) expect((await (await me()).PATCH(patch(cookie, { current: `guess ${i}`, next: "a new password" }))).status).toBe(403);
+    const sixth = await (await me()).PATCH(patch(cookie, { current: "the real one", next: "a new password" }));
+    expect(sixth.status).toBe(429);
+    expect(sixth.headers.get("retry-after")).toMatch(/^\d+$/);
+    expect(auth.checkAccount("password-guesser@example.com", "the real one")?.id).toBe(a.id);
+  });
+
+  it("refuses a guest and the owner: it's an account's own password", async () => {
+    const owner = auth.createSession().value;
+    expect((await (await me()).PATCH(patch(owner, { current: "install password", next: "a new password" }))).status).toBe(403);
+    expect((await (await me()).PATCH(patch("", { current: "x", next: "a new password" }))).status).toBe(403);
+    expect(auth.checkPassword("install password")).toBe(true);
   });
 });
