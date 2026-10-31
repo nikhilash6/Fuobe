@@ -17,7 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { uploadFile } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { uploadFile, useIsVisitor } from "@/lib/api";
 import { MAX_SOURCE_IMAGES, NAME_MAX, suggestName, type Palette, type PalettePick } from "@/lib/catalog/palettes";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -137,6 +138,8 @@ export function ColorSignaturePanel({
 }) {
   const { items, isLoading } = usePalettes();
   const { create, remove } = usePaletteActions();
+  // A guest or a free account: the Cinema palettes only (saving one of its own is refused).
+  const visitor = useIsVisitor();
   const [view, setView] = useState<View>("list");
   const [files, setFiles] = useState<File[]>([]);
   const [draft, setDraft] = useState<PaletteDraft>(manualDraft);
@@ -174,13 +177,22 @@ export function ColorSignaturePanel({
             {!compact && (
               <>
                 <p className="text-[14px] font-semibold text-brand-text">Control your colors</p>
-                <p className="mt-0.5 text-[12.5px] text-muted-foreground">Upload a reference image and bring its colors into your own style.</p>
+                <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                  {visitor ? "Pick a Cinema palette below and bring its colors into your image." : "Upload a reference image and bring its colors into your own style."}
+                </p>
               </>
             )}
-            {compact && <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">Upload a reference image to create your color signature.</p>}
-            <Button size="sm" className={cn("h-8", !compact && "mt-2")} onClick={() => setView("create")}>
-              <Upload /> Upload &amp; Create
-            </Button>
+            {compact && (
+              <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+                {visitor ? "Pick a Cinema palette to use its colors." : "Upload a reference image to create your color signature."}
+              </p>
+            )}
+            {/* Saving a palette is a library change, which only the owner makes here (the server refuses it). */}
+            {!visitor && (
+              <Button size="sm" className={cn("h-8", !compact && "mt-2")} onClick={() => setView("create")}>
+                <Upload /> Upload &amp; Create
+              </Button>
+            )}
           </div>
           {engine === "open" && value && (
             <label className="mb-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12.5px]">
@@ -194,7 +206,11 @@ export function ColorSignaturePanel({
           <div className="max-h-[52svh] space-y-4 overflow-y-auto pr-0.5 sm:max-h-[360px]" onScroll={(e) => setCompact(e.currentTarget.scrollTop > 24)}>
             <section>
               <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Your palettes</p>
-              {isLoading ? (
+              {visitor ? (
+                <div className="rounded-lg border border-dashed p-4 text-center">
+                  <SelfHostNote className="text-[12px]">Saving palettes isn&apos;t on free accounts yet.</SelfHostNote>
+                </div>
+              ) : isLoading ? (
                 <div className="grid grid-cols-2 gap-2">
                   <Skeleton className="aspect-video" />
                   <Skeleton className="aspect-video" />
