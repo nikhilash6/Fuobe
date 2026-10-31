@@ -11,7 +11,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import type { Generation, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
-import { useEngine, useGenerations } from "@/lib/api";
+import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest } from "@/lib/api";
 import { claimStartToken, followEngineDefault, handoffKey, mergeHandoff, presetModel, promptShown, START_PARAM, withoutStart, withPreset } from "@/lib/composer";
 import { positionsFrom } from "@/lib/catalog/keyframes";
 import { reuseSignature, withSignatureWords } from "@/lib/catalog/palettes";
@@ -490,10 +490,20 @@ function HandoffSync({
   );
 }
 
-/** One draft's page: the studio and its hand-off. The start request resets with the draft (a new epoch). */
+/**
+ * One draft's page: the studio and its hand-off. The start request resets with the draft (a new epoch).
+ *
+ * A guest's Start from Home opens "Create a free account" here instead of sending a run that can only be refused. It
+ * opens after HandoffSync took `go` out of the address (a microtask), so the card's way back is the studio with the
+ * prompt filled in. While who is looking isn't known yet, the run is sent and its refusal opens the same card.
+ */
 function StudioSession({ header, tabs, sync }: { header?: React.ReactNode; tabs?: React.ReactNode; sync: Omit<React.ComponentProps<typeof HandoffSync>, "onStart"> }) {
   const [startRequest, setStartRequest] = useState(0);
-  const onStart = useCallback(() => setStartRequest((n) => n + 1), []);
+  const guest = useIsGuest();
+  const onStart = useCallback(() => {
+    if (guest) queueMicrotask(() => window.dispatchEvent(new CustomEvent(GUEST_PROMPT_EVENT, { detail: { action: "run" } })));
+    else setStartRequest((n) => n + 1);
+  }, [guest]);
   return (
     <StartRequestCtx.Provider value={startRequest}>
       <StudioBody header={header} tabs={tabs} />
