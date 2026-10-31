@@ -337,7 +337,7 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
             <EngineSwitch value={engine} onChange={setEngine} size="sm" compact />
           </div>
           <p className="text-[12px] text-muted-foreground">
-            {engine === "open" ? "Open-source models run free on your GPU." : "Paid models cost what the approval card shows."} Smart plans with the best model you&apos;ve connected (its provider bills each run); Free uses free models, then the offline planner.
+            {engine === "open" ? "Open-source models run free on your GPU." : "Paid models cost what the approval card shows."} Smart plans with the best model you&apos;ve connected (a paid one bills each run); Free uses free models, then the offline planner.
           </p>
         </fieldset>
 
