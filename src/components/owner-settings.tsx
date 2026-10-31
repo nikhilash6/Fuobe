@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signInHref, signOut, useHydrated, useViewer } from "@/lib/api";
+import { announceAuthChange, signInHref, signOut, useHydrated, useViewer } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /** Settings' line under its title: what this viewer finds on the page. Nothing until the viewer is known (as below). */
@@ -100,7 +100,8 @@ function AccountSection({ email }: { email: string }) {
     try {
       const res = await fetch("/api/auth/me", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
       if (res.status === 204) {
-        // A full load: the page and every cached answer were the account's.
+        // This browser's other tabs hear it, then a full load: the page and every cached answer were the account's.
+        announceAuthChange();
         window.location.replace(window.location.origin);
         return;
       }

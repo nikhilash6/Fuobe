@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { announceAuthChange } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
 import { timeAgo } from "@/lib/format";
 import { responseError, toastError } from "@/lib/refusals";
@@ -332,6 +333,8 @@ export function SecuritySettings() {
             className="-my-1 h-7"
             onClick={async () => {
               await fetch("/api/auth/logout", { method: "POST" });
+              // This browser's other tabs stop going on as the owner.
+              announceAuthChange();
               router.replace("/login");
             }}
           >

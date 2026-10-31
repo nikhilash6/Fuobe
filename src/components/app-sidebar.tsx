@@ -40,7 +40,7 @@ import { IntentLink } from "@/components/intent-link";
 import { JobNotifications } from "@/components/job-notifications";
 import { NAV, type NavGroupDef } from "@/components/nav-items";
 import { SkillBuilderProvider } from "@/components/skills/skill-builder-provider";
-import { CONNECT_GPU_EVENT, signInHref, useEngineMode, useHydrated, useStatus, useViewer, type StatusInfo } from "@/lib/api";
+import { CONNECT_GPU_EVENT, signInHref, signOut, useEngineMode, useHydrated, useStatus, useViewer, type StatusInfo } from "@/lib/api";
 import { deviceLabel } from "@/lib/gpu/readiness";
 import { useModKey } from "@/lib/keys";
 import { fullScreenStudio, groupId, NAV_CLOSED_KEY, navActive, NEW_CREATION_HREF, parseClosed, scrollFades, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
@@ -511,12 +511,7 @@ function AccountRow() {
               </IntentLink>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={async () => {
-                await fetch("/api/auth/logout", { method: "POST" });
-                window.location.reload();
-              }}
-            >
+            <DropdownMenuItem onSelect={() => void signOut()}>
               <LogOut /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
