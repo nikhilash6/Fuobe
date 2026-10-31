@@ -19,17 +19,20 @@ const OPTIONS: { value: Engine; label: string; icon: typeof Cloud; tip: string }
  * Segmented control with a sliding white thumb (Liner-style). `md` (page headers) turns
  * icon-only below the sm breakpoint so titles keep their line on phones (`compact` does the same
  * for `sm`, e.g. in Assist's one-row footer); the tooltips and aria labels still name each engine.
+ * `wordless`: no "Add key" on a phone either, in a header that has no room for it (the lock and the label still say it).
  */
 export function EngineSwitch({
   value,
   onChange,
   size = "md",
   compact = size === "md",
+  wordless,
 }: {
   value: Engine;
   onChange: (e: Engine) => void;
   size?: "sm" | "md";
   compact?: boolean;
+  wordless?: boolean;
 }) {
   const mode = useEngineMode();
   // Until hydrated, the server's switch (as useEngineMode): a viewer or status that lands mid-hydration must not change it.
@@ -54,7 +57,7 @@ export function EngineSwitch({
         <o.icon className="size-3.5" />
         <span className={cn(compact && "hidden sm:inline")}>{text}</span>
         {/* A phone has room for two words: what to do about the lock. */}
-        {compact && locked?.addKey && <span className="sm:hidden">Add key</span>}
+        {compact && !wordless && locked?.addKey && <span className="sm:hidden">Add key</span>}
       </>
     );
     // An account opens "Add your key" right here (a plain click; Settings → Your keys in a new tab), or Your GPU when

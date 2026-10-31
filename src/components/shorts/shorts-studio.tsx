@@ -78,7 +78,7 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
     <div className="flex min-h-svh min-w-0 flex-col">
       <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
         <SidebarTrigger className="md:hidden" />
-        <h1 className="truncate font-heading text-[22px] leading-none">Shorts Studio</h1>
+        <h1 className="shrink-0 truncate font-heading text-[22px] leading-none">Shorts Studio</h1>
         <div role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} className="ml-2 flex h-8 items-center rounded-full bg-muted p-0.5 sm:ml-4">
           {(["presets", "history"] as const).map((t) => (
             <button
@@ -95,7 +95,8 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
           ))}
         </div>
         <div className="ml-auto">
-          <EngineSwitch value={engine} onChange={setEngine} />
+          {/* A phone's header has room for the title and the tabs, not "Add key" too. */}
+          <EngineSwitch value={engine} onChange={setEngine} wordless />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">

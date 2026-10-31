@@ -106,7 +106,8 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
           ))}
         </div>
         <div className="ml-auto shrink-0">
-          <EngineSwitch value={engine} onChange={setEngine} />
+          {/* A phone's header has room for the tabs, not "Add key" too. */}
+          <EngineSwitch value={engine} onChange={setEngine} wordless />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">
