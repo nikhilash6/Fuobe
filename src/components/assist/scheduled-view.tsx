@@ -23,7 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useNow } from "@/components/studio/use-now";
 import { describeRule, formatWhen, untilText, zoneLabel, type ScheduleResult, type ScheduleView } from "@/lib/assist-schedule";
-import { useIsOwner } from "@/lib/api";
+import { useIsOwner, useIsVisitor } from "@/lib/api";
 import { formatCost, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -51,6 +51,7 @@ export function ScheduledView({ projectId }: { projectId?: string } = {}) {
   const list = schedules.data ?? [];
   // A guest or an account (public sign-up): scheduled tasks are the owner's, so nothing to schedule.
   const owner = useIsOwner();
+  const visitor = useIsVisitor();
 
   return (
     <div className={cn("flex min-w-0 flex-col", !projectId && "min-h-svh")}>
@@ -106,8 +107,18 @@ export function ScheduledView({ projectId }: { projectId?: string } = {}) {
                 <EmptyMedia variant="icon">
                   <CalendarClock />
                 </EmptyMedia>
-                <EmptyTitle className="font-heading text-[22px] font-normal">No scheduled tasks yet</EmptyTitle>
-                <EmptyDescription>Schedule a prompt here, or with the Schedule button in any chat. You choose whether each run asks you first.</EmptyDescription>
+                {/* A visitor can't schedule (the note above says why); nothing until it's known who's looking, so neither text flashes. */}
+                {owner ? (
+                  <>
+                    <EmptyTitle className="font-heading text-[22px] font-normal">No scheduled tasks yet</EmptyTitle>
+                    <EmptyDescription>Schedule a prompt here, or with the Schedule button in any chat. You choose whether each run asks you first.</EmptyDescription>
+                  </>
+                ) : visitor ? (
+                  <>
+                    <EmptyTitle className="font-heading text-[22px] font-normal">Schedules belong to the owner</EmptyTitle>
+                    <EmptyDescription>The studio&apos;s owner sets Assist&apos;s scheduled tasks here, and they stay private to them.</EmptyDescription>
+                  </>
+                ) : null}
               </EmptyHeader>
               {owner && (
                 <EmptyContent>

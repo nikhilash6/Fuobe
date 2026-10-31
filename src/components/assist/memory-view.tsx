@@ -101,47 +101,50 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
             )}
           </div>
         )}
-        <div className="mt-5 flex flex-wrap items-center gap-2">
-          {!projectId && (
-            <Select value={placeKey(place)} onValueChange={(k) => setPlace(fromKey(k))}>
-              <SelectTrigger className="h-8 rounded-full" aria-label="Whose memory">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="personal">Personal</SelectItem>
-                {projects.data?.map((p) => (
-                  <SelectItem key={p.id} value={`project:${p.id}`}>
-                    <ProjectDot project={p} /> {p.name}
-                  </SelectItem>
-                ))}
-                <SelectItem value="all">Everything</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-          <div className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto px-1 scrollbar-none" role="radiogroup" aria-label="Category" onKeyDown={radioKeys}>
-            {(["all", ...MEMORY_CATEGORIES] as const).map((c) => {
-              const n = c === "all" ? (memories.data?.length ?? 0) : (counts.get(c) ?? 0);
-              // Empty categories are hidden, except the picked one (it stays the group's Tab stop).
-              if (c !== "all" && !n && category !== c) return null;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  role="radio"
-                  aria-checked={category === c}
-                  tabIndex={radioTab(category === c)}
-                  onClick={() => setCategory(c)}
-                  className={cn(
-                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors",
-                    category === c ? "bg-brand-faint text-brand-text hover:bg-brand-faint-hover" : "bg-secondary text-secondary-foreground hover:bg-accent",
-                  )}
-                >
-                  {c === "all" ? "All" : c} <span className="font-mono text-[11px] opacity-70">{n}</span>
-                </button>
-              );
-            })}
+        {/* Whose memory and its categories: only the owner has any (a visitor's list is always empty). */}
+        {owner && (
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {!projectId && (
+              <Select value={placeKey(place)} onValueChange={(k) => setPlace(fromKey(k))}>
+                <SelectTrigger className="h-8 rounded-full" aria-label="Whose memory">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="personal">Personal</SelectItem>
+                  {projects.data?.map((p) => (
+                    <SelectItem key={p.id} value={`project:${p.id}`}>
+                      <ProjectDot project={p} /> {p.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="all">Everything</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            <div className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto px-1 scrollbar-none" role="radiogroup" aria-label="Category" onKeyDown={radioKeys}>
+              {(["all", ...MEMORY_CATEGORIES] as const).map((c) => {
+                const n = c === "all" ? (memories.data?.length ?? 0) : (counts.get(c) ?? 0);
+                // Empty categories are hidden, except the picked one (it stays the group's Tab stop).
+                if (c !== "all" && !n && category !== c) return null;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={category === c}
+                    tabIndex={radioTab(category === c)}
+                    onClick={() => setCategory(c)}
+                    className={cn(
+                      "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      category === c ? "bg-brand-faint text-brand-text hover:bg-brand-faint-hover" : "bg-secondary text-secondary-foreground hover:bg-accent",
+                    )}
+                  >
+                    {c === "all" ? "All" : c} <span className="font-mono text-[11px] opacity-70">{n}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
         <div className="mt-4">
           {memories.isLoading ? (
             <div className="space-y-2">
@@ -161,12 +164,17 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
                 <EmptyMedia variant="icon">
                   <Brain />
                 </EmptyMedia>
-                <EmptyTitle className="font-heading text-[22px] font-normal">{category === "all" ? "Nothing remembered yet" : `No ${category.toLowerCase()} memories`}</EmptyTitle>
                 {/* A visitor can't add or import (the note above says why); nothing until it's known who's looking, so neither text flashes. */}
                 {owner ? (
-                  <EmptyDescription>Tell Assist “remember that I always want 9:16” in a chat, add one here, or bring over what another assistant knows about you.</EmptyDescription>
+                  <>
+                    <EmptyTitle className="font-heading text-[22px] font-normal">{category === "all" ? "Nothing remembered yet" : `No ${category.toLowerCase()} memories`}</EmptyTitle>
+                    <EmptyDescription>Tell Assist “remember that I always want 9:16” in a chat, add one here, or bring over what another assistant knows about you.</EmptyDescription>
+                  </>
                 ) : visitor ? (
-                  <EmptyDescription>Assist&apos;s memory on this studio is its owner&apos;s.</EmptyDescription>
+                  <>
+                    <EmptyTitle className="font-heading text-[22px] font-normal">Memory belongs to the owner</EmptyTitle>
+                    <EmptyDescription>Assist keeps what the studio&apos;s owner tells it, and that stays private to them.</EmptyDescription>
+                  </>
                 ) : null}
               </EmptyHeader>
               {owner && (
