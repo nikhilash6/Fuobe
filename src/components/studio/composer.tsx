@@ -400,6 +400,14 @@ export function Composer({ docked }: { docked: boolean }) {
     const route = presetParams(picked, engine);
     setDraft((d) => ({ presetId: id, modelId: m.id, params: { ...m.defaults, ...route, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt, seed: d.params.seed }, ...lookCleared(model, m) }));
   };
+  // The empty studio's example tiles pick a camera motion or effect here, as the chip does, so what is attached stays.
+  useEffect(() => {
+    if (!bridgeRef) return;
+    bridgeRef.pick = pickPreset;
+    return () => {
+      if (bridgeRef.pick === pickPreset) bridgeRef.pick = null;
+    };
+  });
   // A motion handed over in the link (?preset= from the Motions gallery) is known once the presets load: it moves the
   // studio's untouched default model to its Original, once per preset.
   const adoptedPreset = useRef<string | undefined>(undefined);

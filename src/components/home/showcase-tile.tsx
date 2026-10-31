@@ -27,6 +27,7 @@ export function ShowcaseTile({
   index,
   sizes = SIZES,
   small = false,
+  onNavigate,
 }: {
   card: PresetCardData;
   kind: string;
@@ -35,8 +36,13 @@ export function ShowcaseTile({
   index: number;
   /** How wide the tile shows, where it isn't on Home's wall (a studio's row of four, under its composer). */
   sizes?: string;
-  /** A tile that is small at every width (a studio's row): it gets the taller, darker shade of a phone's tile. */
+  /**
+   * A tile that is small at every width (a studio's row): it gets the taller, darker shade of a phone's tile, and it is
+   * never the page's largest picture, so even the first isn't fetched ahead of the rest.
+   */
   small?: boolean;
+  /** Called as the link navigates in the app; preventDefault() keeps the page (a studio picks the tile's move itself). */
+  onNavigate?: React.ComponentProps<typeof IntentLink>["onNavigate"];
 }) {
   const { ref, playing, asked, handlers } = usePreviewPlayback<HTMLAnchorElement>(card.id, card.preview);
   const still = card.preview.rest?.src ?? card.preview.poster;
@@ -45,6 +51,7 @@ export function ShowcaseTile({
     <IntentLink
       ref={ref}
       href={href}
+      onNavigate={onNavigate}
       {...handlers}
       // In the order it shows: the kind (from xl), the name, the line.
       aria-label={`${kind}: ${card.name}, ${caption}. Try it`}
@@ -62,7 +69,7 @@ export function ShowcaseTile({
           place={staggered(index)}
           sizes={sizes}
           loading={index < 4 ? "eager" : "lazy"}
-          fetchPriority={index === 0 ? "high" : undefined}
+          fetchPriority={index === 0 && !small ? "high" : undefined}
         />
       </div>
       {/* A small tile (a phone's, or four across a tablet) is short: a taller, darker shade keeps its white words readable over a bright picture. */}

@@ -4,7 +4,7 @@ import { ArrowRight, ArrowUp, Loader2, Upload } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -20,7 +20,7 @@ import { currentModelId, migrateRequest } from "@/lib/catalog/replaced";
 import { matchSpokenLanguage } from "@/lib/speech-languages";
 import { SoulPresetCards } from "@/components/moodboards/soul-preset-cards";
 import type { StudioCatalog } from "@/lib/studio-catalog";
-import type { StudioExample } from "@/lib/studio-examples";
+import type { StudioExample, StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { ComposerBridgeCtx, useComposerBridge, type ComposerBridge } from "./attachments";
 import { CatalogProvider, useCatalog } from "./catalog";
@@ -250,30 +250,60 @@ function PromptSuggestions({ suggestions }: { suggestions: string[] }) {
 const EXAMPLE_SIZES = "(min-width: 640px) 240px, 50vw";
 
 /** The row's tiles. Memoized: the row reads the draft (below), and typing shouldn't re-render four playing covers. */
-const ExampleTiles = memo(function ExampleTiles({ examples }: { examples: StudioExample[] }) {
+const ExampleTiles = memo(function ExampleTiles({ tiles }: { tiles: StudioExample[] }) {
+  const bridge = useComposerBridge();
+  const grid = useRef<HTMLDivElement>(null);
+  // A tile that picks a camera motion or effect in this same studio (/video?preset=…) picks it the way the composer's
+  // own picker does: a photo already attached, the model and its settings stay, where opening the link anew would
+  // start a fresh draft. Its link still opens in a new tab, and is the way in when the composer isn't there.
+  const pickHere = (href: string) => (e: { preventDefault: () => void }) => {
+    const url = new URL(href, window.location.href);
+    const id = url.searchParams.get("preset");
+    if (!id || url.pathname !== window.location.pathname || !bridge?.pick) return;
+    e.preventDefault();
+    // The row goes once a move is picked, and the tile with it: a tile picked from the keyboard hands its focus to this
+    // studio's composer, so the next key types the prompt instead of starting again from the top of the page.
+    const keyboard = !!grid.current?.querySelector(":focus-visible");
+    const composer = grid.current?.closest("[data-studio]")?.querySelector<HTMLElement>("[data-composer]");
+    bridge.pick(id);
+    // The move's card shows above the composer: back up to it, as the link's navigation would have.
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    if (keyboard) requestAnimationFrame(() => composer?.querySelector<HTMLElement>("textarea, button")?.focus({ preventScroll: true }));
+  };
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {examples.map((e, i) => (
-        <ShowcaseTile key={e.card.id} card={e.card} kind={e.kind} caption={e.caption} href={e.href} index={i} sizes={EXAMPLE_SIZES} small />
+    <div ref={grid} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {tiles.map((e, i) => (
+        <ShowcaseTile
+          key={e.card.id}
+          card={e.card}
+          kind={e.kind}
+          caption={e.caption}
+          href={e.href}
+          index={i}
+          sizes={EXAMPLE_SIZES}
+          small
+          onNavigate={pickHere(e.href)}
+        />
       ))}
     </div>
   );
 });
 
 /**
- * "See what it makes": real covers from the studio's own presets (src/lib/studio-examples.ts) under the empty
- * composer, each opening its app or picking its motion or effect. Hidden while a preset is picked: its own card is
- * above the composer then.
+ * Real covers from the studio's own presets (src/lib/studio-examples.ts) under the empty composer, each opening its
+ * app or picking its motion or effect. Hidden while a preset is picked: its own card is above the composer then.
  */
-function StudioExamples({ examples }: { examples: StudioExample[] }) {
+function StudioExamples({ row }: { row: StudioExampleRow }) {
   const { draft } = useStudio();
+  // Its own id: a studio left earlier stays in the page, hidden, with a row of its own.
+  const heading = useId();
   if (draft.presetId) return null;
   return (
-    <section aria-labelledby="studio-examples" className="mx-auto w-full max-w-[1000px] px-3 pb-10 sm:px-6">
-      <h2 id="studio-examples" className="mb-2 text-center text-[12.5px] font-medium text-muted-foreground">
-        See what it makes
+    <section aria-labelledby={heading} className="mx-auto w-full max-w-[1000px] px-3 pb-10 sm:px-6">
+      <h2 id={heading} className="mb-2 text-center text-[12.5px] font-medium text-muted-foreground">
+        {row.heading}
       </h2>
-      <ExampleTiles examples={examples} />
+      <ExampleTiles tiles={row.tiles} />
     </section>
   );
 }
@@ -316,7 +346,7 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
   );
 }
 
-function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs?: React.ReactNode; examples?: StudioExample[] }) {
+function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs?: React.ReactNode; examples?: StudioExampleRow }) {
   // Config and actions only: the draft lives in the composer, so typing doesn't re-render the page or the feed.
   const { config, setDraft } = useStudioActions();
   const [engine, setEngine] = useEngine();
@@ -345,6 +375,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
 
   return (
     <div
+      data-studio
       className="relative flex min-h-svh min-w-0 flex-col"
       onDragEnter={(e) => {
         if (![...e.dataTransfer.types].includes("Files")) return;
@@ -415,7 +446,8 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
 
       {!hasItems && config.suggestions && <PromptSuggestions suggestions={config.suggestions} />}
       {!hasItems && config.signature && <SoulPresetCards />}
-      {!hasItems && !!examples?.length && <StudioExamples examples={examples} />}
+      {/* Only once the feed is known to be empty: a studio with results would show the row, fetch its covers, then drop it. */}
+      {feed.isSuccess && !hasItems && !!examples?.tiles.length && <StudioExamples row={examples} />}
 
       {dragging && (
         <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-overlay p-8">
@@ -445,7 +477,7 @@ interface StudioPageProps {
   /** Prompt to start with when the URL doesn't carry one (e.g. "@Maya "). */
   initialPrompt?: string;
   /** Real covers of what the studio makes, under the empty composer (`studioExamples()` in a server component). */
-  examples?: StudioExample[];
+  examples?: StudioExampleRow;
 }
 
 type DraftProps = Omit<StudioPageProps, "catalog">;
@@ -543,7 +575,7 @@ function StudioSession({
 }: {
   header?: React.ReactNode;
   tabs?: React.ReactNode;
-  examples?: StudioExample[];
+  examples?: StudioExampleRow;
   sync: Omit<React.ComponentProps<typeof HandoffSync>, "onStart">;
 }) {
   const [startRequest, setStartRequest] = useState(0);

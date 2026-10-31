@@ -175,10 +175,12 @@ export function useAttach(slots: InputSlot[], refMax: number) {
 
 /**
  * The page's drop zone hands files to the composer, which knows the current slots (they change
- * with the model and preset). The composer registers its `attachFiles` here.
+ * with the model and preset). The composer registers its `attachFiles` here, and its camera
+ * motion and effect picker as `pick` (the studio's example tiles pick through it).
  */
 export interface ComposerBridge {
   current: ((files: File[]) => void) | null;
+  pick?: ((id: string) => void) | null;
 }
 
 export const ComposerBridgeCtx = createContext<ComposerBridge | null>(null);
