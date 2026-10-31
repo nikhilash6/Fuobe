@@ -35,7 +35,8 @@ export const ACCEPT: Record<MediaKind, string> = {
   model3d: ".glb,.gltf,model/gltf-binary",
 };
 
-const MAX_MB = 200;
+/** The largest file a studio takes, as the server does (src/app/api/uploads). */
+export const MAX_MB = 200;
 
 const EXT_KIND: [RegExp, MediaKind][] = [
   [/\.(mp4|webm|mov|m4v)$/i, "video"],

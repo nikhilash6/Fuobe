@@ -9,7 +9,7 @@ import { downloadBlob } from "@/components/ads/render";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Slider } from "@/components/ui/slider";
-import { kindOfFile, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
+import { kindOfFile, MAX_MB, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { uploadFile, useViewer } from "@/lib/api";
 import { applyPreset, CONTROLS, describeGrade, FRAGMENT, isNeutral, NEUTRAL, PRESETS, uniforms, VERTEX, type Grade } from "@/lib/grade";
 import { cn } from "@/lib/utils";
@@ -282,12 +282,13 @@ function Grader() {
   /** Where the graded file came from, as the library keeps it: a file on the server, never this browser's blob: address. */
   const sourceUrl = async (from: Input): Promise<string> => {
     if (!from.file) return from.url;
+    if (from.file.size > MAX_MB * 1024 * 1024) throw new Error(`That file's over ${MAX_MB} MB, so it can't go in your library. Download keeps the graded copy.`);
     if (uploadedSource.current?.file !== from.file) uploadedSource.current = { file: from.file, url: (await uploadFile(from.file)).url };
     return uploadedSource.current.url;
   };
 
-  const record = async (file: File, kind: "image" | "video") => {
-    const from = await sourceUrl(input!);
+  /** Keeps the graded file in the library, made from `from` (sourceUrl). */
+  const record = async (file: File, kind: "image" | "video", from: string) => {
     const asset = await uploadFile(file);
     const res = await fetch("/api/generations/local", {
       method: "POST",
@@ -374,15 +375,19 @@ function Grader() {
     }
   };
 
-  /** Renders the graded picture or clip in the browser, then downloads it or (the owner) saves it to the library. */
+  /**
+   * Renders the graded picture or clip in the browser, then downloads it or (the owner) saves it to the library. A save
+   * keeps the picked file first, so one the library can't take says so before a clip plays through.
+   */
   const exportTo = async (to: "download" | "library") => {
-    if (!source) return;
+    if (!source || !input) return;
     setSaving({ to, progress: source instanceof HTMLVideoElement ? 0 : undefined });
     try {
+      const from = to === "library" ? await sourceUrl(input) : null;
       const file = source instanceof HTMLVideoElement ? await renderVideo(source, (progress) => setSaving({ to, progress })) : await renderImage(source);
       if (!file || !alive.current) return;
       if (to === "download") downloadBlob(file, file.name);
-      else await record(file, file.type.startsWith("video/") ? "video" : "image");
+      else if (from) await record(file, file.type.startsWith("video/") ? "video" : "image", from);
     } catch (e) {
       if (alive.current) toastError(e);
     } finally {
@@ -433,7 +438,12 @@ function Grader() {
               <ImagePlus className="size-8" />
               <div>
                 <p className="font-heading text-[24px] text-white">Grade a photo or a clip</p>
-                <p className="mt-1 text-[13px]">Drop a file, or pick one from your library. Nothing is uploaded until you save.</p>
+                <p className="mt-1 text-[13px]">
+                  {/* Only the owner saves to the library; everyone else downloads the graded copy. */}
+                  {owner
+                    ? "Drop a file, or pick one from your library. Nothing is uploaded until you save."
+                    : "Drop a photo or a clip, or pick one. It stays in your browser, and Download saves the graded copy."}
+                </p>
               </div>
               <div className="flex gap-2">
                 <MediaSlot label="Image" kind="image" value={null} onChange={pick} onFile={pickFile} local size="lg" />
