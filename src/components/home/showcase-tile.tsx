@@ -19,7 +19,25 @@ const FOUR_UP = "(min-width: 640px) and (max-width: 767px), (min-width: 1024px)"
  * picture, fetched first. Tiles 5 to 8 are hidden (and never fetched) where the wall has two columns; where it has
  * four, they're on the first screen, so they're asked for with the page, not after its layout as a lazy image is.
  */
-export function ShowcaseTile({ card, kind, caption, href, index }: { card: PresetCardData; kind: string; caption: string; href: string; index: number }) {
+export function ShowcaseTile({
+  card,
+  kind,
+  caption,
+  href,
+  index,
+  sizes = SIZES,
+  small = false,
+}: {
+  card: PresetCardData;
+  kind: string;
+  caption: string;
+  href: string;
+  index: number;
+  /** How wide the tile shows, where it isn't on Home's wall (a studio's row of four, under its composer). */
+  sizes?: string;
+  /** A tile that is small at every width (a studio's row): it gets the taller, darker shade of a phone's tile. */
+  small?: boolean;
+}) {
   const { ref, playing, asked, handlers } = usePreviewPlayback<HTMLAnchorElement>(card.id, card.preview);
   const still = card.preview.rest?.src ?? card.preview.poster;
   if (index >= 4) preload(still, { as: "image", imageSrcSet: `${thumbOf(still)} 320w, ${still} 512w`, imageSizes: SIZES, media: FOUR_UP });
@@ -42,7 +60,7 @@ export function ShowcaseTile({ card, kind, caption, href, index }: { card: Prese
           playing={playing}
           asked={asked}
           place={staggered(index)}
-          sizes={SIZES}
+          sizes={sizes}
           loading={index < 4 ? "eager" : "lazy"}
           fetchPriority={index === 0 ? "high" : undefined}
         />
@@ -50,7 +68,10 @@ export function ShowcaseTile({ card, kind, caption, href, index }: { card: Prese
       {/* A small tile (a phone's, or four across a tablet) is short: a taller, darker shade keeps its white words readable over a bright picture. */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-black/65 to-transparent max-md:h-[70%] max-md:via-black/40 max-md:from-black/75"
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t to-transparent",
+          small ? "h-[70%] via-black/40 from-black/75" : "h-[45%] from-black/65 max-md:h-[70%] max-md:via-black/40 max-md:from-black/75",
+        )}
       />
       <span aria-hidden className="pointer-events-none absolute inset-x-3 bottom-2.5 flex min-w-0 flex-col text-left text-white [text-shadow:0_1px_2px_rgb(0_0_0/30%)]">
         <span className="hidden text-[11px] tracking-wide text-white/75 uppercase xl:block">{kind}</span>

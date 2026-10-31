@@ -4,7 +4,7 @@ import { ArrowRight, ArrowUp, Loader2, Upload } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -20,6 +20,7 @@ import { currentModelId, migrateRequest } from "@/lib/catalog/replaced";
 import { matchSpokenLanguage } from "@/lib/speech-languages";
 import { SoulPresetCards } from "@/components/moodboards/soul-preset-cards";
 import type { StudioCatalog } from "@/lib/studio-catalog";
+import type { StudioExample } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { ComposerBridgeCtx, useComposerBridge, type ComposerBridge } from "./attachments";
 import { CatalogProvider, useCatalog } from "./catalog";
@@ -193,6 +194,8 @@ const EMPTY: Generation[] = [];
 
 /** The preset card (U23) is its own chunk: only app pages and studios with a motion or effect picked load it. */
 const PresetHeader = dynamic(() => import("@/components/preset-header").then((m) => m.PresetHeader));
+/** The example covers are one too: only the studios that show them (Image, Video, Edit) load it. */
+const ShowcaseTile = dynamic(() => import("@/components/home/showcase-tile").then((m) => m.ShowcaseTile));
 
 /** While a preset (app, camera motion, effect) is active and the feed is empty: what it does and what to add, above the composer. */
 function ActivePresetHeader() {
@@ -243,6 +246,38 @@ function PromptSuggestions({ suggestions }: { suggestions: string[] }) {
   );
 }
 
+/** A row tile's width: half a phone, else a quarter of the row (1000 px at most). */
+const EXAMPLE_SIZES = "(min-width: 640px) 240px, 50vw";
+
+/** The row's tiles. Memoized: the row reads the draft (below), and typing shouldn't re-render four playing covers. */
+const ExampleTiles = memo(function ExampleTiles({ examples }: { examples: StudioExample[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {examples.map((e, i) => (
+        <ShowcaseTile key={e.card.id} card={e.card} kind={e.kind} caption={e.caption} href={e.href} index={i} sizes={EXAMPLE_SIZES} small />
+      ))}
+    </div>
+  );
+});
+
+/**
+ * "See what it makes": real covers from the studio's own presets (src/lib/studio-examples.ts) under the empty
+ * composer, each opening its app or picking its motion or effect. Hidden while a preset is picked: its own card is
+ * above the composer then.
+ */
+function StudioExamples({ examples }: { examples: StudioExample[] }) {
+  const { draft } = useStudio();
+  if (draft.presetId) return null;
+  return (
+    <section aria-labelledby="studio-examples" className="mx-auto w-full max-w-[1000px] px-3 pb-10 sm:px-6">
+      <h2 id="studio-examples" className="mb-2 text-center text-[12.5px] font-medium text-muted-foreground">
+        See what it makes
+      </h2>
+      <ExampleTiles examples={examples} />
+    </section>
+  );
+}
+
 /**
  * The picked open model's state on the viewer's GPU (the GPU pre-flight), left of the engine switch: a pill that opens
  * the guided fix. Its own component, so the draft it reads re-renders only this.
@@ -281,7 +316,7 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
   );
 }
 
-function StudioBody({ header, tabs }: { header?: React.ReactNode; tabs?: React.ReactNode }) {
+function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs?: React.ReactNode; examples?: StudioExample[] }) {
   // Config and actions only: the draft lives in the composer, so typing doesn't re-render the page or the feed.
   const { config, setDraft } = useStudioActions();
   const [engine, setEngine] = useEngine();
@@ -380,6 +415,7 @@ function StudioBody({ header, tabs }: { header?: React.ReactNode; tabs?: React.R
 
       {!hasItems && config.suggestions && <PromptSuggestions suggestions={config.suggestions} />}
       {!hasItems && config.signature && <SoulPresetCards />}
+      {!hasItems && !!examples?.length && <StudioExamples examples={examples} />}
 
       {dragging && (
         <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-overlay p-8">
@@ -408,6 +444,8 @@ interface StudioPageProps {
   initialRefs?: string[];
   /** Prompt to start with when the URL doesn't carry one (e.g. "@Maya "). */
   initialPrompt?: string;
+  /** Real covers of what the studio makes, under the empty composer (`studioExamples()` in a server component). */
+  examples?: StudioExample[];
 }
 
 type DraftProps = Omit<StudioPageProps, "catalog">;
@@ -497,7 +535,17 @@ function HandoffSync({
  * opens after HandoffSync took `go` out of the address (a microtask), so the card's way back is the studio with the
  * prompt filled in. While who is looking isn't known yet, the run is sent and its refusal opens the same card.
  */
-function StudioSession({ header, tabs, sync }: { header?: React.ReactNode; tabs?: React.ReactNode; sync: Omit<React.ComponentProps<typeof HandoffSync>, "onStart"> }) {
+function StudioSession({
+  header,
+  tabs,
+  examples,
+  sync,
+}: {
+  header?: React.ReactNode;
+  tabs?: React.ReactNode;
+  examples?: StudioExample[];
+  sync: Omit<React.ComponentProps<typeof HandoffSync>, "onStart">;
+}) {
   const [startRequest, setStartRequest] = useState(0);
   const guest = useIsGuest();
   const onStart = useCallback(() => {
@@ -506,7 +554,7 @@ function StudioSession({ header, tabs, sync }: { header?: React.ReactNode; tabs?
   }, [guest]);
   return (
     <StartRequestCtx.Provider value={startRequest}>
-      <StudioBody header={header} tabs={tabs} />
+      <StudioBody header={header} tabs={tabs} examples={examples} />
       <HandoffSync {...sync} onStart={onStart} />
     </StartRequestCtx.Provider>
   );
@@ -517,7 +565,7 @@ function StudioSession({ header, tabs, sync }: { header?: React.ReactNode; tabs?
  * by HandoffSync alone), so the composer the shell painted is the one you type into: nothing
  * typed or focused before hydration is lost.
  */
-function StudioDraft({ config, header, tabs, initialRefs, initialPrompt }: DraftProps) {
+function StudioDraft({ config, header, tabs, initialRefs, initialPrompt, examples }: DraftProps) {
   const [engine, setEngine] = useEngine();
   const catalog = useCatalog();
   const bridge = useMemo<ComposerBridge>(() => ({ current: null }), []);
@@ -566,7 +614,7 @@ function StudioDraft({ config, header, tabs, initialRefs, initialPrompt }: Draft
     <ComposerBridgeCtx.Provider value={bridge}>
       <PresetUrlCtx.Provider value={presetUrl}>
         <StudioProvider key={start.epoch} config={config} initial={initial}>
-          <StudioSession header={header} tabs={tabs} sync={{ startKey: start.key, start: initial, build: buildRef, adopt: adoptRef, follow: followRef, ownRef, ready: catalog.ready, onNavigate }} />
+          <StudioSession header={header} tabs={tabs} examples={examples} sync={{ startKey: start.key, start: initial, build: buildRef, adopt: adoptRef, follow: followRef, ownRef, ready: catalog.ready, onNavigate }} />
         </StudioProvider>
       </PresetUrlCtx.Provider>
     </ComposerBridgeCtx.Provider>
