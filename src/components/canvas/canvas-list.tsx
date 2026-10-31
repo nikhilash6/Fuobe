@@ -146,9 +146,10 @@ export interface TemplateCardData {
   byEngine: Record<Engine, { outline: Outline; models: string[] }>;
 }
 
-/** What each template section is, under its heading. */
-const GROUP_NOTES: Record<string, string> = {
-  "Effects 2.0 chains": "A photo, an image edit that sets the scene, then Fuobe DoP animates it with the effect. Open weights on both engines: free on your GPU.",
+/** What each template section is, under its heading (a guest or an account runs a canvas on a self-hosted Fuobe only). */
+const GROUP_NOTES: Record<string, (visitor: boolean) => string> = {
+  "Effects 2.0 chains": (visitor) =>
+    `A photo, an image edit that sets the scene, then Fuobe DoP animates it with the effect. Open weights on both engines${visitor ? "." : ": free on your GPU."}`,
 };
 
 /** onUse: none for a guest or an account (a canvas is saved to the owner's library: the page says so once). */
@@ -308,7 +309,7 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
                   <h2 id={`tpl-${group.replace(/\W+/g, "-")}`} className="font-heading text-[22px] leading-tight">
                     {group}
                   </h2>
-                  {GROUP_NOTES[group] && <p className="mt-0.5 text-[13px] text-muted-foreground">{GROUP_NOTES[group]}</p>}
+                  {GROUP_NOTES[group] && <p className="mt-0.5 text-[13px] text-muted-foreground">{GROUP_NOTES[group](visitor)}</p>}
                 </div>
               )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

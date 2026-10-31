@@ -170,7 +170,9 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
     ? model3dRequest({ ...input, photo: input.photo ?? PLACEHOLDER, views: { front: PLACEHOLDER, left: PLACEHOLDER, ...sides }, prompt: input.prompt?.trim() || "an object" })
     : null;
   const preview = useRunPreview(engineKnown ? priced : null);
-  const price = priceLine(preview.data);
+  // A free run (open weights) is free on a self-hosted Fuobe: a guest or an account reads that, not "your ComfyUI".
+  const free = !!preview.data && !preview.data.demo && (preview.data.engine === "open" || preview.data.costUsd === 0);
+  const price = visitor && free ? "Self-hosted only" : priceLine(preview.data);
   const cloudAllowed = engineMode !== "open";
   const go = () => {
     if (visitor) return;
@@ -334,7 +336,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
               <p className="mt-1 text-[12px] text-muted-foreground">
                 {mode === "splat"
                   ? engine === "open"
-                    ? "TripoSplat cuts the subject out and renders an orbit video of the splat on your GPU."
+                    ? `TripoSplat cuts the subject out and renders an orbit video of the splat${visitor ? "" : " on your GPU"}.`
                     : "TripoSplat cuts the subject out and returns a .ply splat to download."
                   : engine === "open"
                     ? "Open models also get a turntable video, rendered after the model is made."

@@ -55,7 +55,9 @@ async function findCuts(src: string, duration: number, onProgress: (p: number) =
   }
 }
 
-const money = (usd: number | null | undefined, demo?: boolean, open?: boolean) => (demo ? "Demo · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`);
+/** visitor: a guest or an account, whose own GPU doesn't run Katana yet (the page says so). */
+const money = (usd: number | null | undefined, demo?: boolean, open?: boolean, visitor?: boolean) =>
+  demo ? "Demo · free" : open ? (visitor ? "Self-hosted only" : "Free · your GPU") : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
 
 /** Katana: rebuild a reference edit with your subject, shot for shot. */
 export function KatanaStudio() {
@@ -287,7 +289,7 @@ export function KatanaStudio() {
               {preview.data ? (
                 <>
                   {preview.data.segments.length} segment{preview.data.segments.length === 1 ? "" : "s"} · {preview.data.steps} steps ·{" "}
-                  <span className="font-mono text-foreground">{money(preview.data.costUsd, preview.data.demo, engine === "open")}</span>
+                  <span className="font-mono text-foreground">{money(preview.data.costUsd, preview.data.demo, engine === "open", visitor)}</span>
                 </>
               ) : (
                 (blocker ?? "Pricing…")

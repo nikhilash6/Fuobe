@@ -232,15 +232,19 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   );
 }
 
-/** The price of the next step, next to its button: "≈ $8.13 + ElevenLabs v4", "Demo · free", "Free on your GPU". */
+/**
+ * The price of the next step, next to its button: "≈ $8.13 + ElevenLabs v4", "Demo · free", "Free on your GPU" ("Self-hosted
+ * only" for a guest or an account: a dub doesn't run on their own GPU yet).
+ */
 function PriceNote({ price, loading, error, hint }: { price?: DubPrice; loading?: boolean; error?: Error | null; hint?: string }) {
+  const visitor = useIsVisitor();
   if (loading) return <Skeleton className="h-4 w-20" aria-label="Pricing" />;
   if (error) return <span className="max-w-[16rem] text-right text-[12px] leading-snug text-muted-foreground">{error.message}</span>;
   if (!price) return null;
   const extra = price.unpriced.length ? `${price.unpriced.join(" and ")} bill${price.unpriced.length === 1 ? "s" : ""} by the provider's own rate (per character or token).` : undefined;
   return (
     <span className="text-right text-[12px] leading-snug" title={[extra, hint].filter(Boolean).join(" ") || undefined}>
-      <span className="font-medium tabular-nums">{priceLine(price)}</span>
+      <span className="font-medium tabular-nums">{visitor && !price.demo && price.engine === "open" ? "Self-hosted only" : priceLine(price)}</span>
       {price.steps > 1 && <span className="block text-muted-foreground">{price.steps} steps</span>}
     </span>
   );

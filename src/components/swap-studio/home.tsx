@@ -81,7 +81,7 @@ export function SwapStudioHome() {
           />
           <Button type="submit" className="h-10 rounded-full px-5" disabled={create.isPending || visitor}>
             {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Drama className="size-4" />}
-            New project · {engine === "open" ? "your GPU" : "cloud"}
+            {visitor ? "New project" : `New project · ${engine === "open" ? "your GPU" : "cloud"}`}
           </Button>
         </form>
         {visitor && <SelfHostNote className="mt-3 max-w-lg">Free accounts can&apos;t save projects here yet.</SelfHostNote>}

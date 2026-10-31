@@ -94,11 +94,11 @@ function useSettled<T>(value: T, ms = 250): T {
   return settled;
 }
 
-function RunInfo({ preview, loading, blocker }: { preview?: RunPreview & { steps?: number }; loading: boolean; blocker: string | null }) {
+function RunInfo({ preview, loading, blocker, visitor }: { preview?: RunPreview & { steps?: number }; loading: boolean; blocker: string | null; visitor: boolean }) {
   if (blocker) return <p className="text-[12.5px] text-destructive">{blocker}</p>;
   if (!preview) return <p className="h-5 text-[12.5px] text-muted-foreground">{loading ? "Pricing…" : ""}</p>;
   if (preview.error) return <p className="text-[12.5px] text-destructive">{preview.error}</p>;
-  const cost = preview.demo ? "Demo · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
+  const cost = preview.demo ? "Demo · free" : preview.costUsd === 0 ? (visitor ? "Self-hosted only" : "Free · your GPU") : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
   return (
     <div className="space-y-0.5 text-[12.5px] text-muted-foreground" aria-live="polite">
       <p>
@@ -406,10 +406,16 @@ export function InfluencerBuilder() {
               </div>
             ) : (
               <p className="text-[12.5px] text-muted-foreground">
-                Fuobe Soul on your GPU: Z-Image Turbo draws the sheet in Soul&apos;s Realistic look (the Soul Cast sheet workflow); with a photo or clothing, Qwen-Image-Edit 2511 then puts them on it. <span className="font-medium text-foreground">Free</span> on your GPU.
+                {visitor ? "Fuobe Soul" : "Fuobe Soul on your GPU"}: Z-Image Turbo draws the sheet in Soul&apos;s Realistic look (the Soul Cast sheet workflow); with a photo or clothing, Qwen-Image-Edit 2511 then puts them on it.
+                {!visitor && (
+                  <>
+                    {" "}
+                    <span className="font-medium text-foreground">Free</span> on your GPU.
+                  </>
+                )}
               </p>
             )}
-            <RunInfo preview={blocker ? undefined : (settled ? preview.data : undefined)} loading={preview.isFetching} blocker={blocker} />
+            <RunInfo preview={blocker ? undefined : (settled ? preview.data : undefined)} loading={preview.isFetching} blocker={blocker} visitor={visitor} />
             <Button className="w-full" onClick={create} disabled={run.isPending || uploading || visitor}>
               {run.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} {run.isPending ? "Starting…" : "Generate character sheet"}
             </Button>

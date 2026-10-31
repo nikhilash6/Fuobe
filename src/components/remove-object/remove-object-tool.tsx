@@ -243,7 +243,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
       {!clip && (
         <ToolHero
           title="Remove anything from a video"
-          subtitle="Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays. Priced before it runs; free on your own ComfyUI."
+          subtitle={`Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays. Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}
         >
           {visitor && <SelfHostNote className="mt-3 max-w-xl">Remove object runs on a self-hosted Fuobe for now.</SelfHostNote>}
         </ToolHero>
@@ -449,7 +449,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
                       {actions.preview.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Eye className="size-3.5" />} Preview the mask
                     </Button>
                     <span className="min-w-0 text-[12px] leading-snug text-muted-foreground">
-                      first {REMOVE.previewSeconds} s · {est.demo ? "demo" : engine === "open" ? "free" : costText({ costUsd: est.previewUsd, demo: false }, "cloud")}
+                      first {REMOVE.previewSeconds} s · {est.demo ? "demo" : engine === "open" ? (visitor ? "self-hosted only" : "free") : costText({ costUsd: est.previewUsd, demo: false }, "cloud")}
                       {!est.previewExact && ` · how SAM 3.1 reads it — ${est.modelName} finds the object itself`}
                     </span>
                   </div>
@@ -461,7 +461,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
                     ) : (
                       <>
                         <p className="flex items-center gap-1.5 text-[15px] font-semibold tabular-nums">
-                          {costText(est, engine)}
+                          {costText(est, engine, visitor)}
                           {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" aria-label="Updating the price" />}
                         </p>
                         {est && (

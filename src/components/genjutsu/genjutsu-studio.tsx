@@ -707,7 +707,7 @@ export function GenjutsuStudio() {
               )}
               {maker && options.length <= 1 && (
                 <p className="text-[12px] text-muted-foreground">
-                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {maker.note} · {makerLicence(maker, !/your GPU|on fal/.test(maker.note ?? ""))}
+                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {maker.note} · {makerLicence(maker, !(visitor && maker.engine === "open") && !/your GPU|on fal/.test(maker.note ?? ""))}
                 </p>
               )}
 
@@ -745,7 +745,7 @@ export function GenjutsuStudio() {
                     ) : (
                       <>
                         <p className="flex items-center gap-1.5 text-[15px] font-semibold tabular-nums">
-                          {costText(est, engine)}
+                          {costText(est, engine, visitor)}
                           {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" aria-label="Updating the price" />}
                         </p>
                         {est && (
@@ -932,6 +932,8 @@ function SourceBadge({ source }: { source: Maker["source"] }) {
 
 /** The models for this mode and engine, one line each (where it comes from, what it's good at, its limits, its licence). */
 function MakerList({ options, value, onChange }: { options: Maker[]; value: string; onChange: (id: string) => void }) {
+  // A guest or an account: open weights run on a self-hosted Fuobe only, not on their own GPU yet.
+  const visitor = useIsVisitor();
   return (
     <div role="radiogroup" aria-label="Model" onKeyDown={radioKeys} className="space-y-1.5">
       {options.map((m) => (
@@ -953,7 +955,7 @@ function MakerList({ options, value, onChange }: { options: Maker[]; value: stri
               {m.label} <SourceBadge source={m.source} />
             </span>
             <span className="block text-[12px] leading-snug text-muted-foreground">{m.note}</span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/90">{makerLicence(m)}</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/90">{makerLicence(m, !(visitor && m.engine === "open"))}</span>
           </span>
         </button>
       ))}

@@ -163,7 +163,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
       {!clip && (
         <ToolHero
           title="Take a clip further"
-          subtitle="Evolution keeps your clip's motion and timing and takes the rest where your references and words point. Priced before it runs; free on your own ComfyUI."
+          subtitle={`Evolution keeps your clip's motion and timing and takes the rest where your references and words point. Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}
         >
           {visitor && <SelfHostNote className="mt-3 max-w-xl">Evolution runs on a self-hosted Fuobe for now.</SelfHostNote>}
         </ToolHero>
@@ -287,7 +287,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
                     ) : (
                       <>
                         <p className="flex items-center gap-1.5 text-[15px] font-semibold tabular-nums">
-                          {costText(est, engine)}
+                          {costText(est, engine, visitor)}
                           {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" aria-label="Updating the price" />}
                         </p>
                         {est && (

@@ -339,7 +339,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       : badSite
         ? "Enter a valid website URL"
         : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? (visitor ? "Self-hosted only" : "Free") : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   // Until a template is picked or you start on the composer it stays slim (the attachment tiles fold
   // away), so the template gallery behind it stays in view.
@@ -389,7 +389,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
         <div className="pt-6 pb-2 text-center sm:pt-10">
           <h2 className="font-heading text-display text-balance">Turn a product into ready-to-post content</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">
-            Product shots, motion, UGC presenters, ads, posters and listings — from Fuobe&apos;s templates, on {engine === "open" ? "your own GPU, free" : "Fuobe Marketing Image or partner models in the cloud"}.
+            Product shots, motion, UGC presenters, ads, posters and listings — from Fuobe&apos;s templates, on {engine === "open" ? (visitor ? "open-source models" : "your own GPU, free") : "Fuobe Marketing Image or partner models in the cloud"}.
           </p>
           {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Marketing Studio runs on a self-hosted Fuobe for now.</SelfHostNote>}
         </div>

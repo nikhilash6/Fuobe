@@ -118,14 +118,15 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
         {tab === "history" ? (
           <MixedHistory onStart={() => pick("presets")} />
         ) : tab === "how" ? (
-          <How onStart={() => pick("presets")} cloud={engineMode !== "open"} />
+          <How onStart={() => pick("presets")} cloud={engineMode !== "open"} visitor={visitor} />
         ) : (
           <>
             <div className="mx-auto max-w-[720px] pt-8 pb-6 text-center sm:pt-12">
               <p className="text-[12px] font-semibold tracking-[0.14em] text-brand-text uppercase">No prompts, just vibe</p>
               <h2 className="mt-2 font-heading text-display text-balance">Turn any video into mixed-media art</h2>
               <p className="mx-auto mt-2 max-w-[560px] text-body text-pretty text-muted-foreground">
-                33 looks, each with its own colours and materials. Preview one frame first, then render the clip frame by frame at the rate you choose — on Fuobe Mixed Media, free on your GPU.
+                33 looks, each with its own colours and materials. Preview one frame first, then render the clip frame by frame at the rate you choose — on Fuobe Mixed Media
+                {visitor ? "." : ", free on your GPU."}
               </p>
               {visitor && <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Mixed Media runs on a self-hosted Fuobe for now.</SelfHostNote>}
             </div>
@@ -137,7 +138,8 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
   );
 }
 
-function How({ onStart, cloud }: { onStart: () => void; cloud: boolean }) {
+/** visitor: a guest or an account, for whom the open engine runs only on a self-hosted Fuobe (not on their own GPU yet). */
+function How({ onStart, cloud, visitor }: { onStart: () => void; cloud: boolean; visitor: boolean }) {
   return (
     <div className="mx-auto max-w-[920px] pt-10">
       <h2 className="text-center font-heading text-[34px] leading-tight">How it works</h2>
@@ -157,7 +159,8 @@ function How({ onStart, cloud }: { onStart: () => void; cloud: boolean }) {
         <p className="font-medium text-foreground">Cost</p>
         <p className="mt-1">
           A render is counted in frames: seconds × frame rate, rounded down (10 s at 8 FPS = 80 frames; at most 10 s × 24 FPS = 240). Fuobe Mixed Media draws every
-          frame again in the look — Z-Image Turbo following the frame&apos;s own outlines, with the look&apos;s LoRA and one seed — free on your GPU
+          frame again in the look — Z-Image Turbo following the frame&apos;s own outlines, with the look&apos;s LoRA and one seed — free{" "}
+          {visitor ? "when you run Fuobe yourself" : "on your GPU"}
           {cloud ? ", or on the cloud at about a cent a frame. Nano Banana 2 and Seedream 5.0 Flash redraw frames too, priced per frame." : "."} Smooth draws only the
           first frame in the look, then Wan 2.2 Fun VACE carries it through the clip by depth{cloud ? ", priced per second. Fast restyles the clip in one video-to-video pass, priced by the model" : ""}.
           The estimate shows before you generate.
@@ -527,7 +530,7 @@ function Editor({
 
       <Field
         label="Restyle"
-        hint={frameMode ? `Every frame drawn again · ${cloud ? "priced per frame" : "free on your GPU"}` : smooth ? `First frame, then carried through · ${cloud ? "priced per second" : "free on your GPU"}` : "One video-to-video pass · priced by the model"}
+        hint={frameMode ? `Every frame drawn again${cloud ? " · priced per frame" : visitor ? "" : " · free on your GPU"}` : smooth ? `First frame, then carried through${cloud ? " · priced per second" : visitor ? "" : " · free on your GPU"}` : "One video-to-video pass · priced by the model"}
       >
         <Segmented<MixedMode> label="Restyle" value={mode} onChange={setMode} options={MODE_OPTIONS.filter((o) => MIXED_MODES[engine].includes(o.value))} />
       </Field>
@@ -620,7 +623,7 @@ function Editor({
         {model && (
           <p className="text-[12px] leading-snug text-muted-foreground">
             {smooth
-              ? `Fuobe Original · the first frame drawn in the look, then Wan 2.2 Fun VACE carries it through the clip by depth${cloud ? " at 720p" : " (480p, 16 FPS on your GPU)"}.`
+              ? `Fuobe Original · the first frame drawn in the look, then Wan 2.2 Fun VACE carries it through the clip by depth${cloud ? " at 720p" : visitor ? " (480p, 16 FPS)" : " (480p, 16 FPS on your GPU)"}.`
               : original
                 ? `Fuobe Original · every frame drawn again by Z-Image Turbo along its own outlines, with the look's LoRA and one seed${cloud ? ", hosted on fal" : ""}.`
                 : model.tagline}
@@ -631,7 +634,7 @@ function Editor({
       <div className="space-y-2 rounded-xl border p-3">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[13px] font-medium">Preview frame</span>
-          <span className="font-mono text-[12px] text-muted-foreground tabular-nums">Preview costs: {est ? costText({ costUsd: est.previewUsd, demo: est.demo }, engine) : "—"}</span>
+          <span className="font-mono text-[12px] text-muted-foreground tabular-nums">Preview costs: {est ? costText({ costUsd: est.previewUsd, demo: est.demo }, engine, visitor) : "—"}</span>
         </div>
         <p className="text-[12px] text-muted-foreground">Generate one frame with your current settings before creating the full video.</p>
         {preview && (
@@ -690,7 +693,7 @@ function Editor({
           </span>
           <span className="flex items-center gap-1.5 font-mono text-[13px] font-medium tabular-nums" aria-live="polite">
             {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-            {body ? costText(est, engine) : "—"}
+            {body ? costText(est, engine, visitor) : "—"}
           </span>
         </div>
         {frameMode && cloud && est && !est.demo && typeof est.perFrameUsd === "number" && (

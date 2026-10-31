@@ -24,6 +24,7 @@ import {
 } from "@/lib/catalog/content-factory";
 import { formatLength } from "@/lib/catalog/faceless";
 import type { Engine } from "@/lib/catalog/types";
+import { useIsVisitor } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { claudePrompt, type SeriesAsk } from "./hooks";
@@ -267,12 +268,16 @@ export function PresetGrid({ value, onPick }: { value: string | null; onPick: (p
 // ---------------------------------------------------------------------------
 // The price
 
-/** "≈ $4.20 · 3 episodes × $1.40" / "Demo · free" / "Free · your GPU", with the research's pricing note. */
+/**
+ * "≈ $4.20 · 3 episodes × $1.40" / "Demo · free" / "Free · your GPU", with the research's pricing note. A guest or an
+ * account reads "Self-hosted only" for the open engine: a series doesn't run on their own GPU yet.
+ */
 export function SeriesPriceLine({ data, loading, engine, className }: { data: SeriesEstimate | undefined; loading?: boolean; engine: Engine; className?: string }) {
+  const visitor = useIsVisitor();
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
   const p = data.price;
   const each = p.episodes > 1 ? ` · ${p.episodes} × ${usd(p.perEpisode)}` : "";
-  const price = data.demo ? "Demo · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
+  const price = data.demo ? "Demo · free" : engine === "open" ? (visitor ? "Self-hosted only" : "Free · your GPU") : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
   return (
     <span className={cn("inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5", className)}>
       <Popover>
@@ -284,7 +289,7 @@ export function SeriesPriceLine({ data, loading, engine, className }: { data: Se
         </PopoverTrigger>
         <PopoverContent className="w-72 p-3 text-[13px]" collisionPadding={12}>
           <p className="font-medium">How the price works</p>
-          <p className="mt-1 text-[12px] text-muted-foreground">{data.demo ? "Nothing is connected for some steps, so this runs as a free demo with placeholder results." : engine === "open" ? "Every step runs on your own ComfyUI: no fees." : PRICE_NOTE}</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">{data.demo ? "Nothing is connected for some steps, so this runs as a free demo with placeholder results." : engine === "open" ? (visitor ? "Every step runs on open-source models, free on a self-hosted Fuobe." : "Every step runs on your own ComfyUI: no fees.") : PRICE_NOTE}</p>
           {!data.demo && engine === "cloud" && p.episodes > 1 && (
             <p className="mt-2 font-mono text-[12px] tabular-nums">
               {p.episodes} episodes × {usd(p.perEpisode)} = {usd(p.total)}

@@ -282,7 +282,7 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
           {mode === "describe" && (
             <div className="space-y-2">
               <Textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={5} placeholder="Who are they? e.g. “a 26-year-old surfer and photographer from Lisbon, freckles, sun-bleached curls”" aria-label="Describe your character" />
-              <p className="text-[12px] text-muted-foreground">Runs the AI Influencer app: Nano Banana Pro in the cloud, the Soul Cast sheet (Z-Image Turbo) free on your GPU.</p>
+              <p className="text-[12px] text-muted-foreground">Runs the AI Influencer app: Nano Banana Pro in the cloud, the Soul Cast sheet (Z-Image Turbo){visitor ? " with open weights" : " free on your GPU"}.</p>
             </div>
           )}
 

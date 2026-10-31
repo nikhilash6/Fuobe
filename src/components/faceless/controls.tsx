@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { formatLength, PART_LABELS, type EstimateResult, type StepPart } from "@/lib/catalog/faceless";
 import type { Engine } from "@/lib/catalog/types";
+import { useIsVisitor } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /** A segmented control (Liner style: muted track, white thumb), keyboard like a radio group. */
@@ -77,12 +78,14 @@ export const usd = (n: number) => (n >= 10 ? `$${n.toFixed(0)}` : `$${n.toFixed(
 
 /**
  * "≈ $7.02" / "Demo · free" / "Free · your GPU", with what it's made of in a popover. quiet: the estimate's problem (no
- * narrator voice yet…) is a plain hint, not a warning: nothing has been asked of the visitor yet.
+ * narrator voice yet…) is a plain hint, not a warning: nothing has been asked of the visitor yet. A guest or an account
+ * reads "Self-hosted only" for the open engine: Faceless and Explainer don't run on their own GPU yet.
  */
 export function EstimateLine({ data, loading, engine, className, quiet }: { data: EstimateResult | undefined; loading?: boolean; engine: Engine; className?: string; quiet?: boolean }) {
   const [open, setOpen] = useState(false);
+  const visitor = useIsVisitor();
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
-  const price = data.demo ? "Demo · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
+  const price = data.demo ? "Demo · free" : engine === "open" ? (visitor ? "Self-hosted only" : "Free · your GPU") : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
   const parts = Object.entries(data.estimate.parts).filter(([, v]) => (v ?? 0) > 0) as [StepPart, number][];
   const notes = !data.error ? (data.notes ?? []) : [];
   return (
