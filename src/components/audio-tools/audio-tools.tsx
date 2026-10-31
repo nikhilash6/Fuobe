@@ -12,7 +12,7 @@ import { ACCEPT, fileToList, fileToSlot, kindOfFile, LibraryGrid, wrongKindMessa
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useDraft } from "@/components/av/use-draft";
-import { useEngine, useGenerations } from "@/lib/api";
+import { useAskBeforeUpload, useEngine, useGenerations } from "@/lib/api";
 import {
   clock,
   CROSSFADE_MAX,
@@ -77,15 +77,18 @@ function AddAudio({ multiple, onFiles, onPick, compact, disabled }: { multiple?:
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [picking, setPicking] = useState(false);
+  // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
+  const askFirst = useAskBeforeUpload();
   const take = (list: FileList | null | undefined) => {
     const files = [...(list ?? [])];
+    if (!files.length || askFirst()) return;
     const audio = files.filter((f) => kindOfFile(f) === "audio");
     if (files.length > audio.length) toast(wrongKindMessage("audio"));
     if (audio.length) onFiles(multiple ? audio : audio.slice(0, 1));
   };
   const buttons = (
     <div className="flex flex-wrap items-center justify-center gap-1.5">
-      <Button size="sm" variant={compact ? "outline" : "default"} className="rounded-full" onClick={() => input.current?.click()} disabled={disabled}>
+      <Button size="sm" variant={compact ? "outline" : "default"} className="rounded-full" onClick={() => askFirst() || input.current?.click()} disabled={disabled}>
         {compact ? <Plus className="size-3.5" /> : <Upload className="size-3.5" />} {compact ? "Add a clip" : multiple ? "Upload audio clips" : "Upload audio"}
       </Button>
       <Popover open={picking} onOpenChange={setPicking}>

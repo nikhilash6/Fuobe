@@ -15,7 +15,7 @@ import { VideoTrimmer } from "@/components/studio/video-trimmer";
 import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { probeBlob, probeUrl } from "@/lib/media-probe";
-import { useModelAccess } from "@/lib/api";
+import { useAskBeforeUpload, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -42,6 +42,8 @@ function ReferenceDrop({ onFile, onPick }: { onFile: (f: File) => void; onPick: 
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [lib, setLib] = useState(false);
+  // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
+  const askFirst = useAskBeforeUpload();
   return (
     <div
       onDragOver={(e) => (e.preventDefault(), setOver(true))}
@@ -50,7 +52,7 @@ function ReferenceDrop({ onFile, onPick }: { onFile: (f: File) => void; onPick: 
         e.preventDefault();
         setOver(false);
         const f = e.dataTransfer.files[0];
-        if (f) onFile(f);
+        if (f && !askFirst()) onFile(f);
       }}
       className={cn("flex aspect-[4/3] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border-strong p-6 text-center transition-colors sm:aspect-video", over && "border-primary bg-brand-faint")}
     >
@@ -60,7 +62,7 @@ function ReferenceDrop({ onFile, onPick }: { onFile: (f: File) => void; onPick: 
         MP4, MOV or WebM · {MULTIPLIER.minSeconds}–{MULTIPLIER.maxSeconds} seconds (trim a longer one here)
       </p>
       <div className="mt-4 flex flex-wrap justify-center gap-2">
-        <Button onClick={() => input.current?.click()}>
+        <Button onClick={() => askFirst() || input.current?.click()}>
           <Upload /> Upload video
         </Button>
         <Popover open={lib} onOpenChange={setLib}>
@@ -95,7 +97,10 @@ function MentionImages({ value, onChange, onMention, max }: { value: string[]; o
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(0);
   const [lib, setLib] = useState(false);
+  // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
+  const askFirst = useAskBeforeUpload();
   const add = async (files: File[]) => {
+    if (!files.length || askFirst()) return;
     const room = max - value.length;
     if (room <= 0) return void toast(`Up to ${max} images`);
     setBusy(Math.min(room, files.length));
@@ -131,7 +136,7 @@ function MentionImages({ value, onChange, onMention, max }: { value: string[]; o
       ))}
       {value.length + busy < max && (
         <div className="relative flex size-16 shrink-0 flex-col overflow-hidden rounded-xl border border-dashed border-border-strong">
-          <button type="button" onClick={() => input.current?.click()} className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] text-muted-foreground hover:bg-brand-faint hover:text-brand-text" aria-label="Add images">
+          <button type="button" onClick={() => askFirst() || input.current?.click()} className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] text-muted-foreground hover:bg-brand-faint hover:text-brand-text" aria-label="Add images">
             <ImagePlus className="size-4" />
             Add
           </button>

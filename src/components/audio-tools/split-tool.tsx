@@ -14,7 +14,7 @@ import { ACCEPT, fileToSlot, kindOfFile, LibraryGrid, type SlotValue } from "@/c
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { useEngine, useGenerations } from "@/lib/api";
+import { useAskBeforeUpload, useEngine, useGenerations } from "@/lib/api";
 import type { AudioToolPreview } from "@/lib/av/audio-tools";
 import {
   backgroundLowered,
@@ -140,8 +140,10 @@ function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate:
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [picking, setPicking] = useState(false);
+  // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
+  const askFirst = useAskBeforeUpload();
   const take = (f: File | undefined) => {
-    if (!f) return;
+    if (!f || askFirst()) return;
     const kind = kindOfFile(f);
     if (kind !== "audio" && kind !== "video") return void toast("Audio or video only — drop a sound file or a clip here");
     void uploadSource(f, kind, onPick, onUpdate);
@@ -169,7 +171,7 @@ function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate:
         <p className="mt-1 text-[13px] text-muted-foreground">A song, podcast, film clip or video, up to 200 MB</p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
-        <Button size="sm" className="rounded-full" onClick={() => input.current?.click()}>
+        <Button size="sm" className="rounded-full" onClick={() => askFirst() || input.current?.click()}>
           <Upload className="size-3.5" /> Upload audio or video
         </Button>
         <Popover open={picking} onOpenChange={setPicking}>

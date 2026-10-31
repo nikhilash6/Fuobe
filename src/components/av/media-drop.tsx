@@ -6,12 +6,15 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ACCEPT, fileToSlot, kindOfFile, LibraryGrid, wrongKindMessage, type SlotValue } from "@/components/studio/media-slot";
+import { useAskBeforeUpload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { realDuration } from "./frame-sampler";
 
 /**
  * A large drop zone for the one video (or photo) a tool works on: drop, click or pick from the
  * library; then a preview with Replace / Remove. Reports the clip's length once the browser knows it.
+ * Someone whose upload would be refused (a guest, an account with neither its own GPU nor its own key)
+ * is asked first instead of getting the file chooser, unless the file stays in the browser (`local`).
  */
 export function MediaDrop({
   kind,
@@ -51,8 +54,12 @@ export function MediaDrop({
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [picking, setPicking] = useState(false);
+  const askFirst = useAskBeforeUpload();
+  /** True when the upload would be refused and its card opened instead. */
+  const refused = () => !local && askFirst();
+  const choose = () => refused() || input.current?.click();
   const take = (f: File | undefined) => {
-    if (!f) return;
+    if (!f || refused()) return;
     if (kindOfFile(f) !== kind) return void toast(wrongKindMessage(kind));
     onFile?.(f);
     if (local) {
@@ -139,7 +146,7 @@ export function MediaDrop({
               <Loader2 className="size-3 animate-spin" /> Uploading…
             </span>
           )}
-          <Button variant="ghost" size="sm" className="rounded-full" onClick={() => input.current?.click()}>
+          <Button variant="ghost" size="sm" className="rounded-full" onClick={choose}>
             <RefreshCw className="size-3.5" /> Replace
           </Button>
           <Button variant="ghost" size="icon-sm" className="rounded-full" aria-label={`Remove ${kind === "video" ? "the video" : "the photo"}`} onClick={() => onChange(null)}>
@@ -175,7 +182,7 @@ export function MediaDrop({
         {hint && <p className="mt-1 text-[13px] text-muted-foreground">{hint}</p>}
       </div>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
-        <Button size="sm" className="rounded-full" onClick={() => input.current?.click()}>
+        <Button size="sm" className="rounded-full" onClick={choose}>
           <Upload className="size-3.5" /> Upload {kind === "video" ? "a video" : "a photo"}
         </Button>
         {library}
