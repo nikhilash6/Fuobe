@@ -275,7 +275,9 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
                 <StyleArt styleId={settings.styleId} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] font-medium">{style.name}</p>
+                <p className="line-clamp-2 text-[14px] leading-tight font-medium" title={style.name}>
+                  {style.name}
+                </p>
                 <p className="line-clamp-2 text-[12px] leading-snug text-muted-foreground">{style.description}</p>
               </div>
               <Button variant="outline" size="sm" onClick={() => setStylesOpen(true)}>
