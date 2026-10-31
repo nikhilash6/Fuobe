@@ -469,12 +469,16 @@ function YourGpuChip({ viewer }: { viewer: NonNullable<StatusInfo["viewer"]> }) 
 
 /**
  * Who is signed in (public sign-up): an account's email, with Settings, Your GPU and Sign out. Nothing
- * for the owner or a guest. In the rail it's the initial alone; on a phone the menu opens upward.
+ * for the owner or a guest. In the rail it's the initial alone; on a phone the menu opens upward. Until hydrated it is
+ * the server's HTML (no row), even when the viewer query has already answered; until the viewer is known, a browser an
+ * account used last keeps the row's height, so the footer doesn't move when it comes.
  */
 function AccountRow() {
-  const account = useViewer().data?.account;
+  const hydrated = useHydrated();
+  const viewer = useViewer().data;
+  const account = hydrated ? viewer?.account : undefined;
   const { isMobile } = useSidebar();
-  if (!account) return null;
+  if (!account) return hydrated && viewer ? null : <div aria-hidden className="hidden h-9 group-data-[collapsible=icon]:h-8 [html[data-viewer='account']_&]:block" />;
   return (
     <SidebarMenu>
       <SidebarMenuItem>

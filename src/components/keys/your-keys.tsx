@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ADD_KEY_EVENT, preferEngine, useStatus, useViewer } from "@/lib/api";
+import { ADD_KEY_EVENT, preferEngine, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { settingProblem } from "@/lib/connections";
 import { CLOUD_KEY, CLOUD_PROVIDERS, OPEN_ONLY_MESSAGE, type CloudProvider, type KeyInfo, type YourKeys } from "@/lib/your-keys";
 import { cn } from "@/lib/utils";
@@ -271,9 +271,11 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
 
 /** Settings → Your keys, for accounts (below Your GPU). `prices`: what the studios' paid defaults cost (starterPriceLine). */
 export function AccountKeysSection({ prices }: { prices?: string }) {
+  // Nothing until hydrated, as in the server's HTML, even when the viewer query has already answered.
+  const hydrated = useHydrated();
   const account = useViewer().data?.account;
   const q = useYourKeys(!!account);
-  if (!account) return null;
+  if (!hydrated || !account) return null;
   return (
     <section id="your-keys" aria-labelledby="your-keys-title" className="grid scroll-mt-28 grid-cols-[minmax(0,1fr)] gap-6 border-b py-8 md:scroll-mt-20 md:grid-cols-[260px_minmax(0,1fr)]">
       <div className="min-w-0">

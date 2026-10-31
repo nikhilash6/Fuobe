@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useViewer } from "@/lib/api";
+import { useHydrated, useViewer } from "@/lib/api";
 import { storageSize, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
@@ -104,9 +104,11 @@ export function runsHref({ account, status, kind }: { account?: string; status?:
 
 /** Settings' strip (the owner): how many accounts, 0 included, and the way down to Accounts, the last section. */
 export function AccountsChip() {
+  // Nothing until hydrated, as in the server's HTML, even when the answers are already in the cache.
+  const hydrated = useHydrated();
   const owner = useViewer().data?.owner;
   const q = useAdminAccounts(!!owner);
-  if (!q.data) return null;
+  if (!hydrated || !owner || !q.data) return null;
   return (
     <a href="#accounts" className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] whitespace-nowrap transition-colors hover:bg-accent">
       <span className="text-muted-foreground">Accounts</span>
@@ -143,11 +145,12 @@ function useAccountsAnchor(ready: boolean) {
 
 /** Settings → Accounts (the owner only): who signed up (public sign-up), what each made and the space it takes, with switch-off, delete and a CSV export. */
 export function AccountsAdmin() {
+  const hydrated = useHydrated();
   const owner = useViewer().data?.owner;
   const q = useAdminAccounts(!!owner);
   const act = useAdminAction();
   useAccountsAnchor(!!q.data);
-  if (!owner || (!q.data && !q.isError)) return null;
+  if (!hydrated || !owner || (!q.data && !q.isError)) return null;
   const total = q.data?.total ?? 0;
   return (
     <section id="accounts" aria-labelledby="accounts-title" className="grid scroll-mt-28 grid-cols-[minmax(0,1fr)] gap-6 border-t py-8 md:scroll-mt-20 md:grid-cols-[260px_minmax(0,1fr)]">

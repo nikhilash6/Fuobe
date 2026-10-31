@@ -3,12 +3,16 @@
 import { LogOut } from "lucide-react";
 import { ConnectChoice } from "@/components/gpu/connect-choice";
 import { Button } from "@/components/ui/button";
-import { useViewer } from "@/lib/api";
+import { useHydrated, useViewer } from "@/lib/api";
 
-/** Settings for an account (public sign-up): "Your GPU", at the top of the page, and signing out. Nothing for the owner or a guest. */
+/**
+ * Settings for an account (public sign-up): "Your GPU", at the top of the page, and signing out. Nothing for the owner
+ * or a guest, and nothing until hydrated: the server's HTML has none.
+ */
 export function AccountGpuSection() {
+  const hydrated = useHydrated();
   const account = useViewer().data?.account;
-  if (!account) return null;
+  if (!hydrated || !account) return null;
   return (
     <section id="your-gpu" aria-labelledby="your-gpu-title" className="grid scroll-mt-28 grid-cols-[minmax(0,1fr)] gap-6 border-b py-8 md:scroll-mt-20 md:grid-cols-[260px_minmax(0,1fr)]">
       <div className="min-w-0">
