@@ -11,10 +11,11 @@ import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { BrandChip } from "@/components/brand/brand-dialog";
 import { inputCls } from "@/components/brand/fields";
+import { withoutOwnGpu } from "@/lib/catalog/engines";
 import { FORMATS, formatModels, looksLikeWebsite, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
 import { SelfHostNote } from "@/components/self-host-note";
 import { formatCost } from "@/lib/format";
-import { useIsVisitor, useModelAccess } from "@/lib/api";
+import { useIsOwner, useIsVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { addRuns, send, useBrands, useEstimate } from "./hooks";
@@ -106,6 +107,8 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
   const f = FORMATS[draft.format];
   // Models switched off in Settings → Models & licences leave the menu, and the pick falls back to one that is on.
   const access = useModelAccess();
+  // A guest or an account: Marketing Studio runs on a self-hosted Fuobe only, so no model reads "on your GPU".
+  const visitor = useIsVisitor();
   const choices = keepOffered(formatModels(f, engine, { product: !!draft.product, avatar: !!draft.avatar }), (c) => offered(access, c.id, engine));
   const model = choices.find((c) => c.id === draft.modelId) ?? choices[0];
   const summary = [draft.aspectRatio, f.durations && `${draft.duration}s`, draft.batch > 1 && `×${draft.batch}`].filter(Boolean).join(" · ");
@@ -163,7 +166,7 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
             {choices.map((c) => (
               <button key={c.id} type="button" onClick={() => set({ modelId: c.id })} className={cn("w-full rounded-lg px-2.5 py-1.5 text-left hover:bg-accent", model.id === c.id && "bg-brand-faint")}>
                 <span className={cn("block text-[13px] font-medium", model.id === c.id && "text-brand-text")}>{models[c.id]?.name ?? c.id}</span>
-                <span className="block text-[11px] text-muted-foreground">{c.note ?? models[c.id]?.tagline}</span>
+                <span className="block text-[11px] text-muted-foreground">{visitor ? withoutOwnGpu(c.note ?? models[c.id]?.tagline ?? "") : (c.note ?? models[c.id]?.tagline)}</span>
               </button>
             ))}
           </div>
@@ -288,8 +291,10 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   const composer = useRef<HTMLDivElement>(null);
   const prompt = useRef<HTMLTextAreaElement>(null);
   // A run doesn't go to an account's own GPU or key yet (only the studios' generations do): said up front, with no
-  // upload slots and no Generate, instead of a run the server refuses.
+  // upload slots and no Generate, instead of a run the server refuses. The slots show once the owner is known
+  // (useIsOwner), so a visitor never sees them and then gone.
   const visitor = useIsVisitor();
+  const isOwner = useIsOwner();
   const set = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
   const f = FORMATS[draft.format];
   const template = draft.templateId ? TEMPLATE_INDEX.get(draft.templateId) : undefined;
@@ -456,9 +461,9 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
               </div>
             )}
             {/* A guest or an account gets no upload slots: nothing is uploaded for a run that can't start here. */}
-            {!visitor && f.product !== "none" && <ProductSlot value={draft.product} onChange={(p) => set({ product: p })} required={f.product === "required"} brandId={brandId} pulse={pulse === "product"} />}
-            {!visitor && f.avatar !== "none" && <AvatarSlot value={draft.avatar} onChange={(a) => set({ avatar: a })} pulse={pulse === "avatar"} />}
-            {!visitor && f.pipeline !== "ugc" && <MediaSlot label="Reference" kind="image" value={draft.reference} onChange={(v) => set({ reference: v })} />}
+            {isOwner && f.product !== "none" && <ProductSlot value={draft.product} onChange={(p) => set({ product: p })} required={f.product === "required"} brandId={brandId} pulse={pulse === "product"} />}
+            {isOwner && f.avatar !== "none" && <AvatarSlot value={draft.avatar} onChange={(a) => set({ avatar: a })} pulse={pulse === "avatar"} />}
+            {isOwner && f.pipeline !== "ugc" && <MediaSlot label="Reference" kind="image" value={draft.reference} onChange={(v) => set({ reference: v })} />}
           </div>
           <textarea
             ref={prompt}

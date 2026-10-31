@@ -25,6 +25,8 @@ import {
   type Maker,
 } from "@/lib/catalog/genjutsu";
 import { ANCHOR_FALLBACK, CLOUD_NO_LORA } from "@/lib/catalog/character-swap";
+import { withoutOwnGpu } from "@/lib/catalog/engines";
+import { MARKETING_IMAGE_NOTE } from "@/lib/catalog/marketing";
 import { buildPayload } from "@/lib/catalog/payload";
 import { estimateCost, planGeneration } from "@/lib/catalog/plan";
 import { getModel, getPreset } from "@/lib/catalog";
@@ -91,6 +93,19 @@ describe("Genjutsu: which model runs", () => {
     expect(makerLicence(maker("scail-2"))).toBe("SCAIL-2 weights: MIT · on fal, pay per use");
     expect(makerLicence(maker("kling-o3"))).toBe("Closed model: pay per use, under its provider's terms");
     expect(MAKERS.every((m) => makerLicence(m).length > 10)).toBe(true);
+  });
+
+  it("a guest or an account reads the open models' notes without 'free on your GPU' (Genjutsu doesn't run there)", () => {
+    for (const m of MAKERS) {
+      const note = withoutOwnGpu(m.note);
+      expect(note, m.id).not.toMatch(/your GPU|^free\b| · free\b/);
+      expect(note.length, m.id).toBeGreaterThan(10);
+      if (!/your GPU|free/.test(m.note)) expect(note, m.id).toBe(m.note);
+    }
+    expect(withoutOwnGpu("Wan Animate 2 at 480p in 4 steps · free on your GPU (24 GB) · Apache-2.0")).toBe("Wan Animate 2 at 480p in 4 steps · Apache-2.0");
+    expect(withoutOwnGpu("MiniMax H3 + the swap LoRA on your GPU: SAM 3.1 picks the person · free · 48 GB+ advised")).toBe("MiniMax H3 + the swap LoRA: SAM 3.1 picks the person · 48 GB+ advised");
+    expect(withoutOwnGpu(MARKETING_IMAGE_NOTE.open)).toBe("Fuobe Original · Qwen-Image-Edit 2511");
+    expect(withoutOwnGpu("Lip sync · free on your GPU (24 GB), or hosted on fal")).toBe("Lip sync · hosted on fal");
   });
 
   it("refuses in words what an engine can't do", () => {

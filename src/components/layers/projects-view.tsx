@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LibraryGrid } from "@/components/studio/media-slot";
 import { PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
-import { uploadFile, useHydrated, useIsVisitor, useViewer } from "@/lib/api";
+import { uploadFile, useHydrated, useIsOwner, useIsVisitor, useViewer } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { LayerProject } from "@/lib/layers";
 import { cn } from "@/lib/utils";
@@ -197,8 +197,9 @@ function ProjectsInner() {
   const file = useRef<HTMLInputElement>(null);
   const hydrated = useHydrated();
   // A project is saved to the studio's library, which is its owner's: a guest or an account is told so up front, and
-  // nothing is uploaded only to be refused.
+  // nothing is uploaded only to be refused. The empty list's Upload shows once the owner is known (useIsOwner).
   const visitor = useIsVisitor();
+  const isOwner = useIsOwner();
   const viewer = useViewer().data;
   const [picking, setPicking] = useState(false);
   const [renaming, setRenaming] = useState<LayerProject | null>(null);
@@ -354,7 +355,7 @@ function ProjectsInner() {
                 <EmptyTitle className="font-heading text-[22px]">Your edit projects will appear here</EmptyTitle>
                 <EmptyDescription>Upload an image to separate it into editable layers — every project you start is saved here.</EmptyDescription>
               </EmptyHeader>
-              {!visitor && (
+              {isOwner && (
                 <EmptyContent>
                   <Button className="rounded-full" onClick={() => file.current?.click()} disabled={!!busy}>
                     <Upload /> Upload Media

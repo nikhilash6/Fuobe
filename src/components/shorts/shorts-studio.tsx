@@ -9,7 +9,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
-import { useEngine, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useIsOwner, useIsVisitor, useModelAccess } from "@/lib/api";
 import {
   clipShapeProblem,
   rangeProblem,
@@ -82,8 +82,8 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
     <div className="flex min-h-svh min-w-0 flex-col">
       <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
         <SidebarTrigger className="md:hidden" />
-        <h1 className="shrink-0 truncate font-heading text-[22px] leading-none">Shorts Studio</h1>
-        <div role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} className="ml-2 flex h-8 items-center rounded-full bg-muted p-0.5 sm:ml-4">
+        <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">Shorts Studio</h1>
+        <div role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} className="ml-2 flex h-8 shrink-0 items-center rounded-full bg-muted p-0.5 sm:ml-4">
           {(["presets", "history"] as const).map((t) => (
             <button
               key={t}
@@ -98,7 +98,7 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
             </button>
           ))}
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto shrink-0">
           {/* A phone's header has room for the title and the tabs, not "Add key" too. */}
           <EngineSwitch value={engine} onChange={setEngine} wordless />
         </div>
@@ -159,6 +159,9 @@ function Workspace({
   const selectedBuiltIn = SHORTS_PRESETS.find((p) => p.id === presetId);
   const selectedCustom = custom.data?.find((p) => p.id === presetId);
   const selectedName = selectedBuiltIn?.name ?? selectedCustom?.name;
+  // A preset of your own is saved to the studio's library, which is its owner's: its card shows once that's known, so
+  // a visitor never sees it in the grid and then gone.
+  const isOwner = useIsOwner();
 
   // Phones: after picking a look, a bar points down to the upload step until it's on screen.
   const [setupVisible, setSetupVisible] = useState(false);
@@ -177,8 +180,7 @@ function Workspace({
           custom={custom.data ?? []}
           presetId={presetId}
           onSelect={setPresetId}
-          // A preset of your own is saved to the studio's library, which is its owner's.
-          onCreate={visitor ? undefined : () => setDialog({ open: true })}
+          onCreate={isOwner ? () => setDialog({ open: true }) : undefined}
           onEdit={(id) => setDialog({ open: true, preset: custom.data?.find((p) => p.id === id) })}
         />
       </section>

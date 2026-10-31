@@ -53,6 +53,7 @@ import {
   type Maker,
 } from "@/lib/catalog/genjutsu";
 import { chainState } from "@/lib/catalog/shorts";
+import { withoutOwnGpu } from "@/lib/catalog/engines";
 import type { Generation, PixelPoint } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
@@ -482,6 +483,7 @@ export function GenjutsuStudio() {
               Whole clips, shot by shot? Open in Character Swap Studio
             </Link>
           )}
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">Genjutsu runs on a self-hosted Fuobe for now.</SelfHostNote>}
         </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>
@@ -489,6 +491,7 @@ export function GenjutsuStudio() {
           <ClipDrop
             accept={GENJUTSU.accept}
             limits={limits(mode === "character")}
+            disabled={visitor}
             onFile={(f) => {
               const err = source.pick(f);
               if (err) toast.error(err);
@@ -707,7 +710,7 @@ export function GenjutsuStudio() {
               )}
               {maker && options.length <= 1 && (
                 <p className="text-[12px] text-muted-foreground">
-                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {maker.note} · {makerLicence(maker, !(visitor && maker.engine === "open") && !/your GPU|on fal/.test(maker.note ?? ""))}
+                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {visitor ? withoutOwnGpu(maker.note) : maker.note} · {makerLicence(maker, !(visitor && maker.engine === "open") && !/your GPU|on fal/.test(maker.note ?? ""))}
                 </p>
               )}
 
@@ -954,7 +957,7 @@ function MakerList({ options, value, onChange }: { options: Maker[]; value: stri
             <span className="flex flex-wrap items-center gap-1.5 text-[13px] font-medium">
               {m.label} <SourceBadge source={m.source} />
             </span>
-            <span className="block text-[12px] leading-snug text-muted-foreground">{m.note}</span>
+            <span className="block text-[12px] leading-snug text-muted-foreground">{visitor ? withoutOwnGpu(m.note) : m.note}</span>
             <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/90">{makerLicence(m, !(visitor && m.engine === "open"))}</span>
           </span>
         </button>

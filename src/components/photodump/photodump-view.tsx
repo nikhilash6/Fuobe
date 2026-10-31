@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { fileToList, type SlotValue } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
-import { useElements, useEngine, useGenerations, useIsVisitor, useModelAccess } from "@/lib/api";
+import { useElements, useEngine, useGenerations, useIsOwner, useIsVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { customPack, DEFAULT_ASPECT, MAX_PACK_REFS, MAX_SELFIE_MB, PACKS, PHOTODUMP_ASPECTS, PHOTODUMP_MODELS, PHOTODUMP_SOUL, soulIdOf, type Pack } from "@/lib/catalog/packs";
 import type { Generation } from "@/lib/catalog/types";
@@ -150,8 +150,10 @@ function useRuns(feature: string) {
 export function PhotodumpView() {
   const [engine, setEngine] = useEngine();
   // A set doesn't run on an account's own GPU or key yet (only the studios' generations do), and a pack of your own is
-  // saved to the owner's library: said up front, and the upload, Create pack and Generate are off. The packs stay open.
+  // saved to the owner's library: said up front, and the upload and Generate are off. The packs stay open. Create pack
+  // shows once the owner is known (useIsOwner), so a visitor never sees it in the grid and then gone.
   const visitor = useIsVisitor();
+  const isOwner = useIsOwner();
   const [step, setStep] = useState(0);
   const [reached, setReached] = useState(0);
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("all");
@@ -246,7 +248,7 @@ export function PhotodumpView() {
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {/* A pack of your own is saved to the studio's library, which is its owner's. */}
-            {!visitor && (
+            {isOwner && (
               <button
                 type="button"
                 onClick={() => setCreatingPack(true)}
