@@ -38,7 +38,7 @@ async function call<T>(method: string, body?: unknown, test = false): Promise<T>
  * of a local ComfyUI. Nothing here looks for a ComfyUI on this device: it shows the tunnel command. 36rem wide at most
  * from sm up, unless a wider page lifts that (className, as ConnectChoice's).
  */
-export function YourGpu({ className }: { className?: string } = {}) {
+export function YourGpu({ className, onLinked }: { className?: string; onLinked?: () => void } = {}) {
   const qc = useQueryClient();
   const id = useId();
   const q = useQuery({ queryKey: ["account-gpu"], queryFn: () => call<GpuState>("GET") });
@@ -57,11 +57,13 @@ export function YourGpu({ className }: { className?: string } = {}) {
       setInfo(r.info);
       if (!test) {
         qc.setQueryData(["account-gpu"], { gpu: r.gpu });
-        // Runs go to the link now, not to a Fuobe tab on this computer.
+        // Runs go to the link now, not to a Fuobe tab on this computer, and its own files are taken (the status says so).
         void qc.invalidateQueries({ queryKey: ["viewer"] });
+        void qc.invalidateQueries({ queryKey: ["status"] });
         toast.success("Your GPU is connected. Runs go to your ComfyUI now.");
         setUrl("");
         setToken("");
+        onLinked?.();
       }
     } catch (e) {
       setInfo(null);
@@ -74,6 +76,7 @@ export function YourGpu({ className }: { className?: string } = {}) {
     setBusy("remove");
     try {
       qc.setQueryData(["account-gpu"], await call<GpuState>("DELETE"));
+      void qc.invalidateQueries({ queryKey: ["status"] });
       setInfo(null);
     } catch (e) {
       toastError(e);

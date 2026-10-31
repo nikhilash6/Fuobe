@@ -422,6 +422,8 @@ export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLo
         setDone({ port, stats, guard });
         void qc.invalidateQueries({ queryKey: ["viewer"] });
         void qc.invalidateQueries({ queryKey: ["account-gpu"] });
+        // What the account may do now (its own files are taken, useAskBeforeUpload): the status says so.
+        void qc.invalidateQueries({ queryKey: ["status"] });
         try {
           const board = await sendCheck<ReadinessView>(await checkThisComputer(port, { host }));
           qc.setQueryData(["gpu", "readiness"], board);

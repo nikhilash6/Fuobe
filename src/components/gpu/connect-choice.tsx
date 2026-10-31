@@ -152,6 +152,7 @@ function ComputerStatus({ gpu, onLink }: { gpu: Extract<AccountGpuView, { mode: 
     try {
       qc.setQueryData(["account-gpu"], await gpuCall("DELETE"));
       void qc.invalidateQueries({ queryKey: ["viewer"] });
+      void qc.invalidateQueries({ queryKey: ["status"] });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -204,6 +205,7 @@ export interface ConnectChoiceProps {
    * once), or this browser hasn't been allowed to reach it yet (the browser's question is explained first).
    */
   reason?: FindReason;
+  /** Connected, from this computer or with a link: the card that asked can close (and a refused run start again). */
   onStart?: () => void;
   onNotNow?: () => void;
   /** The two options' box (and the link's form): 36rem at most from sm up, unless a wider page lifts that (sm:max-w-none). */
@@ -230,7 +232,7 @@ export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow, classN
     return (
       <div className="space-y-4">
         <p className="rounded-xl bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">{unsupportedWords(support)}</p>
-        <YourGpu className={className} />
+        <YourGpu className={className} onLinked={onStart} />
       </div>
     );
   }
@@ -274,7 +276,7 @@ export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow, classN
         </button>
         {(link || linked) && (
           <div className="mt-3">
-            <YourGpu className={className} />
+            <YourGpu className={className} onLinked={onStart} />
           </div>
         )}
       </div>
