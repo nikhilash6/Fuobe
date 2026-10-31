@@ -132,7 +132,7 @@ export function ConnectGpu() {
         {header(1)}
         {isAccount ? (
           <Card>
-            <ConnectChoice />
+            <ConnectChoice className="sm:max-w-none" />
           </Card>
         ) : (
           <p className="text-[14px] text-muted-foreground">The GPU check is switched off on this studio (FUOBE_GPU_PREFLIGHT=0).</p>
@@ -149,7 +149,7 @@ export function ConnectGpu() {
         <Card>
           <h2 className="mb-1 text-[16px] font-semibold">Where is ComfyUI running?</h2>
           {reason === "refused" && <p className="mb-3 text-[13px] text-destructive">Fuobe can&apos;t use this address. Connect your own ComfyUI.</p>}
-          <ConnectChoice />
+          <ConnectChoice className="sm:max-w-none" />
         </Card>
         {done}
       </div>

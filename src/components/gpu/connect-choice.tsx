@@ -206,9 +206,11 @@ export interface ConnectChoiceProps {
   reason?: FindReason;
   onStart?: () => void;
   onNotNow?: () => void;
+  /** The two options' box: 36rem at most from sm up, unless a wider page lifts that (sm:max-w-none). */
+  className?: string;
 }
 
-export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow }: ConnectChoiceProps) {
+export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow, className }: ConnectChoiceProps) {
   const support = useComputerSupport();
   // The owner (whose runs go to their own computer when Settings says so) has no account GPU: only the finder.
   const owner = useViewer().data?.owner === true;
@@ -235,7 +237,7 @@ export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow }: Conn
   if (gpu?.mode === "computer" && !flow && !link) return <ComputerStatus gpu={gpu} onLink={() => setLink(true)} />;
   const linked = gpu?.mode === "link";
   return (
-    <div className="w-full min-w-0 space-y-3 sm:max-w-[36rem]">
+    <div className={cn("w-full min-w-0 space-y-3 sm:max-w-[36rem]", className)}>
       <div className={cn("space-y-3 rounded-2xl border bg-background p-4", !linked && "border-primary/40")}>
         <div className="flex items-start gap-3">
           <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
