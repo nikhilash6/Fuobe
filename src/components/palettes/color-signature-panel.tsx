@@ -197,10 +197,10 @@ export function ColorSignaturePanel({
           {engine === "open" && value && (
             <label className="mb-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12.5px]">
               <span>
-                Lock the colours after generating
-                <span className="block text-[11.5px] text-muted-foreground">A palette-transfer step recolours each image (open source, CPU)</span>
+                Lock the colors after generating
+                <span className="block text-[11.5px] text-muted-foreground">Keeps each image to the palette&apos;s colors after it&apos;s made</span>
               </span>
-              <Switch checked={value.lock ?? lockByDefault} onCheckedChange={(lock) => onPick({ ...value, lock })} aria-label="Lock the colours after generating" />
+              <Switch checked={value.lock ?? lockByDefault} onCheckedChange={(lock) => onPick({ ...value, lock })} aria-label="Lock the colors after generating" />
             </label>
           )}
           <div className="max-h-[52svh] space-y-4 overflow-y-auto pr-0.5 sm:max-h-[360px]" onScroll={(e) => setCompact(e.currentTarget.scrollTop > 24)}>
@@ -265,7 +265,7 @@ export function ColorSignaturePanel({
           <button type="button" onClick={() => setView("manual")} className="flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-colors hover:bg-accent">
             <PaletteIcon className="size-5 text-brand-text" />
             <span className="text-[13px] font-medium">Pick colors manually</span>
-            <span className="text-[11.5px] text-muted-foreground">Up to 12 colours, a background, random starters</span>
+            <span className="text-[11.5px] text-muted-foreground">Up to 12 colors, a background, random starters</span>
           </button>
         </div>
       )}

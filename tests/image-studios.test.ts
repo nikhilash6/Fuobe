@@ -136,7 +136,7 @@ describe("palettes: k-means extraction", () => {
     expect(normalizeHex("12345g")).toBeNull();
     expect(paletteError({ name: "x", colors: [] })).toMatch(/at least one/);
     expect(paletteError({ name: "x", colors: Array(13).fill("#FFFFFF") })).toMatch(/up to 12/);
-    expect(paletteError({ name: "x", colors: ["#GG0000"] })).toMatch(/isn't a colour/);
+    expect(paletteError({ name: "x", colors: ["#GG0000"] })).toMatch(/isn't a color/);
     expect(paletteError({ name: "ok", colors: ["#FFFFFF"], background: "#000000" })).toBeNull();
     expect(cardStrip({ colors: ["#111111", "#222222", "#111111"], background: "#222222" })).toEqual(["#222222", "#111111"]);
     expect(paletteColors({ colors: ["#111111"], background: "#333333" })).toEqual(["#111111", "#333333"]);

@@ -71,11 +71,11 @@ export function normalizeHex(input: string): string | null {
 export function paletteError(p: { name: string; colors: string[]; background?: string | null }): string | null {
   if (!p.name.trim()) return "Give the palette a name";
   if (p.name.trim().length > NAME_MAX) return `Keep the name under ${NAME_MAX} characters`;
-  if (!p.colors.length) return "Add at least one colour";
-  if (p.colors.length > MAX_COLORS) return `A palette holds up to ${MAX_COLORS} colours`;
+  if (!p.colors.length) return "Add at least one color";
+  if (p.colors.length > MAX_COLORS) return `A palette holds up to ${MAX_COLORS} colors`;
   const bad = p.colors.find((c) => !HEX_RE.test(c));
-  if (bad) return `${bad} isn't a colour — use #RRGGBB`;
-  if (p.background && !HEX_RE.test(p.background)) return `${p.background} isn't a colour — use #RRGGBB`;
+  if (bad) return `${bad} isn't a color — use #RRGGBB`;
+  if (p.background && !HEX_RE.test(p.background)) return `${p.background} isn't a color — use #RRGGBB`;
   return null;
 }
 

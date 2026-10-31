@@ -94,7 +94,7 @@ export function PaletteEditor({ value, onChange, onSave, saving }: { value: Pale
           </button>
         </div>
         <p className="text-[11.5px] text-muted-foreground">
-          {value.colors.length}/{MAX_COLORS} colours · Recraft uses the first {MAX_COLORS_RECRAFT}
+          {value.colors.length}/{MAX_COLORS} colors · Recraft uses the first {MAX_COLORS_RECRAFT}
         </p>
       </section>
 
@@ -137,7 +137,7 @@ export function PaletteEditor({ value, onChange, onSave, saving }: { value: Pale
           Save palette
         </Button>
       </div>
-      {error && value.colors.length === 0 && <p className="text-[12px] text-muted-foreground">Add at least one colour</p>}
+      {error && value.colors.length === 0 && <p className="text-[12px] text-muted-foreground">Add at least one color</p>}
     </div>
   );
 }
