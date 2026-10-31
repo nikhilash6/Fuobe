@@ -123,7 +123,7 @@ export function EffectsSection({ facts, effects }: Pick<HomeShowcase, "facts" | 
         title="Effects"
         count={facts.effects}
         all="/effects"
-        line="Add one photo and get the shot: fire, wings, floods, explosions."
+        line="Add one photo and get the shot: storms, blooms, flares, floods."
       />
       <Cards items={effects} className="sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6" />
     </section>

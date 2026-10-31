@@ -21,22 +21,22 @@ export const STUDIO_EXAMPLES: Record<ExampleStudio, { heading: string; tiles: { 
     heading: "Or start from an app",
     tiles: [
       { id: "app-sketch-to-real", caption: "A rough sketch, made a real photo" },
-      { id: "app-style-transfer", caption: "Any photo, redrawn as anime" },
-      { id: "app-virtual-try-on" },
+      { id: "app-behind-the-scenes" },
+      { id: "app-outfit-shot" },
       { id: "app-product-shot" },
     ],
   },
   video: {
     heading: "See what it makes",
-    tiles: [{ id: "motion-fpv-drone" }, { id: "effect-flame-on" }, { id: "motion-bullet-time" }, { id: "effect-angel-wings" }],
+    tiles: [{ id: "motion-fpv-drone" }, { id: "effect-sand-storm" }, { id: "motion-dolly-in" }, { id: "effect-nature-bloom" }],
   },
   edit: {
     heading: "Or start from an app",
     tiles: [
-      { id: "app-relight" },
-      { id: "app-colorize", caption: "Black & white photos, in full color" },
+      { id: "app-relight", caption: "Change the light of any photo" },
+      { id: "app-match-colors" },
       { id: "app-outfit-swap" },
-      { id: "app-hairstyle-try-on" },
+      { id: "app-steal-the-look" },
     ],
   },
 };

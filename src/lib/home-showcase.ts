@@ -25,14 +25,14 @@ import { onPeak, thumbOf, type PresetCardData } from "@/lib/preset-cards";
  * phone's tile (HOME_CAPTION_MAX.wall).
  */
 export const HOME_WALL = [
-  { id: "effect-flame-on", kind: "Effect", caption: "Bursts into flame" },
-  { id: "effect-powder-explosion", kind: "Effect", caption: "Colored powder bursts" },
-  { id: "app-virtual-try-on", kind: "App · before → after", caption: "Any garment, on anyone" },
-  { id: "motion-fpv-drone", kind: "Camera motion", caption: "Diving over the cove" },
-  { id: "motion-low-shutter", kind: "Camera motion", caption: "Dreamy light trails" },
-  { id: "effect-clone-explosion", kind: "Effect", caption: "Clones burst outward" },
-  { id: "effect-angel-wings", kind: "Effect", caption: "Great wings unfold" },
+  { id: "motion-crane-up", kind: "Camera motion", caption: "Rises over a pink lake" },
+  { id: "effect-outfit-switch", kind: "Effect", caption: "Jeans to a ball gown" },
+  { id: "app-behind-the-scenes", kind: "App · before → after", caption: "Reveals the film set" },
+  { id: "effect-sand-storm", kind: "Effect", caption: "A wall of red sand" },
   { id: "motion-glam", kind: "Camera motion", caption: "A slow arc in gold" },
+  { id: "effect-train-rush", kind: "Effect", caption: "A train rushes past" },
+  { id: "motion-catwalk", kind: "Camera motion", caption: "Down the runway" },
+  { id: "motion-fpv-drone", kind: "Camera motion", caption: "Diving over the cove" },
 ] as const;
 
 /** The longest caption a wall tile (a phone's, 136 px at 360) and a row's card (two lines) hold whole. */
@@ -40,34 +40,34 @@ export const HOME_CAPTION_MAX = { wall: 22, card: 40 };
 
 /** Each card says in a few words what it does (the catalog's description stays its tooltip). */
 export const HOME_EFFECTS = [
-  { id: "effect-aquarium", caption: "The room floods into an aquarium" },
-  { id: "effect-portal", caption: "A glowing portal pulls them in" },
-  { id: "effect-building-explosion", caption: "The building behind them explodes" },
-  { id: "effect-diamond", caption: "Their body turns to diamond" },
-  { id: "effect-thunder-god", caption: "Lightning crackles around them" },
-  { id: "effect-jelly-drift", caption: "Glowing jellyfish drift around them" },
-  { id: "effect-earth-zoom-out", caption: "Zooms out from them to space" },
-  { id: "effect-fallen-angel", caption: "Dark wings burst as they land" },
-  { id: "effect-fire-element", caption: "Fire spirals up from their hands" },
+  { id: "effect-nature-bloom", caption: "Flowers overgrow the old station" },
+  { id: "effect-wind-to-face", caption: "A gale sweeps back hair and coat" },
+  { id: "effect-lens-flare", caption: "An anamorphic flare sweeps the frame" },
+  { id: "effect-dirty-lens", caption: "Rain beads on the lens as it drifts" },
+  { id: "effect-levitation", caption: "They float up off the dune" },
+  { id: "effect-splash-transition", caption: "A splash carries it to the open sea" },
+  { id: "effect-architecture-wave", caption: "The city folds up behind them" },
+  { id: "effect-shadow-smoke", caption: "Ink-dark smoke rises around them" },
+  { id: "effect-car-drive", caption: "A drive along the coast road" },
   { id: "effect-water-splash", caption: "A huge wave crashes over them" },
-  { id: "effect-raven-transition", caption: "Ravens burst out, then remake them" },
-  { id: "effect-northern-lights", caption: "An aurora ripples across the sky" },
+  { id: "effect-flood", caption: "Water and candles rise around them" },
+  { id: "effect-pool-jump", caption: "A backward leap into the pool" },
 ];
 
 /** A phone's rail shows all twelve; a wider screen shows the first six (four from lg to xl), one row (home-sections.tsx). */
 export const HOME_MOTIONS = [
-  { id: "motion-bullet-time", caption: "Time freezes as the camera sweeps" },
-  { id: "motion-mouth-in", caption: "A fast push in to the lips" },
-  { id: "motion-car-chasing", caption: "Chasing the car at speed" },
-  { id: "motion-360-orbit", caption: "A full circle around them" },
-  { id: "motion-flying", caption: "Flying alongside through the air" },
+  { id: "motion-dolly-in", caption: "A slow push in through the library" },
+  { id: "motion-classic-static", caption: "Locked off, framed like a painting" },
+  { id: "motion-slow-motion", caption: "Every droplet in slow motion" },
+  { id: "motion-double-dolly", caption: "Glides along with them, as if floating" },
   { id: "motion-crash-zoom-in", caption: "A crash zoom into the face" },
-  { id: "motion-catwalk", caption: "Tracks them down the runway" },
-  { id: "motion-crane-up", caption: "Rises above to reveal the scene" },
-  { id: "motion-super-dolly-in", caption: "From a wide shot to a close-up, fast" },
-  { id: "motion-action-run", caption: "Running backward as they sprint" },
-  { id: "motion-through-object-in", caption: "Flies through the opening to them" },
+  { id: "motion-helicopter-shot", caption: "Circles high over the castle" },
+  { id: "motion-super-dolly-out", caption: "From a close-up out to the whole valley" },
+  { id: "motion-360-orbit", caption: "A full circle around them" },
+  { id: "motion-car-chasing", caption: "Chasing the car at speed" },
+  { id: "motion-crane-over-the-head", caption: "Rises over their head to the view" },
   { id: "motion-lazy-susan", caption: "They turn as if on a turntable" },
+  { id: "motion-one-take", caption: "One unbroken Steadicam move" },
 ];
 
 /**
@@ -76,28 +76,31 @@ export const HOME_MOTIONS = [
  */
 export const HOME_BEFORE_AFTER = [
   { id: "app-sketch-to-real", tags: ["Sketch", "Photo"], zoom: 1.22 },
-  { id: "app-colorize", tags: ["Black & white", "Color"], zoom: 1.02 },
-  { id: "app-style-transfer", tags: ["Photo", "Anime"], zoom: 1.02 },
+  { id: "app-relight", tags: ["Overcast", "Golden hour"], zoom: 1.02 },
+  { id: "app-makeup-studio", tags: ["Bare", "Evening"], zoom: 1.02 },
 ] as const;
 
 /** Apps whose clip wipes from before to after: at rest they show the after. */
 export const HOME_REVEALS = [
-  { id: "app-face-swap", caption: "A new face, same pose and light" },
   { id: "app-outfit-swap", caption: "Wear the outfit from any photo" },
-  { id: "app-hairstyle-try-on", caption: "Try a new haircut or color" },
-  { id: "app-relight", caption: "Change the light of any photo" },
-  { id: "app-product-shot", caption: "Your product, relit in a new scene" },
   { id: "app-steal-the-look", caption: "Copy the style of a reference" },
+  { id: "app-product-shot", caption: "Your product, relit in a new scene" },
+  { id: "app-match-colors", caption: "Take the colors of any photo" },
+  { id: "app-outfit-shot", caption: "From a flat lay to a model shoot" },
+  { id: "app-color-grading", caption: "A cinematic grade in one click" },
 ];
 
-/** Studio cards: a real cover (a clip, or Image to 3D's still) and one line each; Audio shows its tools instead of a picture. */
+/**
+ * Studio cards: a real cover (a clip, or a still: Mixed Media's looks, Marketing's product shot and Image to 3D's
+ * turntable shot) and one line each; Audio shows its tools instead of a picture.
+ */
 export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => string }[] = [
   { href: "/cinema", id: "motion-arc-left", line: (f) => `Direct a film shot by shot: camera, lens, light and ${f.cinemaMoves} moves.` },
-  { href: "/genjutsu", id: "effect-outfit-switch", line: () => "Keep a clip’s motion. Change what’s in it." },
+  { href: "/genjutsu", id: "effect-seamless-transition", line: () => "Keep a clip’s motion. Change what’s in it." },
   { href: "/character-swap", id: "app-character-swap", line: () => "Put your character into whole clips, shot by shot." },
-  { href: "/marketing", id: "app-click-to-ad", line: (f) => `From a product link to a finished ad. ${f.adTemplates} ad templates.` },
-  { href: "/mixed-media", id: "effect-scrapbook-collage", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },
-  { href: "/motion-control", id: "motion-moonwalk-left", line: () => "Give anyone the moves from any clip." },
+  { href: "/marketing", id: "app-macroshot-product", line: (f) => `From a product link to a finished ad. ${f.adTemplates} ad templates.` },
+  { href: "/mixed-media", id: "effect-magazine", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },
+  { href: "/motion-control", id: "motion-static", line: () => "Give anyone the moves from any clip." },
   { href: "/audio", line: () => "Voices, music and sound for any clip, made or split apart." },
   { href: "/image-to-3d", id: "app-3d-rotation", line: () => "A photo or a sentence to a 3D model you can spin." },
 ];
@@ -131,7 +134,7 @@ export const HOME_NEW_OPEN = [
 
 /**
  * The chips under the composer. Each fills it with a prompt that looks like a cover on this page (Glam, FPV Drone
- * and Angel Wings on the wall, Relight under Apps); nothing runs until Start. The studio's owner gets Assist's chip in
+ * and Crane Up on the wall, Relight under Apps); nothing runs until Start. Whoever runs the studio gets Assist's chip in
  * place of the last (home-view.tsx): only the owner can use Assist.
  */
 export const HOME_TRY = [
@@ -148,8 +151,8 @@ export const HOME_TRY = [
   { mode: "edit", label: "Make it golden hour", prompt: "Make it golden hour: warm low sun, long soft shadows and a glowing sky" },
   {
     mode: "image",
-    label: "Wings above the clouds",
-    prompt: "Fashion portrait of a model in an ivory silk suit with vast white feathered wings, on a cliff above a sea of clouds at sunrise",
+    label: "Silk on a pink salt lake",
+    prompt: "Editorial fashion photo of a model in a yellow silk slip dress on a white salt road across a pink salt lake, bright sun",
   },
 ] as const;
 

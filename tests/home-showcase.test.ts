@@ -46,8 +46,8 @@ const exists = (url: string) => (fs.statSync(path.join(root, "public", url.split
 /** Covers the reviews turned down: no real cover yet, or white bars at the sides (and Text Edit's white edge). */
 const NO_COVER = ["app-fuobe-angles", "app-talking-photo", "motion-dolly-zoom-out", "motion-buckle-up"];
 const WHITE_BARS = ["app-dance", "app-simlife", "app-game-dump", "app-japanese-show", "app-comic-book", "app-banana-eating", "app-change-background", "effect-boiling-point", "effect-color-rain", "app-text-edit"];
-/** Studio cards that rest on a still: Image to 3D's turntable shot. */
-const STILLS = ["app-3d-rotation"];
+/** Studio cards that rest on a still: Mixed Media's look, Marketing's product shot and Image to 3D's turntable shot. */
+const STILLS = ["effect-magazine", "app-macroshot-product", "app-3d-rotation"];
 /**
  * Slots whose clip was taken down with the still it was made from (Flying's eagle had three wings): the card rests
  * on its new still until the new clip is published. Take an id out when its clip is back.
@@ -57,8 +57,8 @@ const CLIP_PENDING = ["motion-flying"];
 const studioIds = HOME_STUDIOS.flatMap((s) => (s.id ? [s.id] : []));
 const rows = [...HOME_EFFECTS, ...HOME_MOTIONS, ...HOME_REVEALS];
 const homeIds = [...HOME_WALL.map((t) => t.id), ...rows.map((r) => r.id), ...HOME_BEFORE_AFTER.map((p) => p.id), ...studioIds];
-/** Effects whose first frame is the strong one, so their card rests on the poster as the camera motions' do. */
-const ON_POSTER = ["effect-earth-zoom-out"];
+/** Effects whose first frame is the strong one, so their card rests on the poster as the camera motions' do (none now). */
+const ON_POSTER: string[] = [];
 
 describe("Home's showcase", () => {
   it("names real presets, each with its cover and, where the slot plays one, its clip", () => {
@@ -130,8 +130,8 @@ describe("Home's showcase", () => {
       expect(from, id).toBeLessThan(1.5);
     }
     // The preset header rests on the same frame (onPeak), and a preset without one keeps its poster.
-    const flame = home.wall.find((t) => t.id === "effect-flame-on")!.card;
-    expect(onPeak({ ...flame, preview: { ...flame.preview, rest: undefined } }).preview.rest).toEqual(flame.preview.rest);
+    const effect = home.wall.find((t) => t.id === "effect-outfit-switch")!.card;
+    expect(onPeak({ ...effect, preview: { ...effect.preview, rest: undefined } }).preview.rest).toEqual(effect.preview.rest);
     const glam = home.wall.find((t) => t.id === "motion-glam")!.card;
     expect(onPeak(glam)).toBe(glam);
   });
@@ -144,7 +144,7 @@ describe("Home's showcase", () => {
   });
 
   it("links effects and motions to the Video studio with the preset picked, apps to their own page", async () => {
-    expect(presetHref("effect-flame-on")).toBe("/video?preset=effect-flame-on");
+    expect(presetHref("effect-outfit-switch")).toBe("/video?preset=effect-outfit-switch");
     expect(presetHref("motion-glam")).toBe("/video?preset=motion-glam");
     expect(presetHref("app-relight")).toBe("/apps/app-relight");
     const home = await homeShowcase();
