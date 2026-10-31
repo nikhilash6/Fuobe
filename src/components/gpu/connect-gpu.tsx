@@ -9,6 +9,7 @@ import { PreflightChecklist } from "@/components/gpu/preflight-checklist";
 import { ReadinessBoard } from "@/components/gpu/readiness-board";
 import { ConnectChoice } from "@/components/gpu/connect-choice";
 import { useSettings } from "@/components/connect-field";
+import { openFinder, useComputerSupport } from "@/components/gpu/open-connect";
 import { usePagePlace } from "@/components/gpu/use-local-comfy";
 import { KeyInstead } from "@/components/keys/your-keys";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ export function ConnectGpu() {
   const comfyWhere = ownerSettings?.find((s) => s.name === "comfyWhere")?.value;
   const steer = owner ? ownerSteer(place, status, ownerSettings ? comfyWhere || "server" : undefined) : null;
   const ownerSetup = steer === "hosted";
+  const support = useComputerSupport();
   const lastUrl = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (!isAccount || gpu.isLoading) return;
@@ -181,7 +183,18 @@ export function ConnectGpu() {
 
   const report = view?.report;
   const problem = view?.problem;
-  const showList = check.running || check.lines.length > 0;
+  const linesFailed = check.lines.some((l) => l.step === "found" && l.state === "fail");
+  // A failed check that a later one (the finder's, once ComfyUI is back) put right is no longer shown.
+  const showList = check.running || (check.lines.length > 0 && !(linesFailed && !problem));
+  const foundFailed = showList && linesFailed;
+  const computerFix =
+    view?.target === "computer" && support === "ok"
+      ? problem === "cors-off"
+        ? { label: "Show me how", go: () => openFinder("setting") }
+        : problem === "unreachable" || problem === "timeout"
+          ? { label: "Find my ComfyUI", go: () => openFinder("find") }
+          : null
+      : null;
   return (
     <div className="space-y-6">
       {header(report && !check.running ? 3 : 2, !!report && !check.running)}
@@ -217,13 +230,22 @@ export function ConnectGpu() {
           )}
           {problem && !check.running && (
             <div className="mt-3 space-y-2 text-[13px]">
-              <p className="flex items-start gap-2">
-                <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive" />
-                <span>
-                  {view?.problemText}
-                  {view?.problemDetail && <span className="block text-[12px] text-muted-foreground">{view.problemDetail}</span>}
-                </span>
-              </p>
+              {/* The checklist above says it already: one line, never two. */}
+              {!foundFailed && (
+                <p className="flex items-start gap-2">
+                  <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive" />
+                  <span>
+                    {view?.problemText}
+                    {view?.problemDetail && view.target !== "computer" && <span className="block text-[12px] text-muted-foreground">{view.problemDetail}</span>}
+                  </span>
+                </p>
+              )}
+              {/* ComfyUI on this computer without Fuobe's setting, or closed: the finder gives the one fix and goes on by itself. */}
+              {computerFix && (
+                <Button className="mr-2 h-11 sm:h-9" onClick={computerFix.go}>
+                  {computerFix.label}
+                </Button>
+              )}
               <Button variant="secondary" className="h-11 sm:h-9" onClick={() => void check.start()}>
                 Check again
               </Button>

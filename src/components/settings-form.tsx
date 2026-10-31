@@ -631,7 +631,7 @@ export function SettingsForm({ prices }: { prices?: string }) {
         }
         inactive={mode === "cloud" ? "Not used in Paid APIs only mode" : undefined}
       >
-        {hosted ? <ConnectChoice /> : <LocalComfy get={get} onWhere={(v) => save.mutateAsync({ comfyWhere: v })} />}
+        {hosted ? <ConnectChoice advanced /> : <LocalComfy get={get} onWhere={(v) => save.mutateAsync({ comfyWhere: v })} />}
       </Section>
 
       <Section

@@ -402,7 +402,14 @@ export function HomeView({
           </>
         ) : nothingConnected && !status?.viewer && (
           <p className="mt-4 text-[13px] text-muted-foreground">
-            You’re in <span className="font-medium text-foreground">demo mode</span> — outputs are placeholders.{" "}
+            {/* With the demo off, a run asks for a GPU or a key: no promise of placeholders. */}
+            {status?.demoMode === "off" ? (
+              "Nothing is connected yet. "
+            ) : (
+              <>
+                You’re in <span className="font-medium text-foreground">demo mode</span> — outputs are placeholders.{" "}
+              </>
+            )}
             {hostedPage && engineMode !== "cloud" ? (
               <button type="button" onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))} className="text-brand-text underline underline-offset-2">
                 Connect your GPU
@@ -412,7 +419,7 @@ export function HomeView({
                 {engineMode === "open" ? "Connect ComfyUI" : engineMode === "cloud" ? "Add a fal.ai or Replicate key" : "Add a fal.ai key or connect ComfyUI"}
               </Link>
             )}{" "}
-            to generate for real.
+            {status?.demoMode === "off" ? "to make the real thing." : "to generate for real."}
           </p>
         )}
       </div>

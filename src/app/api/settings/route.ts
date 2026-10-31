@@ -18,7 +18,8 @@ export async function PUT(request: Request) {
   }
   const onComputer = getSetting("comfyWhere") === "computer";
   for (const [name, value] of entries) setSetting(name, value.trim());
-  // ComfyUI no longer runs on the owner's computer: the runs still going there stop, saying why.
-  if (onComputer && getSetting("comfyWhere") !== "computer") forgetComputer("owner", "switched");
+  // ComfyUI no longer runs on the owner's computer: the runs still going there stop, saying why (Disconnect, or a move).
+  const disconnected = new URL(request.url).searchParams.get("why") === "disconnected";
+  if (onComputer && getSetting("comfyWhere") !== "computer") forgetComputer("owner", disconnected ? "disconnected" : "switched");
   return Response.json({ settings: publicSettings() });
 }

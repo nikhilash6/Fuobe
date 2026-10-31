@@ -236,17 +236,17 @@ async function hosted() {
   check("the line offers this computer right there", await card.getByRole("button", { name: "Use the ComfyUI on this computer" }).nth(1).isVisible());
   await shoot(page, "home-guide-refused", { scroll: '[aria-label="Use your GPU"]' });
 
-  // The guide's button opens the dialog: Find my ComfyUI → connected, with the owner's words.
+  // The guide's button opens the dialog already looking (the button said "this computer"): connected, with the owner's
+  // words, and no second "Find my ComfyUI" to press.
   await card.getByRole("button", { name: "Use the ComfyUI on this computer" }).first().click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("heading", { name: "Connect your GPU", exact: true }).waitFor({ timeout: 15_000 });
   check("the dialog says Connect your GPU (no run waiting)", true);
   check("the dialog: this computer first", await dialog.getByText("Use the ComfyUI on this computer", { exact: true }).first().isVisible());
   check("the dialog: a ComfyUI on a server second", await dialog.getByText("Use a ComfyUI on a server", { exact: true }).isVisible());
+  check("the dialog doesn't start in an address field", !(await page.evaluate(() => document.activeElement?.tagName === "INPUT")));
   await shoot(page, "dialog-choose");
-  await dialog.getByRole("button", { name: "Find my ComfyUI" }).click();
-  await dialog.getByText("Your GPU is connected").waitFor({ timeout: 30_000 });
-  check("found and connected with one tap", true);
+  check("found and connected with one tap (the guide's)", !!(await until(() => dialog.getByText("Your GPU is connected").isVisible(), 30_000)));
   check("the owner's done line", await until(() => dialog.getByText("Done. Your open-source runs now go to this computer. Keep a Fuobe tab open here while they run.").isVisible(), 10_000));
   await until(() => dialog.getByText(/Ready now:/).isVisible(), 20_000);
   await shoot(page, "dialog-connected");
@@ -300,6 +300,28 @@ async function hosted() {
   await startFake(PC_PORT, SITE, { guard: true });
   check("ComfyUI back: online again", !!(await until(() => page.locator('[data-sidebar="footer"]').getByText("online").isVisible(), 70_000, 1000)));
 
+  // ComfyUI started the usual way (without Fuobe's setting): the sidebar's line opens the fix; /connect says it once.
+  await stopFake(PC_PORT);
+  await startFake(PC_PORT, "off");
+  const needs = page.locator('[data-sidebar="footer"]').getByRole("button", { name: /needs a setting/ });
+  check("no setting: the sidebar says needs a setting, as a button", !!(await until(() => needs.isVisible(), 70_000, 1000)));
+  await needs.click();
+  check("the sidebar's button opens the setting's fix", !!(await until(() => page.getByRole("dialog").getByRole("heading", { name: "Your ComfyUI needs Fuobe's setting again" }).isVisible(), 15_000)));
+  check("the fix: the start file", !!(await until(() => page.getByRole("dialog").getByRole("button", { name: /Download start file/ }).first().isVisible(), 15_000)));
+  await shoot(page, "dialog-no-setting");
+  await page.keyboard.press("Escape");
+  await page.goto(`${SITE}/connect`, { waitUntil: "load" });
+  await page.getByRole("button", { name: /Check again|Check my GPU/ }).first().click({ timeout: 30_000 });
+  await until(() => page.getByText("ComfyUI is running, but it isn't letting this page in yet.").first().isVisible(), 30_000);
+  const connectText = await page.locator("body").innerText();
+  check("/connect, no setting: one line, never the closed line", (connectText.match(/isn't letting this page in yet/g) ?? []).length === 1 && !connectText.includes("isn't answering on this computer"), connectText.slice(0, 400));
+  check("/connect, no setting: no browser error words", !/Failed to fetch|NetworkError/.test(connectText));
+  check("/connect, no setting: Show me how", await page.getByRole("button", { name: "Show me how" }).isVisible());
+  await shoot(page, "connect-no-setting");
+  await stopFake(PC_PORT);
+  await startFake(PC_PORT, SITE, { guard: true });
+  check("ComfyUI back with the setting: online again", !!(await until(() => page.locator('[data-sidebar="footer"]').getByText("online").isVisible(), 70_000, 1000)));
+
   // H2. A phone of the owner's: what the computer said, why not here, and the server way.
   {
     const phone = await context({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -335,6 +357,7 @@ async function hosted() {
     check(`Settings: ${typed} refused with one line`, !!(await until(() => sec.getByText(words).isVisible(), 10_000)));
   }
   check("Settings: no connection test was sent for any of them", ctx.tests.length === 0, ctx.tests.join(" | "));
+  check("already on this computer, the refusal offers to keep it", await sec.getByRole("button", { name: "Keep using this computer" }).isVisible());
   await shoot(page, "settings-refused", { scroll: "#comfyui" });
   await addr.fill("");
 
@@ -345,6 +368,14 @@ async function hosted() {
   await shoot(page, "settings-choose", { scroll: "#comfyui" });
   await page.getByRole("navigation", { name: "Connections" }).getByText("Connect").waitFor({ timeout: 30_000 });
   check("Settings' strip: Your GPU · Connect", true);
+  const where = async () => (await api(page, "/api/settings")).body?.settings?.find((s) => s.name === "comfyWhere")?.value;
+
+  // Disconnect sticks: Settings opened again (this browser may reach ComfyUI already) waits for Find my ComfyUI.
+  await page.goto(`${SITE}/`, { waitUntil: "load" });
+  await page.goto(`${SITE}/settings`, { waitUntil: "load" });
+  await page.locator("#comfyui").getByRole("button", { name: "Find my ComfyUI" }).waitFor({ timeout: 30_000 });
+  await sleep(8000);
+  check("Disconnect sticks: Settings opened again doesn't connect by itself", (await where()) !== "computer" && (await page.locator("#comfyui").getByRole("button", { name: "Find my ComfyUI" }).isVisible()), String(await where()));
 
   // The refusal's button starts this computer's finder in the card above.
   await sec.getByRole("button", { name: /Use a ComfyUI on a server/ }).click();
@@ -367,8 +398,41 @@ async function hosted() {
   await page.goto(`${SITE}/connect`, { waitUntil: "load" });
   check("/connect: Where is ComfyUI running?", !!(await until(() => page.getByRole("heading", { name: "Where is ComfyUI running?" }).isVisible(), 30_000)));
   check("/connect: no failing check of the server's address", !(await page.getByText(/didn't answer/).isVisible()));
+  await sleep(8000);
+  check("/connect doesn't connect this computer by itself", (await where()) !== "computer", String(await where()));
   await shoot(page, "connect-choose");
   await send(page, "/api/settings", { comfyWhere: "server" }, "PUT");
+
+  // A ComfyUI at a server address that answers (here the server's own stand-in): opening Settings keeps the runs there.
+  await startFake(SERVER_COMFY_PORT, "off");
+  check("a server address that answers", (await send(page, "/api/settings", { comfyUrl: `http://127.0.0.1:${SERVER_COMFY_PORT}`, comfyWhere: "server" }, "PUT")).status === 200);
+  await until(async () => (await api(page, "/api/status")).body?.providers?.comfyui?.configured, 30_000, 1000);
+  await page.goto(`${SITE}/settings`, { waitUntil: "load" });
+  await page.locator("#comfyui").getByText("Use the ComfyUI on this computer instead").first().waitFor({ timeout: 30_000 });
+  await sleep(8000);
+  check("server mode: opening Settings keeps the runs on the server address", (await where()) === "server", String(await where()));
+  await send(page, "/api/settings", { comfyUrl: "" }, "PUT");
+  await stopFake(SERVER_COMFY_PORT);
+
+  // A run that went through (a demo), then "Your GPU · Connect": the card never starts that run again.
+  check("demo on for a moment", (await send(page, "/api/settings", { demoMode: "auto" }, "PUT")).status === 200);
+  await until(async () => !(await api(page, "/api/status")).body?.providers?.comfyui?.configured, 30_000, 1000);
+  await studio(page, "/image?model=oss-z-image-turbo");
+  const demoRun = await generate(page, "a demo first");
+  const demoDone = await until(async () => {
+    const g = await demoRun();
+    return ended(g) && g;
+  }, 60_000, 500);
+  check("the demo run went through", demoDone?.status === "succeeded", demoDone?.error ?? demoDone?.status ?? "no run");
+  const count = (await runs(page)).length;
+  await page.locator('[data-sidebar="footer"]').getByRole("button", { name: /Your GPU\s*Connect/ }).click();
+  const d3 = page.getByRole("dialog");
+  check("the sidebar's Connect: Connect your GPU, with no run waiting", !!(await until(() => d3.getByRole("heading", { name: "Connect your GPU", exact: true }).isVisible(), 15_000)));
+  check("the sidebar's Connect looks at once", !!(await until(() => d3.getByText(/Your GPU is connected/).isVisible(), 30_000)));
+  await sleep(6000);
+  check("no run started again", (await runs(page)).length === count, `${(await runs(page)).length} vs ${count}`);
+  await page.keyboard.press("Escape");
+  await send(page, "/api/settings", { comfyWhere: "server", demoMode: "off" }, "PUT");
 
   // H4. A run with nothing connected opens the dialog (no toast); once connected, it starts and runs on the computer.
   await studio(page, "/image?model=oss-z-image-turbo");

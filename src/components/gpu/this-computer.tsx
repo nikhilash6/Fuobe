@@ -82,6 +82,16 @@ function PromptPicture() {
   );
 }
 
+/** The browser's question, explained: its picture and what to press. */
+function AllowNote() {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <PromptPicture />
+      <p className="min-w-[12rem] flex-1 text-[12px] text-muted-foreground">Your browser will ask to let Fuobe reach apps on this computer. Press Allow. Fuobe only talks to ComfyUI.</p>
+    </div>
+  );
+}
+
 function blockedSteps(): string {
   const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
   if (/Firefox\//.test(ua)) return "Click the icon to the left of the address and allow apps and services on this device, then reload.";
@@ -388,6 +398,11 @@ export interface ThisComputerProps {
   doneWords?: string;
   /** Changes when something outside asks to look now ("Use the ComfyUI on this computer" under a refused address). */
   lookNow?: number;
+  /**
+   * Wait for "Find my ComfyUI", even when the browser lets Fuobe in already: a card that only shows the choice (Settings,
+   * /connect, a dialog opened without a run) never moves the runs to this computer by itself.
+   */
+  waitForTap?: boolean;
 }
 
 /** Is Fuobe's guard in this ComfyUI (it answers at /fuobe/guard)? */
@@ -398,9 +413,9 @@ const guardAt = (port: number, host: string) =>
   );
 
 /** The whole flow, from "Find my ComfyUI" to connected. */
-export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLook, again, doneWords, lookNow }: ThisComputerProps) {
+export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLook, again, doneWords, lookNow, waitForTap }: ThisComputerProps) {
   const qc = useQueryClient();
-  const { state, look, choose } = useLocalComfy(true);
+  const { state, look, choose, perm } = useLocalComfy(true, { auto: !waitForTap });
   const [done, setDone] = useState<Connected | null>(null);
   const [error, setError] = useState<string | null>(null);
   const connecting = useRef<string | null>(null);
@@ -462,7 +477,7 @@ export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLo
   if (done) return <Celebration c={done} fromRun={fromRun} kind={kind} onStart={onStart} onNotNow={onNotNow} doneWords={doneWords} />;
   return (
     <div className="space-y-3 text-[13px]">
-      <Screen state={state} look={look} choose={choose} again={again} />
+      <Screen state={state} look={look} choose={choose} again={again} asks={perm !== "granted"} />
       {error && <p className="text-[12px] text-destructive">{error}</p>}
     </div>
   );
@@ -492,7 +507,8 @@ function WaitingScreen({ port, since, onLook }: { port: number; since: number; o
   );
 }
 
-function Screen({ state, look, choose, again }: { state: Finder; look: ReturnType<typeof useLocalComfy>["look"]; choose: (port: number) => void; again?: boolean }) {
+/** `asks`: the browser may still ask to let Fuobe reach apps on this computer (its question is explained). */
+function Screen({ state, look, choose, again, asks }: { state: Finder; look: ReturnType<typeof useLocalComfy>["look"]; choose: (port: number) => void; again?: boolean; asks: boolean }) {
   const lookAt = (port: number, host: string) => void look({ ports: [{ port, host }] });
   switch (state.s) {
     case "unsupported":
@@ -507,17 +523,17 @@ function Screen({ state, look, choose, again }: { state: Finder; look: ReturnTyp
           <Button className="h-11 sm:h-9" onClick={() => void look()}>
             <Search /> Find my ComfyUI
           </Button>
-          <div className="flex flex-wrap items-center gap-3">
-            <PromptPicture />
-            <p className="min-w-[12rem] flex-1 text-[12px] text-muted-foreground">Your browser will ask to let Fuobe reach apps on this computer. Press Allow. Fuobe only talks to ComfyUI.</p>
-          </div>
+          {asks && <AllowNote />}
         </div>
       );
     case "looking":
       return (
-        <p className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> Looking for ComfyUI on this computer…
-        </p>
+        <div className="space-y-3">
+          <p className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Looking for ComfyUI on this computer…
+          </p>
+          {asks && <AllowNote />}
+        </div>
       );
     case "found":
       return (

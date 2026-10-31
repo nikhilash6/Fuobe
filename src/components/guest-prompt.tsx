@@ -11,7 +11,7 @@ import { takeGpuRetry } from "@/hooks/use-gpu";
 import { KeyInstead } from "@/components/keys/your-keys";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CONNECT_GPU_EVENT, GUEST_PROMPT_EVENT, refusalCard, signInHref, useStatus, useViewer, watchGuestRefusals, type RefusalAction, type RefusalCard, type RefusalDetail } from "@/lib/api";
+import { CONNECT_GPU_EVENT, GUEST_PROMPT_EVENT, refusalCard, signInHref, useStatus, useViewer, watchGuestRefusals, type ConnectGpuDetail as ConnectDetail, type RefusalAction, type RefusalCard } from "@/lib/api";
 import { CLOUD_KEY } from "@/lib/your-keys";
 
 /**
@@ -35,6 +35,8 @@ export function GuestPrompt() {
   // What was refused: a run (or any other change), or a file of the visitor's own.
   const [action, setAction] = useState<RefusalAction | "connect">("run");
   const [retry, setRetry] = useState<{ retry: () => void; kind?: string } | null>(null);
+  // Opened by a button that said "Use the ComfyUI on this computer": the finder looks at once.
+  const [look, setLook] = useState(false);
   const close = useCallback(() => {
     setOpen(false);
     setRetry(null);
@@ -59,8 +61,8 @@ export function GuestPrompt() {
       setOpen(true);
       return true;
     };
-    // A bare Event (the sidebar's "Connect your GPU") has no detail: a run.
-    const detail = (e: Event) => (e as CustomEvent<(RefusalDetail & { reason?: FindReason }) | null>).detail ?? {};
+    // A button that only opens the card sends no action (and a bare Event no detail at all): no run waits.
+    const detail = (e: Event) => (e as CustomEvent<ConnectDetail | null>).detail ?? {};
     const guest = (e: Event) => {
       // Signed in a moment ago: not an offer to sign up, but to log in again; and the page asks who is looking.
       const out = was.current;
@@ -75,13 +77,15 @@ export function GuestPrompt() {
       }
     };
     const gpu = (e: Event) => {
-      const { action: refused = "run", reason: why } = detail(e);
-      // The run that was refused (the composer leaves its retry as it sends): kept until the GPU is connected.
-      const r = refused === "run" ? takeGpuRetry() : null;
+      const d = detail(e);
+      // Only a refused run carries its retry (watchGuestRefusals says "run"): a button that just opens this card never
+      // starts the last run again.
+      const r = d.action === "run" ? takeGpuRetry() : null;
       if (!show("gpu")) return;
       setRetry(r);
-      setReason(why);
-      setAction(refused);
+      setReason(d.reason);
+      setAction(d.action ?? "connect");
+      setLook(!!d.look);
     };
     window.addEventListener(GUEST_PROMPT_EVENT, guest);
     window.addEventListener(CONNECT_GPU_EVENT, gpu);
@@ -96,7 +100,15 @@ export function GuestPrompt() {
         <CloseOnNavigation close={close} />
       </Suspense>
       <Dialog open={open} onOpenChange={(o) => !o && close()}>
-        <DialogContent className={card?.kind === "gpu" ? "max-h-[90svh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-xl" : "sm:max-w-sm"}>
+        <DialogContent
+          className={card?.kind === "gpu" ? "max-h-[90svh] grid-cols-[minmax(0,1fr)] overflow-y-auto sm:max-w-xl" : "sm:max-w-sm"}
+          // "Connect your GPU" starts on the card itself, not in an address field (a phone's keyboard would cover it).
+          onOpenAutoFocus={(e) => {
+            if (card?.kind !== "gpu") return;
+            e.preventDefault();
+            (e.currentTarget as HTMLElement | null)?.focus?.();
+          }}
+        >
           {card?.kind === "gpu" ? (
             <>
               <DialogHeader>
@@ -126,6 +138,7 @@ export function GuestPrompt() {
                 fromRun={!!retry}
                 kind={retry?.kind}
                 reason={reason}
+                look={look}
                 onStart={() => {
                   const r = retry;
                   close();

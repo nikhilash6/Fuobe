@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { loopbackFetch } from "@/lib/gpu/browser-check";
-import { browserSupport, localBase, pageCanReach, portsToLook, sameFinder, settled, type Finder, type PortLook, type SystemStats } from "@/lib/local-comfy";import { rememberedComfy } from "./computer-runtime";
+import { localBase, portsToLook, sameFinder, settled, type Finder, type PortLook, type SystemStats } from "@/lib/local-comfy";
+import { rememberedComfy } from "./computer-runtime";
+import { useComputerSupport } from "./open-connect";
 
 /**
  * Finding the ComfyUI on this computer from the page ("Use the ComfyUI on this computer"). It looks at the ports
  * ComfyUI uses (the one that answered last first), tells a ComfyUI it can read from one that answers without Fuobe's
  * setting, and, while the card is open and the tab is in view, looks again quietly at every port: every 2 s while it
  * waits for ComfyUI to come back with the setting, every 5 s while nothing answers. It never looks on its own while the
- * browser would still ask (Chrome's advice): the person's click does the first look.
+ * browser would still ask (Chrome's advice): the person's click does the first look. `auto: false`: not even when the
+ * browser lets Fuobe in already (a card that only shows the choice must never connect by itself).
  */
 
 export type { Finder };
@@ -60,31 +63,17 @@ export async function loopbackPermission(): Promise<{ state: Permission; status?
   return { state: "unknown" };
 }
 
-const NARROW = "(max-width: 767px)";
-const subscribeNarrow = (cb: () => void) => {
-  const m = window.matchMedia(NARROW);
-  m.addEventListener("change", cb);
-  return () => m.removeEventListener("change", cb);
-};
-
-/** Can this browser use the ComfyUI on its computer at all ("ok"), or why not. */
-export function useComputerSupport(): "ok" | "safari" | "phone" | "http" {
-  const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW).matches, () => false);
-  if (typeof window === "undefined") return "ok";
-  const coarse = window.matchMedia("(pointer: coarse)").matches && !window.matchMedia("(hover: hover)").matches;
-  const b = browserSupport(navigator as Navigator & { userAgentData?: { mobile?: boolean; platform?: string } }, { narrow, coarse });
-  if (b !== "ok") return b;
-  return pageCanReach(window.location.origin, window.isSecureContext) ? "ok" : "http";
-}
-
+export { useComputerSupport } from "./open-connect";
 export { usePagePlace } from "./use-page-place";
 
 const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
 
-/** The finder, while `active` (the card is open). */
-export function useLocalComfy(active: boolean) {
+/** The finder, while `active` (the card is open). `perm`: whether the browser would still ask, once known. */
+export function useLocalComfy(active: boolean, o: { auto?: boolean } = {}) {
+  const auto = o.auto !== false;
   const support = useComputerSupport();
   const [state, setState] = useState<Finder>({ s: "start" });
+  const [perm, setPerm] = useState<Permission | null>(null);
   const cur = useRef(state);
   useEffect(() => {
     cur.current = state;
@@ -130,21 +119,23 @@ export function useLocalComfy(active: boolean) {
     let alive = true;
     let status: PermissionStatus | undefined;
     const onChange = () => {
+      if (status) setPerm(status.state as Permission);
       if (status?.state === "denied") setState({ s: "blocked" });
       else if (status?.state === "granted" && cur.current.s === "blocked") void look();
     };
     void loopbackPermission().then((p) => {
       if (!alive) return;
       status = p.status;
+      setPerm(p.state);
       status?.addEventListener("change", onChange);
-      if (p.state === "granted" && cur.current.s === "start") void look();
+      if (p.state === "granted" && cur.current.s === "start" && auto) void look();
       else if (p.state === "denied") setState({ s: "blocked" });
     });
     return () => {
       alive = false;
       status?.removeEventListener("change", onChange);
     };
-  }, [active, support, look]);
+  }, [active, support, look, auto]);
 
   // Quiet looks at every port while it waits for ComfyUI (with the setting: a readable ComfyUI on any port connects) or
   // for any ComfyUI to start.
@@ -155,5 +146,5 @@ export function useLocalComfy(active: boolean) {
     return () => clearInterval(id);
   }, [active, every, look]);
 
-  return { state: support !== "ok" ? ({ s: "unsupported", why: support } as Finder) : state, look, choose, support };
+  return { state: support !== "ok" ? ({ s: "unsupported", why: support } as Finder) : state, look, choose, support, perm };
 }

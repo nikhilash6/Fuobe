@@ -249,8 +249,11 @@ export function runnerFacts(principal: Principal): (ComputerFacts & { port?: num
   return { ...json<ComputerFacts>(r.facts_json, {}), ...(r.port && { port: r.port }), seenAt: r.seen_at, online: here && r.comfy === "ok", ...(here && r.comfy !== "ok" && { comfy: r.comfy }) };
 }
 
-/** Forget a principal's computer (it disconnected, its runs moved elsewhere: `switched`, or the account went). */
-export function forgetComputer(principal: Principal, why: "Stopped" | "switched" = "Stopped"): void {
+/**
+ * Forget a principal's computer (it disconnected: `disconnected` when the owner pressed Disconnect, its runs moved
+ * elsewhere: `switched`, or the account went).
+ */
+export function forgetComputer(principal: Principal, why: "Stopped" | "switched" | "disconnected" = "Stopped"): void {
   rdb().prepare("DELETE FROM relay_runners WHERE principal = ?").run(principal);
   for (const t of rdb().prepare(`SELECT id FROM relay_tasks WHERE principal = ? AND state IN (${ACTIVE_STATES.map(() => "?").join(",")})`).all(principal, ...ACTIVE_STATES) as { id: string }[]) {
     endTask(t.id, "canceled", { error: why });

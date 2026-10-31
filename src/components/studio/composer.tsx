@@ -72,7 +72,7 @@ import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
 import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
 import { cn } from "@/lib/utils";
-import { badgeFor, badgeText, openGpuSetup, setGpuRetry, useGpuBadges } from "@/hooks/use-gpu";
+import { badgeFor, badgeText, dropGpuRetry, openGpuSetup, setGpuRetry, useGpuBadges } from "@/hooks/use-gpu";
 import { AttachMenu } from "./attach-menu";
 import { useAttach, useComposerBridge, useUploadReaper } from "./attachments";
 import { DialogueEditor, LanguageChip, VoicePicker } from "./audio-controls";
@@ -607,6 +607,8 @@ export function Composer({ docked }: { docked: boolean }) {
       model?.kind,
     );
     create.mutate(skipGpu ? ({ ...sent.request, gpuCheck: "skip" } as typeof sent.request) : sent.request, {
+      // Accepted: nothing to try again (a card opened later never starts this run a second time).
+      onSuccess: () => dropGpuRetry(),
       // Stopped by the GPU pre-flight, or refused with its own card: the guided fix or the card is open already, so no error toast on top.
       onError: (e) => void ((e as { gpuSetup?: boolean }).gpuSetup || toastError(e)),
     });

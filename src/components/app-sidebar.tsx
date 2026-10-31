@@ -40,8 +40,9 @@ import { IntentLink } from "@/components/intent-link";
 import { JobNotifications } from "@/components/job-notifications";
 import { NAV, type NavGroupDef } from "@/components/nav-items";
 import { SkillBuilderProvider } from "@/components/skills/skill-builder-provider";
+import { awayFix, openConnect, useComputerSupport } from "@/components/gpu/open-connect";
 import { usePagePlace } from "@/components/gpu/use-page-place";
-import { CONNECT_GPU_EVENT, ownGpuOf, signInHref, signOut, useEngineMode, useHydrated, useStatus, useViewer, VIEWER_KEY, type StatusInfo } from "@/lib/api";
+import { ownGpuOf, signInHref, signOut, useEngineMode, useHydrated, useStatus, useViewer, VIEWER_KEY, type StatusInfo } from "@/lib/api";
 import { deviceLabel } from "@/lib/gpu/readiness";
 import { useModKey } from "@/lib/keys";
 import { fullScreenStudio, groupId, NAV_CLOSED_KEY, navActive, NEW_CREATION_HREF, parseClosed, scrollFades, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
@@ -436,10 +437,12 @@ function ViewerRow() {
 function YourGpuChip({ gpu, guest }: { gpu: NonNullable<StatusInfo["viewer"]>["gpu"]; guest: boolean }) {
   const cls = "flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left text-[12px] text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden";
   const g = gpu;
+  // ComfyUI on this computer is closed, or runs without Fuobe's setting: the finder, at that step (elsewhere: /connect).
+  const fix = awayFix(g.connected ? g : undefined, useComputerSupport());
   if (g.connected) {
     const vram = g.vramBytes ? `${Math.round(g.vramBytes / 2 ** 30)} GB` : "";
-    return (
-      <IntentLink href="/connect" className={cls}>
+    const inner = (
+      <>
         <span className="flex items-center gap-2">
           <StatusDot ok={g.online} /> Your GPU
           <span className="ml-auto">{g.online ? "online" : g.comfy === "down" ? "ComfyUI not running" : g.comfy === "no-setting" ? "needs a setting" : "offline"}</span>
@@ -447,6 +450,15 @@ function YourGpuChip({ gpu, guest }: { gpu: NonNullable<StatusInfo["viewer"]>["g
         {(g.device || vram || g.mode === "computer") && (
           <span className="truncate text-[11px]">{[g.mode === "computer" && "Your computer", deviceLabel(g.device), vram && `${vram} VRAM`].filter(Boolean).join(" · ")}</span>
         )}
+      </>
+    );
+    return fix ? (
+      <button type="button" className={cls} onClick={fix}>
+        {inner}
+      </button>
+    ) : (
+      <IntentLink href="/connect" className={cls}>
+        {inner}
       </IntentLink>
     );
   }
@@ -461,7 +473,7 @@ function YourGpuChip({ gpu, guest }: { gpu: NonNullable<StatusInfo["viewer"]>["g
       {body}
     </a>
   ) : (
-    <button type="button" className={cls} onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))}>
+    <button type="button" className={cls} onClick={() => openConnect(true)}>
       {body}
     </button>
   );
@@ -546,7 +558,8 @@ export function AppSidebar() {
   const mode = useEngineMode();
   // The owner's GPU as "Your GPU": on the owner's computer, or (a hosted studio with nothing connected) one to connect.
   const place = usePagePlace();
-  const ownerGpu = status && !status.viewer && (status.ownerGpu || (place === "hosted" && !comfy && mode !== "cloud")) ? (ownGpuOf(status) ?? { connected: false }) : null;
+  // Not in Paid APIs only mode: ComfyUI isn't used there, wherever it runs.
+  const ownerGpu = status && !status.viewer && mode !== "cloud" && (status.ownerGpu || (place === "hosted" && !comfy)) ? (ownGpuOf(status) ?? { connected: false }) : null;
   const ready = mode === "open" ? comfy : mode === "cloud" ? cloud : cloud || comfy;
   const [closed, setClosed] = useState(readClosed);
   const toggle = useCallback((id: string) => {
@@ -631,6 +644,14 @@ export function AppSidebar() {
                   </IntentLink>
                 )}
                 <YourGpuChip gpu={ownerGpu} guest={false} />
+                {(mode !== "both" || (!ready && status?.demoMode !== "off")) && (
+                  <div className="flex flex-col gap-1.5 px-2 pb-1 text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
+                    {mode !== "both" && <span>{mode === "open" ? "Open source only" : "Paid APIs only"}</span>}
+                    {!ready && status?.demoMode !== "off" && (
+                      <span className="w-fit rounded-sm bg-highlight/25 px-1.5 py-0.5 text-highlight-foreground dark:text-highlight">Demo mode · placeholder outputs</span>
+                    )}
+                  </div>
+                )}
               </>
             ) : !status ? (
               // Not known yet: no "add key / offline" the install may not have, for a visitor who never sees them.

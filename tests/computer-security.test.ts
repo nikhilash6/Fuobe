@@ -282,9 +282,22 @@ describe("the owner's computer and an account's never mix", () => {
     const { relayFile } = await import("@/server/providers/comfyui");
     const { asAccount } = await import("@/server/generations");
     setSetting("comfyWhere", "computer");
+    // A finished job of the owner's, its result sent in: something real to find, so a refusal means the principal.
     const t = waitingTask("owner");
-    const url = `relay:${t.id}/view?filename=x.png&n=0`;
+    const c = await claimed("owner", "device-owner-sec-1");
+    expect(c.id).toBe(t.id);
+    expect((await call("owner", "POST", `/api/gpu/computer/tasks/${c.id}/report`, { headers: { "x-fuobe-lease": c.lease }, body: { event: "sent", promptId: c.promptId } })).status).toBe(200);
+    const fin = await call("owner", "POST", `/api/gpu/computer/tasks/${c.id}/report`, {
+      headers: { "x-fuobe-lease": c.lease },
+      body: { event: "finished", entry: { status: { status_str: "success", completed: true }, outputs: ONE_PNG } },
+    });
+    expect(fin.status).toBe(200);
+    expect((await put("owner", c.id, 0, c.lease, FAKE_PNG)).status).toBe(200);
+    const url = `relay:${c.id}/view?filename=x_00001_.png&subfolder=fuobe&type=output&n=0`;
+    expect(relayFile(url)).not.toBeNull();
+    expect((await onComputer("owner", () => outputFetch(url))).status).toBe(200);
     expect(asAccount(a, () => relayFile(url))).toBeNull();
+    expect(onComputer(`acct:${a}`, () => relayFile(url))).toBeNull();
     expect((await onComputer(`acct:${a}`, () => outputFetch(url))).status).toBe(404);
   });
 

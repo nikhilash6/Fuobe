@@ -105,15 +105,17 @@ export function ConnectField({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const secret = !!setting?.secret;
-  // Only the built-in default (127.0.0.1 on a hosted studio means its server): shown empty, nothing to test until typed.
-  const onlyDefault = hideDefault && !setting?.isSet && !setting?.fromEnv;
+  // A hosted page: an address on the server's own machine or network is never sent to be tested (lib/page-place.ts).
+  const allowPrivate = useAllowPrivate(place === "hosted");
+  // Only the built-in default (127.0.0.1 on a hosted studio means its server), or an address set on the server that the
+  // owner never typed and the server may not call from here: shown empty, nothing to test until typed.
+  const envRefused = hideDefault && place === "hosted" && !trustSaved && !!setting?.fromEnv && !!setting.value && refusedOnHosted(addressKind(setting.value), allowPrivate);
+  const onlyDefault = hideDefault && ((!setting?.isSet && !setting?.fromEnv) || envRefused);
   const saved = secret || onlyDefault ? "" : (setting?.value ?? "");
   const typed = draft !== null && draft.trim() !== saved.trim() ? draft.trim() : null;
   const shown = draft ?? saved;
   const problem = typed ? settingProblem(name, typed) : null;
   const canTest = saveOnly ? typed !== null && !problem : typed !== null || (!onlyDefault && (!!setting?.isSet || !!setting?.value));
-  // A hosted page: an address on the server's own machine or network is never sent to be tested (lib/page-place.ts).
-  const allowPrivate = useAllowPrivate(place === "hosted");
   const checked = place === "hosted" && ADDRESS_FIELDS.has(name) && (typed !== null || !trustSaved) ? (typed ?? saved) : "";
   const kind = checked ? addressKind(checked) : null;
   const refusedHere = kind && refusedOnHosted(kind, allowPrivate) ? refusedLine(kind, addressHost(checked)) : null;
@@ -259,7 +261,7 @@ export function ConnectField({
       </div>
       {hint !== undefined && (
         <p id={`${inputId}-hint`} className="text-[12px] text-muted-foreground">
-          {setting?.fromEnv ? "Set from an environment variable; a value saved here wins. " : ""}
+          {setting?.fromEnv && !onlyDefault ? (place === "hosted" ? "Set on the server. A value saved here replaces it. " : "Set from an environment variable; a value saved here wins. ") : ""}
           {hint}
         </p>
       )}

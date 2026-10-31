@@ -107,6 +107,11 @@ export function setGpuRetry(retry: () => void, skip: () => void, kind?: string):
   pendingRetry = { at: Date.now(), retry, skip, ...(kind && { kind }) };
 }
 
+/** The run went through: its retry is no longer anyone's to start. */
+export function dropGpuRetry(): void {
+  pendingRetry = null;
+}
+
 /** The composer's retry, when it asked within the last few seconds (another page's stale one never applies). */
 export function takeGpuRetry(): { retry: () => void; skip: () => void; kind?: string } | null {
   const p = pendingRetry;

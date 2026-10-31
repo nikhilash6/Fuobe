@@ -481,6 +481,45 @@ describe("a run on the ComfyUI on the person's own computer", () => {
     }
   });
 
+  it("the owner's Disconnect stops a run on the computer saying so, not that ComfyUI moved", async () => {
+    const { setSetting } = await import("@/server/settings");
+    const settingsRoute = await import("@/app/api/settings/route");
+    setSetting("comfyWhere", "computer");
+    setSetting("engineMode", "open");
+    setSetting("demoMode", "off");
+    const owner = `${auth.SESSION_COOKIE}=${auth.createSession().value}`;
+    try {
+      const text = JSON.stringify({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse at dusk" });
+      const r = await generationsRoute.POST(new Request("http://localhost:3000/api/generations", { method: "POST", headers: { cookie: owner, ...SITE_HEADERS, "content-type": "application/json", "content-length": String(Buffer.byteLength(text)) }, body: text }));
+      expect(r.status).toBe(201);
+      const id = ((await r.json()).items as { id: string }[])[0].id;
+      await handedOver(id);
+      await settingsRoute.PUT(new Request("http://localhost:3000/api/settings?why=disconnected", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ comfyWhere: "server" }) }));
+      const g = await settle(id);
+      expect(g?.status).toBe("failed");
+      expect(g?.error).toBe(RELAY_WORDS.disconnected);
+    } finally {
+      setSetting("comfyWhere", "server");
+    }
+  });
+
+  it("a run already sent says it waits for the computer once that computer's tab stops answering", async () => {
+    await gpuRoute.PUT(json("/api/account/gpu", "PUT", { mode: "computer" }));
+    const pic = await uploadPng();
+    const [id] = await run({ feature: "app", modelId: "oss-qwen-edit", presetId: "app-headshot-generator", prompt: "", inputs: { images: [pic.url] } });
+    await handedOver(id);
+    const t = tab(routes, cookie, fake.port, { device: "device-away-1" });
+    await t.runner.beat();
+    // Claimed (sent to the tab), and the tab goes quiet: closed, or the computer asleep.
+    const claim = await t.api("/api/gpu/computer/claim", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ device: "device-away-1" }) });
+    expect(claim.status).toBe(200);
+    await tick();
+    expect(getGeneration(id)?.message).not.toBe(RELAY_WORDS.computerAway);
+    db().prepare("UPDATE relay_runners SET seen_at = seen_at - 120000").run();
+    await tick();
+    expect(getGeneration(id)).toMatchObject({ status: "queued", message: RELAY_WORDS.computerAway });
+  });
+
   it("stops a job whose run went, and forgets a deleted account's computer and files", async () => {
     const { createTask, purgeComputer, stageInput, sweepRelay, relayDir } = await import("@/server/computer/tasks");
     const name = stageInput(`acct:${a}`, FAKE_PNG, "image/png", "x.png");

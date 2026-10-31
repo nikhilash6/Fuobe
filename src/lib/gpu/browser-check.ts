@@ -4,7 +4,7 @@
  * read, then sent to the server (PUT /api/gpu/inventory), which keeps it for this person's board, chips and fixes.
  */
 import { localBase, preflightPath } from "../local-comfy";
-import { gatherInventory } from "./gather";
+import { gatherInventory, problemText } from "./gather";
 import { parseIndex } from "./requirements";
 import { fetchTransport } from "./transport";
 import type { CheckLine, GpuInventory, RequirementIndex } from "./types";
@@ -37,15 +37,25 @@ export async function checkThisComputer(port: number, o: { host?: string; onLine
     },
     { decodes: true },
   );
-  const inv = await gatherInventory(t, await requirements(), { where: "computer", statsTimeoutMs: 1500, onLine: o.onLine, classes: o.classes, folders: o.folders });
+  // The first line's failure waits: it may be a ComfyUI that runs without Fuobe's setting, not one that's closed.
+  let held: CheckLine | null = null;
+  const onLine = (l: CheckLine) => (l.step === "found" && l.state === "fail" ? (held = l) : o.onLine?.(l));
+  const inv = await gatherInventory(t, await requirements(), { where: "computer", statsTimeoutMs: 1500, onLine, classes: o.classes, folders: o.folders });
   // The browser can't read a ComfyUI started without Fuobe's setting: a look that can't read the answer still sees it's there.
-  if (inv.problem === "unreachable") {
-    const answers = await loopbackFetch(`${base}/system_stats`, { mode: "no-cors" }).then(
-      () => true,
-      () => false,
-    );
-    if (answers) return { ...inv, problem: "cors-off" };
+  if (inv.problem === "unreachable" || inv.problem === "timeout") {
+    const answers =
+      inv.problem === "unreachable" &&
+      (await loopbackFetch(`${base}/system_stats`, { mode: "no-cors" }).then(
+        () => true,
+        () => false,
+      ));
+    // The browser's own words ("Failed to fetch") say nothing to the person: one line says what to do.
+    const out: GpuInventory = { ...inv, ...(answers && { problem: "cors-off" as const }) };
+    delete out.problemDetail;
+    o.onLine?.({ step: "found", state: "fail", text: problemText(out.problem!, "computer") });
+    return out;
   }
+  if (held) o.onLine?.(held);
   return inv;
 }
 

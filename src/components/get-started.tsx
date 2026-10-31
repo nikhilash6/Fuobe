@@ -8,9 +8,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConnectField, useSettings } from "@/components/connect-field";
 import { OwnerComputerLine, OwnerServerComfy } from "@/components/gpu/connect-choice";
+import { openConnect, useComputerSupport } from "@/components/gpu/open-connect";
+import { unsupportedWords } from "@/components/gpu/this-computer";
 import { usePagePlace } from "@/components/gpu/use-local-comfy";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CONNECT_GPU_EVENT, saveSettings, useEngineMode, type StatusInfo } from "@/lib/api";
+import { saveSettings, useEngineMode, type StatusInfo } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
 import { COMFY_INSTALL_COMMAND, COMFY_INSTALL_DOCS, FAL_KEYS_URL, nothingConnected } from "@/lib/connections";
 import { cn } from "@/lib/utils";
@@ -60,19 +62,26 @@ function ComfyLinks() {
  * "Use your GPU" on a hosted studio (the page isn't on the server's machine, so the server's 127.0.0.1 isn't the
  * owner's): Fuobe finds the ComfyUI on this computer, in the connect dialog (it stays open through "connected" after
  * this guide goes); a ComfyUI on a server or a cloud GPU is the quieter second way. Once ComfyUI runs on the owner's
- * computer (a guide opened again), its state.
+ * computer (a guide opened again), its state. On a phone, in Safari or on a plain-http page, why this browser can't, and the
+ * server way open.
  */
 function HostedGpuCard({ computer }: { computer: boolean }) {
+  const support = useComputerSupport();
   const [server, setServer] = useState(false);
   return (
     <GuideCard icon={Cpu} title="Use your GPU" cost="Free: open-source models run on your own graphics card">
       {computer ? (
         <OwnerComputerLine />
+      ) : support !== "ok" ? (
+        <>
+          <p className="text-[13px] leading-relaxed text-muted-foreground">{unsupportedWords(support, true)}</p>
+          <OwnerServerComfy hosted onlyAddress />
+        </>
       ) : (
         <>
           <p className="text-[13px] leading-relaxed text-muted-foreground">Fuobe finds the ComfyUI running on this computer and sends your runs to it.</p>
           <div className="space-y-1.5">
-            <Button className="h-11 w-full sm:h-9 sm:w-fit" onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))}>
+            <Button className="h-11 w-full sm:h-9 sm:w-fit" onClick={() => openConnect(true)}>
               <Cpu /> Use the ComfyUI on this computer
             </Button>
             <p className="text-[12px] text-muted-foreground">Runs while Fuobe is open in this browser.</p>
@@ -153,6 +162,9 @@ export function GetStarted({
   const mode = status?.engineMode ?? cachedMode;
   // Where this page is: unknown in the server's HTML (Home's static shell), so the GPU card waits for it there.
   const place = usePagePlace();
+  // "Just try it": the owner's demo, never a visitor's, and not when the demo is off (a run then asks for a GPU instead).
+  // Unknown (undefined) in Home's static shell.
+  const demo = status ? !status.viewer && status.demoMode !== "off" : undefined;
 
   const hide = async () => {
     setHiding(true);
@@ -190,7 +202,7 @@ export function GetStarted({
         </Button>
       </div>
 
-      <div className={cn("mt-4 grid gap-3", mode === "both" ? "lg:grid-cols-3" : "md:grid-cols-2")}>
+      <div className={cn("mt-4 grid gap-3", mode === "both" && demo !== false ? "lg:grid-cols-3" : "md:grid-cols-2")}>
         {mode !== "open" && (
           <GuideCard icon={Cloud} title="Use paid models" cost={prices ? `Pay per run with your own key: ${prices}` : "Pay per run with your own key"}>
             <p className="text-[13px] leading-relaxed text-muted-foreground">The Fuobe Originals hosted on open weights, plus Nano Banana, Seedance, Kling, Veo and many more, through one fal.ai key. A Replicate token works too (Settings).</p>
@@ -248,7 +260,7 @@ export function GetStarted({
           </GuideCard>
         )}
         {/* The owner's demo: not in the first paint (a visitor of a public studio never sees it). */}
-        {status && !status.viewer && (
+        {demo && (
         <GuideCard icon={Sparkles} title="Just try it" cost="Free: no keys, no GPU">
           <p className="text-[13px] leading-relaxed text-muted-foreground">Click through every studio with clearly labelled placeholder results. You can connect a model later in Settings.</p>
           <Button

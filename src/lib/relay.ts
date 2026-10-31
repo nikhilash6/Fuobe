@@ -278,6 +278,9 @@ export const RELAY_WORDS = {
   tooBig: "Your ComfyUI made a file over 1 GB. Try a shorter clip or a lower size.",
   stopped: "Stopped",
   switched: "This run stopped because ComfyUI now runs somewhere else. Press Retry.",
+  disconnected: "You disconnected your computer, so this run stopped. Press Retry.",
+  /** A run sent to the computer whose Fuobe tab stopped answering (closed, asleep): it goes on once that tab is back. */
+  computerAway: "Waiting for your computer. Open Fuobe there to finish this run.",
 } as const;
 
 /** A script's open-source run (an API token) while the owner's ComfyUI is on the owner's computer. */

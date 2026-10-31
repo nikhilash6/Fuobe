@@ -1239,6 +1239,15 @@ export function signInHref(mode: "signup" | "login", next?: string): string {
 
 export const GUEST_PROMPT_EVENT = "fuobe:guest-prompt";
 export const CONNECT_GPU_EVENT = "fuobe:connect-gpu";
+/**
+ * What opened "Connect your GPU": `action` a refusal (watchGuestRefusals, or a file chooser that asks first): a refused
+ * run's card keeps that run and starts it once connected; `reason` the runner's note; `look` a button that said "Use the
+ * ComfyUI on this computer". With none of them, a button that only opens the card: no run waits.
+ */
+export interface ConnectGpuDetail extends RefusalDetail {
+  reason?: "setting" | "find" | "browser";
+  look?: boolean;
+}
 /** A run started from this tab (components/gpu/computer-runtime.ts listens). */
 export const COMPUTER_KICK_EVENT = "fuobe:computer-kick";
 /** The guided fix (src/components/gpu/guided-fix.tsx): { ref, plan? }. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { ChevronDown, Cpu, Globe, Info, Loader2, Search, TriangleAlert, Unplug } from "lucide-react";
+import { ChevronDown, Cpu, Globe, Info, Loader2, TriangleAlert, Unplug } from "lucide-react";
 import { createContext, useContext, useState } from "react";
 import { toast } from "sonner";
 import { ConnectField, useAllowPrivate, useSettings } from "@/components/connect-field";
@@ -9,15 +9,14 @@ import { gib } from "@/components/gpu/comfy-finder";
 import { YourGpu } from "@/components/gpu/your-gpu";
 import { Button } from "@/components/ui/button";
 import { deviceLabel } from "@/lib/gpu/readiness";
-import { CONNECT_GPU_EVENT, useStatus, useViewer } from "@/lib/api";
+import { useStatus, useViewer } from "@/lib/api";
 import type { OwnerGpuView } from "@/lib/connections";
 import { addressKind, refusedOnHosted } from "@/lib/page-place";
-import { RELAY_WORDS } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import { restartComputerRunner, rememberComfy, rememberedComfy } from "./computer-runtime";
 import { GuardFix, SettingFix, ThisComputer, unsupportedWords } from "./this-computer";
 import { lookOn, useComputerSupport, usePagePlace } from "./use-local-comfy";
-import { openFinder, useComputerState, type FindReason } from "./computer-runner";
+import { openConnect, openFinder, useComputerState, type FindReason } from "./computer-runner";
 
 /**
  * "Connect your GPU": the ComfyUI on this computer first (the quickest way: nothing to install, runs while Fuobe is
@@ -46,8 +45,9 @@ export async function connectThisComputer(): Promise<void> {
   await gpuCall("PUT", { mode: "computer" });
 }
 
-async function putWhere(where: "server" | "computer"): Promise<void> {
-  const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ comfyWhere: where }) });
+/** `disconnect`: the owner pressed Disconnect (the runs that stop say so, not "ComfyUI now runs somewhere else"). */
+async function putWhere(where: "server" | "computer", disconnect = false): Promise<void> {
+  const res = await fetch(disconnect ? "/api/settings?why=disconnected" : "/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ comfyWhere: where }) });
   if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `Request failed (${res.status})`);
 }
 
@@ -58,7 +58,7 @@ export async function connectOwnerComputer(): Promise<void> {
 
 /** The owner's ComfyUI goes back to the server's address (the runs still waiting for the computer stop, saying why). */
 export async function disconnectOwnerComputer(qc: QueryClient): Promise<void> {
-  await putWhere("server");
+  await putWhere("server", true);
   for (const key of ["viewer", "status", "settings"]) void qc.invalidateQueries({ queryKey: [key] });
 }
 
@@ -78,7 +78,9 @@ function useHere() {
   if (local.holder === "other") return { other: true as const };
   const v = local.holder === "this" ? local.view : null;
   if (!v || v.stopped || v.heldElsewhere) return null;
-  return { other: false as const, comfy: v.comfy, access: v.access, port: v.port, facts: v.facts };
+  // Runs this tab is working on, or that wait for it: Disconnect would stop them.
+  const busy = v.waiting > 0 || v.jobs.some((j) => j.phase !== "done" && j.phase !== "failed");
+  return { other: false as const, comfy: v.comfy, access: v.access, port: v.port, facts: v.facts, busy };
 }
 
 const Act = ({ children, onClick }: { children: React.ReactNode; onClick: () => void }) => (
@@ -119,7 +121,7 @@ function ComputerProblem({ here, server }: { here: ReturnType<typeof useHere>; s
   }
   return (
     <p className="text-[12px] text-muted-foreground">
-      {server === "down" ? "ComfyUI isn't running on your computer. Start it there." : server === "no-setting" ? "ComfyUI on your computer needs Fuobe's setting again. Open Fuobe there to see how." : RELAY_WORDS.noComputer}
+      {server === "down" ? "ComfyUI isn't running on your computer. Start it there." : server === "no-setting" ? "ComfyUI on your computer needs Fuobe's setting again. Open Fuobe there to see how." : "Offline. Open Fuobe on the computer that runs ComfyUI."}
     </p>
   );
 }
@@ -191,6 +193,7 @@ function ComputerStatus({ gpu, onDisconnect, other, look = true }: { gpu: Comput
           {busy ? <Loader2 className="animate-spin" /> : <Unplug />} Disconnect
         </Button>
       </div>
+      {mine?.busy && <p className="text-[12px] text-muted-foreground">Disconnect stops the runs going on now.</p>}
       {gpu.cors === "any" && <p className="text-[12px] text-amber-700 dark:text-amber-400">Your ComfyUI lets every website in. To keep it private, start it with --enable-cors-header {window.location.origin} instead.</p>}
       {look && online && guard === false && gpu.cors !== "any" && shownPort && <NoGuard port={shownPort} />}
       {look && (
@@ -268,8 +271,11 @@ function ChoiceCards({
   );
 }
 
-/** "Use the ComfyUI on this computer" under a refused address, inside the choice: start this computer's finder there. */
-const FindHere = createContext<(() => void) | null>(null);
+/**
+ * The way under a refused address, inside the choice: start this computer's finder there ("Use the ComfyUI on this
+ * computer"), or, while ComfyUI runs there already, fold the server address away ("Keep using this computer").
+ */
+const FindHere = createContext<{ label: string; go: () => void } | null>(null);
 
 /**
  * A ComfyUI address the server must not call from a hosted page (127.0.0.1 is the server itself there): what that
@@ -284,8 +290,8 @@ export function HostedRefusal({ line }: { line: string }) {
         <Info aria-hidden className="mt-0.5 size-3.5 shrink-0 text-brand-text" /> {line}
       </p>
       {support === "ok" && (
-        <Button size="sm" onClick={() => (find ? find() : window.dispatchEvent(new Event(CONNECT_GPU_EVENT)))}>
-          <Cpu /> Use the ComfyUI on this computer
+        <Button size="sm" onClick={() => (find ? find.go() : openConnect(true))}>
+          <Cpu /> {find?.label ?? "Use the ComfyUI on this computer"}
         </Button>
       )}
     </div>
@@ -296,9 +302,10 @@ export function HostedRefusal({ line }: { line: string }) {
  * The owner's ComfyUI at a server address: a cloud GPU, a tunnel to the owner's own, or (on the server's own machine)
  * 127.0.0.1. On a hosted studio the built-in 127.0.0.1 isn't shown, and an address on the server's machine or network
  * is refused before anything is sent. While ComfyUI runs on the owner's computer, a green test moves it to the server.
- * `onlyAddress`: the address alone (the first-run guide).
+ * `onlyAddress`: the address alone (the first-run guide). On a hosted page the second ComfyUI (the isolated worker) is
+ * only in Settings (`advanced`), never in the connect dialog.
  */
-export function OwnerServerComfy({ hosted, computer = false, onlyAddress = false }: { hosted: boolean; computer?: boolean; onlyAddress?: boolean }) {
+export function OwnerServerComfy({ hosted, computer = false, onlyAddress = false, advanced = false }: { hosted: boolean; computer?: boolean; onlyAddress?: boolean; advanced?: boolean }) {
   const qc = useQueryClient();
   const settings = useSettings().data;
   const status = useStatus().data;
@@ -340,14 +347,18 @@ export function OwnerServerComfy({ hosted, computer = false, onlyAddress = false
           refusal={refusal}
         />
       )}
-      {!onlyAddress && !computer && (
+      {!onlyAddress && !computer && (!hosted || advanced) && (
         <ConnectField
           name="comfyIsolatedUrl"
           setting={get("comfyIsolatedUrl")}
           provider="comfyui"
-          label="Isolated worker URL (optional)"
+          label={hosted ? "Second ComfyUI for lip sync and sound (optional)" : "Isolated worker URL (optional)"}
           placeholder={hosted ? "https://…" : "http://127.0.0.1:8189"}
-          hint="A second ComfyUI for LatentSync 1.6 and ThinkSound, whose node packs can't share the main install. scripts/comfy/README.md shows how to start one."
+          hint={
+            hosted
+              ? "LatentSync 1.6 and ThinkSound need add-ons that can't share your main ComfyUI. Give the address of a second one here."
+              : "A second ComfyUI for LatentSync 1.6 and ThinkSound, whose node packs can't share the main install. scripts/comfy/README.md shows how to start one."
+          }
           place={place}
           refusal={refusal}
         />
@@ -372,6 +383,14 @@ export interface ConnectChoiceProps {
   onNotNow?: () => void;
   /** The two options' box (and the link's form): 36rem at most from sm up, unless a wider page lifts that (sm:max-w-none). */
   className?: string;
+  /**
+   * Opened by a button that already said "Use the ComfyUI on this computer" (the guide, the sidebar's Connect): look at
+   * once. Without it (and without a run or a reason) the finder waits for "Find my ComfyUI": a card that only shows the
+   * choice (Settings, /connect) never moves the runs to this computer by itself.
+   */
+  look?: boolean;
+  /** Settings: the owner's server way has the second ComfyUI (the isolated worker) too. */
+  advanced?: boolean;
 }
 
 export function ConnectChoice(props: ConnectChoiceProps) {
@@ -380,7 +399,7 @@ export function ConnectChoice(props: ConnectChoiceProps) {
   return viewer.owner ? <OwnerChoice {...props} /> : <AccountChoice {...props} />;
 }
 
-function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className }: ConnectChoiceProps) {
+function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className, look }: ConnectChoiceProps) {
   const qc = useQueryClient();
   const support = useComputerSupport();
   const q = useAccountGpu();
@@ -431,8 +450,9 @@ function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className }: 
             kind={kind}
             onStart={onStart}
             onNotNow={onNotNow}
-            autoLook={reason === "setting" || reason === "find"}
+            autoLook={reason === "setting" || reason === "find" || look}
             again={reason === "setting"}
+            waitForTap={!fromRun && !reason && !look}
           />
         </div>
       }
@@ -448,7 +468,7 @@ function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className }: 
  * computer is in Settings' "Where ComfyUI runs"). While ComfyUI runs on the owner's computer: its state, with
  * Disconnect and the server address as the other way.
  */
-function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className }: ConnectChoiceProps) {
+function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className, look, advanced }: ConnectChoiceProps) {
   const qc = useQueryClient();
   const support = useComputerSupport();
   const place = usePagePlace();
@@ -460,9 +480,9 @@ function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className }: Co
   // The server way, opened or closed by hand (until then: open when an address is saved or connected).
   const [serverOpen, setServerOpen] = useState<boolean | null>(null);
   const [lookNow, setLookNow] = useState(0);
-  // Just disconnected: this computer's finder waits for a tap (a browser that may reach ComfyUI would connect it again
-  // by itself), then looks at once.
-  const [armed, setArmed] = useState<"auto" | "tap" | "look">("auto");
+  // This computer's finder looks by itself only when the person asked for this computer (a run, a reason, a button that
+  // said so). Anywhere else, and after Disconnect, it waits for "Find my ComfyUI".
+  const [armed, setArmed] = useState<"tap" | "look">(look ? "look" : "tap");
   const thisComputer = (
     <ThisComputer
       connect={async () => {
@@ -479,12 +499,8 @@ function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className }: Co
       again={reason === "setting"}
       doneWords={OWNER_DONE}
       lookNow={lookNow}
+      waitForTap={!fromRun && !reason && armed === "tap"}
     />
-  );
-  const findButton = (
-    <Button className="h-11 sm:h-9" onClick={() => setArmed("look")}>
-      <Search /> Find my ComfyUI
-    </Button>
   );
   // Opened by the note of the tab that runs the jobs: straight to the finder, as before.
   if (reason) return support !== "ok" ? <p className="text-[13px] text-muted-foreground">{unsupportedWords(support, true)}</p> : thisComputer;
@@ -496,13 +512,18 @@ function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className }: Co
   // Opens by itself for a server address of the owner's: connected, or saved and one the server may call from here.
   const usable = !!address?.isSet && !(hosted && refusedOnHosted(addressKind(address.value), allowPrivate));
   const open = serverOpen ?? (serverConnected || usable);
-  const serverForm = <OwnerServerComfy hosted={hosted} computer={computer} />;
-  const findHere = () => {
-    setServerOpen(false);
-    setFlow(true);
-    setArmed((a) => (a === "tap" ? "look" : a));
-    setLookNow((n) => n + 1);
+  const serverForm = <OwnerServerComfy hosted={hosted} computer={computer} advanced={advanced} />;
+  const findHere = {
+    label: "Use the ComfyUI on this computer",
+    go: () => {
+      setServerOpen(false);
+      setFlow(true);
+      setArmed("look");
+      setLookNow((n) => n + 1);
+    },
   };
+  // ComfyUI runs on this computer already: a refused server address only folds away.
+  const keepHere = { label: "Keep using this computer", go: () => setServerOpen(false) };
   const disconnect = async () => {
     await disconnectOwnerComputer(qc);
     setArmed("tap");
@@ -544,7 +565,7 @@ function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className }: Co
     );
   if (computer && !flow)
     return (
-      <FindHere.Provider value={() => setServerOpen(false)}>
+      <FindHere.Provider value={keepHere}>
         <div className={cn("w-full min-w-0 space-y-3 sm:max-w-[36rem]", className)}>
           {state}
           {serverOpen && serverBox}
@@ -560,7 +581,7 @@ function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className }: Co
         sub="A cloud GPU or a tunnel address. Runs go on with this tab closed."
         open={open}
         onToggle={() => setServerOpen(!open)}
-        computer={<div onClickCapture={() => setFlow(true)}>{armed === "tap" ? findButton : thisComputer}</div>}
+        computer={<div onClickCapture={() => setFlow(true)}>{thisComputer}</div>}
       >
         {serverForm}
       </ChoiceCards>

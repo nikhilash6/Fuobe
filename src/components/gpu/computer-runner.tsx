@@ -4,12 +4,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Cpu, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
-import { CONNECT_GPU_EVENT, useViewer } from "@/lib/api";
+import { useViewer } from "@/lib/api";
 import type { Generation } from "@/lib/catalog/types";
 import { shortGpu } from "@/lib/gpu/readiness";
 import { RELAY_WORDS } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import { computerState, jobFor, RESTART_EVENT, startComputerRunner, store, stored, subscribeComputer, takeOverHere, type ComputerState, type RunnerStart } from "./computer-runtime";
+import { openFinder } from "./open-connect";
 import { loopbackPermission, useComputerSupport } from "./use-local-comfy";
 
 /**
@@ -18,9 +19,7 @@ import { loopbackPermission, useComputerSupport } from "./use-local-comfy";
  * to their own computer. The sidebar shows its note (ComputerNote) while their GPU works, or when ComfyUI needs them.
  */
 
-/** Why the "Connect your GPU" card opens from here: ComfyUI needs the setting again, find ComfyUI, or allow this browser. */
-export type FindReason = "setting" | "find" | "browser";
-export const openFinder = (reason: FindReason) => window.dispatchEvent(new CustomEvent(CONNECT_GPU_EVENT, { detail: { reason } }));
+export { awayFix, openConnect, openFinder, type FindReason } from "./open-connect";
 
 /**
  * May this browser reach ComfyUI on this computer without a question nobody explained? Allowed: yes. Told no:

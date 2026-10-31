@@ -72,7 +72,7 @@ import { outsideTenant, runAsTenant, tenantAccount } from "../tenant";
 import { ask, checkReach, reachSync, sharedCheck, type Reach } from "./reach";
 import { ProviderError, type PollResult, type ProviderAdapter, type RemoteOutput } from "./types";
 import { isOutOfMemory } from "@/lib/gpu/fix-codes";
-import { makingWords, queueWords, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
+import { makingWords, queueWords, RELAY_TIMES, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
 import type { GenerationFix } from "@/lib/catalog/types";
 import {
   checkClocks,
@@ -1785,7 +1785,10 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   const kind = extraOf(t).made ?? made ?? "image";
   const waitMs = tenantAccount() ? ACCOUNT_LIMITS.queueMs : 4 * 3_600_000;
   const sentAt = t.sent_at ?? undefined;
-  const down = t.down_at ? (t.down_why === "setting" ? RELAY_WORDS.comfyNoSetting : RELAY_WORDS.comfyDown) : undefined;
+  // Sent, and the computer's tab stopped answering (closed, asleep): not a run that looks alive for half an hour.
+  const r = t.state === "waiting" ? null : runnerFacts(principal);
+  const away = t.state !== "waiting" && (!r || Date.now() - r.seenAt >= RELAY_TIMES.onlineMs);
+  const down = t.down_at ? (t.down_why === "setting" ? RELAY_WORDS.comfyNoSetting : RELAY_WORDS.comfyDown) : away ? RELAY_WORDS.computerAway : undefined;
   switch (t.state) {
     case "waiting": {
       // The computer's tab is open, but its ComfyUI is closed or runs without Fuobe's setting: say that, not "open Fuobe".
@@ -1824,7 +1827,7 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
       return { state: "succeeded", outputs: await withLayerBoxes(outputs) };
     }
     case "canceled":
-      return { state: "failed", error: t.error === "switched" ? RELAY_WORDS.switched : RELAY_WORDS.stopped };
+      return { state: "failed", error: t.error === "switched" ? RELAY_WORDS.switched : t.error === "disconnected" ? RELAY_WORDS.disconnected : RELAY_WORDS.stopped };
     default:
       return { state: "failed", ...relayFailure(t, manifest) };
   }
