@@ -39,9 +39,10 @@ export function OwnerSettings({ children }: { children: React.ReactNode }) {
         <AccountSection email={v.account.email} />
       ) : (
         <section className="space-y-3 border-b py-8">
-          <h2 className="text-[15px] font-semibold">Run Fuobe on your own GPU</h2>
-          <p className="max-w-xl text-[13px] text-muted-foreground">
-            Create a free account, then connect your own ComfyUI: your runs go to your GPU. It must be reachable from the internet, for example through a Cloudflare Tunnel or ngrok.
+          <h2 className="text-[15px] font-semibold">Run Fuobe on your own GPU or key</h2>
+          <p className="max-w-xl text-[13px] text-pretty text-muted-foreground">
+            Create a free account, then connect the ComfyUI on your computer (or one elsewhere through a link), and your runs go to your own GPU. No GPU? Add your own fal.ai or
+            Replicate key.
           </p>
           <div className="flex gap-2">
             <Button asChild size="sm">
