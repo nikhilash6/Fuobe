@@ -1,11 +1,12 @@
 "use client";
 
 import { Ban, Film, Loader2, Shuffle } from "lucide-react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import type { Preset } from "@/lib/catalog/types";
 import { presetCover } from "@/lib/preset-covers";
+import { featuredAll } from "@/lib/preset-featured";
 import { cn } from "@/lib/utils";
 import { CoverScrollBox, CoverTile, usePickerPlayback } from "@/components/cover-tile";
 import { PRESET_ICONS } from "@/components/preset-icons";
@@ -15,7 +16,8 @@ import { Chip, ClearableChip } from "./chip";
 /**
  * Camera-motion / effect picker and Mix. Loaded as its own chunk (with the preset icons and the slim
  * covers map), and the preset lists come from the full catalog chunk, fetched on first hover or open.
- * A preset shows its real cover, as in the galleries, else its drawn tile.
+ * A preset shows its real cover, as in the galleries, else its drawn tile. Both list them as the galleries do
+ * (featuredAll), with the category tabs in catalog order.
  */
 
 const tileClass = "group flex flex-col items-start gap-1 overflow-hidden rounded-lg p-1 text-left ring-primary transition hover:bg-accent";
@@ -44,7 +46,8 @@ function PresetTile({ preset: p, picked, onPick }: { preset: Preset; picked: boo
 export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] | null; value?: string; onPick: (id: string | undefined) => void; noneLabel: string }) {
   const [cat, setCat] = useState<string>("All");
   const box = useRef<HTMLDivElement>(null);
-  if (!list)
+  const ordered = useMemo(() => (list ? featuredAll(list) : null), [list]);
+  if (!list || !ordered)
     return (
       <div className="grid h-40 place-items-center" role="status" aria-label="Loading presets">
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -85,7 +88,7 @@ export function PresetGrid({ list, value, onPick, noneLabel }: { list: Preset[] 
                 <span className="w-full truncate px-0.5 text-[12px] font-medium">{noneLabel}</span>
               </button>
             )}
-            {list
+            {ordered
               .filter((p) => cat === "All" || p.category === cat)
               .map((p) => (
                 <PresetTile key={p.id} preset={p} picked={value === p.id} onPick={() => onPick(p.id)} />
@@ -179,7 +182,12 @@ export function MixChip({
   const catalog = useCatalog();
   const second = mix ? catalog.getPreset(mix.presetId) : undefined;
   const cover = second && presetCover(second.id);
-  const mixable = catalog.presets ? [...catalog.presets.motion, ...catalog.presets.effect].filter((p) => p.id !== primary.id && !p.inputs.some((i) => i.key === "endImage")) : null;
+  // Kept while the sliders move, so the picker isn't sorted again on every step.
+  const presets = catalog.presets;
+  const mixable = useMemo(
+    () => (presets ? [...presets.motion, ...presets.effect].filter((p) => p.id !== primary.id && !p.inputs.some((i) => i.key === "endImage")) : null),
+    [presets, primary.id],
+  );
   return (
     <ClearableChip active={!!mix} onClear={() => onChange({ mix: undefined })} clearLabel="Remove the mix">
       <Popover

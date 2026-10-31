@@ -11,7 +11,7 @@ import { useProgressive } from "@/components/use-progressive";
 import { CardChip, badgeKey, parseBadgeKey } from "@/components/gpu/readiness-chip";
 import { useGpuBadges } from "@/hooks/use-gpu";
 import { useEngineMode, useViewer } from "@/lib/api";
-import { interleaveByCategory, matchesSearch, previewFlip, searchText, type PresetCardData } from "@/lib/preset-cards";
+import { matchesSearch, previewFlip, searchText, type PresetCardData } from "@/lib/preset-cards";
 import { cn } from "@/lib/utils";
 
 /** A tiny label shown on hover/focus (CSS only: a gallery has hundreds of these). */
@@ -205,10 +205,14 @@ const GRID = GALLERY_GRID;
 
 export function PresetGallery({
   presets,
+  categories,
   href,
   noun = "presets",
 }: {
+  /** In the order the All view shows them (featuredGallery): a category or a search keeps it. */
   presets: PresetCardData[];
+  /** The category tabs, in catalog order. */
+  categories: string[];
   /** "{id}" is replaced with the preset id. */
   href: string;
   /** Plural shown in the result count, e.g. "effects". */
@@ -224,17 +228,13 @@ export function PresetGallery({
   const query = useDeferredValue(q.trim().toLowerCase());
 
   const index = useMemo(() => presets.map((p) => [p, searchText(p)] as const), [presets]);
-  // Unfiltered, the categories take turns, so the first screen shows the range of the catalog.
-  const mixed = useMemo(() => interleaveByCategory(presets), [presets]);
-  const cats = useMemo(() => ["All", ...new Set(presets.map((p) => p.category))], [presets]);
+  const cats = useMemo(() => ["All", ...categories], [categories]);
   const list = useMemo(
     () =>
-      cat === "All" && !query
-        ? mixed.filter((p) => runsOn === "all" || p[runsOn])
-        : index
-            .filter(([p, text]) => (cat === "All" || p.category === cat) && (!query || matchesSearch(text, query)) && (runsOn === "all" || p[runsOn]))
-            .map(([p]) => p),
-    [index, mixed, cat, query, runsOn],
+      index
+        .filter(([p, text]) => (cat === "All" || p.category === cat) && (!query || matchesSearch(text, query)) && (runsOn === "all" || p[runsOn]))
+        .map(([p]) => p),
+    [index, cat, query, runsOn],
   );
   // Cards render a page at a time; a new filter starts from the first page again.
   const { shown, hasMore, moreFrom, sentinel, left } = useProgressive(list.length, `${cat}|${query}|${runsOn}`, FIRST_PAGE, PAGE);

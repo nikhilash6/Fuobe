@@ -17,6 +17,7 @@ import {
   type CameraMove,
 } from "@/lib/preset-cards";
 import { previewFor, toPresetCard } from "@/lib/preset-card-data";
+import { featuredGallery } from "@/lib/preset-featured";
 import {
   autoplays,
   browserPlaybackEnv,
@@ -579,8 +580,9 @@ describe("gallery variety at rest", () => {
       { id: "c2", category: "C" },
     ];
     expect(interleaveByCategory(items).map((i) => i.id)).toEqual(["a1", "b1", "c1", "a2", "c2", "a3"]);
-    // The first row of /effects no longer shows one category's near-identical cards.
-    const firstRow = interleaveByCategory(EFFECTS.map(toPresetCard)).slice(0, 5);
+    // The first row of /effects (its featured order, which takes turns the same way) shows five categories, not one
+    // category's near-identical cards.
+    const firstRow = featuredGallery(EFFECTS.map(toPresetCard)).presets.slice(0, 5);
     expect(new Set(firstRow.map((c) => c.category)).size).toBe(5);
     expect(new Set(firstRow.map((c) => c.preview.fx)).size).toBeGreaterThanOrEqual(4);
   });
