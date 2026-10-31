@@ -77,8 +77,9 @@ describe("M-3: the proxy holds at most a few MB of any request body", () => {
 
   it("each of those routes refuses a guest, an account and another website as the proxy would", async () => {
     for (const r of BIG) {
-      // Assist's answer to a guest is an account's (403): signing up wouldn't let it in.
-      expect((await r.call(form(r.path))).status, `${r.name}: guest`).toBe(r.path.startsWith("/api/assist/") ? 403 : 401);
+      // Assist and the tools an account's own GPU doesn't run give a guest the account's answer (403): signing up
+      // wouldn't let it in. A run's finish and a save to the library offer to sign up (401).
+      expect((await r.call(form(r.path))).status, `${r.name}: guest`).toBe(["finish", "mix export"].includes(r.name) ? 401 : 403);
       expect((await r.call(form(r.path, { cookie: owner, headers: { origin: "http://evil.example" } }))).status, `${r.name}: cross-site`).toBe(403);
     }
     // An account: only its own run's finish passes the proxy's rules, and "g1" isn't its own.

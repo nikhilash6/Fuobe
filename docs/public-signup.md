@@ -28,7 +28,10 @@ built-in skills). The owner's library stays private: the lists come back empty, 
 it (files, uploads, projects, settings values, tokens) answer 401 "Sign up to see your library".
 
 Every change a guest sends (generate, upload, save a setting, create a project…) answers 401. The
-studio shows a "Create a free account to run this" card with **Sign up** and **Log in**. Price
+studio shows a "Create a free account to run this" card with **Sign up** and **Log in**. Where
+signing up wouldn't help, a guest gets an account's answer instead: 403 `assist-owner` for Assist,
+and 403 `own-gpu-tool` for a tool an account's own GPU or key doesn't run (Shorts, Katana,
+Marketing…). The pages of those tools say so up front and turn off their upload and Generate. Price
 checks (the estimate routes, and `?preview=1` on the run routes that support it) stay open, so the
 studios can show prices. A guest may send 120 price checks a minute (per visitor behind a trusted
 reverse proxy; see below), and so may each account. A price check reads only the header of a file

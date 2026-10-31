@@ -156,15 +156,22 @@ function priceCheck(request: NextRequest, who: string): NextResponse {
 /**
  * A guest (public sign-up on, signed out): every page and the catalog reads, the owner's lists
  * empty, the rest of the library 401, and every change 401 (the client offers to sign up), but
- * Assist's: signing up wouldn't let it use Assist, so it gets the account's answer (assistOwner).
+ * where signing up wouldn't let it in: Assist (assistOwner) and the tools an account's own GPU or
+ * key doesn't run (ownGpuTool) get the account's answer.
  */
 function guest(request: NextRequest): NextResponse {
   const { pathname, search } = request.nextUrl;
-  if (request.method === "GET" || request.method === "HEAD") return readAsGuest(request, false);
-  if (isPriceCheck(request.method, pathname, search)) return priceCheck(request, `guest:${LoginGuard.clientKey(request.headers)}`);
-  if (isAssistChange(request.method, pathname)) return assistOwner();
+  const { method } = request;
+  if (method === "GET" || method === "HEAD") return readAsGuest(request, false);
+  if (isPriceCheck(method, pathname, search)) return priceCheck(request, `guest:${LoginGuard.clientKey(request.headers)}`);
+  if (isAssistChange(method, pathname)) return assistOwner();
+  // What an account may send, the library, the owner's settings and the studios' runs: signing up is the next step.
+  if (!accountMayChange(method, pathname, search) && !isLibraryChange(method, pathname) && !ownerOnly(method, pathname) && !ownGpuRun(method, pathname)) return ownGpuTool();
   return NextResponse.json({ error: GUEST_RUN_MESSAGE }, { status: 401, headers: guestHeaders });
 }
+
+/** A tool that doesn't run on an account's own GPU or key yet, for a guest or an account: one answer (no sign-up card). */
+const ownGpuTool = () => NextResponse.json({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, { status: 403, headers: { "Cache-Control": "no-store" } });
 
 /** Any change to Assist by a visitor (a guest, or an account with or without a GPU): one answer, which the Assist pages also show. */
 const assistOwner = () => NextResponse.json({ error: ASSIST_OWNER_MESSAGE, code: "assist-owner" }, { status: 403, headers: { "Cache-Control": "no-store" } });
@@ -216,7 +223,7 @@ function account(request: NextRequest, who: Account): NextResponse {
   if (isAssistChange(request.method, pathname)) return assistOwner();
   if (isLibraryChange(request.method, pathname)) return NextResponse.json({ error: LIBRARY_MESSAGE, code: "library" }, { status: 403 });
   // A tool its own GPU or key wouldn't run says so first: "Connect your GPU" only for what a GPU or a key unlocks.
-  if (!ownGpuRun(request.method, pathname)) return NextResponse.json({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, { status: 403 });
+  if (!ownGpuRun(request.method, pathname)) return ownGpuTool();
   // Neither its own GPU nor its own key: nothing it could run on. (Which one a run needs, the route says.)
   if (!who.gpu && !hasCloudKey(who)) return NextResponse.json({ error: CONNECT_GPU_OR_KEY_MESSAGE, code: "connect-gpu" }, { status: 403, headers: { [CONNECT_GPU_HEADER]: "1" } });
   return pass(request);

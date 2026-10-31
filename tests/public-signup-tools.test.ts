@@ -111,10 +111,18 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     expect(access.isPriceCheck("GET", "/api/turnaround/estimate", "")).toBe(false);
   });
 
-  it("opens the price checks to guests and refuses their runs and saves with the sign-up prompt", async () => {
+  it("opens the price checks to guests, gives their tool runs the account's own-gpu-tool, and their saves the sign-up prompt", async () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     for (const p of ["/api/turnaround/estimate", "/api/turnaround?preview=1", "/api/audio-tools?preview=1"]) expect(passed(proxy(req(p, { method: "POST" }))), p).toBe(true);
-    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/audio-tools/export?offset=0"]) {
+    // Signing up wouldn't run these (an account's own GPU or key doesn't either): the account's answer, not the card.
+    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/shorts/sessions", "/api/katana", "/api/marketing/runs", "/api/layers/l1/jobs"]) {
+      const r = proxy(req(p, { method: "POST" }));
+      expect(r.status, p).toBe(403);
+      expect(r.headers.get(access.GUEST_HEADER), p).toBeNull();
+      expect(await r.json(), p).toEqual({ error: access.OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" });
+    }
+    // The studios' runs, an upload and a save to the library: signing up is the next step there.
+    for (const p of ["/api/generations", "/api/media/probe", "/api/audio-tools/export?offset=0", "/api/canvases"]) {
       const r = proxy(req(p, { method: "POST" }));
       expect(r.status, p).toBe(401);
       expect(r.headers.get(access.GUEST_HEADER), p).toBe("1");
