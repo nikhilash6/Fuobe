@@ -95,7 +95,9 @@ describe("the studios' examples", () => {
     expect(read("components", "studio", "composer.tsx")).toMatch(/bridgeRef\.pick = pickPreset;/);
     // A tile picked from the keyboard hands its focus to its own studio's composer, not to a hidden studio's.
     expect(page).toMatch(/closest\("\[data-studio\]"\)\?\.querySelector<HTMLElement>\("\[data-composer\]"\)/);
-    expect(page).toMatch(/if \(keyboard\) requestAnimationFrame\(\(\) => composer\?\.querySelector<HTMLElement>\("textarea, button"\)\?\.focus\(\{ preventScroll: true \}\)\)/);
+    expect(page).toMatch(/if \(keyboard\) requestAnimationFrame\(\(\) => \(composer\?\.querySelector\("textarea"\) \?\? composer\?\.querySelector\("button"\)\)\?\.focus\(\{ preventScroll: true \}\)\)/);
     expect(page).toMatch(/^\s+data-studio$/m);
+    // The first pick loads the move's card: only the card waits for its code, so the studio (and the focus) stays.
+    expect(page).toMatch(/<Suspense fallback=\{null\}>\s*<ActivePresetHeader \/>\s*<\/Suspense>/);
   });
 });

@@ -268,7 +268,7 @@ const ExampleTiles = memo(function ExampleTiles({ tiles }: { tiles: StudioExampl
     bridge.pick(id);
     // The move's card shows above the composer: back up to it, as the link's navigation would have.
     window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-    if (keyboard) requestAnimationFrame(() => composer?.querySelector<HTMLElement>("textarea, button")?.focus({ preventScroll: true }));
+    if (keyboard) requestAnimationFrame(() => (composer?.querySelector("textarea") ?? composer?.querySelector("button"))?.focus({ preventScroll: true }));
   };
   return (
     <div ref={grid} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -438,7 +438,12 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
               </button>
             </div>
           )}
-        {!hasItems && <ActivePresetHeader />}
+        {/* Its own boundary: the card's code loads on the first pick, and only the card waits for it, not the whole studio. */}
+        {!hasItems && (
+          <Suspense fallback={null}>
+            <ActivePresetHeader />
+          </Suspense>
+        )}
         <div data-composer className={cn("mx-auto w-full", hasItems ? "max-w-[800px]" : "max-w-[760px]")}>
           <Composer docked={hasItems} />
         </div>
