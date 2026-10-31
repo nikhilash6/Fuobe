@@ -40,7 +40,8 @@ vi.mock("next/cache", () => ({ cacheLife: () => {} }));
  */
 
 const root = process.cwd();
-const exists = (url: string) => (fs.statSync(path.join(root, "public", url), { throwIfNoEntry: false })?.size ?? 0) > 0;
+/** Whether a cover URL's file is there (without its version, ?v=). */
+const exists = (url: string) => (fs.statSync(path.join(root, "public", url.split("?")[0]), { throwIfNoEntry: false })?.size ?? 0) > 0;
 
 /** Covers the reviews turned down: no real cover yet, or white bars at the sides (and Text Edit's white edge). */
 const NO_COVER = ["app-fuobe-angles", "app-talking-photo", "motion-dolly-zoom-out", "motion-buckle-up"];
@@ -88,7 +89,9 @@ describe("Home's showcase", () => {
       const peaked = !!PRESET_PEAKS[c.id];
       expect(!!c.preview.rest, c.id).toBe(peaked);
       if (c.preview.rest) {
-        expect(c.preview.rest).toEqual({ src: `/previews/presets/peak/${c.id}.jpg`, ...PRESET_PEAKS[c.id] });
+        // With its version, which its small copy's URL keeps (thumbOf).
+        const { at, from, v } = PRESET_PEAKS[c.id];
+        expect(c.preview.rest).toEqual({ src: `/previews/presets/peak/${c.id}.jpg?v=${v}`, at, from });
         expect(exists(c.preview.rest.src), c.preview.rest.src).toBe(true);
         // Its 320 px copy, for a small screen (PresetPreview's sizes).
         expect(exists(thumbOf(c.preview.rest.src)), thumbOf(c.preview.rest.src)).toBe(true);
@@ -99,12 +102,20 @@ describe("Home's showcase", () => {
     const peakedIds = [...HOME_EFFECTS, ...HOME_REVEALS, ...HOME_WALL.filter((t) => !t.id.startsWith("motion-"))].map((t) => t.id).filter((id) => !ON_POSTER.includes(id));
     for (const id of peakedIds) expect(PRESET_PEAKS[id], id).toBeDefined();
     for (const id of ON_POSTER) expect(PRESET_PEAKS[id], id).toBeUndefined();
-    // The before/after: the poster, then the peak.
+    // The before/after: the poster, then the peak; the poster's small copy on its tab.
     for (const p of home.beforeAfter) {
       expect(p.before).toBe(PRESET_PREVIEWS[p.id].poster);
-      expect(p.after).toBe(`/previews/presets/peak/${p.id}.jpg`);
+      expect(p.after).toBe(`/previews/presets/peak/${p.id}.jpg?v=${PRESET_PEAKS[p.id].v}`);
+      expect(p.thumb).toBe(thumbOf(p.before));
+      expect(exists(p.thumb), p.thumb).toBe(true);
       expect(p.tags).toHaveLength(2);
     }
+    // Every cover URL Home gives (the wall, the rows, the before/after, the studios' cards) carries its version (?v=),
+    // and so does each small copy a tile asks for (thumbOf): a cover made again shows at once.
+    const urls = [...JSON.stringify(home).matchAll(/"(\/previews\/[^"]*)"/g)].map((m) => m[1]);
+    const stills = cards.flatMap((c) => [c.preview.poster, ...(c.preview.rest ? [c.preview.rest.src] : [])]);
+    expect(urls.length).toBeGreaterThan(cards.length);
+    for (const url of [...urls, ...stills.map(thumbOf)]) expect(url).toMatch(/^\/previews\/[^?]+\?v=[0-9a-f]{8}$/);
     // Every peak in the list has its file, and every file is in the list; a peak starts inside its clip's last second.
     const peakDir = path.join(root, "public", "previews", "presets", "peak");
     const files = (dir: string) => fs.readdirSync(dir).filter((f) => f.endsWith(".jpg")).map((f) => f.replace(/\.jpg$/, "")).sort();

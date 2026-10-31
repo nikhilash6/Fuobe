@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,13 +12,29 @@ const covers = (await import("../scripts/eval/lib/covers.mjs")) as unknown as {
   coversFromMasters: (dir: string, opts: Record<string, unknown>) => { covers: Cover[]; skipped: { id: string; why: string }[] };
   readManifest: (file: string) => Record<string, Entry>;
   writeManifest: (entries: Record<string, Entry>, file: string) => void;
+  withVersions: (entries: Record<string, Entry>, publicDir: string) => Record<string, Entry>;
+  versionCovers: (opts: { publicDir?: string; manifest?: string; dryRun?: boolean }) => { entries: number; urls: number; changed: number; unversioned: string[] };
   seamless: (frames: Buffer[], fade: number) => Buffer[];
   loopsAlready: (frames: Buffer[], luma: number) => boolean;
 };
-const { coversFromMasters, loopsAlready, readManifest, seamless, writeManifest } = covers;
+const { coversFromMasters, loopsAlready, readManifest, seamless, versionCovers, withVersions, writeManifest } = covers;
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-covers-masters-"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+/** A content version as the covers spell it: the first 8 hex digits of the sha256 of these files, one after another. */
+const sha8 = (...files: string[]) => {
+  const hash = createHash("sha256");
+  for (const f of files) hash.update(fs.readFileSync(f));
+  return hash.digest("hex").slice(0, 8);
+};
+/** A cover URL at that path with any version. */
+const versioned = (url: string) => expect.stringMatching(new RegExp(`^${url.replaceAll(".", "\\.")}\\?v=[0-9a-f]{8}$`));
+/** The slim covers map written next to a manifest. */
+const readSlim = (manifest: string) => {
+  const text = fs.readFileSync(path.join(path.dirname(manifest), "preset-covers.generated.ts"), "utf8");
+  return { text, slim: JSON.parse(text.slice(text.indexOf("=", text.indexOf("export const PRESET_COVERS")) + 1).trim().replace(/;\s*$/, "")) };
+};
 
 const hasFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
 const SAMPLES = path.join(process.cwd(), "public", "samples");
@@ -76,9 +93,16 @@ describe("covers from masters", () => {
     expect(r.covers).toHaveLength(2);
     const m = readManifest(manifest);
     expect(Object.keys(m)).toEqual(["app-headshot-generator", "effect-set-on-fire", "effect-thunder-god"]);
+    // Its files aren't in this public folder, so its URLs get no version.
     expect(m["effect-thunder-god"]).toEqual(measured);
-    expect(m["app-headshot-generator"]).toEqual({ poster: "/previews/presets/app-headshot-generator.jpg", run: "comfyui-previews-test", engine: "comfyui", model: "krea2-realism", variant: "lean-json" });
-    expect(m["effect-set-on-fire"]).toEqual({ poster: "/previews/presets/effect-set-on-fire.jpg", video: "/previews/presets/effect-set-on-fire.mp4", run: "comfyui-previews-test", engine: "comfyui", model: "minimax-h3", variant: "lean-json" });
+    expect(m["app-headshot-generator"]).toEqual({ poster: versioned("/previews/presets/app-headshot-generator.jpg"), run: "comfyui-previews-test", engine: "comfyui", model: "krea2-realism", variant: "lean-json" });
+    expect(m["effect-set-on-fire"]).toEqual({ poster: versioned("/previews/presets/effect-set-on-fire.jpg"), video: versioned("/previews/presets/effect-set-on-fire.mp4"), run: "comfyui-previews-test", engine: "comfyui", model: "minimax-h3", variant: "lean-json" });
+    // Each URL's version is its file's, made after the small copies: a poster's with its small copy's, a clip's its own.
+    const fire = m["effect-set-on-fire"];
+    expect(fire.poster).toBe(`/previews/presets/effect-set-on-fire.jpg?v=${sha8(path.join(out, "effect-set-on-fire.jpg"), path.join(out, "thumbs", "effect-set-on-fire.jpg"))}`);
+    expect(fire.video).toBe(`/previews/presets/effect-set-on-fire.mp4?v=${sha8(path.join(out, "effect-set-on-fire.mp4"))}`);
+    expect(r.covers.find((c) => c.key === "effect-set-on-fire")).toMatchObject({ poster: fire.poster, video: fire.video });
+    expect(readSlim(manifest).slim["effect-set-on-fire"]).toEqual([fire.poster.split("=")[1], fire.video!.split("=")[1]]);
     // Still: at most 768 px; clip: at most 512 px and 4 s, no audio.
     const probe = (f: string) => JSON.parse(spawnSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type,width,height:format=duration", "-of", "json", path.join(out, f)], { encoding: "utf8" }).stdout);
     const s = probe("app-headshot-generator.jpg").streams[0];
@@ -111,11 +135,13 @@ describe("covers from masters", () => {
     fs.copyFileSync(still(), path.join(masters, "effect-set-on-fire", "start.png"));
     const only = coversFromMasters(masters, { ...PROVENANCE, publicDir: pub, manifest, only: ["effect-set-on-fire"] });
     expect(only.covers.map((c) => c.key)).toEqual(["effect-set-on-fire"]);
-    expect(readManifest(manifest)["effect-set-on-fire"]).toEqual({ poster: "/previews/presets/effect-set-on-fire.jpg", run: "comfyui-previews-test", engine: "comfyui", model: "ideogram4", variant: "lean-json" });
+    expect(readManifest(manifest)["effect-set-on-fire"]).toEqual({ poster: versioned("/previews/presets/effect-set-on-fire.jpg"), run: "comfyui-previews-test", engine: "comfyui", model: "ideogram4", variant: "lean-json" });
     expect(fs.existsSync(path.join(out, "effect-set-on-fire.mp4"))).toBe(false);
     expect(readManifest(manifest)["effect-thunder-god"]).toEqual(measured);
-    // Its new poster gets a new small copy.
+    // Its new poster gets a new small copy, and both a new URL; the other cover keeps its own.
     expect(thumbTime()).toBeGreaterThan(thumbAt);
+    expect(readManifest(manifest)["effect-set-on-fire"].poster).not.toBe(fire.poster);
+    expect(readManifest(manifest)["app-headshot-generator"].poster).toBe(m["app-headshot-generator"].poster);
 
     // A master for a preset whose cover a measured run made: kept, and listed, unless --replace.
     const dop = path.join(pub, "previews", "dop");
@@ -128,7 +154,7 @@ describe("covers from masters", () => {
     expect(readManifest(manifest)["effect-thunder-god"]).toEqual(measured);
     const replaced = coversFromMasters(masters, { ...PROVENANCE, publicDir: pub, manifest, only: ["effect-thunder-god"], replace: true });
     expect(replaced.covers.map((c) => c.key)).toEqual(["effect-thunder-god"]);
-    expect(readManifest(manifest)["effect-thunder-god"]).toMatchObject({ poster: "/previews/presets/effect-thunder-god.jpg", run: "comfyui-previews-test" });
+    expect(readManifest(manifest)["effect-thunder-god"]).toMatchObject({ poster: versioned("/previews/presets/effect-thunder-god.jpg"), run: "comfyui-previews-test" });
     // The replaced cover's files go, its poster's small copy too.
     expect(fs.readdirSync(dop, { recursive: true, encoding: "utf8" }).filter((f) => /\.(jpg|mp4)$/.test(f))).toEqual([]);
     expect(fs.existsSync(path.join(out, "thumbs", "effect-thunder-god.jpg"))).toBe(true);
@@ -144,22 +170,112 @@ describe("covers from masters", () => {
     expect(() => coversFromMasters(masters, { ...PROVENANCE, dryRun: true, manifest: broken })).toThrow(/isn't a covers manifest/);
   });
 
-  it("writes the slim covers map the pickers read next to the manifest: 1 for a clip, 0 for a still, files kept elsewhere in full", () => {
+  it("writes the slim covers map the pickers read next to the manifest: the versions of a cover at the usual place, others in full", () => {
     const manifest = path.join(dir, "slim", "manifest.ts");
-    const elsewhere = { poster: "/previews/dop/effect-thunder-god.jpg", video: "/previews/dop/effect-thunder-god.mp4", run: "r1", engine: "open", model: "m", variant: "v" };
+    const elsewhere = { poster: "/previews/dop/effect-thunder-god.jpg?v=0123abcd", video: "/previews/dop/effect-thunder-god.mp4?v=4567ef01", run: "r1", engine: "open", model: "m", variant: "v" };
     writeManifest(
       {
-        "motion-zoom-in": { poster: "/previews/presets/motion-zoom-in.jpg", video: "/previews/presets/motion-zoom-in.mp4", run: "r", engine: "comfyui", model: "m", variant: "v" },
+        "motion-zoom-in": { poster: "/previews/presets/motion-zoom-in.jpg?v=aaaa1111", video: "/previews/presets/motion-zoom-in.mp4?v=bbbb2222", run: "r", engine: "comfyui", model: "m", variant: "v" },
         "effect-thunder-god": elsewhere,
-        "app-headshot-generator": { poster: "/previews/presets/app-headshot-generator.jpg", run: "r", engine: "comfyui", model: "m", variant: "v" },
+        "app-headshot-generator": { poster: "/previews/presets/app-headshot-generator.jpg?v=cccc3333", run: "r", engine: "comfyui", model: "m", variant: "v" },
+        // Not versioned (its file was missing): listed in full, so the pickers never make up a version.
+        "app-unversioned": { poster: "/previews/presets/app-unversioned.jpg", run: "r", engine: "comfyui", model: "m", variant: "v" },
       },
       manifest,
     );
-    const text = fs.readFileSync(path.join(dir, "slim", "preset-covers.generated.ts"), "utf8");
+    const { text, slim } = readSlim(manifest);
     expect(text).not.toMatch(/"run"|"engine"|"model"|"variant"/);
-    const slim = JSON.parse(text.slice(text.indexOf("=", text.indexOf("export const PRESET_COVERS")) + 1).trim().replace(/;\s*$/, ""));
-    expect(slim).toEqual({ "app-headshot-generator": 0, "effect-thunder-god": { poster: elsewhere.poster, video: elsewhere.video }, "motion-zoom-in": 1 });
-    expect(Object.keys(slim)).toEqual(["app-headshot-generator", "effect-thunder-god", "motion-zoom-in"]);
+    expect(slim).toEqual({
+      "app-headshot-generator": "cccc3333",
+      "app-unversioned": { poster: "/previews/presets/app-unversioned.jpg" },
+      "effect-thunder-god": { poster: elsewhere.poster, video: elsewhere.video },
+      "motion-zoom-in": ["aaaa1111", "bbbb2222"],
+    });
+    expect(Object.keys(slim)).toEqual(["app-headshot-generator", "app-unversioned", "effect-thunder-god", "motion-zoom-in"]);
+  });
+
+  it("versions each URL from its file's bytes: a file that changes gets a new version, the others keep theirs", () => {
+    const pub = path.join(dir, "versions-public");
+    const presets = path.join(pub, "previews", "presets");
+    const put = (f: string, bytes: string) => {
+      fs.mkdirSync(path.dirname(path.join(presets, f)), { recursive: true });
+      fs.writeFileSync(path.join(presets, f), bytes);
+    };
+    put("motion-zoom-in.jpg", "poster");
+    put("thumbs/motion-zoom-in.jpg", "small poster");
+    put("motion-zoom-in.mp4", "clip");
+    put("app-relight.jpg", "still");
+    const meta = { run: "r", engine: "comfyui", model: "m", variant: "v" };
+    const entries = {
+      "motion-zoom-in": { poster: "/previews/presets/motion-zoom-in.jpg", video: "/previews/presets/motion-zoom-in.mp4", ...meta },
+      // A still without its small copy yet: versioned by the still alone.
+      "app-relight": { poster: "/previews/presets/app-relight.jpg?v=00000000", ...meta },
+      // A file that isn't there loses the version it had; a URL outside /previews is left as it is.
+      "app-gone": { poster: "/previews/presets/app-gone.jpg?v=12345678", ...meta },
+      "app-elsewhere": { poster: "/samples/previews/portrait.svg", ...meta },
+    };
+    const at = (f: string) => path.join(presets, f);
+    const first = withVersions(entries, pub);
+    expect(first["motion-zoom-in"]).toEqual({
+      ...entries["motion-zoom-in"],
+      poster: `/previews/presets/motion-zoom-in.jpg?v=${sha8(at("motion-zoom-in.jpg"), at("thumbs/motion-zoom-in.jpg"))}`,
+      video: `/previews/presets/motion-zoom-in.mp4?v=${sha8(at("motion-zoom-in.mp4"))}`,
+    });
+    expect(first["app-relight"].poster).toBe(`/previews/presets/app-relight.jpg?v=${sha8(at("app-relight.jpg"))}`);
+    expect(first["app-gone"].poster).toBe("/previews/presets/app-gone.jpg");
+    expect(first["app-elsewhere"].poster).toBe("/samples/previews/portrait.svg");
+    // Versioned again, nothing changes: the version is the bytes', not the time's.
+    expect(withVersions(first, pub)).toEqual(first);
+
+    // The clip made again: its URL changes, the poster's stays.
+    put("motion-zoom-in.mp4", "clip, made again");
+    const clipAgain = withVersions(first, pub)["motion-zoom-in"];
+    expect(clipAgain.video).not.toBe(first["motion-zoom-in"].video);
+    expect(clipAgain.poster).toBe(first["motion-zoom-in"].poster);
+    // The small copy made again: the poster's URL changes with it (thumbOf keeps the poster's version).
+    put("thumbs/motion-zoom-in.jpg", "small poster, made again");
+    const thumbAgain = withVersions(first, pub)["motion-zoom-in"];
+    expect(thumbAgain.poster).not.toBe(first["motion-zoom-in"].poster);
+    expect(thumbAgain.video).toBe(clipAgain.video);
+    // The same bytes back: the same version as before.
+    put("motion-zoom-in.mp4", "clip");
+    put("thumbs/motion-zoom-in.jpg", "small poster");
+    expect(withVersions(first, pub)["motion-zoom-in"]).toEqual(first["motion-zoom-in"]);
+  });
+
+  it("versions the manifest from the files as they are, without encoding or touching them (--versions)", () => {
+    const pub = path.join(dir, "restamp-public");
+    const presets = path.join(pub, "previews", "presets");
+    fs.mkdirSync(path.join(presets, "thumbs"), { recursive: true });
+    for (const [f, bytes] of [["app-relight.jpg", "a"], ["thumbs/app-relight.jpg", "b"], ["effect-flame-on.jpg", "c"], ["thumbs/effect-flame-on.jpg", "d"], ["effect-flame-on.mp4", "e"]]) fs.writeFileSync(path.join(presets, f), bytes);
+    const manifest = path.join(dir, "restamp", "manifest.ts");
+    const meta = { run: "r", engine: "comfyui", model: "m", variant: "v" };
+    writeManifest(
+      {
+        "app-relight": { poster: "/previews/presets/app-relight.jpg", ...meta },
+        "effect-flame-on": { poster: "/previews/presets/effect-flame-on.jpg", video: "/previews/presets/effect-flame-on.mp4", ...meta },
+        "app-missing": { poster: "/previews/presets/app-missing.jpg", ...meta },
+      },
+      manifest,
+    );
+    const media = () => fs.readdirSync(presets, { recursive: true, encoding: "utf8" }).map((f) => [f, fs.statSync(path.join(presets, f)).mtimeMs]);
+    const was = media();
+    const unwritten = fs.readFileSync(manifest, "utf8");
+
+    expect(versionCovers({ publicDir: pub, manifest, dryRun: true })).toMatchObject({ entries: 3, urls: 4, changed: 3, unversioned: ["/previews/presets/app-missing.jpg"] });
+    expect(fs.readFileSync(manifest, "utf8")).toBe(unwritten);
+    expect(versionCovers({ publicDir: pub, manifest })).toMatchObject({ changed: 3 });
+    const m = readManifest(manifest);
+    expect(m["app-relight"].poster).toBe(`/previews/presets/app-relight.jpg?v=${sha8(path.join(presets, "app-relight.jpg"), path.join(presets, "thumbs", "app-relight.jpg"))}`);
+    expect(m["effect-flame-on"].video).toBe(`/previews/presets/effect-flame-on.mp4?v=${sha8(path.join(presets, "effect-flame-on.mp4"))}`);
+    expect(readSlim(manifest).slim).toEqual({
+      "app-missing": { poster: "/previews/presets/app-missing.jpg" },
+      "app-relight": m["app-relight"].poster.split("=")[1],
+      "effect-flame-on": [m["effect-flame-on"].poster.split("=")[1], m["effect-flame-on"].video!.split("=")[1]],
+    });
+    // The media is as it was; a second run finds nothing to change.
+    expect(media()).toEqual(was);
+    expect(versionCovers({ publicDir: pub, manifest })).toMatchObject({ changed: 0 });
   });
 
   it("makes a clip loop without a jump: its last frames fade into its first, which it then starts after (unless it loops already)", () => {

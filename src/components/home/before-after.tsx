@@ -10,6 +10,8 @@ export interface BeforeAfterPair {
   name: string;
   before: string;
   after: string;
+  /** The before's 320 px copy (thumbOf, with the before's version), on its tab. */
+  thumb: string;
   /** What each side shows: "Sketch", "Photo". */
   tags: string[];
   /** How much both pictures are enlarged, so an edge in the source never shows. */
@@ -235,7 +237,7 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
                   name fits whole. The sketch's paper edge is cropped as in the picture. */}
               <span className="hidden shrink-0 overflow-hidden rounded-md sm:block sm:h-[42px] sm:w-14 xl:h-10 xl:w-full">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/previews/presets/thumbs/${p.id}.jpg`} alt="" width={56} height={42} loading="lazy" decoding="async" className="size-full object-cover" style={{ scale: p.zoom }} />
+                <img src={p.thumb} alt="" width={56} height={42} loading="lazy" decoding="async" className="size-full object-cover" style={{ scale: p.zoom }} />
               </span>
               <span className="truncate leading-tight xl:text-center">{p.name}</span>
             </button>

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -5,7 +6,7 @@ import nextConfig from "../next.config";
 import { APPS, EFFECTS, MOTIONS } from "@/lib/catalog";
 import { SOUL_LOOK_CARDS } from "@/lib/catalog/soul-looks.generated";
 import { toPresetCard } from "@/lib/preset-card-data";
-import { isCover } from "@/lib/preset-cards";
+import { isCover, onPeak } from "@/lib/preset-cards";
 import { presetCover, thumbOf } from "@/lib/preset-covers";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
@@ -19,6 +20,16 @@ import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
 
 const root = process.cwd();
 const entries = Object.entries(PRESET_PREVIEWS);
+/** A cover URL as the site gives it: its file's path, then its content version. */
+const VERSIONED = /^(\/previews\/[^?]+)\?v=([0-9a-f]{8})$/;
+/** A cover URL's file in public/ (without its version). */
+const fileOf = (url: string) => path.join(root, "public", url.split("?")[0]);
+/** What the generators version a URL by: the first 8 hex digits of the sha256 of its files, one after another. */
+const versionOf = (...files: string[]) => {
+  const hash = createHash("sha256");
+  for (const f of files) hash.update(fs.readFileSync(f));
+  return hash.digest("hex").slice(0, 8);
+};
 
 describe("the preset covers manifest", () => {
   it("lists catalog presets (or Soul looks) only, in the order the generator writes them", () => {
@@ -30,18 +41,31 @@ describe("the preset covers manifest", () => {
 
   it("points every entry at a JPEG poster (and an MP4 clip) that exists and isn't empty, with its provenance", () => {
     for (const [id, e] of entries) {
-      expect(e.poster, id).toMatch(/^\/previews\/[a-z0-9-]+\/[^/]+\.jpg$/);
-      if (e.video !== undefined) expect(e.video, id).toMatch(/^\/previews\/[a-z0-9-]+\/[^/]+\.mp4$/);
+      expect(e.poster, id).toMatch(/^\/previews\/[a-z0-9-]+\/[^/?]+\.jpg\?v=[0-9a-f]{8}$/);
+      if (e.video !== undefined) expect(e.video, id).toMatch(/^\/previews\/[a-z0-9-]+\/[^/?]+\.mp4\?v=[0-9a-f]{8}$/);
       for (const url of [e.poster, e.video].filter((u): u is string => !!u)) {
-        expect(fs.statSync(path.join(root, "public", url), { throwIfNoEntry: false })?.size, url).toBeGreaterThan(0);
+        expect(fs.statSync(fileOf(url), { throwIfNoEntry: false })?.size, url).toBeGreaterThan(0);
       }
       expect(typeof e.run === "string" && e.run.length > 0, `${id} names its run`).toBe(true);
       expect(typeof e.engine === "string" && e.engine.length > 0, `${id} names its engine`).toBe(true);
     }
   });
 
+  // A file made again under its old name gets a new URL only when its version is made again too (pnpm eval:covers and
+  // gen-preset-peaks do it, and their --versions on its own): a manifest left behind by its files fails here.
+  it("versions every URL from its files as they are now: a poster with its small copy, a clip, a peak frame with its small copy", () => {
+    for (const [id, e] of entries) {
+      expect(e.poster.split("?")[1], id).toBe(`v=${versionOf(fileOf(e.poster), fileOf(thumbOf(e.poster)))}`);
+      if (e.video) expect(e.video.split("?")[1], id).toBe(`v=${versionOf(fileOf(e.video))}`);
+    }
+    for (const [id, { v }] of Object.entries(PRESET_PEAKS)) {
+      const still = `/previews/presets/peak/${id}.jpg`;
+      expect(v, id).toBe(versionOf(fileOf(still), fileOf(thumbOf(still))));
+    }
+  });
+
   it("leaves no cover file in public/previews that no entry names (with its poster's small copy for the pickers, and its clip's peak frame and its small copy for Home)", () => {
-    const named = new Set(entries.flatMap(([, e]) => [e.poster, thumbOf(e.poster), e.video].filter(Boolean)));
+    const named = new Set(entries.flatMap(([, e]) => [e.poster, thumbOf(e.poster), e.video].filter((u): u is string => !!u).map((u) => u.split("?")[0])));
     for (const id of Object.keys(PRESET_PEAKS)) for (const f of [`/previews/presets/peak/${id}.jpg`, thumbOf(`/previews/presets/peak/${id}.jpg`)]) named.add(f);
     const dir = path.join(root, "public", "previews");
     const files = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(jpg|mp4)$/.test(f)) : [];
@@ -49,8 +73,8 @@ describe("the preset covers manifest", () => {
     expect(orphans).toEqual([]);
   });
 
-  // Every one of the 255 effects is getting a hover clip (about 50 bytes of card data each), so the budget is
-  // sized for all of them, not for today's count.
+  // Every one of the 255 effects is getting a hover clip (about 60 bytes of card data each, with its version), so the
+  // budget is sized for all of them, not for today's count: about 97 KB then, of which the versions are 5.6 KB.
   it("shows each cover on its card, and keeps the effects gallery's card data under 100 KB with them", () => {
     for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) {
       const c = toPresetCard(p);
@@ -59,6 +83,20 @@ describe("the preset covers manifest", () => {
       if (e) expect([c.preview.poster, c.preview.video], p.id).toEqual([e.poster, e.video]);
     }
     expect(JSON.stringify(EFFECTS.map(toPresetCard)).length).toBeLessThan(100_000);
+  });
+
+  it("versions every cover URL a gallery card, the preset header or a picker shows, and each small copy's", () => {
+    const urls = (value: unknown) => [...JSON.stringify(value).matchAll(/"(\/previews\/[^"]*)"/g)].map((m) => m[1]);
+    const presets = [...APPS, ...MOTIONS, ...EFFECTS];
+    // The preset header rests on its clip's peak frame (onPeak); a gallery card is the same card without it.
+    const cards = presets.map((p) => onPeak(toPresetCard(p)));
+    const shown = [
+      ...urls(cards),
+      ...cards.flatMap((c) => (isCover(c.preview) ? [thumbOf(c.preview.poster), ...(c.preview.rest ? [thumbOf(c.preview.rest.src)] : [])] : [])),
+      ...urls(presets.map((p) => presetCover(p.id))),
+    ];
+    expect(shown.length).toBeGreaterThan(entries.length * 3);
+    for (const url of shown) expect(url).toMatch(VERSIONED);
   });
 
   it("gives the pickers every cover through the slim map, with the same files, and nothing else", () => {
@@ -93,9 +131,9 @@ describe("the preset covers manifest", () => {
       "lib/home-showcase.ts",
     ]);
     expect(fs.readFileSync(path.join(root, "src", "lib", "home-showcase.ts"), "utf8")).toMatch(/^import "server-only";$/m);
-    // The slim map (which presets have a cover, and a clip: a few KB) is for the pickers, each in its own chunk: the
-    // camera motion and Mix pickers (next/dynamic in composer.tsx) and Cinema Studio's moves (next/dynamic in
-    // camera-moves.tsx, loaded when the "#" picker or the Director panel's Movement tab shows them).
+    // The slim map (which presets have a cover, and a clip, with their versions: about 8 KB gzipped) is for the pickers,
+    // each in its own chunk: the camera motion and Mix pickers (next/dynamic in composer.tsx) and Cinema Studio's moves
+    // (next/dynamic in camera-moves.tsx, loaded when the "#" picker or the Director panel's Movement tab shows them).
     expect(importers(/from "[^"]*preset-covers\.generated"/)).toEqual(["lib/preset-covers.ts"]);
     // (A type is no code: the cover tile takes a cover without importing the map.)
     expect(importers(/^import (?!type )[^;]*from "[^"]*preset-covers";/m)).toEqual(["components/cinema/move-list.tsx", "components/studio/preset-chips.tsx"]);
@@ -108,8 +146,16 @@ describe("the preset covers manifest", () => {
     expect(header).toMatch(/dynamic\(\(\) => import\("@\/components\/preset-header"\)/);
   });
 
-  it("serves the covers with a day's cache, revalidated in the background (their names stay when a cover is made again)", async () => {
-    const rules = await nextConfig.headers!();
-    expect(rules).toContainEqual({ source: "/previews/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] });
+  it("serves a versioned cover for a year, never revalidated, and one asked for without its version for a day", async () => {
+    const rules = (await nextConfig.headers!()).filter((r) => r.source === "/previews/:path*");
+    const version = { type: "query", key: "v", value: "[0-9a-f]{8}" };
+    expect(rules).toEqual([
+      { source: "/previews/:path*", has: [version], headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      { source: "/previews/:path*", missing: [version], headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
+    ]);
+    // Next matches a has or missing value whole (^…$), so the two rules never both apply, and every version takes the first.
+    const whole = new RegExp(`^${version.value}$`);
+    for (const [, e] of entries) expect(VERSIONED.exec(e.poster)?.[2]).toMatch(whole);
+    for (const v of ["", "1234567", "123456789", "ABCDEF12", "abcdefg1"]) expect(v).not.toMatch(whole);
   });
 });

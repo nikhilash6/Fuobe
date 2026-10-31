@@ -69,12 +69,12 @@ describe("the camera motion picker", () => {
   it("never borrows another move's cover: Dolly Zoom Out shows its own, not Dolly Zoom In's opposite move", () => {
     const t = tile(motion("motion-dolly-zoom-out"));
     expect(t).not.toContain("motion-dolly-zoom-in");
-    expect(t).toContain('src="/previews/presets/thumbs/motion-dolly-zoom-out.jpg"');
+    expect(t).toMatch(/src="\/previews\/presets\/thumbs\/motion-dolly-zoom-out\.jpg\?v=[0-9a-f]{8}"/);
   });
 
   it("shows 3D Rotation with its own turntable cover, not the 3D Rotation app's it showed before it had one", () => {
     const t = tile(motion("motion-3d-rotation"));
-    expect(t).toContain('src="/previews/presets/thumbs/motion-3d-rotation.jpg"');
+    expect(t).toMatch(/src="\/previews\/presets\/thumbs\/motion-3d-rotation\.jpg\?v=[0-9a-f]{8}"/);
     expect(t).not.toContain("app-3d-rotation");
     expect(t).not.toContain("linear-gradient");
   });
@@ -118,7 +118,8 @@ function jpegSize(buf: Buffer): { width: number; height: number } {
 
 describe("the pickers' small posters", () => {
   const pub = path.join(process.cwd(), "public");
-  const file = (url: string) => path.join(pub, ...url.split("/").filter(Boolean));
+  /** A cover URL's file, without its version (?v=). */
+  const file = (url: string) => path.join(pub, ...url.split("?")[0].split("/").filter(Boolean));
 
   it("are each poster at most 320 px wide, in thumbs/ next to it, a fraction of its size", () => {
     let total = 0;
@@ -228,7 +229,7 @@ describe("Cinema Studio's camera moves", () => {
       else expect(moveCover(m), m.slug).toEqual(presetCover(m.motionId));
     }
     // Pedestal Up rises like Jib Up, whose clip it shows.
-    expect(moveCover(CAMERA_MOVES.find((m) => m.slug === "pedestal-up")!)?.poster).toBe("/previews/presets/motion-jib-up.jpg");
+    expect(moveCover(CAMERA_MOVES.find((m) => m.slug === "pedestal-up")!)?.poster).toMatch(/^\/previews\/presets\/motion-jib-up\.jpg\?v=[0-9a-f]{8}$/);
     expect(CAMERA_MOVES.filter((m) => moveCover(m)).length).toBeGreaterThan(30);
   });
 

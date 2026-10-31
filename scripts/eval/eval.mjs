@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { loadSuite, suiteFiles, validateAll } from "./lib/cases.mjs";
 import { compareRuns, compareText, promote, promoteText, researchRecords } from "./lib/compare.mjs";
-import { coversFromMasters, makeCovers } from "./lib/covers.mjs";
+import { coversFromMasters, makeCovers, versionCovers } from "./lib/covers.mjs";
 import { scoreRun } from "./lib/metrics.mjs";
 import { METRICS_DIR, REPO_DIR, resultsDir } from "./lib/paths.mjs";
 import { RECIPES_FILE } from "./lib/recipes.mjs";
@@ -78,7 +78,13 @@ pnpm eval:covers --from-masters <dir> --run <name> [--engine comfyui] [--model <
   --model (--video-model for clips) and --variant; a folder's meta.json can name its own model and variant.
   The manifest is merged: other entries stay, and an id whose cover another run made elsewhere (a measured
   cover) is skipped (--replace takes it over). Run again, it encodes only new or changed masters (--force: all).
-  Clips loop without a jump: their last frames are crossfaded into their first ones.`,
+  Clips loop without a jump: their last frames are crossfaded into their first ones.
+
+pnpm eval:covers --versions [--dry-run] [--public-dir public] [--manifest …]
+
+  Every URL in the manifest ends in its file's content version (?v=, 8 hex digits of its sha256; a poster's also
+  covers its small copy in thumbs/), so a cover made again gets a new URL. Both commands above write them; this
+  one versions the manifest from the files as they are, hashing only (nothing is encoded).`,
   history: "pnpm eval:history [--suite soul] [--case soul/v1-general] [--limit 20]",
   validate: "pnpm eval:validate [suite files…]   checks every case file and that the generated suites match the research",
   trash: "pnpm eval:trash <runId> [--dry-run]   moves the run's generations to that Fuobe's Trash (its results here stay)",
@@ -435,11 +441,13 @@ async function covers(args, ctx) {
       only: { type: "string" },
       force: { type: "boolean" },
       replace: { type: "boolean" },
+      versions: { type: "boolean" },
     },
     { positionals: true },
   );
   if (v.help) return ctx.print(HELP.covers), 0;
   if (v["from-masters"]) return coversFromMastersCmd(v, ctx);
+  if (v.versions) return versionsCmd(v, ctx);
   const { dir } = resolveRun(root(v, ctx.env), positionals[0] ?? "latest");
   const r = makeCovers(dir, { variant: v.variant, dryRun: v["dry-run"], publicDir: v["public-dir"] && path.resolve(v["public-dir"]), manifest: v.manifest && path.resolve(v.manifest), commercialOnly: v["commercial-only"] });
   if (v.json) return ctx.print(JSON.stringify(r, null, 2)), 0;
@@ -449,6 +457,17 @@ async function covers(args, ctx) {
   if (r.skipped.length > 10) ctx.print(`  · and ${r.skipped.length - 10} more`);
   if (r.covers.length && !v["dry-run"]) ctx.note(`Look at the media in ${path.relative(REPO_DIR, r.folder) || r.folder} and the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest} before committing them.`);
   return 0;
+}
+
+/** pnpm eval:covers --versions: the manifest's URLs versioned from the files as they are, without encoding anything. */
+function versionsCmd(v, ctx) {
+  const r = versionCovers({ dryRun: v["dry-run"], publicDir: v["public-dir"] && path.resolve(v["public-dir"]), manifest: v.manifest && path.resolve(v.manifest) });
+  if (v.json) return ctx.print(JSON.stringify(r, null, 2)), 0;
+  ctx.print(`${r.changed} of ${r.urls} cover URLs in ${r.entries} entries ${v["dry-run"] ? "would get" : "got"} a new version`);
+  for (const u of r.unversioned.slice(0, 10)) ctx.print(`  · ${u}: no file, so no version`);
+  if (r.unversioned.length > 10) ctx.print(`  · and ${r.unversioned.length - 10} more`);
+  if (r.changed && !v["dry-run"]) ctx.note(`Look at the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest} before committing it.`);
+  return r.unversioned.length ? 1 : 0;
 }
 
 /** pnpm eval:covers --from-masters <dir>: covers from rendered masters, merged into the manifest. */

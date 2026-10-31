@@ -405,13 +405,17 @@ export function proceduralPreview(p: Pick<Preset, "id" | "type" | "name" | "cate
  */
 export const isCover = (p: Pick<PresetPreview, "move" | "fx">) => !p.move && !p.fx;
 
-/** A poster's 320 px copy: thumbs/ next to it (pnpm eval:covers makes the covers' own, gen-preset-peaks the peaks'). */
+/**
+ * A poster's 320 px copy: thumbs/ next to it (pnpm eval:covers makes the covers' own, gen-preset-peaks the peaks'),
+ * with the poster's version (?v=), which the generators hash from both files.
+ */
 export const thumbOf = (poster: string) => poster.replace(/\/([^/]+)$/, "/thumbs/$1");
 
 /** The card resting on its clip's peak frame (preset-peaks.generated.ts) when it has one, else as it is. */
 export function onPeak(card: PresetCardData): PresetCardData {
   const peak = PRESET_PEAKS[card.id];
-  return peak ? { ...card, preview: { ...card.preview, rest: { src: `/previews/presets/peak/${card.id}.jpg`, ...peak } } } : card;
+  if (!peak) return card;
+  return { ...card, preview: { ...card.preview, rest: { src: `/previews/presets/peak/${card.id}.jpg?v=${peak.v}`, at: peak.at, from: peak.from } } };
 }
 
 /**

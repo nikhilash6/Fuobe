@@ -18,7 +18,7 @@ import { buildLicenceList } from "@/lib/licences";
 import { modelHref } from "@/lib/palette-index";
 import { cacheLife } from "next/cache";
 import { toPresetCard } from "@/lib/preset-card-data";
-import { onPeak, type PresetCardData } from "@/lib/preset-cards";
+import { onPeak, thumbOf, type PresetCardData } from "@/lib/preset-cards";
 
 /**
  * The wall under the composer: the first pictures a visitor sees, each with what it does, in a line that fits a
@@ -293,7 +293,7 @@ export async function homeShowcase() {
     reveals: HOME_REVEALS.map(captioned),
     beforeAfter: HOME_BEFORE_AFTER.map(({ id, tags, zoom }) => {
       const card = homeCard(id);
-      return { id, name: card.name, before: card.preview.poster, after: card.preview.rest?.src ?? card.preview.poster, tags: [...tags], zoom, href: presetHref(id) };
+      return { id, name: card.name, before: card.preview.poster, after: card.preview.rest?.src ?? card.preview.poster, thumb: thumbOf(card.preview.poster), tags: [...tags], zoom, href: presetHref(id) };
     }),
     studios: HOME_STUDIOS.map((s) => ({ href: s.href, label: navLabel(s.href), line: s.line(facts), card: s.id ? homeCard(s.id) : undefined })),
     audioTools: audioTools(),

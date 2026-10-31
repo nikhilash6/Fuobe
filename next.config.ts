@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+/** A cover URL's content version (?v=, scripts/eval/lib/covers.mjs): Next matches the value whole. */
+const COVER_VERSION = { type: "query" as const, key: "v", value: "[0-9a-f]{8}" };
+
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
@@ -33,8 +36,12 @@ const nextConfig: NextConfig = {
       // Vendored scripts (public/vendor: the 3D viewer's meshopt decoder) keep their name across upgrades:
       // a day, then revalidated in the background.
       { source: "/vendor/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
-      // Preset covers (public/previews, pnpm eval:covers) keep their name when a cover is made again: the same.
-      { source: "/previews/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
+      // Preset covers (public/previews, pnpm eval:covers) keep their name when a cover is made again, but every URL the
+      // site gives them ends in the file's content version (?v=, 8 hex digits of its sha256, from the generated
+      // manifests): a changed file gets a new URL, so a versioned one is kept for a year and never revalidated. One
+      // asked for without its version (a link from elsewhere) keeps a day's cache, revalidated in the background.
+      { source: "/previews/:path*", has: [COVER_VERSION], headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      { source: "/previews/:path*", missing: [COVER_VERSION], headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
     ];
   },
   async redirects() {

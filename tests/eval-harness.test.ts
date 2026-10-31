@@ -716,7 +716,15 @@ describe("report, blind review, compare and promote", () => {
     const r = await covers(["fake-dop-covers"]);
     expect(r.code, r.stderr).toBe(0);
     const entry = (await import("../scripts/eval/lib/covers.mjs")).readManifest(manifest)["effect-thunder-god"];
-    expect(entry).toEqual({ poster: "/previews/soul/effect-thunder-god.jpg", video: "/previews/soul/effect-thunder-god.mp4", run: "fake-dop-covers", engine: "open", model: "", variant: "research" });
+    // Each URL ends in its file's content version, so a cover made again gets a new URL.
+    expect(entry).toEqual({
+      poster: expect.stringMatching(/^\/previews\/soul\/effect-thunder-god\.jpg\?v=[0-9a-f]{8}$/),
+      video: expect.stringMatching(/^\/previews\/soul\/effect-thunder-god\.mp4\?v=[0-9a-f]{8}$/),
+      run: "fake-dop-covers",
+      engine: "open",
+      model: "",
+      variant: "research",
+    });
     const probe = JSON.parse(spawnSync("ffprobe", ["-v", "error", "-show_entries", "stream=width,height:format=duration", "-of", "json", path.join(out, "effect-thunder-god.mp4")], { encoding: "utf8" }).stdout);
     expect(Math.max(probe.streams[0].width, probe.streams[0].height)).toBeLessThanOrEqual(512);
     expect(Number(probe.format.duration)).toBeLessThanOrEqual(4.1);

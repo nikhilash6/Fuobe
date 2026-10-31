@@ -37,10 +37,14 @@ page.on("request", (r) => {
   if (u.pathname.startsWith("/previews/") && u.pathname.endsWith(".mp4")) clips.push(u.pathname);
 });
 
-/** The clips in an open popover: which file, whether it plays, how far in. */
+/** The clips in an open popover: which file (without its version, ?v=), whether it plays, how far in. */
 const videos = () =>
   page.evaluate(() =>
-    [...document.querySelectorAll("[data-radix-popper-content-wrapper] video")].map((v) => ({ file: (v.getAttribute("src") ?? "").split("/").pop(), playing: !v.paused, t: v.currentTime })),
+    [...document.querySelectorAll("[data-radix-popper-content-wrapper] video")].map((v) => ({
+      file: (v.getAttribute("src") ?? "").split("?")[0].split("/").pop(),
+      playing: !v.paused,
+      t: v.currentTime,
+    })),
   );
 const until = async (fn, ms) => {
   for (const end = Date.now() + ms; ; await page.waitForTimeout(40)) {

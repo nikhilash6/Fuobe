@@ -462,6 +462,14 @@ presets have a cover and a clip: the pickers (camera motions, Mix, Cinema Studio
 the browser. Their tiles show each poster's small copy (320 px wide) from `thumbs/` next to it, which
 every run makes where it's missing or older than its poster.
 
+Every URL in both files ends in its file's content version: `?v=` and the first 8 hex digits of the
+sha256 of its bytes (a poster's with its small copy's, whose URL keeps the poster's version). So a
+cover made again under its old name gets a new URL, and the site serves versioned covers for a year
+(`next.config.ts`). Each run versions the whole manifest after making its files.
+`pnpm eval:covers --versions` does only that: it hashes the files as they are and encodes nothing
+(`--dry-run` says how many URLs would change). `node scripts/gen-preset-peaks.mjs` versions Home's
+peak frames the same way (`--versions` alone does only that).
+
 - `--variant catalog` takes that variant's renders for every case instead, such as what ships today.
 - `--dry-run` lists what it would pick.
 - Only Fuobe's own renders become covers: a demo run never does. A render whose LoRAs aren't commercial

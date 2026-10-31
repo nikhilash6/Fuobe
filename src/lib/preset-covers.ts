@@ -1,7 +1,8 @@
 /**
  * A preset's real cover for the pickers (camera motions, effects, Mix, Cinema Studio's moves): the same still and
- * clip its gallery card shows. Reads the slim covers map (preset-covers.generated.ts: which presets have a cover,
- * and a clip), never the manifest with its provenance (preset-previews.generated.ts), so client code can import it.
+ * clip its gallery card shows, at the same versioned URLs (?v=). Reads the slim covers map (preset-covers.generated.ts:
+ * which presets have a cover, and a clip, and their versions), never the manifest with its provenance
+ * (preset-previews.generated.ts), so client code can import it.
  * Keep it to the pickers' own chunks all the same: tests/preset-covers.test.ts checks the importers.
  */
 import type { CameraMove } from "./catalog/cinema";
@@ -30,8 +31,10 @@ export function presetCover(id: string | undefined): PresetCover | undefined {
   if (!id) return undefined;
   if (!Object.hasOwn(PRESET_COVERS, id)) return Object.hasOwn(SAME_SHOT, id) ? presetCover(SAME_SHOT[id]) : undefined;
   const c = PRESET_COVERS[id];
+  // A cover at the usual place is listed by its versions alone: the poster's (which its small copy shares), and the clip's.
   const base = `/previews/presets/${id}`;
-  const { poster, video } = typeof c === "object" ? c : { poster: `${base}.jpg`, video: c ? `${base}.mp4` : undefined };
+  const { poster, video } =
+    typeof c === "string" ? { poster: `${base}.jpg?v=${c}`, video: undefined } : Array.isArray(c) ? { poster: `${base}.jpg?v=${c[0]}`, video: `${base}.mp4?v=${c[1]}` } : c;
   return { poster, thumb: thumbOf(poster), ...(video && { video }) };
 }
 
