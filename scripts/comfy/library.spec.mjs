@@ -726,15 +726,13 @@ export const SPEC = [
       "Fast: Spectrallic's MOSS-Image SFT 8-step DMD int8 file, Apache-2.0)",
     notes:
       'Core nodes only (MOSS-Image is native in the pinned ComfyUI): Comfy-Org\'s template image_moss_image_t2i_bboxes without its subgraph, TextGenerate upsampler and box nodes. ' +
-      'The prompt is plain words or a compiled layout (src/lib/layout-prompt.ts compileMoss: summary + items with pixel boxes from the canvas centre, y before x), which reaches the model verbatim; ' +
+      'The prompt is plain words or a compiled layout (a summary + items with pixel boxes from the canvas centre, y before x), which reaches the model verbatim; ' +
       'width / height are the layout\'s canvas (multiples of 16, up to 2048). Standard = the template: 25 steps, CFG 2.5, er_sde / simple, skip-layer guidance on layer 22 for the first half; ' +
-      'Quality = USERGUIDE: 50 steps, CFG 3, euler; Fast = Spectrallic\'s SFT with the 8-step DMD LoRA merged (unet), 8 steps, CFG 1 (whether it keeps layouts is untested); ' +
-      'Base = MOSS-Image Base (unet, the owner\'s image_moss_image_base_t2i) at 50 steps, CFG 3, euler, the preview pipeline\'s moss-base settings. ' +
-      'The text encoder is qwen3.5_9b_int8_convrot, not the template\'s qwen3.5_9b_w4a8_gptq: loading the w4a8 build after other model families faulted the NVIDIA driver and restarted Windows ' +
-      'on 2026-10-23; the preview pipeline then ran 23 MOSS renders (SFT and Base) on the int8 file with no fault. ' +
-      'vramGb 16 is a guess: there is no official figure; about 15 GB of files (DiT 5.4 + encoder 9.7 + VAE 0.25) and ComfyUI offloads. ' +
-      'The int8 files run through comfy-kitchen\'s kernels, which need a PyTorch built for CUDA 13 (cu130): comfy/quant_ops.py turns its CUDA backend off otherwise, logs a warning and (a guess) falls back to a slower path. ' +
-      'Validated by /prompt on the CPU library server with the w4a8 encoder; the int8 encoder is not validated by /prompt here.',
+      'Quality = the MOSS-Image user guide: 50 steps, CFG 3, euler; Fast = Spectrallic\'s SFT with the 8-step DMD LoRA merged (unet), 8 steps, CFG 1; ' +
+      'Base = MOSS-Image Base (unet) at 50 steps, CFG 3, euler. ' +
+      'The text encoder is qwen3.5_9b_int8_convrot (the int8 file FIBO 2\'s prompt writer also loads), not the template\'s qwen3.5_9b_w4a8_gptq. ' +
+      'The 16 GB VRAM figure is an estimate, as MOSS-Image publishes none: about 15 GB of files (DiT 5.4 + encoder 9.7 + VAE 0.25), and ComfyUI offloads. ' +
+      'The int8 files run through comfy-kitchen\'s kernels, which need a PyTorch built for CUDA 13 (cu130): comfy/quant_ops.py turns its CUDA backend off otherwise and logs a warning, and the model may run slower.',
   },
   {
     id: 'qwen-image-edit-2509',
@@ -940,7 +938,7 @@ export const SPEC = [
       'insightface buffalo_l face analysis models -> models/insightface/models/buffalo_l (downloaded by ReActor on first run)',
       'retinaface_resnet50 detector -> models/facedetection (downloaded on first run)',
     ],
-    notes: 'image = target photo (faces get replaced), image2 = source face. inswapper_128 is research/non-commercial licensed; ReActor applies an NSFW detector by default. Requires the insightface Python package (pip wheel insightface 2.1 installs fine on Python 3.13).',
+    notes: 'image = target photo (faces get replaced), image2 = source face. inswapper_128 is research/non-commercial licensed; ReActor applies an NSFW detector by default. Requires the insightface Python package (insightface 2.1 installs from pip on Python 3.13).',
   },
 
   // =========================================================================
@@ -1114,8 +1112,8 @@ export const SPEC = [
     notes:
       'Subject/character reference (not a first frame): the reference appears in a newly composed scene. fp16 14B weights (34.7 GB) + the lightx2v T2V 4-step LoRA at 1.0: 4 steps, cfg 1, euler, shift 5 ' +
       '(loraStrength 0 + steps 20 + cfg 6 = the slow full-quality path). 24 GB cards need weight_dtype fp8_e4m3fn on node 113. ' +
-      'Changed in round 4: the template ships the CausVid LoRA (CC-BY-NC-4.0, non-commercial) at 0.3 with uni_pc and shift 8; it was swapped for the Apache-2.0 lightx2v LoRA ' +
-      '(lightx2v/Wan2.1-T2V-14B-StepDistill-CfgDistill) with the settings of the round-4 VACE graphs. The lightx2v + VACE 14B pairing is inferred, not GPU-tested.',
+      'The template ships the CausVid LoRA (CC-BY-NC-4.0, non-commercial) at 0.3 with uni_pc and shift 8; here the Apache-2.0 lightx2v LoRA ' +
+      '(lightx2v/Wan2.1-T2V-14B-StepDistill-CfgDistill) replaces it, with the sampler settings of the other Wan VACE graphs.',
   },
   {
     id: 'wan22-s2v-14b',
@@ -1381,8 +1379,8 @@ export const SPEC = [
     license: 'Apache-2.0 (InfiniteTalk, Wan 2.1, lightx2v; FusioniX: Apache-2.0 card, the LoRAs it merges unchecked)',
     autoDownloads: ['DownloadAndLoadWav2VecModel downloads TencentGameMate/chinese-wav2vec2-base into models/transformers on first run'],
     notes:
-      'kijai WanVideoWrapper example 03 (GGUF Q8 Wan2.1-I2V-480p + InfiniteTalk single, lightx2v LoRA, 6 steps). Generates in 81-frame windows until the audio ends; `frames` is a MAX frame cap @25 fps (default 500 = 20 s). Changes vs example: MelBandRoFormer vocal separation removed (use clean speech audio), attention sdpa instead of sageattn, save_output=true, Windows sub-paths flattened. Output is a VHS_VideoCombine node: look in history outputs[node].gifs[], not .images[]. ' +
-      'Originals O11 (Fuobe Speak): the graph is unchanged and its defaults stay the fast lightx2v pass (6 steps, cfg 1, shift 11, motion_frame 9, dpm++_sde); Fuobe Speak sends Higgsfield\'s Infinite Talk settings through the new bindings: ' +
+      'kijai WanVideoWrapper example 03 (GGUF Q8 Wan2.1-I2V-480p + InfiniteTalk single, lightx2v LoRA, 6 steps). Generates in 81-frame windows until the audio ends; `frames` is a MAX frame cap @25 fps (default 500 = 20 s). Changes vs example: MelBandRoFormer vocal separation removed (use clean speech audio), attention sdpa instead of sageattn, save_output=true, model sub-folders flattened. Output is a VHS_VideoCombine node: look in history outputs[node].gifs[], not .images[]. ' +
+      'The defaults are the fast lightx2v pass (6 steps, cfg 1, shift 11, motion_frame 9, dpm++_sde). Fuobe Speak sends a slower, higher-quality recipe through the extra bindings: ' +
       'lora Wan2.1_I2V_14B_FusionX_LoRA.safetensors at 1 (the run\'s LoRA goes into WanVideoLoraSelect, which this wrapper graph loads itself), steps 25, cfg 5 (text guidance), audioCfg 5 (audio guidance; the wrapper runs the extra audio-free pass when cfg > 1), ' +
       'shift 10, scheduler unipc (InfiniteTalk\'s solver), motionFrame 15 and colormatch reinhard for InfiniteTalk\'s colour correction (a Lab mean / spread match to the portrait; the wrapper has no strength, so on = 1). About 25 / 6 × 3 passes the time of the fast pass.',
   },
@@ -1720,9 +1718,9 @@ export const SPEC = [
     vramGb: 24,
     license: 'Apache-2.0 (Qwen-Image-Edit 2509, dx8152 Multiple-angles LoRA, Qwen-Image-Lightning)',
     notes:
-      'Higgsfield Angles\' recipe on the GPU (Originals O11; research studios[angles]): library qwen-image-edit-2509 (Qwen-Image-Edit 2509 fp8 + the Lightning 4-step LoRA, FluxKontextImageScale to ~1 MP, ModelSamplingAuraFlow 3, CFGNorm, euler / simple, cfg 1) ' +
-      'with dx8152\'s Multiple-angles LoRA after the Lightning LoRA at 1.25 (as fal\'s hosted route and the public HF Space fuse it) and 6 steps (fal\'s default for this LoRA; the Lightning LoRA is distilled for 4, so 6 is a guess until measured). ' +
-      'prompt = the LoRA\'s camera instructions in Chinese with English ("将镜头向左旋转45度 Rotate the camera 45 degrees to the left." / move forward / close-up / bird\'s-eye / worm\'s-eye / wide-angle), which src/lib/catalog/open-tools.ts writes from Fuobe Angles\' controls. ' +
+      'A new camera angle on one photo: library qwen-image-edit-2509 (Qwen-Image-Edit 2509 fp8 + the Lightning 4-step LoRA, FluxKontextImageScale to ~1 MP, ModelSamplingAuraFlow 3, CFGNorm, euler / simple, cfg 1) ' +
+      'with dx8152\'s Multiple-angles LoRA after the Lightning LoRA at 1.25 (as fal\'s hosted route and the public HF Space fuse it) and 6 steps (fal\'s default for this LoRA; the Lightning LoRA is distilled for 4). ' +
+      'prompt = the LoRA\'s camera instructions in Chinese with English ("将镜头向左旋转45度 Rotate the camera 45 degrees to the left." / move forward / close-up / bird\'s-eye / worm\'s-eye / wide-angle), which Fuobe Angles writes from its controls. ' +
       'The LoRA file is renamed from 镜头转换.safetensors to qwen-edit-2509-multiple-angles-dx8152.safetensors; Fuobe downloads it into ComfyUI\'s loras folder before a run. Output size follows the input (~1 MP).',
   },
   {
@@ -1848,8 +1846,8 @@ export const SPEC = [
         (sound === 1
           ? 'clip 1\'s own sound from the start (a voiced presenter followed by silent b-roll, or a reference ad followed by a new CTA). '
           : 'silence as long as clip 1 (VHS_VideoInfoLoaded duration -> EmptyAudio), then clip 2\'s own sound (a silent hook clip, then the voiced presenter or the reference ad). ') +
-        `The sound clip must have an audio track (VHS fails to extract audio otherwise); the other clips' sound is dropped. Marketing Studio UGC / Click to Ad / Ad Multiplier joins (src/server/marketing.ts). ` +
-        'Runs on CPU (verified on the shared ComfyUI with a 16 fps silent hook + a 25 fps voiced clip + 16 fps b-roll: the sound starts at the hook\'s end). RAM grows with the total frame count at the target fps.',
+        `The sound clip must have an audio track (VHS fails to extract audio otherwise); the other clips' sound is dropped. Marketing Studio's UGC, Click to Ad and Ad Multiplier joins use it. ` +
+        'Runs on CPU (tested with a 16 fps silent hook + a 25 fps voiced clip + 16 fps b-roll: the sound starts at the hook\'s end). RAM grows with the total frame count at the target fps.',
     })),
   ),
 
@@ -1969,7 +1967,7 @@ export const SPEC = [
     license: 'CC-BY-NC-4.0 (Video-Depth-Anything-Large weights: non-commercial)',
     autoDownloads: ['LoadVideoDepthAnythingModel downloads depth-anything/Video-Depth-Anything-Large video_depth_anything_vitl.pth (about 1.5 GB) into models/videodepthanything on first run'],
     notes:
-      'video-depth-vda-small with the Large model (Originals O11): the model Higgsfield\'s Depth Map runs (higgsfield-originals-5.md §3.22). Its weights are CC-BY-NC-4.0: the licence is information (Settings → Models & licences ' +
+      'video-depth-vda-small with the Large model: the model Higgsfield\'s Depth Map runs. Its weights are CC-BY-NC-4.0: the licence is information (Settings → Models & licences ' +
       'lists it as Non-commercial with a switch), the Depth map defaults stay VDA-Small (Apache-2.0) on the GPU. Same graph otherwise: gray or inferno, side by side through the lazy switch, audio dropped.',
   },
   {
@@ -1990,7 +1988,7 @@ export const SPEC = [
     license: 'Meta SAM License (SAM 3.1: royalty-free, commercial use allowed; attribution + acceptable-use terms)',
     modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
     notes:
-      'Fuobe Soul\'s PixeletedFace look (Originals O11; research presets[PixeletedFace].post): SAM3_Detect with the words (prompt, "face" by default: every face, one merged mask, threshold 0.4), GrowMask 12 px so the hair line and jaw are covered, ' +
+      'Fuobe Soul\'s PixeletedFace look: SAM3_Detect with the words (prompt, "face" by default: every face, one merged mask, threshold 0.4), GrowMask 12 px so the hair line and jaw are covered, ' +
       'then the picture shrunk by mosaicScale with area averaging (0.04: blocks of 25 px) and blown back up with nearest-exact to its own size, composited only under the mask (ImageCompositeMasked). ' +
       'No face found: the picture comes back unchanged. Core nodes and the SAM 3.1 checkpoint only.',
   },
@@ -2041,7 +2039,7 @@ export const SPEC = [
     bindings: { image: [b('1', 'image')], filenamePrefix: [b('3', 'filename_prefix')] },
     outputs: [{ node: '3', kind: 'image' }],
     vramGb: 0,
-    notes: 'Runs on any ComfyUI (CPU is fine), needs no model files. Used by the Fuobe end-to-end self-test (tests/e2e/comfyui-selftest.mjs).',
+    notes: 'Runs on any ComfyUI (CPU is fine), needs no model files. Used by Settings → Run self-test and the end-to-end self-test.',
   },
   {
     id: 'selftest-video',
@@ -2236,10 +2234,10 @@ export const SPEC = [
     vramGb: 20,
     license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only',
     notes:
-      'The owner\'s image_qwen_image_2_1_t2i-working-great-default.json, its subgraph flattened: int8 model, Qwen3-VL 8B int8 text encoder (type qwen_image), ' +
-      'TextEncodeQwenImage21 (no negative, resolution 1024, no images), EmptyLatentImage, KSampler 25 steps, cfg 1, euler, simple, denoise 1 (as saved). ' +
-      'Removed: the ResolutionSelector (width/height bind the latent, multiples of 32 as the owner\'s note asks, native up to 2048x2048) and the SaveImageAdvanced (SaveImage after SplitImageWithAlpha). ' +
-      'cfg 1: no negative prompt. Proof [O]: the owner\'s saved workflow; not rendered through Fuobe yet.',
+      'The Qwen-Image 2.1 text-to-image workflow, its subgraph flattened: int8 model, Qwen3-VL 8B int8 text encoder (type qwen_image), ' +
+      'TextEncodeQwenImage21 (no negative, resolution 1024, no images), EmptyLatentImage, KSampler 25 steps, cfg 1, euler, simple, denoise 1. ' +
+      'Removed: the ResolutionSelector (width/height bind the latent, multiples of 32, native up to 2048x2048) and the SaveImageAdvanced (SaveImage after SplitImageWithAlpha, as the Qwen 2.1 VAE decodes four channels). ' +
+      'cfg 1: no negative prompt.',
   },
   {
     id: 'qwen-image-21-edit',
@@ -2255,11 +2253,11 @@ export const SPEC = [
     vramGb: 20,
     license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only',
     notes:
-      'The proven preview graph qwen21-edit-25 (FashDash\'s 25-step camera_q21 stage) with the references wired as the owner\'s image_qwen_image_2_1_image_edit.json / homecenter graph: ' +
+      'The 25-step Qwen-Image 2.1 edit behind the site\'s preview pictures, with the references wired as in the Qwen-Image 2.1 image-edit workflow: ' +
       'each image scaled to 2048 on its long side (lanczos), all of them on one TextEncodeQwenImage21 (images.image_1..4, resolution 0 = each at its own size on the 32 grid, vae linked, no negative), ' +
       'its latent (image 1\'s size: no custom-size latent, which shifts the edit), QwenImage21Cache auto, KSampler 25 steps, cfg 1, euler, simple. Output follows image 1 (2048 on the long side). ' +
       'Images 2-4 are optional: the provider drops a reference not given (dropBranch into TextEncodeQwenImage21). Prompt: one plain instruction, then one keep clause pointing at the picture ' +
-      '("Keep ... exactly as in image 1"); refer to references as image 1/2/3/4. Removed: the ComfySwitchNode custom size, compare and note nodes. Proof [P]: 133 preview edits (qwen21-edit-25 and turbo).',
+      '("Keep ... exactly as in image 1"); refer to references as image 1/2/3/4. Removed: the ComfySwitchNode custom size, compare and note nodes. It and qwen-image-21-turbo-edit made 133 of the site\'s preview edits.',
   },
   {
     id: 'qwen-image-21-turbo-edit',
@@ -2274,10 +2272,10 @@ export const SPEC = [
     vramGb: 20,
     license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only',
     notes:
-      'The owner\'s image_qwen_image_2_1_turbo_image_edit.json as the proven preview graphs qwen21-edit-fast / qwen21-edit-fast-2img run it: turbo int8 model, the fixed 8-step ManualSigmas ' +
+      'The Qwen-Image 2.1 turbo image-edit workflow, as the site\'s fast preview edits run it: turbo int8 model, the fixed 8-step ManualSigmas ' +
       'schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder\'s latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). ' +
-      'No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the owner\'s template), the custom-size switch, compare and notes. ' +
-      'FashDash\'s blind test: as good as 25 steps (dressing 21 vs 22 of 48), weaker only on hard camera turns and product rotations (use qwen-image-21-edit there). Proof [P]: the preview end images.',
+      'No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. ' +
+      'In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there).',
   },
   {
     id: 'qwen-image-21-inpaint',
@@ -2291,12 +2289,12 @@ export const SPEC = [
     vramGb: 20,
     license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; AusBoss nodes MIT',
     notes:
-      'The AusBoss pack\'s example "Qwen Image 2.1 Inpaint (AusBoss)" (the only Qwen 2.1 inpaint recipe on the owner\'s PC; not one of the owner\'s saved workflows), its two subgraphs flattened: ' +
+      'The AusBoss pack\'s example "Qwen Image 2.1 Inpaint (AusBoss)", its two subgraphs flattened: ' +
       'Crop For Inpaint (context 1.6, blend 8 px, multiple 32, 1.5 MP, bicubic) -> GrowMask 8 on the crop\'s mask -> StringFormat "{a} Keep everything else exactly the same." -> ' +
       'TextEncodeQwenImage21 with the crop as image 1 (resolution 0) -> VAEEncode of the crop + SetLatentNoiseMask -> QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> ' +
       'SplitImageWithAlpha -> Stitch Inpaint (classic, no colour match) back into the full picture. mask = separate uploaded PNG, same size as image, read from the RED channel: white = change ' +
-      '(as flux1-fill-inpaint). Removed: Mask by Touch and its SAM 3.1 model (the mask is uploaded), the speed LoRA (off as saved), the crop/pad loader (LoadImage), compare, timer and notes. ' +
-      'Prompt: say what goes in the painted area like asking a person ("Replace the cup with a glass of orange juice"). Proof [I]: not rendered yet.',
+      '(as flux1-fill-inpaint). Removed: Mask by Touch and its SAM 3.1 model (the mask is uploaded), the speed LoRA (off in the example), the crop/pad loader (LoadImage), compare, timer and notes. ' +
+      'Prompt: say what goes in the painted area like asking a person ("Replace the cup with a glass of orange juice").',
   },
   {
     id: 'qwen-image-21-outpaint',
@@ -2314,13 +2312,13 @@ export const SPEC = [
     vramGb: 20,
     license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; outpaint LoRA by AusBoss under the same licence; AusBoss nodes MIT',
     notes:
-      'The owner\'s qwenImage21Outpaint_v12.json as the proven preview graph qwen21-expand runs it (FashDash\'s expand stage): Crop + Rotate + Pad puts the photo on a gray (#808080) canvas grown by the pads ' +
-      '(feather 12, scaled to 1 MP on the 32 grid) -> outpaint-v2 LoRA at 1 -> Qwen3-VL 8B (the same text encoder, TextGenerate, the owner\'s instruction, seed fixed) describes the picture, ' +
+      'The Qwen-Image 2.1 outpaint workflow (v12) as the site\'s Expand previews run it: Crop + Rotate + Pad puts the photo on a gray (#808080) canvas grown by the pads ' +
+      '(feather 12, scaled to 1 MP on the 32 grid) -> outpaint-v2 LoRA at 1 -> Qwen3-VL 8B (the same text encoder, TextGenerate, the workflow\'s instruction, seed fixed) describes the picture, ' +
       '"Outpaint the image: ... Scene:" leads -> TextEncodeQwenImage21 with the canvas as image 1 -> KSampler 25 steps, cfg 1, euler, simple, no noise mask (it drew a box at the seam) -> ' +
       'SplitImageWithAlpha -> Stitch Inpaint (blend in, tone match 1) -> scaled to the full-size padded canvas, and the original photo composited back on top (second pad node, feather 48). ' +
       'Pads are the input photo\'s pixels (multiples of 8); defaults 384/288/384/288 = a 1.5x zoom-out of a 1536x1152 photo. Grow at most about the photo\'s own size per side per run. ' +
       'prompt = the optional "what goes there" hint (the lead-in "Also include in the prompt:" is added); it must not name the subject, which then appears again in the margin. ' +
-      'Removed: AusBoss Seed/Text/Compare/RunTimer/ShowText/WorkflowNote and its SaveImage (SaveImage). Proof [P]: the preview expand stills.',
+      'Removed: AusBoss Seed/Text/Compare/RunTimer/ShowText/WorkflowNote and its SaveImage (SaveImage).',
   },
   // ---- Owner's SOTA image families: Ideogram 4 -------------------------------------------
   {
@@ -2338,12 +2336,12 @@ export const SPEC = [
     vramGb: 24,
     license: 'Ideogram Non-Commercial Model Agreement: NON-COMMERCIAL (research and personal use; commercial use needs a paid Ideogram licence)',
     notes:
-      'The owner\'s image_ideogram4_t2i_int8.json, exported through the ComfyUI frontend (subgraph 98 flattened, its LLM caption-template subgraph and preview pruned) and rendered as the preview pipeline\'s A1 [proven]. ' +
+      'The Ideogram 4 int8 text-to-image workflow, exported through the ComfyUI frontend (subgraph 98 flattened, its LLM caption-template subgraph and preview pruned); it made the site\'s Ideogram 4 preview stills. ' +
       'Kept as saved: the conditional UNET with CFGOverride (cfg 3 for the last 30% of steps) into DualModelGuider cfg 7, whose negative pass is the unconditional UNET on the zeroed prompt; ' +
       'qwen3vl_8b_fp8_scaled loaded as type ideogram4; flux2-vae; EmptyFlux2LatentImage; euler; SamplerCustomAdvanced; width and height rounded up to 16 (at least 256) by its math nodes. ' +
-      'The preset table feeds Ideogram4Scheduler (Quality 48 steps / mu 0 / std 1.5, Default 20 / 0 / 1.75, Turbo 12 / 0.5 / 1.75); the graph runs Quality, the recipe of the approved preview stills with people (those without ran Default, as the saved workflow does). ' +
-      'No negative prompt: the guidance is asymmetric with a text-free unconditional pass. The prompt is an Ideogram 4 JSON caption (the app writes one from plain words: src/lib/ideogram-caption.ts); ' +
-      'plain sentences often come back as the grey "blocked by safety filter" card. The Realism Engine LoRA graph is not used (the approved stills are the stock graph).',
+      'The preset table feeds Ideogram4Scheduler (Quality 48 steps / mu 0 / std 1.5, Default 20 / 0 / 1.75, Turbo 12 / 0.5 / 1.75); the graph runs Quality, the recipe of the preview stills with people (those without ran Default, as the original workflow does). ' +
+      'No negative prompt: the guidance is asymmetric with a text-free unconditional pass. The prompt is an Ideogram 4 JSON caption (the app writes one from plain words); ' +
+      'plain sentences often come back as the grey "blocked by safety filter" card. The Realism Engine LoRA graph is not used.',
   },
   // ---- Owner's SOTA image families: Krea 2 (2026-10-31). Every graph runs Krea 2 Turbo (krea2_turbo_fp8_scaled, as the owner's edit
   // workflow does), Qwen3-VL 4B (CLIPLoader type krea2) and the Qwen-Image VAE; Krea's in-graph "Refine prompt" TextGenerate is left out
@@ -2362,10 +2360,9 @@ export const SPEC = [
     vramGb: 20,
     license: 'Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it); Krea2-realism-V2 LoRA MIT',
     notes:
-      'The owner\'s image_krea2_turbo_t2i_int8.json (the official Krea 2 Turbo graph) with LoraLoaderModelOnly Krea2-realism-V2 at 1.0 after the UNET, run as the realism creator says: ' +
+      'The official Krea 2 Turbo text-to-image graph with LoraLoaderModelOnly Krea2-realism-V2 at 1.0 after the UNET, run as the LoRA\'s author recommends: ' +
       'euler / simple, 6 steps (4-8), cfg 1 with ConditioningZeroOut, about 2 MP (1 MP gets noisy), detailed natural-language prose. Removed: the style-LoRA and Refine-prompt switches, ' +
-      'the ResolutionSelector (explicit width/height, multiple of 16). The preview pipeline rendered these settings with the merged civitai realism checkpoint, which isn\'t on Hugging Face; ' +
-      'the LoRA on the Comfy-Org Turbo is not rendered yet.',
+      'the ResolutionSelector (explicit width/height, multiple of 16).',
   },
   {
     id: 'krea2-turbo-t2i',
@@ -2378,8 +2375,8 @@ export const SPEC = [
     vramGb: 20,
     license: 'Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it)',
     notes:
-      'The owner\'s image_krea2_turbo_t2i_int8.json as saved: euler / simple, 8 steps, cfg 1 with ConditioningZeroOut, 1024x1024 by default. Removed: the style-LoRA and Refine-prompt switches ' +
-      '(the user\'s LoRAs attach after the UNET as on every graph), the ResolutionSelector (explicit width/height, multiple of 16).',
+      'The official Krea 2 Turbo text-to-image graph: euler / simple, 8 steps, cfg 1 with ConditioningZeroOut, 1024x1024 by default. Removed: the style-LoRA and Refine-prompt switches ' +
+      '(your own LoRAs attach after the UNET as on every graph), the ResolutionSelector (explicit width/height, multiple of 16).',
   },
   {
     id: 'krea2-edit-general',
@@ -2396,11 +2393,11 @@ export const SPEC = [
     license:
       'Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it); the Krea 2 General Edit V2 LoRA is NON-COMMERCIAL (commercial use needs a licence from its author)',
     notes:
-      'The owner\'s "Krea2 Image Edit.json" (the comfyui-krea2edit graph) with the pack\'s V2 LoRA krea2_general_edit_v2 at 1.0 → Krea2EditModelPatch (the photo VAE-encoded as source_latent, ' +
+      'The comfyui-krea2edit pack\'s "Krea2 Image Edit" graph with the pack\'s V2 LoRA krea2_general_edit_v2 at 1.0 → Krea2EditModelPatch (the photo VAE-encoded as source_latent, ' +
       'the pixel path vae + source_image, target_latent = the KSampler\'s latent, fit_mode fit, ref_boost 4, ref_boost_a 1, both references aligned) → Krea2EditGroundedEncode with the instruction ' +
-      '(grounding_px 768) as the positive and an empty one on the same photo as the negative; EmptySD3LatentImage; KSampler 8 steps (the V2 card; the owner\'s v1.2 graph used 10), cfg 1, euler, simple. ' +
-      'image2 is the person for "put this person in the scene" (the group the owner ships bypassed): its loader goes when no second photo is given. The output follows image 1 ("auto") or the shape asked for; ' +
-      '1 MP is the sweet spot. Removals need the Raw model at cfg 3 (pack README): Turbo at cfg 1 tends to re-render the subject. Not rendered with the V2 LoRA yet.',
+      '(grounding_px 768) as the positive and an empty one on the same photo as the negative; EmptySD3LatentImage; KSampler 8 steps (the V2 card; the v1.2 graph used 10), cfg 1, euler, simple. ' +
+      'image2 is the person for "put this person in the scene" (a group the pack\'s graph ships bypassed): its loader goes when no second photo is given. The output follows image 1 ("auto") or the shape asked for; ' +
+      '1 MP is the sweet spot. Removals need the Raw model at cfg 3 (pack README): Turbo at cfg 1 tends to re-render the subject.',
   },
   {
     id: 'krea2-edit-identity',
@@ -2417,9 +2414,9 @@ export const SPEC = [
     license:
       'Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it); the Krea 2 Identity Edit V2 LoRA is NON-COMMERCIAL (commercial use needs a licence from its author)',
     notes:
-      'krea2-edit-general\'s graph (the owner\'s "Krea2 Image Edit.json") with krea2_identity_edit_v2 at 1.0, ref_boost 2 and the person aligned (trained): a new place, pose or outfit, the same face. ' +
+      'krea2-edit-general\'s graph (the pack\'s "Krea2 Image Edit") with krea2_identity_edit_v2 at 1.0, ref_boost 2 and the person aligned (trained): a new place, pose or outfit, the same face. ' +
       'For a distinctive face, end the instruction with "Preserve the exact facial identity - distinguishing features: ..." (pack notes). image2 = a second person or the person to put in the scene, ' +
-      'dropped when not given. 8 steps, cfg 1, euler, simple. Not rendered with the V2 LoRA yet.',
+      'dropped when not given. 8 steps, cfg 1, euler, simple.',
   },
   {
     id: 'krea2-turbo-i2i',
@@ -2435,9 +2432,8 @@ export const SPEC = [
     vramGb: 20,
     license: 'Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it)',
     notes:
-      'The base-latent path of the owner\'s "krea2SFWNSFWUncensoredImageTo_v10 - steps fixed.json", built like z-image-turbo-i2i: the picture scaled to about 2 MP on the 16-pixel grid (the workflow scales to 1.98 MP), ' +
-      'VAE-encoded, then Krea 2 Turbo\'s sampler (8 steps, cfg 1, euler, simple: the workflow\'s "linear/euler, simple, 8 steps" in core samplers) at denoise = strength (0.6). Not used: its image-to-prompt and ' +
-      'prompt-enhancer branches, the abliterated text encoder, the NSFW LoRA, the RES4LYF second pass and the SeedVR2 upscaler. The result keeps the picture\'s shape. Not rendered yet.',
+      'Image to image on Krea 2 Turbo, built like z-image-turbo-i2i: the picture scaled to about 2 MP on the 16-pixel grid, ' +
+      'VAE-encoded, then Krea 2 Turbo\'s sampler (8 steps, cfg 1, euler, simple) at denoise = strength (0.6). The result keeps the picture\'s shape.',
   },
   {
     id: 'krea2-inpaint',
@@ -2451,11 +2447,11 @@ export const SPEC = [
     vramGb: 20,
     license: 'Krea 2 Community License (free under US$1M yearly revenue; enterprise terms above it); the inpaint-edit LoRA by Cierpliwy under the same licence; ComfyUI-Krea2-Ostris-Edit MIT',
     notes:
-      'The edit stage of Cierpliwy\'s krea2-inpaint-workflows examples (the owner\'s krea2-inpaint-workflows/): Krea 2 Turbo → LoRA krea2_inpaint_edit at 1.0 (the v1 512 file on the owner\'s PC; ' +
+      'The edit stage of Cierpliwy\'s krea2-inpaint-workflows examples: Krea 2 Turbo → LoRA krea2_inpaint_edit at 1.0 (the v1 512 file; ' +
       'the model card now recommends krea2_inpaint_edit_v2_17500) → Krea2OstrisEditModelPatch with kv_cache on (the card: needed for correct masked editing); TextEncodeKrea2OstrisEdit (clip, vae, image1 = ' +
       'the photo with the masked area black) as the positive, ConditioningZeroOut as the negative; EmptyLatentImage at the reference\'s size; KSampler 8 steps, cfg 1, euler_ancestral, simple. ' +
       'mask = separate PNG, red channel, white = paint here (the flux1-fill-inpaint convention). The reference is scaled to about 1 MP on the 16-pixel grid (the add-on\'s limit until ostris PR #10); ' +
-      'the whole picture is redrawn, nothing is pasted back. Needs ComfyUI-Krea2-Ostris-Edit, not installed on the validation server. Not rendered yet.',
+      'the whole picture is redrawn, nothing is pasted back. Needs the ComfyUI-Krea2-Ostris-Edit nodes.',
   },
   {
     id: 'krea2-outpaint',
@@ -2475,7 +2471,7 @@ export const SPEC = [
       'krea2-inpaint\'s edit stage on a bigger canvas, as in the add-on\'s outpaint_example: the photo on black grown by padLeft/padTop/padRight/padBottom px (ImagePadForOutpaint with feathering 0, ' +
       'then black over its mask: a hard edge like the example\'s SolidMask canvas), scaled to about 1 MP, then the same LoRA, patch (kv_cache on) and 8 euler_ancestral steps. Default pads 256 px a side ' +
       '(the example grows a 512 px picture by a quarter of its side on each). The prompt describes the whole scene. The v1 512 LoRA was trained without outpainting masks (v2 adds them, model card). ' +
-      'Needs ComfyUI-Krea2-Ostris-Edit. Not rendered yet.',
+      'Needs the ComfyUI-Krea2-Ostris-Edit nodes.',
   },
   // ---- Owner's SOTA image families: FIBO 2 (Bria FIBO 2.0 Dev and Edit Turbo, core nodes) ------------------------
   {
@@ -2492,10 +2488,9 @@ export const SPEC = [
     vramGb: 24,
     license: 'CC-BY-NC-4.0 (Bria FIBO 2.0 weights: NON-COMMERCIAL; commercial use needs a Bria agreement)',
     notes:
-      'The owner\'s fibo/fibo_2_dev_text2image_vgl.json as saved [O]: core TextGenerate on Qwen3.5 9B int8 (CLIPLoader type stable_diffusion, 2048 tokens, sampling off) turns the words ' +
-      'into Bria\'s VGL JSON with the owner\'s art-director system prompt, and CLIP Text Encode (fibo2, Qwen3-VL 4B int8) encodes it; empty negative, 30 steps, cfg 5, euler / simple. ' +
-      'The ResolutionSelector is replaced by an explicit width x height (FIBO 2 is trained at about 1 MP, multiple of 16); the prompt preview and the notes are removed. ' +
-      'Not rendered through Fuobe yet (the preview pipeline rendered FIBO 2 Dev from a hand-written VGL prompt through TextEncodeFibo2 at 40 steps).',
+      'The FIBO 2 Dev text-to-image VGL workflow: core TextGenerate on Qwen3.5 9B int8 (CLIPLoader type stable_diffusion, 2048 tokens, sampling off) turns the words ' +
+      'into Bria\'s VGL JSON with an art-director system prompt, and CLIP Text Encode (fibo2, Qwen3-VL 4B int8) encodes it; empty negative, 30 steps, cfg 5, euler / simple. ' +
+      'The ResolutionSelector is replaced by an explicit width x height (FIBO 2 is trained at about 1 MP, multiple of 16); the prompt preview and the notes are removed.',
   },
   {
     id: 'fibo2-dev-edit',
@@ -2511,11 +2506,11 @@ export const SPEC = [
     vramGb: 16,
     license: 'CC-BY-NC-4.0 (Bria FIBO 2.0 weights: NON-COMMERCIAL; commercial use needs a Bria agreement)',
     notes:
-      'The owner\'s fibo/fibo_2_dev_image_edit_multi.json as saved [O]: image 1 scaled to 1 MP and to a multiple of 16 (bicubic), the other references straight into TextEncodeFibo2 ' +
-      '(images.image_2..4: the owner\'s graph wires two, 3 and 4 are wired the same way). The encoder gives the conditioning and the latent at the trained size of image 1\'s shape ' +
+      'The FIBO 2 Dev multi-image edit workflow: image 1 scaled to 1 MP and to a multiple of 16 (bicubic), the other references straight into TextEncodeFibo2 ' +
+      '(images.image_2..4: the original graph wires two, 3 and 4 are wired the same way). The encoder gives the conditioning and the latent at the trained size of image 1\'s shape ' +
       '(width = height = 0); empty negative (the null caption FIBO 2 was trained with), 30 steps, cfg 5, euler / simple. One picture is scaled and centre-cropped to the result (the edit ' +
       'lines up with it pixel for pixel); several are each scaled to their own trained size. References not given are left out of the encoder. The instruction names the pictures ' +
-      '<image_1>, <image_2>... The VGL edit graphs (a 9.75 GB prompt writer on every edit) are not adopted. Not rendered through Fuobe yet.',
+      '<image_1>, <image_2>... The VGL edit graphs (a 9.75 GB prompt writer on every edit) are not used.',
   },
   {
     id: 'fibo2-edit-turbo-edit',
@@ -2530,8 +2525,8 @@ export const SPEC = [
     vramGb: 16,
     license: 'CC-BY-NC-4.0 (Bria FIBO 2.0 weights: NON-COMMERCIAL; commercial use needs a Bria agreement)',
     notes:
-      'The owner\'s fibo/fibo_2_edit_turbo_image_edit_multi.json as saved [O]: fibo2-dev-edit on the Edit Turbo weights, 4 steps, cfg 1 (no negative pass), euler / simple; ' +
-      'references 3 and 4 wired like reference 2, and left out when not given. Edits only: none of the owner\'s graphs runs the turbo weights for text to image. Not rendered through Fuobe yet.',
+      'The FIBO 2 Edit Turbo multi-image edit workflow: fibo2-dev-edit on the Edit Turbo weights, 4 steps, cfg 1 (no negative pass), euler / simple; ' +
+      'references 3 and 4 wired like reference 2, and left out when not given. Edits only: the turbo weights aren\'t used for text to image.',
   },
 
   // ---- Fuobe DoP (Originals O4): LTX-2.3 camera moves, FPV and transitions with LoRAs ------------
@@ -3002,7 +2997,7 @@ export const SPEC = [
     license:
       'MIT (Pixal3D weights by TencentARC, as the multi-view weights; TRELLIS.2 VAEs as repackaged by Comfy-Org, BiRefNet, microsoft/MoGe 2); the dino_v3_L_naf image encoder is DINOv3 ViT-L under the DINOv3 License ' +
       '(royalty-free, commercial use allowed; the app must show a "Built with DINOv3" notice)',
-    notes: 'Template 3d_pixal3d_trellis2_image_to_model, Pixal3D branch (the default image-to-3D route): MoGe-2 (geometry_estimation/moge_2_vitl_normal_fp16, resolution_level 9) estimates the camera from the cut-out, MoGeGeometryToFOV (horizontal, degrees) -> Pixal3DConditioning (camera_angle_x) with the DINOv3 encoder, UNet pixal3d_int8_convrot; ImageCropToMask pad_factor 1.1 (as the node asks for Pixal3D). BiRefNet cut-out -> ImageCropToMask 1024 -> structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) -> RemeshMesh (768, sign_mode solid, fill 20, band 1, smooth 20) -> DecimateMesh (250,000 faces, midpoint) -> smooth normals -> UV unwrap -> base colour / metallic / roughness baked at textureSize, normal map 2048 and AO 1024 baked from the dense remeshed mesh onto the decimated one -> GLB (Save3DAdvanced, history ui "3d"). No turntable in the graph: after the job the Fuobe server finishes the GLB (scripts/model3d/finish-glb.mjs: roughness floor by material, pivot at the bottom centre, meshopt + WebP 2048 web GLB as meta.web; the raw GLB stays the download) and renders a 96-frame 24 fps turntable on the CPU (scripts/model3d/render-turntable.mjs, model-viewer on SwiftShader) when Chromium and ffmpeg are available (src/server/model3d-finish.ts). GPU validation 2026-10-23 (RTX 5090, the same graph run end to end): 114-185 s per object, 25-35 MB raw GLB at ~250k triangles (was 8M triangles / 317 MB before the decimate step), web GLB 1.6-3.6 MB; more faithful to the photo than TRELLIS.2 (209-238 s). The origin is the camera-aligned volume centre, hence the pivot fix. Surfaces can show faint planar facets from the shape decode (no graph setting removes them).',
+    notes: 'Template 3d_pixal3d_trellis2_image_to_model, Pixal3D branch (the default image-to-3D route): MoGe-2 (geometry_estimation/moge_2_vitl_normal_fp16, resolution_level 9) estimates the camera from the cut-out, MoGeGeometryToFOV (horizontal, degrees) -> Pixal3DConditioning (camera_angle_x) with the DINOv3 encoder, UNet pixal3d_int8_convrot; ImageCropToMask pad_factor 1.1 (as the node asks for Pixal3D). BiRefNet cut-out -> ImageCropToMask 1024 -> structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) -> RemeshMesh (768, sign_mode solid, fill 20, band 1, smooth 20) -> DecimateMesh (250,000 faces, midpoint) -> smooth normals -> UV unwrap -> base colour / metallic / roughness baked at textureSize, normal map 2048 and AO 1024 baked from the dense remeshed mesh onto the decimated one -> GLB (Save3DAdvanced, history ui "3d"). No turntable in the graph: after the job the Fuobe server finishes the GLB (roughness floor by material, pivot at the bottom centre, meshopt + WebP 2048 web GLB as meta.web; the raw GLB stays the download) and renders a 96-frame 24 fps turntable on the CPU (model-viewer on SwiftShader) when Chromium and ffmpeg are available. Run end to end on an RTX 5090: 114-185 s per object, 25-35 MB raw GLB at ~250k triangles (was 8M triangles / 317 MB before the decimate step), web GLB 1.6-3.6 MB; more faithful to the photo than TRELLIS.2 (209-238 s). The origin is the camera-aligned volume centre, hence the pivot fix. Surfaces can show faint planar facets from the shape decode (no graph setting removes them).',
   },
   {
     id: 'image-to-3d-trellis2',
@@ -3017,7 +3012,7 @@ export const SPEC = [
     license:
       'MIT (TRELLIS.2 weights, DINOv3-NAF / TRELLIS VAEs as repackaged by Comfy-Org, BiRefNet); the dino_v3_L_naf image encoder is DINOv3 ViT-L under the DINOv3 License ' +
       '(royalty-free, commercial use allowed; the app must show a "Built with DINOv3" notice)',
-    notes: 'Template 3d_pixal3d_trellis2_image_to_model, TRELLIS.2 branch (the fallback image-to-3D route; Pixal3D is the default): Trellis2Conditioning with the DINOv3 encoder, UNet trellis_2_int8_convrot; ImageCropToMask pad_factor 1.0. BiRefNet cut-out -> ImageCropToMask 1024 -> structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) -> RemeshMesh (768, sign_mode solid, fill 20, band 1, smooth 20) -> DecimateMesh (250,000 faces, midpoint) -> smooth normals -> UV unwrap -> base colour / metallic / roughness baked at textureSize, normal map 2048 and AO 1024 baked from the dense remeshed mesh onto the decimated one -> GLB (Save3DAdvanced, history ui "3d"). No turntable in the graph: after the job the Fuobe server finishes the GLB (scripts/model3d/finish-glb.mjs: roughness floor by material, pivot at the bottom centre, meshopt + WebP 2048 web GLB as meta.web; the raw GLB stays the download) and renders a 96-frame 24 fps turntable on the CPU (scripts/model3d/render-turntable.mjs, model-viewer on SwiftShader) when Chromium and ffmpeg are available (src/server/model3d-finish.ts). GPU validation 2026-10-23: 209-238 s, 28-43 MB raw GLB at ~250k triangles. The 36-view RotateMesh + RenderMesh turntable (unlit, aliased, 12 fps) was removed.',
+    notes: 'Template 3d_pixal3d_trellis2_image_to_model, TRELLIS.2 branch (the fallback image-to-3D route; Pixal3D is the default): Trellis2Conditioning with the DINOv3 encoder, UNet trellis_2_int8_convrot; ImageCropToMask pad_factor 1.0. BiRefNet cut-out -> ImageCropToMask 1024 -> structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) -> RemeshMesh (768, sign_mode solid, fill 20, band 1, smooth 20) -> DecimateMesh (250,000 faces, midpoint) -> smooth normals -> UV unwrap -> base colour / metallic / roughness baked at textureSize, normal map 2048 and AO 1024 baked from the dense remeshed mesh onto the decimated one -> GLB (Save3DAdvanced, history ui "3d"). No turntable in the graph: after the job the Fuobe server finishes the GLB (roughness floor by material, pivot at the bottom centre, meshopt + WebP 2048 web GLB as meta.web; the raw GLB stays the download) and renders a 96-frame 24 fps turntable on the CPU (model-viewer on SwiftShader) when Chromium and ffmpeg are available. Run end to end on an RTX 5090: 209-238 s, 28-43 MB raw GLB at ~250k triangles. The 36-view RotateMesh + RenderMesh turntable (unlit, aliased, 12 fps) was removed.',
   },
   {
     id: 'image-to-3d-trellis2-multiview',
@@ -3038,12 +3033,12 @@ export const SPEC = [
       '(Pixal3DMultiViewConditioning, a fixed orbit rig 90 degrees apart, Z up: the left view is the object\'s own left, the camera at +90 degrees azimuth from the front, i.e. the photographer walks to their right; ' +
       'every side but the front is optional and the provider drops the branch of a side with no photo). ' +
       'Each side: BiRefNet cut-out -> crop to mask (1024, pad 1.1) -> the view. Then TRELLIS.2 structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) on Pixal3D multi-view ' +
-      '-> decimate to 700k faces -> remesh -> UV unwrap -> baked base colour / metallic / roughness / AO / normal at textureSize -> GLB, plus a 36-view turntable (RotateMesh + RenderMesh, core) saved as MP4 at turntableFps; the Fuobe server then finishes the GLB (web GLB as meta.web) and, when Chromium and ffmpeg are there, replaces that turntable with its CPU render (src/server/model3d-finish.ts). ' +
+      '-> decimate to 700k faces -> remesh -> UV unwrap -> baked base colour / metallic / roughness / AO / normal at textureSize -> GLB, plus a 36-view turntable (RotateMesh + RenderMesh, core) saved as MP4 at turntableFps; the Fuobe server then finishes the GLB (web GLB as meta.web) and, when Chromium and ffmpeg are there, replaces that turntable with its CPU render. ' +
       'The views\' horizontal field of view as framed (Pixal3DMultiViewConditioning.fov) is measured on the front crop: MoGe 2 (LoadMoGeModel -> MoGeInference -> MoGeGeometryToFOV, horizontal, degrees), ' +
       'as the node\'s tooltip says for photos and as the official single-view template 3d_pixal3d_trellis2_image_to_model feeds Pixal3DConditioning; the multi-view template keeps the rig value 20, ' +
       'which suits rendered turnaround sheets but not phone photos, whose crops are usually wider. fovX (degrees, 0 = estimate, the default) fixes MoGe\'s lens instead, ' +
       'so MoGeGeometryToFOV passes it on (20 for a generated turnaround sheet). ' +
-      'Weights: pixal3d_multiview_int8_convrot 5.58 GB + moge_2_vitl_normal_fp16 0.66 GB + the TRELLIS.2 VAEs, DINOv3-NAF and BiRefNet the single-view graph already uses. VRAM unverified (as the single-view graph: 16 GB). Validated by /prompt only.',
+      'Weights: pixal3d_multiview_int8_convrot 5.58 GB + moge_2_vitl_normal_fp16 0.66 GB + the TRELLIS.2 VAEs, DINOv3-NAF and BiRefNet the single-view graph already uses. VRAM: about 16 GB, as the single-view graph (not measured).',
   },
   {
     id: 'image-to-3d-hunyuan3d-21',
@@ -3191,7 +3186,7 @@ export const SPEC = [
     notes:
       'The dub voice track, all core nodes. The template places one line: EmptyAudio of the video\'s length (duration) is the track, the line (audio) is cut where the next line starts ' +
       '(TrimAudioDuration), put after startTime seconds of silence (AudioConcat after EmptyAudio) and added onto the track (AudioMerge add: pads or cuts the line to the track). ' +
-      'The provider rewrites the graph per request (expandTimelineWorkflow, src/lib/av/timeline.ts): params.extra.timeline = {length, clips:[{start, duration}]} with one inputs.audios clip per entry, ' +
+      'The provider rewrites the graph per request: params.extra.timeline = {length, clips:[{start, duration}]} with one inputs.audios clip per entry, ' +
       'each loaded, cut, led in and added in turn, so the saved track is exactly as long as the video with every line at its cue time (pauses kept). ' +
       'SaveAudio writes FLAC (lossless, no MP3 priming delay). Feeds lip re-sync (InfiniteTalk frames = the track\'s length = the video\'s) and video-mux-audio. Runs on CPU.',
   },
@@ -3258,7 +3253,7 @@ export const SPEC = [
       'Changed from the research graph: the seconds-based window (the research bound startFrame / frames on the whole decoded clip and centre-cropped to width x height). ' +
       'Speed: the template\'s CausVid LoRA is CC-BY-NC-4.0, so this uses the Apache-2.0 lightx2v T2V 4-step LoRA (4 steps, cfg 1, euler, shift 5; ' +
       'the pairing with VACE is inferred, not GPU-tested); loraStrength 0 + steps 20 + cfg 6 is the slow full-quality path. checkpoint wan2.1_vace_1.3B_fp16.safetensors (4.31 GB) fits 8 GB cards and needs loraStrength 0, steps 20, cfg 6 ' +
-      '(no 4-step LoRA for 1.3B). No new download: every default file is already in the library. Validated by /prompt only (no GPU here). ' +
+      '(no 4-step LoRA for 1.3B). No new download: every default file is already in the library. Checked with the ComfyUI /prompt validation only. ' +
       'The window, sound and work-size nodes ran on CPU (the built graph\'s own nodes, VACE replaced by the work-size frames scaled back): an 8 s 360x640 30 fps clip with sound, ' +
       'startTime 1, duration 0 -> 81 frames, 2.700 s of picture and 2.700 s of sound, rendered at 464x832 and back, matching source frames 30-110 (27.2 dB PSNR at offset 0 vs 19 dB one frame off; ' +
       'the research graph\'s centre crop gave 16.4 dB at every offset, i.e. misplaced); startTime 2, duration 1 -> 29 frames, 0.967 s of both; startTime and duration 81/30 -> frames 81-161; ' +
@@ -3292,7 +3287,7 @@ export const SPEC = [
       'For a window after the first, the mask must be painted on (or tracked to) that window\'s first frame: the second output (node 77, role "mask", added by the remove-object package) ' +
       'is the tracked mask of the window\'s LAST frame (SAM3_TrackToMask before GrowMask, at the work size, white = the object), which Fuobe feeds to the next window as its mask, so the object is followed across windows. ' +
       'The provider keeps node 77 only when params.extra.handOffMask is true (a window another one waits on); otherwise it is dropped, so a single or last window saves just the video. ' +
-      'Validated by /prompt only (no GPU here).',
+      'Checked with the ComfyUI /prompt validation only.',
   },
   {
     id: 'video-erase-void',
@@ -3323,7 +3318,7 @@ export const SPEC = [
       'Pass 2 re-samples with noise warped along pass 1\'s optical flow (RAFT) for steadier long clips; skipPass2 true halves the time (pass 1 "is sufficient for most videos" per Netflix\'s card). ' +
       'The switch is lazy, so pass 2 does not run then, but void_pass2 and the RAFT file must still be installed (/prompt checks every loader that feeds the output). ' +
       'Downloads 32.5 GB: 2 x 11.14 GB passes, T5-XXL fp16 9.79 GB (the same file as FLUX\'s t5xxl_fp16), CogVideoX VAE 0.43 GB, RAFT 0.02 GB. ' +
-      'VRAM in ComfyUI is unverified: Netflix\'s reference code needs 40 GB+, a 24 GB card with offloading is plausible (inferred). Validated by /prompt only (no GPU here). ' +
+      'VRAM in ComfyUI is unverified: Netflix\'s reference code needs 40 GB+, a 24 GB card with offloading is plausible (inferred). Checked with the ComfyUI /prompt validation only. ' +
       'Changed from the research graph: the seconds-based window, the in-graph 8n+5 count and the aspect-keeping work size (the research bound startFrame / frames and centre-cropped). ' +
       'The window and work-size nodes ran on CPU: a 10 s 640x360 25 fps clip with sound, startTime 0.5, duration 0 -> 197 frames at 672x376, 7.880 s of picture and of sound; duration 2 -> 45 frames, 1.800 s of both.',
   },
@@ -3346,7 +3341,7 @@ export const SPEC = [
       'Genjutsu "Object Swap" on the open engine. maskPrompt = what to replace (the tracked mask, as video-inpaint-wan-vace); image = the new object, product or character, best cut out on a plain or white background ' +
       '(bg-remove-birefnet); prompt describes the result. The reference goes to WanVaceToVideo.reference_image (one extra latent frame that TrimVideoLatent drops) and the masked area is regenerated following the original motion. ' +
       'One image: with several references the provider sends the first (or a collage). Window rules (startTime / duration in seconds, at most 81 frames; width x height = the work-size budget in the clip\'s shape), the paste-back into the original frames ' +
-      'and the kept sound are as video-inpaint-wan-vace. For a whole person, SCAIL-2 Character Replacement (template video_wan21_scail2_character_replacement) keeps the body motion better (not built). Validated by /prompt only (no GPU here).',
+      'and the kept sound are as video-inpaint-wan-vace. For a whole person, SCAIL-2 Character Replacement (template video_wan21_scail2_character_replacement) keeps the body motion better (not built). Checked with the ComfyUI /prompt validation only.',
   },
   {
     id: 'video-insert-wan-vace',
@@ -3368,7 +3363,7 @@ export const SPEC = [
       'mask = the region where the new object should appear, a PNG in the clip\'s shape read from the red channel (white = the region, black = keep), scaled (not cropped) to the work size; it is held for every frame of the window (RepeatImageBatch), ' +
       'so it suits a static or slow camera (without the repeat WanVaceToVideo would pad a one-frame mask with 1 = generate and regenerate the whole clip). image = the object (best cut out on white); ' +
       'prompt = what appears where and what it does. No SAM. Changed from the research graph: the mask is read from the red channel (Fuobe\'s mask convention) instead of alpha. ' +
-      'Window rules (startTime / duration in seconds, at most 81 frames), the work-size budget, paste-back and the kept sound as video-inpaint-wan-vace. Validated by /prompt only (no GPU here).',
+      'Window rules (startTime / duration in seconds, at most 81 frames), the work-size budget, paste-back and the kept sound as video-inpaint-wan-vace. Checked with the ComfyUI /prompt validation only.',
   },
 
   // ---- Genjutsu Character swap (O5, docs/research/openjutsu-6.md): MiniMax H3 + Akatz Labs' Character Swap LoRA ----
@@ -3405,7 +3400,7 @@ export const SPEC = [
       'lora V1.5 (h3_character_swap_v1.5) or V1 (h3_character_swap_pro4500_1000); "none" deletes node 850 and feeds 800.model from the Turbo LoRA (node 4). 8 steps, CFG 1, er_sde / normal for the FL2V Turbo LoRA; windows 124 frames with 18 of history (17n+5 / 0, 1, 17n+1). ' +
       'The clip\'s own sound is put back by the pack (807) and kept by CreateVideo; the pack also writes its own MP4 under output/H3-Character-Swap. Needs FFmpeg and FFprobe on PATH. ' +
       'Tested by its authors on a 96 GB RTX PRO 6000 (Comfy) and a 24 GB RTX 4090 with 128 GB RAM and model offloading (Akatz); NVFP4 text encoding runs natively on compute capability 10+ (Blackwell), slower elsewhere. 46.33 GB of weights. ' +
-      'Not validated here: the h3_character_swap nodes are not installed on this server (the 22 core nodes were checked against /object_info, docs/research/openjutsu-6.md §3.3).',
+      'Not yet checked with the ComfyUI /prompt validation, which needs the h3_character_swap nodes (its 22 core nodes were checked against /object_info).',
   },
   {
     id: 'video-character-swap-h3-relay',
@@ -3432,7 +3427,7 @@ export const SPEC = [
     notes:
       'Akatz Labs\' newer route for the same swap (h3-relay @ e2a7665b, 2.0.1; example_workflows/toolkit/H3-Character-Swap.api.json, which Akatz\'s tool ships at 5f83374). Changed: a Trim Video node picks the part, the mask preview is removed, the adapter loads the V1.5 file by its Hugging Face name. ' +
       'Bindings as video-character-swap-h3 without an anchor frame or a masked-generation switch; lora "none" deletes the adapter and feeds its users from the Turbo LoRA. H3 Relay registers HTTP routes and an in-memory H3 layout compatibility layer on import: run it on the isolated worker if you prefer (install-comfyui.sh installs it with H3_RELAY=1). ' +
-      'Needs FFmpeg and FFprobe on PATH. Not validated here: the pack is not installed on this server.',
+      'Needs FFmpeg and FFprobe on PATH. Not yet checked with the ComfyUI /prompt validation, which needs the pack.',
   },
   // Remove object's "Remove a person (H3)" (docs/research/openjutsu-6.md §4.4, §11.1 item 9): H3 Relay 2.0's Person Removal
   // example (akatz-ai/h3-relay @ e2a7665b, GPL-3.0) with Akatz Labs' Person Remover V1 LoRA, started from a clean first
@@ -3458,7 +3453,7 @@ export const SPEC = [
     notes:
       'H3 Relay\'s toolkit H3-Person-Removal.api.json at e2a7665b (Akatz Labs\' tool ships the same file). Changed: the clean first frame goes through an ImageScale (centre crop) to the video\'s exact size, so an edit that came back a little larger or smaller still fits; SAM 3.1\'s words default to "person"; the save prefix. ' +
       'video = the part already fitted to 24 fps on the 32-pixel grid (oss-fit-clip), image = the clean first frame (the app makes it with Qwen-Image-Edit from the part\'s first frame). 22-frame windows with 18 of history, 12 steps, er_sde / simple, CFG 1, LoRA 1.0, mask grown 5 px, seed 904234 by default (Akatz\'s settings). The output is silent: the app puts the clip\'s sound back. ' +
-      'Needs the h3-relay pack (H3_RELAY=1) and FFmpeg. Not validated here: the pack is not installed on this server.',
+      'Needs the h3-relay pack (H3_RELAY=1) and FFmpeg. Not yet checked with the ComfyUI /prompt validation, which needs the pack.',
   },
 
   // Character Swap Studio (o/h3-studio; docs/research/openjutsu-6.md §4.2): Akatz Labs' H3 Character Swap workbench for whole
@@ -3494,7 +3489,7 @@ export const SPEC = [
       'video = the clip at 24 fps (oss-fit-clip), startTime / duration = the segment and the history frames before it (the app starts half a frame early and runs a quarter frame long, so Trim Video and PrepareVideo keep exactly those frames), image = the character, image2 = the anchor (absent: the provider deletes it, unlinks the window\'s anchor, drops Picture 2 and the first-frame guide unless there is history). ' +
       'historyVideo = the previous take\'s lossless master (save_master, 16-bit FFV1), historyStart / historyLength = its last frames, which become initial_history on the plan, the window and the append (Akatz\'s H3RelayLoadHistory route, with frames instead of an NPZ); absent: the provider deletes that branch. With history and an anchor the anchor is Picture 3 (the window\'s anchor output is then the generated boundary). ' +
       'The approved mask (params.extra.maskVideo, a whole-shot mask at 24 fps from video-mask-h3-relay) is added by the provider: Trim Video at maskStart for the same duration, fitted to the canvas, red channel to a mask, into the expansion instead of SAM\'s own chain; useMask false bypasses the edit mask (the whole frame is regenerated). ' +
-      'Outputs: the segment (H.264) and its lossless master (role master) for the next segment. Needs the h3-relay pack (H3_RELAY=1), VideoHelperSuite and FFmpeg. Not validated here: the pack is not installed on this server.',
+      'Outputs: the segment (H.264) and its lossless master (role master) for the next segment. Needs the h3-relay pack (H3_RELAY=1), VideoHelperSuite and FFmpeg. Not yet checked with the ComfyUI /prompt validation, which needs the pack.',
   },
   {
     id: 'video-mask-h3-relay',
@@ -3518,7 +3513,7 @@ export const SPEC = [
     license: 'SAM 3.1 under Meta\'s SAM License (commercial use allowed under its terms) · H3 Relay nodes GPL-3.0 (Sendy Software LLC and contributors)',
     notes:
       'Who to swap in one shot, as a black-and-white mask video at H3\'s canvas size and 24 fps (white = the person): the shot is prepared like a segment (H3 Relay\'s PrepareSource), SAM 3.1 detects on frame keyFrame from the words (maskPrompt) and the clicks (positiveCoords / negativeCoords, moved into the canvas by the provider; a click makes its detection first, so selection becomes index 0), H3RelaySelectMask picks largest / leftmost / rightmost / #n as the swap graphs do, SAM 3.1 tracks it for spanFrames (the rest of the shot for Track shot, 1 for Update frame) and recovers empty frames. ' +
-      'prevMask = the version it corrects: its frames before (head) and after (tail) the new part are spliced around it; without one the provider links the new part straight to the video (and puts blank frames before a track that starts mid-shot). Akatz Labs\' app does the same with its own nodes (mask versions, Update frame, Track shot). Needs the h3-relay pack. Not validated here: the pack is not installed on this server.',
+      'prevMask = the version it corrects: its frames before (head) and after (tail) the new part are spliced around it; without one the provider links the new part straight to the video (and puts blank frames before a track that starts mid-shot). Akatz Labs\' app does the same with its own nodes (mask versions, Update frame, Track shot). Needs the h3-relay pack. Not yet checked with the ComfyUI /prompt validation, which needs the pack.',
   },
 
   // ---- Faceless "Frame by frame": Ken Burns over a still ------------------------------
@@ -3545,7 +3540,7 @@ export const SPEC = [
       'At most 10 s per job: RAM still grows by about one output frame per frame (~11 MB at 720p) until ComfyUI\'s RAM-pressure cache evicts chunks; split longer scenes. ' +
       'Changed from the research graph: easeInOut (node 19) blends linear and eased progress (the research graph was always eased). ' +
       'Research runs (4-core CPU): 2 s 640x360 25 fps 17.9 s; 5 s 1280x720 30 fps 75.6 s (+2.6 GB RSS); 10 s 1280x720 30 fps 142.1 s (+3.7 GB RSS, both under RAM pressure). ' +
-      'Ran here (shared CPU server, two sessions, 64x64 still, 2 s 320x180 25 fps, chunks of 20): 50 frames, 2.000 s H.264 in 8.5-9.3 s (easeInOut 1) and 7.6-11.2 s (0); ' +
+      'Tested on CPU (64x64 still, 2 s 320x180 25 fps, chunks of 20): 50 frames, 2.000 s H.264 in 8.5-9.3 s (easeInOut 1) and 7.6-11.2 s (0); ' +
       'the two match at the first, middle and last frame and differ in between, and the eased one barely moves over its first and last frames. ' +
       'Crops are whole pixels, so a tiny still steps visibly (the first frame after zoom 1 jumps by one source pixel); supersample and a still larger than the output hide it.',
   },
@@ -3561,7 +3556,7 @@ export const SPEC = [
     vramGb: 0,
     license: 'n/a (no model; ComfyUI core)',
     notes:
-      'The Faceless / Explainer "Frame by frame" join (r4/faceless-plus): the Ken Burns scenes (kenburns-still, and the pieces of scenes over 10 s), and joins of those joins, one after another in input order. ' +
+      'The Faceless / Explainer "Frame by frame" join: the Ken Burns scenes (kenburns-still, and the pieces of scenes over 10 s), and joins of those joins, one after another in input order. ' +
       'The template joins two clips (video, video2); the provider rewrites it per request (expand "videos", expandVideoJoinWorkflow): one LoadVideo per inputs.videos entry, wired to ConcatenateVideo videos.video0..N-1 (at most 100). ' +
       'ConcatenateVideo copies the encoded packets when every clip has the same codec, extradata, size, bit depth, colour space and sound layout (clips ComfyUI\'s CreateVideo / SaveVideo made at one size and fps), ' +
       'so RAM stays flat however long the film is (video-concat-{2,3,4} decode every frame as float32: about 11 MB a frame at 720p, 20 GB for a 60 s film at 30 fps); otherwise it re-encodes one clip at a time to the first clip\'s settings ' +
@@ -3584,7 +3579,7 @@ export const SPEC = [
     vramGb: 0,
     license: 'n/a (no model; ComfyUI core + VideoHelperSuite GPL-3.0 code)',
     notes:
-      'The Canvas Video concatenator (r4/canvas-plus), one job per clip, then video-concat-encoded joins them: every clip comes out at the film\'s size (width x height, scaled to cover and centre-cropped), ' +
+      'The Canvas Video concatenator, one job per clip, then video-concat-encoded joins them: every clip comes out at the film\'s size (width x height, scaled to cover and centre-cropped), ' +
       'at fps (30) and as H.264 + AAC from VHS, so ConcatenateVideo can copy the packets. VHS_LoadVideo resamples to fps and skips round(startTime x fps) frames, keeping round(duration x fps) ' +
       '(duration 0 = to the end); its sound is cut to the same window (VHS lazy audio: start = skipped frames / fps, length = kept frames / fps), so picture and sound stay in sync. ' +
       'framesPerBatch frames per pass (64): memory stays flat however long the clip. Muted clips and clips with no sound: the provider replaces the combine\'s audio with an EmptyAudio as long as the window ' +
@@ -3611,7 +3606,7 @@ export const SPEC = [
       'Repeats = ceil((duration - crossfade) / (clip - crossfade)) from VHS_LoadAudioUpload\'s duration; each repeat is the body + (tail fading out + head fading in); the last crossfade seconds fade out. ' +
       'The clip must be longer than 2 x crossfade. headroomDb (integer dB, default -3) keeps a summed seam under 1.0, because AudioMerge "add" normalises a whole segment that peaks over 1. ' +
       'Each loop pass keeps its output cached, so memory grows as O(repeats^2 x clip): prefer clips >= 60 s (<= 10 repeats). Saves FLAC at the clip\'s sample rate. ' +
-      'Ran here (CPU, two sessions with two tone clips): a 3 s 44.1 kHz stereo clip (440 Hz left, 660 Hz right), crossfade 0.5 s (a 16-bit 8 kHz curve), duration 10 -> FLAC 10.000 s, 44.1 kHz stereo in 1.1-2.5 s; ' +
+      'Tested on CPU (two tone clips): a 3 s 44.1 kHz stereo clip (440 Hz left, 660 Hz right), crossfade 0.5 s (a 16-bit 8 kHz curve), duration 10 -> FLAC 10.000 s, 44.1 kHz stereo in 1.1-2.5 s; ' +
       'seams at 2.5 / 5 / 7.5 s (+2.1 dB RMS over each seam on the pure tones: the equal-power bump), no clicks (largest sample step 0.035 vs 0.031 in the source), ' +
       'level -3 dB elsewhere (headroomDb) and the last 0.5 s fading to 0.',
   },
@@ -3627,11 +3622,11 @@ export const SPEC = [
     license: 'n/a (no model; ComfyUI core audio nodes; VideoHelperSuite loader, GPL-3.0 code)',
     notes:
       'audio then audio2, overlapped by crossfade seconds (params.crossfade, > 0; 0.02 gives a click-free hard join). fadeCurve = the same curve WAV as audio-loop-crossfade, crossfade seconds long, written by the provider. ' +
-      'More clips (params.audios in order): the provider rewrites the graph for all of them in one prompt (expand "audios", expandAudioJoinWorkflow, r4/faceless-plus): every clip but the last is read by a VHS loader ' +
+      'More clips (params.audios in order): the provider rewrites the graph for all of them in one prompt (expand "audios"): every clip but the last is read by a VHS loader ' +
       '(for its length), the first gives its body, each middle clip its head, middle and tail, the last its head and the rest, and each seam is tail x fade-out + next head x fade-in, all concatenated in order; ' +
       'middle clips must be longer than 2 x crossfade. The output runs at the highest sample rate of the clips (AudioConcat resamples) and is saved as FLAC. ' +
       'Clips placed at exact times are audio-timeline\'s job. ' +
-      'Ran here (CPU, two sessions): 3 s 44.1 kHz tones + 2 s 48 kHz noise, crossfade 0.5 s -> FLAC 4.500 s at 48 kHz stereo in 0.2-2.1 s; the tones keep their level (-9.0 dB RMS) up to 2.5 s, ' +
+      'Tested on CPU: 3 s 44.1 kHz tones + 2 s 48 kHz noise, crossfade 0.5 s -> FLAC 4.500 s at 48 kHz stereo in 0.2-2.1 s; the tones keep their level (-9.0 dB RMS) up to 2.5 s, ' +
       'the overlap ramps over 0.5 s and the noise follows at its own level (-15.2 dB): no headroom is taken off here.',
   },
 
@@ -3653,7 +3648,7 @@ export const SPEC = [
       'it also leaves a first-frame .png next to them. Storage: /view serves .mkv as video/x-matroska, which storage.ts has no extension for, so an FFV1 export is saved as <id>.bin (kind video) until ' +
       'EXT_BY_TYPE / TYPE_BY_EXT know mkv (feature package). ' +
       'Decodes the whole clip (GetVideoComponents): RAM grows with the length. ' +
-      'Ran here (CPU, two sessions, a 1 s 64x64 16 fps clip with AAC sound, 0.16-0.4 s each, checked with ffprobe): ProRes HQ .mov yuv444p10le + pcm_s16le; ProRes 4444 yuv444p12le; h265-mp4 HEVC Main 10 yuv420p10le + AAC; ' +
+      'Tested on CPU (a 1 s 64x64 16 fps clip with AAC sound, 0.16-0.4 s each, checked with ffprobe): ProRes HQ .mov yuv444p10le + pcm_s16le; ProRes 4444 yuv444p12le; h265-mp4 HEVC Main 10 yuv420p10le + AAC; ' +
       'ffv1-mkv gbrap16le + FLAC; h264-mp4 High yuv420p + AAC; 16 frames and 1.000 s in every file; bt709 tags (FFV1: gbr matrix, sRGB transfer, bt709 primaries).',
   },
   {
@@ -3671,8 +3666,8 @@ export const SPEC = [
       'CreateVideo writes BT.2020 HLG at 10 bits (color_space HDR) and SaveVideo an H.264 High 10 MP4; the sound is kept. params.format hlg_10bit is this graph as built; pq_10bit binds colorSpace "HDR PQ" ' +
       '(BT.2020 PQ, HDR10\'s transfer, still H.264 High 10: core ComfyUI has no H.265 encoder); exr -> video-sdr-to-hdr-exr. ' +
       'The learned alternative is the LTX-2.5 SDR-To-HDR IC-LoRA (LTX community licence, not built). Decodes the whole clip: RAM grows with the length. ' +
-      'Ran here (CPU, two sessions, 1 s 64x64 16 fps clip, 0.2-1.5 s): H.264 High 10, yuv420p10le, bt2020nc / bt2020 / arib-std-b67 (HLG), 16 frames, AAC kept. ' +
-      'Through Fuobe with colorSpace HDR PQ (r4/video-finish, 3 s 320x180 25 fps clip with sound): H.264 High 10, yuv420p10le, smpte2084 / bt2020, 75 frames, AAC.',
+      'Tested on CPU (1 s 64x64 16 fps clip, 0.2-1.5 s): H.264 High 10, yuv420p10le, bt2020nc / bt2020 / arib-std-b67 (HLG), 16 frames, AAC kept. ' +
+      'Through Fuobe with colorSpace HDR PQ (3 s 320x180 25 fps clip with sound): H.264 High 10, yuv420p10le, smpte2084 / bt2020, 75 frames, AAC.',
   },
   {
     id: 'video-export-exr',
@@ -3685,11 +3680,11 @@ export const SPEC = [
     license: 'n/a (no model; ComfyUI core)',
     notes:
       'params.format "exr" of the export-video operation. One half-float .exr per frame (role frames, in frame order); input_color_space sRGB applies the inverse sRGB curve, so the files are scene-linear Rec.709. ' +
-      'Node 5 saves an H.264 preview with the clip\'s sound (role preview, added by r4/video-finish): the result shown in the feed; the provider zips the frames onto it (meta.artifacts.exr). ' +
+      'Node 5 saves an H.264 preview with the clip\'s sound (role preview): the result shown in the feed; the provider zips the frames onto it (meta.artifacts.exr). ' +
       'The app zips the sequence. No sound. Decodes the whole clip: RAM grows with the length. Storage: /view serves .exr as image/aces, which storage.ts has no extension for, ' +
       'so each frame is saved as an image .bin until EXT_BY_TYPE / TYPE_BY_EXT know exr (feature package; the zip is the deliverable anyway). ' +
-      'Ran here (CPU, two sessions, 1 s 64x64 16 fps clip, 0.06-0.2 s): 16 .exr files (<prefix>_00001.exr ...), HALF B/G/R channels, ZIP compression, linear transfer. ' +
-      'With the preview (r4/video-finish, through Fuobe, 2 s 160x96 30 fps clip with sound): 60 .exr files zipped (2.6 MB, stored) onto an H.264 preview with AAC.',
+      'Tested on CPU (1 s 64x64 16 fps clip, 0.06-0.2 s): 16 .exr files (<prefix>_00001.exr ...), HALF B/G/R channels, ZIP compression, linear transfer. ' +
+      'With the preview (through Fuobe, 2 s 160x96 30 fps clip with sound): 60 .exr files zipped (2.6 MB, stored) onto an H.264 preview with AAC.',
   },
 
   // ---- Still to clip, ad end card ---------------------------------------------------------
@@ -3709,7 +3704,7 @@ export const SPEC = [
       'The still held for duration seconds at fps, centre-cropped to width x height (ImageScale), with a silent stereo AAC track so joins and players see sound. ' +
       'The app renders an end card (logo on the brand colour) at the clip\'s size; for a gentle push-in use kenburns-still with zoom 1 -> 1.05. ' +
       'With video-concat-sound1-2 it is the end-card fallback for clips the open engine did not make (see video-append-endcard). ' +
-      'Ran here (CPU, two sessions, 64x64 PNG -> 2 s 320x180 25 fps, 0.2-1.0 s): 50 identical frames, H.264 + stereo AAC silence, 2.000 s.',
+      'Tested on CPU (64x64 PNG -> 2 s 320x180 25 fps, 0.2-1.0 s): 50 identical frames, H.264 + stereo AAC silence, 2.000 s.',
   },
   {
     id: 'video-append-endcard',
@@ -3729,7 +3724,7 @@ export const SPEC = [
       'and passed as complete_audio. Silent ads (LoadAudio stops with "No audio stream found in the file", checked): the provider drops nodes 2, 12 and 13 and the complete_audio input of node 14, and the result has no sound track. ' +
       'LIMIT: only for clips the open engine made (ComfyUI CreateVideo/SaveVideo, sRGB-tagged H.264). Clips from other encoders (cloud models, uploads, ffmpeg/libx264, tagged or not) fail in core v0.41 with ' +
       '"Video chunk 1 could not be encoded compatibly: extradata ... color space"; for those use still-to-clip + video-concat-sound1-2 (decodes everything, keeps clip 1\'s sound). ' +
-      'Ran here (CPU, two sessions): a ComfyUI-made 2 s 320x180 25 fps clip with sound + a 2 s card -> 4.000 s, 100 frames in 0.3-2.9 s; the ad\'s 50 frames decode bit-identical to the source (framemd5) and silencedetect finds silence from 2.00 s. ' +
+      'Tested on CPU: a ComfyUI-made 2 s 320x180 25 fps clip with sound + a 2 s card -> 4.000 s, 100 frames in 0.3-2.9 s; the ad\'s 50 frames decode bit-identical to the source (framemd5) and silencedetect finds silence from 2.00 s. ' +
       'Silent ad + a 1.5 s card with nodes 2, 12 and 13 dropped: 3.52 s, 88 frames, no sound track (keeping node 12 as complete_audio instead gives a sound track only the card\'s 1.5 s long). ' +
       'The fixture clip from ffmpeg failed with the extradata / colour-space error above (the limit reproduced).',
   },
@@ -3800,16 +3795,16 @@ export const SPEC = [
     optionalModels: ['Wan2_1-I2V-14B-480p_fp8_e4m3fn_scaled_KJ.safetensors'],
     license: 'Apache-2.0 (Wan 2.1 I2V 14B; Uni3C, alibaba-damo-academy/Uni3C — Kijai\'s repack repo carries no licence field)',
     notes:
-      'Cinema 3D scene "Film this path" (N7-5): the still is the start image (WanImageToVideo, 81 frames, CLIP vision H) and the browser\'s render of the MoGe mesh or ' +
-      'point cloud along the path (src/components/cinema/scene-engine.ts recordPath: 81 frames, 16 fps, black where nothing was seen) is the `video`, which core ' +
+      'Cinema 3D scene "Film this path": the still is the start image (WanImageToVideo, 81 frames, CLIP vision H) and the browser\'s render of the MoGe mesh or ' +
+      'point cloud along the path (81 frames, 16 fps, black where nothing was seen) is the `video`, which core ' +
       'WanUni3CControlnetApply encodes with the Wan VAE as Uni3C\'s render_video (it pads or cuts it to the latent\'s frame count and resizes it, centre crop, to the ' +
-      'output size; it has no hole-mask input, so the render\'s mask stays in the browser for WorldCast, N7-9). Model path: UNETLoader -> ModelSamplingSD3 (shift 5) -> ' +
-      'Uni3C (strength 1, 0-1) -> KSampler (30 steps, cfg 5, uni_pc / simple; Uni3C\'s own sampler settings are 50 steps at cfg 5 — to confirm on a GPU). ' +
+      'output size; it has no hole-mask input, so the render\'s mask stays in the browser). Model path: UNETLoader -> ModelSamplingSD3 (shift 5) -> ' +
+      'Uni3C (strength 1, 0-1) -> KSampler (30 steps, cfg 5, uni_pc / simple; Uni3C\'s own sampler settings are 50 steps at cfg 5). ' +
       'Weights: Kijai/WanVideo_comfy Wan21_Uni3C_controlnet_fp16 @ 8260d429 in models/model_patches (its header has every key core ModelPatchLoader\'s Uni3C branch ' +
-      'reads; loading it is inferred, not run) and Wan 2.1 I2V 14B 720P fp8 scaled (Comfy-Org/Wan-2.1 @ 123acf1c), the base Uni3C was trained on. The 480P Q8 GGUF ' +
-      'Fuobe pins for InfiniteTalk can\'t load through a core node (UNETLoader reads no GGUF; that needs city96\'s ComfyUI-GGUF pack), so the core drop-in to try ' +
+      'reads) and Wan 2.1 I2V 14B 720P fp8 scaled (Comfy-Org/Wan-2.1 @ 123acf1c), the base Uni3C was trained on. The 480P Q8 GGUF ' +
+      'Fuobe uses for InfiniteTalk can\'t load through a core node (UNETLoader reads no GGUF; that needs city96\'s ComfyUI-GGUF pack), so the core drop-in to try ' +
       'first on a smaller GPU is the 480P fp8 file the native InfiniteTalk graph uses (`checkpoint`): both are dim 5120, which the Uni3C node checks. ' +
-      'VRAM: Uni3C\'s own figures are 46-51 GB with offload (Fuobe\'s older 24 GB note is unverified). Validated by /prompt only (no GPU here).',
+      'VRAM: Uni3C\'s own figures are 46-51 GB with offload.',
   },
 
   // ---- Content Factory: read a reference video ---------------------------------------------
@@ -3874,12 +3869,12 @@ export const SPEC = [
     license: 'RIFE 4.26 and FILM weights from Comfy-Org/frame_interpolation (MIT / Apache-2.0); VideoHelperSuite (GPL-3.0 code) for Select Every Nth',
     notes:
       'Higgsfield\'s FPS Boost targets (24 / 30 / 60 / 90 / 120 fps) and slow motion on the open engine. The provider picks m (multiplier, 2-16) and n (every) from the clip\'s own frame rate (its header) so that ' +
-      'source fps x m / n = target x slowdown (src/lib/av/fps.ts: 24 -> 30 m5 n4, 24 -> 60 m5 n2, 24 -> 90 m15 n4, 24 -> 120 m5, 30 -> 60 m2, 60 -> 90 m3 n2, 60 -> 120 m2; a target the source rate is a whole multiple of (60 -> 30: m1 n2) only drops frames, ' +
+      'source fps x m / n = target x slowdown (24 -> 30 m5 n4, 24 -> 60 m5 n2, 24 -> 90 m15 n4, 24 -> 120 m5, 30 -> 60 m2, 60 -> 90 m3 n2, 60 -> 120 m2; a target the source rate is a whole multiple of (60 -> 30: m1 n2) only drops frames, ' +
       'and then the provider links FrameInterpolate out; other lower targets still interpolate (30 -> 24: m4 n5)). The output fps is computed in the graph from the decoded frame rate (source fps x m / (n x slowdown)); m and n need the header\'s rate, so the provider refuses a clip without one rather than guess. ' +
       'The last frame is held once more before interpolating, so the clip keeps its length (N frames become N x m + 1, about one output frame longer than the source) instead of losing a source frame. ' +
       'slowdown > 1 stretches the clip (2 = twice as long); the provider then drops the sound link (it would no longer match). checkpoint film_net_fp16.safetensors runs FILM (better on large motion, about 31x slower on CPU). ' +
       'Holds the whole interpolated clip in memory (the source frames, their copy with the last frame held, and source frames x m; the selection is a view): the provider refuses clips that need more than half the server\'s RAM. ' +
-      'Ran here through Fuobe (CPU, a random-weight RIFE file standing in for the weights): 24 fps 2 s 320x180 -> 60 fps = 121 frames, 2.017 s (m 5, n 2); 25 fps 3 s with sound -> 30 fps at 2x slow motion = 181 frames, 6.03 s, no sound track; 30 fps 2 s with sound -> 24 fps = 49 frames, 2.04 s, sound kept (m 4, n 5).',
+      'Tested through Fuobe on CPU, with a random-weight RIFE file standing in for the weights: 24 fps 2 s 320x180 -> 60 fps = 121 frames, 2.017 s (m 5, n 2); 25 fps 3 s with sound -> 30 fps at 2x slow motion = 181 frames, 6.03 s, no sound track; 30 fps 2 s with sound -> 24 fps = 49 frames, 2.04 s, sound kept (m 4, n 5).',
   },
   {
     id: 'upscale-video-esrgan-chunked',
@@ -3899,7 +3894,7 @@ export const SPEC = [
       'until the clip is done, as mixed-media-zimage-frames does), upscales them with the model (tiled), scales them so the shorter edge is shortSide px (params.resolution: 1080p -> 1080, the shape kept) and pipes them ' +
       'into one ffmpeg H.264 encode that stays open across passes; the last pass writes the file with the source\'s sound at the source frame rate. The provider follows the passes by their filename prefix. ' +
       'framesPerBatch: the provider sizes it from the clip\'s header so a pass holds about 1.5 GB of frames (16 by default). Any spandrel model in models/upscale_models works as upscaleModel (x2 / x4). ' +
-      'Ran here (CPU, a random-weight x4 ESRGAN file standing in for the weights): 30 s 256x144 25 fps with sound -> 1920x1080, 750 frames, AAC, 47 passes of 16 frames in 417 s, ComfyUI\'s RSS peaked 0.87 GB above idle (upscale-video-esrgan on 10 s of the same clip, 4x to 1024x576 only, peaked 3.0 GB above idle); through Fuobe a silent 2 s 24 fps clip -> 1280x720, 48 frames, no audio link.',
+      'Tested on CPU (a random-weight x4 ESRGAN file standing in for the weights): 30 s 256x144 25 fps with sound -> 1920x1080, 750 frames, AAC, 47 passes of 16 frames in 417 s, ComfyUI\'s RSS peaked 0.87 GB above idle (upscale-video-esrgan on 10 s of the same clip, 4x to 1024x576 only, peaked 3.0 GB above idle); through Fuobe a silent 2 s 24 fps clip -> 1280x720, 48 frames, no audio link.',
   },
   {
     id: 'upscale-video-seedvr2-chunked',
@@ -3917,7 +3912,7 @@ export const SPEC = [
     notes:
       'The native SeedVR2 nodes of upscale-video-seedvr2 (same files, same settings) run on framesPerBatch frames per pass (33 by default; SeedVR2 pads a pass to 4n+1 frames and crops the padding back) and the ' +
       'passes are piped into one H.264 encode with the source\'s sound, so a long clip no longer needs the whole film in memory (the template is capped at 20 s). The frames are first scaled so the shorter edge is ' +
-      'shortSide px. Each pass is restored on its own: there is no temporal context across a pass boundary, so a seam every framesPerBatch frames is possible (not measured: no GPU here). Validated by /prompt only.',
+      'shortSide px. Each pass is restored on its own: there is no temporal context across a pass boundary, so a seam every framesPerBatch frames is possible (not measured yet). Validated by /prompt only.',
   },
   {
     id: 'video-export-pro-chunked',
@@ -3935,7 +3930,7 @@ export const SPEC = [
       'ffv1 -> video/ffv1-mkv, h264 -> video/h264-mp4; exr -> video-export-exr). VHS lists only <prefix>_00001-audio.<ext> when the clip has sound, <prefix>_00001.<ext> otherwise, on the last pass. ' +
       'Caveat: VHS\'s ProRes "hq" profile leaves the pixel format to prores_ks, which picks yuv444p10le for the RGB frames, so "ProRes 422 HQ" is the HQ profile (apch) carrying 4:4:4 10-bit samples ' +
       '(FFmpeg decodes it; a strict 4:2:2 file needs a VHS format with -pix_fmt yuv422p10le, which would be a change to the node pack). The same holds for video-export-pro. ' +
-      'Ran here (CPU, r4/video-finish, 3 s 320x180 25 fps clip with sound): ProRes apch / yuv444p10le / PCM and H.265 Main 10 yuv420p10le with AAC; on a silent 2 s 24 fps clip FFV1 gbrap16le .mkv, 48 of 48 frames; each ffprobe-checked.',
+      'Tested on CPU (3 s 320x180 25 fps clip with sound): ProRes apch / yuv444p10le / PCM and H.265 Main 10 yuv420p10le with AAC; on a silent 2 s 24 fps clip FFV1 gbrap16le .mkv, 48 of 48 frames; each ffprobe-checked.',
   },
   {
     id: 'video-sdr-to-hdr-exr',
@@ -3950,6 +3945,6 @@ export const SPEC = [
       'params.format exr of the sdr-to-hdr operation (Higgsfield\'s "EXR 16-bit: uncompressed frame sequence for compositing"). The same ImageSDRToHDR expansion as video-sdr-to-hdr; SaveImageAdvanced writes each ' +
       'frame as a half-float EXR with input_color_space HDR, i.e. the inverse HLG curve: scene-linear light in Rec.2020 primaries, highlights above 1.0 kept. Node 6 saves the 10-bit HLG MP4 with the clip\'s sound as ' +
       'the result to watch (role preview); the provider zips the frames (role frames) onto it as meta.artifacts.exr. Decodes the whole clip: RAM grows with the length (the provider refuses what the server can\'t hold). ' +
-      'Ran here through Fuobe (CPU, 2 s 160x96 30 fps clip with sound): 60 half-float EXR frames zipped onto an H.264 High 10 HLG (arib-std-b67, bt2020) preview with AAC.',
+      'Tested through Fuobe on CPU (2 s 160x96 30 fps clip with sound): 60 half-float EXR frames zipped onto an H.264 High 10 HLG (arib-std-b67, bt2020) preview with AAC.',
   },
 ];

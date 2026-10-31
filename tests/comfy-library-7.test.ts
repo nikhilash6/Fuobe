@@ -38,14 +38,14 @@ describe("moss-image-t2i in the manifest", () => {
         "Fast: Spectrallic's MOSS-Image SFT 8-step DMD int8 file, Apache-2.0)",
     );
     expect(entry.outputs).toEqual([{ node: "10", kind: "image" }]);
-    expect(entry.notes).toMatch(/vramGb 16 is a guess/);
+    expect(entry.notes).toMatch(/The 16 GB VRAM figure is an estimate, as MOSS-Image publishes none/);
     expect(entry.notes).toMatch(/CUDA 13 \(cu130\): comfy\/quant_ops\.py/);
   });
 
   it("pins Comfy-Org's int8 set (15 GB), never the w4a8 encoder, and lists the Fast and Base files as optional", () => {
     expect(entry.models).toEqual([
       { file: "moss_image_sft_int8_convrot.safetensors", folder: "diffusion_models", url: `${COMFY_ORG}/diffusion_models/moss_image_sft_int8_convrot.safetensors`, sizeGb: 5.41 },
-      // The w4a8 build faulted the NVIDIA driver on the owner's PC (2026-10-23): the int8 one, as FIBO 2's prompt writer loads it.
+      // The int8 encoder, as FIBO 2's prompt writer loads it, never the template's w4a8 build (it faulted a GPU driver in testing).
       { file: "qwen3.5_9b_int8_convrot.safetensors", folder: "text_encoders", url: "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_int8_convrot.safetensors", sizeGb: 9.75 },
       { file: "flux2-vae_small.safetensors", folder: "vae", url: `${COMFY_ORG}/vae/flux2-vae_small.safetensors`, sizeGb: 0.25 },
       { file: "moss_image_sft_8stepdmd_int8_convrot.safetensors", folder: "diffusion_models", url: FAST, sizeGb: 5.41, optional: true },

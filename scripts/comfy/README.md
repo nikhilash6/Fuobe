@@ -469,8 +469,8 @@ node validate-workflows.mjs moss-image-t2i --shared
 - **Weights** (15 GB): Comfy-Org/MOSS-Image at `530a4c94f92c35ef6818b1b035a983fe9dcf5f54` (diffusion model 5.41 GB, small VAE
   0.25 GB) and its int8 Qwen3.5-9B text encoder (9.75 GB, the row FIBO 2 shares), and, for the Fast setting only, Spectrallic's SFT
   with the 8-step DMD LoRA merged in (5.41 GB), for Base only MOSS-Image Base int8 (5.41 GB; both `optionalModels`). All Apache-2.0.
-  Not the template's w4a8 encoder: loading it after other model families faulted the NVIDIA driver and restarted Windows on the
-  owner's PC (2026-10-23); the preview pipeline then ran 23 MOSS renders on the int8 file with no fault. The Workflows page's install commands fetch them; nothing is downloaded at build time.
+  Not the template's w4a8 encoder: in testing (2026-10-23), loading it after other model families faulted the NVIDIA driver;
+  the preview pipeline then ran 23 MOSS renders on the int8 file with no fault. The Workflows page's install commands fetch them; nothing is downloaded at build time.
 - **Settings**: Standard is the Comfy template's (25 steps, CFG 2.5, er_sde / simple), Best OpenMOSS's guide (50, 3, euler),
   Fast the DMD file at 8 steps and CFG 1, Base the Base file at 50 steps, CFG 3, euler (`ModelOptions.controls[].sets` on
   `oss-moss-image` writes them).
@@ -530,7 +530,7 @@ from an example and not rendered yet.
 - **Weights** (about 92 GB new, revisions, sizes and SHA-256 from the Hugging Face API in `model-pins.json`): the int8 builds
   of Comfy-Org's Ideogram-4, Qwen-Image-2.1, Fibo-2.0 and MOSS-Image (Qwen3.5 9B) repositories, AusBoss's outpaint LoRA and
   the Krea 2 LoRAs (Realism V2, General and Identity Edit V2, inpaint-edit v1 512). The Krea 2 graphs load Comfy-Org's fp8 Krea 2
-  Turbo (`krea2_turbo_fp8_scaled`, 13.14 GB), the build the owner's edit workflow loads and his PC has. `variants` in
+  Turbo (`krea2_turbo_fp8_scaled`, 13.14 GB), the build the Krea 2 edit workflow loads. `variants` in
   `KNOWN_MODELS` names the same weights in another precision in the same repository (Krea 2 Turbo's bf16 build, …); nothing
   reads it yet, so a ComfyUI with only those builds still needs the pinned file.
 - **Ideogram 4's safety card**: when its filter refuses a prompt, the graph saves a flat grey "Image blocked by safety filter"
