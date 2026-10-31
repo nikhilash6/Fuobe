@@ -84,7 +84,8 @@ pnpm eval:covers --versions [--dry-run] [--public-dir public] [--manifest …]
 
   Every URL in the manifest ends in its file's content version (?v=, 8 hex digits of its sha256; a poster's also
   covers its small copy in thumbs/), so a cover made again gets a new URL. Both commands above write them; this
-  one versions the manifest from the files as they are, hashing only (nothing is encoded).`,
+  one versions the manifest from the files as they are. It encodes only a poster's small copy that's missing or
+  older than its poster (one copied in by hand), first; --dry-run lists those and fails until they're made.`,
   history: "pnpm eval:history [--suite soul] [--case soul/v1-general] [--limit 20]",
   validate: "pnpm eval:validate [suite files…]   checks every case file and that the generated suites match the research",
   trash: "pnpm eval:trash <runId> [--dry-run]   moves the run's generations to that Fuobe's Trash (its results here stay)",
@@ -459,15 +460,25 @@ async function covers(args, ctx) {
   return 0;
 }
 
-/** pnpm eval:covers --versions: the manifest's URLs versioned from the files as they are, without encoding anything. */
+/**
+ * pnpm eval:covers --versions: the manifest's URLs versioned from the files as they are, encoding only the posters'
+ * missing or outdated small copies. Fails (1) when a URL is left without a version (its file is missing), or on a dry
+ * run when a small copy is due: until it's made, the versions don't match what the site would serve.
+ */
 function versionsCmd(v, ctx) {
-  const r = versionCovers({ dryRun: v["dry-run"], publicDir: v["public-dir"] && path.resolve(v["public-dir"]), manifest: v.manifest && path.resolve(v.manifest) });
-  if (v.json) return ctx.print(JSON.stringify(r, null, 2)), 0;
-  ctx.print(`${r.changed} of ${r.urls} cover URLs in ${r.entries} entries ${v["dry-run"] ? "would get" : "got"} a new version`);
-  for (const u of r.unversioned.slice(0, 10)) ctx.print(`  · ${u}: no file, so no version`);
-  if (r.unversioned.length > 10) ctx.print(`  · and ${r.unversioned.length - 10} more`);
-  if (r.changed && !v["dry-run"]) ctx.note(`Look at the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest} before committing it.`);
-  return r.unversioned.length ? 1 : 0;
+  const dry = v["dry-run"];
+  const r = versionCovers({ dryRun: dry, publicDir: v["public-dir"] && path.resolve(v["public-dir"]), manifest: v.manifest && path.resolve(v.manifest) });
+  const status = r.unversioned.length || (dry && r.thumbs.length) ? 1 : 0;
+  if (v.json) return ctx.print(JSON.stringify(r, null, 2)), status;
+  ctx.print(`${r.changed} of ${r.urls} cover URLs in ${r.entries} entries ${dry ? "would get" : "got"} a new version`);
+  const list = (items, why) => {
+    for (const u of items.slice(0, 10)) ctx.print(`  · ${u}: ${why}`);
+    if (items.length > 10) ctx.print(`  · and ${items.length - 10} more`);
+  };
+  list(r.thumbs, dry ? "small copy missing or older than its poster: would be made first" : "small copy made (it was missing or older than its poster)");
+  list(r.unversioned, "no file, so no version");
+  if ((r.changed || r.thumbs.length) && !dry) ctx.note(`Look at the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest}${r.thumbs.length ? " and the small copies it made" : ""} before committing them.`);
+  return status;
 }
 
 /** pnpm eval:covers --from-masters <dir>: covers from rendered masters, merged into the manifest. */

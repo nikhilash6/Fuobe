@@ -38,9 +38,12 @@ const nextConfig: NextConfig = {
       { source: "/vendor/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
       // Preset covers (public/previews, pnpm eval:covers) keep their name when a cover is made again, but every URL the
       // site gives them ends in the file's content version (?v=, 8 hex digits of its sha256, from the generated
-      // manifests): a changed file gets a new URL, so a versioned one is kept for a year and never revalidated. One
-      // asked for without its version (a link from elsewhere) keeps a day's cache, revalidated in the background.
-      { source: "/previews/:path*", has: [COVER_VERSION], headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      // manifests): a changed file gets a new URL, so a browser keeps a versioned one for a year and never revalidates
+      // it. The CDN keeps it a day (s-maxage): a page loaded before a deploy can still ask for an old version and get the
+      // new file under it, and a revert or rollback that gives that version back must not find the wrong file pinned
+      // there for a year. One asked for without its version (a link from elsewhere) keeps a day's cache, revalidated in
+      // the background.
+      { source: "/previews/:path*", has: [COVER_VERSION], headers: [{ key: "Cache-Control", value: "public, max-age=31536000, s-maxage=86400, immutable" }] },
       { source: "/previews/:path*", missing: [COVER_VERSION], headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
     ];
   },

@@ -13,7 +13,7 @@ const covers = (await import("../scripts/eval/lib/covers.mjs")) as unknown as {
   readManifest: (file: string) => Record<string, Entry>;
   writeManifest: (entries: Record<string, Entry>, file: string) => void;
   withVersions: (entries: Record<string, Entry>, publicDir: string) => Record<string, Entry>;
-  versionCovers: (opts: { publicDir?: string; manifest?: string; dryRun?: boolean }) => { entries: number; urls: number; changed: number; unversioned: string[] };
+  versionCovers: (opts: { publicDir?: string; manifest?: string; dryRun?: boolean }) => { entries: number; urls: number; changed: number; thumbs: string[]; unversioned: string[] };
   seamless: (frames: Buffer[], fade: number) => Buffer[];
   loopsAlready: (frames: Buffer[], luma: number) => boolean;
 };
@@ -262,7 +262,7 @@ describe("covers from masters", () => {
     const was = media();
     const unwritten = fs.readFileSync(manifest, "utf8");
 
-    expect(versionCovers({ publicDir: pub, manifest, dryRun: true })).toMatchObject({ entries: 3, urls: 4, changed: 3, unversioned: ["/previews/presets/app-missing.jpg"] });
+    expect(versionCovers({ publicDir: pub, manifest, dryRun: true })).toMatchObject({ entries: 3, urls: 4, changed: 3, thumbs: [], unversioned: ["/previews/presets/app-missing.jpg"] });
     expect(fs.readFileSync(manifest, "utf8")).toBe(unwritten);
     expect(versionCovers({ publicDir: pub, manifest })).toMatchObject({ changed: 3 });
     const m = readManifest(manifest);
@@ -276,6 +276,43 @@ describe("covers from masters", () => {
     // The media is as it was; a second run finds nothing to change.
     expect(media()).toEqual(was);
     expect(versionCovers({ publicDir: pub, manifest })).toMatchObject({ changed: 0 });
+  });
+
+  it.runIf(hasFfmpeg)("makes a poster's small copy first when it's missing or older than a poster copied in by hand (--versions)", () => {
+    const pub = path.join(dir, "byhand-public");
+    const presets = path.join(pub, "previews", "presets");
+    fs.mkdirSync(path.join(presets, "thumbs"), { recursive: true });
+    const poster = path.join(presets, "app-relight.jpg");
+    const thumb = path.join(presets, "thumbs", "app-relight.jpg");
+    const newThumb = path.join(presets, "thumbs", "app-headshot.jpg");
+    spawnSync("ffmpeg", ["-v", "error", "-y", "-i", still(), "-frames:v", "1", "-q:v", "4", poster]);
+    fs.copyFileSync(poster, path.join(presets, "app-headshot.jpg"));
+    // The relit poster was copied in by hand over an older one: its small copy still shows the old picture.
+    fs.writeFileSync(thumb, "the old picture");
+    const before = new Date(Date.now() - 60_000);
+    fs.utimesSync(thumb, before, before);
+    const manifest = path.join(dir, "byhand", "manifest.ts");
+    const meta = { run: "r", engine: "comfyui", model: "m", variant: "v" };
+    writeManifest(
+      { "app-relight": { poster: "/previews/presets/app-relight.jpg?v=00000000", ...meta }, "app-headshot": { poster: "/previews/presets/app-headshot.jpg", ...meta } },
+      manifest,
+    );
+    const unwritten = fs.readFileSync(manifest, "utf8");
+    const thumbs = ["/previews/presets/thumbs/app-headshot.jpg", "/previews/presets/thumbs/app-relight.jpg"];
+
+    // A dry run lists the copies it would make, and makes none.
+    expect(versionCovers({ publicDir: pub, manifest, dryRun: true })).toMatchObject({ changed: 2, thumbs, unversioned: [] });
+    expect(fs.readFileSync(thumb, "utf8")).toBe("the old picture");
+    expect(fs.existsSync(newThumb)).toBe(false);
+    expect(fs.readFileSync(manifest, "utf8")).toBe(unwritten);
+    // Then it makes them before hashing, so each version is of the poster and its new small copy.
+    expect(versionCovers({ publicDir: pub, manifest })).toMatchObject({ changed: 2, thumbs, unversioned: [] });
+    for (const f of [thumb, newThumb]) expect(fs.readFileSync(f).subarray(0, 2), f).toEqual(Buffer.from([0xff, 0xd8]));
+    const m = readManifest(manifest);
+    expect(m["app-relight"].poster).toBe(`/previews/presets/app-relight.jpg?v=${sha8(poster, thumb)}`);
+    expect(m["app-headshot"].poster).toBe(`/previews/presets/app-headshot.jpg?v=${sha8(path.join(presets, "app-headshot.jpg"), newThumb)}`);
+    // Made once: the next run has nothing to make or change.
+    expect(versionCovers({ publicDir: pub, manifest, dryRun: true })).toMatchObject({ changed: 0, thumbs: [] });
   });
 
   it("makes a clip loop without a jump: its last frames fade into its first, which it then starts after (unless it loops already)", () => {

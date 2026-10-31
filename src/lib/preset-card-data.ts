@@ -1,10 +1,11 @@
 /**
- * A preset's card as the galleries and the preset header show it: the slim card data (preset-cards.ts) with
- * its real cover when it has one (preset-previews.generated.ts, pnpm eval:covers), else the procedural preview.
+ * A preset's card as the galleries show it: the slim card data (preset-cards.ts) with its real cover when it has
+ * one (preset-previews.generated.ts, pnpm eval:covers), else the procedural preview. The preset header shows the
+ * same one, built from the slim covers map (coverPreview, preset-covers.ts).
  *
  * The only module that reads the covers manifest, which lists every cover with its provenance. Import it from
- * server pages, or from a component loaded on its own (next/dynamic, like the preset header): a client module
- * that imports it ships the whole manifest in every chunk it is in. tests/preset-cards.test.ts checks the importers.
+ * server pages or server-only modules: a client module that imports it ships the whole manifest in every chunk it
+ * is in. tests/preset-covers.test.ts checks the importers.
  */
 import type { Preset } from "./catalog/types";
 import { presetCard, proceduralPreview, previewScene, type PresetCardData, type PresetPreview } from "./preset-cards";

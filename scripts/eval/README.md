@@ -466,9 +466,12 @@ Every URL in both files ends in its file's content version: `?v=` and the first 
 sha256 of its bytes (a poster's with its small copy's, whose URL keeps the poster's version). So a
 cover made again under its old name gets a new URL, and the site serves versioned covers for a year
 (`next.config.ts`). Each run versions the whole manifest after making its files.
-`pnpm eval:covers --versions` does only that: it hashes the files as they are and encodes nothing
-(`--dry-run` says how many URLs would change). `node scripts/gen-preset-peaks.mjs` versions Home's
-peak frames the same way (`--versions` alone does only that).
+`pnpm eval:covers --versions` does only that: it hashes the files as they are. The only thing it
+encodes is a poster's small copy that's missing or older than its poster (a poster copied in by hand),
+which it makes first, so the copy never keeps the old picture under the new version. `--dry-run` says
+how many URLs would change and which copies it would make, and fails while any copy is due.
+`node scripts/gen-preset-peaks.mjs` versions Home's peak frames the same way (`--versions` alone
+does only that).
 
 - `--variant catalog` takes that variant's renders for every case instead, such as what ships today.
 - `--dry-run` lists what it would pick.

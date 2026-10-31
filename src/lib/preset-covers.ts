@@ -1,12 +1,13 @@
 /**
- * A preset's real cover for the pickers (camera motions, effects, Mix, Cinema Studio's moves): the same still and
- * clip its gallery card shows, at the same versioned URLs (?v=). Reads the slim covers map (preset-covers.generated.ts:
- * which presets have a cover, and a clip, and their versions), never the manifest with its provenance
- * (preset-previews.generated.ts), so client code can import it.
- * Keep it to the pickers' own chunks all the same: tests/preset-covers.test.ts checks the importers.
+ * A preset's real cover for the pickers (camera motions, effects, Mix, Cinema Studio's moves) and the preset header:
+ * the same still and clip its gallery card shows, at the same versioned URLs (?v=). Reads the slim covers map
+ * (preset-covers.generated.ts: which presets have a cover, and a clip, and their versions), never the manifest with
+ * its provenance (preset-previews.generated.ts), so client code can import it.
+ * Keep it to their own chunks all the same: tests/preset-covers.test.ts checks the importers.
  */
 import type { CameraMove } from "./catalog/cinema";
-import { thumbOf } from "./preset-cards";
+import type { Preset } from "./catalog/types";
+import { proceduralPreview, previewScene, thumbOf, type PresetPreview } from "./preset-cards";
 import { PRESET_COVERS } from "./preset-covers.generated";
 
 /** Where pnpm eval:covers puts a poster's small copy (scripts/eval/lib/covers.mjs, thumbOf). */
@@ -36,6 +37,16 @@ export function presetCover(id: string | undefined): PresetCover | undefined {
   const { poster, video } =
     typeof c === "string" ? { poster: `${base}.jpg?v=${c}`, video: undefined } : Array.isArray(c) ? { poster: `${base}.jpg?v=${c[0]}`, video: `${base}.mp4?v=${c[1]}` } : c;
   return { poster, thumb: thumbOf(poster), ...(video && { video }) };
+}
+
+/**
+ * A preset's preview as its gallery card shows it (previewFor, preset-card-data.ts), from the slim map: its own cover,
+ * never another shot's (SAME_SHOT is for the pickers' tiles), else the procedural preview. The preset header reads
+ * this, so its chunk carries the versions alone rather than the manifest with its provenance.
+ */
+export function coverPreview(p: Pick<Preset, "id" | "type" | "name" | "category">): PresetPreview {
+  const own = Object.hasOwn(PRESET_COVERS, p.id) ? presetCover(p.id) : undefined;
+  return own ? { poster: own.poster, ...(own.video && { video: own.video }), scene: previewScene(p) } : proceduralPreview(p);
 }
 
 /**

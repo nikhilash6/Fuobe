@@ -17,7 +17,11 @@ vi.mock("next/cache", () => ({ cacheLife: () => {} }));
  */
 
 const root = process.cwd();
-const exists = (url: string) => (fs.statSync(path.join(root, "public", url), { throwIfNoEntry: false })?.size ?? 0) > 0;
+/** A cover URL's file in public/ is there and not empty: the URL as the site gives it, ending in its version (?v=). */
+const exists = (url: string) => {
+  expect(url, url).toMatch(/^\/previews\/[^?]+\?v=[0-9a-f]{8}$/);
+  return (fs.statSync(path.join(root, "public", url.split("?")[0]), { throwIfNoEntry: false })?.size ?? 0) > 0;
+};
 const studios = Object.keys(STUDIO_EXAMPLES) as ExampleStudio[];
 
 describe("the studios' examples", () => {

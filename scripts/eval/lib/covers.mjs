@@ -154,24 +154,41 @@ export function withVersions(entries, publicDir = path.dirname(COVERS_DIR)) {
 
 /**
  * Version the manifest's URLs from its files as they are (pnpm eval:covers --versions): for covers listed before
- * they had versions, or files changed by hand. Hashes only: nothing is encoded. Says how many URLs changed, and
- * lists any left without a version (a file that's missing).
+ * they had versions, or files changed by hand. First it makes each poster's small copy that's missing or older than
+ * its poster (one copied in by hand), as every run does (writeThumbs), so a copy never shows the old picture under
+ * the new version. Nothing else is encoded. Says how many URLs changed and which copies it made (`thumbs`), and lists
+ * any URL left without a version (a file that's missing). A dry run writes nothing: `thumbs` lists the copies it
+ * would make, and `changed` counts with the copies as they are.
  * @param {{ publicDir?: string, manifest?: string, dryRun?: boolean }} [opts]
  */
 export function versionCovers(opts = {}) {
+  const publicDir = opts.publicDir ?? path.dirname(COVERS_DIR);
   const before = readManifest(opts.manifest);
-  const after = withVersions(before, opts.publicDir);
+  const thumbs = opts.dryRun ? dueThumbs(before, publicDir).map((t) => t.thumb) : writeThumbs(before, publicDir);
+  const after = withVersions(before, publicDir);
   const urls = (m) => Object.values(m).flatMap((e) => [e.poster, e.video].filter((u) => u !== undefined));
   const [was, now] = [urls(before), urls(after)];
   const result = {
     entries: Object.keys(after).length,
     urls: now.length,
     changed: now.filter((u, i) => u !== was[i]).length,
+    thumbs: thumbs.map((f) => `/${path.relative(publicDir, f).split(path.sep).join("/")}`),
     unversioned: now.filter((u) => String(u).startsWith("/previews/") && !urlVersion(u)),
     manifest: opts.manifest ?? MANIFEST_FILE,
   };
   if (!opts.dryRun) writeManifest(after, opts.manifest);
   return result;
+}
+
+/** The listed posters whose small copy is missing or older than the poster: the ones writeThumbs makes. */
+function dueThumbs(entries, publicDir) {
+  const due = [];
+  for (const e of Object.values(entries)) {
+    const poster = previewFile(e.poster, publicDir);
+    const thumb = previewFile(typeof e.poster === "string" && thumbOf(e.poster), publicDir);
+    if (poster && thumb && fs.existsSync(poster) && !newer(thumb, poster)) due.push({ poster, thumb });
+  }
+  return due;
 }
 
 /**
@@ -180,10 +197,7 @@ export function versionCovers(opts = {}) {
  */
 export function writeThumbs(entries, publicDir = path.dirname(COVERS_DIR)) {
   const made = [];
-  for (const e of Object.values(entries)) {
-    const poster = previewFile(e.poster, publicDir);
-    const thumb = previewFile(typeof e.poster === "string" && thumbOf(e.poster), publicDir);
-    if (!poster || !thumb || !fs.existsSync(poster) || newer(thumb, poster)) continue;
+  for (const { poster, thumb } of dueThumbs(entries, publicDir)) {
     fs.mkdirSync(path.dirname(thumb), { recursive: true });
     run(["-i", poster, "-vf", `scale='min(${THUMB_PX},iw)':-2,format=yuvj420p`, "-frames:v", "1", "-q:v", "5", thumb]);
     made.push(thumb);

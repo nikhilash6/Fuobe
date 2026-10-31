@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 import nextConfig from "../next.config";
 import { APPS, EFFECTS, MOTIONS } from "@/lib/catalog";
 import { SOUL_LOOK_CARDS } from "@/lib/catalog/soul-looks.generated";
-import { toPresetCard } from "@/lib/preset-card-data";
+import { previewFor, toPresetCard } from "@/lib/preset-card-data";
 import { isCover, onPeak } from "@/lib/preset-cards";
-import { presetCover, thumbOf } from "@/lib/preset-covers";
+import { coverPreview, presetCover, thumbOf } from "@/lib/preset-covers";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
@@ -108,11 +108,16 @@ describe("the preset covers manifest", () => {
     for (const id of [undefined, "", "toString", "constructor", "__proto__"]) expect(presetCover(id), String(id)).toBeUndefined();
   });
 
-  it("is read only on the server and in the preset header's own chunk", () => {
+  it("gives the preset header, from the slim map, the preview its gallery card shows", () => {
+    // 3D Rotation's motion included: the header shows its procedural preview, as its card does, not the app's shot.
+    for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) expect(coverPreview(p), p.id).toEqual(previewFor(p));
+  });
+
+  it("is read only on the server", () => {
     // Client chunks keep whatever client code uses from a module. preset-cards.ts is in the galleries',
     // home's, shorts' and mixed media's chunks, so importing the manifest there (or preset-card-data.ts,
-    // which does) would ship it to all of them. A new importer belongs here only if it's a server page,
-    // server-only (Home's showcase) or loaded on its own (next/dynamic), like the preset header.
+    // which does) would ship it to all of them. A new importer belongs here only if it's a server page or
+    // server-only (Home's showcase). The preset header reads the slim map instead (coverPreview).
     const sources = fs
       .readdirSync(path.join(root, "src"), { recursive: true, encoding: "utf8" })
       .filter((f) => /\.tsx?$/.test(f))
@@ -127,16 +132,20 @@ describe("the preset covers manifest", () => {
       "app/(studio)/apps/page.tsx",
       "app/(studio)/effects/page.tsx",
       "app/(studio)/motions/page.tsx",
-      "components/preset-header.tsx",
       "lib/home-showcase.ts",
     ]);
     expect(fs.readFileSync(path.join(root, "src", "lib", "home-showcase.ts"), "utf8")).toMatch(/^import "server-only";$/m);
-    // The slim map (which presets have a cover, and a clip, with their versions: about 8 KB gzipped) is for the pickers,
-    // each in its own chunk: the camera motion and Mix pickers (next/dynamic in composer.tsx) and Cinema Studio's moves
-    // (next/dynamic in camera-moves.tsx, loaded when the "#" picker or the Director panel's Movement tab shows them).
+    // The slim map (which presets have a cover, and a clip, with their versions: about 8 KB gzipped) is for the pickers
+    // and the preset header, each in its own chunk: the camera motion and Mix pickers (next/dynamic in composer.tsx),
+    // Cinema Studio's moves (next/dynamic in camera-moves.tsx, loaded when the "#" picker or the Director panel's
+    // Movement tab shows them), and the preset header (next/dynamic in studio-page.tsx, checked below).
     expect(importers(/from "[^"]*preset-covers\.generated"/)).toEqual(["lib/preset-covers.ts"]);
     // (A type is no code: the cover tile takes a cover without importing the map.)
-    expect(importers(/^import (?!type )[^;]*from "[^"]*preset-covers";/m)).toEqual(["components/cinema/move-list.tsx", "components/studio/preset-chips.tsx"]);
+    expect(importers(/^import (?!type )[^;]*from "[^"]*preset-covers";/m)).toEqual([
+      "components/cinema/move-list.tsx",
+      "components/preset-header.tsx",
+      "components/studio/preset-chips.tsx",
+    ]);
     const composer = fs.readFileSync(path.join(root, "src", "components", "studio", "composer.tsx"), "utf8");
     expect(composer).toMatch(/dynamic\(\(\) => import\("\.\/preset-chips"\)/);
     expect(importers(/from "[^"]*\/move-list"/)).toEqual([]);
@@ -146,11 +155,11 @@ describe("the preset covers manifest", () => {
     expect(header).toMatch(/dynamic\(\(\) => import\("@\/components\/preset-header"\)/);
   });
 
-  it("serves a versioned cover for a year, never revalidated, and one asked for without its version for a day", async () => {
+  it("serves a versioned cover for a year in the browser and a day in the CDN, and one without its version for a day", async () => {
     const rules = (await nextConfig.headers!()).filter((r) => r.source === "/previews/:path*");
     const version = { type: "query", key: "v", value: "[0-9a-f]{8}" };
     expect(rules).toEqual([
-      { source: "/previews/:path*", has: [version], headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
+      { source: "/previews/:path*", has: [version], headers: [{ key: "Cache-Control", value: "public, max-age=31536000, s-maxage=86400, immutable" }] },
       { source: "/previews/:path*", missing: [version], headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
     ]);
     // Next matches a has or missing value whole (^…$), so the two rules never both apply, and every version takes the first.

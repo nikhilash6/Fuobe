@@ -7,9 +7,9 @@ import { openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import { useEngine } from "@/lib/api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Preset } from "@/lib/catalog/types";
-// The covers manifest comes with toPresetCard: this component is loaded on its own (next/dynamic in studio-page.tsx).
-import { toPresetCard } from "@/lib/preset-card-data";
-import { onPeak, presetHowTo, presetRouteLines, previewFlip } from "@/lib/preset-cards";
+import { onPeak, presetCard, presetHowTo, presetRouteLines, previewFlip } from "@/lib/preset-cards";
+// The slim covers map comes with coverPreview: this component is loaded on its own (next/dynamic in studio-page.tsx).
+import { coverPreview } from "@/lib/preset-covers";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,8 +35,9 @@ export function PresetHeader({
   onClear?: () => void;
   className?: string;
 }) {
-  // On its clip's peak frame when it has one, as Home's card the visitor came from (onPeak).
-  const card = onPeak(toPresetCard(preset));
+  // Its gallery card's cover (coverPreview, from the slim map), on its clip's peak frame when it has one, as Home's
+  // card the visitor came from (onPeak).
+  const card = onPeak(presetCard(preset, coverPreview(preset)));
   const { ref, playing, asked, handlers, onTap } = usePreviewPlayback<HTMLDivElement>(card.id, card.preview, { always: true });
   const routes = presetRouteLines(preset, modelName);
   // Its state on the viewer's GPU (open engine only): a pill that opens the guided fix.
