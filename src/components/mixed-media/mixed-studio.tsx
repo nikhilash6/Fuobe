@@ -336,6 +336,8 @@ function Editor({
   const [pickedModel, setModel] = useState<Record<string, string>>({});
   const modelId = (models.some((m) => m.id === pickedModel[slot]) && pickedModel[slot]) || models[0]?.id;
   const model = models.find((m) => m.id === modelId);
+  // An open model is free on a self-hosted Fuobe: a guest or an account reads that, not "your GPU".
+  const priceOf = (m?: RestyleModelInfo) => (visitor && m?.engine === "open" ? "Self-hosted only" : m?.price);
   const original = modelId === MIXED_ORIGINAL;
   const [previewId, setPreviewId] = useState<string | null>(null);
   // Every main step of the latest render (cut → frames or restyle → sound), so a failed step shows its own error.
@@ -594,7 +596,7 @@ function Editor({
               <SelectValue>
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate">{model?.name}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{model?.price}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{priceOf(model)}</span>
                 </span>
               </SelectValue>
             </SelectTrigger>
@@ -606,7 +608,7 @@ function Editor({
                     <span className="flex min-w-0 flex-col">
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate">{m.name}</span>
-                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{m.price}</span>
+                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{priceOf(m)}</span>
                       </span>
                       {issue && <span className="text-[11px] text-muted-foreground">{issue}</span>}
                     </span>
@@ -617,7 +619,7 @@ function Editor({
           </Select>
         ) : (
           <div className="rounded-lg border px-3 py-2 text-[13px]">
-            <span className="font-medium">{model?.name ?? "—"}</span> <span className="text-muted-foreground">· {model?.price}</span>
+            <span className="font-medium">{model?.name ?? "—"}</span> <span className="text-muted-foreground">· {priceOf(model)}</span>
           </div>
         )}
         {model && (
