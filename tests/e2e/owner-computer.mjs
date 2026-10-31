@@ -314,7 +314,14 @@ async function hosted() {
   await page.getByRole("button", { name: /Check again|Check my GPU/ }).first().click({ timeout: 30_000 });
   await until(() => page.getByText("ComfyUI is running, but it isn't letting this page in yet.").first().isVisible(), 30_000);
   const connectText = await page.locator("body").innerText();
-  check("/connect, no setting: one line, never the closed line", (connectText.match(/isn't letting this page in yet/g) ?? []).length === 1 && !connectText.includes("isn't answering on this computer"), connectText.slice(0, 400));
+  // What the page shows, without the checklist's screen-reader announcer, which repeats the last line on purpose.
+  const shownText = await page.locator("main").evaluate((m) => {
+    const c = m.cloneNode(true);
+    c.querySelectorAll(".sr-only").forEach((e) => e.remove());
+    return c.textContent ?? "";
+  });
+  const said = (shownText.match(/isn't letting this page in yet/g) ?? []).length;
+  check("/connect, no setting: one line, never the closed line", said === 1 && !shownText.includes("isn't answering on this computer"), `said ${said} time(s)${shownText.includes("isn't answering on this computer") ? ", with the closed line" : ""}`);
   check("/connect, no setting: no browser error words", !/Failed to fetch|NetworkError/.test(connectText));
   check("/connect, no setting: Show me how", await page.getByRole("button", { name: "Show me how" }).isVisible());
   await shoot(page, "connect-no-setting");
