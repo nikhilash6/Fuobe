@@ -18,7 +18,7 @@ import { finishGaveUp, useSoulFinish } from "@/components/studio/soul-finish";
 import { FailedTile, MediaThumb, PendingTile, tileRatio } from "@/components/studio/feed";
 import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { Viewer } from "@/components/studio/viewer";
-import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useIsVisitor, useStatus } from "@/lib/api";
+import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsVisitor, useStatus } from "@/lib/api";
 import { MAX_FRAMES, STORYBOARD_ASPECTS, STORYBOARD_LOOK_MODEL, STORYBOARD_PARTNER_IDS, storyboardModels, type StoryboardPartner } from "@/lib/catalog/storyboard";
 import { lookCard } from "@/lib/catalog/soul-cards";
 import type { Engine, Generation } from "@/lib/catalog/types";
@@ -272,8 +272,11 @@ function Board({
 export function StoryboardView({ modelNames = {} }: { /** Display names of the storyboard models, from the server. */ modelNames?: Record<string, string> }) {
   const qc = useQueryClient();
   const [engine, setEngine] = useEngine();
-  // The engine is known once the install's engine mode is: no price asked for a cloud board an open-only install refuses.
-  const statusReady = !!useStatus().data;
+  // The engine is known once the install's engine mode is and the page has hydrated (until then useEngine answers the
+  // server's "cloud"): no price asked for a cloud board an open-only install refuses.
+  const hydrated = useHydrated();
+  const status = useStatus().data;
+  const statusReady = hydrated && !!status;
   // A storyboard doesn't run on an account's own GPU yet (only the studios' generations do), nor for a guest who signs up.
   const visitor = useIsVisitor();
   const [mode, setMode] = useState<"auto" | "manual">("auto");
