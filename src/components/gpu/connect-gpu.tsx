@@ -69,7 +69,7 @@ export function ConnectGpu() {
   const done = (
     <div className="flex flex-wrap items-center justify-end gap-2">
       <Button asChild variant="ghost" className="h-11 sm:h-9">
-        <Link href="/">Not now</Link>
+        <Link href={next}>Not now</Link>
       </Button>
       <Button asChild className="h-11 sm:h-9">
         <Link href={next}>Start creating</Link>
