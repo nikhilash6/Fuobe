@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { useIsOwner } from "@/lib/api";
+import { useIsOwner, useIsVisitor } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { guessCategory, MEMORY_CATEGORIES, MEMORY_HINTS, MEMORY_MAX_CHARS, parseMemoryImport, type AssistMemory, type AssistProject, type MemoryCategory, type MemoryScope } from "@/lib/assist";
 import { timeAgo } from "@/lib/format";
@@ -54,6 +54,7 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
   const [importing, setImporting] = useState(false);
   // A guest or an account (public sign-up): Assist's memory is the owner's, so no Add or Import.
   const owner = useIsOwner();
+  const visitor = useIsVisitor();
   const list = (memories.data ?? []).filter((m) => category === "all" || m.category === category);
   const counts = useMemo(() => {
     const c = new Map<string, number>();
@@ -88,14 +89,16 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
         {projectId && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[13px] text-muted-foreground">Only this project&apos;s chats see these.</p>
-            <div className="flex gap-1.5">
-              <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
-                <Import /> Import
-              </Button>
-              <Button size="sm" onClick={() => setAdding(true)}>
-                <Plus /> Add
-              </Button>
-            </div>
+            {owner && (
+              <div className="flex gap-1.5">
+                <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
+                  <Import /> Import
+                </Button>
+                <Button size="sm" onClick={() => setAdding(true)}>
+                  <Plus /> Add
+                </Button>
+              </div>
+            )}
           </div>
         )}
         <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -159,7 +162,12 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
                   <Brain />
                 </EmptyMedia>
                 <EmptyTitle className="font-heading text-[22px] font-normal">{category === "all" ? "Nothing remembered yet" : `No ${category.toLowerCase()} memories`}</EmptyTitle>
-                <EmptyDescription>Tell Assist “remember that I always want 9:16” in a chat, add one here, or bring over what another assistant knows about you.</EmptyDescription>
+                {/* A visitor can't add or import (the note above says why); nothing until it's known who's looking, so neither text flashes. */}
+                {owner ? (
+                  <EmptyDescription>Tell Assist “remember that I always want 9:16” in a chat, add one here, or bring over what another assistant knows about you.</EmptyDescription>
+                ) : visitor ? (
+                  <EmptyDescription>Assist&apos;s memory on this studio is its owner&apos;s.</EmptyDescription>
+                ) : null}
               </EmptyHeader>
               {owner && (
                 <EmptyContent className="flex-row justify-center">
