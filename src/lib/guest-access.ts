@@ -241,7 +241,7 @@ export const OWN_GPU_TOOL_MESSAGE = "This tool doesn't run on your own GPU yet. 
 export const CONNECT_GPU_HEADER = "x-fuobe-connect-gpu";
 export const CONNECT_GPU_MESSAGE = "Connect your GPU to run this. Free accounts run on their own ComfyUI.";
 /** An account's upload with neither a GPU nor a key of its own: its files are kept for runs on its own ComfyUI or key. */
-export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU to add your own files. A free account uses them on its own ComfyUI.";
+export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU, or add your own fal.ai or Replicate key, to add your own files.";
 /** An account with neither its own GPU nor its own key (the proxy's answer to a run). */
 export const CONNECT_GPU_OR_KEY_MESSAGE = "Connect your GPU, or add your own fal.ai or Replicate key, to run this.";
 
