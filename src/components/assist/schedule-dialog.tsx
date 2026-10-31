@@ -337,7 +337,7 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
             <EngineSwitch value={engine} onChange={setEngine} size="sm" compact />
           </div>
           <p className="text-[12px] text-muted-foreground">
-            {engine === "open" ? "Open-source models run free on your GPU." : "Paid models cost what the approval card shows."} Smart uses Claude (your Anthropic key, billed per run); Free uses a local model or the offline planner.
+            {engine === "open" ? "Open-source models run free on your GPU." : "Paid models cost what the approval card shows."} Smart plans with the best model you&apos;ve connected (its provider bills each run); Free uses free models, then the offline planner.
           </p>
         </fieldset>
 
@@ -349,7 +349,7 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
                 {
                   id: "ask",
                   title: "Ask me first",
-                  body: "Each run plans the job, then waits in its chat for your OK — nothing is generated until you approve. A run on Claude uses your Anthropic key to plan.",
+                  body: "Each run plans the job, then waits in its chat for your OK — nothing is generated until you approve. A run on a paid model uses that provider's key to plan.",
                 },
                 { id: "auto", title: "Run on its own, within a cap", body: "Plans start without asking while they fit the cap. A plan that would pass it, or has no known price, waits for you." },
               ] as const
