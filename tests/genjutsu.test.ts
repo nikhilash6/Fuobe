@@ -104,7 +104,7 @@ describe("Genjutsu: which model runs", () => {
     }
     expect(withoutOwnGpu("Wan Animate 2 at 480p in 4 steps · free on your GPU (24 GB) · Apache-2.0")).toBe("Wan Animate 2 at 480p in 4 steps · Apache-2.0");
     expect(withoutOwnGpu("MiniMax H3 + the swap LoRA on your GPU: SAM 3.1 picks the person · free · 48 GB+ advised")).toBe("MiniMax H3 + the swap LoRA: SAM 3.1 picks the person · 48 GB+ advised");
-    expect(withoutOwnGpu(MARKETING_IMAGE_NOTE.open)).toBe("Fuobe Original · Qwen-Image-Edit 2511");
+    expect(withoutOwnGpu(MARKETING_IMAGE_NOTE.open)).toBe("Fuobe Original · Qwen-Image 2.1");
     expect(withoutOwnGpu("Lip sync · free on your GPU (24 GB), or hosted on fal")).toBe("Lip sync · hosted on fal");
   });
 

@@ -337,7 +337,7 @@ describe("open engine: TripoSplat (image-to-splat-triposplat)", () => {
   });
 });
 
-describe("open engine: text to 3D as a Z-Image Turbo still, then TRELLIS.2", () => {
+describe("open engine: text to 3D as a Qwen-Image 2.1 still, then TRELLIS.2", () => {
   async function settle(id: string, ms = 40_000) {
     const until = Date.now() + ms;
     for (;;) {
@@ -352,8 +352,9 @@ describe("open engine: text to 3D as a Z-Image Turbo still, then TRELLIS.2", () 
     const req = m3d.model3dRequest({ engine: "open", mode: "text", prompt: "A brass lantern." });
     expect(gens.previewGeneration(req)).toMatchObject({ op: "text-to-3d", costUsd: 0 });
     const [built, still] = gens.createGenerations(req);
-    expect(still).toMatchObject({ feature: "image-to-3d-step", modelId: "oss-z-image-turbo", op: "t2i" });
-    expect(still.prompt).toMatch(/^A brass lantern\. A single object, whole and centred/);
+    expect(still).toMatchObject({ feature: "image-to-3d-step", modelId: "oss-qwen-image-21", op: "t2i" });
+    expect(still.request.params).toMatchObject({ aspectRatio: "1:1", resolution: "1K" });
+    expect(still.prompt).toMatch(/^A brass lantern\. The object alone, whole and centred/);
     expect(built).toMatchObject({ feature: "image-to-3d", modelId: "oss-trellis2", op: "image-to-3d", status: "queued" });
     expect(built.batchId).toBe(still.batchId);
     const dep = (db().prepare("SELECT depends_on FROM generations WHERE id = ?").get(built.id) as { depends_on: string }).depends_on;
@@ -370,7 +371,7 @@ describe("open engine: text to 3D as a Z-Image Turbo still, then TRELLIS.2", () 
     const steps = gens.createGenerations({ feature: "image-to-3d", modelId: "oss-text-trellis2", prompt: "a brass lantern" });
     expect(steps.map((g) => [g.modelId, g.op])).toEqual([
       ["oss-trellis2", "image-to-3d"],
-      ["oss-z-image-turbo", "t2i"],
+      ["oss-qwen-image-21", "t2i"],
     ]);
     // A photo sent along has no place in this route: the model is built from the still alone.
     const [built] = gens.createGenerations({ feature: "image-to-3d", modelId: "oss-text-trellis2", prompt: "a brass lantern", inputs: { images: ["/api/files/p.png"] } });
@@ -390,7 +391,7 @@ describe("open engine: text to 3D as a Z-Image Turbo still, then TRELLIS.2", () 
 
   it("writes the still prompt for a clean cut-out", () => {
     expect(m3d.stillPromptFor3d("  a ceramic teapot...  ")).toBe(
-      "a ceramic teapot. A single object, whole and centred, seen from the front at eye level, on a plain light grey background, soft even studio light, no other objects, no text",
+      "a ceramic teapot. The object alone, whole and centred, seen from the front at eye level, on a plain light grey background, soft even studio light",
     );
   });
 });

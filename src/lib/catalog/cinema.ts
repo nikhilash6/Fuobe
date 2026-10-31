@@ -1,6 +1,7 @@
 import { DEFAULT_MOTION, PATH_FPS, PATH_FRAMES, normalizeKeys, toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { APERTURE, LENS, anglesNote, poseWords, recomposePrompt, type ScenePose } from "@/lib/scene3d";
 import { getModel, getPreset } from "./index";
+import { plannedDurations } from "./clip-lengths";
 import { DOP_MODEL, LTX25_HOSTED } from "./dop";
 import { dualEngine, onEngine } from "./engines";
 import { localOnly, needsToken, triggerOf } from "./loras";
@@ -596,11 +597,15 @@ export const CAST_SHEET_MODEL = "oss-zimage-soul-cast";
 
 /**
  * Models offered in the prompt bar, per mode and engine. The first is the default: the Original on both engines.
- * Partner models stay as choices (the Director compiled into the prompt); LTX-2.5 is the open choice with sound.
+ * Partner models stay as choices (the Director compiled into the prompt). MiniMax H3 comes next on both engines (a clip
+ * with its own sound); LTX-2.5 is the other open choice with sound.
  */
 export const CINEMA_MODELS: Record<CinemaMode, Record<Engine, string[]>> = {
-  video: { cloud: [CINEMA_MODEL, "seedance-2-5", "kling-3", "veo-3-1"], open: [CINEMA_MODEL, "oss-ltx25", "oss-wan22-14b"] },
-  image: { cloud: [CINEMA_STILL_MODEL, "nano-banana-pro", "seedream-5-pro"], open: [CINEMA_STILL_MODEL, "oss-ideogram-4", "oss-qwen-image-21", "oss-z-image-turbo", "oss-qwen-image"] },
+  video: {
+    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-3", "veo-3-1", "minimax-h3-max", "wan-3"],
+    open: [CINEMA_MODEL, "oss-minimax-h3", "oss-ltx25", "oss-wan22-14b"],
+  },
+  image: { cloud: [CINEMA_STILL_MODEL, "nano-banana-pro", "seedream-5-pro"], open: [CINEMA_STILL_MODEL, "oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism", "oss-moss-image"] },
 };
 
 /**
@@ -714,7 +719,7 @@ export function gridPrompt(scene: string, size: GridSize, type: GridType): strin
   const { rows, cols } = gridDims(size);
   const t = GRID_TYPES.find((g) => g.id === type) ?? GRID_TYPES[0];
   return [
-    `A cinematic contact sheet: a ${cols}×${rows} grid of ${rows * cols} equally sized film stills separated by thin, straight white gutters, no text, no numbers, no borders around the sheet`,
+    `A cinematic contact sheet: a ${cols}×${rows} grid of ${rows * cols} equally sized film stills separated by thin, straight white gutters, the grid filling the frame edge to edge, every panel a clean picture of the scene alone`,
     `The panels, in reading order (left to right, top to bottom), show ${t.instruction}`,
     `Same characters, wardrobe, location, lighting and colour grade in every panel`,
     `Scene: ${tidy(scene)}`,
@@ -820,7 +825,7 @@ export function castPrompt(values: CastValues, description?: string): string {
     `Casting turnaround sheet for an original film character${film ? ` in a ${film}` : ""}: a ${who}${looks.length ? `, ${looks.join(", ")}` : ""}`,
     tidy(description) || undefined,
     "Full-body front view, three-quarter view, side profile and back view side by side, plus a close-up portrait of the face, on a seamless neutral studio backdrop with soft, even lighting",
-    "The same person, face and wardrobe in every view; photorealistic, natural skin texture, no text",
+    "The same person, face and wardrobe in every view, the views alone on the backdrop; photorealistic, natural skin texture",
   ]
     .filter(Boolean)
     .join(". ") + ".";
@@ -846,14 +851,14 @@ export const LOCATION_VIEWS: { id: string; name: string; prompt: string; pose: S
   { id: "high", name: "High angle", prompt: "Show the same location from a high angle looking down, as from a crane or a balcony", pose: { horizontal: 0, vertical: 60, zoom: 3 } },
 ];
 
-/** An empty 16:9 set: no people, the place itself is the subject. */
+/** An empty 16:9 set: the place itself is the subject. */
 export function locationPrompt(description: string, settings: DirectorSettings): string {
   const camera = cameraWords(settings, true);
   const palette = paletteWords(settings.palette);
   const light = lightingWords(settings.lighting);
   return [
     `Establishing shot of a film location: ${tidy(description)}`,
-    "An empty set with no people, wide 16:9 composition with depth, production-designed detail, cinematic lighting",
+    "An empty set, the place itself the only subject, wide 16:9 composition with depth, production-designed detail, cinematic lighting",
     camera,
     light,
     palette,
@@ -862,7 +867,7 @@ export function locationPrompt(description: string, settings: DirectorSettings):
     .join(". ") + ".";
 }
 
-const LOCATION_KEEP = "Keep everything about the place the same: architecture, props, materials, time of day, lighting and colour grade. No people";
+const LOCATION_KEEP = "Keep everything about the place the same: architecture, props, materials, time of day, lighting and colour grade. The place stands empty";
 
 export function locationViewPrompt(view: string, description?: string): string {
   const v = LOCATION_VIEWS.find((x) => x.id === view) ?? LOCATION_VIEWS[0];
@@ -1313,7 +1318,7 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
   }
   if (kind === "video" && model.kind === "video") {
     const want = Math.max(DURATION.min, Math.min(DURATION.max, Math.round(input.duration ?? DURATION.default)));
-    const allowed = o.durations;
+    const allowed = plannedDurations(model);
     // Fuobe Cinema in the cloud: any whole second; past 20 s planVideo adds an extend for the rest.
     if (anyLength(model)) params.duration = Math.min(want, CINEMA_MAX_SECONDS);
     else {
@@ -1394,15 +1399,15 @@ function label(steps: CinemaStep[], labels: Record<string, string>): CinemaStep[
 
 /**
  * Reference clips on the cloud default: Fuobe Cinema takes none yet (research studios[cinema-studio].original
- * .referenceClips), so a take that carries some runs on the first partner model in the menu that takes them all
- * (Seedance 2.5). A model picked from the menu stays, and clipInputs says what it leaves out.
+ * .referenceClips), so a take that carries some runs on the first partner model in the menu that takes them all, as
+ * many as were added (MiniMax H3 takes 3 of each kind, Seedance 2.5 more), else the first that takes their kinds. A
+ * model picked from the menu stays, and clipInputs says what it leaves out.
  */
 function clipModel(model: ModelDef, input: CinemaGenerateInput, notes: string[]): ModelDef {
   const kinds = (["videos", "audios"] as const).filter((k) => !!input[k]?.length);
   if (input.engine !== "cloud" || input.modelId || model.id !== CINEMA_MODEL || !kinds.length || kinds.every((k) => takesClips(model, "ref2v", k))) return model;
-  const instead = CINEMA_MODELS.video.cloud
-    .flatMap((id) => (id === CINEMA_MODEL ? [] : (modelOn(id, "cloud") ?? [])))
-    .find((m) => kinds.every((k) => takesClips(m, "ref2v", k)));
+  const partners = CINEMA_MODELS.video.cloud.flatMap((id) => (id === CINEMA_MODEL ? [] : (modelOn(id, "cloud") ?? []))).filter((m) => kinds.every((k) => takesClips(m, "ref2v", k)));
+  const instead = partners.find((m) => kinds.every((k) => (input[k]?.length ?? 0) <= clipMax(m, k))) ?? partners[0];
   if (!instead) return model;
   notes.push(`${model.name} doesn't take reference clips yet, so this take runs on ${instead.name} (a partner model) with them — pick ${model.name} in the menu to leave them out`);
   return instead;
@@ -1539,17 +1544,29 @@ function planVideo(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
 
 const STILL_CLIPS_NOTE = "Stills use image references — reference videos and audio are left out";
 
-/** What edits a still with references: Qwen-Image-Edit 2511 on the user's GPU, Nano Banana Pro in the cloud. */
+/**
+ * What edits a frame on the user's GPU outside stills and grids (the moment before a take, a take's first frame), and a
+ * location's other view (with the Multiple-Angles LoRA trained on it): Qwen-Image-Edit 2511. Nano Banana Pro in the cloud.
+ */
 function editModel(engine: Engine): ModelDef {
   return getModel(engine === "open" ? "oss-qwen-edit" : "nano-banana-pro")!;
+}
+
+/** What makes a still or a grid with references: Qwen-Image 2.1 on the user's GPU (up to 4), Nano Banana Pro in the cloud. */
+export const STILL_EDIT_MODELS: Record<Engine, string> = { cloud: "nano-banana-pro", open: "oss-qwen-image-21" };
+/** How many references a still or a grid sends, per engine. */
+export const STILL_REFERENCES: Record<Engine, number> = { cloud: 10, open: 4 };
+
+function stillEditModel(engine: Engine): ModelDef {
+  return getModel(STILL_EDIT_MODELS[engine]) ?? editModel(engine);
 }
 
 function planStill(input: CinemaGenerateInput): CinemaPlan {
   const notes: string[] = [];
   let model = pickModel("image", input);
-  const images = (input.images ?? []).slice(0, input.engine === "open" ? 3 : 10);
+  const images = (input.images ?? []).slice(0, STILL_REFERENCES[input.engine]);
   if (images.length && !model.routes.some((r) => r.op === "edit")) {
-    const instead = editModel(input.engine);
+    const instead = stillEditModel(input.engine);
     notes.push(`Stills with references run on ${instead.name}`);
     model = instead;
   }
@@ -1585,10 +1602,10 @@ function planGrid(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
   const has = ctx.has ?? ((id: string) => !!getModel(id));
   const size = input.grid?.size ?? "2x2";
   const type = input.grid?.type ?? "freeform";
-  const images = (input.images ?? []).slice(0, input.engine === "open" ? 3 : 10);
+  const images = (input.images ?? []).slice(0, STILL_REFERENCES[input.engine]);
   let model: ModelDef;
   const extra: Record<string, unknown> = {};
-  if (images.length) model = editModel(input.engine);
+  if (images.length) model = stillEditModel(input.engine);
   else if (input.engine === "open" && has("oss-zimage-grid")) {
     model = getModel("oss-zimage-grid")!;
     const { rows, cols } = gridDims(size);
@@ -1619,7 +1636,7 @@ export const CAST_MODELS: Record<Engine, string[]> = { cloud: [SOUL_BUILDER_MODE
  */
 export const LOCATION_MODELS: Record<Engine, string[]> = {
   cloud: [SOUL_BUILDER_MODEL, "nano-banana-pro", "seedream-5-pro"],
-  open: [SOUL_BUILDER_MODEL, "oss-qwen-image-21", "oss-krea2-realism", "oss-z-image-turbo", "oss-qwen-image"],
+  open: [SOUL_BUILDER_MODEL, "oss-qwen-image-21", "oss-krea2-realism", "oss-moss-image", "oss-z-image-turbo"],
 };
 
 /** A builder's maker: the one asked for when this engine offers it (and this install has it), else the first. */
@@ -1839,7 +1856,7 @@ export function editPrompt(change: string, scene?: string): string {
   return `${sc ? `${sc}. The same shot with one change` : "The same shot with one change"}: ${c}. ${keep}.`;
 }
 
-/** A take made on a partner model in the menu (Seedance 2.5, Kling 3.0, Veo 3.1): a partner editor edits it. */
+/** A take made on a partner model in the menu (MiniMax H3, Seedance 2.5, Kling 3.0, Veo 3.1…): a partner editor edits it. */
 const partnerTake = (modelId: string) => modelId !== CINEMA_MODEL && CINEMA_MODELS.video.cloud.includes(modelId);
 
 function planEdit(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {

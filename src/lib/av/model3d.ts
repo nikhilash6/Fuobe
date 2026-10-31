@@ -48,7 +48,7 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
   },
   text: {
     cloud: [{ id: "tripo-h3-1-text", note: "A textured model from words · ≈ $0.20" }],
-    open: [{ id: "oss-text-trellis2", note: "Draws the object, then builds it · textured GLB + turntable · 16 GB GPU" }],
+    open: [{ id: "oss-text-trellis2", note: "Draws the object, then builds it · textured GLB + turntable · 20 GB GPU" }],
   },
   objects: {
     cloud: [{ id: "sam-3d-objects", note: "Rebuilds what you name, as it stands in the photo · ≈ $0.02" }],
@@ -171,7 +171,7 @@ export function modeOfRequest(r: Pick<GenerationRequest, "op" | "modelId" | "inp
  */
 export function stillPromptFor3d(prompt: string): string {
   const words = prompt.trim().replace(/[.\s]+$/, "");
-  return `${words}. A single object, whole and centred, seen from the front at eye level, on a plain light grey background, soft even studio light, no other objects, no text`;
+  return `${words}. The object alone, whole and centred, seen from the front at eye level, on a plain light grey background, soft even studio light`;
 }
 
 /**

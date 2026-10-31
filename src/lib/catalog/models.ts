@@ -1647,14 +1647,14 @@ const open: ModelDef[] = [
   }),
   o({
     id: "oss-text-trellis2",
-    name: "Z-Image Turbo → TRELLIS.2",
-    vendor: "Alibaba Tongyi × Microsoft",
+    name: "Qwen-Image 2.1 → TRELLIS.2",
+    vendor: "Alibaba Qwen × Microsoft",
     family: "trellis",
     kind: "model3d",
-    tagline: "Describe one object: Z-Image Turbo draws it on a plain background, then TRELLIS.2 builds the textured 3D model and a turntable · 16 GB GPU · Apache-2.0 + MIT",
+    tagline: "Describe one object: Qwen-Image 2.1 draws it on a plain background, then TRELLIS.2 builds the textured 3D model and a turntable · 20 GB GPU · non-commercial weights + MIT",
     badges: ["new"],
-    // Built on the server as two steps: a Z-Image Turbo still, then image-to-3d-trellis2 on it (src/server/chains.ts).
-    routes: [{ op: "text-to-3d", provider: "comfyui", endpoint: "image-to-3d-trellis2", chained: true, note: "a Z-Image Turbo still → TRELLIS.2" }],
+    // Built on the server as two steps: a Qwen-Image 2.1 still, then image-to-3d-trellis2 on it (src/server/chains.ts).
+    routes: [{ op: "text-to-3d", provider: "comfyui", endpoint: "image-to-3d-trellis2", chained: true, note: "a Qwen-Image 2.1 still → TRELLIS.2" }],
     options: { seed: true },
   }),
   o({

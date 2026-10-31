@@ -247,7 +247,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
               className="min-h-28 rounded-xl"
             />
             <p className="mt-2 text-[12px] text-muted-foreground">
-              One object: what it is, its material and colours.{engine === "open" && " Z-Image Turbo draws it on a plain background first; the finished model's card links to that still."}
+              One object: what it is, its material and colours.{engine === "open" && " Qwen-Image 2.1 draws it on a plain background first; the finished model's card links to that still."}
             </p>
           </Panel>
         ) : (

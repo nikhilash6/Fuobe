@@ -42,6 +42,7 @@ import {
   spokenTimes,
   staleSteps,
   styleRefLimit,
+  subjectOf,
   TIMING_PARTS,
   topicsBrief,
   topicsSchema,
@@ -416,7 +417,8 @@ export function makeAvatar(id: string): Generation {
   const [g] = createGenerations({
     feature: "faceless-avatar",
     modelId: ENGINE_MODELS[engine].still,
-    prompt: `A round channel avatar for a YouTube channel called “${c.name}” (${c.idea}): one bold, simple central emblem, centred on a plain background. Style: ${style.look}. No text or letters.`,
+    // The words name only what the picture shows (the open still model draws any words it is given, and reads no negatives).
+    prompt: `A round channel avatar for a YouTube channel about ${subjectOf(c.idea) || c.name}: one bold, simple pictorial emblem, centred on a plain background. Style: ${style.look}.`,
     params: { aspectRatio: "1:1", numOutputs: 1 },
     title: `${c.name} · avatar`,
   });

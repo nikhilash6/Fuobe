@@ -251,7 +251,7 @@ export function EpisodeSettingsForm({
           <p className="text-[12px] text-muted-foreground">
             {value.engine === "cloud"
               ? `Pictures: Nano Banana Pro · ${frames ? "Camera: Ken Burns zoom (fal), no video model" : `Video: ${video?.name ?? "Gemini Omni Flash"}`} · Voice: ElevenLabs v4 (Chatterbox for your own voice), timed word by word by ElevenLabs forced alignment · Music: Sonilo · Subtitles: Auto Subtitle`
-              : `Pictures: Z-Image Turbo (Qwen-Image-Edit with your images) · ${frames ? "Camera: Ken Burns pan and zoom, scenes over 10 s in pieces" : "Video: Wan 2.2 Lightning"} · Voice: Chatterbox, timed by Qwen3-ASR · Music: ACE-Step, looped past 4 minutes · Subtitles: Qwen3-ASR + burn-in`}
+              : `Pictures: Qwen-Image 2.1 (Krea 2 Style Reference or Qwen-Image 2.1 Turbo with your images) · ${frames ? "Camera: Ken Burns pan and zoom, scenes over 10 s in pieces" : `Video: ${video?.name ?? "MiniMax H3"}`} · Voice: Chatterbox, timed by Qwen3-ASR · Music: ACE-Step, looped past 4 minutes · Subtitles: Qwen3-ASR + burn-in`}
             {" "}Each scene is cut to where its lines are spoken.
           </p>
         </CollapsibleContent>

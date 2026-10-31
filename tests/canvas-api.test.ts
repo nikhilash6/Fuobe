@@ -215,7 +215,7 @@ describe("canvas API", () => {
       let res = await list.POST(req("POST", { templateId: "image-animate", engine: "cloud" }));
       const c = (await res.json()) as Canvas;
       expect(c.name).toBe("Image → Animate");
-      expect(c.pages[0].graph.nodes.filter((n) => n.data.modelId).map((n) => n.data.modelId)).toEqual(["oss-z-image-turbo", "oss-wan22-14b-fast"]);
+      expect(c.pages[0].graph.nodes.filter((n) => n.data.modelId).map((n) => n.data.modelId)).toEqual(["oss-qwen-image-21", "oss-minimax-h3"]);
       // Cloud nodes are refused with a reason.
       res = await run.POST(req("POST", { graph: board }), ctx(id));
       expect(res.status).toBe(422);

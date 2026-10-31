@@ -146,7 +146,7 @@ describe("apps and tools pick the new models first", () => {
   });
 
   it("Canvas' Effects 2.0 chains set the scene on Qwen-Image 2.1 on your GPU", () => {
-    expect(EFFECT_CHAIN_MODELS.edit).toEqual({ cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-image-21" });
+    expect(EFFECT_CHAIN_MODELS.edit).toEqual({ cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-image-21-turbo" });
   });
 
   it("Photodump, Fashion Factory and Character swap offer Qwen-Image 2.1 before Qwen-Image-Edit 2511", () => {

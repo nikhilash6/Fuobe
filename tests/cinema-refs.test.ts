@@ -44,12 +44,12 @@ describe("reference clips", () => {
     const plan = planCinema({ ...VIDEO, ...CLIPS, modelId: "kling-3" }, ctx);
     expect(plan.model.id).toBe("kling-3");
     expect(plan.steps[0].request.inputs).toBeUndefined();
-    expect(plan.notes.join(" ")).toMatch(/Kling 3\.0 doesn't take reference videos and reference audio — Seedance 2\.5 does/);
-    // Fuobe Cinema picked from the menu takes none yet: Seedance 2.5 is named.
+    expect(plan.notes.join(" ")).toMatch(/Kling 3\.0 doesn't take reference videos and reference audio — MiniMax H3 or Seedance 2\.5 or MiniMax H3 Max or Wan 3\.0 do/);
+    // Fuobe Cinema picked from the menu takes none yet: the partners that do are named.
     const original = planCinema({ ...VIDEO, ...CLIPS, modelId: "fuobe-cinema" }, ctx);
     expect(original.model.id).toBe("fuobe-cinema");
     expect(original.steps[0].request.op).toBeUndefined();
-    expect(original.notes.join(" ")).toMatch(/Fuobe Cinema doesn't take reference videos and reference audio — Seedance 2\.5 does/);
+    expect(original.notes.join(" ")).toMatch(/Fuobe Cinema doesn't take reference videos and reference audio — MiniMax H3 or Seedance 2\.5/);
     expect(original.notes.join(" ")).not.toMatch(/Cinema Studio/);
     // Open models and stills never take them.
     expect(planCinema({ ...VIDEO, ...CLIPS, engine: "open" }, ctx).notes.join(" ")).toMatch(/aren't sent to Fuobe Cinema/);
@@ -79,13 +79,17 @@ describe("reference clips", () => {
   it("move a take on the default model to the first partner model that takes them all, with a note", () => {
     // Nothing picked in the menu (the cloud default, Fuobe Cinema): the clips aren't dropped.
     const plan = planCinema({ ...VIDEO, ...CLIPS }, ctx);
-    expect(plan.model.id).toBe("seedance-2-5");
-    expect(plan.steps[0].request).toMatchObject({ modelId: "seedance-2-5", op: "ref2v", inputs: CLIPS });
-    expect(plan.notes[0]).toBe("Fuobe Cinema doesn't take reference clips yet, so this take runs on Seedance 2.5 (a partner model) with them — pick Fuobe Cinema in the menu to leave them out");
+    expect(plan.model.id).toBe("minimax-h3");
+    expect(plan.steps[0].request).toMatchObject({ modelId: "minimax-h3", op: "ref2v", inputs: CLIPS });
+    expect(plan.notes[0]).toBe("Fuobe Cinema doesn't take reference clips yet, so this take runs on MiniMax H3 (a partner model) with them — pick Fuobe Cinema in the menu to leave them out");
     expect(plan.costUsd).toBeGreaterThan(0);
     // Only a reference video, or only audio: the same.
-    expect(planCinema({ ...VIDEO, videos: CLIPS.videos }, ctx).model.id).toBe("seedance-2-5");
-    expect(planCinema({ ...VIDEO, audios: CLIPS.audios }, ctx).model.id).toBe("seedance-2-5");
+    expect(planCinema({ ...VIDEO, videos: CLIPS.videos }, ctx).model.id).toBe("minimax-h3");
+    expect(planCinema({ ...VIDEO, audios: CLIPS.audios }, ctx).model.id).toBe("minimax-h3");
+    // More clips than MiniMax H3 takes (3 of each kind): the first partner that takes them all.
+    const many = planCinema({ ...VIDEO, videos: ["/api/files/a.mp4", "/api/files/b.mp4", "/api/files/c.mp4", "/api/files/d.mp4"], audios: CLIPS.audios }, ctx);
+    expect(many.model.id).toBe("seedance-2-5");
+    expect(many.steps[0].request.inputs?.videos).toHaveLength(4);
     // No clips, or the GPU, or a still: Fuobe Cinema stays.
     expect(planCinema(VIDEO, ctx).model.id).toBe("fuobe-cinema");
     expect(planCinema({ ...VIDEO, ...CLIPS, engine: "open" }, ctx).model.id).toBe("fuobe-cinema");

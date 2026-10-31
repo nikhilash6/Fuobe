@@ -131,7 +131,10 @@ describe("storyboard film", () => {
     const { items } = createStoryboardFilm(board.batchId);
     const [film, ...clips] = items;
     expect(clips).toHaveLength(3);
-    expect(clips[0].modelId).toBe("oss-wan22-14b-fast");
+    // MiniMax H3 on the GPU, in 5 s shots (its trained range starts there).
+    expect(clips[0].modelId).toBe("oss-minimax-h3");
+    expect(clips.every((c) => c.request.params?.duration === 5)).toBe(true);
+    expect(film.modelId).toBe("oss-join-clips");
     // Start and end frame for every shot but the last.
     expect(dependsOn(clips[0].id)).toEqual([board.items[0].id, board.items[1].id]);
     expect(clips[0].request.chain).toEqual([{ slot: "images", position: "first" }, { slot: "endImage" }]);

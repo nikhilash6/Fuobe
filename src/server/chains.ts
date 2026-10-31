@@ -367,13 +367,13 @@ export function createExtendChain(original: GenerationRequest, model: ModelDef):
   }
 }
 
-/** The still the open text-to-3D route draws first. */
-const STILL_MODEL = "oss-z-image-turbo";
+/** The still the open text-to-3D route draws first (Qwen-Image 2.1's text-to-image route). */
+const STILL_MODEL = "oss-qwen-image-21";
 /** The image-to-3D model that runs a text-to-3D route's workflow. */
 const BUILDERS_3D: Record<string, string> = { "image-to-3d-trellis2": "oss-trellis2" };
 
 /**
- * Text to 3D on the open engine (a text-to-3d route marked `chained`): Z-Image Turbo draws the object whole on a
+ * Text to 3D on the open engine (a text-to-3d route marked `chained`): Qwen-Image 2.1 draws the object whole on a
  * plain background (a helper step), then the route's workflow (TRELLIS.2) builds the model from that still.
  */
 export function createStillTo3d(original: GenerationRequest, model: ModelDef, route: ModelRoute): Generation[] {
@@ -533,9 +533,12 @@ export function createMosaicRun(original: GenerationRequest, model: ModelDef, op
   return [...mosaics, ...pictures];
 }
 
-/** The model a storyboard film is animated with. */
+/**
+ * The model a storyboard film is animated with: MiniMax H3 on your GPU (5 s shots, its default), Seedance 2.5 in the
+ * cloud. A clip's own sound stays out of the film: the open join (video-concat-{n}) keeps the picture only.
+ */
 export function filmModel(engine: Engine, modelId?: string): ModelDef {
-  const m = getModel(modelId ?? (engine === "open" ? "oss-wan22-14b-fast" : "seedance-2-5"));
+  const m = getModel(modelId ?? (engine === "open" ? "oss-minimax-h3" : "seedance-2-5"));
   if (!m || m.kind !== "video" || !supportsOp(m, "i2v")) throw new Error("Pick an image-to-video model");
   return m;
 }

@@ -380,7 +380,7 @@ describe("canvas templates", () => {
     expect(graphEngine(graph)).toBe("open");
     expect(graph.nodes.find((n) => n.id === "film")!.data.modelId).toBe("oss-join-clips");
     expect(graph.nodes.find((n) => n.id === "beat1")!.data).toMatchObject({ modelId: "oss-text-llm", op: "write" });
-    expect(graph.nodes.find((n) => n.id === "shot1")!.data).toMatchObject({ modelId: "oss-wan22-14b-fast", op: "i2v" });
+    expect(graph.nodes.find((n) => n.id === "shot1")!.data).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v" });
     expect(planCanvas(graph, { engineMode: "open" }).errors).toEqual([]);
   });
 

@@ -943,15 +943,16 @@ export interface ModelChoice {
 }
 
 /**
- * Marketing Studio Image's Original (build plan O10): Qwen-Image-Edit 2511 with Fuobe's template prompts on both engines
- * (Qwen-Image 2512 without a product photo; a Standalone product shot relit by the White_to_Scene LoRA on the open
- * engine). Its pictures carry no words: the headline and CTA are set over them in the browser, so they come out exact.
+ * Marketing Studio Image's Original (build plan O10) with Fuobe's template prompts: Qwen-Image 2.1 on the user's GPU
+ * (its edit with up to 4 references, its text-to-image without a product photo; a Standalone product shot relit by the
+ * White_to_Scene LoRA), Qwen-Image-Edit 2511 hosted on fal. Its pictures carry no words: the headline and CTA are set
+ * over them in the browser, so they come out exact.
  */
 export const MARKETING_IMAGE_MODEL = "fuobe-marketing-image";
 
 /** The Original's line in the model menus, per engine. */
 export const MARKETING_IMAGE_NOTE: Record<Engine, string> = {
-  open: "Fuobe Original · Qwen-Image-Edit 2511 on your GPU",
+  open: "Fuobe Original · Qwen-Image 2.1 on your GPU",
   cloud: "Fuobe Original · Qwen-Image-Edit 2511, hosted",
 };
 
@@ -967,7 +968,10 @@ export function formatModels(format: FormatDef, engine: Engine, has: { product: 
   if (engine === "open") {
     switch (format.pipeline) {
       case "motion":
-        return [{ id: "oss-wan22-14b-fast", note: "Wan 2.2 14B, shot by shot" }];
+        return [
+          { id: "oss-minimax-h3", note: "MiniMax H3, 5–15 s clips with sound" },
+          { id: "oss-wan22-14b-fast", note: "Wan 2.2 14B, shot by shot" },
+        ];
       case "ugc":
         return [{ id: "oss-infinitetalk", note: "InfiniteTalk presenter" }];
       default:
@@ -985,10 +989,10 @@ export function formatModels(format: FormatDef, engine: Engine, has: { product: 
     case "poster":
       return has.product
         ? [original, { id: "gpt-image-2-5", note: "Draws the exact text" }, { id: "nano-banana-pro" }, { id: "ideogram-4-5" }]
-        : [original, { id: "ideogram-3", note: "Exact text in your brand colours" }, { id: "ideogram-4-5" }, { id: "recraft-4-1" }, { id: "gpt-image-2-5" }];
+        : [original, { id: "ideogram-4-5", note: "Exact text in your brand colours" }, { id: "recraft-4-1" }, { id: "gpt-image-2-5" }];
     case "ugc-talking":
     case "tiktok":
-      return [{ id: "omnihuman-2", note: "Full-body presenter" }, { id: "kling-avatar" }];
+      return [{ id: "omnihuman-2", note: "Full-body presenter" }, { id: "kling-avatar-2" }];
     default:
       return [{ id: "seedance-2-5", note: "Multi-shot with sound" }, { id: "kling-o3" }, { id: "gemini-omni-flash" }];
   }
@@ -999,7 +1003,7 @@ export function formatModels(format: FormatDef, engine: Engine, has: { product: 
  * engines (the product photo as reference, else made from the concept), partner models as choices in the cloud.
  */
 export const AD_VISUAL_MODELS: Record<Engine, ModelChoice[]> = {
-  open: [{ id: MARKETING_IMAGE_MODEL, name: "Fuobe Marketing Image", note: "Fuobe Original · Qwen-Image-Edit 2511 with your product photo, free on your GPU" }],
+  open: [{ id: MARKETING_IMAGE_MODEL, name: "Fuobe Marketing Image", note: "Fuobe Original · Qwen-Image 2.1 with your product photo, free on your GPU" }],
   cloud: [
     { id: MARKETING_IMAGE_MODEL, name: "Fuobe Marketing Image", note: "Fuobe Original · Qwen-Image-Edit 2511 with your product photo, hosted on fal" },
     { id: "nano-banana-pro", name: "Nano Banana Pro", note: "Google's Gemini 3 Pro Image, through fal" },
@@ -1012,10 +1016,26 @@ export function adVisualModel(engine: Engine, asked?: string | null): string {
   return asked && AD_VISUAL_MODELS[engine].some((c) => c.id === asked) ? asked : AD_VISUAL_MODELS[engine][0].id;
 }
 
-/** Cloud talking-presenter / voice / caption models for UGC pipelines. */
+/**
+ * Talking-presenter / voice / caption models for UGC pipelines (Marketing Studio UGC and TikTok, Click to Ad, the Ad
+ * Multiplier's new hook and CTA). `still` makes the presenter from reference photos (up to 4 on Qwen-Image 2.1 Turbo);
+ * `stillFromWords` without any. A clip's own sound never reaches the film: the open joins keep the picture and one
+ * chosen soundtrack (the presenter's voice, or the reference ad's), and the mux lays the voiceover in its place.
+ */
 export const UGC_MODELS = {
-  cloud: { voice: "elevenlabs-v4", still: "nano-banana-pro", talk: "omnihuman-2", clip: "seedance-2-5", captions: "auto-subtitle", join: "join-clips", mux: "merge-audio-video", trim: "trim-video", frame: "extract-frame" },
-  open: { voice: "oss-chatterbox", still: "oss-qwen-edit", talk: "oss-infinitetalk", clip: "oss-wan22-14b-fast", captions: "oss-captions-burnin", join: "oss-join-clips", mux: "oss-mux", trim: "oss-trim", frame: "oss-extract-frame" },
+  cloud: { voice: "elevenlabs-v4", still: "nano-banana-pro", stillFromWords: "nano-banana-pro", talk: "omnihuman-2", clip: "seedance-2-5", captions: "auto-subtitle", join: "join-clips", mux: "merge-audio-video", trim: "trim-video", frame: "extract-frame" },
+  open: {
+    voice: "oss-chatterbox",
+    still: "oss-qwen-image-21-turbo",
+    stillFromWords: "oss-qwen-image-21",
+    talk: "oss-infinitetalk",
+    clip: "oss-minimax-h3",
+    captions: "oss-captions-burnin",
+    join: "oss-join-clips",
+    mux: "oss-mux",
+    trim: "oss-trim",
+    frame: "oss-extract-frame",
+  },
 } as const;
 
 /**
