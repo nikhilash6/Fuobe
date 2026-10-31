@@ -19,8 +19,12 @@ const INTERNAL = [
   /not rendered/i,
   /Proof \[/,
   /CPU library server|no GPU here|Ran here|on this server|validation server|shared CPU server/i,
-  /Originals O\d|\bN7-\d|\br4\//,
+  /\bthe (\d-core )?CPU server\b|\bresearch (graph|run|bound)/i,
+  /\/prompt (validation|only)|Validated by \/prompt|\/object_info/i,
+  /not GPU-tested|not measured yet|random-weight/i,
+  /Originals O\d|\bN7-\d|\br4\/|build plan [A-Z]?\d|catalog-\d|feature package/i,
   /\b(src|tests)\/|scripts\/(?!comfy\/README\.md)/,
+  /\b[\w-]+\.tsx?\b|persistOutput|collectOutputs|EXT_BY_TYPE|TYPE_BY_EXT|OutputFile\b/,
 ];
 
 describe("the workflow library's notes", () => {
@@ -40,6 +44,19 @@ describe("the workflow library's notes", () => {
       "image-to-3d-pixal3d",
       "video-concat-sound2-3",
       "interpolate-rife-fps",
+      "ltx23-t2v-lora",
+      "video-evolution-wan22-fun-vace",
+      "captions-burnin",
+      "ocr-lines-qwen35",
+      "video-inpaint-wan-vace",
+      "video-erase-void",
+      "video-character-swap-h3",
+      "video-mask-h3-relay",
+      "video-export-pro",
+      "video-export-exr",
+      "image-to-splat-triposplat",
+      "upscale-video-esrgan-chunked",
+      "upscale-video-seedvr2-chunked",
     ];
     for (const id of ids) expect(manifest.workflows.find((w) => w.id === id)?.notes, id).toBe(spec.get(id));
   });
