@@ -2,11 +2,13 @@
 
 import { AudioLines, FileVideo, ImagePlus, Library, Loader2, Upload, X } from "lucide-react";
 import { nanoid } from "nanoid";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAskBeforeUpload, useAssets, type Asset } from "@/lib/api";
+import { signInHref, useAskBeforeUpload, useAssets, useIsGuest, type Asset } from "@/lib/api";
 import { toastError } from "@/lib/refusals";
 import { postFile } from "@/lib/upload";
 import type { MediaKind } from "@/lib/catalog/types";
@@ -138,10 +140,12 @@ export function SlotPreview({ value, className }: { value: Pick<SlotValue, "kind
   return <img src={value.preview} alt={value.name ?? ""} className={cn("size-full object-cover", className)} />;
 }
 
-/** Grid of your uploads and results of one kind (or several). */
+/** Grid of your uploads and results of one kind (or several). A guest's is empty, and says how to fill it. */
 export function LibraryGrid({ kinds, onPick }: { kinds: MediaKind[]; onPick: (v: SlotValue) => void }) {
   const [kind, setKind] = useState<MediaKind>(kinds[0] ?? "image");
   const assets = useAssets(undefined, kind);
+  const guest = useIsGuest();
+  const here = usePathname();
   return (
     <div className="space-y-2">
       {kinds.length > 1 && (
@@ -176,6 +180,13 @@ export function LibraryGrid({ kinds, onPick }: { kinds: MediaKind[]; onPick: (v:
             </button>
           ))}
         </div>
+      ) : guest ? (
+        <p className="px-1 py-6 text-center text-sm text-muted-foreground">
+          <Link href={signInHref("signup", here)} className="text-brand-text underline underline-offset-2">
+            Sign up free
+          </Link>{" "}
+          to keep your uploads and results here.
+        </p>
       ) : (
         <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nothing here yet. Uploads and results show up here.</p>
       )}

@@ -40,6 +40,8 @@ export function GuestPrompt() {
     setRetry(null);
   }, []);
   const viewer = useStatus().data?.viewer;
+  // A studio that runs open-source models only takes no keys: its cards offer the GPU alone.
+  const keysAllowed = viewer?.kind !== "account" || viewer.paidAllowed !== false;
   const qc = useQueryClient();
   // Who this page was for, for the refusal that comes when that sign-in ended elsewhere: "owner", "account", or null.
   const who = useViewer().data;
@@ -101,10 +103,14 @@ export function GuestPrompt() {
                 <div className="mb-1 grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
                   <Cpu className="size-5" />
                 </div>
-                <DialogTitle>{TITLES[reason ?? action]}</DialogTitle>
+                <DialogTitle>{reason ? TITLES[reason] : action === "upload" && !keysAllowed ? "Connect your GPU to add your own files" : TITLES[action]}</DialogTitle>
                 <DialogDescription>
                   {!reason && action === "upload" ? (
-                    "A free account keeps its files for runs on its own ComfyUI or its own fal.ai or Replicate key."
+                    keysAllowed ? (
+                      "Your files are kept for your own runs, on your own ComfyUI or with your own fal.ai or Replicate key."
+                    ) : (
+                      "Your files are kept for your own runs on your own ComfyUI."
+                    )
                   ) : (
                     <>Fuobe runs this on the ComfyUI on your computer. It&apos;s free and private.</>
                   )}
@@ -183,7 +189,7 @@ function logInAgain(who: "owner" | "account", here?: string): string {
 
 const TITLES: Record<FindReason | RefusalAction, string> = {
   run: "Connect your GPU to run this",
-  upload: "Connect your GPU or add a key to use your own files",
+  upload: "Connect your GPU or add a key to add your own files",
   setting: "Your ComfyUI needs Fuobe's setting again",
   find: "Find your ComfyUI",
   browser: "Run your GPU jobs from this browser",

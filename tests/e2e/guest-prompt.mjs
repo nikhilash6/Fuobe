@@ -6,7 +6,7 @@
 // A run keeps the run's words: a guest presses Generate in the Image studio ("Create a free account to run this"). A
 // guest's message in Assist opens no card (it's the owner's: "Assist runs on the studio owner's AI…" is its toast, as
 // an account's).
-// Then an account with neither a GPU nor a key: Target photo opens "Connect your GPU or add a key to use your own files"
+// Then an account with neither a GPU nor a key: Target photo opens "Connect your GPU or add a key to add your own files"
 // instead of the file chooser, its form inside it, closed when the page changes; an upload sent anyway is refused (403)
 // with the same card; Color Grading still grades its own picture. None on a message in Assist (it's the owner's, the
 // same toast), and its Generate in the Image studio opens "Connect your GPU to run this".
@@ -33,7 +33,7 @@ const FACE_SWAP = "/apps/app-face-swap";
 const TARGET = /^Target photo \(required\): upload$/;
 const GUEST_CARD = "Create a free account to add your own files";
 const GUEST_RUN_CARD = "Create a free account to run this";
-const GPU_CARD = "Connect your GPU or add a key to use your own files";
+const GPU_CARD = "Connect your GPU or add a key to add your own files";
 const GPU_RUN_CARD = "Connect your GPU to run this";
 
 const browser = await launch();
@@ -226,7 +226,7 @@ try {
     await settled(page);
     let s = await seen(page);
     await shot(page, "8-connect-gpu");
-    check("one card opens: Connect your GPU or add a key to use your own files", s.cards.length === 1 && s.cards[0] === GPU_CARD, JSON.stringify(s.cards));
+    check("one card opens: Connect your GPU or add a key to add your own files", s.cards.length === 1 && s.cards[0] === GPU_CARD, JSON.stringify(s.cards));
     check("no error toast on top of it", s.errors.length === 0, JSON.stringify(s.errors));
     const sideways = await page.getByRole("dialog").evaluate((d) => d.scrollWidth - d.clientWidth);
     check("its form fits inside it (nothing cut off at the right)", sideways <= 0, `${sideways}px`);

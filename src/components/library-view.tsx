@@ -11,6 +11,7 @@ import { FolderDialog, FolderHeader, FolderStrip, MoveMenuItems } from "@/compon
 import { ReviewMenuItems } from "@/components/library/review";
 import { UploadDeleteProvider } from "@/components/library/upload-delete";
 import { useViewPrefs, ViewOptions, type ViewPrefs } from "@/components/library/view-options";
+import { openAddKey } from "@/components/keys/your-keys";
 import { PageShell } from "@/components/page-shell";
 import { useShare } from "@/components/share/share-provider";
 import { SharedLinks } from "@/components/share/shared-links";
@@ -39,7 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BULK_MAX, useCreateGeneration, useFolders, useGenerationActions, useIsAccount, useIsOwner, useIsVisitor, useLibrary, useLibraryFacets, useShares, useStatus, useUploads, type Asset, type FeedFilter } from "@/lib/api";
+import { BULK_MAX, signInHref, useCreateGeneration, useFolders, useGenerationActions, useIsAccount, useIsGuest, useIsOwner, useIsVisitor, useLibrary, useLibraryFacets, useShares, useStatus, useUploads, type Asset, type FeedFilter } from "@/lib/api";
 import type { Generation, MediaKind, ReviewStatus } from "@/lib/catalog/types";
 import { keyCombo, useModKey } from "@/lib/keys";
 import { buildEntries, folderAndDescendants, reviewInfo, splitByDate, toggleAll, TRASH_DAYS, type LibraryEntry } from "@/lib/library";
@@ -233,6 +234,7 @@ function Inner() {
   // A guest or an account sees its own runs only; an account with neither its own GPU nor its own key can't add files yet.
   const visitor = useIsVisitor();
   const account = useIsAccount();
+  const guest = useIsGuest() && visitor;
   const seen = useStatus().data?.viewer;
   const cantUpload = seen?.kind === "account" && !seen.gpu.connected && !seen.keys?.length;
   // Library → Shared: the share links, not results (no search, selection or filters there).
@@ -506,16 +508,31 @@ function Inner() {
     }
     if (folder) return <Empty title="This folder is empty">Drag cards onto it, or select some and choose Move to folder.</Empty>;
     if (tab.id === "favorites") return <Empty title="Nothing liked yet">Mark the ones you like with the heart to keep them here.</Empty>;
+    if (uploadsTab && guest)
+      return (
+        <Empty title="No uploads yet">
+          <Link href={signInHref("signup", "/library?tab=uploads")} className="text-brand-text underline underline-offset-2">
+            Sign up free
+          </Link>{" "}
+          to add your own files.
+        </Empty>
+      );
     if (uploadsTab && cantUpload)
       return (
         <Empty title="No uploads yet">
           <Link href="/connect" className="text-brand-text underline underline-offset-2">
             Connect your GPU
-          </Link>{" "}
-          or{" "}
-          <Link href="/settings#your-keys" className="text-brand-text underline underline-offset-2">
-            add a key
-          </Link>{" "}
+          </Link>
+          {/* "Add your fal.ai key" opens here, over the Library; a studio of open-source models only takes no keys. */}
+          {seen.paidAllowed !== false && (
+            <>
+              {" "}
+              or{" "}
+              <button type="button" onClick={() => openAddKey("fal")} className="text-brand-text underline underline-offset-2">
+                add a key
+              </button>
+            </>
+          )}{" "}
           to add your own files.
         </Empty>
       );
@@ -543,7 +560,23 @@ function Inner() {
         ) : (
           <div className="min-w-0">
             <h1 className="font-heading text-[34px] leading-tight">Library</h1>
-            <p className="mt-1 max-w-2xl text-[15px] text-muted-foreground">{visitor ? (account ? "What you make on your own GPU or with your own key." : "What you make on your own GPU.") : "Everything you make, across cloud and open-source runs."}</p>
+            <p className="mt-1 max-w-2xl text-[15px] text-muted-foreground">
+              {/* A guest can't make anything yet; a studio of open-source models only takes no keys. */}
+              {!visitor ? (
+                "Everything you make, across cloud and open-source runs."
+              ) : guest ? (
+                <>
+                  <Link href={signInHref("signup", "/library")} className="text-brand-text underline underline-offset-2">
+                    Sign up free
+                  </Link>{" "}
+                  to keep what you make here.
+                </>
+              ) : account && seen?.paidAllowed !== false ? (
+                "What you make on your own GPU or with your own key."
+              ) : (
+                "What you make on your own GPU."
+              )}
+            </p>
           </div>
         )}
         <div className={cn("flex w-full items-center gap-2 sm:w-auto", sharedTab && "hidden")}>
