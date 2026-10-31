@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { useNow } from "@/components/studio/use-now";
-import { useEngine } from "@/lib/api";
+import { useEngine, useStatus } from "@/lib/api";
 import { threadTitle, type AssistModeChoice } from "@/lib/assist";
 import {
   DEFAULT_SCHEDULE_CAP_USD,
@@ -160,6 +160,7 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
   };
 
   const toggleDay = (d: number) => setDays((xs) => (xs.includes(d) ? xs.filter((x) => x !== d) : [...xs, d]));
+  const onComputer = !!useStatus().data?.ownerGpu;
 
   return (
     <form onSubmit={save} className="flex min-h-0 flex-col">
@@ -168,6 +169,8 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
           <CalendarClock className="size-5 text-muted-foreground" /> {schedule ? "Edit scheduled task" : "Schedule a task"}
         </DialogTitle>
         <DialogDescription>Each run is a new chat on this server — it runs even when Fuobe isn&apos;t open in a browser. What it makes lands in your Library.</DialogDescription>
+        {/* ComfyUI on the owner's computer: its open-source runs wait for a Fuobe tab there. */}
+        {onComputer && <p className="text-[13px] text-muted-foreground">Runs on your computer: keep Fuobe open there at that time.</p>}
       </DialogHeader>
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5">
         <div className="space-y-2">

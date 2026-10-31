@@ -33,7 +33,7 @@ export function GuestPrompt() {
   // Opened by the runner's note: ComfyUI needs Fuobe's setting again, find ComfyUI, or let this browser reach it.
   const [reason, setReason] = useState<FindReason | undefined>(undefined);
   // What was refused: a run (or any other change), or a file of the visitor's own.
-  const [action, setAction] = useState<RefusalAction>("run");
+  const [action, setAction] = useState<RefusalAction | "connect">("run");
   const [retry, setRetry] = useState<{ retry: () => void; kind?: string } | null>(null);
   const close = useCallback(() => {
     setOpen(false);
@@ -112,7 +112,7 @@ export function GuestPrompt() {
                       "Your files are kept for your own runs on your own ComfyUI."
                     )
                   ) : (
-                    <>Fuobe runs this on the ComfyUI on your computer. It&apos;s free and private.</>
+                    <>{action === "connect" && !reason ? "Your runs go to the ComfyUI on your computer. It's free and private." : "Fuobe runs this on the ComfyUI on your computer. It's free and private."}</>
                   )}
                 </DialogDescription>
                 {/* Paid models run on the account's own key instead (Your keys), when the studio allows them. */}
@@ -187,9 +187,11 @@ function logInAgain(who: "owner" | "account", here?: string): string {
   return `${href}${href.includes("?") ? "&" : "?"}owner=1`;
 }
 
-const TITLES: Record<FindReason | RefusalAction, string> = {
+const TITLES: Record<FindReason | RefusalAction | "connect", string> = {
   run: "Connect your GPU to run this",
   upload: "Connect your GPU or add a key to add your own files",
+  // Opened with no run waiting (the setup guide, the sidebar's Connect).
+  connect: "Connect your GPU",
   setting: "Your ComfyUI needs Fuobe's setting again",
   find: "Find your ComfyUI",
   browser: "Run your GPU jobs from this browser",

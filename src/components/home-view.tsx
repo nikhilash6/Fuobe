@@ -5,6 +5,7 @@ import { ArrowRight, CircleAlert, ImageIcon, Loader2, MessageCircle, Video, Wand
 import { useRouter, useSearchParams } from "next/navigation";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { GetStarted } from "@/components/get-started";
+import { usePagePlace } from "@/components/gpu/use-page-place";
 import { GitHubMark } from "@/components/github-mark";
 import { PageShell } from "@/components/page-shell";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -170,6 +171,8 @@ export function HomeView({
   const statusData = useStatus().data;
   const status = hydrated ? statusData : undefined;
   const nothingConnected = !!status && noConnection(status);
+  // A hosted studio: the owner's GPU is connected from here (the dialog), not by an address in Settings.
+  const hostedPage = usePagePlace() === "hosted";
   // Until something is connected (or it's put away): three ways to start, under the composer. The
   // static shell (no status yet) shows it only in a browser where it showed last time
   // (FirstRunScript), so a visitor to a public studio, who never gets it, doesn't see it come and go.
@@ -400,9 +403,15 @@ export function HomeView({
         ) : nothingConnected && !status?.viewer && (
           <p className="mt-4 text-[13px] text-muted-foreground">
             You’re in <span className="font-medium text-foreground">demo mode</span> — outputs are placeholders.{" "}
-            <Link href="/settings#get-started" className="text-brand-text underline underline-offset-2">
-              {engineMode === "open" ? "Connect ComfyUI" : engineMode === "cloud" ? "Add a fal.ai or Replicate key" : "Add a fal.ai key or connect ComfyUI"}
-            </Link>{" "}
+            {hostedPage && engineMode !== "cloud" ? (
+              <button type="button" onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))} className="text-brand-text underline underline-offset-2">
+                Connect your GPU
+              </button>
+            ) : (
+              <Link href="/settings#get-started" className="text-brand-text underline underline-offset-2">
+                {engineMode === "open" ? "Connect ComfyUI" : engineMode === "cloud" ? "Add a fal.ai or Replicate key" : "Add a fal.ai key or connect ComfyUI"}
+              </Link>
+            )}{" "}
             to generate for real.
           </p>
         )}

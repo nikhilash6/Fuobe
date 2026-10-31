@@ -1,13 +1,16 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Bot, Clapperboard, Cloud, Copy, Cpu, ExternalLink, ImageIcon, Megaphone, Mic2, Sparkles, Video, Wand2, X } from "lucide-react";
+import { AudioLines, Bot, ChevronDown, Clapperboard, Cloud, Copy, Cpu, ExternalLink, ImageIcon, Megaphone, Mic2, Sparkles, Video, Wand2, X } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConnectField, useSettings } from "@/components/connect-field";
-import { saveSettings, useEngineMode, type StatusInfo } from "@/lib/api";
+import { OwnerComputerLine, OwnerServerComfy } from "@/components/gpu/connect-choice";
+import { usePagePlace } from "@/components/gpu/use-local-comfy";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CONNECT_GPU_EVENT, saveSettings, useEngineMode, type StatusInfo } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
 import { COMFY_INSTALL_COMMAND, COMFY_INSTALL_DOCS, FAL_KEYS_URL, nothingConnected } from "@/lib/connections";
 import { cn } from "@/lib/utils";
@@ -30,6 +33,68 @@ const INTENTS = [
 ] as const;
 
 export type IntentMode = "image" | "video" | "edit";
+
+/** Models per workflow, how to install ComfyUI, and its install command: the GPU card's links. */
+function ComfyLinks() {
+  return (
+    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <Link href="/workflows" className="text-brand-text underline-offset-2 hover:underline">
+        Models per workflow
+      </Link>
+      <a href={COMFY_INSTALL_DOCS} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text underline-offset-2 hover:underline">
+        Install ComfyUI <ExternalLink className="size-3" />
+      </a>
+      <button
+        type="button"
+        onClick={() => void copyWithToast(COMFY_INSTALL_COMMAND, "Install command copied")}
+        className="inline-flex max-w-full items-center gap-1 rounded-md bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground ring-1 ring-border hover:bg-accent"
+        aria-label={`Copy the install command: ${COMFY_INSTALL_COMMAND}`}
+      >
+        <span className="truncate">{COMFY_INSTALL_COMMAND}</span> <Copy className="size-3 shrink-0" />
+      </button>
+    </span>
+  );
+}
+
+/**
+ * "Use your GPU" on a hosted studio (the page isn't on the server's machine, so the server's 127.0.0.1 isn't the
+ * owner's): Fuobe finds the ComfyUI on this computer, in the connect dialog (it stays open through "connected" after
+ * this guide goes); a ComfyUI on a server or a cloud GPU is the quieter second way. Once ComfyUI runs on the owner's
+ * computer (a guide opened again), its state.
+ */
+function HostedGpuCard({ computer }: { computer: boolean }) {
+  const [server, setServer] = useState(false);
+  return (
+    <GuideCard icon={Cpu} title="Use your GPU" cost="Free: open-source models run on your own graphics card">
+      {computer ? (
+        <OwnerComputerLine />
+      ) : (
+        <>
+          <p className="text-[13px] leading-relaxed text-muted-foreground">Fuobe finds the ComfyUI running on this computer and sends your runs to it.</p>
+          <div className="space-y-1.5">
+            <Button className="h-11 w-full sm:h-9 sm:w-fit" onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))}>
+              <Cpu /> Use the ComfyUI on this computer
+            </Button>
+            <p className="text-[12px] text-muted-foreground">Runs while Fuobe is open in this browser.</p>
+          </div>
+          <div>
+            <button type="button" onClick={() => setServer((v) => !v)} aria-expanded={server} className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground">
+              ComfyUI on a server or a cloud GPU? <ChevronDown className={cn("size-3.5 transition-transform", server && "rotate-180")} />
+            </button>
+            {server && (
+              <div className="mt-3">
+                <OwnerServerComfy hosted onlyAddress />
+              </div>
+            )}
+          </div>
+        </>
+      )}
+      <p className="text-[12px] text-muted-foreground">
+        <ComfyLinks />
+      </p>
+    </GuideCard>
+  );
+}
 
 function GuideCard({ icon: Icon, title, cost, children }: { icon: typeof Cloud; title: string; cost: string; children: React.ReactNode }) {
   return (
@@ -86,6 +151,8 @@ export function GetStarted({
   const titleId = useId();
   const cachedMode = useEngineMode();
   const mode = status?.engineMode ?? cachedMode;
+  // Where this page is: unknown in the server's HTML (Home's static shell), so the GPU card waits for it there.
+  const place = usePagePlace();
 
   const hide = async () => {
     setHiding(true);
@@ -112,7 +179,9 @@ export function GetStarted({
           </h2>
           <p className="mt-1 text-[13px] text-muted-foreground">
             {status && nothingConnected(status)
-              ? "Nothing is connected yet, so every run is a free demo with placeholder results. Connect a model to make the real thing:"
+              ? status.demoMode === "off"
+                ? "Nothing is connected yet. Connect a model to make the real thing:"
+                : "Nothing is connected yet, so every run is a free demo with placeholder results. Connect a model to make the real thing:"
               : "Three ways to make things with Fuobe. Connect another one, or check one you set up:"}
           </p>
         </div>
@@ -140,7 +209,13 @@ export function GetStarted({
             />
           </GuideCard>
         )}
-        {mode !== "cloud" && (
+        {mode !== "cloud" && place === null ? (
+          <GuideCard icon={Cpu} title="Use your GPU" cost="Free: open-source models run on your own graphics card">
+            <Skeleton className="h-[116px] w-full rounded-lg" />
+          </GuideCard>
+        ) : mode !== "cloud" && place === "hosted" ? (
+          <HostedGpuCard computer={get("comfyWhere")?.value === "computer"} />
+        ) : mode !== "cloud" && (
           <GuideCard icon={Cpu} title="Use your GPU" cost="Free: open-source models run on your machine">
             <p className="text-[13px] leading-relaxed text-muted-foreground">Point Fuobe at a running ComfyUI. Each workflow lists the model files it needs.</p>
             <ConnectField

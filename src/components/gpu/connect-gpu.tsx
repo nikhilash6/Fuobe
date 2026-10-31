@@ -8,11 +8,14 @@ import { useEffect, useRef } from "react";
 import { PreflightChecklist } from "@/components/gpu/preflight-checklist";
 import { ReadinessBoard } from "@/components/gpu/readiness-board";
 import { ConnectChoice } from "@/components/gpu/connect-choice";
+import { useSettings } from "@/components/connect-field";
+import { usePagePlace } from "@/components/gpu/use-local-comfy";
 import { KeyInstead } from "@/components/keys/your-keys";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGpuCheck, useGpuReadiness } from "@/hooks/use-gpu";
 import { signInHref, useStatus, useViewer } from "@/lib/api";
+import { ownerSteer } from "@/lib/page-place";
 import { safeNext } from "@/lib/safe-redirect";
 
 /**
@@ -45,6 +48,15 @@ export function ConnectGpu() {
   });
   const g = gpu.data?.gpu;
   const url = g ? (g.mode === "computer" ? "this computer" : g.url) : null;
+  // The owner of a hosted studio with no ComfyUI connected: where it runs comes first (the server's own address would
+  // be the server itself, never the owner's computer), and nothing is checked until then.
+  const owner = !!viewer?.owner;
+  const place = usePagePlace();
+  const status = useStatus().data;
+  const ownerSettings = useSettings(owner).data;
+  const comfyWhere = ownerSettings?.find((s) => s.name === "comfyWhere")?.value;
+  const steer = owner ? ownerSteer(place, status, ownerSettings ? comfyWhere || "server" : undefined) : null;
+  const ownerSetup = steer === "hosted";
   const lastUrl = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (!isAccount || gpu.isLoading) return;
@@ -55,14 +67,14 @@ export function ConnectGpu() {
   const view = r.data;
   const auto = useRef<string | null>(null);
   useEffect(() => {
-    if (!view?.connected || check.running || (view.wait ?? 0) > 0) return;
+    if (!view?.connected || check.running || (view.wait ?? 0) > 0 || ownerSetup || (owner && steer === null)) return;
     const old = view.checkedAt == null || view.stale || Date.now() - view.checkedAt > 60_000;
     const key = `${url ?? "install"}`;
     if (old && auto.current !== key) {
       auto.current = key;
       void check.start();
     }
-  }, [view, check, url]);
+  }, [view, check, url, ownerSetup, owner, steer]);
 
   const title = welcome ? "Welcome! Connect your GPU" : "Connect your GPU";
   const lead = "Make things on your own graphics card with ComfyUI. It's free, private and has no run limit. Fuobe checks what your ComfyUI has, and shows what each studio still needs.";
@@ -125,6 +137,18 @@ export function ConnectGpu() {
       </div>
     );
 
+  if (ownerSetup)
+    return (
+      <div className="space-y-6">
+        {header(1)}
+        <Card>
+          <h2 className="mb-3 text-[16px] font-semibold">Where is ComfyUI running?</h2>
+          <ConnectChoice className="sm:max-w-none" />
+        </Card>
+        {done(false)}
+      </div>
+    );
+
   const reason = view && !view.connected ? view.reason : undefined;
   if (reason === "off")
     return (
@@ -170,7 +194,7 @@ export function ConnectGpu() {
             </Link>
           ) : (
             <Link href="/settings#comfyui" className="text-[13px] text-brand-text underline-offset-2 hover:underline">
-              The studio&apos;s ComfyUI
+              {view?.target === "computer" ? "Change where it runs" : "The studio's ComfyUI"}
             </Link>
           )}
         </div>

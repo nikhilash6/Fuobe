@@ -95,7 +95,14 @@ const UNSUPPORTED: Record<"safari" | "phone" | "http", string> = {
   http: "Your browser only lets a secure page reach apps on this computer. Open the studio over https, or on the computer that runs ComfyUI, or run from anywhere with a link.",
 };
 
-export const unsupportedWords = (why: "safari" | "phone" | "http") => UNSUPPORTED[why];
+/** The owner's second way is a ComfyUI at a server address (a cloud GPU, a tunnel), not an account's link. */
+const UNSUPPORTED_OWNER: Record<"safari" | "phone" | "http", string> = {
+  phone: "Your phone can't run ComfyUI. Open Fuobe on your computer to use its ComfyUI, or use a ComfyUI on a server below.",
+  safari: "Safari can't reach apps on this computer from a website. Open Fuobe in Chrome, Edge or Firefox to use your ComfyUI directly, or use a ComfyUI on a server below.",
+  http: "Your browser only lets a secure page reach apps on this computer. Open the studio over https, or on the computer that runs ComfyUI, or use a ComfyUI on a server below.",
+};
+
+export const unsupportedWords = (why: "safari" | "phone" | "http", owner = false) => (owner ? UNSUPPORTED_OWNER : UNSUPPORTED)[why];
 
 /** Save a file the page made (the start file, the guard). */
 function save(name: string, text: string) {
@@ -268,7 +275,7 @@ function readyLine(board: ReadinessView | null | undefined): string | null {
 }
 
 /** The connected screen: the GPU, what's ready, and the run starting (when it was opened from one). */
-function Celebration({ c, fromRun, kind, onStart, onNotNow }: { c: Connected; fromRun?: boolean; kind?: string; onStart?: () => void; onNotNow?: () => void }) {
+function Celebration({ c, fromRun, kind, onStart, onNotNow, doneWords }: { c: Connected; fromRun?: boolean; kind?: string; onStart?: () => void; onNotNow?: () => void; doneWords?: string }) {
   const facts = statsFacts(c.stats, origin(), c.guard);
   const gpu = [facts.device && deviceLabel(facts.device), gib(facts.vramBytes), facts.version && `ComfyUI ${facts.version}`].filter(Boolean).join(" · ");
   const ready = readyLine(c.board);
@@ -357,7 +364,7 @@ function Celebration({ c, fromRun, kind, onStart, onNotNow }: { c: Connected; fr
           </Button>
         </div>
       ) : (
-        !fromRun && <p className="text-[13px] text-muted-foreground">Done. Runs from the Image, Video and Audio studios now use your GPU. Keep a Fuobe tab open while they run.</p>
+        !fromRun && <p className="text-[13px] text-muted-foreground">{doneWords ?? "Done. Runs from the Image, Video and Audio studios now use your GPU. Keep a Fuobe tab open while they run."}</p>
       )}
     </div>
   );
@@ -377,6 +384,10 @@ export interface ThisComputerProps {
   autoLook?: boolean;
   /** ComfyUI had Fuobe's setting before, and runs without it now (the fix says so). */
   again?: boolean;
+  /** The last line once connected, when it wasn't opened from a run (the owner's own words). */
+  doneWords?: string;
+  /** Changes when something outside asks to look now ("Use the ComfyUI on this computer" under a refused address). */
+  lookNow?: number;
 }
 
 /** Is Fuobe's guard in this ComfyUI (it answers at /fuobe/guard)? */
@@ -387,7 +398,7 @@ const guardAt = (port: number, host: string) =>
   );
 
 /** The whole flow, from "Find my ComfyUI" to connected. */
-export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLook, again }: ThisComputerProps) {
+export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLook, again, doneWords, lookNow }: ThisComputerProps) {
   const qc = useQueryClient();
   const { state, look, choose } = useLocalComfy(true);
   const [done, setDone] = useState<Connected | null>(null);
@@ -400,6 +411,14 @@ export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLo
     autoLooked.current = true;
     void look();
   }, [autoLook, state.s, look]);
+
+  // Asked from outside: look now (from the start screen, or after nothing answered).
+  const looked = useRef(lookNow ?? 0);
+  useEffect(() => {
+    if (!lookNow || lookNow === looked.current) return;
+    looked.current = lookNow;
+    if (state.s === "start" || state.s === "none") void look();
+  }, [lookNow, state.s, look]);
 
   // Found and readable: connect with no click, then check what it has.
   useEffect(() => {
@@ -440,7 +459,7 @@ export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLo
     })();
   }, [state, connect, qc]);
 
-  if (done) return <Celebration c={done} fromRun={fromRun} kind={kind} onStart={onStart} onNotNow={onNotNow} />;
+  if (done) return <Celebration c={done} fromRun={fromRun} kind={kind} onStart={onStart} onNotNow={onNotNow} doneWords={doneWords} />;
   return (
     <div className="space-y-3 text-[13px]">
       <Screen state={state} look={look} choose={choose} again={again} />

@@ -1,30 +1,34 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Cpu, Globe, Loader2, TriangleAlert, Unplug } from "lucide-react";
-import { useState } from "react";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { ChevronDown, Cpu, Globe, Info, Loader2, Search, TriangleAlert, Unplug } from "lucide-react";
+import { createContext, useContext, useState } from "react";
 import { toast } from "sonner";
+import { ConnectField, useAllowPrivate, useSettings } from "@/components/connect-field";
 import { gib } from "@/components/gpu/comfy-finder";
 import { YourGpu } from "@/components/gpu/your-gpu";
 import { Button } from "@/components/ui/button";
 import { deviceLabel } from "@/lib/gpu/readiness";
-import { useViewer } from "@/lib/api";
+import { CONNECT_GPU_EVENT, useStatus, useViewer } from "@/lib/api";
+import type { OwnerGpuView } from "@/lib/connections";
+import { addressKind, refusedOnHosted } from "@/lib/page-place";
 import { RELAY_WORDS } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import { restartComputerRunner, rememberComfy, rememberedComfy } from "./computer-runtime";
 import { GuardFix, SettingFix, ThisComputer, unsupportedWords } from "./this-computer";
-import { lookOn, useComputerSupport } from "./use-local-comfy";
+import { lookOn, useComputerSupport, usePagePlace } from "./use-local-comfy";
 import { openFinder, useComputerState, type FindReason } from "./computer-runner";
 
 /**
- * "Connect your GPU" for an account: the ComfyUI on this computer first (the quickest way: nothing to install, runs
- * while Fuobe is open in this browser), a link (a tunnel) second, for runs that go on with the tab closed. On a phone,
- * in Safari, or on a page that can't ask for the permission, only the link, with why.
+ * "Connect your GPU": the ComfyUI on this computer first (the quickest way: nothing to install, runs while Fuobe is
+ * open in this browser). For an account, a link (a tunnel) second, for runs that go on with the tab closed; for the
+ * owner of a hosted studio, a ComfyUI at a server address (a cloud GPU, a tunnel). On a phone, in Safari, or on a page
+ * that can't ask for the permission, only the second way, with why.
  */
 
-export type AccountGpuView =
-  | { mode: "computer"; online: boolean; comfy?: "down" | "no-setting"; device?: string; vramBytes?: number; version?: string; port?: number; cors?: "exact" | "any" | "other"; guard?: boolean }
-  | { mode: "link"; url: string; hasToken: boolean };
+export type AccountGpuView = OwnerGpuView | { mode: "link"; url: string; hasToken: boolean };
+
+type ComputerView = Extract<AccountGpuView, { mode: "computer" }>;
 
 async function gpuCall<T>(method: string, body?: unknown): Promise<T> {
   const res = await fetch("/api/account/gpu", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -42,11 +46,24 @@ export async function connectThisComputer(): Promise<void> {
   await gpuCall("PUT", { mode: "computer" });
 }
 
-/** The owner's: ComfyUI runs on the computer the owner uses (Settings → Where ComfyUI runs). */
-async function connectOwnerComputer(): Promise<void> {
-  const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ comfyWhere: "computer" }) });
+async function putWhere(where: "server" | "computer"): Promise<void> {
+  const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ comfyWhere: where }) });
   if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `Request failed (${res.status})`);
 }
+
+/** The owner's: ComfyUI runs on the computer the owner uses (Settings → Where ComfyUI runs). */
+export async function connectOwnerComputer(): Promise<void> {
+  await putWhere("computer");
+}
+
+/** The owner's ComfyUI goes back to the server's address (the runs still waiting for the computer stop, saying why). */
+export async function disconnectOwnerComputer(qc: QueryClient): Promise<void> {
+  await putWhere("server");
+  for (const key of ["viewer", "status", "settings"]) void qc.invalidateQueries({ queryKey: [key] });
+}
+
+/** The owner's last line once the computer is connected. */
+const OWNER_DONE = "Done. Your open-source runs now go to this computer. Keep a Fuobe tab open here while they run.";
 
 const ABOUT =
   "Fuobe's setting lets the Fuobe page use your ComfyUI. On its own, it would also let other websites send work to your ComfyUI if your browser lets them reach apps on this computer (Chrome, Edge and Firefox ask you first). Fuobe's guard, a small file in ComfyUI's custom_nodes folder, turns them away. To turn the setting off, start ComfyUI the usual way.";
@@ -119,9 +136,11 @@ function NoGuard({ port }: { port: number }) {
   );
 }
 
-/** "This computer · RTX 5090 · port 8188 · Ready", another port, a link instead, Disconnect. */
-function ComputerStatus({ gpu, onLink }: { gpu: Extract<AccountGpuView, { mode: "computer" }>; onLink: () => void }) {
-  const qc = useQueryClient();
+/**
+ * "This computer · RTX 5090 · port 8188 · Ready", another port, the other way to connect, Disconnect. `look`: this
+ * browser can reach a ComfyUI on its computer (not a phone): the port can be changed from here.
+ */
+function ComputerStatus({ gpu, onDisconnect, other, look = true }: { gpu: ComputerView; onDisconnect: () => Promise<void>; other: { label: string; onClick: () => void }; look?: boolean }) {
   const here = useHere();
   const [busy, setBusy] = useState(false);
   const [about, setAbout] = useState(false);
@@ -131,7 +150,7 @@ function ComputerStatus({ gpu, onLink }: { gpu: Extract<AccountGpuView, { mode: 
   // A tab of this browser runs the jobs: what it sees now. Elsewhere (a phone, another computer has them): the server.
   const mine = here && !here.other ? here : null;
   const online = mine ? mine.comfy === "ok" && !mine.access : gpu.online;
-  const shownPort = mine?.port ?? rememberedComfy()?.port ?? gpu.port;
+  const shownPort = mine?.port ?? (look ? rememberedComfy()?.port : undefined) ?? gpu.port;
   const facts = [gpu.device && deviceLabel(gpu.device), gib(gpu.vramBytes), shownPort && `port ${shownPort}`].filter(Boolean).join(" · ");
   const guard = mine?.facts ? mine.facts.guard : gpu.guard;
   const lookAt = async () => {
@@ -150,9 +169,7 @@ function ComputerStatus({ gpu, onLink }: { gpu: Extract<AccountGpuView, { mode: 
   const remove = async () => {
     setBusy(true);
     try {
-      qc.setQueryData(["account-gpu"], await gpuCall("DELETE"));
-      void qc.invalidateQueries({ queryKey: ["viewer"] });
-      void qc.invalidateQueries({ queryKey: ["status"] });
+      await onDisconnect();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -164,7 +181,10 @@ function ComputerStatus({ gpu, onLink }: { gpu: Extract<AccountGpuView, { mode: 
       <div className="flex items-start gap-2.5 rounded-xl bg-brand-faint px-3 py-2.5">
         <Cpu className="mt-0.5 size-4 shrink-0 text-brand-text" />
         <div className="min-w-0 flex-1">
-          <p className="font-medium">This computer{online ? " · Ready" : ""}</p>
+          <p className="font-medium">
+            {look ? "This computer" : "Your computer"}
+            {online ? " · Ready" : ""}
+          </p>
           {online ? <p className="truncate text-[12px] text-muted-foreground">{facts || "Your ComfyUI"}</p> : <ComputerProblem here={here} server={gpu.comfy} />}
         </div>
         <Button size="sm" variant="ghost" className="-my-1 h-7" onClick={() => void remove()} disabled={busy}>
@@ -172,25 +192,167 @@ function ComputerStatus({ gpu, onLink }: { gpu: Extract<AccountGpuView, { mode: 
         </Button>
       </div>
       {gpu.cors === "any" && <p className="text-[12px] text-amber-700 dark:text-amber-400">Your ComfyUI lets every website in. To keep it private, start it with --enable-cors-header {window.location.origin} instead.</p>}
-      {online && guard === false && gpu.cors !== "any" && shownPort && <NoGuard port={shownPort} />}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[12px] text-muted-foreground">ComfyUI on another port?</span>
-        <input aria-label="ComfyUI's port" inputMode="numeric" className="h-8 w-20 rounded-md border bg-background px-2 text-[13px]" value={port} onChange={(e) => setPort(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void lookAt()} />
-        <Button size="sm" variant="secondary" className="h-8" onClick={() => void lookAt()}>
-          Look
-        </Button>
-      </div>
+      {look && online && guard === false && gpu.cors !== "any" && shownPort && <NoGuard port={shownPort} />}
+      {look && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] text-muted-foreground">ComfyUI on another port?</span>
+          <input aria-label="ComfyUI's port" inputMode="numeric" className="h-8 w-20 rounded-md border bg-background px-2 text-[13px]" value={port} onChange={(e) => setPort(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void lookAt()} />
+          <Button size="sm" variant="secondary" className="h-8" onClick={() => void lookAt()}>
+            Look
+          </Button>
+        </div>
+      )}
       {note && <p className="text-[12px] text-muted-foreground">{note}</p>}
       {fixPort && <SettingFix key={fixPort} port={fixPort} back={false} />}
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
-        <button type="button" className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={onLink}>
-          Use a link instead
+        <button type="button" className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={other.onClick}>
+          {other.label}
         </button>
         <button type="button" className="flex items-center gap-1 text-muted-foreground hover:text-foreground" onClick={() => setAbout((v) => !v)}>
           About this setting <ChevronDown className={cn("size-3.5 transition-transform", about && "rotate-180")} />
         </button>
       </div>
       {about && <p className="text-[12px] text-muted-foreground">{ABOUT}</p>}
+    </div>
+  );
+}
+
+/** The two ways, as cards: this computer (primary), and the second way behind a disclosure. */
+function ChoiceCards({
+  instead,
+  computer,
+  title,
+  sub,
+  open,
+  onToggle,
+  children,
+  className,
+}: {
+  /** The second way is connected: this computer is offered "instead". */
+  instead: boolean;
+  computer: React.ReactNode;
+  title: string;
+  sub: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  /** 36rem wide at most from sm up, unless a wider page lifts that (ConnectChoice's className). */
+  className?: string;
+}) {
+  return (
+    <div className={cn("w-full min-w-0 space-y-3 sm:max-w-[36rem]", className)}>
+      <div className={cn("space-y-3 rounded-2xl border bg-background p-4", !instead && "border-primary/40")}>
+        <div className="flex items-start gap-3">
+          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+            <Cpu className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[15px] font-medium">{instead ? "Use the ComfyUI on this computer instead" : "Use the ComfyUI on this computer"}</p>
+            <p className="text-[13px] text-muted-foreground">The quickest way. Runs while Fuobe is open in this browser.</p>
+          </div>
+        </div>
+        {computer}
+      </div>
+      <div className="rounded-2xl border border-dashed p-4">
+        <button type="button" className="flex w-full items-start gap-3 text-left" onClick={onToggle} aria-expanded={open}>
+          <Globe className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-medium">{title}</span>
+            <span className="block text-[12px] text-muted-foreground">{sub}</span>
+          </span>
+          <ChevronDown className={cn("mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+        </button>
+        {open && <div className="mt-3">{children}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** "Use the ComfyUI on this computer" under a refused address, inside the choice: start this computer's finder there. */
+const FindHere = createContext<(() => void) | null>(null);
+
+/**
+ * A ComfyUI address the server must not call from a hosted page (127.0.0.1 is the server itself there): what that
+ * address means here, in one line, and the way that reaches the owner's own computer.
+ */
+export function HostedRefusal({ line }: { line: string }) {
+  const find = useContext(FindHere);
+  const support = useComputerSupport();
+  return (
+    <div className="mt-1 space-y-2 rounded-xl bg-brand-faint px-3 py-2.5 text-[13px]">
+      <p className="flex items-start gap-1.5">
+        <Info aria-hidden className="mt-0.5 size-3.5 shrink-0 text-brand-text" /> {line}
+      </p>
+      {support === "ok" && (
+        <Button size="sm" onClick={() => (find ? find() : window.dispatchEvent(new Event(CONNECT_GPU_EVENT)))}>
+          <Cpu /> Use the ComfyUI on this computer
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The owner's ComfyUI at a server address: a cloud GPU, a tunnel to the owner's own, or (on the server's own machine)
+ * 127.0.0.1. On a hosted studio the built-in 127.0.0.1 isn't shown, and an address on the server's machine or network
+ * is refused before anything is sent. While ComfyUI runs on the owner's computer, a green test moves it to the server.
+ * `onlyAddress`: the address alone (the first-run guide).
+ */
+export function OwnerServerComfy({ hosted, computer = false, onlyAddress = false }: { hosted: boolean; computer?: boolean; onlyAddress?: boolean }) {
+  const qc = useQueryClient();
+  const settings = useSettings().data;
+  const status = useStatus().data;
+  const get = (n: string) => settings?.find((s) => s.name === n);
+  // A server ComfyUI that answers works for the server, wherever this page is: only a newly typed address is checked.
+  const trustSaved = !computer && !!status?.providers.comfyui?.configured;
+  const place = hosted ? ("hosted" as const) : undefined;
+  const refusal = hosted ? (line: string) => <HostedRefusal line={line} /> : undefined;
+  const connected = (r: { detail: string }) => {
+    toast.success("ComfyUI connected", { description: r.detail });
+    void qc.invalidateQueries({ queryKey: ["viewer"] });
+  };
+  return (
+    <div className="space-y-4">
+      <ConnectField
+        name="comfyUrl"
+        setting={get("comfyUrl")}
+        provider="comfyui"
+        label={hosted ? "Server address" : "ComfyUI server URL"}
+        idleLabel="Connect"
+        placeholder={hosted ? "https://…" : "http://127.0.0.1:8188"}
+        hint={hosted ? "An address Fuobe's server can reach: a cloud GPU, or a tunnel to your own." : "Where ComfyUI listens; a local install is http://127.0.0.1:8188."}
+        hideDefault={hosted}
+        extraValues={computer ? { comfyWhere: "server" } : undefined}
+        place={place}
+        trustSaved={trustSaved}
+        refusal={refusal}
+        onConnected={connected}
+      />
+      {!onlyAddress && (
+        <ConnectField
+          name="comfyToken"
+          setting={get("comfyToken")}
+          provider="comfyui"
+          label={hosted ? "Access token (optional)" : "Auth token (optional)"}
+          hint={hosted ? "For a ComfyUI behind a login or a proxy." : "Sent as a Bearer token, for ComfyUI behind a proxy."}
+          place={computer ? undefined : place}
+          trustSaved={trustSaved}
+          refusal={refusal}
+        />
+      )}
+      {!onlyAddress && !computer && (
+        <ConnectField
+          name="comfyIsolatedUrl"
+          setting={get("comfyIsolatedUrl")}
+          provider="comfyui"
+          label="Isolated worker URL (optional)"
+          placeholder={hosted ? "https://…" : "http://127.0.0.1:8189"}
+          hint="A second ComfyUI for LatentSync 1.6 and ThinkSound, whose node packs can't share the main install. scripts/comfy/README.md shows how to start one."
+          place={place}
+          refusal={refusal}
+        />
+      )}
+      {computer && <p className="text-[12px] text-muted-foreground">Connecting a server address stops the runs still going on your computer.</p>}
     </div>
   );
 }
@@ -212,19 +374,20 @@ export interface ConnectChoiceProps {
   className?: string;
 }
 
-export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow, className }: ConnectChoiceProps) {
+export function ConnectChoice(props: ConnectChoiceProps) {
+  const viewer = useViewer().data;
+  if (!viewer) return <Loader2 className="size-5 animate-spin text-muted-foreground" />;
+  return viewer.owner ? <OwnerChoice {...props} /> : <AccountChoice {...props} />;
+}
+
+function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className }: ConnectChoiceProps) {
+  const qc = useQueryClient();
   const support = useComputerSupport();
-  // The owner (whose runs go to their own computer when Settings says so) has no account GPU: only the finder.
-  const owner = useViewer().data?.owner === true;
-  const q = useAccountGpu(!owner);
+  const q = useAccountGpu();
   const gpu = q.data?.gpu ?? null;
   // Once the person starts finding their ComfyUI, the flow stays on screen through to "connected".
   const [flow, setFlow] = useState(!!reason);
   const [link, setLink] = useState(false);
-  if (owner) {
-    if (support !== "ok") return <p className="text-[13px] text-muted-foreground">{unsupportedWords(support)}</p>;
-    return <ThisComputer connect={connectOwnerComputer} fromRun={fromRun} kind={kind} onStart={onStart} onNotNow={onNotNow} autoLook={reason === "setting" || reason === "find"} again={reason === "setting"} />;
-  }
   if (q.isError) return <p className="text-[13px] text-muted-foreground">{q.error.message}</p>;
   if (!q.data) return <Loader2 className="size-5 animate-spin text-muted-foreground" />;
   if (support !== "ok") {
@@ -236,20 +399,28 @@ export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow, classN
       </div>
     );
   }
-  if (gpu?.mode === "computer" && !flow && !link) return <ComputerStatus gpu={gpu} onLink={() => setLink(true)} />;
+  if (gpu?.mode === "computer" && !flow && !link)
+    return (
+      <ComputerStatus
+        gpu={gpu}
+        onDisconnect={async () => {
+          qc.setQueryData(["account-gpu"], await gpuCall("DELETE"));
+          void qc.invalidateQueries({ queryKey: ["viewer"] });
+          void qc.invalidateQueries({ queryKey: ["status"] });
+        }}
+        other={{ label: "Use a link instead", onClick: () => setLink(true) }}
+      />
+    );
   const linked = gpu?.mode === "link";
   return (
-    <div className={cn("w-full min-w-0 space-y-3 sm:max-w-[36rem]", className)}>
-      <div className={cn("space-y-3 rounded-2xl border bg-background p-4", !linked && "border-primary/40")}>
-        <div className="flex items-start gap-3">
-          <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
-            <Cpu className="size-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[15px] font-medium">{linked ? "Use the ComfyUI on this computer instead" : "Use the ComfyUI on this computer"}</p>
-            <p className="text-[13px] text-muted-foreground">The quickest way. Runs while Fuobe is open in this browser.</p>
-          </div>
-        </div>
+    <ChoiceCards
+      className={className}
+      instead={linked}
+      title="Run from anywhere with a link"
+      sub="For runs that go on with this tab closed. You'll need a tunnel."
+      open={link || linked}
+      onToggle={() => setLink((v) => !v)}
+      computer={
         <div onClickCapture={() => setFlow(true)}>
           <ThisComputer
             connect={async () => {
@@ -264,29 +435,142 @@ export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow, classN
             again={reason === "setting"}
           />
         </div>
-      </div>
-      <div className="rounded-2xl border border-dashed p-4">
-        <button type="button" className="flex w-full items-start gap-3 text-left" onClick={() => setLink((v) => !v)} aria-expanded={link || linked}>
-          <Globe className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-medium">Run from anywhere with a link</span>
-            <span className="block text-[12px] text-muted-foreground">For runs that go on with this tab closed. You&apos;ll need a tunnel.</span>
-          </span>
-          <ChevronDown className={cn("mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform", (link || linked) && "rotate-180")} />
-        </button>
-        {(link || linked) && (
-          <div className="mt-3">
-            <YourGpu className={className} onLinked={onStart} />
-          </div>
-        )}
-      </div>
-    </div>
+      }
+    >
+      <YourGpu className={className} onLinked={onStart} />
+    </ChoiceCards>
   );
 }
 
 /**
- * The owner's "Where ComfyUI runs" (Settings → Open-source engine · ComfyUI): on this server, at the address below, or
- * on the computer the owner uses, which the owner's own Fuobe tab runs (a studio on a server, a GPU at home).
+ * The owner's choice. On a hosted studio (the page isn't on the server's machine): the ComfyUI on this computer first,
+ * a ComfyUI at a server address second. On the server's own machine or network: the server address, as before (the
+ * computer is in Settings' "Where ComfyUI runs"). While ComfyUI runs on the owner's computer: its state, with
+ * Disconnect and the server address as the other way.
+ */
+function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className }: ConnectChoiceProps) {
+  const qc = useQueryClient();
+  const support = useComputerSupport();
+  const place = usePagePlace();
+  const status = useStatus().data;
+  const settings = useSettings().data;
+  const allowPrivate = useAllowPrivate(place === "hosted");
+  // Once the person starts finding their ComfyUI, the flow stays on screen through to "connected".
+  const [flow, setFlow] = useState(!!reason);
+  // The server way, opened or closed by hand (until then: open when an address is saved or connected).
+  const [serverOpen, setServerOpen] = useState<boolean | null>(null);
+  const [lookNow, setLookNow] = useState(0);
+  // Just disconnected: this computer's finder waits for a tap (a browser that may reach ComfyUI would connect it again
+  // by itself), then looks at once.
+  const [armed, setArmed] = useState<"auto" | "tap" | "look">("auto");
+  const thisComputer = (
+    <ThisComputer
+      connect={async () => {
+        setFlow(true);
+        await connectOwnerComputer();
+        void qc.invalidateQueries({ queryKey: ["settings"] });
+        void qc.invalidateQueries({ queryKey: ["status"] });
+      }}
+      fromRun={fromRun}
+      kind={kind}
+      onStart={onStart}
+      onNotNow={onNotNow}
+      autoLook={reason === "setting" || reason === "find" || armed === "look"}
+      again={reason === "setting"}
+      doneWords={OWNER_DONE}
+      lookNow={lookNow}
+    />
+  );
+  const findButton = (
+    <Button className="h-11 sm:h-9" onClick={() => setArmed("look")}>
+      <Search /> Find my ComfyUI
+    </Button>
+  );
+  // Opened by the note of the tab that runs the jobs: straight to the finder, as before.
+  if (reason) return support !== "ok" ? <p className="text-[13px] text-muted-foreground">{unsupportedWords(support, true)}</p> : thisComputer;
+  if (!settings || !status || place === null) return <Loader2 className="size-5 animate-spin text-muted-foreground" />;
+  const computer = settings.find((s) => s.name === "comfyWhere")?.value === "computer";
+  const hosted = place === "hosted" && status.engineMode !== "cloud";
+  const serverConnected = !computer && !!status.providers.comfyui?.configured;
+  const address = settings.find((s) => s.name === "comfyUrl");
+  // Opens by itself for a server address of the owner's: connected, or saved and one the server may call from here.
+  const usable = !!address?.isSet && !(hosted && refusedOnHosted(addressKind(address.value), allowPrivate));
+  const open = serverOpen ?? (serverConnected || usable);
+  const serverForm = <OwnerServerComfy hosted={hosted} computer={computer} />;
+  const findHere = () => {
+    setServerOpen(false);
+    setFlow(true);
+    setArmed((a) => (a === "tap" ? "look" : a));
+    setLookNow((n) => n + 1);
+  };
+  const disconnect = async () => {
+    await disconnectOwnerComputer(qc);
+    setArmed("tap");
+    setFlow(false);
+    setServerOpen(null);
+  };
+  const state = computer ? (
+    <ComputerStatus
+      gpu={status.ownerGpu ?? { mode: "computer", online: false }}
+      look={support === "ok"}
+      onDisconnect={disconnect}
+      other={{ label: "Use a server address instead", onClick: () => setServerOpen((v) => !(v ?? false)) }}
+    />
+  ) : null;
+  const serverBox = (
+    <div className="rounded-2xl border border-dashed p-4">
+      <p className="mb-3 text-[13px] font-medium">Use a ComfyUI on a server</p>
+      {serverForm}
+    </div>
+  );
+
+  // A page on the server's own machine or its network: the server address, as before (the computer is in Settings'
+  // "Where ComfyUI runs").
+  if (!hosted)
+    return (
+      <div className={cn("w-full min-w-0 space-y-3 sm:max-w-[36rem]", className)}>
+        {state}
+        {computer ? serverOpen && serverBox : serverForm}
+      </div>
+    );
+  // A phone, Safari, a plain-http page: what the computer said last (if it runs there), why not here, and the server way.
+  if (support !== "ok")
+    return (
+      <div className={cn("w-full min-w-0 space-y-3 sm:max-w-[36rem]", className)}>
+        {state}
+        <p className="rounded-xl bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">{unsupportedWords(support, true)}</p>
+        {serverBox}
+      </div>
+    );
+  if (computer && !flow)
+    return (
+      <FindHere.Provider value={() => setServerOpen(false)}>
+        <div className={cn("w-full min-w-0 space-y-3 sm:max-w-[36rem]", className)}>
+          {state}
+          {serverOpen && serverBox}
+        </div>
+      </FindHere.Provider>
+    );
+  return (
+    <FindHere.Provider value={findHere}>
+      <ChoiceCards
+        className={className}
+        instead={serverConnected}
+        title="Use a ComfyUI on a server"
+        sub="A cloud GPU or a tunnel address. Runs go on with this tab closed."
+        open={open}
+        onToggle={() => setServerOpen(!open)}
+        computer={<div onClickCapture={() => setFlow(true)}>{armed === "tap" ? findButton : thisComputer}</div>}
+      >
+        {serverForm}
+      </ChoiceCards>
+    </FindHere.Provider>
+  );
+}
+
+/**
+ * The owner's "Where ComfyUI runs" (Settings → Open-source engine · ComfyUI, on the server's own machine or network):
+ * on this server, at the address below, or on the computer the owner uses, which the owner's own Fuobe tab runs.
  */
 export function OwnerComfyWhere({ value, onChange }: { value: string; onChange: (v: "server" | "computer") => Promise<unknown> }) {
   const qc = useQueryClient();
@@ -339,7 +623,8 @@ export function OwnerComfyWhere({ value, onChange }: { value: string; onChange: 
   );
 }
 
-function OwnerComputerLine() {
+/** "This computer · RTX 5090 · port 8188 · Ready" (or what's wrong), as this browser's tab sees it. */
+export function OwnerComputerLine() {
   const here = useHere();
   const mine = here && !here.other ? here : null;
   const facts = mine?.facts;

@@ -40,7 +40,8 @@ import { IntentLink } from "@/components/intent-link";
 import { JobNotifications } from "@/components/job-notifications";
 import { NAV, type NavGroupDef } from "@/components/nav-items";
 import { SkillBuilderProvider } from "@/components/skills/skill-builder-provider";
-import { CONNECT_GPU_EVENT, signInHref, signOut, useEngineMode, useHydrated, useStatus, useViewer, VIEWER_KEY, type StatusInfo } from "@/lib/api";
+import { usePagePlace } from "@/components/gpu/use-page-place";
+import { CONNECT_GPU_EVENT, ownGpuOf, signInHref, signOut, useEngineMode, useHydrated, useStatus, useViewer, VIEWER_KEY, type StatusInfo } from "@/lib/api";
 import { deviceLabel } from "@/lib/gpu/readiness";
 import { useModKey } from "@/lib/keys";
 import { fullScreenStudio, groupId, NAV_CLOSED_KEY, navActive, NEW_CREATION_HREF, parseClosed, scrollFades, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
@@ -428,12 +429,13 @@ function ViewerRow() {
 }
 
 /**
- * A visitor's status strip (public sign-up): its own GPU, never the install's. A guest is sent to sign
- * up first; an account without one opens "Connect your GPU"; a connected one says whether it answers.
+ * "Your GPU" in the status strip: a visitor's own (public sign-up), never the install's, or the owner's computer. A
+ * guest is sent to sign up first; anyone else without one opens "Connect your GPU"; a connected one says whether it
+ * answers.
  */
-function YourGpuChip({ viewer }: { viewer: NonNullable<StatusInfo["viewer"]> }) {
+function YourGpuChip({ gpu, guest }: { gpu: NonNullable<StatusInfo["viewer"]>["gpu"]; guest: boolean }) {
   const cls = "flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left text-[12px] text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden";
-  const g = viewer.gpu;
+  const g = gpu;
   if (g.connected) {
     const vram = g.vramBytes ? `${Math.round(g.vramBytes / 2 ** 30)} GB` : "";
     return (
@@ -454,7 +456,7 @@ function YourGpuChip({ viewer }: { viewer: NonNullable<StatusInfo["viewer"]> }) 
       <span className="ml-auto font-medium text-brand-text">Connect</span>
     </span>
   );
-  return viewer.kind === "guest" ? (
+  return guest ? (
     <a href={signInHref("signup", "/connect")} className={cls}>
       {body}
     </a>
@@ -542,6 +544,9 @@ export function AppSidebar() {
   const cloud = status && (status.providers.fal?.configured || status.providers.replicate?.configured);
   const comfy = status?.providers.comfyui?.configured;
   const mode = useEngineMode();
+  // The owner's GPU as "Your GPU": on the owner's computer, or (a hosted studio with nothing connected) one to connect.
+  const place = usePagePlace();
+  const ownerGpu = status && !status.viewer && (status.ownerGpu || (place === "hosted" && !comfy && mode !== "cloud")) ? (ownGpuOf(status) ?? { connected: false }) : null;
   const ready = mode === "open" ? comfy : mode === "cloud" ? cloud : cloud || comfy;
   const [closed, setClosed] = useState(readClosed);
   const toggle = useCallback((id: string) => {
@@ -616,7 +621,17 @@ export function AppSidebar() {
           <SidebarFooter className="gap-1 border-t border-sidebar-border" onClick={closeOnLink}>
             {computer && <ComputerNote />}
             {status?.viewer ? (
-              <YourGpuChip viewer={status.viewer} />
+              <YourGpuChip gpu={status.viewer.gpu} guest={status.viewer.kind === "guest"} />
+            ) : ownerGpu ? (
+              <>
+                {mode !== "open" && (
+                  <IntentLink href="/settings" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden">
+                    <StatusDot ok={!!cloud} /> Cloud models
+                    <span className="ml-auto">{cloud ? "connected" : "add key"}</span>
+                  </IntentLink>
+                )}
+                <YourGpuChip gpu={ownerGpu} guest={false} />
+              </>
             ) : !status ? (
               // Not known yet: no "add key / offline" the install may not have, for a visitor who never sees them.
               <div aria-hidden className="flex h-[30px] items-center px-2 group-data-[collapsible=icon]:hidden">

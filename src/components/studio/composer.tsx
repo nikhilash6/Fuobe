@@ -17,7 +17,8 @@ import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
-import { enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useStatus } from "@/lib/api";
+import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useStatus } from "@/lib/api";
+import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
 import {
@@ -247,6 +248,8 @@ export function Composer({ docked }: { docked: boolean }) {
   const hydrated = useHydrated();
   const liveStatus = useStatus().data;
   const status = hydrated ? liveStatus : undefined;
+  // A hosted studio: the owner connects a GPU from the dialog ("Connect your GPU"), not with an address in Settings.
+  const hostedPage = usePagePlace() === "hosted";
   // The day a launch price is read on: the browser's, once hydrated (none while the page prerenders: no price shown then).
   const today = useToday();
   // Upscale hub: the attached clip's header (length, size, frame rate). Its length prices per-second tools and
@@ -1232,9 +1235,15 @@ export function Composer({ docked }: { docked: boolean }) {
             {engineMode === "cloud"
               ? "This install runs paid cloud APIs only (Settings → Engine mode), and no cloud API re-encodes a finished clip: export formats are written by ComfyUI on your own machine."
               : config.comfyOnly!.note}{" "}
-            <Link href="/settings" className="font-medium text-brand-text underline-offset-2 hover:underline">
-              Open Settings
-            </Link>
+            {hostedPage && engineMode !== "cloud" && !status?.viewer ? (
+              <button type="button" onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))} className="font-medium text-brand-text underline-offset-2 hover:underline">
+                Connect your GPU
+              </button>
+            ) : (
+              <Link href="/settings" className="font-medium text-brand-text underline-offset-2 hover:underline">
+                Open Settings
+              </Link>
+            )}
           </p>
           {alternative && alternativeHref && engineMode !== "open" && (
             <p>

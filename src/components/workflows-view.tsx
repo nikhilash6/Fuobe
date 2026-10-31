@@ -9,6 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProgressive } from "@/components/use-progressive";
+import { usePagePlace } from "@/components/gpu/use-page-place";
+import { CONNECT_GPU_EVENT, useStatus } from "@/lib/api";
+import { timeAgo } from "@/lib/format";
 import { copyText } from "@/lib/clipboard";
 import type { ManifestWorkflow } from "@/lib/comfy";
 import { installScript, workflowSource } from "@/lib/comfy-install";
@@ -21,6 +24,9 @@ type WF = Omit<ManifestWorkflow, "models"> & { models: (ManifestWorkflow["models
 interface ComfyStatus {
   /** null: a visitor, who isn't told about the studio's own ComfyUI (their own is on /connect). */
   reachable: boolean | null;
+  /** "computer": the owner's ComfyUI runs on the owner's computer; the checkmarks are from its tab's last check (`checkedAt`). */
+  where?: "computer";
+  checkedAt?: number | null;
   generatedAt: string;
   comfyuiCommit?: string;
   workflows: WF[];
@@ -30,7 +36,67 @@ async function fetchStatus(): Promise<ComfyStatus> {
   const res = await fetch("/api/comfyui");
   const body = (await res.json().catch(() => ({}))) as Partial<ComfyStatus> & { error?: string };
   if (!res.ok) throw new Error(body.error ?? `Couldn’t load the workflow library (${res.status})`);
-  return { reachable: body.reachable === null ? null : !!body.reachable, generatedAt: body.generatedAt ?? "", comfyuiCommit: body.comfyuiCommit, workflows: body.workflows ?? [] };
+  return {
+    reachable: body.reachable === null ? null : !!body.reachable,
+    ...(body.where === "computer" && { where: "computer" as const, checkedAt: body.checkedAt ?? null }),
+    generatedAt: body.generatedAt ?? "",
+    comfyuiCommit: body.comfyuiCommit,
+    workflows: body.workflows ?? [],
+  };
+}
+
+/** The owner's banner: where ComfyUI is, whether it answers, and what the checkmarks mean. */
+function OwnerBanner({ data }: { data: ComfyStatus }) {
+  const status = useStatus().data;
+  const place = usePagePlace();
+  const cls = (ok: boolean) => cn("flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-[13px]", ok ? "bg-background" : "bg-brand-faint");
+  const link = "text-brand-text underline underline-offset-2";
+  if (data.where === "computer") {
+    const checked = data.checkedAt ?? null;
+    return (
+      <div className={cls(!!checked)}>
+        {checked ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <CircleAlert className="size-4 shrink-0 text-brand-text" />}
+        <span className="min-w-0 flex-1 basis-56">
+          {checked ? `Checked on your computer ${timeAgo(checked)}. Checkmarks show the models it has.` : "Your GPU is the ComfyUI on your computer. Check it to see which models it has."}
+        </span>
+        <Link href="/connect" className={link}>
+          {checked ? "Check again" : "Check your GPU"}
+        </Link>
+      </div>
+    );
+  }
+  if (data.reachable)
+    return (
+      <div className={cls(true)}>
+        <CheckCircle2 className="size-4 shrink-0 text-success" />
+        <span className="min-w-0 flex-1 basis-56">Connected to ComfyUI — model checkmarks below reflect what’s installed.</span>
+        <Link href="/settings#comfyui" className={link}>
+          Server settings
+        </Link>
+      </div>
+    );
+  // Nothing answers. A hosted studio: the owner's GPU is to be connected (the server's own address isn't the owner's).
+  if (place === "hosted")
+    return (
+      <div className={cls(false)}>
+        <CircleAlert className="size-4 shrink-0 text-brand-text" />
+        <span className="min-w-0 flex-1 basis-56">ComfyUI isn&apos;t connected yet. Connect your GPU to run these on your own graphics card.</span>
+        <Button size="sm" onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))}>
+          Connect your GPU
+        </Button>
+      </div>
+    );
+  return (
+    <div className={cls(false)}>
+      <CircleAlert className="size-4 shrink-0 text-warning" />
+      <span className="min-w-0 flex-1 basis-56">
+        {status?.demoMode === "off" ? "ComfyUI is not reachable, so open-source runs can’t start." : "ComfyUI is not reachable, so open-source runs fall back to demo output."}
+      </span>
+      <Link href="/settings#comfyui" className={link}>
+        Server settings
+      </Link>
+    </div>
+  );
 }
 
 /**
@@ -229,15 +295,7 @@ export function WorkflowsView({ routes = [] }: { routes?: ComfyRoute[] }) {
           </Link>
         </div>
       ) : (
-        <div className={cn("flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-[13px]", data.reachable ? "bg-background" : "bg-brand-faint")}>
-          {data.reachable ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <CircleAlert className="size-4 shrink-0 text-warning" />}
-          <span className="min-w-0 flex-1 basis-56">
-            {data.reachable ? "Connected to ComfyUI — model checkmarks below reflect what’s installed." : "ComfyUI is not reachable, so open-source runs fall back to demo output."}
-          </span>
-          <Link href="/settings#comfyui" className="text-brand-text underline underline-offset-2">
-            Server settings
-          </Link>
-        </div>
+        <OwnerBanner data={data} />
       )}
       {workflows.length > 0 && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

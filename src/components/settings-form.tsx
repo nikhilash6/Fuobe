@@ -7,7 +7,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { OwnerComfyWhere } from "@/components/gpu/connect-choice";
+import { ConnectChoice, OwnerComfyWhere } from "@/components/gpu/connect-choice";
+import { usePagePlace } from "@/components/gpu/use-local-comfy";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -158,12 +159,13 @@ function ChoiceField({
  * each a link to its field), the engine mode and, for the owner, the accounts. Also opens the setup guide again.
  */
 function StatusStrip({ status, onGuide, guideOpen }: { status?: StatusInfo; onGuide: () => void; guideOpen: boolean }) {
+  const place = usePagePlace();
   return (
     <div className="sticky top-12 z-10 -mx-4 border-b bg-background/90 px-4 py-2.5 backdrop-blur sm:-mx-8 sm:px-8 md:top-0">
       <nav aria-label="Connections" className="scrollbar-none -my-1 flex items-center gap-1.5 overflow-x-auto py-1">
         {status ? (
           <>
-            {connectionSummary(status).map((c) => (
+            {connectionSummary(status, place).map((c) => (
               <a
                 key={c.id}
                 href={c.href}
@@ -468,11 +470,31 @@ function LocalLlmSettings({ get, set }: { get: (n: string) => PublicSetting | un
   );
 }
 
+/** The studio's own ComfyUI on the server's machine or network: where it runs, then its address, token and isolated worker. */
+function LocalComfy({ get, onWhere }: { get: (n: string) => PublicSetting | undefined; onWhere: (v: "server" | "computer") => Promise<unknown> }) {
+  return (
+    <>
+      <OwnerComfyWhere value={get("comfyWhere")?.value || "server"} onChange={onWhere} />
+      <ConnectField name="comfyUrl" setting={get("comfyUrl")} provider="comfyui" label="ComfyUI server URL" placeholder="http://127.0.0.1:8188" hint="Where ComfyUI listens; a local install is http://127.0.0.1:8188." />
+      <ConnectField name="comfyToken" setting={get("comfyToken")} provider="comfyui" label="Auth token (optional)" hint="Sent as a Bearer token, for ComfyUI behind a proxy." />
+      <ConnectField
+        name="comfyIsolatedUrl"
+        setting={get("comfyIsolatedUrl")}
+        provider="comfyui"
+        label="Isolated worker URL (optional)"
+        placeholder="http://127.0.0.1:8189"
+        hint="A second ComfyUI for LatentSync 1.6 and ThinkSound, whose node packs can't share the main install. scripts/comfy/README.md shows how to start one."
+      />
+    </>
+  );
+}
+
 export function SettingsForm({ prices }: { prices?: string }) {
   const qc = useQueryClient();
   const router = useRouter();
   const settings = useSettings();
   const status = useStatus().data;
+  const place = usePagePlace();
   // The setup guide on request: the strip's "Setup guide", or a link to /settings#get-started (Home's demo line).
   const [guide, setGuide] = useState<boolean | null>(null);
   const askedByLink = useSyncExternalStore(subscribeHash, () => window.location.hash === "#get-started", () => false);
@@ -506,6 +528,9 @@ export function SettingsForm({ prices }: { prices?: string }) {
       </div>
     );
   const mode = get("engineMode")?.value || "both";
+  // A hosted studio (this page isn't on the server's machine): the owner's GPU is first the ComfyUI on this computer.
+  const hosted = place === "hosted" && mode !== "cloud";
+  const onComputer = get("comfyWhere")?.value === "computer";
   // The guide opens by itself on a first run, and on request ("Setup guide") after that.
   const firstRun = showFirstRun(status);
   const guideOpen = !!status && (firstRun || (guide ?? askedByLink));
@@ -586,27 +611,27 @@ export function SettingsForm({ prices }: { prices?: string }) {
         id="comfyui"
         title="Open-source engine · ComfyUI"
         description={
-          <>
-            Run every open-source workflow on your own GPU (or a rented one). Fuobe talks to ComfyUI&apos;s HTTP API and uploads inputs for you. See{" "}
-            <Link href="/workflows" className="text-brand-text underline-offset-2 hover:underline">
-              ComfyUI workflows
-            </Link>{" "}
-            for the models each one needs.
-          </>
+          hosted ? (
+            <>
+              Run every open-source workflow on your own graphics card. See{" "}
+              <Link href="/workflows" className="text-brand-text underline-offset-2 hover:underline">
+                ComfyUI workflows
+              </Link>{" "}
+              for the models each one needs.
+            </>
+          ) : (
+            <>
+              Run every open-source workflow on your own GPU (or a rented one). Fuobe talks to ComfyUI&apos;s HTTP API and uploads inputs for you. See{" "}
+              <Link href="/workflows" className="text-brand-text underline-offset-2 hover:underline">
+                ComfyUI workflows
+              </Link>{" "}
+              for the models each one needs.
+            </>
+          )
         }
         inactive={mode === "cloud" ? "Not used in Paid APIs only mode" : undefined}
       >
-        <OwnerComfyWhere value={get("comfyWhere")?.value || "server"} onChange={(v) => save.mutateAsync({ comfyWhere: v })} />
-        <ConnectField name="comfyUrl" setting={get("comfyUrl")} provider="comfyui" label="ComfyUI server URL" placeholder="http://127.0.0.1:8188" hint="Where ComfyUI listens; a local install is http://127.0.0.1:8188." />
-        <ConnectField name="comfyToken" setting={get("comfyToken")} provider="comfyui" label="Auth token (optional)" hint="Sent as a Bearer token, for ComfyUI behind a proxy." />
-        <ConnectField
-          name="comfyIsolatedUrl"
-          setting={get("comfyIsolatedUrl")}
-          provider="comfyui"
-          label="Isolated worker URL (optional)"
-          placeholder="http://127.0.0.1:8189"
-          hint="A second ComfyUI for LatentSync 1.6 and ThinkSound, whose node packs can't share the main install. scripts/comfy/README.md shows how to start one."
-        />
+        {hosted ? <ConnectChoice /> : <LocalComfy get={get} onWhere={(v) => save.mutateAsync({ comfyWhere: v })} />}
       </Section>
 
       <Section
@@ -614,6 +639,11 @@ export function SettingsForm({ prices }: { prices?: string }) {
         title="LoRAs · looks, motions, effects and adapters"
         description="Looks, camera moves and effects add LoRA files to open models, on your GPU and in the cloud; an adapter is the LoRA an Original always loads (Fuobe Try-On's). Fuobe fetches the pinned version a run needs and shows each file's licence; what may run where is your call in Models & licences."
       >
+        {onComputer && (
+          <p className="flex items-start gap-1.5 text-[13px] text-muted-foreground">
+            <Info aria-hidden className="mt-0.5 size-3.5 shrink-0 text-brand-text" /> Your ComfyUI is on your computer: put LoRA files in its models/loras folder. Fuobe tells you which ones a run needs.
+          </p>
+        )}
         <LoraSettings folder={get("comfyLorasDir")} civitaiKey={get("civitaiKey")} />
       </Section>
 

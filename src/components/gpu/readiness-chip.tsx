@@ -2,7 +2,7 @@
 
 import { CheckCircle2, Cpu, Download, Layers } from "lucide-react";
 import { badgeState, badgeText } from "@/hooks/use-gpu";
-import { useStatus } from "@/lib/api";
+import { ownGpuOf, useStatus } from "@/lib/api";
 import type { Badge } from "@/lib/gpu/types";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +55,8 @@ export function CardChip({ badge, gpu }: { badge: Badge; gpu?: string }) {
  * isn't there right now (ComfyUI closed, without Fuobe's setting, a link that doesn't answer) says that instead.
  */
 export function HeaderPill({ badge, gpu, onOpen, compact }: { badge: Badge; gpu?: string; onOpen?: () => void; compact?: boolean }) {
-  const own = useStatus().data?.viewer?.gpu;
+  // The viewer's own GPU: an account's, or the owner's computer (whose tab says whether ComfyUI is there now).
+  const own = ownGpuOf(useStatus().data);
   const s = badgeState(badge);
   const t = badgeText(badge, gpu);
   const tenths = badge[2];
