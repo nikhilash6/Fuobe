@@ -476,7 +476,7 @@ export function GenjutsuStudio() {
   return (
     <ToolShell title="Genjutsu" tabs={tabs} header={<SetupCode setup={setup} onPaste={apply} />} wide>
       {!clip && (
-        <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint} Priced before it runs; free on your own ComfyUI.`}>
+        <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint} Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}>
           {isCharacter && (
             <Link href="/character-swap" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
               Whole clips, shot by shot? Open in Character Swap Studio
