@@ -40,7 +40,7 @@ import { IntentLink } from "@/components/intent-link";
 import { JobNotifications } from "@/components/job-notifications";
 import { NAV, type NavGroupDef } from "@/components/nav-items";
 import { SkillBuilderProvider } from "@/components/skills/skill-builder-provider";
-import { CONNECT_GPU_EVENT, signInHref, signOut, useEngineMode, useHydrated, useStatus, useViewer, type StatusInfo } from "@/lib/api";
+import { CONNECT_GPU_EVENT, signInHref, signOut, useEngineMode, useHydrated, useStatus, useViewer, VIEWER_KEY, type StatusInfo } from "@/lib/api";
 import { deviceLabel } from "@/lib/gpu/readiness";
 import { useModKey } from "@/lib/keys";
 import { fullScreenStudio, groupId, NAV_CLOSED_KEY, navActive, NEW_CREATION_HREF, parseClosed, scrollFades, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
@@ -373,8 +373,6 @@ function SearchRow() {
   );
 }
 
-const VIEWER_KEY = "fuobe:viewer";
-
 /**
  * Runs while the HTML is parsed: `<html data-viewer="owner">` in a browser where the owner was signed in last time, so
  * the row kept for "Sign up / Log in" (or an account's menu) isn't drawn and then taken away on every page load.
@@ -494,10 +492,17 @@ function AccountRow() {
               <ChevronsUpDown className="text-muted-foreground" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side={isMobile ? "top" : "right"} align="end" className="min-w-56">
+          {/* As wide as the email (on one line, up to 22rem), never narrower than the row: an address breaks only when it must,
+              and the menu keeps clear of the screen's edges. */}
+          <DropdownMenuContent
+            side={isMobile ? "top" : "right"}
+            align="end"
+            collisionPadding={8}
+            className="w-max max-w-[min(22rem,var(--radix-dropdown-menu-content-available-width))] min-w-[max(14rem,var(--radix-dropdown-menu-trigger-width))]"
+          >
             <DropdownMenuLabel className="font-normal">
               <span className="block text-[11px]">Signed in as</span>
-              <span className="block text-[13px] break-all text-foreground">{account.email}</span>
+              <span className="block text-[13px] [overflow-wrap:anywhere] text-foreground">{account.email}</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>

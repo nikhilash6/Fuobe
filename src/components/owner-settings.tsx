@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Info, KeyRound, Loader2, LogOut, Scale, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { announceAuthChange, signInHref, signOut, useHydrated, useViewer } from "@/lib/api";
+import { announceAuthChange, leaveNotice, rememberViewer, signInHref, signOut, useHydrated, useViewer } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /** Settings' line under its title: what this viewer finds on the page. Nothing until the viewer is known (as below). */
@@ -18,7 +19,7 @@ export function SettingsIntro() {
   if (!hydrated || !v) return null;
   if (v.owner)
     return "Choose open source, paid APIs or both, connect providers, point Fuobe at your ComfyUI server, and choose how prompts get enhanced. Keys stay on this server.";
-  return v.account ? "Your account, your GPU and your own keys. The studio's own settings are its owner's." : "Create a free account and connect your own GPU.";
+  return v.account ? "Your account, your GPU and your own keys. The studio's own settings are its owner's." : "How a free account runs Fuobe, and every model's licence.";
 }
 
 /**
@@ -89,25 +90,44 @@ function Licences() {
  */
 function AccountSection({ email }: { email: string }) {
   const id = useId();
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [changing, setChanging] = useState(false);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // The password was wrong (403): only then is its field marked, not for "too many tries" or no answer.
+  const [wrong, setWrong] = useState(false);
   const remove = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError("");
+    setWrong(false);
     try {
       const res = await fetch("/api/auth/me", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
       if (res.status === 204) {
-        // This browser's other tabs hear it, then a full load: the page and every cached answer were the account's.
+        // This browser's other tabs hear it, then a full load (as a guest's): the page and every cached answer were the
+        // account's. The home page says it was deleted, which a sign-out alone would look the same as.
+        rememberViewer("guest");
+        leaveNotice("account-deleted");
         announceAuthChange();
         window.location.replace(window.location.origin);
         return;
       }
+      if (res.status === 401) {
+        // This browser was signed out (the password was changed in another one): the page shows Log in instead.
+        setBusy(false);
+        setOpen(false);
+        setPassword("");
+        toast("You were signed out", { description: "This browser isn't signed in any more. Log in again to delete your account." });
+        void qc.invalidateQueries({ queryKey: ["viewer"] });
+        void qc.invalidateQueries({ queryKey: ["status"] });
+        announceAuthChange();
+        return;
+      }
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       setError(body.error ?? `The account wasn't deleted (${res.status})`);
+      setWrong(res.status === 403);
     } catch {
       setError("The account wasn't deleted: the studio didn't answer. Try again.");
     }
@@ -140,7 +160,7 @@ function AccountSection({ email }: { email: string }) {
           </Button>
         </div>
       </div>
-      <ChangePassword open={changing} onOpenChange={setChanging} />
+      <ChangePassword email={email} open={changing} onOpenChange={setChanging} />
       <Dialog
         open={open}
         onOpenChange={(o) => {
@@ -148,6 +168,7 @@ function AccountSection({ email }: { email: string }) {
           setOpen(o);
           setPassword("");
           setError("");
+          setWrong(false);
         }}
       >
         <DialogContent className="sm:max-w-md">
@@ -168,7 +189,7 @@ function AccountSection({ email }: { email: string }) {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                aria-invalid={!!error}
+                aria-invalid={wrong}
                 aria-describedby={error ? `${id}-error` : undefined}
                 autoFocus
               />
@@ -219,33 +240,49 @@ function PasswordInput({ id, shown, onShow, ...props }: React.ComponentProps<typ
  * Settings → Account → Change password (PATCH /api/auth/me): the current password, then the new one. Every other
  * browser signed in to the account is signed out; this one stays signed in.
  */
-function ChangePassword({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+function ChangePassword({ email, open, onOpenChange }: { email: string; open: boolean; onOpenChange: (open: boolean) => void }) {
   const id = useId();
+  const qc = useQueryClient();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [shown, setShown] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // The current password was wrong (403): only then is its field marked, not for "too many tries" or no answer.
+  const [wrong, setWrong] = useState(false);
   const short = next.length > 0 && next.length < 8;
   const reset = () => {
     setCurrent("");
     setNext("");
     setShown(false);
     setError("");
+    setWrong(false);
   };
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError("");
+    setWrong(false);
     try {
       const res = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ current, next }) });
       if (res.ok) {
         toast.success("Password changed", { description: "You're still signed in here. Any other browser signed in to your account is signed out." });
         reset();
         onOpenChange(false);
+      } else if (res.status === 401) {
+        // This browser was signed out (the password was changed in another one): the page shows Log in instead.
+        setBusy(false);
+        reset();
+        onOpenChange(false);
+        toast("You were signed out", { description: "This browser isn't signed in any more. Log in again to change your password." });
+        void qc.invalidateQueries({ queryKey: ["viewer"] });
+        void qc.invalidateQueries({ queryKey: ["status"] });
+        announceAuthChange();
+        return;
       } else {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         setError(body.error ?? `The password wasn't changed (${res.status})`);
+        setWrong(res.status === 403);
       }
     } catch {
       setError("The password wasn't changed: the studio didn't answer. Try again.");
@@ -265,8 +302,10 @@ function ChangePassword({ open, onOpenChange }: { open: boolean; onOpenChange: (
         <form onSubmit={save} className="space-y-4">
           <DialogHeader>
             <DialogTitle>Change your password</DialogTitle>
-            <DialogDescription>Any other browser signed in to your account is signed out. You stay signed in here.</DialogDescription>
+            <DialogDescription>Changing your password signs out every other browser where you&apos;re signed in. You stay signed in here.</DialogDescription>
           </DialogHeader>
+          {/* The account's email, for password managers: they update its saved login rather than save a new one. */}
+          <input type="email" name="username" autoComplete="username" value={email} readOnly hidden />
           <div className="space-y-1.5">
             <Label htmlFor={`${id}-current`} className="text-[13px]">
               Current password
@@ -278,7 +317,7 @@ function ChangePassword({ open, onOpenChange }: { open: boolean; onOpenChange: (
               autoComplete="current-password"
               value={current}
               onChange={(e) => setCurrent(e.target.value)}
-              aria-invalid={!!error}
+              aria-invalid={wrong}
               aria-describedby={error ? `${id}-error` : undefined}
               autoFocus
             />

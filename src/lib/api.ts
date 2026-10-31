@@ -1124,9 +1124,45 @@ export function announceAuthChange(): void {
   } catch {}
 }
 
+/** Who used this browser last ("owner", "account" or "guest"): the sidebar's first-paint script reads it (app-sidebar.tsx). */
+export const VIEWER_KEY = "fuobe:viewer";
+
+/**
+ * Who the next page is for, said before it loads (signing in or out): the sidebar keeps the right row from its first
+ * frame, so its menu doesn't move when the viewer is known.
+ */
+export function rememberViewer(kind: "owner" | "account" | "guest"): void {
+  try {
+    localStorage.setItem(VIEWER_KEY, kind);
+  } catch {}
+}
+
+/** A word for the next page this tab loads (sessionStorage), when the change itself leaves nothing to see on it. */
+const NOTICE_KEY = "fuobe:notice";
+export type Notice = "account-deleted";
+
+/** Leaves a notice for the next page, which shows it once (src/app/providers.tsx). */
+export function leaveNotice(notice: Notice): void {
+  try {
+    sessionStorage.setItem(NOTICE_KEY, notice);
+  } catch {}
+}
+
+/** The notice the last page left, once: reading it removes it. */
+export function takeNotice(): Notice | null {
+  try {
+    const n = sessionStorage.getItem(NOTICE_KEY);
+    sessionStorage.removeItem(NOTICE_KEY);
+    return n === "account-deleted" ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Signing out: the server forgets the session, the other tabs hear of it, and the page starts again signed out. */
 export async function signOut(): Promise<void> {
   await fetch("/api/auth/logout", { method: "POST" });
+  rememberViewer("guest");
   announceAuthChange();
   window.location.reload();
 }

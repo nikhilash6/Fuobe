@@ -12,7 +12,7 @@ import { KeyInstead } from "@/components/keys/your-keys";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useGpuCheck, useGpuReadiness } from "@/hooks/use-gpu";
-import { signInHref, useViewer } from "@/lib/api";
+import { signInHref, useStatus, useViewer } from "@/lib/api";
 import { safeNext } from "@/lib/safe-redirect";
 
 /**
@@ -66,13 +66,13 @@ export function ConnectGpu() {
 
   const title = welcome ? "Welcome! Connect your GPU" : "Connect your GPU";
   const lead = "Make things on your own graphics card with ComfyUI. It's free, private and has no run limit. Fuobe checks what your ComfyUI has, and shows what each studio still needs.";
-  const done = (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <Button asChild variant="ghost" className="h-11 sm:h-9">
-        <Link href={next}>Not now</Link>
-      </Button>
-      <Button asChild className="h-11 sm:h-9">
-        <Link href={next}>Start creating</Link>
+  // One way on, to where the person was going: "Not now" while nothing runs their work, "Start creating" once a GPU is
+  // connected or a fal.ai or Replicate key is saved.
+  const hasKey = !!useStatus().data?.viewer?.keys?.length;
+  const done = (connected: boolean) => (
+    <div className="flex justify-end">
+      <Button asChild variant={connected ? "default" : "outline"} className="h-11 sm:h-9">
+        <Link href={next}>{connected ? "Start creating" : "Not now"}</Link>
       </Button>
     </div>
   );
@@ -151,7 +151,7 @@ export function ConnectGpu() {
           {reason === "refused" && <p className="mb-3 text-[13px] text-destructive">Fuobe can&apos;t use this address. Connect your own ComfyUI.</p>}
           <ConnectChoice className="sm:max-w-none" />
         </Card>
-        {done}
+        {done(hasKey)}
       </div>
     );
 
@@ -208,7 +208,7 @@ export function ConnectGpu() {
         </div>
       </Card>
       {report && <ReadinessBoard view={view!} owner={!isAccount} onCheck={() => void check.start()} checking={check.running} />}
-      {done}
+      {done(true)}
     </div>
   );
 }

@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { GuestPrompt } from "@/components/guest-prompt";
 import { AddKeyPrompt } from "@/components/keys/your-keys";
-import { AUTH_CHANNEL } from "@/lib/api";
+import { toast } from "sonner";
+import { AUTH_CHANNEL, takeNotice, type ViewerInfo } from "@/lib/api";
 
 /** The GPU pre-flight's guided fix: loaded after the page, listening for "fuobe:gpu-setup". */
 const GuidedFixHost = dynamic(() => import("@/components/gpu/guided-fix").then((m) => m.GuidedFixHost), { ssr: false });
@@ -30,12 +31,22 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
     const c = new BroadcastChannel(AUTH_CHANNEL);
-    c.onmessage = () => {
-      void client.invalidateQueries({ queryKey: ["viewer"] });
+    c.onmessage = async () => {
       void client.invalidateQueries({ queryKey: ["status"] });
+      await client.invalidateQueries({ queryKey: ["viewer"] });
+      // A studio without public sign-up has nothing for someone signed out but its sign-in page: loading again takes
+      // this tab there, rather than showing a guest's pages that offer an account it can't make.
+      const v = client.getQueryData<ViewerInfo>(["viewer"]);
+      if (v && !v.signedIn && !v.publicSignup && window.location.pathname !== "/login") window.location.reload();
     };
     return () => c.close();
   }, [client]);
+  // What the last page left to say (Delete account lands here as a guest, which looks the same as signing out). The
+  // Toaster below is listening by now: a child's effects run before this one.
+  useEffect(() => {
+    if (takeNotice() === "account-deleted")
+      toast.success("Your account was deleted", { description: "Its uploads, runs, GPU connection and saved keys are gone. You're signed out." });
+  }, []);
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <QueryClientProvider client={client}>

@@ -1,16 +1,17 @@
 "use client";
 
-import { Cpu, Sparkles } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Cpu, LogIn, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ConnectChoice } from "@/components/gpu/connect-choice";
 import type { FindReason } from "@/components/gpu/computer-runner";
 import { takeGpuRetry } from "@/hooks/use-gpu";
 import { KeyInstead } from "@/components/keys/your-keys";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CONNECT_GPU_EVENT, GUEST_PROMPT_EVENT, refusalCard, signInHref, useStatus, watchGuestRefusals, type RefusalCard } from "@/lib/api";
+import { CONNECT_GPU_EVENT, GUEST_PROMPT_EVENT, refusalCard, signInHref, useStatus, useViewer, watchGuestRefusals, type RefusalCard } from "@/lib/api";
 import { CLOUD_KEY } from "@/lib/your-keys";
 
 /**
@@ -21,7 +22,8 @@ import { CLOUD_KEY } from "@/lib/your-keys";
  * a key" when it has no key yet. Mounted once, in the app's providers, so it outlives the page: a
  * card closes when the page changes (its own Sign up or Log in, Back), and never opens on the
  * sign-in page (refusalCard). Opened by a run that was refused, "Connect your GPU" keeps that run
- * and starts it by itself once the GPU is connected.
+ * and starts it by itself once the GPU is connected. Refused as a guest while this page still had
+ * someone signed in (the password changed in another browser), it says "You were signed out" instead.
  */
 export function GuestPrompt() {
   // The last card stays while the dialog animates out.
@@ -35,6 +37,14 @@ export function GuestPrompt() {
     setRetry(null);
   }, []);
   const viewer = useStatus().data?.viewer;
+  const qc = useQueryClient();
+  // Who this page was for, for the refusal that comes when that sign-in ended elsewhere: "owner", "account", or null.
+  const who = useViewer().data;
+  const was = useRef<"owner" | "account" | null>(null);
+  useEffect(() => {
+    was.current = who?.signedIn ? (who.owner ? "owner" : "account") : null;
+  }, [who]);
+  const [signedOut, setSignedOut] = useState<"owner" | "account" | null>(null);
   useEffect(() => {
     watchGuestRefusals();
     const show = (kind: RefusalCard["kind"]) => {
@@ -44,7 +54,16 @@ export function GuestPrompt() {
       setOpen(true);
       return true;
     };
-    const guest = () => show("guest");
+    const guest = () => {
+      // Signed in a moment ago: not an offer to sign up, but to log in again; and the page asks who is looking.
+      const out = was.current;
+      if (show("guest")) setSignedOut(out);
+      if (out) {
+        was.current = null;
+        void qc.invalidateQueries({ queryKey: ["viewer"] });
+        void qc.invalidateQueries({ queryKey: ["status"] });
+      }
+    };
     const gpu = (e: Event) => {
       // The run that was refused (the composer leaves its retry as it sends): kept until the GPU is connected.
       const r = takeGpuRetry();
@@ -58,7 +77,7 @@ export function GuestPrompt() {
       window.removeEventListener(GUEST_PROMPT_EVENT, guest);
       window.removeEventListener(CONNECT_GPU_EVENT, gpu);
     };
-  }, []);
+  }, [qc]);
   return (
     <>
       <Suspense fallback={null}>
@@ -93,6 +112,23 @@ export function GuestPrompt() {
                 onNotNow={() => setRetry(null)}
               />
             </>
+          ) : signedOut ? (
+            <>
+              <DialogHeader>
+                <div className="mb-1 grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
+                  <LogIn className="size-5" />
+                </div>
+                <DialogTitle>You were signed out</DialogTitle>
+                <DialogDescription>This browser isn&apos;t signed in any more, for example because the password was changed in another browser. Log in again to go on.</DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:justify-start">
+                <Button asChild>
+                  <Link href={logInAgain(signedOut, card?.here)} onClick={close}>
+                    Log in
+                  </Link>
+                </Button>
+              </DialogFooter>
+            </>
           ) : (
             <>
               <DialogHeader>
@@ -120,6 +156,13 @@ export function GuestPrompt() {
       </Dialog>
     </>
   );
+}
+
+/** Log in again, coming back here: the owner to the studio's own sign-in. */
+function logInAgain(who: "owner" | "account", here?: string): string {
+  const href = signInHref("login", here);
+  if (who !== "owner") return href;
+  return `${href}${href.includes("?") ? "&" : "?"}owner=1`;
 }
 
 const TITLES: Record<FindReason | "run", string> = {

@@ -206,7 +206,7 @@ export interface ConnectChoiceProps {
   reason?: FindReason;
   onStart?: () => void;
   onNotNow?: () => void;
-  /** The two options' box: 36rem at most from sm up, unless a wider page lifts that (sm:max-w-none). */
+  /** The two options' box (and the link's form): 36rem at most from sm up, unless a wider page lifts that (sm:max-w-none). */
   className?: string;
 }
 
@@ -230,7 +230,7 @@ export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow, classN
     return (
       <div className="space-y-4">
         <p className="rounded-xl bg-muted px-3 py-2.5 text-[13px] text-muted-foreground">{unsupportedWords(support)}</p>
-        <YourGpu />
+        <YourGpu className={className} />
       </div>
     );
   }
@@ -274,7 +274,7 @@ export function ConnectChoice({ fromRun, kind, reason, onStart, onNotNow, classN
         </button>
         {(link || linked) && (
           <div className="mt-3">
-            <YourGpu />
+            <YourGpu className={className} />
           </div>
         )}
       </div>

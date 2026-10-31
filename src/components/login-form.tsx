@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { announceAuthChange, signOut, useViewer } from "@/lib/api";
+import { announceAuthChange, rememberViewer, signOut, useViewer } from "@/lib/api";
 import { safeNext } from "@/lib/safe-redirect";
 import { cn } from "@/lib/utils";
 
@@ -67,10 +67,12 @@ export function LoginForm() {
     if (res.ok) {
       // Only a page on this site: never bounce to another origin after signing in.
       const after = safeNext(params.get("next"), window.location.origin);
-      // A new account connects its GPU first (the pre-flight board), then goes on to where it was headed.
+      // A new account connects its GPU first (the pre-flight board), then goes on to where it was headed. Not back to
+      // Settings' Your GPU (its Sign up free): the welcome page is that same choice.
       const q = new URLSearchParams({ welcome: "1" });
-      if (after !== "/" && !after.startsWith("/connect")) q.set("next", after);
+      if (after !== "/" && !after.startsWith("/connect") && !after.startsWith("/settings#your-gpu")) q.set("next", after);
       const dest = mode === "signup" ? new URL(`/connect?${q}`, window.location.origin).toString() : after;
+      rememberViewer(mode === "owner" ? "owner" : "account");
       announceAuthChange();
       window.location.assign(dest);
       return;

@@ -20,7 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { announceAuthChange } from "@/lib/api";
+import { announceAuthChange, rememberViewer } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
 import { timeAgo } from "@/lib/format";
 import { responseError, toastError } from "@/lib/refusals";
@@ -224,7 +224,9 @@ function SignOutEveryone({ tokens }: { tokens: number }) {
     setBusy(true);
     try {
       await call("/api/auth/sessions", "POST", { tokens: revoke });
-      // This browser is signed out too.
+      // This browser is signed out too: its other tabs hear of it, and the next page starts as a guest's.
+      rememberViewer("guest");
+      announceAuthChange();
       router.replace("/login?owner=1");
     } catch (e) {
       toastError(e);
@@ -333,7 +335,8 @@ export function SecuritySettings() {
             className="-my-1 h-7"
             onClick={async () => {
               await fetch("/api/auth/logout", { method: "POST" });
-              // This browser's other tabs stop going on as the owner.
+              // This browser's other tabs stop going on as the owner, and the next page starts as a guest's.
+              rememberViewer("guest");
               announceAuthChange();
               router.replace("/login");
             }}

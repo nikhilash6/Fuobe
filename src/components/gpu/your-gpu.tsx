@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { responseError, toastError } from "@/lib/refusals";
+import { cn } from "@/lib/utils";
 
 interface GpuState {
   /** A link, or the ComfyUI on this computer (connect-choice.tsx shows that one). */
@@ -34,9 +35,10 @@ async function call<T>(method: string, body?: unknown, test = false): Promise<T>
 /**
  * "Your GPU" (public sign-up): an account's own ComfyUI, where its runs go (never this studio's keys
  * or GPU). The server calls it, so it needs a public address: a Cloudflare Tunnel or ngrok in front
- * of a local ComfyUI. Nothing here looks for a ComfyUI on this device: it shows the tunnel command.
+ * of a local ComfyUI. Nothing here looks for a ComfyUI on this device: it shows the tunnel command. 36rem wide at most
+ * from sm up, unless a wider page lifts that (className, as ConnectChoice's).
  */
-export function YourGpu() {
+export function YourGpu({ className }: { className?: string } = {}) {
   const qc = useQueryClient();
   const id = useId();
   const q = useQuery({ queryKey: ["account-gpu"], queryFn: () => call<GpuState>("GET") });
@@ -85,7 +87,7 @@ export function YourGpu() {
   const gpu = q.data.gpu?.mode === "computer" ? null : q.data.gpu;
 
   return (
-    <div className="w-full min-w-0 space-y-4 sm:max-w-[36rem]">
+    <div className={cn("w-full min-w-0 space-y-4 sm:max-w-[36rem]", className)}>
       <p className="text-[13px] text-muted-foreground">
         Free accounts run on their own ComfyUI, never on this studio&apos;s own keys or GPU. Runs from the Image, Video and Audio studios on open-source models go to it. It must be
         reachable from the internet, for example through a Cloudflare Tunnel or ngrok in front of your ComfyUI.
@@ -119,9 +121,12 @@ export function YourGpu() {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`${id}-token`} className="text-[13px]">
-            Token <span className="text-muted-foreground">(optional, sent as Authorization: Bearer)</span>
+            Access token <span className="text-muted-foreground">(optional)</span>
           </Label>
-          <Input id={`${id}-token`} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
+          <Input id={`${id}-token`} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} aria-describedby={`${id}-token-hint`} />
+          <p id={`${id}-token-hint`} className="text-[12px] text-muted-foreground">
+            Only if your tunnel or ComfyUI asks for a password or token.
+          </p>
         </div>
         {error && <p className="text-[12px] text-destructive">{error}</p>}
         {info && (
