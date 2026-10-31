@@ -4,6 +4,7 @@ import { Loader2, Minus, Plus, TriangleAlert, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAskBeforeUpload } from "@/lib/api";
 import { FRAMES_HINT, frameRange, frameRole, frameTimes, KEYFRAME_SNAP, MAX_KEYFRAMES, secondsLabel } from "@/lib/catalog/keyframes";
 import type { FrameAttachment } from "@/lib/composer";
 import { cn } from "@/lib/utils";
@@ -177,8 +178,10 @@ function FrameTile({
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const name = index === 0 ? "the start frame" : `frame ${index + 1}`;
+  // Someone whose upload would be refused (a guest, an account with no GPU or key) gets its card, not the file chooser.
+  const askFirst = useAskBeforeUpload();
   const take = (f: File | undefined) => {
-    if (!f) return;
+    if (!f || askFirst()) return;
     if (kindOfFile(f) !== "image") return void toast(wrongKindMessage("image"));
     onFile(f);
   };
@@ -203,7 +206,7 @@ function FrameTile({
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={() => input.current?.click()}
+              onClick={() => askFirst() || input.current?.click()}
               aria-label={`Frame ${index + 1}, ${role.toLowerCase()} at ${secondsLabel(time)}: replace`}
               className={cn("size-full overflow-hidden rounded-xl border bg-muted outline-none focus-visible:ring-2 focus-visible:ring-ring/50", over && "ring-2 ring-primary")}
             >

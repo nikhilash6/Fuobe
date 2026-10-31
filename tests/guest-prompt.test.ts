@@ -32,7 +32,7 @@ import { send as shortsSend } from "@/components/shorts/hooks";
 import { fileToSlot, type SlotValue } from "@/components/studio/media-slot";
 import { useCreateSwapProject } from "@/components/swap-studio/hooks";
 import { runGpuCheck } from "@/hooks/use-gpu";
-import { assetUsage, CONNECT_GPU_EVENT, enhance, GUEST_PROMPT_EVENT, refusalCard, signInHref, watchGuestRefusals } from "@/lib/api";
+import { askToSignUp, assetUsage, CONNECT_GPU_EVENT, enhance, GUEST_PROMPT_EVENT, refusalCard, signInHref, watchGuestRefusals } from "@/lib/api";
 import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, CONNECT_GPU_UPLOAD_MESSAGE, GUEST_HEADER, GUEST_LIBRARY_MESSAGE, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
 import { refusalShown, toastError } from "@/lib/refusals";
 
@@ -113,6 +113,24 @@ describe("a guest's refused upload (an image tile: Face Swap's Target photo)", (
     await fetch("/api/media/probe", { method: "POST", body: "{}" });
     await fetch(new Request("http://localhost/api/uploads", { method: "POST", body: "x" }));
     expect(details).toEqual([{ action: "upload" }, { action: "upload" }]);
+  });
+});
+
+describe("askToSignUp", () => {
+  it("opens Create a free account about the visitor's own files, with no request sent", () => {
+    page("/apps/app-face-swap");
+    const sent = vi.fn(server);
+    server = sent;
+    askToSignUp();
+    expect(events).toEqual([GUEST_PROMPT_EVENT]);
+    expect(details).toEqual([{ action: "upload" }]);
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it("or about a run", () => {
+    page("/image");
+    askToSignUp("run");
+    expect(details).toEqual([{ action: "run" }]);
   });
 });
 

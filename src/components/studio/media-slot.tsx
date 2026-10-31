@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAssets, type Asset } from "@/lib/api";
+import { useAskBeforeUpload, useAssets, type Asset } from "@/lib/api";
 import { toastError } from "@/lib/refusals";
 import { postFile } from "@/lib/upload";
 import type { MediaKind } from "@/lib/catalog/types";
@@ -211,7 +211,11 @@ function LibraryPicker({ kind, onPick }: { kind: MediaKind; onPick: (v: SlotValu
   );
 }
 
-/** A compact attachment tile: empty (dashed, click/drop to upload) or filled (thumbnail + remove). */
+/**
+ * A compact attachment tile: empty (dashed, click/drop to upload) or filled (thumbnail + remove). Someone whose upload
+ * would be refused (a guest, an account with neither its own GPU nor its own key) is asked first instead of getting the
+ * file chooser, unless the tile keeps the file in the browser (`local`).
+ */
 export function MediaSlot({
   label,
   kind,
@@ -220,6 +224,7 @@ export function MediaSlot({
   required,
   size = "md",
   onFile,
+  local,
   slotKey,
   caption,
 }: {
@@ -231,6 +236,8 @@ export function MediaSlot({
   size?: "md" | "lg";
   /** Take over file handling (e.g. to append to a list with a stable id). */
   onFile?: (f: File) => void;
+  /** `onFile` keeps the file in this browser and uploads nothing (Color grading): anyone may pick one. */
+  local?: boolean;
   /** Marks the tile so the composer can point at it ("Add a start frame"). */
   slotKey?: string;
   /** Filled, keep the slot's role on the thumbnail ("Target", "Face"), so two photos can be told apart. */
@@ -242,6 +249,9 @@ export function MediaSlot({
     if (onFile) onFile(f);
     else void fileToSlot(f, onChange, kind);
   };
+  const askFirst = useAskBeforeUpload();
+  /** True when the upload would be refused and its card opened instead. */
+  const refused = () => !local && askFirst();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const dim = size === "lg" ? "size-20" : "size-14";
@@ -263,7 +273,7 @@ export function MediaSlot({
             e.stopPropagation();
             setOver(false);
             const f = e.dataTransfer.files?.[0];
-            if (f) handleFile(f);
+            if (f && !refused()) handleFile(f);
           }}
         >
           {value ? (
@@ -290,7 +300,7 @@ export function MediaSlot({
           ) : (
             <button
               type="button"
-              onClick={() => input.current?.click()}
+              onClick={() => refused() || input.current?.click()}
               aria-label={`${label}${required ? " (required)" : ""}: upload`}
               className={cn(
                 "flex size-full flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:bg-brand-faint hover:text-brand-text",

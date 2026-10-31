@@ -3,6 +3,7 @@
 import { nanoid } from "nanoid";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { useAskBeforeUpload } from "@/lib/api";
 import { MAX_KEYFRAMES } from "@/lib/catalog/keyframes";
 import { acceptedKinds, addFrame, fitAttachments, noRoomMessage, onImageChange, placeAttachment, removeFrame, replaceAttachment } from "@/lib/composer";
 import type { InputSlot, MediaKind } from "@/lib/catalog/types";
@@ -41,7 +42,9 @@ const MAX_AT_ONCE = 8;
  * Attach files to the studio draft: paste, drop, the "+" menu and the slot tiles all go through
  * here. Each file is placed once with its local preview, then swapped for the uploaded asset by
  * id (never re-added if it was removed meanwhile). A file with no room (references full, or a
- * model that takes none) is never uploaded: the person is told why instead.
+ * model that takes none) is never uploaded: the person is told why instead. Someone whose upload
+ * would be refused (a guest, an account with neither its own GPU nor its own key) gets that card
+ * at once, before any preview is placed.
  */
 export function useAttach(slots: InputSlot[], refMax: number) {
   const { config, draft, setDraft } = useStudio();
@@ -50,10 +53,12 @@ export function useAttach(slots: InputSlot[], refMax: number) {
   useEffect(() => {
     latest.current = draft;
   });
+  const askFirst = useAskBeforeUpload();
 
   /** Upload a file: `place` runs once with the local preview, the result replaces it by id. */
   const start = useCallback(
     (file: File, place: (v: SlotValue) => void, kind?: MediaKind) => {
+      if (askFirst()) return;
       const id = nanoid(8);
       const entry = { ac: new AbortController(), seen: false };
       inflight.set(id, entry);
@@ -78,7 +83,7 @@ export function useAttach(slots: InputSlot[], refMax: number) {
         { signal: entry.ac.signal },
       );
     },
-    [setDraft],
+    [setDraft, askFirst],
   );
 
   const kinds = useMemo(() => new Set<MediaKind>(acceptedKinds(slots, config.multiRef)), [slots, config.multiRef]);
@@ -113,6 +118,8 @@ export function useAttach(slots: InputSlot[], refMax: number) {
 
   const attachFiles = useCallback(
     (files: File[]) => {
+      // A paste, a drop on the page or the "+" menu: one card for the lot, and no toast about kinds or room on top.
+      if (askFirst()) return;
       const frames = latest.current.frames;
       // Frames mode: each still becomes the next frame, up to ten.
       const usable = files.filter((f) => (frames ? kindOfFile(f) === "image" : kinds.has(kindOfFile(f))));
@@ -130,7 +137,7 @@ export function useAttach(slots: InputSlot[], refMax: number) {
       if (rejected.length) noRoom();
       for (const i of placed) start(batch[i], place);
     },
-    [kinds, start, place, noRoom, slots, config.multiRef, refMax],
+    [askFirst, kinds, start, place, noRoom, slots, config.multiRef, refMax],
   );
 
   /** A slot tile: replace its value (an upload it held is cancelled by the reaper). A drawing belongs to the image it was made on. */

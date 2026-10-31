@@ -1229,6 +1229,29 @@ function requestPath(input: RequestInfo | URL): string {
   }
 }
 
+/** Opens "Create a free account" on its own (GuestPrompt), e.g. before a guest's file chooser: it could only be refused. */
+export function askToSignUp(action: RefusalAction = "upload"): void {
+  window.dispatchEvent(new CustomEvent<RefusalDetail>(GUEST_PROMPT_EVENT, { detail: { action } }));
+}
+
+/**
+ * For a file chooser, a drop or a paste: asks first whoever the upload would refuse, instead of letting them pick a file
+ * for nothing. A guest gets "Create a free account", an account with neither its own GPU nor its own key "Connect your
+ * GPU or add a key". The function returns true when it asked (the chooser stays shut, the file stays out), and false
+ * for anyone the upload takes, and while who is looking isn't known yet (the server's refusal opens the same card).
+ */
+export function useAskBeforeUpload(): () => boolean {
+  const guest = useIsGuest();
+  const seen = useStatus().data?.viewer;
+  const nowhere = seen?.kind === "account" && !seen.gpu.connected && !seen.keys?.length;
+  return useCallback(() => {
+    if (guest) askToSignUp("upload");
+    else if (nowhere) window.dispatchEvent(new CustomEvent<RefusalDetail>(CONNECT_GPU_EVENT, { detail: { action: "upload" } }));
+    else return false;
+    return true;
+  }, [guest, nowhere]);
+}
+
 /**
  * The card a refusal opens on this page. None on the sign-in page: the visitor is signing in already,
  * and a wrong password there is the form's own error.

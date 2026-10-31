@@ -416,7 +416,7 @@ function Grader() {
         <h1 className="font-heading text-[22px] leading-none">Color grading</h1>
         <span className="ml-2 hidden rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success sm:inline">Free · runs in your browser</span>
         <div className="ml-auto flex items-center gap-2">
-          {input && <MediaSlot label="Replace" kind={input.kind} value={null} onChange={pick} onFile={pickFile} />}
+          {input && <MediaSlot label="Replace" kind={input.kind} value={null} onChange={pick} onFile={pickFile} local />}
         </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 sm:px-6 lg:flex-row">
@@ -436,8 +436,8 @@ function Grader() {
                 <p className="mt-1 text-[13px]">Drop a file, or pick one from your library. Nothing is uploaded until you save.</p>
               </div>
               <div className="flex gap-2">
-                <MediaSlot label="Image" kind="image" value={null} onChange={pick} onFile={pickFile} size="lg" />
-                <MediaSlot label="Video" kind="video" value={null} onChange={pick} onFile={pickFile} size="lg" />
+                <MediaSlot label="Image" kind="image" value={null} onChange={pick} onFile={pickFile} local size="lg" />
+                <MediaSlot label="Video" kind="video" value={null} onChange={pick} onFile={pickFile} local size="lg" />
               </div>
               <button
                 type="button"
