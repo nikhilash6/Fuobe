@@ -341,7 +341,7 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
             <Toggle label="Audio" hint={p.generateAudio === false ? "Silent video (cheaper)" : "Native sound, music and dialogue"} checked={p.generateAudio !== false} onChange={(v) => setP({ generateAudio: v })} />
           )}
           {shape.enhance && (
-            <Toggle label="Enhance prompt" hint="An LLM rewrites your prompt before generating" checked={!!p.enhancePrompt} onChange={(v) => setP({ enhancePrompt: v })}>
+            <Toggle label="Enhance prompt" hint="Rewrites your prompt with more detail before it runs" checked={!!p.enhancePrompt} onChange={(v) => setP({ enhancePrompt: v })}>
               <button
                 type="button"
                 onClick={onRewrite}
