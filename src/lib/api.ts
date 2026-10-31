@@ -1209,6 +1209,26 @@ export const ADD_KEY_EVENT = "fuobe:add-key";
 /** A card GuestPrompt shows for a refusal: "Create a free account" (coming back to `here` after) or "Connect your GPU". */
 export type RefusalCard = { kind: "guest"; here: string } | { kind: "gpu" };
 
+/** What a refusal card is about, for its words: a run (or any other change), or adding a file of one's own. */
+export type RefusalAction = "run" | "upload";
+
+/** What the cards' events may say (GUEST_PROMPT_EVENT, CONNECT_GPU_EVENT). Without it, a card is about a run. */
+export interface RefusalDetail {
+  action?: RefusalAction;
+}
+
+/** The requests that add a file of the visitor's own: their refusal's card says "add your own files", not "run this". */
+const UPLOAD_PATHS = new Set(["/api/uploads", "/api/media/probe"]);
+
+/** A request's path, whichever way fetch was given it (a path, a URL or a Request). Empty when it can't be read. */
+function requestPath(input: RequestInfo | URL): string {
+  try {
+    return new URL(input instanceof Request ? input.url : String(input), window.location.href || "http://localhost").pathname;
+  } catch {
+    return "";
+  }
+}
+
 /**
  * The card a refusal opens on this page. None on the sign-in page: the visitor is signing in already,
  * and a wrong password there is the form's own error.
@@ -1224,27 +1244,27 @@ export function refusalCard(kind: RefusalCard["kind"], at: { pathname: string; s
  * (a 403 marked x-fuobe-connect-gpu): open "Connect your GPU". Watches every fetch, so the studio's
  * own helpers (json() here, and the components' own) all get it. The response is marked
  * (src/lib/refusals.ts): the error json() and postFile() throw for it shows no toast on top of the
- * card. Never on the sign-in page (refusalCard). Installed once.
+ * card. Never on the sign-in page (refusalCard). Installed once. A refused upload's card says so ("add your own
+ * files"), not "run this".
  */
 export function watchGuestRefusals(): void {
   const w = window as typeof window & { __fuobeGuestFetch?: boolean };
   if (w.__fuobeGuestFetch) return;
   w.__fuobeGuestFetch = true;
   const original = window.fetch.bind(window);
-  const open = (res: Response, kind: RefusalCard["kind"]) => {
+  const open = (res: Response, kind: RefusalCard["kind"], path: string) => {
     if (!refusalCard(kind, window.location)) return;
     markRefusalShown(res);
-    window.dispatchEvent(new Event(kind === "guest" ? GUEST_PROMPT_EVENT : CONNECT_GPU_EVENT));
+    const detail: RefusalDetail = { action: UPLOAD_PATHS.has(path) ? "upload" : "run" };
+    window.dispatchEvent(new CustomEvent(kind === "guest" ? GUEST_PROMPT_EVENT : CONNECT_GPU_EVENT, { detail }));
   };
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const res = await original(input, init);
-    if (res.status === 401 && res.headers.get("x-fuobe-guest") === "1") {
-      const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-      if (method !== "GET" && method !== "HEAD") open(res, "guest");
-    }
-    if (res.status === 403 && res.headers.get("x-fuobe-connect-gpu") === "1") open(res, "gpu");
+    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    if (res.status === 401 && res.headers.get("x-fuobe-guest") === "1" && method !== "GET" && method !== "HEAD") open(res, "guest", requestPath(input));
+    if (res.status === 403 && res.headers.get("x-fuobe-connect-gpu") === "1") open(res, "gpu", requestPath(input));
     // A run started here, on the ComfyUI on this computer: the tab that runs it asks for it at once.
-    if (res.status === 201 && (init?.method ?? "").toUpperCase() === "POST" && new URL(input instanceof Request ? input.url : String(input), window.location.href).pathname === "/api/generations") {
+    if (res.status === 201 && method === "POST" && requestPath(input) === "/api/generations") {
       window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));
     }
     // An account's paid run without its own key for that provider (x-fuobe-add-key: fal | replicate): "Add your key".

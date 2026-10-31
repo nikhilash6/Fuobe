@@ -11,16 +11,17 @@ import { takeGpuRetry } from "@/hooks/use-gpu";
 import { KeyInstead } from "@/components/keys/your-keys";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CONNECT_GPU_EVENT, GUEST_PROMPT_EVENT, refusalCard, signInHref, useStatus, useViewer, watchGuestRefusals, type RefusalCard } from "@/lib/api";
+import { CONNECT_GPU_EVENT, GUEST_PROMPT_EVENT, refusalCard, signInHref, useStatus, useViewer, watchGuestRefusals, type RefusalAction, type RefusalCard, type RefusalDetail } from "@/lib/api";
 import { CLOUD_KEY } from "@/lib/your-keys";
 
 /**
  * The cards a public studio shows when something is refused (watchGuestRefusals): "Create a free
- * account to run this" for a guest (public sign-up, signed out) who tries to generate, upload or
- * change anything, and "Connect your GPU to run this" for an account (accounts run on their own
- * ComfyUI, or their own fal.ai or Replicate key, never the owner's keys or GPU), with "No GPU? Add
- * a key" when it has no key yet. Mounted once, in the app's providers, so it outlives the page: a
- * card closes when the page changes (its own Sign up or Log in, Back), and never opens on the
+ * account to run this" for a guest (public sign-up, signed out) who tries to generate or change
+ * anything, and "Connect your GPU to run this" for an account (accounts run on their own ComfyUI,
+ * or their own fal.ai or Replicate key, never the owner's keys or GPU), with "No GPU? Add a key"
+ * when it has no key yet. A refused upload, or a file chooser that asks first (useAskBeforeUpload),
+ * says "add your own files" instead. Mounted once, in the app's providers, so it outlives the page:
+ * a card closes when the page changes (its own Sign up or Log in, Back), and never opens on the
  * sign-in page (refusalCard). Opened by a run that was refused, "Connect your GPU" keeps that run
  * and starts it by itself once the GPU is connected. Refused as a guest while this page still had
  * someone signed in (the password changed in another browser), it says "You were signed out" instead.
@@ -31,6 +32,8 @@ export function GuestPrompt() {
   const [open, setOpen] = useState(false);
   // Opened by the runner's note: ComfyUI needs Fuobe's setting again, find ComfyUI, or let this browser reach it.
   const [reason, setReason] = useState<FindReason | undefined>(undefined);
+  // What was refused: a run (or any other change), or a file of the visitor's own.
+  const [action, setAction] = useState<RefusalAction>("run");
   const [retry, setRetry] = useState<{ retry: () => void; kind?: string } | null>(null);
   const close = useCallback(() => {
     setOpen(false);
@@ -54,10 +57,15 @@ export function GuestPrompt() {
       setOpen(true);
       return true;
     };
-    const guest = () => {
+    // A bare Event (the sidebar's "Connect your GPU") has no detail: a run.
+    const detail = (e: Event) => (e as CustomEvent<(RefusalDetail & { reason?: FindReason }) | null>).detail ?? {};
+    const guest = (e: Event) => {
       // Signed in a moment ago: not an offer to sign up, but to log in again; and the page asks who is looking.
       const out = was.current;
-      if (show("guest")) setSignedOut(out);
+      if (show("guest")) {
+        setSignedOut(out);
+        setAction(detail(e).action ?? "run");
+      }
       if (out) {
         was.current = null;
         void qc.invalidateQueries({ queryKey: ["viewer"] });
@@ -65,11 +73,13 @@ export function GuestPrompt() {
       }
     };
     const gpu = (e: Event) => {
+      const { action: refused = "run", reason: why } = detail(e);
       // The run that was refused (the composer leaves its retry as it sends): kept until the GPU is connected.
-      const r = takeGpuRetry();
+      const r = refused === "run" ? takeGpuRetry() : null;
       if (!show("gpu")) return;
       setRetry(r);
-      setReason((e as CustomEvent<{ reason?: FindReason } | undefined>).detail?.reason);
+      setReason(why);
+      setAction(refused);
     };
     window.addEventListener(GUEST_PROMPT_EVENT, guest);
     window.addEventListener(CONNECT_GPU_EVENT, gpu);
@@ -91,8 +101,14 @@ export function GuestPrompt() {
                 <div className="mb-1 grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
                   <Cpu className="size-5" />
                 </div>
-                <DialogTitle>{TITLES[reason ?? "run"]}</DialogTitle>
-                <DialogDescription>Fuobe runs this on the ComfyUI on your computer. It&apos;s free and private.</DialogDescription>
+                <DialogTitle>{TITLES[reason ?? action]}</DialogTitle>
+                <DialogDescription>
+                  {!reason && action === "upload" ? (
+                    "A free account keeps its files for runs on its own ComfyUI or its own fal.ai or Replicate key."
+                  ) : (
+                    <>Fuobe runs this on the ComfyUI on your computer. It&apos;s free and private.</>
+                  )}
+                </DialogDescription>
                 {/* Paid models run on the account's own key instead (Your keys), when the studio allows them. */}
                 {viewer?.kind === "account" && viewer.paidAllowed !== false && !!viewer.keys?.length && (
                   <p className="text-[13px] text-muted-foreground">{`Or switch to Cloud to use your ${viewer.keys.map((k) => CLOUD_KEY[k].label).join(" or ")} key.`}</p>
@@ -135,7 +151,7 @@ export function GuestPrompt() {
                 <div className="mb-1 grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
                   <Sparkles className="size-5" />
                 </div>
-                <DialogTitle>Create a free account to run this</DialogTitle>
+                <DialogTitle>{action === "upload" ? "Create a free account to add your own files" : "Create a free account to run this"}</DialogTitle>
                 <DialogDescription>You&apos;re browsing as a guest. Sign up with an email and a password to generate, upload and keep your work.</DialogDescription>
               </DialogHeader>
               <DialogFooter className="gap-2 sm:justify-start">
@@ -165,8 +181,9 @@ function logInAgain(who: "owner" | "account", here?: string): string {
   return `${href}${href.includes("?") ? "&" : "?"}owner=1`;
 }
 
-const TITLES: Record<FindReason | "run", string> = {
+const TITLES: Record<FindReason | RefusalAction, string> = {
   run: "Connect your GPU to run this",
+  upload: "Connect your GPU or add a key to use your own files",
   setting: "Your ComfyUI needs Fuobe's setting again",
   find: "Find your ComfyUI",
   browser: "Run your GPU jobs from this browser",

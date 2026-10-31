@@ -33,7 +33,7 @@ import { fileToSlot, type SlotValue } from "@/components/studio/media-slot";
 import { useCreateSwapProject } from "@/components/swap-studio/hooks";
 import { runGpuCheck } from "@/hooks/use-gpu";
 import { assetUsage, CONNECT_GPU_EVENT, enhance, GUEST_PROMPT_EVENT, refusalCard, signInHref, watchGuestRefusals } from "@/lib/api";
-import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, GUEST_HEADER, GUEST_LIBRARY_MESSAGE, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
+import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, CONNECT_GPU_UPLOAD_MESSAGE, GUEST_HEADER, GUEST_LIBRARY_MESSAGE, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
 import { refusalShown, toastError } from "@/lib/refusals";
 
 const answer = (status: number, body: Record<string, unknown>, headers: Record<string, string> = {}) =>
@@ -41,20 +41,25 @@ const answer = (status: number, body: Record<string, unknown>, headers: Record<s
 const guestRefusal = () => answer(401, { error: GUEST_RUN_MESSAGE }, { [GUEST_HEADER]: "1" });
 
 let events: string[] = [];
+/** What each card's event said (its detail): what was refused. */
+let details: unknown[] = [];
 let server: (url: string, init?: RequestInit) => Response = () => answer(200, {});
 
 /** A page at `pathname` with the watcher installed: `window` is this global, as in a browser. */
 function page(pathname: string, search = "") {
   vi.stubGlobal("window", globalThis);
-  vi.stubGlobal("location", { pathname, search });
-  vi.stubGlobal("dispatchEvent", (e: Event) => void events.push(e.type));
-  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => server(String(input), init));
+  vi.stubGlobal("location", { pathname, search, href: `http://localhost${pathname}${search}` });
+  vi.stubGlobal("dispatchEvent", (e: Event) => {
+    events.push(e.type);
+    details.push((e as CustomEvent).detail ?? null);
+  });
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => server(input instanceof Request ? new URL(input.url).pathname : String(input), init));
   watchGuestRefusals();
 }
 
 const picture = () => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "photo.png", { type: "image/png" });
 
-/** Upload a picture into an image tile, as the Color Grading studio's Image tile does: what the tile was given. */
+/** Upload a picture into an image tile, as Face Swap's Target photo does: what the tile was given. */
 async function uploadToTile(): Promise<(SlotValue | null)[]> {
   const given: (SlotValue | null)[] = [];
   await fileToSlot(picture(), (v) => void given.push(v), "image");
@@ -63,38 +68,51 @@ async function uploadToTile(): Promise<(SlotValue | null)[]> {
 
 beforeEach(() => {
   events = [];
+  details = [];
   toasts.error.length = 0;
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   delete (globalThis as { __fuobeGuestFetch?: boolean }).__fuobeGuestFetch;
 });
 
-describe("a guest's refused upload (Color Grading's Image tile)", () => {
+describe("a guest's refused upload (an image tile: Face Swap's Target photo)", () => {
   it("opens one card and shows no error toast on top of it", async () => {
-    page("/color-grade");
+    page("/apps/app-face-swap");
     server = (url, init) => (url === "/api/uploads" && init?.method === "POST" ? guestRefusal() : answer(200, {}));
     const given = await uploadToTile();
     expect(events).toEqual([GUEST_PROMPT_EVENT]);
+    // The card is about the file: "Create a free account to add your own files".
+    expect(details).toEqual([{ action: "upload" }]);
     expect(toasts.error).toEqual([]);
     // The local preview while it uploads, then the empty tile again.
     expect(given.map((v) => v && { uploading: v.uploading })).toEqual([{ uploading: true }, null]);
   });
 
   it("still toasts any other failure (too big, a server error)", async () => {
-    page("/color-grade");
+    page("/apps/app-face-swap");
     server = () => answer(413, { error: "That picture is over 25 MB." });
     await uploadToTile();
     expect(events).toEqual([]);
     expect(toasts.error).toEqual(["That picture is over 25 MB."]);
   });
 
-  it("an account without its GPU gets Connect your GPU alone", async () => {
-    page("/color-grade");
-    server = () => answer(403, { error: CONNECT_GPU_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
+  it("an account without its GPU gets Connect your GPU alone, about its files", async () => {
+    page("/apps/app-face-swap");
+    server = () => answer(403, { error: CONNECT_GPU_UPLOAD_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
     await uploadToTile();
     expect(events).toEqual([CONNECT_GPU_EVENT]);
+    expect(details).toEqual([{ action: "upload" }]);
     expect(toasts.error).toEqual([]);
+  });
+
+  it("a clip's facts (read from an upload) count as adding a file too, whichever way fetch is called", async () => {
+    page("/upscale");
+    server = () => guestRefusal();
+    await fetch("/api/media/probe", { method: "POST", body: "{}" });
+    await fetch(new Request("http://localhost/api/uploads", { method: "POST", body: "x" }));
+    expect(details).toEqual([{ action: "upload" }, { action: "upload" }]);
   });
 });
 
@@ -104,6 +122,8 @@ describe("a guest's refused run", () => {
     server = () => guestRefusal();
     const e = await enhance("a red coat", "image", "t2i").catch((err: unknown) => err);
     expect(events).toEqual([GUEST_PROMPT_EVENT]);
+    // The card is about a run: "Create a free account to run this".
+    expect(details).toEqual([{ action: "run" }]);
     expect(e).toBeInstanceOf(Error);
     expect((e as Error).message).toBe(GUEST_RUN_MESSAGE);
     expect(refusalShown(e)).toBe(true);
@@ -173,6 +193,7 @@ describe("each studio's own fetch helper", () => {
       .create({ name: "Untitled canvas" })
       .catch((err: unknown) => err);
     expect(events).toEqual([CONNECT_GPU_EVENT]);
+    expect(details).toEqual([{ action: "run" }]);
     expect(refusalShown(e)).toBe(true);
   });
 
