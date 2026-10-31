@@ -219,8 +219,8 @@ const fingerprint = (s: string) => crypto.createHash("sha256").update(s).digest(
 /**
  * The key a session is signed with: the secret and a password's fingerprint. The owner's password (FUOBE_PASSWORD, or
  * the Settings one): a new one (after a restart, or in Settings) ends every owner sign-in at once, and the secret alone
- * (auth.json) can't make an owner cookie. An account's own password hash: its new password ends its other sign-ins,
- * and the owner's new password signs no account out.
+ * (auth.json) can't make an owner cookie. An account's own password hash: its new password ends its other sign-ins.
+ * A new FUOBE_PASSWORD signs no account out; a password set in Settings makes a new secret, which signs out everyone.
  */
 function keyFor(d: AuthFile, who: "owner" | Pick<Account, "hash">): string {
   return `${d.secret}.${fingerprint(who === "owner" ? envPassword() || d.password || "" : who.hash)}`;

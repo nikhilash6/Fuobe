@@ -120,8 +120,10 @@ deleted (by itself or by the owner), its runs are stopped and removed, and its u
 are deleted with it.
 
 An account changes its password in **Settings → Account**: `PATCH /api/auth/me` with
-`{ "current", "next" }` (at least 8 characters, 5 tries a minute). Every other browser signed in to
-the account is signed out; the browser that changed it gets a new session.
+`{ "current", "next" }` (at least 8 characters, and not the current one). Every other browser signed in to the account is
+signed out; the browser that changed it gets a new session. Changing the password and deleting the
+account share one limit: 5 password checks a minute per account. A browser that was signed out gets
+401 from both, so the page can offer Log in; the owner gets 403.
 
 ## Your GPU
 

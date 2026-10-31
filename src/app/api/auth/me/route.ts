@@ -31,16 +31,30 @@ export async function GET(request: Request) {
 }
 
 /**
- * An account deletes itself (its password again, to be sure). Signs it out. Five password checks a minute per account:
- * each is a slow check on purpose.
+ * Five password checks a minute per account, deleting it and changing its password together: each is a slow check on
+ * purpose, and either one tells whether a guess was right.
  */
+const passwordCheck = (id: string) => hit(`password-check:${id}`, 5, 60_000);
+
+/**
+ * A request from no account: signed out (no session, or one that ended when the password was changed in another browser)
+ * is a 401, so the page can show Log in; the owner, whose password isn't an account's, a 403.
+ */
+function notAnAccount(request: Request, signedOut: string, owner: string): Response {
+  const isOwner = !authEnabled() || validToken(request.headers.get("authorization"));
+  return Response.json({ error: isOwner ? owner : signedOut }, { status: isOwner ? 403 : 401 });
+}
+
+/** An account deletes itself (its password again, to be sure). Signs it out. */
 export async function DELETE(request: Request) {
   const jar = await cookies();
   const session = sessionViewer(sessionCookieOf(request));
-  if (session?.kind !== "account") return Response.json({ error: "Sign in to the account you want to delete" }, { status: 403 });
+  const ownerRefusal = "This deletes an account, not the studio";
+  if (!session) return notAnAccount(request, "You're signed out. Log in again to delete your account.", ownerRefusal);
+  if (session.kind !== "account") return Response.json({ error: ownerRefusal }, { status: 403 });
   const parsed = z.object({ password: z.string().min(1).max(500) }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Wrong password" }, { status: 403 });
-  const rate = hit(`delete-me:${session.account.id}`, 5, 60_000);
+  const rate = passwordCheck(session.account.id);
   if (!rate.ok) return Response.json({ error: "Too many tries. Wait a minute, then try again." }, { status: 429, headers: { "Retry-After": String(rate.retryAfterS) } });
   if (!(await verifyAccount(session.account.email, parsed.data.password))) return Response.json({ error: "Wrong password" }, { status: 403 });
   // Switched off at once, its running jobs stopped (on its own keys), then its runs, files and record go.
@@ -56,18 +70,22 @@ const NewPassword = z.object({
 
 /**
  * An account changes its password (the current one first, to be sure). Its other sign-ins end; this browser gets a new
- * session cookie. Five password checks a minute per account, as for deleting it.
+ * session cookie.
  */
 export async function PATCH(request: Request) {
   const jar = await cookies();
   const session = sessionViewer(sessionCookieOf(request));
-  if (session?.kind !== "account") return Response.json({ error: "Sign in to change your password" }, { status: 403 });
+  const ownerRefusal = "This changes an account's password, not the studio's";
+  if (!session) return notAnAccount(request, "You're signed out. Log in again to change your password.", ownerRefusal);
+  if (session.kind !== "account") return Response.json({ error: ownerRefusal }, { status: 403 });
   const parsed = NewPassword.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     const next = parsed.error.issues.find((i) => i.path[0] === "next");
     return Response.json({ error: next?.message ?? "Enter your current password and a new one" }, { status: 400 });
   }
-  const rate = hit(`password-me:${session.account.id}`, 5, 60_000);
+  // Not a change: it would sign the other browsers out for nothing. (Two of the request's own words: no password check.)
+  if (parsed.data.next === parsed.data.current) return Response.json({ error: "Choose a new password, not the one you use now" }, { status: 400 });
+  const rate = passwordCheck(session.account.id);
   if (!rate.ok) return Response.json({ error: "Too many tries. Wait a minute, then try again." }, { status: 429, headers: { "Retry-After": String(rate.retryAfterS) } });
   try {
     await setAccountPassword(session.account.id, parsed.data.current, parsed.data.next);

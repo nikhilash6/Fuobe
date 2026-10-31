@@ -421,6 +421,12 @@ describe("an account changes its password (Settings → Account)", () => {
       headers: { "content-type": "application/json", cookie: `${auth.SESSION_COOKIE}=${cookie}` },
       body: JSON.stringify(body),
     });
+  const remove = (cookie: string, body: unknown) =>
+    new Request("http://localhost:3000/api/auth/me", {
+      method: "DELETE",
+      headers: { "content-type": "application/json", cookie: `${auth.SESSION_COOKIE}=${cookie}` },
+      body: JSON.stringify(body),
+    });
   const secret = () => (JSON.parse(fs.readFileSync(path.join(dir, "auth.json"), "utf8")) as { secret: string }).secret;
   /** An account cookie signed with the secret alone, as before account keys held the password's fingerprint. */
   const legacy = (id: string) => {
@@ -432,7 +438,10 @@ describe("an account changes its password (Settings → Account)", () => {
   it("needs the current password, ends every other sign-in, and keeps this browser signed in", async () => {
     const a = auth.createAccount("new-password@example.com", "first password");
     const here = auth.createSession(a.id).value;
+    // Another browser's sign-in, a moment later: a different cookie, not the same string again.
+    await new Promise((r) => setTimeout(r, 5));
     const elsewhere = auth.createSession(a.id).value;
+    expect(elsewhere).not.toBe(here);
     const old = legacy(a.id);
     const owner = auth.createSession().value;
     // A cookie from before this change still works, until the account changes its password.
@@ -444,7 +453,12 @@ describe("an account changes its password (Settings → Account)", () => {
     const short = await (await me()).PATCH(patch(here, { current: "first password", next: "short" }));
     expect(short.status).toBe(400);
     expect((await short.json()).error).toMatch(/8 characters/);
+    // The same password again isn't a change: nobody is signed out for it.
+    const same = await (await me()).PATCH(patch(here, { current: "first password", next: "first password" }));
+    expect(same.status).toBe(400);
+    expect((await same.json()).error).toMatch(/new password/);
     expect(auth.sessionViewer(here)?.kind).toBe("account");
+    expect(auth.sessionViewer(elsewhere)?.kind).toBe("account");
     expect(jar.set).not.toHaveBeenCalled();
 
     const ok = await (await me()).PATCH(patch(here, { current: "first password", next: "second password" }));
@@ -461,8 +475,10 @@ describe("an account changes its password (Settings → Account)", () => {
     expect(auth.checkAccount("new-password@example.com", "second password")?.id).toBe(a.id);
     expect(auth.checkAccount("new-password@example.com", "first password")).toBeNull();
     expect(auth.validSession(owner)).toBe(true);
-    // The old cookie can't try again.
-    expect((await (await me()).PATCH(patch(here, { current: "second password", next: "third password" }))).status).toBe(403);
+    // The old cookie can't try again: it's signed out (401, so the page shows Log in).
+    const again = await (await me()).PATCH(patch(here, { current: "second password", next: "third password" }));
+    expect(again.status).toBe(401);
+    expect((await again.json()).error).toMatch(/signed out/);
   });
 
   it("allows five tries a minute, then answers 429", async () => {
@@ -475,10 +491,34 @@ describe("an account changes its password (Settings → Account)", () => {
     expect(auth.checkAccount("password-guesser@example.com", "the real one")?.id).toBe(a.id);
   });
 
-  it("refuses a guest and the owner: it's an account's own password", async () => {
+  it("counts deleting the account with changing its password: five guesses a minute in all, not five each", async () => {
+    const a = auth.createAccount("two-door-guesser@example.com", "the real one");
+    const cookie = auth.createSession(a.id).value;
+    for (let i = 0; i < 3; i++) expect((await (await me()).PATCH(patch(cookie, { current: `guess ${i}`, next: "a new password" }))).status).toBe(403);
+    for (let i = 3; i < 5; i++) expect((await (await me()).DELETE(remove(cookie, { password: `guess ${i}` }))).status).toBe(403);
+    expect((await (await me()).DELETE(remove(cookie, { password: "the real one" }))).status).toBe(429);
+    expect((await (await me()).PATCH(patch(cookie, { current: "the real one", next: "a new password" }))).status).toBe(429);
+    expect(auth.checkAccount("two-door-guesser@example.com", "the real one")?.id).toBe(a.id);
+  });
+
+  it("refuses a guest (signed out: 401) and the owner (403): it's an account's own password", async () => {
     const owner = auth.createSession().value;
     expect((await (await me()).PATCH(patch(owner, { current: "install password", next: "a new password" }))).status).toBe(403);
-    expect((await (await me()).PATCH(patch("", { current: "x", next: "a new password" }))).status).toBe(403);
+    expect((await (await me()).PATCH(patch("", { current: "x", next: "a new password" }))).status).toBe(401);
     expect(auth.checkPassword("install password")).toBe(true);
+  });
+
+  it("deleting from a browser that was signed out elsewhere is a 401 (Log in), not a wrong password", async () => {
+    const a = auth.createAccount("signed-out-deleter@example.com", "first password");
+    const here = auth.createSession(a.id).value;
+    await new Promise((r) => setTimeout(r, 5));
+    const elsewhere = auth.createSession(a.id).value;
+    expect((await (await me()).PATCH(patch(elsewhere, { current: "first password", next: "second password" }))).status).toBe(200);
+    const del = await (await me()).DELETE(remove(here, { password: "second password" }));
+    expect(del.status).toBe(401);
+    expect((await del.json()).error).toMatch(/signed out/);
+    expect(auth.checkAccount("signed-out-deleter@example.com", "second password")?.id).toBe(a.id);
+    // The owner still gets a 403: the studio isn't an account.
+    expect((await (await me()).DELETE(remove(auth.createSession().value, { password: "install password" }))).status).toBe(403);
   });
 });
