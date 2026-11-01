@@ -415,6 +415,8 @@ export const ASSET_FREE: Record<string, string> = {
   "gpu_snapshots.inventory_json": "what a GPU's ComfyUI has (class names, model file names and sizes), never a Fuobe file",
   "gpu_snapshots.report_json": "readiness built from that inventory",
   "generations.external_meta_json": "the provider's job handles",
+  "billing_outbox.payload_json": "reports for the billing service: hold and run ids, counts and words, never a file",
+  "reports_inbox.target_json": "what a report is about: a run, asset or share id, never a file",
   "shorts_sessions.range_json": "start and end times",
   "shorts_sessions.settings_json": "ratio, language, model and resolution",
   "shorts_sessions.segments_json": "generation ids of each take",
@@ -2344,11 +2346,14 @@ export async function cancelGeneration(id: string): Promise<void> {
     const account = accountOf(r);
     // An account's job is stopped with its own key, also when the account is switched off or about to be deleted.
     const own = account ? accountRun(account, r.provider, "cancel") : undefined;
+    // A run on this install's GPUs is stopped there, as the account.
+    const onPool = !!account && poolOf(r);
     const cancel = () =>
       Promise.resolve()
         .then(() => adapterFor(r.provider, account).cancel?.(pollContext(r, model)))
         .catch(() => {});
-    if (!own) await cancel();
+    if (onPool) await runOnPool(account!, cancel);
+    else if (!own) await cancel();
     else if ("run" in own) await own.run(cancel);
   }
   stopModelFinish(id);

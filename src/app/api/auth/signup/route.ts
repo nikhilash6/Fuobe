@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
+import { accountEvent, accountFacts } from "@/server/billing";
 import { AccountError, createAccount, createSession, LoginGuard, publicSignup, SESSION_COOKIE } from "@/server/auth";
 import { hit, peek } from "@/server/rate";
 
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
     throw e;
   }
   if (key !== LoginGuard.DIRECT) hit(`signup-day:${key}`, SIGNUPS_A_DAY, DAY);
+  // An optional billing service hears of it (none set: nothing is sent).
+  accountEvent("created", accountFacts(account));
   const s = createSession(account.id);
   (await cookies()).set(SESSION_COOKIE, s.value, {
     httpOnly: true,

@@ -314,6 +314,17 @@ describe("the outbox", () => {
   });
 });
 
+describe("account events", () => {
+  it("a deleted account is reported to the service", async () => {
+    const { removeAccount } = await import("@/server/account-sweep");
+    const gone = auth.createAccount("leaving@example.com", "long enough").id;
+    await removeAccount(gone);
+    await until(() => fake.calls_of("/v1/account-event").some((c) => (c.body as { event: string; account: { id: string } }).account.id === gone));
+    const ev = fake.calls_of("/v1/account-event").find((c) => (c.body as { account: { id: string } }).account.id === gone)!.body as { event: string; account: { email: string } };
+    expect(ev).toMatchObject({ event: "deleted", account: { email: "leaving@example.com" } });
+  });
+});
+
 describe("the transport", () => {
   it("reads https, http and unix: addresses, and nothing else", () => {
     expect(hookTarget("https://billing.example.com/base")).toMatchObject({ kind: "url" });

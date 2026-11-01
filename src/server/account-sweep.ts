@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { RETENTION_MS, runAccountDeletedHooks } from "./account-files";
 import { clearAccountLoras } from "./account-loras";
-import { deleteAccount, readAccountIds, setAccountDisabled } from "./auth";
+import { accountById, deleteAccount, readAccountIds, setAccountDisabled } from "./auth";
+import { accountEvent, accountFacts } from "./billing";
 import { db } from "./db";
 import { handOversDone } from "./generations";
 import { deleteForever } from "./library";
@@ -60,7 +61,10 @@ export async function removeAccount(id: string): Promise<void> {
     .all(id) as string[];
   await purgeAccount(id);
   if (!(await handOversDone(going))) console.warn("[fuobe] account deletion: a run was still being handed to its provider after a minute; the account goes anyway");
+  const gone = accountById(id);
   deleteAccount(id);
+  // An optional billing service hears of it (none set: nothing is sent).
+  if (gone) accountEvent("deleted", accountFacts(gone));
 }
 
 /** One sweep (see the header). `now` for tests. */

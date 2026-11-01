@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
+import { accountEvent, accountFacts } from "@/server/billing";
 import { authEnabled, createSession, LoginGuard, normalizeEmail, publicSignup, recordLogin, SESSION_COOKIE, verifyAccount, verifyPassword } from "@/server/auth";
 import { enter, hit } from "@/server/rate";
 
@@ -96,6 +97,7 @@ export async function POST(request: Request) {
     if (account.disabled) return Response.json({ error: "This account is switched off. Ask the studio's owner." }, { status: 403 });
     accountId = account.id;
     recordLogin(account.id);
+    accountEvent("signed-in", accountFacts(account));
   } else {
     const wait = ownerGuard().blockedFor(key);
     if (wait > 0) return tooMany(wait, key);
