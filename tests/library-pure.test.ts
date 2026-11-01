@@ -113,6 +113,7 @@ describe("outputActions", () => {
       "menu:restore-video",
       "menu:add-sound",
       "menu:split-soundtrack",
+      "menu:remove-dialogue",
       "menu:grade",
       "menu:genjutsu",
       "menu:finalize",
