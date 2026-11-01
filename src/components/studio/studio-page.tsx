@@ -465,7 +465,16 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
         header={
           config.live ? (
             <>
-              {header}
+              {/* Live always runs on the viewer's GPU: the engine switch has no say while it is on. */}
+              {live ? (
+                <span className="inline-flex cursor-not-allowed" title="Live runs on your GPU">
+                  <span className="pointer-events-none inline-flex opacity-40" aria-disabled>
+                    {header}
+                  </span>
+                </span>
+              ) : (
+                header
+              )}
               <LiveSwitch on={live} onChange={setLive} />
             </>
           ) : (

@@ -1,7 +1,9 @@
 import "server-only";
 import { nanoid } from "nanoid";
+import { LIVE_NODES_VERSION, liveNodesState } from "@/lib/comfy-live-nodes";
 import { parseComfyBinary, parseComfyText } from "@/lib/comfy-ws";
 import type { LiveEvent } from "@/lib/live/frames";
+import { RENDER_DEADLINE_MS } from "@/lib/live/scheduler";
 import { LIVE_FILES, LIVE_OUTPUT, type LiveGraph } from "@/lib/live/graph";
 import { comfyRequest, ownGpu } from "../providers/comfyui";
 import { getSetting } from "../settings";
@@ -15,7 +17,7 @@ import { getSetting } from "../settings";
  * runs; only Fuobe's own live prompts are ever touched.
  *
  * On an account's linked GPU there is no socket (fetchPublic only): the picture is saved to temp and read back, with
- * the history polled every 80 ms.
+ * the history polled every 80 ms. Every render has a deadline, and one ComfyUI no longer has ends: nothing waits forever.
  */
 
 export interface LivePicture {
@@ -68,6 +70,8 @@ interface LiveSocket {
   status: LiveStatus;
   /** Ours, waiting in ComfyUI's queue. */
   waiting: number;
+  /** Ours, stopped before they were seen to start: interrupted if they start after all. */
+  stopped: Set<string>;
 }
 
 declare global {
@@ -85,7 +89,7 @@ export function liveSocket(): LiveSocket {
     s = undefined;
   }
   if (!s) {
-    s = { url, clientId: `fuobe-live-${nanoid(10)}`, online: false, backoff: 250, waiters: new Map(), listeners: new Set(), status: { online: false, running: null, queue: 0, otherRan: false }, waiting: 0 };
+    s = { url, clientId: `fuobe-live-${nanoid(10)}`, online: false, backoff: 250, waiters: new Map(), listeners: new Set(), status: { online: false, running: null, queue: 0, otherRan: false }, waiting: 0, stopped: new Set() };
     globalThis.__fuobeLiveSocket = s;
   }
   if (!s.ws && !s.timer) connect(s);
@@ -174,7 +178,11 @@ function connect(s: LiveSocket) {
       return;
     }
     const w = "promptId" in e && e.promptId ? s.waiters.get(e.promptId) : undefined;
-    if (!w) return;
+    if (!w) {
+      // One of ours that was stopped started anyway (the delete came too late): interrupt it, now that it is ours running.
+      if (e.type === "execution_start" && s.stopped.delete(e.promptId)) void post("/interrupt", { prompt_id: e.promptId }).catch(() => undefined);
+      return;
+    }
     if (e.type === "execution_start") {
       w.started = true;
       w.startedAt = Date.now();
@@ -187,6 +195,10 @@ function connect(s: LiveSocket) {
       w.reject(new LiveRenderError(e.message ?? "The render failed", e.nodeType === "LoadImageFuobeLive" ? "missing-input" : "failed"));
     } else if (e.type === "interrupted") {
       w.reject(new LiveRenderError("Stopped", "stopped"));
+    } else if (e.type === "success" || (e.type === "executing" && e.node === null)) {
+      // Finished, and no picture came (the picture is always sent before this): an old copy of the nodes served from
+      // ComfyUI's cache. Never wait forever.
+      w.reject(new LiveRenderError("ComfyUI finished without sending the picture. Update Fuobe's live nodes.", "failed"));
     }
   };
 }
@@ -233,14 +245,60 @@ async function refusal(res: Response): Promise<LiveRenderError> {
   return new LiveRenderError(body.error?.message ? `ComfyUI refused the render: ${body.error.message}` : `ComfyUI answered ${res.status}`, "failed");
 }
 
+export { RENDER_DEADLINE_MS };
+/** How often a render that hasn't finished checks that ComfyUI still has it (a restart or a cleared queue drops it without a word). */
+export const GONE_CHECK_MS = 4000;
+/** The largest picture read back from a linked GPU (a 4096 px PNG master fits with room to spare). */
+export const MAX_PICTURE_BYTES = 80 * 2 ** 20;
+
+/** Whether ComfyUI still has a prompt, waiting or running (null: it couldn't be asked). */
+async function inQueue(id: string): Promise<boolean | null> {
+  try {
+    const r = await comfyRequest("/queue");
+    if (!r.ok) return null;
+    const q = (await r.json()) as { queue_running?: unknown[][]; queue_pending?: unknown[][] };
+    return [...(q.queue_running ?? []), ...(q.queue_pending ?? [])].some((row) => Array.isArray(row) && row[1] === id);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Take a prompt of ours off ComfyUI: deleted if it waits, interrupted if it runs. An interrupt goes only to a prompt
+ * known to be ours and running (an older ComfyUI stops whatever runs, whatever prompt an interrupt names): one not yet
+ * seen to start is remembered, and interrupted if it starts after all.
+ */
+function takeOff(s: LiveSocket, id: string, started: boolean) {
+  void post("/queue", { delete: [id] }).catch(() => undefined);
+  if (started) void post("/interrupt", { prompt_id: id }).catch(() => undefined);
+  else {
+    s.stopped.add(id);
+    if (s.stopped.size > 200) s.stopped.delete(s.stopped.values().next().value!);
+  }
+}
+
+/** The same on a linked GPU (no events): interrupted only when its queue shows this prompt running. */
+async function takeOffPolled(id: string) {
+  await post("/queue", { delete: [id] }).catch(() => undefined);
+  try {
+    const r = await comfyRequest("/queue");
+    const q = r.ok ? ((await r.json()) as { queue_running?: unknown[][] }) : {};
+    if ((q.queue_running ?? []).some((row) => Array.isArray(row) && row[1] === id)) await post("/interrupt", { prompt_id: id });
+  } catch {}
+}
+
 /**
  * One render: the graph's picture, or a LiveRenderError. `signal` stops it (deleted while queued, interrupted while
- * running). `onEvent` hears started and progress.
+ * running). `onEvent` hears started and progress. A render ends, one way or another: by its picture, an error, a stop,
+ * ComfyUI finishing without a picture, ComfyUI no longer having the prompt, or `deadlineMs`.
  */
-export async function renderLive(graph: LiveGraph, signal: AbortSignal, onEvent: (e: LiveEvent) => void): Promise<LivePicture> {
-  if (ownGpu()) return renderPolling(graph, signal, onEvent);
+export async function renderLive(graph: LiveGraph, signal: AbortSignal, onEvent: (e: LiveEvent) => void, deadlineMs: number = RENDER_DEADLINE_MS.keep): Promise<LivePicture> {
+  if (signal.aborted) throw new LiveRenderError("Stopped", "stopped");
+  if (ownGpu()) return renderPolling(graph, signal, onEvent, deadlineMs);
   const s = liveSocket();
   if (!(await online(s, 3000))) throw new LiveRenderError("Can't reach ComfyUI. Reconnecting…", "offline");
+  // Stopped while waiting for the socket: nothing was sent, nothing to take off.
+  if (signal.aborted) throw new LiveRenderError("Stopped", "stopped");
   const id = crypto.randomUUID();
   let settle!: { resolve: (p: LivePicture) => void; reject: (e: Error) => void };
   const done = new Promise<LivePicture>((resolve, reject) => (settle = { resolve, reject }));
@@ -263,37 +321,83 @@ export async function renderLive(graph: LiveGraph, signal: AbortSignal, onEvent:
   };
   s.waiters.set(id, waiter);
   s.waiting++;
-  const stop = () => {
+  const end = (e: LiveRenderError) => {
     const started = waiter.started;
-    waiter.reject(new LiveRenderError("Stopped", "stopped"));
-    void post("/queue", { delete: [id] }).catch(() => undefined);
-    if (started) void post("/interrupt", { prompt_id: id }).catch(() => undefined);
+    const had = s.waiters.get(id) === waiter;
+    waiter.reject(e);
+    if (had) takeOff(s, id, started);
   };
-  if (signal.aborted) stop();
-  else signal.addEventListener("abort", stop, { once: true });
+  const stop = () => end(new LiveRenderError("Stopped", "stopped"));
+  signal.addEventListener("abort", stop, { once: true });
+  const deadline = setTimeout(() => end(new LiveRenderError("ComfyUI took too long with this render", "failed")), deadlineMs);
+  deadline.unref?.();
+  // A prompt ComfyUI dropped without a word (a cleared queue, a restart the socket didn't see): gone twice in a row.
+  let gone = 0;
+  const watch = setInterval(() => {
+    if (!s.waiters.has(id)) return;
+    void inQueue(id).then((has) => {
+      gone = has === false ? gone + 1 : 0;
+      if (gone >= 2) waiter.reject(new LiveRenderError("ComfyUI dropped the render", "failed"));
+    });
+  }, GONE_CHECK_MS);
+  watch.unref?.();
   try {
-    const res = await post("/prompt", { prompt: graph, prompt_id: id, client_id: s.clientId, front: true });
-    if (!res.ok) waiter.reject(await refusal(res));
-    else {
-      res.body?.cancel().catch(() => {});
-      onEvent({ type: "queued", pos: Math.max(0, s.status.queue) });
+    try {
+      const res = await post("/prompt", { prompt: graph, prompt_id: id, client_id: s.clientId, front: true });
+      if (!res.ok) waiter.reject(await refusal(res));
+      else {
+        res.body?.cancel().catch(() => {});
+        onEvent({ type: "queued", pos: Math.max(0, s.status.queue) });
+      }
+    } catch (e) {
+      waiter.reject(new LiveRenderError((e as Error).message || "Can't reach ComfyUI", "offline"));
     }
-  } catch (e) {
-    waiter.reject(new LiveRenderError((e as Error).message || "Can't reach ComfyUI", "offline"));
-  }
-  try {
+    // Stopped while the prompt was on its way: the first delete may have arrived before it, so take it off again.
+    if (signal.aborted) takeOff(s, id, false);
     const p = await done;
     markWarm();
     return p;
   } finally {
+    clearTimeout(deadline);
+    clearInterval(watch);
     signal.removeEventListener("abort", stop);
     // Live renders don't pile up in ComfyUI's history.
     void post("/history", { delete: [id] }).catch(() => undefined);
   }
 }
 
+/** A response body, read up to `max` bytes (null when it is larger). */
+async function readCapped(res: Response, max: number): Promise<Uint8Array | null> {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > max) {
+    res.body?.cancel().catch(() => {});
+    return null;
+  }
+  if (!res.body) return new Uint8Array(0);
+  const reader = res.body.getReader();
+  const parts: Uint8Array[] = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.byteLength;
+    if (n > max) {
+      reader.cancel().catch(() => {});
+      return null;
+    }
+    parts.push(value);
+  }
+  const out = new Uint8Array(n);
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.byteLength;
+  }
+  return out;
+}
+
 /** An account's linked GPU: no socket; the picture is saved to temp and read back. */
-async function renderPolling(graph: LiveGraph, signal: AbortSignal, onEvent: (e: LiveEvent) => void): Promise<LivePicture> {
+async function renderPolling(graph: LiveGraph, signal: AbortSignal, onEvent: (e: LiveEvent) => void, deadlineMs: number): Promise<LivePicture> {
   const id = crypto.randomUUID();
   const g = structuredClone(graph);
   if (g[LIVE_OUTPUT]) g[LIVE_OUTPUT].inputs.to = "temp";
@@ -305,9 +409,12 @@ async function renderPolling(graph: LiveGraph, signal: AbortSignal, onEvent: (e:
   res.body?.cancel().catch(() => {});
   onEvent({ type: "queued", pos: 0 });
   let started = false;
+  let lastCheck = Date.now();
+  let gone = 0;
   try {
     for (;;) {
       if (signal.aborted) throw new LiveRenderError("Stopped", "stopped");
+      if (Date.now() - t0 > deadlineMs) throw new LiveRenderError("ComfyUI took too long with this render", "failed");
       await new Promise((r) => setTimeout(r, 80));
       const h: Record<string, HistoryEntry> = await comfyRequest(`/history/${id}`).then((r) => (r.ok ? (r.json() as Promise<Record<string, HistoryEntry>>) : {}));
       const entry = h[id];
@@ -316,6 +423,12 @@ async function renderPolling(graph: LiveGraph, signal: AbortSignal, onEvent: (e:
           started = true;
           onEvent({ type: "started" });
         }
+        if (Date.now() - lastCheck >= GONE_CHECK_MS) {
+          lastCheck = Date.now();
+          const has = await inQueue(id);
+          gone = has === false ? gone + 1 : 0;
+          if (gone >= 2) throw new LiveRenderError("ComfyUI dropped the render", "failed");
+        }
         continue;
       }
       const err = entry.status?.messages?.find(([t]) => t === "execution_error")?.[1] as { exception_message?: string; node_type?: string } | undefined;
@@ -323,15 +436,17 @@ async function renderPolling(graph: LiveGraph, signal: AbortSignal, onEvent: (e:
       const img = entry.outputs?.[LIVE_OUTPUT]?.images?.[0];
       if (!img || img.type !== "temp" || !/^[\w.-]+$/.test(img.filename)) throw new LiveRenderError("The render made no picture", "failed");
       const view = await comfyRequest(`/view?${new URLSearchParams({ filename: img.filename, subfolder: "", type: "temp" })}`);
-      if (!view.ok) throw new LiveRenderError("Couldn't read the picture", "failed");
-      const data = new Uint8Array(await view.arrayBuffer());
+      if (!view.ok) {
+        view.body?.cancel().catch(() => {});
+        throw new LiveRenderError("Couldn't read the picture", "failed");
+      }
+      const data = await readCapped(view, MAX_PICTURE_BYTES);
+      if (!data) throw new LiveRenderError("The picture is too large", "failed");
       return { data, type: view.headers.get("content-type") ?? "image/webp", w: 0, h: 0, ms: Date.now() - t0 };
     }
   } catch (e) {
-    if (signal.aborted) {
-      void post("/queue", { delete: [id] }).catch(() => undefined);
-      void post("/interrupt", { prompt_id: id }).catch(() => undefined);
-    }
+    // Stopped, dropped or too slow: off ComfyUI (ours only).
+    if (!(e instanceof LiveRenderError) || e.code !== "missing-input") void takeOffPolled(id);
     throw e;
   } finally {
     void post("/history", { delete: [id] }).catch(() => undefined);
@@ -366,10 +481,11 @@ const FILES: [string, string][] = [
 ];
 
 /**
- * Whether ComfyUI has Fuobe's live nodes (their version, or 0), whether it runs with --highvram or --gpu-only, and the
- * model files its folders don't list ("folder/file"; a folder that can't be read lists nothing missing).
+ * Whether ComfyUI has Fuobe's live nodes (their version when it is exactly this copy, or 0; outdated: another copy),
+ * whether it runs with --highvram or --gpu-only, and the model files its folders don't list ("folder/file"; a folder
+ * that can't be read lists nothing missing).
  */
-export async function liveFacts(): Promise<{ nodes: number; highvram: boolean | null; missing: string[] }> {
+export async function liveFacts(): Promise<{ nodes: number; outdated: boolean; highvram: boolean | null; missing: string[] }> {
   const missing = (
     await Promise.all(
       FILES.map(async ([folder, file]) => {
@@ -382,12 +498,13 @@ export async function liveFacts(): Promise<{ nodes: number; highvram: boolean | 
   ).filter((x): x is string => !!x);
   const [nodes, stats] = await Promise.all([
     comfyRequest("/fuobe/live")
-      .then(async (r) => (r.ok ? Number(((await r.json()) as { version?: unknown }).version) || 0 : 0))
-      .catch(() => 0),
+      .then(async (r) => (r.ok ? ((await r.json()) as unknown) : null))
+      .catch(() => null),
     comfyRequest("/system_stats")
       .then(async (r) => (r.ok ? ((await r.json()) as { system?: { argv?: string[] } }) : null))
       .catch(() => null),
   ]);
   const argv = stats?.system?.argv;
-  return { nodes, highvram: Array.isArray(argv) ? argv.includes("--highvram") || argv.includes("--gpu-only") : null, missing };
+  const state = liveNodesState(nodes);
+  return { nodes: state === "ok" ? LIVE_NODES_VERSION : 0, outdated: state === "outdated", highvram: Array.isArray(argv) ? argv.includes("--highvram") || argv.includes("--gpu-only") : null, missing };
 }

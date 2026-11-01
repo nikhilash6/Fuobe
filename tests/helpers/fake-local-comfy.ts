@@ -18,6 +18,8 @@ import type { Duplex } from "node:stream";
 import { pathToFileURL } from "node:url";
 // @ts-expect-error -- plain Node (the review harness) needs the extension; the bundler resolution allows none.
 import { isLiveGraph, liveModelSize, pictureSize, renderLive, type LiveRender } from "./fake-live.ts";
+// @ts-expect-error -- as above.
+import { LIVE_NODES_SHA256, LIVE_NODES_VERSION } from "../../src/lib/comfy-live-nodes.ts";
 
 export interface LocalComfyOptions {
   /** "off": ComfyUI's own check (other sites get 403); an origin, or "*". */
@@ -58,6 +60,14 @@ export interface LocalComfyOptions {
   lossy?: boolean;
   /** The live nodes aren't installed (object_info leaves out the *FuobeLive classes; /fuobe/live is 404). */
   noLiveNodes?: boolean;
+  /**
+   * An old copy of the live nodes (version 1): /fuobe/live answers no hash, and its save node has no IS_CHANGED, so a
+   * graph identical to the last one is served from ComfyUI's cache: no picture, only execution_cached, executed and
+   * execution_success.
+   */
+  oldLiveNodes?: boolean;
+  /** Nothing ever starts: prompts wait in the queue (a stuck ComfyUI). */
+  stall?: boolean;
 }
 
 /** One live render the stand-in made (for the bookkeeping checks). */
@@ -196,6 +206,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
   let timer: NodeJS.Timeout | undefined;
   const sockets = new Map<string, Set<Duplex>>();
   const renders: LiveRenderLog[] = [];
+  let lastLive: { graph: string; ui: Record<string, unknown> } | undefined;
   const temps = new Map<string, { data: Buffer; type: string }>();
   const sizes = new Map<string, { w: number; h: number }>();
   let server: http.Server;
@@ -245,6 +256,18 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
     const gen = generation;
     const alive = () => gen === generation && running === job;
     const started = Date.now();
+    const same = lastLive !== undefined && lastLive.graph === JSON.stringify(job.graph);
+    if (same && opts.oldLiveNodes) {
+      // ComfyUI's cache: every node, the save node included, is served from the last run. No picture is sent.
+      const ui = lastLive!.ui;
+      event(job.clientId, "execution_start", { prompt_id: job.id });
+      event(job.clientId, "execution_cached", { nodes: Object.keys(job.graph), prompt_id: job.id });
+      event(job.clientId, "executed", { node: "90", prompt_id: job.id, output: ui });
+      event(job.clientId, "executing", { node: null, prompt_id: job.id });
+      event(job.clientId, "execution_success", { prompt_id: job.id });
+      timer = setTimeout(() => alive() && finish(job, { prompt: [job.number, job.id, job.graph, {}, []], outputs: { "90": ui }, status: { status_str: "success", completed: true, messages: [["execution_success", { prompt_id: job.id }]] } }), 1);
+      return;
+    }
     event(job.clientId, "execution_start", { prompt_id: job.id });
     event(job.clientId, "executing", { node: "32", prompt_id: job.id });
     const size = liveModelSize(job.graph, (n) => sizes.get(n) ?? null);
@@ -282,6 +305,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
             temps.set(name, { data, type: r.type });
             ui = { images: [{ filename: name, subfolder: "", type: "temp" }] };
           }
+          lastLive = { graph: JSON.stringify(job.graph), ui };
           event(job.clientId, "executed", { node: "90", prompt_id: job.id, output: ui });
           event(job.clientId, "executing", { node: null, prompt_id: job.id });
           event(job.clientId, "execution_success", { prompt_id: job.id });
@@ -341,7 +365,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
 
   function tick() {
     status();
-    if (running || !queue.length) return;
+    if (running || !queue.length || opts.stall) return;
     const job = queue.shift()!;
     run(job);
   }
@@ -417,7 +441,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       if (p === "/fuobe/guard") return opts.guard ? reply(200, { guard: 1 }) : reply(404, { error: "not found" });
       const has = opts.has ? installed(opts.has) : null;
       const liveNodes = !!has?.info.SaveImageFuobeLive && !opts.noLiveNodes;
-      if (p === "/fuobe/live") return liveNodes ? reply(200, { version: 1 }) : reply(404, { error: "not found" });
+      if (p === "/fuobe/live") return liveNodes ? reply(200, opts.oldLiveNodes ? { version: 1 } : { version: LIVE_NODES_VERSION, sha256: LIVE_NODES_SHA256 }) : reply(404, { error: "not found" });
       if (p === "/models") return reply(200, has ? [...has.folders.keys()] : ["checkpoints", "loras", "vae"]);
       if (p.startsWith("/models/")) return reply(200, (has?.folders.get(decodeURIComponent(p.slice(8))) ?? []).map((f) => f.name));
       if (p.startsWith("/experiment/models/") && has) {
@@ -487,10 +511,11 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       }
       if (p === "/queue") {
         if (req.method === "POST") {
-          const asked = JSON.parse(body.toString("utf8") || "{}") as { delete?: string[] };
+          const asked = JSON.parse(body.toString("utf8") || "{}") as { delete?: string[]; clear?: boolean };
           entry.body = asked;
           const del = asked.delete ?? [];
-          queue = queue.filter((j) => !del.includes(j.id));
+          queue = asked.clear ? [] : queue.filter((j) => !del.includes(j.id));
+          status();
           return reply(200, {});
         }
         const row = (j: Job) => [j.number, j.id, j.graph, { client_id: j.clientId }, []];

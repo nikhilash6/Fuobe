@@ -19,7 +19,7 @@
 export const LIVE_NODES_FILE_NAME = "fuobe_live.py";
 
 /** Its version, as GET /fuobe/live answers it. */
-export const LIVE_NODES_VERSION = 1;
+export const LIVE_NODES_VERSION = 2;
 
 /** The node pack's name in the requirement index. */
 export const LIVE_PACK = "fuobe-live";
@@ -34,6 +34,7 @@ They read only Fuobe-named pictures in the input folder and send nothing anywher
 To remove them, delete this file and restart ComfyUI.
 """
 import asyncio
+import hashlib
 import io
 import json
 import math
@@ -48,9 +49,19 @@ import torch.nn.functional as F
 from PIL import Image, ImageOps
 
 FUOBE_LIVE = ${LIVE_NODES_VERSION}
+try:
+    with open(__file__, "rb") as _f:
+        FUOBE_LIVE_SHA256 = hashlib.sha256(_f.read()).hexdigest()
+except Exception:
+    FUOBE_LIVE_SHA256 = ""
 NAME = re.compile(r"^fuobe_[A-Za-z0-9_-]{8,24}\.(png|jpg|jpeg|webp)$")
 MAX_REFERENCES = 4
 MAX_SIDE = 4096
+# Detail transfer: the local correlation of the two pictures' fine detail at which the base's detail starts to come
+# back, and at which it fully does.
+CORR_LOW = 0.25
+CORR_HIGH = 0.6
+SPLIT = 2.0
 
 
 # ---------------------------------------------------------------------------
@@ -109,15 +120,65 @@ def from_lab(lab):
     return torch.where(c > 0.0031308, 1.055 * c.clamp(min=1e-8) ** (1.0 / 2.4) - 0.055, 12.92 * c).clamp(0.0, 1.0)
 
 
-def change_mask(base, edited, threshold=0.06, feather=24, blur=5, grow=8):
-    """Where the edit changed the picture: per-pixel Lab difference over threshold*100, grown and feathered. [B,H,W] 0..1."""
-    d = torch.linalg.vector_norm(to_lab(base) - to_lab(edited), dim=-1)[:, None]
-    d = _gauss(d, blur / 2.0)
+def _blur_img(img, sigma):
+    """Blur a [B,H,W,C] picture with a separable Gaussian, channel by channel."""
+    if sigma <= 0:
+        return img
+    b, h, w, c = img.shape
+    x = img.movedim(-1, 1).reshape(b * c, 1, h, w)
+    return _gauss(x, sigma).reshape(b, c, h, w).movedim(1, -1)
+
+
+def luma(img):
+    """[B,H,W,3] to [B,1,H,W] (Rec. 709 weights)."""
+    w = torch.tensor([0.2126, 0.7152, 0.0722], dtype=img.dtype, device=img.device)
+    return (img @ w)[:, None]
+
+
+def change_mask(base, edited, threshold=0.06, feather=24, blur=3, grow=8):
+    """Where the edit changed the picture: both pictures blurred first (so noise, re-made texture and resampling
+    differences cancel instead of adding up), their Lab difference over threshold*100, specks removed, grown and
+    feathered. Same-size inputs. [B,H,W] 0..1."""
+    s = blur / 2.0
+    d = torch.linalg.vector_norm(to_lab(_blur_img(base, s)) - to_lab(_blur_img(edited, s)), dim=-1)[:, None]
     m = (d > threshold * 100.0).to(base.dtype)
+    m = -F.max_pool2d(-m, kernel_size=3, stride=1, padding=1)
     if grow > 0:
         m = F.max_pool2d(m, kernel_size=2 * grow + 1, stride=1, padding=grow)
     m = _gauss(m, feather / 3.0).clamp(0.0, 1.0)
     return m[:, 0]
+
+
+def resize_mask(m, w, h):
+    """A [B,H,W] mask to w x h (bilinear: no ringing, and zeros stay exactly zero)."""
+    if m.shape[1] == h and m.shape[2] == w:
+        return m
+    x = F.interpolate(m[:, None], size=(h, w), mode="bilinear", align_corners=False)[:, 0]
+    return torch.where(x < 1.0 / 1024.0, torch.zeros_like(x), x.clamp(0.0, 1.0))
+
+
+def detail_transfer(base, ed, edited):
+    """The base's finest detail back where the edit kept the base's structure. base: the region at full size; ed: the
+    edit at that size (colour matched); edited: the edit at the size it was made. An edit made smaller than the base
+    and through a VAE has soft or re-made fine detail. The structure check runs at the edit's own size: where both
+    pictures' finest detail there lines up (local correlation), the detail finer than the edit could hold comes from
+    the base, scaled by the edit's new light. Where the edit made new detail (an object, a texture, a style) or took
+    some away, its own stays."""
+    rh, rw = base.shape[1], base.shape[2]
+    eh, ew = edited.shape[1], edited.shape[2]
+    cw, ch = (ew, eh) if ew * eh <= rw * rh else (rw, rh)
+    bs, es = resize(base, cw, ch), resize(edited, cw, ch)
+    yb, ye = luma(bs - _blur_img(bs, 1.0)), luma(es - _blur_img(es, 1.0))
+    cov = _gauss(yb * ye, 2.0)
+    vb = _gauss(yb * yb, 2.0)
+    ve = _gauss(ye * ye, 2.0)
+    corr = cov / torch.sqrt(vb * ve + 1e-10)
+    w = ((corr - CORR_LOW) / (CORR_HIGH - CORR_LOW)).clamp(0.0, 1.0)
+    w = resize_mask(w[:, 0], rw, rh)[..., None]
+    low_b = _blur_img(resize(bs, rw, rh), SPLIT * rw / float(cw))
+    low_e = _blur_img(ed, SPLIT * rw / float(cw))
+    gain = ((luma(low_e) + 0.02) / (luma(low_b) + 0.02)).clamp(0.5, 2.0).movedim(1, -1)
+    return (low_e + w * gain * (base - low_b) + (1.0 - w) * (ed - low_e)).clamp(0.0, 1.0)
 
 
 def lab_match(edited, base, keep):
@@ -163,33 +224,54 @@ def crop_box(mask, width, height, context=1.6, multiple=32):
     return (bx0, by0, bx0 + w, by0 + h)
 
 
-def paste_back(base, edited, mode="auto", threshold=0.06, feather=24, match_color=True, out_max_side=0, box=None, mask=None):
-    """The edit, back on the full-size base. mode auto: only what changed; mask: the painted region; off: the whole edit."""
+def paste_back(base, edited, mode="auto", threshold=0.06, feather=24, match_color=True, out_max_side=0, box=None, mask=None, detail=True):
+    """The edit, back on the full-size base. mode auto: only what changed; mask: the painted region; off: the whole edit.
+    Where the result takes the edit, the base's fine detail comes back where the edit kept its structure (detail)."""
     base = base[:1, :, :, :3]
     edited = edited[:1, :, :, :3]
     H, W = base.shape[1], base.shape[2]
     x0, y0, x1, y1 = box if box is not None else (0, 0, W, H)
+    if out_max_side and max(W, H) > out_max_side:
+        # A live frame (thrown away): composited at its own small size.
+        s = out_max_side / float(max(W, H))
+        W2, H2 = max(32, int(round(W * s))), max(32, int(round(H * s)))
+        sx, sy = W2 / float(W), H2 / float(H)
+        base = resize(base, W2, H2)
+        x0, x1 = int(round(x0 * sx)), max(int(round(x0 * sx)) + 1, int(round(x1 * sx)))
+        y0, y1 = int(round(y0 * sy)), max(int(round(y0 * sy)) + 1, int(round(y1 * sy)))
+        x1, y1 = min(W2, x1), min(H2, y1)
+        feather = max(1, int(round(feather * s)))
+        W, H = W2, H2
     region = base[:, y0:y1, x0:x1]
-    ed = resize(edited, x1 - x0, y1 - y0)
+    rh, rw = region.shape[1], region.shape[2]
+    eh, ew = edited.shape[1], edited.shape[2]
+    ed = resize(edited, rw, rh)
     if mode == "off":
-        m = torch.ones(region.shape[:3], dtype=base.dtype, device=base.device)
-        match_color = False
-    elif mode == "mask" and mask is not None:
+        return _place(base, ed, x0, y0, torch.ones(region.shape[:3], dtype=base.dtype, device=base.device))
+    if mode == "mask" and mask is not None:
         mm = resize(mask[:1, :, :, :1].expand(1, -1, -1, 3), W, H)[..., 0]
         mm = mm[:, y0:y1, x0:x1]
         m = _gauss((mm > 0.5).to(base.dtype)[:, None], feather / 3.0)[:, 0].clamp(0.0, 1.0)
     else:
-        m = change_mask(region, ed, threshold, feather)
+        # Compared at the smaller of the two sizes, so resampling alone never reads as a change.
+        cw, ch = (ew, eh) if ew * eh <= rw * rh else (rw, rh)
+        k = cw / float(rw)
+        m = change_mask(resize(region, cw, ch), resize(edited, cw, ch), threshold, max(1.0, feather * k), 3, max(1, int(round(8 * k))))
+        m = resize_mask(m, rw, rh)
         if float(m.mean()) > 0.6:
             m = torch.ones_like(m)
             match_color = False
     if match_color:
         ed = lab_match(ed, region, 1.0 - m)
+    if detail:
+        ed = detail_transfer(region, ed, edited)
+    return _place(base, ed, x0, y0, m)
+
+
+def _place(base, ed, x0, y0, m):
     out = base.clone()
-    out[:, y0:y1, x0:x1] = composite(region, ed, m)
-    if out_max_side and max(W, H) > out_max_side:
-        s = out_max_side / float(max(W, H))
-        out = resize(out, max(32, int(round(W * s))), max(32, int(round(H * s))))
+    region = base[:, y0:y0 + ed.shape[1], x0:x0 + ed.shape[2]]
+    out[:, y0:y0 + ed.shape[1], x0:x0 + ed.shape[2]] = composite(region, ed, m)
     return out
 
 
@@ -362,16 +444,16 @@ if not os.environ.get("FUOBE_LIVE_PURE"):
                     "match_color": ("BOOLEAN", {"default": True}),
                     "out_max_side": ("INT", {"default": 0, "min": 0, "max": MAX_SIDE, "step": 32}),
                 },
-                "optional": {"box": ("FUOBE_BOX",), "mask_image": ("IMAGE",)},
+                "optional": {"box": ("FUOBE_BOX",), "mask_image": ("IMAGE",), "detail": ("BOOLEAN", {"default": True})},
             }
 
         RETURN_TYPES = ("IMAGE",)
         FUNCTION = "paste"
         CATEGORY = "fuobe/live"
 
-        def paste(self, base, edited, mode, threshold, feather, match_color, out_max_side, box=None, mask_image=None):
+        def paste(self, base, edited, mode, threshold, feather, match_color, out_max_side, box=None, mask_image=None, detail=True):
             dev = comfy.model_management.intermediate_device()
-            out = paste_back(base.to(dev), edited.to(dev), mode, threshold, feather, match_color, out_max_side, box, None if mask_image is None else mask_image.to(dev))
+            out = paste_back(base.to(dev), edited.to(dev), mode, threshold, feather, match_color, out_max_side, box, None if mask_image is None else mask_image.to(dev), detail)
             return (out,)
 
     class SaveImageFuobeLive:
@@ -391,6 +473,12 @@ if not os.environ.get("FUOBE_LIVE_PURE"):
         FUNCTION = "save"
         OUTPUT_NODE = True
         CATEGORY = "fuobe/live"
+
+        @classmethod
+        def IS_CHANGED(cls, **kwargs):
+            # Never served from ComfyUI's cache: the same graph again (a keep of the text just rendered) must still
+            # send its picture. The nodes before it stay cached.
+            return float("nan")
 
         def save(self, images, format, quality, to, unique_id=None):
             img = images[:1, :, :, :3]
@@ -431,7 +519,7 @@ if not os.environ.get("FUOBE_LIVE_PURE"):
 
     async def _fuobe_live_status(request):
         from aiohttp import web
-        return web.json_response({"version": FUOBE_LIVE})
+        return web.json_response({"version": FUOBE_LIVE, "sha256": FUOBE_LIVE_SHA256})
 
     try:
         _ps = getattr(server.PromptServer, "instance", None)
@@ -450,8 +538,21 @@ export function liveNodesBase64(): string {
   return btoa(LIVE_NODES_SOURCE);
 }
 
-/** Its answer at /fuobe/live: there, and this version or newer. */
-export const isLiveNodes = (answer: unknown): boolean => !!answer && typeof answer === "object" && Number((answer as { version?: unknown }).version) >= LIVE_NODES_VERSION;
+/**
+ * The sha256 of LIVE_NODES_SOURCE: the file reports its own at /fuobe/live, and only an exact copy counts. A test
+ * (tests/live-nodes.test.ts) fails when the source changes without a new version and hash here.
+ */
+export const LIVE_NODES_SHA256 = "3386bb3743b41b8618b2da45ee257e48ef34b0d1cdac8abde3a2aa38974285d3";
+
+/** Its answer at /fuobe/live: this version, and exactly this file. */
+export const isLiveNodes = (answer: unknown): boolean =>
+  !!answer && typeof answer === "object" && Number((answer as { version?: unknown }).version) === LIVE_NODES_VERSION && (answer as { sha256?: unknown }).sha256 === LIVE_NODES_SHA256;
+
+/** What /fuobe/live's answer says: the nodes are there and exact (ok), there but another copy (outdated), or not there. */
+export function liveNodesState(answer: unknown): "ok" | "outdated" | "missing" {
+  if (isLiveNodes(answer)) return "ok";
+  return answer && typeof answer === "object" && Number((answer as { version?: unknown }).version) > 0 ? "outdated" : "missing";
+}
 
 /** The classes the file defines (the requirement index's pack). */
 export const LIVE_NODE_CLASSES = ["LoadImageFuobeLive", "CropFuobeLive", "Qwen21ReferenceFuobeLive", "Qwen21EncodeFuobeLive", "PasteBackFuobeLive", "SaveImageFuobeLive"] as const;

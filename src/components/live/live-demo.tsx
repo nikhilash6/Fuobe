@@ -17,7 +17,8 @@ interface DemoFrame {
   small?: string;
 }
 type DemoStep =
-  | { type: "frame"; frame: string; live?: string; ms: number }
+  /** live: a live frame (the pill says Live); the recording's real times join it once there are real-GPU numbers. */
+  | { type: "frame"; frame: string; live?: boolean; ms: number }
   | { type: "type"; text: string; ms: number }
   | { type: "keep"; label: string; ms: number }
   | { type: "compare"; ms: number }
@@ -59,7 +60,7 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
   const reduced = useReducedMotion();
   const box = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(true);
-  const [view, setView] = useState<View>({ frame: "before", under: null, typed: "", steps: [], keepPulse: false, compare: null, pill: "Live · 512" });
+  const [view, setView] = useState<View>({ frame: "before", under: null, typed: "", steps: [], keepPulse: false, compare: null, pill: "Live" });
 
   useEffect(() => {
     let alive = true;
@@ -95,12 +96,12 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
     const first = demo.script.map(frameOf).find(Boolean) ?? Object.keys(demo.frames)[0];
     void (async () => {
       while (alive) {
-        setView({ frame: first, under: null, typed: "", steps: [], keepPulse: false, compare: null, pill: "Live · 512" });
+        setView({ frame: first, under: null, typed: "", steps: [], keepPulse: false, compare: null, pill: "Live" });
         let typed = "";
         for (const s of demo.script) {
           if (!alive) return;
           if (s.type === "frame") {
-            setView((v) => ({ ...v, under: v.frame === s.frame ? v.under : v.frame, frame: s.frame, pill: s.live ? `Live · 512 · ${s.live}` : v.pill }));
+            setView((v) => ({ ...v, under: v.frame === s.frame ? v.under : v.frame, frame: s.frame, pill: s.live ? "Live" : v.pill }));
             await wait(s.ms);
           } else if (s.type === "type") {
             const per = Math.max(28, Math.floor(s.ms / Math.max(1, s.text.length)));
@@ -115,7 +116,7 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
             setView((v) => ({ ...v, keepPulse: true }));
             await wait(380);
             typed = "";
-            setView((v) => ({ ...v, keepPulse: false, typed: "", steps: [...v.steps, s.label], pill: "Kept ✓ · 1024" }));
+            setView((v) => ({ ...v, keepPulse: false, typed: "", steps: [...v.steps, s.label], pill: "Kept ✓" }));
             await wait(s.ms - 380);
           } else if (s.type === "compare") {
             const t0 = performance.now();
@@ -163,7 +164,7 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
         </>
       ))}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/10" />
-      <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-medium backdrop-blur" role="status" aria-live="off">
+      <span className={cn("absolute inline-flex items-center gap-1.5 rounded-full bg-black/45 font-medium backdrop-blur", compact ? "top-1.5 left-1.5 px-2 py-0.5 text-[10.5px]" : "top-3 left-3 px-2.5 py-1 text-[11px]")} role="status" aria-live="off">
         <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
         {view.pill}
       </span>
@@ -182,16 +183,17 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
           type="button"
           tabIndex={onTypeAttempt ? 0 : -1}
           onClick={onTypeAttempt}
-          className={cn("flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-white/12 px-3 text-left ring-1 ring-white/15 backdrop-blur-md", compact ? "h-9 text-[12.5px]" : "h-11 text-[14px]")}
+          className={cn("flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-white/12 text-left ring-1 ring-white/15 backdrop-blur-md", compact ? "h-8 px-2 text-[11.5px]" : "h-11 px-3 text-[14px]")}
           aria-label="Type a change"
         >
-          <Zap className="size-3.5 shrink-0 text-amber-300" />
-          <span className="truncate">{view.typed || <span className="text-white/55">Type a change…</span>}</span>
+          <Zap className={cn("shrink-0 text-amber-300", compact ? "size-3" : "size-3.5")} />
+          {/* The end of the text stays in view as it grows. */}
+          <span className={cn("flex min-w-0 overflow-hidden whitespace-nowrap", view.typed && "justify-end")}>{view.typed || <span className="text-white/55">Type a change…</span>}</span>
           <span className="-ml-1.5 h-4 w-px shrink-0 animate-[live-caret_1s_steps(1)_infinite] bg-white/80" />
         </button>
-        <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-xl bg-white font-medium text-black transition-transform", compact ? "h-9 px-2.5 text-[12px]" : "h-11 px-3.5 text-[13px]", view.keepPulse && "scale-95 ring-4 ring-primary/60")}>
+        <span className={cn("inline-flex shrink-0 items-center justify-center gap-1 rounded-xl bg-white font-medium text-black transition-transform", compact ? "size-8" : "h-11 px-3.5 text-[13px]", view.keepPulse && "scale-95 ring-4 ring-primary/60")} aria-label={compact ? "Keep" : undefined}>
           {view.steps.length && !view.typed ? <Check className="size-3.5" /> : <CornerDownLeft className="size-3.5" />}
-          Keep
+          {!compact && "Keep"}
         </span>
       </div>
     </div>

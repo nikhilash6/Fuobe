@@ -1,10 +1,11 @@
 /**
  * Live edit doesn't wear a picture down (spec §6): 10 kept edits through the scheduler, the graph builder and the step
  * stack, against the ComfyUI stand-in with a lossy round trip on every render (noise and blur over the whole frame,
- * as a VAE's would add). The stand-in can only check the bookkeeping; GPU-TEST.md measures real pictures.
+ * as a VAE's would add). The stand-in can only check the bookkeeping; real pictures are measured on a GPU.
  *
- * - hybrid (Fuobe's method): every base is a full-size PNG master, and the pixels no edit touched are bit-identical to
- *   the original after 10 edits (SSIM 1.000, sharpness 100 %);
+ * - hybrid (Fuobe's method): every base is a full-size PNG master, the change mask (found from the lossy render, with
+ *   the node's threshold, not from where the stand-in painted) stays local, and the pixels no edit touched are
+ *   bit-identical to the original after 10 edits (SSIM 1.000, sharpness 100 %);
  * - chain without the paste-back (every edit re-encodes the whole picture): SSIM falls below 0.98;
  * - the reference app's way, each kept 512 live frame as the next base: SSIM falls below 0.90.
  */
@@ -91,6 +92,7 @@ async function session(method: Method | "preview") {
   const stack = StepStack.from(await master(original, first));
   const bases: string[] = [];
   const touched: [number, number, number, number][] = [];
+  const changed: number[] = [];
   let seq = 0;
   let previewBase: { name: string; bytes: Buffer } | null = null;
   for (const [k, text] of EDITS.entries()) {
@@ -122,16 +124,20 @@ async function session(method: Method | "preview") {
     stack.keep({ text, norm: text, seed, method, keepRes: 1536, master: await master(o.result, name), ms: 0 });
     bases.push(baseName);
     const r = fake.renders.at(-1)!;
+    if (method === "hybrid") changed.push(r.changed ?? 1);
     if (r.touched) touched.push(r.touched);
   }
   const final = method === "preview" ? previewBase!.bytes : fake.inputs.get(stack.head!.master.name)!;
-  return { stack, bases, touched, final };
+  return { stack, bases, touched, changed, final };
 }
 
 describe("stacked live edits", () => {
   it("hybrid: every base is a full-size PNG master and untouched pixels stay exactly as they were", async () => {
     const posted = fake.log.length;
-    const { stack, touched, final } = await session("hybrid");
+    const { stack, touched, changed, final } = await session("hybrid");
+    // Every change mask stayed near its edit (8-20 % of the picture painted), never the whole lossy frame.
+    for (const c of changed) expect(c).toBeLessThan(0.3);
+    expect(touched).toHaveLength(10);
     expect(stack.path()).toHaveLength(11);
     // Every graph's node 10 names a PNG master at full size (or the original), never a live frame's bytes.
     const prompts = fake.log.slice(posted).filter((l) => l.prompt?.prompt);
@@ -148,8 +154,20 @@ describe("stacked live edits", () => {
     const unchanged = outside(touched);
     const score = ssim(a, b, unchanged);
     console.log(`hybrid: unchanged-region SSIM after 10 edits = ${score.toFixed(4)}, ${touched.length} edited areas`);
-    expect(score).toBe(1);
-    expect(laplacianVariance(b, unchanged) / laplacianVariance(a, unchanged)).toBe(1);
+    expect(score).toBeCloseTo(1, 6);
+    expect(laplacianVariance(b, unchanged) / laplacianVariance(a, unchanged)).toBeCloseTo(1, 4);
+    // Stronger than SSIM: outside every edit, each pixel is the original's.
+    let same = 0;
+    let total = 0;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++)
+        if (unchanged(x, y)) {
+          total++;
+          if (a.px[y * W + x] === b.px[y * W + x]) same++;
+        }
+    console.log(`hybrid: ${total} untouched pixels, ${same} identical`);
+    expect(total).toBeGreaterThan(W * H * 0.1);
+    expect(same).toBe(total);
   }, 120_000);
 
   it("chain without the paste-back drifts (the reason for it)", async () => {

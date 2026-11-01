@@ -30,7 +30,7 @@ const MODES = [
   { id: "image", label: "Image", icon: ImageIcon, href: "/image", placeholder: "Describe an image…" },
   { id: "video", label: "Video", icon: Video, href: "/video", placeholder: "Describe a shot…" },
   { id: "edit", label: "Edit", icon: Wand2, href: "/edit", placeholder: "Describe a change (you'll add the image next)…" },
-  { id: "live", label: "Live", icon: Zap, href: "/live-edit", placeholder: "Type and watch it change…" },
+  { id: "live", label: "Live", icon: Zap, href: "/live-edit", placeholder: "Type a change, then open Live edit…" },
 ];
 
 /** A Try chip under the composer: it picks the mode and fills in the prompt; Start still runs it. */

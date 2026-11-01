@@ -170,9 +170,32 @@ describe("the server path", () => {
     expect(fake.inputs.has(base)).toBe(true);
   }, 15_000);
 
+  it("a keep of the text just settled, once the held render is gone, still gets its picture (the same graph again)", async () => {
+    const settled = image(await frames(await ask({ slot: "settle", text: "a pearl necklace" })))!;
+    const posts = fake.posts();
+    const kept = image(await frames(await ask({ slot: "keep", text: "a pearl necklace", fromSettled: false })))!;
+    expect(fake.posts()).toBe(posts + 1);
+    expect(kept.header).toMatchObject({ type: "image/png", w: settled.header.w, h: settled.header.h });
+  });
+
   it("refuses pictures the session didn't stage", async () => {
     const r = await ask({ text: "x", base: "fuobe_lvAAAAAAAAAAAAAAAAAAAA.png" });
     expect(r.status).toBe(409);
+  });
+
+  it("refuses a method it doesn't know", async () => {
+    const r = await ask({ text: "x", method: "hybrid<script>" });
+    expect(r.status).toBe(400);
+    expect(r.headers.get("X-Live-Key")).toBeNull();
+  });
+
+  it("gives every editor its own session, and ends one when its tab closes", async () => {
+    const a = ((await (await session.POST(req("/api/live/session", {}))).json()) as { sessionId: string }).sessionId;
+    const b = ((await (await session.POST(req("/api/live/session", { sessionId: a }))).json()) as { sessionId: string }).sessionId;
+    expect(b).not.toBe(a);
+    expect((await session.POST(req("/api/live/session", { sessionId: a, end: true }))).status).toBe(200);
+    const r = await render.POST(req("/api/live/render", { sessionId: a, seq: 1, slot: "live", seed: 7, size: 512, keepRes: 1024, text: "x" }));
+    expect(r.status).toBe(410);
   });
 });
 

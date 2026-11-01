@@ -39,7 +39,7 @@ import { restoreStack, StepStack, type Method, type Step } from "@/lib/live/step
 import { completedWords, endsWord, MAX_LIVE_TEXT, normalize } from "@/lib/live/text";
 import { cn } from "@/lib/utils";
 import { keyOf, type LiveFacts, type LiveTransport, type RenderOut, type RenderReq, type TransportStatus } from "./live-transport";
-import { idbGet, idbPut } from "./live-store";
+import { idbDel, idbGet, idbPrune, idbPut } from "./live-store";
 
 /**
  * Live edit: change a picture as you type. The text box drives throwaway live frames (small WebP, a few hundred
@@ -104,6 +104,23 @@ interface Try {
 type Phase = { s: "connecting" } | { s: "ready" } | { s: "setup"; facts: LiveFacts } | { s: "error"; message: string; code?: string };
 
 const storageKey = (image: string | undefined) => `fuobe-live:${image ?? "new"}`;
+/** Remembered dismissals (this browser only). */
+const HIGHVRAM_HINT = "fuobe-live-hint:highvram";
+const HOLD_HINT = "fuobe-live-hint:hold";
+
+/** The masters stored in this browser that any saved session still refers to. */
+function idbInUse(): Set<string> {
+  const keep = new Set<string>();
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith("fuobe-live:")) continue;
+      const st = load<{ stack?: { steps?: { master?: { idb?: unknown } }[] } }>(k);
+      for (const step of st?.stack?.steps ?? []) if (typeof step?.master?.idb === "string") keep.add(step.master.idb);
+    }
+  } catch {}
+  return keep;
+}
 
 /** What the page shows of the kept steps (a snapshot: the stack itself lives in a ref and changes in handlers). */
 interface StackView {
@@ -196,7 +213,7 @@ export function LiveEditor(props: LiveEditorProps) {
   const [lastMs, setLastMs] = useState<number | null>(null);
   const [keptFlash, setKeptFlash] = useState(false);
   const [hidden, setHidden] = useState(false);
-  const [highvramHint, setHighvramHint] = useState(true);
+  const [highvramHint, setHighvramHint] = useState(() => load<boolean>(HIGHVRAM_HINT) !== false);
 
   // Compare and tools.
   const [hold, setHold] = useState<"prev" | "orig" | null>(null);
@@ -249,8 +266,9 @@ export function LiveEditor(props: LiveEditorProps) {
         return;
       }
       if (s.master.idb) {
-        const bytes = await idbGet(s.master.idb);
-        if (bytes) await transport.stageBytes(bytes, "master");
+        const key = s.master.idb;
+        const bytes = await idbGet(key);
+        if (bytes) await transport.stageBytes(bytes, "master", () => idbGet(key));
       }
     },
     [transport],
@@ -282,6 +300,8 @@ export function LiveEditor(props: LiveEditorProps) {
         setPhase({ s: "setup", facts: r });
         return;
       }
+      // Masters this browser kept for steps no saved session refers to any more go.
+      void idbPrune(idbInUse());
       // A stored session for this picture comes back as it was.
       const stored = load<{ stack: unknown; seed: number; keepChoice?: "auto" | KeepRes; liveChoice?: "auto" | LiveSize; aspect?: string }>(storageKey(props.image));
       const restored = stored ? restoreStack(stored.stack) : new StepStack();
@@ -509,13 +529,42 @@ export function LiveEditor(props: LiveEditorProps) {
   // ---------------------------------------------------------------------------
   // Keeping, undo and redo
 
+  /**
+   * Let go of this tab's copies of older masters that the server keeps (the step trail and undo read them from their
+   * file): only the newest few, the original and the step before stay in memory.
+   */
+  const releaseBlobs = () => {
+    const s = stack.current;
+    const near = new Set([s.head, s.previous(), s.original, ...s.path().slice(-4)].flatMap((x) => (x ? [x.master.name] : [])));
+    const drop: string[] = [];
+    for (const [name, url] of masterUrls.current) {
+      const step = s.all.find((x) => x.master.name === name);
+      if (near.has(name) || !step?.master.url || !url.startsWith("blob:")) continue;
+      // A settled frame's picture is also the render cache's: that one is let go when the cache drops it.
+      if (![...cache.current.values()].some((c) => c.url === url)) URL.revokeObjectURL(url);
+      masterUrls.current.delete(name);
+      drop.push(name);
+    }
+    if (drop.length)
+      setUrls((u) => {
+        const next = { ...u };
+        for (const n of drop) delete next[n];
+        return next;
+      });
+  };
+
   const [keeping, setKeeping] = useState(false);
+  /** A keep is running (a ref: two Enters in one tick must not both start one). */
+  const keepingRef = useRef(false);
 
   const keep = async (choice?: { text: string; seed: number }, download = false) => {
-      if (keeping || phase.s !== "ready") return;
+      if (keepingRef.current || phase.s !== "ready") return;
       const t = choice?.text ?? textRef.current;
       if (!normalize(t)) return;
       const keepSeed = choice?.seed ?? seedRef.current;
+      keepingRef.current = true;
+      // The step joins the head it started from (undo, redo and a new picture wait until the keep is done).
+      const parent = stack.current.head?.id ?? null;
       setKeeping(true);
       clearTimeout(idle.current);
       clearTimeout(settle.current);
@@ -544,20 +593,27 @@ export function LiveEditor(props: LiveEditorProps) {
         let name = out.masterName;
         let idb: string | undefined;
         let local = false;
+        // Where the master lives once this tab lets its copy go: the server's file, or this browser's.
+        const where: { url?: string; idb?: string } = {};
         if (!name) {
-          const st = await transport.stageBytes(out.data, "master");
+          const st = await transport.stageBytes(out.data, "master", async () => (where.url ? dataUrlBytes(where.url) : where.idb ? idbGet(where.idb) : null));
           name = st.name;
         }
         const blobUrl = held?.url ?? URL.createObjectURL(new Blob([out.data as BlobPart], { type: "image/png" }));
         setMasterUrl(name, blobUrl);
         if (!url) {
-          // The computer path: the server keeps the master (off the critical path); this browser keeps it until then.
+          // The computer path: the server keeps the master; this browser keeps it until then, and only if it can't.
           idb = `master:${out.sha256}`;
           await idbPut(idb, out.data);
           const posted = await fetch("/api/live/masters", { method: "POST", headers: { "content-type": "image/png" }, body: out.data as BodyInit }).catch(() => null);
           if (posted?.ok) url = ((await posted.json()) as { url?: string }).url;
-          else local = true;
+          if (url) {
+            void idbDel(idb);
+            idb = undefined;
+          } else local = true;
         }
+        where.url = url;
+        where.idb = idb;
         const step = stack.current.keep({
           text: t,
           norm: normalize(t),
@@ -568,8 +624,9 @@ export function LiveEditor(props: LiveEditorProps) {
           master: { name, w: size.w, h: size.h, sha256: out.sha256, format: "png", ...(url && { url }), ...(idb && { idb }) },
           ms: out.ms,
           ...(local && { local: true }),
-        });
+        }, parent);
         bump();
+        releaseBlobs();
         setText("");
         textRef.current = "";
         setTries([]);
@@ -579,15 +636,22 @@ export function LiveEditor(props: LiveEditorProps) {
         setTimeout(() => setKeptFlash(false), 1000);
         if (download) downloadUrl(blobUrl, `live-edit-${step.id}.png`);
         if (local) toast.message("Kept in this browser only", { description: "Your files are full, so this step stays here. Download it to keep it." });
+        // Once, on a touch screen: how to compare.
+        if (load<boolean>(HOLD_HINT) === null && window.matchMedia?.("(pointer: coarse)").matches) {
+          save(HOLD_HINT, true);
+          toast.message("Press and hold the picture to see the step before", { description: "The … menu compares with the original too." });
+        }
       } catch (e) {
         toast.error((e as Error).message);
       } finally {
+        keepingRef.current = false;
         setKeeping(false);
         setBusy(null);
       }
   };
 
   const move = async (to: "undo" | "redo" | string) => {
+      if (keepingRef.current) return;
       const s = stack.current;
       const step = to === "undo" ? s.undo() : to === "redo" ? s.redo() : s.jump(to);
       if (!step) return;
@@ -621,6 +685,10 @@ export function LiveEditor(props: LiveEditorProps) {
   // Pictures in: a file, a paste, a drop
 
   const addFile = async (file: File) => {
+      if (keepingRef.current) {
+        toast.message("One moment: keeping the change");
+        return;
+      }
       if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
         toast.error("Add a PNG, JPEG or WebP picture");
         return;
@@ -767,9 +835,12 @@ export function LiveEditor(props: LiveEditorProps) {
     if (busy?.what === "adding") return { tone: "busy", text: "Adding the picture…" };
     if (!liveOn) return { tone: "off", text: "Live off" };
     if (keptFlash) return { tone: "ok", text: "Kept ✓" };
-    const size = shown?.kind === "live" ? sizeShown : shown ? Math.max(shown.w, shown.h) : sizeShown;
-    return { tone: busy ? "busy" : "ok", text: `${link ? "Live (slower over a link)" : "Live"} · ${size}${lastMs !== null && shown?.kind !== "master" ? ` · ${(lastMs / 1000).toFixed(2)} s` : ""}` };
-  })();
+    const label = link ? "Live (slower over a link)" : "Live";
+    // A kept picture's size is on its badge; the pill tells the live size and time only for live and settled frames.
+    if (!shown || shown.kind === "master") return { tone: busy ? "busy" : "ok", text: label };
+    const size = shown.kind === "live" ? sizeShown : Math.max(shown.w, shown.h);
+    return { tone: busy ? "busy" : "ok", text: label, detail: `${size}${lastMs !== null ? ` · ${(lastMs / 1000).toFixed(2)} s` : ""}` };
+  })() as { tone: string; text: string; detail?: string };
 
   const setupPanel = phase.s === "setup" ? <LiveSetup facts={phase.facts} computer={transport.kind === "computer"} /> : null;
   const errorPanel = phase.s === "error" ? <LiveProblem message={phase.message} code={phase.code} /> : null;
@@ -795,7 +866,7 @@ export function LiveEditor(props: LiveEditorProps) {
       }}
     >
       {/* Top bar */}
-      <header className={cn("flex shrink-0 items-center gap-1.5 px-3 sm:px-4", embedded ? "h-12" : "h-14")}>
+      <header className={cn("flex min-w-0 shrink-0 items-center gap-1.5 px-3 sm:px-4", embedded ? "h-12" : "h-14")}>
         {!embedded && (
           <Link href={props.from === "edit" ? "/edit" : props.from === "library" ? "/library" : "/"} className="-ml-1 grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent md:hidden" aria-label="Back">
             <ChevronLeft className="size-4" />
@@ -805,8 +876,8 @@ export function LiveEditor(props: LiveEditorProps) {
           <Zap className="size-4 text-primary" />
           <span className="max-sm:sr-only">Live edit</span>
         </h1>
-        <StatusPill tone={pill.tone} text={pill.text} progress={busy?.progress} />
-        <div className="ml-auto flex items-center gap-0.5">
+        <StatusPill tone={pill.tone} text={pill.text} detail={pill.detail} progress={busy?.progress} />
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <ToolButton label="Undo" keys="Ctrl+Z" onClick={() => void move("undo")} disabled={!view.canUndo}>
             <Undo2 />
           </ToolButton>
@@ -816,10 +887,10 @@ export function LiveEditor(props: LiveEditorProps) {
           <ToolButton label="Compare" keys="hold C" onClick={() => setCompareOpen(true)} disabled={!previous && !original} className="max-sm:hidden">
             <ArrowLeftRight />
           </ToolButton>
-          <ToolButton label="Shuffle" keys="R" onClick={shuffle} disabled={!normalize(text)}>
+          <ToolButton label="Shuffle" keys="R" onClick={shuffle} disabled={!normalize(text)} className="max-sm:hidden">
             <Shuffle />
           </ToolButton>
-          <ToolButton label={mask ? "Change the painted region" : "Paint a region"} keys="B" onClick={() => setBrushOpen(true)} disabled={!hasPicture} active={!!mask}>
+          <ToolButton label={mask ? "Change the painted region" : "Paint a region"} keys="B" onClick={() => setBrushOpen(true)} disabled={!hasPicture} active={!!mask} className="max-sm:hidden">
             <Brush />
           </ToolButton>
           <ToolButton label={liveOn ? "Live on" : "Live off"} keys="L" onClick={toggleLive} active={!liveOn} className="max-sm:hidden">
@@ -838,15 +909,26 @@ export function LiveEditor(props: LiveEditorProps) {
             method={method}
             setMethod={setMethod}
             onKeys={() => setKeysOpen(true)}
+            phone={{
+              shuffle: normalize(text) ? shuffle : undefined,
+              brush: hasPicture ? () => setBrushOpen(true) : undefined,
+              brushLabel: mask ? "Change the painted region" : "Paint a region",
+              compare: previous || original ? () => setCompareOpen(true) : undefined,
+              liveOn,
+              toggleLive,
+              download: current ? download : undefined,
+              save: !embedded && props.canSave && head?.master.url && path.length > 1 ? () => void saveToLibrary() : undefined,
+              fullScreen: embedded ? `/live-edit${image ? `?image=${encodeURIComponent(image)}&from=edit` : "?from=edit"}` : undefined,
+            }}
           />
-          <ToolButton label="Download" keys="D" onClick={download} disabled={!current}>
+          <ToolButton label="Download" keys="D" onClick={download} disabled={!current} className="max-sm:hidden">
             <Download />
           </ToolButton>
           {embedded ? (
             <>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="sm" variant="ghost" asChild>
+                  <Button size="sm" variant="ghost" asChild className="max-sm:hidden">
                     <Link href={`/live-edit${image ? `?image=${encodeURIComponent(image)}&from=edit` : "?from=edit"}`} aria-label="Full screen">
                       <Expand className="size-4" />
                     </Link>
@@ -854,8 +936,9 @@ export function LiveEditor(props: LiveEditorProps) {
                 </TooltipTrigger>
                 <TooltipContent>Full screen</TooltipContent>
               </Tooltip>
-              <Button size="sm" onClick={() => head?.master.url && props.onUse?.(head.master.url)} disabled={!head?.master.url || path.length < 2} className="ml-1">
-                Use in Edit
+              <Button size="sm" onClick={() => head?.master.url && props.onUse?.(head.master.url)} disabled={!head?.master.url || path.length < 2} className="ml-1 max-sm:px-2.5">
+                <span className="max-sm:hidden">Use in Edit</span>
+                <span className="sm:hidden">Use</span>
               </Button>
               {props.onClose && (
                 <ToolButton label="Close live" onClick={props.onClose}>
@@ -883,14 +966,6 @@ export function LiveEditor(props: LiveEditorProps) {
           <span className="pointer-events-none absolute bottom-3 left-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white tabular-nums backdrop-blur" data-live-badge>
             {hold ? (hold === "orig" ? "Original" : "Before") : shown?.kind === "master" ? `${shown.w}×${shown.h} · kept ✓` : shown?.kind === "settled" ? `${shown.w}×${shown.h} · ready to keep` : `${sizeShown} · live`}
           </span>
-        )}
-        {facts?.highvram === false && highvramHint && phase.s === "ready" && (
-          <div className="absolute top-3 right-3 left-3 flex items-start gap-2 rounded-xl bg-black/60 p-3 text-[12.5px] text-white backdrop-blur sm:left-auto sm:max-w-sm">
-            <span className="min-w-0 flex-1">ComfyUI runs without --highvram, so live frames take about twice as long. Start it with --highvram for the fastest edits.</span>
-            <button type="button" onClick={() => setHighvramHint(false)} className="shrink-0 rounded p-0.5 hover:bg-white/15" aria-label="Dismiss">
-              <X className="size-3.5" />
-            </button>
-          </div>
         )}
       </div>
 
@@ -925,9 +1000,11 @@ export function LiveEditor(props: LiveEditorProps) {
             {keptFlash ? "Kept" : "Keep"}
           </Button>
         </div>
-        {tries.length > 0 && (
-          <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5" data-live-tries>
+        {(tries.length > 0 || hasPicture) && (
+          // The row keeps its height from the start, so the picture doesn't move when the first try comes in.
+          <div className="mt-2 flex h-[46px] items-center gap-1.5 overflow-x-auto pb-0.5" data-live-tries={tries.length > 0 ? "" : undefined}>
             <span className="shrink-0 text-[11.5px] font-medium text-muted-foreground">Tries</span>
+            {tries.length === 0 && <span className="truncate text-[11.5px] text-subtle-foreground">Pause while typing and each take lands here. Click one to keep it.</span>}
             {tries.map((t) => (
               <Tooltip key={t.key}>
                 <TooltipTrigger asChild>
@@ -939,10 +1016,28 @@ export function LiveEditor(props: LiveEditorProps) {
                 <TooltipContent>Keep this one</TooltipContent>
               </Tooltip>
             ))}
-            <span className="shrink-0 text-[11.5px] text-muted-foreground max-sm:hidden">
-              <Kbd>R</Kbd> for another
-            </span>
+            {tries.length > 0 && (
+              <span className="shrink-0 text-[11.5px] text-muted-foreground max-sm:hidden">
+                <Kbd>R</Kbd> for another
+              </span>
+            )}
           </div>
+        )}
+        {facts?.highvram === false && highvramHint && phase.s === "ready" && (
+          <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-muted-foreground" data-live-highvram>
+            <span className="min-w-0 flex-1 truncate">Faster: start ComfyUI with --highvram (live frames take about twice as long without it).</span>
+            <button
+              type="button"
+              onClick={() => {
+                setHighvramHint(false);
+                save(HIGHVRAM_HINT, false);
+              }}
+              className="shrink-0 rounded p-0.5 hover:bg-accent"
+              aria-label="Dismiss"
+            >
+              <X className="size-3.5" />
+            </button>
+          </p>
         )}
         {!embedded && !hasPicture && phase.s === "ready" && (
           <p className="mt-2 text-[12px] text-muted-foreground">
@@ -974,19 +1069,23 @@ export function downloadUrl(url: string, name: string) {
 // ---------------------------------------------------------------------------
 // Parts
 
-function StatusPill({ tone, text, progress }: { tone: string; text: string; progress?: number }) {
+/** The live status. `detail` (size and time) is left out on phones, where the picture's badge has the size. */
+function StatusPill({ tone, text, detail, progress }: { tone: string; text: string; detail?: string; progress?: number }) {
   return (
     <span
       role="status"
       data-live-pill
       className={cn(
-        "relative ml-1 inline-flex h-7 items-center gap-1.5 overflow-hidden rounded-full border px-2.5 text-[12px] font-medium whitespace-nowrap tabular-nums max-sm:max-w-[46vw]",
+        "relative ml-1 inline-flex h-7 min-w-0 shrink items-center gap-1.5 overflow-hidden rounded-full border px-2.5 text-[12px] font-medium whitespace-nowrap tabular-nums",
         tone === "warn" && "border-warning/40 text-warning",
         tone === "off" && "text-muted-foreground",
       )}
     >
       <span className={cn("size-1.5 shrink-0 rounded-full", tone === "ok" ? "bg-success" : tone === "busy" ? "animate-pulse bg-primary" : tone === "warn" ? "bg-warning" : tone === "wait" ? "animate-pulse bg-muted-foreground" : "bg-subtle-foreground")} />
-      <span className="truncate">{text}</span>
+      <span className="truncate">
+        {text}
+        {detail && <span className="max-sm:hidden"> · {detail}</span>}
+      </span>
       {tone === "busy" && progress !== undefined && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary/70 transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />}
     </span>
   );
@@ -1096,7 +1195,26 @@ function Settings(p: {
   method: Method;
   setMethod: (m: Method) => void;
   onKeys: () => void;
+  /** On phones the header keeps Undo, Redo and this menu: the other actions are here. */
+  phone: {
+    shuffle?: () => void;
+    brush?: () => void;
+    brushLabel: string;
+    compare?: () => void;
+    liveOn: boolean;
+    toggleLive: () => void;
+    download?: () => void;
+    save?: () => void;
+    fullScreen?: string;
+  };
 }) {
+  const [open, setOpen] = useState(false);
+  const act = (fn?: () => void) => () => {
+    setOpen(false);
+    fn?.();
+  };
+  const item = "flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[13.5px] hover:bg-accent disabled:opacity-40 [&_svg]:size-4 [&_svg]:text-muted-foreground";
+  const ph = p.phone;
   const row = "flex items-center justify-between gap-3 py-1.5";
   const seg = <T extends string | number>(value: T, options: { v: T; label: string }[], set: (v: T) => void) => (
     <div className="flex rounded-lg bg-muted p-0.5">
@@ -1108,7 +1226,7 @@ function Settings(p: {
     </div>
   );
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
@@ -1119,7 +1237,41 @@ function Settings(p: {
         </TooltipTrigger>
         <TooltipContent>Settings</TooltipContent>
       </Tooltip>
-      <PopoverContent align="end" className="w-80 text-[13px]">
+      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-24px)] text-[13px]">
+        <div className="-mx-1 mb-2 grid gap-0.5 border-b pb-2 sm:hidden" data-live-phone-menu>
+          {ph.save && (
+            <button type="button" className={item} onClick={act(ph.save)}>
+              <Save />
+              Save to your Library
+            </button>
+          )}
+          <button type="button" className={item} onClick={act(ph.compare)} disabled={!ph.compare}>
+            <ArrowLeftRight />
+            Compare
+          </button>
+          <button type="button" className={item} onClick={act(ph.brush)} disabled={!ph.brush}>
+            <Brush />
+            {ph.brushLabel}
+          </button>
+          <button type="button" className={item} onClick={act(ph.shuffle)} disabled={!ph.shuffle}>
+            <Shuffle />
+            Shuffle: another take
+          </button>
+          <button type="button" className={item} onClick={act(ph.toggleLive)} aria-pressed={!ph.liveOn}>
+            {ph.liveOn ? <ZapOff /> : <Zap />}
+            {ph.liveOn ? "Pause live" : "Live on"}
+          </button>
+          <button type="button" className={item} onClick={act(ph.download)} disabled={!ph.download}>
+            <Download />
+            Download
+          </button>
+          {ph.fullScreen && (
+            <Link href={ph.fullScreen} className={item} onClick={() => setOpen(false)}>
+              <Expand />
+              Full screen
+            </Link>
+          )}
+        </div>
         <div className={row}>
           <span>Live size</span>
           {seg<"auto" | LiveSize>(p.liveChoice, [{ v: "auto", label: "Auto" }, ...LIVE_LADDER.map((n) => ({ v: n as LiveSize, label: String(n) }))], p.setLiveChoice)}
@@ -1241,8 +1393,10 @@ export function LiveSetup({ facts, computer }: { facts: LiveFacts; computer: boo
         <ol className="mt-5 space-y-3 text-[13.5px]">
           {!facts.nodes && (
             <li className="rounded-xl border p-3.5">
-              <p className="font-medium">Add Fuobe&apos;s live nodes</p>
-              <p className="mt-1 text-muted-foreground">One file for ComfyUI&apos;s custom_nodes folder (fuobe_live.py). Then restart ComfyUI.</p>
+              <p className="font-medium">{facts.outdated ? "Update Fuobe's live nodes" : "Add Fuobe's live nodes"}</p>
+              <p className="mt-1 text-muted-foreground">
+                {facts.outdated ? "ComfyUI has another copy of fuobe_live.py. Put this one in its place in custom_nodes, then restart ComfyUI." : "One file for ComfyUI's custom_nodes folder (fuobe_live.py). Then restart ComfyUI."}
+              </p>
               <Button asChild size="sm" className="mt-2.5">
                 <a href="/api/live/nodes" download>
                   <Download className="size-4" />

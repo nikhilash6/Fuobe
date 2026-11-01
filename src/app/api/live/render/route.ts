@@ -1,15 +1,16 @@
 import { connection } from "next/server";
 import { eventFrame, imageFrame, LIVE_STREAM_TYPE, type LiveEvent } from "@/lib/live/frames";
 import { MAX_GRAPH_PROMPT, slotBindings, type LiveGraphParams } from "@/lib/live/graph";
-import { LIVE_INPUT } from "@/lib/live/names";
-import { isAspect, isKeepRes, isLiveSize, editSize } from "@/lib/live/sizes";
+import { LIVE_INPUT, pictureExt, pngSize } from "@/lib/live/names";
+import { isAspect, isKeepRes, isLiveSize, editSize, MAX_MASTER_SIDE } from "@/lib/live/sizes";
+import { METHODS, type Method } from "@/lib/live/steps";
 import { MAX_LIVE_TEXT, normalize, renderKey } from "@/lib/live/text";
 import { ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { asWho, liveWho } from "@/server/live/access";
 import { LiveRenderError } from "@/server/live/comfy-live";
 import { sessionOf, stage, submit, type Rendered } from "@/server/live/sessions";
 import { enter, hit } from "@/server/rate";
-import { readRef, saveFile } from "@/server/storage";
+import { deleteAsset, readRef, saveFile } from "@/server/storage";
 
 const SLOTS = new Set(["live", "settle", "keep", "warm"]);
 
@@ -56,8 +57,10 @@ export async function POST(request: Request) {
   if (!live.ok || !all.ok) return Response.json({ error: "Too many renders" }, { status: 429, headers: { "Retry-After": "1" } });
 
   // What to render: every value checked against the session and the size tables.
+  if (b.method !== undefined && !METHODS.includes(b.method as Method)) return Response.json({ error: "Bad method" }, { status: 400 });
+  const method: Method = (b.method as Method | undefined) ?? "hybrid";
   const text = typeof b.text === "string" ? b.text : "";
-  const compose = who.kind === "owner" && b.method === "compose" && typeof b.compose === "string" ? b.compose : null;
+  const compose = who.kind === "owner" && method === "compose" && typeof b.compose === "string" ? b.compose : null;
   const prompt = compose !== null ? compose.slice(0, MAX_GRAPH_PROMPT) : normalize(text.slice(0, MAX_LIVE_TEXT * 2));
   const seed = Number(b.seed);
   if (!Number.isSafeInteger(seed) || seed < 0) return Response.json({ error: "Bad seed" }, { status: 400 });
@@ -85,7 +88,7 @@ export async function POST(request: Request) {
     ...(!base && { aspect }),
   };
   const quality = slot === "settle" || slot === "keep" ? "keep" : "live";
-  const key = renderKey({ base: base ?? "", refs: refs as string[], mask, text: prompt, seed, size: params.res, aspect, method: typeof b.method === "string" ? b.method : "hybrid", quality });
+  const key = renderKey({ base: base ?? "", refs: refs as string[], mask, text: prompt, seed, size: params.res, aspect, method, quality });
   // Keep after a settle of the same text, seed and size: the settled picture on screen is stored as it is (no new render).
   const fromSettled = slot === "keep" && b.fromSettled !== false ? key : undefined;
 
@@ -141,8 +144,14 @@ export async function POST(request: Request) {
 
   /** Store a kept picture as the step's master (the owner's file, or the account's own) and stage it as the next base. */
   const keepMaster = async (pic: Rendered): Promise<{ masterId?: string; url?: string; name?: string } & { error?: true }> => {
-    if (pic.type !== "image/png") {
+    // Checked by its bytes, not by what ComfyUI said it is.
+    const size = pictureExt(pic.data) === "png" ? pngSize(pic.data) : null;
+    if (pic.type !== "image/png" || !size) {
       onEvent({ type: "error", message: "A kept picture must be a PNG master" });
+      return { error: true };
+    }
+    if (Math.max(size.w, size.h) > MAX_MASTER_SIDE) {
+      onEvent({ type: "error", message: `Kept pictures are at most ${MAX_MASTER_SIDE} px on the long side` });
       return { error: true };
     }
     const data = Buffer.from(pic.data);
@@ -157,8 +166,14 @@ export async function POST(request: Request) {
       }
     }
     const asset = saveFile({ data, contentType: "image/png", name: `live-edit-${seq}.png`, source: "derived", ...(who.kind === "account" && { accountId: who.account.id }) });
-    const st = await stage(s, pic.data, () => asWho(who, () => readRef(asset.url)).then((r) => new Uint8Array(r.data)));
-    return { masterId: asset.id, url: asset.url, name: st.name };
+    try {
+      const st = await stage(s, pic.data, () => asWho(who, () => readRef(asset.url)).then((r) => new Uint8Array(r.data)));
+      return { masterId: asset.id, url: asset.url, name: st.name };
+    } catch (e) {
+      // Not staged, so not kept: the file goes too (it would count against the account's space for nothing).
+      deleteAsset(asset.id);
+      throw e;
+    }
   };
 
   const stream = new ReadableStream<Uint8Array>({

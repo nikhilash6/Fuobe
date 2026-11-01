@@ -122,9 +122,14 @@ export class StepStack {
     return this.liveShas.has(sha256);
   }
 
-  /** Keep a step on top of the head (or as the first picture, for text to image). */
-  keep(s: Omit<Step, "id" | "parent" | "at"> & { at?: number }): Step {
+  /**
+   * Keep a step on top of the head (or as the first picture, for text to image). `parent`: the head the keep started
+   * from; if the head moved since (an undo while the keep rendered), the step would sit on a picture that wasn't its
+   * base, so it is refused.
+   */
+  keep(s: Omit<Step, "id" | "parent" | "at"> & { at?: number }, parent?: string | null): Step {
     const base = this.head;
+    if (parent !== undefined && (base?.id ?? null) !== parent) throw new StepError("The picture changed while keeping. Keep again.");
     if (base && s.master.format !== "png") throw new StepError("A kept master must be a PNG");
     if (this.liveShas.has(s.master.sha256)) throw new StepError("A live frame can't be kept as a master");
     if (base && s.method !== "compose" && s.master.w * s.master.h < base.master.w * base.master.h) throw new StepError("A kept master can't be smaller than its base");

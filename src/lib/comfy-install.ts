@@ -181,7 +181,7 @@ export function psBase64(b64: string): string {
 }
 
 /** Single quotes in a PowerShell string. */
-const ps =(s: string) => `'${s.replaceAll("'", "''")}'`;
+const ps = (s: string) => `'${s.replaceAll("'", "''")}'`;
 
 /**
  * "Start ComfyUI for Fuobe.bat", made in the browser for the port and this site: it finds the ComfyUI listening on the

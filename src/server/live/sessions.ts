@@ -5,14 +5,16 @@ import { buildLiveGraph, type LiveGraphParams } from "@/lib/live/graph";
 import { inputName, pictureExt, PICTURE_TYPES, pngSize } from "@/lib/live/names";
 import { LiveScheduler, type LiveJob, type Outcome, type Slot } from "@/lib/live/scheduler";
 import { onOwnGpu, type OwnGpu } from "../providers/comfyui";
-import { LiveRenderError, renderLive, stageInput, waitOnline, type LivePicture } from "./comfy-live";
+import { LiveRenderError, RENDER_DEADLINE_MS, renderLive, stageInput, waitOnline, type LivePicture } from "./comfy-live";
 
 /**
  * Live edit sessions on the server path (one per tab): the scheduler (src/lib/live/scheduler.ts) that keeps one render
  * of the tab's in ComfyUI at a time, the pictures it staged (by content name, with Fuobe's copy, so a ComfyUI that
  * restarted and lost its input folder gets them again), and the newest settled renders (full-quality PNG masters of
  * the text on screen, held for 2 minutes so Keep stores exactly those bytes). Sessions end 10 minutes after their
- * last use.
+ * last use, or when their tab closes. Each person has at most 4 (a fifth ends the one used longest ago), and each holds
+ * at most 160 MB of pictures: past that, the oldest held renders go first, then copies that can be read again from
+ * their file, then the oldest painted regions.
  */
 
 export const SESSION_IDLE_MS = 10 * 60_000;
@@ -20,6 +22,12 @@ const SETTLED_KEPT = 6;
 const SETTLED_MS = 2 * 60_000;
 /** Fuobe's copies of staged pictures kept in memory per session (masters at 2048 are ~10 MB): older ones are re-read. */
 const COPIES_KEPT = 12;
+/** Sessions per person (one per tab). */
+export const SESSIONS_PER_PRINCIPAL = 4;
+/** The pictures a session may hold in memory: staged copies, painted regions and held renders. */
+export const SESSION_BYTES = 160 * 2 ** 20;
+/** Painted regions whose bytes are kept (to stage again after a restart); older ones must be painted again. */
+const MASKS_KEPT = 4;
 
 export interface RenderPayload {
   params: LiveGraphParams;
@@ -86,6 +94,9 @@ export function openSession(principal: string, gpu: OwnGpu | undefined, id?: str
     had.gpu = gpu;
     return had;
   }
+  // One person's sessions are capped: the one used longest ago ends.
+  const mine = [...s.sessions.values()].filter((x) => x.principal === principal).sort((a, b) => a.lastUsed - b.lastUsed);
+  for (const old of mine.slice(0, Math.max(0, mine.length - SESSIONS_PER_PRINCIPAL + 1))) endSession(old.id);
   const session: LiveSession = {
     id: `lv_${nanoid(16)}`,
     principal,
@@ -137,7 +148,33 @@ export async function stage(s: LiveSession, data: Uint8Array, reread?: () => Pro
   // Keep the newest copies in memory; older ones are read again from their file when needed.
   const withData = [...s.staged.values()].filter((x) => x.data && x.reread);
   for (const x of withData.slice(0, Math.max(0, withData.length - COPIES_KEPT))) x.data = undefined;
+  const masks = [...s.staged.values()].filter((x) => x.data && !x.reread);
+  for (const x of masks.slice(0, Math.max(0, masks.length - MASKS_KEPT))) x.data = undefined;
+  trim(s);
   return st;
+}
+
+/** The bytes a session holds. */
+export const heldBytes = (s: LiveSession) => [...s.staged.values()].reduce((n, x) => n + (x.data?.byteLength ?? 0), 0) + [...s.settled.values()].reduce((n, x) => n + x.pic.data.byteLength, 0);
+
+/** Keep a session within SESSION_BYTES: the oldest held renders go, then re-readable copies, then painted regions. */
+function trim(s: LiveSession) {
+  let total = heldBytes(s);
+  if (total <= SESSION_BYTES) return;
+  for (const [k, v] of s.settled) {
+    if (total <= SESSION_BYTES || s.settled.size <= 1) break;
+    s.settled.delete(k);
+    total -= v.pic.data.byteLength;
+  }
+  for (const pass of [true, false])
+    for (const x of s.staged.values()) {
+      if (total <= SESSION_BYTES) return;
+      if (!x.data || !!x.reread !== pass) continue;
+      total -= x.data.byteLength;
+      x.data = undefined;
+    }
+  // A single held render larger than the budget still goes.
+  if (total > SESSION_BYTES) s.settled.clear();
 }
 
 async function sizeOf(data: Uint8Array): Promise<{ w: number; h: number } | null> {
@@ -165,7 +202,7 @@ async function run(s: LiveSession, job: LiveJob<RenderPayload>, signal: AbortSig
   }
   const { graph, staged } = buildLiveGraph(params);
   for (const n of staged) if (!s.staged.has(n)) throw new LiveRenderError("That picture wasn't added to this session", "missing-input");
-  const once = () => within(s, () => renderLive(graph, signal, onEvent));
+  const once = () => within(s, () => renderLive(graph, signal, onEvent, RENDER_DEADLINE_MS[job.slot]));
   let pic: LivePicture | undefined;
   for (let tries = 0; !pic; tries++) {
     try {
@@ -189,6 +226,7 @@ async function run(s: LiveSession, job: LiveJob<RenderPayload>, signal: AbortSig
     for (const [k, v] of s.settled) if (now - v.at > SETTLED_MS) s.settled.delete(k);
     s.settled.set(job.key, { pic: out, at: now });
     while (s.settled.size > SETTLED_KEPT) s.settled.delete(s.settled.keys().next().value!);
+    trim(s);
   }
   return out;
 }

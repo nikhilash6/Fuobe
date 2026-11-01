@@ -15,6 +15,9 @@
 
 export type Slot = "keep" | "live" | "settle" | "warm";
 
+/** How long a render may take before it is taken off ComfyUI and reported failed (the first after another job reloads the model). */
+export const RENDER_DEADLINE_MS: Readonly<Record<Slot, number>> = { live: 60_000, settle: 90_000, keep: 180_000, warm: 240_000 };
+
 /** Slots by priority. */
 export const SLOTS: readonly Slot[] = ["keep", "live", "settle", "warm"];
 
@@ -206,7 +209,8 @@ export class LiveScheduler<P, R> {
       p = Promise.reject(e);
     }
     p.then(
-      (result) => done({ ok: true, result }),
+      // A job stopped while it ran answers as dropped, even when its render came in anyway.
+      (result) => done(cur.dropped ? { ok: false, dropped: cur.dropped } : { ok: true, result }),
       (e) => done(cur.dropped ? { ok: false, dropped: cur.dropped } : { ok: false, error: e instanceof Error ? e.message : String(e) }),
     );
   }

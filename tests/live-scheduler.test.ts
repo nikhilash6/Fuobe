@@ -166,6 +166,15 @@ describe("live scheduler", () => {
     expect(outcome(await s.submit({ seq: 99, slot: "live", key: "z", payload: "z" }))).toBe("dropped:closed");
   });
 
+  it("a job stopped while it ran is a drop, even when its picture came in anyway", async () => {
+    let finish!: (v: string) => void;
+    const s = new LiveScheduler<string, string>({ run: () => new Promise<string>((r) => (finish = r)) });
+    const p = s.submit({ seq: 1, slot: "live", key: "a", payload: "a" });
+    s.cancel(() => true);
+    finish("pic:a");
+    expect(outcome(await p)).toBe("dropped:cancelled");
+  });
+
   it("a failed render is an error, not a drop", async () => {
     const s = new LiveScheduler<string, string>({ run: () => Promise.reject(new Error("out of memory")) });
     expect(outcome(await s.submit({ seq: 1, slot: "live", key: "a", payload: "a" }))).toBe("error:out of memory");

@@ -5,7 +5,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { isLiveNodes, LIVE_NODE_CLASSES, LIVE_NODES_FILE_NAME, LIVE_NODES_SOURCE, LIVE_NODES_VERSION, liveNodesBase64 } from "@/lib/comfy-live-nodes";
+import { createHash } from "node:crypto";
+import { isLiveNodes, LIVE_NODE_CLASSES, LIVE_NODES_FILE_NAME, LIVE_NODES_SHA256, LIVE_NODES_SOURCE, LIVE_NODES_VERSION, liveNodesBase64, liveNodesState } from "@/lib/comfy-live-nodes";
 import { startFile } from "@/lib/comfy-install";
 import { parseComfyBinary } from "@/lib/comfy-ws";
 import { PACK_LIVE_CLASSES } from "@/lib/live/graph";
@@ -39,10 +40,33 @@ describe("fuobe_live.py", () => {
     expect(bat.replaceAll("'+'", "")).toContain(liveNodesBase64());
     expect(bat).toContain("fuobe_live.py");
   });
-  it("answers its version", () => {
-    expect(isLiveNodes({ version: 1 })).toBe(true);
-    expect(isLiveNodes({ version: 0 })).toBe(false);
+  it("is pinned by content: a changed file needs a new version and hash", () => {
+    // Every released (version, sha256). Changing LIVE_NODES_SOURCE fails here until a new row is added with a new
+    // version, and LIVE_NODES_VERSION and LIVE_NODES_SHA256 match it.
+    const RELEASED: [number, string][] = [[2, "3386bb3743b41b8618b2da45ee257e48ef34b0d1cdac8abde3a2aa38974285d3"]];
+    const sha = createHash("sha256").update(LIVE_NODES_SOURCE, "utf8").digest("hex");
+    expect(sha).toBe(LIVE_NODES_SHA256);
+    expect(RELEASED.at(-1)).toEqual([LIVE_NODES_VERSION, sha]);
+    const versions = RELEASED.map(([v]) => v);
+    expect(versions).toEqual([...versions].sort((a, b) => a - b));
+    expect(new Set(versions).size).toBe(versions.length);
+    expect(new Set(RELEASED.map(([, h]) => h)).size).toBe(RELEASED.length);
+  });
+  it("counts only an exact copy", () => {
+    expect(isLiveNodes({ version: LIVE_NODES_VERSION, sha256: LIVE_NODES_SHA256 })).toBe(true);
+    expect(isLiveNodes({ version: LIVE_NODES_VERSION })).toBe(false);
+    expect(isLiveNodes({ version: LIVE_NODES_VERSION, sha256: "0".repeat(64) })).toBe(false);
+    expect(isLiveNodes({ version: LIVE_NODES_VERSION + 1, sha256: LIVE_NODES_SHA256 })).toBe(false);
     expect(isLiveNodes(null)).toBe(false);
+    expect(liveNodesState({ version: 1 })).toBe("outdated");
+    expect(liveNodesState(null)).toBe("missing");
+    expect(liveNodesState({ version: LIVE_NODES_VERSION, sha256: LIVE_NODES_SHA256 })).toBe("ok");
+  });
+  it("its save node is never served from ComfyUI's cache", () => {
+    const save = LIVE_NODES_SOURCE.slice(LIVE_NODES_SOURCE.indexOf("class SaveImageFuobeLive:"));
+    const isChanged = save.slice(save.indexOf("def IS_CHANGED(cls, **kwargs):"), save.indexOf("def save("));
+    expect(isChanged).toContain('return float("nan")');
+    expect(LIVE_NODES_SOURCE).toContain('return web.json_response({"version": FUOBE_LIVE, "sha256": FUOBE_LIVE_SHA256})');
   });
 });
 

@@ -3,8 +3,9 @@
  * the bookkeeping can be measured. An "edit" paints a rectangle chosen by the prompt and seed (8–20 % of the picture)
  * in a colour chosen by them, at the model's size (the resolution's area, the base's shape), then scales it back up.
  * With `lossy`, the whole edited frame also gets ±2 noise and a slight blur, a stand-in for a VAE round trip. The paste
- * back copies the base outside the changed rectangle (grown 8 px, feathered), as Fuobe's node does; mode "off" keeps
- * the whole edit, "mask" uses the painted region. Only erasable TypeScript (runs under plain Node).
+ * back finds what changed the way Fuobe's node does (changeMask: both pictures blurred at the model's size, their Lab
+ * difference over the node's threshold, specks removed, grown and feathered), so it doesn't know where it painted;
+ * mode "off" keeps the whole edit, "mask" uses the painted region. Only erasable TypeScript (runs under plain Node).
  */
 import { createHash } from "node:crypto";
 import sharpLib from "sharp";
@@ -19,8 +20,10 @@ export interface LiveRender {
   /** The model's size (sets the render's time). */
   modelW: number;
   modelH: number;
-  /** In the output's pixels: the area the edit may have touched (grown and feathered), or null for a whole-frame edit. */
+  /** In the output's pixels: the box around every pixel the paste-back took from the edit, or null (none, or the whole frame). */
   touched: [number, number, number, number] | null;
+  /** The share of the picture the change mask covered (0 for text to image). */
+  changed?: number;
   base?: string;
 }
 
@@ -71,6 +74,86 @@ async function encode(data: Buffer, w: number, h: number, format: string, qualit
   const s = await sharp();
   const img = s(data, { raw: { width: w, height: h, channels: 3 } });
   return format === "png" ? img.png({ compressionLevel: 1 }).toBuffer() : img.webp({ quality }).toBuffer();
+}
+
+/** sRGB bytes to CIE Lab (D65), as fuobe_live.py's to_lab. */
+function toLab(px: Buffer): Float32Array {
+  const out = new Float32Array(px.length);
+  const lin = (v: number) => {
+    const c = v / 255;
+    return c > 0.04045 ? ((c + 0.055) / 1.055) ** 2.4 : c / 12.92;
+  };
+  const e = 216 / 24389;
+  const f = (t: number) => (t > e ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116);
+  for (let i = 0; i < px.length; i += 3) {
+    const r = lin(px[i]);
+    const g = lin(px[i + 1]);
+    const b = lin(px[i + 2]);
+    const fx = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047);
+    const fy = f(0.2126 * r + 0.7152 * g + 0.0722 * b);
+    const fz = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
+    out[i] = 116 * fy - 16;
+    out[i + 1] = 500 * (fx - fy);
+    out[i + 2] = 200 * (fy - fz);
+  }
+  return out;
+}
+
+/** A max (or, with min, a min) filter over a (2r+1) square, separably. */
+function boxMax(m: Uint8Array, w: number, h: number, r: number, min = false): Uint8Array {
+  const pick = min ? Math.min : Math.max;
+  const tmp = new Uint8Array(m.length);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let v = m[y * w + x];
+      for (let k = Math.max(0, x - r); k <= Math.min(w - 1, x + r); k++) v = pick(v, m[y * w + k]);
+      tmp[y * w + x] = v;
+    }
+  const out = new Uint8Array(m.length);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let v = tmp[y * w + x];
+      for (let k = Math.max(0, y - r); k <= Math.min(h - 1, y + r); k++) v = pick(v, tmp[k * w + x]);
+      out[y * w + x] = v;
+    }
+  return out;
+}
+
+/** The node's threshold (PasteBackFuobeLive threshold 0.06: a Lab difference of 6), blur 3, grow 8, feather 24. */
+export const MASK = { threshold: 6, blur: 3, grow: 8, feather: 24 } as const;
+
+/**
+ * Where an edit changed a base, as fuobe_live.py's change_mask: compared at the edit's own size (w x h) after a blur of
+ * both, a Lab difference over MASK.threshold, specks removed, grown, feathered, then scaled to the base's size (W x H).
+ * 0..255 per pixel; exactly 0 where nothing changed.
+ */
+export async function changeMask(baseFull: Buffer, W: number, H: number, editAt: Buffer, ew: number, eh: number): Promise<Uint8Array> {
+  const s = await sharp();
+  // The stand-in compares at 512 px at most (it shares a process with the browser checks: it must stay quick).
+  const f = Math.min(1, 512 / Math.max(ew, eh));
+  const w = Math.max(8, Math.round(ew * f));
+  const h = Math.max(8, Math.round(eh * f));
+  const edit = await resize(editAt, ew, eh, w, h);
+  const sigma = Math.max(0.3, (MASK.blur / 2) * f);
+  const small = await resize(baseFull, W, H, w, h);
+  const blur = (px: Buffer) => s(px, { raw: { width: w, height: h, channels: 3 } }).blur(sigma).raw().toBuffer();
+  const [a, b] = await Promise.all([blur(small), blur(edit)]);
+  const la = toLab(a);
+  const lb = toLab(b);
+  let m: Uint8Array = new Uint8Array(w * h);
+  for (let i = 0; i < m.length; i++) {
+    const j = i * 3;
+    m[i] = Math.hypot(la[j] - lb[j], la[j + 1] - lb[j + 1], la[j + 2] - lb[j + 2]) > MASK.threshold ? 255 : 0;
+  }
+  m = boxMax(m, w, h, 1, true);
+  const k = w / W;
+  m = boxMax(m, w, h, Math.max(1, Math.round(MASK.grow * k)));
+  const feather = Math.max(1, MASK.feather * k) / 3;
+  const soft = await s(Buffer.from(m), { raw: { width: w, height: h, channels: 1 } }).blur(Math.max(0.3, feather)).extractChannel(0).raw().toBuffer();
+  const up = await s(soft, { raw: { width: w, height: h, channels: 1 } }).resize(W, H, { kernel: "linear", fit: "fill" }).extractChannel(0).raw().toBuffer();
+  const out = new Uint8Array(W * H);
+  for (let i = 0; i < out.length; i++) out[i] = up[i] < 1 ? 0 : up[i];
+  return out;
 }
 
 /** Render a live graph from the stand-in's input folder. Throws like the node would when a picture is missing. */
@@ -161,29 +244,36 @@ export async function renderLive(g: Graph, inputs: Map<string, Buffer>, opts: { 
   }
   const edited = await resize(model, mw, mh, W, H);
 
-  // Paste back: the base where nothing changed.
+  // Paste back: the base where nothing changed, found as the node finds it (not from the painted rectangle).
   const out = Buffer.from(base.data);
   let touched: [number, number, number, number] | null = null;
+  let changed = 0;
   if (mode === "off") {
     edited.copy(out);
   } else {
-    const grow = 8;
-    const feather = 24;
-    const [rx0, ry0, rx1, ry1] = [rect[0] - grow, rect[1] - grow, rect[2] + grow, rect[3] + grow];
-    touched = [Math.max(0, rx0 - feather), Math.max(0, ry0 - feather), Math.min(W, rx1 + feather), Math.min(H, ry1 + feather)];
-    for (let y = touched[1]; y < touched[3]; y++)
-      for (let x = touched[0]; x < touched[2]; x++) {
-        let m: number;
-        if (maskFull) m = maskFull[(y * W + x) * 3] / 255;
-        else {
-          const dx = Math.max(rx0 - x, 0, x - (rx1 - 1));
-          const dy = Math.max(ry0 - y, 0, y - (ry1 - 1));
-          m = Math.max(0, 1 - Math.hypot(dx, dy) / feather);
+    let mask: Uint8Array;
+    if (maskFull) {
+      mask = new Uint8Array(W * H);
+      for (let i = 0; i < mask.length; i++) mask[i] = maskFull[i * 3];
+    } else mask = await changeMask(base.data, W, H, model, mw, mh);
+    let x0 = W, y0 = H, x1 = 0, y1 = 0;
+    for (let i = 0; i < mask.length; i++) if (mask[i]) changed++;
+    if (!maskFull && changed > 0.6 * W * H) {
+      // A global change: the whole edit (the node also brings back the base's fine detail; the stand-in doesn't).
+      edited.copy(out);
+    } else
+      for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+          const m = mask[y * W + x] / 255;
+          if (m <= 0) continue;
+          x0 = Math.min(x0, x);
+          y0 = Math.min(y0, y);
+          x1 = Math.max(x1, x + 1);
+          y1 = Math.max(y1, y + 1);
+          const i = (y * W + x) * 3;
+          for (let c = 0; c < 3; c++) out[i + c] = Math.round(base.data[i + c] * (1 - m) + edited[i + c] * m);
         }
-        if (m <= 0) continue;
-        const i = (y * W + x) * 3;
-        for (let c = 0; c < 3; c++) out[i + c] = Math.round(base.data[i + c] * (1 - m) + edited[i + c] * m);
-      }
+    if (x1 > x0) touched = [x0, y0, x1, y1];
   }
 
   // The output size (a live frame is the composite made small).
@@ -197,7 +287,7 @@ export async function renderLive(g: Graph, inputs: Map<string, Buffer>, opts: { 
     data = await resize(out, W, H, ow, oh);
     if (touched) touched = [Math.floor(touched[0] * s), Math.floor(touched[1] * s), Math.ceil(touched[2] * s), Math.ceil(touched[3] * s)];
   }
-  return { data: await encode(data, ow, oh, format, quality), type: format === "png" ? "image/png" : "image/webp", width: ow, height: oh, modelW: mw, modelH: mh, touched, base: String(g["10"].inputs.image) };
+  return { data: await encode(data, ow, oh, format, quality), type: format === "png" ? "image/png" : "image/webp", width: ow, height: oh, modelW: mw, modelH: mh, touched, changed: changed / (W * H), base: String(g["10"].inputs.image) };
 }
 
 /** A picture's size from its header (PNG, JPEG or WebP via sharp's metadata), for timing. */

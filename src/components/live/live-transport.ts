@@ -1,11 +1,12 @@
 "use client";
 
+import { LIVE_NODES_VERSION, liveNodesState } from "@/lib/comfy-live-nodes";
 import { parseComfyBinary, parseComfyText } from "@/lib/comfy-ws";
 import { loopbackFetch } from "@/lib/gpu/browser-check";
 import { FrameReader, type LiveEvent } from "@/lib/live/frames";
 import { buildLiveGraph, LIVE_FILES, LIVE_OUTPUT, liveGraphProblem, slotBindings, type LiveGraphParams } from "@/lib/live/graph";
 import { inputName, pictureExt, PICTURE_TYPES, pngSize, sha256Hex } from "@/lib/live/names";
-import { LiveScheduler, type Slot } from "@/lib/live/scheduler";
+import { LiveScheduler, RENDER_DEADLINE_MS, type Slot } from "@/lib/live/scheduler";
 import { editSize, type Aspect } from "@/lib/live/sizes";
 import { normalize, renderKey } from "@/lib/live/text";
 import { graphProblem, localBase, readPath, writePath } from "@/lib/local-comfy";
@@ -19,7 +20,14 @@ import { imageSize } from "@/lib/image-size";
  * - ChannelTransport: from this tab straight to the ComfyUI on this computer ("Use the ComfyUI on this computer"): the
  *   graph is built here, checked by the relay's rules and the live graph check, and sent to 127.0.0.1 with this tab's own
  *   client id; only prompts and pictures this tab made are ever touched. No server hop per render.
+ *
+ * Every render ends: by its picture, an error, a stop, ComfyUI finishing without a picture, ComfyUI no longer having
+ * the prompt, or a deadline.
  */
+/** How often a render that hasn't finished checks that ComfyUI still has it. */
+const GONE_CHECK_MS = 4000;
+/** Staged pictures whose bytes this tab keeps in memory (older ones are read again from their file). */
+const COPIES_KEPT = 6;
 
 export interface RenderReq {
   seq: number;
@@ -65,6 +73,8 @@ export interface StagedPicture {
 
 export interface LiveFacts {
   nodes: number;
+  /** ComfyUI has another copy of the live nodes (an older or changed file): it needs this one. */
+  outdated?: boolean;
   highvram: boolean | null;
   /** Model files ComfyUI doesn't list (folder/file). */
   missing: string[];
@@ -84,8 +94,11 @@ export interface LiveTransport {
   open(): Promise<OpenResult>;
   /** Stage a Fuobe file (the picture being edited, a reference). */
   stageFile(url: string): Promise<StagedPicture>;
-  /** Stage bytes made here (a painted mask; on the computer path, a kept master). */
-  stageBytes(bytes: Uint8Array, kind: "mask" | "master"): Promise<StagedPicture>;
+  /**
+   * Stage bytes made here (a painted mask; on the computer path, a kept master). `reread` gets them back once this tab
+   * has let its copy go (a master's file or this browser's copy).
+   */
+  stageBytes(bytes: Uint8Array, kind: "mask" | "master", reread?: () => Promise<Uint8Array | null>): Promise<StagedPicture>;
   render(req: RenderReq, onEvent: (e: LiveEvent) => void): Promise<RenderResult>;
   hurry(seq: number): void;
   /** Stop renders that no longer matter (the base changed, live was switched off). */
@@ -112,21 +125,25 @@ export class ServerTransport implements LiveTransport {
   private listeners = new Set<(s: TransportStatus) => void>();
   private status: TransportStatus = { online: false, running: null, queue: 0, otherRan: false };
 
+  /** Its own session, every time (never one another tab or editor might hold: their renders would knock out each other's). */
   async open(): Promise<OpenResult> {
-    let stored: string | undefined;
-    try {
-      stored = sessionStorage.getItem("fuobe-live:session") ?? undefined;
-    } catch {}
-    const res = await fetch("/api/live/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId: stored }) });
-    const j = (await res.json().catch(() => ({}))) as { sessionId?: string; mode?: "server" | "link"; seed?: number; nodes?: { version?: number }; highvram?: boolean | null; missing?: string[]; error?: string; code?: string };
+    const res = await fetch("/api/live/session", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    const j = (await res.json().catch(() => ({}))) as { sessionId?: string; mode?: "server" | "link"; seed?: number; nodes?: { version?: number; outdated?: boolean }; highvram?: boolean | null; missing?: string[]; error?: string; code?: string };
     if (!res.ok || !j.sessionId) return { ok: false, error: j.error ?? `Live edit didn't start (${res.status})`, code: j.code };
+    if (this.closed) {
+      this.end(j.sessionId);
+      return { ok: false, error: "Closed", code: "closed" };
+    }
     this.sessionId = j.sessionId;
     this.kind = j.mode === "link" ? "link" : "server";
-    try {
-      sessionStorage.setItem("fuobe-live:session", j.sessionId);
-    } catch {}
     this.listen();
-    return { ok: true, seed: j.seed ?? 0, nodes: j.nodes?.version ?? 0, highvram: j.highvram ?? null, missing: j.missing ?? [] };
+    return { ok: true, seed: j.seed ?? 0, nodes: j.nodes?.version ?? 0, outdated: !!j.nodes?.outdated, highvram: j.highvram ?? null, missing: j.missing ?? [] };
+  }
+
+  private closed = false;
+
+  private end(id: string) {
+    void fetch("/api/live/session", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId: id, end: true }), keepalive: true }).catch(() => {});
   }
 
   private listen() {
@@ -216,9 +233,11 @@ export class ServerTransport implements LiveTransport {
   }
 
   close(): void {
+    this.closed = true;
     this.cancel(() => true);
     this.es?.close();
     this.es = null;
+    if (this.sessionId) this.end(this.sessionId);
   }
 }
 
@@ -253,8 +272,11 @@ export class ChannelTransport implements LiveTransport {
   private closed = false;
   /** Prompt ids this tab minted: the only ones it may stop or take out of the history. */
   private ownIds: string[] = [];
-  /** Names this tab staged, with its own copy of their bytes (to stage again after ComfyUI restarts). */
-  private names = new Map<string, { bytes: Uint8Array; type: string; w: number; h: number; sha256: string }>();
+  /**
+   * Names this tab staged, with its own copy of the newest ones' bytes and a way to read the others again (to stage
+   * them again after ComfyUI restarts). Old copies are let go, so a long session doesn't fill the tab's memory.
+   */
+  private names = new Map<string, { bytes?: Uint8Array; reread?: () => Promise<Uint8Array | null>; type: string; w: number; h: number; sha256: string }>();
   private waiters = new Map<string, Waiter>();
   private listeners = new Set<(s: TransportStatus) => void>();
   private status: TransportStatus = { online: false, running: null, queue: 0, otherRan: false };
@@ -294,14 +316,16 @@ export class ChannelTransport implements LiveTransport {
       const stats = await this.get("/system_stats");
       if (!stats.ok) return { ok: false, error: "ComfyUI on this computer didn't answer", code: "offline" };
       const argv = ((await stats.json()) as { system?: { argv?: string[] } }).system?.argv;
-      const nodes = await this.get("/fuobe/live").then(async (r) => (r.ok ? Number(((await r.json()) as { version?: number }).version) || 0 : 0)).catch(() => 0);
+      const answer = await this.get("/fuobe/live").then(async (r) => (r.ok ? ((await r.json()) as unknown) : null)).catch(() => null);
+      const state = liveNodesState(answer);
+      const nodes = state === "ok" ? LIVE_NODES_VERSION : 0;
       const missing: string[] = [];
       for (const [folder, file] of [["diffusion_models", LIVE_FILES.unet], ["text_encoders", LIVE_FILES.clip], ["vae", LIVE_FILES.vae], ["loras", LIVE_FILES.lora]] as const) {
         const list = await this.get(`/models/${folder}`).then((r) => (r.ok ? (r.json() as Promise<string[]>) : null)).catch(() => null);
         if (Array.isArray(list) && !list.includes(file)) missing.push(`${folder}/${file}`);
       }
       this.connect();
-      return { ok: true, seed: Math.floor(Math.random() * 2 ** 31), nodes, highvram: Array.isArray(argv) ? argv.includes("--highvram") || argv.includes("--gpu-only") : null, missing };
+      return { ok: true, seed: Math.floor(Math.random() * 2 ** 31), nodes, outdated: state === "outdated", highvram: Array.isArray(argv) ? argv.includes("--highvram") || argv.includes("--gpu-only") : null, missing };
     } catch {
       return { ok: false, error: "Can't reach the ComfyUI on this computer", code: "offline" };
     }
@@ -350,7 +374,11 @@ export class ChannelTransport implements LiveTransport {
         return;
       }
       const w = "promptId" in e && e.promptId ? this.waiters.get(e.promptId) : undefined;
-      if (!w) return;
+      if (!w) {
+        // One of this tab's, stopped, that started anyway: interrupt it now that it is ours running.
+        if (e.type === "execution_start" && this.stopped.delete(e.promptId)) void this.post("/interrupt", { prompt_id: e.promptId }).catch(() => {});
+        return;
+      }
       if (e.type === "execution_start") {
         w.started = true;
         w.startedAt = performance.now();
@@ -360,6 +388,8 @@ export class ChannelTransport implements LiveTransport {
       } else if (e.type === "progress" && e.max <= 8) w.onEvent({ type: "progress", value: e.value, max: e.max });
       else if (e.type === "error") w.reject(fail(e.message ?? "The render failed", e.nodeType === "LoadImageFuobeLive" ? "missing-input" : "failed"));
       else if (e.type === "interrupted") w.reject(fail("Stopped", "stopped"));
+      // Finished and no picture came (it is always sent first): an old copy of the nodes served from ComfyUI's cache.
+      else if (e.type === "success" || (e.type === "executing" && e.node === null)) w.reject(fail("ComfyUI finished without sending the picture. Update Fuobe's live nodes.", "failed"));
     };
   }
 
@@ -381,31 +411,54 @@ export class ChannelTransport implements LiveTransport {
     if (!res.ok) throw fail(`ComfyUI refused the picture (${res.status})`, "failed");
   }
 
-  private async stage(bytes: Uint8Array): Promise<StagedPicture> {
+  private async stage(bytes: Uint8Array, reread?: () => Promise<Uint8Array | null>): Promise<StagedPicture> {
     const ext = pictureExt(bytes);
     if (!ext) throw new Error("Only PNG, JPEG or WebP pictures");
     const { name, sha256 } = await inputName(bytes, ext);
     const had = this.names.get(name);
-    if (had) return { name, w: had.w, h: had.h, sha256 };
+    if (had) {
+      // Newest again: it moves to the end, and keeps its bytes for now.
+      this.names.delete(name);
+      this.names.set(name, { ...had, bytes, reread: reread ?? had.reread });
+      this.trim();
+      return { name, w: had.w, h: had.h, sha256 };
+    }
     const size = (ext === "png" ? pngSize(bytes) : null) ?? (() => {
       const s = imageSize(bytes);
       return s ? { w: s.width, h: s.height } : { w: 0, h: 0 };
     })();
-    this.names.set(name, { bytes, type: PICTURE_TYPES[ext], w: size.w, h: size.h, sha256 });
+    this.names.set(name, { bytes, reread, type: PICTURE_TYPES[ext], w: size.w, h: size.h, sha256 });
     await this.upload(name, bytes, PICTURE_TYPES[ext]);
+    this.trim();
     return { name, w: size.w, h: size.h, sha256 };
+  }
+
+  /** Let go of all but the newest copies that can be read again. */
+  private trim() {
+    const held = [...this.names.values()].filter((x) => x.bytes && x.reread);
+    for (const x of held.slice(0, Math.max(0, held.length - COPIES_KEPT))) x.bytes = undefined;
+  }
+
+  /** A staged picture's bytes: this tab's copy, or read again. */
+  private async bytesOf(name: string): Promise<Uint8Array | null> {
+    const c = this.names.get(name);
+    if (!c) return null;
+    return c.bytes ?? (c.reread ? await c.reread().catch(() => null) : null);
   }
 
   async stageFile(url: string): Promise<StagedPicture> {
     // Fuobe's own file (same site), then into ComfyUI under its content name.
     if (!url.startsWith("/api/files/") && !url.startsWith("blob:")) throw new Error("Only your own files");
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Couldn't read the picture");
-    return this.stage(new Uint8Array(await res.arrayBuffer()));
+    const read = async () => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Couldn't read the picture");
+      return new Uint8Array(await res.arrayBuffer());
+    };
+    return this.stage(await read(), url.startsWith("/api/files/") ? read : undefined);
   }
 
-  stageBytes(bytes: Uint8Array): Promise<StagedPicture> {
-    return this.stage(bytes);
+  stageBytes(bytes: Uint8Array, _kind: "mask" | "master", reread?: () => Promise<Uint8Array | null>): Promise<StagedPicture> {
+    return this.stage(bytes, reread);
   }
 
   render(req: RenderReq, onEvent: (e: LiveEvent) => void): Promise<RenderResult> {
@@ -455,15 +508,57 @@ export class ChannelTransport implements LiveTransport {
           const { staged } = buildLiveGraph(job.params);
           for (const n of staged) {
             const c = this.names.get(n);
-            if (c) await this.upload(n, c.bytes, c.type);
+            const bytes = await this.bytesOf(n);
+            if (!c || !bytes) throw fail("A picture of this session is gone. Add it again.", "missing-input");
+            await this.upload(n, bytes, c.type);
           }
         } else throw e;
       }
     }
   }
 
+  /** Whether ComfyUI still has a prompt, waiting or running (null: it couldn't be asked). */
+  private async inQueue(id: string): Promise<boolean | null> {
+    try {
+      const r = await this.get("/queue");
+      if (!r.ok) return null;
+      const q = (await r.json()) as { queue_running?: unknown[][]; queue_pending?: unknown[][] };
+      return [...(q.queue_running ?? []), ...(q.queue_pending ?? [])].some((row) => Array.isArray(row) && row[1] === id);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Ours, stopped before they were seen to start: interrupted if they start after all. */
+  private stopped = new Set<string>();
+
+  /**
+   * Take a prompt of this tab's off ComfyUI: deleted if it waits, interrupted if it runs. An interrupt goes only to a
+   * prompt seen running (an older ComfyUI stops whatever runs); one not seen to start is interrupted if it starts.
+   */
+  private takeOff(id: string, started: boolean) {
+    void this.post("/queue", { delete: [id] }).catch(() => {});
+    if (started) void this.post("/interrupt", { prompt_id: id }).catch(() => {});
+    else {
+      this.stopped.add(id);
+      if (this.stopped.size > 200) this.stopped.delete(this.stopped.values().next().value!);
+    }
+  }
+
+  /** End a render of ours that is still waited on. */
+  private end(id: string, e: Error) {
+    const w = this.waiters.get(id);
+    if (!w) return;
+    const started = w.started;
+    w.reject(e);
+    this.takeOff(id, started);
+  }
+
   private async once(job: ChannelJob, signal: AbortSignal): Promise<RenderOut> {
+    if (signal.aborted) throw fail("Stopped", "stopped");
     if (!(await this.online_(3000))) throw fail("Can't reach ComfyUI. Reconnecting…", "offline");
+    // Stopped while waiting for the socket: nothing was sent.
+    if (signal.aborted) throw fail("Stopped", "stopped");
     const { graph, staged } = buildLiveGraph(job.params);
     // The tab's own checks, before anything reaches ComfyUI: the relay's loader rule and the live graph's shape.
     const names = [...this.names.keys()];
@@ -492,26 +587,38 @@ export class ChannelTransport implements LiveTransport {
     });
     done.catch(() => {});
     this.waiting++;
-    const stop = () => {
-      const w = this.waiters.get(id);
-      const started = !!w?.started;
-      w?.reject(fail("Stopped", "stopped"));
-      void this.post("/queue", { delete: [id] }).catch(() => {});
-      if (started) void this.post("/interrupt", { prompt_id: id }).catch(() => {});
-    };
+    const stop = () => this.end(id, fail("Stopped", "stopped"));
     signal.addEventListener("abort", stop, { once: true });
+    const deadline = setTimeout(() => this.end(id, fail("ComfyUI took too long with this render", "failed")), RENDER_DEADLINE_MS[job.req.slot]);
+    // A prompt ComfyUI dropped without a word (a cleared queue, a restart): gone twice in a row.
+    let gone = 0;
+    const watch = setInterval(() => {
+      if (!this.waiters.has(id)) return;
+      void this.inQueue(id).then((has) => {
+        gone = has === false ? gone + 1 : 0;
+        if (gone >= 2) this.waiters.get(id)?.reject(fail("ComfyUI dropped the render", "failed"));
+      });
+    }, GONE_CHECK_MS);
     try {
-      const res = await this.post("/prompt", { prompt: graph, prompt_id: id, client_id: this.clientId, front: true });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: { type?: string; message?: string } };
-        this.waiters.get(id)?.reject(body.error?.type === "missing_node_type" ? fail("Fuobe's live nodes aren't installed in ComfyUI", "missing-nodes") : fail(body.error?.message ?? `ComfyUI answered ${res.status}`, "failed"));
-      } else job.onEvent({ type: "queued", pos: this.status.queue });
+      try {
+        const res = await this.post("/prompt", { prompt: graph, prompt_id: id, client_id: this.clientId, front: true });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: { type?: string; message?: string } };
+          this.waiters.get(id)?.reject(body.error?.type === "missing_node_type" ? fail("Fuobe's live nodes aren't installed in ComfyUI", "missing-nodes") : fail(body.error?.message ?? `ComfyUI answered ${res.status}`, "failed"));
+        } else job.onEvent({ type: "queued", pos: this.status.queue });
+      } catch {
+        this.waiters.get(id)?.reject(fail("Can't reach ComfyUI", "offline"));
+      }
+      // Stopped while the prompt was on its way: the first delete may have arrived before it.
+      if (signal.aborted) this.takeOff(id, false);
       const p = await done;
       this.set({ otherRan: false });
       const sha256 = await sha256Hex(p.data);
       const size = p.type === "image/png" ? pngSize(p.data) : null;
       return { data: p.data, type: p.type, w: p.w || size?.w || 0, h: p.h || size?.h || 0, ms: p.ms || performance.now() - t0, sha256, key: job.key };
     } finally {
+      clearTimeout(deadline);
+      clearInterval(watch);
       signal.removeEventListener("abort", stop);
       void this.post("/history", { delete: [id] }).catch(() => {});
     }

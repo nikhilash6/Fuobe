@@ -163,6 +163,17 @@ describe("steps", () => {
     expect(s.all).toHaveLength(1);
   });
 
+  it("refuses a keep whose head moved while it rendered (an undo during the keep)", () => {
+    const s = StepStack.from(master(0));
+    keep(s, 1);
+    const parent = s.head!.id;
+    s.undo();
+    expect(() => s.keep({ text: "late", norm: "late", seed: 2, method: "hybrid", keepRes: 1536, master: master(2), ms: 900 }, parent)).toThrow(/changed while keeping/);
+    expect(s.all).toHaveLength(2);
+    s.redo();
+    expect(s.keep({ text: "late", norm: "late", seed: 2, method: "hybrid", keepRes: 1536, master: master(2), ms: 900 }, parent).parent).toBe(parent);
+  });
+
   it("text to image starts empty and keeps a first picture of 1024 or more", () => {
     const s = new StepStack();
     expect(s.base("hybrid")).toBeNull();
