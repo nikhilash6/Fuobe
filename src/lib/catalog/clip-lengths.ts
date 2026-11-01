@@ -10,10 +10,14 @@ export const PLANNED_DURATIONS: Readonly<Record<string, readonly number[]>> = { 
 
 /**
  * Models that render any whole number of seconds in a range, where a studio fits the clip to a length of its own
- * (a Faceless scene cut to its lines, a Marketing motion ad of the length asked for). MiniMax H3 on your GPU renders
- * any length on its 17n + 5 frame grid: 3 s up to the 15 s it is trained for.
+ * (a Faceless scene cut to its lines, a Marketing motion ad of the length asked for, a Cinema take). MiniMax H3 on your
+ * GPU renders any length on its 17n + 5 frame grid: 3 s up to the 15 s it is trained for.
  */
-export const LENGTH_RANGES: Readonly<Record<string, readonly [number, number]>> = { "oss-minimax-h3": [3, 15] };
+export const LENGTH_RANGES: Readonly<Record<string, readonly [number, number]>> = {
+  "oss-minimax-h3": [3, 15],
+  // Kling 4.0 in the cloud: any whole second from 3 to 30 (fal's and Replicate's duration field).
+  "kling-4": [3, 30],
+};
 
 /** The clip lengths a studio plans with on a model: PLANNED_DURATIONS, else the catalog's own. */
 export function plannedDurations(model: Pick<ModelDef, "id" | "options"> | undefined): number[] | undefined {

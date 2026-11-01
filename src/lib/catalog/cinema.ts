@@ -1,7 +1,7 @@
 import { DEFAULT_MOTION, PATH_FPS, PATH_FRAMES, normalizeKeys, toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { APERTURE, LENS, anglesNote, poseWords, recomposePrompt, type ScenePose } from "@/lib/scene3d";
 import { getModel, getPreset } from "./index";
-import { plannedDurations } from "./clip-lengths";
+import { lengthRange, PLANNED_DURATIONS, plannedDurations } from "./clip-lengths";
 import { DOP_MODEL, LTX25_HOSTED } from "./dop";
 import { dualEngine, onEngine } from "./engines";
 import { localOnly, needsToken, triggerOf } from "./loras";
@@ -602,7 +602,8 @@ export const CAST_SHEET_MODEL = "oss-zimage-soul-cast";
  */
 export const CINEMA_MODELS: Record<CinemaMode, Record<Engine, string[]>> = {
   video: {
-    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-3", "veo-3-1", "minimax-h3-max"],
+    // Kling 4.0: a 30 s take (up to 6 shots) in one call, with @Elements and reference clips.
+    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-4", "kling-3", "veo-3-1", "minimax-h3-max"],
     open: [CINEMA_MODEL, "oss-minimax-h3", "oss-ltx25", "oss-wan22-14b"],
   },
   image: { cloud: [CINEMA_STILL_MODEL, "nano-banana-pro", "seedream-5-pro"], open: [CINEMA_STILL_MODEL, "oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism", "oss-moss-image"] },
@@ -1349,7 +1350,10 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
     // Fuobe Cinema in the cloud: any whole second; past 20 s planVideo adds an extend for the rest.
     if (anyLength(model)) params.duration = Math.min(want, CINEMA_MAX_SECONDS);
     else {
-      params.duration = allowed?.length ? nearest(allowed, want) : want;
+      // A model that renders any whole second in a range (Kling 4.0: 3–30 s) makes the length asked, within it, unless
+      // Cinema plans it with a few lengths of its own (MiniMax H3 on your GPU: 5, 10 or 15 s).
+      const range = PLANNED_DURATIONS[model.id] ? undefined : lengthRange(model);
+      params.duration = range ? Math.max(range[0], Math.min(range[1], want)) : allowed?.length ? nearest(allowed, want) : want;
       if (params.duration !== want) notes.push(`${model.name} makes ${params.duration}s clips — use Extend for longer scenes`);
     }
     if (o.audio === true) params.generateAudio = input.audio !== false;

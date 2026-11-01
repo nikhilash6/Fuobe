@@ -112,11 +112,14 @@ describe("round-4 cloud models", () => {
     }
   });
 
-  it("leaves Kling 4.0 out until its API opens", () => {
-    const routes = MODELS.flatMap((m) => m.routes);
-    expect(routes.filter((r) => r.endpoint.startsWith("kling/v4/"))).toEqual([]);
-    expect(research4.filter((e) => e.endpoint.startsWith("kling/v4/")).every((e) => e.status === "playground-only")).toBe(true);
-    expect(fs.readFileSync("scripts/gen-cloud-models.py", "utf8")).toMatch(/TODO\(kling-4\)/);
+  it("routes Kling 4.0 only on endpoints whose API is open (checked 2026-11-01, nm10-kling-4)", () => {
+    const routes = MODELS.flatMap((m) => m.routes).filter((r) => r.endpoint.startsWith("kling/v4/"));
+    expect(new Set(routes.map((r) => r.endpoint)).size).toBe(4);
+    for (const r of routes) {
+      const e = research4.find((x) => x.endpoint === r.endpoint)!;
+      expect(e.status, r.endpoint).toBe("active");
+    }
+    expect(fs.readFileSync("scripts/gen-cloud-models.py", "utf8")).not.toMatch(/TODO\(kling-4\)/);
   });
 
   it("hides chain helpers and shows the new models in their studios' pickers", () => {

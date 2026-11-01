@@ -98,9 +98,11 @@ const PICKER_UNIT = { image: "/image", second: "/sec", video: "/video", request:
  * The model picker's short price ("$0.05/sec", "Free"), at `now` (./catalog/promo): the launch price while it holds,
  * nothing for a launch-priced model while no clock may be read (null).
  */
-export function pickerPrice(m: ModelDef, now: PriceClock): string {
+export function pickerPrice(m: ModelDef, now: PriceClock, edits = false): string {
   if (m.engine === "open") return "Free";
   const p = m.pricing && pricingOn(m.pricing, now);
+  // A studio that edits clips (Edit video) shows the rate an edit bills, on the seconds in and out (Kling 4.0).
+  if (edits && p?.clipInput) return `${formatCost(p.clipInput.usd)}/sec in+out`;
   return p ? `${formatCost(p.usd)}${PICKER_UNIT[p.unit]}` : "";
 }
 

@@ -21,6 +21,11 @@ Run:  python3 scripts/fetch-hosted-schemas.py
       python3 scripts/fetch-hosted-schemas.py --trainers                                         (only the trainers' outputs)
       python3 scripts/fetch-hosted-schemas.py --base-only [endpoint …]                           (Genjutsu's plain endpoints, or O11's / BASE ones by id, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --partner                                          (partner routes in partnerEndpoints, the rest kept)
+      python3 scripts/fetch-hosted-schemas.py --part4 [endpoint …]                               (PART4's records in paid-model-apis-4.json, the rest kept)
+
+--part4 re-reads endpoints that research part 4 recorded (docs/research/paid-model-apis-4.json) and refreshes them in
+place: their inputs, the price lines of their llms.txt, their status in fal's catalog (active / playground-only, read
+from the page) and the day it was checked; a Replicate model in PART4 gets its record made or refreshed the same way.
 """
 import datetime
 import json
@@ -153,6 +158,23 @@ PARTNER = {
     "alibaba/happy-horse/v1.1/reference-to-video": ("ref2v", {**HAPPY_HORSE, "aspectRatio": "aspect_ratio", "images": "image_urls"}),
 }
 
+# Research part 4's records re-read with --part4 (build package nm10-kling-4: Kling 4.0's API opened after round 4 recorded
+# it as playground-only). keyFields stay the record's own unless given here; a Replicate model is read by its latest version.
+PART4 = {
+    "kling/v4/text-to-video": None,
+    "kling/v4/image-to-video": None,
+    "kling/v4/reference-to-video": None,
+    # The edit's reference clips (@Video2..) came after round 4 read it.
+    "kling/v4/video-to-video/edit": {"prompt": "prompt", "video": "video_url", "images": "image_urls", "videos": "video_urls", "elements": "elements",
+                                     "duration": "duration", "resolution": "resolution"},
+    # One Replicate model for text, frames, references and edits. Fuobe routes its text, image and start/end-frame runs
+    # there (its reference numbering, @image_1 across start, middle, end and reference images, and its lack of shots and
+    # elements keep the reference and edit runs on fal); the edit's source is base_video.
+    "replicate:kwaivgi/kling-v4.0": {"prompt": "prompt", "image": "start_image", "endImage": "end_image", "images": "reference_images",
+                                     "video": "base_video", "duration": "duration", "resolution": "resolution", "aspectRatio": "aspect_ratio"},
+}
+
+
 def get(url):
     req = urllib.request.Request(url, headers={"User-Agent": "fuobe-research/1.0"})
     with urllib.request.urlopen(req, timeout=60) as r:
@@ -204,13 +226,19 @@ def spec(p, root, required=False):
         out["required"] = True
     elif "type" in out and out["type"] not in ("union",) and "required" not in out:
         out["required"] = False
-    for src, dst in (("default", "default"), ("minimum", "minimum"), ("maximum", "maximum"), ("exclusiveMinimum", "minimumExclusive"), ("exclusiveMaximum", "maximumExclusive")):
+    for src, dst in (("default", "default"), ("minimum", "minimum"), ("maximum", "maximum"), ("exclusiveMinimum", "minimumExclusive"), ("exclusiveMaximum", "maximumExclusive"),
+                     ("minLength", "minLength"), ("maxLength", "maxLength")):
         if src in p:
             out[dst] = p[src]
     if p.get("nullable"):
         out["nullable"] = True
-    if p.get("description"):
-        out["desc"] = p["description"]
+    # fal states a file's limits (size, sides, length, frame rate) in limit_description; research part 4 kept them in desc.
+    limits = p.get("limit_description")
+    desc = p.get("description") or ""
+    if limits and limits not in desc:
+        desc = f"{desc}\n\n{limits}" if desc else limits
+    if desc:
+        out["desc"] = desc
     if p.get("examples"):
         out["examples"] = p["examples"][:1]
     return out
@@ -243,6 +271,89 @@ def replicate(slug, version):
             root = v["_extras"]["dereferenced_openapi_schema"]
             return inputs_of(root, root["components"]["schemas"]["Input"])
     raise SystemExit(f"{slug}: version {version} not found on its schema page")
+
+
+def replicate_latest(slug):
+    """A Replicate model's latest version: its inputs (dereferenced OpenAPI) and the version's id and date."""
+    page = get(f"https://replicate.com/{slug}/api/schema")
+    for m in re.finditer(r'<script[^>]*type="application/json"[^>]*>(.*?)</script>', page, re.S):
+        try:
+            data = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            continue
+        v = data.get("version") if isinstance(data, dict) else None
+        if isinstance(v, dict) and (v.get("_extras") or {}).get("dereferenced_openapi_schema"):
+            root = v["_extras"]["dereferenced_openapi_schema"]
+            return inputs_of(root, root["components"]["schemas"]["Input"]), v.get("id"), (v.get("created_at") or "")[:10]
+    raise SystemExit(f"{slug}: no version schema on its page")
+
+
+def replicate_prices(slug):
+    """Replicate's billing tiers for a model, one line each ("720p, text or image input: $0.157 per second of output video")."""
+    page = get(f"https://replicate.com/{slug}")
+    m = re.search(r'"billingConfig":\s*(\{.*?"current_tiers":\s*\[.*?\]\})', page, re.S)
+    if not m:
+        return None
+    try:
+        tiers = json.loads(m.group(1))["current_tiers"]
+    except (json.JSONDecodeError, KeyError):
+        return None
+    lines = []
+    for t in tiers:
+        for pr in t.get("prices") or []:
+            what = t.get("title") or ""
+            if t.get("description") and t.get("description") != what:
+                what = f"{what} ({t['description']})" if what else t["description"]
+            lines.append(f"{what}: {pr.get('price')} {pr.get('title')}")
+    return "; ".join(lines) or None
+
+
+def fal_catalog_status(endpoint):
+    """fal's catalog status of an endpoint (active, deprecated…), or "unlisted"."""
+    data = json.loads(get(f"https://api.fal.ai/v1/models?endpoint_id={endpoint}"))
+    hits = [x for x in data.get("models") or [] if x.get("endpoint_id") == endpoint]
+    return ((hits[0].get("metadata") or {}).get("status") or "active") if hits else "unlisted"
+
+
+def part4(ids):
+    """Refresh research part 4's records (PART4) in docs/research/paid-model-apis-4.json, keeping the rest as they are."""
+    path = ROOT / "docs/research/paid-model-apis-4.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    by_key = {(e["provider"], e["endpoint"]): e for e in data["endpoints"]}
+    for key, kf in PART4.items():
+        if ids and key not in ids and key.split(":", 1)[-1] not in ids:
+            continue
+        provider, ep = key.split(":", 1) if key.startswith("replicate:") else ("fal", key)
+        rec = by_key.get((provider, ep))
+        if provider == "fal":
+            if not rec:
+                sys.exit(f"{ep} is not in paid-model-apis-4.json")
+            rec["inputs"] = fal(ep)
+            page = get(f"https://fal.ai/models/{ep}/llms.txt")
+            listed = fal_catalog_status(ep)
+            # Round 4's own status: the page says the API isn't open yet.
+            rec["status"] = "playground-only" if re.search(r"API access is coming soon", page, re.I) else listed
+            # The "## Pricing" section only (the page's later lines price fal's own GPUs).
+            section = re.search(r"(?ims)^## Pricing\s*$(.*?)(?=^## |\Z)", page)
+            lines = [l.replace("**", "").strip(" -*") for l in (section.group(1) if section else "").splitlines()]
+            rec["price"] = " ".join(l for l in lines if "$" in l) or rec.get("price")
+        else:
+            inputs, version, created = replicate_latest(ep)
+            if not rec:
+                rec = {"family": ep.split("/")[1].split("-v")[0], "model": ep, "title": ep, "vendor": "Kuaishou" if ep.startswith("kwaivgi/") else ep.split("/")[0],
+                       "operation": "t2v+i2v+flf2v+v2v", "provider": "replicate", "endpoint": ep, "falCategory": None}
+                data["endpoints"].append(rec)
+            rec.update({"status": "active", "inputs": inputs, "version": version, "versionDate": created, "output": "output",
+                        "price": replicate_prices(ep), "verified": True, "sourceUrl": f"https://replicate.com/{ep}",
+                        "apiUrl": f"https://api.replicate.com/v1/models/{ep}/predictions"})
+        if kf:
+            rec["keyFields"] = kf
+        missing = [f for f in (rec.get("keyFields") or {}).values() if f.split(".")[0] not in rec["inputs"]]
+        if missing:
+            sys.exit(f"{ep}: keyFields {missing} are not inputs")
+        rec["checked"] = TODAY
+        print(f"{provider}:{ep}: {rec['status']}, {len(rec['inputs'])} inputs")
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def fal_price(endpoint):
@@ -296,6 +407,9 @@ def trainer_outputs(data):
 
 
 def main():
+    if "--part4" in sys.argv:
+        part4(sys.argv[sys.argv.index("--part4") + 1:])
+        return
     raw = FILE.read_text(encoding="utf-8")
     data = json.loads(raw)
     if "--trainers" in sys.argv:
