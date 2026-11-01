@@ -64,12 +64,12 @@ export interface StudioElement {
 
 /**
  * What a model does with @mentioned Elements, for the mention menu, when it has elements of its own (Kling 4.0): how many,
- * which kinds, and that voices aren't sent yet (they need the provider's voice ids, which Fuobe can't make).
+ * which kinds, and that voices aren't sent (they need the provider's voice ids, which Fuobe can't make).
  */
 export function elementsNote(model: Pick<ModelDef, "name" | "options"> | undefined): string | undefined {
   const e = model?.options.elements;
   if (!e) return undefined;
-  return `${model!.name}: characters and props go as its elements, up to ${e.max} (a photo and ${e.views} more angles, or a clip) · voices: not yet`;
+  return `${model!.name}: characters and props go as its elements, up to ${e.max} (a photo and ${e.views} more angles, or a clip) · voices aren't used`;
 }
 
 /** `Maya Lopez` → `Maya_Lopez`. Letters, digits, `_` and `-` only. */

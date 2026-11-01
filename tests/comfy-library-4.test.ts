@@ -103,6 +103,7 @@ describe("round-4 ComfyUI workflows", () => {
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",
+      "qwen-image-21-live-edit",
       "qwen-image-21-inpaint",
       "qwen-image-21-outpaint",
       "ideogram4-t2i",
@@ -117,6 +118,9 @@ describe("round-4 ComfyUI workflows", () => {
       "fibo2-dev-edit",
       "fibo2-edit-turbo-edit",
       "video-restore-ltx25-tiled",
+      // Clean up voice: ComfyUI-RE-USE isn't on the validation server; the pack's own tests run it (comfy-nodes/ComfyUI-RE-USE/tests).
+      "voice-clean-reuse",
+      "voice-clean-bed-reuse",
       "video-character-swap-h3",
       "video-character-swap-h3-relay",
       "video-person-remove-h3-relay",

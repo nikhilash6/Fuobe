@@ -55,6 +55,7 @@ export type CanvasNodeType =
   | "bg-remove"
   | "tts"
   | "voice-change"
+  | "clean-voice"
   | "clone-voice"
   | "translate"
   | "concat"
@@ -233,16 +234,18 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   "bg-remove": { type: "bg-remove", label: "Remove background", group: "Utilities", icon: "Eraser", ops: ["bg-remove", "bg-remove-video"], variants: ["image", "video"], description: "Cut out the subject of an image or video" },
   tts: { type: "tts", label: "Text to speech", group: "Utilities", icon: "Mic2", ops: ["tts"], description: "Speak a text, in a preset voice or a cloned one" },
   "voice-change": { type: "voice-change", label: "Change voice", group: "Utilities", icon: "AudioWaveform", ops: ["voice-change"], description: "Say a recording again in another voice, keeping its timing" },
+  // NVIDIA RE-USE on the open engine only (nothing like it is hosted on fal or Replicate): hidden on a cloud-only install.
+  "clean-voice": { type: "clean-voice", label: "Clean up voice", group: "Utilities", icon: "AudioLines", ops: ["enhance-voice"], description: "Remove noise, echo and room sound from speech" },
   "clone-voice": { type: "clone-voice", label: "Clone voice", group: "Inputs", icon: "UserRound", description: "A voice sample (or one of your saved voices) to speak with" },
   translate: { type: "translate", label: "Translate", group: "Utilities", icon: "Languages", ops: ["translate", "dub"], variants: ["text", "video"], description: "Translate a text, or dub a video into another language" },
-  concat: { type: "concat", label: "Video concatenator", group: "Utilities", icon: "Film", ops: ["concat"], description: "Up to 50 clips in one film: trim and mute each, pick the frame" },
-  restore: { type: "restore", label: "Restore & colourise", group: "Utilities", icon: "Palette", ops: ["restore-video"], description: "Old or black-and-white footage, cleaned and in colour (Lightricks' Restore IC-LoRA)" },
+  concat: { type: "concat", label: "Assemble film", group: "Utilities", icon: "Film", ops: ["concat"], description: "Up to 50 clips in one film: trim and mute each, pick the frame" },
+  restore: { type: "restore", label: "Restore & colourise", group: "Utilities", icon: "Palette", ops: ["restore-video"], description: "Old or black-and-white footage, cleaned and in colour" },
   table: { type: "table", label: "Table", group: "Inputs", icon: "Table", description: "Rows of words: what it feeds runs once per row" },
   output: { type: "output", label: "Output", group: "Output", icon: "MonitorPlay", description: "Preview what's connected, side by side" },
   note: { type: "note", label: "Sticky note", group: "Output", icon: "StickyNote", description: "A note on the board (not run)" },
 };
 
-export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "translate", "concat", "restore"]);
+export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "clean-voice", "translate", "concat", "restore"]);
 export const isGenerator = (n: Pick<CanvasNode, "type">) => GENERATOR_TYPES.has(n.type);
 
 /** Entries of the Add-node palette (several entries can make the same node type). */
@@ -285,6 +288,7 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("bg-remove"), id: "bg-remove", data: { mediaKind: "image" }, keywords: "cutout matte transparent" },
   { ...pick("tts"), id: "tts", keywords: "voice speech narration clone" },
   { ...pick("voice-change"), id: "voice-change", keywords: "voice changer speech to speech revoice convert" },
+  { ...pick("clean-voice"), id: "clean-voice", keywords: "denoise enhance speech noise clean up voice echo reverb podcast" },
   { ...pick("clone-voice"), id: "clone-voice", keywords: "voice sample clone my voice speaker" },
   { ...pick("translate"), id: "translate", data: { mediaKind: "text" }, keywords: "language translate dub localize subtitles" },
   { ...pick("concat"), id: "concat", keywords: "concatenate join merge stitch edit trim mute film assemble" },
@@ -314,7 +318,8 @@ export function paletteItems(mode: "both" | "open" | "cloud" = "both", engine?: 
   const key = `${mode}:${engine ?? ""}`;
   const hit = paletteCache.get(key);
   if (hit) return hit;
-  const items = PALETTE.filter((p) => p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)).map((p): PaletteItem => {
+  // Clean up voice has no cloud route: a cloud-only install doesn't offer it at all.
+  const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice")).map((p): PaletteItem => {
     const fixed = p.data?.modelId ? getModel(p.data.modelId) : undefined;
     if (fixed && !runsOn(fixed, "cloud") && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? GPU_ONLY_INSTALL : GPU_ONLY_ENTRY };
     if (mode === "both" || !isGenerator(p) || defaultModelForNode({ type: p.type, data: p.data ?? {} }, mode)) return p;
@@ -360,6 +365,7 @@ const PREFERRED: Partial<Record<Operation, Partial<Record<Engine, string>>>> = {
   lipsync: { cloud: "sync-lipsync-3" },
   tts: { cloud: "elevenlabs-v4", open: "oss-chatterbox" },
   "voice-change": { cloud: "elevenlabs-voice-changer", open: "oss-chatterbox-vc" },
+  "enhance-voice": { open: "oss-reuse-voice" },
   dub: { cloud: "elevenlabs-dubbing" },
   music: { cloud: "elevenlabs-music", open: "oss-ace-step" },
   sfx: { cloud: "elevenlabs-sfx" },
@@ -527,6 +533,7 @@ const OP_PORTS: Partial<Record<Operation, InputPortId[]>> = {
   mux: ["video", "audio"],
   "image-to-3d": ["images"],
   "separate-audio": ["audio", "video"],
+  "enhance-voice": ["audio", "video"],
   translate: ["prompt"],
   write: ["prompt"],
   vectorize: ["images"],
@@ -727,13 +734,13 @@ export function connectionError(graph: CanvasGraph, c: Connection): string | nul
     const port = inputPorts(t).find((p) => p.id === c.targetHandle);
     if (!port) return `${nodeLabel(t)} has no ${c.targetHandle ?? ""} input`;
     if (!acceptsType(port, type)) return type === "voice" ? `A voice goes into a Voice input (Text to speech, Change voice)` : `${PORT_TYPE_LABEL[type]} can't go into ${port.label}`;
-    if (t.type === "concat" && graph.edges.filter((e) => e.target === t.id && e.source !== s.id).length >= CONCAT_LIMITS.clips) return `The video concatenator takes up to ${CONCAT_LIMITS.clips} clips`;
+    if (t.type === "concat" && graph.edges.filter((e) => e.target === t.id && e.source !== s.id).length >= CONCAT_LIMITS.clips) return `Assemble film takes up to ${CONCAT_LIMITS.clips} clips`;
     // Rows from a table: one table per node, and Join clips can't take a clip per row (the concatenator can).
     if (graph.nodes.some((n) => n.type === "table")) {
       const withEdge: CanvasGraph = { ...graph, edges: [...graph.edges, { id: "", source: s.id, target: t.id, sourceHandle: OUT, targetHandle: c.targetHandle ?? null }] };
       const rows = rowsFeeding(withEdge, t);
       if (rows && "error" in rows) return rows.error;
-      if (rows && t.type === "join") return "Join clips takes one clip per input — the Video concatenator joins a clip per row";
+      if (rows && t.type === "join") return "Join clips takes one clip per input. Assemble film joins a clip per row";
     }
   }
   if (ancestors(graph, [s.id]).has(t.id)) return "That would make a loop";
@@ -935,7 +942,7 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
   if (!single) {
     const rows = rowsFeeding(graph, n);
     if (rows && "error" in rows) return rows;
-    if (rows && n.type === "join") return { error: `Join clips takes one clip per input — use the Video concatenator to join every row of “${nodeLabel(rows.table)}”` };
+    if (rows && n.type === "join") return { error: `Join clips takes one clip per input. Use Assemble film to join every row of “${nodeLabel(rows.table)}”` };
     if (rows) return rowRequest(graph, n, model, rows);
   }
 
@@ -1198,7 +1205,7 @@ function concatRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef): Node
     return rows && !("error" in rows) ? rows.rows.map((_, row) => ({ ...c, row })) : [c];
   });
   if (!clips.length) return { error: `Connect the clips to join (up to ${CONCAT_LIMITS.clips})` };
-  if (clips.length > CONCAT_LIMITS.clips) return { error: `The video concatenator takes up to ${CONCAT_LIMITS.clips} clips — remove ${clips.length - CONCAT_LIMITS.clips}` };
+  if (clips.length > CONCAT_LIMITS.clips) return { error: `Assemble film takes up to ${CONCAT_LIMITS.clips} clips. Remove ${clips.length - CONCAT_LIMITS.clips}` };
   const ratio = concatRatio(n.data.params?.aspectRatio);
   const size = CONCAT_SIZE[ratio];
   const title = nodeLabel(n);
@@ -1321,8 +1328,8 @@ export function describeNode(graph: CanvasGraph, n: CanvasNode, ctx: DescribeCon
       costUsd: null,
       error:
         mode === "open"
-          ? `${model.name} is a paid cloud model, but this install is open source only — pick an open model`
-          : `${model.name} is an open-source model, but this install uses cloud models only — pick a cloud model`,
+          ? `${model.name} is a cloud model, which isn't available here. Pick an open-source model`
+          : `${model.name} is an open-source model, which isn't available here. Pick a cloud model`,
     };
   }
   const built = buildRequest(graph, n, model);
@@ -1961,7 +1968,7 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
   {
     id: "table-film",
     name: "Table → shots → film",
-    description: "One row per shot: each row makes a still and animates it, then the concatenator joins every row into one film",
+    description: "One row per shot: each row makes a still and animates it, then every row is joined into one film",
     icon: "Table",
     hue: 160,
     build: tpl(
@@ -1981,7 +1988,7 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
   {
     id: "clips-film",
     name: "Clips → one film",
-    description: "Trim, mute and join clips in one frame, 30 fps, with the Video concatenator",
+    description: "Trim, mute and join clips into one film, at 30 fps",
     icon: "Film",
     hue: 250,
     build: tpl(

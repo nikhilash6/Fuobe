@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { announceAuthChange, rememberViewer, signOut, useViewer } from "@/lib/api";
+import { announceAuthChange, rememberViewer, signOut, useStatus, useViewer } from "@/lib/api";
 import { safeNext } from "@/lib/safe-redirect";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ type Mode = "signup" | "login" | "owner";
 const OWNER_LINK = process.env.NODE_ENV !== "production";
 
 const COPY: Record<Mode, { title: string; lead: string; button: string }> = {
-  signup: { title: "Create your free account", lead: "An email and a password, and you're in. No verification.", button: "Sign up" },
+  signup: { title: "Create your free account", lead: "Just an email and a password. You're in within seconds.", button: "Sign up" },
   login: { title: "Welcome back", lead: "Log in with your email and password.", button: "Log in" },
   owner: { title: "Welcome back", lead: "This Fuobe studio is password protected.", button: "Sign in" },
 };
@@ -27,6 +27,7 @@ export function LoginForm() {
   const router = useRouter();
   const pathname = usePathname();
   const viewer = useViewer();
+  const status = useStatus();
   const open = !!viewer.data?.publicSignup;
   const [chosen, setChosen] = useState<Mode | null>(null);
   const mode: Mode = !open ? "owner" : (chosen ?? (params.get("owner") === "1" ? "owner" : params.get("signup") === "1" ? "signup" : "login"));
@@ -57,6 +58,8 @@ export function LoginForm() {
     router.replace(s ? `${pathname}?${s}` : pathname, { scroll: false });
   };
 
+  // Hosted runs (this studio's GPUs take an account's runs): a new account isn't sent to connect a GPU first.
+  const hosted = !!status.data?.viewer?.hosted;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -71,13 +74,14 @@ export function LoginForm() {
       // Settings' Your GPU (its Sign up free): the welcome page is that same choice.
       const q = new URLSearchParams({ welcome: "1" });
       if (after !== "/" && !after.startsWith("/connect") && !after.startsWith("/settings#your-gpu")) q.set("next", after);
-      const dest = mode === "signup" ? new URL(`/connect?${q}`, window.location.origin).toString() : after;
+      // With hosted runs on, a GPU of its own is optional: straight back to where it was.
+      const dest = mode === "signup" && !hosted ? new URL(`/connect?${q}`, window.location.origin).toString() : after;
       rememberViewer(mode === "owner" ? "owner" : "account");
       announceAuthChange();
       window.location.assign(dest);
       return;
     }
-    setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't sign in");
+    setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? (mode === "signup" ? "Something went wrong. Try again in a moment." : "We couldn't log you in. Try again in a moment."));
     setTaken(mode === "signup" && res.status === 409);
     setBusy(false);
   };
@@ -180,6 +184,19 @@ export function LoginForm() {
       <Button type="submit" className="mt-4 h-11 w-full" disabled={!password || (mode !== "owner" && !email) || (mode === "signup" && password.length < 8) || busy}>
         {busy && <Loader2 className="animate-spin" />} {copy.button}
       </Button>
+      {mode === "signup" && (
+        <p className="mt-3 text-center text-[12px] text-muted-foreground">
+          By signing up you agree to our{" "}
+          <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+      )}
       {open && (
         <div className="mt-4 space-y-1.5 text-center text-[13px] text-muted-foreground">
           {mode === "signup" ? (

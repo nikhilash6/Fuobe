@@ -144,7 +144,16 @@ its own results, once. The server never calls the person's computer. Runs wait w
   and 7821, or one the person types. While the browser would still ask to let the site reach apps
   on this device, it looks only after a click, and explains that question first. A tab never
   reaches the computer's apps by itself before that.
-- **Fuobe's setting.** A page can read a ComfyUI on the computer only when ComfyUI runs with
+- **Fuobe Connect (the one step).** A page can read a ComfyUI on the computer only when ComfyUI lets
+  that site in. Fuobe Connect (`integrations/fuobe-connect`, from ComfyUI-Manager or a git clone)
+  lets in only the studios that the person trusts (`https://fuobe.com` unless they name others), and
+  only for what a run needs. Every other website still meets ComfyUI's own check. The card asks for
+  this one install and connects by itself when ComfyUI is back with it. The setting and the guard
+  below are under "Advanced". See [gpu-workers.md](gpu-workers.md).
+- **Pairing** (Safari, phones, a blocked browser, a PC with no screen): Fuobe Connect shows a code,
+  and the person approves it while signed in (`/connect?code=…`). That ComfyUI then runs this
+  person's jobs, and only theirs, with no tab open. Settings → Your GPU lists it, with Disconnect.
+- **Fuobe's setting (Advanced).** Without Fuobe Connect, ComfyUI must run with
   `--enable-cors-header <the site's address>`. The card gives the fix for the install it finds: a
   start file for Windows portable or Easy-Install (it restarts ComfyUI with the setting and leaves a
   start file with it for next time; it never changes the person's own start files), the place in
@@ -155,7 +164,7 @@ its own results, once. The server never calls the person's computer. Runs wait w
   `custom_nodes` and that the other installs download from the card, puts the check back: a request
   from a web page gets in only from ComfyUI's own page or the site the setting names, the live
   socket included. It answers `GET /fuobe/guard`, and the card warns while it's missing.
-- **Phones and Safari** can't reach a ComfyUI on the device: they get the link instead, with why.
+- **Phones and Safari** can't reach a ComfyUI on the device: they get pairing and the link instead, with why.
 
 The owner can do the same on a deployed studio: **Settings → Where ComfyUI runs → On the computer
 you're using**. A studio with ComfyUI on its own machine keeps calling it from the server.
@@ -268,6 +277,39 @@ account with that provider. The studio's own keys are never used for an account'
   attached files to that provider. civitai LoRAs are left out of runs on an account's key (copying
   them would use the studio's civitai key). Assist, text steps, 3D and the other tools stay closed.
 - An account on a studio set to **Open source only** keeps its keys, but they aren't used.
+
+## Hosted runs
+
+By default an account runs only on its own GPU or its own key. An owner who wants accounts to run on the studio's own
+ComfyUI instead sets `FUOBE_HOSTED_RUNS=1`. It is off unless set, and with it off nothing below changes.
+
+With it on:
+
+- An account with no GPU of its own can run in the studios (generations, camera motions, effects, apps). The run goes
+  to this install's ComfyUI server (the address in Settings). An install whose ComfyUI runs on the owner's computer
+  doesn't offer hosted runs.
+- An account whose own GPU is online runs there by default. The composer shows where a run goes ("Your GPU" or "This
+  studio's GPUs"), and the person can pick either.
+- Every other tool still needs the account's own GPU ("This tool doesn't run on your own GPU yet" stays as it is).
+  Image to 3D, extra LoRAs added to a request, and clips and sound as inputs stay on the account's own GPU.
+- An account can upload pictures for these runs. Clips and sound still need its own GPU or key.
+- A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in
+  Settings → Your GPU and at `/connect`; the sidebar says "Your GPU · Optional".
+- A run waiting for the studio's GPUs shows its place in line ("In line · 3rd · about 40 s"). A run may wait
+  `FUOBE_POOL_WAIT_MIN` minutes (30 by default); past that it fails.
+- The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.
+
+Two optional services can go with it:
+
+- a **billing service** ([billing-hook.md](billing-hook.md)): prices runs on this install's GPUs, sets the price aside
+  before a run starts, and shows the person a balance. Without one, these runs are free.
+- a **moderation service** ([moderation-hook.md](moderation-hook.md)): checks a run before it starts and, when it asks
+  to, its outputs before they show. Without one, nothing is checked.
+
+The code is `src/server/hosted.ts` (the switch, the place, the line), `src/server/hosted-run.ts` (the run route's side),
+`src/server/run-stamp.ts` (what every row of a run carries) and `src/lib/hosted.ts` (the browser's side). The tests are
+`tests/hosted-runs.test.ts`, `tests/billing-hook.test.ts`, `tests/billing-release.test.ts` and
+`tests/moderation-hook.test.ts`.
 
 ## Uploads
 

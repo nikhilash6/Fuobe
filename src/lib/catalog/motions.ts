@@ -12,6 +12,8 @@ import type { InputSlot, LoraRef, Preset } from "./types";
 
 type MotionSpec = {
   name: string;
+  /** The name the id was made from, when the preset was renamed since: links and covers keep working. */
+  was?: string;
   category: string;
   prompt: string;
   icon?: string;
@@ -39,6 +41,13 @@ function slug(s: string): string {
     .replace(/^-|-$/g, "");
 }
 
+/** A card's caption from its prompt: the first sentence, without a "Comic book restyle:" or "Bleach bypass grade:" lead-in. */
+function caption(prompt: string): string {
+  const first = prompt.split(".")[0];
+  const rest = /^[^:]{1,40}\b(?:restyle|grade|lighting)\b[^:]*:\s*(.+)$/i.exec(first)?.[1];
+  return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : first;
+}
+
 function look(hue: number, icon: string) {
   return { icon, from: `oklch(0.72 0.16 ${hue})`, to: `oklch(0.55 0.2 ${(hue + 50) % 360})` };
 }
@@ -47,11 +56,11 @@ function build(type: "motion" | "effect", specs: MotionSpec[], baseHue: number):
   return specs.map((m, i) => {
     const op = m.endFrame ? ("flf2v" as const) : ("i2v" as const);
     return {
-      id: `${type}-${slug(m.name)}`,
+      id: `${type}-${slug(m.was ?? m.name)}`,
       type,
       name: m.name,
       category: m.category,
-      description: m.description ?? m.prompt.split(".")[0],
+      description: m.description ?? caption(m.prompt),
       look: look(m.hue ?? (baseHue + i * 23) % 360, m.icon ?? (type === "motion" ? "Video" : "Sparkles")),
       inputs: m.endFrame ? [START, END] : [START],
       promptTemplate: `{prompt}. ${m.prompt}`,
@@ -65,7 +74,7 @@ function build(type: "motion" | "effect", specs: MotionSpec[], baseHue: number):
         loras: m.loras,
       },
       // Fuobe DoP writes each motion's and effect's own line (dopPreset); this one is kept only where it adds to it.
-      parity: m.parity ?? (m.loras?.length ? "On your GPU it adds a LoRA trained for this look." : "On your GPU it follows the preset's description."),
+      parity: m.parity ?? (m.loras?.length ? "On your GPU, it adds a style trained for this look." : "On your GPU, it's made from a written direction."),
     };
   });
 }
@@ -406,19 +415,19 @@ const EFFECT_SPECS: MotionSpec[] = [
   { name: "Moonwalk", category: "Blockbuster", icon: "Moon", prompt: "The subject performs a flawless moonwalk, gliding backward smoothly under a single spotlight" },
   { name: "Dolphin Ride", category: "Blockbuster", icon: "Fish", prompt: "The subject rides on the back of a leaping dolphin across sparkling ocean waves" },
   { name: "Monet Muse", category: "Blockbuster", icon: "Palette", prompt: "The scene dissolves into a living impressionist Monet painting with soft dabs of light and water lilies, the subject gently moving within it" },
-  // Mixed Media (Higgsfield video restyles)
-  { name: "Acid", category: "Mixed Media", icon: "FlaskConical", parity: RESTYLE, prompt: "Acid-trip restyle: neon colors bleed and warp, outlines vibrate and the image pulses with psychedelic distortion" },
-  { name: "Akrill", category: "Mixed Media", icon: "Brush", parity: RESTYLE, prompt: "Thick acrylic paint restyle: bold impasto brushstrokes ripple across the moving scene" },
+  // Mixed Media (video restyles)
+  { name: "Neon Melt", was: "Acid", category: "Mixed Media", icon: "FlaskConical", parity: RESTYLE, description: "Neon colours bleed and warp around the subject", prompt: "Acid-trip restyle: neon colors bleed and warp, outlines vibrate and the image pulses with psychedelic distortion" },
+  { name: "Acrylic", was: "Akrill", category: "Mixed Media", icon: "Brush", parity: RESTYLE, description: "Thick acrylic brushwork ripples across the scene", prompt: "Thick acrylic paint restyle: bold impasto brushstrokes ripple across the moving scene" },
   { name: "Broken Mirror", category: "Mixed Media", icon: "Shapes", parity: RESTYLE, prompt: "The image fractures into shards of a broken mirror, each piece reflecting the subject from a slightly different angle as they move" },
   { name: "Bubbles", category: "Mixed Media", icon: "Circle", parity: RESTYLE, prompt: "Iridescent soap bubbles float through the frame, each one reflecting and refracting the subject" },
-  { name: "Cannabis", category: "Mixed Media", icon: "Leaf", parity: RESTYLE, prompt: "Hazy green-tinted restyle with drifting leaf silhouettes and soft smoky glow around the subject" },
+  { name: "Smoke Haze", was: "Cannabis", category: "Mixed Media", icon: "Leaf", parity: RESTYLE, description: "A soft green haze and drifting smoke around the subject", prompt: "Hazy green-tinted restyle with drifting leaf silhouettes and soft smoky glow around the subject" },
   { name: "Canvas", category: "Mixed Media", icon: "Frame", parity: RESTYLE, prompt: "The moving scene is painted onto textured canvas, brushstrokes and canvas weave visible as the subject moves" },
   { name: "Cold Vision", category: "Mixed Media", icon: "Thermometer", parity: RESTYLE, prompt: "Thermal camera restyle: the subject glows in false-color heat signature against a cold blue background" },
   { name: "Comic", category: "Mixed Media", icon: "Zap", parity: RESTYLE, prompt: "Comic book restyle: bold ink outlines, halftone dots and flat colors, with action lines as the subject moves" },
   { name: "Flash Comic", category: "Mixed Media", icon: "Zap", parity: RESTYLE, prompt: "Rapid comic panels flash in sync with the motion, the subject popping between inked halftone frames" },
   { name: "Fragments", category: "Mixed Media", icon: "Shapes", parity: RESTYLE, prompt: "The image breaks into floating geometric fragments that drift and reassemble around the moving subject" },
   { name: "Hand Paint", category: "Mixed Media", icon: "Paintbrush", parity: RESTYLE, prompt: "Hand-painted animation restyle: every frame looks freshly painted with loose, wobbling brushstrokes" },
-  { name: "LSD", category: "Mixed Media", icon: "Rainbow", parity: RESTYLE, prompt: "Kaleidoscopic psychedelic restyle: colors cycle through rainbow hues, patterns breathe and trails follow every movement" },
+  { name: "Kaleido", was: "LSD", category: "Mixed Media", icon: "Rainbow", parity: RESTYLE, description: "Colours cycle through the rainbow and trail every move", prompt: "Kaleidoscopic psychedelic restyle: colors cycle through rainbow hues, patterns breathe and trails follow every movement" },
   { name: "Lava", category: "Mixed Media", icon: "Flame", parity: RESTYLE, prompt: "Molten lava restyle: the scene glows orange and black, the subject's outline flowing like magma" },
   { name: "Layer Mixed Media", category: "Mixed Media", icon: "Layers", parity: RESTYLE, prompt: "Layered mixed-media collage: paper textures, paint strokes, sketch lines and photo cutouts stack and shift over the moving subject" },
   { name: "Magazine", category: "Mixed Media", icon: "BookOpen", parity: RESTYLE, prompt: "Glossy magazine restyle: the frame becomes a printed editorial spread with halftone print texture and typography blocks around the subject" },
@@ -434,7 +443,7 @@ const EFFECT_SPECS: MotionSpec[] = [
   { name: "Particles", category: "Mixed Media", icon: "Sparkles", parity: RESTYLE, prompt: "The subject is rendered as streams of glowing particles that scatter and reform with every movement" },
   { name: "Random Glow", category: "Mixed Media", icon: "Lightbulb", parity: RESTYLE, prompt: "Random patches of colored glow flicker and bloom across the scene and the subject in rhythm" },
   { name: "Sketch", category: "Mixed Media", icon: "Pencil", parity: RESTYLE, prompt: "Pencil sketch restyle: the moving scene is drawn in graphite lines on white paper, lines redrawn every frame" },
-  { name: "Toxic", category: "Mixed Media", icon: "Biohazard", parity: RESTYLE, prompt: "Toxic restyle: sickly neon-green glow, dripping slime textures and hazy fumes around the subject" },
+  { name: "Neon Slime", was: "Toxic", category: "Mixed Media", icon: "Biohazard", parity: RESTYLE, description: "Neon-green glow, glossy slime and drifting fumes", prompt: "Toxic restyle: sickly neon-green glow, dripping slime textures and hazy fumes around the subject" },
   { name: "Tracking", category: "Mixed Media", icon: "Crosshair", parity: RESTYLE, prompt: "Motion-tracking HUD restyle: tracking boxes, crosshairs and data labels lock onto the subject and follow every move" },
   { name: "Two Color", category: "Mixed Media", icon: "Contrast", parity: RESTYLE, prompt: "Duotone restyle: the scene is reduced to two bold ink colors like a screen print" },
   { name: "Ultraviolet", category: "Mixed Media", icon: "Lightbulb", parity: RESTYLE, prompt: "Ultraviolet blacklight restyle: deep purple darkness with fluorescent highlights glowing on the subject" },
@@ -454,7 +463,7 @@ const EFFECT_SPECS: MotionSpec[] = [
   { name: "Lime Jam", category: "Color Grade", icon: "Citrus", parity: RESTYLE, prompt: "Lime grade: zesty acid-green tint through the mids with punchy contrast" },
   { name: "Nostalgic Blue", category: "Color Grade", icon: "Droplets", parity: RESTYLE, prompt: "Nostalgic blue grade: faded cyan-blue tones, lifted blacks and soft film haze" },
   { name: "Soft Palette", category: "Color Grade", icon: "Palette", parity: RESTYLE, prompt: "Soft palette grade: muted, gentle low-contrast pastels with creamy skin tones" },
-  { name: "Overtime", category: "Color Grade", icon: "Clock", parity: RESTYLE, prompt: "Late-night office grade: greenish fluorescent cast, desaturated tones and tired contrast" },
+  { name: "Overtime", category: "Color Grade", icon: "Clock", parity: RESTYLE, description: "Late-night office light: a fluorescent green cast and muted tones", prompt: "Late-night office grade: greenish fluorescent cast, desaturated tones and tired contrast" },
   { name: "Crimson Vigil", category: "Color Grade", icon: "Moon", parity: RESTYLE, prompt: "Crimson grade: deep reds bleed into the shadows, ominous and intense" },
   { name: "Bleach Bypass", category: "Color Grade", icon: "Contrast", parity: RESTYLE, prompt: "Bleach bypass grade: desaturated colors, harsh contrast and silvery highlights" },
   { name: "Bleached Warm", category: "Color Grade", icon: "Sun", parity: RESTYLE, prompt: "Bleached warm grade: sun-washed, slightly desaturated golden tones like a hot afternoon" },

@@ -10,6 +10,7 @@ import type { GenParams, ModelDef } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { fileToSlot, type SlotValue } from "./media-slot";
 import { VoiceRecorder } from "./voice-recorder";
+import { useMaybeClean } from "@/components/audio-tools/clean-voice-switch";
 
 const chip = "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors";
 const idle = "bg-secondary text-secondary-foreground hover:bg-accent";
@@ -71,6 +72,7 @@ export function VoicePicker({
   };
   // Someone whose upload would be refused (a guest, an account with no GPU or key) gets its card, not the file chooser.
   const askFirst = useAskBeforeUpload();
+  const clean = useMaybeClean();
   const upload = () => {
     if (!askFirst()) return file.current?.click();
     setOpen(false);
@@ -87,7 +89,7 @@ export function VoicePicker({
         {clone && (
           <Section title="Clone a voice">
             <div className="flex flex-wrap gap-1.5 px-2 pb-1">
-              <VoiceRecorder onRecorded={(v) => pick({ kind: "sample", value: v })} />
+              <VoiceRecorder clean onRecorded={(v) => pick({ kind: "sample", value: v })} />
               <button type="button" onClick={upload} className={cn(chip, idle)}>
                 <Upload className="size-3.5" /> Upload
               </button>
@@ -98,12 +100,12 @@ export function VoicePicker({
                 hidden
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) void fileToSlot(f, (v) => v && !v.uploading && pick({ kind: "sample", value: v }), "audio");
+                  if (f) void fileToSlot(f, (v) => v && !v.uploading && void clean.run(v, (c) => pick({ kind: "sample", value: c })), "audio");
                   e.target.value = "";
                 }}
               />
             </div>
-            <p className="px-2 pb-1 text-[11px] text-muted-foreground">10–60 s of clean speech works best.</p>
+            <p className="px-2 pb-1 text-[11px] text-muted-foreground">{clean.busy ? "Cleaning the voice…" : "10–60 s of clean speech works best. Clean samples make cleaner clones: a clone copies room noise."}</p>
           </Section>
         )}
         {clone && (

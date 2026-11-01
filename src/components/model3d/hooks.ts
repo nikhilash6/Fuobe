@@ -36,7 +36,7 @@ export function useRunPreview(req: GenerationRequest | null) {
     queryFn: async () => {
       const res = await fetch("/api/generations?preview=1", { method: "POST", headers: { "Content-Type": "application/json" }, body: body! });
       const j = (await res.json().catch(() => ({}))) as RunPreview & { error?: string };
-      if (!res.ok) throw responseError(res, j.error ?? `Request failed (${res.status})`);
+      if (!res.ok) throw responseError(res, j.error ?? "Something went wrong. Please try again.");
       return j;
     },
   });
@@ -46,7 +46,7 @@ export function useRunPreview(req: GenerationRequest | null) {
 export function priceLine(p: RunPreview | undefined): string | null {
   if (!p) return null;
   if (p.demo) return "Placeholder · nothing is charged";
-  if (p.engine === "open" || p.costUsd === 0) return "Free — runs on your ComfyUI";
+  if (p.engine === "open" || p.costUsd === 0) return "Free";
   if (p.costUsd === null) return "Billed by your provider";
   const usd = p.costUsd < 0.01 ? "<$0.01" : `$${p.costUsd < 1 ? p.costUsd.toFixed(3).replace(/0$/, "") : p.costUsd.toFixed(2)}`;
   return `≈ ${usd}, paid to ${p.providerId === "replicate" ? "Replicate" : "fal.ai"}`;

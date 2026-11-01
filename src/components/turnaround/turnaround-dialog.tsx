@@ -73,7 +73,7 @@ interface Props {
 async function post<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const out = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw responseError(res, out.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, out.error ?? "Something went wrong. Please try again.");
   return out;
 }
 

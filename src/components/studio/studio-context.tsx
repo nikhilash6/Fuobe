@@ -97,6 +97,8 @@ export interface StudioConfig {
    * compiled for the model at the size it renders (src/lib/layout-prompt.ts); the prompt is the whole picture's caption.
    */
   layout?: boolean;
+  /** A Live switch in the header (Edit): the picture changes as you type, on the viewer's own GPU (Live edit). */
+  live?: boolean;
 }
 
 export interface Draft {

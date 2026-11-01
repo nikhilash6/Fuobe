@@ -3,8 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-// The Workflows page's marks come from GET /api/comfyui: the studio's owner gets each graph's `validated` as it is;
-// anyone else gets it on the graphs that passed, and the page shows those a Checked mark.
+// GET /api/comfyui: the owner gets each graph's `validated` as it is; anyone else gets it on the graphs that passed.
 
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 

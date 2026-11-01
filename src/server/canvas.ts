@@ -98,6 +98,7 @@ const NODE_TYPES = [
   "bg-remove",
   "tts",
   "voice-change",
+  "clean-voice",
   "clone-voice",
   "translate",
   "concat",

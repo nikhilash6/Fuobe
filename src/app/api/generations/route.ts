@@ -18,6 +18,11 @@ import { GenerationRequestSchema } from "@/server/request-schema";
 import { gateGeneration, GPU_SETUP_HEADER } from "@/server/gpu/gate";
 import { gpuTargetFor } from "@/server/gpu/target";
 import { connectNeeds } from "@/server/connect-refusal";
+import { billingConfigured } from "@/server/billing";
+import { queueRelease } from "@/server/billing-outbox";
+import { runOnPool } from "@/server/hosted";
+import { decidePlace, moderateRun, poolQuote, readWishes, reservePool, type PlaceDecision, type Refusal } from "@/server/hosted-run";
+import { withRunStamp, type RunStamp } from "@/server/run-stamp";
 
 /**
  * List generations, newest first. Filters: kind / kinds, features (`x*` = prefix), models, statuses,
@@ -92,6 +97,12 @@ export async function POST(request: Request) {
     const headers: Record<string, string> = r.code === "connect-gpu" ? { [CONNECT_GPU_HEADER]: "1" } : r.code === "add-key" && r.provider ? { [ADD_KEY_HEADER]: r.provider } : {};
     return refuse(403, r.error, { code: r.code, ...(r.provider && { provider: r.provider }) }, headers);
   };
+  // Beside the request (never in it): the place the client prefers, and the price it showed (hosted runs, billing hook).
+  const { wish, shown } = readWishes(body);
+  const refusedBy = (r: Refusal) => {
+    if (account) unhit(`run:${account.id}`);
+    return refuse(r.status, r.body.error, r.body, r.headers);
+  };
   const notes: string[] = [];
   if (account && !preview) {
     // Room on the server, room in the account's files, and a fair share of runs.
@@ -113,13 +124,43 @@ export async function POST(request: Request) {
   }
   try {
     if (preview) {
+      // Hosted runs: a visitor's run that would go to this install's GPUs is priced there, with the billing service's
+      // quote (its words for Run). Off, or a run on its own GPU or key: priced as before.
+      const pool = viewer.kind !== "owner" ? await poolQuote(account, req, wish) : null;
+      if (pool) {
+        const { model, ...p } = pool.planned;
+        return Response.json({ ...p, modelId: model.id, modelName: model.name, engine: model.engine, kind: outputKind(p.op, model), opLabel: OPERATION_LABELS[p.op] ?? p.op, place: "pool", quote: pool.quote });
+      }
       const { model, ...p } = priced(() => previewGeneration(req));
       return Response.json({ ...p, modelId: model.id, modelName: model.name, engine: model.engine, kind: outputKind(p.op, model), opLabel: OPERATION_LABELS[p.op] ?? p.op });
+    }
+    // Hosted runs (FUOBE_HOSTED_RUNS=1): an account's run may go to this install's GPUs. Off: always its own (today).
+    let decision: PlaceDecision = { kind: "own" };
+    if (account) {
+      decision = await decidePlace(account, req, wish);
+      if (decision.kind === "refuse") return refusedBy(decision.refusal);
+    }
+    let onPool = decision.kind === "pool" ? decision : null;
+    if (account && onPool && billingConfigured()) {
+      // The billing service's limits for runs on this install's GPUs (never above the studio's own).
+      const lim = onPool.policy.limits;
+      if (lim.activeRuns > 0 && activeRuns(account.id) >= lim.activeRuns) {
+        unhit(`run:${account.id}`);
+        return refuse(429, ACCOUNT_MESSAGES.activeRuns, {}, { "Retry-After": "30" });
+      }
+      if (lim.outputsPerRun > 0 && (req.params?.numOutputs ?? 1) > lim.outputsPerRun) {
+        req = { ...req, params: { ...req.params, numOutputs: lim.outputsPerRun } };
+        notes.push(ACCOUNT_MESSAGES.outputsCapped);
+        // Priced and set aside for what runs.
+        const capped = req;
+        onPool = { ...onPool, planned: runOnPool(account.id, () => previewGeneration(capped)) };
+      }
     }
     // GPU pre-flight: a ComfyUI run that is sure to fail for something missing stops here with the plan that fixes it
     // (src/server/gpu/gate.ts; never when the check is unknown, for graphics memory, or with gpuCheck "skip").
     let gpuWarning: string | undefined;
-    if (viewer.kind !== "guest") {
+    // (A run on this install's GPUs: its plan was checked by decidePlace; the pre-flight is about the account's own GPU.)
+    if (viewer.kind !== "guest" && !onPool) {
       let planned: ReturnType<typeof previewGeneration> | null = null;
       try {
         planned = onOwn(() => previewGeneration(req));
@@ -155,7 +196,7 @@ export async function POST(request: Request) {
         gpuWarning = gate.warning;
       }
     }
-    if (account) {
+    if (account && !onPool) {
       // The LoRAs this run adds (and its start frame's step, for an effect that makes one) must be on the account's
       // ComfyUI: say which to download before anything is queued.
       const fix = await onOwn(() => accountLoraFix(req));
@@ -164,13 +205,34 @@ export async function POST(request: Request) {
         return refuse(409, missingFilesMessage(fix), { code: "comfy_missing_model", fix });
       }
     }
+    // The moderation service's check (none set: nothing checked), before anything is set aside: a refusal costs nothing.
+    // Then, on this install's GPUs, the billing service sets the run's price aside (none set: the run is free).
+    let stamp: RunStamp | null = null;
+    if (account) {
+      const mod = await moderateRun(account, req, onPool?.planned ?? null, onPool ? "pool" : "own");
+      if (!mod.ok) return refusedBy(mod.refusal);
+      if (onPool) {
+        const held = await reservePool(account, req, onPool.planned, shown, mod.checkOutputs);
+        if (!held.ok) return refusedBy(held.refusal);
+        stamp = held.stamp;
+      } else if (mod.checkOutputs) stamp = { checkOutputs: true };
+    }
     // Counted again just before the run is stored, with nothing awaited in between: requests that arrived together all
     // passed the first count while the checks above waited.
     if (account && activeRuns(account.id) >= ACCOUNT_LIMITS.activeRuns) {
       unhit(`run:${account.id}`);
+      if (stamp?.hold) queueRelease(stamp.hold);
       return refuse(429, ACCOUNT_MESSAGES.activeRuns, {}, { "Retry-After": "30" });
     }
-    const items = onOwn(() => createGenerations(req));
+    const make = () => createGenerations(req);
+    let items: ReturnType<typeof createGenerations>;
+    try {
+      items = account && onPool ? runOnPool(account.id, () => withRunStamp(stamp ?? { place: "pool" }, make)) : stamp ? onOwn(() => withRunStamp(stamp, make)) : onOwn(make);
+    } catch (e) {
+      // Nothing was made: what was set aside goes back.
+      if (stamp?.hold) queueRelease(stamp.hold);
+      throw e;
+    }
     // A script's open-source run while ComfyUI is on the owner's computer: it waits for the owner's Fuobe tab there.
     if (viewer.kind === "owner" && token && getSetting("comfyWhere") === "computer" && items.some((g) => g.provider === "comfyui")) notes.push(RUNS_ON_COMPUTER_NOTE);
     // What the run leaves out or changes (a model that replaced a retired one, a LoRA that runs only on a GPU, a length the API rounds).

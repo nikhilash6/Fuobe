@@ -256,7 +256,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "gemini-image",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "Gemini 2.5 Flash Image \u2014 fast, cheap, great at consistent edits",
+    "tagline": "Gemini 2.5 Flash Image \u2014 fast, consistent edits",
     "routes": [
       {
         "op": "t2i",
@@ -503,7 +503,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "seedream",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "The fastest, cheapest Seedream 5 \u2014 quick edits in bulk",
+    "tagline": "The fastest Seedream 5 \u2014 quick edits in bulk",
     "routes": [
       {
         "op": "t2i",
@@ -1496,7 +1496,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "z-image",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "Cheapest, fastest masked inpainting",
+    "tagline": "Fast masked inpainting, great value",
     "routes": [
       {
         "op": "inpaint",
@@ -2534,7 +2534,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "The Apache-2.0 FLUX.2: cheapest drafts and edits",
+    "tagline": "The Apache-2.0 FLUX.2: quick drafts and edits",
     "routes": [
       {
         "op": "t2i",
@@ -2722,7 +2722,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "FLUX.1 [dev] with your trained characters and styles \u00b7 non-commercial weights, fal clears its outputs",
+    "tagline": "FLUX.1 [dev] with your trained characters and styles \u00b7 non-commercial weights",
     "routes": [
       {
         "op": "t2i",
@@ -2794,7 +2794,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs \u00b7 non-commercial weights, fal clears its outputs",
+    "tagline": "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs \u00b7 non-commercial weights",
     "routes": [
       {
         "op": "t2i",
@@ -2866,7 +2866,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "FLUX.2 [dev] with your trained characters and styles \u00b7 non-commercial weights, fal clears its outputs",
+    "tagline": "FLUX.2 [dev] with your trained characters and styles \u00b7 non-commercial weights",
     "routes": [
       {
         "op": "t2i",
@@ -2939,7 +2939,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "The 9B FLUX.2 [klein] with your LoRAs \u00b7 non-commercial weights, fal clears its outputs",
+    "tagline": "The 9B FLUX.2 [klein] with your LoRAs \u00b7 non-commercial weights",
     "routes": [
       {
         "op": "t2i",
@@ -5222,7 +5222,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "kling",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Kling 3 quality, faster and cheaper",
+    "tagline": "Kling 3 quality, faster and lighter on cost",
     "routes": [
       {
         "op": "t2v",
@@ -6140,7 +6140,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "veo",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Cheapest Veo for drafts and volume",
+    "tagline": "Veo for drafts and volume",
     "routes": [
       {
         "op": "t2v",
@@ -10705,7 +10705,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "inworld",
     "engine": "cloud",
     "kind": "audio",
-    "tagline": "The cheapest natural narration \u2014 113 voices in 15 languages",
+    "tagline": "Natural narration, great value \u2014 113 voices in 15 languages",
     "routes": [
       {
         "op": "tts",
@@ -11855,7 +11855,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "heygen",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Faster, cheaper lip-synced translation",
+    "tagline": "Faster lip-synced translation, lighter on cost",
     "routes": [
       {
         "op": "dub",
@@ -12213,7 +12213,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "sonilo",
     "engine": "cloud",
     "kind": "audio",
-    "tagline": "Fast, cheap sound effects up to 3 minutes",
+    "tagline": "Fast sound effects up to 3 minutes",
     "routes": [
       {
         "op": "sfx",
@@ -12548,7 +12548,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "stable-audio",
     "engine": "cloud",
     "kind": "audio",
-    "tagline": "Quick, cheap loops and beds up to 2 minutes",
+    "tagline": "Quick loops and beds up to 2 minutes",
     "routes": [
       {
         "op": "music",
@@ -13070,7 +13070,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "seedream",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "Faster, cheaper Seedream layer split",
+    "tagline": "Faster Seedream layer split, lighter on cost",
     "routes": [
       {
         "op": "layers",
@@ -14799,7 +14799,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "hunyuan-3d",
     "engine": "cloud",
     "kind": "model3d",
-    "tagline": "Faster, cheaper single-view Hunyuan3D",
+    "tagline": "Faster single-view Hunyuan3D, lighter on cost",
     "routes": [
       {
         "op": "image-to-3d",
@@ -15710,7 +15710,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "rife",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Cheap frame interpolation: twice the frames, same speed",
+    "tagline": "Frame interpolation: twice the frames, same speed",
     "routes": [
       {
         "op": "interpolate",
@@ -16544,7 +16544,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "heygen",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "HeyGen's model on MiniMax H3 \u2014 cheap 768p clips, references with sound",
+    "tagline": "HeyGen's model on MiniMax H3 \u2014 768p clips, references with sound",
     "routes": [
       {
         "op": "t2v",
@@ -16796,7 +16796,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "grok",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "One of the cheapest 720p video models, 1\u201315 s",
+    "tagline": "Great-value 720p video, 1\u201315 s",
     "routes": [
       {
         "op": "t2v",
@@ -18060,7 +18060,7 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "family": "fuobe-soul",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "Soul's 139 looks on open weights: Z-Image Turbo with up to three LoRAs",
+    "tagline": "139 signature looks, ready to shoot",
     "routes": [
       {
         "op": "t2i",
@@ -18307,7 +18307,7 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "family": "fuobe-soul",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "Soul's looks on Qwen-Image 2512: clean lettering for posters and signs",
+    "tagline": "Fuobe Soul's looks with clean lettering for posters and signs",
     "routes": [
       {
         "op": "t2i",

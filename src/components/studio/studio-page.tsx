@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ArrowUp, Loader2, Upload } from "lucide-react";
+import { ArrowRight, ArrowUp, Loader2, Upload, Zap } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
@@ -44,6 +44,48 @@ import { EngineSwitch } from "./engine-switch";
 import { Feed } from "./feed";
 import type { SlotValue } from "./media-slot";
 import { PresetUrlCtx, StartRequestCtx, StudioProvider, usePresetUrl, useStudio, useStudioActions, type Draft, type StudioConfig } from "./studio-context";
+
+// Live edit's panel (the Edit studio's Live switch) loads on the first switch.
+const LiveEditPanel = dynamic(() => import("@/components/live/live-edit-app").then((m) => m.LiveEditPanel), { ssr: false });
+
+/** The Live switch: the picture changes as you type, on the viewer's own GPU (whatever the engine). */
+function LiveSwitch({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      title="Live: the picture changes as you type (runs on your GPU)"
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition-colors",
+        on ? "border-primary/40 bg-brand-faint text-brand-text" : "text-muted-foreground hover:bg-accent hover:text-foreground",
+      )}
+      data-live-switch
+    >
+      <Zap className="size-3.5" />
+      Live
+    </button>
+  );
+}
+
+/** The Live panel, seeded with the composer's picture and words; "Use in Edit" puts the kept picture back in the composer. */
+function LiveArea({ onClose }: { onClose: () => void }) {
+  const { draft, setSlot } = useStudio();
+  const [seed] = useState(() => ({ image: draft.slots.image?.ref, text: draft.prompt }));
+  return (
+    <LiveEditPanel
+      image={seed.image}
+      text={seed.text}
+      onClose={onClose}
+      onUse={(url) => {
+        setSlot("image", slot(url));
+        onClose();
+        toast.success("The kept picture is in Edit");
+      }}
+    />
+  );
+}
 
 function kindOfUrl(url: string): MediaKind {
   if (/\.(mp4|webm|mov)(\?|$)/i.test(url)) return "video";
@@ -93,6 +135,8 @@ function initialDraft(
   }
   if (sp.get("video")) slots.video = slot(sp.get("video"));
   if (sp.get("audio")) slots.audio = slot(sp.get("audio"));
+  // A voice sample handed over (Clean up voice → "Use as a voice sample"): the voice a cloning model speaks with.
+  if (sp.get("voice")) slots.voiceAudio = slot(sp.get("voice"));
   // An output format handed over in the link (Export → "ProRes in the cloud"), when the model writes it.
   const format = model?.options.formats?.find((f) => f === sp.get("format"));
   // A size handed over (Regenerate in 2K → 1440p), when the model offers it.
@@ -398,6 +442,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
   const hasItems = items.length > 0;
   const offscreen = useOffscreenResults(feed.data);
   const catalog = useCatalog();
+  const [live, setLive] = useState(false);
 
   const reuse = useCallback(
     (g: Generation) => {
@@ -436,9 +481,38 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
         else toast("Drop it on the composer");
       }}
     >
-      <StudioHeader title={config.title} header={header} tabs={tabs} />
+      <StudioHeader
+        title={config.title}
+        header={
+          config.live ? (
+            <>
+              {/* Live always runs on the viewer's GPU: the engine switch has no say while it is on. */}
+              {live ? (
+                <span className="inline-flex cursor-not-allowed" title="Live runs on your GPU">
+                  <span className="pointer-events-none inline-flex opacity-40" aria-disabled>
+                    {header}
+                  </span>
+                </span>
+              ) : (
+                header
+              )}
+              <LiveSwitch on={live} onChange={setLive} />
+            </>
+          ) : (
+            header
+          )
+        }
+        tabs={tabs}
+      />
 
-      <div className={cn("mx-auto w-full max-w-[1240px] min-w-0 px-3 sm:px-6", hasItems && "flex-1 pb-8")}>
+      {live && (
+        <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-4 sm:px-6">
+          <div className="h-[calc(100svh-4.5rem)] min-h-[520px]">
+            <LiveArea onClose={() => setLive(false)} />
+          </div>
+        </div>
+      )}
+      <div className={cn("mx-auto w-full max-w-[1240px] min-w-0 px-3 sm:px-6", hasItems && "flex-1 pb-8", live && "hidden")}>
         {hasItems ? (
           <div className="pt-4">
             <Feed items={items} onReuse={reuse} />
@@ -479,6 +553,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
       {/* One composer for both layouts (centred under the hero, docked under the feed), so it keeps focus and state when the first result arrives. */}
       <div
         className={cn(
+          live && "hidden",
           hasItems
             ? "sticky bottom-0 z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6"
             : "px-3 pt-6 sm:px-6 sm:pt-10",
@@ -507,10 +582,13 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
         </div>
       </div>
 
-      {!hasItems && config.suggestions && <PromptSuggestions suggestions={config.suggestions} />}
-      {!hasItems && config.signature && <SoulPresetCards />}
-      {/* Only once the feed is known to be empty: a studio with results would show the row, fetch its covers, then drop it. */}
-      {feed.isSuccess && !hasItems && !!examples?.tiles.length && <StudioExamples row={examples} />}
+      {/* Hidden, not unmounted, while Live is on: the page around the panel keeps its state. */}
+      <div className={live ? "hidden" : "contents"}>
+        {!hasItems && config.suggestions && <PromptSuggestions suggestions={config.suggestions} />}
+        {!hasItems && config.signature && <SoulPresetCards />}
+        {/* Only once the feed is known to be empty: a studio with results would show the row, fetch its covers, then drop it. */}
+        {feed.isSuccess && !hasItems && !!examples?.tiles.length && <StudioExamples row={examples} />}
+      </div>
 
       {dragging && (
         <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-overlay p-8">

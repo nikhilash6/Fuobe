@@ -21,38 +21,43 @@ export interface PresetPreviewMedia {
 
 export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
   "app-3d-figure": {
-    "poster": "/previews/presets/app-3d-figure.jpg?v=860d05bb",
+    "poster": "/previews/presets/app-3d-figure.jpg?v=2a823887",
+    "video": "/previews/presets/app-3d-figure.mp4?v=dd9265f9",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-3d-render": {
-    "poster": "/previews/presets/app-3d-render.jpg?v=618f71fb",
+    "poster": "/previews/presets/app-3d-render.jpg?v=06254a8f",
+    "video": "/previews/presets/app-3d-render.mp4?v=1dde5ae2",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-3d-rotation": {
-    "poster": "/previews/presets/app-3d-rotation.jpg?v=cf7378ff",
+    "poster": "/previews/presets/app-3d-rotation.jpg?v=d6a7603e",
+    "video": "/previews/presets/app-3d-rotation.mp4?v=e48b971d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-60s-cafe": {
-    "poster": "/previews/presets/app-60s-cafe.jpg?v=f86c405e",
+    "poster": "/previews/presets/app-60s-cafe.jpg?v=8ed4dd7a",
+    "video": "/previews/presets/app-60s-cafe.mp4?v=6f86681f",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-ad-creative": {
-    "poster": "/previews/presets/app-ad-creative.jpg?v=ed2ff74c",
+    "poster": "/previews/presets/app-ad-creative.jpg?v=9cc269f3",
+    "video": "/previews/presets/app-ad-creative.mp4?v=ee05f089",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-age-shift": {
@@ -87,38 +92,43 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-asmr-add-on": {
-    "poster": "/previews/presets/app-asmr-add-on.jpg?v=9c6ddb6b",
+    "poster": "/previews/presets/app-asmr-add-on.jpg?v=c5ef11ee",
+    "video": "/previews/presets/app-asmr-add-on.mp4?v=9b3e4516",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-asmr-classic": {
-    "poster": "/previews/presets/app-asmr-classic.jpg?v=8eec4073",
+    "poster": "/previews/presets/app-asmr-classic.jpg?v=cb4166ca",
+    "video": "/previews/presets/app-asmr-classic.mp4?v=78e03e27",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-asmr-host": {
-    "poster": "/previews/presets/app-asmr-host.jpg?v=42ffa436",
+    "poster": "/previews/presets/app-asmr-host.jpg?v=d50e5717",
+    "video": "/previews/presets/app-asmr-host.mp4?v=ae26506f",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-asmr-promo": {
-    "poster": "/previews/presets/app-asmr-promo.jpg?v=5f28135d",
+    "poster": "/previews/presets/app-asmr-promo.jpg?v=e2211374",
+    "video": "/previews/presets/app-asmr-promo.mp4?v=e9cd48cf",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-banana-eating": {
-    "poster": "/previews/presets/app-banana-eating.jpg?v=2a384f15",
+    "poster": "/previews/presets/app-banana-eating.jpg?v=cbd4a4be",
+    "video": "/previews/presets/app-banana-eating.mp4?v=80441baf",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-behind-the-scenes": {
@@ -130,10 +140,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-billboard-ad": {
-    "poster": "/previews/presets/app-billboard-ad.jpg?v=f1a035bc",
+    "poster": "/previews/presets/app-billboard-ad.jpg?v=1c66a2bd",
+    "video": "/previews/presets/app-billboard-ad.mp4?v=aa072b3d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-breakdown": {
@@ -159,17 +170,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-bullet-time-scene": {
-    "poster": "/previews/presets/app-bullet-time-scene.jpg?v=aafd1aaa",
+    "poster": "/previews/presets/app-bullet-time-scene.jpg?v=aa80c324",
+    "video": "/previews/presets/app-bullet-time-scene.mp4?v=3078ea7a",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-bullet-time-splash": {
-    "poster": "/previews/presets/app-bullet-time-splash.jpg?v=4f68ca24",
+    "poster": "/previews/presets/app-bullet-time-splash.jpg?v=a1b759e0",
+    "video": "/previews/presets/app-bullet-time-splash.mp4?v=5b0334c5",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-bullet-time-white": {
@@ -180,17 +193,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-burning-sunset": {
-    "poster": "/previews/presets/app-burning-sunset.jpg?v=232c464a",
+    "poster": "/previews/presets/app-burning-sunset.jpg?v=e82bb90f",
+    "video": "/previews/presets/app-burning-sunset.mp4?v=4850b6c6",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-chameleon": {
-    "poster": "/previews/presets/app-chameleon.jpg?v=80448aa3",
+    "poster": "/previews/presets/app-chameleon.jpg?v=c7ce795d",
+    "video": "/previews/presets/app-chameleon.mp4?v=8ca0b29d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-change-background": {
@@ -209,6 +224,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "ideogram4+qwen-image-2.1-edit",
     "variant": "lean-json"
   },
+  "app-clean-up-voice": {
+    "poster": "/previews/presets/app-clean-up-voice.jpg?v=fc2aa150",
+    "video": "/previews/presets/app-clean-up-voice.mp4?v=e9bfbc55",
+    "run": "comfyui-previews-2026-10",
+    "engine": "comfyui",
+    "model": "ideogram4+depth-anything-3",
+    "variant": "lean-json"
+  },
   "app-click-to-ad": {
     "poster": "/previews/presets/app-click-to-ad.jpg?v=754f743c",
     "video": "/previews/presets/app-click-to-ad.mp4?v=1d8d8753",
@@ -218,10 +241,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-clipcut": {
-    "poster": "/previews/presets/app-clipcut.jpg?v=92d951de",
+    "poster": "/previews/presets/app-clipcut.jpg?v=650eaeac",
+    "video": "/previews/presets/app-clipcut.mp4?v=536db050",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-cloud-surf": {
@@ -248,10 +272,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-comic-book": {
-    "poster": "/previews/presets/app-comic-book.jpg?v=43c0ff65",
+    "poster": "/previews/presets/app-comic-book.jpg?v=867c44f9",
+    "video": "/previews/presets/app-comic-book.mp4?v=e075411a",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-commercial-faces": {
@@ -263,24 +288,27 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-dance": {
-    "poster": "/previews/presets/app-dance.jpg?v=f4185e52",
+    "poster": "/previews/presets/app-dance.jpg?v=b29783c7",
+    "video": "/previews/presets/app-dance.mp4?v=20396528",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-expand-image": {
-    "poster": "/previews/presets/app-expand-image.jpg?v=3d9866ff",
+    "poster": "/previews/presets/app-expand-image.jpg?v=4468f0a0",
+    "video": "/previews/presets/app-expand-image.mp4?v=22797342",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-expression-edit": {
-    "poster": "/previews/presets/app-expression-edit.jpg?v=ee9d93dd",
+    "poster": "/previews/presets/app-expression-edit.jpg?v=4666152b",
+    "video": "/previews/presets/app-expression-edit.mp4?v=24e4fb1b",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-face-swap": {
@@ -299,46 +327,51 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-fridge-ad": {
-    "poster": "/previews/presets/app-fridge-ad.jpg?v=2ac8c16a",
+    "poster": "/previews/presets/app-fridge-ad.jpg?v=d464c985",
+    "video": "/previews/presets/app-fridge-ad.mp4?v=872b3529",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-fuobe-angles": {
-    "poster": "/previews/presets/app-fuobe-angles.jpg?v=6167b371",
+    "poster": "/previews/presets/app-fuobe-angles.jpg?v=a8c29228",
+    "video": "/previews/presets/app-fuobe-angles.mp4?v=b345ec66",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-game-dump": {
-    "poster": "/previews/presets/app-game-dump.jpg?v=9736b258",
-    "video": "/previews/presets/app-game-dump.mp4?v=00f34e76",
+    "poster": "/previews/presets/app-game-dump.jpg?v=ac39c93c",
+    "video": "/previews/presets/app-game-dump.mp4?v=547049b4",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "ideogram4+qwen-image-2.1-edit",
     "variant": "lean-json"
   },
   "app-ghoulgao": {
-    "poster": "/previews/presets/app-ghoulgao.jpg?v=b275ae6d",
+    "poster": "/previews/presets/app-ghoulgao.jpg?v=9dd20f9c",
+    "video": "/previews/presets/app-ghoulgao.mp4?v=ea0827cb",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-giallo-horror": {
-    "poster": "/previews/presets/app-giallo-horror.jpg?v=d7e4c1c2",
+    "poster": "/previews/presets/app-giallo-horror.jpg?v=81d0d822",
+    "video": "/previews/presets/app-giallo-horror.mp4?v=ed35341e",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-giant-product": {
-    "poster": "/previews/presets/app-giant-product.jpg?v=5c72b163",
+    "poster": "/previews/presets/app-giant-product.jpg?v=35e7d4f6",
+    "video": "/previews/presets/app-giant-product.mp4?v=975b5d03",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-glitter-sticker": {
@@ -350,10 +383,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-graffiti-ad": {
-    "poster": "/previews/presets/app-graffiti-ad.jpg?v=f4fc354a",
+    "poster": "/previews/presets/app-graffiti-ad.jpg?v=a3b5d3a5",
+    "video": "/previews/presets/app-graffiti-ad.mp4?v=50248ef9",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-gtai": {
@@ -388,10 +422,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-hug": {
-    "poster": "/previews/presets/app-hug.jpg?v=6724f41e",
+    "poster": "/previews/presets/app-hug.jpg?v=9f77905b",
+    "video": "/previews/presets/app-hug.mp4?v=d1b7d94e",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-idol": {
@@ -402,10 +437,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-image-to-3d": {
-    "poster": "/previews/presets/app-image-to-3d.jpg?v=7c3b64a3",
+    "poster": "/previews/presets/app-image-to-3d.jpg?v=28c7b74f",
+    "video": "/previews/presets/app-image-to-3d.mp4?v=2d80f6f1",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-j-magazine": {
@@ -416,10 +452,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-j-poster": {
-    "poster": "/previews/presets/app-j-poster.jpg?v=55f41ee4",
+    "poster": "/previews/presets/app-j-poster.jpg?v=668b8cd6",
+    "video": "/previews/presets/app-j-poster.mp4?v=8ffa52a0",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-japanese-show": {
@@ -431,45 +468,51 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-kick-ad": {
-    "poster": "/previews/presets/app-kick-ad.jpg?v=a7577eba",
+    "poster": "/previews/presets/app-kick-ad.jpg?v=827df4be",
+    "video": "/previews/presets/app-kick-ad.mp4?v=926152bb",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-latex": {
-    "poster": "/previews/presets/app-latex.jpg?v=6ec6dfe0",
+    "poster": "/previews/presets/app-latex.jpg?v=c271801b",
+    "video": "/previews/presets/app-latex.mp4?v=48c95f1b",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-link-to-video-ad": {
-    "poster": "/previews/presets/app-link-to-video-ad.jpg?v=341072d2",
+    "poster": "/previews/presets/app-link-to-video-ad.jpg?v=05d16e17",
+    "video": "/previews/presets/app-link-to-video-ad.mp4?v=9857c5b1",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-macro-scene": {
-    "poster": "/previews/presets/app-macro-scene.jpg?v=a7e588ab",
+    "poster": "/previews/presets/app-macro-scene.jpg?v=9b4494c5",
+    "video": "/previews/presets/app-macro-scene.mp4?v=dcf89124",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-macroshot-product": {
-    "poster": "/previews/presets/app-macroshot-product.jpg?v=1e046572",
+    "poster": "/previews/presets/app-macroshot-product.jpg?v=19da0c6d",
+    "video": "/previews/presets/app-macroshot-product.mp4?v=91c28ab9",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-magic-button": {
-    "poster": "/previews/presets/app-magic-button.jpg?v=945b4150",
+    "poster": "/previews/presets/app-magic-button.jpg?v=97e9d18e",
+    "video": "/previews/presets/app-magic-button.mp4?v=24c7eddc",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-makeup-studio": {
@@ -504,10 +547,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-melting-doodle": {
-    "poster": "/previews/presets/app-melting-doodle.jpg?v=55f669de",
+    "poster": "/previews/presets/app-melting-doodle.jpg?v=cce8ad6f",
+    "video": "/previews/presets/app-melting-doodle.mp4?v=5b4ed917",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-meme-generator": {
@@ -534,10 +578,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-mukbang": {
-    "poster": "/previews/presets/app-mukbang.jpg?v=c0311551",
+    "poster": "/previews/presets/app-mukbang.jpg?v=e330c376",
+    "video": "/previews/presets/app-mukbang.mp4?v=8bac8cdf",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-nano-strike": {
@@ -618,17 +663,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-poster": {
-    "poster": "/previews/presets/app-poster.jpg?v=f85f3d32",
+    "poster": "/previews/presets/app-poster.jpg?v=891340f5",
+    "video": "/previews/presets/app-poster.mp4?v=0af82217",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-product-360": {
-    "poster": "/previews/presets/app-product-360.jpg?v=fe6025df",
+    "poster": "/previews/presets/app-product-360.jpg?v=4a3913d9",
+    "video": "/previews/presets/app-product-360.mp4?v=cf8f20e6",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-product-placement": {
@@ -648,17 +695,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-rap-god": {
-    "poster": "/previews/presets/app-rap-god.jpg?v=7ab6d8de",
+    "poster": "/previews/presets/app-rap-god.jpg?v=f40ea91e",
+    "video": "/previews/presets/app-rap-god.mp4?v=764605a4",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-recast": {
-    "poster": "/previews/presets/app-recast.jpg?v=a0d1c2b5",
+    "poster": "/previews/presets/app-recast.jpg?v=10e84722",
+    "video": "/previews/presets/app-recast.mp4?v=6a8212e1",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-relight": {
@@ -678,10 +727,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-renaissance": {
-    "poster": "/previews/presets/app-renaissance.jpg?v=ad5c9173",
+    "poster": "/previews/presets/app-renaissance.jpg?v=e9438f88",
+    "video": "/previews/presets/app-renaissance.mp4?v=b94a703a",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-restore-photo": {
@@ -693,24 +743,27 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-roller-coaster": {
-    "poster": "/previews/presets/app-roller-coaster.jpg?v=7917defd",
+    "poster": "/previews/presets/app-roller-coaster.jpg?v=2b16ae65",
+    "video": "/previews/presets/app-roller-coaster.mp4?v=0302f5ca",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-sand-worm": {
-    "poster": "/previews/presets/app-sand-worm.jpg?v=926cbbcc",
+    "poster": "/previews/presets/app-sand-worm.jpg?v=7ea5c3d0",
+    "video": "/previews/presets/app-sand-worm.mp4?v=7c8c12b5",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-shots": {
-    "poster": "/previews/presets/app-shots.jpg?v=55407e6d",
+    "poster": "/previews/presets/app-shots.jpg?v=fed45e20",
+    "video": "/previews/presets/app-shots.mp4?v=3526620d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-signboard": {
@@ -729,10 +782,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-simlife": {
-    "poster": "/previews/presets/app-simlife.jpg?v=2e649ba9",
+    "poster": "/previews/presets/app-simlife.jpg?v=ccfdff95",
+    "video": "/previews/presets/app-simlife.mp4?v=2a104bb0",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-sketch-to-real": {
@@ -774,10 +828,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-sticker-match-cut": {
-    "poster": "/previews/presets/app-sticker-match-cut.jpg?v=c0caa9ef",
+    "poster": "/previews/presets/app-sticker-match-cut.jpg?v=81e600e9",
+    "video": "/previews/presets/app-sticker-match-cut.mp4?v=fa3010a3",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-sticker-pack": {
@@ -789,10 +844,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-storm-creature": {
-    "poster": "/previews/presets/app-storm-creature.jpg?v=16e0be2b",
+    "poster": "/previews/presets/app-storm-creature.jpg?v=c7f6909e",
+    "video": "/previews/presets/app-storm-creature.mp4?v=eea9c059",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-style-snap": {
@@ -812,10 +868,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-talking-photo": {
-    "poster": "/previews/presets/app-talking-photo.jpg?v=63bf0e06",
+    "poster": "/previews/presets/app-talking-photo.jpg?v=923f7be1",
+    "video": "/previews/presets/app-talking-photo.mp4?v=564d2d8b",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-text-edit": {
@@ -841,10 +898,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-truck-ad": {
-    "poster": "/previews/presets/app-truck-ad.jpg?v=20007dee",
+    "poster": "/previews/presets/app-truck-ad.jpg?v=3db467a1",
+    "video": "/previews/presets/app-truck-ad.mp4?v=3ae3db02",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-unboxing-video": {
@@ -863,10 +921,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-urban-cuts": {
-    "poster": "/previews/presets/app-urban-cuts.jpg?v=c8e610c5",
+    "poster": "/previews/presets/app-urban-cuts.jpg?v=78112156",
+    "video": "/previews/presets/app-urban-cuts.mp4?v=2c4277ca",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-vectorize": {
@@ -878,10 +937,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-victory-card": {
-    "poster": "/previews/presets/app-victory-card.jpg?v=9dff87f6",
+    "poster": "/previews/presets/app-victory-card.jpg?v=e1ab175e",
+    "video": "/previews/presets/app-victory-card.mp4?v=b0abd8dd",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-video-background-remover": {
@@ -892,10 +952,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-video-face-swap": {
-    "poster": "/previews/presets/app-video-face-swap.jpg?v=c69e7345",
+    "poster": "/previews/presets/app-video-face-swap.jpg?v=a09a9980",
+    "video": "/previews/presets/app-video-face-swap.mp4?v=8e35beb0",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-virtual-try-on": {
@@ -914,24 +975,27 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-what-s-next": {
-    "poster": "/previews/presets/app-what-s-next.jpg?v=0c7e11bc",
+    "poster": "/previews/presets/app-what-s-next.jpg?v=96f44568",
+    "video": "/previews/presets/app-what-s-next.mp4?v=e5867853",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-yes-kiss": {
-    "poster": "/previews/presets/app-yes-kiss.jpg?v=796d9d9b",
+    "poster": "/previews/presets/app-yes-kiss.jpg?v=491815ab",
+    "video": "/previews/presets/app-yes-kiss.mp4?v=c0c21248",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-zoom-out": {
-    "poster": "/previews/presets/app-zoom-out.jpg?v=749899eb",
+    "poster": "/previews/presets/app-zoom-out.jpg?v=0843fb80",
+    "video": "/previews/presets/app-zoom-out.mp4?v=18db8e37",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-zooms": {
@@ -943,10 +1007,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-acid": {
-    "poster": "/previews/presets/effect-acid.jpg?v=aa503234",
+    "poster": "/previews/presets/effect-acid.jpg?v=2cf20ad9",
+    "video": "/previews/presets/effect-acid.mp4?v=eda1dc9e",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-act-natural": {
@@ -958,10 +1023,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-agamemnon": {
-    "poster": "/previews/presets/effect-agamemnon.jpg?v=8fbb442e",
+    "poster": "/previews/presets/effect-agamemnon.jpg?v=097a985a",
+    "video": "/previews/presets/effect-agamemnon.mp4?v=54eb9b67",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-agent-reveal": {
@@ -980,10 +1046,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-akrill": {
-    "poster": "/previews/presets/effect-akrill.jpg?v=00640e49",
+    "poster": "/previews/presets/effect-akrill.jpg?v=6f0ee53c",
+    "video": "/previews/presets/effect-akrill.mp4?v=b09a4205",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-angel-wings": {
@@ -1083,10 +1150,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-black-tears": {
-    "poster": "/previews/presets/effect-black-tears.jpg?v=11877e65",
+    "poster": "/previews/presets/effect-black-tears.jpg?v=ae58a8dc",
+    "video": "/previews/presets/effect-black-tears.mp4?v=f1fe2b2d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-bleach-bypass": {
@@ -1106,17 +1174,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-bloom-mouth": {
-    "poster": "/previews/presets/effect-bloom-mouth.jpg?v=704a210e",
+    "poster": "/previews/presets/effect-bloom-mouth.jpg?v=c64cf9ab",
+    "video": "/previews/presets/effect-bloom-mouth.mp4?v=7d94ace6",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-blue-depth": {
-    "poster": "/previews/presets/effect-blue-depth.jpg?v=ed30224a",
+    "poster": "/previews/presets/effect-blue-depth.jpg?v=650b39c4",
+    "video": "/previews/presets/effect-blue-depth.mp4?v=82a75eae",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-boarding-pass": {
@@ -1127,24 +1197,27 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-boiling-point": {
-    "poster": "/previews/presets/effect-boiling-point.jpg?v=bf925cd0",
+    "poster": "/previews/presets/effect-boiling-point.jpg?v=3e4e2d10",
+    "video": "/previews/presets/effect-boiling-point.mp4?v=d78a14a7",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-broken-mirror": {
-    "poster": "/previews/presets/effect-broken-mirror.jpg?v=007a72cf",
+    "poster": "/previews/presets/effect-broken-mirror.jpg?v=cab00d60",
+    "video": "/previews/presets/effect-broken-mirror.mp4?v=980f2e9b",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-bubbles": {
-    "poster": "/previews/presets/effect-bubbles.jpg?v=b9db54e7",
+    "poster": "/previews/presets/effect-bubbles.jpg?v=33b52f74",
+    "video": "/previews/presets/effect-bubbles.mp4?v=0f81e24b",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-buddy": {
@@ -1188,17 +1261,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-cannabis": {
-    "poster": "/previews/presets/effect-cannabis.jpg?v=e2780e26",
+    "poster": "/previews/presets/effect-cannabis.jpg?v=96f221d3",
+    "video": "/previews/presets/effect-cannabis.mp4?v=c724e8b5",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-canvas": {
-    "poster": "/previews/presets/effect-canvas.jpg?v=db12c0cb",
+    "poster": "/previews/presets/effect-canvas.jpg?v=178338e7",
+    "video": "/previews/presets/effect-canvas.mp4?v=e93500d5",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-car-drive": {
@@ -1266,17 +1341,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-cold-vision": {
-    "poster": "/previews/presets/effect-cold-vision.jpg?v=57bf9f6d",
+    "poster": "/previews/presets/effect-cold-vision.jpg?v=d9e76ede",
+    "video": "/previews/presets/effect-cold-vision.mp4?v=a3ef4bc8",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-color-rain": {
-    "poster": "/previews/presets/effect-color-rain.jpg?v=786b306a",
+    "poster": "/previews/presets/effect-color-rain.jpg?v=dcf09478",
+    "video": "/previews/presets/effect-color-rain.mp4?v=03ea676e",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-column-wipe": {
@@ -1288,17 +1365,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-comic": {
-    "poster": "/previews/presets/effect-comic.jpg?v=eca3fbc0",
+    "poster": "/previews/presets/effect-comic.jpg?v=66d8bc60",
+    "video": "/previews/presets/effect-comic.mp4?v=744e8e53",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-contre-jour": {
-    "poster": "/previews/presets/effect-contre-jour.jpg?v=d282c266",
+    "poster": "/previews/presets/effect-contre-jour.jpg?v=d5090e15",
+    "video": "/previews/presets/effect-contre-jour.mp4?v=2f88bdd6",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-cotton-cloud": {
@@ -1318,10 +1397,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-crush": {
-    "poster": "/previews/presets/effect-crush.jpg?v=55dce2c6",
+    "poster": "/previews/presets/effect-crush.jpg?v=21583ec5",
+    "video": "/previews/presets/effect-crush.mp4?v=804baafa",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-crying": {
@@ -1403,10 +1483,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-dolphin-ride": {
-    "poster": "/previews/presets/effect-dolphin-ride.jpg?v=995e4f83",
+    "poster": "/previews/presets/effect-dolphin-ride.jpg?v=e8e0fefe",
+    "video": "/previews/presets/effect-dolphin-ride.mp4?v=49b7f290",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-dream-date": {
@@ -1489,10 +1570,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-fairytale-castle": {
-    "poster": "/previews/presets/effect-fairytale-castle.jpg?v=594d805c",
+    "poster": "/previews/presets/effect-fairytale-castle.jpg?v=fd3fd013",
+    "video": "/previews/presets/effect-fairytale-castle.mp4?v=58c4ae65",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-fallen-angel": {
@@ -1504,10 +1586,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-film-colors": {
-    "poster": "/previews/presets/effect-film-colors.jpg?v=5ad61d59",
+    "poster": "/previews/presets/effect-film-colors.jpg?v=84c3baeb",
+    "video": "/previews/presets/effect-film-colors.mp4?v=fdc286b3",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-fire-breath": {
@@ -1606,17 +1689,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-floral-eyes": {
-    "poster": "/previews/presets/effect-floral-eyes.jpg?v=7c817a36",
+    "poster": "/previews/presets/effect-floral-eyes.jpg?v=640a648d",
+    "video": "/previews/presets/effect-floral-eyes.mp4?v=a8494352",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-fragments": {
-    "poster": "/previews/presets/effect-fragments.jpg?v=8d3ef028",
+    "poster": "/previews/presets/effect-fragments.jpg?v=3ad41c3c",
+    "video": "/previews/presets/effect-fragments.mp4?v=c27fac93",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-freezing": {
@@ -1731,10 +1816,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-hand-paint": {
-    "poster": "/previews/presets/effect-hand-paint.jpg?v=51d336ee",
+    "poster": "/previews/presets/effect-hand-paint.jpg?v=22b8c630",
+    "video": "/previews/presets/effect-hand-paint.mp4?v=f41af0b8",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-hand-transition": {
@@ -1897,17 +1983,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-lacewalker": {
-    "poster": "/previews/presets/effect-lacewalker.jpg?v=5568f428",
+    "poster": "/previews/presets/effect-lacewalker.jpg?v=20ee4d02",
+    "video": "/previews/presets/effect-lacewalker.mp4?v=8d9743b1",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-lava": {
-    "poster": "/previews/presets/effect-lava.jpg?v=34fbf31a",
+    "poster": "/previews/presets/effect-lava.jpg?v=22a15423",
+    "video": "/previews/presets/effect-lava.mp4?v=47305cdc",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-layer-mixed-media": {
@@ -1942,10 +2030,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-lidar-transition": {
-    "poster": "/previews/presets/effect-lidar-transition.jpg?v=898fa0de",
+    "poster": "/previews/presets/effect-lidar-transition.jpg?v=bee4b723",
+    "video": "/previews/presets/effect-lidar-transition.mp4?v=63b138a4",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-lime-jam": {
@@ -1995,10 +2084,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-marble": {
-    "poster": "/previews/presets/effect-marble.jpg?v=9f602a47",
+    "poster": "/previews/presets/effect-marble.jpg?v=3550bec9",
+    "video": "/previews/presets/effect-marble.mp4?v=5a2db430",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-medusa-gorgona": {
@@ -2026,24 +2116,27 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-mighty-fighter": {
-    "poster": "/previews/presets/effect-mighty-fighter.jpg?v=0c815599",
+    "poster": "/previews/presets/effect-mighty-fighter.jpg?v=7f782df8",
+    "video": "/previews/presets/effect-mighty-fighter.mp4?v=ea58b68c",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-modern": {
-    "poster": "/previews/presets/effect-modern.jpg?v=6aa65261",
+    "poster": "/previews/presets/effect-modern.jpg?v=2e11d21a",
+    "video": "/previews/presets/effect-modern.mp4?v=e671ed87",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-monet-muse": {
-    "poster": "/previews/presets/effect-monet-muse.jpg?v=5d564c5a",
+    "poster": "/previews/presets/effect-monet-muse.jpg?v=462cde54",
+    "video": "/previews/presets/effect-monet-muse.mp4?v=ec7f82e7",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-money-rain": {
@@ -2102,10 +2195,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-multiverse": {
-    "poster": "/previews/presets/effect-multiverse.jpg?v=ab1c32e9",
+    "poster": "/previews/presets/effect-multiverse.jpg?v=ff622d46",
+    "video": "/previews/presets/effect-multiverse.mp4?v=c81efde6",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-muscle-up": {
@@ -2117,17 +2211,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-mystification": {
-    "poster": "/previews/presets/effect-mystification.jpg?v=445f3f73",
+    "poster": "/previews/presets/effect-mystification.jpg?v=28a65ca7",
+    "video": "/previews/presets/effect-mystification.mp4?v=c99e5ad3",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-naturalistic-clean": {
-    "poster": "/previews/presets/effect-naturalistic-clean.jpg?v=c1c22eb4",
+    "poster": "/previews/presets/effect-naturalistic-clean.jpg?v=7bd35653",
+    "video": "/previews/presets/effect-naturalistic-clean.mp4?v=9b3727df",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-nature-bloom": {
@@ -2139,10 +2235,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-noir": {
-    "poster": "/previews/presets/effect-noir.jpg?v=2c7a6fc5",
+    "poster": "/previews/presets/effect-noir.jpg?v=1c9f5d27",
+    "video": "/previews/presets/effect-noir.mp4?v=3e3ac107",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-northern-lights": {
@@ -2208,10 +2305,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-overexposed": {
-    "poster": "/previews/presets/effect-overexposed.jpg?v=5b5bda9b",
+    "poster": "/previews/presets/effect-overexposed.jpg?v=ce0f0ecd",
+    "video": "/previews/presets/effect-overexposed.mp4?v=bdbc6cf2",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-overhead-fall": {
@@ -2252,17 +2350,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-paper": {
-    "poster": "/previews/presets/effect-paper.jpg?v=87d86f4a",
+    "poster": "/previews/presets/effect-paper.jpg?v=5e1c44bf",
+    "video": "/previews/presets/effect-paper.mp4?v=e4242b6c",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-particles": {
-    "poster": "/previews/presets/effect-particles.jpg?v=94f708d6",
+    "poster": "/previews/presets/effect-particles.jpg?v=c1a7cb53",
+    "video": "/previews/presets/effect-particles.mp4?v=d9a1a5dd",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-peak-moment": {
@@ -2274,17 +2374,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-pearl-earring": {
-    "poster": "/previews/presets/effect-pearl-earring.jpg?v=24c73135",
+    "poster": "/previews/presets/effect-pearl-earring.jpg?v=3ad7e520",
+    "video": "/previews/presets/effect-pearl-earring.mp4?v=b73f4ae9",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-pigeons": {
-    "poster": "/previews/presets/effect-pigeons.jpg?v=762f03c8",
+    "poster": "/previews/presets/effect-pigeons.jpg?v=95e79429",
+    "video": "/previews/presets/effect-pigeons.mp4?v=538a9cc0",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-pixelated-face": {
@@ -2360,10 +2462,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-practicals": {
-    "poster": "/previews/presets/effect-practicals.jpg?v=272b65c7",
+    "poster": "/previews/presets/effect-practicals.jpg?v=8b2665b1",
+    "video": "/previews/presets/effect-practicals.mp4?v=79c14eeb",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-push-to-glass": {
@@ -2375,10 +2478,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-random-glow": {
-    "poster": "/previews/presets/effect-random-glow.jpg?v=cf380920",
+    "poster": "/previews/presets/effect-random-glow.jpg?v=79603236",
+    "video": "/previews/presets/effect-random-glow.mp4?v=a9964f90",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-raven-transition": {
@@ -2462,10 +2566,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-selfie-outfit": {
-    "poster": "/previews/presets/effect-selfie-outfit.jpg?v=af295c31",
+    "poster": "/previews/presets/effect-selfie-outfit.jpg?v=fba97b25",
+    "video": "/previews/presets/effect-selfie-outfit.mp4?v=16f5aa8c",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-selfie-posing": {
@@ -2501,24 +2606,27 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-silhouette": {
-    "poster": "/previews/presets/effect-silhouette.jpg?v=a7ac68e6",
+    "poster": "/previews/presets/effect-silhouette.jpg?v=2d6bafb4",
+    "video": "/previews/presets/effect-silhouette.mp4?v=302f717a",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-skatedog": {
-    "poster": "/previews/presets/effect-skatedog.jpg?v=34daf162",
+    "poster": "/previews/presets/effect-skatedog.jpg?v=609afc53",
+    "video": "/previews/presets/effect-skatedog.mp4?v=af3f7f5c",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-sketch": {
-    "poster": "/previews/presets/effect-sketch.jpg?v=e89afddb",
+    "poster": "/previews/presets/effect-sketch.jpg?v=441b7043",
+    "video": "/previews/presets/effect-sketch.mp4?v=4e4bc4c0",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-skin-surge": {
@@ -2554,10 +2662,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-soft-cross": {
-    "poster": "/previews/presets/effect-soft-cross.jpg?v=9daba7a2",
+    "poster": "/previews/presets/effect-soft-cross.jpg?v=4d9cc3f8",
+    "video": "/previews/presets/effect-soft-cross.mp4?v=9c117fd2",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-soft-palette": {
@@ -2673,10 +2782,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-superstar": {
-    "poster": "/previews/presets/effect-superstar.jpg?v=b483b445",
+    "poster": "/previews/presets/effect-superstar.jpg?v=04841ba0",
+    "video": "/previews/presets/effect-superstar.mp4?v=c0066397",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-tattoo-animation": {
@@ -2688,10 +2798,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-teal-orange-epic": {
-    "poster": "/previews/presets/effect-teal-orange-epic.jpg?v=4f09f0e1",
+    "poster": "/previews/presets/effect-teal-orange-epic.jpg?v=535af12c",
+    "video": "/previews/presets/effect-teal-orange-epic.mp4?v=feae0597",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-tentacles": {
@@ -2719,17 +2830,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-toxic": {
-    "poster": "/previews/presets/effect-toxic.jpg?v=6efbef60",
+    "poster": "/previews/presets/effect-toxic.jpg?v=70518d7d",
+    "video": "/previews/presets/effect-toxic.mp4?v=f160fa6a",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-tracking": {
-    "poster": "/previews/presets/effect-tracking.jpg?v=fd78455a",
+    "poster": "/previews/presets/effect-tracking.jpg?v=c7b21d66",
+    "video": "/previews/presets/effect-tracking.mp4?v=b0482bde",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-train-rush": {
@@ -2749,10 +2862,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-turn-into-statue": {
-    "poster": "/previews/presets/effect-turn-into-statue.jpg?v=05b871d4",
+    "poster": "/previews/presets/effect-turn-into-statue.jpg?v=2e5aad59",
+    "video": "/previews/presets/effect-turn-into-statue.mp4?v=02b01a2b",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-turning-metal": {
@@ -2794,10 +2908,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-vintage": {
-    "poster": "/previews/presets/effect-vintage.jpg?v=e492bd22",
+    "poster": "/previews/presets/effect-vintage.jpg?v=dd9f1fee",
+    "video": "/previews/presets/effect-vintage.mp4?v=f4bebabf",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-visor-x": {
@@ -2857,17 +2972,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-window": {
-    "poster": "/previews/presets/effect-window.jpg?v=fe51bba2",
+    "poster": "/previews/presets/effect-window.jpg?v=cd5c50e5",
+    "video": "/previews/presets/effect-window.mp4?v=226189fa",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-windows": {
-    "poster": "/previews/presets/effect-windows.jpg?v=4991618c",
+    "poster": "/previews/presets/effect-windows.jpg?v=9132f4bd",
+    "video": "/previews/presets/effect-windows.mp4?v=ddb89362",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-wireframe": {
@@ -2919,10 +3036,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-3d-rotation": {
-    "poster": "/previews/presets/motion-3d-rotation.jpg?v=41845593",
+    "poster": "/previews/presets/motion-3d-rotation.jpg?v=712c496b",
+    "video": "/previews/presets/motion-3d-rotation.mp4?v=50336a9d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-action-run": {
@@ -2934,10 +3052,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-aerial-pullback": {
-    "poster": "/previews/presets/motion-aerial-pullback.jpg?v=828fc4e0",
+    "poster": "/previews/presets/motion-aerial-pullback.jpg?v=c5095402",
+    "video": "/previews/presets/motion-aerial-pullback.mp4?v=b1bf276c",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-arc-left": {
@@ -2989,10 +3108,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-buckle-up": {
-    "poster": "/previews/presets/motion-buckle-up.jpg?v=114080eb",
+    "poster": "/previews/presets/motion-buckle-up.jpg?v=2b0c2d85",
+    "video": "/previews/presets/motion-buckle-up.mp4?v=4bf55264",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-bullet-time": {
@@ -3020,8 +3140,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-catwalk": {
-    "poster": "/previews/presets/motion-catwalk.jpg?v=2d64cc09",
-    "video": "/previews/presets/motion-catwalk.mp4?v=c5e1a3f1",
+    "poster": "/previews/presets/motion-catwalk.jpg?v=57f553e7",
+    "video": "/previews/presets/motion-catwalk.mp4?v=2b71fd01",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "minimax-h3",
@@ -3139,10 +3259,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-downhill-pov": {
-    "poster": "/previews/presets/motion-downhill-pov.jpg?v=85b6e4c5",
+    "poster": "/previews/presets/motion-downhill-pov.jpg?v=c4343fec",
+    "video": "/previews/presets/motion-downhill-pov.mp4?v=c4e2bf30",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-dreamy-flow": {
@@ -3154,10 +3275,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-drone-reveal": {
-    "poster": "/previews/presets/motion-drone-reveal.jpg?v=4275f31d",
+    "poster": "/previews/presets/motion-drone-reveal.jpg?v=e1de3485",
+    "video": "/previews/presets/motion-drone-reveal.mp4?v=35d74d02",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-dutch-angle": {
@@ -3169,10 +3291,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-earth-zoom-out": {
-    "poster": "/previews/presets/motion-earth-zoom-out.jpg?v=ef069265",
+    "poster": "/previews/presets/motion-earth-zoom-out.jpg?v=47988031",
+    "video": "/previews/presets/motion-earth-zoom-out.mp4?v=fde8a23f",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-eating-zoom": {
@@ -3215,17 +3338,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-flying": {
-    "poster": "/previews/presets/motion-flying.jpg?v=bd8cba1a",
+    "poster": "/previews/presets/motion-flying.jpg?v=1649ea52",
+    "video": "/previews/presets/motion-flying.mp4?v=269352e5",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-flying-cam-transition": {
-    "poster": "/previews/presets/motion-flying-cam-transition.jpg?v=36758083",
+    "poster": "/previews/presets/motion-flying-cam-transition.jpg?v=301f0a02",
+    "video": "/previews/presets/motion-flying-cam-transition.mp4?v=17ccb536",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-focus-change": {
@@ -3451,10 +3576,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-pov": {
-    "poster": "/previews/presets/motion-pov.jpg?v=1741892c",
+    "poster": "/previews/presets/motion-pov.jpg?v=bb781cb0",
+    "video": "/previews/presets/motion-pov.mp4?v=93598f26",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-rap-flex": {
@@ -3496,10 +3622,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-robo-arm": {
-    "poster": "/previews/presets/motion-robo-arm.jpg?v=83d857ed",
+    "poster": "/previews/presets/motion-robo-arm.jpg?v=338ea34b",
+    "video": "/previews/presets/motion-robo-arm.mp4?v=55506ac1",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-robot-arm": {
@@ -3510,10 +3637,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-roll-transition": {
-    "poster": "/previews/presets/motion-roll-transition.jpg?v=6ad44541",
+    "poster": "/previews/presets/motion-roll-transition.jpg?v=8ee75f86",
+    "video": "/previews/presets/motion-roll-transition.mp4?v=0e461f15",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-silent-machine": {
@@ -3525,8 +3653,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-skate-cruise": {
-    "poster": "/previews/presets/motion-skate-cruise.jpg?v=e46dcc7e",
-    "video": "/previews/presets/motion-skate-cruise.mp4?v=b2cdc06e",
+    "poster": "/previews/presets/motion-skate-cruise.jpg?v=cea477da",
+    "video": "/previews/presets/motion-skate-cruise.mp4?v=f3a0ef90",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "minimax-h3",
@@ -3557,10 +3685,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-ski-powder": {
-    "poster": "/previews/presets/motion-ski-powder.jpg?v=8468233c",
+    "poster": "/previews/presets/motion-ski-powder.jpg?v=1c7926d3",
+    "video": "/previews/presets/motion-ski-powder.mp4?v=6c7949a4",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-slow-motion": {
@@ -3572,10 +3701,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-snorricam": {
-    "poster": "/previews/presets/motion-snorricam.jpg?v=bebfde90",
+    "poster": "/previews/presets/motion-snorricam.jpg?v=c5bbf95c",
+    "video": "/previews/presets/motion-snorricam.mp4?v=3778aece",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-snowboard-carving": {
@@ -3634,10 +3764,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-tilt-down": {
-    "poster": "/previews/presets/motion-tilt-down.jpg?v=7615650a",
+    "poster": "/previews/presets/motion-tilt-down.jpg?v=5377d4e2",
+    "video": "/previews/presets/motion-tilt-down.mp4?v=f6e07cdd",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-tilt-up": {
@@ -3649,8 +3780,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-timelapse": {
-    "poster": "/previews/presets/motion-timelapse.jpg?v=b16f671b",
-    "video": "/previews/presets/motion-timelapse.mp4?v=e24cc90a",
+    "poster": "/previews/presets/motion-timelapse.jpg?v=5cc63fd9",
+    "video": "/previews/presets/motion-timelapse.mp4?v=5bc04a19",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "minimax-h3",
@@ -3704,10 +3835,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-whip-pan": {
-    "poster": "/previews/presets/motion-whip-pan.jpg?v=17f97340",
+    "poster": "/previews/presets/motion-whip-pan.jpg?v=cddb805b",
+    "video": "/previews/presets/motion-whip-pan.mp4?v=21c8113d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-wiggle": {

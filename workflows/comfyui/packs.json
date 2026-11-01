@@ -8,6 +8,15 @@
     "subdir": null,
     "folders": ["dbs"]
   },
+  "ComfyUI-RE-USE": {
+    "repo": "https://github.com/workingprototype/Fuobe",
+    "commit": "8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": "comfy-nodes/ComfyUI-RE-USE",
+    "folders": ["reuse"]
+  },
   "ComfyUI-Frame-Interpolation": {
     "repo": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation",
     "commit": "26545cc2dd95bc3d27f056016300673bdeee78f5",
@@ -246,6 +255,16 @@
     "repo": "https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes",
     "commit": "d58d006a4ea32c25c06499f2ff104f0852a045a6",
     "registry": { "id": "plaguekind-nodes", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "fuobe-live": {
+    "bundled": "fuobe_live.py",
+    "repo": "https://github.com/workingprototype/Fuobe",
+    "commit": "",
+    "registry": null,
     "requirementsTxt": false,
     "isolated": false,
     "subdir": null,

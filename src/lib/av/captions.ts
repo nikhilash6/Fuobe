@@ -140,7 +140,7 @@ export function burnPricePerMinute(route: BurnRoute, style: string, translated =
 /** What the style controls mean on this burner, in one line. */
 export function burnNote(route: BurnRoute): string {
   if (route === "open") return "The open burner draws outlined text at the top or the bottom; karaoke styles show 3 words at a time, without a highlight.";
-  if (route === "veed") return "VEED sizes the text by its preset; in karaoke styles the highlight colour marks the words VEED finds key, not the spoken one.";
+  if (route === "veed") return "Text size follows the style. Karaoke styles highlight key words, not each spoken one.";
   return "Auto Subtitle shows 3 words at a time and highlights the spoken word in karaoke styles.";
 }
 

@@ -12,8 +12,7 @@ import { areaCls } from "@/components/brand/fields";
 import { uploadImages } from "@/components/brand/image-list";
 import { fileToSlot, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
-import { getModel } from "@/lib/catalog";
-import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, UGC_MODELS, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
+import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { probeBlob, probeUrl } from "@/lib/media-probe";
 import { useAskBeforeUpload, useModelAccess } from "@/lib/api";
@@ -60,7 +59,7 @@ function ReferenceDrop({ onFile, onPick }: { onFile: (f: File) => void; onPick: 
       <EmptyIcon icon={FileVideo} />
       <p className="mt-4 text-[15px] font-medium">Upload the ad you want more of</p>
       <p className="mt-1 text-[13px] text-muted-foreground">
-        MP4, MOV or WebM · {MULTIPLIER.minSeconds}–{MULTIPLIER.maxSeconds} seconds (trim a longer one here)
+        MP4, MOV or WebM · {MULTIPLIER.minSeconds}–{MULTIPLIER.maxSeconds} seconds (longer? trim it first)
       </p>
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         <Button onClick={() => askFirst() || input.current?.click()}>
@@ -180,7 +179,7 @@ function MentionImages({ value, onChange, onMention, max }: { value: string[]; o
 /** Ad Multiplier: a reference ad (4–30 s) → new versions: recreated from a prompt, or with a new hook / CTA. */
 export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) {
   const qc = useQueryClient();
-  const { engine, setEngine, mode: engineMode } = useMarketingEngine();
+  const { engine, setEngine } = useMarketingEngine();
   const access = useModelAccess();
   const [video, setVideo] = useState<SlotValue | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
@@ -367,7 +366,7 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
                 {sections
                   ? "Used when the clip's own frames can't be read."
                   : engine === "open"
-                    ? "Wan Animate puts your first mentioned image into the ad's performance."
+                    ? "The first image you @mention takes over the performance."
                     : maxImages
                       ? `People, products or places to swap in. Tap one to mention it — ${model?.name ?? "this model"} uses up to ${maxImages}.`
                       : `${model?.name ?? "This model"} edits from the prompt alone — pick Kling O3 to use your images.`}
@@ -414,7 +413,7 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
                     placeholder={`${MULTIPLIER.defaultPrompt} Or: swap the presenter for @image_1 and set it in a sunny kitchen.`}
                   />
                   <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                    <span>{missing.length ? <span className="text-destructive">No image {missing.map((n) => `@image_${n}`).join(", ")} — add it or remove the mention</span> : used.length ? `Mentions: ${used.map((n) => `@image_${n}`).join(", ")}` : "Empty prompt: “Recreate this ad.”"}</span>
+                    <span>{missing.length ? <span className="text-destructive">No image {missing.map((n) => `@image_${n}`).join(", ")} — add it or remove the mention</span> : used.length ? `Mentions: ${used.map((n) => `@image_${n}`).join(", ")}` : "Leave it empty to recreate the ad as it is."}</span>
                     <span className="font-mono tabular-nums">
                       {prompt.length}/{MULTIPLIER.maxChars}
                     </span>
@@ -448,7 +447,7 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
                   label="Quality"
                   value={quality}
                   onChange={setQuality}
-                  options={MULTIPLIER.qualities.map((q) => ({ id: q, label: q, title: engine === "open" && q === "1080p" ? "Open-source models make 720p" : undefined }))}
+                  options={MULTIPLIER.qualities.map((q) => ({ id: q, label: q, title: engine === "open" && q === "1080p" ? "Made at 720p here" : undefined }))}
                 />
                 {engine === "open" && quality === "1080p" && <p className="mt-1 text-[11px] text-muted-foreground">Made at {multiplierResolution(quality, engine)} on open-source models</p>}
               </div>
@@ -499,9 +498,6 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
             }
           />
         </div>
-        <p className="flex flex-wrap items-center justify-center gap-1.5 pt-6 text-center text-[12px] text-muted-foreground">
-          <Sparkles className="size-3" /> {engineMode === "open" ? "" : "Cloud: Kling O3 edit, Happy Horse edit, Gemini Omni Flash · "}Open source: Fuobe Genjutsu (Wan Animate), {getModel(UGC_MODELS.open.clip)?.name} clips joined around your ad
-        </p>
       </div>
     </div>
   );

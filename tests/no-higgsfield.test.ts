@@ -91,7 +91,7 @@ const HISTORY_SECTIONS: Record<string, string> = { "README.md": "### Upgrading f
 
 /** A file's lines, with a history section blanked (HISTORY_SECTIONS): it ends at the next heading of its level or above. */
 function scannedLines(f: string, text: string): string[] {
-  const lines = text.split("\n");
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
   const heading = HISTORY_SECTIONS[f];
   const at = heading ? lines.indexOf(heading) : -1;
   if (at < 0) return lines;
@@ -131,8 +131,9 @@ function walk(p: string, out: string[]) {
   const full = path.join(ROOT, p);
   if (!fs.existsSync(full)) return;
   const st = fs.statSync(full);
+  const posix = p.replace(/\\/g, "/");
   if (st.isFile()) {
-    if (TEXT.test(p)) out.push(p);
+    if (TEXT.test(posix)) out.push(posix);
     return;
   }
   for (const name of fs.readdirSync(full)) {
@@ -178,7 +179,7 @@ describe("no code path names the Higgsfield provider", () => {
     // The README's upgrade notes are history; the rest of it is scanned (a key row there is caught).
     const readme = ["## Quick start", "| A Higgsfield key | `HIGGSFIELD_API_KEY` |", "### Upgrading from an earlier version", "- Soul ID no longer trains on Higgsfield (PR #12).", "### Setting up", "Runs on Higgsfield"].join("\n");
     expect(scannedLines("README.md", readme)).toEqual(["## Quick start", "| A Higgsfield key | `HIGGSFIELD_API_KEY` |", "### Upgrading from an earlier version", "", "### Setting up", "Runs on Higgsfield"]);
-    expect(fs.readFileSync(path.join(ROOT, "README.md"), "utf8").split("\n")).toContain(HISTORY_SECTIONS["README.md"]);
+    expect(fs.readFileSync(path.join(ROOT, "README.md"), "utf8").replace(/\r\n/g, "\n").split("\n")).toContain(HISTORY_SECTIONS["README.md"]);
     // History and comparisons stay allowed.
     for (const ok of ["Higgsfield's pogo example names four things to remove", "the way Higgsfield names layer files", "a 1:1 alternative to Higgsfield", "Higgsfield is never called", "Progress uses Higgsfield's 14 labels"])
       expect(RULES.some(([, re]) => re.test(ok)), ok).toBe(false);
@@ -444,7 +445,7 @@ describe("stored ids resolve where they are read", () => {
     await runUntil(() => [soul, partner, gone].every((id) => getGeneration(id)?.status === "failed"));
     expect(getGeneration(soul)).toMatchObject({ status: "failed", error: RETIRED_PROVIDER_ERROR });
     expect(getGeneration(partner)).toMatchObject({ status: "failed", error: RETIRED_PROVIDER_ERROR });
-    expect(getGeneration(gone)).toMatchObject({ status: "failed", error: "Model old-model no longer exists" });
+    expect(getGeneration(gone)).toMatchObject({ status: "failed", error: "This model isn't available any more. Pick another." });
   });
 
   it("starts a step that was waiting on a retired model on its replacement", async () => {

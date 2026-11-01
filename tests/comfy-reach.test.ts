@@ -256,7 +256,7 @@ describe("a chain step after real ComfyUI steps", () => {
         const x = gens.getGeneration(g.id)!;
         return x.status === "failed" ? x : undefined;
       });
-      expect(done.error).toMatch(/Join clips \(copy\) needs ComfyUI to continue what the earlier steps made for real/);
+      expect(done.error).toMatch(/Join clips.*needs ComfyUI to continue what the earlier steps made for real/);
     } finally {
       gens.COMFY_WAIT.ms = wait;
     }

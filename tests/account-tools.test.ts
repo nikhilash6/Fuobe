@@ -239,7 +239,7 @@ describe("an account's ComfyUI can't hold up the server", () => {
       const id = (await r.json()).items[0].id as string;
       const g = await settle(id);
       expect(g?.status).toBe("failed");
-      expect(g?.error).toMatch(/over 2 MB/);
+      expect(g?.error).toMatch(/couldn't save this result/);
       expect(fs.readdirSync(scratchDir()).filter((f) => f.startsWith(`${id}-out-`))).toEqual([]);
     } finally {
       OWN_OUTPUT_LIMITS.maxBytes = was;
@@ -252,7 +252,7 @@ describe("an account's ComfyUI can't hold up the server", () => {
     const r = await generationsRoute.POST(json("/api/generations", "POST", { feature: "video", modelId: "fuobe-dop", presetId: "motion-zoom-in", prompt: "", inputs: { images: [pic.url] } }));
     const g = await settle((await r.json()).items[0].id);
     expect(g?.status).toBe("failed");
-    expect(g?.error).toBe("Your ComfyUI answered with a job id Fuobe can't use.");
+    expect(g?.error).toBe("Your ComfyUI couldn't take this run. Press Retry.");
     expect(fake.log.some((e) => e.path.startsWith("/system_stats?"))).toBe(false);
   });
 });

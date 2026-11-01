@@ -10,7 +10,6 @@ import type { BeforeAfterStill } from "@/components/home/before-after";
 import { NAV } from "@/components/nav-items";
 import { APPS, EFFECTS, MODELS, MOTIONS, getPreset, isListed, modelCounts } from "@/lib/catalog";
 import { CAMERA_MOVES } from "@/lib/catalog/cinema";
-import { LLM_PROVIDERS } from "@/lib/catalog/llm-providers";
 import { TEMPLATES } from "@/lib/catalog/marketing";
 import type { ModelDef } from "@/lib/catalog/types";
 import type { Manifest } from "@/lib/comfy";
@@ -108,7 +107,14 @@ export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => 
 ];
 
 /** Destinations with a section of their own on Home, so they aren't pills as well. */
-export const HOME_OWN_SECTIONS = ["/assist", "/motions", "/effects", "/apps"];
+export const HOME_OWN_SECTIONS = ["/assist", "/motions", "/effects", "/apps", "/live-edit"];
+
+/** Live edit's moment on Home: a recorded session plays (no GPU, no requests), with one way in. */
+export const HOME_LIVE = {
+  href: "/live-edit?from=home",
+  title: "Change it as you type",
+  line: "Type a change and watch the picture follow in under a second. Keep what you like; nothing blurs, however many changes you stack.",
+};
 
 /** Assist's starter skills, as its empty chat lists them first (assist-view.tsx). */
 export const HOME_SKILLS = ["product-photoshoot", "ugc-video", "thumbnail-generation", "faceless-video", "short-film", "localization"];
@@ -223,12 +229,6 @@ export function audioTools() {
   return { named, more: HUB_MODES.audio.length - named.length };
 }
 
-/** What Assist plans with: the hosted providers (6 by name, then how many more) and the local servers. */
-export function assistRunsOn() {
-  const hosted = LLM_PROVIDERS.filter((p) => p.group !== "local").map((p) => p.short);
-  return { named: hosted.slice(0, 6), more: Math.max(0, hosted.length - 6), local: LLM_PROVIDERS.filter((p) => p.group === "local" && p.id !== "custom").map((p) => p.label) };
-}
-
 /** A JSON file's contents, or null when it's missing or unreadable (as the About page reads it). */
 async function readJson<T>(text: Promise<string>): Promise<T | null> {
   try {
@@ -310,7 +310,6 @@ export async function homeShowcase() {
     audioTools: audioTools(),
     pills: homePills(),
     newModels: newOpenModels(),
-    runsOn: assistRunsOn(),
     skills: skills.starters,
   };
 }

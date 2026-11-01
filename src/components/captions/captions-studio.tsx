@@ -256,7 +256,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
                 {transcribing ? <Loader2 className="size-4 animate-spin" /> : <Captions className="size-4" />}
                 {transcribing ? "Transcribing…" : "Transcribe the speech"}
               </Button>
-              <p className="mt-2 text-[12px] text-muted-foreground">{engine === "open" ? "Qwen3-ASR on your ComfyUI (30 languages, detected)." : "ElevenLabs Scribe v2 (word timings, ≈ $0.008 per minute)."}</p>
+              <p className="mt-2 text-[12px] text-muted-foreground">{engine === "open" ? "Detects 30 languages." : "ElevenLabs Scribe v2 (word timings, ≈ $0.008 per minute)."}</p>
               {t && <StepList className="mt-3" steps={[{ key: "t", label: "Transcript", g: t }]} />}
             </div>
           )}
@@ -284,7 +284,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
               <RouteCard on={quick} onClick={() => setQuick(true)} icon={<Wand2 className="size-4" />} title="Quick karaoke" note="Auto Subtitle transcribes again and burns word-by-word captions, the spoken word highlighted (≈ $0.03 per minute) — your edits aren't used." />
             </div>
           )}
-          {engine === "open" && <p className="mb-3 text-[12px] text-muted-foreground">ComfyUI&apos;s caption burn-in draws your lines into the frames chunk by chunk and keeps the sound (CPU is fine, no model).</p>}
+          {engine === "open" && <p className="mb-3 text-[12px] text-muted-foreground">Your captions are burned into the video, and the sound stays.</p>}
           <div className="flex flex-wrap items-center gap-2">
             <Button className={cn("rounded-full", usesCues(route) && problems.length > 0 && "bg-muted text-muted-foreground hover:bg-muted")} onClick={burn} disabled={create.isPending}>
               {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Burn captions

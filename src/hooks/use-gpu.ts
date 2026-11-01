@@ -32,7 +32,7 @@ export interface ReadinessView {
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { cache: "no-store" });
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw Object.assign(new Error(body.error ?? `Request failed (${res.status})`), { status: res.status });
+  if (!res.ok) throw Object.assign(new Error(body.error ?? "Something went wrong. Please try again."), { status: res.status });
   return body;
 }
 
@@ -80,7 +80,7 @@ export function badgeText(b: Badge, gpu?: string): { short: string; long: string
   const gb = tenths ? `${tenths / 10} GB` : "";
   if (s === "r") return flags & 4 ? { short: "Ready", long: "Runs on any computer" } : { short: "Ready", long: `Ready on your ${gpu ?? "GPU"}${flags & 1 ? " (slow: it borrows memory)" : ""}` };
   if (s === "g") return { short: "Bigger GPU", long: `Needs more graphics memory than your ${gpu ?? "GPU"} has` };
-  if (s === "u") return { short: "Not yet", long: "Needs a second ComfyUI, which Your GPU doesn't connect yet" };
+  if (s === "u") return { short: "Not here", long: "Needs its own ComfyUI, so it can't run next to your other add-ons" };
   const downloadOnly = gb && steps === 1;
   return {
     short: steps === 1 ? "1 step" : `${steps} steps`,

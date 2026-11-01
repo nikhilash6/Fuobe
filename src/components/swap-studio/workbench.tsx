@@ -58,7 +58,7 @@ function uploadClip(file: File, onProgress: (p: number) => void): Promise<{ url:
     xhr.onload = () => {
       const body = xhr.response as { url?: string; name?: string; error?: string } | null;
       if (xhr.status >= 200 && xhr.status < 300 && body?.url) resolve({ url: body.url, name: body.name });
-      else reject(new Error(body?.error ?? `Upload failed (${xhr.status})`));
+      else reject(new Error(body?.error ?? "That upload didn't go through. Please try again."));
     };
     xhr.onerror = () => reject(new Error("Upload failed — check your connection"));
     const form = new FormData();

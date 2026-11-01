@@ -3,7 +3,7 @@
  * is on (src/server/auth.ts publicSignup). Path rules only: src/proxy.ts applies them.
  *
  * - A guest opens every page and the catalog and status reads the pages need. The owner's library
- *   comes back empty (or 401 "Sign up to see your library"), and every change is a 401 that the
+ *   comes back empty (or 401 "Sign up to see this"), and every change is a 401 that the
  *   client turns into "Create a free account" (src/components/guest-prompt.tsx).
  * - An account sees what a guest sees of the owner's studio: the owner's library and projects stay
  *   hidden (empty lists, 403) and can't be changed (403, LIBRARY_CHANGES). It never runs on the
@@ -17,11 +17,11 @@ export const GUEST_HEADER = "x-fuobe-guest";
 /** A guest's request, as the proxy marks it for GUEST_FILTERED routes (a client that sends the header itself only gets less). */
 export const isGuest = (request: Request) => request.headers.get(GUEST_HEADER) === "1";
 
-export const GUEST_LIBRARY_MESSAGE = "Sign up to see your library.";
+export const GUEST_LIBRARY_MESSAGE = "Sign up to see this.";
 export const GUEST_RUN_MESSAGE = "Create a free account to run this.";
 
 /** Catalog and status reads that hold nothing of the owner's library: a guest gets the real answer. */
-const GUEST_READS = new Set(["/api/status", "/api/models", "/api/search-index", "/api/comfyui", "/api/settings/models", "/api/gpu/requirements"]);
+const GUEST_READS = new Set(["/api/status", "/api/models", "/api/search-index", "/api/comfyui", "/api/settings/models", "/api/gpu/requirements", "/api/live/nodes"]);
 
 /** Catalogs mixed with the owner's own items: the route leaves the owner's part out for a guest (GUEST_HEADER). */
 const GUEST_FILTERED = new Set(["/api/moodboards", "/api/palettes", "/api/assist", "/api/assist/skills"]);
@@ -165,7 +165,7 @@ export function accountGeneration(method: string, pathname: string): string | un
  */
 export function accountOwnRead(pathname: string): boolean {
   if (ACCOUNT_LISTS.has(pathname)) return true;
-  return pathname === "/api/generations" || pathname === "/api/account/gpu" || pathname === "/api/account/keys" || GPU_READS.has(pathname) || COMPUTER_READ.test(pathname);
+  return pathname === "/api/generations" || pathname === "/api/account/gpu" || pathname === "/api/account/keys" || GPU_READS.has(pathname) || COMPUTER_READ.test(pathname) || PAIRING_READS.has(pathname);
 }
 
 /** The Library's counts and its Uploads (its stored files): each route answers an account with its own only. */
@@ -176,6 +176,8 @@ const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets"]);
  * jobs from the session, and only that person's (src/server/computer/http.ts principalOf).
  */
 const COMPUTER_READ = /^\/api\/gpu\/computer\/tasks\/[^/]+\/(inputs|outputs)\/[^/]+$/;
+/** Pairing a ComfyUI with Fuobe Connect: the code's computer, and the person's paired ComfyUIs (src/app/api/gpu/pair). */
+const PAIRING_READS = new Set(["/api/gpu/pair", "/api/gpu/paired"]);
 const COMPUTER_CHANGES: [method: string, path: RegExp][] = [
   ["POST", /^\/api\/gpu\/computer\/(beat|claim)$/],
   ["POST", /^\/api\/gpu\/computer\/tasks\/[^/]+\/(report|release)$/],
@@ -196,12 +198,34 @@ export function accountMayChange(method: string, pathname: string, search: strin
   if ((method === "PUT" || method === "DELETE") && /^\/api\/account\/keys\/(fal|replicate)$/.test(pathname)) return true;
   // GPU pre-flight: checking its own ComfyUI (reads only; the routes check the target and the request themselves).
   if ((method === "POST" && pathname === "/api/gpu/check") || (method === "PUT" && pathname === "/api/gpu/inventory")) return true;
-  // Running its own jobs on its own computer.
+  // Running its own jobs on its own computer, and pairing (or unpairing) its own ComfyUI.
   if (COMPUTER_CHANGES.some(([m, p]) => m === method && p.test(pathname))) return true;
+  if ((method === "POST" && pathname === "/api/gpu/pair") || (method === "DELETE" && /^\/api\/gpu\/paired\/[^/]+$/.test(pathname))) return true;
   if (method === "POST" && (pathname === "/api/uploads" || pathname === "/api/media/probe")) return true;
+  // "Report this result", and a click on an offer the billing service sent (each route checks the rest).
+  if (method === "POST" && (pathname === "/api/reports" || pathname === "/api/billing/interest")) return true;
   // Like, pin or review many of its own runs at once (the route checks each is its own, and refuses the rest).
   if (method === "POST" && pathname === "/api/generations/bulk") return true;
   return isPriceCheck(method, pathname, search);
+}
+
+/**
+ * Live edit (src/app/api/live): the route a path names, or null. "nodes" is the node file's download (open to anyone);
+ * every other route runs or stores live edits.
+ */
+export type LiveRoute = "session" | "inputs" | "render" | "cancel" | "events" | "masters" | "save" | "nodes";
+const LIVE_ROUTE = /^\/api\/live\/(session|inputs|render|cancel|events|masters|save|nodes)$/;
+export const liveRoute = (pathname: string): LiveRoute | null => (LIVE_ROUTE.exec(pathname)?.[1] as LiveRoute | undefined) ?? null;
+
+/**
+ * What an account gets on a live edit route, by its own GPU: it renders only there (a linked GPU through the server, or
+ * its own computer from its tab), keeps its masters in its own files, and has no Library to save to. A guest gets
+ * GUEST_RUN_MESSAGE on all of them but the node download.
+ */
+export function accountLive(route: LiveRoute, gpu: "link" | "computer" | null): "pass" | "connect-gpu" | "library" {
+  if (route === "nodes") return "pass";
+  if (route === "save") return "library";
+  return gpu ? "pass" : "connect-gpu";
 }
 
 /** Assist (chats, skills, memory, projects, schedules): any change to it, which only the owner may make on a public studio. */
@@ -215,15 +239,15 @@ export function isAssistChange(method: string, pathname: string): boolean {
  * GPU. A guest gets it too, not the 401 that offers to sign up: an account couldn't use Assist either. The Assist
  * pages say the same to both (src/components/assist/visitor-note.tsx).
  */
-export const ASSIST_OWNER_MESSAGE = "Assist runs on the studio owner's AI, so only the owner can use it here. Fuobe is open source: run it yourself for your own chats, skills, memory and schedules.";
+export const ASSIST_OWNER_MESSAGE = "Assist isn't available here. Make anything in the Image, Video and Audio studios, or with an app, effect or camera motion.";
 
 /** A change to the studio's library or projects (refused for an account with LIBRARY_MESSAGE, not "Connect your GPU"). */
 export function isLibraryChange(method: string, pathname: string): boolean {
   return LIBRARY_CHANGES.some(([methods, path]) => methods.split(" ").includes(method) && path.test(pathname));
 }
 
-export const ACCOUNT_LIBRARY_MESSAGE = "This studio's library is its owner's. Free accounts can't open or change it.";
-export const LIBRARY_MESSAGE = "Free accounts can't save to this studio's library yet.";
+export const ACCOUNT_LIBRARY_MESSAGE = "We can't find that.";
+export const LIBRARY_MESSAGE = "Saving here isn't available. Download what you make from your runs.";
 
 /**
  * Runs an account may start once it has connected its own ComfyUI ("Your GPU") or added its own fal.ai or Replicate key
@@ -231,21 +255,26 @@ export const LIBRARY_MESSAGE = "Free accounts can't save to this studio's librar
  * that key only, with only its own uploaded files (src/app/api/generations/route.ts, generations.ts accountRun). Other
  * tools plan with the install's AI helpers or its own ComfyUI, so they stay refused.
  */
+/** A report anyone may send, signed in or not ("Report this result" on a shared link). */
+export const anyoneMayReport = (method: string, pathname: string): boolean => method === "POST" && pathname === "/api/reports";
+
 export function ownGpuRun(method: string, pathname: string): boolean {
   return method === "POST" && pathname === "/api/generations";
 }
 
-export const OWN_GPU_TOOL_MESSAGE = "This tool doesn't run on your own GPU yet. Camera motions, effects, apps and the Image, Video and Audio studios do.";
+export const OWN_GPU_TOOL_MESSAGE = "This tool isn't available here. Try the Image, Video or Audio studio, or an app, effect or camera motion.";
 
 /** Set on an account's refused run: the client shows "Connect your GPU to run this". */
 export const CONNECT_GPU_HEADER = "x-fuobe-connect-gpu";
 /** Beside it on the owner's refused run (Demo mode off, nothing connected): what would run it, "gpu", "key" or "any". */
 export const CONNECT_NEEDS_HEADER = "x-fuobe-connect-needs";
-export const CONNECT_GPU_MESSAGE = "Connect your GPU to run this. Free accounts run on their own ComfyUI.";
+export const CONNECT_GPU_MESSAGE = "Connect your GPU to run this. It's free.";
 /** An account's upload with neither a GPU nor a key of its own: its files are kept for runs on its own ComfyUI or key. */
-export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU, or add your own fal.ai or Replicate key, to add your own files.";
-/** An account with neither its own GPU nor its own key (the proxy's answer to a run). */
-export const CONNECT_GPU_OR_KEY_MESSAGE = "Connect your GPU, or add your own fal.ai or Replicate key, to run this.";
+export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU, or add a fal.ai or Replicate key, to add your own files.";
+/** The same, on a studio with paid models off (no keys). */
+export const CONNECT_GPU_UPLOAD_OPEN_MESSAGE = "Connect your GPU to add your own files.";
+/** An account with neither its own GPU nor its own key (the proxy's answer to a run): the card it opens offers both. */
+export const CONNECT_GPU_OR_KEY_MESSAGE = CONNECT_GPU_MESSAGE;
 
 /** Install-wide settings, keys and tokens: changes are the owner's (403 for an account). */
 const OWNER_WRITES = new Set(["/api/settings", "/api/settings/models", "/api/loras", "/api/llm", "/api/providers/test", "/api/auth/public"]);

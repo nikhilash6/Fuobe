@@ -52,3 +52,6 @@ next-env.d.ts
 /scripts/eval/results/
 /scripts/eval/metrics/.venv/
 __pycache__/
+
+# The worker's built parts (scripts/build-worker.mjs)
+/bin/lib/worker/dist/

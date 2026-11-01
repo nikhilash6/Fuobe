@@ -115,6 +115,12 @@ function restartLine(inv: GpuInventory | null): string {
 }
 
 function packLines(shell: Shell, l: Layout, name: string, p: IndexPack, kind: StepKind): string[] {
+  // A node file Fuobe ships itself: nothing to clone. Live edit's setup card and Settings → Your GPU download it.
+  if (p.bundled) {
+    if (!plain(p.bundled)) return [];
+    const dest = l.under(shell, "custom_nodes");
+    return [comment(shell, `Download ${p.bundled} from Fuobe (the setup card on Live edit, or Settings, Your GPU) into ${dest}, then restart ComfyUI`)];
+  }
   if (!plain(name) || !plain(p.repo) || !/^[0-9a-f]{7,40}$/.test(p.commit)) return [comment(shell, `Install ${name} by hand: ${p.repo}`)];
   const dest = l.under(shell, "custom_nodes", name);
   const py = l.python(shell);
@@ -175,7 +181,7 @@ function stepLines(shell: Shell, l: Layout, s: CommandStep, ctx: CommandContext)
     case "civitai-key":
       return [comment(shell, "Make a civitai API key at https://civitai.com/user/account"), shell === "ps" ? '$env:CIVITAI_KEY = "your_key"' : 'export CIVITAI_KEY="your_key"'];
     case "isolated-worker":
-      return [comment(shell, "Start a second ComfyUI for these add-ons: scripts/comfy/install-isolated-worker.sh in Fuobe's repository shows how")];
+      return [comment(shell, "Start a second ComfyUI for these add-ons (see Fuobe's ComfyUI setup guide)")];
     case "model":
     case "model-replace": {
       const f = s.file ? idx.files[s.file as keyof RequirementIndex["files"]] : undefined;

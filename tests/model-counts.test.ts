@@ -42,16 +42,10 @@ describe("model counts", () => {
     expect(MODELS.some((x) => x.hidden && x.engine === "cloud")).toBe(true);
   });
 
-  it("is the count Home, /models, Project status and About quote", () => {
+  it("is the count Home quotes", () => {
     expect(read("src/lib/home-showcase.ts")).toMatch(/modelCounts\(\)/);
-    expect(read("src/app/(studio)/status/page.tsx")).toMatch(/modelCounts\(\)/);
-    expect(read("src/app/(studio)/settings/about/page.tsx")).toMatch(/modelCounts\(\)/);
-    // /models lists the same models the counts count.
-    expect(read("src/app/(studio)/models/page.tsx")).toMatch(/MODELS\.filter\(isListed\)/);
     // No page counts the catalog on its own.
-    for (const file of ["src/app/(studio)/status/page.tsx", "src/app/(studio)/settings/about/page.tsx", "src/lib/home-showcase.ts"]) {
-      expect(read(file), file).not.toMatch(/MODELS\.filter\([^)]*enginesOf/);
-      expect(read(file), file).not.toMatch(/openModels: licences/);
-    }
+    expect(read("src/lib/home-showcase.ts")).not.toMatch(/MODELS\.filter\([^)]*enginesOf/);
+    expect(read("src/lib/home-showcase.ts")).not.toMatch(/openModels: licences/);
   });
 });

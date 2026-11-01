@@ -36,9 +36,9 @@ const IMPORT_ERROR_BYTES = 2048;
 const PROBLEM_TEXT: Record<GpuProblem, string> = {
   unreachable: "Your link didn't answer. Is the tunnel running? Quick-tunnel links change when it restarts.",
   auth: "Your ComfyUI refused the key.",
-  "not-comfy": "That address answers, but not as ComfyUI.",
+  "not-comfy": "That address isn't a ComfyUI. Check that your tunnel points at ComfyUI's port.",
   timeout: "Your ComfyUI took too long to answer.",
-  "cors-off": "ComfyUI is running, but it isn't letting this page in yet.",
+  "cors-off": "ComfyUI is running, but it isn't letting this page in.",
   "lna-blocked": "Your browser blocked this page from reaching apps on this device.",
   redirect: "That address sends Fuobe somewhere else. Use the final https address.",
 };

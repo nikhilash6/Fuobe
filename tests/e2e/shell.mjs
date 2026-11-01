@@ -29,11 +29,11 @@ try {
     const ctx = await browser.newContext(PHONE);
     const page = await ctx.newPage();
     for (const [from, link, to] of [
-      ["/models", /^Effects$/, "/effects"],
+      ["/image", /^Effects$/, "/effects"],
       ["/effects", /^New creation/, "/"],
       ["/", /^Favorites$/, "/library"],
       // The footer's engine status links to Settings too.
-      ["/models", /^Cloud models/, "/settings"],
+      ["/image", /^Cloud models/, "/settings"],
     ]) {
       step(`phone: tapping “${link.source.replace(/[\^$]/g, "")}” in the drawer on ${from} closes it`);
       await openRoute(page, app + from);
@@ -45,7 +45,7 @@ try {
       await drawer.waitFor({ state: "detached", timeout: 5_000 });
     }
     step("phone: Search in the drawer opens the palette");
-    await openRoute(page, `${app}/models`);
+    await openRoute(page, `${app}/image`);
     await page.getByRole("button", { name: "Toggle Sidebar" }).first().tap();
     await page.locator('[data-mobile="true"]').getByRole("button", { name: /^Search/ }).tap();
     await page.getByRole("dialog", { name: "Search Fuobe" }).waitFor();
@@ -172,14 +172,11 @@ try {
     assert.ok(!(await studios.getByRole("link", { name: "Upscale" }).isVisible()), "other Studios items are folded away");
     await studios.locator("[data-nav-toggle]").click(); // leave it open for the next run
 
-    step("/workflows → Server settings scrolls to the ComfyUI section");
+    step("/workflows and /settings/about redirect to Home and Settings");
     await openRoute(page, `${app}/workflows`);
-    await page.getByRole("link", { name: "Server settings" }).click();
-    await page.waitForURL(/\/settings#comfyui$/);
-    await page.locator("#comfyui").waitFor();
-    await page.waitForTimeout(400);
-    const top = await page.locator("#comfyui").evaluate((el) => el.getBoundingClientRect().top);
-    assert.ok(top >= -2 && top < 300, `ComfyUI section near the top of the screen (top ${Math.round(top)}px)`);
+    await page.waitForURL((u) => new URL(u).pathname === "/");
+    await openRoute(page, `${app}/settings/about`);
+    await page.waitForURL(/\/settings$/);
 
     step("Show more from the keyboard focuses the first new card");
     await openRoute(page, `${app}/effects`);

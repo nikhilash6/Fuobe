@@ -213,7 +213,7 @@ try {
   await page.getByText(/run is using this key now/).waitFor({ timeout: 20_000 });
   await shootKeys(page, "your-keys-runs-going-desktop.png");
   await page.getByRole("button", { name: "Stop runs and remove" }).click();
-  await page.getByText("Your fal.ai key is removed from this studio.").waitFor({ timeout: 20_000 });
+  await page.getByText("Your fal.ai key is removed.").waitFor({ timeout: 20_000 });
   const cancel = fal.log.find((r) => r.path.endsWith("/cancel"));
   check(cancel?.authorization === `Key ${ACCT_FAL}`, "removing the key stopped the running job at fal.ai with that key");
   const slowRow = await api(`/api/generations/${slow.json?.items?.[0]?.id}`, { cookie: acct });

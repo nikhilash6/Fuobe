@@ -34,6 +34,8 @@ export interface RequirementIndex {
 export interface IndexPack {
   repo: string;
   commit: string;
+  /** A node file Fuobe ships itself (fuobe_live.py): Fuobe writes it into custom_nodes, nothing is cloned. */
+  bundled?: string;
   /** Comfy Registry id; `version` is set only once the validator ran on that exact release (empty until then: manual). */
   registry?: { id: string; version: string };
   /** The node classes the library uses from it. */

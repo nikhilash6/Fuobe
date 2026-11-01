@@ -8,6 +8,7 @@ import type {
   ModelRoute,
   Operation,
   Preset,
+  PresetEndStep,
   PresetRoute,
 } from "./types";
 import { billedClipSeconds, editClipsProblem, sourceSeconds } from "./clip-windows";
@@ -222,6 +223,10 @@ export interface Plan {
    * the canvas it was compiled at when the model reads pixels (MOSS-Image: the exact size it renders).
    */
   layout?: { format: LayoutFormat | "words"; boxes: number; width?: number; height?: number };
+  /** MiniMax H3's sound lines from the preset's route (its preview's), which its layout's sound fields take. */
+  sound?: { soundscape: string; music: string };
+  /** An end-frame step: an image edit of the start frame that becomes the clip's end frame (H3 flf2v). */
+  end?: PresetEndStep;
 }
 
 /** Operations that work from their inputs alone. */
@@ -229,7 +234,7 @@ const PROMPTLESS = new Set<Operation>([
   "concat", "frame", "color-match", "finalize", "reframe", "dialogue", "voice-change", "dub", "bg-remove-video", "depth-video", "upscale-image", "upscale-video", "bg-remove",
   "interpolate", "v2a", "face-swap", "motion-transfer", "lipsync", "avatar",
   // round 3: tools that work from their inputs (open caption burn-in takes timed lines as its prompt and says so when they're missing)
-  "trim", "transcribe", "mux", "separate-audio", "layers", "image-to-3d", "captions", "text-layers", "vectorize", "level",
+  "trim", "transcribe", "mux", "separate-audio", "enhance-voice", "layers", "image-to-3d", "captions", "text-layers", "vectorize", "level",
   // av-tools: the dub voice track (clips placed on the video's timeline)
   "timeline",
   // round 4: tools that work from their inputs (removing an object needs a prompt only on models that read one)
@@ -282,6 +287,8 @@ export function planGeneration(
   let params: GenParams = { ...model.defaults, ...req.params };
   let loras: LoraRef[] = [];
   let op: Operation | undefined = req.op;
+  let sound: Plan["sound"];
+  let end: Plan["end"];
 
   if (preset) {
     // The preset's routes on this engine: the one its preview was made with (when this catalog has its model), then its own.
@@ -312,6 +319,8 @@ export function planGeneration(
     if (sameModel && Object.keys(chosen).length) params = { ...params, extra: { ...chosen, ...params.extra } };
     loras = sameModel ? (route.loras ?? []) : [];
     if (sameModel) op = op ?? route.op;
+    if (sameModel && route.sound) sound = route.sound;
+    if (sameModel && route.end && !req.inputs?.endImage) end = route.end;
   }
 
   const notes: string[] = [];
@@ -553,6 +562,8 @@ export function planGeneration(
     ...(notes.length && { notes }),
     ...(soulPlan && { soul: soulPlan }),
     ...(layoutPlan && { layout: layoutPlan }),
+    ...(sound && { sound }),
+    ...(end && { end }),
   };
 }
 
@@ -753,6 +764,7 @@ const NEEDS: Partial<
   vectorize: { images: 1, msg: "Add the image to turn into an SVG" },
   transcribe: { oneOf: ["audio", "video"], msg: "Add the audio or video to transcribe" },
   "separate-audio": { oneOf: ["audio", "video"], msg: "Add the audio or video to split" },
+  "enhance-voice": { oneOf: ["audio", "video"], msg: "Add the audio or video to clean" },
   level: { audio: true, msg: "Add the audio to level" },
   // round 4
   "remove-object": { video: true, msg: "Add the video to remove something from" },

@@ -81,8 +81,9 @@ export const PresetCard = memo(function PresetCard({
               <Icon className="size-3.5" />
             </span>
             <span className="pointer-events-none absolute right-1.5 bottom-1.5 flex gap-1">
-              {preset.cloud && engine !== "open" && <EngineChip engine="cloud" />}
-              {preset.open && engine !== "cloud" && <EngineChip engine="open" />}
+              {/* With one engine every card runs on it: a chip only where cards differ. */}
+              {!engine && preset.cloud && <EngineChip engine="cloud" />}
+              {!engine && preset.open && <EngineChip engine="open" />}
             </span>
           </>
         )}
@@ -130,13 +131,8 @@ const RUNS_ON: { value: RunsOn; label: string; icon?: typeof Cloud }[] = [
 
 /** "Runs on: All · Cloud · Open source", as a radio group with arrow-key support. */
 function RunsOnControl({ value, onChange, locked, owner }: { value: RunsOn; onChange: (v: RunsOn) => void; locked?: "cloud" | "open"; owner: boolean }) {
-  // Only the owner has Settings → Engine mode; a visitor reads the lock and goes nowhere.
-  if (locked && !owner)
-    return (
-      <span className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-muted px-3 text-[13px] text-muted-foreground" title="Set by the studio's owner">
-        <Lock className="size-3.5" /> {locked === "open" ? "Open source only" : "Cloud only"}
-      </span>
-    );
+  // Only the owner has Settings → Engine mode; with one engine there is nothing for a visitor to pick.
+  if (locked && !owner) return null;
   if (locked)
     return (
       <Link
@@ -210,6 +206,36 @@ export function useFadeEdges<T extends HTMLElement>() {
   return ref;
 }
 
+/**
+ * A card that opens a tool of its own (Live edit), shown before the presets: the same card chrome, its own link. Only
+ * on the All tab with no search, or when the search matches its words; never when the gallery shows cloud tools only.
+ */
+export interface LinkCard {
+  href: string;
+  title: string;
+  line: string;
+  /** More words a search finds it by. */
+  words?: string;
+  badge?: string;
+  /** Its picture: a node (a playing demo), drawn in the card's 4:3 frame. */
+  cover: React.ReactNode;
+}
+
+function LeadingCard({ card }: { card: LinkCard }) {
+  return (
+    <Link href={card.href} className="group/card flex min-w-0 flex-col gap-2 rounded-xl p-1.5 transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" data-leading-card>
+      <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+        {card.cover}
+        {card.badge && <span className="pointer-events-none absolute top-1.5 right-1.5 rounded-full bg-highlight px-1.5 py-0.5 text-[10.5px] font-semibold text-highlight-foreground">{card.badge}</span>}
+      </div>
+      <div className="min-w-0 px-0.5 pb-0.5">
+        <p className="truncate text-[14px] font-medium">{card.title}</p>
+        <p className="line-clamp-2 text-[12.5px] text-muted-foreground">{card.line}</p>
+      </div>
+    </Link>
+  );
+}
+
 const FIRST_PAGE = 30;
 const PAGE = 40;
 
@@ -220,6 +246,7 @@ export function PresetGallery({
   categories,
   href,
   noun = "presets",
+  leading,
 }: {
   /** In the order the All view shows them (featuredGallery): a category or a search keeps it. */
   presets: PresetCardData[];
@@ -229,6 +256,8 @@ export function PresetGallery({
   href: string;
   /** Plural shown in the result count, e.g. "effects". */
   noun?: string;
+  /** Tools of their own shown first (LinkCard). */
+  leading?: LinkCard[];
 }) {
   const [cat, setCat] = useState("All");
   const [q, setQ] = useState("");
@@ -254,6 +283,7 @@ export function PresetGallery({
 
   const strip = useFadeEdges<HTMLDivElement>();
   const stale = q.trim().toLowerCase() !== query;
+  const lead = (leading ?? []).filter((c) => cat === "All" && runsOn !== "cloud" && (!query || matchesSearch(`${c.title} ${c.line} ${c.words ?? ""}`.toLowerCase(), query)));
   // One fetch of the viewer's chips (the GPU pre-flight); each card gets one string.
   const badges = useGpuBadges().data;
   const viewer = useViewer().data;
@@ -327,9 +357,12 @@ export function PresetGallery({
           ))}
         </div>
       </div>
-      {list.length ? (
+      {list.length || lead.length ? (
         <>
           <div ref={grid} className={cn(GRID, "transition-opacity", stale && "opacity-70")}>
+            {lead.map((c) => (
+              <LeadingCard key={c.href} card={c} />
+            ))}
             {list.slice(0, shown).map((p) => (
               <PresetCard key={p.id} preset={p} href={href.replace("{id}", p.id)} engine={locked} gpu={p.open ? badgeKey(badges?.presets[p.id]) : undefined} gpuName={badges?.gpu} />
             ))}
@@ -351,7 +384,7 @@ export function PresetGallery({
         <div className="py-16 text-center">
           <p className="font-heading text-[22px]">{query ? `No matches for “${q.trim()}”` : `No ${noun} here`}</p>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            {runsOn !== "all" && !locked ? "Try another engine, or clear the filters." : "Try another word or category."}
+            {runsOn !== "all" && !locked ? "Show all, or clear the filters." : "Try another word or category."}
           </p>
           <button
             type="button"

@@ -14,7 +14,7 @@ const REF = /^(model:[\w.-]{1,120}#[\w-]{1,40}|preset:[\w.-]{1,120}(?:@[\w.-]{1,
 export async function GET(request: Request) {
   await connection();
   const headers = { "Cache-Control": "private, no-store" };
-  if (!preflightOn()) return Response.json({ error: "The GPU pre-flight is switched off on this studio." }, { status: 404, headers });
+  if (!preflightOn()) return Response.json({ error: "The GPU check is off." }, { status: 404, headers });
   const ref = new URL(request.url).searchParams.get("ref") ?? "";
   if (!REF.test(ref)) return Response.json({ error: "Name a tool (ref)" }, { status: 400, headers });
   const t = gpuTargetFor(request, "read");

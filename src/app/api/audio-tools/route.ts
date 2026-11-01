@@ -14,8 +14,8 @@ const MESSAGES: Record<string, string> = {
 };
 
 /**
- * Audio → Loop / extend, Join and Split soundtrack (and a split's mix put back on its video), and Video tools → Remove
- * dialogue: start a run; `?preview=1` only plans and prices it.
+ * Audio → Loop / extend, Join, Split soundtrack and Clean up voice (and a split's mix put back on its video), and Video
+ * tools → Remove dialogue: start a run; `?preview=1` only plans and prices it.
  */
 async function post(request: Request) {
   const raw: unknown = await request.json().catch(() => null);
@@ -29,7 +29,9 @@ async function post(request: Request) {
         ? "Export the mix first"
         : tool === "remove-dialogue" && path === "video"
           ? "Add the video to take the dialogue out of"
-          : (MESSAGES[path] ?? "Check the settings");
+          : tool === "clean" && path === "media"
+            ? "Add the audio or video to clean"
+            : (MESSAGES[path] ?? "Check the settings");
     return Response.json({ error: msg }, { status: 400 });
   }
   const preview = new URL(request.url).searchParams.get("preview") === "1";

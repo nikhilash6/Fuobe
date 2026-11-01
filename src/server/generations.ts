@@ -51,7 +51,7 @@ import { listElements } from "./elements";
 import { markStale } from "./gpu/snapshots";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
-import { createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
+import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
 import { createRegenerateRun } from "./regenerate";
 import { REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
@@ -79,10 +79,16 @@ import { llmBackends, llmLabel, llmMissing, llmUsesClaude, probeLocal } from "./
 import type { PollContext, PollResult, ProviderAdapter, RemoteOutput } from "./providers/types";
 import { mediaFacts } from "./media-facts";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
+import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
 import { engineMode, getSetting, withCandidates, withoutCandidates } from "./settings";
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
+import { stamped, stampOf, withRunStamp } from "./run-stamp";
+import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
+import { sweepBilling } from "./billing-outbox";
+import { moderationConfigured } from "./moderation";
+import { holdForCheck, sweepOutputChecks } from "./output-checks";
 import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir } from "./storage";
 
 interface Row {
@@ -119,6 +125,8 @@ interface Row {
   folder_id?: string | null;
   /** What a failed ComfyUI run was missing (GenerationFix as JSON). */
   fix_json?: string | null;
+  /** NULL, or "checking": its outputs wait for the moderation service (output-checks.ts). */
+  stage?: string | null;
 }
 
 /** Trash and folder columns, joined onto every library read. */
@@ -127,7 +135,10 @@ const LIBRARY_JOINS = "LEFT JOIN generation_trash t ON t.generation_id = g.id LE
 const LIBRARY_JOIN = `generations g ${LIBRARY_JOINS}`;
 
 export function toGeneration(r: Row): Generation {
-  const request = JSON.parse(r.request_json) as GenerationRequest;
+  const stored = JSON.parse(r.request_json) as GenerationRequest;
+  // The billing hold is the server's: never sent to a browser or a script.
+  const { hold, ...request } = stored;
+  const checking = r.stage === "checking";
   const model = getModel(r.model_id);
   const ar = request.params?.aspectRatio ?? model?.defaults?.aspectRatio;
   // Rows read without the library join (the runner's own SELECTs) look the trash and folder up.
@@ -154,7 +165,8 @@ export function toGeneration(r: Row): Generation {
     message: r.message,
     prompt: r.prompt,
     request,
-    outputs: JSON.parse(r.outputs_json) as OutputFile[],
+    // Held for the moderation service's check: nothing of it is shown until it passes.
+    outputs: checking ? [] : (JSON.parse(r.outputs_json) as OutputFile[]),
     error: r.error,
     costUsd: r.cost_usd,
     favorite: !!r.favorite,
@@ -173,7 +185,20 @@ export function toGeneration(r: Row): Generation {
     ...(r.status === "failed" && r.fix_json && { fix: parseFix(r.fix_json) }),
     // Failed or stopped before a paid provider took the job (a refused key, an empty balance): nothing was billed.
     ...((r.status === "failed" || r.status === "canceled") && !r.external_id && (r.provider === "fal" || r.provider === "replicate") && { notBilled: true as const }),
+    // On this install's GPUs (hosted runs): what it cost, or that it cost nothing.
+    ...(stored.place === "pool" && { place: "pool" as const }),
+    ...(stored.charge && r.status === "succeeded" && { charge: stored.charge }),
+    ...(hold && (r.status === "failed" || r.status === "canceled") && { notCharged: true as const }),
+    ...(checking && { stage: "checking" as const }),
+    // Waiting in line on this install's GPUs: its place and the wait, about.
+    ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
   };
+}
+
+/** A pool row's place in line, as the Generation field (none once it has started). */
+function poolQueue(id: string): { queue: { place: number; etaSeconds: number | null } } | Record<string, never> {
+  const q = placeInLine(id);
+  return q ? { queue: q } : {};
 }
 
 function parseFix(json: string): GenerationFix | null {
@@ -395,6 +420,8 @@ export const ASSET_FREE: Record<string, string> = {
   "gpu_snapshots.inventory_json": "what a GPU's ComfyUI has (class names, model file names and sizes), never a Fuobe file",
   "gpu_snapshots.report_json": "readiness built from that inventory",
   "generations.external_meta_json": "the provider's job handles",
+  "billing_outbox.payload_json": "reports for the billing service: hold and run ids, counts and words, never a file",
+  "reports_inbox.target_json": "what a report is about: a run, asset or share id, never a file",
   "shorts_sessions.range_json": "start and end times",
   "shorts_sessions.settings_json": "ratio, language, model and resolution",
   "shorts_sessions.segments_json": "generation ids of each take",
@@ -423,6 +450,15 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_tasks.received_json": "how much of each result has arrived",
   "relay_tasks.result_json": "the finished entry a person's ComfyUI reported: its own file names",
   "relay_tasks.refusal_json": "a ComfyUI refusal: node classes and model names",
+  "relay_tasks.needs_json": "what a job for the workers needs: workflow, model file names and sizes, node packs, VRAM",
+  "relay_tasks.tried_json": "the ids of the workers that lost or failed this job",
+  "relay_workers.facts_json": "what a worker said about its ComfyUI: its GPU, memory and version",
+  "relay_workers.inventory_json": "a worker's model files and node packs: names, sizes and hashes on that PC",
+  "relay_workers.lanes_json": "the lanes a worker can run: hashes of model file names",
+  "relay_workers.bench_json": "a worker's job times in each lane",
+  "relay_workers.hours_json": "a worker's hours: a time zone and windows",
+  "relay_workers.allow_json": "the lanes the owner lets a worker run, with their delays",
+  "relay_pairings.facts_json": "what a paired ComfyUI said about itself: its name, GPU and version",
 };
 
 /** The query that finds the rows of one ASSET_REFS table naming a file (@id), except the purged generation's own (@g). */
@@ -679,8 +715,8 @@ function prepare(original: GenerationRequest) {
     if (cloud) throw new AccountRunError(paidAllowed() ? { error: addKeyMessage(cloud), code: "add-key", provider: cloud } : { error: OPEN_ONLY_RUN, code: "open-only" });
     throw new Error(
       mode === "open"
-        ? `${plan.model.name} is a paid cloud model, but this install is set to open source only (Settings → Engine mode)`
-        : `${plan.model.name} is an open-source model, but this install is set to paid cloud APIs only (Settings → Engine mode)`,
+        ? `${plan.model.name} is a cloud model, which isn't available here. Pick an open-source model`
+        : `${plan.model.name} is an open-source model, which isn't available here. Pick a cloud model`,
     );
   }
   // Checks planGeneration can't make without knowing the model's kind or the text ops' needs.
@@ -790,6 +826,7 @@ export function previewGeneration(asked: GenerationRequest) {
     prompt: plan.prompt,
     loras,
     ...(notes.length && { notes }),
+    plan: { end: plan.end },
   };
 }
 
@@ -827,13 +864,15 @@ function stampTenant(asked: GenerationRequest, opts: CreateOptions): GenerationR
   if (tenant()?.kind === "guest") throw new Error(GUEST_RUN_MESSAGE);
   const who = tenantAccount();
   if (!who) {
-    if (ownGpu()) throw new Error("A run on an account's own GPU must be that account's run.");
-    return asked;
+    if (ownGpu()) throw new Error("We can't find that run.");
+    // The owner's runs carry no place, hold or check of an account's run (run-stamp.ts).
+    return withRunStamp({}, () => stamped(asked));
   }
-  if (asked.account && asked.account !== who) throw new Error("That run belongs to another account.");
+  if (asked.account && asked.account !== who) throw new Error("We can't find that run.");
   const deps = opts.dependsOn === undefined ? [] : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
-  if (deps.some((d) => generationAccount(d) !== who)) throw new Error("An earlier step of this run isn't yours.");
-  return { ...asked, account: who, engine: accountEngineMode(who) === "open" ? "open" : asked.engine };
+  if (deps.some((d) => generationAccount(d) !== who)) throw new Error("We can't find that run.");
+  // Where the run goes and its billing hold are the route's decision for this run (run-stamp.ts), never a stored request's.
+  return { ...stamped(asked), account: who, engine: accountEngineMode(who) === "open" ? "open" : asked.engine };
 }
 
 export function createGenerations(given: GenerationRequest, opts: CreateOptions = {}): Generation[] {
@@ -885,6 +924,8 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   // A dependent job can't be planned until its inputs exist; it's validated with placeholders, then launched by the runner.
   const p = waits ? prepare(withChainInputs(original, slotsFor(original, deps.length).map(placeholderFor))) : prepare(original);
   const { req, plan, route, demo, providerId, cost } = p;
+  // A preset whose recipe edited the start frame into an end frame first: two steps (the edit, then the clip).
+  if (!opts.dependsOn && plan.end) return createEndFrameClip(original, plan.end);
   const notes = moved.note ? [moved.note, ...p.notes] : p.notes;
   // A chained route is built from its inputs when it's created; it can't wait for another step's output.
   if (waits && route.chained) throw new Error(chainedWaitMessage(plan.model.name, plan.op));
@@ -1123,7 +1164,7 @@ function chainMode(p: { demo: boolean; plan: { model: { name: string } }; route:
   }
   if (!p.demo && demoDeps > 0) {
     // A dry run (GenerationRequest.demo) stays a demo even with Settings → Demo mode off.
-    if (getSetting("demoMode") === "off" && !asked?.demo) return { error: "An earlier step ran as a demo — retry it with its provider connected" };
+    if (getSetting("demoMode") === "off" && !asked?.demo) return { error: "An earlier step made a placeholder. Retry it once a model is connected." };
     return { forceDemo: true };
   }
   return {};
@@ -1257,7 +1298,8 @@ async function advanceDependents(): Promise<void> {
     // An account's step reads its inputs, and is planned, as its run was: as that account, on its own ComfyUI and its own
     // keys. submit() then checks the step's own provider (its GPU, or its key for that provider).
     const account = stored.account;
-    const asRun = <T,>(fn: () => T): T => (account ? asAccount(account, fn) : fn());
+    // A step of a run on this install's GPUs is planned there too, with the run's stamp (its place and hold).
+    const asRun = <T,>(fn: () => T): T => (account ? (stored.place === "pool" ? runOnPool(account, () => withRunStamp(stampOf(stored), fn)) : asAccount(account, fn)) : fn());
     try {
       // The planned op (r.op), not request.op: a translate whose op was inferred still gets the cue list.
       const values = await asRun(() => Promise.all(outputs.map((o, i) => chainValue(pickOutput(o, slots[i]), slots[i], r.op))));
@@ -1327,9 +1369,11 @@ function recordSubmission(id: string, at: number): void {
 // Public sign-up: an account's runs go to its own ComfyUI ("Your GPU") or its own fal.ai or Replicate key ("Your
 // keys"), never the install's providers
 
-export const OWN_GPU_ONLY = "Free accounts run only on their own ComfyUI: pick an open-source model.";
-export const OPEN_ONLY_RUN = "This studio runs open-source models only, so paid models don't run here. Pick an open-source model.";
-export const SWITCHED_OFF_RUN = "This account is switched off, so its runs stopped.";
+export const OWN_GPU_ONLY = "Pick an open-source model to run it on your GPU.";
+export const OPEN_ONLY_RUN = "Pick an open-source model to run this on your GPU.";
+export const SWITCHED_OFF_RUN = "This account is closed, so its runs stopped.";
+/** A run on this install's GPUs that waited past its limit (hosted runs). */
+export const POOL_WAITED = "The studio's GPUs were busy, so it didn't run. Not charged.";
 
 /**
  * Everything an account's work runs inside: as the account (tenant.ts: only its own files and runs), on its own ComfyUI
@@ -1379,7 +1423,7 @@ export class AccountRunError extends Error {
  * fails here: it never falls into the owner's keys (provider-keys.ts).
  */
 export function adapterFor(providerId: ProviderId, account: string | undefined): ProviderAdapter {
-  if ((tenantAccount() ?? undefined) !== (account ?? undefined)) throw new Error("This run isn't in its account's scope");
+  if ((tenantAccount() ?? undefined) !== (account ?? undefined)) throw new Error("We can't find that run.");
   return provider(providerId);
 }
 
@@ -1410,6 +1454,25 @@ export async function accountLoraFix(req: GenerationRequest): Promise<MissingFil
         prompt: step.prompt,
         inputs: { images: (req.inputs?.images ?? []).slice(0, 1) },
         ...(step.loras?.length && { loras: step.loras }),
+        ...(step.params && { params: step.params }),
+      });
+      if (s.route.provider === "comfyui") asks.push({ loras: [...s.loras.applied, ...graphLoras(s.route.endpoint, step.params?.extra)], endpoint: s.route.endpoint });
+    } catch {
+      // The step says what's wrong when it is created.
+    }
+  }
+  // An end-frame step (Qwen-Image 2.1 edit that makes the clip's end frame) runs on the GPU too.
+  if (p.plan.end) {
+    try {
+      const step = p.plan.end;
+      const s = previewGeneration({
+        feature: req.feature,
+        account: req.account,
+        engine: "open",
+        modelId: step.modelId,
+        op: step.op,
+        prompt: step.promptTemplate,
+        inputs: { images: (req.inputs?.images ?? []).slice(0, 1) },
         ...(step.params && { params: step.params }),
       });
       if (s.route.provider === "comfyui") asks.push({ loras: [...s.loras.applied, ...graphLoras(s.route.endpoint, step.params?.extra)], endpoint: s.route.endpoint });
@@ -1451,8 +1514,26 @@ const accountOf = (r: Pick<Row, "request_json">): string | undefined => {
   }
 };
 
+/** A row of a run on this install's GPUs (hosted runs). */
+const poolOf = (r: Pick<Row, "request_json">): boolean => {
+  try {
+    return (JSON.parse(r.request_json) as GenerationRequest).place === "pool";
+  } catch {
+    return false;
+  }
+};
+
 function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: ReturnType<typeof planGeneration>, req: GenerationRequest, index: number): Promise<void> {
   if (!req.account) return submitNow(id, route, providerId, plan, req, index);
+  // On this install's GPUs (hosted runs): as the account, on this install's ComfyUI server only.
+  if (req.place === "pool") {
+    if (providerId !== "comfyui") {
+      update(id, { status: "failed", error: OWN_GPU_ONLY, completed_at: Date.now(), message: null });
+      submitting().delete(id);
+      return Promise.resolve();
+    }
+    return runOnPool(req.account, () => withRunStamp(stampOf(req), () => submitNow(id, route, providerId, plan, req, index)));
+  }
   const own = accountRun(req.account, providerId, "submit");
   if ("error" in own) {
     update(id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
@@ -1478,7 +1559,7 @@ async function submitNow(
     // An account's run on its own ComfyUI and keys only (asAccount): outside it, nothing is sent.
     const adapter = adapterFor(providerId, req.account);
     // An account's run on its own ComfyUI: every LoRA it adds must be there first (nothing is sent before this check).
-    if (req.account && providerId === "comfyui") {
+    if (req.account && req.place !== "pool" && providerId === "comfyui") {
       const fix = await checkAccountLoras([...plan.loras, ...graphLoras(route.endpoint, plan.params.extra)], route.endpoint, route);
       if (fix) throw Object.assign(new Error(missingFilesMessage(fix)), { fix });
     }
@@ -1502,6 +1583,16 @@ async function submitNow(
       return gate(async () => {
         const f = await readRef(ref);
         return adapter.prepareFile(f.data, f.contentType, f.name, route);
+      });
+    };
+    // An end-frame step crops the start frame before the edit (the recipe's crop of the subject).
+    const cropWindow = isCropWindow(plan.params.extra?.crop) ? plan.params.extra.crop : undefined;
+    const prepCropped = async (ref?: string) => {
+      if (!ref || !cropWindow) return prep(ref);
+      return gate(async () => {
+        const f = await readRef(ref);
+        const data = cropPicture(f.data, cropWindow);
+        return adapter.prepareFile(data, "image/png", f.name.replace(/\.[^.]+$/, ".png"), route);
       });
     };
     // The input clip's header (size, frame rate, length): upscalers that take a factor and frame-count routes read it.
@@ -1583,7 +1674,7 @@ async function submitNow(
     const h3Op = plan.op === "t2v" || plan.op === "i2v" || plan.op === "flf2v" ? plan.op : undefined;
     const orbit = h3Op === "i2v" && plan.params.extra?.orbit === true;
     if (plan.model.options.promptFormat === "minimax-h3" && h3Op && prompt && !orbit) {
-      const wrapped = h3Prompt(prompt, h3Op, h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5));
+      const wrapped = h3Prompt(prompt, h3Op, h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape, plan.sound?.music);
       if (wrapped !== prompt) {
         prompt = wrapped;
         update(id, { prompt });
@@ -1593,7 +1684,7 @@ async function submitNow(
       ...plan.params,
       prompt,
       negativePrompt: req.negativePrompt,
-      images: (await Promise.all((req.inputs?.images ?? []).map(prep))).filter(Boolean) as string[],
+      images: (await Promise.all((req.inputs?.images ?? []).map((ref, i) => (i === 0 ? prepCropped(ref) : prep(ref))))).filter(Boolean) as string[],
       endImage: await prep(req.inputs?.endImage),
       mask: await prepMask(req.inputs?.mask),
       video: await prepVideo(req.inputs?.video),
@@ -1790,7 +1881,7 @@ function sweepInterrupted(): void {
   const busy = submitting();
   for (const r of rows) {
     if (busy.has(r.id)) continue;
-    update(r.id, { status: "failed", error: "Interrupted before it reached the provider", completed_at: Date.now(), message: null });
+    update(r.id, { status: "failed", error: "This run stopped before it started. Press Retry.", completed_at: Date.now(), message: null });
   }
 }
 
@@ -1805,12 +1896,14 @@ async function pollGuarded(r: Row): Promise<void> {
       update(r.id, { status: "failed", error: "This run's details can't be read, so it was stopped.", completed_at: Date.now(), message: null });
       return;
     }
-    const own = account ? accountRun(account, r.provider, "poll") : undefined;
-    if (own && "error" in own) update(r.id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
+    const onPool = account ? poolOf(r) : false;
+    const own = account && !onPool ? accountRun(account, r.provider, "poll") : undefined;
+    if (onPool) await runOnPool(account!, () => pollOne(r));
+    else if (own && "error" in own) update(r.id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
     else if (own) await own.run(() => pollOne(r));
     else await pollOne(r);
   } catch (e) {
-    update(r.id, { message: `Poll error: ${(e as Error).message}` });
+    console.warn(`[generations] ${r.id}: ${(e as Error).message}`);
   } finally {
     polling.delete(r.id);
   }
@@ -1825,7 +1918,7 @@ export function rowsToPoll(limit = 100): Row[] {
     .prepare(
       `SELECT g.* FROM generations g
        JOIN (SELECT id, ROW_NUMBER() OVER (PARTITION BY json_extract(request_json, '$.account') ORDER BY created_at) AS turn
-             FROM generations WHERE status IN ('queued','running') AND external_id IS NOT NULL) t ON t.id = g.id
+             FROM generations WHERE status IN ('queued','running') AND external_id IS NOT NULL AND stage IS NULL) t ON t.id = g.id
        ORDER BY ${ACCOUNT_LAST.replace("request_json", "g.request_json")}, t.turn, g.created_at ASC LIMIT ?`,
     )
     .all(limit) as Row[];
@@ -1842,6 +1935,10 @@ async function tick(): Promise<void> {
     const active = rowsToPoll();
     for (const r of active) if (accountOf(r)) void pollGuarded(r);
     await Promise.all([...active.filter((r) => !accountOf(r)).map(pollGuarded), pollTrainings().catch(() => {}), advanceDependents().catch(() => {})]);
+    // The optional services (billing.ts, moderation.ts): outputs waiting for their check, then reports for the billing
+    // service. Neither does anything while no service is set.
+    if (moderationConfigured()) await sweepOutputChecks();
+    void sweepBilling();
   } finally {
     state.busy = false;
   }
@@ -1854,7 +1951,7 @@ async function fastTick(): Promise<void> {
   try {
     const rows = db()
       .prepare(
-        `SELECT g.*, r.started_at AS run_started_at FROM generations g LEFT JOIN generation_runs r ON r.id = g.id WHERE g.status = 'running' AND g.external_id IS NOT NULL AND g.progress IS NOT NULL ORDER BY ${ACCOUNT_LAST.replace("request_json", "g.request_json")}, g.created_at ASC LIMIT 50`,
+        `SELECT g.*, r.started_at AS run_started_at FROM generations g LEFT JOIN generation_runs r ON r.id = g.id WHERE g.status = 'running' AND g.external_id IS NOT NULL AND g.progress IS NOT NULL AND g.stage IS NULL ORDER BY ${ACCOUNT_LAST.replace("request_json", "g.request_json")}, g.created_at ASC LIMIT 50`,
       )
       .all() as (Row & { run_started_at: number | null })[];
     const now = Date.now();
@@ -1889,7 +1986,7 @@ async function pollOne(r: Row): Promise<void> {
   if (!model) {
     // A job on a model Fuobe retired with its provider (replaced.ts) can't be collected: Reuse runs it on the replacement.
     const retired = !!replacedBy(r.model_id) || !Object.hasOwn(PROVIDERS, r.provider);
-    update(r.id, { status: "failed", error: retired ? RETIRED_PROVIDER_ERROR : `Model ${r.model_id} no longer exists`, completed_at: Date.now(), message: null });
+    update(r.id, { status: "failed", error: retired ? RETIRED_PROVIDER_ERROR : "This model isn't available any more. Pick another.", completed_at: Date.now(), message: null });
     return;
   }
   // The clock runs from when the provider got the job (and from when it started it), not from creation:
@@ -1914,8 +2011,10 @@ async function pollOne(r: Row): Promise<void> {
     pollError = e;
   }
   // An account's job waits at most 30 minutes in its own ComfyUI's queue (or its provider's).
-  const queueMs = account ? ACCOUNT_LIMITS.queueMs : QUEUE_TIMEOUT_MS;
-  const where = r.provider === "comfyui" ? "your ComfyUI" : provider(r.provider).label;
+  const stored = JSON.parse(r.request_json) as GenerationRequest;
+  const onPool = !!account && stored.place === "pool";
+  // On this install's GPUs: the wait the billing service set for the run, else FUOBE_POOL_WAIT_MIN.
+  const queueMs = onPool ? poolWaitMs(stored.waitMs) : account ? ACCOUNT_LIMITS.queueMs : QUEUE_TIMEOUT_MS;
   if (!res || res.state === "queued" || res.state === "running") {
     // A job on someone's own computer reached their ComfyUI later than it was handed over (it waited for their tab): its
     // queue clock starts then.
@@ -1937,9 +2036,11 @@ async function pollOne(r: Row): Promise<void> {
           ? `Timed out after ${TIMEOUT_MS / 60_000} minutes`
           : res?.state === "queued" && res.timeoutError
             ? res.timeoutError
-            : account
-              ? `Timed out waiting ${queueMs / 60_000} minutes in ${where}'s queue`
-            : `Timed out waiting ${QUEUE_TIMEOUT_MS / 3_600_000} hours in the provider's queue`,
+            : onPool
+              ? POOL_WAITED
+              : account
+                ? `This waited over ${queueMs / 60_000} minutes to start. Press Retry.`
+              : "This took too long to start. Press Retry.",
         completed_at: now,
         message: null,
       });
@@ -1980,7 +2081,7 @@ async function pollOne(r: Row): Promise<void> {
       } catch (e) {
         if (account) {
           for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
-          const why = e instanceof AccountFilesFull ? e.message : `Couldn't save a result from ${where}: ${(e as Error).message}`;
+          const why = e instanceof AccountFilesFull ? e.message : "We couldn't save this result. Press Retry.";
           update(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null });
           return;
         }
@@ -2022,11 +2123,16 @@ async function pollOne(r: Row): Promise<void> {
     resumeFinish({ ...r, outputs_json: JSON.stringify(outputs) });
     return;
   }
+  // The moderation service asked to see this run's outputs first: they are held, and the row waits ("Checking").
+  if (stored.checkOutputs && moderationConfigured()) {
+    holdForCheck(r.id, outputs);
+    return;
+  }
   update(r.id, {
     status: "succeeded",
     outputs_json: JSON.stringify(outputs),
     progress: 1,
-    message: dropped ? `Kept the first ${ACCOUNT_LIMITS.outputsPerJob} results (${where} made ${ACCOUNT_LIMITS.outputsPerJob + dropped})` : null,
+    message: dropped ? `Kept ${ACCOUNT_LIMITS.outputsPerJob} of ${ACCOUNT_LIMITS.outputsPerJob + dropped} results` : null,
     completed_at: Date.now(),
   });
 }
@@ -2362,11 +2468,14 @@ export async function cancelGeneration(id: string): Promise<void> {
     const account = accountOf(r);
     // An account's job is stopped with its own key, also when the account is switched off or about to be deleted.
     const own = account ? accountRun(account, r.provider, "cancel") : undefined;
+    // A run on this install's GPUs is stopped there, as the account.
+    const onPool = !!account && poolOf(r);
     const cancel = () =>
       Promise.resolve()
         .then(() => adapterFor(r.provider, account).cancel?.(pollContext(r, model)))
         .catch(() => {});
-    if (!own) await cancel();
+    if (onPool) await runOnPool(account!, cancel);
+    else if (!own) await cancel();
     else if ("run" in own) await own.run(cancel);
   }
   stopModelFinish(id);
@@ -2418,6 +2527,57 @@ export function finishOutput(id: string, index: number, png: Buffer): Generation
 
 // ---------------------------------------------------------------------------
 // Results made in the browser (colour grading): stored as finished generations.
+
+/**
+ * A live edit saved to the Library (the owner's): the kept master as the result, the steps that made it in
+ * params.liveSteps, the joined step texts as the prompt. It ran on the owner's GPU already, so nothing is queued.
+ */
+export function recordLiveEdit(input: { master: string; original?: string; steps: { text: string; seed: number }[]; from?: string }): Generation {
+  const model = getModel("oss-qwen-image-21-live");
+  if (!model) throw new Error("Live edit's model is missing");
+  const now = Date.now();
+  const prompt = input.steps.map((s) => s.text).filter(Boolean).join(" · ").slice(0, 2000) || "Live edit";
+  const op: Generation["op"] = input.original ? "edit" : "t2i";
+  const req: GenerationRequest = {
+    feature: "live-edit",
+    modelId: model.id,
+    op,
+    prompt,
+    inputs: input.original ? { images: [input.original] } : {},
+    params: { extra: { liveSteps: input.steps, ...(input.from && { from: input.from }) } },
+  };
+  const row: Row = {
+    id: nanoid(12),
+    batch_id: null,
+    feature: "live-edit",
+    preset_id: null,
+    model_id: model.id,
+    engine: model.engine,
+    provider: "comfyui",
+    op,
+    kind: "image",
+    status: "succeeded",
+    progress: 1,
+    message: null,
+    prompt,
+    request_json: JSON.stringify(req),
+    provider_input_json: null,
+    external_id: "live",
+    external_meta_json: null,
+    outputs_json: JSON.stringify([{ url: input.master, kind: "image", contentType: "image/png" }]),
+    error: null,
+    cost_usd: 0,
+    favorite: 0,
+    created_at: now,
+    updated_at: now,
+    completed_at: now,
+    depends_on: null,
+  };
+  db()
+    .prepare(`INSERT INTO generations (${Object.keys(row).join(", ")}) VALUES (${Object.keys(row).map((k) => `@${k}`).join(", ")})`)
+    .run(row);
+  return toGeneration(row);
+}
 
 export function recordLocalGeneration(input: {
   feature: string;

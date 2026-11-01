@@ -17,6 +17,7 @@ import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
+import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
 import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
@@ -103,6 +104,7 @@ import { SketchTools } from "./sketch-tools";
 import { RECENT_MODELS, useStoredList } from "./stored-list";
 import { usePresetUrl, useStartRequest, useStudio, type Draft } from "./studio-context";
 import { useEdgeFade } from "./use-edge-fade";
+import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning } from "@/components/audio-tools/clean-voice-switch";
 import { useSignature } from "../palettes/use-signature";
 import { placeholdersOn } from "@/lib/demo-mode";
 
@@ -528,6 +530,7 @@ export function Composer({ docked }: { docked: boolean }) {
     [baseSlots, model?.options.imageLabels, config.multiRef?.label, draft.refs.length],
   );
   const slots = named.slots;
+  const hasCleanVoice = slots.some((s) => s.cleanVoice && s.accept === "audio");
   // Clips: ComfyUI joins 4 at a time. Images: what the model takes beyond the fixed image slots, for the operation the run
   // will be (a painted mask makes it an inpaint, which Qwen-Image 2.1 runs on the picture alone).
   const refOp = studioOp ?? (draft.slots.mask?.ref && model && routesFor(model, "inpaint").length ? "inpaint" : undefined);
@@ -570,6 +573,18 @@ export function Composer({ docked }: { docked: boolean }) {
     return { mentions, sketched, signed, request: m ? stripMotionPaths(sketched.request, m) : sketched.request };
   };
   const { mentions, sketched, signed } = prepare(draft);
+  // Hosted runs: an open model may run on this studio's GPUs. Its price there is the server's (the words of the
+  // studio's billing service, or free), asked again 300 ms after a change. With the account's own GPU online, that
+  // GPU is the default; the person can pick either.
+  const viewerInfo = status?.viewer;
+  const ownOnline = !!viewerInfo?.gpu.connected && !!viewerInfo.gpu.online;
+  const [runOnPick, setRunOn] = useState<RunOn | null>(null);
+  const runOn: RunOn = runOnPick ?? (ownOnline ? "own" : "pool");
+  const hostedHere = !!viewerInfo?.hosted && model?.engine === "open";
+  const poolPrice = hostedHere && runOn === "pool";
+  const priceBody = useSettled(poolPrice ? quoteBody(signed.request, runOn) : null);
+  const hostedQuote = useHostedQuote(priceBody).data?.quote;
+  const priceUnavailable = poolPrice && hostedQuote?.code === "paused";
   const resolvesOnServer = mentions.mentioned.length > 0 || !!draft.slots.mask?.ref || !!draft.slots.sketch?.ref;
 
   // Plan with stand-ins for attachments that are missing or still uploading, so the cost and the
@@ -580,6 +595,8 @@ export function Composer({ docked }: { docked: boolean }) {
   const askedSlots = framesOn ? framesSlots(slots) : slots;
   const missing = firstMissingSlot(askedSlots, draft.slots, anyOf);
   const uploading = Object.values(draft.slots).some((v) => v?.uploading) || draft.refs.some((r) => r.uploading) || (framesOn && framesUploading(draft.frames));
+  // A voice slot's "Clean up voice" is cleaning the file that just landed: Generate waits for the clean one.
+  const cleaningVoice = useVoiceCleaning();
   // Export without a ComfyUI to write it (none connected, or the install runs cloud APIs only): say so and offer the cloud route.
   // A cloud-only install refuses open models, and without placeholder results nothing else runs it, so Generate says why.
   const comfyMissing = !!config.comfyOnly && !!status && (engineMode === "cloud" || !status.providers.comfyui?.configured);
@@ -646,6 +663,7 @@ export function Composer({ docked }: { docked: boolean }) {
     frames: framesOn && model ? (framesBlocker(model, draft.frames!.length) ?? (framesGap ? { message: framesGap } : null)) : null,
     missing,
     uploading,
+    cleaning: cleaningVoice,
     maskMissing: needsMask(model, config.sketch, draft.slots),
     planError,
     promptMissing,
@@ -709,7 +727,10 @@ export function Composer({ docked }: { docked: boolean }) {
       () => submitRef.current(true),
       model?.kind,
     );
-    create.mutate(skipGpu ? ({ ...sent.request, gpuCheck: "skip" } as typeof sent.request) : sent.request, {
+    // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
+    const hosted = viewerInfo?.hosted ? { place: runOn, ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
+    const body = { ...sent.request, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
+    create.mutate(body, {
       // Accepted: nothing to try again (a card opened later never starts this run a second time).
       onSuccess: () => dropGpuRetry(),
       // Stopped by the GPU pre-flight, or refused with its own card: the guided fix or the card is open already, so no error toast on top.
@@ -779,11 +800,14 @@ export function Composer({ docked }: { docked: boolean }) {
   const alternativeHref = alternative && `${alternative.href}${video?.startsWith("/api/files/") ? `&video=${encodeURIComponent(video)}` : ""}`;
   const demo = !!(model && placeholdersOn(status?.demoMode));
   // On the open engine every run is free on the GPU: said even before the run can be planned (no voice sample, no clip yet).
-  const costText = costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), unknown: loraPriceUnknown }, formatCost);
+  const ownCostText = costLabel({ demo, cost: cost ?? (engine === "open" && model ? 0 : null), unknown: loraPriceUnknown }, formatCost);
   // An account's paid run is billed to its own provider account (Your keys), or still needs that key.
   const payer = paidThrough(model, status);
   const missingKey = needsKey(model, status)?.[0];
-  const payerText = payer && cost ? ` · ${billedTo(payer)}` : missingKey ? ` · ${addKeyLabel(missingKey).toLowerCase()}` : "";
+  const ownPayerText = payer && cost ? ` · ${billedTo(payer)}` : missingKey ? ` · ${addKeyLabel(missingKey).toLowerCase()}` : "";
+  // On this studio's GPUs: the quote's words (none from the server: free, as the open engine always is).
+  const costText = poolPrice ? (priceUnavailable ? "Price unavailable" : hostedQuote?.text || ownCostText) : ownCostText;
+  const payerText = poolPrice ? "" : ownPayerText;
 
   // Attachments: only when something is attached, a required slot is still empty, or none of a "one of these" group is filled (U8).
   const kinds = [...attach.kinds];
@@ -916,7 +940,7 @@ export function Composer({ docked }: { docked: boolean }) {
   const layoutSummary = !model
     ? ""
     : laid?.width
-      ? `Compiled for ${model.name} at ${laid.width} × ${laid.height}, the size it renders`
+      ? `Laid out for ${model.name} at ${laid.width} × ${laid.height}, the size it renders`
       : laid?.format === "flux3" || laid?.format === "ideogram"
         ? `${model.name} reads the boxes in place (its own layout form)`
         : laid
@@ -1129,19 +1153,32 @@ export function Composer({ docked }: { docked: boolean }) {
       )}
       {showAttachments && !collapsed && !framesOn && (
         <div className="scrollbar-none flex items-center gap-2 overflow-x-auto px-1 pt-1.5 pb-2">
-          {slots.map((s) => (
-            <MediaSlot
-              key={s.key}
-              slotKey={s.key}
-              label={s.label}
-              kind={s.accept}
-              required={s.required}
-              caption
-              value={draft.slots[s.key] ?? null}
-              onChange={(v) => attach.setSlotValue(s.key, v)}
-              onFile={(f) => attach.uploadToSlot(s.key, f, s.accept)}
-            />
-          ))}
+          {slots.map((s) =>
+            s.cleanVoice && s.accept === "audio" ? (
+              <CleanVoiceSlot
+                key={s.key}
+                slotKey={s.key}
+                label={s.label}
+                required={s.required}
+                value={draft.slots[s.key] ?? null}
+                onChange={(v) => attach.setSlotValue(s.key, v)}
+                onFile={(f) => attach.uploadToSlot(s.key, f, s.accept)}
+              />
+            ) : (
+              <MediaSlot
+                key={s.key}
+                slotKey={s.key}
+                label={s.label}
+                kind={s.accept}
+                required={s.required}
+                caption
+                value={draft.slots[s.key] ?? null}
+                onChange={(v) => attach.setSlotValue(s.key, v)}
+                onFile={(f) => attach.uploadToSlot(s.key, f, s.accept)}
+              />
+            ),
+          )}
+          {hasCleanVoice && <CleanVoiceSwitch status className="hidden max-w-[16rem] shrink-0 sm:flex" hint="first, free on your GPU" />}
           {config.sketch && draft.slots.image?.ref && !draft.slots.image.uploading && (
             <SketchTools modes={config.sketch} image={draft.slots.image.ref} autoOpen={config.sketchAutoOpen} />
           )}
@@ -1175,6 +1212,8 @@ export function Composer({ docked }: { docked: boolean }) {
           )}
         </div>
       )}
+      {/* On a phone the slot row scrolls sideways, so the switch gets its own line under it. */}
+      {showAttachments && !collapsed && !framesOn && hasCleanVoice && <CleanVoiceSwitch status className="px-3 pb-2 sm:hidden" hint="first, free on your GPU" />}
 
       {showPrompt && (
         <PromptInput
@@ -1381,11 +1420,22 @@ export function Composer({ docked }: { docked: boolean }) {
           />
           <span className="contents max-sm:hidden">{styleChips}</span>
         </div>
+        {hostedHere && viewerInfo?.gpu.connected && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setRunOn(runOn === "own" ? "pool" : "own")}
+            aria-label={`Runs on ${runOn === "own" ? "your GPU" : "this studio's GPUs"}. Switch`}
+            className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground underline decoration-border-strong underline-offset-2 hover:text-foreground"
+          >
+            {runOn === "own" ? "Your GPU" : "This studio's GPUs"}
+          </button>
+        )}
         {costText && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums">
-                <span className="sm:hidden">{costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
+                <span className="sm:hidden">{poolPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
                 <span className="hidden sm:inline">
                   {costText}
                   {payerText}
@@ -1393,7 +1443,11 @@ export function Composer({ docked }: { docked: boolean }) {
               </span>
             </TooltipTrigger>
             <TooltipContent className="max-w-72">
-              {demo
+              {poolPrice
+                ? priceUnavailable
+                  ? "Runs on this studio's GPUs are paused for a moment. Try again soon, or run on your own GPU."
+                  : (hostedQuote?.sub ?? "Runs on this studio's GPUs")
+                : demo
                 ? "Placeholder results are on (Settings), so outputs are free stand-ins"
                 : cost === 0
                   ? "Runs on your own GPU"
@@ -1412,7 +1466,7 @@ export function Composer({ docked }: { docked: boolean }) {
             <Button
               size="icon"
               onClick={submit}
-              disabled={create.isPending || signature.lock.isPending}
+              disabled={create.isPending || signature.lock.isPending || priceUnavailable}
               aria-label={blocker ? `Generate — ${blocker.message}` : "Generate"}
               // Blocked, it stays the brand colour (paler, the arrow still 3:1 or more): pressing it still says what's missing and points at it.
               className={cn("size-10 shrink-0 rounded-full", blocker && "bg-primary/70 hover:bg-primary/80")}

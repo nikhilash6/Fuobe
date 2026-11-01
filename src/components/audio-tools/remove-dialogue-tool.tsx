@@ -108,7 +108,7 @@ const COPY =
  * Why a guest or an account can't run it: POST /api/audio-tools answers them own-gpu-tool (docs/public-signup.md), so
  * the page says so up front and its upload and run are off, instead of a run the server refuses.
  */
-const SELF_HOSTED = "Remove dialogue runs on a self-hosted Fuobe for now";
+const SELF_HOSTED = "Remove dialogue isn't available here";
 
 /** ?video= from a result's "Remove dialogue", read once after hydration. */
 function useHandoff(take: (s: Source) => void) {
@@ -473,7 +473,7 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
           title="Remove dialogue"
           subtitle={
             visitor
-              ? `${COPY} Runs with DBS (open source, 23 MB, CPU or GPU).`
+              ? COPY
               : `${COPY} Runs on your ComfyUI with DBS (open source, 23 MB, CPU or GPU): free.`
           }
         >
@@ -656,7 +656,6 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
                     <span className="font-mono text-foreground">
                       {openToolPrice(p, true)}
                     </span>
-                    {` · ${SELF_HOSTED}`}
                   </>
                 ) : blocker && engine !== "cloud" ? (
                   blocker

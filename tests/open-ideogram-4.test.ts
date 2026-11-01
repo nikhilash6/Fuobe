@@ -425,7 +425,7 @@ describe("Ideogram 4's grey safety card", () => {
   it("fails the run with what to try, and keeps no file of it", async () => {
     const g = await answered(card);
     expect(g.status).toBe("failed");
-    expect(g.error).toBe("Ideogram 4's safety filter blocked this picture and sent its grey card instead. Run it again for a new seed, or try Qwen-Image 2.1 or Krea 2 Realism.");
+    expect(g.error).toBe("Ideogram 4 declined this one. Run it again, or try Qwen-Image 2.1 or Krea 2 Realism.");
     expect(g.outputs).toEqual([]);
     expect(listAssets({ source: "generation", limit: 1000 }).filter((a) => a.generationId === g.id)).toEqual([]);
   });

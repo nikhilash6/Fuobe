@@ -145,7 +145,7 @@ model("nano-banana-2-1", "Nano Banana 2.1", "Google", "gemini-image", "image",
       [("t2i", "google/nano-banana-2.1"), ("edit", "google/nano-banana-2.1/edit")],
       badges=["new"], pricing=("image", 0.1, "token-based, approx."), defaults={"aspectRatio": "1:1", "resolution": "1K"})
 model("nano-banana", "Nano Banana", "Google", "gemini-image", "image",
-      "Gemini 2.5 Flash Image — fast, cheap, great at consistent edits",
+      "Gemini 2.5 Flash Image — fast, consistent edits",
       [("t2i", "fal-ai/nano-banana"), ("edit", "fal-ai/nano-banana/edit"),
        ("t2i", "google/nano-banana", "replicate"), ("edit", "google/nano-banana", "replicate")],
       badges=["fast"], pricing=("image", 0.039), defaults={"aspectRatio": "1:1"})
@@ -158,7 +158,7 @@ model("seedream-5-lite", "Seedream 5.0 Lite", "ByteDance", "seedream", "image",
       [("t2i", "bytedance/seedream/v5/lite/text-to-image"), ("edit", "bytedance/seedream/v5/lite/edit")],
       badges=["fast"], defaults={"aspectRatio": "3:4"})
 model("seedream-5-flash", "Seedream 5.0 Flash", "ByteDance", "seedream", "image",
-      "The fastest, cheapest Seedream 5 — quick edits in bulk",
+      "The fastest Seedream 5 — quick edits in bulk",
       [("t2i", "bytedance/seedream/v5/flash/text-to-image"), ("edit", "bytedance/seedream/v5/flash/edit")],
       badges=["fast"], defaults={"aspectRatio": "3:4"})
 model("seedream-4-5", "Seedream 4.5", "ByteDance", "seedream", "image",
@@ -198,7 +198,7 @@ model("ideogram-4-5", "Ideogram 4.5", "Ideogram", "ideogram", "image",
       [("t2i", "ideogram/v4.5"), ("edit", "ideogram/v4.5/edit")], defaults={"aspectRatio": "1:1"}, options={"layout": "ideogram"})
 model("flux-fill-pro", "FLUX.1 Fill [pro]", "Black Forest Labs", "flux", "image", "Precise inpainting and object replacement with a mask",
       [("inpaint", "fal-ai/flux-pro/v1/fill")], pricing=("megapixel", 0.05), hidden=False)
-model("z-image-inpaint", "Z-Image Turbo Inpaint (hosted)", "Alibaba Tongyi", "z-image", "image", "Cheapest, fastest masked inpainting",
+model("z-image-inpaint", "Z-Image Turbo Inpaint (hosted)", "Alibaba Tongyi", "z-image", "image", "Fast masked inpainting, great value",
       [("inpaint", "fal-ai/z-image/turbo/inpaint")], badges=["fast"], pricing=("megapixel", 0.01))
 model("recraft-4-1", "Recraft V4.1", "Recraft", "recraft", "image",
       "Brand-ready illustration, icons and design assets in your colour palette",
@@ -273,7 +273,7 @@ model("qwen-image-edit-2509-cloud", "Qwen-Image-Edit 2509 (hosted)", "Alibaba Qw
       "Open-weights Qwen-Image-Edit 2509 with its LoRAs (relight, next scene, angles)",
       [("edit", "fal-ai/qwen-image-edit-plus-lora", "fal")], hidden=True)
 model("flux-2-klein-4b-cloud", "FLUX.2 [klein] 4B (hosted)", "Black Forest Labs", "flux", "image",
-      "The Apache-2.0 FLUX.2: cheapest drafts and edits",
+      "The Apache-2.0 FLUX.2: quick drafts and edits",
       [("t2i", "fal-ai/flux-2/klein/4b", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/lora"}),
        ("edit", "fal-ai/flux-2/klein/4b/edit", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/edit/lora"})],
       badges=["fast"], defaults={"aspectRatio": "1:1"})
@@ -285,16 +285,16 @@ model("wan-2-2-a14b-image-cloud", "Wan 2.2 A14B Image (hosted)", "Alibaba Wan", 
 # (the owner's decision of 2026-10-27): FLUX [dev] and klein 9B weights are non-commercial (fal clears its own hosted
 # outputs), Krea 2 has revenue tiers. The admin turns models on or off in Settings.
 model("flux-1-dev-lora-cloud", "FLUX.1 [dev] with LoRAs (hosted)", "Black Forest Labs", "flux", "image",
-      "FLUX.1 [dev] with your trained characters and styles · non-commercial weights, fal clears its outputs",
+      "FLUX.1 [dev] with your trained characters and styles · non-commercial weights",
       [("t2i", "fal-ai/flux-lora", "fal")], defaults={"aspectRatio": "3:4"})
 model("flux-1-krea-lora-cloud", "FLUX.1 Krea [dev] with LoRAs (hosted)", "Black Forest Labs × Krea", "flux", "image",
-      "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs · non-commercial weights, fal clears its outputs",
+      "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs · non-commercial weights",
       [("t2i", "fal-ai/flux-krea-lora", "fal")], defaults={"aspectRatio": "3:4"})
 model("flux-2-dev-lora-cloud", "FLUX.2 [dev] with LoRAs (hosted)", "Black Forest Labs", "flux", "image",
-      "FLUX.2 [dev] with your trained characters and styles · non-commercial weights, fal clears its outputs",
+      "FLUX.2 [dev] with your trained characters and styles · non-commercial weights",
       [("t2i", "fal-ai/flux-2/lora", "fal")], defaults={"aspectRatio": "3:4"})
 model("flux-2-klein-9b-lora-cloud", "FLUX.2 [klein] 9B with LoRAs (hosted)", "Black Forest Labs", "flux", "image",
-      "The 9B FLUX.2 [klein] with your LoRAs · non-commercial weights, fal clears its outputs",
+      "The 9B FLUX.2 [klein] with your LoRAs · non-commercial weights",
       [("t2i", "fal-ai/flux-2/klein/9b/lora", "fal")], badges=["fast"], defaults={"aspectRatio": "3:4"})
 model("krea-2-turbo-lora-cloud", "Krea 2 Turbo with LoRAs (hosted)", "Krea", "krea", "image",
       "Krea 2's aesthetic with your trained characters and styles · Krea 2 Community licence (revenue tiers)",
@@ -311,7 +311,7 @@ SOUL_FAL = {"num_inference_steps": ORIGINALS["soul"]["settings"]["fal"]["num_inf
 # Replicate's Z-Image LoRA build: the same 8 steps, a PNG (its default is jpg); guidance stays at its Turbo default 0.
 SOUL_REPLICATE = {"num_inference_steps": SOUL_FAL["num_inference_steps"], "output_format": "png"}
 model("fuobe-soul", "Fuobe Soul", "Fuobe Original", "fuobe-soul", "image",
-      "Soul's 139 looks on open weights: Z-Image Turbo with up to three LoRAs",
+      "139 signature looks, ready to shoot",
       [("t2i", "fal-ai/z-image/turbo", "fal", {"loraEndpoint": "fal-ai/z-image/turbo/lora", "fixed": SOUL_FAL}),
        ("t2i", "prunaai/z-image-turbo-lora", "replicate", {"pin": True, "fixed": SOUL_REPLICATE}),
        # Restyle a picture with the look; the result keeps the picture's shape. strength = how much changes.
@@ -319,7 +319,7 @@ model("fuobe-soul", "Fuobe Soul", "Fuobe Original", "fuobe-soul", "image",
         {"loraEndpoint": "fal-ai/z-image/turbo/image-to-image/lora", "keepSize": True, "fixed": {k: v for k, v in SOUL_FAL.items() if k != "num_inference_steps"}})],
       original=True, sizes=SOUL_SIZES, sliders=[("strength", "Change")], defaults={"aspectRatio": "3:4", "resolution": "720p"})
 model("fuobe-soul-hd", "Fuobe Soul HD", "Fuobe Original", "fuobe-soul", "image",
-      "Soul's looks on Qwen-Image 2512: clean lettering for posters and signs",
+      "Fuobe Soul's looks with clean lettering for posters and signs",
       [("t2i", "fal-ai/qwen-image-2512", "fal", {"loraEndpoint": "fal-ai/qwen-image-2512/lora", "fixed": {"output_format": "png"}})],
       original=True, sizes=SOUL_SIZES, pricing=("megapixel", 0.02, "rounded up to whole megapixels", {"roundUp": True}),
       defaults={"aspectRatio": "3:4", "resolution": "720p"})
@@ -476,7 +476,7 @@ model("kling-3", "Kling 3.0", "Kuaishou", "kling", "video",
       [("t2v", "fal-ai/kling-video/v3/pro/text-to-video"), ("i2v", "fal-ai/kling-video/v3/pro/image-to-video", "fal", "+flf2v")],
       badges=["top", "audio", "new"], pricing=("second", 0.168, "audio on; audio-off-half"), defaults={"aspectRatio": "16:9", "duration": 5})
 model("kling-3-turbo", "Kling 3.0 Turbo", "Kuaishou", "kling", "video",
-      "Kling 3 quality, faster and cheaper",
+      "Kling 3 quality, faster and lighter on cost",
       [("t2v", "fal-ai/kling-video/v3/turbo/pro/text-to-video"), ("i2v", "fal-ai/kling-video/v3/turbo/pro/image-to-video", "fal", "+flf2v")],
       badges=["fast", "audio"], defaults={"aspectRatio": "16:9", "duration": 5})
 model("kling-3-4k", "Kling 3.0 4K", "Kuaishou", "kling", "video", "Native 4K Kling 3",
@@ -519,7 +519,7 @@ model("veo-3-1-fast", "Veo 3.1 Fast", "Google", "veo", "video", "Veo quality at 
       [("t2v", "fal-ai/veo3.1/fast"), ("i2v", "fal-ai/veo3.1/fast/image-to-video"), ("flf2v", "fal-ai/veo3.1/fast/first-last-frame-to-video"),
        ("extend", "fal-ai/veo3.1/fast/extend-video", "fal", {"note": "fal retires Veo 3.1 extend on 2026-11-17"})],
       badges=["fast", "audio"], pricing=("second", 0.15), defaults={"aspectRatio": "16:9", "duration": 8, "resolution": "1080p"})
-model("veo-3-1-lite", "Veo 3.1 Lite", "Google", "veo", "video", "Cheapest Veo for drafts and volume",
+model("veo-3-1-lite", "Veo 3.1 Lite", "Google", "veo", "video", "Veo for drafts and volume",
       [("t2v", "fal-ai/veo3.1/lite"), ("i2v", "fal-ai/veo3.1/lite/image-to-video")],
       badges=["fast", "audio"], pricing=("second", 0.05), defaults={"aspectRatio": "16:9", "duration": 8, "resolution": "720p"})
 model("gemini-omni-flash", "Gemini Omni Flash 1.1", "Google", "gemini-omni", "video",
@@ -952,7 +952,7 @@ model("chatterbox-cloud", "Chatterbox (hosted)", "Resemble AI", "chatterbox", "a
 model("index-tts-2-cloud", "IndexTTS-2 (hosted)", "Bilibili", "index-tts", "audio", "Zero-shot cloning with emotion control",
       [("tts", "fal-ai/index-tts-2/text-to-speech")], pricing=("second", 0.002))
 # Higgsfield's Audio model selector also lists Inworld and MiniMax Speech (research part 3 / part 2).
-model("inworld-tts", "Inworld TTS 1.5 Max", "Inworld", "inworld", "audio", "The cheapest natural narration — 113 voices in 15 languages",
+model("inworld-tts", "Inworld TTS 1.5 Max", "Inworld", "inworld", "audio", "Natural narration, great value — 113 voices in 15 languages",
       [("tts", "fal-ai/inworld-tts")], badges=["fast"], pricing=("request", 0.01, "per 1k chars"), defaults={"voice": "Craig (en)"})
 model("minimax-speech-2-8", "MiniMax Speech 2.8 HD", "MiniMax", "minimax-speech", "audio", "Expressive multilingual speech with emotion control",
       [("tts", "fal-ai/minimax/speech-2.8-hd", "fal", {"fixed": {"output_format": "url"}})], pricing=("request", 0.1, "per 1k chars"),
@@ -964,7 +964,7 @@ model("chatterbox-vc-cloud", "Chatterbox Voice Conversion (hosted)", "Resemble A
       [("voice-change", "fal-ai/chatterbox/speech-to-speech")], pricing=("minute", 0.015))
 model("heygen-translate", "HeyGen Translate", "HeyGen", "heygen", "video", "Lip-synced video translation into 170+ languages and accents",
       [("dub", "fal-ai/heygen/v2/translate/precision")], badges=["top"], pricing=("second", 0.1))
-model("heygen-translate-fast", "HeyGen Translate Speed", "HeyGen", "heygen", "video", "Faster, cheaper lip-synced translation",
+model("heygen-translate-fast", "HeyGen Translate Speed", "HeyGen", "heygen", "video", "Faster lip-synced translation, lighter on cost",
       [("dub", "fal-ai/heygen/v2/translate/speed")], badges=["fast"], pricing=("second", 0.05))
 model("elevenlabs-dubbing", "ElevenLabs Dubbing", "ElevenLabs", "elevenlabs", "video", "Dub video or audio while keeping each speaker's voice",
       [("dub", "fal-ai/elevenlabs/dubbing")], pricing=("minute", 0.6))
@@ -973,7 +973,7 @@ model("mirelo-sfx-2", "Mirelo SFX 2.0", "Mirelo", "mirelo", "audio", "Layered, c
       [("sfx", "mirelo-ai/sfx2.0/text-to-audio")], badges=["top", "new"], defaults={"duration": 5}, options={"durations": [2, 5, 10, 30, 60]},
       pricing=("second", 0.01, "intro price until 2026-12-13, then $0.015"))
 # Sonilo answers in AAC unless asked: MP3 plays and downloads everywhere.
-model("sonilo-sfx", "Sonilo SFX 1.1", "Sonilo", "sonilo", "audio", "Fast, cheap sound effects up to 3 minutes",
+model("sonilo-sfx", "Sonilo SFX 1.1", "Sonilo", "sonilo", "audio", "Fast sound effects up to 3 minutes",
       [("sfx", "sonilo/v1.1/text-to-sound-effects")], badges=["fast"], defaults={"duration": 5}, options={"durations": [2, 5, 8, 15, 30]},
       fixed={"audio_format": "mp3"})
 model("stable-audio-3-sfx", "Stable Audio 3 SFX", "Stability AI", "stable-audio", "audio", "Stability's small SFX model — crisp one-shots and ambiences",
@@ -991,7 +991,7 @@ model("lyria-3-pro", "Lyria 3 Pro", "Google", "lyria", "audio", "Longer, richer 
 # A prompt alone has no lyrics to sing: lyrics_optimizer writes them from the prompt.
 model("minimax-music-2-5", "MiniMax Music 2.5", "MiniMax", "minimax-music", "audio", "Songs with vocals, lyrics written from your prompt",
       [("music", "fal-ai/minimax-music/v2.5")], fixed={"lyrics_optimizer": True})
-model("stable-audio-3-music", "Stable Audio 3 Music", "Stability AI", "stable-audio", "audio", "Quick, cheap loops and beds up to 2 minutes",
+model("stable-audio-3-music", "Stable Audio 3 Music", "Stability AI", "stable-audio", "audio", "Quick loops and beds up to 2 minutes",
       [("music", "fal-ai/stable-audio-3/small/music/text-to-audio")], badges=["fast"], defaults={"duration": 30}, options={"durations": [10, 30, 60, 120]})
 model("mureka-song", "Mureka 9.5", "Mureka", "mureka", "audio", "Full songs with vocals in many genres",
       [("music", "mureka/api/generate/song")], pricing=("request", 0.75, "prompt-to-song on mureka-9.5; with lyrics $0.225"),
@@ -1033,7 +1033,7 @@ model("seedream-5-layers", "Seedream 5.0 Layers", "ByteDance", "seedream", "imag
       "Splits a picture into a background and up to 16 named, positioned layers",
       [("layers", "bytedance/seedream/v5/pro/layerize")], badges=["top", "new"], defaults={"resolution": "auto"},
       pricing=("request", 0.17, "$0.034 per layer, ≈5 layers; double above 1536²"))
-model("seedream-5-flash-layers", "Seedream 5.0 Flash Layers", "ByteDance", "seedream", "image", "Faster, cheaper Seedream layer split",
+model("seedream-5-flash-layers", "Seedream 5.0 Flash Layers", "ByteDance", "seedream", "image", "Faster Seedream layer split, lighter on cost",
       [("layers", "bytedance/seedream/v5/flash/layerize")], badges=["fast"], defaults={"resolution": "auto"},
       pricing=("request", 0.135, "$0.027 per layer, ≈5 layers"))
 model("qwen-image-layered-cloud", "Qwen-Image Layered (hosted)", "Alibaba Qwen", "qwen-image", "image",
@@ -1088,7 +1088,7 @@ model("elevenlabs-voice-isolation", "ElevenLabs Voice Isolation", "ElevenLabs", 
 model("hunyuan-3d-3-1-pro", "Hunyuan3D 3.1 Pro", "Tencent Hunyuan", "hunyuan-3d", "model3d", "Textured, game-ready 3D models from a product photo",
       [("image-to-3d", "fal-ai/hunyuan-3d/v3.1/pro/image-to-3d")], badges=["top", "new"], pricing=("request", 0.375, "+$0.15 with PBR"),
       controls=[("generate_type", "Mode")])
-model("hunyuan-3d-3-1-rapid", "Hunyuan3D 3.1 Rapid", "Tencent Hunyuan", "hunyuan-3d", "model3d", "Faster, cheaper single-view Hunyuan3D",
+model("hunyuan-3d-3-1-rapid", "Hunyuan3D 3.1 Rapid", "Tencent Hunyuan", "hunyuan-3d", "model3d", "Faster single-view Hunyuan3D, lighter on cost",
       [("image-to-3d", "fal-ai/hunyuan-3d/v3.1/rapid/image-to-3d")], badges=["fast"], pricing=("request", 0.225, "+$0.15 with PBR"))
 model("trellis-2", "TRELLIS.2", "Microsoft", "trellis", "model3d", "Open-weights image to GLB with detailed geometry",
       [("image-to-3d", "fal-ai/trellis-2")], defaults={"resolution": "1024"}, pricing=("request", 0.3, "1024p; 512p $0.25, 1536p $0.35"))
@@ -1200,7 +1200,7 @@ model("topaz-fps-boost", "Topaz FPS Boost", "Topaz Labs", "topaz", "video",
 # Doubles the frame rate (one new frame per pair) at the clip's own speed; its fps field only applies with
 # use_calculated_fps off, so a target frame rate is not sent.
 model("rife-video-cloud", "RIFE (hosted)", "Open source", "rife", "video",
-      "Cheap frame interpolation: twice the frames, same speed",
+      "Frame interpolation: twice the frames, same speed",
       [("interpolate", "fal-ai/rife/video", "fal", {"drop": ["fps"]})], badges=["fast"], pricing=("request", 0.001, "billed per compute second ($0.0013/s)"))
 model("topaz-sdr-to-hdr", "Topaz SDR to HDR", "Topaz Labs", "topaz", "video",
       "Hyperion 2.5: SDR footage to 10-bit HDR10 (H.265) or ProRes 422 HQ",
@@ -1268,7 +1268,7 @@ model("flux-3-max", "FLUX 3 Max", "Black Forest Labs", "flux", "video",
                 "promo": {"until": "2026-11-07", "usd": 0.0425, "byResolution": {"720p": 0.0425, "1080p": 0.0725}}}),
       controls=[("reasoning_level", "Reasoning")])
 model("heygen-video", "HeyGen Video", "HeyGen", "heygen", "video",
-      "HeyGen's model on MiniMax H3 — cheap 768p clips, references with sound",
+      "HeyGen's model on MiniMax H3 — 768p clips, references with sound",
       [("t2v", "heygen/heygen-video/text-to-video"), ("i2v", "heygen/heygen-video/image-to-video"), ("ref2v", "heygen/heygen-video/reference-to-video")],
       badges=["new", "fast"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768p"}, ranged_durations=True,
       pricing=("second", 0.02, "480p and 768p; 1080p and 2K $0.06", {"byResolution": {"480p": 0.02, "768p": 0.02, "1080p": 0.06, "2k": 0.06}}),
@@ -1279,7 +1279,7 @@ model("grok-imagine-video-1-5", "Grok Imagine Video 1.5", "xAI", "grok", "video"
        ("ref2v", "xai/grok-imagine-video/v1.5/reference-to-video")],
       defaults={"aspectRatio": "16:9", "duration": 6, "resolution": "720p"}, ranged_durations=True, fit_values=True,
       pricing=("second", 0.14, "720p; 480p $0.08, 1080p $0.25; +$0.01 per input image", {"byResolution": {"480p": 0.08, "720p": 0.14, "1080p": 0.25}}))
-model("grok-imagine-video-1-5-lite", "Grok Imagine Video 1.5 Lite", "xAI", "grok", "video", "One of the cheapest 720p video models, 1–15 s",
+model("grok-imagine-video-1-5-lite", "Grok Imagine Video 1.5 Lite", "xAI", "grok", "video", "Great-value 720p video, 1–15 s",
       [("t2v", "xai/grok-imagine-video/v1.5/lite/text-to-video"), ("i2v", "xai/grok-imagine-video/v1.5/lite/image-to-video")],
       badges=["new", "fast"], defaults={"aspectRatio": "16:9", "duration": 6, "resolution": "720p"}, ranged_durations=True,
       pricing=("second", 0.03, "720p; 480p $0.02, 1080p $0.14; +$0.01 per input image", {"byResolution": {"480p": 0.02, "720p": 0.03, "1080p": 0.14}}))

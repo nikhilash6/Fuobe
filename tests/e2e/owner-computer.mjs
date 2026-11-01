@@ -133,7 +133,7 @@ const send = (page, url, body, method = "POST") => api(page, url, { method, head
 const runs = async (page) => (await api(page, "/api/generations?limit=20")).body?.items ?? [];
 
 async function signIn(page, who) {
-  await page.goto(`${SITE}/status`, { waitUntil: "load" });
+  await page.goto(`${SITE}/settings`, { waitUntil: "load" });
   const r = who === "owner" ? await send(page, "/api/auth/login", { password: PASSWORD }) : await send(page, "/api/auth/signup", { email: who, password: "long enough password" });
   if (r.status !== 200 && r.status !== 201) throw new Error(`sign-in answered ${r.status}`);
 }
@@ -280,11 +280,6 @@ async function hosted() {
   const inLibrary = await until(() => page.locator(`img[src*="/api/files/"]`).first().isVisible(), 30_000);
   check("the result is in the Library", !!inLibrary);
 
-  // /workflows: checkmarks from the computer's check.
-  await page.goto(`${SITE}/workflows`, { waitUntil: "load" });
-  check("/workflows: checked on your computer", !!(await until(() => page.getByText(/^Checked on your computer .*Checkmarks show the models it has\.$/).isVisible(), 30_000)));
-  await shoot(page, "workflows-computer");
-
   // /connect: the board, not "Your link didn't answer".
   await page.goto(`${SITE}/connect`, { waitUntil: "load" });
   check("/connect: the board, and Change where it runs", !!(await until(() => page.getByRole("link", { name: "Change where it runs" }).isVisible(), 30_000)));
@@ -312,7 +307,7 @@ async function hosted() {
   await page.keyboard.press("Escape");
   await page.goto(`${SITE}/connect`, { waitUntil: "load" });
   await page.getByRole("button", { name: /Check again|Check my GPU/ }).first().click({ timeout: 30_000 });
-  await until(() => page.getByText("ComfyUI is running, but it isn't letting this page in yet.").first().isVisible(), 30_000);
+  await until(() => page.getByText("ComfyUI is running, but it isn't letting this page in.").first().isVisible(), 30_000);
   const connectText = await page.locator("body").innerText();
   // What the page shows, without the checklist's screen-reader announcer, which repeats the last line on purpose.
   const shownText = await page.locator("main").evaluate((m) => {
@@ -320,7 +315,7 @@ async function hosted() {
     c.querySelectorAll(".sr-only").forEach((e) => e.remove());
     return c.textContent ?? "";
   });
-  const said = (shownText.match(/isn't letting this page in yet/g) ?? []).length;
+  const said = (shownText.match(/isn't letting this page in\./g) ?? []).length;
   check("/connect, no setting: one line, never the closed line", said === 1 && !shownText.includes("isn't answering on this computer"), `said ${said} time(s)${shownText.includes("isn't answering on this computer") ? ", with the closed line" : ""}`);
   check("/connect, no setting: no browser error words", !/Failed to fetch|NetworkError/.test(connectText));
   check("/connect, no setting: Show me how", await page.getByRole("button", { name: "Show me how" }).isVisible());
@@ -394,11 +389,6 @@ async function hosted() {
   await sec.getByRole("button", { name: "Disconnect" }).waitFor({ timeout: 1000 }).catch(() => {});
   // Back to the server's address for H4.
   check("back to server mode", (await send(page, "/api/settings", { comfyWhere: "server" }, "PUT")).status === 200);
-
-  // /workflows with nothing connected.
-  await page.goto(`${SITE}/workflows`, { waitUntil: "load" });
-  check("/workflows: Connect your GPU", !!(await until(() => page.getByText("ComfyUI isn't connected yet. Connect your GPU to run these on your own graphics card.").isVisible(), 30_000)));
-  await shoot(page, "workflows-connect");
 
   // /connect with nothing connected: where ComfyUI runs comes first; no check of the server's own address. (A browser
   // already allowed to reach ComfyUI may connect it by itself here: that's the quickest way.)
@@ -526,7 +516,6 @@ async function hosted() {
     for (const [url, words] of [
       ["/", "Your GPU"],
       ["/connect", "Create a free account, then connect the ComfyUI on your computer."],
-      ["/workflows", "These are the graphs your own ComfyUI runs. Connect your GPU to see what it has and what it still needs."],
       ["/settings", "Sign up free"],
     ]) {
       await gp.goto(SITE + url, { waitUntil: "load" });

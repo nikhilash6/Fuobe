@@ -60,7 +60,7 @@ const SPLIT_LABEL: Record<VoiceSplit, string> = { dbs: "DBS: keeps music and eff
 
 const ROUTE_LINE = {
   open: (split: VoiceSplit) =>
-    `Open source: ${split === "dbs" ? "DBS splits the dialogue from the music and effects" : "MelBand RoFormer splits the voice from the music"} and Qwen3-ASR times it → an AI translates each line → you review → Chatterbox speaks each line in the cloned voice, at its time → InfiniteTalk re-syncs the lips → mixed back over the ${split === "dbs" ? "music and effects" : "music"}.`,
+    `We separate the voice${split === "dbs" ? " from the music and effects" : ""}, translate every line for your review, speak it in the same voice and re-sync the lips.`,
   cloud: "Cloud: ElevenLabs isolates the voice and Demucs lifts out the music and effects → Scribe v2 times the voice → Claude (or a local model) translates → you review → ElevenLabs speaks each line at its time and Chatterbox turns it into the speaker's voice → Sync Lipsync 3 → mixed back over the music and effects.",
 };
 
@@ -169,7 +169,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   return (
     <div className="pb-10">
       <ToolHero title="Speak every language" subtitle="Translate the speech, keep the speaker's voice and re-sync the lips. Review every line before it's spoken.">
-        {visitor && <SelfHostNote className="mt-3 max-w-xl">Translate &amp; dub runs on a self-hosted Fuobe for now.</SelfHostNote>}
+        {visitor && <SelfHostNote className="mt-3 max-w-xl">Translate &amp; dub isn&apos;t available here.</SelfHostNote>}
       </ToolHero>
       <div className="mx-auto mt-8 max-w-[760px] space-y-3">
         {/* A guest's or an account's video would be uploaded for a dub that can't start here. */}
@@ -315,7 +315,7 @@ function PriceNote({ price, loading, error, hint }: { price?: DubPrice; loading?
   const extra = price.unpriced.length ? `${price.unpriced.join(" and ")} bill${price.unpriced.length === 1 ? "s" : ""} by the provider's own rate (per character or token).` : undefined;
   return (
     <span className="text-right text-[12px] leading-snug" title={[extra, hint].filter(Boolean).join(" ") || undefined}>
-      <span className="font-medium tabular-nums">{visitor && (price.demo || price.engine === "open") ? "Self-hosted only" : priceLine(price)}</span>
+      <span className="font-medium tabular-nums">{visitor && (price.demo || price.engine === "open") ? "Not available here" : priceLine(price)}</span>
       {price.steps > 1 && <span className="block text-muted-foreground">{price.steps} steps</span>}
     </span>
   );

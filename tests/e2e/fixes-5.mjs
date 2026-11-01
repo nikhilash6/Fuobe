@@ -99,28 +99,6 @@ try {
   }
 
   // ---------------------------------------------------------------------------
-  // Workflows → Copy install commands on the H3 workflows.
-  {
-    const { context, page } = await contextFor();
-    await page.goto(`${app}/workflows`, { waitUntil: "load" });
-    await page.getByRole("searchbox").or(page.getByPlaceholder(/search/i)).first().fill("h3");
-    for (const [id, want] of [
-      ["video-character-swap-h3-relay", /git clone https:\/\/github\.com\/akatz-ai\/h3-relay "\$COMFYUI\/custom_nodes\/h3-relay"; }[\s\S]*git -C "\$COMFYUI\/custom_nodes\/h3-relay" checkout -q e2a7665b/],
-      ["video-character-swap-h3", /sparse-checkout set --no-cone \/worker_nodes\/h3_character_swap\/ && git -C "\$tmp" checkout -q 0670e4fd/],
-    ]) {
-      const card = page.locator("article").filter({ hasText: id }).filter({ has: page.getByText(id, { exact: true }) }).first();
-      await card.waitFor({ timeout: 30_000 });
-      await page.evaluate(() => navigator.clipboard.writeText("UNCHANGED"));
-      await card.getByRole("button", { name: /Copy install commands/ }).click();
-      await page.getByText("Install commands copied").first().waitFor({ timeout: 5_000 });
-      const copied = await page.evaluate(() => navigator.clipboard.readText());
-      check(`${id}: the commands clone the repo and pin the commit`, want.test(copied));
-      check(`${id}: no …/tree/… address handed to git`, !/clone \S*\/tree\//.test(copied));
-    }
-    await context.close();
-  }
-
-  // ---------------------------------------------------------------------------
   // Edit video: Happy Horse priced on the attached clip's seconds ($0.28 a second at 720p), a 40 s clip refused.
   {
     const before = Object.fromEntries((await (await fetch(`${app}/api/settings`)).json()).settings.map((s) => [s.name, s.value]));
@@ -164,7 +142,7 @@ try {
   ]) {
     for (const scheme of ["light", "dark"]) {
       const { context, page } = await contextFor({ width, height }, scheme);
-      for (const p of ["/settings#training", "/workflows"]) {
+      for (const p of ["/settings#training", "/settings"]) {
         await page.goto(`${app}${p}`, { waitUntil: "load" });
         await page.waitForTimeout(1200);
         const ok = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);

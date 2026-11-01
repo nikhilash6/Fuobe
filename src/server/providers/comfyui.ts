@@ -49,6 +49,7 @@ import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
 import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
 import { dbsChannelsFor, dbsModelFor, dbsSurroundBed, installedDbs, surroundSource, type DbsModel } from "@/lib/av/split";
+import { installedReuse, NO_REUSE_PACK, rateFor, reuseFileFor, STRENGTH_DB, type ReuseModel } from "@/lib/av/clean-voice";
 import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
 import { exportValues, framesPerPass, hdrColorSpace, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
@@ -99,6 +100,7 @@ import {
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
+import { OWNER_BOOST_MS, poolFields, poolWaitMs, poolWaitWords } from "../computer/pool";
 
 export const WORKFLOW_DIR = path.join(process.cwd(), "workflows", "comfyui");
 
@@ -167,11 +169,37 @@ export function computerScope(): Principal | undefined {
   const own = ownGpu();
   if (own) return own.kind === "computer" ? own.principal : undefined;
   if (serverScope.getStore()) return undefined;
-  return getSetting("comfyWhere") === "computer" ? "owner" : undefined;
+  const where = getSetting("comfyWhere");
+  // Workers (docs/gpu-workers.md) take the owner's jobs the way the owner's own computer would: staged here, run there.
+  return where === "computer" || where === "workers" ? "owner" : undefined;
+}
+
+/** The owner's ComfyUI jobs go to the workers (Settings: ComfyUI runs on "workers"), not to one computer. */
+const onWorkers = (computer: Principal | undefined) => computer === "owner" && !ownGpu() && getSetting("comfyWhere") === "workers";
+
+/**
+ * FUOBE_POOL_MEDIA_INPUTS: what a job for workers may send them ("image" unless set; "image,video,audio" for all).
+ * Pictures are always made again from their pixels first (no EXIF, no GPS, nothing a decoder on that PC could trip on).
+ */
+const poolMedia = () => new Set((process.env.FUOBE_POOL_MEDIA_INPUTS ?? "image").split(",").map((s) => s.trim()).filter(Boolean));
+
+export async function forWorkers(data: Buffer, contentType: string, name: string): Promise<{ data: Buffer; contentType: string; name: string }> {
+  const kind = contentType.split("/")[0];
+  if (!poolMedia().has(kind)) throw new ProviderError(kind === "video" ? "The shared GPUs don't take clips yet." : kind === "audio" ? "The shared GPUs don't take sound yet." : "The shared GPUs don't take this kind of file.");
+  if (kind !== "image") return { data, contentType, name };
+  const sharp = (await import("sharp")).default;
+  const png = await sharp(data, { failOn: "error", limitInputPixels: 64 * 2 ** 20 }).rotate().png().toBuffer();
+  return { data: png, contentType: "image/png", name: name.replace(/\.[^.]*$/, "") + ".png" };
 }
 
 /** A run the owner sent to the studio's own ComfyUI before Settings moved ComfyUI to the owner's computer. */
 const serverScope = new AsyncLocalStorage<true>();
+
+/**
+ * Run `fn` on this install's own ComfyUI server (Settings → ComfyUI address), never an account's own GPU and never a
+ * computer's tab: an account's run on this install's GPUs (hosted runs, src/server/hosted.ts).
+ */
+export const onInstallComfy = <T,>(fn: () => T): T => outsideOwnGpu(() => serverScope.run(true, fn));
 
 /**
  * Whose computer a run sent there belongs to, whatever ComfyUI's place is now: the account's (as its tenant), or the
@@ -186,7 +214,7 @@ function relayPrincipal(): Principal {
  * Said when a workflow for the isolated worker (LatentSync 1.6, ThinkSound) would go to someone's computer: it needs a
  * second ComfyUI beside the first, which the tab doesn't reach yet. Refused before anything is staged or queued.
  */
-export const ISOLATED_ON_COMPUTER = "This one needs a second ComfyUI running alongside the first, which Fuobe doesn't connect from your computer yet.";
+export const ISOLATED_ON_COMPUTER = "This one needs its own ComfyUI, so it can't run from your computer next to your other add-ons.";
 
 /** Said when something would call a ComfyUI that only the person's own tab may reach. */
 export const ON_COMPUTER_ONLY = "This ComfyUI is on your own computer: only your Fuobe tab there talks to it.";
@@ -734,6 +762,36 @@ export async function comfyDbsModels(worker: ComfyWorker = "main", maxAgeMs = 10
   });
 }
 
+declare global {
+  /** The RE-USE files each ComfyUI address listed last (GET /models/reuse; null: no reuse folder, so no ComfyUI-RE-USE), and when. */
+  var __fuobeComfyReuse: Map<string, { models?: ReuseModel[] | null; at: number }> | undefined;
+}
+
+/**
+ * The RE-USE models the connected ComfyUI has on disk (GET /models/reuse, which ComfyUI-RE-USE registers), at most
+ * `maxAgeMs` old: null when the server answers but has no reuse folder (the pack isn't installed), undefined when it can't
+ * say (unreachable).
+ */
+export async function comfyReuseModels(worker: ComfyWorker = "main", maxAgeMs = 10_000): Promise<ReuseModel[] | null | undefined> {
+  const url = baseUrl(worker);
+  if (!url) return undefined;
+  const cache = (globalThis.__fuobeComfyReuse ??= new Map());
+  const hit = cache.get(url);
+  if (hit && Date.now() - hit.at < maxAgeMs) return hit.models;
+  return oneAsk(`/models/reuse ${url}`, async () => {
+    let models: ReuseModel[] | null | undefined;
+    try {
+      const files = await comfyJson<unknown>("/models/reuse", worker);
+      models = Array.isArray(files) ? installedReuse(files.filter((f): f is string => typeof f === "string")) : undefined;
+    } catch (e) {
+      // ComfyUI answers 404 for a model folder nobody registered: no ComfyUI-RE-USE.
+      models = e instanceof ProviderError && e.status === 404 ? null : undefined;
+    }
+    cache.set(url, { models, at: Date.now() });
+    return models;
+  });
+}
+
 /** The connected ComfyUI's RAM in bytes, as the last reachability check read it (whole-clip tools' budget). */
 export function comfyRam(): number | undefined {
   const computer = computerScope();
@@ -919,6 +977,8 @@ export interface PrepareContext {
   device?: () => Promise<string | undefined>;
   /** The DBS models on the server's disk (GET /models/dbs), undefined when it can't say: a run never gets one that isn't there. */
   dbsModels?: () => Promise<DbsModel[] | undefined>;
+  /** The RE-USE files on the server's disk (GET /models/reuse): null without ComfyUI-RE-USE, undefined when it can't say. */
+  reuseModels?: () => Promise<ReuseModel[] | null | undefined>;
   /**
    * The route puts the run's one LoRA in the graph's own LoRA slot (ModelRoute.loraSlot: Fuobe Speak's FusioniX on kijai's
    * InfiniteTalk graph, with the settings it goes with). Without it a graph with no model loader refuses a LoRA.
@@ -1118,7 +1178,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // A voice track on the video's timeline: the clips are the spoken lines (the template binds the first).
   if (ctx.op === "timeline") values.audio = input.audios?.[0] ?? input.audio;
   // Speech workflows read the soundtrack with LoadAudio, which also takes a video upload.
-  if ((ctx.op === "transcribe" || ctx.op === "separate-audio" || ctx.op === "translate") && b.audio && !b.video) values.audio = input.audio ?? input.video ?? clips[0];
+  if ((ctx.op === "transcribe" || ctx.op === "separate-audio" || ctx.op === "enhance-voice" || ctx.op === "translate") && b.audio && !b.video) values.audio = input.audio ?? input.video ?? clips[0];
   if (b.language && input.targetLanguage) values.language = input.targetLanguage;
   if (b.sourceLanguage && input.sourceLanguage) {
     const whisper = b.sourceLanguage.some((t) => workflow[t.node]?.class_type === "Apply Whisper");
@@ -1486,6 +1546,28 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       throw new ProviderError((e as Error).message, 400);
     }
   }
+  // RE-USE (voice-clean-reuse, voice-clean-bed-reuse): the file for voice / laughter (refused in words when the host's
+  // list doesn't have it, or has no ComfyUI-RE-USE at all), the rate (Auto: the source's on a CUDA GPU, capped on a CPU),
+  // Strength as room tone, and the level in the node's words.
+  if (b.reuseModel) {
+    const installed = await ctx.reuseModels?.().catch(() => undefined);
+    if (installed === null) throw new ProviderError(NO_REUSE_PACK, 400);
+    try {
+      values.reuseModel = reuseFileFor(extra.reuseModel, installed);
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
+    }
+    if (b.rate) {
+      const auto = extra.rate === undefined || extra.rate === "auto";
+      const device = auto ? await ctx.device?.().catch(() => undefined) : undefined;
+      values.rate = rateFor(extra.rate ?? "auto", device, input.sourceDuration ?? ctx.media?.(String(values.audio ?? ""))?.duration);
+    }
+    const strength = extra.strength as keyof typeof STRENGTH_DB | undefined;
+    if (b.roomToneDb && extra.roomToneDb === undefined && strength && strength in STRENGTH_DB) values.roomToneDb = STRENGTH_DB[strength];
+    if (b.level && (extra.level === "match" || extra.level === "voice")) values.level = extra.level === "voice" ? "-16 LUFS" : "match input";
+    for (const k of ["reuseModel", "rate", "strength", "background", ...(values.level !== undefined ? ["level"] : [])]) delete extra[k];
+  }
+  delete extra.background;
   const sourceChannels = b.channels || b.separationModel ? (ctx.media?.(String(values.audio ?? ""))?.channels ?? (Number(extra.sourceChannels) || undefined)) : undefined;
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
@@ -1573,7 +1655,9 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   }
 
   const bound = applyBindings(graph, b, Object.fromEntries(Object.entries(values).filter(([k]) => !left.includes(k))));
-  if (bound.missing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${bound.missing.join(", ")}`);
+  // maxDimension targets for removed reference branches are expected: their scale nodes go with the loader.
+  const realMissing = bound.missing.filter((m) => !/^maxDimension\b/.test(m));
+  if (realMissing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${realMissing.join(", ")}`);
   let wf = bound.workflow;
   const outputIds = manifest.outputs.map((o) => o.node);
   // The prompt helper (FLUX 3 Image Klein's upsampler) off, or a layout with boxes it would rewrite: the words as typed.
@@ -1750,8 +1834,9 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   const computer = computerScope();
   if (computer) {
     if (worker === "isolated") throw new ProviderError(ISOLATED_ON_COMPUTER);
-    const staged = stageInput(computer, data, contentType, name);
-    rememberSent(staged, data, contentType, name);
+    const sent = onWorkers(computer) ? await forWorkers(data, contentType, name) : { data, contentType, name };
+    const staged = stageInput(computer, sent.data, sent.contentType, sent.name);
+    rememberSent(staged, sent.data, sent.contentType, sent.name);
     return staged;
   }
   const form = new FormData();
@@ -1815,7 +1900,9 @@ async function sweepPasses(prefix: string, worker: ComfyWorker = "main"): Promis
 /** Run `fn` as a principal's work on its own computer: an account's (as that account), or the owner's. */
 export function onComputer<T>(principal: Principal, fn: () => T): T {
   if (principal === "owner") return outsideTenant(() => outsideOwnGpu(fn));
-  return runAsTenant({ kind: "account", id: principal.slice(5) }, () => onOwnGpu({ kind: "computer", principal }, fn));
+  // A task always belongs to the owner or an account; a pool only takes it (callers pass the task's own principal).
+  if (!principal.startsWith("acct:")) throw new Error("Not a task's principal");
+  return runAsTenant({ kind: "account", id: principal.slice(5) }, () => onOwnGpu({ kind: "computer", principal: principal as `acct:${string}` }, fn));
 }
 
 /** The most one result may weigh when it comes from a computer: an account's 1 GB (less when its files are fuller); the owner's 8 GB. */
@@ -1845,7 +1932,7 @@ export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_b
     outputs = collectOutputs(e, manifest, `relay:${t.id}`);
     if (outputs.length) break;
   }
-  if (!outputs.length) return t.meta_batch && !passes && t.prefix ? { follow: t.prefix } : { error: "Workflow finished without saving any output" };
+  if (!outputs.length) return t.meta_batch && !passes && t.prefix ? { follow: t.prefix } : { error: "This run finished without a result. Press Retry." };
   const account = tenantAccount();
   let budget = Infinity;
   if (account) {
@@ -1894,13 +1981,16 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   const found = typeof meta.relay === "string" ? getTask(principal, meta.relay) : null;
   if (!found) return { state: "failed", error: "This run was lost. Press Retry." };
   const t = checkClocks(found);
+  // A run on the workers: while it waits, its place in line; once a worker has it, that worker's reports (a worker that
+  // goes quiet gives it back to the line, pool.ts, so no "open Fuobe on your computer").
+  if (t.pools && t.state === "waiting") return { state: "queued", message: t.note === "resent" ? "Back in line for another GPU" : poolWaitWords(t) };
   const p = taskProgress(t.id);
   const kind = extraOf(t).made ?? made ?? "image";
   const waitMs = tenantAccount() ? ACCOUNT_LIMITS.queueMs : 4 * 3_600_000;
   const sentAt = t.sent_at ?? undefined;
   // Sent, and the computer's tab stopped answering (closed, asleep): not a run that looks alive for half an hour.
-  const r = t.state === "waiting" ? null : runnerFacts(principal);
-  const away = t.state !== "waiting" && (!r || Date.now() - r.seenAt >= RELAY_TIMES.onlineMs);
+  const r = t.state === "waiting" || t.pools ? null : runnerFacts(principal);
+  const away = !t.pools && t.state !== "waiting" && (!r || Date.now() - r.seenAt >= RELAY_TIMES.onlineMs);
   const down = t.down_at ? (t.down_why === "setting" ? RELAY_WORDS.comfyNoSetting : RELAY_WORDS.comfyDown) : away ? RELAY_WORDS.computerAway : undefined;
   switch (t.state) {
     case "waiting": {
@@ -1931,7 +2021,7 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
         const type = o.url.startsWith("relay:") ? types.get(n) : undefined;
         return type ? { ...o, contentType: type } : o;
       });
-      if (!outputs.length) return { state: "failed", error: "Workflow finished without saving any output" };
+      if (!outputs.length) return { state: "failed", error: "This run finished without a result. Press Retry." };
       try {
         outputs = await bundleFrames(outputs, String(meta.generationId ?? ""));
       } catch (e) {
@@ -1982,6 +2072,7 @@ export const comfyProvider: ProviderAdapter = {
       device: () => comfyDevice(worker),
       // Fresh: a model installed a moment ago runs. (On someone's computer, nothing to ask: its ComfyUI has the last word.)
       dbsModels: () => comfyDbsModels(worker, 0),
+      reuseModels: () => comfyReuseModels(worker, 0),
     });
     // On someone's computer: the job waits for their Fuobe tab, which sends exactly this graph under the prompt id minted
     // here. A refusal comes back in its report, and the poll explains it as below.
@@ -1998,6 +2089,8 @@ export const comfyProvider: ProviderAdapter = {
         workflowId: manifest.id,
         made: model?.kind,
         loras: (input.loras ?? []).map((l) => ({ file: l.file, ...(l.url && { url: l.url }) })),
+        // The owner's jobs on the workers: the lane and files they need, ahead of everyone else's, with a wait limit.
+        ...(onWorkers(computer) && { pool: poolFields(manifest.id, { boostMs: OWNER_BOOST_MS, waitMs: poolWaitMs() }) }),
       });
       return { externalId: task.promptId, meta: { ...meta, generationId, relay: task.id }, payload: wf };
     }
@@ -2019,13 +2112,13 @@ export const comfyProvider: ProviderAdapter = {
     }
     if (!PROMPT_ID.test(body.prompt_id)) {
       // Stop it there: an id Fuobe can't use would never be collected.
-      throw new ProviderError(ownGpu() ? "Your ComfyUI answered with a job id Fuobe can't use." : "ComfyUI answered with a job id Fuobe can't use.");
+      throw new ProviderError(ownGpu() ? "Your ComfyUI couldn't take this run. Press Retry." : "ComfyUI couldn't take this run. Press Retry.");
     }
     return { externalId: body.prompt_id, meta: { ...meta, generationId, ...(worker === "isolated" && { worker }) }, payload: wf };
   },
 
   async poll({ externalId, meta, model, ...rest }) {
-    if (!PROMPT_ID.test(externalId)) return { state: "failed", error: "ComfyUI answered with a job id Fuobe can't use." };
+    if (!PROMPT_ID.test(externalId)) return { state: "failed", error: "ComfyUI couldn't take this run. Press Retry." };
     const worker: ComfyWorker = meta.worker === "isolated" ? "isolated" : "main";
     let manifest: ManifestWorkflow | undefined;
     try {
@@ -2054,7 +2147,7 @@ export const comfyProvider: ProviderAdapter = {
         outputs = next ?? [];
       }
       forget(externalId);
-      if (!outputs.length) return { state: "failed" as const, error: "Workflow finished without saving any output" };
+      if (!outputs.length) return { state: "failed" as const, error: "This run finished without a result. Press Retry." };
       try {
         outputs = await bundleFrames(outputs, String(meta.generationId ?? String(meta.prefix ?? "").replace(/^fuobe\//, "")));
       } catch (e) {
@@ -2084,10 +2177,10 @@ export const comfyProvider: ProviderAdapter = {
       misses.set(externalId, n);
       if (n < 3) return { state: "running", message: "Checking on ComfyUI" };
       forget(externalId);
-      return { state: "failed", error: "Prompt disappeared from the ComfyUI queue (server restarted or job was cleared)" };
+      return { state: "failed", error: "ComfyUI restarted and lost this run. Press Retry." };
     }
     globalThis.__fuobeComfyMisses?.delete(externalId);
-    if (pendingIdx >= 0) return { state: "queued", message: `In ComfyUI queue · position ${pendingIdx + 1}` };
+    if (pendingIdx >= 0) return { state: "queued", message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
     const total = Number(meta.nodeCount ?? 0);
     const stepFrac = p && p.max ? p.value / p.max : 0;
     const progressValue = total ? Math.min(0.99, ((p?.nodesDone ?? 0) - 1 + stepFrac) / total) : stepFrac || undefined;

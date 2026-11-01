@@ -134,15 +134,15 @@ export function videoToolNote(model: Pick<ModelDef, "name" | "engine" | "options
     if (outs.length > 1) return null;
     if (outs[0] === "cutout") return `${model.name} makes the cut-out only — BiRefNet and SAM also make the alpha mask.`;
     return model.engine === "cloud"
-      ? "The cloud gives the alpha mask of what you name — cut it out by words with SAM 3 on your ComfyUI, or cut out the whole subject with BiRefNet or Bria."
+      ? "Name what to keep and get its mask, or cut out the whole subject."
       : `${model.name} makes the alpha mask only.`;
   }
   const maps = o.colormaps ?? ["grayscale"];
   if (maps.length >= COLORMAPS.length) return null;
   if (model.engine === "open") {
     return maps.length > 1
-      ? `The open engine draws ${maps.map(colormapLabel).join(" and ")} — Turbo, Magma and Viridis need the cloud engine.`
-      : `${model.name} draws grayscale only — Video Depth Anything adds Inferno; Turbo, Magma and Viridis need the cloud engine.`;
+      ? `${maps.map(colormapLabel).join(" and ")} work with open-source models. Turbo, Magma and Viridis need Cloud.`
+      : `${model.name} draws grayscale only. Video Depth Anything adds Inferno; Turbo, Magma and Viridis need Cloud.`;
   }
   return `${model.name} draws ${maps.map(colormapLabel).join(", ")}.`;
 }
@@ -449,6 +449,8 @@ export function blockerFor(s: {
   /** Frames mode: the start frame to add, or a model that can't follow frames (framesBlocker in catalog/keyframes.ts). */
   frames?: Blocker | null;
   uploading: boolean;
+  /** A voice slot's "Clean up voice" is still running: the run waits for the clean file. */
+  cleaning?: boolean;
   maskMissing?: boolean;
   planError?: string | null;
   promptMissing: boolean;
@@ -459,6 +461,7 @@ export function blockerFor(s: {
   if (s.frames) return s.frames;
   if (s.missing) return { message: missingMessage(s.missing), slot: s.missing.key };
   if (s.uploading) return { message: "Uploading…", quiet: true };
+  if (s.cleaning) return { message: "Waiting for the clean voice", quiet: true };
   if (s.maskMissing) return { message: "Paint the area to change", slot: "mask" };
   // The planner says "Write a prompt first" too (an empty prompt on a model that needs one): as quiet as the composer's own.
   if (s.planError) return s.planError === WRITE_PROMPT ? { message: WRITE_PROMPT, quiet: true } : { message: s.planError };

@@ -28,7 +28,7 @@ async function call<T>(method: string, body?: unknown, test = false): Promise<T>
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw responseError(res, j.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, j.error ?? "Something went wrong. Please try again.");
   return j;
 }
 
@@ -92,8 +92,7 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
   return (
     <div className={cn("w-full min-w-0 space-y-4 sm:max-w-[36rem]", className)}>
       <p className="text-[13px] text-muted-foreground">
-        Free accounts run on their own ComfyUI, never on this studio&apos;s own keys or GPU. Runs from the Image, Video and Audio studios on open-source models go to it. It must be
-        reachable from the internet, for example through a Cloudflare Tunnel or ngrok in front of your ComfyUI.
+        {gpu ? "Your runs go to your ComfyUI through this web address." : "Your runs go to your ComfyUI through a secure web address. Here's how to make one:"}
       </p>
       {gpu ? (
         <div className="flex items-start gap-2.5 rounded-xl bg-brand-faint px-3 py-2.5 text-[13px]">
@@ -119,7 +118,7 @@ export function YourGpu({ className, onLinked }: { className?: string; onLinked?
           </Label>
           <Input id={`${id}-url`} placeholder="https://your-tunnel.trycloudflare.com" value={url} onChange={(e) => setUrl(e.target.value)} aria-invalid={!!error || local} />
           {local && (
-            <p className="text-[12px] text-destructive">That address is on your own computer or network, and the server can&apos;t reach it. Start a tunnel and paste its https address.</p>
+            <p className="text-[12px] text-destructive">That address only works on your own network. Paste the https address your tunnel prints.</p>
           )}
         </div>
         <div className="space-y-1.5">

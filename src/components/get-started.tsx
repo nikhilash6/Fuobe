@@ -36,13 +36,10 @@ const INTENTS = [
 
 export type IntentMode = "image" | "video" | "edit";
 
-/** Models per workflow, how to install ComfyUI, and its install command: the GPU card's links. */
+/** How to install ComfyUI, and its install command: the GPU card's links. */
 function ComfyLinks() {
   return (
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <Link href="/workflows" className="text-brand-text underline-offset-2 hover:underline">
-        Models per workflow
-      </Link>
       <a href={COMFY_INSTALL_DOCS} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text underline-offset-2 hover:underline">
         Install ComfyUI <ExternalLink className="size-3" />
       </a>
@@ -232,9 +229,6 @@ export function GetStarted({
               onConnected={connected("ComfyUI")}
               hint={
                 <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <Link href="/workflows" className="text-brand-text underline-offset-2 hover:underline">
-                    Models per workflow
-                  </Link>
                   <a href={COMFY_INSTALL_DOCS} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text underline-offset-2 hover:underline">
                     Install ComfyUI <ExternalLink className="size-3" />
                   </a>

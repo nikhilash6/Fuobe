@@ -76,6 +76,8 @@ export const LOADER_FOLDERS = {
   OpenH3RegenLora: { lora_name: 'loras' },
   OpenH3RegenUpscale: { model_name: 'latent_upscale_models' },
   OpenH3RegenFastVAEDecode: { vae_name: 'vae' },
+  // Clean up voice: ComfyUI-RE-USE's loader reads models/reuse.
+  REUSELoader: { model: 'reuse' },
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
 const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode']);
@@ -153,6 +155,8 @@ export const BINDING_KEYS = new Set([
   'preset',
   // Open-H3 Regenerate (n7-3): the pack's output size and draft size (its combo strings) and the refine's start noise
   'resolution', 'draftSize', 'startSigma',
+  // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
+  'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

@@ -93,7 +93,7 @@ export async function waitForGeneration(id: string, o: { signal?: AbortSignal; t
   while (Date.now() < deadline) {
     if (o.signal?.aborted) throw new Error("Stopped");
     const res = await fetch(`/api/generations/${id}`, { signal: o.signal });
-    if (!res.ok) throw new Error(res.status === 404 ? "That job is gone" : `Request failed (${res.status})`);
+    if (!res.ok) throw new Error(res.status === 404 ? "That job is gone" : "Something went wrong. Please try again.");
     const g = (await res.json()) as Generation;
     if (g.status === "succeeded") return g;
     if (g.status === "failed" || g.status === "canceled") throw new Error(g.error || "It didn't finish");

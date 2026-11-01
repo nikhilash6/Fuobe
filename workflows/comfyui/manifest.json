@@ -6375,7 +6375,7 @@
         }
       ],
       "vramGb": 16,
-      "license": "Apache-2.0 (InfiniteTalk, Wan 2.1, lightx2v; FusioniX: Apache-2.0 card, the LoRAs it merges unchecked)",
+      "license": "Apache-2.0 (InfiniteTalk, Wan 2.1, lightx2v; FusioniX: Apache-2.0 card; the LoRAs it merges carry their own licences)",
       "validated": true,
       "notes": "kijai WanVideoWrapper example 03 (GGUF Q8 Wan2.1-I2V-480p + InfiniteTalk single, lightx2v LoRA, 6 steps). Generates in 81-frame windows until the audio ends; `frames` is a MAX frame cap @25 fps (default 500 = 20 s). Changes vs example: MelBandRoFormer vocal separation removed (use clean speech audio), attention sdpa instead of sageattn, save_output=true, model sub-folders flattened. A VHS_VideoCombine node saves the video. The defaults are the fast lightx2v pass (6 steps, cfg 1, shift 11, motion_frame 9, dpm++_sde). Fuobe Speak sends a slower, higher-quality recipe through the extra bindings: lora Wan2.1_I2V_14B_FusionX_LoRA.safetensors at 1 (the run's LoRA goes into WanVideoLoraSelect, which this wrapper graph loads itself), steps 25, cfg 5 (text guidance), audioCfg 5 (audio guidance; the wrapper runs the extra audio-free pass when cfg > 1), shift 10, scheduler unipc (InfiniteTalk's solver), motionFrame 15 and colormatch reinhard for InfiniteTalk's colour correction (a Lab mean / spread match to the portrait; the wrapper has no strength, so on = 1). About 25 / 6 × 3 passes the time of the fast pass.",
       "autoDownloads": [
@@ -10746,6 +10746,24 @@
             "node": "90",
             "input": "filename_prefix"
           }
+        ],
+        "maxDimension": [
+          {
+            "node": "20",
+            "input": "largest_size"
+          },
+          {
+            "node": "21",
+            "input": "largest_size"
+          },
+          {
+            "node": "22",
+            "input": "largest_size"
+          },
+          {
+            "node": "23",
+            "input": "largest_size"
+          }
         ]
       },
       "outputs": [
@@ -10835,6 +10853,24 @@
             "node": "90",
             "input": "filename_prefix"
           }
+        ],
+        "maxDimension": [
+          {
+            "node": "20",
+            "input": "largest_size"
+          },
+          {
+            "node": "21",
+            "input": "largest_size"
+          },
+          {
+            "node": "22",
+            "input": "largest_size"
+          },
+          {
+            "node": "23",
+            "input": "largest_size"
+          }
         ]
       },
       "outputs": [
@@ -10873,6 +10909,120 @@
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only",
       "validated": false,
       "notes": "The Qwen-Image 2.1 turbo image-edit workflow, as the site's fast preview edits run it: turbo int8 model, the fixed 8-step ManualSigmas schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder's latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there)."
+    },
+    {
+      "id": "qwen-image-21-live-edit",
+      "title": "Qwen-Image 2.1 Live Edit (2-step DMD2 LoRA, as you type)",
+      "capability": "edit",
+      "file": "qwen-image-21-live-edit.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-live-edit.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "image3": [
+          {
+            "node": "12",
+            "input": "image"
+          }
+        ],
+        "image4": [
+          {
+            "node": "13",
+            "input": "image"
+          }
+        ],
+        "mask": [
+          {
+            "node": "14",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "width": [
+          {
+            "node": "30",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "30",
+            "input": "height"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "width": 512,
+        "height": 512
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-DMD2-2steps.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights.safetensors",
+          "sizeGb": 0.07
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "fuobe-live",
+          "repo": "https://github.com/workingprototype/Fuobe"
+        }
+      ],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1 and the DMD2 2-step LoRA by linoyts, a derivative): NON-COMMERCIAL, research and evaluation only; Fuobe live nodes MIT",
+      "validated": false,
+      "notes": "Live editing as you type (Fuobe builds this graph in code; this file is its canonical form): the int8 Qwen-Image 2.1 model with the DMD2 2-step LoRA at 1, BasicGuider (CFG 1, positive only), euler, ManualSigmas \"1.0, 0.5, 0.0\" (the LoRA card's schedule, no shift), on Fuobe's live nodes (fuobe_live.py): a loader that skips the input-folder listing, the references resized and VAE-encoded in their own node (cached while only the text changes), a positive-only encode, a crop around a painted region, a paste-back of unchanged pixels with colour matching, and a save node that sends the picture over the socket. Live frames at 384-768, kept steps at 1024-2048 composited onto a full-size lossless master. References 2-4 and the mask are optional."
     },
     {
       "id": "qwen-image-21-inpaint",
@@ -14309,9 +14459,247 @@
         }
       ],
       "vramGb": 0,
-      "license": "DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)",
+      "license": "DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; bundled DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)",
       "validated": true,
       "notes": "CPU OK, about 1.7 GiB on CUDA. audio = an audio file or a video (LoadAudio reads a video's soundtrack without decoding frames). DBSLoader model DBS-BSRNN-DnR (fast: 18.9 MB, 9.07 dB SI-SDR on DnR v2, the CPU default) or DBS-TIGER-DnR (best: 4.1 MB, 10.13 dB, about 3x slower on a CPU, the CUDA default); device auto. Measured on a 4-CPU host (torch 2.14.1+cpu, 10-20 s clips): DBS-BSRNN 0.17-0.33x real time per channel, DBS-TIGER 0.08-0.09x. DBSSeparate channels mono (the mean of the channels, the official usage) or each channel (stereo stems: every channel separated on its own, 2x the time); output_sample_rate input. ComfyUI saves audio as mono or stereo only (a 5.1 waveform comes out as scrambled stereo three times as long), so the provider splits a file with more than 2 channels in mono and makes its background from music + effects (node 4 rewired to AudioMerge add) rather than the original minus the speech. Outputs in order: voice (speech), music, effects (sfx), background = original minus speech (AudioMerge subtract: with mono it keeps the original stereo image at mono cost; AudioMerge scales the whole result down when it peaks over 1.0), and the pack's JSON report (model, device, rates, windows, seconds, times real time). Voice + background add up to the source, except on a loud master where AudioMerge had to lower the background to fit under full scale (FLAC holds no more). Voice is first, so a chain without a stem takes the dialogue. Trained on synthetic English mixes (DnR v2): dialogue separates well (15-16 dB), music against effects less so (5.7-7.8 dB). Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved (recorded as information)."
+    },
+    {
+      "id": "voice-clean-reuse",
+      "title": "Clean up voice: noise, echo, clipping and codec damage removed from speech (NVIDIA RE-USE, ComfyUI-RE-USE)",
+      "capability": "enhance-voice",
+      "file": "voice-clean-reuse.json",
+      "source": "hand-built (scripts/comfy/hand-built/voice-clean-reuse.json)",
+      "bindings": {
+        "audio": [
+          {
+            "node": "1",
+            "input": "audio"
+          }
+        ],
+        "reuseModel": [
+          {
+            "node": "2",
+            "input": "model"
+          }
+        ],
+        "rate": [
+          {
+            "node": "3",
+            "input": "rate"
+          }
+        ],
+        "channels": [
+          {
+            "node": "3",
+            "input": "channels"
+          }
+        ],
+        "roomToneDb": [
+          {
+            "node": "3",
+            "input": "room_tone_db"
+          }
+        ],
+        "level": [
+          {
+            "node": "3",
+            "input": "level"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "4",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "4",
+          "kind": "audio",
+          "stem": "voice"
+        },
+        {
+          "node": "5",
+          "kind": "text",
+          "role": "report"
+        }
+      ],
+      "defaults": {
+        "reuseModel": "NemotronLabs-RE-USE.safetensors",
+        "rate": "source",
+        "channels": "mono",
+        "roomToneDb": -60,
+        "level": "match input"
+      },
+      "limits": {},
+      "models": [
+        {
+          "file": "NemotronLabs-RE-USE.safetensors",
+          "folder": "reuse",
+          "url": "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/resolve/31f82f2efad1095034492f236e8dac9239ba713b/model.safetensors",
+          "sizeGb": 0.04
+        },
+        {
+          "file": "NemotronLabs-RE-USE-laughter.safetensors",
+          "folder": "reuse",
+          "url": "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE-laughter/resolve/1b1521dd659608e1e063ada83e0acfe1da473a8b/model.safetensors",
+          "sizeGb": 0.04,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-RE-USE",
+          "repo": "https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE"
+        }
+      ],
+      "vramGb": 0,
+      "license": "RE-USE weights OpenMDW-1.1 (NVIDIA; 'ready for commercial use' on the card; the card's safety section points to the NVIDIA Open Model License for use-case limits); ComfyUI-RE-USE code MIT with adapted RE-USE code OpenMDW-1.1",
+      "validated": false,
+      "notes": "CPU OK; about 1 GB VRAM with chunking. audio = an audio file or a video (LoadAudio reads a video's soundtrack without decoding frames). REUSELoader model NemotronLabs-RE-USE (voice only) or NemotronLabs-RE-USE-laughter (keeps laughs and breaths a little more), 39 MB each; device auto. REUSEEnhance rate: the model's STFT scales with the rate (a 40 ms window at any rate), so work grows about linearly with it; above the source rate it fills the empty high band (bandwidth extension). Chunks from the free memory (2-20 s on CUDA, 5-10 s on a CPU) joined with 1 s raised-cosine crossfades; Cancel works between chunks. room_tone_db mixes the original back under the clean voice (Strength: Full -60 = off, Natural -24, Light -14); level match input brings the speech level back (the model is about 3 dB quieter), peak at most -1 dBFS. Measured under a busy RTX 5090 (worst cases): 0.26 s of work per second of audio at 16 kHz, 1.4 at 48 kHz with Triton (about 6x slower without); i9 CPU with numba: 4 at 16 kHz, 15 at 48 kHz. It keeps the main speaker and removes everything else (other voices, music, effects): voice-clean-bed-reuse keeps the music and effects. The Mamba layer is a plain-PyTorch rewrite (no mamba-ssm): it matches the reference maths numerically, but it is not NVIDIA's code path."
+    },
+    {
+      "id": "voice-clean-bed-reuse",
+      "title": "Clean the dialogue of a soundtrack and keep its music and effects (DBS + NVIDIA RE-USE)",
+      "capability": "enhance-voice",
+      "file": "voice-clean-bed-reuse.json",
+      "source": "hand-built (scripts/comfy/hand-built/voice-clean-bed-reuse.json)",
+      "bindings": {
+        "audio": [
+          {
+            "node": "1",
+            "input": "audio"
+          }
+        ],
+        "reuseModel": [
+          {
+            "node": "2",
+            "input": "model"
+          }
+        ],
+        "separationModel": [
+          {
+            "node": "3",
+            "input": "model"
+          }
+        ],
+        "channels": [
+          {
+            "node": "4",
+            "input": "channels"
+          },
+          {
+            "node": "6",
+            "input": "channels"
+          }
+        ],
+        "rate": [
+          {
+            "node": "6",
+            "input": "rate"
+          }
+        ],
+        "roomToneDb": [
+          {
+            "node": "6",
+            "input": "room_tone_db"
+          }
+        ],
+        "level": [
+          {
+            "node": "6",
+            "input": "level"
+          }
+        ],
+        "bedDb": [
+          {
+            "node": "6",
+            "input": "bed_db"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "7",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "7",
+          "kind": "audio",
+          "stem": "voice"
+        },
+        {
+          "node": "8",
+          "kind": "text",
+          "role": "report"
+        }
+      ],
+      "defaults": {
+        "reuseModel": "NemotronLabs-RE-USE.safetensors",
+        "separationModel": "DBS-BSRNN-DnR",
+        "rate": "source",
+        "channels": "mono",
+        "roomToneDb": -24,
+        "level": "match input",
+        "bedDb": 0
+      },
+      "limits": {},
+      "models": [
+        {
+          "file": "NemotronLabs-RE-USE.safetensors",
+          "folder": "reuse",
+          "url": "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/resolve/31f82f2efad1095034492f236e8dac9239ba713b/model.safetensors",
+          "sizeGb": 0.04
+        },
+        {
+          "file": "DBS-BSRNN-DnR/model.safetensors",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/model.safetensors",
+          "sizeGb": 0.02
+        },
+        {
+          "file": "DBS-BSRNN-DnR/config.json",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "DBS-TIGER-DnR/model.safetensors",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/model.safetensors",
+          "sizeGb": 0.004
+        },
+        {
+          "file": "DBS-TIGER-DnR/config.json",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "NemotronLabs-RE-USE-laughter.safetensors",
+          "folder": "reuse",
+          "url": "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE-laughter/resolve/1b1521dd659608e1e063ada83e0acfe1da473a8b/model.safetensors",
+          "sizeGb": 0.04,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-DBS",
+          "repo": "https://github.com/hiroki-abe-58/ComfyUI-DBS/tree/f656e53434b5485c148a2866fbd6ddc6b6152ed6"
+        },
+        {
+          "name": "ComfyUI-RE-USE",
+          "repo": "https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE"
+        }
+      ],
+      "vramGb": 0,
+      "license": "RE-USE weights OpenMDW-1.1 (NVIDIA; 'ready for commercial use' on the card; the card's safety section points to the NVIDIA Open Model License for use-case limits); ComfyUI-RE-USE code MIT with adapted RE-USE code OpenMDW-1.1; DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)",
+      "validated": false,
+      "notes": "CPU OK. The video soundtrack variant of voice-clean-reuse (the provider runs it for params.extra.background \"keep\"): DBS splits the soundtrack (graph A's nodes), RE-USE cleans only the dialogue, and REUSEEnhance mixes the original music & effects (the original minus the speech, AudioMerge subtract) back under it at bed_db, at the higher of the two rates, peak at most -1 dBFS. A source with more than 2 channels runs in mono with music + effects as the bed (node 5 rewired, as graph A). The result has the input's length, starting at 0, so it goes back on the picture with video-mux-audio-replace. DBS was trained on English mixes; the dialogue split is its strong part (15-16 dB)."
     },
     {
       "id": "captions-qwen3-asr",

@@ -7,7 +7,7 @@ import { featuredGallery } from "@/lib/preset-featured";
 
 export const metadata: Metadata = {
   title: "Effects",
-  description: "Storms, transformations and cinematic VFX from one photo, made with open-source models on your own GPU.",
+  description: "Storms, transformations and cinematic VFX from one photo.",
 };
 
 export default function Page() {
@@ -15,7 +15,7 @@ export default function Page() {
     <PageShell>
       <PageHeader
         title="Effects"
-        description="Storms, transformations and cinematic VFX from one photo. Runs free on your GPU or in the cloud; color looks apply instantly in your browser."
+        description="Storms, transformations and cinematic VFX from one photo. Colour looks apply instantly."
       />
       <PresetGallery {...featuredGallery(EFFECTS.map(toPresetCard))} href="/video?preset={id}" noun="effects" />
     </PageShell>

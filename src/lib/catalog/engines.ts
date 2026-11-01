@@ -56,8 +56,8 @@ export function pickEngine(
     if (mode !== "both" && asked !== mode) {
       throw new Error(
         mode === "open"
-          ? `${m.name} on the cloud isn't available: this install is set to open source only (Settings → Engine mode). Switch to Open source to run it on your GPU`
-          : `${m.name} on your GPU isn't available: this install is set to paid cloud APIs only (Settings → Engine mode). Switch to Cloud to run it there`,
+          ? `${m.name} on the cloud isn't available here. Switch to Open source to run it on your GPU`
+          : `${m.name} on your GPU isn't available here. Switch to Cloud to run it there`,
       );
     }
     return asked;

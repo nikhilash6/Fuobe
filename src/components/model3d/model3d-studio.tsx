@@ -1,7 +1,6 @@
 "use client";
 
 import { Box, Loader2, PersonStanding } from "lucide-react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -165,7 +164,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const input: Model3dInput = { engine, mode, modelId: modelId ?? undefined, photo: photo?.ref, views: sides, prompt: mode === "text" ? text : mode === "objects" ? object : undefined };
   const uploading = !!photo?.uploading || VIEW_SIDES.some((s) => views[s]?.uploading);
   // A guest or an account reads why the button is off, not a step on an upload that is off too.
-  const blocker = visitor ? "Image to 3D runs on a self-hosted Fuobe for now" : (model3dBlocker(input) ?? (uploading ? "Uploading…" : null));
+  const blocker = visitor ? "Image to 3D isn't available here" : (model3dBlocker(input) ?? (uploading ? "Uploading…" : null));
   // The price before anything is attached: placeholders stand in for the files and the words.
   const priced: GenerationRequest | null = modelId
     ? model3dRequest({ ...input, photo: input.photo ?? PLACEHOLDER, views: { front: PLACEHOLDER, left: PLACEHOLDER, ...sides }, prompt: input.prompt?.trim() || "an object" })
@@ -173,7 +172,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const preview = useRunPreview(engineKnown ? priced : null);
   // A free run (open weights) is free on a self-hosted Fuobe: a guest or an account reads that, not "your ComfyUI".
   const free = !!preview.data && !preview.data.demo && (preview.data.engine === "open" || preview.data.costUsd === 0);
-  const price = visitor && free ? "Self-hosted only" : priceLine(preview.data);
+  const price = visitor && free ? "Not available here" : priceLine(preview.data);
   const cloudAllowed = engineMode !== "open";
   const go = () => {
     if (visitor) return;
@@ -192,7 +191,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
         <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} />
       </Suspense>
       <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]}>
-        {visitor && <SelfHostNote className="mt-3 max-w-xl">Image to 3D runs on a self-hosted Fuobe for now.</SelfHostNote>}
+        {visitor && <SelfHostNote className="mt-3 max-w-xl">Image to 3D isn&apos;t available here.</SelfHostNote>}
       </ToolHero>
       <ModePicker mode={mode} onChange={pickMode} />
       {rigHint && (
@@ -317,15 +316,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
                 </Select>
                 <p className="text-[12px] text-muted-foreground">{choices.find((m) => m.id === modelId)?.note}</p>
                 {!licence && info[modelId]?.notices.length > 0 && <p className="text-[12px] font-medium">{info[modelId].notices.join(" · ")}</p>}
-                {licence && (
-                  <p className="text-[12px] text-muted-foreground">
-                    Licence: {[licence.name, ...licence.flags].join(" · ")}
-                    {licence.notices.length > 0 && <span className="font-medium text-foreground"> · {licence.notices.join(" · ")}</span>} ·{" "}
-                    <Link href="/settings/about" className="underline underline-offset-2" prefetch={false}>
-                      All licences
-                    </Link>
-                  </p>
-                )}
+                {licence && licence.notices.length > 0 && <p className="text-[12px] text-muted-foreground">{licence.notices.join(" · ")}</p>}
               </div>
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
@@ -336,11 +327,11 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
               <p className="mt-1 text-[12px] text-muted-foreground">
                 {mode === "splat"
                   ? engine === "open"
-                    ? `TripoSplat cuts the subject out and renders an orbit video of the splat${visitor ? "" : " on your GPU"}.`
-                    : "TripoSplat cuts the subject out and returns a .ply splat to download."
+                    ? "Cuts the subject out and comes with an orbit video."
+                    : "Cuts the subject out, ready to download."
                   : engine === "open"
-                    ? "Open models also get a turntable video, rendered after the model is made."
-                    : "Cloud models return the .glb; record a turntable right here in your browser."}
+                    ? "Comes with a turntable video of your model."
+                    : "Download your model, or record a turntable right here."}
               </p>
             </>
           )}
