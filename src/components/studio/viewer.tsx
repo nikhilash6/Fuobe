@@ -13,6 +13,7 @@ import { formatCost, timeAgo } from "@/lib/format";
 import { PRESETS as GRADE_PRESETS } from "@/lib/grade";
 import { trashDaysLeft, userTitle } from "@/lib/library";
 import { editOnlyFormat, isLayered, layerInfo, outputActions, type OutputAction } from "@/lib/output-actions";
+import { useEngineMode } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { CompareSlider } from "./compare-slider";
@@ -165,7 +166,8 @@ export function Viewer({
   // A video this browser can't decode (HEVC or 10-bit H.264 on some systems): shown as a file to download instead.
   const [failedVideo, setFailedVideo] = useState<string | null>(null);
   const run = useActionRunner({ onReuse: onReuse && ((x) => (onReuse(x), onClose())), onCompare: () => setComparing((v) => !v), onDeleted: onClose });
-  const list = useMemo(() => outputActions(g, index, { reuse: !!onReuse, compare: !!source, inViewer: true }), [g, index, onReuse, source]);
+  const engineMode = useEngineMode();
+  const list = useMemo(() => outputActions(g, index, { reuse: !!onReuse, compare: !!source, inViewer: true, engineMode }), [g, index, onReuse, source, engineMode]);
 
   // Read the latest values from the key handler without re-subscribing on every render.
   const latest = useRef({ list, run, g, index, onPrev, onNext, source });

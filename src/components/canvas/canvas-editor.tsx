@@ -699,7 +699,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     [openMenuAt],
   );
 
-  const palette = useMemo(() => paletteItems(mode), [mode]);
+  const palette = useMemo(() => paletteItems(mode, engine), [mode, engine]);
   const menuItems = useMemo(() => {
     const c = menu?.connect;
     if (!c) return palette;

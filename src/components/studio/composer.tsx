@@ -94,6 +94,7 @@ import { Chip, chipBase, chipIdle } from "./chip";
 import { MediaSlot, SlotPreview, type SlotValue } from "./media-slot";
 import { ControlsChip } from "./model-controls";
 import { ModelPicker } from "./model-picker";
+import { FinishChoices } from "./finish-choices";
 import { ELEMENT_ICONS, PromptInput, type PromptInputHandle } from "./prompt-input";
 import { radioKeys, radioTab } from "./radio-keys";
 import { SettingsChip } from "./settings-panel";
@@ -629,12 +630,10 @@ export function Composer({ docked }: { docked: boolean }) {
   if (clipProblem && !planError) planError = clipProblem;
   if (signed.blocker) planError = signed.blocker;
   // Models that take no prompt (try-on, 3D, transcription, upscalers), or can run without one, never ask for one.
+  // A model that reads only words (Open-H3 Regenerate redraws from them) asks for them even in a tool that hides the box.
   const promptMissing =
-    !config.promptOptional &&
-    !opts.promptless &&
-    !opts.promptOptional &&
-    preset?.userPrompt !== "none" &&
-    preset?.userPrompt !== "optional" &&
+    (!!opts.requires?.prompt ||
+      (!config.promptOptional && !opts.promptless && !opts.promptOptional && preset?.userPrompt !== "none" && preset?.userPrompt !== "optional")) &&
     !draft.prompt.trim() &&
     !draft.params.shots?.some((s) => s.prompt.trim()) &&
     // Boxes say what the picture holds: the whole picture's caption can stay empty.
@@ -750,7 +749,11 @@ export function Composer({ docked }: { docked: boolean }) {
     });
   const opNote = op && model ? routesFor(model, op)[0]?.note : undefined;
   // Booleans in, not the model's options object: the React Compiler keeps the memos above.
-  const showPrompt = showsPrompt({ hidePrompt: config.hidePrompt, modelPrompt: config.modelPrompt }, { promptless: !!opts.promptless, promptOptional: !!opts.promptOptional }, preset?.userPrompt);
+  const showPrompt = showsPrompt(
+    { hidePrompt: config.hidePrompt, modelPrompt: config.modelPrompt },
+    { promptless: !!opts.promptless, promptOptional: !!opts.promptOptional, needsPrompt: !!opts.requires?.prompt },
+    preset?.userPrompt,
+  );
   const effectiveOp = studioOp ?? op;
   // SDR to HDR, Export: every format the studio's models on this engine write; picking one this model doesn't
   // write moves the request to the model that does (EXR frames → LTX 2.3 HDR on the cloud).
@@ -1182,7 +1185,7 @@ export function Composer({ docked }: { docked: boolean }) {
           placeholder={
             layoutOn
               ? "Describe the whole picture… the boxes say what goes where"
-              : (preset?.promptPlaceholder ?? (config.hidePrompt && config.modelPrompt ? config.modelPrompt : config.placeholder))
+              : (preset?.promptPlaceholder ?? opts.promptPlaceholder ?? (config.hidePrompt && config.modelPrompt ? config.modelPrompt : config.placeholder))
           }
           elements={elements}
           collapsed={collapsed}
@@ -1222,6 +1225,18 @@ export function Composer({ docked }: { docked: boolean }) {
             );
           })}
         </div>
+      )}
+
+      {/* Upscale → Video: Restore · faithful and Regenerate · creative side by side (on your GPU). */}
+      {config.finishChoices && !preset && (
+        <FinishChoices
+          choices={config.finishChoices}
+          model={model}
+          engine={engine}
+          engineMode={engineMode}
+          offered={(id) => (catalog.offered(id, "open") ? catalog.getModel(id) : undefined)}
+          onPick={pickModel}
+        />
       )}
 
       {/* Preset options (apps) */}

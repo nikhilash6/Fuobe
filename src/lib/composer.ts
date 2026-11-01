@@ -185,11 +185,12 @@ export function settingsSummary(shape: SettingsShape, params: GenParams, model?:
  */
 export function showsPrompt(
   studio: { hidePrompt?: boolean; modelPrompt?: string },
-  options: Pick<ModelDef["options"], "promptless" | "promptOptional"> | undefined,
+  options: (Pick<ModelDef["options"], "promptless" | "promptOptional"> & { needsPrompt?: boolean }) | undefined,
   presetPrompt?: "none" | "optional" | "required",
 ): boolean {
   if (presetPrompt === "none" || options?.promptless) return false;
-  return !studio.hidePrompt || (!!studio.modelPrompt && !!options?.promptOptional);
+  // A model that needs words (requires.prompt: Open-H3 Regenerate) shows the box even in a tool that hides it.
+  return !studio.hidePrompt || !!options?.needsPrompt || (!!studio.modelPrompt && !!options?.promptOptional);
 }
 
 /** The output format a request writes: the one picked, else the model's default or first, else the studio's first. */
@@ -765,7 +766,7 @@ export function acceptedKinds(slots: InputSlot[], multiRef?: { kind?: MediaKind 
 // Hand-off params ("/video?image=…") arriving after the first paint
 
 /** The URL params a studio prefills its draft from; anything else in the query is ignored. */
-export const HANDOFF_PARAMS = ["image", "ref", "video", "audio", "prompt", "preset", "model", "format"] as const;
+export const HANDOFF_PARAMS = ["image", "ref", "video", "audio", "prompt", "preset", "model", "format", "resolution"] as const;
 
 /** A stable key for the hand-off part of a query string ("" when there's none). */
 export function handoffKey(search: string | URLSearchParams | null | undefined): string {

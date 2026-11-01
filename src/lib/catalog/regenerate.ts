@@ -11,6 +11,8 @@ import type { Generation, GenerationRequest, LoraRef } from "./types";
 
 export const REGEN_MODEL = "oss-h3-regenerate";
 export const REGEN_WORKFLOW = "video-regenerate-h3";
+/** The join a clip redrawn in 15 s parts ends with (packet by packet: every part has the same size and rate). */
+export const REGEN_JOIN = "oss-join-encoded";
 /** Upscale → Video's restore model, shown beside Regenerate. */
 export const RESTORE_MODEL = "oss-seedvr2";
 

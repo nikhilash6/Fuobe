@@ -66,7 +66,7 @@ import { useShare } from "@/components/share/share-provider";
 import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useCreateGeneration, useGenerationActions, useSaveElement } from "@/lib/api";
+import { useCreateGeneration, useEngineMode, useGenerationActions, useSaveElement } from "@/lib/api";
 import { ELEMENT_KINDS, type ElementKind } from "@/lib/catalog/elements";
 import { OPERATION_LABELS, type Generation, type OutputFile } from "@/lib/catalog/types";
 import { downloadName, userTitle } from "@/lib/library";
@@ -74,6 +74,7 @@ import { toSrt, toVtt } from "@/lib/cues";
 import { cuesOf, outputActions, textOf, type ActionContext, type OutputAction, type OutputActionId } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
+import { rerenderRequest } from "@/lib/catalog/regenerate";
 import { toastError } from "@/lib/refusals";
 
 export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
@@ -104,6 +105,8 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "download-exr": FileArchive,
   favorite: Heart,
   finalize: Sparkles,
+  regenerate: Sparkles,
+  "rerender-2k": Sparkles,
   compare: Columns2,
   reuse: RotateCcw,
   "make-skill": BookmarkPlus,
@@ -239,6 +242,9 @@ export function useActionRunner(opts: RunnerOptions = {}) {
           { feature: g.feature, modelId: g.modelId, op: "finalize", prompt: g.request.prompt, params: { draftId: o.draftId, resolution: "1080p", duration: g.request.params?.duration } },
           { onSuccess: () => toast.success("Rendering the final 1080p version"), onError: (e) => toastError(e) },
         );
+      case "rerender-2k":
+        // fal's H3 at 2K: the same inputs, words and seed, a new render on the same hosted model (priced per second).
+        return create.mutate(rerenderRequest(g), { onSuccess: () => toast.success("Rendering it again at 2K"), onError: (e) => toastError(e) });
       case "reuse":
         return opts.onReuse?.(g);
       case "make-skill":
@@ -391,7 +397,8 @@ export function TileActions({
   tone?: "media" | "surface";
 }) {
   const run = useActionRunner(opts);
-  const list = useMemo(() => outputActions(g, index, ctx), [g, index, ctx]);
+  const engineMode = useEngineMode();
+  const list = useMemo(() => outputActions(g, index, { ...ctx, engineMode }), [g, index, ctx, engineMode]);
   const [saving, setSaving] = useState(false);
   const strip = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
