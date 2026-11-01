@@ -144,7 +144,10 @@ describe("the preset covers manifest", () => {
         .filter((s) => spec.test(s.text))
         .map((s) => s.file)
         .sort();
-    expect(importers(/from "[^"]*preset-previews\.generated"/)).toEqual(["lib/preset-card-data.ts"]);
+    expect(importers(/from "[^"]*preset-previews\.generated"/)).toEqual(["lib/catalog/preset-recipes.ts", "lib/preset-card-data.ts"]);
+    // "Used for this preview" reads it too: on server pages and modules, in the preset header's chunk, and in a chunk the
+    // composer loads on its own (import()); the composer and the planner read the light preset-recipe-routes.ts.
+    expect(importers(/from "[^"]*catalog\/preset-recipes"/)).toEqual(["app/(studio)/apps/[id]/page.tsx", "components/preset-header.tsx", "server/gpu/tools.ts"]);
     expect(importers(/from "[^"]*preset-card-data"/)).toEqual([
       "app/(studio)/apps/page.tsx",
       "app/(studio)/effects/page.tsx",

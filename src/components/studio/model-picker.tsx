@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Cloud, Cpu, SearchX, Server, Star } from "lucide-react";
+import { ChevronDown, Cloud, Cpu, SearchX, Server, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KEY_ADDED_EVENT, openAddKey } from "@/components/keys/your-keys";
@@ -83,6 +83,7 @@ function ModelRow({
   gpu,
   gpuName,
   needs,
+  made,
 }: {
   m: ModelDef;
   selected: boolean;
@@ -96,6 +97,8 @@ function ModelRow({
   gpuName?: string;
   /** An account's paid model it has no key for yet: dimmed, "Add your fal.ai key" in place of the price. */
   needs?: CloudProvider[] | null;
+  /** The active preset's live preview was made with this model. */
+  made?: boolean;
 }) {
   return (
     <>
@@ -125,6 +128,12 @@ function ModelRow({
         <span className="block truncate text-[12px] leading-snug text-muted-foreground">
           {m.vendor} · {m.tagline}
         </span>
+        {made && (
+          <span className="mt-0.5 flex items-center gap-1 text-[11px] leading-snug font-medium text-brand-text">
+            <Sparkles className="size-3! shrink-0" aria-hidden />
+            Used for this preview
+          </span>
+        )}
         {m.worker === "isolated" && (
           <span className="mt-0.5 flex items-center gap-1 text-[11px] leading-snug text-muted-foreground">
             <Server className="size-3! shrink-0" aria-hidden />
@@ -172,6 +181,12 @@ interface PickerProps {
   defaultModels?: { cloud: string; open: string };
   /** The operations the studio offers, its main one first: "Best for this studio" ranks the models that do it. */
   ops?: Operation[];
+  /** The model the active preset's preview was made with (its recipe): first in "Best for this studio". */
+  recipe?: string;
+  /** A short list in its own order (an app's models): one group, no Recent, Starred or Best. */
+  flat?: boolean;
+  /** The model the active preset's live preview really came from: "Used for this preview" on its row. */
+  madeWith?: string;
 }
 
 /**
@@ -180,9 +195,18 @@ interface PickerProps {
  * desktop, a bottom sheet on phones. The list is built only while the panel is open (a canvas
  * board shows dozens of closed pickers).
  */
+/**
+ * A model's name on a phone's narrow button: Qwen-Image's family name shortened ("Qwen 2.1 Turbo"), so the word that
+ * tells two models apart (Turbo) stays in view. The full name is the button's label.
+ */
+export function phoneName(name: string): string {
+  return name.replace(/^Qwen-Image(-Edit)? /, (_, edit?: string) => (edit ? "Qwen Edit " : "Qwen "));
+}
+
 export function ModelPicker(props: PickerProps) {
   const [open, setOpen] = useState(false);
   const { value, models, onChange } = props;
+  const made = !!value && value.id === props.madeWith;
   // The model a dimmed row was chosen for (by this picker only): picked once its key is saved and the studio knows it
   // (the status has the key, so the engine switch is on Cloud and nothing swaps the model back to an open one).
   const waiting = useRef<string | null>(null);
@@ -213,9 +237,17 @@ export function ModelPicker(props: PickerProps) {
       className="w-[min(92vw,440px)] p-0 shadow-strong"
       sheetClassName="h-[80svh]"
       trigger={
-        <Button variant="secondary" size="sm" className="h-8 shrink-0 gap-1.5 rounded-full px-3 text-[13px] font-medium" aria-label={`Model: ${value?.name ?? "none"}. Change model`}>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-8 shrink-0 gap-1.5 rounded-full px-3 text-[13px] font-medium"
+          aria-label={`Model: ${value?.name ?? "none"}${made ? ", used for this preview" : ""}. Change model`}
+          title={made ? "Used for this preview" : undefined}
+        >
           {value?.engine === "open" ? <Cpu className="size-3.5" /> : <Cloud className="size-3.5" />}
-          <span className="max-w-32 truncate sm:max-w-44">{value?.name ?? "Choose model"}</span>
+          <span className="max-w-40 truncate max-sm:hidden sm:max-w-44">{value?.name ?? "Choose model"}</span>
+          <span className="max-w-40 truncate sm:hidden">{value ? phoneName(value.name) : "Choose model"}</span>
+          {made && <Sparkles className="size-3.5 text-brand-text" aria-hidden />}
           <ChevronDown className="size-3.5 opacity-60" />
         </Button>
       }
@@ -242,6 +274,9 @@ function PickerList({
   onEngineChange,
   defaultModels,
   ops,
+  recipe,
+  flat,
+  madeWith,
   onPicked,
   onNeedsKey,
 }: PickerProps & { onPicked: () => void; onNeedsKey?: (m: ModelDef, p: CloudProvider) => void }) {
@@ -255,8 +290,12 @@ function PickerList({
   const today = useToday();
   const engines = useMemo<Engine[]>(() => (mode === "both" ? ["cloud", "open"] : [mode]), [mode]);
   // "Best" ranks models that do what the studio is for, not single-purpose tools.
-  const best = useMemo(() => studioBest(models, engine, defaultModels?.[engine], ops), [models, engine, defaultModels, ops]);
-  const { groups, count } = useMemo(() => groupModels({ models, engine, engines, query: q, recent, starred, best }), [models, engine, engines, q, recent, starred, best]);
+  // A preset's recipe leads, when it runs on this engine.
+  const best = useMemo(() => {
+    const ranked = studioBest(models, engine, defaultModels?.[engine], ops);
+    return recipe && models.some((m) => m.id === recipe && m.engine === engine) ? [recipe, ...ranked.filter((id) => id !== recipe)] : ranked;
+  }, [models, engine, defaultModels, ops, recipe]);
+  const { groups, count } = useMemo(() => groupModels({ models, engine, engines, query: q, recent, starred, best, flat }), [models, engine, engines, q, recent, starred, best, flat]);
   const ready = (m: ModelDef) => m.routes.some((r) => status?.providers[r.provider]?.configured);
   const shown = groups.flatMap((g) => g.models);
   const demo = status && status.demoMode !== "off" && shown.some((m) => !ready(m));
@@ -358,6 +397,7 @@ function PickerList({
                   gpu={m.engine === "open" ? badgeFor(badges, { modelId: m.id }) : null}
                   gpuName={badges?.gpu}
                   needs={needsKey(m, status)}
+                  made={m.id === madeWith}
                 />
               </CommandItem>
             ))}

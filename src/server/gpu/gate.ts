@@ -52,7 +52,8 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
     has,
   });
   if (!has(id)) return { ok: true };
-  const preset = req.presetId ? presetTool(req.presetId) : null;
+  // The preset's route on the run's model (the one its preview was made with, or its own): its LoRAs are checked too.
+  const preset = req.presetId ? presetTool(req.presetId, { modelId: g.modelId }) : null;
   const model = modelTool(g.modelId, g.op);
   const ref: ToolRef = preset?.ref ?? model?.ref ?? `workflow:${id}`;
   const name = preset?.name ?? model?.name ?? id;

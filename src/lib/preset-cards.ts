@@ -501,21 +501,56 @@ function joinList(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
+/** A line of the preset header's details popover: a model an engine runs a preset on. */
+export interface PresetRouteLine {
+  engine: "cloud" | "open";
+  label: string;
+  model: string | null;
+  /** The preset's live preview was made with this model ("Used for this preview"). */
+  made?: true;
+  /** A second choice on the same engine (its own route, after the model its preview was made with). */
+  alt?: true;
+}
+
+/**
+ * The preset's note on how it runs (preset.parity) under its route lines. When it opens on the model its preview was
+ * made with, the note is about its second choice, and says so: "Fuobe DoP: Wan 2.2 with …" reads "Or Fuobe DoP: …", and
+ * "The open version …" names that model.
+ */
+export function parityNote(parity: string | undefined, lines: Pick<PresetRouteLine, "engine" | "model" | "alt">[]): string | undefined {
+  if (!parity) return undefined;
+  const alt = lines.filter((l) => l.alt);
+  if (!alt.length) return parity;
+  if (/^Fuobe DoP\b/.test(parity)) return `Or ${parity}`;
+  const openAlt = alt.find((l) => l.engine === "open")?.model;
+  if (openAlt && parity.startsWith("The open version ")) return `${openAlt}, the second choice on your GPU, ${parity.slice("The open version ".length)}`;
+  return parity;
+}
+
 /**
  * Which model each engine runs a preset on, for the preset header's details popover (the studio
- * hero no longer needs to spell out "Cloud: … · Open source: …").
+ * hero no longer needs to spell out "Cloud: … · Open source: …"): the model its preview was made
+ * with first (`recipeOf`, src/lib/catalog/preset-recipes.ts presetRecipe), then its own route.
  */
 export function presetRouteLines(
   p: Pick<Preset, "cloud" | "open" | "parity">,
   nameOf: (modelId: string) => string | undefined = () => undefined,
-): { engine: "cloud" | "open"; label: string; model: string | null }[] {
-  return (["cloud", "open"] as const).map((engine) => {
+  recipeOf: (engine: "cloud" | "open") => { route: { modelId: string }; made: boolean } | undefined = () => undefined,
+): PresetRouteLine[] {
+  return (["cloud", "open"] as const).flatMap((engine) => {
     const route = p[engine];
+    const label = engine === "cloud" ? "Cloud" : "Open source";
     const name = route ? (nameOf(route.modelId) ?? route.modelId) : null;
     // A LoRA licensed for the user's GPU only (civitai "RentCivit"): the cloud route keeps the preset's words until Fuobe
     // DoP with the LoRA is evaluated there; the licence is said, not enforced.
     const gpuOnly = engine === "cloud" && !route?.loras?.length && !!p.open?.loras?.length && p.open.loras.every((l) => l.licence?.hostedOk === false);
-    return { engine, label: engine === "cloud" ? "Cloud" : "Open source", model: name && gpuOnly ? `${name} · words only (its LoRA is licensed for your GPU only)` : name };
+    const own: PresetRouteLine = { engine, label, model: name && gpuOnly ? `${name} · words only (its LoRA is licensed for your GPU only)` : name };
+    const recipe = recipeOf(engine);
+    if (!recipe) return [own];
+    const first: PresetRouteLine = { engine, label, model: nameOf(recipe.route.modelId) ?? recipe.route.modelId, ...(recipe.made && { made: true as const }) };
+    // The recipe on the preset's own model (Zooms on Qwen-Image 2.1) is one line.
+    if (recipe.route.modelId === route?.modelId || !own.model) return [first];
+    return [first, { ...own, alt: true as const }];
   });
 }
 

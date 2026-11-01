@@ -4,11 +4,12 @@ import { planFor } from "@/server/gpu/readiness-service";
 import { gpuTargetFor } from "@/server/gpu/target";
 
 /**
- * GPU pre-flight: one tool's fix plan (`?ref=model:<id>#<op>`, `preset:<id>`, `studio:<href>` or
- * `workflow:<id>`), built on the server from the requirement index and the viewer's last check. The client
- * names a tool only, never a file, URL or repository (R2). P1 plans are by hand: the commands to run.
+ * GPU pre-flight: one tool's fix plan (`?ref=model:<id>#<op>`, `preset:<id>` or `preset:<id>@<model id>` for its
+ * route on that model, `studio:<href>` or `workflow:<id>`), built on the server from the requirement index and the
+ * viewer's last check. The client names a tool only, never a file, URL or repository (R2). P1 plans are by hand: the
+ * commands to run.
  */
-const REF = /^(model:[\w.-]{1,120}#[\w-]{1,40}|preset:[\w.-]{1,120}|studio:\/[\w/-]{0,60}|workflow:[\w.-]{1,120})$/;
+const REF = /^(model:[\w.-]{1,120}#[\w-]{1,40}|preset:[\w.-]{1,120}(?:@[\w.-]{1,120})?|studio:\/[\w/-]{0,60}|workflow:[\w.-]{1,120})$/;
 
 export async function GET(request: Request) {
   await connection();

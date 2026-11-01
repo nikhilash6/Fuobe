@@ -8,7 +8,7 @@ import { vramGb } from "@/lib/gpu/requirements";
 import { getSetting } from "../settings";
 import { loadIndex } from "./index-file";
 import { probe, readSnapshot, saveViews, checkWait, type Snapshot } from "./snapshots";
-import { STUDIO_ROWS, openModelTools, presetTools, studioOthers, studioTool, toolFor, type Tool } from "./tools";
+import { STUDIO_ROWS, openModelTools, presetRouteTools, presetTools, studioOthers, studioTool, toolFor, type Tool } from "./tools";
 import { urlHash, type ReadTarget } from "./target";
 
 /**
@@ -54,7 +54,8 @@ export function buildViews(inv: GpuInventory, idx: RequirementIndex, ctx: Readin
     const b = badgeOf(readinessOf(tool, inv, idx, ctx));
     if (b) badges.models[tool.ref.slice("model:".length)] = b;
   }
-  for (const tool of presetTools()) {
+  // The route a preset opens on ("<id>"), and its other routes ("<id>@<model id>": Fuobe DoP with the move's LoRAs).
+  for (const tool of [...presetTools(), ...presetRouteTools()]) {
     const b = badgeOf(readinessOf(tool, inv, idx, ctx));
     if (b) badges.presets[tool.ref.slice("preset:".length)] = b;
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
-import type { GenParams, InputSlot, MediaKind, Operation, Preset } from "@/lib/catalog/types";
+import type { Engine, GenParams, InputSlot, MediaKind, Operation, Preset } from "@/lib/catalog/types";
 import type { FeedFilter } from "@/lib/api";
 import type { Signature } from "@/lib/catalog/palettes";
 import type { FrameAttachment } from "@/lib/composer";
@@ -32,6 +32,11 @@ export interface StudioConfig {
   presetPicker?: "motion" | "effect";
   preset?: Preset;
   defaultModels: { cloud: string; open: string };
+  /**
+   * An app's models on each engine (withRecipe, src/lib/catalog/preset-recipes.ts): the one its preview was made with
+   * first, then its own route's. With two on the engine the composer offers both in place of the model chip.
+   */
+  appModels?: Record<Engine, string[]>;
   /**
    * The default to open on instead where the server can't write the default's caption for this viewer (Ideogram 4 for an
    * account, a guest, or an install with no local model answering: writesCaptions in src/lib/composer.ts).

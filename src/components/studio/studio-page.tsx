@@ -12,7 +12,8 @@ import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import type { Generation, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
 import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest } from "@/lib/api";
-import { claimStartToken, followEngineDefault, handoffKey, mergeHandoff, presetModel, promptShown, START_PARAM, withoutStart, withPreset } from "@/lib/composer";
+import { claimStartToken, followEngineDefault, handoffKey, mergeHandoff, presetModel, presetParams, promptShown, routeParams, START_PARAM, withoutStart, withPreset } from "@/lib/composer";
+import { presetGpuKey, presetRoutes } from "@/lib/catalog/preset-recipe-routes";
 import { positionsFrom } from "@/lib/catalog/keyframes";
 import { reuseSignature, withSignatureWords } from "@/lib/catalog/palettes";
 import { movedAppRequest } from "@/lib/catalog/plan";
@@ -48,21 +49,26 @@ function initialDraft(
   const preset = sp.get("preset") ? lookup.getPreset(sp.get("preset")!) : config.preset;
   // A link or Assist hand-off that names a model Fuobe retired opens on the one that replaced it (replaced.ts).
   const requested = sp.get("model") && currentModelId(sp.get("model")!);
-  // An app opened on one of its own models (?model=, from ⌘K) takes that model's route and params.
-  const presetRoute = preset
-    ? ([preset.cloud, preset.open].find((r) => !!requested && r?.modelId === requested) ?? (engine === "open" ? preset.open : preset.cloud) ?? preset.cloud ?? preset.open)
-    : null;
-  // A camera motion or effect starts on its Original (Fuobe DoP) when the studio has it.
-  const presetOwn = presetModel(preset, engine);
+  const has = (id: string) => !!lookup.getModel(id);
+  // An app starts on the model its preview was made with on this engine, else its own route (else the other engine's,
+  // for an app with no version here); opened on one of its models (?model=, from ⌘K), on that model's route.
+  const other = engine === "open" ? "cloud" : "open";
+  const appRoutes = preset?.type === "app" ? [...presetRoutes(preset, engine, has), ...presetRoutes(preset, other, has)] : [];
+  const appRoute = appRoutes.find((r) => !!requested && r.modelId === requested) ?? appRoutes[0];
+  // A camera motion or effect starts on the model its preview was made with (MiniMax H3), else its Original (Fuobe DoP),
+  // when the studio has it.
+  const presetOwn = presetModel(preset, engine, has);
   const modelId =
     (requested && lookup.getModel(requested)?.id) ||
-    (preset?.type === "app" ? presetRoute?.modelId : undefined) ||
+    appRoute?.modelId ||
     (presetOwn && lookup.getModel(presetOwn)?.id) ||
     config.defaultModels[engine] ||
     config.defaultModels.cloud ||
     // Open-only tools (Match colors) keep their open model under the Cloud switch, like cloud-only ones do under Open.
     config.defaultModels.open;
   const model = lookup.getModel(modelId);
+  // The route's own settings (Wan 2.2 at 480p; a recipe on H3 at the Quality its cover was made at) on its own model.
+  const routeSettings = appRoute && modelId === appRoute.modelId ? routeParams(appRoute, "app") : presetOwn && modelId === presetOwn ? presetParams(preset, engine, has) : {};
   const slots: Draft["slots"] = {};
   const imageSlot = config.slots.find((s) => s.accept === "image")?.key ?? preset?.inputs.find((s) => s.accept === "image")?.key;
   const refs: SlotValue[] = [];
@@ -79,7 +85,7 @@ function initialDraft(
     prompt: sp.get("prompt") ?? "",
     negativePrompt: "",
     modelId,
-    params: { ...model?.defaults, ...(preset?.type === "app" ? presetRoute?.params : {}), ...(format && { format }) },
+    params: { ...model?.defaults, ...routeSettings, ...(format && { format }) },
     slots,
     refs,
     presetId: sp.get("preset") ?? config.preset?.id,
@@ -209,6 +215,13 @@ function ActivePresetHeader() {
       preset={preset}
       className="mb-3"
       modelName={(id) => catalog.getModel(id)?.name}
+      gpuKey={presetGpuKey(
+        preset,
+        (id) => !!catalog.getModel(id),
+        draft.modelId,
+        draft.params.extra?.quality,
+        catalog.getModel(draft.modelId)?.options.controls?.find((c) => c.param === "quality")?.default,
+      )}
       onClear={
         config.preset
           ? undefined
@@ -314,16 +327,21 @@ function StudioExamples({ row }: { row: StudioExampleRow }) {
  */
 function StudioGpuPill() {
   const { config, draft } = useStudio();
+  const catalog = useCatalog();
   const [engine] = useEngine();
   const badges = useGpuBadges().data;
   if (engine !== "open" || !badges?.connected) return null;
   const modelId = draft.modelId || config.defaultModels.open;
   const presetId = draft.presetId ?? config.preset?.id;
-  const preset = presetId ? badges.presets[presetId] : undefined;
+  // A preset's badge describes its route on the model picked, at the route's Quality (presetGpuKey, as the composer).
+  const p = presetId ? catalog.getPreset(presetId) : undefined;
+  const m = catalog.getModel(modelId);
+  const key = p ? presetGpuKey(p, (id) => !!catalog.getModel(id), modelId, draft.params.extra?.quality, m?.options.controls?.find((c) => c.param === "quality")?.default) : undefined;
+  const preset = key ? badges.presets[key] : undefined;
   const op = config.ops.find((o) => badges.models[`${modelId}#${o}`]);
   const badge = preset ?? (op ? badges.models[`${modelId}#${op}`] : badgeFor(badges, { modelId }));
   if (!badge) return null;
-  const ref = preset && presetId ? `preset:${presetId}` : `model:${modelId}#${op ?? Object.keys(badges.models).find((k) => k.startsWith(`${modelId}#`))?.split("#")[1] ?? ""}`;
+  const ref = preset && key ? `preset:${key}` : `model:${modelId}#${op ?? Object.keys(badges.models).find((k) => k.startsWith(`${modelId}#`))?.split("#")[1] ?? ""}`;
   return <HeaderPill badge={badge} gpu={badges.gpu} compact onOpen={() => openGpuSetup({ ref })} />;
 }
 

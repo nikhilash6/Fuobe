@@ -20,6 +20,7 @@ import {
   motionMove,
   moveVars,
   PREVIEW_LAYERS,
+  parityNote,
   presetHowTo,
   presetRouteLines,
   previewFlip,
@@ -287,6 +288,42 @@ describe("preset route lines (details popover)", () => {
     expect(cloud.model).toBe("Kling 2.5 Turbo · words only (its LoRA is licensed for your GPU only)");
     expect(open.model).toBe("Fuobe DoP");
     expect(presetRouteLines(getPreset("motion-overhead")!, () => "Fuobe DoP")[0].model).toBe("Fuobe DoP");
+  });
+
+  it("names the model a preset's preview was made with first, with the label when it made the live preview", () => {
+    const truck = getPreset("motion-truck-left")!;
+    const names: Record<string, string> = { "oss-minimax-h3": "MiniMax H3", "minimax-h3": "MiniMax H3", "fuobe-dop": "Fuobe DoP", "fuobe-dop-ltx": "Fuobe DoP · LTX" };
+    const h3 = (made: boolean) => (e: "cloud" | "open") => ({ route: { modelId: e === "open" ? "oss-minimax-h3" : "minimax-h3" }, made });
+    expect(presetRouteLines(truck, (id) => names[id], h3(true))).toEqual([
+      { engine: "cloud", label: "Cloud", model: "MiniMax H3", made: true },
+      { engine: "cloud", label: "Cloud", model: names[truck.cloud!.modelId], alt: true },
+      { engine: "open", label: "Open source", model: "MiniMax H3", made: true },
+      { engine: "open", label: "Open source", model: names[truck.open!.modelId], alt: true },
+    ]);
+    // The preset's note then speaks of its second choice.
+    const truckLines = presetRouteLines(truck, (id) => names[id], h3(true));
+    expect(parityNote("Fuobe DoP: Wan 2.2 with the motionpushin LoRA, on your GPU and in the cloud", truckLines)).toBe(
+      "Or Fuobe DoP: Wan 2.2 with the motionpushin LoRA, on your GPU and in the cloud",
+    );
+    expect(parityNote("Fuobe DoP: Wan 2.2", presetRouteLines(truck, (id) => names[id]))).toBe("Fuobe DoP: Wan 2.2");
+    const colors = [
+      { engine: "open" as const, model: "Qwen-Image 2.1 Turbo" },
+      { engine: "open" as const, model: "Palette match", alt: true as const },
+    ];
+    expect(parityNote("The open version transfers the palette directly (no AI model, runs on CPU)", colors)).toBe(
+      "Palette match, the second choice on your GPU, transfers the palette directly (no AI model, runs on CPU)",
+    );
+    expect(parityNote("Approximation: one combined image", colors)).toBe("Approximation: one combined image");
+    expect(parityNote(undefined, colors)).toBeUndefined();
+    // A still cover: the recipe leads, without the label.
+    expect(presetRouteLines(truck, (id) => names[id], h3(false))[0]).toEqual({ engine: "cloud", label: "Cloud", model: "MiniMax H3" });
+    // A recipe on the preset's own model (Zooms on Qwen-Image 2.1) is one line; an engine without a recipe keeps its route.
+    const zooms = getPreset("app-zooms")!;
+    const lines = presetRouteLines(zooms, (id) => ({ "oss-qwen-image-21": "Qwen-Image 2.1", "nano-banana-pro": "Nano Banana Pro" })[id], (e) => (e === "open" ? { route: zooms.open!, made: true } : undefined));
+    expect(lines).toEqual([
+      { engine: "cloud", label: "Cloud", model: "Nano Banana Pro" },
+      { engine: "open", label: "Open source", model: "Qwen-Image 2.1", made: true },
+    ]);
   });
 });
 

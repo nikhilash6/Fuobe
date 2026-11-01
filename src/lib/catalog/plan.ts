@@ -17,6 +17,7 @@ import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { askedSize, numFramesValue, sizeValue } from "./payload";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
 import { pricingOn, type PriceClock } from "./promo";
+import { presetRoutes } from "./preset-recipe-routes";
 
 export { pricingAt } from "./promo";
 
@@ -110,9 +111,12 @@ export function composeShots(overall: string, shots: { prompt: string; duration:
   return [overall.trim() && `${overall.trim().replace(/[.\s]+$/, "")}.`, ...parts].filter(Boolean).join(" ");
 }
 
+/** The preset's own route on an engine (its recipe, the route its preview was made with, is in presetRoutes). */
 export function presetRoute(preset: Preset, engine: Engine): PresetRoute | null {
   return engine === "open" ? preset.open : preset.cloud;
 }
+
+export { presetRoutes };
 
 /**
  * The model apps ran on before they moved to a newer one (2026-10-31, the owner's newest image models): the edit apps
@@ -236,17 +240,29 @@ export function planGeneration(
   let op: Operation | undefined = req.op;
 
   if (preset) {
-    const route = presetRoute(preset, model.engine);
-    if (!route) throw new Error(`${preset.name} has no ${model.engine === "open" ? "open-source" : "cloud"} version yet`);
-    if (route.modelId !== model.id && !preset.type.match(/motion|effect/)) {
-      // Apps pin their model; motions/effects let the user pick any compatible video model.
-      throw new Error(`${preset.name} runs on ${route.modelId}, not ${model.id}`);
+    // The preset's routes on this engine: the one its preview was made with (when this catalog has its model), then its own.
+    const routes = presetRoutes(preset, model.engine, (id) => !!getModel(id));
+    if (!routes.length) throw new Error(`${preset.name} has no ${model.engine === "open" ? "open-source" : "cloud"} version yet`);
+    const matched = routes.find((r) => r.modelId === model.id);
+    if (!matched && !preset.type.match(/motion|effect/)) {
+      // Apps run on their own models; motions/effects let the user pick any compatible video model.
+      throw new Error(`${preset.name} runs on ${[...new Set(routes.map((r) => r.modelId))].join(" or ")}, not ${model.id}`);
     }
-    // Preset params/LoRAs are tuned for the preset's own model; other compatible models only get the prompt (without
+    const route = matched ?? routes[0];
+    // Preset params/LoRAs are tuned for the route's own model; other compatible models only get the prompt (without
     // a LoRA's trigger word, which means nothing to them).
-    const sameModel = route.modelId === model.id;
-    prompt = composePrompt((sameModel || preset.type === "app" ? route.promptTemplate : undefined) ?? preset.promptTemplate, req.prompt, preset, req.presetOptions);
-    params = { ...model.defaults, ...(sameModel ? route.params : {}), ...req.params };
+    const sameModel = !!matched;
+    prompt = composePrompt((sameModel ? route.promptTemplate : undefined) ?? preset.promptTemplate, req.prompt, preset, req.presetOptions);
+    // The route's extra settings (H3's orbit, a camera pose) stay under what the request sets itself. A setting the composer
+    // shows as a control (H3's Quality) is the request's own: the composer starts it at the route's value, and its Auto
+    // sends none, which is the model's default.
+    const shown = new Set((model.options.controls ?? []).map((c) => c.param));
+    const routeExtra = Object.fromEntries(Object.entries(route.params?.extra ?? {}).filter(([k]) => !shown.has(k)));
+    const routePlain = { ...route.params };
+    delete routePlain.extra;
+    const hasExtra = Object.keys(routeExtra).length > 0 || !!req.params?.extra;
+    const extra = sameModel && hasExtra ? { extra: { ...routeExtra, ...req.params?.extra } } : {};
+    params = { ...model.defaults, ...(sameModel ? routePlain : {}), ...req.params, ...extra };
     // Option choices that set model settings (Angles: rotate / tilt / zoom); a value the user set wins.
     const chosen = Object.assign({}, ...(preset.options ?? []).map((o) => o.choices.find((c) => c.value === (req.presetOptions?.[o.key] ?? o.default ?? o.choices[0]?.value))?.extra ?? {}));
     if (sameModel && Object.keys(chosen).length) params = { ...params, extra: { ...chosen, ...params.extra } };

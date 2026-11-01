@@ -1,13 +1,14 @@
 "use client";
 
-import { Cloud, Cpu, Info, X } from "lucide-react";
+import { Cloud, Cpu, Info, Sparkles, X } from "lucide-react";
 import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { PresetPreview, usePreviewPlayback } from "@/components/preset-preview";
 import { openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import { useEngine } from "@/lib/api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { presetRecipe } from "@/lib/catalog/preset-recipes";
 import type { Preset } from "@/lib/catalog/types";
-import { onPeak, presetCard, presetHowTo, presetRouteLines, previewFlip } from "@/lib/preset-cards";
+import { onPeak, parityNote, presetCard, presetHowTo, presetRouteLines, previewFlip } from "@/lib/preset-cards";
 // The slim covers map comes with coverPreview: this component is loaded on its own (next/dynamic in studio-page.tsx).
 import { coverPreview } from "@/lib/preset-covers";
 import { cn } from "@/lib/utils";
@@ -25,12 +26,18 @@ import { cn } from "@/lib/utils";
 export function PresetHeader({
   preset,
   modelName,
+  gpuKey,
   onClear,
   className,
 }: {
   preset: Preset;
   /** Display name for a model id (the studio's model lookup). */
   modelName?: (id: string) => string | undefined;
+  /**
+   * The preset's GPU badge for the composer's model and Quality (presetGpuKey): "<id>", "<id>@<model id>", or undefined
+   * when the run is the model's own (no preset pill).
+   */
+  gpuKey?: string;
   /** Clear the preset (motions/effects picked in a general studio); omit on a preset's own page. */
   onClear?: () => void;
   className?: string;
@@ -39,11 +46,16 @@ export function PresetHeader({
   // card the visitor came from (onPeak).
   const card = onPeak(presetCard(preset, coverPreview(preset)));
   const { ref, playing, asked, handlers, onTap } = usePreviewPlayback<HTMLDivElement>(card.id, card.preview, { always: true });
-  const routes = presetRouteLines(preset, modelName);
+  // The model its preview was made with comes first (when this studio has it), marked when the live preview came from it.
+  const has = (id: string) => !!modelName?.(id);
+  const routes = presetRouteLines(preset, modelName, (e) => presetRecipe(preset, e, has));
+  const note = parityNote(preset.parity, routes);
   // Its state on the viewer's GPU (open engine only): a pill that opens the guided fix.
   const badges = useGpuBadges().data;
   const [engine] = useEngine();
-  const gpu = preset.open && engine === "open" ? (badges?.presets[preset.id] ?? null) : null;
+  const gpu = gpuKey && engine === "open" ? (badges?.presets[gpuKey] ?? null) : null;
+  // The model its live preview was made with, said in words on the card (the composer marks it with a sparkle).
+  const made = routes.find((r) => r.made && !r.alt && r.engine === engine) ?? routes.find((r) => r.made);
   return (
     <div className={cn("mx-auto flex w-full max-w-[760px] items-center gap-3 rounded-2xl border bg-background p-2 pr-3 text-left shadow-soft", className)}>
       <div
@@ -58,8 +70,14 @@ export function PresetHeader({
       <div className="min-w-0 flex-1">
         <p className="truncate font-heading text-[19px] leading-snug">{preset.name}</p>
         <p className="line-clamp-2 text-[13px] text-muted-foreground max-sm:line-clamp-3">{presetHowTo(preset)}</p>
+        {made?.model && (
+          <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] font-medium text-brand-text">
+            <Sparkles className="size-3 shrink-0" aria-hidden />
+            <span className="truncate">Preview made with {made.model}</span>
+          </p>
+        )}
       </div>
-      {gpu && <HeaderPill badge={gpu} gpu={badges?.gpu} compact onOpen={() => openGpuSetup({ ref: `preset:${preset.id}`, name: preset.name })} />}
+      {gpu && <HeaderPill badge={gpu} gpu={badges?.gpu} compact onOpen={() => openGpuSetup({ ref: `preset:${gpuKey}`, name: preset.name })} />}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -75,14 +93,28 @@ export function PresetHeader({
           <p className="text-muted-foreground">{preset.description}</p>
           <ul className="space-y-1">
             {routes.map((r) => (
-              <li key={r.engine} className="flex items-center gap-2">
-                {r.engine === "cloud" ? <Cloud className="size-3.5 shrink-0" /> : <Cpu className="size-3.5 shrink-0" />}
-                <span className="text-muted-foreground">{r.label}</span>
-                <span className={cn("ml-auto truncate font-medium", !r.model && "font-normal text-muted-foreground")}>{r.model ?? "Not available yet"}</span>
+              <li key={`${r.engine}-${r.alt ? "alt" : "first"}`} className="flex items-start gap-2">
+                {r.alt ? (
+                  <span className="size-3.5 shrink-0" aria-hidden />
+                ) : r.engine === "cloud" ? (
+                  <Cloud className="mt-0.5 size-3.5 shrink-0" />
+                ) : (
+                  <Cpu className="mt-0.5 size-3.5 shrink-0" />
+                )}
+                <span className="text-muted-foreground">{r.alt ? "or" : r.label}</span>
+                <span className="ml-auto flex min-w-0 flex-col items-end text-right">
+                  <span className={cn("max-w-full truncate font-medium", !r.model && "font-normal text-muted-foreground", r.alt && "font-normal")}>{r.model ?? "Not available yet"}</span>
+                  {r.made && (
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-brand-text">
+                      <Sparkles className="size-3 shrink-0" aria-hidden />
+                      Used for this preview
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
-          {preset.parity && <p className="border-t pt-2 text-[12px] text-muted-foreground">{preset.parity}</p>}
+          {note && <p className="border-t pt-2 text-[12px] text-muted-foreground">{note}</p>}
         </PopoverContent>
       </Popover>
       {onClear && (

@@ -165,15 +165,22 @@ export function PresetChip({ type, value, onChange }: { type: "motion" | "effect
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
-/** Higgsfield's Mix: a second motion or effect on top of the first, each with a strength. */
+/**
+ * Higgsfield's Mix: a second motion or effect on top of the first, each with a strength. The first one's strength scales
+ * its LoRAs, so its slider shows only on a model that runs them (`strengthOn` names the model that does, otherwise).
+ */
 export function MixChip({
   primary,
   strength,
+  takesStrength = true,
+  strengthOn,
   mix,
   onChange,
 }: {
   primary: Preset;
   strength: number;
+  takesStrength?: boolean;
+  strengthOn?: string;
   mix?: { presetId: string; strength: number };
   onChange: (patch: { presetStrength?: number; mix?: { presetId: string; strength: number } | undefined }) => void;
 }) {
@@ -207,13 +214,19 @@ export function MixChip({
         </PopoverTrigger>
         <PopoverContent className={cn(POPOVER_HEIGHT, "w-[min(92vw,460px)] space-y-3 p-3")} align="start" side={side} collisionPadding={12} aria-label="Mix">
           <div className="space-y-2.5">
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[12px]">
-                <span className="font-medium">{primary.name}</span>
-                <span className="text-muted-foreground tabular-nums">{pct(strength)}</span>
+            {takesStrength ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="font-medium">{primary.name}</span>
+                  <span className="text-muted-foreground tabular-nums">{pct(strength)}</span>
+                </div>
+                <Slider min={0.1} max={1} step={0.05} value={[strength]} onValueChange={([v]) => onChange({ presetStrength: v })} aria-label={`${primary.name} strength`} />
               </div>
-              <Slider min={0.1} max={1} step={0.05} value={[strength]} onValueChange={([v]) => onChange({ presetStrength: v })} aria-label={`${primary.name} strength`} />
-            </div>
+            ) : (
+              <p className="text-[12px] text-muted-foreground">
+                <span className="font-medium text-foreground">{primary.name}</span> runs at full strength{strengthOn ? `; its strength can be set on ${strengthOn}` : ""}.
+              </p>
+            )}
             {second && mix && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-[12px]">
@@ -243,6 +256,8 @@ export default function PresetChips({
   preset,
   presetId,
   strength,
+  takesStrength,
+  strengthOn,
   mix,
   onPreset,
   onMix,
@@ -251,6 +266,9 @@ export default function PresetChips({
   preset?: Preset;
   presetId?: string;
   strength: number;
+  /** The run's model scales the move's LoRAs (its strength slider shows); `strengthOn`: the model that does, otherwise. */
+  takesStrength?: boolean;
+  strengthOn?: string;
   mix?: { presetId: string; strength: number };
   onPreset: (id?: string) => void;
   onMix: (patch: { presetStrength?: number; mix?: { presetId: string; strength: number } | undefined }) => void;
@@ -258,7 +276,7 @@ export default function PresetChips({
   return (
     <>
       {picker && <PresetChip type={picker} value={presetId} onChange={onPreset} />}
-      {preset && (preset.type === "motion" || preset.type === "effect") && <MixChip primary={preset} strength={strength} mix={mix} onChange={onMix} />}
+      {preset && (preset.type === "motion" || preset.type === "effect") && <MixChip primary={preset} strength={strength} takesStrength={takesStrength} strengthOn={strengthOn} mix={mix} onChange={onMix} />}
     </>
   );
 }

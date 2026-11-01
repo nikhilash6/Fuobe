@@ -7,6 +7,8 @@ import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { libraryEntry, needsToken } from "@/lib/catalog/loras";
 import { ANGLES_2511_LORA } from "@/lib/catalog/open-tools";
+import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
+import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { STUDIO_WORKFLOWS } from "@/lib/catalog/swap-studio-plan";
 import { FILL_MODELS } from "@/lib/catalog/turnaround";
 import type { LoraRef, ModelDef, Operation } from "@/lib/catalog/types";
@@ -92,23 +94,40 @@ export function modelTool(modelId: string, op: string): Tool | null {
   };
 }
 
-/** A preset: its open route, its prestep's, and their LoRAs. */
-export function presetTool(presetId: string): Tool | null {
+/**
+ * A preset: an open route of it, its prestep's, and their LoRAs. By default the route the composer opens it on (the one
+ * its preview was made with, when the catalog has its model); `own`: its own route; `modelId`: its route on that model
+ * (null when it has none there: the run is the model's alone).
+ */
+export function presetTool(presetId: string, pick: { own?: boolean; modelId?: string } = {}): Tool | null {
   const p = getPreset(presetId);
   if (!p?.open) return null;
-  const main = modelTool(p.open.modelId, p.open.op);
+  const routes = presetRoutes(p, "open", (id) => !!getModel(id));
+  const route = pick.own ? p.open : pick.modelId ? routes.find((r) => r.modelId === pick.modelId) : (routes[0] ?? p.open);
+  if (!route) return null;
+  const main = modelTool(route.modelId, route.op);
   if (!main) return null;
+  // The graph the route's own settings pick (H3's Orbit graph, its Best one; a camera pose), as the gate resolves a run.
+  const extra = route.params?.extra;
+  const has = (id: string) => !!loadIndex().workflows[id];
+  const graphs = extra ? main.workflows.map((w) => resolveWorkflowId(w, { op: route.op, clips: 0, images: 0, audio2: false, extra, has })) : main.workflows;
   const pre = p.prestep?.open ? modelTool(p.prestep.open.modelId, p.prestep.open.op) : null;
   const loras = new Map<string, LoraNeed>();
-  for (const l of [...(p.open.loras ?? []), ...(p.prestep?.open.loras ?? [])]) loras.set(basename(l.file), loraNeed(l));
+  for (const l of [...(route.loras ?? []), ...(p.prestep?.open.loras ?? [])]) loras.set(basename(l.file), loraNeed(l));
   for (const l of [...main.loras, ...(pre?.loras ?? [])]) loras.set(l.file, l);
+  // A route after the first is named by its model too ("preset:motion-jib-up@fuobe-dop"), so its guided fix plans it.
+  const first = (routes[0] ?? p.open).modelId === route.modelId;
+  // Its cloud alternative: on the route its preview was made with, that recipe hosted (MiniMax H3 on fal) when the
+  // catalog has it; else the preset's own cloud route, for an Original that runs on both engines.
+  const hosted = !pick.own && recipeRoute(p, "open")?.modelId === route.modelId ? recipeRoute(p, "cloud") : undefined;
+  const cloud = hosted && getModel(hosted.modelId) ? hosted.modelId : p.cloud && main.cloud ? p.cloud.modelId : undefined;
   return {
-    ref: `preset:${p.id}`,
+    ref: first ? `preset:${p.id}` : `preset:${p.id}@${route.modelId}`,
     name: p.name,
     kind: main.kind,
-    workflows: [...new Set([...main.workflows, ...(pre?.workflows ?? [])])],
+    workflows: [...new Set([...graphs, ...(pre?.workflows ?? [])])],
     loras: [...loras.values()],
-    ...(p.cloud && main.cloud && { cloud: { modelId: p.cloud.modelId } }),
+    ...(cloud && { cloud: { modelId: cloud } }),
     ...(main.local && !pre && { local: true }),
   };
 }
@@ -243,19 +262,37 @@ export function openModelTools(): Tool[] {
   return out;
 }
 
-/** Every preset with an open route (the gallery's chips). */
-export function presetTools(): Tool[] {
+/** Every preset with an open route (the gallery's chips), on the route it opens on (`own`: its own route). */
+export function presetTools(pick: { own?: boolean } = {}): Tool[] {
   return PRESETS.flatMap((p) => {
-    const t = presetTool(p.id);
+    const t = presetTool(p.id, pick);
     return t ? [t] : [];
+  });
+}
+
+/**
+ * Every preset's other open routes (Fuobe DoP with the move's LoRAs, an app's own model), each as
+ * "preset:<id>@<model id>": the composer's badge and guided fix when one of them is picked.
+ */
+export function presetRouteTools(): Tool[] {
+  return PRESETS.flatMap((p) => {
+    const routes = presetRoutes(p, "open", (id) => !!getModel(id));
+    const others = [...new Set(routes.slice(1).map((r) => r.modelId))].filter((id) => id !== routes[0]?.modelId);
+    return others.flatMap((modelId) => {
+      const t = presetTool(p.id, { modelId });
+      return t ? [t] : [];
+    });
   });
 }
 
 let loraNamesCache: string[] | null = null;
 
-/** Every LoRA a preset or a recipe names (what a full check looks for in models/loras). */
+/**
+ * Every LoRA a preset or a recipe names (what a full check looks for in models/loras): the presets' own routes too (Fuobe
+ * DoP's), which stay one pick away when a preset opens on the model its preview was made with.
+ */
 export function allLoraNames(): string[] {
-  loraNamesCache ??= [...new Set([...presetTools(), ...openModelTools()].flatMap((t) => t.loras.map((l) => l.file)))].sort();
+  loraNamesCache ??= [...new Set([...presetTools(), ...presetTools({ own: true }), ...openModelTools()].flatMap((t) => t.loras.map((l) => l.file)))].sort();
   return loraNamesCache;
 }
 
@@ -263,8 +300,8 @@ export function allLoraNames(): string[] {
 export function toolFor(ref: string): Tool | null {
   const m = /^model:([^#]+)#(.+)$/.exec(ref);
   if (m) return modelTool(m[1], m[2]);
-  const p = /^preset:(.+)$/.exec(ref);
-  if (p) return presetTool(p[1]);
+  const p = /^preset:([^@]+)(?:@(.+))?$/.exec(ref);
+  if (p) return presetTool(p[1], p[2] ? { modelId: p[2] } : {});
   const s = /^studio:(.+)$/.exec(ref);
   if (s) {
     const row = STUDIO_ROWS.find((r) => r.href === s[1]);

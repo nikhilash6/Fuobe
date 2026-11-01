@@ -23,6 +23,9 @@ import {
   toggleIn,
   type Attachment,
 } from "@/lib/composer";
+import { appRoute, engineSwitchModel, presetFallback, presetOriginal, presetParams, routeParams } from "@/lib/composer";
+import { withRecipe } from "@/lib/catalog/preset-recipes";
+import { needsKey } from "@/lib/your-keys";
 import { appStudio, EDIT_STUDIO, IMAGE_STUDIO, JOIN_CLIPS_STUDIO, LIPSYNC_STUDIO, TRANSCRIBE_STUDIO, VIDEO_STUDIO } from "@/lib/studios";
 import { studioCatalog } from "@/lib/studio-catalog";
 import { buildPayload } from "@/lib/catalog/payload";
@@ -333,6 +336,77 @@ describe("studio catalog slice", () => {
     expect(app.models.map((m) => m.id)).toEqual(expect.arrayContaining([relight.cloud!.modelId, relight.open!.modelId]));
     const edit = studioCatalog(EDIT_STUDIO);
     expect(edit.models.map((m) => m.id)).toEqual(expect.arrayContaining([EDIT_STUDIO.defaultModels.cloud, EDIT_STUDIO.defaultModels.open]));
+  });
+});
+
+describe("a preset opens on the model its preview was made with", () => {
+  const inCatalog = (id: string) => !!getModel(id);
+  // An account with a Replicate token only: hosted MiniMax H3 is on fal alone.
+  const replicateOnly = { viewer: { kind: "account" as const, keys: ["replicate" as const] } };
+  const runs = (id: string) => inCatalog(id) && !needsKey(getModel(id), replicateOnly);
+
+  it("ships an app's two models in its slice and offers both", () => {
+    const face = withRecipe(appStudio(getPreset("app-face-swap")!), inCatalog);
+    const ids = studioCatalog(face).models.map((m) => m.id);
+    expect(ids).toEqual(expect.arrayContaining(["oss-qwen-image-21-turbo", "oss-reactor", "nano-banana-pro"]));
+    const dance = withRecipe(appStudio(getPreset("app-dance")!), inCatalog);
+    expect(studioCatalog(dance).models.map((m) => m.id)).toEqual(expect.arrayContaining(["oss-minimax-h3", "minimax-h3", "oss-wan22-14b", "kling-2-5-turbo"]));
+  });
+
+  it("starts a motion on H3 at the Quality its cover was made at, and an app on its route's settings", () => {
+    expect(presetOriginal(getPreset("motion-crash-zoom-in")!, "open", inCatalog)).toBe("oss-minimax-h3");
+    expect(presetParams(getPreset("motion-crash-zoom-in")!, "open", inCatalog)).toEqual({ duration: 5, extra: { quality: "best" } });
+    // Fast is H3's default: nothing to set (Director stays on Auto). The orbit stays the preset's (the planner adds it).
+    expect(presetParams(getPreset("motion-truck-left")!, "open", inCatalog)).toEqual({ duration: 5 });
+    expect(presetParams(getPreset("motion-360-orbit")!, "open", inCatalog)).toEqual({ duration: 3 });
+    // A colour-grade effect starts on Fuobe DoP.
+    expect(presetOriginal(getPreset("effect-candy-pink")!, "open", inCatalog)).toBe("fuobe-dop");
+    const dance = getPreset("app-dance")!;
+    expect(routeParams(appRoute(dance, "open", "oss-wan22-14b", inCatalog), "app")).toEqual(dance.open!.params);
+    expect(routeParams(appRoute(dance, "open", "oss-minimax-h3", inCatalog), "app")).toEqual({ duration: 5 });
+  });
+
+  it("falls back to the preset's own route where the viewer can't run its recipe (a Replicate-only account)", () => {
+    const dance = getPreset("app-dance")!;
+    expect(presetFallback(dance, "cloud", "minimax-h3", inCatalog, runs)?.modelId).toBe("kling-2-5-turbo");
+    // A viewer who can run the recipe stays on it; so does one on another model already.
+    expect(presetFallback(dance, "cloud", "minimax-h3", inCatalog, inCatalog)).toBeUndefined();
+    expect(presetFallback(dance, "cloud", "kling-2-5-turbo", inCatalog, runs)).toBeUndefined();
+    // A motion: its own cloud route (Fuobe DoP · LTX for Truck Left), when the move is picked and when it is open.
+    const truck = getPreset("motion-truck-left")!;
+    expect(presetOriginal(truck, "cloud", runs)).toBe(truck.cloud!.modelId);
+    expect(presetFallback(truck, "cloud", "minimax-h3", inCatalog, runs)?.modelId).toBe(truck.cloud!.modelId);
+    // A model switched off in Settings: the GPU's H3 gives way to Fuobe DoP.
+    const offH3 = (id: string) => id !== "oss-minimax-h3" && inCatalog(id);
+    expect(presetFallback(truck, "open", "oss-minimax-h3", inCatalog, offH3)?.modelId).toBe("fuobe-dop");
+    // Nothing runnable: the recipe stays (Generate asks for the key).
+    expect(presetFallback(dance, "cloud", "minimax-h3", inCatalog, () => false)).toBeUndefined();
+    // A preset with one route has nowhere to go.
+    expect(presetFallback(getPreset("effect-candy-pink")!, "open", "fuobe-dop", inCatalog, () => false)).toBeUndefined();
+  });
+
+  it("lists an app's two models once each, in their order", () => {
+    const models = ["oss-qwen-image-21-turbo", "oss-reactor"].map((id) => getModel(id)!);
+    const flat = groupModels({ models, engine: "open", engines: ["cloud", "open"], query: "", recent: ["oss-reactor"], starred: [], best: ["oss-qwen-image-21-turbo"], flat: true });
+    expect(flat.groups.map((g) => g.models.map((m) => m.id))).toEqual([["oss-qwen-image-21-turbo", "oss-reactor"]]);
+    expect(flat.count).toBe(2);
+    const grouped = groupModels({ models, engine: "open", engines: ["cloud", "open"], query: "", recent: [], starred: [], best: ["oss-qwen-image-21-turbo"] });
+    expect(grouped.groups.map((g) => g.id)).toEqual(["best", "all"]);
+  });
+
+  it("keeps an app on its own models when the engine changes (AI Influencer's cloud Original on the GPU)", () => {
+    const influencer = getPreset("app-ai-influencer")!;
+    const defaults = { cloud: "fuobe-soul", open: "oss-zimage-soul-cast" };
+    const soulOnGpu = { id: "fuobe-soul", engine: "open" as const };
+    expect(engineSwitchModel({ model: soulOnGpu, preset: influencer, engine: "open", from: "cloud", defaults, has: inCatalog })).toBe("oss-zimage-soul-cast");
+    expect(engineSwitchModel({ model: soulOnGpu, preset: influencer, engine: "open", from: "open", defaults, has: inCatalog })).toBe("oss-zimage-soul-cast");
+    expect(engineSwitchModel({ model: { id: "fuobe-soul", engine: "cloud" }, preset: influencer, engine: "cloud", from: "open", defaults, has: inCatalog })).toBeUndefined();
+    // An app on its own route stays; on the other engine's model it moves to this engine's recipe.
+    const face = getPreset("app-face-swap")!;
+    expect(engineSwitchModel({ model: { id: "oss-reactor", engine: "open" }, preset: face, engine: "open", from: "open", defaults, has: inCatalog })).toBeUndefined();
+    expect(engineSwitchModel({ model: { id: "nano-banana-pro", engine: "cloud" }, preset: face, engine: "open", from: "cloud", defaults, has: inCatalog })).toBe("oss-qwen-image-21-turbo");
+    // An app with no version on the engine keeps its model (Generate says so).
+    expect(engineSwitchModel({ model: { id: "oss-wan22-animate", engine: "open" }, preset: getPreset("app-recast")!, engine: "cloud", from: "open", defaults, has: inCatalog })).toBeUndefined();
   });
 });
 

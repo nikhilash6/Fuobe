@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowUp, AtSign, GalleryHorizontalEnd, Loader2, Sparkles, X } from "lucide-react";
+import { ArrowUp, AtSign, Cloud, Cpu, GalleryHorizontalEnd, Loader2, Sparkles, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { openAddKey } from "@/components/keys/your-keys";
@@ -12,7 +12,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToday } from "@/hooks/use-today";
 import { estimateCost, imageLimit, planGeneration, routesFor } from "@/lib/catalog/plan";
-import type { Engine, GenerationRequest, MediaKind, ModelDef, Operation, Preset, VideoFormat } from "@/lib/catalog/types";
+import type { Engine, GenerationRequest, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
 import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
@@ -36,7 +36,9 @@ import {
   OPEN_MIN_GAP,
   type FrameSupport,
 } from "@/lib/catalog/keyframes";
+import { appModels, presetGpuKey, presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipe-routes";
 import {
+  appRoute,
   blockerFor,
   blockerLine,
   clipBlocker,
@@ -58,10 +60,13 @@ import {
   PLACEHOLDER,
   presetModel,
   presetOriginal,
+  presetFallback as presetFallbackRoute,
   presetParams,
   postStepCost,
   prestepCost,
   pushRecent,
+  routeParams,
+  untouchedParams,
   settingsShape,
   showsPrompt,
   startStep,
@@ -181,6 +186,24 @@ function buildRequest(
   };
 }
 
+/**
+ * Whether the preset's preview was made with its recipe on this engine ("Used for this preview" on that model). The covers
+ * manifest that says so is its own chunk (src/lib/catalog/preset-recipes.ts), loaded once a preset with a recipe is open.
+ */
+function useRecipeMade(preset: Preset | undefined, engine: Engine, recipeModel: string | undefined): boolean {
+  const key = preset && recipeModel ? `${preset.id}:${engine}` : "";
+  const [made, setMade] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!key || !preset || key in made) return;
+    let live = true;
+    void import("@/lib/catalog/preset-recipes").then((m) => live && setMade((x) => ({ ...x, [key]: m.recipeMade(preset, engine) })));
+    return () => {
+      live = false;
+    };
+  }, [key, preset, engine, made]);
+  return !!key && !!made[key];
+}
+
 /** Leaving a model that takes looks (Fuobe Soul) for one that doesn't: the look (its presetId) doesn't come along. */
 function lookCleared(from: ModelDef | undefined, to: ModelDef): Partial<Draft> {
   return from?.options.looks && !to.options.looks ? { presetId: undefined, presetStrength: undefined } : {};
@@ -293,6 +316,23 @@ export function Composer({ docked }: { docked: boolean }) {
   const preset: Preset | undefined = draft.presetId && !takesLook ? catalog.getPreset(draft.presetId) : config.preset;
   const lockedModel = preset?.type === "app";
   const presetLoading = !!draft.presetId && !takesLook && !preset && !catalog.complete;
+  // The models the viewer's catalog has (the studio's slice, or the full catalog once it's loaded), and the ones this
+  // viewer can run now: offered in Settings → Models & licences, and a key for its provider when it's an account's paid run.
+  const has = useCallback((id: string) => !!catalog.getModel(id), [catalog]);
+  const runs = useCallback(
+    (id: string) => {
+      const m = catalog.getModel(id);
+      return !!m && catalog.offered(id, engine) && !needsKey(m, status);
+    },
+    [catalog, engine, status],
+  );
+  // An app runs on its own models on this engine: the one its preview was made with, then its own route's.
+  const appIds = useMemo(() => (lockedModel && preset ? appModels(preset, engine, has) : []), [lockedModel, preset, engine, has]);
+  // The model the preset's preview was made with on this engine (MiniMax H3, Qwen-Image 2.1 Turbo), and whether its live
+  // preview really came from it ("Used for this preview" on that model).
+  const recipe = preset && !takesLook ? recipeRoute(preset, engine) : undefined;
+  const recipeModel = recipe && has(recipe.modelId) ? recipe.modelId : undefined;
+  const madeWith = useRecipeMade(preset, engine, recipeModel) ? recipeModel : undefined;
   /** What the request names for its model: the engine (only a model that runs on both, a Fuobe Original), and whether it takes looks. */
   const targetFor = (id: string) => {
     const m = catalog.getModel(id);
@@ -339,7 +379,7 @@ export function Composer({ docked }: { docked: boolean }) {
     seen.current = { engine, model };
     if (!model) return;
     if (heldForKey && (model.id !== config.defaultModels.cloud || new URLSearchParams(window.location.search).get("model") === model.id)) return;
-    const next = engineSwitchModel({ model, preset, engine, from: before.engine, defaults });
+    const next = engineSwitchModel({ model, preset, engine, from: before.engine, defaults, has });
     const m = next ? catalog.getModel(next) : undefined;
     if (!m) {
       if (before.engine === engine || before.model?.id !== model.id || before.model === model) return;
@@ -353,9 +393,10 @@ export function Composer({ docked }: { docked: boolean }) {
     }
     // Only the model this effect saw: a hand-off applied in the same commit (?model=, a layout effect) already
     // replaced it, and swapping it for the engine's default would undo the link (it landed on Z-Image Turbo).
-    const route = m.id === presetModel(preset, engine) ? presetParams(preset, engine) : {};
+    // An app takes the settings of its route on that model; a camera motion or effect its move's.
+    const route = lockedModel ? routeParams(appRoute(preset, engine, m.id, has), "app") : m.id === presetModel(preset, engine, has) ? presetParams(preset, engine, has) : {};
     setDraft((d) => (d.modelId !== model.id ? {} : { modelId: m.id, params: { ...m.defaults, ...route, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt }, ...lookCleared(model, m) }));
-  }, [engine, model, preset, defaults, setDraft, catalog, heldForKey, config.defaultModels.cloud]);
+  }, [engine, model, preset, defaults, setDraft, catalog, heldForKey, config.defaultModels.cloud, has, lockedModel]);
 
   // Where the server can't write Ideogram 4's caption (writesCaptions), the studio's untouched default moves to its stand-in
   // once the status is known. Ideogram 4 picked after that stays.
@@ -364,31 +405,46 @@ export function Composer({ docked }: { docked: boolean }) {
     if (captionChecked.current || writes === undefined || !model) return;
     captionChecked.current = true;
     const to = defaults[engine];
-    const m = to !== model.id && model.id === config.defaultModels[engine] && !lockedModel ? catalog.getModel(to) : undefined;
+    // An app moves only to one of its own models.
+    const m = to !== model.id && model.id === config.defaultModels[engine] && (!lockedModel || appIds.includes(to)) ? catalog.getModel(to) : undefined;
     if (m) setDraft((d) => (d.modelId !== model.id ? {} : { modelId: m.id, params: { ...m.defaults, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt }, ...lookCleared(model, m) }));
-  }, [writes, model, defaults, engine, config.defaultModels, lockedModel, catalog, setDraft]);
+  }, [writes, model, defaults, engine, config.defaultModels, lockedModel, appIds, catalog, setDraft]);
+
+  // The preset's recipe (the model its preview was made with) that this viewer can't run: a Replicate-only account and
+  // hosted MiniMax H3 (fal only), or a model switched off in Settings → Models & licences. The composer moves to the
+  // preset's own route on this engine when the viewer can run that (Kling 2.5 Turbo, Fuobe DoP, the app's own model).
+  const presetFallback = useMemo(() => (takesLook ? undefined : presetFallbackRoute(preset, engine, model?.id, has, runs)), [preset, takesLook, model, engine, has, runs]);
+  useEffect(() => {
+    const m = presetFallback && model ? catalog.getModel(presetFallback.modelId) : undefined;
+    if (!m || !model) return;
+    const route = routeParams(presetFallback, preset!.type);
+    setDraft((d) => (d.modelId !== model.id ? {} : { modelId: m.id, params: { ...m.defaults, ...route, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt, seed: d.params.seed } }));
+    // Said only for the setting: an account's key is its own business (the keys' note says what each model needs).
+    if (!catalog.offered(model.id, engine)) toast(`${model.name} is turned off in Settings → Models & licences, so this uses ${m.name}`, { id: "model-access" });
+  }, [presetFallback, model, preset, engine, catalog, setDraft]);
 
   // Settings → Models & licences switched the model off (a default, a remembered pick, a Reuse, a link): the composer
   // moves to the studio's default on this engine, else the first model of its list that is on, and says so. With
-  // none on, Generate says what to turn on (accessError).
+  // none on, Generate says what to turn on (accessError). A preset's recipe moves to the preset's own route instead.
   const offModel = model && !catalog.offered(model.id, engine) ? model : undefined;
   const fallback = offModel ? [defaults[engine], ...models.filter((m) => m.engine === engine).map((m) => m.id)].find((id) => !!id && catalog.offered(id, engine) && !!catalog.getModel(id)) : undefined;
   useEffect(() => {
-    if (!offModel || !fallback || lockedModel) return;
+    if (!offModel || !fallback || lockedModel || presetFallback) return;
     const m = catalog.getModel(fallback)!;
     setDraft((d) => (d.modelId !== offModel.id ? {} : { modelId: m.id, params: { ...m.defaults, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt }, ...lookCleared(offModel, m) }));
     toast(`${offModel.name} is turned off in Settings → Models & licences, so this uses ${m.name}`, { id: "model-access" });
-  }, [offModel, fallback, lockedModel, catalog, setDraft]);
+  }, [offModel, fallback, lockedModel, presetFallback, catalog, setDraft]);
 
   // An account (Your keys) starts on a paid model it can run: the studio's untouched default when it has that key, else
-  // the first of the list it can run. Quietly: nothing it picked changed (a model it picked is never swapped).
+  // the first of the list it can run. Quietly: nothing it picked changed (a model it picked is never swapped). A preset's
+  // recipe moves to the preset's own route instead (presetFallback).
   const keyStart =
     model && model.id === config.defaultModels[engine] && needsKey(model, status) ? startingModel(model.id, models.filter((m) => m.engine === engine && catalog.offered(m.id, engine)), status) : undefined;
   useEffect(() => {
-    const m = keyStart && model && keyStart !== model.id && !lockedModel ? catalog.getModel(keyStart) : undefined;
+    const m = keyStart && model && keyStart !== model.id && !lockedModel && !presetFallback ? catalog.getModel(keyStart) : undefined;
     if (!m || !model) return;
     setDraft((d) => (d.modelId !== model.id ? {} : { modelId: m.id, params: { ...m.defaults, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt }, ...lookCleared(model, m) }));
-  }, [keyStart, model, lockedModel, catalog, setDraft]);
+  }, [keyStart, model, lockedModel, presetFallback, catalog, setDraft]);
 
   // A camera motion or effect runs on its Original on this engine (Fuobe DoP): picking one moves the composer there,
   // with the move's own settings (Focus Change: 6 s, silent). Another video model can be picked after it; it takes
@@ -397,10 +453,12 @@ export function Composer({ docked }: { docked: boolean }) {
     presetUrl(id);
     if (!id) return setDraft({ presetId: undefined, mix: undefined, presetStrength: undefined });
     const picked = catalog.getPreset(id);
-    const want = presetOriginal(picked, engine);
-    const m = want && want !== model?.id ? catalog.getModel(want) : undefined;
+    const want = presetOriginal(picked, engine, runs);
+    const m = want ? catalog.getModel(want) : undefined;
     if (!m) return setDraft({ presetId: id });
-    const route = presetParams(picked, engine);
+    // Also when the composer is already on that model (MiniMax H3 for most moves): the move picked brings its own length
+    // and Quality, not the last one's.
+    const route = presetParams(picked, engine, runs);
     setDraft((d) => ({ presetId: id, modelId: m.id, params: { ...m.defaults, ...route, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt, seed: d.params.seed }, ...lookCleared(model, m) }));
   };
   // The empty studio's example tiles pick a camera motion or effect here, as the chip does, so what is attached stays.
@@ -415,14 +473,23 @@ export function Composer({ docked }: { docked: boolean }) {
   // studio's untouched default model to its Original, once per preset.
   const adoptedPreset = useRef<string | undefined>(undefined);
   useEffect(() => {
-    const want = presetOriginal(preset, engine);
+    const want = presetOriginal(preset, engine, runs);
     if (!preset || !want || !model || adoptedPreset.current === preset.id) return;
     adoptedPreset.current = preset.id;
-    if (model.id === want || model.id !== defaults[engine]) return;
+    const route = presetParams(preset, engine, runs);
+    // Already on that model (MiniMax H3 is the Video studio's default): the move's length and Quality replace the ones
+    // still at the model's defaults.
+    if (model.id === want) {
+      setDraft((d) => {
+        const params = d.modelId === model.id ? untouchedParams(d.params, model.defaults ?? {}, route) : undefined;
+        return params ? { params } : {};
+      });
+      return;
+    }
+    if (model.id !== defaults[engine]) return;
     const m = catalog.getModel(want);
-    const route = presetParams(preset, engine);
     if (m) setDraft((d) => (d.modelId !== model.id ? {} : { modelId: m.id, params: { ...m.defaults, ...route, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt, seed: d.params.seed }, ...lookCleared(model, m) }));
-  }, [preset, engine, model, defaults, catalog, setDraft]);
+  }, [preset, engine, model, defaults, catalog, setDraft, runs]);
   // A link to a camera motion or effect Fuobe doesn't have (?preset=nope): once every preset is known, the composer
   // drops it and says so, so the chip doesn't wait on it and a plain prompt runs.
   const unknownPreset = catalog.complete && !!draft.presetId && !takesLook && !preset;
@@ -496,9 +563,9 @@ export function Composer({ docked }: { docked: boolean }) {
   // A cloud-only install refuses open models, and with demo mode off nothing else runs it, so Generate says why.
   const comfyMissing = !!config.comfyOnly && !!status && (engineMode === "cloud" || !status.providers.comfyui?.configured);
   const comfyBlock = comfyMissing && model?.engine === "open" && (engineMode === "cloud" || status?.demoMode === "off") ? "Needs ComfyUI: see the note below" : null;
-  const accessError = offModel && (!fallback || lockedModel) ? `${offModel.name} is turned off in Settings → Models & licences` : null;
+  const accessError = offModel && !presetFallback && (!fallback || lockedModel) ? `${offModel.name} is turned off in Settings → Models & licences` : null;
   const engineError =
-    (lockedModel && preset && !(engine === "open" ? preset.open : preset.cloud) ? `${preset.name} has no ${engine === "open" ? "open-source" : "cloud"} version yet` : null) ?? accessError ?? comfyBlock;
+    (lockedModel && preset && !appIds.length ? `${preset.name} has no ${engine === "open" ? "open-source" : "cloud"} version yet` : null) ?? accessError ?? comfyBlock;
   let op: Operation | undefined;
   let cost: number | null = null;
   // The run goes to a LoRA endpoint whose price isn't published (fal's MOSS-Image /lora).
@@ -558,19 +625,25 @@ export function Composer({ docked }: { docked: boolean }) {
   // GPU): Generate opens the guided fix instead of sending a run that would fail late, and the prompt stays here.
   const gpuBadges = useGpuBadges().data;
   const gpuOp = op ?? studioOp;
-  const gpuBadge =
-    model?.engine === "open" && gpuBadges?.connected
-      ? ((preset?.open ? gpuBadges.presets[preset.id] : undefined) ?? badgeFor(gpuBadges, { modelId: model.id, op: gpuOp }))
-      : null;
+  // A preset's badge describes its route on the model picked (src/server/gpu/tools.ts): the first open route (its recipe's
+  // when the catalog has its model) as "<id>", another one as "<id>@<model id>" (Fuobe DoP with the move's LoRAs). On a
+  // model the preset has no route on, or at another Quality than the route's (H3's 8-step graph for a preset made at
+  // Best), the model's own badge applies.
+  const presetKey =
+    preset && !takesLook && model
+      ? presetGpuKey(preset, has, model.id, draft.params.extra?.quality, model.options.controls?.find((c) => c.param === "quality")?.default)
+      : undefined;
+  const presetGpu = presetKey && gpuBadges?.connected ? gpuBadges.presets[presetKey] : undefined;
+  const gpuBadge = model?.engine === "open" && gpuBadges?.connected ? (presetGpu ?? badgeFor(gpuBadges, { modelId: model.id, op: gpuOp })) : null;
   const gpuSetup = gpuBadge && gpuBadge[0] !== "r" ? gpuBadge : null;
-  const gpuRef = preset?.open && gpuBadges?.presets[preset.id] ? `preset:${preset.id}` : model ? `model:${model.id}#${gpuOp ?? Object.keys(gpuBadges?.models ?? {}).find((k) => k.startsWith(`${model.id}#`))?.split("#")[1] ?? ""}` : "";
+  const gpuRef = presetGpu && presetKey ? `preset:${presetKey}` : model ? `model:${model.id}#${gpuOp ?? Object.keys(gpuBadges?.models ?? {}).find((k) => k.startsWith(`${model.id}#`))?.split("#")[1] ?? ""}` : "";
   const openGpuFix = () => {
     setGpuRetry(
       () => submitRef.current(),
       () => submitRef.current(true),
       model?.kind,
     );
-    openGpuSetup({ ref: gpuRef, name: preset?.open ? preset.name : model?.name });
+    openGpuSetup({ ref: gpuRef, name: presetGpu ? preset?.name : model?.name });
   };
 
   // An account's paid model it has no key for yet: Generate asks for the key (the note below says so too).
@@ -745,6 +818,25 @@ export function Composer({ docked }: { docked: boolean }) {
     setDraft((d) => ({ modelId: m.id, params: { ...m.defaults, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt, seed: d.params.seed }, ...lookCleared(model, m) }));
     if (m.engine !== engine) setEngine(m.engine);
   };
+  // An app's two models on this engine (the one its preview was made with, then its own route's): a picker of those in
+  // place of the model chip, listing the other engine's too for the picker's engine switch. A model switched off in
+  // Settings → Models & licences leaves it.
+  const appPickerModels = useMemo(
+    () =>
+      lockedModel && preset
+        ? (["cloud", "open"] as const)
+            .flatMap((e) => appModels(preset, e, has).filter((id) => catalog.offered(id, e)))
+            .map((id) => catalog.getModel(id))
+            .filter((m): m is ModelDef => !!m)
+        : [],
+    [lockedModel, preset, has, catalog],
+  );
+  const appChoice = appPickerModels.filter((m) => m.engine === engine).length > 1;
+  const pickAppModel = (m: ModelDef) => {
+    const route = routeParams(appRoute(preset, m.engine, m.id, has), "app");
+    setDraft((d) => ({ modelId: m.id, params: { ...m.defaults, ...route, numOutputs: d.params.numOutputs, enhancePrompt: d.params.enhancePrompt, seed: d.params.seed } }));
+    if (m.engine !== engine) setEngine(m.engine);
+  };
 
   // Frames on: the start and end frames already attached become the first frames. Off: the first and last frames
   // go back to start and end (the ones in between can come back with Undo).
@@ -825,6 +917,15 @@ export function Composer({ docked }: { docked: boolean }) {
       )}
     </>
   );
+  // A move's strength scales its LoRAs (Fuobe DoP's, Fuobe DoP · LTX's camera LoRA): the slider shows on a model whose
+  // route of the move has them, else the note names the model that does (MiniMax H3 runs a move in words).
+  const moveStrength = useMemo(() => {
+    if (!preset || !model || (preset.type !== "motion" && preset.type !== "effect")) return { here: true };
+    const scaled = (r: PresetRoute | null | undefined) => !!r?.loras?.length || !!r?.params?.extra?.camera_lora;
+    if (presetRoutes(preset, engine, has).some((r) => r.modelId === model.id && scaled(r))) return { here: true };
+    const own = engine === "open" ? preset.open : preset.cloud;
+    return { here: false, on: scaled(own) && own!.modelId !== model.id ? catalog.getModel(own!.modelId)?.name : undefined };
+  }, [preset, model, engine, has, catalog]);
   const styleChips = (
     <>
       {(config.presetPicker || (preset && (preset.type === "motion" || preset.type === "effect"))) && (
@@ -833,6 +934,8 @@ export function Composer({ docked }: { docked: boolean }) {
           preset={preset}
           presetId={draft.presetId}
           strength={draft.presetStrength ?? 1}
+          takesStrength={moveStrength.here}
+          strengthOn={moveStrength.on}
           mix={draft.mix}
           onPreset={pickPreset}
           onMix={(patch) => setDraft(patch)}
@@ -1067,16 +1170,19 @@ export function Composer({ docked }: { docked: boolean }) {
           )}
           {/* The model chip may shrink (its name truncates) on phones, so the row fits without scrolling. */}
           <span className="flex min-w-0 shrink-0 max-sm:order-2 max-sm:min-w-[4.5rem] max-sm:shrink max-sm:[&>button]:min-w-0 max-sm:[&>button]:shrink max-sm:[&>button>svg:first-child]:hidden">
-            {!lockedModel ? (
+            {!lockedModel || appChoice ? (
               catalog.ready ? (
                 <ModelPicker
-                  models={models}
+                  models={appChoice ? appPickerModels : models}
                   value={model}
                   engine={engine}
                   onEngineChange={setEngine}
                   defaultModels={defaults}
                   ops={pickerOps}
-                  onChange={pickModel}
+                  onChange={appChoice ? pickAppModel : pickModel}
+                  recipe={recipeModel}
+                  flat={appChoice}
+                  madeWith={madeWith}
                 />
               ) : (
                 <Chip icon={Loader2} disabled className="[&>svg]:animate-spin">
@@ -1086,11 +1192,15 @@ export function Composer({ docked }: { docked: boolean }) {
             ) : (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Chip icon={Sparkles}>
+                  <Chip icon={model?.engine === "cloud" ? Cloud : Cpu} aria-label={`${preset?.name} runs on ${model?.name ?? "its own model"}${model && model.id === madeWith ? ", used for this preview" : ""}`}>
                     <span className="min-w-0 truncate">{model?.name ?? "…"}</span>
+                    {model && model.id === madeWith && <Sparkles className="size-3.5 shrink-0 text-brand-text" aria-hidden />}
                   </Chip>
                 </TooltipTrigger>
-                <TooltipContent>{preset?.name} runs on {model?.name ?? "its own model"}</TooltipContent>
+                <TooltipContent>
+                  {preset?.name} runs on {model?.name ?? "its own model"}
+                  {model && model.id === madeWith ? " · Used for this preview" : ""}
+                </TooltipContent>
               </Tooltip>
             )}
           </span>

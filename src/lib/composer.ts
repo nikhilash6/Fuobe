@@ -12,7 +12,8 @@ import { addFrameAt, frameTimes, framesInputs, removeFrameAt, spread, type Frame
 import { FACE_MOSAIC_MODELS } from "./catalog/open-tools";
 import { pricingOn, type PriceClock } from "./catalog/promo";
 import { soulPostStep } from "./catalog/soul";
-import { COLORMAPS, type Engine, type GenParams, type InputSlot, type MatteOutput, type MediaKind, type ModelDef, type Operation, type Preset, type VideoFormat } from "./catalog/types";
+import { appModels, ownRoute, presetRoutes, type HasModel, type RecipePreset } from "./catalog/preset-recipe-routes";
+import { COLORMAPS, type Engine, type GenParams, type InputSlot, type MatteOutput, type MediaKind, type ModelDef, type Operation, type Preset, type PresetRoute, type VideoFormat } from "./catalog/types";
 import { spokenLanguageName } from "./speech-languages";
 
 // ---------------------------------------------------------------------------
@@ -683,37 +684,99 @@ export interface DraftShape {
 const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const sameAttachment = (a: Attachment | null | undefined, b: Attachment | null | undefined) => (a ?? null) === (b ?? null) || (!!a && !!b && a.id === b.id && a.ref === b.ref);
 
-type PresetRoutes = Pick<Preset, "type" | "open" | "cloud">;
+type PresetRoutes = RecipePreset;
+
+const isMove = (preset: PresetRoutes | undefined): preset is PresetRoutes => preset?.type === "motion" || preset?.type === "effect";
 
 /**
- * The model a camera motion or effect runs on by default on an engine (Fuobe DoP, or the route its move names: a
- * camera LoRA in the cloud runs on Fuobe DoP · LTX; a move with nothing of the Original's own in the cloud keeps its
- * partner model there). Undefined for apps (their model is pinned) and without a preset.
+ * The route a camera motion or effect runs on by default on an engine: the one its preview was made with (MiniMax H3)
+ * when the viewer's catalog has its model (`has`), else its own (Fuobe DoP, or the route its move names: a camera LoRA
+ * in the cloud runs on Fuobe DoP · LTX; a move with nothing of the Original's own in the cloud keeps its partner model
+ * there). Undefined for apps and without a preset.
  */
-export function presetModel(preset: PresetRoutes | undefined, engine: Engine): string | undefined {
-  if (!preset || (preset.type !== "motion" && preset.type !== "effect")) return undefined;
-  return (engine === "open" ? preset.open : preset.cloud)?.modelId;
+function moveRoute(preset: PresetRoutes | undefined, engine: Engine, has: HasModel): PresetRoute | undefined {
+  return isMove(preset) ? presetRoutes(preset, engine, has)[0] : undefined;
+}
+
+/** The model a camera motion or effect runs on by default on an engine (moveRoute). Undefined for apps and without a preset. */
+export function presetModel(preset: PresetRoutes | undefined, engine: Engine, has: HasModel): string | undefined {
+  return moveRoute(preset, engine, has)?.modelId;
 }
 
 /**
- * The Original a camera motion or effect moves the composer to when it is picked or linked (Fuobe DoP on this engine).
- * Never a partner route (a move Fuobe DoP has nothing of its own for in the cloud): the person's model stays.
+ * The model a camera motion or effect moves the composer to when it is picked or linked: its recipe's (MiniMax H3),
+ * else its Original (Fuobe DoP on this engine). Never a partner route (a move Fuobe DoP has nothing of its own for in
+ * the cloud): the person's model stays.
  */
-export function presetOriginal(preset: PresetRoutes | undefined, engine: Engine): string | undefined {
-  const route = preset && presetModel(preset, engine) ? (engine === "open" ? preset.open : preset.cloud) : undefined;
+export function presetOriginal(preset: PresetRoutes | undefined, engine: Engine, has: HasModel): string | undefined {
+  const route = moveRoute(preset, engine, has);
   return route && !route.partner ? route.modelId : undefined;
 }
 
 /**
- * The settings a preset's route starts the composer with on its model (Focus Change: 6 s, 720p, silent), over the
- * model's defaults. Only plain values the composer shows: the route's extra (a camera LoRA, a pose) stays the
- * preset's, so the next preset picked on the same model doesn't inherit it.
+ * The settings a preset's route starts the composer with on its model (Focus Change: 6 s, 720p, silent; a recipe on H3:
+ * 5 s at the Quality its cover was made at), over the model's defaults. Only values the composer shows: the route's other
+ * extras (a camera LoRA, a pose, the orbit) stay the preset's, so the next preset picked on the same model doesn't inherit
+ * them. The planner adds them to the run.
  */
-export function presetParams(preset: PresetRoutes | undefined, engine: Engine): GenParams {
-  const route = preset && presetModel(preset, engine) ? (engine === "open" ? preset.open : preset.cloud) : undefined;
+export function presetParams(preset: PresetRoutes | undefined, engine: Engine, has: HasModel): GenParams {
+  return routeParams(moveRoute(preset, engine, has), "motion");
+}
+
+/**
+ * The settings a preset's route starts the composer with: an app's route's as they are (they are its own); a camera
+ * motion's or effect's plain ones and its Quality (presetParams).
+ */
+export function routeParams(route: Pick<PresetRoute, "params"> | undefined, type: Preset["type"]): GenParams {
+  if (type === "app") return { ...route?.params };
   const plain: GenParams = { ...route?.params };
+  const quality = route?.params?.extra?.quality;
   delete plain.extra;
-  return plain;
+  return quality === undefined ? plain : { ...plain, extra: { quality } };
+}
+
+/**
+ * A route's settings over a draft that is already on the route's model: each setting still at the model's default takes
+ * the route's value (a linked preset that loads after the first draft: Whip Pan at Best, 360 Orbit at 3 s). A setting
+ * the person changed stays. Undefined when nothing changes.
+ */
+export function untouchedParams(params: GenParams, defaults: GenParams, route: GenParams): GenParams | undefined {
+  const next: Record<string, unknown> = { ...params };
+  let changed = false;
+  for (const [k, v] of Object.entries(route)) {
+    if (k === "extra") continue;
+    const now = (params as Record<string, unknown>)[k];
+    if (same(now, (defaults as Record<string, unknown>)[k]) && !same(now, v)) {
+      next[k] = v;
+      changed = true;
+    }
+  }
+  for (const [k, v] of Object.entries(route.extra ?? {})) {
+    const now = params.extra?.[k];
+    if (same(now, defaults.extra?.[k]) && !same(now, v)) {
+      next.extra = { ...(next.extra as GenParams["extra"]), [k]: v };
+      changed = true;
+    }
+  }
+  return changed ? (next as GenParams) : undefined;
+}
+
+/** An app's route for a model on an engine (its recipe's or its own), if the app runs on that model there. */
+export function appRoute(preset: PresetRoutes | undefined, engine: Engine, modelId: string, has: HasModel): PresetRoute | undefined {
+  return preset?.type === "app" ? presetRoutes(preset, engine, has).find((r) => r.modelId === modelId) : undefined;
+}
+
+/**
+ * Where the composer goes when the viewer can't run the route a preset opens on (its recipe: a Replicate-only account and
+ * hosted MiniMax H3, which is on fal alone; a model switched off in Settings → Models & licences): the first of the
+ * preset's other routes on this engine the viewer can run (`runs`). Undefined when the composer isn't on the first
+ * route's model, the viewer can run it, or no other route runs for them (Generate then says what is missing).
+ */
+export function presetFallback(preset: PresetRoutes | undefined, engine: Engine, modelId: string | undefined, has: HasModel, runs: HasModel): PresetRoute | undefined {
+  if (!preset || !modelId) return undefined;
+  const routes = presetRoutes(preset, engine, has);
+  if (routes.length < 2 || routes[0].modelId !== modelId || runs(modelId)) return undefined;
+  return routes.slice(1).find((r) => r.modelId !== modelId && runs(r.modelId));
 }
 
 /**
@@ -737,10 +800,12 @@ export function viewerDefaults<D extends { cloud: string; open: string }>(defaul
 
 /**
  * What the engine switch (or a model change) does to the composer's model: the model id to move to, or undefined to
- * keep it. A model that doesn't run on the engine gives way to the preset's model there (an app's pinned route), else
- * the studio's default. A camera motion or effect on its model for the other engine follows its move to this one's
- * (Jib Up: Fuobe DoP on the GPU, Fuobe DoP · LTX in the cloud), but only when the engine has just changed: the sibling
- * model picked on purpose on the same engine stays.
+ * keep it. An app runs only on its own models for the engine (its recipe's, then its route's): any other model, even
+ * one that also runs on this engine (Fuobe Soul, AI Influencer's cloud model), gives way to the first. A model that
+ * doesn't run on the engine gives way to the preset's model there, else the studio's default. A camera motion or effect
+ * on a model of the other engine follows its move to this one's (MiniMax H3 hosted → on the GPU; Jib Up: Fuobe DoP on
+ * the GPU, Fuobe DoP · LTX in the cloud), but only when the engine has just changed: the sibling model picked on purpose
+ * on the same engine stays.
  */
 export function engineSwitchModel(o: {
   model: Pick<ModelDef, "id" | "engine">;
@@ -749,13 +814,26 @@ export function engineSwitchModel(o: {
   /** The engine the composer was on before (the same one when only the model changed). */
   from: Engine;
   defaults: Partial<Record<Engine, string>>;
+  has: HasModel;
 }): string | undefined {
-  const { model, preset, engine } = o;
-  const want = presetModel(preset, engine);
-  const other = presetModel(preset, engine === "open" ? "cloud" : "open");
-  const follows = o.from !== engine && !!want && want !== model.id && model.id === other;
-  if (model.engine === engine && !follows) return undefined;
-  if (preset?.type === "app") return engine === "open" ? preset.open?.modelId : preset.cloud?.modelId;
+  const { model, preset, engine, has } = o;
+  if (preset?.type === "app") {
+    const ids = appModels(preset, engine, has);
+    return ids.includes(model.id) || !ids.length ? undefined : ids[0];
+  }
+  const otherEngine: Engine = engine === "open" ? "cloud" : "open";
+  const want = presetModel(preset, engine, has);
+  // The same choice on the other engine (the recipe's model, or the move's own route's) moves to its sibling here.
+  let follows: string | undefined;
+  if (isMove(preset) && o.from !== engine) {
+    const mine = presetRoutes(preset, engine, has);
+    const theirs = presetRoutes(preset, otherEngine, has);
+    const i = theirs.findIndex((r) => r.modelId === model.id);
+    const sibling = i >= 0 ? (mine[i]?.modelId ?? want) : undefined;
+    if (sibling && sibling !== model.id) follows = sibling;
+  }
+  if (follows) return follows;
+  if (model.engine === engine) return undefined;
   return want ?? o.defaults[engine];
 }
 
@@ -793,7 +871,8 @@ export function postStepCost(
  * preset's own model: a partner model runs the effect's words alone.
  */
 export function prestepCost(preset: Pick<Preset, "type" | "open" | "cloud" | "prestep"> | undefined, modelId: string | undefined, engine: Engine): number {
-  if (!preset?.prestep || !modelId || presetModel(preset, engine) !== modelId) return 0;
+  // A preset with a step has no recipe: its own route is the one that runs the step.
+  if (!preset?.prestep || !modelId || ownRoute(preset, engine)?.modelId !== modelId) return 0;
   return preset.prestep[engine].usd ?? 0;
 }
 
@@ -996,6 +1075,8 @@ export function groupModels(input: {
   recent: string[];
   starred: string[];
   best: string[];
+  /** A short list in its own order (an app's models): one group. */
+  flat?: boolean;
 }): { groups: ModelGroup[]; count: number } {
   const { models, engine, engines, query, recent, starred, best } = input;
   const q = query.trim();
@@ -1009,6 +1090,7 @@ export function groupModels(input: {
     return { groups: hits.length ? [{ id: "results", label: "Results", models: hits }] : [], count: hits.length };
   }
   const pool = models.filter((m) => m.engine === engine);
+  if (input.flat) return { groups: pool.length ? [{ id: "all", label: "Models", models: pool }] : [], count: pool.length };
   const byId = new Map(pool.map((m) => [m.id, m]));
   const used = new Set<string>();
   const take = (ids: string[], max: number) => {
