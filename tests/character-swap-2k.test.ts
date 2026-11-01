@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import type { PlanStep } from "@/lib/catalog/shorts";
 import type { GenInput } from "@/lib/catalog/types";
 
 // Character swap in 2K (package n7-4-character-swap-2k): Genjutsu's 1080p / 2K / 4K and Character Swap Studio's Sharpen,
@@ -22,6 +23,7 @@ type SwapTake = import("@/lib/catalog/swap-studio").SwapTake;
 const { planTakeFinish, planAssembly } = await import("@/lib/catalog/swap-studio-plan");
 const { getModel } = await import("@/lib/catalog");
 const { estimateCost } = await import("@/lib/catalog/plan");
+const { onEngine } = await import("@/lib/catalog/engines");
 const { buildPayload } = await import("@/lib/catalog/payload");
 const { prepareWorkflow, getWorkflow } = await import("@/server/providers/comfyui");
 
@@ -32,7 +34,7 @@ const maker = (id: string, engine: "open" | "cloud") => G.getMaker(id, engine)!;
 const character = (engine: "open" | "cloud", quality: string, o: Partial<Parameters<typeof G.planGenjutsu>[0]> = {}) =>
   G.planGenjutsu({ engine, mode: "character", maker: maker(G.ORIGINALS.character, engine), title: "Swap", source: hd, range: { start: 2, end: 12 }, quality, references: [ref], seed: 42, ...o });
 const keys = (p: { steps: { key: string }[] }) => p.steps.map((s) => s.key);
-const step = (p: { steps: { key: string; request: GenInput & Record<string, unknown>; after?: string[]; chain?: unknown[] }[] }, key: string) => {
+const step = (p: { steps: PlanStep[] }, key: string) => {
   const s = p.steps.find((x) => x.key === key);
   if (!s) throw new Error(`no step ${key}: ${keys(p).join(", ")}`);
   return s;
@@ -86,7 +88,7 @@ describe("prices", () => {
     expect(S.cloudSharpenUsd("1080p", 5)).toBeNull();
     // The catalog prices the plan's step the same way.
     const m = getModel("fuobe-character-swap")!;
-    const cloud = { ...m, engine: "cloud" as const };
+    const cloud = onEngine(m, "cloud");
     expect(estimateCost(cloud, { resolution: "2K", duration: 5 }, 1, "video-swap")).toBeCloseTo(0.8125, 2);
     expect(estimateCost(cloud, { resolution: "4K", duration: 15 }, 1, "video-swap")).toBeCloseTo(3, 2);
     expect(estimateCost(cloud, { resolution: "768p", duration: 5 }, 1, "video-swap")).toBeCloseTo(0.375, 2);
@@ -237,7 +239,7 @@ describe("Genjutsu's Character swap", () => {
     expect(character("cloud", "1080p").steps.find((s) => s.request.modelId === "fuobe-character-swap")!.request.params).toMatchObject({ resolution: "768p" });
     // The payload fal gets.
     const m = getModel("fuobe-character-swap")!;
-    const route = (m.engines?.cloud?.routes ?? m.routes).find((r) => r.provider === "fal")!;
+    const route = onEngine(m, "cloud").routes.find((r) => r.provider === "fal")!;
     const payload = buildPayload(route.map!, { ...swap.request.params, prompt: swap.request.prompt, images: [ref] } as never) as Record<string, unknown>;
     expect(payload).toMatchObject({ resolution: "2K", seed: 42, duration: 10 });
   });
@@ -346,6 +348,17 @@ describe("Character Swap Studio: Sharpen", () => {
 
 // ---------------------------------------------------------------------------
 // The graph
+
+describe("the GPU pre-flight", () => {
+  it("has a Character swap in 2K row on the regenerate, the composite and the join", async () => {
+    const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
+    const row = STUDIO_ROWS.find((r) => r.label === "Character swap in 2K")!;
+    expect(row).toMatchObject({ href: "/genjutsu?mode=character", group: "Video tools" });
+    const t = studioTool(row)!;
+    expect(t.workflows).toEqual(expect.arrayContaining(["video-regenerate-h3", "video-composite-mask", "video-concat-encoded"]));
+    expect(t.loras.map((l) => l.file)).toContain("open_h3_regenerate_2k_lora.safetensors");
+  });
+});
 
 describe("video-composite-mask", () => {
   const { manifest } = getWorkflow(S.COMPOSITE_WORKFLOW);

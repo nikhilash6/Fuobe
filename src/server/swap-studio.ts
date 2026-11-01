@@ -50,6 +50,7 @@ import { REGEN_MODEL } from "@/lib/catalog/regenerate";
 import { COMPOSITE_MODEL, filmSize, SHARPEN_COPY, SHARPEN_TIERS, sharpenOptions, sharpenTierFor, type SharpenTier } from "@/lib/catalog/sharpen";
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
 import { ACCESS_PLACE } from "@/lib/model-access";
+import { silenceWriter } from "./canvas";
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { cancelGeneration, getGeneration, previewChained } from "./generations";
@@ -1019,8 +1020,13 @@ export function assemble(projectId: string, clipId: string): SwapProject {
     return url;
   };
   const plan = planAssembly({ engine: p.engine, clip, pieces: found.pieces, videoOf });
+  // A silent clip's cloud assembly ends on its silence: the WAV is written now (silenceRef, as Genjutsu and Canvas do).
+  const withSilence = silenceWriter();
   // The takes count as steps already made: a demo join of real takes is refused.
-  const pipe = run(plan.steps, existing);
+  const pipe = run(
+    plan.steps.map((s) => ({ ...s, request: withSilence(s.request) })),
+    existing,
+  );
   const assembly = { genId: pipe.byKey[plan.final].id, stepIds: pipe.items.map((g) => g.id), takes, createdAt: Date.now() };
   return mutate(projectId, (cur) => mapClip(cur, clipId, (c) => ({ ...c, assembly })));
 }

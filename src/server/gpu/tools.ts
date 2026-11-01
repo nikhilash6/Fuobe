@@ -11,6 +11,7 @@ import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
 import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { COMPOSITE_MODEL } from "@/lib/catalog/sharpen";
 import { libraryEntry, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
 import { ANGLES_2511_LORA } from "@/lib/catalog/open-tools";
 import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
@@ -217,6 +218,18 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     group: "Video tools",
     steps: [
       { modelId: REGEN_MODEL, op: "upscale-video" },
+      { modelId: REGEN_JOIN, op: "concat" },
+    ],
+  },
+  // n7-4: the Character swap at 1080p / 2K / 4K (Genjutsu, and Sharpen in Character Swap Studio's Finish): the swap
+  // regenerated, only the character composited over the footage, the windows joined.
+  {
+    href: "/genjutsu?mode=character",
+    label: "Character swap in 2K",
+    group: "Video tools",
+    steps: [
+      { modelId: REGEN_MODEL, op: "upscale-video" },
+      { modelId: COMPOSITE_MODEL, op: "overlay" },
       { modelId: REGEN_JOIN, op: "concat" },
     ],
   },
