@@ -7,13 +7,15 @@ import { FORMAT_INFO } from "./av/formats";
 import { fpsPlan, fpsSummary } from "./av/fps";
 import { targetShortEdge, upscaledSize, upscaleFactorFor, upscaleTier } from "./av/upscale";
 import { wholeClipProblem, wholeClipTool } from "./av/video-finish";
-import { clipWindowProblem } from "./catalog/clip-windows";
+import { clipFpsProblem, clipSizeProblem, clipWindowProblem } from "./catalog/clip-windows";
+import { clipBilling } from "./catalog/plan";
 import { addFrameAt, frameTimes, framesInputs, removeFrameAt, spread, type FrameSupport } from "./catalog/keyframes";
 import { FACE_MOSAIC_MODELS } from "./catalog/open-tools";
 import { pricingOn, type PriceClock } from "./catalog/promo";
 import { soulPostStep } from "./catalog/soul";
 import { appModels, ownRoute, presetRoutes, type HasModel, type RecipePreset } from "./catalog/preset-recipe-routes";
 import { COLORMAPS, type Engine, type GenParams, type InputSlot, type MatteOutput, type MediaKind, type ModelDef, type Operation, type Preset, type PresetRoute, type VideoFormat } from "./catalog/types";
+import { formatCost } from "./format";
 import { spokenLanguageName } from "./speech-languages";
 import { LAYOUT_MAX_PIXELS, LAYOUT_MAX_SIDE, LAYOUT_PARAM, readLayout, readsBoxes, type LayoutDraft } from "./layout-prompt";
 
@@ -209,7 +211,8 @@ export function clipOutcome(
   op: Operation | undefined,
   facts: { width?: number; height?: number; fps?: number; duration?: number } | undefined,
   params: GenParams,
-  model: (Pick<ModelDef, "engine" | "options" | "defaults"> & Partial<Pick<ModelDef, "name" | "routes">>) | undefined,
+  model: (Pick<ModelDef, "engine" | "options" | "defaults"> & Partial<Pick<ModelDef, "name" | "routes" | "pricing">>) | undefined,
+  now?: PriceClock,
 ): string | null {
   if (!facts || !model) return null;
   const { width, height, fps, duration } = facts;
@@ -273,6 +276,12 @@ export function clipOutcome(
     } else if (f === "exr" && duration && fps) frames = ` (${Math.round(duration * fps)} frames)`;
     return info ? `${head} → ${info.short}${frames}, .${info.ext}` : head;
   }
+  // An edit billed on the seconds in and out (Kling 4.0): what's billed, before the total.
+  const billing = duration && model.engine === "cloud" ? clipBilling(model, { ...params, sourceDuration: duration }, op, now) : undefined;
+  if (billing) {
+    const twice = billing.input < billing.output ? " (at least twice the output)" : "";
+    return `${clipSeconds(billing.input)} in + ${clipSeconds(billing.output)} out: billed on ${clipSeconds(billing.billed)}${twice} at ${formatCost(billing.rate)}/s`;
+  }
   return null;
 }
 
@@ -290,7 +299,14 @@ export function clipBlocker(
   model: (Pick<ModelDef, "engine" | "options" | "defaults"> & Partial<Pick<ModelDef, "id" | "name">>) | undefined,
   ramBytes: number | undefined,
 ): string | null {
-  if (op === "v2v" && model?.id && facts?.duration) return clipWindowProblem({ id: model.id, name: model.name ?? model.id, engine: model.engine }, facts.duration, facts.fps);
+  if (op === "v2v" && model?.id && (facts?.duration || facts?.width)) {
+    const named = { id: model.id, name: model.name ?? model.id, engine: model.engine };
+    return (
+      (facts.duration ? clipWindowProblem(named, facts.duration, facts.fps) : null) ??
+      (facts.width && facts.height ? clipSizeProblem(named, facts.width, facts.height) : null) ??
+      (facts.fps ? clipFpsProblem(named, facts.fps) : null)
+    );
+  }
   if (!facts?.width || !facts.height || !model) return null;
   if (op === "upscale-video") {
     const tier = upscaleTier(params.resolution ?? model.defaults?.resolution, model.options.resolutions, { width: facts.width, height: facts.height }, params.resolution !== undefined);

@@ -75,7 +75,8 @@ describe("Genjutsu: which model runs", () => {
     const sources = (engine: Engine, mode: "motion" | "character" | "swap" | "restyle" | "insert", target?: "type" | "click" | "paint") =>
       Object.fromEntries(makersFor(engine, mode, target).map((m) => [m.id, m.source]));
     expect(sources("cloud", "character")).toEqual({ [ORIGINALS.character]: "original", "scail-2": "open", "h3-max-recast": "partner", "wan-22-animate-replace": "open", "kling-o3": "partner", "p-video-replace": "partner" });
-    expect(sources("cloud", "swap", "type")).toEqual({ [ORIGINALS.swapLite]: "original", "kling-o3": "partner", "p-video-replace": "partner" });
+    expect(sources("cloud", "swap", "type")).toEqual({ [ORIGINALS.swapLite]: "original", "kling-o3": "partner", "kling-4": "partner", "p-video-replace": "partner" });
+    expect(sources("cloud", "insert", "type")).toMatchObject({ "kling-o3": "partner", "kling-4": "partner" });
     expect(sources("cloud", "swap", "paint")).toEqual({ [ORIGINALS.swapLite]: "original", "wan-22-vace-inpaint": "open" });
     expect(sources("cloud", "restyle")).toEqual({ [ORIGINALS.restyle]: "original", "gemini-omni-flash": "partner", "kling-o3-4k-edit": "partner", "happy-horse-video-edit": "partner" });
     expect(sources("open", "character", "type")).toEqual({ [ORIGINALS.character]: "original", "oss-h3-character-swap-relay": "open" });

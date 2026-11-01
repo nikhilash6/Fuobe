@@ -322,7 +322,23 @@ export interface FieldMap {
   /** Language to translate into (dubbing). */
   targetLanguage?: string;
   /** Native multi-shot: an array of {prompt, duration} (Kling's `multi_prompt`). */
-  multiShot?: { key: string; durationType: "string" | "number"; json?: boolean; shotType?: string; flag?: string };
+  multiShot?: {
+    key: string;
+    durationType: "string" | "number";
+    json?: boolean;
+    shotType?: string;
+    flag?: string;
+    /** The most characters a shot's prompt takes (Kling 4.0: 512); a longer one is cut at a word. */
+    maxPrompt?: number;
+    /** Shot lengths in whole seconds (rounded, at least 1). */
+    integer?: true;
+  };
+  /**
+   * Kling 4.0's elements (@Element1..): a list of objects, each a frontal image with up to `views` more angles, or a
+   * clip (`video`). Filled from params.elements, which groups some of inputs.images / inputs.videos into elements: those
+   * leave the image and clip lists, so the rest keep their @Image / @Video numbers.
+   */
+  elements?: { key: string; frontal: string; views: string; video?: string; max: number; maxViews: number; maxVideos?: number };
   /** Boolean draft switch (Seedance 2.5 renders a cheap 480p take and returns a draft id). */
   draft?: string;
   /** Field that takes the draft id to finish. */
@@ -533,7 +549,8 @@ export interface ModelRoute {
   maxImages?: number;
 }
 
-export type Badge = "new" | "top" | "fast" | "audio" | "4k" | "hd" | "pro" | "open" | "uncensored" | "beta";
+/** "30s": takes of up to 30 s in one call (Kling 4.0). */
+export type Badge = "new" | "top" | "fast" | "audio" | "4k" | "hd" | "pro" | "open" | "uncensored" | "beta" | "30s";
 
 export interface ModelOptions {
   aspectRatios?: string[];
@@ -550,6 +567,12 @@ export interface ModelOptions {
   endFrame?: boolean;
   /** Multi-shot support: "native" sends per-shot prompts, "prompt" writes the shots into one prompt. */
   multiShot?: { mode: "native" | "prompt" | "concat"; maxShots: number };
+  /**
+   * @mentioned Elements go as the model's own elements (Kling 4.0's @Element1..): up to `max`, each a frontal image and up
+   * to `views` more angles, or a clip (up to `videos` of them). `voices`: a voice can be bound to one (false: Fuobe has no
+   * way to make the provider's voice ids yet, so voices aren't sent).
+   */
+  elements?: { max: number; views: number; videos: number; voices: false; ops: Operation[] };
   /** Draft mode (cheap preview, then a full render of the take you like). */
   draft?: boolean;
   /**
@@ -677,6 +700,12 @@ export interface Pricing {
   roundUp?: true;
   /** What an animation preset adds to a run (params.animation: Meshy rigging +$0.12). */
   animationUsd?: number;
+  /**
+   * A run with a clip going in (an edit's source, reference clips, video elements: Kling 4.0) bills this rate per second
+   * of input plus output, at least twice the output (fal and Replicate: "2x output if input is shorter than output,
+   * otherwise input + output"), in place of `usd` / `byResolution`.
+   */
+  clipInput?: { usd: number; byResolution?: Record<string, number> };
 }
 
 /** A model's weights licence, as read in the research: information, never a gate (the owner's decision of 2026-10-27). */
@@ -756,6 +785,13 @@ export interface GenParams {
   targetLanguage?: string;
   /** Multi-shot: shots in order (empty/undefined = one shot). "auto" lets the model cut by itself. */
   shots?: { prompt: string; duration: number }[];
+  /**
+   * @mentioned Elements as the model's elements (ModelOptions.elements, FieldMap.elements): each groups inputs.images by
+   * index (0-based; the first is its frontal view), or names one of inputs.videos (a video element).
+   */
+  elements?: { images?: number[]; video?: number }[];
+  /** Seconds of the reference clips that go in (Kling 4.0 bills them with the output: Pricing.clipInput). */
+  clipSeconds?: number;
   multiShot?: "auto";
   /** Render a cheap draft first (Seedance 2.5 draft mode). */
   draft?: boolean;

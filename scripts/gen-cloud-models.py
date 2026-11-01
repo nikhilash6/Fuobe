@@ -68,6 +68,8 @@ IMAGE_SIZE_MAP = {
     "5:4": "landscape_4_3", "4:5": "portrait_4_3",
 }
 RATIO = re.compile(r"^\d+(\.\d+)?:\d+(\.\d+)?$")
+# Models whose @mentioned Elements go as the API's own elements (FieldMap.elements, ModelOptions.elements).
+ELEMENT_MODELS = {"kling-4"}
 # Duration picks for APIs that take any whole number of seconds in a range.
 NICE_DURATIONS = [3, 4, 5, 6, 8, 10, 12, 15, 20, 30]
 
@@ -396,6 +398,29 @@ model("seedance-2-5", "Seedance 2.5", "ByteDance", "seedance", "video",
       badges=["top", "audio", "new"], pricing=("second", 0.473, "720p"), defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"},
       # fal's schema gives no count for 2.5's reference clips; Replicate's 2.5 schema says up to 10 (30 s in all), as the research found.
       options={"multiShot": {"mode": "prompt", "maxShots": 6}, "maxVideos": 10, "maxAudios": 10})
+# Kling 4.0 (research part 4, re-read 2026-11-01 when fal opened its API; build package nm10-kling-4): 3-30 s at 720p or
+# 1080p, per-shot prompts (multi_prompt) and @Element1.. elements on fal; Replicate's official model takes the text and
+# start/end-frame runs as a second provider (its @image_1 numbering, and no shots or elements, keep references and edits
+# on fal). The reference route's start_image_url is left out: Fuobe's references are references, not a first frame.
+# Edits keep the clip's length (duration defaults to the source's), so their routes send none. An edit, reference clips
+# and video elements bill per second of input plus output, at least twice the output (Pricing.clipInput). fal's
+# middle_image_urls (8 ordered keyframes, no times) and voice_ids aren't mapped: Frames mode stays on FLUX 3 Max, and
+# Fuobe can't make fal voice ids yet.
+_K4_EDIT = "kling/v4/video-to-video/edit"
+model("kling-4", "Kling 4.0", "Kuaishou", "kling", "video",
+      "Kuaishou's newest flagship — 3–30 s takes, multi-shot, @Elements and video edits up to 1080p",
+      [("t2v", "kling/v4/text-to-video"), ("i2v", "kling/v4/image-to-video", "fal", "+flf2v"),
+       ("ref2v", "kling/v4/reference-to-video", "fal", {"drop": ["image"]}),
+       ("v2v", _K4_EDIT, "fal", {"drop": ["duration"]}),
+       ("video-swap", _K4_EDIT, "fal", {"drop": ["duration"]}), ("video-insert", _K4_EDIT, "fal", {"drop": ["duration"]}),
+       ("t2v", "kwaivgi/kling-v4.0", "replicate", {"drop": ["image", "endImage", "images", "video"]}),
+       ("i2v", "kwaivgi/kling-v4.0", "replicate", {"drop": ["images", "video", "aspectRatio"], "flf2v": True})],
+      # Only reference-to-video takes "auto": each route lists the shapes it takes (fit_values), so a text or Replicate
+      # run leaves "auto" out (the API's own 16:9) rather than sending a value it refuses.
+      badges=["top", "30s", "new"], ranged_durations=True, fit_values=True,
+      pricing=("second", 0.235, "1080p; 720p $0.157. An edit, reference clips or video elements bill $0.141/s at 1080p ($0.094 at 720p) on the seconds in plus the seconds out, at least twice the output",
+               {"byResolution": {"720p": 0.157, "1080p": 0.235}, "clipInput": {"usd": 0.141, "byResolution": {"720p": 0.094, "1080p": 0.141}}}),
+      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"})
 model("seedance-2-0", "Seedance 2.0", "ByteDance", "seedance", "video",
       "Smooth multi-shot motion with audio",
       [("t2v", "bytedance/seedance-2.0/text-to-video"), ("i2v", "bytedance/seedance-2.0/image-to-video", "fal", "+flf2v"),
@@ -1034,11 +1059,7 @@ model("meshy-7-1", "Meshy 7.1", "Meshy", "meshy", "model3d", "Textured models wi
 # ---------------------------------------------------------------------------
 # Round 4 (research part 4): video erase / swap / insert, FPS boost, SDR to HDR, FFmpeg-style tools, OCR, 3D
 # and the models released between 2026-09-15 and 2026-10-22.
-#
-# TODO(kling-4): Kling 4.0 (kling/v4/text-to-video, image-to-video, reference-to-video, video-to-video/edit) has
-# schemas in paid-model-apis-4.json but status "playground-only": fal's pages say "Kling 4.0 is available in the
-# playground and fal Agent. API access is coming soon." (re-checked 2026-10-22). Add a "kling-4" model here
-# (t2v / i2v + keyframes / ref2v / v2v + remove-object / video-swap / video-insert) once the API opens.
+
 
 # What VOID and VACE regenerate in the masked area when Fuobe's prompt names the thing to remove.
 SCENE_AFTER_REMOVAL = "The same shot with nothing there: the background continues naturally, matching the light, texture and motion around it"
@@ -1750,6 +1771,13 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # Part 3 names for clip lists (merge-videos' video_urls, Seed Audio's reference audio_urls).
     for k in ("videos", "audios"):
         if k in kf and (inputs.get(kf[k]) or {}).get("type") == "array":
+            # An edit that takes its source clip and reference clips apart (Kling 4.0: video_url as @Video1, video_urls
+            # as @Video2..): the list is the reference clips (FieldMap.videos), the source stays the clip edited.
+            if k == "videos" and "video" in kf and (inputs.get(kf["video"]) or {}).get("type") != "array":
+                fmap["videos"] = kf.pop(k)
+                spec = inputs.get(fmap["videos"]) or {}
+                opts["maxVideos"] = max(opts.get("maxVideos", 0), num(spec.get("maxItems")) or 3)
+                continue
             kf.setdefault(k[:-1], kf.pop(k))
     for k in ["negativePrompt", "image", "images", "endImage", "mask", "video", "audio", "numOutputs", "seed", "generateAudio"]:
         if k in kf:
@@ -1774,12 +1802,43 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         item = (inputs.get(kf["multiShot"]) or {}).get("itemSchema") or {}
         dtype = "string" if (item.get("duration") or {}).get("valueType") == "string" else "number"
         ms = {"key": kf["multiShot"], "durationType": dtype}
+        # Kling 4.0's shots: a prompt of up to 512 characters each, whole seconds (FieldMap.multiShot.maxPrompt / integer).
+        if num((item.get("prompt") or {}).get("maxLength")):
+            ms["maxPrompt"] = int(num(item["prompt"]["maxLength"]))
+        if (item.get("duration") or {}).get("type") == "integer":
+            ms["integer"] = True
         if (inputs.get(kf["multiShot"]) or {}).get("type") == "string":
             ms["json"] = True
         if "shotType" in kf:
             ms["shotType"] = kf["shotType"]
         fmap["multiShot"] = ms
         opts["multiShot"] = {"mode": "native", "maxShots": 6}
+    # Kling 4.0's elements (@Element1..): objects of a frontal image and more angles, or a clip (FieldMap.elements), with the
+    # limits the schema states: how many, how many angles, how many may be clips ("up to 3 may be video elements").
+    # Only for the models in ELEMENT_MODELS: Kling O1 / O3 record elements too, but their runs keep sending @mentions as
+    # reference images as before (moving them is its own change, with its own checks).
+    if "elements" in kf and m["id"] in ELEMENT_MODELS and (inputs.get(kf["elements"]) or {}).get("type") == "array":
+        spec = inputs.get(kf["elements"]) or {}
+        item = spec.get("itemSchema") or {}
+        frontal = next((k for k in item if "frontal" in k), None)
+        views = next((k for k, v in item.items() if (v or {}).get("type") == "array" and "image" in k), None)
+        clip = next((k for k, v in item.items() if (v or {}).get("type") == "string" and "video" in k), None)
+        if frontal and views:
+            most = int(num(spec.get("maxItems")) or 4)
+            angles = int(num((item[views] or {}).get("maxItems")) or 3)
+            clips = re.search(r"up to (\d+) may be video elements", spec.get("desc") or "")
+            el = {"key": kf["elements"], "frontal": frontal, "views": views, "max": most, "maxViews": angles}
+            if clip:
+                el["video"] = clip
+                el["maxVideos"] = int(clips[1]) if clips else most
+            fmap["elements"] = el
+            prev = opts.get("elements") or {}
+            # Voices need the provider's voice ids (fal's Kling create-voice), which Fuobe can't make yet: never sent.
+            opts["elements"] = {"max": max(prev.get("max", 0), most), "views": max(prev.get("views", 0), angles),
+                                "videos": max(prev.get("videos", 0), el.get("maxVideos", 0)), "voices": False,
+                                "ops": union(prev.get("ops", []), [op])}
+        else:
+            warn(f"{m['id']}: {ep} elements have no frontal image and angle list")
     if "draft" in kf and op in ("t2v", "i2v", "ref2v"):
         fmap["draft"] = kf["draft"]
         opts["draft"] = True

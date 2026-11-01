@@ -58,8 +58,10 @@ export const PromptInput = forwardRef<
     className?: string;
     /** Docked and not focused: keep the prompt to one line. */
     collapsed?: boolean;
+    /** What the model does with an @mention, under the menu's heading (Kling 4.0: "Up to 7 as Kling elements · voices: not yet"). */
+    elementsNote?: string;
   }
->(function PromptInput({ value, onChange, onSubmit, placeholder, elements, className, collapsed }, ref) {
+>(function PromptInput({ value, onChange, onSubmit, placeholder, elements, className, collapsed, elementsNote }, ref) {
   const ta = useRef<HTMLTextAreaElement>(null);
   const mirror = useRef<HTMLDivElement>(null);
   const [caret, setCaret] = useState<number | null>(null);
@@ -220,6 +222,7 @@ export const PromptInput = forwardRef<
           <p className="flex items-center gap-1.5 px-2 pt-1.5 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
             <AtSign className="size-3" /> Elements
           </p>
+          {elementsNote && <p className="px-2 pb-1.5 text-[11px] leading-snug text-muted-foreground">{elementsNote}</p>}
           {matches.map((el, i) => {
             const Icon = ELEMENT_ICONS[el.kind];
             return (

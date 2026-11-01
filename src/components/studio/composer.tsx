@@ -19,7 +19,7 @@ import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
-import { applyMentions, type StudioElement } from "@/lib/catalog/elements";
+import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
 import {
   chainGapProblem,
@@ -770,7 +770,7 @@ export function Composer({ docked }: { docked: boolean }) {
   // Enhance writes a scene; a tool's optional words (FLUX.3 Upscale's details) stay as typed.
   const baseShape = settingsShape(model, effectiveOp, config.kind, showPrompt && !config.hidePrompt, p, config.ops, studioFormats);
   const shape = framesCtx ? framesShape(baseShape, framesCtx.chained) : layoutOn ? layoutShape(baseShape) : baseShape;
-  const outcome = config.clipFacts && draft.slots.video?.ref ? clipOutcome(effectiveOp, facts, p, model) : null;
+  const outcome = config.clipFacts && draft.slots.video?.ref ? clipOutcome(effectiveOp, facts, p, model, today) : null;
   const video = draft.slots.video?.ref;
   const alternative = config.comfyOnly?.alternative;
   const alternativeHref = alternative && `${alternative.href}${video?.startsWith("/api/files/") ? `&video=${encodeURIComponent(video)}` : ""}`;
@@ -1186,6 +1186,7 @@ export function Composer({ docked }: { docked: boolean }) {
           }
           elements={elements}
           collapsed={collapsed}
+          elementsNote={elementsNote(model)}
         />
       )}
 

@@ -15,7 +15,12 @@
  */
 import type { Engine, GenerationRequest, ModelDef, ModelRoute, Operation } from "./types";
 
-/** Kling 4.0 and FLUX 3 Max take up to 10 frames. */
+/**
+ * Up to 10 frames, as Kling 4.0's own app and FLUX 3 Max keyframes-to-video take. Frames mode runs on FLUX 3 Max in the
+ * cloud, never on Kling 4.0: its hosted API (fal and Replicate, read 2026-11-01) takes a start frame, up to 8 middle
+ * frames in order and an end frame, with no time for any of them, so a frame can't be placed where the strip puts it.
+ * Kling 4.0 runs here as a start + end frame model (only the first and the last frame).
+ */
 export const MAX_KEYFRAMES = 10;
 /** Frame times snap to a tenth of a second. */
 export const KEYFRAME_SNAP = 0.1;
