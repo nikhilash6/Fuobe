@@ -5,7 +5,7 @@ import { NAV } from "@/components/nav-items";
 import { APPS, EFFECTS, getModel, MODELS, MOTIONS } from "@/lib/catalog";
 import { entryScore, indexEntries, normalize, rankPalette, skillEntries, wordScore, type PaletteEntry } from "@/lib/command-search";
 import { modelHref, paletteIndex } from "@/lib/palette-index";
-import { modelSearchText, rowPriceOn, toModelRow } from "@/lib/model-rows";
+import { rowPriceOn, toModelRow } from "@/lib/model-rows";
 import { hubModePaths, studioRoutes } from "./e2e/_routes.mjs";
 
 const page = (label: string, href: string, keywords?: string): PaletteEntry => ({ key: `page:${href}`, kind: "page", label, href, keywords });
@@ -161,16 +161,12 @@ describe("palette index", () => {
     }
   });
 
-  it("finds the model on the Models page when nothing else runs it", () => {
-    const fallback = index.models.filter((m) => pathOf(m.href) === "/models");
-    // Only models whose studio isn't in this build (or that only run inside chains) are left. Round 4 adds
-    // the Remove object, Genjutsu, FPS Boost / SDR to HDR / Export and 3D scene models (33 here).
+  it("opens a model nothing else runs in the studio of what it makes", () => {
+    const home: Record<string, string> = { image: "/image", video: "/video", audio: "/audio", text: "/assist", model3d: "/image-to-3d" };
+    const fallback = index.models.filter((m) => !m.href.includes("?") && Object.values(home).includes(m.href));
     expect(fallback.length).toBeLessThan(40);
-    for (const m of fallback) {
-      const q = new URLSearchParams(m.href.split("?")[1]).get("q");
-      // The Models search (ModelsTable) matches q against this text.
-      expect(q && modelSearchText(toModelRow(getModel(m.id)!)).includes(q.trim().toLowerCase()), m.href).toBeTruthy();
-    }
+    for (const m of fallback) expect(m.href, m.id).toBe(home[getModel(m.id)!.kind]);
+    expect(index.models.some((m) => pathOf(m.href) === "/models")).toBe(false);
   });
 
   it("opens every page and settings section the palette lists", () => {

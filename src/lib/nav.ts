@@ -3,10 +3,10 @@
 /** Group labels the user collapsed, in localStorage. */
 export const NAV_CLOSED_KEY = "fuobe:nav-closed";
 /**
- * Folded until the user opens them (nothing remembered yet). Studios starts open, so a first visit shows
- * that the studios exist; Engine (models, workflows, settings) starts folded. ⌘K reaches folded rows too.
+ * Folded until the user opens them (nothing remembered yet). Every group starts open, so a first visit shows
+ * that the studios exist. ⌘K reaches folded rows too.
  */
-export const DEFAULT_NAV_CLOSED: readonly string[] = ["engine"];
+export const DEFAULT_NAV_CLOSED: readonly string[] = [];
 /** Written by the shadcn SidebarProvider ("true" / "false"). */
 export const SIDEBAR_COOKIE = "sidebar_state";
 
@@ -38,7 +38,7 @@ function queryMatches(query: string, search: URLSearchParams) {
  * Whether a nav link is the current page. A link with a query (`/library?tab=favorites`) is active
  * when the path and every one of its params match; a plain link is active on its path (and below it)
  * unless a sibling matches better: a query link to the same path, or a link to a page below it
- * (Settings yields to About & licences on /settings/about).
+ * (a link to /settings yields to one to a page below it).
  */
 export function navActive(href: string, pathname: string, search: URLSearchParams, siblings: string[] = []): boolean {
   if (!pathname) return false;

@@ -53,6 +53,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/characters", destination: "/elements", permanent: true },
       { source: "/characters/:id", destination: "/elements/:id", permanent: true },
+      ...["/status", "/models", "/workflows"].map((source) => ({ source, destination: "/", permanent: true })),
+      { source: "/settings/about", destination: "/settings", permanent: true },
       // The product-link ad apps open the Click to Ad flow (src/lib/catalog/apps.ts).
       { source: "/apps/:id(app-click-to-ad|app-link-to-video-ad)", destination: "/marketing/click-to-ad", permanent: false },
       // The Virality Predictor app became the /virality page (its frame step is the Hook Frame app).

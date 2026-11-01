@@ -116,7 +116,7 @@ function ActiveItems({ group }: { group: NavGroupDef }) {
   );
 }
 
-/** The folded groups: remembered in this browser, else Engine (DEFAULT_NAV_CLOSED), also on the server. */
+/** The folded groups: remembered in this browser, else DEFAULT_NAV_CLOSED, also on the server. */
 function readClosed(): string[] {
   try {
     return parseClosed(typeof window === "undefined" ? null : localStorage.getItem(NAV_CLOSED_KEY));
@@ -140,8 +140,8 @@ function NavGroup({ group, open, onToggle }: { group: NavGroupDef; open: boolean
             className="w-full cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           >
             {group.label}
-            {/* Folded, the label says how much is inside. */}
-            <span className="ml-auto font-normal tracking-normal tabular-nums group-data-[open=true]/nav:hidden">{group.items.length}</span>
+            {/* Folded, the label says how much is inside (a single row needs no count). */}
+            <span className="ml-auto font-normal tracking-normal tabular-nums group-data-[open=true]/nav:hidden">{group.items.length > 1 && group.items.length}</span>
             <ChevronRight className="ml-1 size-3.5 transition-transform group-data-[open=true]/nav:ml-auto group-data-[open=true]/nav:rotate-90" />
           </button>
         </SidebarGroupLabel>
@@ -186,7 +186,7 @@ function reveal(box: HTMLElement | null, el: Element | null | undefined) {
 }
 
 /**
- * Brings the open page's row into view when the page changes: with Studios open, Engine's rows (Models, Settings…)
+ * Brings the open page's row into view when the page changes: with Studios open, the rows below it (Settings)
  * sit below the fold. Inside Suspense: the pathname is runtime data.
  */
 function RevealActive({ box }: { box: React.RefObject<HTMLDivElement | null> }) {

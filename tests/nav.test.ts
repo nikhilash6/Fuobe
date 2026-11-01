@@ -28,15 +28,19 @@ describe("sidebar active state", () => {
     expect(navActive("/library", "/library", q("tab=trash"), LIBRARY)).toBe(true);
   });
 
-  it("hands it to a sibling link below the plain one: Settings and About & licences", () => {
-    const engine = NAV.find((g) => g.label === "Engine")!.items.map((i) => i.href);
-    expect(engine).toContain("/settings/about");
-    const lit = (pathname: string) => engine.filter((h) => navActive(h, pathname, q(), engine));
-    expect(lit("/settings/about")).toEqual(["/settings/about"]);
+  it("hands it to a sibling link below the plain one", () => {
+    const links = ["/settings", "/settings/runs"];
+    const lit = (pathname: string) => links.filter((h) => navActive(h, pathname, q(), links));
+    expect(lit("/settings/runs")).toEqual(["/settings/runs"]);
     expect(lit("/settings")).toEqual(["/settings"]);
     // Pages below Settings with no link of their own keep Settings lit.
     expect(lit("/settings/models")).toEqual(["/settings"]);
-    expect(lit("/models")).toEqual(["/models"]);
+  });
+
+  it("ends with Settings, and links no removed page", () => {
+    const hrefs = NAV.flatMap((g) => g.items.map((i) => i.href));
+    expect(NAV.at(-1)!.items.map((i) => i.href)).toEqual(["/settings"]);
+    for (const gone of ["/status", "/models", "/workflows", "/settings/about"]) expect(hrefs).not.toContain(gone);
   });
 });
 
@@ -50,20 +54,20 @@ describe("remembered sidebar state", () => {
   });
 
   it("parses the collapsed groups defensively", () => {
-    expect(parseClosed('["studios","engine"]')).toEqual(["studios", "engine"]);
+    expect(parseClosed('["studios","more"]')).toEqual(["studios", "more"]);
     expect(parseClosed('["studios", 3]')).toEqual(["studios"]);
     // The user opened every group: that choice is kept, not replaced by the defaults.
     expect(parseClosed("[]")).toEqual([]);
   });
 
-  it("folds Engine, and shows Studios, until the user chooses (nothing stored, or nothing readable)", () => {
-    expect(parseClosed(null)).toEqual(["engine"]);
-    expect(parseClosed(undefined)).toEqual(["engine"]);
-    expect(parseClosed("not json")).toEqual(["engine"]);
-    expect(parseClosed('{"a":1}')).toEqual(["engine"]);
+  it("opens every group until the user chooses (nothing stored, or nothing readable)", () => {
+    expect(parseClosed(null)).toEqual([]);
+    expect(parseClosed(undefined)).toEqual([]);
+    expect(parseClosed("not json")).toEqual([]);
+    expect(parseClosed('{"a":1}')).toEqual([]);
     // A fresh copy each time: a caller adding to it can't change the defaults.
     parseClosed(null).push("create");
-    expect(parseClosed(null)).toEqual(["engine"]);
+    expect(parseClosed(null)).toEqual([]);
   });
 
   it("only folds groups that can fold, and keeps Create and Library in view", () => {
