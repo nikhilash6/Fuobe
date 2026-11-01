@@ -120,7 +120,7 @@ export const NAV: NavGroupDef[] = [
       { href: "/video-edit", label: "Edit video", icon: Scissors, keywords: "video edit restyle" },
       { href: "/extend", label: "Extend video", icon: FastForward, keywords: "longer continue" },
       { href: "/reframe", label: "Reframe", icon: Crop, keywords: "aspect ratio outpaint" },
-      { href: "/video-tools", label: "Video tools", icon: Layers, keywords: "join trim matte depth captions evolution remove object" },
+      { href: "/video-tools", label: "Video tools", icon: Layers, keywords: "join trim matte depth captions evolution remove object restore colourise colorize archive old footage black and white" },
       { href: "/elements", label: "Elements", icon: AtSign, keywords: "characters places props" },
       { href: "/upscale", label: "Upscale", icon: ZoomIn, keywords: "enhance resolution 4k" },
       { href: "/audio", label: "Audio", icon: AudioLines, keywords: "voice tts music sfx dub transcribe" },

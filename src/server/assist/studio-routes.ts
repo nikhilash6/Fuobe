@@ -8,6 +8,7 @@ import { getModel } from "@/lib/catalog";
 import { routesFor } from "@/lib/catalog/plan";
 import { defaultSettings, genreInfo, PART_LABELS, type EpisodeAspect, type EpisodeSettings, type NarratorVoice, type StepPart } from "@/lib/catalog/faceless";
 import { AD_RATIOS, emptyKit, type BrandKit, type Product } from "@/lib/catalog/marketing";
+import { RESTORE } from "@/lib/catalog/restore";
 import { lookFromPreset, SHORTS, SHORTS_MODELS, type ShortsLook } from "@/lib/catalog/shorts";
 import type { Engine, GenerationRequest, MediaKind, Operation } from "@/lib/catalog/types";
 import { modeHref } from "@/lib/hubs";
@@ -22,10 +23,11 @@ import { chooseRoute } from "../generations";
 import { createProject, deleteProject, FileUrl, jobSteps, startJob } from "../layers";
 import { firstOn } from "../model-access";
 import { engineMode } from "../settings";
+import { createRestore, estimateRestore, RestoreBodySchema, RestoreEstimateSchema } from "../restore";
 import { createSession, estimateWith, sourceInfo, type ShortsBody, type SourceInfo } from "../shorts";
 import { absolutePath, getAsset } from "../storage";
 import type { ToolContext } from "./define";
-import { planSteps, STUDIO_ROUTES, type AdsToolInput, type CaptionsToolInput, type DubToolInput, type FacelessToolInput, type LayersToolInput, type RestyleToolInput, type StudioRoute } from "./studio-tools";
+import { planSteps, STUDIO_ROUTES, type AdsToolInput, type CaptionsToolInput, type DubToolInput, type FacelessToolInput, type LayersToolInput, type RestoreToolInput, type RestyleToolInput, type StudioRoute } from "./studio-tools";
 
 /**
  * The Assist / MCP studio tools, wired to the studios' own server modules: each adapter turns a tool
@@ -669,9 +671,67 @@ const captionsRoute: StudioRoute<CaptionsToolInput> = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Restore & colourise: one restoration, in Video tools → Restore & colourise (src/server/restore.ts)
+
+function restoreBody(i: RestoreToolInput, ctx: ToolContext) {
+  const info = clipInfo(i.video);
+  return {
+    engine: engineOf(ctx),
+    source: { url: i.video, name: fileTitle(i.video), duration: info?.duration, fps: info?.fps, width: info?.width, height: info?.height, hasAudio: info?.hasAudio },
+    prompt: i.prompt,
+    hint: i.hint,
+    negative: i.negative,
+    refine: i.restore_to_4k,
+    deinterlace: i.deinterlace,
+    reference: i.reference,
+    resolution: i.resolution,
+  };
+}
+
+/** The body checked as /api/restore checks it, refused in words (a reference that isn't a Fuobe file). */
+function parsed<T>(schema: { safeParse: (v: unknown) => { success: true; data: T } | { success: false } }, body: unknown): T {
+  const r = schema.safeParse(body);
+  if (!r.success) throw new Error("The clip and the reference picture must be files in Fuobe (/api/files/…): attach them to the chat first");
+  return r.data;
+}
+
+const restoreRoute: StudioRoute<RestoreToolInput> = {
+  studio: "Restore & colourise",
+  page: modeHref("video-tools", "restore"),
+  // Only a clip Fuobe can't read runs elsewhere (one generation on the whole clip); every other refusal is the card's error.
+  refuse: (i) => (i.video.startsWith("/api/files/") && clipInfo(i.video)?.duration ? null : "Fuobe couldn't read this clip's length and frame rate"),
+  plan: (i, ctx) => {
+    const est = estimateRestore(parsed(RestoreEstimateSchema, restoreBody(i, ctx)));
+    const job: PlannedJob = {
+      tool: "restore_video",
+      modelId: RESTORE.model,
+      modelName: getModel(RESTORE.model)?.name ?? RESTORE.model,
+      kind: "video",
+      op: "restore-video",
+      prompt: i.prompt?.trim() || "Written for the clip when it runs",
+      count: 1,
+      costUsd: est.costUsd,
+      demo: est.demo,
+      note: [`${est.pieces} ${est.engine === "open" ? "window" : "piece"}${est.pieces === 1 ? "" : "s"} at ${est.canvas.width}×${est.canvas.height}${est.refined ? `, then ${est.refined.width}×${est.refined.height}` : ""}`, ...est.notes].join(" · "),
+      atomic: true,
+    };
+    return [job];
+  },
+  async run(i, ctx) {
+    const r = await createRestore(parsed(RestoreBodySchema, restoreBody(i, ctx)));
+    return {
+      ids: [r.final.id],
+      href: modeHref("video-tools", "restore"),
+      info: { prompt: r.prompt, negative: r.negative, writtenBy: r.by, note: "The restoration is listed under Your restorations in Restore & colourise, beside the original with a Before/After wipe." },
+    };
+  },
+};
+
 STUDIO_ROUTES.split_layers = layersRoute;
 STUDIO_ROUTES.restyle_footage = shortsRoute;
 STUDIO_ROUTES.dub_video = dubRoute;
 STUDIO_ROUTES.faceless_episode = facelessRoute;
 STUDIO_ROUTES.create_ads = adsRoute;
 STUDIO_ROUTES.add_captions = captionsRoute;
+STUDIO_ROUTES.restore_video = restoreRoute;

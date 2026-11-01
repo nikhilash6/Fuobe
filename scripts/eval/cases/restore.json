@@ -1,0 +1,104 @@
+{
+ "$schema": "./case.schema.json",
+ "suite": "restore",
+ "title": "Fuobe Restore · archive footage restored and colourised",
+ "description": "Runs Video tools → Restore & colourise (POST /api/restore) on your own archive clip in local/restore/: scan.mp4 (10–60 s of black-and-white or faded footage you own or that is in the public domain). On ComfyUI, LTX-2.5 22B distilled with Lightricks' Restore IC-LoRA, 960x544 tiles fused every step, 97-frame windows each starting from the last 17 restored frames, the sound put back; Restore to 4K adds the Detail Refine IC-LoRA at twice the canvas. On fal, LTX-2.3 22B reference video to video with the same LoRA (mirrored from Hugging Face with your token), one untiled pass a piece. The LoRA is gated: accept its licence on Hugging Face and add a token in Settings → LoRAs before an open or cloud run. Temporal drift is read against the scan; nothing here has been rendered yet.",
+ "original": [
+  "fuobe-restore"
+ ],
+ "kind": "video",
+ "targets": {
+  "open": {
+   "models": [
+    "fuobe-restore"
+   ]
+  },
+  "cloud": {
+   "models": [
+    "fuobe-restore"
+   ]
+  },
+  "demo": {
+   "models": [
+    "fuobe-restore"
+   ]
+  }
+ },
+ "defaults": {
+  "seeds": [
+   1001
+  ],
+  "metrics": [
+   "temporal",
+   "clip"
+  ],
+  "timeoutSeconds": 7200,
+  "candidate": "original"
+ },
+ "variants": {
+  "original": {
+   "description": "Fuobe Restore as the tool runs it"
+  }
+ },
+ "cases": [
+  {
+   "id": "restore/words",
+   "title": "Your words: period, place, light, clothing, natural colour",
+   "inputs": {
+    "video": "local/restore/scan.mp4"
+   },
+   "demoInputs": {
+    "video": "fixtures/walk-6s.mp4"
+   },
+   "prompts": [
+    {
+     "id": "street",
+     "text": "a city street in the 1930s, overcast daylight, trams and horse carts, people in wool coats and felt hats, painted shop fronts, natural colour"
+    }
+   ],
+   "metrics": [
+    "temporal",
+    "clip"
+   ],
+   "submit": {
+    "route": "/api/restore",
+    "body": {
+     "engine": "{{engine}}",
+     "prompt": "{{prompt}}",
+     "source": "{{source:inputs.video}}",
+     "seed": 1001,
+     "requestId": "{{requestId}}"
+    }
+   }
+  },
+  {
+   "id": "restore/written",
+   "title": "The words written for the clip (Claude, a local model or the template)",
+   "inputs": {
+    "video": "local/restore/scan.mp4"
+   },
+   "demoInputs": {
+    "video": "fixtures/walk-6s.mp4"
+   },
+   "prompts": [
+    {
+     "id": "hint",
+     "text": "a street, 1930s"
+    }
+   ],
+   "metrics": [
+    "temporal"
+   ],
+   "submit": {
+    "route": "/api/restore",
+    "body": {
+     "engine": "{{engine}}",
+     "hint": "{{prompt}}",
+     "source": "{{source:inputs.video}}",
+     "seed": 1001,
+     "requestId": "{{requestId}}"
+    }
+   }
+  }
+ ]
+}

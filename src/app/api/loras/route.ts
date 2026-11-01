@@ -20,6 +20,7 @@ export async function GET() {
     folder: folder || null,
     ...(problem && { folderProblem: problem }),
     civitaiKey: !!getSetting("civitaiKey"),
+    hfToken: !!getSetting("huggingfaceDownloadToken"),
     loras: LORA_LIBRARY.map((e) => ({
       key: e.key,
       name: e.name,

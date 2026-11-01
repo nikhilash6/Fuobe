@@ -5,7 +5,7 @@
  */
 import { LLM_PROVIDERS } from "./catalog/llm-providers";
 
-export type TestProvider = "fal" | "replicate" | "comfyui" | "llm" | "civitai" | "ai-toolkit";
+export type TestProvider = "fal" | "replicate" | "comfyui" | "llm" | "civitai" | "huggingface" | "ai-toolkit";
 
 /** The settings each provider's connection test reads; an unsaved value for one of them can be tested before it's saved. */
 export const PROVIDER_SETTINGS = {
@@ -59,6 +59,8 @@ export const PROVIDER_SETTINGS = {
   ],
   // Not a model provider: the key that downloads a recipe's civitai LoRAs (Settings → LoRAs).
   civitai: ["civitaiKey"],
+  // Nor this: the token that downloads gated Hugging Face LoRAs once their licence is accepted (Settings → LoRAs).
+  huggingface: ["huggingfaceDownloadToken"],
   // Not a model provider either: the trainer Soul IDs and Fuobe looks train on, on your GPU (Settings → Training).
   "ai-toolkit": ["aiToolkitUrl", "aiToolkitToken", "aiToolkitDatasetDir"],
 } as const satisfies Record<TestProvider, readonly string[]>;
@@ -83,6 +85,8 @@ export function candidateValues(provider: TestProvider, values?: unknown, value?
 
 /** Where to get a civitai API key (Settings → LoRAs links to it). */
 export const CIVITAI_KEYS_URL = "https://civitai.com/user/account";
+/** Where to make a Hugging Face access token (a "Read" token is enough for gated downloads). */
+export const HF_TOKENS_URL = "https://huggingface.co/settings/tokens";
 /** Where to get a fal.ai key (the guide and Settings link to it). */
 export const FAL_KEYS_URL = "https://fal.ai/dashboard/keys";
 /** The ComfyUI address a local install listens on. */

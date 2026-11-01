@@ -51,6 +51,7 @@ export type OutputActionId =
   | "delete"
   | "delete-upload"
   | "restore"
+  | "restore-video"
   | "delete-forever";
 
 export interface OutputAction {
@@ -125,6 +126,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("reframe", "Reframe", `/reframe?video=${q(o.url)}`);
       link("lipsync", "Lipsync", `/lipsync?video=${q(o.url)}`);
       link("upscale", "Upscale", `/upscale/video?video=${q(o.url)}`);
+      // Old, faded or black-and-white footage (Fuobe Restore): Video tools → Restore & colourise with the clip in.
+      link("restore-video", "Restore & colourise", `/video-tools/restore?video=${q(o.url)}`);
       link("add-sound", "Add sound", `/audio/video?video=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?video=${q(o.url)}`);
       link("remove-dialogue", "Remove dialogue", `/video-tools/remove-dialogue?video=${q(o.url)}`);

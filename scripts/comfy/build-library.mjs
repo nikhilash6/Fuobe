@@ -68,6 +68,8 @@ export const LOADER_FOLDERS = {
   // comfyui-oss-4 additions
   OpticalFlowLoader: { model_name: 'optical_flow' },
   LoadMoGeModel: { model_name: 'geometry_estimation' },
+  // archive-restore: Lightricks' IC-LoRA loader (ComfyUI-LTXVideo)
+  LTXICLoRALoaderModelOnly: { lora_name: 'loras' },
   // MiniMax H3 video: larryvrh's turbo LoRA loader (ComfyUI-MiniMax-H3-Turbo) reads models/loras.
   MiniMaxH3TurboLoRA: { lora_name: 'loras' },
 };
@@ -97,6 +99,8 @@ const NUMERIC_DEFAULT_KEYS = [
   'megapixels',
   // Originals O11
   'motionFrame', 'audioCfg', 'threshold', 'mosaicScale',
+  // archive-restore
+  'windowStart', 'windowFrames', 'prefixFrames', 'canvasWidth', 'canvasHeight', 'tileWidth', 'tileHeight', 'tileFrames',
 ];
 export const BINDING_KEYS = new Set([
   'prompt', 'negativePrompt', 'image', 'image2', 'image3', 'image4', 'mask', 'endImage', 'video', 'audio',
@@ -137,6 +141,8 @@ export const BINDING_KEYS = new Set([
   'separationModel', 'channels',
   // MOSS-Image (docs/research/new-models-7.md §4.6): the KSampler's sampler and the UNET file its Quality / Fast settings pick
   'sampler', 'unet',
+  // archive-restore (Restore & colourise): the window, the canvas, the prefix hand-off, deinterlacing and the fusion tiles
+  'windowStart', 'canvasWidth', 'canvasHeight', 'fieldWidth', 'fieldHeight', 'prefixFrom', 'prefixFrames', 'tileWidth', 'tileHeight', 'streaming', 'tileFrames',
   // The owner's SOTA image families (2026-10-31): Ideogram 4's sampling preset
   'preset',
 ]);
@@ -364,7 +370,7 @@ async function main() {
       const size = await hfSize(known.url, sizeCache);
       if (size && typeof size === 'object' && size.error) errs.push(`model ${file}: ${known.url} -> ${size.error}`);
       const bytes = typeof size === 'number' ? size : size?.size;
-      models.set(file, { file, folder: known.folder, url: known.url, sizeGb: bytes ? gb(bytes) : null, ...(optional && { optional: true }) });
+      models.set(file, { file, folder: known.folder, url: known.url, sizeGb: bytes ? gb(bytes) : null, ...(size?.gated && { gated: true }), ...(optional && { optional: true }) });
     }
 
     // ---- custom nodes

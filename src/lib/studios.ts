@@ -1,6 +1,7 @@
 import { getModel } from "@/lib/catalog";
 import { SIGNATURE_MODELS } from "@/lib/catalog/palettes";
 import { FACE_MOSAIC_MODELS } from "@/lib/catalog/open-tools";
+import { UPSCALE_FIRST_STEPS } from "@/lib/catalog/upscale-first";
 import type { Preset } from "@/lib/catalog/types";
 import type { StudioConfig } from "@/components/studio/studio-context";
 
@@ -142,6 +143,8 @@ export const VIDEO_UPSCALE_STUDIO: StudioConfig = {
   kind: "video",
   hero: "Sharper, bigger, cleaner video",
   subtitle: "Upscale a clip to 1080p, 4K or up to 8K, and restore faces, textures and text.",
+  // Archive footage (scans, tape, black and white) is restored and colourised first: Fuobe Restore rebuilds it, then upscales.
+  firstSteps: UPSCALE_FIRST_STEPS,
   slots: [{ key: "video", label: "Video", accept: "video", required: true }],
   defaultModels: { cloud: "topaz-video", open: "oss-seedvr2" },
   clipFacts: true,

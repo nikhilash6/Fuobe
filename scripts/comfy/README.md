@@ -392,6 +392,30 @@ node validate-workflows.mjs qwen-image-edit-2509-angles image-face-mosaic-sam3 v
   colour correction as `reinhard`, and not the Evolution intensities. `tests/open-tools.test.ts` and
   `tests/evolution-comfy.test.ts` check the provider's bindings on the library files.
 
+### Restore & colourise (o/archive-restore, 2026-10-30)
+
+One hand-built entry for Video tools → Restore & colourise and the Canvas Restore node: Lightricks' Restore IC-LoRA on
+LTX-2.5 22B distilled with tiled latent fusion (docs/research/fuobe-originals-recipes-5.json, studio `archive-restore`):
+
+```bash
+npm run build -- video-restore-ltx25-tiled
+node validate-workflows.mjs video-restore-ltx25-tiled --shared
+```
+
+| id | capability | what | validated here |
+|---|---|---|---|
+| `video-restore-ltx25-tiled` | restore-video | One window of up to 97 frames (`windowStart`, `windowFrames`) scaled with lanczos to the card's canvas (1440x1088 for 4:3, 1920x1088 for 16:9), restored by `LTXVTiledFusionSampler` in 960x544 tiles at 50% overlap with the card's 8-step sigmas (euler, cfg 1). A later window takes the last 17 restored frames of the one before through `LTXVAddGuide` at frame 0 (`video2`, `prefixFrom`, `prefixFrames`) and drops them from its output; a reference picture goes in at `frame_idx` -1; deinterlacing keeps one field (`fieldWidth`, `fieldHeight`). Stage 2 (Restore to 4K) is the same graph with the Detail Refine IC-LoRA and 1024x576 tiles at twice the canvas. A whole clip in one run streams past 97 frames up to 481. The provider removes the unused branches (`src/lib/restore-graph.ts`); the pipeline joins the windows packet by packet and puts the sound back. 24 GB | no: `missing_node_type` (the ComfyUI-LTXVideo classes) |
+
+- **Node pack**: ComfyUI-LTXVideo (LTX-2 Community License, free below US$10M annual revenue: information, not a gate),
+  pinned in `install-comfyui.sh` at `220e1d45`. It is not installed on the
+  CPU validation server, so the build records its classes as unknown and the entry stays unvalidated.
+- **Weights**: the LTX-2.5 22B distilled transformer (int8), its VAE and the Gemma text encoder, plus the Restore IC-LoRA
+  (1.7 GB) and, for stage 2, the Detail Refine IC-LoRA (1.3 GB). Both LoRAs are gated on Hugging Face: accept the licence
+  there, add a token in Settings → LoRAs, and the provider downloads the one a run loads before it submits. LoRA files
+  are never committed.
+- **Not run**: the graph has not loaded in a ComfyUI with ComfyUI-LTXVideo, and nothing has run on a GPU.
+  `tests/restore-comfy.test.ts` checks the bindings and branch removal on the library file.
+
 ## DBS soundtrack separation (DBS D1)
 
 PR #15 adds three hand-built graphs: this one, the fly path's and MOSS-Image's (below), all `validated: true` (the
