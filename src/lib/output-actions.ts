@@ -186,7 +186,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   // made on your GPU (or uploaded) opens Upscale → Video on Open-H3 Regenerate, which runs on your GPU only. Other cloud
   // results keep their upscalers in Upscale.
   if (o.kind === "video" && g.status === "succeeded") {
-    if (canRerender(g)) out.push({ id: "rerender-2k", label: rerenderLabel(g.modelId), placement: "menu" });
+    if (canRerender(g, ctx.engineMode)) out.push({ id: "rerender-2k", label: rerenderLabel(g.modelId), placement: "menu" });
     else if ((g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
   }
   if (ctx.compare) out.push({ id: "compare", label: "Compare with original", placement: "menu" });
