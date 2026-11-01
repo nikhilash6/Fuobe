@@ -293,10 +293,11 @@ describe("brand kits", () => {
     expect(mk.planMarketing({ engine: "cloud", format: "poster", templateId: "po-swiss-grid", prompt: "Autumn launch", modelId: "ideogram-3" }, { ...ctx, product: null }).steps[0].request.modelId).toBe("fuobe-marketing-image");
     expect(mk.planMarketing({ engine: "open", format: "poster", prompt: "Autumn" }, { ...ctx, product: null }).steps[0].request).toMatchObject({ modelId: "fuobe-marketing-image", op: "t2i" });
 
-    // A Standalone product shot: the Original by default; on the user's GPU one product photo is cut out and relit
-    // (product-shot-qwen-edit-2509); Bria Product Shot stays a cloud choice.
+    // A Standalone product shot: on the user's GPU the Original cuts one product photo out and relights it
+    // (product-shot-qwen-edit-2509); that recipe has no hosted copy, so the cloud starts on Bria Product Shot and the
+    // Original is listed there as running on your GPU only (the owner's 10-30 rule).
     const shot = mk.planMarketing({ engine: "cloud", format: "product-standalone", templateId: "ps-ice-bath" }, ctx);
-    expect(shot.steps[0].request).toMatchObject({ modelId: "fuobe-marketing-image", op: "edit" });
+    expect(shot.steps[0].request).toMatchObject({ modelId: "bria-product-shot", op: "edit" });
     expect(shot.steps[0].request.params?.extra).toBeUndefined();
     const openShot = mk.planMarketing({ engine: "open", format: "product-standalone", templateId: "ps-ice-bath" }, ctx);
     expect(openShot.steps[0].request).toMatchObject({ modelId: "fuobe-marketing-image", op: "edit", params: { extra: { productShot: true } } });

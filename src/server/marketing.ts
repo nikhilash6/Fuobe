@@ -24,6 +24,7 @@ import {
   multiplierResolution,
   OPEN_SOUND_JOIN,
   overlayLayout,
+  pickable,
   multiplierText,
   settingById,
   shotPlan,
@@ -303,7 +304,11 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     }
   }
   // Models switched off in Settings → Models & licences aren't picked while another choice is on.
-  const choices = keepOffered(formatModels(f, input.engine, { product: hasProduct, avatar: !!input.avatar }), (c) => isOffered(c.id, input.engine));
+  const listed = formatModels(f, input.engine, { product: hasProduct, avatar: !!input.avatar });
+  // A choice listed only to say it runs on your GPU (the Original's Standalone shot in the cloud) is refused in its words.
+  const elsewhere = listed.find((c) => c.unavailable && c.id === input.modelId);
+  if (elsewhere) throw new PlanError(`${need(elsewhere.id).name} makes ${f.name} shots on your GPU only (${elsewhere.unavailable}): switch to your GPU, or pick another model`);
+  const choices = keepOffered(pickable(listed), (c) => isOffered(c.id, input.engine));
   const name = tpl?.name ?? f.name;
   const title = [name, product?.name ?? brand?.name].filter(Boolean).join(" · ");
   const meta: MarketingRunMeta = { format: f.id, templateId: tpl?.id, productId: product?.id ?? null, brandId: brand?.id ?? null };

@@ -24,8 +24,12 @@ export interface CameraKey {
 
 /** The photo's own camera: where every path starts. */
 export const PHOTO_KEY: CameraKey = { t: 0, azimuth: 0, elevation: 0, distance: 1 };
-/** fal's H3 Max takes 2–12 keyframes; a path keeps to that so it films the same on both engines. */
-export const MAX_KEYS = 12;
+/**
+ * The most keys a path holds. Your GPU follows the path your browser renders (Uni3C), so it takes every key; fal's H3 Max
+ * takes 2–12, and a longer path is simplified to the 12 that matter most there, which the run says (toH3MaxTrajectory).
+ * (It was 12 on both engines until the owner's rule of 2026-10-30: the GPU keeps what it can do.)
+ */
+export const MAX_KEYS = 24;
 /** The closest and furthest a key may be (subject distances). */
 export const DISTANCE = { min: 0.2, max: 4 } as const;
 

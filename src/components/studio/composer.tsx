@@ -292,7 +292,8 @@ export function Composer({ docked }: { docked: boolean }) {
   // The day a launch price is read on: the browser's, once hydrated (none while the page prerenders: no price shown then).
   const today = useToday();
   // Upscale hub: the attached clip's header (length, size, frame rate). Its length prices per-second tools and
-  // travels with the request (params.sourceDuration); a clip swapped since a Reuse never keeps the old one's.
+  // travels with the request (params.sourceDuration), with its rate for a route billed by frames (params.sourceFps);
+  // a clip swapped since a Reuse never keeps the old one's.
   const facts = useClipFacts(config.clipFacts && !typed.slots.video?.uploading ? typed.slots.video?.ref : undefined).data;
   // Lipsync: a talking avatar is as long as its voice (the voice's header prices it and goes with the request); not while a
   // video is attached (lip re-sync keeps the clip's length).
@@ -301,11 +302,11 @@ export function Composer({ docked }: { docked: boolean }) {
   const draft = useMemo(
     () =>
       config.clipFacts
-        ? { ...typed, params: { ...typed.params, sourceDuration: typed.slots.video?.ref ? facts?.duration : undefined } }
+        ? { ...typed, params: { ...typed.params, sourceDuration: typed.slots.video?.ref ? facts?.duration : undefined, sourceFps: typed.slots.video?.ref ? facts?.fps : undefined } }
         : config.voiceFacts
           ? { ...typed, params: { ...typed.params, sourceDuration: voiceRef ? voice?.duration : undefined } }
           : typed,
-    [config.clipFacts, config.voiceFacts, typed, facts?.duration, voiceRef, voice?.duration],
+    [config.clipFacts, config.voiceFacts, typed, facts?.duration, facts?.fps, voiceRef, voice?.duration],
   );
   const liveElements = useElements().data;
   const elements = (hydrated && liveElements) || EMPTY;

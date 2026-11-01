@@ -300,9 +300,9 @@ export function clipBlocker(
   ramBytes: number | undefined,
 ): string | null {
   if (op === "v2v" && model?.id && (facts?.duration || facts?.width)) {
-    const named = { id: model.id, name: model.name ?? model.id };
+    const named = { id: model.id, name: model.name ?? model.id, engine: model.engine };
     return (
-      (facts.duration ? clipWindowProblem(named, facts.duration) : null) ??
+      (facts.duration ? clipWindowProblem(named, facts.duration, facts.fps) : null) ??
       (facts.width && facts.height ? clipSizeProblem(named, facts.width, facts.height) : null) ??
       (facts.fps ? clipFpsProblem(named, facts.fps) : null)
     );

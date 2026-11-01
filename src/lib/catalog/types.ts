@@ -750,6 +750,11 @@ export interface ModelDef {
    * LTX-2.3 graphs make silent clips).
    */
   engineOptions?: Partial<Record<Engine, Partial<ModelOptions>>>;
+  /**
+   * What each engine runs when they differ, in one plain line (the owner's rule of 2026-10-30: each engine does all it
+   * can, the cloud only on hosted models, and the UI says so). Settings → Models & licences shows it under the model.
+   */
+  engineNote?: string;
   /** Hidden from pickers (used only internally by presets). */
   hidden?: boolean;
   /**
@@ -821,6 +826,11 @@ export interface GenParams {
    * many frames a frame-count route renders (LTX 2.3 clean plate / HDR, VOID; FieldMap.numFrames).
    */
   sourceDuration?: number;
+  /**
+   * The input clip's frame rate, when the caller knows it: what a clip edit billed by its frames costs (fal's Wan 2.2
+   * Fun VACE bills frames ÷ 16; src/lib/catalog/clip-windows.ts). The server's header read wins over it.
+   */
+  sourceFps?: number;
   /** Extract every Nth frame. */
   frameInterval?: number;
   /** Frame interpolation: the frame rate to reach, and a slow-motion factor (1–8; 2 = twice as long). */

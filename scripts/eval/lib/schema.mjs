@@ -214,6 +214,10 @@ export const SuiteSchema = z
     kind: z.enum(["image", "video", "audio"]),
     /** Where a case's recipe comes from: a Soul look, a motion / effect, or nothing beyond the case itself. */
     recipe: z.enum(["soul-look", "motion", "none"]).default("none"),
+    /** "paid-keys": the first suite to run once the install has paid cloud keys (the owner's DoP Mixed Media call). */
+    runFirst: z.enum(["paid-keys"]).optional(),
+    /** The default a run of this suite decides, and the rule it is decided by (a person makes the change, reviewed). */
+    decides: z.string().min(1).optional(),
     targets: PerEngine(Target).refine((t) => t.open || t.cloud || t.demo, "name a target for at least one engine"),
     defaults: z
       .object({

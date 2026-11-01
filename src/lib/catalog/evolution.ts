@@ -8,13 +8,31 @@
  *   direction (the first references as images 2–4), then Wan 2.2 Fun VACE re-renders the segment from the segment
  *   itself, noised to the intensity's denoise, with depth control and that frame as its reference
  *   (video-evolution-wan22-fun-vace, which also loads a whole clip at 16 fps when Edit video sends one).
- * - In the cloud: LTX-2.3 22B video to video on fal, video_strength = 1 − denoise, the direction as the scene; a clip
- *   over 20 s runs as equal pieces. The endpoint takes no images: there the references shape the direction only.
+ * - In the cloud: the same model hosted on fal (Wan 2.2 Fun VACE depth), the way Fuobe Shorts runs it. Per piece of up to
+ *   10 s (241 frames as fal works them), hosted Qwen-Image-Edit 2511 takes the piece's first frame toward the direction
+ *   (the first references as images 2–4), and VACE re-renders the piece by its depth with that frame as its reference
+ *   (ref_image_urls, as the GPU graph's reference_image; no first frame pinned, as on the GPU). The endpoint has
+ *   no strength field, so the change level reaches the direction frame only: how much of the clip's own look stays
+ *   (the GPU's denoise) is set on your GPU only (EVOLUTION_CLOUD_NOTE).
  * - Then the pieces are joined and the clip's own sound put back.
  *
  * Pure module, shared by the page, the server (src/server/evolution.ts) and the tests.
  */
-import { planCloudSegments, planOpenSegments, planStitch, SHORTS, SHORTS_TOOLS, wholeClip, type PlanStep, type ShortsPlanInput, type ShortsRange } from "./shorts";
+import {
+  originalBilledSeconds,
+  originalSegmentProblem,
+  originalSegmentSeconds,
+  planCloudSegments,
+  planOpenSegments,
+  planStitch,
+  SHORTS,
+  SHORTS_TOOLS,
+  vaceDownsample,
+  wholeClip,
+  type PlanStep,
+  type ShortsPlanInput,
+  type ShortsRange,
+} from "./shorts";
 import type { Engine, GenerationRequest } from "./types";
 
 export const EVOLUTION = {
@@ -29,14 +47,16 @@ export const EVOLUTION = {
   maxDirectionChars: 10_000,
   /** What reaches the models: the direction's first sentences, up to this many characters. */
   promptChars: 1500,
-  /** LTX-2.3 makes at most 481 frames a call: 20 s at 24 fps. */
-  cloudPieceSeconds: 20,
   /** Qwen-Image 2.1 Turbo takes the frame plus three references. */
   openReferences: 3,
+  /** In the cloud, hosted Qwen-Image-Edit 2511 takes the frame plus as many: the GPU recipe's direction frame. */
+  cloudReferences: 3,
   /** The LLM sees this many references (Claude reads up to 20 images a turn; a local vision model fewer). */
   llmReferences: { cloud: 8, open: 4 } as Record<Engine, number>,
   /** Helper on the GPU: the segment's first frame taken toward the direction (Qwen-Image 2.1 Turbo, 8 steps). */
   frameModel: "oss-qwen-image-21-turbo",
+  /** Helper in the cloud: the same step on hosted Qwen-Image-Edit 2511 (Fuobe Shorts' first-frame model). */
+  cloudFrameModel: SHORTS_TOOLS.cloud.frame,
   maxBytes: 500 * 1024 * 1024,
   accept: "video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm",
 } as const;
@@ -45,9 +65,9 @@ export type Intensity = "low" | "medium" | "high";
 
 /**
  * Build plan O13's change intensity: the denoise the open graph starts from (the noise level it takes the clip to:
- * (1 − denoise) × clip + denoise × noise, then 4 Lightx2v steps back), and in the
- * cloud LTX-2.3's video_strength = 1 − denoise (lower gives the model more freedom). The same numbers are in the research
- * (studios[evolution].original.intensity); tests/evolution.test.ts holds them together.
+ * (1 − denoise) × clip + denoise × noise, then 4 Lightx2v steps back), and on both engines the direction frame's
+ * instruction (directionFramePrompt). fal's hosted VACE has no strength field, so in the cloud the instruction is all of
+ * it. The same numbers are in the research (studios[evolution].original.intensity); tests/evolution.test.ts holds them together.
  */
 export const INTENSITIES: { id: Intensity; label: string; denoise: number; hint: string }[] = [
   { id: "low", label: "Low", denoise: 0.45, hint: "Same scene and people, a new finish" },
@@ -57,29 +77,20 @@ export const INTENSITIES: { id: Intensity; label: string; denoise: number; hint:
 
 const intensity = (i: Intensity) => INTENSITIES.find((x) => x.id === i) ?? INTENSITIES[1];
 export const denoiseFor = (i: Intensity): number => intensity(i).denoise;
-export const videoStrengthFor = (i: Intensity): number => Math.round((1 - intensity(i).denoise) * 100) / 100;
 
-/** Resolutions per engine (the GPU graph tops out at 1280 px; LTX-2.3 has a 1080p tier) and the default. */
-export const EVOLUTION_RESOLUTIONS: Record<Engine, string[]> = { open: ["480p", "720p"], cloud: ["480p", "720p", "1080p"] };
+/** What the cloud can't do of the GPU recipe, in one plain line (the page, the estimate and Settings say it). */
+export const EVOLUTION_CLOUD_NOTE = "In the cloud the change level shapes each piece's direction frame; how much of the clip's own look stays is set on your GPU only";
+
+/** Resolutions per engine (the GPU graph tops out at 1280 px; fal's hosted VACE at 720p) and the default. Both keep the clip's shape. */
+export const EVOLUTION_RESOLUTIONS: Record<Engine, string[]> = { open: ["480p", "720p"], cloud: ["480p", "580p", "720p"] };
 export const EVOLUTION_DEFAULT_RESOLUTION: Record<Engine, string> = { open: "480p", cloud: "720p" };
 
-/** LTX-2.3's shapes (Fuobe Cinema's size table): the clip is made in the one nearest its own. */
-export const CLOUD_SHAPES = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] as const;
+/** The resolutions an engine offers, as a choice: "480p, 580p or 720p". */
+export const resolutionChoices = (engine: Engine): string => EVOLUTION_RESOLUTIONS[engine].join(", ").replace(/, ([^,]*)$/, " or $1");
 
-export function nearestShape(width?: number, height?: number): (typeof CLOUD_SHAPES)[number] {
-  if (!width || !height) return "16:9";
-  const r = Math.log(width / height);
-  let best: (typeof CLOUD_SHAPES)[number] = "16:9";
-  let gap = Infinity;
-  for (const s of CLOUD_SHAPES) {
-    const [a, b] = s.split(":").map(Number);
-    const d = Math.abs(Math.log(a / b) - r);
-    if (d < gap) {
-      gap = d;
-      best = s;
-    }
-  }
-  return best;
+/** The cloud's pieces: Fuobe Shorts' (at most 10 s and 241 frames as fal's VACE works them, by the clip's rate). */
+export function cloudPieces(range: ShortsRange, fps?: number) {
+  return planCloudSegments(range, originalSegmentSeconds(fps));
 }
 
 // ---------------------------------------------------------------------------
@@ -105,12 +116,14 @@ export function evolutionRangeProblem(range: ShortsRange, duration?: number): st
 }
 
 /** Why this run can't start, or null. */
-export function evolutionProblem(o: { engine: Engine; source: Pick<EvolutionSource, "duration">; range: ShortsRange; references: number; direction?: string; resolution?: string }): string | null {
+export function evolutionProblem(o: { engine: Engine; source: Pick<EvolutionSource, "duration" | "fps">; range: ShortsRange; references: number; direction?: string; resolution?: string }): string | null {
   const r = evolutionRangeProblem(o.range, o.source.duration);
   if (r) return r;
   if (o.references > EVOLUTION.maxReferences) return `Use up to ${EVOLUTION.maxReferences} references`;
   if ((o.direction?.length ?? 0) > EVOLUTION.maxDirectionChars) return `Keep the direction under ${EVOLUTION.maxDirectionChars.toLocaleString("en")} characters`;
-  if (o.resolution && !EVOLUTION_RESOLUTIONS[o.engine].includes(o.resolution)) return `${o.resolution} isn't offered ${o.engine === "open" ? "on your GPU" : "in the cloud"} — pick ${EVOLUTION_RESOLUTIONS[o.engine].join(" or ")}`;
+  if (o.resolution && !EVOLUTION_RESOLUTIONS[o.engine].includes(o.resolution)) return `${o.resolution} isn't offered ${o.engine === "open" ? "on your GPU" : "in the cloud"} — pick ${resolutionChoices(o.engine)}`;
+  // fal's VACE refuses a piece under 17 frames or a clip under 5 fps: said before the cuts and frames are paid for.
+  if (o.engine === "cloud") return cloudPieces(o.range, o.source.fps).map((p) => originalSegmentProblem(p.end - p.start, o.source.fps)).find(Boolean) ?? null;
   return null;
 }
 
@@ -143,7 +156,7 @@ function refImages(refs: number): string {
   return n.length === 1 ? `image ${n[0]}` : `images ${n.slice(0, -1).join(", ")} and ${n.at(-1)}`;
 }
 
-/** On the GPU: the edit model's instruction for the segment's first frame (references are images 2 onward). */
+/** On both engines: the edit model's instruction for the segment's first frame (references are images 2 onward). */
 export function directionFramePrompt(direction: string, i: Intensity, refs: number): string {
   const d = directionPrompt(direction).text.replace(/[.\s]+$/, "");
   const keep = i === "high" ? "Keep the composition and the poses of image 1." : "Keep the composition, the people, their faces and poses, and the framing of image 1.";
@@ -231,7 +244,7 @@ export interface EvolutionPlan {
   sound: boolean;
   /** The direction was longer than the models take: only its first sentences go. */
   cut: boolean;
-  /** References that reach a model (the GPU's direction frames); the rest only shape the direction. */
+  /** References that reach a model (the direction frames, on both engines); the rest only shape the direction. */
   referencesUsed: number;
 }
 
@@ -240,8 +253,9 @@ const pieceLabel = (i: number, n: number, what: string) => ({ label: n > 1 ? `Pi
 
 /**
  * The whole job. GPU: per segment, cut it (16 fps), take its first frame toward the direction, evolve it from itself
- * at the intensity's denoise. Cloud: per piece of up to 20 s, cut it (unless it is the whole clip) and evolve it on
- * LTX-2.3 at video_strength 1 − denoise, in the tier's size for the clip's shape. Then join and put the sound back.
+ * at the intensity's denoise. Cloud: per piece of up to 10 s, cut it (unless it is the whole clip), take its first frame
+ * toward the direction on hosted Qwen-Image-Edit 2511, and re-render the piece by its depth on fal's Wan 2.2 Fun VACE
+ * with that frame as its reference, frames and rate kept (billed on frames ÷ 16). Then join and put the sound back.
  */
 export function planEvolution(input: EvolutionPlanInput): EvolutionPlan {
   const { engine } = input;
@@ -299,18 +313,44 @@ export function planEvolution(input: EvolutionPlanInput): EvolutionPlan {
       keys.push(`evolve${i}`);
     });
   } else {
-    const pieces = planCloudSegments(input.range, EVOLUTION.cloudPieceSeconds);
+    const t = SHORTS_TOOLS.cloud;
+    const pieces = cloudPieces(input.range, input.source.fps);
     n = pieces.length;
     const whole = n === 1 && wholeClip(input.range, input.source.duration);
-    const shape = nearestShape(input.source.width, input.source.height);
+    const refs = input.references.slice(0, EVOLUTION.cloudReferences);
+    referencesUsed = refs.length;
+    const downsample = vaceDownsample(input.source.fps);
     pieces.forEach((p, i) => {
       const own = n === 1 && !sound;
-      if (!whole) {
+      const seconds = p.end - p.start;
+      // The whole clip goes as it is; a part is cut first.
+      const cut = whole ? null : `cut${i}`;
+      const video = cut ? {} : { inputs: { video: input.source.url } };
+      if (cut) {
         steps.push({
-          key: `cut${i}`,
-          request: { ...helper, modelId: SHORTS_TOOLS.cloud.cut, op: "trim", inputs: { video: input.source.url }, params: { startTime: p.start, endTime: p.end }, step: pieceLabel(i, n, "cut") },
+          key: cut,
+          request: { ...helper, modelId: t.cut, op: "trim", inputs: { video: input.source.url }, params: { startTime: p.start, endTime: p.end }, step: pieceLabel(i, n, "cut") },
         });
       }
+      steps.push({
+        key: `still${i}`,
+        request: { ...helper, modelId: t.still, op: "frame", ...video, params: { extra: { frame_type: "first" } }, step: pieceLabel(i, n, "first frame") },
+        ...(cut ? { after: [cut], chain: [{ slot: "video" as const }] } : {}),
+      });
+      steps.push({
+        key: `frame${i}`,
+        request: {
+          ...helper,
+          modelId: EVOLUTION.cloudFrameModel,
+          op: "edit",
+          prompt: directionFramePrompt(input.direction, input.intensity, refs.length),
+          ...(refs.length ? { inputs: { images: refs } } : {}),
+          params: { ...seed },
+          step: pieceLabel(i, n, "direction frame"),
+        },
+        after: [`still${i}`],
+        chain: [{ slot: "images", position: "first" }],
+      });
       steps.push({
         key: `evolve${i}`,
         request: {
@@ -319,11 +359,19 @@ export function planEvolution(input: EvolutionPlanInput): EvolutionPlan {
           engine: "cloud",
           op: "v2v",
           prompt,
-          ...(whole ? { inputs: { video: input.source.url } } : {}),
-          params: { aspectRatio: shape, resolution, duration: r3(p.end - p.start), extra: { video_strength: videoStrengthFor(input.intensity) }, ...seed },
+          ...video,
+          // fal bills frames ÷ 16 as "video seconds" (duration); sourceDuration is the piece's own length.
+          params: {
+            resolution,
+            duration: originalBilledSeconds(seconds, input.source.fps),
+            sourceDuration: r3(seconds),
+            ...seed,
+            ...(downsample ? { extra: { temporal_downsample_factor: downsample } } : {}),
+          },
           step: pieceLabel(i, n, "evolve"),
         },
-        ...(whole ? {} : { after: [`cut${i}`], chain: [{ slot: "video" as const }] }),
+        after: cut ? [cut, `frame${i}`] : [`frame${i}`],
+        chain: cut ? [{ slot: "video" }, { slot: "images", position: "first" }] : [{ slot: "images", position: "first" }],
       });
       keys.push(`evolve${i}`);
     });

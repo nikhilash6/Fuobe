@@ -330,7 +330,8 @@ describe("Cinema API: Film this path in demo mode", () => {
       { keys: [{ t: 2, azimuth: 0, elevation: 0, distance: 1 }] },
       { keys: [{ t: 0, azimuth: 0, elevation: 120, distance: 1 }] },
       { keys: [{ t: 0, azimuth: 0, elevation: 0, distance: 0 }] },
-      { keys: Array.from({ length: 13 }, (_, i) => ({ t: i / 12, azimuth: i, elevation: 0, distance: 1 })) },
+      // Past 24 keys (your GPU follows up to 24; the cloud simplifies a longer path to H3 Max's 12, and says so).
+      { keys: Array.from({ length: 25 }, (_, i) => ({ t: i / 24, azimuth: i, elevation: 0, distance: 1 })) },
       { keys: orbit, render: "https://elsewhere.test/r.webm" },
       { keys: orbit, duration: 30 },
     ]) {

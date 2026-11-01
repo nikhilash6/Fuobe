@@ -93,6 +93,7 @@ export const GenerationRequestSchema = z.object({
       easing: z.enum(["linear", "ease-in-out"]).optional(),
       crossfade: z.number().min(0).max(30).optional(),
       sourceDuration: z.number().positive().max(36_000).optional(),
+      sourceFps: z.number().positive().max(1000).optional(),
       frameInterval: z.number().int().min(1).max(10_000).optional(),
       targetFps: z.number().positive().max(240).optional(),
       slowdown: z.number().min(1).max(8).optional(),
