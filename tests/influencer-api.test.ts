@@ -60,8 +60,8 @@ describe("/api/influencer", () => {
   it("prices the open sheet as free, in two steps with a face", async () => {
     const face = upload();
     const open = await (await post({ engine: "open", state, start: "face", photo: face }, true)).json();
-    expect(open).toMatchObject({ modelId: "oss-qwen-edit", count: 1, steps: 2 });
-    expect(open.notes).toEqual(["Two steps: Z-Image Turbo draws the sheet, then Qwen-Image-Edit 2511 puts your face on it"]);
+    expect(open).toMatchObject({ modelId: "oss-qwen-image-21", count: 1, steps: 2 });
+    expect(open.notes).toEqual(["Two steps: Z-Image Turbo draws the sheet, then Qwen-Image 2.1 puts your face on it"]);
   });
 
   it("makes the open sheet, then puts the face on it, as one batch (demo)", async () => {
@@ -71,7 +71,7 @@ describe("/api/influencer", () => {
     const run = await res.json();
     expect(run.items.map((g: { feature: string; modelId: string }) => [g.feature, g.modelId])).toEqual([
       ["influencer-step", "oss-zimage-soul-cast"],
-      ["influencer", "oss-qwen-edit"],
+      ["influencer", "oss-qwen-image-21"],
     ]);
     // The Soul Cast sheet graph runs in Fuobe Soul's casting look: its words and LoRAs around the compiled character.
     expect(run.items[0].prompt).toContain(compileCastPrompt({ state: state as never, direction: "A potter from Porto" }));
@@ -97,7 +97,7 @@ describe("/api/influencer", () => {
     const again = retryPhoto(pass.id);
     expect(again.map((g) => [g.feature, g.modelId, g.batchId])).toEqual([
       ["influencer-step", "oss-zimage-soul-cast", run.batchId],
-      ["influencer", "oss-qwen-edit", run.batchId],
+      ["influencer", "oss-qwen-image-21", run.batchId],
     ]);
     expect(gens.getGeneration(pass.id)).toBeNull();
     const redone = await settle(again[1].id);
@@ -120,7 +120,7 @@ describe("/api/influencer", () => {
     expect(gens.getGeneration(pass.id)!.request.inputs?.images).toEqual([face]);
     // Only the pass runs again: it waits for the finished sheet, then gets it as image 1.
     const again = retryPhoto(pass.id);
-    expect(again.map((g) => [g.feature, g.modelId, g.batchId])).toEqual([["influencer", "oss-qwen-edit", run.batchId]]);
+    expect(again.map((g) => [g.feature, g.modelId, g.batchId])).toEqual([["influencer", "oss-qwen-image-21", run.batchId]]);
     expect(gens.getGeneration(pass.id)).toBeNull();
     const redone = await settle(again[0].id);
     expect(redone.status).toBe("succeeded");

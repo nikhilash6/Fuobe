@@ -731,8 +731,13 @@ export function planRemoval(input: RemovalPlanInput): RemovalPlan {
   return { steps, final, pieces, sound, tracked };
 }
 
-/** The tools the H3 person removal prepares its inputs with (all on your GPU). */
-export const PERSON_REMOVAL_TOOLS = { fit: "oss-fit-clip", frame: "oss-extract-frame", clean: "oss-qwen-edit" } as const;
+/**
+ * The tools the H3 person removal prepares its inputs with (all on your GPU). The clean frame is Qwen-Image 2.1 at 25
+ * steps: its edit follows image 1's shape (the frame scaled to 2048 px on the long side, each side rounded to 32 px),
+ * and the relay graph scales it back to the part's exact size with a centre crop. The framing stays the clip's: a 16:9
+ * part (1344×736) comes back at 2048×1120, within a pixel of its shape; the rounding moves an edge by 1.5% at most.
+ */
+export const PERSON_REMOVAL_TOOLS = { fit: "oss-fit-clip", frame: "oss-extract-frame", clean: "oss-qwen-image-21" } as const;
 
 /** H3 Relay's Person Removal works at 24 fps (its windows are counted in frames of the clip as it comes in). */
 export const PERSON_REMOVAL_FPS = 24;
@@ -749,7 +754,7 @@ export function cleanFramePrompt(words: string | undefined): string {
 /**
  * Remove a person on H3 (docs/research/openjutsu-6.md §4.4): the part fitted to 24 fps on the 32-pixel grid (the size
  * H3's pixel budget gives the clip at "768"), its first frame, a clean copy of that frame with the person gone
- * (Qwen-Image-Edit), then H3 Relay's Person Removal from the clean frame; its output is silent, so the clip's sound is
+ * (Qwen-Image 2.1), then H3 Relay's Person Removal from the clean frame; its output is silent, so the clip's sound is
  * put back.
  */
 function planPersonRemoval(input: RemovalPlanInput): RemovalPlan {
@@ -780,7 +785,7 @@ function planPersonRemoval(input: RemovalPlanInput): RemovalPlan {
     },
     {
       key: "clean",
-      request: { ...helper, modelId: PERSON_REMOVAL_TOOLS.clean, op: "edit", prompt: cleanFramePrompt(input.prompt), ...(input.seed !== undefined ? { params: { ...seed } } : {}), step: label("A clean first frame (Qwen-Image-Edit)", 2) },
+      request: { ...helper, modelId: PERSON_REMOVAL_TOOLS.clean, op: "edit", prompt: cleanFramePrompt(input.prompt), ...(input.seed !== undefined ? { params: { ...seed } } : {}), step: label("A clean first frame (Qwen-Image 2.1)", 2) },
       after: ["frame"],
       chain: [{ slot: "images", position: "first" }],
     },

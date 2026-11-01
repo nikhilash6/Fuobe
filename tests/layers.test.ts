@@ -27,6 +27,7 @@ import {
   nodesFromOutputs,
   placeOutput,
   rectFrom,
+  relightPrompt,
   reframeDoc,
   replaceNodes,
   resizeBox,
@@ -563,6 +564,58 @@ describe("tools and prices", () => {
     }
   });
 
+  it("puts the newest open image models first: Qwen-Image 2.1, its Turbo, Krea 2, FIBO 2, MOSS-Image and SeedVR2", () => {
+    expect(TOOL_MODELS.regenerate.open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit", "oss-fibo2-edit-turbo"]);
+    expect(TOOL_MODELS.regenerate.cloud).toEqual(["nano-banana-pro", "seedream-5-pro", "nano-banana-2-1"]);
+    expect(TOOL_MODELS["generate-layer"].open).toEqual(["oss-qwen-image-21", "oss-ideogram-4", "oss-krea2-turbo", "oss-moss-image"]);
+    expect(TOOL_MODELS["text-edit"].open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit"]);
+    expect(TOOL_MODELS.enhance.open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit"]);
+    expect(TOOL_MODELS.regional.open).toEqual(["oss-qwen-image-21", "oss-krea2-edit", "oss-fibo2-edit-turbo"]);
+    expect(TOOL_MODELS.upscale.open).toEqual(["oss-seedvr2-image", "oss-upscale-image"]);
+    expect(TOOL_MODELS.relight).toEqual({ cloud: ["nano-banana-pro", "nano-banana-2-1"], open: ["oss-qwen-image-21-turbo", "oss-krea2-edit", "oss-qwen-relight"] });
+    expect(TOOL_MODELS.angles.open).toEqual(["oss-qwen-image-21"]);
+    expect(TOOL_MODELS.expand.open).toEqual(["oss-qwen-image-21", "oss-krea2-inpaint"]);
+    expect(TOOL_MODELS.inpaint).toEqual({ cloud: ["nano-banana-pro", "bria-fibo-2", "z-image-inpaint"], open: ["oss-qwen-image-21", "oss-krea2-inpaint"] });
+    // Qwen-Image-Edit 2511, FLUX.1 Kontext and Fill, Z-Image Turbo, Qwen-Image 2512 and Nano Banana 2 are in no tool list.
+    const all = Object.values(TOOL_MODELS).flatMap((t) => [...t.cloud, ...t.open]);
+    for (const id of ["oss-qwen-edit", "oss-flux-kontext", "oss-flux-fill", "flux-fill-pro", "oss-z-image-turbo", "oss-qwen-image", "nano-banana-2"]) expect(all, id).not.toContain(id);
+    // The angle and the front of a turn need the 25-step model (its Turbo misses big camera turns).
+    expect(getModel("oss-qwen-image-21")!.routes.find((r) => r.op === "edit")!.endpoint).toBe("qwen-image-21-edit");
+  });
+
+  it("only offers models whose route takes what the tool sends", () => {
+    // Regional edit, edit text and the Enhancer send one picture to an edit route.
+    for (const tool of ["regional", "text-edit", "enhance", "relight"] as const) {
+      for (const id of TOOL_MODELS[tool].open) {
+        const m = getModel(id)!;
+        expect(supportsOp(m, "edit"), `${tool}: ${id}`).toBe(true);
+        expect(m.options.maxImages ?? 1, `${tool}: ${id}`).toBeGreaterThanOrEqual(1);
+      }
+    }
+    // Inpaint sends a mask: every model past Nano Banana Pro (the red-tinted copy) has an inpaint route with one.
+    for (const engine of ["cloud", "open"] as const) {
+      for (const id of TOOL_MODELS.inpaint[engine].filter((x) => x !== "nano-banana-pro")) {
+        const m = getModel(id)!;
+        const route = m.routes.find((r) => r.op === "inpaint");
+        expect(route, id).toBeDefined();
+        if (engine === "cloud") expect(route!.map?.mask, id).toBeTruthy();
+      }
+    }
+    // Expand on your GPU sends the pads to an outpaint route.
+    for (const id of TOOL_MODELS.expand.open) expect(supportsOp(getModel(id)!, "outpaint"), id).toBe(true);
+  });
+
+  it("words a relight for each kind of model", () => {
+    // The Relight LoRA graph: the light alone (it adds the LoRA's trigger itself).
+    expect(relightPrompt("oss-qwen-relight", "warm golden hour sunlight", "coming from the left")).toBe("warm golden hour sunlight, coming from the left");
+    // Qwen-Image 2.1 and its Turbo: their own picture tags, as the relit covers were made.
+    const qwen = relightPrompt("oss-qwen-image-21-turbo", "warm golden hour sunlight", "coming from the left");
+    expect(qwen).toMatch(/^Relight <image1> with warm golden hour sunlight coming from the left\. Keep .* exactly as in <image1>/);
+    // Krea 2 Edit and the cloud: a plain instruction.
+    expect(relightPrompt("oss-krea2-edit", "soft overcast daylight")).toMatch(/^Relight the image with soft overcast daylight\. Keep the subject/);
+    expect(relightPrompt("nano-banana-pro", "soft overcast daylight")).toBe(relightPrompt("oss-krea2-edit", "soft overcast daylight"));
+  });
+
   it("runs the Enhancer's Detail look on catalog upscalers", () => {
     for (const engine of ["cloud", "open"] as const) {
       for (const id of ENHANCE_DETAIL_MODELS[engine]) {
@@ -575,7 +628,7 @@ describe("tools and prices", () => {
     }
     expect(enhancePrompt("detail")).toBeNull();
     expect(enhancePrompt("glow", "  ")).toBe(
-      "Give the portrait a soft beauty retouch with a healthy dewy glow, still keeping real pore texture. Make the skin look like a high-end editorial photograph shot on a sharp lens — real texture, no plastic smoothing, no makeup changes. Keep the face shape, identity, expression, hair, lighting and background exactly the same.",
+      "Give the portrait a soft beauty retouch with a healthy dewy glow, still keeping real pore texture. Make the skin look like a high-end editorial photograph shot on a sharp lens, with real, natural skin texture and the same makeup. Keep the face shape, identity, expression, hair, lighting and background exactly the same.",
     );
     // Every look but Detail has an instruction.
     expect(ENHANCE_LOOKS.filter((l) => !l.prompt).map((l) => l.id)).toEqual(["detail"]);

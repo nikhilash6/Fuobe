@@ -125,7 +125,7 @@ async function planInput(body: MixedBody, opts: { probe: boolean }): Promise<{ i
     frames = s.frames;
     rate = s.fps;
     if (Math.abs(s.fps - fps) > 0.01) notes.push(`Frames are every ${s.interval === 1 ? "" : `${ordinal(s.interval)} `}frame of this ${+sourceFps.toFixed(2)} FPS clip: ${+s.fps.toFixed(2)} FPS, ${frames} frames`);
-    if (modelId === "seedream-5-flash") notes.push(`Seedream 5.0 Flash takes no seed, so frames vary a little more than with Nano Banana 2${body.resolution === "4K" ? "; it draws up to 2K" : ""}`);
+    if (modelId === "seedream-5-flash") notes.push(`Seedream 5.0 Flash takes no seed, so frames vary a little more than with Nano Banana 2.1${body.resolution === "4K" ? "; it draws up to 2K" : ""}`);
     else if (original && body.resolution === "4K") notes.push(`${model?.name} draws frames at up to 2K (about 4 megapixels)`);
     else if (frames > FRAME_LIMITS.perClip && body.resolution !== "1K") {
       // merge-videos sizes the joined clips 512–2048 px a side.

@@ -100,7 +100,7 @@ describe("Fuobe Mixed Media and Fuobe Shorts in the catalog", () => {
 
   it("are the studios' defaults, with the partners kept as choices", () => {
     expect(mm.MIXED_FRAME_MODELS[0]).toBe("fuobe-mixed-media");
-    expect(mm.MIXED_FRAME_MODELS).toContain("nano-banana-2");
+    expect(mm.MIXED_FRAME_MODELS).toContain("nano-banana-2-1");
     expect(mm.MIXED_MODELS.open).toEqual(["fuobe-mixed-media"]);
     expect(mm.MIXED_MODELS.cloud).toContain("gemini-omni-flash");
     expect(sh.SHORTS_MODELS.cloud[0]).toBe("fuobe-shorts");

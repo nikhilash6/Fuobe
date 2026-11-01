@@ -365,24 +365,31 @@ export interface PlanCaps {
 export const PHOTODUMP_SOUL = "fuobe-soul";
 
 /**
- * Instadump's Original (build plan O10): Qwen-Image-Edit 2511 with the photos as references, one Fuobe prompt per pack
- * photo — hosted in the cloud, the 3-image graph on your GPU. It also makes a character's photos before a Soul ID.
+ * Instadump's Original (build plan O10): an edit model with the photos as references, one Fuobe prompt per pack photo.
+ * In the cloud hosted Qwen-Image-Edit 2511; on your GPU Qwen-Image 2.1 (up to 4 references). It also makes a
+ * character's photos before a Soul ID.
  */
-export const PHOTO_EDIT: Record<Engine, string> = { cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-edit" };
-/** The edit model your GPU runs first: Qwen-Image 2.1 (up to 4 references); Qwen-Image-Edit 2511 stays a choice after it. */
-export const OPEN_PHOTO_EDIT = "oss-qwen-image-21";
+export const PHOTO_EDIT: Record<Engine, string> = { cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-image-21" };
+/** The edit model your GPU runs first: Qwen-Image 2.1 (up to 4 references). */
+export const OPEN_PHOTO_EDIT = PHOTO_EDIT.open;
+/** Its 8-step Turbo (up to 4 references). */
+export const OPEN_PHOTO_EDIT_TURBO = "oss-qwen-image-21-turbo";
+/** Krea 2 Identity Edit: restages the person in one photo (a new place, pose or outfit, the same face). */
+export const OPEN_IDENTITY_EDIT = "oss-krea2-identity-edit";
 
 /** The models a pack's photos can run on, the default first after Fuobe Soul (which needs a trained Soul ID). */
 export const PHOTODUMP_MODELS: Record<Engine, string[]> = {
-  cloud: [PHOTODUMP_SOUL, PHOTO_EDIT.cloud, "nano-banana-pro", "seedream-5-pro"],
-  open: [PHOTODUMP_SOUL, OPEN_PHOTO_EDIT, PHOTO_EDIT.open],
+  cloud: [PHOTODUMP_SOUL, PHOTO_EDIT.cloud, "nano-banana-pro", "nano-banana-2-1", "seedream-5-pro"],
+  open: [PHOTODUMP_SOUL, OPEN_PHOTO_EDIT, OPEN_IDENTITY_EDIT, OPEN_PHOTO_EDIT_TURBO],
 };
 
 const EDIT_NAMES: Record<string, string> = {
   "qwen-image-edit-2511-cloud": "Qwen-Image-Edit 2511",
-  "oss-qwen-edit": "Qwen-Image-Edit 2511",
   "oss-qwen-image-21": "Qwen-Image 2.1",
+  "oss-qwen-image-21-turbo": "Qwen-Image 2.1 Turbo",
+  "oss-krea2-identity-edit": "Krea 2 Identity Edit",
   "nano-banana-pro": "Nano Banana Pro",
+  "nano-banana-2-1": "Nano Banana 2.1",
   "seedream-5-pro": "Seedream 5.0 Pro",
 };
 
@@ -413,7 +420,7 @@ export function photodumpModel(subject: PhotoSubject, engine: Engine, _caps: Pla
   return { modelId: fallback, note };
 }
 
-const KEEP_FACE = "Keep their exact face, identity, skin tone and hair; a new photo, not a copy of the reference";
+const KEEP_FACE = "Keep their exact face, identity, skin tone and hair, in a freshly composed new photo";
 
 /** One photo's prompt for a subject: an @mention for saved characters, image 1 for a selfie. */
 export function shotPrompt(pack: Pick<Pack, "look" | "custom">, shot: string, subject: PhotoSubject, refIndex?: number): string {
@@ -598,14 +605,15 @@ export const getTemplate = (id: string) => FASHION.find((t) => t.id === id);
 
 /**
  * Fashion Factory's models per step (build plan O10): Fuobe Try-On (FLUX.2 [klein] 4B + the try-on LoRA) dresses the
- * base shot on both engines, FASHN and Nano Banana Pro stay as cloud choices and Qwen-Image 2.1 (then Qwen-Image-Edit
- * 2511) dresses it on your GPU when the try-on can't run. Qwen-Image-Edit 2511 makes the photoset in the cloud, Nano
- * Banana Pro a choice; on your GPU Qwen-Image 2.1 makes it, Qwen-Image-Edit 2511 a choice.
+ * base shot on both engines, FASHN and Nano Banana Pro stay as cloud choices, and on your GPU Qwen-Image 2.1 Turbo
+ * (then Krea 2 Identity Edit) dresses it when the try-on can't run. Qwen-Image-Edit 2511 makes the photoset in the
+ * cloud, Nano Banana Pro a choice; on your GPU Qwen-Image 2.1 makes it, Krea 2 Identity Edit (a new pose and place,
+ * the same person) a choice.
  */
 export const TRYON_MODEL = "fuobe-tryon";
 export const FASHION_MODELS = {
-  outfit: { cloud: [TRYON_MODEL, "fashn-tryon", "nano-banana-pro"], open: [TRYON_MODEL, OPEN_PHOTO_EDIT, PHOTO_EDIT.open] },
-  photoset: { cloud: [PHOTO_EDIT.cloud, "nano-banana-pro"], open: [OPEN_PHOTO_EDIT, PHOTO_EDIT.open] },
+  outfit: { cloud: [TRYON_MODEL, "fashn-tryon", "nano-banana-pro"], open: [TRYON_MODEL, OPEN_PHOTO_EDIT_TURBO, OPEN_IDENTITY_EDIT] },
+  photoset: { cloud: [PHOTO_EDIT.cloud, "nano-banana-pro"], open: [OPEN_PHOTO_EDIT, OPEN_IDENTITY_EDIT] },
 } as const;
 
 /**
@@ -771,22 +779,27 @@ export function fashionReducer(s: FashionState, a: FashionAction): FashionState 
 export const SHEET_MAX_REFS = 5;
 
 export const SHEET_PROMPT =
-  "A character turnaround sheet of the person in the reference images: full-body front view, three-quarter view, side profile and back view side by side, plus a close-up of the face, on a seamless light-grey studio backdrop with soft, even light. The same face, hairstyle, body and outfit in every view; photorealistic, natural skin texture, no text.";
+  "A character turnaround sheet of the person in the reference images: full-body front view, three-quarter view, side profile and back view side by side, plus a close-up of the face, on a seamless light-grey studio backdrop with soft, even light. The same face, hairstyle, body and outfit in every view; photorealistic, natural skin texture, a clean picture made only of the views.";
 
-/** From Reference: 1–5 photos → a turnaround sheet (Nano Banana Pro, or Qwen-Image-Edit with up to 3). */
+/** The sheet from reference photos on your GPU: Qwen-Image 2.1 at 25 steps (its Turbo misses big camera turns). */
+export const SHEET_OPEN_MODEL = "oss-qwen-image-21";
+/** Qwen-Image 2.1 takes up to 4 reference photos. */
+export const SHEET_OPEN_REFS = 4;
+
+/** From Reference: 1–5 photos → a turnaround sheet (Nano Banana Pro, or Qwen-Image 2.1 with up to 4). */
 export function sheetFromReference(images: string[], engine: Engine, details?: string): { request: GenerationRequest; notes: string[] } {
   if (!images.length) throw new Error("Upload at least 1 image");
   if (images.length > SHEET_MAX_REFS) throw new Error(`Maximum ${SHEET_MAX_REFS} images`);
   const notes: string[] = [];
-  const max = engine === "open" ? 3 : SHEET_MAX_REFS;
-  if (images.length > max) notes.push(`Qwen-Image-Edit takes 3 photos — the first 3 are used`);
+  const max = engine === "open" ? SHEET_OPEN_REFS : SHEET_MAX_REFS;
+  if (images.length > max) notes.push(`Qwen-Image 2.1 takes ${max} photos — the first ${max} are used`);
   // The open workflow has no size setting: the sheet comes out in the first photo's shape.
-  if (engine === "open") notes.push("Qwen-Image-Edit keeps the shape of your first photo — put a landscape photo first for a wide sheet");
+  if (engine === "open") notes.push("Qwen-Image 2.1 keeps the shape of your first photo — put a landscape photo first for a wide sheet");
   const extra = details?.trim().replace(/[.\s]+$/, "");
   return {
     request: {
       feature: "character-sheet",
-      modelId: engine === "open" ? "oss-qwen-edit" : "nano-banana-pro",
+      modelId: engine === "open" ? SHEET_OPEN_MODEL : "nano-banana-pro",
       op: "edit",
       prompt: extra ? `${SHEET_PROMPT} ${extra}.` : SHEET_PROMPT,
       inputs: { images: images.slice(0, max) },

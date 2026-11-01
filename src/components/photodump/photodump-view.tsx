@@ -30,10 +30,12 @@ const STEPS = ["Choose a Pack", "Add your photo", "Get your photos"];
 const MODEL_NAMES: Record<string, string> = {
   "fuobe-soul": "Fuobe Soul + Soul ID",
   "nano-banana-pro": "Nano Banana Pro",
+  "nano-banana-2-1": "Nano Banana 2.1",
   "seedream-5-pro": "Seedream 5.0 Pro",
   "qwen-image-edit-2511-cloud": "Qwen-Image-Edit 2511",
-  "oss-qwen-edit": "Qwen-Image-Edit 2511",
   "oss-qwen-image-21": "Qwen-Image 2.1",
+  "oss-qwen-image-21-turbo": "Qwen-Image 2.1 Turbo",
+  "oss-krea2-identity-edit": "Krea 2 Identity Edit",
 };
 const TABS = [
   ["all", "All"],
@@ -365,7 +367,7 @@ export function PhotodumpView() {
             </div>
             <div className="space-y-2">
               <p className="text-[12.5px] font-medium">Aspect ratio</p>
-              {/* A model that keeps the photo's shape (Qwen-Image-Edit) ignores the aspect ratio: the picker is off and the run line says why. */}
+              {/* A model that keeps the photo's shape (Qwen-Image 2.1's edit) ignores the aspect ratio: the picker is off and the run line says why. */}
               <div role="radiogroup" aria-label="Aspect ratio" aria-disabled={fixedAspect || undefined} onKeyDown={radioKeys} className="flex flex-wrap gap-1">
                 {PHOTODUMP_ASPECTS.map((a) => (
                   <button

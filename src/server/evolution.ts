@@ -182,9 +182,10 @@ function planInput(body: z.infer<typeof EvolutionBodySchema>, info: Awaited<Retu
   const name = getModel(EVOLUTION.model)?.name ?? "Fuobe Evolution";
   const n = body.references.length;
   if (engine === "open") {
-    notes.push(`Each ≤5 s segment: Qwen-Image-Edit takes its first frame toward the direction${n ? ` with your first ${Math.min(n, EVOLUTION.openReferences) === 1 ? "reference" : "two references"}` : ""}, then Wan 2.2 Fun VACE re-renders it from itself at 16 fps`);
+    const k = Math.min(n, EVOLUTION.openReferences);
+    notes.push(`Each ≤5 s segment: Qwen-Image 2.1 Turbo takes its first frame toward the direction${n ? ` with your first ${k === 1 ? "reference" : `${k} references`}` : ""}, then Wan 2.2 Fun VACE re-renders it from itself at 16 fps`);
     if (n > EVOLUTION.openReferences) notes.push(`The other ${n - EVOLUTION.openReferences} reference${n - EVOLUTION.openReferences > 1 ? "s" : ""} shape the direction only`);
-    notes.push("Needs a 24 GB GPU · Wan 2.2 Fun VACE and Qwen-Image-Edit are Apache-2.0");
+    notes.push("Needs a 24 GB GPU · Wan 2.2 Fun VACE is Apache-2.0; Qwen-Image 2.1's weights are non-commercial");
   } else {
     notes.push(`${name} runs LTX-2.3 video to video on fal in your clip's shape (${nearestShape(source.width, source.height)}) at 24 fps`);
     if (n) notes.push(`LTX-2.3 takes no pictures: your ${n === 1 ? "reference shapes" : `${n} references shape`} the direction`);

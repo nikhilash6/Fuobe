@@ -229,7 +229,8 @@ describe("effects as steps", () => {
     const req = { feature: "motion", modelId: "fuobe-dop", presetId: "effect-window", prompt: "a woman reading", inputs: { images: ["/api/files/uploads/a.png"] } };
     for (const engine of ["open", "cloud"] as const) {
       const [clip, relit] = createGenerations({ ...req, engine });
-      expect(relit.modelId).toBe(engine === "open" ? "oss-qwen-relight" : "qwen-image-edit-2509-cloud");
+      expect(relit.modelId).toBe(engine === "open" ? "oss-qwen-image-21-turbo" : "qwen-image-edit-2509-cloud");
+      if (engine === "open") expect(relit.prompt).toMatch(/^Relight <image1>: soft natural window light from the side/);
       expect(relit.op).toBe("edit");
       expect(clip.modelId).toBe("fuobe-dop");
       expect(clip.engine).toBe(engine);

@@ -133,16 +133,21 @@ describe("Fuobe Evolution: the plan", () => {
     expect(step(plan({ source: { ...clip, width: 1080, height: 1920 } }), "evolve0").request.params?.aspectRatio).toBe("9:16");
   });
 
-  it("GPU: per ≤81-frame segment, cut at 16 fps, the direction frame with two references, the graph at the intensity's denoise", () => {
+  it("GPU: per ≤81-frame segment, cut at 16 fps, the direction frame with three references, the graph at the intensity's denoise", () => {
     const p = plan({ engine: "open", intensity: "low" });
     // 12 s at 16 fps = 192 frames → 3 segments of 4n+1 frames.
     expect(p.pieces).toBe(3);
-    expect(p.referencesUsed).toBe(2);
+    // Qwen-Image 2.1 Turbo takes four images: the frame and three references.
+    expect(EVOLUTION.openReferences).toBe(3);
+    expect(p.referencesUsed).toBe(3);
     expect(step(p, "cut0").request).toMatchObject({ modelId: "oss-segment", op: "trim", params: { fps: 16, aspectRatio: "auto", resolution: "480p" } });
     const frame = step(p, "frame0");
-    expect(frame.request).toMatchObject({ modelId: "oss-qwen-edit", op: "edit", inputs: { images: refs.slice(0, 2) } });
+    expect(frame.request).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit", inputs: { images: refs.slice(0, 3) } });
     expect(frame.request.prompt).toMatch(/^Refine image 1 gently toward this direction: A neon-lit night market in the rain\. Keep the composition, the people/);
-    expect(frame.request.prompt).toMatch(/images 2 and 3/);
+    expect(frame.request.prompt).toMatch(/Use the characters, objects and style of images 2, 3 and 4 where they fit\.$/);
+    expect(directionFramePrompt("x", "medium", 1)).toMatch(/of image 2 where they fit\.$/);
+    expect(directionFramePrompt("x", "medium", 2)).toMatch(/of images 2 and 3 where they fit\.$/);
+    expect(directionFramePrompt("x", "medium", 0)).not.toMatch(/image 2/);
     expect(frame).toMatchObject({ after: ["cut0"], chain: [{ slot: "images", position: "first" }] });
     const e = step(p, "evolve0");
     expect(e.request).toMatchObject({ modelId: "fuobe-evolution", engine: "open", op: "v2v", prompt: "A neon-lit night market in the rain.", params: { aspectRatio: "auto", resolution: "480p", extra: { denoise: 0.45 } } });

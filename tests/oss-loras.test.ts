@@ -167,7 +167,7 @@ describe("every motion and effect on Fuobe DoP", () => {
     expect(pink.grade).toBe("candy-pink");
     expect(pink.open!.loras).toBeUndefined();
     const window = getPreset("effect-window")!;
-    expect(window.prestep?.open).toMatchObject({ modelId: "oss-qwen-relight", op: "edit" });
+    expect(window.prestep?.open).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit" });
     expect(window.prestep?.cloud).toMatchObject({ modelId: "qwen-image-edit-2509-cloud", op: "edit" });
     expect(window.prestep!.cloud.prompt.startsWith("重新照明, ")).toBe(true);
     expect(window.prestep!.cloud.loras!.map((l) => l.file)).toEqual(["Qwen-Image-Edit-2509-Relight.safetensors"]);

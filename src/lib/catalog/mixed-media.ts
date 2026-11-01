@@ -53,7 +53,7 @@ export const MIXED_MODELS: Record<Engine, string[]> = {
   open: [MIXED_ORIGINAL],
 };
 export const MIXED_TOOLS = {
-  cloud: { cut: "trim-video", mux: "merge-audio-video", preview: "nano-banana-2", frames: "extract-frames", assemble: "images-to-video", join: "join-clips" },
+  cloud: { cut: "trim-video", mux: "merge-audio-video", preview: "nano-banana-2-1", frames: "extract-frames", assemble: "images-to-video", join: "join-clips" },
   open: { preview: MIXED_ORIGINAL },
 } as const;
 
@@ -66,10 +66,10 @@ export type MixedMode = "frames" | "smooth" | "fast";
 export const MIXED_MODES: Record<Engine, MixedMode[]> = { cloud: ["frames", "smooth", "fast"], open: ["frames", "smooth"] };
 /**
  * Cloud models that draw each frame (the first is the default): Fuobe Mixed Media (Z-Image Turbo + ControlNet with the
- * look's LoRA, one seed, every frame on its own), then the partner image editors, Nano Banana 2 (it takes a seed) and
+ * look's LoRA, one seed, every frame on its own), then the partner image editors, Nano Banana 2.1 (it takes a seed) and
  * Seedream 5.0 Flash, which redraw each frame looking at the one styled before it.
  */
-export const MIXED_FRAME_MODELS = [MIXED_ORIGINAL, "nano-banana-2", "seedream-5-flash"] as const;
+export const MIXED_FRAME_MODELS = [MIXED_ORIGINAL, "nano-banana-2-1", "seedream-5-flash"] as const;
 
 /**
  * Cloud per-frame limits: fal's extract-nth-frame returns up to 500 frames a call and images-to-video

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
-import { detectCuts, finalKey, KEYFRAME_OFFSET, katanaStage, katanaSteps, nearestAspect, planSegments, refineCut, refineTimes, stepsToRedo } from "@/lib/av/katana";
+import { detectCuts, finalKey, KEYFRAME_OFFSET, katanaStage, katanaSteps, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, stepsToRedo } from "@/lib/av/katana";
 import { frameParams, frameRequest } from "@/lib/av/frames";
 
 vi.setConfig({ testTimeout: 150_000 });
@@ -126,11 +126,11 @@ describe("katana steps", () => {
     expect(steps.map((s) => [s.key, s.request.modelId, s.request.op])).toEqual([
       ["cut0", "oss-segment", "trim"],
       ["frame0", "oss-extract-frame", "frame"],
-      ["key0", "oss-qwen-edit", "edit"],
+      ["key0", "oss-qwen-image-21-turbo", "edit"],
       ["move0", "fuobe-genjutsu-motion", "motion-transfer"],
       ["cut1", "oss-segment", "trim"],
       ["frame1", "oss-extract-frame", "frame"],
-      ["key1", "oss-qwen-edit", "edit"],
+      ["key1", "oss-qwen-image-21-turbo", "edit"],
       ["move1", "fuobe-genjutsu-motion", "motion-transfer"],
       ["join", "oss-join-clips", "concat"],
       ["final", "oss-mux", "mux"],
@@ -140,8 +140,11 @@ describe("katana steps", () => {
     expect(steps[1].request.params).toEqual({ startTime: KEYFRAME_OFFSET, endTime: KEYFRAME_OFFSET + 0.5, extra: { frameIndex: 0 } });
     // The open motion model is told the segment's length (Fun Control would render its 81-frame default).
     expect(steps[3].request.params).toMatchObject({ duration: 4, resolution: "480p" });
-    // Qwen-Image-Edit gets the frame first, then two photos.
-    expect(steps[2]).toMatchObject({ after: "frame0", chain: [{ slot: "images", position: "first" }], request: { inputs: { images: ["/a.png", "/b.png"] } } });
+    // Qwen-Image 2.1 Turbo gets the frame first, then three photos (its four images).
+    expect(OPEN_KEYFRAME_PHOTOS).toBe(3);
+    expect(steps[2]).toMatchObject({ after: "frame0", chain: [{ slot: "images", position: "first" }], request: { inputs: { images: ["/a.png", "/b.png", "/c.png"] } } });
+    expect(steps[2].request.prompt).toMatch(/^Replace the main subject of image 1 with the subject shown in images 2 to 4, /);
+    expect(katanaSteps({ engine: "open", reference: "/ref.mp4", photos: [...photos, "/d.png"], segments })[2].request.inputs?.images).toEqual(photos);
     expect(steps[3]).toMatchObject({ after: ["key0", "cut0"], chain: [{ slot: "images", position: "first" }, { slot: "video" }] });
     expect(steps[8]).toMatchObject({ after: ["move0", "move1"], chain: [{ slot: "videos" }, { slot: "videos" }] });
     expect(steps[9]).toMatchObject({ after: "join", chain: [{ slot: "video" }], request: { inputs: { audio: "/ref.mp4" } } });

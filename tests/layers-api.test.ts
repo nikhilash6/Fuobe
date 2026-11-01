@@ -157,7 +157,8 @@ describe("job steps", () => {
       prompt: "a vase of tulips. Blend it into the surroundings with matching light, perspective and grain.",
       inputs: { images: ["/api/files/a.png"], mask: "/api/files/m.png", sketch: "/api/files/s.png" },
     });
-    expect(steps({ ...paint, modelId: "flux-fill-pro" })[0].request).toMatchObject({ modelId: "flux-fill-pro", op: "inpaint" });
+    expect(steps({ ...paint, modelId: "bria-fibo-2" })[0].request).toMatchObject({ modelId: "bria-fibo-2", op: "inpaint", inputs: { mask: "/api/files/m.png" } });
+    expect(steps({ ...paint, engine: "open", modelId: "oss-krea2-inpaint" })[0].request).toMatchObject({ modelId: "oss-krea2-inpaint", op: "inpaint", inputs: { mask: "/api/files/m.png" } });
     const open = steps({ ...paint, engine: "open", settings: { keepAlpha: true } });
     expect(open.map((x) => [x.key, x.request.modelId, x.request.op])).toEqual([
       ["inpaint", "oss-qwen-image-21", "inpaint"],
@@ -191,18 +192,46 @@ describe("job steps", () => {
   });
 
   it("hands layers to the existing upscale, relight, angles, background and expand models", () => {
-    expect(steps({ tool: "upscale", engine: "open" })[0].request).toMatchObject({ modelId: "oss-upscale-image", op: "upscale-image" });
+    // SeedVR2 restores detail as it enlarges (4x ESRGAN stays a choice).
+    expect(steps({ tool: "upscale", engine: "open" })[0].request).toMatchObject({ modelId: "oss-seedvr2-image", op: "upscale-image" });
+    expect(steps({ tool: "upscale", engine: "open", modelId: "oss-upscale-image" })[0].request).toMatchObject({ modelId: "oss-upscale-image", op: "upscale-image" });
     expect(steps({ tool: "bg-remove" })[0].request).toMatchObject({ modelId: "birefnet-cloud", op: "bg-remove" });
+    // Relight: Qwen-Image 2.1 Turbo in its own picture tags; the Relight LoRA graph (a choice) gets the light alone.
     const relight = steps({ tool: "relight", engine: "open", settings: { light: "Neon night", direction: "Left" } })[0].request;
-    expect(relight).toMatchObject({ modelId: "oss-qwen-relight", op: "edit", prompt: "pink and blue neon lights at night, coming from the left" });
+    expect(relight).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit" });
+    expect(relight.prompt).toMatch(/^Relight <image1> with pink and blue neon lights at night coming from the left\. Keep /);
+    const lora = steps({ tool: "relight", engine: "open", modelId: "oss-qwen-relight", settings: { light: "Neon night", direction: "Left" } })[0].request;
+    expect(lora).toMatchObject({ modelId: "oss-qwen-relight", op: "edit", prompt: "pink and blue neon lights at night, coming from the left" });
+    const krea = steps({ tool: "relight", engine: "open", modelId: "oss-krea2-edit", settings: { light: "Neon night" } })[0].request;
+    expect(krea.prompt).toMatch(/^Relight the image with pink and blue neon lights at night\. Keep the subject/);
+    expect(steps({ tool: "relight", modelId: "nano-banana-2-1", settings: { light: "Neon night" } })[0].request).toMatchObject({ modelId: "nano-banana-2-1", op: "edit" });
     const angles = steps({ tool: "angles", settings: { rotate: 90, tilt: 10, zoom: 4 } })[0].request;
     expect(angles).toMatchObject({ modelId: "qwen-multiple-angles", params: { extra: { horizontal_angle: 90, vertical_angle: 10, zoom: 4 } } });
-    expect(steps({ tool: "angles", engine: "open", settings: { angle: "Back" } })[0].request.prompt).toContain("a view from directly behind");
+    // On your GPU: Qwen-Image 2.1 (25 steps) on the same plain camera words, no LoRA.
+    const turned = steps({ tool: "angles", engine: "open", settings: { angle: "Back" } })[0].request;
+    expect(turned).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit" });
+    expect(turned.prompt).toMatch(/^Show the exact same subject from a view from directly behind, as if the camera physically moved\./);
+    expect(turned.loras).toBeUndefined();
     const expand = steps({ tool: "expand", engine: "open", settings: { pads: { left: 64, top: 0, right: 64, bottom: 8 } } })[0].request;
     expect(expand).toMatchObject({ modelId: "oss-qwen-image-21", op: "outpaint", params: { extra: { padLeft: 64, padTop: 0, padRight: 64, padBottom: 8 } } });
+    // Krea 2 Inpaint grows the canvas from the same pads.
+    expect(steps({ tool: "expand", engine: "open", modelId: "oss-krea2-inpaint", settings: { pads: { left: 64, top: 0, right: 64, bottom: 8 } } })[0].request).toMatchObject({
+      modelId: "oss-krea2-inpaint",
+      op: "outpaint",
+      params: { extra: { padLeft: 64 } },
+    });
     expect(() => steps({ tool: "expand", engine: "open", settings: { pads: { left: 0, top: 0, right: 0, bottom: 0 } } })).toThrow(/Drag an edge/);
     expect(steps({ tool: "expand" })[0].request.prompt).toMatch(/^Fill the empty grey margins/);
+    expect(steps({ tool: "expand" })[0].request.prompt).toMatch(/fill the margins with more of the same surroundings\.$/);
     expect(steps({ tool: "regional", prompt: "add a hat" })[0].request).toMatchObject({ modelId: "seedream-5-pro", op: "edit" });
+    // Regional edit and Layer edit on your GPU: Qwen-Image 2.1 first, then Krea 2 Edit and FIBO 2 Edit Turbo, one picture each.
+    expect(steps({ tool: "regional", engine: "open", prompt: "add a hat" })[0].request).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit" });
+    for (const modelId of ["oss-krea2-edit", "oss-fibo2-edit-turbo"]) {
+      expect(steps({ tool: "regional", engine: "open", modelId, prompt: "add a hat" })[0].request).toMatchObject({ modelId, op: "edit", inputs: { images: ["/api/files/a.png"] } });
+      expect(steps({ tool: "regenerate", engine: "open", modelId, prompt: "a red coat" })[0].request).toMatchObject({ modelId, op: "edit" });
+    }
+    expect(() => steps({ tool: "regional", engine: "open", modelId: "oss-qwen-edit", prompt: "add a hat" })).toThrow(/can't run this tool/);
+    expect(steps({ tool: "generate-layer", engine: "open", modelId: "oss-moss-image", prompt: "a lamp" })[0].request).toMatchObject({ modelId: "oss-moss-image", op: "t2i" });
   });
 
   it("only sends a shape the model accepts", () => {
@@ -299,7 +328,7 @@ describe("layers API", () => {
     expect(rows.length).toBeGreaterThan(1);
     expect(rows[0].box).toEqual([expect.closeTo(153.6, 1), expect.closeTo(108, 1), expect.closeTo(998.4, 1), expect.closeTo(97.2, 1)]);
 
-    // Inpaint: Nano Banana Pro is shown the painted area tinted red; FLUX Fill [pro] takes the mask itself.
+    // Inpaint: Nano Banana Pro is shown the painted area tinted red; Bria FIBO 2 takes the mask itself.
     const mask = upload();
     const sketch = upload();
     const paint = { tool: "inpaint", engine: "cloud", image: source, mask, sketch, prompt: "a vase of tulips", frame, settings: { aspect: "16:9" } };
@@ -309,9 +338,9 @@ describe("layers API", () => {
     expect(nano).toMatchObject({ modelId: "nano-banana-pro", op: "edit" });
     expect(nano.request.inputs).toMatchObject({ images: [source], sketch });
     expect(nano.prompt).toMatch(/Only change the region tinted red in image 2/);
-    res = await jobs.POST(req("POST", { ...paint, modelId: "flux-fill-pro" }), ctx({ id }));
+    res = await jobs.POST(req("POST", { ...paint, modelId: "bria-fibo-2" }), ctx({ id }));
     const fill = gens.getGeneration(((await res.json()) as LayerJob).generationIds[0])!;
-    expect(fill).toMatchObject({ modelId: "flux-fill-pro", op: "inpaint" });
+    expect(fill).toMatchObject({ modelId: "bria-fibo-2", op: "inpaint" });
     expect(fill.request.inputs).toMatchObject({ images: [source], mask });
     // Only stored files can be painted with.
     res = await jobs.POST(req("POST", { ...paint, mask: "http://evil.example/m.png" }), ctx({ id }));

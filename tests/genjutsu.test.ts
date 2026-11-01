@@ -255,7 +255,9 @@ describe("Genjutsu: plans", () => {
   it("open restyle on the Original: the Shorts chain on the Original's graph; a Soul look's frame on Fuobe Soul", () => {
     const open = plan({ mode: "restyle", maker: maker(ORIGINALS.restyle, "open"), look: { kind: "custom", images: [ref, "/api/files/b.png", "/api/files/c.png"] }, references: [] });
     expect(open.steps.find((s) => s.request.modelId === "oss-segment")!.request.params?.aspectRatio).toBe("auto");
-    expect(open.steps.find((s) => s.request.modelId === "oss-qwen-edit")!.request.inputs?.images).toEqual([ref, "/api/files/b.png"]);
+    // The first frame in the look: Qwen-Image 2.1 Turbo on your GPU (hosted Qwen-Image-Edit 2511 in the cloud).
+    expect(open.steps.find((s) => s.request.modelId === "oss-qwen-image-21-turbo")!.request.inputs?.images).toEqual([ref, "/api/files/b.png"]);
+    expect(open.steps.some((s) => s.request.modelId === "oss-qwen-edit")).toBe(false);
     const look = open.steps.find((s) => s.request.modelId === ORIGINALS.restyle)!.request;
     expect(look).toMatchObject({ engine: "open", op: "v2v" });
     const soul = plan({ mode: "restyle", maker: maker(ORIGINALS.restyle, "open"), look: { kind: "soul", id: "v1-general" }, references: [], range: { start: 0, end: 5 } });
@@ -377,9 +379,12 @@ describe("Genjutsu: Character swap", () => {
     const planned = planGeneration({ ...sunburst, inputs: { images: ["/api/files/f.png", ref] } }, getModel, getPreset);
     expect(planned.params.aspectRatio).toBe("16:9");
     // On your GPU the first frame keeps the frame's own size: Qwen-Image 2.1 gets the nearest ratio, which its edit graph
-    // doesn't read (the result follows image 1), and Qwen-Image-Edit 2511 is asked none.
+    // doesn't read (the result follows image 1), and Krea 2 Identity Edit "auto" (its canvas in image 1's shape).
     expect(step(ch({ maker: maker(ORIGINALS.character, "open") }), "anchor").request.params?.aspectRatio).toBe("16:9");
-    expect(step(ch({ maker: maker(ORIGINALS.character, "open"), character: { anchorModel: "oss-qwen-edit" } }), "anchor").request.params?.aspectRatio).toBeUndefined();
+    const krea = step(ch({ maker: maker(ORIGINALS.character, "open"), character: { anchorModel: "oss-krea2-identity-edit" } }), "anchor").request;
+    expect(krea).toMatchObject({ modelId: "oss-krea2-identity-edit", op: "edit", params: { aspectRatio: "auto" } });
+    // A Qwen-Image-Edit 2511 pick saved before falls back to the engine's default.
+    expect(step(ch({ maker: maker(ORIGINALS.character, "open"), character: { anchorModel: "oss-qwen-edit" } }), "anchor").request.modelId).toBe("oss-qwen-image-21");
   });
 
   it("cloud: a silent clip's result is silent too (H3's own soundtrack is replaced with silence)", () => {

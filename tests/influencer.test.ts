@@ -24,6 +24,7 @@ import {
   influencerName,
   optionVisible,
   PHRASES,
+  OPEN_EDIT_IMAGES,
   planInfluencer,
   RAIL_ORDER,
   resetPicks,
@@ -521,21 +522,26 @@ describe("the plan per engine", () => {
     valid(p);
   });
 
-  it("open with your face: the sheet, then Qwen-Image-Edit 2511 puts the face (and one clothing reference) on it", () => {
+  it("open with your face: the sheet, then Qwen-Image 2.1 puts the face (and two clothing references) on it", () => {
+    expect(clothes).toHaveLength(3);
+    expect(OPEN_EDIT_IMAGES).toBe(4);
     const p = planInfluencer(run({ engine: "open", start: "face", photo: face, clothing: clothes }), ALL);
-    expect(p.modelId).toBe("oss-qwen-edit");
+    expect(p.modelId).toBe("oss-qwen-image-21");
     expect(p.steps.map((s) => [s.key, s.request.feature, s.request.modelId, s.after])).toEqual([
       ["sheet", "influencer-step", "oss-zimage-soul-cast", undefined],
-      ["dress", "influencer", "oss-qwen-edit", "sheet"],
+      ["dress", "influencer", "oss-qwen-image-21", "sheet"],
     ]);
     expect(p.steps[1].chain).toEqual([{ slot: "images", position: "first" }]);
-    expect(p.steps[1].request.inputs?.images).toEqual([face, clothes[0]]);
-    expect(p.steps[1].request.prompt).toBe(compileDressPrompt({ state, start: "face", clothing: 1 }));
-    expect(p.notes[0]).toBe("Qwen-Image-Edit takes 3 images (the sheet, your photo and clothing) — the first clothing reference is used");
+    // The sheet (chained in first), your face and two clothing references: Qwen-Image 2.1's four images.
+    expect(p.steps[1].request.inputs?.images).toEqual([face, clothes[0], clothes[1]]);
+    expect(p.steps[1].request.prompt).toBe(compileDressPrompt({ state, start: "face", clothing: 2 }));
+    expect(p.notes[0]).toBe("Qwen-Image 2.1 takes 4 images (the sheet, your photo and clothing) — the first 2 clothing references are used");
+    expect(p.notes[1]).toBe("Two steps: Z-Image Turbo draws the sheet, then Qwen-Image 2.1 puts your face on it");
     valid(p);
+    // Without a photo, all three clothing references fit beside the sheet.
     const dressed = planInfluencer(run({ engine: "open", clothing: clothes }), ALL);
-    expect(dressed.steps[1].request.inputs?.images).toEqual(clothes.slice(0, 2));
-    expect(dressed.notes).toEqual(["Qwen-Image-Edit takes 3 images (the sheet and clothing) — the first 2 clothing references are used", "Two steps: Z-Image Turbo draws the sheet, then Qwen-Image-Edit 2511 dresses it in your clothing"]);
+    expect(dressed.steps[1].request.inputs?.images).toEqual(clothes);
+    expect(dressed.notes).toEqual(["Two steps: Z-Image Turbo draws the sheet, then Qwen-Image 2.1 dresses it in your clothing"]);
     // A photo only matters when the run starts from it.
     expect(planInfluencer(run({ engine: "open", start: "scratch", photo: face }), ALL).steps).toHaveLength(1);
   });

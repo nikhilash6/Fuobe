@@ -406,7 +406,7 @@ export function InfluencerBuilder() {
               </div>
             ) : (
               <p className="text-[12.5px] text-muted-foreground">
-                {visitor ? "Fuobe Soul" : "Fuobe Soul on your GPU"}: Z-Image Turbo draws the sheet in Soul&apos;s Realistic look (the Soul Cast sheet workflow); with a photo or clothing, Qwen-Image-Edit 2511 then puts them on it.
+                {visitor ? "Fuobe Soul" : "Fuobe Soul on your GPU"}: Z-Image Turbo draws the sheet in Soul&apos;s Realistic look (the Soul Cast sheet workflow); with a photo or clothing, Qwen-Image 2.1 then puts them on it.
                 {!visitor && (
                   <>
                     {" "}

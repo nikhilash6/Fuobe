@@ -146,7 +146,7 @@ describe("moodboards", () => {
     expect((await noName.json()).error).toBe("Please enter a moodboard name");
   });
 
-  it("builds a board through its cover job (open: collages on Qwen-Image-Edit Style Reference), then it's usable", async () => {
+  it("builds a board through its cover job (open: collages on Krea 2 Style Reference), then it's usable", async () => {
     const images = Array.from({ length: 6 }, upload);
     const res = await moodboardsRoute.POST(json("POST", { name: "Neon Haze", images, collages: [upload()], engine: "open" }));
     expect(res.status).toBe(201);
@@ -154,7 +154,9 @@ describe("moodboards", () => {
     expect(["queued", "running", "cover"]).toContain(m.status);
     expect(m.refs).toEqual(images);
     const g = gens.getGeneration(m.generationId)!;
-    expect(g.modelId).toBe("oss-style-qwen-edit");
+    // Krea 2 Style Reference: trained for style reference, the same one or two collages as references.
+    expect(g.modelId).toBe("oss-style-krea2");
+    expect(g.prompt).toMatch(/^A moodboard cover for “Neon Haze”: one striking, purely visual image/);
     expect(g.feature).toBe("moodboard");
     expect(g.request.inputs?.images).toEqual(m.collages);
     await settle(m.generationId);
@@ -304,8 +306,12 @@ describe("photodump, fashion factory and character sheet runs", () => {
     expect(preview.modelId).toBe("oss-qwen-image-21");
     expect(preview.fixedAspect).toBe(true);
     expect(preview.notes.join()).toMatch(/Qwen-Image 2.1 keeps the shape of your photo/);
+    // A Qwen-Image-Edit 2511 pick saved before runs on Qwen-Image 2.1.
     const old = await (await photodumpRoute.POST(json("POST", { packId: "winter-special", engine: "open", selfie: upload(), aspectRatio: "16:9", modelId: "oss-qwen-edit" }, "http://x/api/photodump?preview=1"))).json();
-    expect(old).toMatchObject({ modelId: "oss-qwen-edit", fixedAspect: true });
+    expect(old).toMatchObject({ modelId: "oss-qwen-image-21", fixedAspect: true });
+    // Krea 2 Identity Edit draws on a canvas of the shape asked for.
+    const krea = await (await photodumpRoute.POST(json("POST", { packId: "winter-special", engine: "open", selfie: upload(), aspectRatio: "16:9", modelId: "oss-krea2-identity-edit" }, "http://x/api/photodump?preview=1"))).json();
+    expect(krea).toMatchObject({ modelId: "oss-krea2-identity-edit", fixedAspect: false });
     const cloud = await (await photodumpRoute.POST(json("POST", { packId: "winter-special", engine: "cloud", selfie: upload(), aspectRatio: "16:9" }, "http://x/api/photodump?preview=1"))).json();
     expect(cloud.fixedAspect).toBe(false);
     // Picking Fuobe Soul with a selfie says why it runs on Qwen-Image-Edit.

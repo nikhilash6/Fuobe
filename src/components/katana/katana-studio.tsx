@@ -21,7 +21,7 @@ import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { formatCueTime } from "@/lib/av/cue-edit";
-import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
+import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -246,7 +246,7 @@ export function KatanaStudio() {
             <p className="mt-2 flex items-start gap-1.5 text-[12px] text-muted-foreground">
               <Users className="mt-0.5 size-3.5 shrink-0" /> A person, a product or an outfit. Clear, well-lit photos from a couple of angles work best.
             </p>
-            {engine === "open" && <p className="mt-1 text-[12px] text-muted-foreground">The open engine uses your first 2 photos (Qwen-Image-Edit takes the frame and two references).</p>}
+            {engine === "open" && <p className="mt-1 text-[12px] text-muted-foreground">The open engine uses your first {OPEN_KEYFRAME_PHOTOS} photos (Qwen-Image 2.1 Turbo takes the frame and {OPEN_KEYFRAME_PHOTOS} references).</p>}
           </Panel>
           <Panel title="Instructions (optional)">
             <Textarea

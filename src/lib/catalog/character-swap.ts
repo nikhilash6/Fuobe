@@ -375,12 +375,12 @@ export function swapPrompt(p: SwapPromptInput): string {
 export function anchorPrompt(o: Pick<CharacterOptions, "who" | "index" | "subject" | "description">): string {
   const description = tidy(o.description).slice(0, CHARACTER_SWAP.maxDescriptionChars);
   if (!description) {
-    return "Replace the person in image 1 with the character from image 2, including their face, hair, body and complete outfit exactly as shown in image 2. Do not keep any of the original person's clothing. Keep image 1's pose, framing, background and lighting.";
+    return "Replace the person in image 1 with the character from image 2, including their face, hair, body and complete outfit exactly as shown in image 2: every garment they wear comes from image 2. Keep image 1's pose, framing, background and lighting.";
   }
   return (
     `Image 1 is the source frame to edit. Image 2 is character identity only: ${description}. Replace ONLY ${whoWords(o)} with that single character. ` +
     "Match the exact source pose, face angle, gaze, mouth opening, expression, limb placement, scale and occlusions. Preserve all other people, the entire original scene, camera framing, lighting and aspect ratio. " +
-    "Keep the reference identity and costume; do not copy the reference pose or background. One full-aspect edited source frame."
+    "Take only the identity and costume from the reference; the pose and background come from the source frame. One full-aspect edited source frame."
   );
 }
 
@@ -393,7 +393,7 @@ export const ANCHOR_MODELS: Record<Engine, { id: string; label: string; note: st
   ],
   open: [
     { id: "oss-qwen-image-21", label: "Qwen-Image 2.1", note: "Free on your GPU (20 GB)" },
-    { id: "oss-qwen-edit", label: "Qwen-Image-Edit 2511", note: "Free on your GPU (24 GB)" },
+    { id: "oss-krea2-identity-edit", label: "Krea 2 Identity Edit", note: "Free on your GPU (20 GB)" },
   ],
 };
 

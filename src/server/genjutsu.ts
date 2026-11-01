@@ -107,7 +107,7 @@ const character = z.object({
   subject: z.string().max(120).optional(),
   maskGrow: z.number().int().min(0).max(256).optional(),
   anchor: z.boolean().optional(),
-  anchorModel: z.enum(["gpt-image-2-5-sunburst", "nano-banana-pro", "oss-qwen-image-21", "oss-qwen-edit"]).optional(),
+  anchorModel: z.enum(["gpt-image-2-5-sunburst", "nano-banana-pro", "oss-qwen-image-21", "oss-krea2-identity-edit", "oss-qwen-edit"]).optional(),
   description: z.string().max(CHARACTER_SWAP.maxDescriptionChars).optional(),
   speech: z.enum(["character", "other", "offscreen", "none"]).optional(),
   dialogue: z.string().max(2000).optional(),

@@ -206,7 +206,7 @@ async function planInput(body: RemovalBody, opts: { probe: boolean; preview?: bo
     }
     if (eraser.cleanFrame) {
       notes.push(
-        "Qwen-Image-Edit first makes a clean copy of the part's first frame with the person gone; MiniMax H3 with Akatz Labs' Person Remover LoRA then rebuilds what was behind them, 22 frames at a time from it, and the clip's sound goes back on",
+        "Qwen-Image 2.1 first makes a clean copy of the part's first frame with the person gone; MiniMax H3 with Akatz Labs' Person Remover LoRA then rebuilds what was behind them, 22 frames at a time from it, and the clip's sound goes back on",
         "People only — for an object, pick Wan 2.1 VACE + SAM 3.1",
         "Needs the H3 Relay nodes on your ComfyUI (scripts/comfy/install-comfyui.sh with H3_RELAY=1) and 24 GB of VRAM with offloading (64–128 GB of RAM); the part runs at 24 fps",
         characterLicenceLine("open", "fuobe-character-swap").replace("nodes GPL-3.0", "H3 Relay nodes GPL-3.0"),

@@ -61,7 +61,7 @@ describe("Evolution: estimates", () => {
     expect(cloud.notes.join(" ")).toMatch(/LTX-2.3 takes no pictures: your reference shapes the direction/);
     const open = await (await estimateRoute.POST(json(body({ engine: "open" })))).json();
     expect(open).toMatchObject({ engine: "open", resolution: "480p", pieces: 3, costUsd: 0 });
-    expect(open.notes.join(" ")).toMatch(/Qwen-Image-Edit takes its first frame toward the direction with your first reference/);
+    expect(open.notes.join(" ")).toMatch(/Qwen-Image 2.1 Turbo takes its first frame toward the direction with your first reference/);
   });
 
   describe("with a fal key (estimates submit nothing)", () => {
@@ -159,7 +159,7 @@ describe("Evolution: runs (demo)", () => {
     expect(direction).toBe("A paper-cut diorama world with layered card stock.");
     const rows = batchOf(final.id);
     expect(rows.filter((r) => r.model_id === "fuobe-evolution")).toHaveLength(3);
-    expect(rows.filter((r) => r.model_id === "oss-qwen-edit")).toHaveLength(3);
+    expect(rows.filter((r) => r.model_id === "oss-qwen-image-21-turbo")).toHaveLength(3);
     const evolve = gens.getGeneration(rows.find((r) => r.model_id === "fuobe-evolution")!.id)!;
     expect(evolve.request).toMatchObject({ engine: "open", params: { extra: { denoise: 0.85 } } });
     const done = await settle(final.id);

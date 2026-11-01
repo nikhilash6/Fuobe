@@ -15,7 +15,7 @@ import { demoTraining, describeTargets, startTraining, trainingBlocker } from ".
  *
  * Making one starts a cover job, which is also what makes the board usable on the cloud: Recraft V4
  * Styles turns the 10 most representative images into a reusable style (its id comes back in
- * meta.styleId) while drawing the cover; on the open engine Qwen-Image-Edit Style Reference draws
+ * meta.styleId) while drawing the cover; on the open engine Krea 2 Style Reference draws
  * the cover from the board's collages. The status follows that job: In queue → In progress →
  * Preparing cover → Complete (or Failed, with Retry). A board can also be trained as a Z-Image Turbo style LoRA
  * (Fuobe Soul ID's style trainings, build plan O3: AI-Toolkit on the user's GPU or fal's Z-Image trainer in style
@@ -38,8 +38,8 @@ interface Row {
   updated_at: number;
 }
 
-/** The model that prepares a board (and draws its cover) on each engine. */
-export const PREP_MODEL: Record<Engine, string> = { cloud: "recraft-4-style", open: "oss-style-qwen-edit" };
+/** The model that prepares a board (and draws its cover) on each engine: on your GPU Krea 2 Style Reference (1–2 collages). */
+export const PREP_MODEL: Record<Engine, string> = { cloud: "recraft-4-style", open: "oss-style-krea2" };
 
 function toMoodboard(r: Row): Moodboard {
   const images = JSON.parse(r.images_json) as string[];

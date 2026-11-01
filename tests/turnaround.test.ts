@@ -197,7 +197,7 @@ describe("the open engine: Frames mode's chain", () => {
       ["fill-left", ["front"]],
       ["main", ["front", "fill-right", "fill-back", "fill-left", "front"]],
     ]);
-    expect(plan.steps[0].request).toMatchObject({ modelId: "oss-qwen-edit", op: "edit", inputs: { images: [SHEET] } });
+    expect(plan.steps[0].request).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit", inputs: { images: [SHEET] } });
     expect(plan.steps[1].request.chain).toEqual([{ slot: "images" }]);
     const main = plan.steps[4].request;
     expect(main.inputs).toBeUndefined();

@@ -55,7 +55,7 @@ import {
   type RemoveRange,
   type RemoveSource,
 } from "./remove-object";
-import { firstFramePrompt, getShortsPreset, lookFromPreset, planShorts, segmentPrompt, type PlanStep, type ShortsLook } from "./shorts";
+import { firstFramePrompt, getShortsPreset, lookFromPreset, planShorts, segmentPrompt, SHORTS_TOOLS, type PlanStep, type ShortsLook } from "./shorts";
 import { getModel } from "./index";
 import { REPLACED_BY } from "./replaced";
 import { soulLook } from "./soul";
@@ -548,7 +548,7 @@ export const MAKERS: Maker[] = [
     engine: "open",
     modes: ["restyle"],
     label: "Fuobe Genjutsu",
-    note: "The first frame takes the look (Qwen-Image-Edit, or Z-Image with a Soul look's LoRAs), then Wan 2.2 Fun VACE by depth · 5 s segments at 16 fps, 480p",
+    note: "The first frame takes the look (Qwen-Image 2.1 Turbo, or Z-Image with a Soul look's LoRAs), then Wan 2.2 Fun VACE by depth · 5 s segments at 16 fps, 480p",
     source: "original",
     refs: { min: 0, max: 0 },
     keepsSound: false,
@@ -1325,14 +1325,15 @@ function planCharacterSwap(input: GenjutsuPlanInput): GenjutsuPlan {
 
 /**
  * The first frame's restyle: a Soul look's LoRAs on Z-Image (Fuobe Soul's edit, an Original: it runs on the engine the
- * restyle does, never on whichever one is connected first), else Qwen-Image-Edit with the look's images.
+ * restyle does, never on whichever one is connected first), else an edit model with the look's images: the Shorts
+ * chain's own (Qwen-Image 2.1 Turbo on your GPU, hosted Qwen-Image-Edit 2511 in the cloud).
  */
 function lookFrameRequest(engine: Engine, look: GenjutsuLook, sl: ShortsLook, refs: string[], seed: object): Pick<GenerationRequest, "modelId" | "op" | "prompt" | "presetId" | "inputs" | "params" | "engine"> {
   if (look.kind === "soul") {
     return { modelId: "fuobe-soul", engine, op: "edit", presetId: look.id, prompt: "The same frame: every person, face, pose and object in place", params: { ...seed } };
   }
   return {
-    modelId: engine === "open" ? "oss-qwen-edit" : "qwen-image-edit-2511-cloud",
+    modelId: SHORTS_TOOLS[engine].frame,
     op: "edit",
     prompt: firstFramePrompt(sl, "auto", refs.length),
     ...(refs.length ? { inputs: { images: refs } } : {}),
@@ -1375,7 +1376,7 @@ function planFuobeRestyle(input: GenjutsuPlanInput): GenjutsuPlan {
 
 /**
  * The cloud Original's restyle: per piece of up to 241 frames, cut it, restyle its first frame (a Soul look's LoRAs on
- * Z-Image, or Qwen-Image-Edit with the look's words and images), then Wan 2.2 Fun VACE carries the look through every
+ * Z-Image, or hosted Qwen-Image-Edit 2511 with the look's words and images), then Wan 2.2 Fun VACE carries the look through every
  * frame by depth (fal's first_frame_url); the pieces are joined and the clip's sound put back.
  */
 function planCloudRestyle(input: GenjutsuPlanInput): GenjutsuPlan {
@@ -1490,7 +1491,7 @@ export function cleanCharacter(v: unknown): Omit<CharacterOptions, "dialogue"> |
   return Object.keys(out).length ? out : undefined;
 }
 
-const ANCHOR_IDS = new Set(["gpt-image-2-5-sunburst", "nano-banana-pro", "oss-qwen-image-21", "oss-qwen-edit"]);
+const ANCHOR_IDS = new Set(["gpt-image-2-5-sunburst", "nano-banana-pro", "oss-qwen-image-21", "oss-krea2-identity-edit", "oss-qwen-edit"]);
 
 /** A setup as a short code ("gj1." + base64url JSON with short keys; empty fields left out). */
 export function encodeSetup(s: GenjutsuSetup): string {

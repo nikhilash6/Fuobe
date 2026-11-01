@@ -17,7 +17,7 @@
  *   on every other model its words. Picks saved with Higgsfield's old style ids still find their look.
  *   Personal: cloud = the board's Recraft style id (Recraft models) or its most representative images
  *   as style references (Nano Banana Pro and other multi-reference models); open = the board's collages
- *   on Qwen-Image-Edit Style Reference (or the style-reference model picked), or its trained style LoRA
+ *   on Krea 2 Style Reference (or the style-reference model picked), or its trained style LoRA
  *   on Z-Image Turbo.
  * Sentences (the palette's hex list, a look described in words, a reference legend) never go into
  * `request.prompt`: they ride in `request.signature.words`, which the server adds when it plans the
@@ -400,7 +400,8 @@ export const SIGNATURE_MODELS = {
   cloudRefs: "nano-banana-pro",
   recraftStyle: "recraft-4-style",
   recraftSaved: "recraft-4-style-saved",
-  openStyle: "oss-style-qwen-edit",
+  /** Krea 2 Style Reference: trained for style reference (1–2 images, the board's collages). */
+  openStyle: "oss-style-krea2",
   openPalette: "oss-zimage-palette",
   openTurbo: "oss-z-image-turbo",
   /** A personal moodboard trained as a style LoRA runs here, the LoRA as its look (both engines). */

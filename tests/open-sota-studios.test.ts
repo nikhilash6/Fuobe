@@ -116,14 +116,15 @@ describe("apps and tools pick the new models first", () => {
     expect(openRoute("app-relight").modelId).toBe("oss-qwen-relight");
     expect(openRoute("app-product-shot").modelId).toBe("oss-product-shot");
     expect(openRoute("app-virtual-try-on").modelId).toBe("oss-tryon-klein");
-    expect(TOOL_MODELS.angles.open).toEqual(["oss-qwen-edit"]);
+    // Layers' Angles runs no LoRA: Qwen-Image 2.1 (25 steps) on the plain camera words.
+    expect(TOOL_MODELS.angles.open).toEqual(["oss-qwen-image-21"]);
     expect(RECOMPOSE_MODELS.open).toEqual(["oss-qwen-edit", "oss-qwen-image-21"]);
   });
 
   it("Layers: Qwen-Image 2.1 edits, inpaints, expands and makes a layer first; Ideogram 4 is the next pick for a layer", () => {
-    expect(TOOL_MODELS.regenerate.open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-qwen-edit", "oss-flux-kontext"]);
+    expect(TOOL_MODELS.regenerate.open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit", "oss-fibo2-edit-turbo"]);
     // A lone object on a plain background is what Ideogram 4's safety filter answers with a grey card most often.
-    expect(TOOL_MODELS["generate-layer"].open).toEqual(["oss-qwen-image-21", "oss-ideogram-4", "oss-z-image-turbo", "oss-qwen-image"]);
+    expect(TOOL_MODELS["generate-layer"].open).toEqual(["oss-qwen-image-21", "oss-ideogram-4", "oss-krea2-turbo", "oss-moss-image"]);
     for (const tool of ["text-edit", "regional", "expand", "inpaint", "enhance"] as const) expect(TOOL_MODELS[tool].open[0], tool).toBe("oss-qwen-image-21");
     // Each first model does what its tool asks of it.
     const does = (m: ModelDef, op: string) => m.routes.some((r) => r.op === op);
@@ -149,14 +150,14 @@ describe("apps and tools pick the new models first", () => {
     expect(EFFECT_CHAIN_MODELS.edit).toEqual({ cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-image-21-turbo" });
   });
 
-  it("Photodump, Fashion Factory and Character swap offer Qwen-Image 2.1 before Qwen-Image-Edit 2511", () => {
+  it("Photodump, Fashion Factory and Character swap offer Qwen-Image 2.1 first, then Krea 2 Identity Edit", () => {
     const selfie: PhotoSubject = { kind: "selfie", url: "/api/files/uploads/me.png" };
-    expect(PHOTODUMP_MODELS.open).toEqual(["fuobe-soul", "oss-qwen-image-21", "oss-qwen-edit"]);
+    expect(PHOTODUMP_MODELS.open).toEqual(["fuobe-soul", "oss-qwen-image-21", "oss-krea2-identity-edit", "oss-qwen-image-21-turbo"]);
     expect(photodumpModel(selfie, "open", {}).modelId).toBe("oss-qwen-image-21");
-    expect(photodumpModel(selfie, "open", {}, "oss-qwen-edit").modelId).toBe("oss-qwen-edit");
-    expect(FASHION_MODELS.outfit.open).toEqual(["fuobe-tryon", "oss-qwen-image-21", "oss-qwen-edit"]);
+    expect(photodumpModel(selfie, "open", {}, "oss-krea2-identity-edit").modelId).toBe("oss-krea2-identity-edit");
+    expect(FASHION_MODELS.outfit.open).toEqual(["fuobe-tryon", "oss-qwen-image-21-turbo", "oss-krea2-identity-edit"]);
     expect(fashionModel("photoset", "open")).toBe("oss-qwen-image-21");
-    expect(ANCHOR_MODELS.open.map((m) => m.id)).toEqual(["oss-qwen-image-21", "oss-qwen-edit"]);
+    expect(ANCHOR_MODELS.open.map((m) => m.id)).toEqual(["oss-qwen-image-21", "oss-krea2-identity-edit"]);
     expect(anchorModel("open").id).toBe("oss-qwen-image-21");
     // The cloud lists are untouched.
     expect(photodumpModel(selfie, "cloud", {}).modelId).toBe("qwen-image-edit-2511-cloud");

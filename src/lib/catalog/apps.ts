@@ -21,14 +21,15 @@ const VIDEO_OPEN: PresetRoute = { modelId: "oss-wan22-14b", op: "i2v", params: {
 const FLF_CLOUD: PresetRoute = { ...VIDEO_CLOUD, op: "flf2v" };
 const FLF_OPEN: PresetRoute = { ...VIDEO_OPEN, op: "flf2v" };
 /** Portrait + voice → talking video. */
-const AVATAR_CLOUD: PresetRoute = { modelId: "kling-avatar", op: "avatar" };
+const AVATAR_CLOUD: PresetRoute = { modelId: "kling-avatar-2", op: "avatar" };
 const AVATAR_OPEN: PresetRoute = { modelId: "oss-infinitetalk", op: "avatar" };
-/** Character image + driving video → video (open source only). */
+/** Character image + driving video → video on your GPU. */
 const ANIMATE_OPEN: PresetRoute = { modelId: "oss-wan22-animate", op: "motion-transfer" };
 const BG_CLOUD: PresetRoute = { modelId: "birefnet-cloud", op: "bg-remove" };
 const BG_OPEN: PresetRoute = { modelId: "oss-rmbg", op: "bg-remove" };
 const UPSCALE_CLOUD: PresetRoute = { modelId: "topaz-image", op: "upscale-image" };
-const UPSCALE_OPEN: PresetRoute = { modelId: "oss-upscale-image", op: "upscale-image" };
+/** SeedVR2 (image) restores detail as it enlarges (4x ESRGAN stays in the Upscale studio's list). */
+const UPSCALE_OPEN: PresetRoute = { modelId: "oss-seedvr2-image", op: "upscale-image" };
 /**
  * Qwen-Image 2.1's expand: Qwen3-VL describes the picture on its grown canvas, and the words only add what goes in the
  * new margins. They never name the subject (it would appear again there), so the apps send their own short hint.
@@ -191,7 +192,7 @@ export const APPS: Preset[] = [
       ]),
     ],
     prompt:
-      "Give the portrait {option:level}. Make the skin look like a high-end editorial photograph shot on a sharp lens — real texture, no plastic smoothing, no makeup changes. Keep the face shape, identity, expression, hair, lighting and background exactly the same.",
+      "Give the portrait {option:level}. Make the skin look like a high-end editorial photograph shot on a sharp lens, with real, natural skin texture and the same makeup. Keep the face shape, identity, expression, hair, lighting and background exactly the same.",
   }),
   app({
     name: "Age Shift",
@@ -539,7 +540,7 @@ export const APPS: Preset[] = [
       ]),
     ],
     prompt:
-      "Expand this image outward into {option:ratio}, continuing the scene naturally beyond every edge with matching perspective, lighting, textures and grain. Keep the original content untouched and add no new people or text.",
+      "Expand this image outward into {option:ratio}, continuing the scene naturally beyond every edge with matching perspective, lighting, textures and grain. Keep the original content untouched, and fill the new area with more of the same surroundings.",
     open: OUTPAINT_OPEN,
     parity: "Set the matching aspect ratio in settings for an exact canvas size.",
   }),
@@ -935,7 +936,7 @@ export const APPS: Preset[] = [
       second("Outfit reference", "A photo of someone wearing the outfit you want"),
     ],
     prompt:
-      "Take the complete outfit worn in the second image — every garment, shoes and accessories, with their exact colors, fabrics, prints and fit — and put it on the person in the first image. Keep the first person's face, hair, body shape, pose, lighting and background unchanged; do not copy the second person's face or body.",
+      "Take the complete outfit worn in the second image — every garment, shoes and accessories, with their exact colors, fabrics, prints and fit — and put it on the person in the first image. Keep the first person's face, hair, body shape, pose, lighting and background unchanged; only the clothing comes from the second image.",
   }),
   app({
     name: "AI Stylist",
@@ -1209,7 +1210,7 @@ export const APPS: Preset[] = [
         ["Glitch", "a digital glitch with RGB split and pixel tearing jumps from the first shot to the second"],
       ]),
     ],
-    prompt: "Seamless transition: {option:fx}. Continuous camera motion, no cuts, both shots keep their exact content.",
+    prompt: "Seamless transition: {option:fx}. One continuous shot, the camera moving throughout; both shots keep their exact content.",
     cloud: FLF_CLOUD,
     open: FLF_OPEN,
     parity: "Makes the transition between two stills: the first shot and the second.",
@@ -1787,7 +1788,7 @@ export const APPS: Preset[] = [
     hue: 95,
     inputs: [{ key: "image", label: "Opening frame", hint: "The first frame of your video", accept: "image", required: true }],
     prompt:
-      "Rework this opening frame into a scroll-stopping hook thumbnail: stronger contrast and color, clearer focal point on the face or product, a more expressive moment and bold composition. Keep the same people, product and setting; add no text.",
+      "Rework this opening frame into a scroll-stopping hook thumbnail: stronger contrast and color, clearer focal point on the face or product, a more expressive moment and bold composition. Keep the same people, product and setting in a clean, purely photographic frame.",
   }),
   app({
     // Named for what it does: it takes out logos and recognizable IP (Fuobe has no detector to score similarity).

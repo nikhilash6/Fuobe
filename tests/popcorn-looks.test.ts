@@ -87,7 +87,7 @@ describe("Popcorn looks: the planner", () => {
     const wide = planStoryboard({ engine: "open", scenes, look: { id: look.id, words: look.look }, aspectRatio: "21:9" });
     expect(wide.every((f) => f.params?.aspectRatio === "16:9" && f.frame?.crop === "21:9")).toBe(true);
     const plain = planStoryboard({ engine: "open", scenes, aspectRatio: "21:9" });
-    expect(plain[0]).toMatchObject({ modelId: "oss-z-image-turbo", params: { aspectRatio: "21:9" } });
+    expect(plain[0]).toMatchObject({ modelId: "oss-qwen-image-21", params: { aspectRatio: "21:9" } });
     expect(plain[1]).toMatchObject({ chainFrom: "first" });
     expect(plain[1].chain).toBeUndefined();
     expect(plain.every((f) => !f.frame?.look && !f.frame?.crop)).toBe(true);

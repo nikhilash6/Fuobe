@@ -161,14 +161,14 @@ function How({ onStart, cloud, visitor }: { onStart: () => void; cloud: boolean;
           A render is counted in frames: seconds × frame rate, rounded down (10 s at 8 FPS = 80 frames; at most 10 s × 24 FPS = 240). Fuobe Mixed Media draws every
           frame again in the look — Z-Image Turbo following the frame&apos;s own outlines, with the look&apos;s LoRA and one seed — free{" "}
           {visitor ? "when you run Fuobe yourself" : "on your GPU"}
-          {cloud ? ", or on the cloud at about a cent a frame. Nano Banana 2 and Seedream 5.0 Flash redraw frames too, priced per frame." : "."} Smooth draws only the
+          {cloud ? ", or on the cloud at about a cent a frame. Nano Banana 2.1 and Seedream 5.0 Flash redraw frames too, priced per frame." : "."} Smooth draws only the
           first frame in the look, then Wan 2.2 Fun VACE carries it through the clip by depth{cloud ? ", priced per second. Fast restyles the clip in one video-to-video pass, priced by the model" : ""}.
           The estimate shows before you generate.
         </p>
         <p className="mt-2">
           Over {FRAME_LIMITS.perClip} frames, the frames go back together as clips and are joined.
           {cloud &&
-            ` Nano Banana 2 and Seedream redraw frames in runs of ${FRAME_LIMITS.lane} side by side, each frame matching the one before it and each run starting from your preview frame, so their look can shift slightly every ${FRAME_LIMITS.lane} frames.`}{" "}
+            ` Nano Banana 2.1 and Seedream redraw frames in runs of ${FRAME_LIMITS.lane} side by side, each frame matching the one before it and each run starting from your preview frame, so their look can shift slightly every ${FRAME_LIMITS.lane} frames.`}{" "}
           If a frame fails, the frames still waiting stop, and Try again redraws only the frames that didn’t finish.
         </p>
       </div>

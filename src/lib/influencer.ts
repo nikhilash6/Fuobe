@@ -797,16 +797,19 @@ export function cleanState(raw: unknown): { state: InfluencerState; problem: str
 
 /**
  * The cloud models that draw the sheet: Fuobe Soul (the default, build plan O10: the sheet in Soul's casting look, then
- * Qwen-Image-Edit 2511 puts your face and clothing on it), or Nano Banana Pro / Seedream 5.0 Pro in one pass with them.
+ * hosted Qwen-Image-Edit 2511 puts your face and clothing on it), or Nano Banana Pro / Seedream 5.0 Pro in one pass with them.
  */
 export const INFLUENCER_CLOUD_MODELS = ["fuobe-soul", "nano-banana-pro", "seedream-5-pro"] as const;
-export const INFLUENCER_OPEN_MODELS = { sheet: "oss-zimage-soul-cast", edit: "oss-qwen-edit" } as const;
+/** On your GPU: the Soul Cast sheet, then Qwen-Image 2.1 (up to 4 references) puts your face and clothing on it. */
+export const INFLUENCER_OPEN_MODELS = { sheet: "oss-zimage-soul-cast", edit: "oss-qwen-image-21" } as const;
 /** Fuobe Soul's steps in the cloud: the sheet on its hosted half, your face and clothing on hosted Qwen-Image-Edit 2511. */
 export const INFLUENCER_SOUL = { sheet: "fuobe-soul", edit: "qwen-image-edit-2511-cloud" } as const;
 /** The look the sheet is drawn in (Soul Cast's casting look: natural, unretouched skin and fabric). */
 export const INFLUENCER_LOOK = CAST_LOOK;
-/** Qwen-Image-Edit 2511 takes three images on your GPU (the sheet, then the photo and clothing); fal takes more. */
-const OPEN_EDIT_IMAGES = 3;
+/** Qwen-Image 2.1 takes four images on your GPU (the sheet, then the photo and clothing); fal takes more. */
+export const OPEN_EDIT_IMAGES = 4;
+/** The edit step's model, by name, per engine. */
+const EDIT_NAME: Record<Engine, string> = { open: "Qwen-Image 2.1", cloud: "Qwen-Image-Edit 2511" };
 
 export interface InfluencerRun {
   engine: Engine;
@@ -851,7 +854,7 @@ export function influencerBlocker(run: Pick<InfluencerRun, "state" | "direction"
 
 /**
  * The jobs for a run. Open: the Soul Cast sheet workflow (Z-Image Turbo, with the casting look's LoRAs the server adds)
- * draws the character; with a photo or clothing, Qwen-Image-Edit 2511 then puts your face and clothes on that sheet, so
+ * draws the character; with a photo or clothing, Qwen-Image 2.1 then puts your face and clothes on that sheet, so
  * the sheet keeps its wide shape. Cloud: the same two steps on Fuobe Soul and hosted Qwen-Image-Edit 2511 by default, or
  * Nano Banana Pro (Seedream 5.0 Pro when asked) drawing the sheet from the compiled prompt with the photos as references.
  */
@@ -891,16 +894,18 @@ export function planInfluencer(run: InfluencerRun, caps: Pick<PlanCaps, "has">):
           },
     };
     if (!edits) return { steps: [sheet], modelId: sheetModel, notes };
-    const room = (open ? OPEN_EDIT_IMAGES : 1 + 1 + MAX_CLOTHING) - 1 - (photo ? 1 : 0);
+    const takes = open ? OPEN_EDIT_IMAGES : 1 + 1 + MAX_CLOTHING;
+    const room = takes - 1 - (photo ? 1 : 0);
     const used = clothing.slice(0, room);
-    if (clothing.length > used.length) notes.push(`Qwen-Image-Edit takes 3 images (the sheet${photo ? ", your photo" : ""} and clothing) — the first ${used.length === 1 ? "clothing reference is" : `${used.length} clothing references are`} used`);
+    const editor = EDIT_NAME[run.engine];
+    if (clothing.length > used.length) notes.push(`${editor} takes ${takes} images (the sheet${photo ? ", your photo" : ""} and clothing) — the first ${used.length === 1 ? "clothing reference is" : `${used.length} clothing references are`} used`);
     const drawer = open ? "Z-Image Turbo" : "Fuobe Soul";
     notes.push(
       photo
         ? start === "face"
-          ? `Two steps: ${drawer} draws the sheet, then Qwen-Image-Edit 2511 puts your face on it`
-          : `Two steps: ${drawer} draws the sheet, then Qwen-Image-Edit 2511 matches it to your reference`
-        : `Two steps: ${drawer} draws the sheet, then Qwen-Image-Edit 2511 dresses it in your clothing`,
+          ? `Two steps: ${drawer} draws the sheet, then ${editor} puts your face on it`
+          : `Two steps: ${drawer} draws the sheet, then ${editor} matches it to your reference`
+        : `Two steps: ${drawer} draws the sheet, then ${editor} dresses it in your clothing`,
     );
     return {
       steps: [

@@ -6,7 +6,7 @@ import type { GenInput, Operation } from "@/lib/catalog/types";
 import { compileCastPrompt, compileDressPrompt, planInfluencer, type InfluencerState } from "@/lib/influencer";
 
 // The comfyui provider driving the AI Influencer builder's open engine on the library graphs: the Soul Cast
-// sheet (Z-Image Turbo) with the compiled character, then Qwen-Image-Edit 2511 with the sheet first.
+// sheet (Z-Image Turbo) with the compiled character, then Qwen-Image 2.1 with the sheet first.
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-influencer-comfy-"));
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
@@ -27,20 +27,22 @@ describe("the builder's open engine through the provider", () => {
     expect(at(wf, "24", "seed")).toBe(11);
   });
 
-  it("Qwen-Image-Edit 2511: the sheet is image 1, your face image 2, the clothing image 3", async () => {
-    const plan = planInfluencer({ engine: "open", state, start: "face", photo: "face.png", clothing: ["coat.png", "boots.png"] }, {});
+  it("Qwen-Image 2.1: the sheet is image 1, your face image 2, the clothing images 3 and 4", async () => {
+    const plan = planInfluencer({ engine: "open", state, start: "face", photo: "face.png", clothing: ["coat.png", "boots.png", "hat.png"] }, {});
     const dress = plan.steps[1].request;
+    expect(dress.modelId).toBe("oss-qwen-image-21");
     // What the chain hands the step when the sheet is done (position "first").
     const images = ["sheet.png", ...(dress.inputs?.images ?? [])];
-    const { workflow: wf } = await prepare("qwen-image-edit-2511-multi", { prompt: dress.prompt, images, seed: 3 }, "edit");
-    expect([at(wf, "41", "image"), at(wf, "83", "image"), at(wf, "1201", "image")]).toEqual(["sheet.png", "face.png", "coat.png"]);
-    expect(at(wf, "170:151", "prompt")).toBe(compileDressPrompt({ state, start: "face", clothing: 1 }));
+    expect(images).toEqual(["sheet.png", "face.png", "coat.png", "boots.png"]);
+    const { workflow: wf } = await prepare("qwen-image-21-edit", { prompt: dress.prompt, images, seed: 3 }, "edit");
+    expect([at(wf, "10", "image"), at(wf, "11", "image"), at(wf, "12", "image"), at(wf, "13", "image")]).toEqual(["sheet.png", "face.png", "coat.png", "boots.png"]);
+    expect(at(wf, "30", "prompt")).toBe(compileDressPrompt({ state, start: "face", clothing: 2 }));
   });
 
-  it("with the face only, image 3 repeats the face (the graph's third slot is always wired)", async () => {
+  it("with the face only, the sheet and the face reach the graph", async () => {
     const plan = planInfluencer({ engine: "open", state, start: "face", photo: "face.png" }, {});
     const dress = plan.steps[1].request;
-    const { workflow: wf } = await prepare("qwen-image-edit-2511-multi", { prompt: dress.prompt, images: ["sheet.png", ...(dress.inputs?.images ?? [])] }, "edit");
-    expect([at(wf, "41", "image"), at(wf, "83", "image"), at(wf, "1201", "image")]).toEqual(["sheet.png", "face.png", "face.png"]);
+    const { workflow: wf } = await prepare("qwen-image-21-edit", { prompt: dress.prompt, images: ["sheet.png", ...(dress.inputs?.images ?? [])] }, "edit");
+    expect([at(wf, "10", "image"), at(wf, "11", "image")]).toEqual(["sheet.png", "face.png"]);
   });
 });

@@ -518,7 +518,7 @@ function SetupPanel({
         {model && (
           <p className="text-[12px] leading-snug text-muted-foreground">
             {engine === "open"
-              ? "Each ≤5 s segment: its first frame is restyled with Qwen-Image-Edit, then Wan 2.2 Fun VACE follows it and the clip's depth."
+              ? "Each ≤5 s segment: its first frame is restyled with Qwen-Image 2.1 Turbo, then Wan 2.2 Fun VACE follows it and the clip's depth."
               : model.id === SHORTS_ORIGINAL
                 ? "Fuobe Original · each segment's first frame is drawn in the look (Qwen-Image-Edit 2511), then Wan 2.2 Fun VACE carries it through every frame by depth, on open weights hosted by fal."
                 : model.tagline}

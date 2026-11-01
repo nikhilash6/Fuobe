@@ -10,7 +10,8 @@
  * - LTX-2.5 LoRAs (Slow Motion, Car Jump) run on the user's GPU only: fal has no LTX-2.5 LoRA endpoint, so the
  *   cloud runs the preset's words. Focus Change is LTX-2.5's own focus_shift move, hosted (LTX-2.5 Fast).
  * - Effects that are a grade (15) animate without a LoRA, then the grade is applied in the browser; the relight
- *   effects (6) relight the start frame first (Qwen-Image-Edit 2509 + its Relight LoRA), then animate it.
+ *   effects (6) relight the start frame first (Qwen-Image 2.1 Turbo on the user's GPU, hosted Qwen-Image-Edit 2509 + its
+ *   Relight LoRA in the cloud), then animate it.
  * - Licences are information: a LoRA licensed for the user's GPU only (civitai "RentCivit") goes to the cloud route
  *   too, unless Settings → Models & licences keeps such LoRAs on the GPU (fitLoras then leaves it out, saying so); a
  *   non-commercial LoRA or one whose licence the research holds is used and said in the preset's line.
@@ -33,11 +34,18 @@ export const DOP_LTX_MODEL = "fuobe-dop-ltx";
 const LTX25_OPEN = "oss-ltx25";
 /** LTX-2.5's camera_motion on fal's fast endpoint (Focus Change's focus_shift): open weights, hosted, no LoRAs. */
 export const LTX25_HOSTED = "ltx-2-5-fast";
-/** The relight step before the clip: Qwen-Image-Edit 2509 + the Relight LoRA (the open graph has it built in). */
-export const RELIGHT_OPEN = "oss-qwen-relight";
+/**
+ * The relight step before the clip. On the user's GPU Qwen-Image 2.1 Turbo relights from plain words in its own picture
+ * tags (the wording the relight effects' covers were made with); in the cloud hosted Qwen-Image-Edit 2509 + the Relight
+ * LoRA, with the LoRA's trigger.
+ */
+export const RELIGHT_OPEN = "oss-qwen-image-21-turbo";
 export const RELIGHT_CLOUD = "qwen-image-edit-2509-cloud";
-/** The Relight LoRA's trigger ("relight"): the open graph prefixes it itself. */
+/** The Relight LoRA's trigger ("relight"). */
 const RELIGHT_TRIGGER = "重新照明";
+/** Qwen-Image 2.1's relight instruction for a light (its text encoder names the start frame <image1>). */
+export const relightWords = (light: string): string =>
+  `Relight <image1>: ${light}. Keep every person, face, pose, object, the setting and the framing exactly as in <image1>, same film grain.`;
 
 /** The Original's models (both engines). */
 export const DOP_MODELS = new Set([DOP_MODEL, DOP_LTX_MODEL]);
@@ -100,7 +108,7 @@ export const DOP_GRADES: Record<string, string> = {
   "effect-sodium-decay": "sodium-decay",
 };
 
-/** What the relight effects ask of the Relight LoRA (Fuobe's words for each light). */
+/** The light each relight effect asks for (Fuobe's words for each light). */
 const RELIGHT_LIGHT: Record<string, string> = {
   "effect-silhouette": "strong backlight behind the subject, the subject nearly a dark silhouette with a glowing rim",
   "effect-practicals": "lit only by warm practical lamps in the scene, warm pools of light and moody falloff",
@@ -216,7 +224,7 @@ export function dopPreset(p: Preset): Preset {
   const relightLora = relight ? all.find((l) => l.family === "edit")?.ref : undefined;
   if (light && relightLora) {
     extras.prestep = {
-      open: { modelId: RELIGHT_OPEN, op: "edit", prompt: light },
+      open: { modelId: RELIGHT_OPEN, op: "edit", prompt: relightWords(light) },
       cloud: { modelId: RELIGHT_CLOUD, op: "edit", prompt: `${RELIGHT_TRIGGER}, ${light}`, loras: [relightLora] },
     };
   }
@@ -272,7 +280,7 @@ export function dopPreset(p: Preset): Preset {
     // Fuobe Mixed Media is Z-Image Turbo + ControlNet, with the look's LoRA when the map has one.
     parity = `Fuobe Mixed Media draws your still as ${mixedLook.name} first, then Fuobe DoP animates it, on your GPU and in the cloud. For a whole clip restyled frame by frame, use Mixed Media.`;
   } else if (extras.prestep) {
-    // The relight is Qwen-Image-Edit 2509 with its Relight LoRA.
+    // The relight is Qwen-Image 2.1 Turbo on your GPU, Qwen-Image-Edit 2509 with its Relight LoRA in the cloud.
     parity = "Fuobe DoP relights your still first, then animates it.";
   } else if (status === "mixed-media-route") parity = `${p.parity ? `${sentence(p.parity)} ` : ""}For a whole clip restyled frame by frame, use Mixed Media.`;
   else if (!cloudSays && local.length) parity = `On your GPU, Fuobe DoP ${openSays}. ${its(local)} licensed for your GPU only, so in the cloud it runs on a partner model.`;

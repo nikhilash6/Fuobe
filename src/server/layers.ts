@@ -18,6 +18,7 @@ import {
   MAX_NODES,
   RELIGHT_DIRECTIONS,
   RELIGHT_LIGHTS,
+  relightPrompt,
   textChanges,
   textEditPrompt,
   TOOL_LABELS,
@@ -266,7 +267,7 @@ export function jobSteps(input: LayerJobInput, opts: { batchTitle?: string } = {
     case "generate-layer": {
       if (!prompt) throw new LayersError("Describe the layer to generate", 400);
       const refs = input.refs ?? [];
-      const ask = `${prompt}. A single element, isolated and centred on a plain white background, nothing else in the frame.`;
+      const ask = `${prompt}. A single element, isolated and centred on a plain white background, alone in the frame.`;
       if (refs.length) {
         const model = toolModel("regenerate", engine, undefined);
         add("make", base(model, { op: "edit", prompt: `${ask} Base it on image 1.`, inputs: { images: refs } }));
@@ -310,12 +311,8 @@ export function jobSteps(input: LayerJobInput, opts: { batchTitle?: string } = {
     }
     case "relight": {
       const model = toolModel(tool, engine, input.modelId);
-      const light = pick(RELIGHT_LIGHTS, s.light);
-      const dir = pick(RELIGHT_DIRECTIONS, s.direction);
-      const p =
-        model.engine === "open"
-          ? `${light}${dir ? `, ${dir}` : ""}`
-          : `Relight the image with ${light}${dir ? ` ${dir}` : ""}. Keep the subject, composition and all details identical; only the light, shadows, reflections and color temperature change.`;
+      // The Relight LoRA graph gets the light alone; Qwen-Image 2.1 its own picture tags; other models a plain instruction.
+      const p = relightPrompt(model.id, pick(RELIGHT_LIGHTS, s.light), pick(RELIGHT_DIRECTIONS, s.direction));
       add("relight", base(model, { op: "edit", prompt: prompt ? `${p} ${prompt}` : p, inputs: { images: [needImage()] }, params: aspectFor(model) }));
       if (s.keepAlpha) cutout("relight");
       break;
@@ -331,7 +328,8 @@ export function jobSteps(input: LayerJobInput, opts: { batchTitle?: string } = {
               inputs: { images: [needImage()] },
               params: { ...aspectFor(model), numOutputs: 1, extra: { horizontal_angle: Math.round(s.rotate ?? 45), vertical_angle: Math.round(s.tilt ?? 0), zoom: Math.round(s.zoom ?? 5) } },
             })
-          : base(model, { op: "edit", prompt: `Show the exact same subject from ${pick(ANGLES, s.angle)}, as if the camera physically moved. ${keep}${prompt ? ` ${prompt}` : ""}`, inputs: { images: [needImage()] }, params: aspectFor(model) });
+          : // Edit models (Qwen-Image 2.1 at 25 steps on your GPU) turn the camera from plain words.
+            base(model, { op: "edit", prompt: `Show the exact same subject from ${pick(ANGLES, s.angle)}, as if the camera physically moved. ${keep}${prompt ? ` ${prompt}` : ""}`, inputs: { images: [needImage()] }, params: aspectFor(model) });
       add("angle", request);
       if (s.keepAlpha) cutout("angle");
       break;
@@ -368,7 +366,7 @@ export function jobSteps(input: LayerJobInput, opts: { batchTitle?: string } = {
         // The open graphs keep the picture as it is themselves, and read the words as what fills the margins: only that.
         add("expand", base(model, { op: "outpaint", prompt: prompt || fill, inputs: { images: [needImage()] }, params: { extra: { padLeft: pads.left, padTop: pads.top, padRight: pads.right, padBottom: pads.bottom } } }));
       } else {
-        add("expand", base(model, { op: "edit", prompt: `Fill the empty grey margins around the picture. ${fill} Keep the original picture untouched and add no new people or text.${prompt ? ` ${prompt}` : ""}`, inputs: { images: [needImage()] }, params: aspectFor(model) }));
+        add("expand", base(model, { op: "edit", prompt: `Fill the empty grey margins around the picture. ${fill} Keep the original picture untouched, and fill the margins with more of the same surroundings.${prompt ? ` ${prompt}` : ""}`, inputs: { images: [needImage()] }, params: aspectFor(model) }));
       }
       break;
     }

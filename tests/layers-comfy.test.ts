@@ -66,19 +66,22 @@ describe("Layers on the open engine", () => {
     expect(at("numLayers")).toEqual([2]);
   });
 
-  it("expand: the padding reaches both of Qwen-Image 2.1's pad nodes, or FLUX Fill when picked", async () => {
+  it("expand: the padding reaches both of Qwen-Image 2.1's pad nodes, or Krea 2 Inpaint's when picked", async () => {
     const pads = { pads: { left: 64, top: 0, right: 128, bottom: 8 } };
     const at = await bind(step({ tool: "expand", settings: pads }));
     expect([at("padLeft"), at("padTop"), at("padRight"), at("padBottom")]).toEqual([[64, 64], [0, 0], [128, 128], [8, 8]]);
     // The words only say what fills the margins: the graph keeps the picture itself.
     expect(at("prompt")).toEqual(["Continue the scene naturally beyond every edge with matching perspective, lighting, textures and grain."]);
-    const fill = await bind(step({ tool: "expand", modelId: "oss-flux-fill", settings: pads }));
-    expect([fill("padLeft"), fill("padTop"), fill("padRight"), fill("padBottom")]).toEqual([[64], [0], [128], [8]]);
+    const krea = await bind(step({ tool: "expand", modelId: "oss-krea2-inpaint", settings: pads }));
+    expect([krea("padLeft")[0], krea("padTop")[0], krea("padRight")[0], krea("padBottom")[0]]).toEqual([64, 0, 128, 8]);
   });
 
   it("relight and edit text: the instruction reaches the edit graphs", async () => {
+    // Qwen-Image 2.1 Turbo in its own picture tags; the Relight LoRA graph (a choice) with the light alone.
     const relight = await bind(step({ tool: "relight", settings: { light: "Candlelight", direction: "Left" } }));
-    expect(String(relight("prompt")[0])).toContain("warm flickering candlelight, coming from the left");
+    expect(String(relight("prompt")[0])).toMatch(/^Relight <image1> with warm flickering candlelight coming from the left\. /);
+    const lora = await bind(step({ tool: "relight", modelId: "oss-qwen-relight", settings: { light: "Candlelight", direction: "Left" } }));
+    expect(String(lora("prompt")[0])).toContain("warm flickering candlelight, coming from the left");
     const text = await bind(step({ tool: "text-edit", settings: { rows: [{ from: "SALE", to: "OPEN" }] } }));
     expect(text("prompt")).toEqual(["Preserve the original design and change only the requested text. Change “SALE” to “OPEN”."]);
   });

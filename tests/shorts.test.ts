@@ -276,7 +276,7 @@ describe("Shorts pipeline shape", () => {
     expect(plan.segments).toHaveLength(6);
     const by = Object.fromEntries(plan.steps.map((s) => [s.key, s]));
     expect(by.cut0.request).toMatchObject({ modelId: "oss-segment", op: "trim", params: { startTime: 0, fps: 16, aspectRatio: "9:16", resolution: "480p" } });
-    expect(by.frame0).toMatchObject({ after: ["cut0"], chain: [{ slot: "images", position: "first" }], request: { modelId: "oss-qwen-edit", op: "edit", inputs: { images: refs.slice(0, 2) } } });
+    expect(by.frame0).toMatchObject({ after: ["cut0"], chain: [{ slot: "images", position: "first" }], request: { modelId: "oss-qwen-image-21-turbo", op: "edit", inputs: { images: refs.slice(0, 2) } } });
     expect(by.look0).toMatchObject({ after: ["cut0", "frame0"], chain: [{ slot: "video" }, { slot: "images" }], request: { modelId: "oss-wan22-vace-restyle", op: "v2v" } });
     // The restyle runs exactly as many frames as its segment.
     for (const s of plan.segments) expect(Math.round((by[`look${s.index}`].request.params!.duration as number) * 16)).toBe(s.frames);

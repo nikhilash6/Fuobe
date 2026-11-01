@@ -153,8 +153,8 @@ describe("Fuobe Try-On and its LoRA", () => {
   it("is Fashion Factory's outfit model on both engines, with Qwen-Image-Edit 2511 making the photoset in the cloud", () => {
     expect(FASHION_MODELS.outfit.open[0]).toBe(TRYON_MODEL);
     expect(FASHION_MODELS.outfit.cloud[0]).toBe(TRYON_MODEL);
-    expect(FASHION_MODELS.photoset).toEqual({ cloud: ["qwen-image-edit-2511-cloud", "nano-banana-pro"], open: ["oss-qwen-image-21", "oss-qwen-edit"] });
-    expect(PHOTODUMP_MODELS.cloud).toEqual(["fuobe-soul", "qwen-image-edit-2511-cloud", "nano-banana-pro", "seedream-5-pro"]);
+    expect(FASHION_MODELS.photoset).toEqual({ cloud: ["qwen-image-edit-2511-cloud", "nano-banana-pro"], open: ["oss-qwen-image-21", "oss-krea2-identity-edit"] });
+    expect(PHOTODUMP_MODELS.cloud).toEqual(["fuobe-soul", "qwen-image-edit-2511-cloud", "nano-banana-pro", "nano-banana-2-1", "seedream-5-pro"]);
   });
 });
 
@@ -303,10 +303,10 @@ describe("Fuobe Try-On's LoRA is never left out of a run", () => {
 describe("Fashion Factory moves on when a model can't run", () => {
   const t = getTemplate("red-room")!;
 
-  it("offers Qwen-Image 2.1 and Qwen-Image-Edit 2511 after Fuobe Try-On on your GPU and takes the photoset's pick", () => {
-    expect(FASHION_MODELS.outfit.open).toEqual([TRYON_MODEL, "oss-qwen-image-21", "oss-qwen-edit"]);
-    const qwen = fashionOutfitRequest(t, "/b.png", "/g.png", "open", "oss-qwen-edit");
-    expect(qwen).toMatchObject({ modelId: "oss-qwen-edit", params: { aspectRatio: "3:4" } });
+  it("offers Qwen-Image 2.1 Turbo and Krea 2 Identity Edit after Fuobe Try-On on your GPU and takes the photoset's pick", () => {
+    expect(FASHION_MODELS.outfit.open).toEqual([TRYON_MODEL, "oss-qwen-image-21-turbo", "oss-krea2-identity-edit"]);
+    const qwen = fashionOutfitRequest(t, "/b.png", "/g.png", "open", "oss-qwen-image-21-turbo");
+    expect(qwen).toMatchObject({ modelId: "oss-qwen-image-21-turbo", params: { aspectRatio: "3:4" } });
     expect(qwen.prompt).toMatch(/^Dress the person in image 1/);
     expect(fashionPhotosetRequests(t, "/d.png", "cloud", "nano-banana-pro")[0].modelId).toBe("nano-banana-pro");
     expect(fashionModel("photoset", "open", "nano-banana-pro")).toBe("oss-qwen-image-21");
@@ -323,7 +323,7 @@ describe("Fashion Factory moves on when a model can't run", () => {
     expect(offeredSummary()?.off).toEqual(expect.arrayContaining([TRYON_MODEL, "oss-tryon-klein"]));
     const base = { step: "outfit" as const, templateId: t.id, base: "/api/files/b.png", garment: "/api/files/g.png" };
     expect(previewFashion({ ...base, engine: "cloud" })).toMatchObject({ modelId: "fashn-tryon" });
-    expect(previewFashion({ ...base, engine: "open" })).toMatchObject({ modelId: "oss-qwen-image-21" });
+    expect(previewFashion({ ...base, engine: "open" })).toMatchObject({ modelId: "oss-qwen-image-21-turbo" });
     // Picked anyway (the API): refused, naming the LoRA's switch.
     expect(previewFashion({ ...base, engine: "cloud", modelId: TRYON_MODEL })).toMatchObject({ error: expect.stringMatching(/switched off in Settings → Models & licences/) });
   });

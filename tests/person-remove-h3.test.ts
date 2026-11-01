@@ -55,7 +55,7 @@ describe("H3 person removal: the plan", () => {
     expect(step("fit").request).toMatchObject({ modelId: "oss-fit-clip", op: "trim", inputs: { video: src.url }, params: { startTime: 2, endTime: 9, fps: PERSON_REMOVAL_FPS, extra: size } });
     expect(step("frame").request).toMatchObject({ modelId: "oss-extract-frame", op: "frame", params: { startTime: 0, extra: { frameIndex: 0 } } });
     expect(step("frame").chain).toEqual([{ slot: "video" }]);
-    expect(step("clean").request).toMatchObject({ modelId: "oss-qwen-edit", op: "edit", params: { seed: 7 } });
+    expect(step("clean").request).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit", params: { seed: 7 }, step: { label: "A clean first frame (Qwen-Image 2.1)" } });
     expect(step("clean").request.prompt).toBe(cleanFramePrompt("Remove the man in the grey shirt"));
     expect(step("clean").request.prompt).toMatch(/^Remove the man in the grey shirt from the picture completely/);
     // The removal reads the fitted part and the clean frame; SAM 3.1 gets the person's words.
@@ -111,6 +111,19 @@ describe("H3 person removal: the graph", () => {
     expect([at(wf, "plan", "window_frames"), at(wf, "plan", "history_frames"), at(wf, "schedule", "steps"), at(wf, "grow_mask", "expand")]).toEqual(["22", "18", 12, 5]);
     expect(wf.save.class_type).toBe("SaveVideo");
     await expect(prepare({ prompt: "" })).rejects.toThrow(/Say what to remove/);
+  });
+
+  it("the clean frame keeps the part's framing: Qwen-Image 2.1 follows image 1's shape, the relay centre-crops it back", () => {
+    const qwen = JSON.parse(fs.readFileSync(path.join(__dirname, "../workflows/comfyui/qwen-image-21-edit.json"), "utf8")) as Graph;
+    // Image 1 is scaled to 2048 px on its long side, and the latent is made on its own size (resolution 0), rounded to 32.
+    expect(qwen["20"]).toMatchObject({ class_type: "ImageScaleToMaxDimension", inputs: { image: ["10", 0], largest_size: 2048 } });
+    expect(qwen["30"]).toMatchObject({ class_type: "TextEncodeQwenImage21", inputs: { resolution: 0 } });
+    // A 16:9 part: 1344×736 → 2048×1121.5 → 2048×1120, the same shape within a pixel at the part's size.
+    const part = h3Canvas(1280, 720, "768p");
+    const long = 2048;
+    const short = Math.round(((part.height * long) / part.width) / 32) * 32;
+    expect([long, short]).toEqual([2048, 1120]);
+    expect(Math.abs(part.height - (short * part.width) / long)).toBeLessThanOrEqual(1);
   });
 
   it("downloads the Person Remover LoRA before it runs", () => {
