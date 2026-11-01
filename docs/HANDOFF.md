@@ -85,13 +85,7 @@ The owner's own words on engines, SAM Audio, accounts and the PR #14 calls are i
 
 ## Waiting on the owner
 
-- **Re-plan accounts around public sign-up.** The seven open questions of accounts-8.md §15 are moot. Ask the owner what accounts should become beyond public sign-up, for example:
-  - teams, and sharing inside a team
-  - accounts' own projects and library (since 5e6a421 they have their own uploads and runs)
-  - plans, credits and payments, and an admin panel beyond Settings → Accounts
-  - which of the 10-29 answers still stand: the three modes (Personal, In-house studio, Platform) and enterprise features (SSO, SCIM, audit)
-
-  Record the answers in `owner-decisions.json`, write a new plan as a research note, then queue packages from it. Don't restart from the old acc-* lane.
+- **Accounts beyond public sign-up:** nothing queued.
 - **Two workflow files the owner shared.** The owner needs to share them again. They were read in the container of the session that wrote this file (PR #15) and not committed, because their origin and licence are unknown.
   - `inbetweening/Animation5-In-Betweening.json`, Comfy's "Animation: Keyframes to Full Character Animation", for package `inbetweening`
   - `blockout/Horror_Scene_SD2.5.json`, Comfy's "Horror scene", for package `blockout-film`
