@@ -12,7 +12,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       app-behind-the-scenes app-relight app-macroshot-product app-sketch-to-real app-age-shift app-makeup-studio
       app-angles app-shots app-match-lighting app-match-colors app-product-shot app-bullet-time-scene
       app-bullet-time-splash app-chameleon app-outfit-swap app-steal-the-look app-outfit-shot app-color-grading
-      app-video-face-swap app-video-background-remover app-breakdown
+      app-video-face-swap app-video-background-remover app-clean-up-voice app-breakdown
     `,
     `
       app-hairstyle-try-on app-fuobe-angles app-product-placement app-link-to-video-ad app-style-snap app-urban-cuts
