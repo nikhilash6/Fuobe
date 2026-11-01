@@ -18,7 +18,7 @@ export function statusLink(url: string): string {
   return new URL(url, DOCS).href;
 }
 
-/** A heading's id: "2. Feature matrix vs Higgsfield" → "2-feature-matrix-vs-higgsfield". */
+/** A heading's id: "2. Feature matrix vs others" → "2-feature-matrix-vs-others". */
 export const headingId = (text: string): string =>
   text
     .toLowerCase()
