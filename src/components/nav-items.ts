@@ -41,6 +41,7 @@ import {
   Video,
   Wand2,
   WandSparkles,
+  Zap,
   ZoomIn,
   type LucideIcon,
 } from "lucide-react";

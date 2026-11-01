@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import { NAV } from "@/components/nav-items";
 import { APPS, EFFECTS, MODELS, MOTIONS, getPreset, modelCounts } from "@/lib/catalog";
 import { CAMERA_MOVES } from "@/lib/catalog/cinema";
-import { LLM_PROVIDERS } from "@/lib/catalog/llm-providers";
 import { TEMPLATES } from "@/lib/catalog/marketing";
 import { ASSIST_PROMPT_MAX, ASSIST_SUGGESTIONS, assistDraft } from "@/lib/assist";
 import { HUB_MODES } from "@/lib/hubs";
@@ -223,12 +222,8 @@ describe("Home's showcase", () => {
     for (const m of fewer) expect(HOME_NEW_OPEN.slice(0, 10)).not.toContain(m.id);
   });
 
-  it("says what Assist plans with, from the provider registry", async () => {
-    const { runsOn, skills } = await homeShowcase();
-    const hosted = LLM_PROVIDERS.filter((p) => p.group !== "local");
-    expect(runsOn.named).toEqual(hosted.slice(0, 6).map((p) => p.short));
-    expect(runsOn.named.length + runsOn.more).toBe(hosted.length);
-    expect(runsOn.local).toEqual(LLM_PROVIDERS.filter((p) => p.group === "local" && p.id !== "custom").map((p) => p.label));
+  it("reads the starter skills from the skills folder", async () => {
+    const { skills } = await homeShowcase();
     // The starter skills exist, each with its SKILL.md title.
     expect(skills.map((s) => s.name)).toEqual(HOME_SKILLS);
     for (const s of skills) expect(fs.readFileSync(path.join(root, "skills", s.name, "SKILL.md"), "utf8")).toContain(`title: ${s.title}`);

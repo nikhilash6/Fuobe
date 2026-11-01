@@ -138,7 +138,7 @@ export function StudioName({ label, line }: { label: string; line: string }) {
 /** Over Assist's heading, for everyone but the studio's owner: here, Assist is the owner's (AssistSection). */
 export function AssistTag() {
   if (useIsOwner()) return null;
-  return <p className="mb-2 inline-flex h-6 items-center rounded-full bg-brand-faint px-2.5 text-[12px] font-medium text-brand-text">In self-hosted Fuobe</p>;
+  return <p className="mb-2 inline-flex h-6 items-center rounded-full bg-brand-faint px-2.5 text-[12px] font-medium text-brand-text">On your own Fuobe</p>;
 }
 
 const ASSIST_ACTION =
@@ -153,7 +153,7 @@ export function AssistAction() {
     </IntentLink>
   ) : (
     <a href="#home-start" className={ASSIST_ACTION}>
-      Host your own Fuobe {arrow}
+      Run your own Fuobe {arrow}
     </a>
   );
 }
