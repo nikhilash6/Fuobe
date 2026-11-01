@@ -316,7 +316,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "effect-plate-check": ["638f505e","9aa3463f"],
   "effect-point-cloud": ["ebf106b0","b1de8206"],
   "effect-polygon": ["52b89928","4af92210"],
-  "effect-pool-jump": ["e194a631","b4602e1c"],
+  "effect-pool-jump": "89866669",
   "effect-portal": ["91c45c3c","3048b6f5"],
   "effect-powder-explosion": ["94885379","4f37f99e"],
   "effect-practicals": ["8b2665b1","79c14eeb"],

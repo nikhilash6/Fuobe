@@ -2438,11 +2438,10 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-pool-jump": {
-    "poster": "/previews/presets/effect-pool-jump.jpg?v=e194a631",
-    "video": "/previews/presets/effect-pool-jump.mp4?v=b4602e1c",
+    "poster": "/previews/presets/effect-pool-jump.jpg?v=89866669",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "minimax-h3",
+    "model": "ideogram4",
     "variant": "lean-json"
   },
   "effect-portal": {
