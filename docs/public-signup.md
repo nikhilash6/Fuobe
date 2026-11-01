@@ -144,7 +144,16 @@ its own results, once. The server never calls the person's computer. Runs wait w
   and 7821, or one the person types. While the browser would still ask to let the site reach apps
   on this device, it looks only after a click, and explains that question first. A tab never
   reaches the computer's apps by itself before that.
-- **Fuobe's setting.** A page can read a ComfyUI on the computer only when ComfyUI runs with
+- **Fuobe Connect (the one step).** A page can read a ComfyUI on the computer only when ComfyUI lets
+  that site in. Fuobe Connect (`integrations/fuobe-connect`, from ComfyUI-Manager or a git clone)
+  lets in only the studios that the person trusts (`https://fuobe.com` unless they name others), and
+  only for what a run needs. Every other website still meets ComfyUI's own check. The card asks for
+  this one install and connects by itself when ComfyUI is back with it. The setting and the guard
+  below are under "Advanced". See [gpu-workers.md](gpu-workers.md).
+- **Pairing** (Safari, phones, a blocked browser, a PC with no screen): Fuobe Connect shows a code,
+  and the person approves it while signed in (`/connect?code=…`). That ComfyUI then runs this
+  person's jobs, and only theirs, with no tab open. Settings → Your GPU lists it, with Disconnect.
+- **Fuobe's setting (Advanced).** Without Fuobe Connect, ComfyUI must run with
   `--enable-cors-header <the site's address>`. The card gives the fix for the install it finds: a
   start file for Windows portable or Easy-Install (it restarts ComfyUI with the setting and leaves a
   start file with it for next time; it never changes the person's own start files), the place in
@@ -155,7 +164,7 @@ its own results, once. The server never calls the person's computer. Runs wait w
   `custom_nodes` and that the other installs download from the card, puts the check back: a request
   from a web page gets in only from ComfyUI's own page or the site the setting names, the live
   socket included. It answers `GET /fuobe/guard`, and the card warns while it's missing.
-- **Phones and Safari** can't reach a ComfyUI on the device: they get the link instead, with why.
+- **Phones and Safari** can't reach a ComfyUI on the device: they get pairing and the link instead, with why.
 
 The owner can do the same on a deployed studio: **Settings → Where ComfyUI runs → On the computer
 you're using**. A studio with ComfyUI on its own machine keeps calling it from the server.

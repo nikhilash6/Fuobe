@@ -245,6 +245,21 @@ fuobe eval trash latest                              # the run's generations to 
 See [`scripts/eval/README.md`](../scripts/eval/README.md) for the suites, metrics, blind review and
 the promote rule.
 
+### `fuobe worker`
+
+Runs this PC's GPU as a worker for a studio: it takes the studio's ComfyUI jobs over HTTPS and runs them on its own
+ComfyUI, and it opens no port. See [gpu-workers.md](gpu-workers.md).
+
+```bash
+node scripts/build-worker.mjs     # once, in the checkout: the worker's shared parts
+fuobe worker setup                # the studio's address, the token from Settings → Workers, ComfyUI's folder, a port
+fuobe worker run                  # until Ctrl+C
+fuobe worker pause                # finish the job, then stop its ComfyUI;  --now: stop now;  --for 2h: back by itself
+fuobe worker resume
+fuobe worker status
+fuobe worker install              # Windows: shows a sign-in task and pause/resume shortcuts; --yes adds them
+```
+
 ## Skills for other agents
 
 Fuobe's skills are [Agent Skills](https://agentskills.io/specification), so the open `skills` CLI

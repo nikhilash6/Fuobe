@@ -106,6 +106,14 @@ LatentSync 1.6 and ThinkSound are optional and run on a separate, isolated Comfy
 
 **Split soundtrack** runs only on your ComfyUI (nobody hosts DBS). On Windows or ComfyUI Desktop, where the install script doesn't run, clone `hiroki-abe-58/ComfyUI-DBS` into `custom_nodes` and check out `f656e53`, then put `config.json` and `model.safetensors` from `JusperLee/DBS-BSRNN-DnR` and `JusperLee/DBS-TIGER-DnR` into `models/dbs/<that name>/` (the Workflows page's "Split a soundtrack" card lists them). DBS runs on a CPU too: Best is preselected on a CUDA GPU (NVIDIA, or AMD with ROCm), Fast anywhere else. The Comfy Registry flags the pack's only version without giving a reason; its code was read at the pinned commit. **MOSS-Image** and the **fly path** use only nodes built into the ComfyUI version Fuobe pins (0.41.0), so an older ComfyUI may not run them. MOSS-Image's int8 files run on kernels that need a PyTorch built for CUDA 13 (cu130); without it ComfyUI logs a warning and probably runs slower (untested). The turnaround video needs no new files: it uses Frames mode's Wan 2.2 14B graphs and the Angles app's Qwen-Image-Edit 2511 with the Multiple-Angles LoRA. **Connect your GPU** (`/connect`) shows what each of them still needs on your ComfyUI.
 
+### Workers and Fuobe Connect
+
+To share your GPUs with your team or your other machines, add **workers** in **Settings → Workers**. Each GPU's PC runs
+`fuobe worker`, which takes the studio's ComfyUI jobs over HTTPS and runs them on its own ComfyUI. The PC opens no
+port. A person who connects their own ComfyUI from the browser needs only **Fuobe Connect**, a ComfyUI custom node
+pack in `integrations/fuobe-connect`. They do not need a start flag. See [gpu-workers.md](gpu-workers.md). With no
+worker added, nothing changes.
+
 To check a ComfyUI connection end to end without downloading any models:
 
 ```bash

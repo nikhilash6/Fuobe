@@ -349,6 +349,16 @@ Round 4 part 4. A share link is an unguessable token that opens one public, read
 
 Checked: unit tests (token storage and lookup, scopes, share-scoped files, the proxy's paths, `ShareGuard`, views, the cleaner over synthetic media) and a scripted live check against a dev server in demo mode with a password set and the visitor signed out, with real ComfyUI PNG and MP4 outputs in the data folder. Not checked: real fal or Replicate files through the cleaner. An MP4 track's handler name isn't blanked, and Canvas boards can't be shared.
 
+## Workers and Fuobe Connect (`src/server/computer/`, `bin/lib/worker/`, `integrations/fuobe-connect/`)
+
+The "computer" routes (`/api/gpu/computer/*`) take a person's browser tab or a worker token (`fuobe_wkr_…`,
+`relay_workers`, only its SHA-256 kept). A personal worker (paired with Fuobe Connect, `relay_pairings`) acts as its
+person's own computer and gets only that person's tasks. A pool worker takes the owner's tasks for its pool: a task
+for workers keeps its principal and names `pools`, `lane`, `needs_json`, `rank_at` and `not_after`, and `pool.ts`
+claims in one transaction (pause, hours, lanes and delays, files and VRAM, the retry rule, sticky lanes), puts a silent
+worker's task back in line after 2 minutes, and fails it after 3 lost attempts. The proxy lets a worker token through
+only on those routes; `validToken()` never takes one. See [gpu-workers.md](gpu-workers.md).
+
 ## Security (`src/proxy.ts`, `src/server/auth.ts`, `src/server/remote-fetch.ts`)
 
 - **Sign-in** is off until a password is set in Settings → Security or `FUOBE_PASSWORD`. State lives in `data/auth.json` (not SQLite) so the proxy can check requests with `fs` and `crypto` alone: a scrypt password hash, an HMAC secret for 30-day session cookies (replaced when the password changes), and API tokens stored as SHA-256 hashes (with public sign-up, below, the accounts too). The proxy lets `/login` and `/api/auth/login` through (and, since round 4 part 4, GET and HEAD on a share link's page and files, checked by `openShare`: see Share links), answers other API calls with 401 and redirects pages to `/login?next=…` (`safeNext()` in `src/lib/safe-redirect.ts` keeps it on the same origin). Its matcher leaves out only build assets, `samples/`, `previews/`, `vendor/`, root SVGs and `/api/uploads` (which makes the proxy's checks itself: `src/server/direct-gate.ts`).
