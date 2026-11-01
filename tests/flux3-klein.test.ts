@@ -406,7 +406,7 @@ describe("fal's FLUX 3 Klein Prompt helper, as on your GPU", () => {
     for (const m of [cloud, base, getModel("oss-flux3-klein")!, getModel("oss-flux3-klein-base")!]) {
       const helper = m.options.controls?.find((c) => c.param === "promptHelper");
       expect(helper, m.id).toMatchObject({ label: "Prompt helper", values: ["on", "off"], default: "on" });
-      expect(helper!.labels!.on, m.id).toMatch(/full caption \(not with layout boxes\)$/);
+      expect(helper!.labels!.on, m.id).toBe("On · full caption (not with boxes)");
       expect(helper!.labels!.off).toBe("Off · your words as typed");
     }
   });

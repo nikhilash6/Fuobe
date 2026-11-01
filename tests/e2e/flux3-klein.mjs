@@ -190,8 +190,7 @@ try {
           const helper = page.getByRole("combobox", { name: "Prompt helper" });
           await helper.waitFor({ timeout: 10_000 });
           const hbox = await helper.boundingBox();
-          const on = engine === "open" ? /On · writes a full caption \(not with layout boxes\)/ : /On · fal writes a full caption \(not with layout boxes\)/;
-          check(`${tag} ${engine}: Options shows the Prompt helper, on by default, layout boxes named`, on.test(flat(await helper.innerText())), flat(await helper.innerText()));
+          check(`${tag} ${engine}: Options shows the Prompt helper, on by default, layout boxes named`, /On · full caption \(not with boxes\)/.test(flat(await helper.innerText())), flat(await helper.innerText()));
           // The words read in full: the text is no wider than the box that shows it.
           const cut = await helper.evaluate((b) => {
             const v = b.querySelector('[data-slot="select-value"]') ?? b;

@@ -230,7 +230,7 @@ KLEIN_LICENCE = {"licence": KLEIN_REC["license"].split(":")[0], "commercial": No
 # Options → Prompt helper, as on your GPU (params.extra.promptHelper, src/lib/catalog/models.ts KLEIN_PROMPT_HELPER): "off" sends
 # enable_prompt_expansion false (payload.ts), "on" leaves fal's default; a layout that places boxes always turns it off.
 KLEIN_HELPER = {"param": "promptHelper", "label": "Prompt helper", "values": ["on", "off"], "default": "on",
-                "labels": {"on": "On · fal writes a full caption (not with layout boxes)", "off": "Off · your words as typed"}}
+                "labels": {"on": "On · full caption (not with boxes)", "off": "Off · your words as typed"}}
 model("flux-3-klein", "FLUX 3 Klein", "Black Forest Labs", "flux", "image",
       "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper · FLUX Kommunity licence",
       [("t2i", f"{KLEIN_FAL}/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/text-to-image/lora"}),

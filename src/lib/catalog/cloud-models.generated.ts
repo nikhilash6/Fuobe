@@ -1882,7 +1882,7 @@ export const CLOUD_MODELS: ModelDef[] = [
           ],
           "default": "on",
           "labels": {
-            "on": "On \u00b7 fal writes a full caption (not with layout boxes)",
+            "on": "On \u00b7 full caption (not with boxes)",
             "off": "Off \u00b7 your words as typed"
           }
         }
@@ -2037,7 +2037,7 @@ export const CLOUD_MODELS: ModelDef[] = [
           ],
           "default": "on",
           "labels": {
-            "on": "On \u00b7 fal writes a full caption (not with layout boxes)",
+            "on": "On \u00b7 full caption (not with boxes)",
             "off": "Off \u00b7 your words as typed"
           }
         }
