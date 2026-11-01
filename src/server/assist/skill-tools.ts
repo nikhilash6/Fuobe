@@ -1,12 +1,13 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import type { PlannedJob } from "@/lib/assist";
 import type { Engine } from "@/lib/catalog/types";
-import { RECIPE_LIMITS, type ParamType, type Recipe } from "@/lib/recipe";
+import { NESTED_SKILL, RECIPE_LIMITS, type ParamType, type Recipe } from "@/lib/recipe";
 import { estimateRecipe, getRecipe, recipeEngines, runRecipe, verifyRecipe } from "../recipes";
 import { getSkill, skillRecipe } from "../skills";
 import { canUseSkill, skillsFor } from "./context";
-import { defineTool, type ToolContext } from "./define";
+import { defineTool, type ToolContext, type ToolOutcome } from "./define";
 
 /**
  * run_skill (package W3): a saved skill whose files hold a recipe runs by itself with values for its inputs — the
@@ -14,8 +15,19 @@ import { defineTool, type ToolContext } from "./define";
  * or a studio's tool call that opens in its studio), MCP lists it and estimate_job prices it.
  */
 
-const Value = z.union([z.string(), z.number()]);
+// Every value is words to the model (a number too, "5"): one JSON type, no type arrays, for every provider's schema rules.
+// A number a model sends anyway is taken as its digits; the recipe reads numbers from text as a form does.
+const Value = z.preprocess((v) => (typeof v === "number" && Number.isFinite(v) ? String(v) : v), z.string());
 const Values = z.record(z.string(), Value);
+
+/**
+ * Inside a skill's own pricing or run: a recipe never has a run_skill step (its schema refuses one), and this guard
+ * stops one written before that rule, or anything else, from pricing or running a skill inside a skill (no recursion).
+ */
+const inSkill = new AsyncLocalStorage<string>();
+/** Work done for a skill (its pricing, its run): a run_skill call inside it is refused. */
+export const insideSkill = <T>(name: string, fn: () => T): T => inSkill.run(name, fn);
+const nested = () => (inSkill.getStore() ? `${NESTED_SKILL.charAt(0).toUpperCase()}${NESTED_SKILL.slice(1)} (/${inSkill.getStore()} is running)` : null);
 
 const RunSkillInput = z.object({
   name: z.string().describe("The skill's name, without the slash (e.g. lamp-turntable). Only skills marked “runs by itself” have a recipe."),
@@ -40,6 +52,8 @@ export function inputList(recipe: Pick<Recipe, "params">, only?: (id: string) =>
 
 /** The skill to run, when this chat (or MCP, which has every enabled skill) may use it; else why not, with the ones that run. */
 function find(name: string, ctx: ToolContext): { recipe: Recipe; title: string; name: string } | { error: string } {
+  const loop = nested();
+  if (loop) return { error: loop };
   const n = name.replace(/^\//, "").trim();
   const projectId = ctx.thread?.projectId ?? null;
   const runnable = () =>
@@ -80,7 +94,7 @@ function plan(input: RunSkill, ctx: ToolContext): PlannedJob[] {
   const bad = valueErrors(input, found.recipe, found.name);
   if (bad) return failed(bad);
   try {
-    const est = estimateRecipe(found.name, { ...(input.rows ? { rows: input.rows } : { values: input.values ?? {} }) }, engineOf(input, found.recipe, ctx));
+    const est = insideSkill(found.name, () => estimateRecipe(found.name, { ...(input.rows ? { rows: input.rows } : { values: input.values ?? {} }) }, engineOf(input, found.recipe, ctx)));
     const pipeline = found.recipe.steps.every((s) => s.kind === "generate");
     const jobs = est.runs.flatMap((r) => r.jobs.map((j) => ({ ...j, tool: "run_skill", ...(pipeline && { atomic: true }) })));
     const errors = [...est.errors, ...est.runs.flatMap((r) => r.errors.map((e) => (est.runs.length > 1 ? `Row ${r.line}: ${e}` : e)))];
@@ -109,7 +123,7 @@ const runSkill = defineTool({
     const found = find(input.name, ctx);
     if ("error" in found || found.recipe.steps.every((s) => s.kind === "generate")) return {};
     try {
-      return estimateRecipe(found.name, { values: input.rows?.[0] ?? input.values ?? {} }, engineOf(input, found.recipe, ctx)).place ?? {};
+      return insideSkill(found.name, () => estimateRecipe(found.name, { values: input.rows?.[0] ?? input.values ?? {} }, engineOf(input, found.recipe, ctx))).place ?? {};
     } catch {
       return {};
     }
@@ -117,31 +131,35 @@ const runSkill = defineTool({
   async run(input, ctx) {
     const found = find(input.name, ctx);
     if ("error" in found) return { content: JSON.stringify({ error: found.error }), isError: true };
-    const bad = valueErrors(input, found.recipe, found.name);
-    if (bad) return { content: JSON.stringify({ error: bad }), isError: true };
-    const asked = engineOf(input, found.recipe, ctx);
-    const body = input.rows ? { rows: input.rows } : { values: input.values ?? {} };
-    // A recipe not yet priced on this engine gets its free plan check first (a saved draft has had it already).
-    const { recipe, skill } = getRecipe(found.name);
-    const engine = asked ?? recipeEngines(recipe)[0];
-    if (engine && !recipe.verified?.[engine]?.plan && skill.source === "user") {
-      const check = await verifyRecipe(found.name, "plan", engine).catch((e: Error) => ({ ok: false, why: e.message }));
-      if (!check.ok) return { content: JSON.stringify({ error: `/${found.name} doesn't run on ${ENGINE_WORDS[engine]} as it is: check it on the Skills page` }), isError: true };
-    }
-    const out = await runRecipe(found.name, body, asked);
-    const ids = out.runs.flatMap((r) => r.ids);
-    const href = out.runs.find((r) => r.href && r.href !== "/library")?.href;
-    return {
-      content: JSON.stringify({
-        skill: found.name,
-        engine: out.engine,
-        runs: out.runs.map((r) => ({ started: r.ids, ...(r.batchId && { batch: r.batchId }), ...(r.href && { href: r.href }), ...(r.error && { error: r.error }) })),
-        ...(out.demo && { demo: true }),
-        note: href ? "The skill's studio job opens at href; its results appear there and in the Library." : "Each run's steps start by themselves as the ones they wait for finish; results appear in the Library.",
-      }),
-      items: ids.length ? [{ id: "", role: "generations", ids }] : undefined,
-    };
+    return insideSkill(found.name, () => runFound(input, ctx, found));
   },
 });
+
+async function runFound(input: RunSkill, ctx: ToolContext, found: { recipe: Recipe; title: string; name: string }): Promise<ToolOutcome> {
+  const bad = valueErrors(input, found.recipe, found.name);
+  if (bad) return { content: JSON.stringify({ error: bad }), isError: true };
+  const asked = engineOf(input, found.recipe, ctx);
+  const body = input.rows ? { rows: input.rows } : { values: input.values ?? {} };
+  // A recipe not yet priced on this engine gets its free plan check first (a saved draft has had it already).
+  const { recipe, skill } = getRecipe(found.name);
+  const engine = asked ?? recipeEngines(recipe)[0];
+  if (engine && !recipe.verified?.[engine]?.plan && skill.source === "user") {
+    const check = await verifyRecipe(found.name, "plan", engine).catch((e: Error) => ({ ok: false, why: e.message }));
+    if (!check.ok) return { content: JSON.stringify({ error: `/${found.name} doesn't run on ${ENGINE_WORDS[engine]} as it is: check it on the Skills page` }), isError: true };
+  }
+  const out = await runRecipe(found.name, body, asked);
+  const ids = out.runs.flatMap((r) => r.ids);
+  const href = out.runs.find((r) => r.href && r.href !== "/library")?.href;
+  return {
+    content: JSON.stringify({
+      skill: found.name,
+      engine: out.engine,
+      runs: out.runs.map((r) => ({ started: r.ids, ...(r.batchId && { batch: r.batchId }), ...(r.href && { href: r.href }), ...(r.error && { error: r.error }) })),
+      ...(out.demo && { demo: true }),
+      note: href ? "The skill's studio job opens at href; its results appear there and in the Library." : "Each run's steps start by themselves as the ones they wait for finish; results appear in the Library.",
+    }),
+    items: ids.length ? [{ id: "", role: "generations", ids }] : undefined,
+  };
+}
 
 export const SKILL_TOOLS = [runSkill];
