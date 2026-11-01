@@ -46,6 +46,8 @@ export interface SceneViewerProps {
   context: { cloudAllowed: boolean; civitai?: boolean };
   brief: string;
   onClose: () => void;
+  /** Blockout to film: the path rendered through the scene (24 fps) handed to the composer as a blockout. */
+  onUseAsBlockout?: (b: { video: string; seconds: number; aspect: string; still: string }) => void;
 }
 
 const SPEEDS = [
@@ -86,7 +88,7 @@ function Section({ title, value, children }: { title: string; value?: React.Reac
   );
 }
 
-export default function SceneViewer({ take, projectId, engine, onEngine, settings, context, brief, onClose }: SceneViewerProps) {
+export default function SceneViewer({ take, projectId, engine, onEngine, settings, context, brief, onClose, onUseAsBlockout }: SceneViewerProps) {
   // Elements in state, not refs: the dialog's portal mounts its content a render after this component.
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
@@ -362,6 +364,39 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
       setFilming(null);
     }
   };
+
+  /** The path rendered through the scene at 24 fps for its length, then handed to the Blockout composer with the still. */
+  const takeAsBlockout = async () => {
+    const eng = engineRef.current;
+    if (!eng || !info || filming || previewing || !onUseAsBlockout) return;
+    if (keys.length < 2) {
+      toast.error("Add a keyframe or pick a move first");
+      return;
+    }
+    setPathOpen(false);
+    try {
+      setFilming("render");
+      setProgress(0);
+      const fps = 24;
+      const frames = Math.max(2, Math.round(pathSeconds * fps));
+      const poses = framePoses(keys, frames, info.pivotDepth, info.photoFov.h, renderSize(info.photoAspect, 1280));
+      const rec = await eng.recordPath(poses, { fps, mp4: true, onProgress: setProgress });
+      setFilming("send");
+      const asset = await uploadFile(new File([rec.render], `blockout-path.${rec.type.includes("mp4") ? "mp4" : "webm"}`, { type: rec.type }));
+      onUseAsBlockout({ video: asset.url, seconds: Math.round((frames / fps) * 100) / 100, aspect, still: take.still });
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") toastError(e, "Couldn't render the path as a blockout");
+    } finally {
+      setFilming(null);
+    }
+  };
+
+  const blockoutButton = (className?: string) =>
+    onUseAsBlockout ? (
+      <Button variant="secondary" onClick={() => void takeAsBlockout()} disabled={status !== "ready" || previewing || !!filming || keys.length < 2} className={cn("rounded-full", className)}>
+        <Box /> Use as blockout
+      </Button>
+    ) : null;
 
   const resetView = () => {
     engineRef.current?.reset();
@@ -747,6 +782,7 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
               {pathOptions}
               <EngineSwitch value={engine} onChange={onEngine} size="sm" />
               {filmButton("w-full")}
+              {blockoutButton("w-full")}
             </div>
           </SheetContent>
         </Sheet>
@@ -760,6 +796,7 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
           <div className="space-y-1.5 border-t p-4">
             {captureButton("w-full")}
             {filmButton("w-full")}
+            {blockoutButton("w-full")}
             <p className="text-center text-[11.5px] text-muted-foreground">Capture re-renders the frame; Film follows the path. Both land next to the scene</p>
           </div>
         </aside>

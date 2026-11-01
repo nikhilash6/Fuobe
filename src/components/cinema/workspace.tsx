@@ -4,7 +4,7 @@ import { Bot, ChevronLeft, Clapperboard, Copy, FileText, Folder, FolderOpen, Fol
 import { nanoid } from "nanoid";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { ErrorState, NotFoundState } from "@/components/empty-state";
@@ -37,6 +37,18 @@ import { PromptBar, useAddRefs } from "./prompt-bar";
 import { SceneCreateDialog, askSceneConfirmAgain, sceneTake, skipSceneConfirm, usePlanPrice, useScenePlan, type SceneTake } from "./scene-actions";
 import { SidePanel } from "./side-panel";
 import { SoulCastDialog, SoulLocationDialog } from "./soul-builders";
+import { BlockoutPanel, initialBlockout, withBuilt, type BlockoutDraft } from "./blockout-panel";
+import type { BlockoutScene } from "@/lib/blockout";
+
+/** The blockout builder (three.js) loads when it opens. */
+const BlockoutBuilder = dynamic(() => import("./blockout-builder"), {
+  ssr: false,
+  loading: () => (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#161617] text-[14px] text-white" role="status">
+      Opening the blockout builder…
+    </div>
+  ),
+});
 
 /** The 3D viewer (and three.js inside it) loads when a scene is opened. */
 const SceneViewer = dynamic(() => import("./scene-viewer"), {
@@ -203,6 +215,12 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
   const [castOpen, setCastOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Blockout to film: the composer's panel (its draft kept while the project is open) and the builder.
+  // /cinema/<id>?blockout=1 (a link to Blockout to film) opens it.
+  const search = useSearchParams();
+  const [blockoutOpen, setBlockoutOpen] = useState(() => search.get("blockout") === "1");
+  const [blockout, setBlockout] = useState<BlockoutDraft>(initialBlockout);
+  const [builder, setBuilder] = useState<BlockoutScene | null>(null);
   const [dropping, setDropping] = useState(false);
   const promptRef = useRef<PromptInputHandle>(null);
   const studio = useStudioGenerations(id, view.kind === "studio");
@@ -572,6 +590,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
                 promptRef={promptRef}
                 onCast={() => setCastOpen(true)}
                 onLocation={() => setLocationOpen(true)}
+                onBlockout={() => setBlockoutOpen(true)}
               />
             </div>
           </div>
@@ -620,6 +639,46 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
           context={context}
           brief={project.brief.body}
           onClose={() => setOpenScene(null)}
+          onUseAsBlockout={(b) => {
+            setBlockout((d) => ({
+              ...d,
+              source: { video: b.video, seconds: b.seconds, aspect: b.aspect, from: "scene" },
+              scene: null,
+              beats: d.source?.from === "scene" && d.beats.length ? d.beats.filter((x) => x.start < b.seconds) : [{ id: "start", start: 0, label: "Opening", words: "" }],
+              refs: d.refs.some((r) => r.url === b.still) ? d.refs : [{ id: "scene-still", url: b.still, role: "location" as const }, ...d.refs].slice(0, 8),
+              prompt: null,
+            }));
+            setOpenScene(null);
+            setBlockoutOpen(true);
+          }}
+        />
+      )}
+      <BlockoutPanel
+        open={blockoutOpen && !builder}
+        onOpenChange={setBlockoutOpen}
+        projectId={id}
+        folderId={folderId}
+        engine={engine}
+        settings={settings}
+        brief={project.brief.body}
+        context={context}
+        draft={blockout}
+        setDraft={setBlockout}
+        onBuild={(scene) => setBuilder(scene)}
+      />
+      {builder && (
+        <BlockoutBuilder
+          initial={builder}
+          onClose={(scene) => {
+            setBlockout((d) => ({ ...d, scene }));
+            setBuilder(null);
+          }}
+          onDone={(built, scene) => {
+            setBlockout((d) => withBuilt(d, built, scene));
+            setBuilder(null);
+            setBlockoutOpen(true);
+            if (!built.type.includes("mp4") && engine === "cloud") toast("This browser saved the grey box as WebM. If the cloud model refuses it, render it in Chrome or Edge, or upload an MP4 from your 3D app.");
+          }}
         />
       )}
       <SoulCastDialog open={castOpen} onOpenChange={setCastOpen} {...builderProps} />

@@ -26,7 +26,7 @@ import {
   type Rect,
 } from "@/lib/scene3d";
 import type { SceneSource } from "./scene-actions";
-import { encodeVp8, pathVideoType, recordWithMediaRecorder, vp8Supported } from "./video-encode";
+import { encodeFrames, encodeVp8, pathVideoType, recordWithMediaRecorder, vp8Supported } from "./video-encode";
 
 /**
  * The 3D scene viewer's renderer (three.js, loaded only when a scene opens): a MoGe mesh (GLB) or a point cloud
@@ -571,7 +571,7 @@ export class SceneEngine {
    */
   async recordPath(
     path: FramePoses,
-    o: { fps: number; mask?: boolean; onProgress?: (p: number) => void; signal?: AbortSignal },
+    o: { fps: number; mask?: boolean; mp4?: boolean; onProgress?: (p: number) => void; signal?: AbortSignal },
   ): Promise<{ render: Blob; mask?: Blob; type: string; frames: number }> {
     if (!this.view || !this.info) throw new Error("The scene isn't ready yet");
     const { width, height, poses, intrinsic } = path;
@@ -612,6 +612,11 @@ export class SceneEngine {
     };
     this.playing = true;
     try {
+      // Blockout to film: the render as the cloud models read it (MP4 where the browser encodes H.264).
+      if (o.mp4 && !mask) {
+        const out = await encodeFrames(poses.length, width, height, o.fps, (i) => (stop(), frame(i), o.onProgress?.((i + 1) / poses.length), render), true);
+        return { render: out.blob, type: out.type, frames: poses.length };
+      }
       if (exact) {
         const [a, b] = await encodeVp8(poses.length, width, height, o.fps, images.length, (i) => {
           stop();
