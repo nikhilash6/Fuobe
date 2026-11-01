@@ -43,7 +43,7 @@ import {
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
-import { carriesLayout, LAYOUT_PARAM } from "@/lib/layout-prompt";
+import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
 import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
@@ -1478,7 +1478,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
   // Options → Prompt helper (FLUX 3 Image Klein) and a layout's draft (kept for Reuse): read here, never bound.
   const helper = extra[PROMPT_HELPER_PARAM];
-  const laidOut = carriesLayout(extra);
+  const laidOut = carriesBoxes(extra);
   delete extra[PROMPT_HELPER_PARAM];
   delete extra[LAYOUT_PARAM];
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
@@ -1563,7 +1563,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (bound.missing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${bound.missing.join(", ")}`);
   let wf = bound.workflow;
   const outputIds = manifest.outputs.map((o) => o.node);
-  // The prompt helper (FLUX 3 Image Klein's upsampler) off, or a layout whose boxes it would rewrite: the words as typed.
+  // The prompt helper (FLUX 3 Image Klein's upsampler) off, or a layout with boxes it would rewrite: the words as typed.
   if (PROMPT_HELPER_GRAPHS.has(manifest.id) && (helper === "off" || laidOut)) wf = skipPromptHelper(wf, outputIds);
   if (dropAnchor) wf = withoutAnchor(wf, b.image2![0].node);
   // LoRA "none": the swap LoRA's loader is linked out (H3 runs with the Turbo LoRA alone).

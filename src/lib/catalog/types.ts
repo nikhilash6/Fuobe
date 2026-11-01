@@ -551,6 +551,12 @@ export interface ModelRoute {
    */
   unsized?: true;
   /**
+   * A cloud edit whose picture follows image 1's shape at the chosen tier (fal's FLUX 3 Klein, as its GPU edit follows reference
+   * 1): the server sends image 1's shape on the tier's square in the route's size field (src/server/generations.ts sizedEdit),
+   * so the price stays the tier's. The composer shows Resolution but no Aspect ratio for its operation.
+   */
+  followsImage?: true;
+  /**
    * The most images this route reads, when fewer than the model's options.maxImages (Qwen-Image 2.1's inpaint and expand
    * read the picture alone; its edit takes 4): the composer offers no more for its operation, and the plan refuses more.
    */
@@ -742,6 +748,12 @@ export interface ModelDef {
   kind: MediaKind;
   tagline: string;
   badges?: Badge[];
+  /**
+   * The operations whose studios rank it in "Best for this studio" by its badges (bestForStudio), when not all of them: FLUX 3
+   * Klein is a top pick for text to image, and the Edit studio offers it without changing its Best list. A studio's default
+   * still leads its list.
+   */
+  bestOps?: Operation[];
   routes: ModelRoute[];
   options: ModelOptions;
   defaults?: Partial<Pick<GenParams, "aspectRatio" | "resolution" | "duration" | "numOutputs" | "generateAudio" | "voice" | "targetFps" | "format">>;

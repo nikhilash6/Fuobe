@@ -22,7 +22,7 @@ Run:  python3 scripts/fetch-hosted-schemas.py
       python3 scripts/fetch-hosted-schemas.py --base-only [endpoint …]                           (Genjutsu's plain endpoints, or O11's / BASE ones by id, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --partner                                          (partner routes in partnerEndpoints, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --part4 [endpoint …]                               (PART4's records in paid-model-apis-4.json, the rest kept)
-      python3 scripts/fetch-hosted-schemas.py --new10                                            (FLUX 3 Klein: NEW10's records in new-models-10.json, its trainers)
+      python3 scripts/fetch-hosted-schemas.py --new10 [endpoint …]                               (FLUX 3 Klein: NEW10's records in new-models-10.json, its trainers; or those named)
 
 --part4 re-reads endpoints that research part 4 recorded (docs/research/paid-model-apis-4.json) and refreshes them in
 place: their inputs, the price lines of their llms.txt, their status in fal's catalog (active / playground-only, read
@@ -194,6 +194,9 @@ NEW10 = {
     "blackforestlabs/flux-3/klein/edit-image": ("edit", KLEIN_EDIT, "FLUX 3 Klein", "FLUX.3 Klein Image Editing"),
     "blackforestlabs/flux-3/klein/text-to-image/lora": ("t2i", {**KLEIN_T2I, "loras": "loras"}, "FLUX 3 Klein LoRA", "FLUX 3 Klein Text to Image LoRA"),
     "blackforestlabs/flux-3/klein/edit-image/lora": ("edit", {**KLEIN_EDIT, "loras": "loras"}, "FLUX 3 Klein LoRA", "FLUX 3 Klein Edit LoRA"),
+    # Klein Base's plain routes (no LoRAs; planned per-image prices, $0.027 at 1K) and its /lora twins.
+    "blackforestlabs/flux-3/klein/base/text-to-image": ("t2i", KLEIN_T2I, "FLUX 3 Klein Base", "FLUX.3 Klein Base (Text to Image)"),
+    "blackforestlabs/flux-3/klein/base/edit-image": ("edit", KLEIN_EDIT, "FLUX 3 Klein Base", "FLUX.3 Klein Base (Image Editing)"),
     "blackforestlabs/flux-3/klein/base/text-to-image/lora": ("t2i", {**KLEIN_T2I, "loras": "loras"}, "FLUX 3 Klein Base LoRA", "FLUX 3 Klein Base Text to Image LoRA"),
     "blackforestlabs/flux-3/klein/base/edit-image/lora": ("edit", {**KLEIN_EDIT, "loras": "loras"}, "FLUX 3 Klein Base LoRA", "FLUX 3 Klein Base Edit LoRA"),
 }
@@ -456,19 +459,24 @@ def trainer_field(s):
     return " ".join(out)
 
 
-def new10():
-    """Research #10's FLUX 3 Klein records: its fal endpoints (endpointRecords in new-models-10.json) and LoRA trainers."""
+def new10(ids):
+    """Research #10's FLUX 3 Klein records: its fal endpoints (endpointRecords in new-models-10.json) and LoRA trainers; only
+    the endpoints or trainers named in `ids` when it names any, the rest kept as they are."""
     path = ROOT / "docs/research/new-models-10.json"
     data = json.loads(path.read_text(encoding="utf-8"))
     records = {e["endpoint"]: e for e in data.get("endpointRecords") or []}
     for ep, (op, kf, model, title) in NEW10.items():
+        if ids and ep not in ids:
+            continue
         inputs = fal(ep)
         missing = [f for f in kf.values() if f not in inputs]
         if missing:
             sys.exit(f"{ep}: keyFields {missing} are not inputs")
         price = llms_price(ep)
         per_mp = re.search(r"\$(\d+(?:\.\d+)?) per megapixel", price or "")
-        tiers = re.findall(r"\$(\d+(?:\.\d+)?) at (\d+(?:\.\d+)?K)\b", price or "")
+        # "$0.009 at 1K" (Klein's) or "1K: $0.027" (Klein Base's plain routes).
+        tiers = re.findall(r"\$(\d+(?:\.\d+)?) at (\d+(?:\.\d+)?K)\b", price or "") or [
+            (v, k) for k, v in re.findall(r"\b(\d+(?:\.\d+)?K): \$(\d+(?:\.\d+)?)", price or "")]
         if per_mp:
             pricing = {"usd": float(per_mp.group(1)), "unit": "megapixel"}
         elif tiers:
@@ -492,6 +500,8 @@ def new10():
     raw = json.loads(FILE.read_text(encoding="utf-8"))
     by_id = {t["id"]: t for t in raw["trainers"]}
     for ep, (family, role) in NEW10_TRAINERS.items():
+        if ids and ep not in ids:
+            continue
         inputs = fal(ep)
         root = json.loads(get(f"https://fal.ai/api/openapi/queue/openapi.json?endpoint_id={ep}"))
         result = root["paths"][f"/{ep}/requests/{{request_id}}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
@@ -514,7 +524,7 @@ def new10():
 
 def main():
     if "--new10" in sys.argv:
-        new10()
+        new10(sys.argv[sys.argv.index("--new10") + 1:])
         return
     if "--part4" in sys.argv:
         part4(sys.argv[sys.argv.index("--part4") + 1:])

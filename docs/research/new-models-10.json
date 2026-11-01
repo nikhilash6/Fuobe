@@ -3015,6 +3015,550 @@
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/edit-image/lora",
    "capability": "edit",
    "fetched": "2026-11-01"
+  },
+  {
+   "family": "flux-3-klein",
+   "model": "FLUX 3 Klein Base",
+   "title": "FLUX.3 Klein Base (Text to Image)",
+   "vendor": "Black Forest Labs",
+   "operation": "t2i",
+   "provider": "fal",
+   "endpoint": "blackforestlabs/flux-3/klein/base/text-to-image",
+   "falCategory": "text-to-image",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "aspectRatio": "image_size",
+    "seed": "seed",
+    "numOutputs": "num_images",
+    "enhancePrompt": "enable_prompt_expansion",
+    "boundingBoxes": "bounding_boxes"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "The prompt to generate an image from. The model is trained on detailed captions: describe framing, subject, background and lighting.",
+     "examples": [
+      "A red fox standing in fresh snow at sunrise, its breath visible in the cold air. Soft golden light rakes across the snowfield from the left, pine forest softly blurred in the background, shot at eye level with a telephoto lens."
+     ]
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the prompt is expanded into a detailed caption (grounded in the reference images when editing) before generation."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "The same seed and the same prompt given to the same version of the model will output the same image every time."
+    },
+    "num_images": {
+     "type": "integer",
+     "required": false,
+     "default": 1,
+     "minimum": 1,
+     "maximum": 4,
+     "desc": "The number of images to generate."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the safety checker will be enabled."
+    },
+    "output_format": {
+     "type": "enum",
+     "values": [
+      "jpeg",
+      "png",
+      "webp"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "png",
+     "desc": "The format of the generated image."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history."
+    },
+    "image_size": {
+     "type": "union",
+     "variants": [
+      {
+       "type": "object",
+       "fields": {
+        "width": {
+         "type": "integer",
+         "required": false,
+         "default": 512,
+         "maximum": 14142,
+         "minimumExclusive": 0,
+         "desc": "The width of the generated image."
+        },
+        "height": {
+         "type": "integer",
+         "required": false,
+         "default": 512,
+         "maximum": 14142,
+         "minimumExclusive": 0,
+         "desc": "The height of the generated image."
+        }
+       },
+       "required": false
+      },
+      {
+       "type": "enum",
+       "values": [
+        "square_hd",
+        "square",
+        "portrait_4_3",
+        "portrait_16_9",
+        "landscape_4_3",
+        "landscape_16_9"
+       ],
+       "valueType": "string",
+       "required": false
+      }
+     ],
+     "default": "square_hd",
+     "desc": "The size of the generated image. Each side can be 256 to 4096 pixels (native 4K)."
+    },
+    "bounding_boxes": {
+     "nullable": true,
+     "type": "array",
+     "items": "object",
+     "itemSchema": {
+      "box": {
+       "type": "object",
+       "fields": {
+        "y_max": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Bottom edge as a fraction of the image height (0-1).",
+         "examples": [
+          0.9
+         ]
+        },
+        "x_max": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Right edge as a fraction of the image width (0-1).",
+         "examples": [
+          0.7
+         ]
+        },
+        "x_min": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Left edge as a fraction of the image width (0-1).",
+         "examples": [
+          0.3
+         ]
+        },
+        "y_min": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Top edge as a fraction of the image height (0-1).",
+         "examples": [
+          0.4
+         ]
+        }
+       },
+       "required": false
+      },
+      "label": {
+       "nullable": true,
+       "type": "string",
+       "required": false,
+       "maxLength": 64,
+       "desc": "Short name for the object in this box, e.g. `fox`. Write `<fox>` in the prompt to tie the box to those words; a box the prompt doesn't name is added to the scene. Defaults to `obj_<n>`.",
+       "examples": [
+        "fox"
+       ]
+      },
+      "description": {
+       "type": "string",
+       "required": false,
+       "maxLength": 500,
+       "desc": "What to draw in this box: the object and its look.",
+       "examples": [
+        "a red fox with thick orange fur and a white-tipped tail"
+       ]
+      }
+     },
+     "itemRequired": [
+      "description",
+      "box"
+     ],
+     "maxItems": 32,
+     "required": false,
+     "desc": "Optional layout: draw each described object inside its box. Box edges are fractions of the image size, with (0, 0) at the top-left. Name boxes in the prompt by label, e.g. `A red fox <fox> sits under a red umbrella <umbrella>`."
+    }
+   },
+   "output": "images[].url",
+   "price": "Planned per-image pricing by output resolution: 768×768: $0.024, 1K: $0.027, 1.5K: $0.033, 2K: $0.042, and 4K: $0.108. The same schedule is planned for text-to-image generation and image editing.",
+   "pricing": {
+    "usd": 0.027,
+    "unit": "image",
+    "byResolution": {
+     "1K": 0.027,
+     "1.5K": 0.033,
+     "2K": 0.042,
+     "4K": 0.108
+    }
+   },
+   "license": "FLUX Kommunity License v1.0: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross annual revenue (affiliates included); other commercial use needs a BFL licence. Its commercial-use exception is not blanket permission for commercial fine-tuning or distribution. The Qwen3-VL-4B-Instruct text encoder is Apache-2.0",
+   "notes": "Send enable_prompt_expansion false with a Fuobe layout; the boxes go as bounding_boxes ({box: {x_min, y_min, x_max, y_max} as 0-1 fractions, label, description}), the prompt naming each box as <label>. image_size takes 256-4096 px a side.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/blackforestlabs/flux-3/klein/base/text-to-image",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/text-to-image",
+   "capability": "t2i",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "flux-3-klein",
+   "model": "FLUX 3 Klein Base",
+   "title": "FLUX.3 Klein Base (Image Editing)",
+   "vendor": "Black Forest Labs",
+   "operation": "edit",
+   "provider": "fal",
+   "endpoint": "blackforestlabs/flux-3/klein/base/edit-image",
+   "falCategory": "image-to-image",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "aspectRatio": "image_size",
+    "seed": "seed",
+    "numOutputs": "num_images",
+    "enhancePrompt": "enable_prompt_expansion",
+    "boundingBoxes": "bounding_boxes",
+    "images": "image_urls"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "A complete caption of the target image with the edit folded in. Refer to the references by their order: the first image, the second image.",
+     "examples": [
+      "A miniature grey amigurumi knight figure crocheted from thick woolen yarn stands on a cliff of stacked yarn skeins at night, lit by a full moon, next to a large fluffy knitted dragon in terracotta and mustard yarn, with a soft out-of-focus backdrop of indigo knitted yarn."
+     ]
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the prompt is expanded into a detailed caption (grounded in the reference images when editing) before generation."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "The same seed and the same prompt given to the same version of the model will output the same image every time."
+    },
+    "num_images": {
+     "type": "integer",
+     "required": false,
+     "default": 1,
+     "minimum": 1,
+     "maximum": 4,
+     "desc": "The number of images to generate."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the safety checker will be enabled."
+    },
+    "output_format": {
+     "type": "enum",
+     "values": [
+      "jpeg",
+      "png",
+      "webp"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "png",
+     "desc": "The format of the generated image."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history."
+    },
+    "image_urls": {
+     "type": "array",
+     "items": "string",
+     "minItems": 1,
+     "maxItems": 10,
+     "required": true,
+     "desc": "The reference images to edit or compose from (up to 10).",
+     "examples": [
+      [
+       "https://storage.googleapis.com/falserverless/example_inputs/z-image-turbo-i2i-input.png"
+      ]
+     ]
+    },
+    "image_size": {
+     "nullable": true,
+     "type": "union",
+     "variants": [
+      {
+       "type": "object",
+       "fields": {
+        "width": {
+         "type": "integer",
+         "required": false,
+         "default": 512,
+         "maximum": 14142,
+         "minimumExclusive": 0,
+         "desc": "The width of the generated image."
+        },
+        "height": {
+         "type": "integer",
+         "required": false,
+         "default": 512,
+         "maximum": 14142,
+         "minimumExclusive": 0,
+         "desc": "The height of the generated image."
+        }
+       },
+       "required": false
+      },
+      {
+       "type": "enum",
+       "values": [
+        "square_hd",
+        "square",
+        "portrait_4_3",
+        "portrait_16_9",
+        "landscape_4_3",
+        "landscape_16_9"
+       ],
+       "valueType": "string",
+       "required": false
+      }
+     ],
+     "desc": "The size of the generated image, 256 to 4096 pixels per side. If not set, a single reference image's own size (scaled to at most 4 megapixels) is used, or the first reference image's size (at most 1 megapixel) when several are given."
+    },
+    "bounding_boxes": {
+     "nullable": true,
+     "type": "array",
+     "items": "object",
+     "itemSchema": {
+      "box": {
+       "nullable": true,
+       "type": "object",
+       "fields": {
+        "y_max": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Bottom edge as a fraction of the image height (0-1).",
+         "examples": [
+          0.9
+         ]
+        },
+        "x_max": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Right edge as a fraction of the image width (0-1).",
+         "examples": [
+          0.7
+         ]
+        },
+        "x_min": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Left edge as a fraction of the image width (0-1).",
+         "examples": [
+          0.3
+         ]
+        },
+        "y_min": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Top edge as a fraction of the image height (0-1).",
+         "examples": [
+          0.4
+         ]
+        }
+       },
+       "required": false,
+       "desc": "Where the object goes in the output image, as on text-to-image. Use instead of `source_box`/`target_box`."
+      },
+      "source_box": {
+       "nullable": true,
+       "type": "object",
+       "fields": {
+        "y_max": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Bottom edge as a fraction of the image height (0-1).",
+         "examples": [
+          0.9
+         ]
+        },
+        "x_max": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Right edge as a fraction of the image width (0-1).",
+         "examples": [
+          0.7
+         ]
+        },
+        "x_min": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Left edge as a fraction of the image width (0-1).",
+         "examples": [
+          0.3
+         ]
+        },
+        "y_min": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Top edge as a fraction of the image height (0-1).",
+         "examples": [
+          0.4
+         ]
+        }
+       },
+       "required": false,
+       "desc": "Where the object is in the reference image. Requires `source_image_index`."
+      },
+      "label": {
+       "nullable": true,
+       "type": "string",
+       "required": false,
+       "maxLength": 64,
+       "desc": "Short name for the object in this box, e.g. `dragon`. Write `<dragon>` in the prompt to tie the box to those words; a box the prompt doesn't name is added to the scene. Defaults to `obj_<n>`.",
+       "examples": [
+        "dragon"
+       ]
+      },
+      "description": {
+       "type": "string",
+       "required": false,
+       "maxLength": 500,
+       "desc": "What to draw in this box: the object and its look.",
+       "examples": [
+        "a large fluffy knitted dragon in terracotta and mustard yarn"
+       ]
+      },
+      "target_box": {
+       "nullable": true,
+       "type": "object",
+       "fields": {
+        "y_max": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Bottom edge as a fraction of the image height (0-1).",
+         "examples": [
+          0.9
+         ]
+        },
+        "x_max": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Right edge as a fraction of the image width (0-1).",
+         "examples": [
+          0.7
+         ]
+        },
+        "x_min": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Left edge as a fraction of the image width (0-1).",
+         "examples": [
+          0.3
+         ]
+        },
+        "y_min": {
+         "type": "number",
+         "required": false,
+         "minimum": 0,
+         "maximum": 1,
+         "desc": "Top edge as a fraction of the image height (0-1).",
+         "examples": [
+          0.4
+         ]
+        }
+       },
+       "required": false,
+       "desc": "Where the object goes in the output image. Leave unset to remove a referenced object; set both boxes to move or resize it."
+      },
+      "source_image_index": {
+       "nullable": true,
+       "type": "integer",
+       "required": false,
+       "minimum": 0,
+       "desc": "0-based index into `image_urls` of the reference the object comes from. Leave unset for a new object."
+      }
+     },
+     "itemRequired": [
+      "description"
+     ],
+     "maxItems": 32,
+     "required": false,
+     "desc": "Optional layout, with (0, 0) at the top-left of each image: keep, move, resize or remove objects from the references, or place new ones. Name boxes in the prompt by label, e.g. `<dragon>`."
+    }
+   },
+   "output": "images[].url",
+   "price": "Planned per-image pricing by output resolution: 768×768: $0.024, 1K: $0.027, 1.5K: $0.033, 2K: $0.042, and 4K: $0.108. The same schedule is planned for text-to-image generation and image editing.",
+   "pricing": {
+    "usd": 0.027,
+    "unit": "image",
+    "byResolution": {
+     "1K": 0.027,
+     "1.5K": 0.033,
+     "2K": 0.042,
+     "4K": 0.108
+    }
+   },
+   "license": "FLUX Kommunity License v1.0: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross annual revenue (affiliates included); other commercial use needs a BFL licence. Its commercial-use exception is not blanket permission for commercial fine-tuning or distribution. The Qwen3-VL-4B-Instruct text encoder is Apache-2.0",
+   "notes": "Send enable_prompt_expansion false with a Fuobe layout; the boxes go as bounding_boxes ({box: {x_min, y_min, x_max, y_max} as 0-1 fractions, label, description}), the prompt naming each box as <label>. image_size takes 256-4096 px a side.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/blackforestlabs/flux-3/klein/base/edit-image",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/edit-image",
+   "capability": "edit",
+   "fetched": "2026-11-01"
   }
  ]
 }

@@ -80,14 +80,15 @@ const MOSS_QUALITY: NonNullable<ModelOptions["controls"]>[number] = {
 
 /**
  * FLUX 3 Image Klein's Prompt helper on your GPU: BFL's upsampler (a 6.7 GB Qwen3.5 9B file) turns the words into the full
- * caption Klein is made for (BFL: short prompts give generic pictures); off sends them as typed. A layout always goes as typed.
+ * caption Klein is made for (BFL: short prompts give generic pictures); off sends them as typed. A layout that places boxes
+ * always goes as typed, which the "on" label says. The cloud's flux-3-klein carries the same control (fal's prompt expansion).
  */
 const KLEIN_PROMPT_HELPER: NonNullable<ModelOptions["controls"]>[number] = {
   param: PROMPT_HELPER_PARAM,
   label: "Prompt helper",
   values: ["on", "off"],
   default: "on",
-  labels: { on: "On · writes a full caption", off: "Off · your words as typed" },
+  labels: { on: "On · writes a full caption (not with layout boxes)", off: "Off · your words as typed" },
 };
 
 type OpenSpec = Omit<ModelDef, "engine" | "badges"> & { badges?: ModelDef["badges"] };
@@ -168,6 +169,8 @@ const open: ModelDef[] = [
     kind: "image",
     tagline: "BFL's open 5.6B model: images up to 4K, edits with up to 10 references, layout boxes · 16-24 GB GPU · FLUX Kommunity licence",
     badges: ["new", "top"],
+    // The Image studio's Best list, as its brief asks; the Edit studio offers it, and its Best list stays the owner's.
+    bestOps: ["t2i"],
     // The edit follows reference 1's shape (about 1 MP); text to image takes the aspect ratio and size.
     routes: [
       comfy("t2i", "flux3-klein-t2i", "16 steps; the prompt helper writes the full caption"),

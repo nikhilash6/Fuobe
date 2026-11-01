@@ -220,22 +220,30 @@ model("moss-image", "MOSS-Image", "OpenMOSS", "moss", "image",
                "checked": MOSS_FAL["fetched"]})
 # FLUX 3 Image Klein (research #10 §6.3, package nm10-flux3-klein): BFL's open 5.6B model on fal, priced per image by tier
 # ($0.009 at 1K … $0.036 at 4K, fal's planned rates); a run with LoRAs goes to its /lora twin ($0.012 per megapixel, up to 3 LoRAs
-# at 0-4). FLUX 3 Klein Base (the checkpoint BFL and fal's trainer train LoRAs on, which fal recommends running them on) has LoRA
-# routes only, $0.035 per megapixel. A layout goes as bounding_boxes with prompt expansion off. Licence: information, never a gate.
+# at 0-4). FLUX 3 Klein Base (the checkpoint BFL and fal's trainer train LoRAs on, which fal recommends running them on): its plain
+# routes per image by tier ($0.027 at 1K … $0.108 at 4K, planned), a run with LoRAs on its /lora twins at $0.035 per megapixel.
+# A layout with boxes goes as bounding_boxes with prompt expansion off. Licence: information, never a gate.
 KLEIN_FAL = "blackforestlabs/flux-3/klein"
 KLEIN_REC = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == f"{KLEIN_FAL}/text-to-image")
+KLEIN_BASE_REC = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == f"{KLEIN_FAL}/base/text-to-image")
 KLEIN_LICENCE = {"licence": KLEIN_REC["license"].split(":")[0], "commercial": None, "note": KLEIN_REC["license"], "checked": KLEIN_REC["fetched"]}
+# Options → Prompt helper, as on your GPU (params.extra.promptHelper, src/lib/catalog/models.ts KLEIN_PROMPT_HELPER): "off" sends
+# enable_prompt_expansion false (payload.ts), "on" leaves fal's default; a layout that places boxes always turns it off.
+KLEIN_HELPER = {"param": "promptHelper", "label": "Prompt helper", "values": ["on", "off"], "default": "on",
+                "labels": {"on": "On · fal writes a full caption (not with layout boxes)", "off": "Off · your words as typed"}}
 model("flux-3-klein", "FLUX 3 Klein", "Black Forest Labs", "flux", "image",
-      "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references, layout boxes; fal writes the full caption · FLUX Kommunity licence",
+      "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper · FLUX Kommunity licence",
       [("t2i", f"{KLEIN_FAL}/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/text-to-image/lora"}),
-       ("edit", f"{KLEIN_FAL}/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/edit-image/lora"})],
-      badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3"},
+       ("edit", f"{KLEIN_FAL}/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/edit-image/lora", "followsImage": True})],
+      badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
       pricing=("image", KLEIN_REC["pricing"]["usd"], "per image at 1K (fal's planned rates by size)", {"byResolution": KLEIN_REC["pricing"]["byResolution"]}),
       licence=KLEIN_LICENCE)
-model("flux-3-klein-base", "FLUX 3 Klein Base with LoRAs", "Black Forest Labs", "flux", "image",
+model("flux-3-klein-base", "FLUX 3 Klein Base", "Black Forest Labs", "flux", "image",
       "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them · FLUX Kommunity licence",
-      [("t2i", f"{KLEIN_FAL}/base/text-to-image/lora"), ("edit", f"{KLEIN_FAL}/base/edit-image/lora")],
-      badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3"},
+      [("t2i", f"{KLEIN_FAL}/base/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/text-to-image/lora"}),
+       ("edit", f"{KLEIN_FAL}/base/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/edit-image/lora", "followsImage": True})],
+      badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
+      pricing=("image", KLEIN_BASE_REC["pricing"]["usd"], "per image at 1K (fal's planned rates by size)", {"byResolution": KLEIN_BASE_REC["pricing"]["byResolution"]}),
       licence=KLEIN_LICENCE)
 model("wan-2-7-image", "Wan 2.7 Image", "Alibaba Wan", "wan", "image",
       "Wan's image model — cinematic stills that animate well",
@@ -2138,6 +2146,11 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     route = {"op": op, "provider": provider, "endpoint": f"{ep}:{version}" if ropts.get("pin") else ep, "map": fmap}
     if ropts.get("note"):
         route["note"] = ropts["note"]
+    # The picture follows image 1's shape at the chosen tier (ModelRoute.followsImage: fal's FLUX 3 Klein edit; the server sizes it).
+    if ropts.get("followsImage"):
+        if "size" not in fmap:
+            warn(f"{m['id']}: {ep} follows image 1 but sends no size")
+        route["followsImage"] = True
     if lora_ep:
         le = EPS.get((provider, lora_ep))
         if not le:

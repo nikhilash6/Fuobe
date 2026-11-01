@@ -717,3 +717,12 @@ export function layoutCompilerFor(model: { options?: { layout?: LayoutFormat } }
 
 /** True when a request's params.extra carries a layout draft (an API's own prompt expansion would rewrite it). */
 export const carriesLayout = (extra: Record<string, unknown> | undefined): boolean => isObj(extra?.[LAYOUT_PARAM]);
+
+/**
+ * True when a request's layout draft places at least one box. FLUX 3 Image Klein's Prompt helper (BFL's upsampler on your GPU,
+ * fal's prompt expansion in the cloud) is overridden only then: an empty draft's prompt is the caption alone (compileFlux3).
+ */
+export const carriesBoxes = (extra: Record<string, unknown> | undefined): boolean => {
+  const layout = extra?.[LAYOUT_PARAM];
+  return isObj(layout) && Array.isArray(layout.items) && layout.items.length > 0;
+};

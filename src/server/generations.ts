@@ -14,7 +14,7 @@ import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
 import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, sourceFrames } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, withoutTriggers } from "@/lib/catalog/plan";
-import { framedLength, keepMatte } from "@/lib/catalog/payload";
+import { framedLength, keepMatte, sizeValue } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
 import { dualEngine, onEngine, pickEngine } from "@/lib/catalog/engines";
 import { promptWithLoras, SOUL_MODELS, soulKind, soulLook, soulPostStep, soulPostSteps } from "@/lib/catalog/soul";
@@ -633,6 +633,24 @@ function sizedMixedFrame(plan: ReturnType<typeof planGeneration>, req: Generatio
 }
 
 /**
+ * A cloud edit that follows image 1's shape (ModelRoute.followsImage: fal's FLUX 3 Klein, whose GPU edit keeps reference 1's
+ * shape): image 1's shape on the chosen tier's square, on the route's grid and within its limits, as its size field. Without
+ * it the size would be the default aspect ratio's (a 16:9 photo back as a square). The tier, and so the price, stays the one
+ * picked. A size the request gives itself wins; a picture that isn't a file in Fuobe keeps the aspect ratio's size.
+ */
+function sizedEdit(plan: ReturnType<typeof planGeneration>, req: GenerationRequest): ReturnType<typeof planGeneration> {
+  if (plan.model.engine !== "cloud" || plan.op !== "edit") return plan;
+  const field = plan.model.routes.find((r) => r.op === "edit" && r.followsImage)?.map?.size;
+  if (!field?.key || plan.params.extra?.[field.key] !== undefined) return plan;
+  const first = req.inputs?.images?.[0];
+  const head = first ? localHead(first) : null;
+  const shape = head ? imageSize(head) : null;
+  if (!shape) return plan;
+  const fit = sizeValue(field, `${shape.width}:${shape.height}`, plan.params.resolution ?? plan.model.defaults?.resolution);
+  return { ...plan, params: { ...plan.params, extra: { ...plan.params.extra, [field.key]: fit } } };
+}
+
+/**
  * The elements "@Name" can mention: the owner's. An account's run or a visitor's price check has none, so "@Name" stays
  * words there (an owner's element photo or LoRA never reaches someone else's run).
  */
@@ -652,7 +670,7 @@ function prepare(original: GenerationRequest) {
   const model = allowed && dualEngine(allowed) ? onEngine(allowed, engineFor(allowed, onSide)) : allowed;
   const lookup = (id: string) => (model && id === model.id ? model : getModel(id));
   const req = model ? stripMotionPaths(applySketch(applyMentions(worded, model, mentionElements()).request, model).request, model) : worded;
-  let plan = sizedMixedFrame(planGeneration(req, lookup, getPreset), req);
+  let plan = sizedEdit(sizedMixedFrame(planGeneration(req, lookup, getPreset), req), req);
   if (mode !== "both" && plan.model.engine !== mode) {
     // An account on the open engine has no key of its own that opens (Your keys), or the studio is open-source only.
     const cloud = mode === "open" && tenantAccount() ? plan.model.routes.map((r) => r.provider).find(isCloudProvider) : undefined;

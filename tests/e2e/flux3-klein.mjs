@@ -1,7 +1,8 @@
 // nm10-flux3-klein in the browser (no run reaches a GPU or fal): FLUX 3 Klein in the Image studio's model menu on both engines,
 // in its "Best for this studio" list on your GPU beside Ideogram 4 and Qwen-Image 2.1, with its price before the run ($0.009 an
-// image at 1K in the cloud, Free on your GPU) and its Prompt helper under Options; the Edit studio taking an image and nine
-// references for it (ten in all); the Train dialog's FLUX 3 Klein target ($4.30 for 1,000 steps on fal, Free on your GPU, the
+// image at 1K in the cloud, Free on your GPU) and its Prompt helper under Options on both engines (saying a layout with boxes
+// goes as typed); the Edit studio taking an image and nine references for it (ten in all), and in the cloud following the
+// photo's shape (Resolution, no Aspect ratio); the Train dialog's FLUX 3 Klein target ($4.30 for 1,000 steps on fal, Free on your GPU, the
 // licence as information); and both rows in Settings → Models & licences, switched on. Each page at 1440 and 390 px, light and
 // dark, without sideways scroll. The API prices are checked through the preview route: with a fal key ($0.009 at 1K, $0.048 at
 // 2K with a LoRA on the /lora twin), else as fal's "connect" answer.
@@ -167,9 +168,14 @@ try {
         await page.waitForFunction(() => /\bFree\b|Demo|≈ \$|Connect/.test(document.querySelector("[data-composer]")?.textContent ?? ""), null, { timeout: 20_000 }).catch(() => {});
         const t = flat(await composer(page).innerText());
         check(`${tag} ${engine}: the composer runs FLUX 3 Klein`, /FLUX 3 Klein/.test(t), t.slice(0, 100));
-        if (engine === "open") {
-          check(`${tag} open: Free before the run`, comfy ? /\bFree\b/.test(t) : /Demo|Free/.test(t), (t.match(/Demo|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
-          // The Prompt helper under Options (on a phone, in the Settings sheet).
+        if (engine === "open") check(`${tag} open: Free before the run`, comfy ? /\bFree\b/.test(t) : /Demo|Free/.test(t), (t.match(/Demo|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
+        else {
+          // fal's $0.009 reads "≈ <$0.01" in the composer.
+          const price = /≈ <?\$0\.0\d|Demo|Connect fal/;
+          check(`${tag} cloud: its price (or fal's connect step) shows before the run`, price.test(t), (t.match(/Demo|Connect[^.]*|≈ <?\$[\d.]+/) ?? ["no price"])[0]);
+        }
+        {
+          // The Prompt helper under Options on both engines (on a phone, in the Settings sheet).
           let scope = composer(page);
           if (width < 500) {
             const settings = composer(page).getByRole("button", { name: /^Settings:/ }).first();
@@ -184,7 +190,8 @@ try {
           const helper = page.getByRole("combobox", { name: "Prompt helper" });
           await helper.waitFor({ timeout: 10_000 });
           const hbox = await helper.boundingBox();
-          check(`${tag} open: Options shows the Prompt helper, on by default`, /On · writes a full caption/.test(flat(await helper.innerText())), flat(await helper.innerText()));
+          const on = engine === "open" ? /On · writes a full caption \(not with layout boxes\)/ : /On · fal writes a full caption \(not with layout boxes\)/;
+          check(`${tag} ${engine}: Options shows the Prompt helper, on by default, layout boxes named`, on.test(flat(await helper.innerText())), flat(await helper.innerText()));
           // The words read in full: the text is no wider than the box that shows it.
           const cut = await helper.evaluate((b) => {
             const v = b.querySelector('[data-slot="select-value"]') ?? b;
@@ -192,16 +199,12 @@ try {
             r.selectNodeContents(v);
             return { text: Math.round(r.getBoundingClientRect().width * 10) / 10, box: Math.round(v.getBoundingClientRect().width * 10) / 10 };
           });
-          check(`${tag} open: the Prompt helper's words aren't cut off`, cut.text <= cut.box + 0.5, `${cut.text} px of text in ${cut.box} px`);
-          check(`${tag} open: the Prompt helper fits the screen`, !!hbox && hbox.x >= 0 && hbox.x + hbox.width <= width + 1, hbox ? `${Math.round(hbox.x)}+${Math.round(hbox.width)}` : "no box");
-          await shoot(page, `klein-options-${width}-${scheme}.png`);
+          check(`${tag} ${engine}: the Prompt helper's words aren't cut off`, cut.text <= cut.box + 0.5, `${cut.text} px of text in ${cut.box} px`);
+          check(`${tag} ${engine}: the Prompt helper fits the screen`, !!hbox && hbox.x >= 0 && hbox.x + hbox.width <= width + 1, hbox ? `${Math.round(hbox.x)}+${Math.round(hbox.width)}` : "no box");
+          await shoot(page, `klein-options-${engine}-${width}-${scheme}.png`);
           await page.keyboard.press("Escape");
           await page.keyboard.press("Escape");
           if (width < 500) await page.keyboard.press("Escape");
-        } else {
-          // fal's $0.009 reads "≈ <$0.01" in the composer.
-          const price = /≈ <?\$0\.0\d|Demo|Connect fal/;
-          check(`${tag} cloud: its price (or fal's connect step) shows before the run`, price.test(t), (t.match(/Demo|Connect[^.]*|≈ <?\$[\d.]+/) ?? ["no price"])[0]);
         }
         check(`${tag} ${engine}: no sideways scroll on the Image studio`, await noSideways(page));
         await shoot(page, `klein-image-${engine}-${width}-${scheme}.png`);
@@ -232,6 +235,22 @@ try {
         check(`${tag} edit: Free on your GPU before the run`, comfy ? /\bFree\b/.test(t) : /Demo|Free/.test(t), (t.match(/Demo|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
         check(`${tag} edit: no sideways scroll with ten images`, await noSideways(page));
         await shoot(page, `klein-edit-10-${width}-${scheme}.png`);
+        await context.close();
+      }
+
+      // ---- Edit studio in the cloud: the result follows the photo's shape, at the Resolution picked (no Aspect ratio).
+      {
+        const { context, page } = await contextFor("cloud", width, scheme);
+        await openStudio(page, "edit");
+        await openMenu(page);
+        await pick(page, "Klein", "flux-3-klein");
+        await composer(page).locator('input[type="file"]').first().setInputFiles({ name: "wide.png", mimeType: "image/png", buffer: png(21, 320, 180) });
+        await page.waitForFunction(() => !/Uploading/.test(document.querySelector("[data-composer]")?.textContent ?? ""), null, { timeout: 30_000 }).catch(() => {});
+        await page.waitForTimeout(800);
+        const settings = flat(await composer(page).getByRole("button", { name: /^Settings:/ }).first().getAttribute("aria-label"));
+        check(`${tag} cloud edit: Resolution without an Aspect ratio (the photo's shape)`, /\b1K\b/.test(settings) && !/\b\d+:\d+\b/.test(settings), settings);
+        check(`${tag} cloud edit: no sideways scroll`, await noSideways(page));
+        await shoot(page, `klein-edit-cloud-${width}-${scheme}.png`);
         await context.close();
       }
 

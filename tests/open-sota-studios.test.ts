@@ -48,8 +48,9 @@ describe('"Best for this studio" on your GPU', () => {
     expect(t2i.indexOf("oss-fibo2-dev")).toBe(5);
   });
 
+  // FLUX 3 Klein is offered in the Edit studio, but ranks only in the Image studio's list (ModelDef.bestOps).
   it("Edit: the new edit models, Qwen-Image 2.1 first, not the text-to-image models its first route would rank", () => {
-    expect(best(EDIT_STUDIO, "open")).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-flux3-klein", "oss-fibo2-dev"]);
+    expect(best(EDIT_STUDIO, "open")).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-fibo2-dev", "oss-fibo2-edit-turbo"]);
   });
 
   it("Inpaint: Qwen-Image 2.1; Krea 2 Inpaint stays out while its add-on isn't on the owner's ComfyUI", () => {

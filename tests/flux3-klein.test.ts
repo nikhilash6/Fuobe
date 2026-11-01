@@ -10,7 +10,7 @@ import { modelChoices } from "@/lib/catalog/canvas";
 import { aiToolkitJob, falTrainingInput, familyOfModel, getTrainer, getTrainingTarget, TRAINING_FAMILIES } from "@/lib/catalog/training";
 import type { GenerationRequest, GenInput, LoraRef, ModelRoute, Operation } from "@/lib/catalog/types";
 import { PROMPT_HELPER_GRAPHS, skipPromptHelper, type ComfyWorkflow, type Manifest } from "@/lib/comfy";
-import { filterModels, studioBest } from "@/lib/composer";
+import { filterModels, settingsShape, studioBest } from "@/lib/composer";
 import { compileFlux3, flux3Boxes, flux3Caption, validateLayout, type LayoutDraft } from "@/lib/layout-prompt";
 import { licenceInfo } from "@/lib/licences";
 import { EDIT_STUDIO, IMAGE_STUDIO } from "@/lib/studios";
@@ -22,6 +22,10 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-klein-"));
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
+const { setSetting } = await import("@/server/settings");
+const { createGenerations, getGeneration } = await import("@/server/generations");
+const { saveFile } = await import("@/server/storage");
+const { db } = await import("@/server/db");
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const dir = path.join(process.cwd(), "workflows/comfyui");
@@ -148,7 +152,7 @@ describe("the provider fills Klein's graphs", () => {
     expect(wf["6"].inputs).toMatchObject({ width: 1536, height: 1024 });
   });
 
-  it("takes the helper out when it's off or a layout is attached: the words reach the encoder as typed", async () => {
+  it("takes the helper out when it's off or a layout places boxes: the words reach the encoder as typed", async () => {
     const off = (await prepare("flux3-klein-t2i", { prompt: "a fox in snow", extra: { promptHelper: "off" } }, "t2i")).workflow;
     expect(off["4"].inputs.text).toBe("a fox in snow");
     expect(classes(off)).not.toContain("TextGenerate");
@@ -158,6 +162,10 @@ describe("the provider fills Klein's graphs", () => {
     const laid = (await prepare("flux3-klein-t2i", { prompt: layout, extra: { layout: POSTER } }, "t2i")).workflow;
     expect(laid["4"].inputs.text).toBe(layout);
     expect(classes(laid)).not.toContain("TextGenerate");
+    // Layout mode with no boxes yet: the prompt is the caption alone, and the helper stays (as the control's label says).
+    const empty = (await prepare("flux3-klein-t2i", { prompt: "A cozy reading nook", extra: { layout: { ...POSTER, items: [] } } }, "t2i")).workflow;
+    expect(empty["4"].inputs.text).toEqual(["11", 0]);
+    expect(empty["11"].inputs.prompt).toBe("A cozy reading nook");
     // The edit's helper goes with the batch of references it looked at; the references stay on the model.
     const edit = (await prepare("flux3-klein-edit", { prompt: "make it night", images: ["a.png"], extra: { promptHelper: "off" } }, "edit")).workflow;
     expect(classes(edit)).not.toContain("BatchImagesNode");
@@ -217,7 +225,11 @@ describe("FLUX 3 Klein in the catalog, both engines", () => {
     expect(openBase.routes.map((r) => [r.op, r.endpoint])).toEqual([["t2i", "flux3-klein-base-t2i-lora"]]);
     expect(routesFor(cloud, "t2i").map((r) => [r.endpoint, r.loraEndpoint])).toEqual([["blackforestlabs/flux-3/klein/text-to-image", "blackforestlabs/flux-3/klein/text-to-image/lora"]]);
     expect(routesFor(cloud, "edit").map((r) => [r.endpoint, r.loraEndpoint])).toEqual([["blackforestlabs/flux-3/klein/edit-image", "blackforestlabs/flux-3/klein/edit-image/lora"]]);
-    expect(base.routes.map((r) => r.endpoint)).toEqual(["blackforestlabs/flux-3/klein/base/text-to-image/lora", "blackforestlabs/flux-3/klein/base/edit-image/lora"]);
+    // Klein Base: fal's plain routes, and their /lora twins for a run with LoRAs.
+    expect(base.routes.map((r) => [r.endpoint, r.loraEndpoint])).toEqual([
+      ["blackforestlabs/flux-3/klein/base/text-to-image", "blackforestlabs/flux-3/klein/base/text-to-image/lora"],
+      ["blackforestlabs/flux-3/klein/base/edit-image", "blackforestlabs/flux-3/klein/base/edit-image/lora"],
+    ]);
     expect(cloud.options).toMatchObject({ maxImages: 10, maxOutputs: 4, layout: "flux3", resolutions: ["1K", "1.5K", "2K", "4K"] });
     // The licence is information: recorded, switched on, never a gate.
     expect(cloud.licence).toMatchObject({ licence: "FLUX Kommunity License v1.0", commercial: null });
@@ -226,13 +238,16 @@ describe("FLUX 3 Klein in the catalog, both engines", () => {
     for (const m of [cloud, base, open, openBase]) expect(m.hidden, m.id).toBeFalsy();
   });
 
-  it("sits in the Image and Edit studios' Best lists on your GPU, beside Ideogram 4 and Qwen-Image 2.1; the defaults stay", () => {
+  it("sits in the Image studio's Best list on your GPU, beside Ideogram 4 and Qwen-Image 2.1; the Edit studio offers it outside its Best list", () => {
     expect(IMAGE_STUDIO.defaultModels).toEqual({ cloud: "nano-banana-pro", open: "oss-ideogram-4" });
     expect(EDIT_STUDIO.defaultModels).toEqual({ cloud: "nano-banana-pro", open: "oss-qwen-image-21" });
     const image = studioBest(filterModels(MODELS, { kind: "image", ops: IMAGE_STUDIO.pickerOps }), "open", IMAGE_STUDIO.defaultModels.open, IMAGE_STUDIO.ops);
     expect(image.slice(0, 3)).toEqual(["oss-ideogram-4", "oss-qwen-image-21", "oss-flux3-klein"]);
-    const edit = studioBest(filterModels(MODELS, { kind: "image", ops: EDIT_STUDIO.ops }), "open", EDIT_STUDIO.defaultModels.open, EDIT_STUDIO.ops);
-    expect(edit).toContain("oss-flux3-klein");
+    const editable = filterModels(MODELS, { kind: "image", ops: EDIT_STUDIO.ops });
+    expect(editable.map((m) => m.id)).toContain("oss-flux3-klein");
+    const edit = studioBest(editable, "open", EDIT_STUDIO.defaultModels.open, EDIT_STUDIO.ops);
+    expect(edit).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-fibo2-dev", "oss-fibo2-edit-turbo"]);
+    expect(getModel("oss-flux3-klein")!.bestOps).toEqual(["t2i"]);
     // Ten references: the Image studio's refs, or the Edit studio's image and nine refs.
     expect(IMAGE_STUDIO.multiRef!.max).toBe(10);
     expect(1 + EDIT_STUDIO.multiRef!.max).toBe(10);
@@ -283,8 +298,11 @@ describe("fal's FLUX 3 Klein payloads", () => {
       expect(body.image_size).toEqual({ width: 1024, height: 1024 });
     }
     expect(buildPayload(edit().map, { prompt: "x", images: Array.from({ length: 10 }, (_, i) => `https://x/${i}.png`) }).image_urls).toHaveLength(10);
-    // Klein Base's own routes are the LoRA routes.
-    expect(t2i(base).loraEndpoint).toBeUndefined();
+    // Klein Base: its plain routes without LoRAs, its /lora twins with them.
+    for (const r of [t2i(base), edit(base)]) {
+      expect(loraEndpointFor(r, [LORA])).toBe(`${r.endpoint}/lora`);
+      expect(loraEndpointFor(r, [])).toBe(r.endpoint);
+    }
     expect(buildPayload(t2i(base).map, { prompt: "photo of mayafz", loras: [LORA] }).loras).toEqual([{ path: LORA.url, scale: 0.8 }]);
   });
 
@@ -334,8 +352,10 @@ describe("fal's FLUX 3 Klein payloads", () => {
     expect(estimateCost(cloud, { aspectRatio: "1:1", resolution: "1K" }, 1, "t2i", true)).toBe(0.012);
     expect(estimateCost(cloud, { aspectRatio: "1:1", resolution: "2K" }, 1, "t2i", true)).toBe(0.048);
     expect(estimateCost(cloud, { aspectRatio: "1:1", resolution: "2K" }, 1, "edit", true)).toBe(0.048);
-    // Klein Base: $0.035 per megapixel.
-    expect(base.pricing).toEqual({ unit: "megapixel", usd: 0.035 });
+    // Klein Base: fal's planned per-image tiers on its plain routes ($0.027 at 1K … $0.108 at 4K), $0.035 per megapixel with LoRAs.
+    expect(base.pricing).toMatchObject({ unit: "image", usd: 0.027, byResolution: { "1K": 0.027, "1.5K": 0.033, "2K": 0.042, "4K": 0.108 }, withLorasPerMegapixel: 0.035 });
+    expect(estimateCost(base, { aspectRatio: "1:1", resolution: "1K" }, 1, "t2i")).toBe(0.027);
+    expect(estimateCost(base, { aspectRatio: "1:1", resolution: "4K" }, 1, "t2i")).toBe(0.108);
     expect(estimateCost(base, { aspectRatio: "1:1", resolution: "1K" }, 1, "t2i", true)).toBe(0.035);
     expect(estimateCost(base, { aspectRatio: "1:1", resolution: "2K" }, 1, "t2i", true)).toBe(0.14);
     // Free on your GPU.
@@ -373,5 +393,113 @@ describe("FLUX 3 Klein as a Soul ID training target", () => {
   it("a FLUX 3 Klein LoRA runs on Klein Base first, and on the distilled Klein, on both engines", () => {
     expect(TRAINING_FAMILIES["flux3-klein"].lead).toEqual({ open: "oss-flux3-klein-base", cloud: "flux-3-klein-base" });
     for (const id of ["oss-flux3-klein-base", "oss-flux3-klein", "flux-3-klein-base", "flux-3-klein"]) expect(familyOfModel(id), id).toBe("flux3-klein");
+  });
+});
+
+describe("fal's FLUX 3 Klein Prompt helper, as on your GPU", () => {
+  const cloud = getModel("flux-3-klein")!;
+  const base = getModel("flux-3-klein-base")!;
+  const route = (m: typeof cloud, op: Operation) => m.routes.find((r) => r.op === op) as ModelRoute & { map: NonNullable<ModelRoute["map"]> };
+  const plan = (req: Partial<GenerationRequest>) => planGeneration({ feature: "image", prompt: "a fox", ...req } as GenerationRequest, getModel, getPreset);
+
+  it("offers the same Options → Prompt helper on both engines, saying a layout with boxes goes as typed", () => {
+    for (const m of [cloud, base, getModel("oss-flux3-klein")!, getModel("oss-flux3-klein-base")!]) {
+      const helper = m.options.controls?.find((c) => c.param === "promptHelper");
+      expect(helper, m.id).toMatchObject({ label: "Prompt helper", values: ["on", "off"], default: "on" });
+      expect(helper!.labels!.on, m.id).toMatch(/full caption \(not with layout boxes\)$/);
+      expect(helper!.labels!.off).toBe("Off · your words as typed");
+    }
+  });
+
+  it("sends enable_prompt_expansion false when it's off, and leaves fal's default (on) when it's on", () => {
+    for (const m of [cloud, base]) {
+      for (const op of ["t2i", "edit"] as const) {
+        const images = op === "edit" ? { images: ["https://x/a.png"] } : {};
+        const off = plan({ modelId: m.id, op, params: { extra: { promptHelper: "off" } }, ...(op === "edit" && { inputs: { images: ["/api/files/a.png"] } }) });
+        const sent = buildPayload(route(m, op).map, { prompt: off.prompt, ...off.params, ...images });
+        expect(sent.enable_prompt_expansion, `${m.id} ${op}`).toBe(false);
+        expect(sent.promptHelper).toBeUndefined();
+        const on = buildPayload(route(m, op).map, { prompt: "a fox", extra: { promptHelper: "on" }, ...images });
+        expect(on.enable_prompt_expansion).toBeUndefined();
+        expect(on.promptHelper).toBeUndefined();
+      }
+    }
+  });
+
+  it("is overridden in Layout mode only once the draft places a box", () => {
+    const empty = plan({ modelId: "flux-3-klein", prompt: "A cozy reading nook", params: { extra: { layout: { ...POSTER, items: [] }, promptHelper: "on" } } });
+    const sent = buildPayload(route(cloud, "t2i").map, { prompt: empty.prompt, ...empty.params });
+    expect(sent.prompt).toBe("A cozy reading nook");
+    expect(sent.enable_prompt_expansion).toBeUndefined();
+    expect(sent.bounding_boxes).toBeUndefined();
+    const boxed = plan({ modelId: "flux-3-klein", prompt: "A cozy reading nook", params: { extra: { layout: POSTER, promptHelper: "on" } } });
+    expect(buildPayload(route(cloud, "t2i").map, { prompt: boxed.prompt, ...boxed.params }).enable_prompt_expansion).toBe(false);
+    // Other models' prompt expansion still goes off for any layout (their compiled prompt is the layout's, boxes or not).
+    const flux3 = getModel("flux-3")!.routes.find((r) => r.op === "t2i")!;
+    expect(buildPayload(flux3.map!, { prompt: "x", extra: { layout: { ...POSTER, items: [] } } }).enable_prompt_expansion).toBe(false);
+  });
+});
+
+/** A PNG's first bytes, enough for its size to be read. */
+function pngHeader(width: number, height: number): Buffer {
+  const b = Buffer.alloc(33);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+  b.writeUInt32BE(13, 8);
+  b.write("IHDR", 12, "ascii");
+  b.writeUInt32BE(width, 16);
+  b.writeUInt32BE(height, 20);
+  b[24] = 8;
+  b[25] = 2;
+  return b;
+}
+
+/** What a run handed its provider (the demo provider records the input it was given). */
+async function handedOver(id: string): Promise<GenInput> {
+  const end = Date.now() + 20_000;
+  while (Date.now() < end) {
+    const row = db().prepare("SELECT provider_input_json, status, error FROM generations WHERE id = ?").get(id) as { provider_input_json: string | null; status: string; error: string | null };
+    if (row.provider_input_json) return JSON.parse(row.provider_input_json);
+    if (row.status === "failed") throw new Error(row.error ?? "failed");
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`${getGeneration(id)?.status}: nothing handed over`);
+}
+
+describe("fal's FLUX 3 Klein edit keeps image 1's shape, as your GPU's edit does", () => {
+  const cloud = getModel("flux-3-klein")!;
+  const edit = (m = cloud) => m.routes.find((r) => r.op === "edit") as ModelRoute & { map: NonNullable<ModelRoute["map"]> };
+  const upload = (w: number, h: number) => saveFile({ data: pngHeader(w, h), contentType: "image/png", name: `p-${w}x${h}.png`, source: "upload" }).url;
+
+  it("sends image 1's shape on the chosen tier's square as image_size, not the default 1:1", async () => {
+    setSetting("demoMode", "auto");
+    // Planned alone, the default aspect ratio would square a 16:9 photo.
+    const p = planGeneration({ feature: "edit", modelId: "flux-3-klein", prompt: "make it night", inputs: { images: ["/api/files/a.png"] } } as GenerationRequest, getModel, getPreset);
+    expect(buildPayload(edit().map, { prompt: p.prompt, ...p.params, images: ["https://x/a.png"] }).image_size).toEqual({ width: 1024, height: 1024 });
+    // A run sizes it from the photo: 1K by default, the tier picked otherwise, on fal's 16 px grid.
+    const wide = upload(4000, 2250);
+    const [run] = createGenerations({ feature: "edit", modelId: "flux-3-klein", prompt: "make it night", inputs: { images: [wide] } });
+    const sent = await handedOver(run.id);
+    expect(sent.extra).toMatchObject({ image_size: { width: 1360, height: 768 } });
+    expect(buildPayload(edit().map, { ...sent, images: ["https://x/a.png"] }).image_size).toEqual({ width: 1360, height: 768 });
+    const [tall] = createGenerations({ feature: "edit", modelId: "flux-3-klein-base", prompt: "make it night", params: { resolution: "2K" }, inputs: { images: [upload(3000, 4000)] } });
+    expect((await handedOver(tall.id)).extra).toMatchObject({ image_size: { width: 1776, height: 2368 } });
+    // A size the request gives itself wins; text to image keeps the aspect ratio's.
+    const [own] = createGenerations({ feature: "edit", modelId: "flux-3-klein", prompt: "x", params: { extra: { image_size: { width: 512, height: 512 } } }, inputs: { images: [wide] } });
+    expect((await handedOver(own.id)).extra).toMatchObject({ image_size: { width: 512, height: 512 } });
+    const [t2i] = createGenerations({ feature: "image", modelId: "flux-3-klein", prompt: "a fox", params: { aspectRatio: "16:9" } });
+    expect((await handedOver(t2i.id)).extra?.image_size).toBeUndefined();
+    // The tier's price stays; with LoRAs, the megapixels of the size sent.
+    expect(estimateCost(cloud, { resolution: "1K", extra: { image_size: { width: 1360, height: 768 } } }, 1, "edit")).toBe(0.009);
+    expect(estimateCost(cloud, { resolution: "1K", extra: { image_size: { width: 1360, height: 768 } } }, 1, "edit", true)).toBeCloseTo(0.012 * ((1360 * 768) / 1024 ** 2), 4);
+  });
+
+  it("offers Resolution but no Aspect ratio for the edit, as for text to image it offers both", () => {
+    for (const m of [cloud, getModel("flux-3-klein-base")!]) {
+      expect(edit(m).followsImage, m.id).toBe(true);
+      expect(settingsShape(m, "edit", "image", true)).toMatchObject({ aspect: null, resolution: ["1K", "1.5K", "2K", "4K"] });
+      expect(settingsShape(m, "t2i", "image", true).aspect).toContain("16:9");
+    }
+    // Your GPU's edit takes neither (it follows reference 1 at about 1 MP).
+    expect(settingsShape(getModel("oss-flux3-klein")!, "edit", "image", true)).toMatchObject({ aspect: null, resolution: null });
   });
 });

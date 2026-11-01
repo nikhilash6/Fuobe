@@ -1766,7 +1766,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references, layout boxes; fal writes the full caption \u00b7 FLUX Kommunity licence",
+    "tagline": "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper \u00b7 FLUX Kommunity licence",
     "routes": [
       {
         "op": "t2i",
@@ -1800,7 +1800,10 @@ export const CLOUD_MODELS: ModelDef[] = [
               "min": 0,
               "max": 4
             }
-          }
+          },
+          "ignore": [
+            "promptHelper"
+          ]
         },
         "loraEndpoint": "blackforestlabs/flux-3/klein/text-to-image/lora"
       },
@@ -1837,8 +1840,12 @@ export const CLOUD_MODELS: ModelDef[] = [
               "min": 0,
               "max": 4
             }
-          }
+          },
+          "ignore": [
+            "promptHelper"
+          ]
         },
+        "followsImage": true,
         "loraEndpoint": "blackforestlabs/flux-3/klein/edit-image/lora"
       }
     ],
@@ -1864,7 +1871,22 @@ export const CLOUD_MODELS: ModelDef[] = [
       "seed": true,
       "maxOutputs": 4,
       "maxImages": 10,
-      "layout": "flux3"
+      "layout": "flux3",
+      "controls": [
+        {
+          "param": "promptHelper",
+          "label": "Prompt helper",
+          "values": [
+            "on",
+            "off"
+          ],
+          "default": "on",
+          "labels": {
+            "on": "On \u00b7 fal writes a full caption (not with layout boxes)",
+            "off": "Off \u00b7 your words as typed"
+          }
+        }
+      ]
     },
     "badges": [
       "new"
@@ -1894,7 +1916,7 @@ export const CLOUD_MODELS: ModelDef[] = [
   },
   {
     "id": "flux-3-klein-base",
-    "name": "FLUX 3 Klein Base with LoRAs",
+    "name": "FLUX 3 Klein Base",
     "vendor": "Black Forest Labs",
     "family": "flux",
     "engine": "cloud",
@@ -1904,7 +1926,7 @@ export const CLOUD_MODELS: ModelDef[] = [
       {
         "op": "t2i",
         "provider": "fal",
-        "endpoint": "blackforestlabs/flux-3/klein/base/text-to-image/lora",
+        "endpoint": "blackforestlabs/flux-3/klein/base/text-to-image",
         "map": {
           "numOutputs": "num_images",
           "seed": "seed",
@@ -1933,13 +1955,17 @@ export const CLOUD_MODELS: ModelDef[] = [
               "min": 0,
               "max": 4
             }
-          }
-        }
+          },
+          "ignore": [
+            "promptHelper"
+          ]
+        },
+        "loraEndpoint": "blackforestlabs/flux-3/klein/base/text-to-image/lora"
       },
       {
         "op": "edit",
         "provider": "fal",
-        "endpoint": "blackforestlabs/flux-3/klein/base/edit-image/lora",
+        "endpoint": "blackforestlabs/flux-3/klein/base/edit-image",
         "map": {
           "images": "image_urls",
           "numOutputs": "num_images",
@@ -1969,8 +1995,13 @@ export const CLOUD_MODELS: ModelDef[] = [
               "min": 0,
               "max": 4
             }
-          }
-        }
+          },
+          "ignore": [
+            "promptHelper"
+          ]
+        },
+        "followsImage": true,
+        "loraEndpoint": "blackforestlabs/flux-3/klein/base/edit-image/lora"
       }
     ],
     "options": {
@@ -1995,7 +2026,22 @@ export const CLOUD_MODELS: ModelDef[] = [
       "seed": true,
       "maxOutputs": 4,
       "maxImages": 10,
-      "layout": "flux3"
+      "layout": "flux3",
+      "controls": [
+        {
+          "param": "promptHelper",
+          "label": "Prompt helper",
+          "values": [
+            "on",
+            "off"
+          ],
+          "default": "on",
+          "labels": {
+            "on": "On \u00b7 fal writes a full caption (not with layout boxes)",
+            "off": "Off \u00b7 your words as typed"
+          }
+        }
+      ]
     },
     "badges": [
       "new"
@@ -2011,8 +2057,16 @@ export const CLOUD_MODELS: ModelDef[] = [
       "resolution": "1K"
     },
     "pricing": {
-      "unit": "megapixel",
-      "usd": 0.035
+      "unit": "image",
+      "usd": 0.027,
+      "note": "per image at 1K (fal's planned rates by size)",
+      "byResolution": {
+        "1K": 0.027,
+        "1.5K": 0.033,
+        "2K": 0.042,
+        "4K": 0.108
+      },
+      "withLorasPerMegapixel": 0.035
     }
   },
   {
