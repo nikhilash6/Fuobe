@@ -23,6 +23,14 @@ export class HookDown extends Error {
 /** Where a service is: an http(s) base URL, or a Unix socket path. */
 export type HookTarget = { kind: "url"; base: URL } | { kind: "socket"; path: string };
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+function isLoopback(hostname: string): boolean {
+  if (LOOPBACK_HOSTS.has(hostname)) return true;
+  // 127.0.0.0/8
+  const parts = hostname.split(".");
+  return parts.length === 4 && parts[0] === "127" && parts.every((p) => /^\d{1,3}$/.test(p));
+}
+
 /** Parse a hook address. `unix:/path.sock` (or `unix:///path.sock`) is a socket; anything else must be an http(s) URL. */
 export function hookTarget(raw: string): HookTarget | null {
   const v = raw.trim();
@@ -34,6 +42,12 @@ export function hookTarget(raw: string): HookTarget | null {
   try {
     const base = new URL(v);
     if (base.protocol !== "http:" && base.protocol !== "https:") return null;
+    if (base.protocol === "http:" && !isLoopback(base.hostname)) {
+      console.warn(
+        `[hook] WARNING: ${v} is plain HTTP on a non-loopback address. ` +
+          `Bearer tokens and payloads will travel unencrypted. Use https: or a unix: socket.`,
+      );
+    }
     return { kind: "url", base };
   } catch {
     return null;
