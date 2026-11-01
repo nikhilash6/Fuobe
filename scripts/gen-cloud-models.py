@@ -681,7 +681,8 @@ model("fuobe-character-swap", "Fuobe Character swap", "Fuobe Original", "fuobe-c
       "The person in your clip becomes your character, same performance, scene and sound: MiniMax H3 with Akatz Labs' swap LoRA",
       [("video-swap", "minimax/h3/reference-to-video/lora", "fal", {"videoArray": True, "fixed": {"prompt_expansion_mode": "disabled", "aspect_ratio": "adaptive"}})],
       original=True, fit_values=True, badges=["audio"],
-      pricing=("second", 0.075, "768p; 480p $0.0625/s; whole seconds, 5–15 per call", {"byResolution": {"768p": 0.075, "480p": 0.0625}}),
+      # 2K / 4K: the same route asked for a size it offers (the result's "Re-render at 2K", n7-3); Genjutsu's Quality stays 480p / 768p.
+      pricing=("second", 0.075, "768p; 480p $0.0625/s; whole seconds, 5–15 per call; a re-render at 2K $0.1625/s, 4K $0.20/s", {"byResolution": {"768p": 0.075, "480p": 0.0625, "2K": 0.1625, "4K": 0.2}}),
       options={"resolutions": ["480p", "768p"]}, defaults={"resolution": "768p"})
 # ----- Originals (O9): Fuobe Mixed Media and Fuobe Shorts on hosted open weights (research §8 mixed-media →
 # studios[mixed-media].original, studios[shorts].original). Mixed Media's cloud half draws one frame: Z-Image Turbo
@@ -874,6 +875,13 @@ model("topaz-starlight", "Topaz Starlight", "Topaz Labs", "topaz", "video", "Rec
       pricing=("second", 0.26, "4K at 30 fps; up to 1080p $0.12/s; 60 fps doubles; Starlight Fast 2 is half", {"byResolution": {"1080p": 0.12, "4K": 0.26}, "factors": [{"param": "targetFps", "values": {"60": 2}}, {"param": "model", "values": {"Starlight Fast 2": 0.5}}]}),
       defaults={"resolution": "4K"}, upscale_tiers=["1080p", "4K"], fps_targets=[24, 30, 60],
       api_defaults={"H264_output": True}, controls=[("model", "Model")], sliders=[("softness", "Softness")])
+# Topaz Astra 2 (n7-3; research new-models-7 §2.7): the most redraw-like hosted upscaler, under its own name. It is not
+# Open-H3 Regenerate (nobody hosts that): the cloud has no "Regenerate". 10 s at 30 fps: $3.00 up to 1080p, $5.00 at 4K.
+model("topaz-astra", "Topaz Astra 2", "Topaz Labs", "topaz", "video", "Creative upscale that invents fine detail and texture, steered by optional words: to 1080p or 4K",
+      [("upscale-video", "topaz/upscale/video/creative")], badges=["new", "4k"],
+      pricing=("second", 0.5, "4K at 30 fps; up to 1080p $0.30/s; 60 fps doubles", {"byResolution": {"1080p": 0.3, "4K": 0.5}, "factors": [{"param": "targetFps", "values": {"60": 2}}]}),
+      defaults={"resolution": "4K"}, upscale_tiers=["1080p", "4K"], fps_targets=[24, 30, 60], options={"promptOptional": True},
+      api_defaults={"H264_output": True}, sliders=[("creativity", "Creativity")])
 # ByteDance Upscale: up to 8K with scene presets ("Common" is the API's general preset).
 model("bytedance-video-upscale", "ByteDance Upscale", "ByteDance", "bytedance-upscaler", "video", "High-fidelity upscaling up to 8K with scene presets",
       [("upscale-video", "fal-ai/bytedance-upscaler/upscale/video")], badges=["new"],
