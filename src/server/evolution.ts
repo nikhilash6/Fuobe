@@ -10,7 +10,6 @@ import {
   EVOLUTION_RESOLUTIONS,
   evolutionProblem,
   evolutionTitle,
-  nearestShape,
   offlineDirection,
   planEvolution,
   tidyDirection,
@@ -187,9 +186,10 @@ function planInput(body: z.infer<typeof EvolutionBodySchema>, info: Awaited<Retu
     if (n > EVOLUTION.openReferences) notes.push(`The other ${n - EVOLUTION.openReferences} reference${n - EVOLUTION.openReferences > 1 ? "s" : ""} shape the direction only`);
     notes.push("Needs a 24 GB GPU · Wan 2.2 Fun VACE is Apache-2.0; Qwen-Image 2.1's weights are non-commercial");
   } else {
-    notes.push(`${name} runs LTX-2.3 video to video on fal in your clip's shape (${nearestShape(source.width, source.height)}) at 24 fps`);
-    if (n) notes.push(`LTX-2.3 takes no pictures: your ${n === 1 ? "reference shapes" : `${n} references shape`} the direction`);
-    notes.push("LTX-2.x Community License: free under US$10M annual revenue (information, Settings → Models & licences)");
+    const k = Math.min(n, EVOLUTION.cloudReferences);
+    notes.push(`${name} runs the GPU's model hosted on fal: each ≤10 s piece's first frame is taken toward the direction by Qwen-Image-Edit 2511${n ? ` with your first ${k === 1 ? "reference" : `${k} references`}` : ""}, then Wan 2.2 Fun VACE carries it through the piece by depth, in your clip's shape`);
+    if (n > EVOLUTION.cloudReferences) notes.push(`The other ${n - EVOLUTION.cloudReferences} reference${n - EVOLUTION.cloudReferences > 1 ? "s" : ""} shape the direction only`);
+    notes.push("Wan 2.2 Fun VACE and Qwen-Image-Edit 2511 are Apache-2.0 (information, Settings → Models & licences)");
   }
   if (source.hasAudio) notes.push("Your clip's own sound is put back on the result");
   const title = evolutionTitle(direction, body.source.name);

@@ -19521,189 +19521,65 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "family": "fuobe-evolution",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Takes your clip further in a direction an LLM writes from your references: LTX-2.3 video to video at a change intensity",
+    "tagline": "Takes your clip further in a direction an LLM writes from your references: a direction frame per piece carried through it by depth (Wan 2.2 Fun VACE)",
     "routes": [
       {
         "op": "v2v",
         "provider": "fal",
-        "endpoint": "fal-ai/ltx-2.3-22b/video-to-video",
+        "endpoint": "fal-ai/wan-22-vace-fun-a14b/depth",
         "map": {
           "negativePrompt": "negative_prompt",
+          "image": "first_frame_url",
           "video": "video_url",
           "seed": "seed",
-          "generateAudio": "generate_audio",
-          "fps": "fps",
-          "numFrames": {
-            "key": "num_frames",
-            "fps": 24,
-            "min": 9,
-            "max": 481,
-            "step": 8
-          },
-          "size": {
-            "key": "video_size",
-            "multiple": 16,
-            "table": {
-              "480p": {
-                "21:9": [
-                  1120,
-                  480
-                ],
-                "16:9": [
-                  864,
-                  480
-                ],
-                "4:3": [
-                  640,
-                  480
-                ],
-                "1:1": [
-                  480,
-                  480
-                ],
-                "3:4": [
-                  480,
-                  640
-                ],
-                "9:16": [
-                  480,
-                  864
-                ]
-              },
-              "720p": {
-                "21:9": [
-                  1504,
-                  640
-                ],
-                "16:9": [
-                  1280,
-                  704
-                ],
-                "4:3": [
-                  1024,
-                  768
-                ],
-                "1:1": [
-                  960,
-                  960
-                ],
-                "3:4": [
-                  768,
-                  1024
-                ],
-                "9:16": [
-                  704,
-                  1280
-                ]
-              },
-              "1080p": {
-                "21:9": [
-                  2240,
-                  960
-                ],
-                "16:9": [
-                  1920,
-                  1088
-                ],
-                "4:3": [
-                  1440,
-                  1088
-                ],
-                "1:1": [
-                  1088,
-                  1088
-                ],
-                "3:4": [
-                  1088,
-                  1440
-                ],
-                "9:16": [
-                  1088,
-                  1920
-                ]
-              }
-            }
+          "fps": "frames_per_second",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "auto",
+              "240p",
+              "360p",
+              "480p",
+              "580p",
+              "720p"
+            ]
           },
           "fixed": {
-            "enable_prompt_expansion": false,
-            "generate_audio": false,
-            "match_video_length": false,
-            "match_input_fps": false,
-            "fps": 24
+            "preprocess": true
           },
-          "loras": {
-            "shape": "items",
-            "key": "loras",
-            "required": true,
-            "range": {
-              "min": 0,
-              "max": 4
-            },
-            "weightName": true
+          "defaults": {
+            "match_input_num_frames": true,
+            "match_input_frames_per_second": true
           }
-        },
-        "loraEndpoint": "fal-ai/ltx-2.3-22b/video-to-video/lora"
+        }
       }
     ],
     "options": {
-      "durations": [
-        3,
-        4,
-        5,
-        6,
-        8,
-        10,
-        12,
-        15,
-        20
-      ],
-      "aspectRatios": [
-        "21:9",
-        "16:9",
-        "4:3",
-        "1:1",
-        "3:4",
-        "9:16"
-      ],
-      "resolutions": [
-        "480p",
-        "720p",
-        "1080p"
-      ],
       "negativePrompt": true,
       "seed": true,
-      "audio": true
+      "resolutions": [
+        "480p",
+        "580p",
+        "720p"
+      ],
+      "maxImages": 1
     },
     "licence": {
-      "licence": "LTX-2 / LTX-2.x Community License",
+      "licence": "Apache-2.0",
       "commercial": true,
-      "note": "Free for companies under US$10M annual revenue; above that a paid licence (github.com/Lightricks/LTX-2 LICENSE-2, LICENSE-2_x, section 2.1)",
-      "checked": "2026-10-23"
+      "note": "Wan 2.2 Fun VACE A14B and Qwen-Image-Edit 2511 (the direction frames) are Apache-2.0"
     },
     "defaults": {
-      "aspectRatio": "16:9",
-      "duration": 5,
-      "resolution": "720p",
-      "generateAudio": true
+      "resolution": "720p"
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.0347,
-      "note": "$0.001605 per megapixel of video (width \u00d7 height \u00d7 frames): about $0.17 for 5 s at 720p; $0.001805 with LoRAs",
+      "usd": 0.1,
+      "note": "720p; 580p $0.075, 480p $0.05 \u00b7 fal bills frames \u00f7 16 as video seconds: a 30 fps clip costs about 1.9\u00d7 its length; each direction frame's Qwen edit is priced on its own",
       "byResolution": {
-        "480p": 0.016,
-        "720p": 0.0347,
-        "1080p": 0.0805
-      },
-      "withLoras": 0.039,
-      "withLorasByResolution": {
-        "480p": 0.018,
-        "720p": 0.039,
-        "1080p": 0.0905
-      },
-      "videoMegapixel": {
-        "usd": 0.001605,
-        "withLoras": 0.001805
+        "720p": 0.1,
+        "580p": 0.075,
+        "480p": 0.05
       }
     }
   },

@@ -4,7 +4,7 @@ import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
-import { CLOUD_SHAPES, denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, videoStrengthFor, type Intensity } from "./evolution";
+import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
 /*
@@ -1907,7 +1907,7 @@ const DOP_OPTIONS: ModelOptions = {
   requires: { images: 1, msg: "Add a start frame: Fuobe DoP moves the camera through your picture" },
 };
 
-/** Fuobe Evolution's change intensity as a composer control on one engine's own field (the GPU's denoise, fal's video_strength). */
+/** Fuobe Evolution's change intensity as a composer control on the GPU graph's own field (its denoise; fal's hosted VACE has none). */
 function intensityControl(param: string, value: (i: Intensity) => number): NonNullable<ModelOptions["controls"]>[number] {
   return {
     param,
@@ -2034,28 +2034,34 @@ const originals: ModelDef[] = [
     options: { seed: true, negativePrompt: true, resolutions: ["480p", "720p"], maxImages: 4 },
   }),
   // Fuobe Evolution (O13): Higgsfield Evolution's Original (src/lib/catalog/evolution.ts plans the segments, the direction
-  // frame and the sound; Video tools → Evolution is its studio). The change intensity is the denoise the GPU graph starts
-  // from, and LTX-2.3's video_strength (1 − denoise) in the cloud: one control, each engine's own field.
+  // frame and the sound; Video tools → Evolution is its studio). Wan 2.2 Fun VACE on both engines: the graph on your GPU,
+  // fal's hosted depth route in the cloud (since the owner's call of 2026-10-30; LTX-2.3 before). The change intensity is
+  // the denoise the GPU graph starts from; fal's route has no such field, so in the cloud the change shapes only the
+  // direction frame Evolution makes, and the composer has no Change control there.
   {
     ...original({
       id: EVOLUTION.model,
       open: [comfy("v2v", "video-evolution-wan22-fun-vace", "Wan 2.2 Fun VACE from the noised segment, depth control, image = the direction frame; ≤81 frames at 16 fps")],
-      tagline: "Takes your clip further in a creative direction · Wan 2.2 Fun VACE free on your GPU (24 GB), or LTX-2.3 on fal",
-      options: { seed: true, negativePrompt: true, aspectRatios: [...CLOUD_SHAPES], resolutions: EVOLUTION_RESOLUTIONS.cloud, maxImages: 0 },
+      tagline: "Takes your clip further in a creative direction · Wan 2.2 Fun VACE free on your GPU (24 GB), or hosted on fal (there the change level shapes the direction frame only)",
+      options: {
+        seed: true,
+        negativePrompt: true,
+        resolutions: EVOLUTION_RESOLUTIONS.cloud,
+        maxImages: 1,
+        imageLabels: ["direction frame (optional: the clip's first frame as it should look)"],
+      },
     }),
-    defaults: { aspectRatio: "16:9", duration: 5, resolution: EVOLUTION_DEFAULT_RESOLUTION.cloud },
+    defaults: { duration: 5, resolution: EVOLUTION_DEFAULT_RESOLUTION.cloud },
     engineDefaults: { open: { resolution: EVOLUTION_DEFAULT_RESOLUTION.open, aspectRatio: "auto" } },
     engineOptions: {
       open: {
         aspectRatios: ["auto", ...VID_AR],
         resolutions: EVOLUTION_RESOLUTIONS.open,
         durations: [3, 4, 5],
-        maxImages: 1,
         imageLabels: ["direction frame (the clip's first frame as it should look)"],
         controls: [intensityControl("denoise", denoiseFor)],
         requires: { images: 1, msg: "Add the direction frame: the clip's first frame as it should look (Video tools → Evolution makes it for you)" },
       },
-      cloud: { controls: [intensityControl("video_strength", videoStrengthFor)] },
     },
   },
   // Character swap (Openjutsu, Akatz Labs' H3 Character Swap): MiniMax H3 with the Character Swap LoRA. On your GPU the

@@ -18,7 +18,7 @@ import { Feed } from "@/components/studio/feed";
 import { fileToList, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
 import { useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
-import { DIRECTION_CUT_NOTE, directionPrompt, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "@/lib/catalog/evolution";
+import { DIRECTION_CUT_NOTE, directionPrompt, EVOLUTION, EVOLUTION_CLOUD_NOTE, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "@/lib/catalog/evolution";
 import { chainState } from "@/lib/catalog/shorts";
 import { downloadHref, downloadName } from "@/lib/library";
 import { cn } from "@/lib/utils";
@@ -238,7 +238,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
                     Characters, objects, places or a style.{" "}
                     {engine === "open"
                       ? `On your GPU the first ${EVOLUTION.openReferences} also go into each segment's direction frame; all of them shape the direction.`
-                      : "In the cloud they shape the direction (LTX-2.3 takes no pictures)."}
+                      : `In the cloud the first ${EVOLUTION.cloudReferences} also go into each piece's direction frame; all of them shape the direction.`}
                   </p>
                 </div>
               </Panel>
@@ -250,6 +250,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
                 <p className="text-[12px] text-muted-foreground" aria-live="polite">
                   {INTENSITIES.find((i) => i.id === intensity)?.hint}
                 </p>
+                {engine === "cloud" && <p className="text-[12px] text-muted-foreground">{EVOLUTION_CLOUD_NOTE}.</p>}
               </Field>
 
               <Field label="Creative direction" htmlFor="evolution-direction" hint={by ? BY[by] : "Optional: left empty, it's written for you when you start"}>

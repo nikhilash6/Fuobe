@@ -7,7 +7,7 @@ import type { Generation } from "@/lib/catalog/types";
 vi.setConfig({ testTimeout: 120_000 });
 
 // /api/evolution end to end in demo mode (no keys, no ComfyUI, no LLM): a run on either engine becomes one pipeline of
-// ordinary generations that the mock provider runs through; estimates with a fal key price the real LTX-2.3 route.
+// ordinary generations that the mock provider runs through; estimates with a fal key price the real hosted VACE route.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-evolution-"));
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
@@ -57,8 +57,9 @@ const body = (over: Record<string, unknown> = {}) => ({ engine: "cloud", intensi
 describe("Evolution: estimates", () => {
   it("no keys: a demo; the GPU is free", async () => {
     const cloud = await (await estimateRoute.POST(json(body()))).json();
-    expect(cloud).toMatchObject({ modelName: "Fuobe Evolution", engine: "cloud", resolution: "720p", pieces: 1, seconds: 12, demo: true });
-    expect(cloud.notes.join(" ")).toMatch(/LTX-2.3 takes no pictures: your reference shapes the direction/);
+    expect(cloud).toMatchObject({ modelName: "Fuobe Evolution", engine: "cloud", resolution: "720p", pieces: 2, seconds: 12, demo: true });
+    expect(cloud.notes.join(" ")).toMatch(/runs the GPU's model hosted on fal: each ≤10 s piece's first frame is taken toward the direction by Qwen-Image-Edit 2511 with your first reference, then Wan 2\.2 Fun VACE/);
+    expect(cloud.notes.join(" ")).not.toMatch(/LTX/);
     const open = await (await estimateRoute.POST(json(body({ engine: "open" })))).json();
     expect(open).toMatchObject({ engine: "open", resolution: "480p", pieces: 3, costUsd: 0 });
     expect(open.notes.join(" ")).toMatch(/Qwen-Image 2.1 Turbo takes its first frame toward the direction with your first reference/);
@@ -68,14 +69,15 @@ describe("Evolution: estimates", () => {
     beforeAll(() => setSetting("falKey", "fal-test-key"));
     afterAll(() => setSetting("falKey", ""));
 
-    it("LTX-2.3 per megapixel of video in the clip's shape, plus the sound put back", async () => {
+    it("Wan 2.2 Fun VACE per video second (frames ÷ 16), each piece's direction frame, plus the sound put back", async () => {
       const e = await (await estimateRoute.POST(json(body()))).json();
-      expect(e).toMatchObject({ demo: false, pieces: 1, steps: 2 });
-      // 9:16 at 720p is 704 × 1280; 12 s at 24 fps is 289 frames: 260.4 MP → 261 × $0.001605.
-      expect(e.costUsd).toBeGreaterThanOrEqual(261 * 0.001605);
-      expect(e.costUsd).toBeLessThan(261 * 0.001605 + 0.02);
-      const hd = await (await estimateRoute.POST(json(body({ resolution: "1080p" })))).json();
-      expect(hd.costUsd).toBeGreaterThan(e.costUsd * 2);
+      // 12 s at 16 fps: two 6 s pieces (cut, first frame, direction frame, evolve), a join and the sound.
+      expect(e).toMatchObject({ demo: false, pieces: 2, steps: 10 });
+      // VACE: 12 s × 16 fps ÷ 16 = 12 video seconds × $0.10 at 720p; the rest (Qwen edits, fal's tools) on top.
+      expect(e.costUsd).toBeGreaterThanOrEqual(1.2);
+      expect(e.costUsd).toBeLessThan(1.2 + 0.2);
+      const low = await (await estimateRoute.POST(json(body({ resolution: "480p" })))).json();
+      expect(e.costUsd - low.costUsd).toBeCloseTo(0.6, 2);
     });
   });
 
@@ -83,6 +85,7 @@ describe("Evolution: estimates", () => {
     const say = async (b: unknown) => (await (await estimateRoute.POST(json(b))).json()).error;
     expect(await say(body({ range: { start: 0, end: 3 } }))).toBe("Select at least 4 seconds");
     expect(await say(body({ engine: "open", resolution: "1080p" }))).toMatch(/isn't offered on your GPU/);
+    expect(await say(body({ resolution: "1080p" }))).toBe("1080p isn't offered in the cloud — pick 480p, 580p or 720p");
     expect(await say({ engine: "cloud" })).toBe("Add a clip and pick how much should change");
     // Past the limits, the limit is said (not the schema's generic refusal), on every route.
     expect(await say(body({ direction: "x".repeat(10_001) }))).toBe("Keep the direction under 10,000 characters");
@@ -137,17 +140,21 @@ describe("Evolution: runs (demo)", () => {
     return out as { final: Generation; items: Generation[]; direction: string; by: string };
   };
 
-  it("cloud: no direction given, the offline writer writes one; Fuobe Evolution at video_strength 0.35, then the sound", async () => {
+  it("cloud: no direction given, the offline writer writes one; per piece a direction frame on hosted Qwen-Image-Edit 2511, then VACE, joined, the sound", async () => {
     const { final, items, direction, by } = await run(body({ idea: "a rainy neon street" }));
     expect(by).toBe("offline");
     expect(direction).toMatch(/now in a new world: a rainy neon street/);
     expect(final.feature).toBe("evolution");
     expect(items.filter((g) => g.feature === "evolution")).toHaveLength(1);
     const rows = batchOf(final.id);
-    expect(rows.map((r) => `${r.op}:${r.model_id}`)).toEqual(["v2v:fuobe-evolution", "mux:merge-audio-video"]);
-    const evolve = gens.getGeneration(rows[0].id)!;
-    expect(evolve.request).toMatchObject({ engine: "cloud", params: { extra: { video_strength: 0.35 } } });
+    const count = (model: string) => rows.filter((r) => r.model_id === model).length;
+    expect([count("trim-video"), count("extract-frame"), count("qwen-image-edit-2511-cloud"), count("fuobe-evolution"), count("merge-audio-video")]).toEqual([2, 2, 2, 2, 1]);
+    const evolve = gens.getGeneration(rows.find((r) => r.model_id === "fuobe-evolution")!.id)!;
+    expect(evolve.request).toMatchObject({ engine: "cloud", params: { resolution: "720p", duration: 6, sourceDuration: 6 } });
+    expect(evolve.request.params?.extra).toBeUndefined();
     expect(evolve.request.prompt).toBe(direction);
+    const frame = gens.getGeneration(rows.find((r) => r.model_id === "qwen-image-edit-2511-cloud")!.id)!;
+    expect(frame.request.prompt).toMatch(/^Change image 1 toward this direction: .*Use the characters, objects and style of image 2 where they fit\.$/);
     const done = await settle(final.id);
     expect(done.status, done.error ?? undefined).toBe("succeeded");
     expect(done.outputs[0].kind).toBe("video");
