@@ -53,6 +53,10 @@ LORA = {
     "fal-ai/ltx-2.3-22b/text-to-video/lora": LTX,
     "fal-ai/ltx-2.3-22b/video-to-video/lora": {**LTX, "video": "video_url"},
     "fal-ai/ltx-2.3-22b/extend-video/lora": {**LTX, "video": "video_url", "endImage": "end_image_url"},
+    # Fuobe Restore's cloud half (package archive-restore): LTX-2.3 22B reference video to video with an IC-LoRA (Lightricks'
+    # Restore IC-LoRA, gated on Hugging Face, sent through Fuobe's LoRA mirror). The archive clip is the reference video;
+    # image_url, the optional first frame, takes the previous piece's last restored frame.
+    "fal-ai/ltx-2.3-22b/reference-video-to-video/lora": {**LTX, "video": "video_url", "image": "image_url"},
     "fal-ai/wan/v2.2-a14b/image-to-video/lora": {"prompt": "prompt", "image": "image_url", "endImage": "end_image_url", "negativePrompt": "negative_prompt",
                                                  "aspectRatio": "aspect_ratio", "resolution": "resolution", "numFrames": "num_frames", "seed": "seed", "loras": "loras"},
     "fal-ai/wan/v2.2-a14b/text-to-video/lora": {"prompt": "prompt", "negativePrompt": "negative_prompt", "aspectRatio": "aspect_ratio", "resolution": "resolution",

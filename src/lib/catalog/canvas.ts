@@ -57,6 +57,7 @@ export type CanvasNodeType =
   | "clone-voice"
   | "translate"
   | "concat"
+  | "restore"
   | "table"
   | "output"
   | "note";
@@ -234,12 +235,13 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   "clone-voice": { type: "clone-voice", label: "Clone voice", group: "Inputs", icon: "UserRound", description: "A voice sample (or one of your saved voices) to speak with" },
   translate: { type: "translate", label: "Translate", group: "Utilities", icon: "Languages", ops: ["translate", "dub"], variants: ["text", "video"], description: "Translate a text, or dub a video into another language" },
   concat: { type: "concat", label: "Video concatenator", group: "Utilities", icon: "Film", ops: ["concat"], description: "Up to 50 clips in one film: trim and mute each, pick the frame" },
+  restore: { type: "restore", label: "Restore & colourise", group: "Utilities", icon: "Palette", ops: ["restore-video"], description: "Old or black-and-white footage, cleaned and in colour (Lightricks' Restore IC-LoRA)" },
   table: { type: "table", label: "Table", group: "Inputs", icon: "Table", description: "Rows of words: what it feeds runs once per row" },
   output: { type: "output", label: "Output", group: "Output", icon: "MonitorPlay", description: "Preview what's connected, side by side" },
   note: { type: "note", label: "Sticky note", group: "Output", icon: "StickyNote", description: "A note on the board (not run)" },
 };
 
-export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "translate", "concat"]);
+export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "translate", "concat", "restore"]);
 export const isGenerator = (n: Pick<CanvasNode, "type">) => GENERATOR_TYPES.has(n.type);
 
 /** Entries of the Add-node palette (several entries can make the same node type). */
@@ -276,6 +278,7 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("clone-voice"), id: "clone-voice", keywords: "voice sample clone my voice speaker" },
   { ...pick("translate"), id: "translate", data: { mediaKind: "text" }, keywords: "language translate dub localize subtitles" },
   { ...pick("concat"), id: "concat", keywords: "concatenate join merge stitch edit trim mute film assemble" },
+  { ...pick("restore"), id: "restore", keywords: "restore colourise colorize archive old footage black and white film scan vhs" },
   { ...pick("table"), id: "table", data: { columns: ["Subject"], rows: [[""], [""], [""]] }, keywords: "rows batch spreadsheet list variations csv grid" },
   { ...pick("output"), id: "output", keywords: "preview compare result" },
   { ...pick("note"), id: "note", keywords: "comment annotation" },
@@ -346,6 +349,7 @@ const PREFERRED: Partial<Record<Operation, Partial<Record<Engine, string>>>> = {
   frame: { cloud: "extract-frame" },
   "upscale-image": { cloud: "topaz-image", open: "oss-seedvr2-image" },
   "upscale-video": { cloud: "topaz-video", open: "oss-seedvr2" },
+  "restore-video": { cloud: "fuobe-restore", open: "fuobe-restore" },
   "bg-remove": { cloud: "birefnet-cloud", open: "oss-rmbg" },
   "bg-remove-video": { cloud: "birefnet-video", open: "oss-video-matte-birefnet" },
   write: { cloud: "text-llm", open: "oss-text-llm" },
@@ -397,7 +401,8 @@ export const CONCAT_TOOLS = {
 export function defaultModelFor(op: Operation, engine: Engine, opts: { hidden?: boolean } = {}): ModelDef | undefined {
   const preferred = PREFERRED[op]?.[engine];
   const m = preferred ? getModel(preferred) : undefined;
-  if (m && m.engine === engine && supportsOp(m, op)) return m;
+  // A Fuobe Original runs on both engines, so it is the default on either.
+  if (m && runsOn(m, engine) && supportsOp(m, op)) return m;
   return MODELS.find((x) => x.engine === engine && (opts.hidden || !x.hidden) && supportsOp(x, op));
 }
 
@@ -488,6 +493,8 @@ const OP_PORTS: Partial<Record<Operation, InputPortId[]>> = {
   "bg-remove-video": ["video"],
   "depth-video": ["video"],
   "relight-video": ["prompt", "video", "images"],
+  // The archive clip, the period words, and an optional first frame already in colour.
+  "restore-video": ["prompt", "video", "images"],
   concat: ["videos"],
   frame: ["video"],
   "color-match": ["images", "video"],

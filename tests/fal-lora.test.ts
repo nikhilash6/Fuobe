@@ -111,7 +111,7 @@ describe("fal LoRA payloads (generated FieldMap.loras)", () => {
     expect(cloudPath({ ...y2k, hostedUrl: "https://v3.fal.media/files/y2k.safetensors" })).toBe("https://v3.fal.media/files/y2k.safetensors");
     const map = route("z-image-turbo-cloud", "t2i").map!;
     expect(buildPayload(map, { prompt: "p", loras: [y2k] }).loras).toBeUndefined();
-    // A gated Hugging Face file can't be fetched by fal either.
+    // A gated Hugging Face file can't be fetched by fal either: it goes as Fuobe's mirror (src/server/loras.ts).
     expect(cloudPath(loraRef(loraEntry("ltx-2-3-22b-ic-lora-relight-1-0")!))).toBeUndefined();
   });
 

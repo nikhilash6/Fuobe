@@ -35,6 +35,10 @@ declare -A NODES=(
   # reason; the code was read at this commit (no network, exec or download paths in the nodes). It needs einops and
   # safetensors only, both already installed below. Weights: the DBS_WEIGHTS block at the end of this script.
   [ComfyUI-DBS]="https://github.com/hiroki-abe-58/ComfyUI-DBS f656e53434b5485c148a2866fbd6ddc6b6152ed6"
+  # Lightricks' LTX nodes for Restore & colourise (package archive-restore): LTXICLoRALoaderModelOnly, LTXAddVideoICLoRAGuide
+  # and LTXVTiledFusionSampler (per-step tiled latent fusion). LTX-2 Community License (the repository's LICENSE: free below
+  # US$10M annual revenue). Read at this commit (2026-10-20); its requirements are installed below.
+  [ComfyUI-LTXVideo]="https://github.com/Lightricks/ComfyUI-LTXVideo 220e1d45aa0469f518e982102fca4dca92a61862"
   # MiniMax H3 video (minimax-h3-t2v / i2v / flf2v): larryvrh's turbo LoRA loader and sampler (Apache-2.0, v1.2.3, no
   # dependencies) and PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel imports triton, installed below).
   [ComfyUI-MiniMax-H3-Turbo]="https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo 77bfa67575b14e3be6214f1747732e540c68b5dd"
@@ -132,6 +136,9 @@ fi
 uv pip install --python "$PY" loguru
 # ComfyUI-ToSVG imports vtracer (MIT), potracer and PyMuPDF (AGPL-3.0, used only by its SVG-to-image node) at load time.
 uv pip install --python "$PY" "vtracer==0.6.15" "potracer==0.0.4" "PyMuPDF==1.26.5"
+# ComfyUI-LTXVideo (Restore & colourise): its requirements.txt at the pinned commit. colour-science, diffusers, einops,
+# huggingface_hub, kornia and transformers are already in the union above; OpenImageIO is for its HDR EXR nodes.
+uv pip install --python "$PY" "ninja~=1.11.1.4" openimageio || echo "warn: ComfyUI-LTXVideo's extra requirements failed to install"
 if [ "${NC_PACKS:-1}" = "1" ]; then uv pip install --python "$PY" "openai-whisper==20250625"; fi
 
 # Optional isolated worker (never in this install or its venv): LatentSync 1.6 lipsync and ThinkSound SFX change

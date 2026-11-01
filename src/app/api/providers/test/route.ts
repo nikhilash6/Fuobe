@@ -1,5 +1,5 @@
 import { candidateValues, isTestProvider, PROVIDER_SETTINGS, settingProblem } from "@/lib/connections";
-import { testCivitaiKey } from "@/server/loras";
+import { testCivitaiKey, testHfToken } from "@/server/loras";
 import { testAiToolkit } from "@/server/training";
 import { PROVIDERS } from "@/server/providers";
 import { hostedAddressRefusal } from "@/server/providers/comfy-address";
@@ -16,9 +16,17 @@ import { validateSetting, withCandidates, type SettingName } from "@/server/sett
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { provider?: unknown; value?: unknown; values?: unknown; field?: unknown; place?: unknown };
   const provider = body.provider;
-  // The civitai key isn't a model provider's (it downloads LoRAs), nor is AI-Toolkit (it trains them).
+  // The civitai key and the Hugging Face token aren't a model provider's (they download LoRAs), nor is AI-Toolkit (it trains them).
   const adapter =
-    provider === "civitai" ? { test: testCivitaiKey } : provider === "ai-toolkit" ? { test: testAiToolkit } : isTestProvider(provider) ? PROVIDERS[provider as Exclude<typeof provider, "civitai" | "ai-toolkit">] : undefined;
+    provider === "civitai"
+      ? { test: testCivitaiKey }
+      : provider === "huggingface"
+        ? { test: testHfToken }
+        : provider === "ai-toolkit"
+          ? { test: testAiToolkit }
+          : isTestProvider(provider)
+            ? PROVIDERS[provider as Exclude<typeof provider, "civitai" | "huggingface" | "ai-toolkit">]
+            : undefined;
   if (!isTestProvider(provider) || !adapter?.test) return Response.json({ ok: false, detail: "Unknown provider" }, { status: 400 });
   const values = candidateValues(provider, body.values, body.value) as Partial<Record<SettingName, string>>;
   try {

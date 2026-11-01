@@ -344,6 +344,7 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
         ...(meta.master ? [{ url: `sample:${sampleClip(ar)}`, kind: "video" as const, contentType: "video/mp4", meta: { role: "master", demo: true } }] : []),
       ];
     case "video-insert":
+    case "restore-video":
     case "keyframes":
     case "still-motion":
     case "images-to-video":

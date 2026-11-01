@@ -12,6 +12,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { EngineSwitch } from "@/components/studio/engine-switch";
+import { grabFrames } from "@/components/restore/hooks";
+import { OldFootageOffer } from "@/components/restore/old-footage";
 import { fileToSlot } from "@/components/studio/media-slot";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEngine, useLikelyVisitor } from "@/lib/api";
@@ -60,7 +62,7 @@ type Draft =
 
 const STEPS = [
   { icon: Sparkles, title: "Choose a style", text: "One of 22 looks: whiteboard, pixel art, paper diorama…" },
-  { icon: Paperclip, title: "Attach a file or just prompt", text: "Images, a PDF, Word or text document, or a link — or only a topic." },
+  { icon: Paperclip, title: "Attach a file or just prompt", text: "Images, old footage, a PDF, Word or text document, or a link — or only a topic." },
   { icon: Download, title: "Download your result", text: "A narrated, subtitled video; fix any scene in the timeline." },
 ];
 
@@ -162,6 +164,8 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
   const [tab, setTab] = useState<"all" | "liked">("all");
   const [q, setQ] = useState("");
   const file = useRef<HTMLInputElement>(null);
+  /** Old footage attached: its still is a picture source; the clip itself is offered to Restore & colourise. */
+  const [footage, setFootage] = useState<{ id: string; name: string; preview: string; url?: string } | null>(null);
   const create = useCreateExplainer();
   const history = useExplainers({ q, liked: tab === "liked" });
   const like = useLikeEpisode();
@@ -187,16 +191,31 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
     let room = MAX_SOURCES - sources.length;
     for (const f of files) {
       if (room <= 0) return void toast("Up to 3 sources per video — remove one to add another");
-      if (f.type.startsWith("image/")) {
+      if (f.type.startsWith("image/") || f.type.startsWith("video/")) {
         room--;
         const id = `${f.name}:${Date.now()}:${room}`;
+        let image: File = f;
+        if (f.type.startsWith("video/")) {
+          // Old footage: a still from its middle is the source the pictures read; the clip goes up for the restore step.
+          const preview = URL.createObjectURL(f);
+          const [still] = await grabFrames(preview, undefined, [0.5], 1280);
+          if (!still) {
+            URL.revokeObjectURL(preview);
+            toast.error(`${f.name}: couldn't read a frame from this clip in the browser — try an MP4`);
+            room++;
+            continue;
+          }
+          image = new File([await (await fetch(still)).blob()], `${f.name.replace(/\.[^.]+$/, "")} still.jpg`, { type: "image/jpeg" });
+          setFootage({ id, name: f.name, preview });
+          void fileToSlot(f, (v) => v && !v.uploading && setFootage((x) => (x?.id === id ? { ...x, url: v.ref } : x)), "video");
+        }
         void fileToSlot(
-          f,
+          image,
           (v) =>
             setSources((xs) => {
               const at = xs.findIndex((x) => x.kind === "image" && x.id === id);
               if (!v) return xs.filter((_, i) => i !== at);
-              const next: Draft = { kind: "image", id, url: v.ref, name: f.name, preview: v.preview, uploading: v.uploading };
+              const next: Draft = { kind: "image", id, url: v.ref, name: image.name, preview: v.preview, uploading: v.uploading };
               // A source removed while it uploads stays removed.
               if (at < 0) return v.uploading ? [...xs, next] : xs;
               return xs.map((x, i) => (i === at ? next : x));
@@ -233,7 +252,7 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
       } else if (/\.(doc|odt|rtf|pages|pptx?|key)$/i.test(f.name) || /msword|opendocument|rtf|presentation/.test(f.type)) {
         toast.error(`${f.name}: save it as PDF or Word (.docx), or paste the text into the prompt`);
       } else {
-        toast.error(`${f.name}: add an image (PNG, JPEG, WebP), a PDF, a Word file (.docx) or a text file (.txt, .md, .csv)`);
+        toast.error(`${f.name}: add an image (PNG, JPEG, WebP), a clip (MP4, MOV, WebM), a PDF, a Word file (.docx) or a text file (.txt, .md, .csv)`);
       }
     }
   };
@@ -323,7 +342,7 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
                 ref={file}
                 type="file"
                 multiple
-                accept="image/png,image/jpeg,image/webp,.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.txt,.md,.markdown,.csv,text/plain,text/markdown"
+                accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm,.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.txt,.md,.markdown,.csv,text/plain,text/markdown"
                 hidden
                 onChange={(e) => {
                   const fs = [...(e.target.files ?? [])];
@@ -332,6 +351,9 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
                 }}
               />
             </div>
+            {footage && sources.some((x) => x.kind === "image" && x.id === footage.id) && (
+              <OldFootageOffer url={footage.url} src={footage.preview} className="mt-2 px-1" />
+            )}
 
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
               <Segmented

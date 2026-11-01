@@ -12084,6 +12084,261 @@
       "notes": "ltx23-i2v-lora without the start frame: the empty latent takes width x height directly. LoRAs injected after the CheckpointLoaderSimple. Silent (the audio is not decoded). Suits LTX camera LoRAs when there is no start frame."
     },
     {
+      "id": "video-restore-ltx25-tiled",
+      "title": "Restore & colourise archive footage: LTX-2.5 22B distilled + the Restore IC-LoRA, tiled latent fusion, one 97-frame window with the 17-frame prefix hand-off (stage 2: the Detail Refine IC-LoRA) (ComfyUI-LTXVideo pack)",
+      "capability": "restore-video",
+      "file": "video-restore-ltx25-tiled.json",
+      "source": "hand-built (scripts/comfy/hand-built/video-restore-ltx25-tiled.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "source",
+            "input": "video"
+          }
+        ],
+        "video2": [
+          {
+            "node": "prefix_source",
+            "input": "video"
+          }
+        ],
+        "image": [
+          {
+            "node": "reference",
+            "input": "image"
+          }
+        ],
+        "prompt": [
+          {
+            "node": "positive",
+            "input": "text"
+          }
+        ],
+        "negativePrompt": [
+          {
+            "node": "negative",
+            "input": "text"
+          }
+        ],
+        "seed": [
+          {
+            "node": "sample",
+            "input": "seed"
+          }
+        ],
+        "cfg": [
+          {
+            "node": "sample",
+            "input": "cfg"
+          }
+        ],
+        "fps": [
+          {
+            "node": "conditioning",
+            "input": "frame_rate"
+          },
+          {
+            "node": "video",
+            "input": "fps"
+          }
+        ],
+        "windowStart": [
+          {
+            "node": "source",
+            "input": "skip_first_frames"
+          }
+        ],
+        "windowFrames": [
+          {
+            "node": "source",
+            "input": "frame_load_cap"
+          },
+          {
+            "node": "empty",
+            "input": "length"
+          }
+        ],
+        "canvasWidth": [
+          {
+            "node": "canvas",
+            "input": "width"
+          },
+          {
+            "node": "empty",
+            "input": "width"
+          },
+          {
+            "node": "reference_fit",
+            "input": "width"
+          }
+        ],
+        "canvasHeight": [
+          {
+            "node": "canvas",
+            "input": "height"
+          },
+          {
+            "node": "empty",
+            "input": "height"
+          },
+          {
+            "node": "reference_fit",
+            "input": "height"
+          }
+        ],
+        "fieldWidth": [
+          {
+            "node": "field",
+            "input": "width"
+          }
+        ],
+        "fieldHeight": [
+          {
+            "node": "field",
+            "input": "height"
+          }
+        ],
+        "prefixFrom": [
+          {
+            "node": "prefix_source",
+            "input": "skip_first_frames"
+          }
+        ],
+        "prefixFrames": [
+          {
+            "node": "keep",
+            "input": "batch_index"
+          }
+        ],
+        "lora": [
+          {
+            "node": "lora",
+            "input": "lora_name"
+          }
+        ],
+        "loraStrength": [
+          {
+            "node": "lora",
+            "input": "strength_model"
+          }
+        ],
+        "tileWidth": [
+          {
+            "node": "sample",
+            "input": "tile_width"
+          }
+        ],
+        "tileHeight": [
+          {
+            "node": "sample",
+            "input": "tile_height"
+          }
+        ],
+        "streaming": [
+          {
+            "node": "guide",
+            "input": "use_streaming"
+          }
+        ],
+        "tileFrames": [
+          {
+            "node": "sample",
+            "input": "tile_frames"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "save",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "save",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "fps": 24,
+        "cfg": 1,
+        "loraStrength": 1,
+        "windowStart": 0,
+        "windowFrames": 97,
+        "prefixFrames": 0,
+        "canvasWidth": 1440,
+        "canvasHeight": 1088,
+        "tileWidth": 960,
+        "tileHeight": 544,
+        "tileFrames": 0,
+        "frameStep": 8,
+        "lora": "ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
+        "prefixFrom": 80,
+        "fieldWidth": 640,
+        "fieldHeight": 240,
+        "streaming": false
+      },
+      "limits": {
+        "maxWidth": 3840,
+        "maxHeight": 3840,
+        "maxFrames": 481,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore/resolve/79245e197a6cd3251e77d178dc380b0e9f2d6563/ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
+          "sizeGb": 1.71,
+          "gated": true
+        },
+        {
+          "file": "gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+          "sizeGb": 15.37,
+          "gated": true
+        },
+        {
+          "file": "ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+          "sizeGb": 21.5,
+          "gated": true
+        },
+        {
+          "file": "ltx-2.5-video-vae-bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-bf16.safetensors",
+          "sizeGb": 1.47,
+          "gated": true
+        },
+        {
+          "file": "ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details/resolve/4912c478b35dd96b6cdcc5f7c7ff9d72c2c57929/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors",
+          "sizeGb": 1.31,
+          "gated": true,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-LTXVideo",
+          "repo": "https://github.com/Lightricks/ComfyUI-LTXVideo/tree/220e1d45aa0469f518e982102fca4dca92a61862"
+        },
+        {
+          "name": "ComfyUI-VideoHelperSuite",
+          "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+        }
+      ],
+      "vramGb": 24,
+      "license": "LTX-2.x Community License (LTX-2.5 22B distilled, its video VAE, and Lightricks' Restore and Detail Refine IC-LoRAs, both gated on Hugging Face: free under US$10M annual revenue); Gemma 4 text encoder packaged by Lightricks; ComfyUI-LTXVideo nodes under the LTX-2 Community License (its LICENSE file)",
+      "validated": false,
+      "notes": "Built from the Restore IC-LoRA card's recipe (Hugging Face Lightricks/LTX-2.5-22b-IC-LoRA-Restore at 79245e1, read as data) and the node definitions of ComfyUI-LTXVideo at 220e1d4 (its LTX-2.5_V2V_TiledFusion_Upscale example wires the same nodes): the window (windowStart, windowFrames: 8n+1, at most 97) read at the clip's own rate, lanczos to the canvas (canvasWidth x canvasHeight: 1440x1088 for 4:3, 1920x1088 for 16:9), the frame-aligned IC-LoRA guide at downscale 1, LTXVTiledFusionSampler with 960x544 tiles at 50% overlap and the 8 distilled sigmas (euler, cfg 1), tiled decode, silent H.264 (the pipeline puts the sound back after the join). video2 = the window before's saved frames; its last 17 (prefixFrom) go in as LTXVAddGuide at frame 0, and prefixFrames (17) drops them from this window's output; absent on the first window (the provider removes that branch). image = an optional reference picture at frame_idx -1 (a second IC-LoRA guide; removed without one). deinterlace keeps one field (fieldWidth x fieldHeight, nearest rows: no blending; ComfyUI has no fieldmatch/yadif/decimate node), removed when off. Stage 2 (Restore to 4K): the same graph on the restored clip with the Detail Refine IC-LoRA, a 2x canvas and 1024x576 tiles. A single generation of a whole clip past 97 frames streams: streaming on the guide and tileFrames 97 on the sampler (the card's other long-clip path; no reference picture there). Needs the ComfyUI-LTXVideo pack.",
+      "validationError": "HTTP 400: missing_node_type: Node 'the archive clip as the frame-aligned IC-LoRA reference (downscale 1, untiled encode); use_streaming only for a whole clip past 97 frames' not found. The custom node may not be installed. (Node ID '#guide')"
+    },
+    {
       "id": "video-trim",
       "title": "Trim a clip by seconds (core Trim Video, keeps fps and audio)",
       "capability": "trim",

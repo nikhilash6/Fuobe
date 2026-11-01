@@ -18,6 +18,7 @@ import {
   Heart,
   ImagePlus,
   Layers2,
+  Palette,
   LayoutDashboard,
   Mic2,
   MicOff,
@@ -113,6 +114,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   delete: Trash2,
   "delete-upload": Trash2,
   restore: ArchiveRestore,
+  "restore-video": Palette,
   "delete-forever": Trash2,
 };
 

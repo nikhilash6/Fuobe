@@ -10201,6 +10201,8 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "LTXAddVideoICLoRAGuide": null,
+  "LTXICLoRALoaderModelOnly": null,
   "LTXVAddGuide": {
     "input": {
       "required": {
@@ -11060,6 +11062,7 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "LTXVTiledFusionSampler": null,
   "LatentBatchSeedBehavior": {
     "input": {
       "required": {

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
 import { planGeneration, routeLoras } from "@/lib/catalog/plan";
+import { loraEntry, loraRef } from "@/lib/catalog/loras";
 
 /** The REST seams the evaluation harness (scripts/eval) needs: a recipe's LoRAs on POST /api/generations, and a preview that says which ones run. */
 
@@ -129,6 +130,15 @@ describe("the preview says what the route runs", () => {
     });
     expect(routeLoras({ provider: "fal" }, [hf]).dropped).toEqual([{ file: hf.file, reason: "this route takes no LoRAs" }]);
     expect(routeLoras({ provider: "replicate" }, [hf]).applied).toEqual([]);
+  });
+
+  it("routeLoras: an optional gated LoRA is left off a cloud route as gated; a model's own gated adapter goes (as Fuobe's copy)", () => {
+    const ltx = { provider: "fal" as const, map: { loras: { shape: "items" as const, key: "loras", required: true } }, loraEndpoint: "fal-ai/ltx-2.3-22b/reference-video-to-video/lora" };
+    const slow = loraRef(loraEntry("ltx-2-5-22b-lora-slow-motion-control-1-0")!);
+    const restore = { ...loraRef(loraEntry("ltx-2-5-22b-ic-lora-restore-1-0")!), adapter: true as const };
+    const r = routeLoras(ltx, [slow, restore]);
+    expect(r.dropped).toEqual([{ file: slow.file, reason: "it is in a gated Hugging Face repo, so it runs only on your GPU" }]);
+    expect(r.applied).toEqual([restore]);
   });
 
   it("returns the endpoint, the final prompt and the LoRAs on the open engine (demo mode, no ComfyUI here)", async () => {

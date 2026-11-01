@@ -449,6 +449,25 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
                 <ArrowRight className="size-3" />
               </Link>
             )}
+            {config.firstSteps?.length ? (
+              <ul aria-label="Before upscaling" className="mt-3 flex max-w-xl flex-col items-center gap-2">
+                {config.firstSteps.map((f) => (
+                  <li key={f.id} className="flex flex-col items-center gap-1">
+                    <Link
+                      href={f.href}
+                      aria-describedby={`first-step-${f.id}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      {f.label}
+                      <ArrowRight className="size-3" />
+                    </Link>
+                    <span id={`first-step-${f.id}`} className="text-[12px] text-pretty text-muted-foreground">
+                      {f.hint}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         )}
       </div>

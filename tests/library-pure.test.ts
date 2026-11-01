@@ -110,6 +110,7 @@ describe("outputActions", () => {
       "menu:reframe",
       "menu:lipsync",
       "menu:upscale",
+      "menu:restore-video",
       "menu:add-sound",
       "menu:split-soundtrack",
       "menu:remove-dialogue",

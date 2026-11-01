@@ -6,6 +6,7 @@ import type { FeedFilter } from "@/lib/api";
 import type { Signature } from "@/lib/catalog/palettes";
 import type { FrameAttachment } from "@/lib/composer";
 import type { LayoutDraft } from "@/lib/layout-prompt";
+import type { UpscaleFirstStep } from "@/lib/catalog/upscale-first";
 import type { SlotValue } from "./media-slot";
 
 export type SlotKey = InputSlot["key"];
@@ -19,6 +20,8 @@ export interface StudioConfig {
   subtitle?: string;
   /** A studio that does the job in more depth, linked under the hero (Edit video → Genjutsu). */
   related?: { href: string; label: string };
+  /** Steps a tool runs before this one, then this one after it, as one job (Upscale → Restore archive footage first). */
+  firstSteps?: UpscaleFirstStep[];
   placeholder: string;
   kind: MediaKind;
   /** Operations whose models appear in the picker. */

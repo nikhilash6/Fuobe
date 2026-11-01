@@ -53,6 +53,7 @@ import { CHARACTER_SWAP, packResolution, samCoords, swapPrompt, SWAP_LORAS, wind
 import { maskMemoryProblem } from "@/lib/catalog/swap-studio";
 import { STUDIO_WORKFLOWS } from "@/lib/catalog/swap-studio-plan";
 import { maskGraph, segmentGraph, type MaskGraphOptions, type SegmentGraphOptions } from "@/lib/swap-studio-graphs";
+import { RESTORE_EXTRA_KEYS, restoreGraph, restoreJob, type RestoreJob } from "@/lib/restore-graph";
 import { getMaker, makerPrompt, OPEN_TARGET_PROBLEM, ORIGINALS, swapTarget } from "@/lib/catalog/genjutsu";
 import { CLICK_OPEN_PROBLEM, HAND_OFF, REMOVE_SCENE, targetPhrase } from "@/lib/catalog/remove-object";
 import type { GenInput, MediaKind, ModelRoute, Operation } from "@/lib/catalog/types";
@@ -1374,6 +1375,21 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     const tooBig = maskMemoryProblem({ width: clip?.width, height: clip?.height, quality: input.resolution, shotFrames, correcting: prev }, await ctx.serverRam?.());
     if (tooBig) throw new ProviderError(tooBig);
   }
+  // Restore & colourise (video-restore-ltx25-tiled): the window, canvas, LoRA and tiles of this pass; the prefix (the window
+  // before's restored frames, videos[0]), the reference picture (images[0]) and deinterlacing are branches it may leave out.
+  let restore: RestoreJob | null = null;
+  if (manifest.capability === "restore-video") {
+    const prefixVideo = typeof clips[0] === "string" && clips[0] && clips[0] !== values.video ? clips[0] : undefined;
+    try {
+      restore = restoreJob({ extra, clip: clip ? clipFacts(clip) : undefined, fps: input.fps, prefixVideo, reference: images[0] });
+    } catch (e) {
+      throw new ProviderError((e as Error).message);
+    }
+    for (const k of RESTORE_EXTRA_KEYS) delete extra[k];
+    Object.assign(values, restore.values, { video2: restore.prefix ? prefixVideo : undefined, image: restore.reference ? images[0] : undefined });
+    if (!restore.prefix) studioLeft.push("video2");
+    if (!restore.reference) studioLeft.push("image");
+  }
   // Genjutsu's Object swap: SAM 3.1 follows what goes (params.extra.maskPrompt, or the "replace … with" part of the prompt,
   // as Genjutsu sends it), the reference comes in, the prompt describes the result. Insert: the painted spot and the
   // reference, the prompt says what appears there. Neither graph takes clicked points.
@@ -1526,6 +1542,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (dropSwapLora && b.lora?.length === 1) wf = bypassNode(wf, b.lora[0].node, "model", outputIds);
   if (studioSegment) wf = segmentGraph(wf, { ...studioSegment, outputs: outputIds });
   if (studioMask) wf = maskGraph(wf, { ...studioMask, outputs: outputIds });
+  if (restore) wf = restoreGraph(wf, restore, outputIds);
   // FPS Boost to a lower rate, or one the clip divides into: no interpolation, only every n-th frame.
   if (finish.bypassInterpolation) {
     const id = Object.keys(wf).find((k) => wf[k].class_type === "FrameInterpolate");
