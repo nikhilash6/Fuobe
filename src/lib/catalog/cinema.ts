@@ -2278,7 +2278,7 @@ function planBlockout(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPla
   if (refs.length > used.length) notes.push(`${model.name} takes ${keep} reference still${keep === 1 ? "" : "s"}${many ? " beside the hand-over frame" : ""}: the first ${keep} go`);
   notes.push(
     seedance
-      ? `${model.name} follows the blockout as its reference video (@Video1) with your stills as @Image1–${Math.max(1, used.length)}${sound ? ", sound on" : ""}`
+      ? `${model.name} follows the blockout as its reference video (@Video1)${used.length ? ` with your still${used.length > 1 ? `s as @Image1–@Image${used.length}` : " as @Image1"}` : ""}${sound ? ", sound on" : ""}`
       : `${model.name} renders the blockout from your stills; camera, blocking and timing come from the video. It makes no sound: add it afterwards with Sound for video`,
   );
   if (many) {

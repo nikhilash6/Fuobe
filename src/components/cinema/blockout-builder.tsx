@@ -284,7 +284,7 @@ export default function BlockoutBuilder({ initial, onClose, onDone }: BlockoutBu
       <DialogContent showCloseButton={false} className="flex h-[100svh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-none md:flex-row" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogTitle className="sr-only">Blockout builder</DialogTitle>
         <DialogDescription className="sr-only">Place grey boxes, a mannequin and the camera, key their moves and the beats, then render the blockout.</DialogDescription>
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#161617]">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#161617]">
           <div className="flex items-center gap-2 px-3 py-2 text-white">
             <Clapperboard className="size-4 shrink-0" aria-hidden />
             <div className="min-w-0 flex-1">
@@ -314,7 +314,7 @@ export default function BlockoutBuilder({ initial, onClose, onDone }: BlockoutBu
               <X className="size-[18px]" />
             </button>
           </div>
-          <div ref={setStageEl} className="relative min-h-[38svh] flex-1 overflow-hidden">
+          <div ref={setStageEl} className="relative min-h-[26svh] flex-1 overflow-hidden">
             <canvas ref={setCanvasEl} tabIndex={0} aria-label="Blockout 3D view: drag to orbit, scroll to zoom, click a piece to select it" className="absolute inset-0 size-full touch-none outline-none" />
             {mode === "shot" && (
               <span className="pointer-events-none absolute top-2 left-2 rounded bg-black/55 px-1.5 py-0.5 font-mono text-[11px] text-white/90">
@@ -350,14 +350,14 @@ export default function BlockoutBuilder({ initial, onClose, onDone }: BlockoutBu
               </div>
               <span className="w-14 shrink-0 text-right font-mono text-[12px] tabular-nums">{fmt(t)}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
               {scene.markers.map((m) => (
-                <button key={m.id} type="button" onClick={() => setT(m.t)} className="h-7 rounded-full bg-sky-500/20 px-2.5 text-[12px] text-sky-100 hover:bg-sky-500/30">
+                <button key={m.id} type="button" onClick={() => setT(m.t)} className="h-7 shrink-0 rounded-full bg-sky-500/20 px-2.5 text-[12px] whitespace-nowrap text-sky-100 hover:bg-sky-500/30">
                   <Flag className="mr-1 inline size-3" />
                   {fmt(m.t)} · {m.label}
                 </button>
               ))}
-              <button type="button" onClick={addMarker} className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-white/30 px-2.5 text-[12px] hover:bg-white/10">
+              <button type="button" onClick={addMarker} className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-dashed border-white/30 px-2.5 text-[12px] whitespace-nowrap hover:bg-white/10">
                 <Plus className="size-3" /> Marker at {fmt(t)}
               </button>
             </div>
