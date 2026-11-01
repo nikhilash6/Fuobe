@@ -274,12 +274,13 @@ export function sourceFrames(s: Pick<RestoreSource, "frames" | "duration" | "fps
 }
 
 /** Why this run can't start, or null. */
-export function restoreProblem(o: { engine: Engine; source: Pick<RestoreSource, "duration" | "fps" | "frames">; refine?: boolean; resolution?: string }): string | null {
+export function restoreProblem(o: { engine: Engine; source: Pick<RestoreSource, "duration" | "fps" | "frames">; refine?: boolean; resolution?: string; upscale?: boolean }): string | null {
   const d = o.source.duration;
   if (d === undefined || !o.source.fps) return "Reading the clip… try again in a moment";
   if (d > RESTORE.maxSeconds + 0.05) return `Restore takes up to ${RESTORE.maxSeconds / 60} minutes at a time: trim the clip first (Video tools → Trim)`;
   if ((sourceFrames(o.source) ?? 0) < RESTORE.minFrames) return "The clip is too short to restore: it needs at least 9 frames";
   if (o.refine && o.engine === "cloud") return "Restore to 4K runs on your GPU: the Detail Refine IC-LoRA is an LTX-2.5 LoRA, and no cloud host runs LTX-2.5 with LoRAs";
+  if (o.refine && o.upscale) return "Restore to 4K already doubles the size: pick it or Then upscale, not both";
   if (o.engine === "cloud" && o.resolution && !(RESTORE.cloudResolutions as readonly string[]).includes(o.resolution)) return `Pick ${RESTORE.cloudResolutions.join(" or ")}`;
   return null;
 }
@@ -302,7 +303,19 @@ export interface RestorePlanInput {
   /** Cloud tier (720p or 1080p). */
   resolution?: string;
   seed?: number;
+  /** Upscale the restored clip after (Upscale → "Restore archive footage first"): the engine's video upscaler. */
+  upscale?: boolean;
 }
+
+/**
+ * The upscaler a restoration hands its result to (Upscale video's defaults): Topaz Video in the cloud, SeedVR2 on
+ * your GPU, both to 2160p (the factor comes from the restored clip at submit). Restore to 4K already doubles the size
+ * on the GPU, so the two don't go together.
+ */
+export const RESTORE_UPSCALE = {
+  cloud: { modelId: "topaz-video", params: { resolution: "2160p" }, label: "Topaz Video, to 2160p" },
+  open: { modelId: "oss-seedvr2", params: { resolution: "2160p" }, label: "SeedVR2, to 2160p" },
+} as const;
 
 export interface RestorePlan {
   steps: PlanStep[];
@@ -431,7 +444,7 @@ export function planRestore(input: RestorePlanInput): RestorePlan {
       });
       picture = joinEncoded(steps, rkeys, "join4k", sound ? helper : { ...base, title: input.title }, "Join the 4K windows");
     }
-    const final = sound ? putSoundBack(steps, picture, base, input.title, source, "open") : picture;
+    const final = thenUpscale(steps, sound ? putSoundBack(steps, picture, base, input.title, source, "open") : picture, input);
     const covered = refine ? frameWindows(framesCovered(windows), REFINE_WINDOW).reduce((a, b) => a + b, 0) : framesCovered(windows);
     return { steps, final, pieces: n, canvas, refined, dropped: total - covered, sound };
   }
@@ -486,9 +499,38 @@ export function planRestore(input: RestorePlanInput): RestorePlan {
   let picture = keys[0];
   if (n > 1) picture = foldJoin(steps, keys, sound ? helper : { ...base, title: input.title });
   const end = pieces[n - 1].end;
-  const final = sound ? putSoundBack(steps, picture, base, input.title, source, "cloud", end) : picture;
+  const final = thenUpscale(steps, sound ? putSoundBack(steps, picture, base, input.title, source, "cloud", end) : picture, input);
   const covered = pieces.reduce((a, p) => a + (p.frames ?? 0), 0);
   return { steps, final, pieces: n, canvas: { width: cw, height: ch }, dropped: Math.max(0, total - covered), sound };
+}
+
+/**
+ * Upscale → "Restore archive footage first": the restored clip (sound and all) goes to the engine's upscaler, which
+ * becomes the run's finished video; the restored one turns into a step.
+ */
+function thenUpscale(steps: PlanStep[], final: string, input: RestorePlanInput): string {
+  if (!input.upscale) return final;
+  const last = steps.find((s) => s.key === final)!;
+  const { title, ...rest } = last.request;
+  const batchTitle = rest.batchTitle;
+  last.request = { ...rest, feature: RESTORE.stepFeature };
+  const u = RESTORE_UPSCALE[input.engine];
+  steps.push({
+    key: "upscale",
+    request: {
+      feature: RESTORE.feature,
+      batchTitle,
+      title: title ?? input.title,
+      modelId: u.modelId,
+      engine: input.engine,
+      op: "upscale-video",
+      params: { ...u.params },
+      step: { label: "Upscale", index: 1300, of: 1000 },
+    },
+    after: [final],
+    chain: [{ slot: "video" }],
+  });
+  return "upscale";
 }
 
 /** The open join: the windows share one size and frame rate, so they're joined packet by packet (no decode, no resize). */

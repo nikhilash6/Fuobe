@@ -83,6 +83,14 @@ describe("Restore: estimates", () => {
       expect(hd.costUsd).toBeGreaterThan(e.costUsd * 1.8);
     });
 
+    it("prices Then upscale in: Topaz Video after the pieces, joins and sound", async () => {
+      const plain = await (await estimateRoute.POST(json(body({ engine: "cloud" })))).json();
+      const up = await (await estimateRoute.POST(json(body({ engine: "cloud", upscale: true })))).json();
+      expect(up.steps).toBe(plain.steps + 1);
+      expect(up.costUsd).toBeGreaterThan(plain.costUsd);
+      expect(up.notes.join(" ")).toMatch(/Then upscaled with Topaz Video, to 2160p, priced in/);
+    });
+
     it("refuses a paid cloud restoration before it starts while no Hugging Face token is set (the LoRA goes as Fuobe's copy)", async () => {
       setSetting("huggingfaceDownloadToken", "");
       const before = (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;
@@ -133,6 +141,15 @@ describe("Restore: runs in demo mode", () => {
     expect(done.status).toBe("succeeded");
     const req = JSON.parse((db().prepare("SELECT request_json FROM generations WHERE id = ?").get(out.final.id) as { request_json: string }).request_json);
     expect(req.title).toMatch(/^Restored · A harbour in the 1930s · reel$/);
+  });
+
+  it("GPU, Then upscale: SeedVR2 after the sound is back, and the upscaled clip is the result", async () => {
+    const out = await (await createRoute.POST(json(body({ upscale: true })))).json();
+    const rows = batchOf(out.final.id);
+    expect(rows.at(-1)).toMatchObject({ model_id: "oss-seedvr2", op: "upscale-video", feature: "restore" });
+    expect(rows.filter((r) => r.feature === "restore")).toHaveLength(1);
+    expect(out.final.id).toBe(rows.at(-1)!.id);
+    expect((await settle(out.final.id)).status).toBe("succeeded");
   });
 
   it("cloud: cut pieces, a hand-off frame, the join and the sound, written words kept", async () => {

@@ -11,6 +11,7 @@ import {
   PROMPT_SYSTEM,
   promptRequest,
   RESTORE,
+  RESTORE_UPSCALE,
   restoreNegative,
   restoreProblem,
   restoreTitle,
@@ -64,8 +65,10 @@ export const RestoreBodySchema = z.object({
   hint: z.string().max(600).optional(),
   /** GPU only: Restore to 4K (the Detail Refine pass). */
   refine: z.boolean().optional(),
-  /** GPU only: keep one field of interlaced frames first. */
+  /** GPU only: keep one field of interlaced frames first (ComfyUI has no fieldmatch / yadif / decimate node). */
   deinterlace: z.boolean().optional(),
+  /** Upscale the restored clip after (Upscale → Restore archive footage first): Topaz Video in the cloud, SeedVR2 on your GPU. */
+  upscale: z.boolean().optional(),
   /** A reference picture (true colours, a face, a sign). */
   reference: fileUrl.optional(),
   resolution: z.string().max(10).optional(),
@@ -155,7 +158,7 @@ function planInput(body: z.infer<typeof RestoreBodySchema>, info: Awaited<Return
     hasAudio: probed ? (info.hasAudio ?? false) : (body.source.hasAudio ?? false),
   };
   const resolution = engine === "cloud" ? (body.resolution ?? RESTORE.cloudResolution) : undefined;
-  const problem = restoreProblem({ engine, source: src, refine: body.refine, resolution });
+  const problem = restoreProblem({ engine, source: src, refine: body.refine, resolution, upscale: body.upscale });
   if (problem) throw new ShortsError(problem, 422);
   if (engine === "cloud" && body.deinterlace) throw new ShortsError("Deinterlacing runs on your GPU: the cloud endpoint takes the clip as it is", 422);
   const notes: string[] = [];
@@ -163,9 +166,11 @@ function planInput(body: z.infer<typeof RestoreBodySchema>, info: Awaited<Return
     notes.push(GPU_NOTE);
     if (body.deinterlace) notes.push("Deinterlacing keeps one field of each frame (ComfyUI has no field-matching filter; telecined film keeps its repeated frames)");
     if (body.refine) notes.push("Restore to 4K adds a detail pass at twice the size with Lightricks' Detail Refine IC-LoRA (1.3 GB, also gated): restore first, refine second");
+    if (body.upscale) notes.push(`Then upscaled on your GPU with ${RESTORE_UPSCALE.open.label} (free)`);
   } else {
     notes.push(CLOUD_NOTE);
     notes.push("Each piece of up to 97 frames starts from the last restored frame of the one before, so the colour carries over");
+    if (body.upscale) notes.push(`Then upscaled with ${RESTORE_UPSCALE.cloud.label}, priced in`);
   }
   if (body.reference) notes.push(engine === "open" ? "Your reference picture goes to every window at frame_idx −1 (true colours, faces, signs)" : "In the cloud your picture is the first frame: give the clip's first frame already in colour");
   if (!hasHfToken()) notes.push(GATED_NOTE);
@@ -183,6 +188,7 @@ function planInput(body: z.infer<typeof RestoreBodySchema>, info: Awaited<Return
       ...(body.reference ? { reference: body.reference } : {}),
       ...(resolution ? { resolution } : {}),
       ...(body.seed !== undefined ? { seed: body.seed } : {}),
+      ...(body.upscale ? { upscale: true } : {}),
     },
   };
 }

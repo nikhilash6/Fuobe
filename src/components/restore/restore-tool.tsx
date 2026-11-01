@@ -18,7 +18,8 @@ import { Feed } from "@/components/studio/feed";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
-import { CLOUD_NOTE, GPU_NOTE, RESTORE, restoreNegative } from "@/lib/catalog/restore";
+import { CLOUD_NOTE, GPU_NOTE, RESTORE, RESTORE_UPSCALE, restoreNegative } from "@/lib/catalog/restore";
+import { THEN_UPSCALE } from "@/lib/catalog/upscale-first";
 import { chainState } from "@/lib/catalog/shorts";
 import { downloadHref, downloadName } from "@/lib/library";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,8 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
   const [by, setBy] = useState<string | null>(null);
   const [refine, setRefine] = useState(false);
   const [deinterlace, setDeinterlace] = useState(false);
+  // Upscale → "Restore archive footage first" arrives with ?then=upscale: the upscale runs after, as one job.
+  const [upscale, setUpscale] = useState(false);
   const [reference, setReference] = useState<SlotValue | null>(null);
   const [resolution, setResolution] = useState<string>(RESTORE.cloudResolution);
   const [run, setRun] = useState<Run | null>(null);
@@ -64,8 +67,10 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
 
   // Hand-off: /video-tools/restore?video=/api/files/… (a result, a Library clip, Upscale's link).
   useEffect(() => {
-    const video = new URLSearchParams(window.location.search).get("video");
+    const q = new URLSearchParams(window.location.search);
+    const video = q.get("video");
     if (video?.startsWith("/api/files/")) source.adopt(video, video.split("/").pop());
+    if (q.get("then") === THEN_UPSCALE) setUpscale(true);
     // Once, on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -82,6 +87,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
         ...(negative.trim() && negative.trim() !== DEFAULT_NEGATIVE ? { negative: negative.trim() } : {}),
         ...(open && refine ? { refine: true } : {}),
         ...(open && deinterlace ? { deinterlace: true } : {}),
+        ...(upscale && !(open && refine) ? { upscale: true } : {}),
         ...(reference?.ref && !reference.uploading ? { reference: reference.ref } : {}),
         ...(!open ? { resolution } : {}),
       }
@@ -257,6 +263,14 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
                   checked={open && refine}
                   disabled={!open}
                   onChange={setRefine}
+                />
+                <Toggle
+                  id="restore-upscale"
+                  label="Then upscale"
+                  hint={`${open ? RESTORE_UPSCALE.open.label : RESTORE_UPSCALE.cloud.label}, after the restoration, in the same run${open ? " (free)" : " (priced in)"}${open && refine ? ". Restore to 4K already doubles the size" : ""}`}
+                  checked={upscale && !(open && refine)}
+                  disabled={open && refine}
+                  onChange={setUpscale}
                 />
                 <Toggle
                   id="restore-interlaced"

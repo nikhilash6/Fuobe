@@ -23,6 +23,8 @@ import {
   tileGrid,
 } from "@/lib/catalog/restore";
 import { restoreGraph, restoreGraphLoras, restoreJob } from "@/lib/restore-graph";
+import { THEN_UPSCALE, UPSCALE_FIRST_STEPS } from "@/lib/catalog/upscale-first";
+import { VIDEO_UPSCALE_STUDIO } from "@/lib/studios";
 import type { ComfyWorkflow } from "@/lib/comfy";
 import { getModel, getPreset } from "@/lib/catalog";
 import { onEngine } from "@/lib/catalog/engines";
@@ -235,6 +237,27 @@ describe("Restore & colourise: the pipeline", () => {
     expect(plan.steps[0].request).toMatchObject({ inputs: { video: "/api/files/a.mp4" }, params: { aspectRatio: "16:9", resolution: "720p" }, feature: "restore" });
     expect(plan.canvas).toEqual({ width: 1280, height: 704 });
     expect(cloudShape(720, 576)).toBe("4:3");
+  });
+
+  it("Then upscale (Upscale → Restore archive footage first): the restored clip goes to the engine's upscaler, which is the result", () => {
+    for (const [engine, model] of [
+      ["open", "oss-seedvr2"],
+      ["cloud", "topaz-video"],
+    ] as const) {
+      const plan = planRestore({ engine, title: "Restored", source, ...words, upscale: true });
+      expect(plan.final, engine).toBe("upscale");
+      const up = plan.steps[plan.steps.length - 1];
+      expect(up, engine).toMatchObject({ key: "upscale", after: ["final"], chain: [{ slot: "video" }] });
+      expect(up.request, engine).toMatchObject({ modelId: model, engine, op: "upscale-video", feature: "restore", title: "Restored", params: { resolution: "2160p" } });
+      // The restored clip with its sound is now a step: one finished video per run.
+      expect(plan.steps.filter((s) => s.request.feature === "restore").map((s) => s.key), engine).toEqual(["upscale"]);
+      expect(plan.steps.find((s) => s.key === "final")!.request.title, engine).toBeUndefined();
+    }
+    expect(restoreProblem({ engine: "open", source: { duration: 4, fps: 24 }, refine: true, upscale: true })).toMatch(/Restore to 4K already doubles the size/);
+    expect(restoreProblem({ engine: "open", source: { duration: 4, fps: 24 }, upscale: true })).toBeNull();
+    // Upscale → Video lists it among its first steps, opening Restore with the upscale on.
+    expect(VIDEO_UPSCALE_STUDIO.firstSteps).toEqual(UPSCALE_FIRST_STEPS);
+    expect(UPSCALE_FIRST_STEPS.find((f) => f.id === "restore")).toMatchObject({ label: "Restore archive footage first", href: `/video-tools/restore?then=${THEN_UPSCALE}` });
   });
 
   it("prices a cloud piece per megapixel of video on the LoRA endpoint; free on the GPU", () => {

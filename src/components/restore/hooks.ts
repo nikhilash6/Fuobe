@@ -16,6 +16,8 @@ export interface RestoreBody {
   hint?: string;
   refine?: boolean;
   deinterlace?: boolean;
+  /** Upscale after (Upscale → Restore archive footage first). */
+  upscale?: boolean;
   reference?: string;
   resolution?: string;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
