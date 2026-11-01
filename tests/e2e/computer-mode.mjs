@@ -160,7 +160,7 @@ try {
     await dialog.getByRole("button", { name: "Find my ComfyUI" }).click();
     await dialog.getByText("Found ComfyUI. One step to use it here:").waitFor({ timeout: 20_000 });
     check("ComfyUI that this page can't use yet: one step, Fuobe Connect from ComfyUI-Manager", await dialog.getByText("Install Fuobe Connect in ComfyUI-Manager").isVisible());
-    check("the step names the Manager's search term and a git address to copy", (await dialog.getByLabel("the search term").first().textContent()) === "Fuobe Connect" && /git clone https:\/\//.test((await dialog.getByLabel("the git command").textContent()) ?? ""));
+    check("the step names the Manager's search term and a git address to copy", (await dialog.getByLabel("the search term").first().textContent()) === "Fuobe Connect" && /git clone https:\/\//.test((await dialog.getByLabel("the git command", { exact: true }).textContent()) ?? ""));
     check("the start setting and the guard are not shown until Advanced is opened", !(await dialog.getByRole("button", { name: "Download start file" }).isVisible()) && !(await dialog.getByText("--enable-cors-header").first().isVisible()));
     await page.screenshot({ path: path.join(shots, "2-needs-setting.png") });
     await dialog.getByRole("button", { name: /Advanced: a start setting instead/ }).click();
