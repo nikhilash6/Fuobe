@@ -2,13 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { NAV } from "@/components/nav-items";
-import { APPS, EFFECTS, MODELS, MOTIONS, getPreset } from "@/lib/catalog";
+import { APPS, EFFECTS, MODELS, MOTIONS, getPreset, modelCounts } from "@/lib/catalog";
 import { CAMERA_MOVES } from "@/lib/catalog/cinema";
 import { LLM_PROVIDERS } from "@/lib/catalog/llm-providers";
 import { TEMPLATES } from "@/lib/catalog/marketing";
 import { ASSIST_PROMPT_MAX, ASSIST_SUGGESTIONS, assistDraft } from "@/lib/assist";
 import { HUB_MODES } from "@/lib/hubs";
-import { buildLicenceList, type LicenceWorkflowInput } from "@/lib/licences";
 import {
   HOME_BEFORE_AFTER,
   HOME_CAPTION_MAX,
@@ -180,26 +179,21 @@ describe("Home's showcase", () => {
   it("quotes the catalog's own numbers", async () => {
     const { facts, studios, audioTools } = await homeShowcase();
     const visible = MODELS.filter((m) => !m.hidden);
-    const open = (m: (typeof MODELS)[number]) => m.engine === "open" || !!m.engines?.includes("open");
-    const manifest = JSON.parse(fs.readFileSync(path.join(root, "workflows", "comfyui", "manifest.json"), "utf8")) as { workflows: LicenceWorkflowInput[] };
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, "workflows", "comfyui", "manifest.json"), "utf8")) as { workflows: unknown[] };
     expect(facts.workflows).toBe(manifest.workflows.length);
     expect(facts.presets).toBe(APPS.length + MOTIONS.length + EFFECTS.length);
     expect([facts.apps, facts.motions, facts.effects]).toEqual([APPS.length, MOTIONS.length, EFFECTS.length]);
     expect(facts.originals).toBe(visible.filter((m) => m.vendor === "Fuobe Original").length);
     expect(facts.originals).toBeGreaterThan(0);
+    // The open and partner models are the counts every page quotes (modelCounts: Home, /models, Project status, About).
+    expect(facts.openModels).toBe(modelCounts().open);
+    expect(facts.partners).toBe(modelCounts().cloud);
     expect(facts.partners).toBe(visible.filter((m) => m.engine === "cloud" && !m.engines?.includes("open")).length);
     expect(facts.cinemaMoves).toBe(CAMERA_MOVES.length);
     expect(facts.adTemplates).toBe(TEMPLATES.length);
     expect(facts.mixedLooks).toBe(EFFECTS.filter((e) => e.category === "Mixed Media").length);
     expect(facts.audioTools).toBe(HUB_MODES.audio.length);
     expect(facts.skills).toBe(fs.readdirSync(path.join(root, "skills")).filter((d) => fs.existsSync(path.join(root, "skills", d, "SKILL.md"))).length);
-    // The open models are About & licences' count (src/app/(studio)/settings/about/page.tsx): one row per model or graph with weights.
-    const about = buildLicenceList(
-      MODELS.map((m) => ({ id: m.id, name: m.name, vendor: m.vendor, kind: m.kind, hidden: m.hidden, routes: m.routes.map((r) => ({ provider: r.provider, endpoint: r.endpoint })) })),
-      manifest.workflows,
-    );
-    expect(facts.openModels).toBe(about.counts.all);
-    expect(facts.openModels).toBeGreaterThan(visible.filter((m) => open(m)).length / 2);
     // The studio cards' lines carry them.
     expect(studios.find((s) => s.href === "/cinema")?.line).toContain(`${facts.cinemaMoves} moves`);
     expect(studios.find((s) => s.href === "/marketing")?.line).toContain(`${facts.adTemplates} ad templates`);

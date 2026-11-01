@@ -6,8 +6,7 @@ import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PageHeader, PageShell } from "@/components/page-shell";
-import { MODELS } from "@/lib/catalog";
-import { enginesOf } from "@/lib/catalog/engines";
+import { modelCounts } from "@/lib/catalog";
 import type { Manifest } from "@/lib/comfy";
 import { FUOBE_REPO } from "@/lib/connections";
 import { headingId, STATUS_ON_GITHUB, statusBody, statusDate, statusLink, statusOutline } from "@/lib/status-page";
@@ -66,9 +65,8 @@ const link = "text-brand-text underline underline-offset-2";
 
 export default async function Page() {
   const [md, workflows] = await Promise.all([readStatus(), readWorkflows()]);
-  const open = MODELS.filter((m) => enginesOf(m).includes("open")).length;
-  // Models with no open-source route: a self-hosted studio runs them with its own key.
-  const cloudOnly = MODELS.filter((m) => !enginesOf(m).includes("open")).length;
+  // The same numbers as Home and /models: models a visitor can pick, each once.
+  const models = modelCounts();
   const updated = statusDate(md);
   const outline = statusOutline(md);
   return (
@@ -87,9 +85,9 @@ export default async function Page() {
         </Fact>
         <Fact label="Models">
           <Link href="/models" className={link}>
-            {open} open-source
+            {models.open} open-source
           </Link>
-          <span className="text-muted-foreground"> · {cloudOnly} more with a fal.ai or Replicate key</span>
+          <span className="text-muted-foreground"> · {models.cloud} more with a fal.ai or Replicate key</span>
         </Fact>
         <Fact label="Licence">
           <a href={`${FUOBE_REPO}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className={link}>

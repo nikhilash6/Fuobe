@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LicencesView } from "@/components/licences-view";
 import { PageHeader, PageShell } from "@/components/page-shell";
-import { MODELS } from "@/lib/catalog";
+import { MODELS, modelCounts } from "@/lib/catalog";
 import type { Manifest } from "@/lib/comfy";
 import { FUOBE_REPO } from "@/lib/connections";
 import { ATTRIBUTIONS, buildLicenceList } from "@/lib/licences";
@@ -54,7 +54,8 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 export default async function Page() {
   const about = await readAbout();
   const { list } = about;
-  const inStudios = list.rows.filter((r) => r.inCatalog).length;
+  const library = list.rows.filter((r) => !r.inCatalog).length;
+  const models = modelCounts();
   return (
     <PageShell>
       <Link href="/settings" className="mb-3 inline-flex items-center gap-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground">
@@ -135,8 +136,8 @@ export default async function Page() {
           Open model licences
         </h2>
         <p className="mt-1 mb-5 max-w-2xl text-[13px] text-muted-foreground">
-          {list.counts.all} open models with weights of their own: {inStudios} in Fuobe&apos;s studios and {list.counts.all - inStudios} more workflows in the library (tools with no weights
-          aren&apos;t counted). {list.counts.clear} allow commercial use, {list.counts.conditions} with conditions (revenue limits or use rules), {list.counts["non-commercial"]} non-commercial
+          Fuobe&apos;s studios offer {models.open} open-source models. Below is the licence of every set of open weights Fuobe runs: theirs, the helper steps its presets run
+          and {library} more workflows in the library, {list.counts.all} in all (tools with no weights aren&apos;t listed). {list.counts.clear} allow commercial use, {list.counts.conditions} with conditions (revenue limits or use rules), {list.counts["non-commercial"]} non-commercial
           and {list.counts.territory} not available everywhere. Read the licence itself before you sell what you make; this list is a guide, not legal advice. Which models this install offers
           is set in{" "}
           <Link href="/settings/models" className="text-brand-text underline underline-offset-2">

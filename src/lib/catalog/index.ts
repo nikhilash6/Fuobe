@@ -1,4 +1,5 @@
 import { APP_ALIASES, APPS as RAW_APPS } from "./apps";
+import { countModels, isListed, type ModelCounts } from "./counts";
 import { EFFECTS as RAW_EFFECTS, MOTIONS as RAW_MOTIONS } from "./motions";
 import { MODELS } from "./models";
 import { LLM_MODELS } from "./llm-models";
@@ -9,6 +10,10 @@ import type { Engine, MediaKind, ModelDef, Operation, Preset } from "./types";
 
 MODELS.push(...LLM_MODELS.filter((m) => !MODELS.some((x) => x.id === m.id))); // text steps (translate, write) on the configured LLM; once per hot reload
 export { MODELS };
+export { isListed, type ModelCounts };
+
+/** The model counts every page quotes (what counts: src/lib/catalog/counts.ts). */
+export const modelCounts = (): ModelCounts => countModels(MODELS);
 
 const modelIndex = new Map(MODELS.map((m) => [m.id, m]));
 /**

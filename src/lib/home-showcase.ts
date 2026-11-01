@@ -8,14 +8,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { BeforeAfterStill } from "@/components/home/before-after";
 import { NAV } from "@/components/nav-items";
-import { APPS, EFFECTS, MODELS, MOTIONS, getPreset } from "@/lib/catalog";
+import { APPS, EFFECTS, MODELS, MOTIONS, getPreset, isListed, modelCounts } from "@/lib/catalog";
 import { CAMERA_MOVES } from "@/lib/catalog/cinema";
 import { LLM_PROVIDERS } from "@/lib/catalog/llm-providers";
 import { TEMPLATES } from "@/lib/catalog/marketing";
 import type { ModelDef } from "@/lib/catalog/types";
 import type { Manifest } from "@/lib/comfy";
 import { HUB_MODES } from "@/lib/hubs";
-import { buildLicenceList } from "@/lib/licences";
 import { modelHref } from "@/lib/palette-index";
 import { cacheLife } from "next/cache";
 import { toPresetCard } from "@/lib/preset-card-data";
@@ -161,11 +160,11 @@ export const HOME_TRY = [
 ] as const;
 
 export interface HomeFacts {
-  /** Open models with their ComfyUI workflow and licence (About & licences' count). */
+  /** Models a visitor can pick that run on their own GPU (modelCounts().open). */
   openModels: number;
   workflows: number;
   originals: number;
-  /** Paid models through the viewer's own fal.ai or Replicate key. */
+  /** Models that run only in the cloud, through the viewer's own fal.ai or Replicate key (modelCounts().cloud). */
   partners: number;
   presets: number;
   apps: number;
@@ -271,16 +270,13 @@ export async function homeShowcase() {
     readSkills(),
   ]);
   const workflows = manifest?.workflows ?? [];
-  const licences = buildLicenceList(
-    MODELS.map((m) => ({ id: m.id, name: m.name, vendor: m.vendor, kind: m.kind, hidden: m.hidden, routes: m.routes.map((r) => ({ provider: r.provider, endpoint: r.endpoint })) })),
-    workflows.map((w) => ({ id: w.id, title: w.title, capability: w.capability, license: w.license, models: w.models.map((m) => ({ url: m.url, sizeGb: m.sizeGb })) })),
-  );
-  const visible = MODELS.filter((m) => !m.hidden);
+  const visible = MODELS.filter(isListed);
+  const counts = modelCounts();
   const facts: HomeFacts = {
-    openModels: licences.counts.all,
+    openModels: counts.open,
     workflows: workflows.length,
     originals: visible.filter((m) => m.vendor === "Fuobe Original").length,
-    partners: visible.filter((m) => !isOpen(m)).length,
+    partners: counts.cloud,
     presets: APPS.length + MOTIONS.length + EFFECTS.length,
     apps: APPS.length,
     motions: MOTIONS.length,
