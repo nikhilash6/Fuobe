@@ -78,6 +78,13 @@ describe("palettes", () => {
     expect(body.caps.native["ideogram-3"]).toEqual({ max: 12 });
   });
 
+  it("gives a built-in palette its catalog name on an install seeded before the name was fixed", () => {
+    db().prepare("UPDATE palettes SET name = 'Crimson Vigi' WHERE id = 'builtin-crimson-vigi'").run();
+    globalThis.__fuobePalettesSeeded = false;
+    expect(palettes.getPalette("builtin-crimson-vigi")?.name).toBe("Crimson Vigil");
+    expect(palettes.listPalettes().filter((p) => p.source === "builtin")).toHaveLength(50);
+  });
+
   it("saves, renames and deletes your palettes; built-ins stay", async () => {
     const bad = await palettesRoute.POST(json("POST", { name: "x", colors: ["#zzzzzz"] }));
     expect(bad.status).toBe(400);

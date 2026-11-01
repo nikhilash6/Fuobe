@@ -89,13 +89,18 @@ declare global {
   var __fuobePalettesSeeded: boolean | undefined;
 }
 
-/** Seed (or top up) the built-in palettes; cheap after the first call in a process. */
+/**
+ * Seed (or top up) the built-in palettes; cheap after the first call in a process. A built-in can't be renamed, so
+ * its name follows the catalog: a name fixed there ("Crimson Vigil") reaches an install seeded before the fix.
+ */
 function ensureBuiltins(): void {
   if (globalThis.__fuobePalettesSeeded) return;
   const now = Date.now();
   const insert = db().prepare(
-    `INSERT OR IGNORE INTO palettes (id, name, colors_json, background, slug, source, thumb_url, position, created_at, updated_at)
-     VALUES (@id, @name, @colors_json, @background, @slug, 'builtin', NULL, @position, @now, @now)`,
+    `INSERT INTO palettes (id, name, colors_json, background, slug, source, thumb_url, position, created_at, updated_at)
+     VALUES (@id, @name, @colors_json, @background, @slug, 'builtin', NULL, @position, @now, @now)
+     ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at
+     WHERE palettes.source = 'builtin' AND palettes.name <> excluded.name`,
   );
   db().transaction(() => {
     builtinPalettes().forEach((p, i) => insert.run({ id: p.id, name: p.name, colors_json: JSON.stringify(p.colors), background: p.background, slug: p.slug, position: i, now }));
