@@ -25,7 +25,7 @@ import {
 import type { PlanStep } from "@/lib/catalog/shorts";
 import type { Engine, GenParams, Generation, PixelPoint } from "@/lib/catalog/types";
 import { createPipeline } from "./chains";
-import { previewChained } from "./generations";
+import { ConnectComfyError, previewChained } from "./generations";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { isOffered, offeredLoras } from "./model-access";
 import { decodePng } from "./png";
@@ -252,6 +252,7 @@ function price(steps: PlanStep[], source: RemoveSource): { costUsd: number | nul
     try {
       p = previewChained(withChain(s), s.after?.length ?? 0);
     } catch (e) {
+      if (e instanceof ConnectComfyError) throw e;
       throw new ShortsError((e as Error).message, 422);
     }
     demo ||= p.demo;
@@ -305,6 +306,7 @@ function run(steps: PlanStep[]) {
   try {
     return createPipeline(steps);
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
 }

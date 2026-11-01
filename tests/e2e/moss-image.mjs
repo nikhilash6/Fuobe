@@ -29,8 +29,8 @@ const flat = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 const status = await (await fetch(`${app}/api/status`)).json().catch(() => ({}));
 const fal = !!status.providers?.fal?.configured;
 const comfy = !!status.providers?.comfyui?.configured;
-// Demo mode (the default) runs a model whose providers aren't connected as a free placeholder; with it off, nothing does.
-const demo = status.demoMode !== "off";
+// Placeholder results (Settings, off by default) make every run a free placeholder; with them off, nothing does.
+const demo = status.demoMode === "on";
 if (!fal) console.log('note: no fal key on this server: the cloud composer shows "Placeholder · free" (start it with FAL_KEY=anything for the hosted price)');
 if (!comfy) console.log('note: ComfyUI is unreachable from this server: the open engine shows "Placeholder · free" too (Free once it is reachable)');
 if (argv.includes("--fal")) check("server: a fal key is set (--fal), so the hosted price is checked", fal);
