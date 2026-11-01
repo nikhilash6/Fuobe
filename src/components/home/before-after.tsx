@@ -73,8 +73,9 @@ export function BeforeAfterPicture({ still, zoom, hd, onLoad }: { still: BeforeA
  * it taps, so a scroll that starts on the picture leaves the handle where it was. Stills only: it plays no clip.
  *
  * It sits screens below the fold, so its pictures load lazily, each its 512 px still at first. Then the screen gets the
- * 960 or 1280 px copy it needs (srcset), asked for only once the picture comes within a screen of view: a
- * browser fetches lazy images well ahead, and on a slow line those would hold up the page's largest paint.
+ * 960 or 1280 px copy it needs (srcset), asked for only once the picture comes within a screen of view and the page
+ * has loaded: a browser fetches lazy images well ahead, and on a slow line those would hold up the page's largest
+ * paint.
  *
  * From lg to xl (beside the sidebar) the tabs stand in a column next to the picture, in the room it leaves.
  */
@@ -84,7 +85,7 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
   /** Bumped as each picture comes in, to look again whether the peek can start. */
   const [loaded, setLoaded] = useState(0);
   const [inView, setInView] = useState(false);
-  /** Set once the picture comes within a screen of view: only then may it take its larger copies. */
+  /** Set once the picture comes within a screen of view and the page has loaded: only then may it take its larger copies. */
   const [near, setNear] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -106,15 +107,20 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
       io.disconnect();
     }, { threshold: 0.6 });
     io.observe(el);
+    // Near, and the page loaded: on a phone the slider can start within a screen, and its copies must not share the
+    // line with the page's first pictures.
+    const ready = () => setNear(true);
     const soon = new IntersectionObserver(([e]) => {
       if (!e.isIntersecting) return;
-      setNear(true);
       soon.disconnect();
+      if (document.readyState === "complete") ready();
+      else window.addEventListener("load", ready, { once: true });
     }, { rootMargin: "100% 0px" });
     soon.observe(el);
     return () => {
       io.disconnect();
       soon.disconnect();
+      window.removeEventListener("load", ready);
     };
   }, []);
 
