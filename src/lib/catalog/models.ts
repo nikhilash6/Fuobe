@@ -81,7 +81,7 @@ const KLEIN_PROMPT_HELPER: NonNullable<ModelOptions["controls"]>[number] = {
   label: "Prompt helper",
   values: ["on", "off"],
   default: "on",
-  labels: { on: "On · writes the full caption (BFL's advice)", off: "Off · your words as typed" },
+  labels: { on: "On · writes a full caption", off: "Off · your words as typed" },
 };
 
 type OpenSpec = Omit<ModelDef, "engine" | "badges"> & { badges?: ModelDef["badges"] };
