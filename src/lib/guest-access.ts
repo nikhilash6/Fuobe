@@ -199,6 +199,8 @@ export function accountMayChange(method: string, pathname: string, search: strin
   // Running its own jobs on its own computer.
   if (COMPUTER_CHANGES.some(([m, p]) => m === method && p.test(pathname))) return true;
   if (method === "POST" && (pathname === "/api/uploads" || pathname === "/api/media/probe")) return true;
+  // "Report this result", and a click on an offer the billing service sent (each route checks the rest).
+  if (method === "POST" && (pathname === "/api/reports" || pathname === "/api/billing/interest")) return true;
   // Like, pin or review many of its own runs at once (the route checks each is its own, and refuses the rest).
   if (method === "POST" && pathname === "/api/generations/bulk") return true;
   return isPriceCheck(method, pathname, search);
@@ -250,6 +252,9 @@ export const LIBRARY_MESSAGE = "Free accounts can't save to this studio's librar
  * that key only, with only its own uploaded files (src/app/api/generations/route.ts, generations.ts accountRun). Other
  * tools plan with the install's AI helpers or its own ComfyUI, so they stay refused.
  */
+/** A report anyone may send, signed in or not ("Report this result" on a shared link). */
+export const anyoneMayReport = (method: string, pathname: string): boolean => method === "POST" && pathname === "/api/reports";
+
 export function ownGpuRun(method: string, pathname: string): boolean {
   return method === "POST" && pathname === "/api/generations";
 }

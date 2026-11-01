@@ -886,6 +886,16 @@ export interface GenerationRequest {
    * server from the session only (the request schema drops it from what a client sends).
    */
   account?: string;
+  /**
+   * Server-only, like `account` (src/server/run-stamp.ts): the run goes to this install's GPUs ("pool", hosted runs);
+   * the billing service's hold for it and the words of its charge; the moderation service sees its outputs first.
+   */
+  place?: "pool";
+  hold?: string;
+  charge?: string;
+  checkOutputs?: boolean;
+  /** How long a run on this install's GPUs may wait in line (ms), when the billing service set it. */
+  waitMs?: number;
   feature: string;
   presetId?: string;
   modelId: string;
@@ -1141,6 +1151,16 @@ export interface Generation {
   fix?: GenerationFix | null;
   /** Failed or stopped before its paid provider took the job (no external id): the card says "Not billed", not its price. */
   notBilled?: true;
+  /** Ran on this install's GPUs (hosted runs), not the account's own. */
+  place?: "pool";
+  /** The billing service's words for what a run on this install's GPUs costs ("7 units"); shown when it succeeded. */
+  charge?: string;
+  /** A run with a billing hold that failed or was stopped: nothing was charged. */
+  notCharged?: true;
+  /** "checking": its outputs wait for the moderation service before they show. */
+  stage?: "checking";
+  /** A run waiting for this install's GPUs: its place in line and the wait, about (GET /api/generations/<id>). */
+  queue?: { place: number; etaSeconds: number | null };
   /**
    * What the run leaves out or changes, said when it is created (LoRAs a cloud run can't carry, a clip length
    * the API rounds). Only on the answer that creates it; not stored.

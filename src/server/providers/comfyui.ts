@@ -169,6 +169,12 @@ export function computerScope(): Principal | undefined {
 const serverScope = new AsyncLocalStorage<true>();
 
 /**
+ * Run `fn` on this install's own ComfyUI server (Settings → ComfyUI address), never an account's own GPU and never a
+ * computer's tab: an account's run on this install's GPUs (hosted runs, src/server/hosted.ts).
+ */
+export const onInstallComfy = <T,>(fn: () => T): T => outsideOwnGpu(() => serverScope.run(true, fn));
+
+/**
  * Whose computer a run sent there belongs to, whatever ComfyUI's place is now: the account's (as its tenant), or the
  * owner's.
  */

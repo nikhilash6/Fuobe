@@ -3,6 +3,8 @@ import path from "node:path";
 import { nanoid } from "nanoid";
 import { CONNECT_GPU_HEADER, CONNECT_GPU_UPLOAD_MESSAGE } from "@/lib/guest-access";
 import { accountProviders } from "@/server/account-keys";
+import { policy as billingPolicy } from "@/server/billing";
+import { poolReady } from "@/server/hosted";
 import { imageSize } from "@/lib/image-size";
 import { sniffMedia, type SniffKind } from "@/lib/sniff";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
@@ -157,8 +159,20 @@ async function ownerUpload(request: Request): Promise<Response> {
 // ---------------------------------------------------------------------------
 // An account
 
+/** The kinds of file an account with no GPU or key of its own may add for runs on this install's GPUs (hosted runs). */
+async function hostedUploads(accountId: string): Promise<{ image: boolean; video: boolean; audio: boolean } | null> {
+  if (!poolReady()) return null;
+  const p = await billingPolicy(accountId);
+  if (!p?.hosted || !(p.uploads.image || p.uploads.video || p.uploads.audio)) return null;
+  return p.uploads;
+}
+
 async function accountUpload(request: Request, account: Account): Promise<Response> {
-  if (!accountGpu(account.id) && !accountProviders(account.id).length) return json(403, { error: CONNECT_GPU_UPLOAD_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
+  // No GPU and no key of its own: with hosted runs on, the files a run on this install's GPUs may use (the policy says
+  // which kinds; checked again once the file's kind is known), else nothing.
+  const own = !!accountGpu(account.id) || accountProviders(account.id).length > 0;
+  const hosted = own ? null : await hostedUploads(account.id);
+  if (!own && !hosted) return json(403, { error: CONNECT_GPU_UPLOAD_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
   if (!diskHasRoom()) return json(503, { error: ACCOUNT_MESSAGES.diskLow });
   // A fair share: 60 an hour, 300 a day, 2 at once.
   const hour = hit(`up:h:${account.id}`, ACCOUNT_LIMITS.uploadsPerHour, 60 * 60_000);
@@ -175,14 +189,14 @@ async function accountUpload(request: Request, account: Account): Promise<Respon
     return json(429, { error: ACCOUNT_MESSAGES.uploadsBusy }, { "Retry-After": "10" });
   }
   try {
-    return await accountUploadBody(request, account);
+    return await accountUploadBody(request, account, hosted);
   } finally {
     releaseAll();
     release();
   }
 }
 
-async function accountUploadBody(request: Request, account: Account): Promise<Response> {
+async function accountUploadBody(request: Request, account: Account, hosted: { image: boolean; video: boolean; audio: boolean } | null): Promise<Response> {
   const lengthHeader = request.headers.get("content-length");
   const length = lengthHeader === null ? NaN : Number(lengthHeader);
   if (!Number.isFinite(length) || length < 0) return json(411, { error: ACCOUNT_MESSAGES.lengthNeeded });
@@ -232,6 +246,10 @@ async function accountUploadBody(request: Request, account: Account): Promise<Re
   const sniffed = sniffMedia(head, declaredType(declaredFull, name));
   if (!sniffed) return drop(415, ACCOUNT_MESSAGES.wrongType);
   if (bytes > KIND_CAP[sniffed.kind]) return drop(413, KIND_MESSAGE[sniffed.kind]);
+  if (hosted && !hosted[sniffed.kind as "image" | "video" | "audio"]) {
+    fs.rmSync(dest, { force: true });
+    return json(403, { error: CONNECT_GPU_UPLOAD_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
+  }
   if (sniffed.kind === "image") {
     const size = imageSize(head);
     if (!size) return drop(415, ACCOUNT_MESSAGES.wrongType);

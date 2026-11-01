@@ -10,6 +10,8 @@ import { offeredSummary } from "./model-access";
 import { PROVIDERS } from "./providers";
 import { blockedForAccounts, fetchPublic, isLoopbackGpu } from "./remote-fetch";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
+import { balance as billingBalance, OPEN_POLICY, policy as billingPolicy, type Action, type Balance } from "./billing";
+import { poolReady } from "./hosted";
 
 /**
  * "Your GPU" (public sign-up): the ComfyUI an account connects, where its runs go. The server calls
@@ -171,6 +173,17 @@ export interface VisitorView {
   keys: CloudProvider[];
   /** The studio lets accounts run paid models on their own keys (it isn't open-source only). */
   paidAllowed: boolean;
+  /**
+   * Hosted runs (FUOBE_HOSTED_RUNS=1): this account (or a guest, once signed up) may run on this install's GPUs, so
+   * connecting a GPU of its own is optional.
+   */
+  hosted?: boolean;
+  /** The billing service's words for the account's balance (billing.ts): the sidebar chip and its menu. */
+  balance?: Balance;
+  /** Extra links the billing service sends for the menu. */
+  links?: Action[];
+  /** A notice to show once per id (the billing service's policy). */
+  notice?: { id: string; text: string; url?: string };
 }
 
 /**
@@ -191,6 +204,15 @@ export async function visitorStatus(account: Account | null) {
     keys,
     paidAllowed: paidAllowed(),
   };
+  // Hosted runs and the billing hook: nothing of either with them off.
+  if (poolReady()) {
+    const p = account ? await billingPolicy(account.id) : OPEN_POLICY;
+    if (p?.hosted) viewer.hosted = true;
+    if (account && p?.links?.length) viewer.links = p.links;
+    if (account && p?.notice) viewer.notice = p.notice;
+    const b = account ? await billingBalance(account.id) : null;
+    if (b) viewer.balance = b;
+  }
   const configured = (id: string) => (id === "comfyui" ? (gpu ? !!live?.online : true) : isCloudProvider(id) && keys.includes(id));
   const access = keys.length ? offeredSummary() : undefined;
   return {

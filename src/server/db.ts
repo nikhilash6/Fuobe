@@ -669,6 +669,56 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
   );
   CREATE INDEX IF NOT EXISTS relay_inputs_task ON relay_inputs(task_id);`;
 
+/**
+ * The optional external services' tables (billing.ts, moderation.ts). billing_outbox: every settle, refund and release
+ * the billing service must get, kept until it takes it (billing-outbox.ts). output_checks: each output of a run whose
+ * outputs the moderation service sees first, and where its check is. reports_inbox: "Report this result" when no
+ * moderation service is set, for the owner. Made here rather than as numbered migrations (other branches add those at
+ * the same time). Safe to run on every start; empty and unread while no service is set.
+ */
+export const HOOK_TABLES = `CREATE TABLE IF NOT EXISTS billing_outbox (
+    key TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    hold_id TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    tries INTEGER NOT NULL DEFAULT 0,
+    next_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    done_at INTEGER,
+    gave_up INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT
+  );
+  CREATE INDEX IF NOT EXISTS billing_outbox_due ON billing_outbox(done_at, next_at);
+  CREATE TABLE IF NOT EXISTS output_checks (
+    asset_id TEXT PRIMARY KEY,
+    generation_id TEXT NOT NULL,
+    state TEXT NOT NULL,
+    asked_at INTEGER NOT NULL,
+    tries INTEGER NOT NULL DEFAULT 0,
+    next_at INTEGER,
+    decided_at INTEGER,
+    text TEXT
+  );
+  CREATE INDEX IF NOT EXISTS output_checks_generation ON output_checks(generation_id);
+  CREATE INDEX IF NOT EXISTS output_checks_due ON output_checks(state, next_at);
+  CREATE TABLE IF NOT EXISTS reports_inbox (
+    id TEXT PRIMARY KEY,
+    target_json TEXT NOT NULL,
+    category TEXT NOT NULL,
+    text TEXT,
+    reporter TEXT,
+    created_at INTEGER NOT NULL,
+    done_at INTEGER
+  );`;
+
+/** Columns the optional services added to existing tables: [table, column, type]. */
+const HOOK_COLUMNS: [string, string, string][] = [
+  // 1: never served to the account (its output check hasn't said "show").
+  ["assets", "held", "INTEGER NOT NULL DEFAULT 0"],
+  // NULL, or "checking" (the tile says "Checking").
+  ["generations", "stage", "TEXT"],
+];
+
 /** Columns of the relay tables that came later: [table, column, type]. */
 const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_runners", "comfy", "TEXT NOT NULL DEFAULT 'ok'"],
@@ -730,6 +780,18 @@ function open(): Database.Database {
   for (const [table, column, type] of RELAY_COLUMNS) {
     const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
     if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+  // The optional billing and moderation services (billing.ts, moderation.ts): their tables and columns.
+  db.exec(HOOK_TABLES);
+  for (const [table, column, type] of HOOK_COLUMNS) {
+    const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
+    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+  // A billing hold's rows are found through this index (only rows that have one are in it).
+  try {
+    db.exec("CREATE INDEX IF NOT EXISTS generations_hold ON generations(json_extract(request_json, '$.hold')) WHERE json_extract(request_json, '$.hold') IS NOT NULL");
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't index runs by hold: ${(e as Error).message}`);
   }
   // An account's own runs (its list, its active runs) are found through this index, not by reading every run. Not a
   // numbered migration, so branches that add migrations never clash over it; a failure only leaves lists slower.

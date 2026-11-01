@@ -79,6 +79,11 @@ import { convertMask, decodePng, encodePng } from "./png";
 import { engineMode, getSetting, withCandidates, withoutCandidates } from "./settings";
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
 import { accountSend } from "./account-send";
+import { stamped, stampOf, withRunStamp } from "./run-stamp";
+import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
+import { sweepBilling } from "./billing-outbox";
+import { moderationConfigured } from "./moderation";
+import { holdForCheck, sweepOutputChecks } from "./output-checks";
 import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir } from "./storage";
 
 interface Row {
@@ -115,6 +120,8 @@ interface Row {
   folder_id?: string | null;
   /** What a failed ComfyUI run was missing (GenerationFix as JSON). */
   fix_json?: string | null;
+  /** NULL, or "checking": its outputs wait for the moderation service (output-checks.ts). */
+  stage?: string | null;
 }
 
 /** Trash and folder columns, joined onto every library read. */
@@ -123,7 +130,10 @@ const LIBRARY_JOINS = "LEFT JOIN generation_trash t ON t.generation_id = g.id LE
 const LIBRARY_JOIN = `generations g ${LIBRARY_JOINS}`;
 
 export function toGeneration(r: Row): Generation {
-  const request = JSON.parse(r.request_json) as GenerationRequest;
+  const stored = JSON.parse(r.request_json) as GenerationRequest;
+  // The billing hold is the server's: never sent to a browser or a script.
+  const { hold, ...request } = stored;
+  const checking = r.stage === "checking";
   const model = getModel(r.model_id);
   const ar = request.params?.aspectRatio ?? model?.defaults?.aspectRatio;
   // Rows read without the library join (the runner's own SELECTs) look the trash and folder up.
@@ -150,7 +160,8 @@ export function toGeneration(r: Row): Generation {
     message: r.message,
     prompt: r.prompt,
     request,
-    outputs: JSON.parse(r.outputs_json) as OutputFile[],
+    // Held for the moderation service's check: nothing of it is shown until it passes.
+    outputs: checking ? [] : (JSON.parse(r.outputs_json) as OutputFile[]),
     error: r.error,
     costUsd: r.cost_usd,
     favorite: !!r.favorite,
@@ -169,7 +180,20 @@ export function toGeneration(r: Row): Generation {
     ...(r.status === "failed" && r.fix_json && { fix: parseFix(r.fix_json) }),
     // Failed or stopped before a paid provider took the job (a refused key, an empty balance): nothing was billed.
     ...((r.status === "failed" || r.status === "canceled") && !r.external_id && (r.provider === "fal" || r.provider === "replicate") && { notBilled: true as const }),
+    // On this install's GPUs (hosted runs): what it cost, or that it cost nothing.
+    ...(stored.place === "pool" && { place: "pool" as const }),
+    ...(stored.charge && r.status === "succeeded" && { charge: stored.charge }),
+    ...(hold && (r.status === "failed" || r.status === "canceled") && { notCharged: true as const }),
+    ...(checking && { stage: "checking" as const }),
+    // Waiting in line on this install's GPUs: its place and the wait, about.
+    ...(stored.place === "pool" && (r.status === "queued" || r.status === "running") && !checking && poolQueue(r.id)),
   };
+}
+
+/** A pool row's place in line, as the Generation field (none once it has started). */
+function poolQueue(id: string): { queue: { place: number; etaSeconds: number | null } } | Record<string, never> {
+  const q = placeInLine(id);
+  return q ? { queue: q } : {};
 }
 
 function parseFix(json: string): GenerationFix | null {
@@ -803,12 +827,14 @@ function stampTenant(asked: GenerationRequest, opts: CreateOptions): GenerationR
   const who = tenantAccount();
   if (!who) {
     if (ownGpu()) throw new Error("A run on an account's own GPU must be that account's run.");
-    return asked;
+    // The owner's runs carry no place, hold or check of an account's run (run-stamp.ts).
+    return withRunStamp({}, () => stamped(asked));
   }
   if (asked.account && asked.account !== who) throw new Error("That run belongs to another account.");
   const deps = opts.dependsOn === undefined ? [] : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
   if (deps.some((d) => generationAccount(d) !== who)) throw new Error("An earlier step of this run isn't yours.");
-  return { ...asked, account: who, engine: accountEngineMode(who) === "open" ? "open" : asked.engine };
+  // Where the run goes and its billing hold are the route's decision for this run (run-stamp.ts), never a stored request's.
+  return { ...stamped(asked), account: who, engine: accountEngineMode(who) === "open" ? "open" : asked.engine };
 }
 
 export function createGenerations(given: GenerationRequest, opts: CreateOptions = {}): Generation[] {
@@ -1227,7 +1253,8 @@ async function advanceDependents(): Promise<void> {
     // An account's step reads its inputs, and is planned, as its run was: as that account, on its own ComfyUI and its own
     // keys. submit() then checks the step's own provider (its GPU, or its key for that provider).
     const account = stored.account;
-    const asRun = <T,>(fn: () => T): T => (account ? asAccount(account, fn) : fn());
+    // A step of a run on this install's GPUs is planned there too, with the run's stamp (its place and hold).
+    const asRun = <T,>(fn: () => T): T => (account ? (stored.place === "pool" ? runOnPool(account, () => withRunStamp(stampOf(stored), fn)) : asAccount(account, fn)) : fn());
     try {
       // The planned op (r.op), not request.op: a translate whose op was inferred still gets the cue list.
       const values = await asRun(() => Promise.all(outputs.map((o, i) => chainValue(pickOutput(o, slots[i]), slots[i], r.op))));
@@ -1300,6 +1327,8 @@ function recordSubmission(id: string, at: number): void {
 export const OWN_GPU_ONLY = "Free accounts run only on their own ComfyUI: pick an open-source model.";
 export const OPEN_ONLY_RUN = "This studio runs open-source models only, so paid models don't run here. Pick an open-source model.";
 export const SWITCHED_OFF_RUN = "This account is switched off, so its runs stopped.";
+/** A run on this install's GPUs that waited past its limit (hosted runs). */
+export const POOL_WAITED = "This studio's GPUs were busy, so it didn't run. Not charged.";
 
 /**
  * Everything an account's work runs inside: as the account (tenant.ts: only its own files and runs), on its own ComfyUI
@@ -1421,8 +1450,26 @@ const accountOf = (r: Pick<Row, "request_json">): string | undefined => {
   }
 };
 
+/** A row of a run on this install's GPUs (hosted runs). */
+const poolOf = (r: Pick<Row, "request_json">): boolean => {
+  try {
+    return (JSON.parse(r.request_json) as GenerationRequest).place === "pool";
+  } catch {
+    return false;
+  }
+};
+
 function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: ReturnType<typeof planGeneration>, req: GenerationRequest, index: number): Promise<void> {
   if (!req.account) return submitNow(id, route, providerId, plan, req, index);
+  // On this install's GPUs (hosted runs): as the account, on this install's ComfyUI server only.
+  if (req.place === "pool") {
+    if (providerId !== "comfyui") {
+      update(id, { status: "failed", error: OWN_GPU_ONLY, completed_at: Date.now(), message: null });
+      submitting().delete(id);
+      return Promise.resolve();
+    }
+    return runOnPool(req.account, () => withRunStamp(stampOf(req), () => submitNow(id, route, providerId, plan, req, index)));
+  }
   const own = accountRun(req.account, providerId, "submit");
   if ("error" in own) {
     update(id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
@@ -1448,7 +1495,7 @@ async function submitNow(
     // An account's run on its own ComfyUI and keys only (asAccount): outside it, nothing is sent.
     const adapter = adapterFor(providerId, req.account);
     // An account's run on its own ComfyUI: every LoRA it adds must be there first (nothing is sent before this check).
-    if (req.account && providerId === "comfyui") {
+    if (req.account && req.place !== "pool" && providerId === "comfyui") {
       const fix = await checkAccountLoras([...plan.loras, ...graphLoras(route.endpoint, plan.params.extra)], route.endpoint, route);
       if (fix) throw Object.assign(new Error(missingFilesMessage(fix)), { fix });
     }
@@ -1724,8 +1771,10 @@ async function pollGuarded(r: Row): Promise<void> {
       update(r.id, { status: "failed", error: "This run's details can't be read, so it was stopped.", completed_at: Date.now(), message: null });
       return;
     }
-    const own = account ? accountRun(account, r.provider, "poll") : undefined;
-    if (own && "error" in own) update(r.id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
+    const onPool = account ? poolOf(r) : false;
+    const own = account && !onPool ? accountRun(account, r.provider, "poll") : undefined;
+    if (onPool) await runOnPool(account!, () => pollOne(r));
+    else if (own && "error" in own) update(r.id, { status: "failed", error: own.error, completed_at: Date.now(), message: null });
     else if (own) await own.run(() => pollOne(r));
     else await pollOne(r);
   } catch (e) {
@@ -1744,7 +1793,7 @@ export function rowsToPoll(limit = 100): Row[] {
     .prepare(
       `SELECT g.* FROM generations g
        JOIN (SELECT id, ROW_NUMBER() OVER (PARTITION BY json_extract(request_json, '$.account') ORDER BY created_at) AS turn
-             FROM generations WHERE status IN ('queued','running') AND external_id IS NOT NULL) t ON t.id = g.id
+             FROM generations WHERE status IN ('queued','running') AND external_id IS NOT NULL AND stage IS NULL) t ON t.id = g.id
        ORDER BY ${ACCOUNT_LAST.replace("request_json", "g.request_json")}, t.turn, g.created_at ASC LIMIT ?`,
     )
     .all(limit) as Row[];
@@ -1761,6 +1810,10 @@ async function tick(): Promise<void> {
     const active = rowsToPoll();
     for (const r of active) if (accountOf(r)) void pollGuarded(r);
     await Promise.all([...active.filter((r) => !accountOf(r)).map(pollGuarded), pollTrainings().catch(() => {}), advanceDependents().catch(() => {})]);
+    // The optional services (billing.ts, moderation.ts): outputs waiting for their check, then reports for the billing
+    // service. Neither does anything while no service is set.
+    if (moderationConfigured()) await sweepOutputChecks();
+    void sweepBilling();
   } finally {
     state.busy = false;
   }
@@ -1773,7 +1826,7 @@ async function fastTick(): Promise<void> {
   try {
     const rows = db()
       .prepare(
-        `SELECT g.*, r.started_at AS run_started_at FROM generations g LEFT JOIN generation_runs r ON r.id = g.id WHERE g.status = 'running' AND g.external_id IS NOT NULL AND g.progress IS NOT NULL ORDER BY ${ACCOUNT_LAST.replace("request_json", "g.request_json")}, g.created_at ASC LIMIT 50`,
+        `SELECT g.*, r.started_at AS run_started_at FROM generations g LEFT JOIN generation_runs r ON r.id = g.id WHERE g.status = 'running' AND g.external_id IS NOT NULL AND g.progress IS NOT NULL AND g.stage IS NULL ORDER BY ${ACCOUNT_LAST.replace("request_json", "g.request_json")}, g.created_at ASC LIMIT 50`,
       )
       .all() as (Row & { run_started_at: number | null })[];
     const now = Date.now();
@@ -1833,8 +1886,11 @@ async function pollOne(r: Row): Promise<void> {
     pollError = e;
   }
   // An account's job waits at most 30 minutes in its own ComfyUI's queue (or its provider's).
-  const queueMs = account ? ACCOUNT_LIMITS.queueMs : QUEUE_TIMEOUT_MS;
-  const where = r.provider === "comfyui" ? "your ComfyUI" : provider(r.provider).label;
+  const stored = JSON.parse(r.request_json) as GenerationRequest;
+  const onPool = !!account && stored.place === "pool";
+  // On this install's GPUs: the wait the billing service set for the run, else FUOBE_POOL_WAIT_MIN.
+  const queueMs = onPool ? poolWaitMs(stored.waitMs) : account ? ACCOUNT_LIMITS.queueMs : QUEUE_TIMEOUT_MS;
+  const where = onPool ? "this studio's GPUs" : r.provider === "comfyui" ? "your ComfyUI" : provider(r.provider).label;
   if (!res || res.state === "queued" || res.state === "running") {
     // A job on someone's own computer reached their ComfyUI later than it was handed over (it waited for their tab): its
     // queue clock starts then.
@@ -1856,7 +1912,9 @@ async function pollOne(r: Row): Promise<void> {
           ? `Timed out after ${TIMEOUT_MS / 60_000} minutes`
           : res?.state === "queued" && res.timeoutError
             ? res.timeoutError
-            : account
+            : onPool
+              ? POOL_WAITED
+              : account
               ? `Timed out waiting ${queueMs / 60_000} minutes in ${where}'s queue`
             : `Timed out waiting ${QUEUE_TIMEOUT_MS / 3_600_000} hours in the provider's queue`,
         completed_at: now,
@@ -1939,6 +1997,11 @@ async function pollOne(r: Row): Promise<void> {
   if (modelToFinish(r, outputs) >= 0) {
     update(r.id, { outputs_json: JSON.stringify(outputs), external_meta_json: JSON.stringify({ ...ctx.meta, finishing: true }), message: "Finishing the 3D model" });
     resumeFinish({ ...r, outputs_json: JSON.stringify(outputs) });
+    return;
+  }
+  // The moderation service asked to see this run's outputs first: they are held, and the row waits ("Checking").
+  if (stored.checkOutputs && moderationConfigured()) {
+    holdForCheck(r.id, outputs);
     return;
   }
   update(r.id, {

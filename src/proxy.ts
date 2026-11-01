@@ -11,6 +11,7 @@ import {
   liveRoute,
   accountMayChange,
   accountOwnRead,
+  anyoneMayReport,
   ASSIST_OWNER_MESSAGE,
   CONNECT_GPU_HEADER,
   CONNECT_GPU_OR_KEY_MESSAGE,
@@ -31,6 +32,7 @@ import { fileAccount, generationAccount } from "@/server/account-library";
 import { hit } from "@/server/rate";
 import { recordExists } from "@/server/records";
 import { findShare, shareGuard, shareTargetExists } from "@/server/share-access";
+import { hostedRunsOn } from "@/server/hosted-switch";
 
 /**
  * Paths that work signed out: the login page and its API (and share links: openShare). Sign-up and
@@ -171,6 +173,7 @@ function guest(request: NextRequest): NextResponse {
   if (method === "GET" || method === "HEAD") return readAsGuest(request, false);
   if (isPriceCheck(method, pathname, search)) return priceCheck(request, `guest:${LoginGuard.clientKey(request.headers)}`);
   if (isAssistChange(method, pathname)) return assistOwner();
+  if (anyoneMayReport(method, pathname)) return pass(request);
   // What an account may send, the library, the owner's settings and the studios' runs: signing up is the next step.
   if (!accountMayChange(method, pathname, search) && !isLibraryChange(method, pathname) && !ownerOnly(method, pathname) && !ownGpuRun(method, pathname)) return ownGpuTool();
   return NextResponse.json({ error: GUEST_RUN_MESSAGE }, { status: 401, headers: guestHeaders });
@@ -239,7 +242,9 @@ function account(request: NextRequest, who: Account): NextResponse {
   // A tool its own GPU or key wouldn't run says so first: "Connect your GPU" only for what a GPU or a key unlocks.
   if (!ownGpuRun(request.method, pathname)) return ownGpuTool();
   // Neither its own GPU nor its own key: nothing it could run on. (Which one a run needs, the route says.)
-  if (!who.gpu && !hasCloudKey(who)) return NextResponse.json({ error: CONNECT_GPU_OR_KEY_MESSAGE, code: "connect-gpu" }, { status: 403, headers: { [CONNECT_GPU_HEADER]: "1" } });
+  // With hosted runs on (FUOBE_HOSTED_RUNS=1), a run in the studios may go to this install's GPUs: the route decides.
+  const hosted = hostedRunsOn() && request.method === "POST" && pathname === "/api/generations";
+  if (!who.gpu && !hasCloudKey(who) && !hosted) return NextResponse.json({ error: CONNECT_GPU_OR_KEY_MESSAGE, code: "connect-gpu" }, { status: 403, headers: { [CONNECT_GPU_HEADER]: "1" } });
   return pass(request);
 }
 
