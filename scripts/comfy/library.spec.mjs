@@ -4478,8 +4478,8 @@ export const SPEC = [
       'Each LoadVideo goes through a Video Slice of the same duration (one composite window of at most 3 s, because every stream is decoded as float32, about 25 MB a frame at 1080p) from its own start (startTime, takeStart, windowStart, maskStart). ' +
       'Two layers, each through the mask scaled to it, grown (maskGrow) and feathered (feather): first the swap stretched back over the region of the footage its canvas covers (canvasWidth x canvasHeight at takeX, takeY), ' +
       'then the regenerate over the centre region its 16:9 / 9:16 draft kept (regionWidth x regionHeight at regionX, regionY; the mask is centre-cropped to it), so a character reaching past that region keeps the 768p swap there rather than the original person. ' +
-      'The regions come from src/lib/catalog/sharpen.ts (compositeGeometry). CreateVideo takes the footage\'s own sound and rate (a silent clip stays silent). ' +
-      'Tested end to end on the CPU ComfyUI (0.41.0): a 320x180 24 fps clip with sound, a 224x128 swap, a 384x216 regenerate and a 224x128 box mask, a 1.5 s window from 0.5 s: 36 frames and 1.5 s of AAC, the regenerate only inside the feathered box; the same with a silent clip gives video only.',
+      'Fuobe works the regions out from the film\'s size and H3\'s canvas. CreateVideo takes the footage\'s own sound and rate (a silent clip stays silent). ' +
+      'Run end to end on ComfyUI 0.41.0 (CPU): a 320x180 24 fps clip with sound, a 224x128 swap, a 384x216 regenerate and a 224x128 box mask, a 1.5 s window from 0.5 s: 36 frames and 1.5 s of AAC, the regenerate only inside the feathered box; the same with a silent clip gives video only.',
   },
   {
     id: 'video-sdr-to-hdr-exr',
