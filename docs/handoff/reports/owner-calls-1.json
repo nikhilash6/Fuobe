@@ -1,0 +1,121 @@
+{
+ "key": "owner-calls-1",
+ "impl": {
+  "branch": "o/owner-calls-1",
+  "summary": "Evolution's cloud route now runs fal's hosted Wan 2.2 Fun VACE depth, the GPU recipe's model (LTX-2.3 removed): per piece of up to 10 s, a direction frame from hosted Qwen-Image-Edit 2511 (the GPU's instruction, first 3 references), then VACE with preprocess on and the frame as first_frame_url, the clip's sound put back, priced before running. The endpoint has no strength field, so the change level shapes only the direction frame in the cloud and the page says so in one line; cloud sizes are 480/580/720p. Fuobe Speak keeps its name; its menu line and Settings → Models & licences (new ModelDef.engineNote) say the GPU adds FusioniX and the cloud runs fal's InfiniteTalk without it. No hosted InfiniteTalk takes a LoRA (fal checked; Replicate only at likely names, no token for search). Marketing's Standalone shot stays GPU-only and its cloud menu line says so. New generated eval suite dop-mixed-media (8 of the 32 effects, Fuobe DoP vs Kling 2.5 Turbo, blind), marked runFirst paid-keys, with the revert rule in the README and STATUS. Audit: camera paths hold 24 keyframes on the GPU again (the cloud still simplifies to H3 Max's 12).",
+  "built": [
+   "src/lib/catalog/evolution.ts: cloud plan on hosted Wan 2.2 Fun VACE (cloudPieces, cloudReferences 3, cloudFrameModel, EVOLUTION_CLOUD_NOTE, cloud fps/frame checks); nearestShape, CLOUD_SHAPES, videoStrengthFor removed",
+   "scripts/gen-cloud-models.py + cloud-models.generated.ts: fuobe-evolution on fal-ai/wan-22-vace-fun-a14b/depth (preprocess fixed, match_input_* defaults, images and aspectRatio dropped, per-video-second pricing, Apache-2.0)",
+   "docs/research/fuobe-originals-recipes-5.json/.md: Evolution cloud record rewritten, depth schema re-fetched 2026-11-01, GPU direction-frame model corrected, Speak loraCheck",
+   "models.ts: Evolution cloud options (no Change control, optional direction frame), Speak tagline, engineNote on Speak / Evolution / Marketing Image",
+   "ModelDef.engineNote shown in Settings → Models & licences (ModelEntry, accessList, model-access-view, search)",
+   "marketing.ts: cloud Standalone menu line says the cut-out and relight run on your GPU only",
+   "server/evolution.ts and evolution-tool.tsx: cloud notes and copy",
+   "eval: dop-mixed-media suite (gen-cases.mjs), schema fields runFirst and decides, validate marks it, README rule",
+   "camera-path.ts: MAX_KEYS 24 (GPU), cloud still simplified to 12",
+   "STATUS and ARCHITECTURE lines for these changes"
+  ],
+  "tests": "Typecheck and eslint clean on changed files. Vitest passed: evolution (16), evolution-api (7), evolution-comfy, open-tools, originals-marketing, eval-harness (42), cloud-catalog-4, cinema-original, cinema-path, camera-path, model-access*, licences, dop*, marketing*, public-signup*, shorts*, cinema* (33 files / 519 in one run, plus the others). Browser: popcorn-evolution.mjs at 1440 and 390, light and dark, with placeholder results on: all Evolution checks pass (121 ok, including the new cloud ones); 4 failures are the Storyboard 'next-scene LoRA' check, a page this package doesn't touch, suspected from 244bed92 but not checked on the base. A one-off check of Settings → Models & licences found the Speak and Evolution lines, no sideways scroll at both widths and themes. No GPU, live ComfyUI run or paid key.",
+  "left": "Nothing rendered: fal's preprocess on an RGB clip, how far the direction frame carries each change level in the cloud, and the joins are unverified. The dop-mixed-media run needs paid keys. Follow-ups: Shorts' GPU first-frame edit is capped at 2 references though its model takes 3 (not cloud-caused); Marketing Image runs Qwen-Image 2.1 on the GPU vs 2511 in the cloud; the audio loop's cloud length is held to the GPU's 600 s limit (the reverse case); a hosted Standalone shot could use fal's Qwen-Image-Edit 2509 LoRA route plus a fal background remover. The Storyboard e2e failure needs a look.",
+  "docsNotes": "STATUS and ARCHITECTURE lines edited for Evolution (row, gaps), Speak, the owner-calls bullet (now built), Marketing Standalone, dop-mixed-media (measured list, first-run rule) and the fly path (24 keys). The STATUS test counts aren't updated. The docs pass may want a FEATURES line for engineNote and for Evolution's cloud now being the GPU's model. Out of date in the brief: the Evolution docs said the GPU frame model was Qwen-Image-Edit 2511 with 2 refs; the code has used Qwen-Image 2.1 Turbo with 3 since 244bed92. Public sign-up is unchanged: no new route; Models & licences only gains a text line.",
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "medium",
+    "title": "Edit video (and API) cloud runs of fuobe-evolution are priced as 5 s whatever the clip, and no clip window is checked",
+    "where": "src/lib/catalog/models.ts (fuobe-evolution: defaults { duration: 5, ... }); src/lib/catalog/plan.ts estimateCost / clipEditSeconds; src/server/generations.ts ~1570; src/lib/catalog/clip-windows.ts",
+    "detail": "Under LTX-2.3, duration set num_frames, so the default 5 s was what was made and billed. fal's VACE depth route has match_input_num_frames on and no duration or num_frames mapping, so the clip's own length is rendered. But planGeneration merges model.defaults, so params.duration = 5 always, and estimateCost uses params.duration before clipEditSeconds/sourceDuration. The server's re-price for a clip edit (generations.ts) also passes plan.params with duration 5. The composer's cloud half has no length control, and Edit video lists fuobe-evolution on the cloud (modelsFor v2v). This is a regression: a direct cloud Evolution run shows a fixed $0.50 at 720p. fal bills frames ÷ 16: a 20 s clip at 30 fps is about $3.75. fuobe-shorts on the same route has no default duration, so it is priced by the clip's length. Neither model has a SOURCE_SECONDS window, so a clip over 241 frames is sent whole to fal's VACE, which allows at most 241 frames. Before, LTX made 5 s from any clip.",
+    "evidence": "A scratch vitest probe (outside the repo) ran planGeneration on {modelId fuobe-evolution, engine cloud, op v2v, video only} and got params.duration 5. estimateCost with sourceDuration 20 gave 0.5, and with 4, 10 or 30 s it was also 0.5. The same probe on fuobe-shorts gave 0.4 / 1 / 3 (2 at 20 s).",
+    "fix": "Move duration: 5 into engineDefaults.open, since only the GPU half has durations [3,4,5]. Give the cloud half a window, and price direct runs by frames ÷ 16 (Shorts' originalBilledSeconds / billFps), or keep fuobe-evolution's cloud route out of Edit video. Add a test that a direct cloud run's price follows the clip."
+   },
+   {
+    "severity": "low",
+    "title": "Marketing Standalone is not GPU-only in the cloud as the brief says: it still runs on a different hosted model, only labelled",
+    "where": "src/lib/catalog/marketing.ts formatModels (product-standalone); src/lib/catalog/models.ts fuobe-marketing-image engineNote",
+    "detail": "The brief says 'Marketing Image's Standalone shot stays GPU-only while its graph has no hosted copy'. The cloud still makes a Standalone shot as a hosted Qwen-Image-Edit 2511 edit. The GPU recipe is BiRefNet plus Qwen-Image-Edit 2509 and the White_to_Scene LoRA. The cloud's menu line now says the cut-out and relight run on your GPU only, and Settings shows an engineNote. Engine mode 'Paid APIs only' does not hide or refuse it. Under the 'no substitute model' rule this is a different model doing the same job. The implementer read the brief as 'the recipe stays on the GPU' and lists a hosted 2509 + LoRA route as a follow-up: fal hosts 2509 with LoRAs (the Storyboard's next-scene LoRA runs there). The owner should confirm which reading they meant.",
+    "evidence": "git diff of marketing.ts and models.ts. tests/originals-marketing.test.ts expects the cloud Standalone choice to stay, with the new note.",
+    "fix": "Either make the cloud Standalone choice say it runs on your GPU and refuse or hide it in the cloud, or build the hosted 2509 + White_to_Scene route plus a hosted cut-out. If the current reading stands, record it as the owner's call."
+   },
+   {
+    "severity": "low",
+    "title": "The cloud sends the direction frame as first_frame_url, while the GPU graph uses it as VACE reference_image; the endpoint has ref_image_urls",
+    "where": "scripts/gen-cloud-models.py (fuobe-evolution route drop ['aspectRatio','images']); src/lib/catalog/evolution.ts planEvolution cloud branch; tests/evolution.test.ts (asserts no ref_image_urls)",
+    "detail": "In video-evolution-wan22-fun-vace, node 15 WanVaceToVideo takes the direction frame as reference_image and starts from the noised clip latent. The cloud sends the same frame as first_frame_url, which pins frame 0, and drops VACE references. fal's live depth schema (31 inputs, fetched in this review) does have ref_image_urls. This copies Fuobe Shorts' cloud recipe, not the GPU Evolution graph, which the brief asked to mirror 'as far as the hosted endpoint allows'. The docs say the cloud runs 'the way Fuobe Shorts runs it' but never note that the frame's role differs. The test pins the current choice in place.",
+    "evidence": "workflows/comfyui/video-evolution-wan22-fun-vace.json node 15 inputs. curl of fal's openapi for fal-ai/wan-22-vace-fun-a14b/depth lists ref_image_urls and first_frame_url.",
+    "fix": "Decide and say which it is: send the frame as ref_image_urls (closer to the GPU), as both, or keep first_frame_url and record the difference in the research JSON and ARCHITECTURE. The dop/evolution eval could compare the two."
+   },
+   {
+    "severity": "low",
+    "title": "The estimate doesn't carry the cloud line or fal's high-fps billing note; small copy and docs leftovers",
+    "where": "src/server/evolution.ts planInput / createEvolution; src/lib/catalog/evolution.ts:80 comment; docs/FEATURES.md:66",
+    "detail": "(a) The comment on EVOLUTION_CLOUD_NOTE says 'the page, the estimate and Settings say it', but the estimate's notes never include it. Only the page and Settings (engineNote) do. (b) Shorts' estimate adds 'fal bills this clip's N fps as X× its length' for clips above 16.5 fps, and Evolution's cloud estimate on the same billing has no such note, so a 30 fps clip costs about 1.9× its length without a word. (c) createEvolution's resolution refusal still joins with ' or ' ('Pick 480p or 580p or 720p'); evolutionProblem was fixed to read '480p, 580p or 720p'. (d) docs/FEATURES.md still says the fly path holds 'up to 12 keyframes in all', but MAX_KEYS is now 24 on the GPU. (e) STATUS test counts are not updated, as the implementer notes.",
+    "evidence": "grep: EVOLUTION_CLOUD_NOTE is used only in evolution-tool.tsx; server/evolution.ts has no fps note. FEATURES.md:66.",
+    "fix": "Add the note and the fps billing line to the cloud estimate notes. Use the same list join in createEvolution. Update FEATURES.md's fly path line and the STATUS counts in the docs pass."
+   }
+  ],
+  "checks": [
+   "Read the full diff claude/fuobe-parity-4...o/owner-calls-1 (32 files) and the code around it: evolution.ts, server/evolution.ts, shorts.ts cloud Original, plan.ts estimateCost, generations.ts, eval plan/recipes, scene-path.tsx.",
+   "Regenerated cloud-models.generated.ts from a git-archive copy with scripts/gen-cloud-models.py: identical to the committed file.",
+   "node scripts/eval/gen-cases.mjs --check: in sync (dop-mixed-media: 8 effects).",
+   "The fuobe-evolution cloud route is field-for-field the same as fuobe-shorts' VACE depth route (preprocess fixed, match_input_* defaults, first_frame_url, resolution accepts), so payloads match the research endpoint.",
+   "Fetched fal's live OpenAPI for fal-ai/wan-22-vace-fun-a14b/depth: 31 inputs, no strength or denoise field (the research is right), ref_image_urls present.",
+   "Fetched fal's OpenAPI for fal-ai/infinitalk, /video-to-video and /single-text: no LoRA field, as the research says. Replicate's search page is client-rendered, so a model under another name couldn't be ruled out here either (acknowledged in the research).",
+   "The GPU graph video-evolution-wan22-fun-vace uses the direction frame as WanVaceToVideo reference_image (finding 3).",
+   "The GPU's Evolution capabilities are not weakened: the open half keeps the denoise Change control, durations [3,4,5], requires the direction frame, maxImages 1, aspectRatios auto + VID_AR, and 480p/720p (checked in a probe).",
+   "Qwen-Image-Edit 2511 cloud takes up to 10 images, so frame + 3 references fits.",
+   "Camera path: MAX_KEYS 24 is accepted by cinema-schemas, and toH3MaxTrajectory simplifies to 12 in the cloud with a note. The key chips scroll (overlay) or wrap (panel).",
+   "DoP Mixed Media suite: the partner variant (kling-2-5-turbo) keeps presetId, but relightStep only runs the prestep when the preset's route model matches, so Kling runs on the preset's words. The test asserts all 8 presets' cloud model is fuobe-dop.",
+   "Public sign-up: no new route, estimate or file path. The Models & licences entry gains only a text field.",
+   "Vitest: evolution, evolution-api, evolution-comfy, open-tools, originals-marketing, camera-path, cinema-path, eval-harness, cloud-catalog-4, licences (10 files, 204 passed). Also model-access*, public-signup, shorts, marketing* (11 files, 203 passed).",
+   "tsc --noEmit: no errors other than the Next typegen globals (LayoutProps/PageProps/RouteContext), which come from the environment. eslint on the changed src files and gen-cases.mjs: clean.",
+   "Browser checks not re-run (no app started in this review). The Storyboard 'next-scene LoRA' e2e failure the implementer reports is on text from storyboard-view.tsx, which this package doesn't touch."
+  ],
+  "verdict": "changes-requested: the core work is sound (Evolution's cloud is on hosted Wan 2.2 Fun VACE with matching payloads, Speak labels, the DoP blind suite, the GPU path keys restored) and tests pass, but fix the medium pricing regression for direct cloud Evolution runs (stale 5 s default, no clip window) before merge. The other three findings are low (the owner's call on Standalone, the frame-role choice, docs and notes) and can go with the docs pass or as follow-ups."
+ },
+ "fix": {
+  "applied": [
+   "Medium (pricing): confirmed. planGeneration merged defaults.duration 5 into every cloud Evolution run, so a direct run cost $0.50 whatever the clip. Changed: duration 5 now sits in engineDefaults.open only (the GPU half's durations stay 3/4/5). New SOURCE_FRAMES in clip-windows.ts covers fuobe-evolution, fuobe-shorts and fuobe-genjutsu-restyle (fal's Wan 2.2 Fun VACE depth route, match_input_num_frames on). On the cloud only, a clip sent whole is billed as frames ÷ 16 through billedClipSeconds, using GenParams.sourceFps (new, sent by the composer from the clip header and accepted by request-schema) or the server's header read, or 30 fps when unknown. Clips outside 17–241 frames are refused by clipBlocker in the composer and in generations.ts submit before fal is called. The server re-prices when the header's rate differs from the caller's. Tests in evolution.test.ts (params.duration is undefined in the cloud and 5 on the GPU; price follows the clip: 4 s at 30 fps $0.75, 8 s at 16 fps $0.80) and edit-video-pricing.test.ts (prices, the 241-frame message, no window on the GPU, server re-price $0.50 → $1.125 for 6 s at an assumed 30 fps, a 20 s clip refused with nothing sent to fal).",
+   "Low (Marketing Standalone): confirmed. The guidance's condition to build a cloud route was not met. fal hosts BiRefNet (fal-ai/birefnet/v2) and 2509 with LoRAs by URL (fal-ai/qwen-image-edit-plus-lora), but nothing hosted puts the cut-out on white: the live schemas of birefnet/v2 and bria/background/remove, read 2026-11-01, have no background colour. So the Standalone shot is now unavailable in the cloud. ModelChoice gains `unavailable` (the reason) and `pickable`. The cloud Standalone menu lists Fuobe Marketing Image last and greyed (aria-disabled) with STANDALONE_CLOUD_NOTE ('Fuobe Original · runs on your GPU only: the cut-out on white and the White_to_Scene relight have no hosted copy') and starts on Bria Product Shot. planMarketing refuses the Original in the cloud: 'Fuobe Marketing Image makes Standalone shots on your GPU only (…): switch to your GPU, or pick another model'. The page doesn't send such a pick to the cloud. engineNote, the research JSON (studios[marketing].original.cloud.productShot), ARCHITECTURE and STATUS are updated. Tests: originals-marketing (menu, pickable, refusal, GPU unchanged), marketing-api (cloud default is now bria-product-shot) and the marketing-originals.mjs browser check.",
+   "Low (direction frame): mirrors the GPU graph. In video-evolution-wan22-fun-vace, WanVaceToVideo takes the frame as reference_image and no start frame, so the cloud now sends it as ref_image_urls and drops first_frame_url (gen-cloud-models.py drops `image`, not `images`; regenerated). No good reason was found to keep first_frame_url: it pins frame 0, which the GPU doesn't. The choice is recorded in research studios[evolution].original.cloud.video and the new .frameRole, the recipes .md, the generator comment, ARCHITECTURE and STATUS. Tests assert the payload has ref_image_urls and no first_frame_url, and read the GPU graph's reference_image wiring.",
+   "Low (copy/docs): the cloud estimate now includes EVOLUTION_CLOUD_NOTE, 'fal bills this clip's N fps as X× its length (video seconds at 16 fps)' above 16.5 fps, and Shorts' downsample note above 30 fps. createEvolution's resolution refusal reads 'Pick 480p, 580p or 720p' (shared resolutionChoices). FEATURES.md's fly path says 24 keyframes on the GPU, simplified to H3 Max's 12 in the cloud. The STATUS Evolution GPU column is corrected to Qwen-Image 2.1 Turbo with 3 references. STATUS gains this run's test count. Tests are in evolution-api.test.ts.",
+   "Base moved during the session (claude/fuobe-parity-4 bc458e7, the n7-2 merge). The branch was not behind it at the start, so it was merged in once, cleanly, and all checks were re-run after the merge."
+  ],
+  "rejected": [
+   "None of the findings. Out of scope here: the Storyboard 'next-scene LoRA' check in popcorn-evolution.mjs, and the three open-engine Photodump/Fashion checks in marketing-originals.mjs. Both expect old model names (Qwen-Image-Edit 2511 on the GPU, from before 244bed92) on pages this package doesn't touch."
+  ],
+  "checks": [
+   "pnpm typecheck (after npx next typegen, re-run after the merge): exit 0.",
+   "pnpm lint: exit 0. Its one warning (WAN_NEG_EN unused in scripts/comfy/library.spec.mjs) was already there.",
+   "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2 after the merge: 278 files, 4,453 tests: 4,449 passed, 3 skipped, 1 failed. The failure is tests/secret-box.test.ts 'opens nothing sealed under another server key', not touched by this branch. It passed 3 of 3 runs on its own, so it looks load-flaky. The run's exit code was 1 because of it. An earlier run before the merge also hit no-higgsfield on src/lib/status-page.ts; the base fixed that in dc991833 and it passes after the merge.",
+   "Targeted runs: evolution (18), evolution-api (7), edit-video-pricing (5), originals-marketing (22), marketing-api (24): all pass.",
+   "Re-running scripts/gen-cloud-models.py leaves no diff; node scripts/eval/gen-cases.mjs --check is in sync.",
+   "Browser (next dev, demo mode, isolated data dir): popcorn-evolution.mjs at 1440 and 390, light and dark: 121 ok, including the new cloud note check. The only failures are the 4 Storyboard next-scene LoRA checks, outside this package and reported by the implementer before this fix.",
+   "marketing-originals.mjs: 20 ok, including the new 'cloud: Standalone's first model is a partner' and 'lists the Original as running on your GPU only'. 3 open-engine Photodump/Fashion checks fail on stale model names, then the script stops at line 155, before its layout pass.",
+   "Because the script stopped early, a one-off script checked the Standalone menu separately at 1440 and 390, light and dark: the Original is greyed with its line, with 0 px sideways scroll.",
+   ".next deleted, dev server stopped, git status clean; pushed o/owner-calls-1 (f6e088ff..b6a1a628)."
+  ],
+  "finalSummary": "Cloud engine: Fuobe Evolution runs fal's hosted Wan 2.2 Fun VACE depth, the GPU's model. Per piece of up to 10 s, a direction frame from hosted Qwen-Image-Edit 2511 (first 3 references) is now sent as VACE's reference (ref_image_urls), as the GPU graph does; the clip's sound goes back on; the run is priced first. Because the endpoint has no strength field, the change level shapes only the direction frame, and the page, the estimate and Settings say so. Direct cloud runs from Edit video or the API are now priced on the clip's frames ÷ 16 and held to 17–241 frames; this also applies to Fuobe Shorts and Genjutsu Restyle on the same endpoint. Fuobe Marketing Image's Standalone shot is GPU-only, and the cloud says so in its menu. Fuobe Speak's labels, the dop-mixed-media eval rule and the GPU's 24-key paths are unchanged from the implement stage.\nOpen engine (ComfyUI): unchanged. Evolution keeps the denoise Change control, 3/4/5 s, a required direction frame, 480p/720p, and its 5 s default. The Standalone shot keeps BiRefNet + 2509 + White_to_Scene.\nVerified vs built: all of this is checked by unit and API tests plus demo-mode browser checks. Nothing was rendered: no GPU, no ComfyUI and no paid key were used. Unverified: fal's preprocess on an RGB clip, how well the VACE reference plus depth carries each change level, fal's behaviour for clips above 30 fps sent whole, and the first dop-mixed-media run, which needs paid keys.\nPublic sign-up: no new route or file path. request-schema accepts params.sourceFps, a price hint the server's own header read overrides. Guests and accounts get what they had: accounts run on their own ComfyUI (open engine, free), where none of the cloud pricing applies; Marketing Studio stays self-hosted only for visitors.",
+  "left": [
+   "A hosted Standalone shot needs a step that puts the cut-out on white. Nothing hosted does it; it could be built as an in-server composite before 2509 + the White_to_Scene LoRA by URL (and Lightning) on fal-ai/qwen-image-edit-plus-lora.",
+   "Not yet measured: whether the direction frame works better as the VACE reference or as first_frame_url. The evolution eval suite can compare the two once paid keys exist.",
+   "Clips above 30 fps sent whole to fal's VACE (no temporal_downsample_factor on a direct run): fal's behaviour is unknown. Today they are counted at full rate for the 241-frame window and the price.",
+   "The browser checks still expect old model names: popcorn-evolution's Storyboard 'next-scene LoRA' check and marketing-originals' open-engine Photodump and Fashion checks (Qwen-Image-Edit 2511 on the GPU, from before 244bed92).",
+   "secret-box's replaced-key test can fail under the full run's load.",
+   "Follow-ups carried from the implement stage: Shorts' GPU first-frame edit is capped at 2 references; Marketing Image runs Qwen-Image 2.1 on the GPU vs 2511 in the cloud; the audio loop's cloud length is held to the GPU's 600 s limit.",
+   "The docs pass may want a FEATURES line for engineNote and for the cloud Standalone note."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/owner-calls-1"
+  ],
+  "notMerged": [],
+  "conflicts": "none",
+  "checks": "typecheck 0, lint 0, vitest 278 files / 4450 passed, 3 skipped (exit 0)",
+  "pushed": true,
+  "head": "4e51ffbf"
+ }
+}

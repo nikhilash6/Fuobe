@@ -1,0 +1,121 @@
+{
+ "key": "dbs-d2",
+ "impl": {
+  "branch": "o/dbs-d2",
+  "summary": "Video tools → Remove dialogue (/video-tools/remove-dialogue) is built on the open engine, with three outcomes: No dialogue (the default), Dialogue only, and Lower the music (−30 to 0 dB, default −12). It runs as two steps in one createPipeline batch. First, graph A (separate-soundtrack-dbs on oss-dbs-separate) reads the video's soundtrack with LoadAudio. Then the stream-copy mux on oss-mux runs: the background or voice stem goes through video-mux-audio-replace, and Lower the music runs video-mux-audio with audio = voice, audio2 = background and backgroundVolumeDb. No new ComfyUI graph was needed. owner-decisions.json has samAudioCloud: false, so there is no cloud route: the cloud engine says the tool runs on your GPU (open source), Engine mode 'Paid APIs only' refuses it with that reason, and the cloud dub is untouched. Commits f9f3261c and cadabebb are signed (SSH).",
+  "built": [
+   "src/lib/av/remove-dialogue.ts: the planner (outcomes, kept and removed stems, muxChain, the dB clamp, blockers 'This clip has no sound' and over 30 minutes, the cloud and cloud-only messages, removeDialogueTime = split time + mux)",
+   "src/server/audio-tools.ts + /api/audio-tools: tool 'remove-dialogue' (zod body, header facts through storedMedia so a visitor's price check reads only its own files, hasAudio refusal, ?preview=1 time estimate with the host's DBS model, one createPipeline batch); the route maps field errors to plain messages",
+   "src/server/chains.ts createPipeline: a step may now be listed twice in `after` when each slot it fills names a different stem (Lower the music needs voice and background from the one split; the runner already handled repeated dependencies). Anything else listed twice is still refused",
+   "src/components/audio-tools/remove-dialogue-tool.tsx: drop or pick a video, ?video= hand-off, outcome control, the Lower slider, Fast/Best model with the host's pick, engine notice with 'Use open source', summary, honest notes, 'Free · runs on your ComfyUI' with the time, progress, before/after players, the result and the removed stem as downloads (both stems for Lower), and earlier runs with Compare to reopen them",
+   "HUB_MODES['video-tools'] and TOOLS['video-tools'] entries; 'Remove dialogue' link in every video result menu (so the Genjutsu and Video tools feeds hand off by ?video=); for clips that have their sound, NEXT_STEPS now offers Extend, Remove dialogue, Split soundtrack (Upscale left the chips for those clips); MicOff icon",
+   "GPU pre-flight board row /video-tools/remove-dialogue (steps oss-dbs-separate separate-audio + oss-mux mux; both graphs are already in requirements.json, and no new pack or model)",
+   "docs/research/dbs-separation-7.md §4.4: as-built note (research correction)"
+  ],
+  "tests": "New tests/remove-dialogue.test.ts (17 tests): plans per outcome, chain stems, which mux graph runs (replace vs mix, via resolveWorkflowId), dB clamp, surround → mono, blockers, time, provider bindings (video → LoadAudio for oss-dbs-separate; the mux graphs' audio/audio2/volume), createPipeline accepting two stems from one step and refusing other repeats, hub/hand-off/next-step/board row, and the API in demo mode (preview free + estimate, a real two-step run finishing with four stems, refusals). tests/public-signup-tools.test.ts: the page opens for guests and accounts; a visitor's price check is on its own GPU, never a demo, and of its own video only; a run gets own-gpu-tool at the proxy; the board row. Updated tests/ux-flows and tests/library-pure for the new menu item and chips. Typecheck clean, lint clean (one existing warning in library.spec.mjs), full vitest 279 files / 4463 passed / 3 skipped. Live run on the CPU ComfyUI at 127.0.0.1:8188 (DBSLoader present, all four DBS weights) through Fuobe (pnpm dev, COMFYUI_URL set, demo off), 15 s H.264 + AAC stereo clip, all three outcomes succeeded: the result's video packets are byte-identical to the source's (framemd5 with -c copy matches); voice + background add back to the decoded source within 3.1e-5, and speech + music + effects to the channel mean within 4.6e-5 (16-bit FLAC); the result soundtrack correlates 0.997–0.998 with the stem (or voice + bed at −12 dB) it was made from, within 0.04 dB; split 54.5 s (0.28x real time), each mux about 1–2 s, inside the shown 49–97 s estimate. Browser (Playwright): /video-tools/remove-dialogue at 1440 and 390 px, light and dark, against the CPU ComfyUI (empty, cloud notice, options with the slider, result players and downloads) and in demo mode (a run from the page to before/after at 390 dark and 1440 light): no horizontal scroll, players fit, controls labelled. The one hydration error seen is in the sidebar on every page (also /audio/split and /video-tools/trim), not this package. Dev server stopped, .next and the data dir deleted.",
+  "left": [
+   "There is no cloud route, because samAudioCloud is false. If the owner turns it on, the brief's SAM Audio routes (extract-soundtrack → sam-audio-separate 'speech' → merge-audio-video, and loudnorm + compose for Lower) are still to build, with sam-audio-separate added to the catalog",
+   "Not verifiable here: GPU timing (the estimate uses D1's figures), quality on real films, and any paid calls",
+   "The test clip came from a ComfyUI template's sung song, not real dialogue: these checks prove the mechanics (picture copy, exact sum, mix level), not separation quality"
+  ],
+  "docsNotes": "For the docs pass: FEATURES/STATUS can list Video tools → Remove dialogue (open engine only: DBS + stream-copy mux; three outcomes; removed stem as a download; the cloud says it runs on your GPU). ARCHITECTURE: /api/audio-tools now also serves tool 'remove-dialogue'; createPipeline allows a step listed twice in `after` when each slot names its own stem. Where the brief was out of date: hubs.ts, mode-switch TOOLS, output-actions and NEXT_STEPS line numbers moved (found by name). The brief's 'more than 2 channels: each channel' is overridden by D1's as-built rule (a file with more than 2 channels is split in mono and its bed made from music + effects, because ComfyUI saves mono or stereo only); D2 follows D1. Already there from D1: graph A, oss-dbs-separate, the stem aliases (target/residual), the mock's four stems, the video → LoadAudio binding and its test, the hasAudio header probe, both mux graphs and the provider's choice between them. The brief's 'video URL bound to LoadAudio' test now also exists in remove-dialogue.test.ts, built from the plan's own request.",
+  "blocked": null
+ },
+ "review": {
+  "package": "dbs-d2",
+  "branch": "o/dbs-d2",
+  "base": "claude/fuobe-parity-4",
+  "findings": [
+   {
+    "severity": "medium",
+    "title": "Guests and accounts see a free run on their own ComfyUI, but every run they start is refused with own-gpu-tool",
+    "where": "src/components/audio-tools/remove-dialogue-tool.tsx (AddVideo / useAskBeforeUpload, money() at ~L232, ToolHero subtitle, the run button and go()); ToolShell is rendered without selfHostedOnly",
+    "detail": "POST /api/audio-tools (not ?preview=1) answers 403 own-gpu-tool to every account at the proxy. The branch's own test asserts this (tests/public-signup-tools.test.ts, 'Remove dialogue (DBS D2)'), and docs/public-signup.md L193-195 says so for this route. The page still treats a visitor like the owner. An account with its own GPU can upload a video (useAskBeforeUpload lets it through). The price check (priceAs, demo:false, costUsd 0) then shows 'Free · runs on your ComfyUI · about N s on your GPU', the hero says 'Runs on your ComfyUI … free', and the Remove dialogue button only fails after the click, with a 403. The base fixed exactly this for the other tools that never run on an account's GPU, in commits 25eac1ff ('visitors learn up front that self-hosted-only tools don't run here') and 0b2c24bc ('visitors read \"Self-hosted only\", not \"Free · your GPU\"'). Remove object follows that pattern at remove-object-tool.tsx L77/217/242/248: useLikelyVisitor, a SelfHostNote, a blocker, no upload or run, and ToolShell selfHostedOnly. This new page follows none of it. (D1's Split soundtrack page has the same gap; it was already on the base.)",
+    "verified": "Traced it: the proxy's account() falls through to ownGpuTool() for POST /api/audio-tools, and the branch's test expects 403 own-gpu-tool. The account preview test expects {costUsd:0, demo:false}, so money() prints 'Free · runs on your ComfyUI'. grep finds no useLikelyVisitor, SelfHostNote or selfHostedOnly in remove-dialogue-tool.tsx.",
+    "fix": "Follow remove-object-tool.tsx: const visitor = useLikelyVisitor(). Show <SelfHostNote>Remove dialogue runs on a self-hosted Fuobe for now.</SelfHostNote>, make the blocker say the same, turn off upload, 'From library' and the run, show 'Self-hosted only' in place of 'Free · runs on your ComfyUI', drop 'on your ComfyUI … free' from the hero for visitors, and pass ToolShell selfHostedOnly. The other way is to let accounts run it on their own ComfyUI: it is two plain open-engine steps with no AI helper, so the rule doesn't require own-gpu-tool. That needs accountRun plus the account-inputs checks and a tests/account-*.test.ts, so it is a bigger change."
+   },
+   {
+    "severity": "low",
+    "title": "Next-step chips: Upscale is gone for every clip that has its sound, and Remove dialogue's own result offers Remove dialogue again",
+    "where": "src/lib/output-actions.ts nextSteps (SOUNDED_VIDEO_OPS → ['extend','remove-dialogue','split-soundtrack'])",
+    "detail": "The brief asked for a Remove dialogue chip, but this change also takes the Upscale chip away from v2a, mux, lipsync, trim and captions results (tests/ux-flows.test.ts was edited to match). v2a is Sound for video, generated effects that rarely have speech, yet its first chips now include Remove dialogue in place of Upscale. A Remove dialogue result is op 'mux', so a 'No dialogue' result offers 'Remove dialogue' again. Upscale is still in the result menu.",
+    "verified": "Read the code; the updated ux-flows test expects ['Extend','Remove dialogue','Split soundtrack'] for op v2a.",
+    "fix": "Keep Upscale and add Remove dialogue only for ops that are likely to have speech (lipsync, dub/mux results other than feature remove-dialogue, trim, captions). Or leave the chips alone and rely on the menu link, then confirm with the owner."
+   },
+   {
+    "severity": "low",
+    "title": "Compare on an earlier run doesn't bring back its outcome or level in the controls",
+    "where": "src/components/audio-tools/remove-dialogue-tool.tsx Results onOpen (~L700)",
+    "detail": "onOpen sets source and ran.outcome = outcomeOf(r), but never calls setOutcome or setMusicDb. When you reopen a 'Lower the music (−20 dB)' run while the controls say 'No dialogue', the Before/After panel shows the Lower run while the 'What to keep' control, the summary and the run button still say No dialogue. Pressing the button then runs the outcome on screen, not the one that was reopened.",
+    "verified": "Read the code: onOpen calls setSource and setRan only.",
+    "fix": "In onOpen, call setOutcome(outcomeOf(r)) and, for lower-music, setMusicDb(r.request.params?.extra?.backgroundVolumeDb ?? LOWER_DEFAULT_DB)."
+   },
+   {
+    "severity": "low",
+    "title": "docs/public-signup.md still names only Split soundtrack as the /api/audio-tools tool that answers own-gpu-tool",
+    "where": "docs/public-signup.md L193-195; the implementer's docsNotes",
+    "detail": "Remove dialogue now runs on the same route and gets the same own-gpu-tool answer for accounts, with a working price check. The source-of-truth doc and the docsNotes for the docs pass don't say so.",
+    "verified": "grep of docs/public-signup.md",
+    "fix": "Have the docs pass add 'and Video tools → Remove dialogue' beside Split soundtrack (POST /api/audio-tools) in that paragraph."
+   }
+  ],
+  "checks": [
+   "owner-decisions.json on claude/fuobe-parity-4 has samAudioCloud: false, so it is right that there is no cloud route and no sam-audio-separate in the catalog. The cloud engine shows 'runs on your GPU (open source)', mode 'cloud' refuses the tool with CLOUD_ONLY_REMOVE_PROBLEM, and the diff doesn't touch the dub (src/lib/av/dub.ts and the dub studio are unchanged)",
+   "No new model, LoRA, node pack or graph. separate-soundtrack-dbs (with its licence recorded), video-mux-audio and video-mux-audio-replace are already in manifest.json and requirements.json. Nothing from Higgsfield in the diff",
+   "createPipeline: a step listed twice is allowed only when every repeated slot names a stem and those stems differ (case-insensitive); anything else listed twice is still refused. topoOrder dedupes with a Set. The runner (advanceDependents) maps each depends_on entry to its own slot. READY_DEPENDENTS (json_each), dropUnused and the recipe-builder walk all handle the repeated id",
+   "The provider's bindings match the manifests. The split step's video goes to LoadAudio (node 1) with channels mono. The mux with one chain stem runs video-mux-audio-replace. With audio2 it runs video-mux-audio, with audio=node 3, audio2=node 4 and backgroundVolumeDb=node 5 volume. The EmptyAudio duration falls back to the FLAC stems' length when the video's header can't be read",
+   "The GPU pre-flight row /video-tools/remove-dialogue resolves oss-mux to video-mux-audio only. The replace graph that the default outcomes run needs only ConcatenateVideo, LoadAudio, LoadVideo and SaveVideo, all core nodes and a subset of the mix graph's, so the board's readiness holds",
+   "Public sign-up: /api/audio-tools?preview=1 is in PREVIEWS and the route is wrapped in priceAs. factsOf reads through storedMedia, so a visitor's price check sees only its own files (the owner's video answers 'That video is gone'). The account price is demo:false on its own GPU and calls no GPU (lastGpuDevice). Runs from accounts and guests are refused at the proxy. The JSON body is small (the video goes by /api/files reference)",
+   "Live check on the CPU ComfyUI at 127.0.0.1:8188 (no installs, no restart). I ran video-mux-audio-replace on a VP9+Opus WebM and an H.264+AAC MOV, the containers the page accepts besides MP4 that the implementer didn't test. Both succeeded. The MOV's video packet framemd5 is identical to the source's. The WebM's VP9 packets are copied into MP4 with identical sizes and payload hashes (only the timestamps are rebased, by 7 ms), so the picture really isn't re-encoded for these containers either. Test files are in ComfyUI input/output subfolder rvw-d2",
+   "npx tsc --noEmit: clean. eslint on the changed files: clean",
+   "vitest --maxWorkers=2: tests/remove-dialogue, public-signup-tools, ux-flows, library-pure and split-soundtrack (117 passed); chains, chain-fanout, chain-optional, chain-soundtrack, pipeline, public-signup, public-signup-visitors, no-higgsfield, av-dub and split-soundtrack (187 passed)",
+   "Brief items present: hub mode and TOOLS entry, the menu hand-off by ?video=, the three outcomes with a −30…0 dB slider (default −12, clamped on the server and in zod), the engine switch, the time line, before/after players, the removed stem (both stems for Lower) as downloads, the copy and honest notes, the 'This clip has no sound' and over-30-minutes blockers, one createPipeline batch, and the board row",
+   "Not verified here: GPU timing, separation quality on real dialogue, and the 390 px / dark layout in a browser (I trusted the implementer's Playwright run and checked only that Segmented wraps and the Slider forwards aria-label and aria-valuetext to its thumb)"
+  ],
+  "verdict": "pass_with_fixes: the open-engine mechanics are correct (picture copied for MP4, MOV and WebM; stems wired right; createPipeline change is safe). Before merging, fix the visitor notice (medium): accounts are shown a free run on their own ComfyUI that the proxy always refuses. The three low items can be done in the same pass or the docs pass."
+ },
+ "fix": {
+  "applied": [
+   "Medium (confirmed: the proxy answers POST /api/audio-tools with own-gpu-tool for guests and accounts, but the page offered them 'Free · runs on your ComfyUI'): Remove dialogue now follows Remove object's pattern. It uses useLikelyVisitor, shows a SelfHostNote ('Remove dialogue runs on a self-hosted Fuobe for now', with the link to run Fuobe yourself), makes that sentence the blocker, and turns off the upload, From library, drop and file input (AddVideo disabled). The run button is off and go() returns early. Visitors see 'Self-hosted only' in place of the price, the hero drops 'on your ComfyUI … free' for them, and ToolShell gets selfHostedOnly. Account runs are NOT opened (main-session call).",
+   "The same pattern applied to D1's Split soundtrack page (src/components/audio-tools/split-tool.tsx), which shares the route and had the same gap: 'Split soundtrack runs on a self-hosted Fuobe for now', AddMedia disabled, run off, 'Self-hosted only', hero wording, ToolShell selfHostedOnly.",
+   "Shared price line: openToolPrice(p, visitor) in src/lib/av/split.ts replaces both pages' local money(). A visitor reads 'Self-hosted only'; the owner keeps 'Free · runs on your ComfyUI' / 'Placeholder · free'.",
+   "Low (chips, confirmed): nextSteps keeps Upscale for every clip that has its sound. Remove dialogue is added only for clips likely to carry speech: mux (except a Remove dialogue result, by feature), lipsync, trim and captions, giving Extend, Upscale, Remove dialogue. v2a and a Remove dialogue result go back to the base's Extend, Upscale, Split soundtrack.",
+   "Low (Compare, confirmed): requestedOutcome(request) in src/lib/av/remove-dialogue.ts reads the outcome and level back from the mux step's chain and params.extra.backgroundVolumeDb (clamped). onOpen now calls setOutcome, and setMusicDb for Lower the music, so the controls and the run button match the reopened run.",
+   "Low (docs, confirmed): docs/public-signup.md names Video tools → Remove dialogue beside Split soundtrack (both POST /api/audio-tools) as own-gpu-tool for accounts with working price checks, and says both pages tell visitors up front.",
+   "Tests: tests/remove-dialogue.test.ts covers requestedOutcome round-trips for every outcome, a missing or out-of-range level and an empty request; the demo API run's stored request reads back as lower-music at -15 dB; and the chips by op and feature (lipsync, dub mux, trim, captions offer Remove dialogue; v2a and a Remove dialogue result don't; max 4 shows Split soundtrack after it). tests/public-signup-tools.test.ts covers openToolPrice for owner and visitor, and checks both pages' source for the visitor pattern (useLikelyVisitor, SELF_HOSTED text, blocker, SelfHostNote, selfHostedOnly, disabled upload, library and input, run off, 'Self-hosted only', hero wording). tests/ux-flows.test.ts goes back to the base's v2a expectation and adds a lipsync case.",
+   "Merged the latest claude/fuobe-parity-4 (4e51ffbf) into o/dbs-d2 first (59f8366b) with no conflicts. The fix commit is 6fa4b77f."
+  ],
+  "rejected": [
+   "The reviewer's alternative for the medium finding (let accounts run Remove dialogue on their own ComfyUI through accountRun and the account-inputs checks): not taken, per the main session's call. The page follows the Remove object pattern instead, and the route stays own-gpu-tool for accounts."
+  ],
+  "checks": [
+   "Worktree case (1): /home/user/wt/o-dbs-d2 on o/dbs-d2. The branch held only this package's commits (f9f3261c, cadabebb), so it was not cut from a rebuilt base. claude/fuobe-parity-4 was not an ancestor, so it was merged in.",
+   "pnpm install --frozen-lockfile --prefer-offline: exit 0. npx next typegen: exit 0.",
+   "pnpm typecheck (tsc --noEmit): exit 0.",
+   "pnpm lint: exit 0. The one warning (WAN_NEG_EN unused in scripts/comfy/library.spec.mjs) was already there.",
+   "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: exit 0, 279 files, 4471 passed, 3 skipped, 1535 s. A first attempt was stopped by the background time limit while another session's vitest ran alongside, and was re-run to completion.",
+   "Targeted runs before the full run: remove-dialogue, public-signup-tools, ux-flows, library-pure, split-soundtrack, 120 passed.",
+   "No browser check of the visitor view in this pass. The change reuses components that are already checked (SelfHostNote, disabled Buttons, ToolShell selfHostedOnly).",
+   ".next deleted, git status clean, pushed: origin/o/dbs-d2 = 6fa4b77f."
+  ],
+  "finalSummary": "Open engine (ComfyUI + ComfyUI-DBS, CPU or GPU): Video tools → Remove dialogue offers No dialogue, Dialogue only and Lower the music (−30…0 dB). It runs as two steps in one batch, graph A then the stream-copy mux, and keeps the removed stem as a download. The implementer and reviewer verified it on the CPU ComfyUI: picture packets are byte-identical for MP4, MOV and WebM, the stems add back exactly, and the mix level is right. Compare now restores the outcome and level. Cloud engine: no route, because samAudioCloud is false and DBS isn't hosted. The page says it runs on your GPU (open source), and 'Paid APIs only' refuses it. The cloud dub is unchanged. Needs a GPU: only for speed (it runs on CPU). No keys are needed. Public sign-up: guests and accounts can open /video-tools/remove-dialogue and /audio/split. Both pages now say up front that the tool runs on a self-hosted Fuobe for now, show 'Self-hosted only', and turn off upload, library pick and run. The price check (?preview=1) still works and is priced for the visitor's own GPU, on its own files only. A POST run is refused at the proxy with own-gpu-tool. The owner's pages are unchanged. Next-step chips keep Upscale and add Remove dialogue only for clips likely to have speech.",
+  "left": [
+   "There is no cloud route while samAudioCloud is false. If the owner turns it on, the SAM Audio routes (extract-soundtrack → sam-audio-separate 'speech' → merge-audio-video, and loudnorm + compose for Lower) and the sam-audio-separate catalog entry are still to build.",
+   "Accounts can't run Remove dialogue or Split soundtrack on their own ComfyUI. Opening that (accountRun + account-inputs checks + a tests/account-*.test.ts) is an owner/plan decision.",
+   "Not verifiable here: GPU timing, separation quality on real dialogue, and paid calls.",
+   "Split soundtrack's mixer 'put the mix on the video' (remux) has no visitor gating, but a visitor can never get stems to reach it, because the split run itself is refused.",
+   "Speech-likely clips now show Extend, Upscale, Remove dialogue as their three chips, so Split soundtrack moves to the menu for them. The owner may want a different order."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/dbs-d2"
+  ],
+  "notMerged": [],
+  "conflicts": "none",
+  "checks": "typecheck 0, lint 0, vitest 282 files / 4503 passed, 3 skipped (exit 0)",
+  "pushed": true,
+  "head": "2c72d369"
+ }
+}
