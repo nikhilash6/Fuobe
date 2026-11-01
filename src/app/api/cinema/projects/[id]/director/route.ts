@@ -20,13 +20,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/cinema/proj
     // An LLM call can outlive a closed tab; keep it running so the answer is saved.
     after(() => reply.catch(() => {}));
     return Response.json({ messages: await reply });
-  });
+  }, request);
 }
 
-export async function DELETE(_req: Request, ctx: RouteContext<"/api/cinema/projects/[id]/director">) {
+export async function DELETE(request: Request, ctx: RouteContext<"/api/cinema/projects/[id]/director">) {
   return handle(async () => {
     const { id } = await ctx.params;
     clearChat(id);
     return new Response(null, { status: 204 });
-  });
+  }, request);
 }

@@ -9,5 +9,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/content-fac
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(await generateSeries(id, await body(request, Generate, "Say what the video is about and pick the settings")));
-  });
+  }, request);
 }

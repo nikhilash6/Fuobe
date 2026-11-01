@@ -98,7 +98,7 @@ function RunInfo({ preview, loading, blocker, visitor }: { preview?: RunPreview 
   if (blocker) return <p className="text-[12.5px] text-destructive">{blocker}</p>;
   if (!preview) return <p className="h-5 text-[12.5px] text-muted-foreground">{loading ? "Pricing…" : ""}</p>;
   if (preview.error) return <p className="text-[12.5px] text-destructive">{preview.error}</p>;
-  const cost = visitor && (preview.demo || preview.costUsd === 0) ? "Self-hosted only" : preview.demo ? "Demo · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
+  const cost = visitor && (preview.demo || preview.costUsd === 0) ? "Self-hosted only" : preview.demo ? "Placeholder · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
   return (
     <div className="space-y-0.5 text-[12.5px] text-muted-foreground" aria-live="polite">
       <p>

@@ -114,24 +114,36 @@ function PlaceholderCard({ close }: { close: () => void }) {
 
 /**
  * The sidebar's "Placeholders on" while the switch is on (the owner's only: nobody else's runs make placeholders). A
- * click turns them off at once, with Undo in the toast; Settings has the switch itself.
+ * click turns them off at once, with Undo in the toast; Settings has the switch itself. `icon`: the collapsed sidebar's
+ * round version, the same button with only its mark showing.
  */
-export function PlaceholdersOnChip({ className }: { className?: string }) {
+export function PlaceholdersOnChip({ className, icon }: { className?: string; icon?: boolean }) {
   const { busy, turnOff } = useSetPlaceholders();
   return (
     <button
       type="button"
       disabled={busy}
       onClick={() => void turnOff()}
-      title="Turn off placeholder results"
+      title={icon ? `${PLACEHOLDERS_ON}: click to turn them off` : "Turn off placeholder results"}
       aria-label={`${PLACEHOLDERS_ON}. Turn off placeholder results`}
       className={cn(
-        "group/chip inline-flex h-6 w-fit max-w-full items-center gap-1 rounded-full bg-highlight/25 pr-1.5 pl-2 text-[11px] font-medium text-highlight-foreground transition-colors outline-none hover:bg-highlight/40 focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60 dark:text-highlight",
+        "group/chip inline-flex items-center rounded-full bg-highlight/25 font-medium text-highlight-foreground transition-colors outline-none hover:bg-highlight/40 focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60 dark:text-highlight",
+        icon ? "size-8 shrink-0 justify-center" : "h-6 w-fit max-w-full gap-1 pr-1.5 pl-2 text-[11px]",
         className,
       )}
     >
-      <span className="min-w-0 truncate">{PLACEHOLDERS_ON}</span>
-      {busy ? <Loader2 aria-hidden className="size-3 shrink-0 animate-spin" /> : <X aria-hidden className="size-3 shrink-0 opacity-70 group-hover/chip:opacity-100" />}
+      {icon ? (
+        busy ? (
+          <Loader2 aria-hidden className="size-4 animate-spin" />
+        ) : (
+          <Sparkles aria-hidden className="size-4" />
+        )
+      ) : (
+        <>
+          <span className="min-w-0 truncate">{PLACEHOLDERS_ON}</span>
+          {busy ? <Loader2 aria-hidden className="size-3 shrink-0 animate-spin" /> : <X aria-hidden className="size-3 shrink-0 opacity-70 group-hover/chip:opacity-100" />}
+        </>
+      )}
     </button>
   );
 }

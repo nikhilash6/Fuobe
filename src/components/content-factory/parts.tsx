@@ -282,7 +282,7 @@ export function PresetTile({ p, on, tabStop, onPick }: { p: StylePreset; on: boo
 // The price
 
 /**
- * "≈ $4.20 · 3 episodes × $1.40" / "Demo · free" / "Free · your GPU", with the research's pricing note. A guest or an
+ * "≈ $4.20 · 3 episodes × $1.40" / "Placeholder · free" / "Free · your GPU", with the research's pricing note. A guest or an
  * account reads "Self-hosted only" for the open engine: a series doesn't run on their own GPU yet.
  */
 export function SeriesPriceLine({ data, loading, engine, className }: { data: SeriesEstimate | undefined; loading?: boolean; engine: Engine; className?: string }) {
@@ -290,7 +290,7 @@ export function SeriesPriceLine({ data, loading, engine, className }: { data: Se
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
   const p = data.price;
   const each = p.episodes > 1 ? ` · ${p.episodes} × ${usd(p.perEpisode)}` : "";
-  const price = visitor && (data.demo || engine === "open") ? "Self-hosted only" : data.demo ? "Demo · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
+  const price = visitor && (data.demo || engine === "open") ? "Self-hosted only" : data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
   return (
     <span className={cn("inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5", className)}>
       <Popover>

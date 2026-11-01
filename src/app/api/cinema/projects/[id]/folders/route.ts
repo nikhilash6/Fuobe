@@ -6,5 +6,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/cinema/proj
     const { id } = await ctx.params;
     const input = await body(request, FolderCreate, "Give the folder a name");
     return Response.json(createFolder(id, input), { status: 201 });
-  });
+  }, request);
 }

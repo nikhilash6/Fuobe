@@ -386,7 +386,15 @@ describe("studio tools", () => {
     // No sample on a real open engine: the card says what to add and can't run, in Faceless Studio
     // and in the pipeline it falls back to (a square episode).
     setSetting("demoMode", "off");
+    const g = globalThis as unknown as { __fuobeComfyReach?: { ok: boolean; at: number; url: string } };
+    const before = g.__fuobeComfyReach;
     try {
+      // Nothing connected: the card says to connect ComfyUI first, not to add a sample it couldn't use yet.
+      const none = plan("faceless_episode", { scenes, style: "flat 2D" }, "open");
+      expect(none.jobs.find((j) => j.error)?.error ?? none.error).toMatch(/Connect ComfyUI in Settings/);
+      expect(planRunnable(none.jobs)).toBe(false);
+      // A ComfyUI that answers: now the sample is what's missing.
+      g.__fuobeComfyReach = { ok: true, at: Date.now(), url: "http://127.0.0.1:9" };
       const p = plan("faceless_episode", { scenes, style: "flat 2D" }, "open");
       expect(p.studio).toBe("Faceless Studio");
       expect(p.jobs.find((j) => j.error)?.error).toMatch(/Pick the narrator's voice/);
@@ -398,6 +406,7 @@ describe("studio tools", () => {
       expect(voice.error).toMatch(/Add a voice sample for the narrator/);
       expect(planRunnable(square.jobs)).toBe(false);
     } finally {
+      g.__fuobeComfyReach = before;
       setSetting("demoMode", "auto");
     }
     // A sample is cloned on either engine; the cloud engine otherwise uses a premade voice.

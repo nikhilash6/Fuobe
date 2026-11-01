@@ -42,10 +42,10 @@ export function useRunPreview(req: GenerationRequest | null) {
   });
 }
 
-/** "≈ $0.38", "Free on your GPU", "Demo — no provider connected" (null: not known yet). */
+/** "≈ $0.38", "Free on your GPU", "Placeholder · nothing is charged" (null: not known yet). */
 export function priceLine(p: RunPreview | undefined): string | null {
   if (!p) return null;
-  if (p.demo) return "Demo — no provider connected, nothing is charged";
+  if (p.demo) return "Placeholder · nothing is charged";
   if (p.engine === "open" || p.costUsd === 0) return "Free — runs on your ComfyUI";
   if (p.costUsd === null) return "Billed by your provider";
   const usd = p.costUsd < 0.01 ? "<$0.01" : `$${p.costUsd < 1 ? p.costUsd.toFixed(3).replace(/0$/, "") : p.costUsd.toFixed(2)}`;

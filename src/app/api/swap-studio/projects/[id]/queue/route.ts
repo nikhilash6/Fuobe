@@ -6,5 +6,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/swap-studio
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(queueTakes(id, await body(request, QueueSchema, "Pick a segment to queue")), { status: 201 });
-  });
+  }, request);
 }

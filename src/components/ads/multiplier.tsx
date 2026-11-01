@@ -270,7 +270,7 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
   const estBody = useMemo(() => (body && sections ? { ...body, firstFrame: hookOn ? body.video : undefined, lastFrame: ctaOn ? body.video : undefined } : body), [body, sections, hookOn, ctaOn]);
   const est = useEstimate<RunEstimate>("/api/ads/multiplier/estimate", estBody);
   const blocker = !video ? "Upload a reference video" : video.uploading ? "Uploading the video…" : duration == null ? "Reading the video…" : length < MULTIPLIER.minSeconds - 0.05 || length > MULTIPLIER.maxSeconds + 0.05 ? "Video duration: 4-30 seconds" : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   const mention = (n: number) => {
     const tag = `@image_${n}`;

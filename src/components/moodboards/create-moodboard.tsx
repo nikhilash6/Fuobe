@@ -155,7 +155,7 @@ export function CreateMoodboardDialog({ open, onOpenChange, onCreated }: { open:
       : !st
         ? `Cloud: a Recraft style from the ${n} most representative images`
         : demo
-          ? `Cloud: a Recraft style from the ${n} most representative images · demo, free`
+          ? `Cloud: a Recraft style from the ${n} most representative images · placeholder, free`
           : fal
             ? `Cloud: Recraft V4 Styles saves a style and draws the cover from the ${n} most representative images · ≈ $0.04 on fal`
             : `Cloud: no fal key, so no saved Recraft style — the ${n} most representative images are used as references`;

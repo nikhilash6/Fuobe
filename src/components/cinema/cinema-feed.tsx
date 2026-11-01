@@ -379,7 +379,7 @@ function TileView({
         <div className="min-w-0 flex-1">
           <p className="line-clamp-2 text-[13.5px] leading-snug">{promptOf(g)}</p>
           <p className="mt-0.5 flex flex-wrap gap-x-1.5 text-[11.5px] text-muted-foreground">
-            {[step, getModel(g.modelId)?.name ?? g.modelId, g.provider === "mock" ? "Demo" : g.engine === "open" ? "Open source" : "Cloud", timeAgo(g.createdAt), g.costUsd ? formatCost(g.costUsd) : null, g.status === "failed" ? g.error : null]
+            {[step, getModel(g.modelId)?.name ?? g.modelId, g.provider === "mock" ? "Placeholder" : g.engine === "open" ? "Open source" : "Cloud", timeAgo(g.createdAt), g.costUsd ? formatCost(g.costUsd) : null, g.status === "failed" ? g.error : null]
               .filter(Boolean)
               .map((m, i) => (
                 <span key={i} className={cn(i > 0 && "before:mr-1.5 before:content-['·']", m === g.error && "text-destructive")}>

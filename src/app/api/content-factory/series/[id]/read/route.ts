@@ -9,5 +9,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/content-fac
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(await rereadSeries(id, (await body(request, Read, "Pick an engine")).engine));
-  });
+  }, request);
 }

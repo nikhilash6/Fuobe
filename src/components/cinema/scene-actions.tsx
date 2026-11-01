@@ -42,12 +42,12 @@ export function sceneTake(g: CinemaGeneration): SceneTake | null {
   return { generation: g, still, source, aspect: ar && IMAGE_ASPECTS.includes(ar) ? ar : "16:9" };
 }
 
-/** What a plan costs here: "Demo" while placeholder results are on (Settings, for a tour). */
+/** What a plan costs here: "Placeholder · free" while placeholder results are on (Settings, for a tour). */
 export function usePlanPrice(plan: CinemaPlan): { cost: number | null; label: string; demo: boolean } {
   const status = useStatus().data;
   const demo = placeholdersOn(status?.demoMode);
   const cost = demo ? 0 : plan.costUsd;
-  return { cost, demo, label: demo ? "Demo · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown" };
+  return { cost, demo, label: demo ? "Placeholder · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown" };
 }
 
 const SKIP_KEY = "fuobe.cinema.sceneConfirm";

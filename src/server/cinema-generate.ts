@@ -15,7 +15,7 @@ import {
 } from "@/lib/catalog/cinema";
 import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { CinemaError, folderExists, getProject, recordTakes, spentUsd } from "./cinema";
-import { createGenerations, previewGeneration } from "./generations";
+import { ConnectComfyError, createGenerations, previewGeneration } from "./generations";
 import { encodePng } from "./png";
 import { engineMode, getSetting } from "./settings";
 import { saveFile } from "./storage";
@@ -74,6 +74,7 @@ function previewSteps(steps: CinemaStep[]): Preview[] {
     try {
       return previewGeneration(withPlaceholders(s));
     } catch (e) {
+      if (e instanceof ConnectComfyError) throw e;
       throw new CinemaError((e as Error).message, 422);
     }
   });
@@ -163,6 +164,7 @@ export function generateInProject(projectId: string, input: CinemaRequest, folde
   } catch (e) {
     // Keep what already started visible in the project, then report the step that failed.
     recordTakes(projectId, all, folder, take);
+    if (e instanceof ConnectComfyError) throw e;
     throw new CinemaError((e as Error).message, 422);
   }
   recordTakes(projectId, all, folder, take);

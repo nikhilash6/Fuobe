@@ -59,7 +59,7 @@ export function StepList({ steps, className }: { steps: StepRow[]; className?: s
                 {g?.modelName && <span className="hidden truncate text-[12px] text-muted-foreground sm:inline">{g.modelName}</span>}
                 <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
                   {status === "succeeded" ? "Done" : status === "failed" ? "Failed" : status === "canceled" ? "Canceled" : waiting ? "Waiting" : counted ?? (pct != null ? `${pct}%` : "Working")}
-                  {g?.provider === "mock" && status === "succeeded" ? " · demo" : ""}
+                  {g?.provider === "mock" && status === "succeeded" ? " · placeholder" : ""}
                 </span>
               </div>
               {(status === "running" || (status === "queued" && !waiting)) && (

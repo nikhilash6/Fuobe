@@ -31,7 +31,7 @@ import { sourceSeconds, takesImage } from "@/lib/catalog/shorts-models";
 import type { Engine, Generation, ProviderId } from "@/lib/catalog/types";
 import { createPipeline } from "./chains";
 import { db } from "./db";
-import { DROPPED_UNUSED, getGeneration, previewChained, unfilledRequest, waitedOnFailure } from "./generations";
+import { ConnectComfyError, DROPPED_UNUSED, getGeneration, previewChained, unfilledRequest, waitedOnFailure } from "./generations";
 import { withoutMissingOnComfy, withoutUnreachableCivitai } from "./loras";
 import { comfyLoraFiles, probeComfy } from "./providers/comfyui";
 import { engineMode, getSetting } from "./settings";
@@ -262,6 +262,7 @@ function run(steps: PlanStep[], opts: { existing?: Record<string, string> } = {}
   try {
     return createPipeline(steps, opts);
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
 }

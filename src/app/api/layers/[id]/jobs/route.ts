@@ -1,3 +1,4 @@
+import { connectRefusal } from "@/server/connect-refusal";
 import { JobInputSchema, LayersError, startJob } from "@/server/layers";
 
 /**
@@ -12,6 +13,6 @@ export async function POST(request: Request, ctx: RouteContext<"/api/layers/[id]
   try {
     return Response.json(startJob(id, parsed.data), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: e instanceof LayersError ? e.status : 422 });
+    return connectRefusal(e, request) ?? Response.json({ error: (e as Error).message }, { status: e instanceof LayersError ? e.status : 422 });
   }
 }

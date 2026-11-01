@@ -6,13 +6,13 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/shorts/pre
     const { id } = await ctx.params;
     const patch = await body(request, PresetPatchSchema, "Those preset settings aren't valid");
     return Response.json(updateCustomPreset(id, patch));
-  });
+  }, request);
 }
 
-export async function DELETE(_req: Request, ctx: RouteContext<"/api/shorts/presets/[id]">) {
+export async function DELETE(request: Request, ctx: RouteContext<"/api/shorts/presets/[id]">) {
   return handle(async () => {
     const { id } = await ctx.params;
     if (!deleteCustomPreset(id)) throw new ShortsError("This preset no longer exists", 404);
     return new Response(null, { status: 204 });
-  });
+  }, request);
 }

@@ -14,5 +14,5 @@ export async function POST(request: Request) {
     const input = await body(request, ShortsBodySchema, "Pick a preset, upload a clip and choose the part to restyle");
     // A repeated requestId (a second click on Generate) gets the session the first one started.
     return Response.json(await once("shorts-session", input.requestId, () => createSession(input)), { status: 201 });
-  });
+  }, request);
 }

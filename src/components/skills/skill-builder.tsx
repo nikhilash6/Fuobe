@@ -362,7 +362,7 @@ function statusLine(c: CheckState | null, busy: "check" | "save" | null, own: st
 
 function priceOf(e: DraftCheckResult["engines"][number]): string {
   if (!e.plan.ok) return "doesn't run";
-  if (e.plan.demo) return "demo, free";
+  if (e.plan.demo) return "placeholder, free";
   if (e.plan.total === null) return "price varies";
   if (e.plan.total === 0) return "Free";
   return formatCost(e.plan.total);

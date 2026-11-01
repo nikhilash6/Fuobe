@@ -23,5 +23,5 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, Create, "Add a reference clip, a link or a preset");
     return Response.json(await createSeries(input), { status: 201 });
-  });
+  }, request);
 }

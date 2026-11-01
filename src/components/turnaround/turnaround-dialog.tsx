@@ -214,7 +214,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
     if (k === "sheet") setSheet(url);
     else setViews((v) => ({ ...v, [k]: url }));
   };
-  const price = !p ? "" : p.demo ? "Demo · free" : engine === "open" ? `Free · on your GPU${p.gpuGb ? `, about ${p.gpuGb} GB` : ""}` : p.costUsd != null ? `≈ ${formatCost(p.costUsd)}` : "";
+  const price = !p ? "" : p.demo ? "Placeholder · free" : engine === "open" ? `Free · on your GPU${p.gpuGb ? `, about ${p.gpuGb} GB` : ""}` : p.costUsd != null ? `≈ ${formatCost(p.costUsd)}` : "";
   const heading = headingOf({ title, flyAround, name });
 
   return (

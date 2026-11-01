@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { createPhotodump, listUserPacks, previewPhotodump } from "@/server/photodump";
+import { refusedRun } from "@/server/connect-refusal";
 
 const Body = z
   .object({
@@ -30,6 +31,6 @@ export async function POST(request: Request) {
   try {
     return Response.json(createPhotodump(parsed.data), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
 }

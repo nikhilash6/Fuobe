@@ -57,7 +57,7 @@ async function findCuts(src: string, duration: number, onProgress: (p: number) =
 
 /** visitor: a guest or an account, whose own GPU doesn't run Katana yet (the page says so). */
 const money = (usd: number | null | undefined, demo?: boolean, open?: boolean, visitor?: boolean) =>
-  visitor && (demo || open) ? "Self-hosted only" : demo ? "Demo · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
+  visitor && (demo || open) ? "Self-hosted only" : demo ? "Placeholder · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
 
 /** Katana: rebuild a reference edit with your subject, shot for shot. */
 export function KatanaStudio() {
@@ -415,7 +415,7 @@ function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
                   </div>
                   <p className="mt-0.5 text-[12px] text-muted-foreground">
                     {j.segments.length} segment{j.segments.length === 1 ? "" : "s"} · {MOTION_MODELS[j.engine].find((x) => x.id === j.motionModel)?.label ?? j.motionModel} · {j.engine === "open" ? "Open source" : "Cloud"}
-                    {final?.provider === "mock" ? " · demo" : ""}
+                    {final?.provider === "mock" ? " · placeholder" : ""}
                   </p>
                   {stage !== "done" && (
                     <div className="mt-3">

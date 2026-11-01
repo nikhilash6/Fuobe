@@ -541,8 +541,8 @@ export function PromptBar(props: PromptBarProps) {
     .filter(Boolean)
     .join(" · ");
   // The live cost sits next to Generate at every width (short on narrow bars).
-  const costShort = demo ? "Demo" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "≈ ?";
-  const costLong = demo ? "Demo · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
+  const costShort = demo ? "Placeholder" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "≈ ?";
+  const costLong = demo ? "Placeholder · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
 
   // The Director's Panel chips: their own row from sm up; on phones one "Director" chip opens them in a sheet.
   const directorChips = (

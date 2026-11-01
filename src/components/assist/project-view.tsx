@@ -41,12 +41,14 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { MediaThumb } from "@/components/studio/feed";
 import { Viewer } from "@/components/studio/viewer";
 import { AssistComposer } from "@/components/assist/composer";
 import { chatSkills, NewChatControls, SkillStarters } from "@/components/assist-view";
 import { useElements, useEngine } from "@/lib/api";
 import { MAX_PROJECT_SOURCES, type AssistProject, type ProjectSource, type SourceKind } from "@/lib/assist";
+import { isPlaceholder, PLACEHOLDER_CHIP } from "@/lib/demo-mode";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -247,11 +249,12 @@ function Assets({ p, active }: { p: AssistProject; active: boolean }) {
       </p>
       <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {tiles.map(({ a, at, o, i }) => (
-          <li key={`${a.generation.id}-${i}`}>
+          <li key={`${a.generation.id}-${i}`} className="relative">
             <button onClick={() => setOpen({ at, i })} className="group relative block aspect-square w-full overflow-hidden rounded-xl bg-muted" aria-label={`Open ${a.generation.request.prompt?.slice(0, 60) || "result"} (from ${a.chatTitle})`}>
-              <MediaThumb output={o} g={a.generation} className="transition duration-300 group-hover:scale-[1.03]" tag={a.generation.provider === "mock" && o.kind === "text" ? "Demo" : undefined} />
-              {a.generation.provider === "mock" && o.kind !== "text" && <span className="absolute top-1.5 right-1.5 rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-medium">Demo</span>}
+              <MediaThumb output={o} g={a.generation} className="transition duration-300 group-hover:scale-[1.03]" tag={isPlaceholder(a.generation) && o.kind === "text" ? PLACEHOLDER_CHIP : undefined} />
             </button>
+            {/* Beside the tile, not in it (a button can't hold the chip's own button): the ways to the real thing. */}
+            {o.kind !== "text" && <PlaceholderChip g={a.generation} overlay className="absolute top-1.5" />}
           </li>
         ))}
       </ul>

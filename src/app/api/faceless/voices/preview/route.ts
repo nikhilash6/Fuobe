@@ -8,5 +8,5 @@ export async function POST(request: Request) {
   return handle(async () => {
     const { id } = await body(request, Ask, "Pick a voice");
     return Response.json(voicePreview({ kind: "preset", id }));
-  });
+  }, request);
 }

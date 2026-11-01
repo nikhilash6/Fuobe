@@ -1220,7 +1220,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
   const attention = new Set(plan.errors.filter((e) => e.message !== OPEN_DUB_HINT).map((e) => e.nodeId)).size;
   const summary = [
     plan.steps.length
-      ? `${plan.steps.length} to run · ${planDemo ? "Demo · free" : plan.costUnknown ? "price unknown" : plan.costUsd === 0 ? "Free" : `≈ ${formatCost(plan.costUsd)}`}`
+      ? `${plan.steps.length} to run · ${planDemo ? "Placeholder · free" : plan.costUnknown ? "price unknown" : plan.costUsd === 0 ? "Free" : `≈ ${formatCost(plan.costUsd)}`}`
       : generators.length && !attention
         ? "Up to date"
         : "",

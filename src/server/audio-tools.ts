@@ -5,7 +5,7 @@ import { CLOUD_ONLY_PROBLEM, DBS_MODELS, dbsChannelsFor, hostPick, missingDbs, p
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { lastGpuDevice } from "./account-gpu";
 import { createPipeline } from "./chains";
-import { previewChained } from "./generations";
+import { ConnectComfyError, previewChained } from "./generations";
 import { comfyDbsModels, comfyDevice, ownGpu } from "./providers/comfyui";
 import { engineMode } from "./settings";
 import { storedMedia } from "./storage";
@@ -147,6 +147,7 @@ export async function previewAudioTool(body: AudioToolRequest): Promise<AudioToo
     try {
       r = previewChained(s.chain ? { ...s.request, chain: s.chain } : s.request, s.after?.length ?? 0);
     } catch (e) {
+      if (e instanceof ConnectComfyError) throw e;
       throw new AudioToolError((e as Error).message);
     }
     demo ||= r.demo;
@@ -184,6 +185,7 @@ export async function runAudioTool(body: AudioToolRequest): Promise<{ batchId: s
     const run = createPipeline(p.steps.map((s) => ({ key: s.key, request: s.request, ...(s.after && { after: s.after }), ...(s.chain && { chain: s.chain }) })));
     return { batchId: run.batchId, result: run.byKey[p.steps[p.steps.length - 1].key], items: run.items };
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new AudioToolError((e as Error).message);
   }
 }

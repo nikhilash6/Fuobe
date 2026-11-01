@@ -13,13 +13,13 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/swap-studi
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(await editProject(id, await body(request, EditSchema, "That change isn't valid")));
-  });
+  }, request);
 }
 
 /** Delete the project, stopping what it still makes (the assembled clips stay in the Library). */
-export async function DELETE(_req: Request, ctx: RouteContext<"/api/swap-studio/projects/[id]">) {
+export async function DELETE(request: Request, ctx: RouteContext<"/api/swap-studio/projects/[id]">) {
   return handle(async () => {
     await deleteProject((await ctx.params).id);
     return new Response(null, { status: 204 });
-  });
+  }, request);
 }

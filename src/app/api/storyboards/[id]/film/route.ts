@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createStoryboardFilm } from "@/server/storyboard";
+import { refusedRun } from "@/server/connect-refusal";
 
 const Body = z.object({ modelId: z.string().max(100).optional() });
 
@@ -10,6 +11,6 @@ export async function POST(request: Request, ctx: RouteContext<"/api/storyboards
   try {
     return Response.json(createStoryboardFilm((await ctx.params).id, parsed.data), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
 }

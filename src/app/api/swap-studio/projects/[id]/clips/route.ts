@@ -6,5 +6,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/swap-studio
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(await addClip(id, await body(request, ClipSchema, "Upload a clip first")), { status: 201 });
-  });
+  }, request);
 }

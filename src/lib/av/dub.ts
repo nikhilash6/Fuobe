@@ -405,9 +405,9 @@ export interface DubPrice {
   steps: number;
 }
 
-/** The price as one short line: "≈ $8.13 + ElevenLabs v4", "Demo · free", "Free on your GPU". */
+/** The price as one short line: "≈ $8.13 + ElevenLabs v4", "Placeholder · free", "Free on your GPU". */
 export function priceLine(p: DubPrice): string {
-  if (p.demo) return "Demo · free";
+  if (p.demo) return "Placeholder · free";
   if (p.engine === "open") return "Free on your GPU";
   const usd = p.costUsd > 0 && p.costUsd < 0.01 ? "< $0.01" : `≈ $${p.costUsd.toFixed(2)}`;
   return p.unpriced.length ? `${usd} + ${p.unpriced.join(" + ")}` : usd;

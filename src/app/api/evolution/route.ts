@@ -8,5 +8,5 @@ export async function POST(request: Request) {
     // A repeated requestId (a second click on Evolve) gets the run the first one started.
     const result = await once("evolution", input.requestId, () => createEvolution(input));
     return Response.json(result, { status: 201 });
-  });
+  }, request);
 }

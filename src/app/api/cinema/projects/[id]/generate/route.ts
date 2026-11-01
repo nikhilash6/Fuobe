@@ -10,5 +10,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/cinema/proj
     const { id } = await ctx.params;
     const b = await body(request, GenerateBody, "That request isn't valid");
     return Response.json(generateInProject(id, b.input, b.folderId ?? null), { status: 201 });
-  });
+  }, request);
 }

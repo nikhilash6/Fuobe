@@ -252,11 +252,11 @@ function HandleCopy({ handle }: { handle: string }) {
   );
 }
 
-/** Training, Soul ID (a LoRA that runs), Retrain (only an older Soul ID kept by reference) or Demo (only a demo training's stand-in). */
+/** Training, Soul ID (a LoRA that runs), Retrain (only an older Soul ID kept by reference) or Placeholder (only a placeholder training's stand-in). */
 function TrainedBadge({ el }: { el: StudioElement }) {
   const real = el.loras.some((l) => !l.demo && !isLegacySoulId(l));
   const legacy = !real && el.loras.some(isLegacySoulId);
-  const label = el.status === "training" ? "Training" : real ? "Soul ID" : legacy ? "Retrain" : el.loras.length ? "Demo" : null;
+  const label = el.status === "training" ? "Training" : real ? "Soul ID" : legacy ? "Retrain" : el.loras.length ? "Placeholder" : null;
   if (!label) return null;
   return (
     <span

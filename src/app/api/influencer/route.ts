@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { MAX_CLOTHING, MAX_DIRECTION } from "@/lib/influencer";
 import { createInfluencer, previewInfluencer, type InfluencerBody } from "@/server/influencer";
+import { refusedRun } from "@/server/connect-refusal";
 
 const File = z.string().startsWith("/api/files/").max(500);
 
@@ -38,6 +39,6 @@ export async function POST(request: Request) {
   try {
     return Response.json(createInfluencer(body), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
 }

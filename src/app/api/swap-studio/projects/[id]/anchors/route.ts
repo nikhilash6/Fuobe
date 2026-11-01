@@ -6,5 +6,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/swap-studio
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(makeAnchor(id, await body(request, AnchorSchema, "Pick a shot")), { status: 201 });
-  });
+  }, request);
 }

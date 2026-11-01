@@ -86,7 +86,7 @@ try {
         await settle();
         return opts;
       };
-      // The estimate (the price, "Demo · free" or "Free · your GPU"), not the trimmer's live length.
+      // The estimate (the price, "Placeholder · free" or "Free · your GPU"), not the trimmer's live length.
       const cost = (scope) => page.locator(scope).locator('span[aria-live="polite"].font-mono').filter({ hasText: /Demo|Free|≈ \$|Price unknown/ }).first();
       const costShown = (scope) =>
         cost(scope)
@@ -117,7 +117,7 @@ try {
       check(`${tag} · mixed: the Original's menu line shows its price`, mmOpts.some((o) => /Fuobe Mixed Media.*\$/.test(o)), mmOpts[0]);
       check(`${tag} · mixed: the Original's line names its recipe`, (await editor.innerText()).includes("Fuobe Original · every frame drawn again by Z-Image Turbo"));
       const mmCost = await costShown("#mm-editor");
-      check(`${tag} · mixed: the estimate shows before running (demo)`, /Demo · free/.test(mmCost), mmCost);
+      check(`${tag} · mixed: the estimate shows before running (demo)`, /Placeholder · free/.test(mmCost), mmCost);
       check(`${tag} · mixed: frames counted before running (6 s × 8 FPS)`, /48 frames · 8 FPS/.test(await editor.innerText()));
       // The preview frame: one frame in the look (the Original's edit route), drawn as every frame will be.
       const preview = async (where) => {
@@ -190,7 +190,7 @@ try {
       const body = await page.locator("body").innerText();
       check(`${tag} · shorts: the Original's line names its recipe`, body.includes("Fuobe Original · each segment's first frame is drawn in the look"));
       const shCost = await costShown("main");
-      check(`${tag} · shorts: the estimate shows before running (demo)`, /Demo · free/.test(shCost), shCost);
+      check(`${tag} · shorts: the estimate shows before running (demo)`, /Placeholder · free/.test(shCost), shCost);
       await shot("shorts-cloud");
       check(`${tag} · shorts: nothing scrolls sideways (cloud)`, (await sideways()) <= 0, `${await sideways()} px`);
       await engine("Open source");

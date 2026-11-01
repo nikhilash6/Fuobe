@@ -28,7 +28,9 @@ Composer / studio (React) ──POST /api/generations (or a studio route that bu
                                          chooseRoute()            among the routes still on (offeredRoutes()): first configured provider for that operation, preferring one that carries
                                               │                   every LoRA and makes the clip length asked (Preferred provider sets
                                               │                   fal/Replicate order otherwise; "llm" for text steps), else the demo
-                                              │                   provider (Settings → Placeholder results; request.demo, a skill's free dry run, forces it)
+                                              │                   provider (Settings → Placeholder results; request.demo, a skill's free dry run, forces it).
+                                              │                   With neither, ConnectComfyError: every studio's route answers the owner's browser with
+                                              │                   the connect card's 422 (src/server/connect-refusal.ts), never a 500 or a toast
                                          fitLoras()               src/lib/catalog/loras.ts: LoRAs a cloud run can't carry are left out, with notes
                                               │                   (a recipe LoRA the model always loads, left out or switched off, refuses the run instead)
                                               ▼

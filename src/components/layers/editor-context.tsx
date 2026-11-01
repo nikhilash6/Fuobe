@@ -134,12 +134,12 @@ export function useEditor(): EditorCtx {
 }
 
 /**
- * "Demo · free", "Free · your GPU", "≈ $0.27" or "Price unknown". A launch price is read on the browser's clock, the day
+ * "Placeholder · free", "Free · your GPU", "≈ $0.27" or "Price unknown". A launch price is read on the browser's clock, the day
  * the editor shows it (the editor renders once its project has loaded in the browser, never while a page prerenders).
  */
 export function costLabel(m: LayerModelInfo | undefined, demo: boolean, usd?: number | null): string {
   if (!m) return "";
-  if (demo) return "Demo · free";
+  if (demo) return "Placeholder · free";
   if (m.engine === "open") return "Free · your GPU";
   const p = m.pricing && pricingAt(m.pricing);
   const v = usd !== undefined ? usd : p && ["image", "request", "megapixel"].includes(p.unit) ? p.usd : null;

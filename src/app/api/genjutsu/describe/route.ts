@@ -6,5 +6,5 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, DescribeSchema, "Add a picture of your character first");
     return Response.json(await describeCharacter(input));
-  });
+  }, request);
 }

@@ -13,7 +13,7 @@ const KIND_ICON: Record<MediaKind | "storyboard" | "memory", typeof ImageIcon> =
 export function jobPrice(j: PlannedJob): string {
   if (j.error) return "—";
   if (j.op === "memory") return "";
-  if (j.demo) return "Demo";
+  if (j.demo) return "Placeholder";
   if (j.costUsd === 0) return "Free";
   return j.costUsd === null ? "Price varies" : formatCost(j.costUsd);
 }

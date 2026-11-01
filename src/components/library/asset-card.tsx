@@ -311,7 +311,7 @@ export const AssetCard = memo(function AssetCard({
         {badges}
         {/* A placeholder says so on the card, past the select dot (not while selecting: a tap there selects). */}
         {!stack && done && !selecting && !trashed && (
-          <PlaceholderChip g={g} overlay className={cn("absolute top-2", audio && canHover && "group-focus-within/card:opacity-0 group-hover/card:opacity-0")} />
+          <PlaceholderChip g={g} overlay className={cn("absolute top-2", audio && canHover && "group-focus-within/card:opacity-0 group-hover/card:opacity-0 focus-within:opacity-100! has-data-[state=open]:opacity-100!")} />
         )}
         <SelectDot selected={selected} visible={selecting} onToggle={(s) => api.toggle(entry.key, ids, s)} label={`Select ${title}`} />
         {actions}

@@ -117,7 +117,7 @@ function demoLayers(prompt: string, aspectRatio: string, n: number): DemoOutput[
   const { w, h } = canvas(aspectRatio);
   const hue = Math.floor(rng(hash(`${prompt}#layers`))() * 360);
   const layer = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`;
-  const label = escapeXml(prompt.split(/\s+/).slice(0, 3).join(" ") || "Demo");
+  const label = escapeXml(prompt.split(/\s+/).slice(0, 3).join(" ") || "Placeholder");
   const all: { name: string; box: number[]; draw: (b: number[]) => string }[] = [
     { name: "Subject", box: [w * 0.28, h * 0.22, w * 0.44, h * 0.6], draw: (b) => `<ellipse cx="${b[0] + b[2] / 2}" cy="${b[1] + b[3] / 2}" rx="${b[2] / 2}" ry="${b[3] / 2}" fill="oklch(0.72 0.17 ${(hue + 40) % 360})"/>` },
     { name: "Prop", box: [w * 0.08, h * 0.62, w * 0.26, h * 0.3], draw: (b) => `<rect x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" rx="28" fill="oklch(0.8 0.14 ${(hue + 150) % 360})"/>` },

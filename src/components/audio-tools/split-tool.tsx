@@ -577,7 +577,7 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
     }
     return backgroundLowered(peak);
   }, [bed]);
-  const remuxCost = remuxPrice.data ? (remuxPrice.data.demo ? "Demo · free" : engine === "open" ? "Free" : remuxPrice.data.costUsd !== null && remuxPrice.data.costUsd < 0.01 ? "under $0.01" : `≈ $${remuxPrice.data.costUsd?.toFixed(2)}`) : null;
+  const remuxCost = remuxPrice.data ? (remuxPrice.data.demo ? "Placeholder · free" : engine === "open" ? "Free" : remuxPrice.data.costUsd !== null && remuxPrice.data.costUsd < 0.01 ? "under $0.01" : `≈ $${remuxPrice.data.costUsd?.toFixed(2)}`) : null;
 
   return (
     <section aria-labelledby="mixer" className="space-y-3">
@@ -650,7 +650,7 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
 // ---------------------------------------------------------------------------
 // The tool
 
-const money = (p: AudioToolPreview) => (p.demo ? "Demo · free" : "Free · runs on your ComfyUI");
+const money = (p: AudioToolPreview) => (p.demo ? "Placeholder · free" : "Free · runs on your ComfyUI");
 /** Where the time estimate is for: the host's device when it said; else a CPU's, the figures the estimate then uses. */
 const onDevice = (device?: string) => (device === "cuda" ? "on your GPU" : device ? "on your CPU" : "on a CPU");
 

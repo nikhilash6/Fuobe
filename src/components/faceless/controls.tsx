@@ -77,7 +77,7 @@ export function Section({ title, hint, children, className }: { title: string; h
 export const usd = (n: number) => (n >= 10 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`);
 
 /**
- * "≈ $7.02" / "Demo · free" / "Free · your GPU", with what it's made of in a popover. quiet: the estimate's problem (no
+ * "≈ $7.02" / "Placeholder · free" / "Free · your GPU", with what it's made of in a popover. quiet: the estimate's problem (no
  * narrator voice yet…) is a plain hint, not a warning: nothing has been asked of the visitor yet. A guest or an account
  * reads "Self-hosted only" for the open engine: Faceless and Explainer don't run on their own GPU yet.
  */
@@ -85,7 +85,7 @@ export function EstimateLine({ data, loading, engine, className, quiet }: { data
   const [open, setOpen] = useState(false);
   const visitor = useLikelyVisitor();
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
-  const price = visitor && (data.demo || engine === "open") ? "Self-hosted only" : data.demo ? "Demo · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
+  const price = visitor && (data.demo || engine === "open") ? "Self-hosted only" : data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
   const parts = Object.entries(data.estimate.parts).filter(([, v]) => (v ?? 0) > 0) as [StepPart, number][];
   const notes = !data.error ? (data.notes ?? []) : [];
   return (

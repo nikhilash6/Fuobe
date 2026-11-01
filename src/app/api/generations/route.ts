@@ -11,12 +11,13 @@ import { OPERATION_LABELS } from "@/lib/catalog/types";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
 import { db } from "@/server/db";
-import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, ConnectComfyError, createGenerations, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
+import { accountLoraFix, accountRun, AccountRunError, asAccount, asVisitor, createGenerations, listGenerations, outputKind, previewGeneration, type AccountRunRefusal } from "@/server/generations";
 import { ensureTrashPurge, listOptionsFrom } from "@/server/library";
 import { hit, unhit } from "@/server/rate";
 import { GenerationRequestSchema } from "@/server/request-schema";
 import { gateGeneration, GPU_SETUP_HEADER } from "@/server/gpu/gate";
 import { gpuTargetFor } from "@/server/gpu/target";
+import { connectNeeds } from "@/server/connect-refusal";
 
 /**
  * List generations, newest first. Filters: kind / kinds, features (`x*` = prefix), models, statuses,
@@ -180,10 +181,10 @@ export async function POST(request: Request) {
     // A price check of a paid model the account has no key for says so, without opening "Add your key".
     if (refusal && !preview) return refused(refusal);
     if (account && !preview) unhit(`run:${account.id}`);
-    // Nothing connected runs this, and ComfyUI or a key could (Demo mode off): the owner's own browser (never a
-    // script's token) opens the connect card for it, with the ways that would run it, and the run starts once one is
-    // connected.
-    const connect = e instanceof ConnectComfyError && viewer.kind === "owner" && !preview && !token ? e.needs : null;
+    // Nothing connected runs this, and ComfyUI or a key could (placeholder results off): the owner's own browser
+    // (never a script's token) opens the connect card for it, with the ways that would run it, and the run starts once
+    // one is connected (src/server/connect-refusal.ts).
+    const connect = connectNeeds(e, request, preview);
     return Response.json(
       {
         error: (e as Error).message,

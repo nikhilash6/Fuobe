@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { MIXED } from "@/lib/catalog/mixed-media";
 import { SHORTS } from "@/lib/catalog/shorts";
+import { connectRefusal } from "./connect-refusal";
 import { ShortsError } from "./shorts";
 
 /** Request bodies for /api/shorts/** and /api/mixed-media/** (zod), and the shared error answer. */
@@ -117,10 +118,11 @@ export function once<T>(scope: string, id: string | undefined, fn: () => Promise
 }
 
 /** Run a route body, answering errors as `{ error }`. */
-export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
+export async function handle(fn: () => Promise<Response> | Response, request?: Request): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
-    return errorResponse(e);
+    // A run nothing connected can make: the connect card in the owner's browser (src/server/connect-refusal.ts).
+    return (request && connectRefusal(e, request)) || errorResponse(e);
   }
 }

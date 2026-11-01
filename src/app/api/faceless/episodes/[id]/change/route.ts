@@ -12,5 +12,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/faceless/ep
     if (!c.apply) return Response.json(previewChange(id, c));
     applyChange(id, c);
     return Response.json(episodeView(id), { status: 201 });
-  });
+  }, request);
 }

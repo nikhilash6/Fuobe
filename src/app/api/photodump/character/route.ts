@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createSheet, previewSheet, type SheetRun } from "@/server/photodump";
+import { refusedRun } from "@/server/connect-refusal";
 
 const Engine = z.enum(["cloud", "open"]);
 
@@ -41,6 +42,6 @@ export async function POST(request: Request) {
   try {
     return Response.json(createSheet(input), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
 }

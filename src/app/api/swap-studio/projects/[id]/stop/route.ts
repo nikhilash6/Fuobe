@@ -6,5 +6,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/swap-studio
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(await stopJob(id, await body(request, StopSchema, "Pick a job to stop")));
-  });
+  }, request);
 }

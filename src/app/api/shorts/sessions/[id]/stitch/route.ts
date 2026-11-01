@@ -7,5 +7,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/shorts/sess
     const { id } = await ctx.params;
     const { requestId } = await optionalBody(request, NonceSchema);
     return Response.json(await once(`shorts-stitch:${id}`, requestId, () => stitchSession(id)), { status: 201 });
-  });
+  }, request);
 }

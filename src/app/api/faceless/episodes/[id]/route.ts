@@ -25,14 +25,14 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/faceless/e
     const patch = await body(request, Patch, "Those changes aren't valid");
     updateEpisode(id, patch);
     return Response.json(episodeView(id));
-  });
+  }, request);
 }
 
 /** Deletes the episode and stops what it still renders (its finished videos stay in the Library). */
-export async function DELETE(_req: Request, ctx: RouteContext<"/api/faceless/episodes/[id]">) {
+export async function DELETE(request: Request, ctx: RouteContext<"/api/faceless/episodes/[id]">) {
   return handle(async () => {
     const { id } = await ctx.params;
     await deleteEpisode(id);
     return new Response(null, { status: 204 });
-  });
+  }, request);
 }

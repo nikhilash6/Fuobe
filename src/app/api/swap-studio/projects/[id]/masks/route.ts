@@ -6,5 +6,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/swap-studio
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(makeMask(id, await body(request, MaskSchema, "Pick a shot, a frame and who to swap")), { status: 201 });
-  });
+  }, request);
 }

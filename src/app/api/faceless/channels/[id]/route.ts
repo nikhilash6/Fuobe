@@ -27,14 +27,14 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/faceless/c
     const { id } = await ctx.params;
     const patch = await body(request, Patch, "Those channel settings aren't valid");
     return Response.json(await updateChannel(id, patch));
-  });
+  }, request);
 }
 
 /** Deletes the channel and its episodes, stopping what they still render (finished videos stay in the Library). */
-export async function DELETE(_req: Request, ctx: RouteContext<"/api/faceless/channels/[id]">) {
+export async function DELETE(request: Request, ctx: RouteContext<"/api/faceless/channels/[id]">) {
   return handle(async () => {
     const { id } = await ctx.params;
     await deleteChannel(id);
     return new Response(null, { status: 204 });
-  });
+  }, request);
 }

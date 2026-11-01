@@ -679,9 +679,15 @@ export function AppSidebar() {
             {/* Placeholder results, only while the owner has them on (Settings, for a tour): a click turns them off. Its own
                 button beside the status link (a button never sits inside a link). */}
             {status && !status.viewer && placeholdersOn(status.demoMode) && (
-              <div className="-mt-1 px-2 pb-1 group-data-[collapsible=icon]:hidden">
-                <PlaceholdersOnChip />
-              </div>
+              <>
+                <div className="-mt-1 px-2 pb-1 group-data-[collapsible=icon]:hidden">
+                  <PlaceholdersOnChip />
+                </div>
+                {/* Collapsed to icons: the same way out, as a round mark. */}
+                <div className="hidden justify-center pb-1 group-data-[collapsible=icon]:flex">
+                  <PlaceholdersOnChip icon />
+                </div>
+              </>
             )}
             <SidebarMenu className="flex-row gap-1 group-data-[collapsible=icon]:flex-col">
               <SidebarMenuItem className="min-w-0 flex-1">

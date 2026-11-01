@@ -7,5 +7,5 @@ export async function POST(request: Request) {
     const input = await body(request, RemovalBodySchema, "Add a clip and say, click or paint what to remove");
     const preview = await once("remove-object-preview", input.requestId, () => createRemovalPreview(input));
     return Response.json(preview, { status: 201 });
-  });
+  }, request);
 }

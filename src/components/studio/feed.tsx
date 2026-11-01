@@ -233,7 +233,7 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
       <PlaceholderChip
         g={g}
         overlay
-        className={cn("absolute", o.kind === "text" ? "bottom-2" : o.draftId ? "top-11" : "top-2", audio && canHover && "group-focus-within/tile:opacity-0 group-hover/tile:opacity-0")}
+        className={cn("absolute", o.kind === "text" ? "bottom-2" : o.draftId ? "top-11" : "top-2", audio && canHover && "group-focus-within/tile:opacity-0 group-hover/tile:opacity-0 focus-within:opacity-100! has-data-[state=open]:opacity-100!")}
       />
       {g.favorite && <Heart className={cn("absolute top-2 right-2 size-4 fill-highlight text-highlight drop-shadow", audio && canHover && "group-focus-within/tile:opacity-0 group-hover/tile:opacity-0")} />}
       {canHover && hot === "bar" && (
@@ -324,7 +324,7 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g:
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               {g.engine === "open" ? <Cpu className="size-3" /> : <Cloud className="size-3" />}
-              {g.provider === "mock" ? "Demo" : g.provider === "local" ? "Browser" : g.engine === "open" ? "Open source" : "Cloud"}
+              {g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "Browser" : g.engine === "open" ? "Open source" : "Cloud"}
             </span>
             {meta.map((m, i) => (
               <span key={i} className="before:mr-1.5 before:content-['·']">

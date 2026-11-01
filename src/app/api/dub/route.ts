@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { z } from "zod";
 import { ONE_SHOT_MODELS } from "@/lib/av/dub";
 import { createDubSession, listDubSessions, previewDub } from "@/server/dub";
+import { connectRefusal } from "@/server/connect-refusal";
 import { priceAs } from "@/server/visitor";
 
 const Body = z.object({
@@ -31,11 +32,13 @@ async function post(request: Request) {
     const msg = first?.path[0] === "video" ? "Add the video to translate" : first?.path[0] === "targets" ? "Pick up to 8 languages to dub into" : "Check the dub settings";
     return Response.json({ error: msg }, { status: 400 });
   }
+  const preview = new URL(request.url).searchParams.get("preview") === "1";
   try {
-    if (new URL(request.url).searchParams.get("preview") === "1") return Response.json(previewDub(parsed.data));
+    if (preview) return Response.json(previewDub(parsed.data));
     return Response.json(createDubSession(parsed.data), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    // Nothing connected runs it: the connect card in the owner's browser (never on a price check).
+    return connectRefusal(e, request, preview) ?? Response.json({ error: (e as Error).message }, { status: 422 });
   }
 }
 

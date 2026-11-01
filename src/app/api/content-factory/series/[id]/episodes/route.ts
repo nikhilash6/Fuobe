@@ -14,5 +14,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/content-fac
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(await addEpisodes(id, await body(request, More, "Say how many episodes to add")));
-  });
+  }, request);
 }

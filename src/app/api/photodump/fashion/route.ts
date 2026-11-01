@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createFashion, previewFashion, type FashionRun } from "@/server/photodump";
+import { refusedRun } from "@/server/connect-refusal";
 
 const File = z.string().startsWith("/api/files/").max(500);
 const Engine = z.enum(["cloud", "open"]);
@@ -22,6 +23,6 @@ export async function POST(request: Request) {
   try {
     return Response.json(createFashion(input), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
 }

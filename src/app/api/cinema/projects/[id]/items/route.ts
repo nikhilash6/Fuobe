@@ -32,7 +32,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/cinema/pro
     const moved = b.folderId !== undefined ? moveItems(id, b.ids, b.folderId) : 0;
     const liked = b.favorite !== undefined ? setFavorites(id, b.ids, b.favorite) : 0;
     return Response.json({ ok: true, moved, liked });
-  });
+  }, request);
 }
 
 /** Bulk: take out of the project; `deleteGenerations` moves them to the library's Trash (restorable, still filed here). Only this project's takes are touched. */
@@ -41,5 +41,5 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/cinema/pr
     const { id } = await ctx.params;
     const b = await body(request, ItemsDelete, "Pick the takes to delete");
     return Response.json({ removed: removeItems(id, b.ids, { deleteGenerations: b.deleteGenerations }) });
-  });
+  }, request);
 }

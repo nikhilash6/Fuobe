@@ -8,5 +8,5 @@ export async function POST(request: Request) {
     // A repeated requestId (a second click on Generate video) gets the render the first one started.
     const { final, items, frames } = await once("mixed-render", input.requestId, () => createMixed(input));
     return Response.json({ final, items, frames }, { status: 201 });
-  });
+  }, request);
 }

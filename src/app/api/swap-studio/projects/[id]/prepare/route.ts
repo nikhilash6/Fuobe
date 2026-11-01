@@ -9,5 +9,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/swap-studio
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(prepareClip(id, (await body(request, Prepare, "Pick a clip")).clipId));
-  });
+  }, request);
 }

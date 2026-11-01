@@ -1,4 +1,5 @@
 import { createStoryboard, StoryboardBodySchema } from "@/server/storyboard";
+import { refusedRun } from "@/server/connect-refusal";
 
 /** Popcorn-style storyboard: consecutive frames, each made from the previous one. */
 export async function POST(request: Request) {
@@ -7,6 +8,6 @@ export async function POST(request: Request) {
   try {
     return Response.json(await createStoryboard(parsed.data), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
 }

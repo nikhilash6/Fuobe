@@ -46,7 +46,7 @@ import type { Engine, Generation, PixelPoint, ProviderId } from "@/lib/catalog/t
 import { silenceWriter } from "./canvas";
 import { createPipeline } from "./chains";
 import { llmText, llmTextBackend } from "./enhance";
-import { createGenerations, previewChained } from "./generations";
+import { ConnectComfyError, createGenerations, previewChained } from "./generations";
 import { localLabel } from "./llm";
 import { isOffered, offeredLoras, offeredModel } from "./model-access";
 import { provider } from "./providers";
@@ -427,6 +427,7 @@ function price(steps: PlanStep[], input: GenjutsuPlanInput): { costUsd: number |
         modes.push({ step: s, demo: true });
         continue;
       }
+      if (e instanceof ConnectComfyError) throw e;
       throw new ShortsError((e as Error).message, 422);
     }
     modes.push({ step: s, demo: p.demo });
@@ -474,6 +475,7 @@ export async function estimateGenjutsu(body: GenjutsuBody): Promise<GenjutsuEsti
   try {
     plan = planGenjutsu(input);
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
   const character = body.mode === "character";
@@ -508,6 +510,7 @@ export async function createGenjutsu(body: GenjutsuBody): Promise<{ final: Gener
     return { final: p.byKey[plan.final], items: p.items };
   } catch (e) {
     if (e instanceof ShortsError) throw e;
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
 }
@@ -584,6 +587,7 @@ export function transcribeClip(body: z.infer<typeof TranscribeSchema>): { id: st
     });
     return { id: g.id, modelId };
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
 }

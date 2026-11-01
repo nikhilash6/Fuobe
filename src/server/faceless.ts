@@ -85,7 +85,8 @@ import { DocxError, docxText } from "./assist/docx";
 import { PdfError, pdfText } from "./assist/pdf";
 import { db } from "./db";
 import { listElements } from "./elements";
-import { cancelGeneration, chooseRoute, createGenerations, getGeneration, previewChained } from "./generations";
+import { connectRefusal } from "./connect-refusal";
+import { cancelGeneration, chooseRoute, ConnectComfyError, createGenerations, getGeneration, previewChained } from "./generations";
 import { provider } from "./providers";
 import type { JsonSpec } from "./llm";
 import { llmBackends, probeLocal } from "./providers/llm";
@@ -713,13 +714,17 @@ function demoVoice(): string {
   return saveFile({ data: buf, contentType: "audio/wav", name: "fuobe-demo-voice.wav", source: "upload" }).url;
 }
 
-/** Whether a model's operation would run as a demo right now. */
+/**
+ * Whether a model's operation would run as a placeholder right now. Nothing connected that runs it (placeholders off)
+ * throws the ConnectComfyError, so the caller says to connect something rather than ask for what the real run needs.
+ */
 function runsAsDemo(modelId: string, op: GenerationRequest["op"]): boolean {
   const m = getModel(modelId);
   if (!m || !op) return true;
   try {
     return chooseRoute(routesFor(m, op)).demo;
-  } catch {
+  } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     return false;
   }
 }
@@ -753,6 +758,7 @@ function buildGraph(ep: FacelessEpisode, blocks = ep.script.blocks, stillEdits?:
     return buildEpisodeGraph(graphInput(ep, blocks, stillEdits), getModel);
   } catch (e) {
     if (e instanceof FacelessError) throw e;
+    if (e instanceof ConnectComfyError) throw e;
     throw new FacelessError((e as Error).message, 422);
   }
 }
@@ -768,6 +774,7 @@ function validate(steps: GraphStep[]): void {
     try {
       return { label: s.label, ...previewStep(s) };
     } catch (e) {
+      if (e instanceof ConnectComfyError) throw e;
       throw new FacelessError(`${s.label}: ${(e as Error).message}`, 422);
     }
   });
@@ -800,6 +807,7 @@ function relaunch(graph: GraphStep[], ids: Record<string, string>, rerun: string
     }
   } catch (e) {
     for (const g of made) void cancelGeneration(g.id);
+    if (e instanceof ConnectComfyError) throw e;
     throw new FacelessError((e as Error).message, 422);
   }
   return next;
@@ -1072,7 +1080,12 @@ function upscaleOffer(ep: FacelessEpisode, seconds: number): EpisodeView["upscal
   const modelId = ENGINE_MODELS[ep.settings.engine].upscale;
   const model = modelId ? getModel(modelId) : undefined;
   if (!model) return null;
-  const demo = runsAsDemo(model.id, "upscale-video");
+  let demo = false;
+  try {
+    demo = runsAsDemo(model.id, "upscale-video");
+  } catch {
+    // Nothing connected runs the upscale yet: offered at its price, and the click opens the connect card.
+  }
   const p = model.pricing && pricingAt(model.pricing);
   const costUsd = demo || model.engine === "open" ? 0 : p?.unit === "megapixel" ? Math.round(p.usd * UPSCALE_MP * UPSCALE_FPS * seconds * 100) / 100 : p?.unit === "second" ? Math.round(p.usd * seconds * 100) / 100 : null;
   return { costUsd, demo };
@@ -1094,6 +1107,7 @@ export function upscaleEpisode(id: string): FacelessEpisode {
       { batchId: ep.plan.batchId, dependsOn: final.id },
     );
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new FacelessError((e as Error).message, 422);
   }
   updateEpisodeRow(id, { plan_json: JSON.stringify({ ...ep.plan, upscaled: g.id } satisfies EpisodePlan) });
@@ -1533,12 +1547,16 @@ export async function body<S extends z.ZodType>(request: Request, schema: S, mes
   return parsed.data;
 }
 
-/** Turn thrown errors into the API's `{ error }` responses. */
-export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
+/**
+ * Turn thrown errors into the API's `{ error }` responses. With the `request`, a run nothing connected can make opens
+ * the connect card in the owner's browser (src/server/connect-refusal.ts) instead of an error.
+ */
+export async function handle(fn: () => Promise<Response> | Response, request?: Request): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
     if (e instanceof FacelessError) return Response.json({ error: e.message }, { status: e.status });
+    if (e instanceof ConnectComfyError) return (request && connectRefusal(e, request)) || Response.json({ error: e.message }, { status: 422 });
     console.error("[faceless]", e);
     return Response.json({ error: (e as Error).message || "Something went wrong" }, { status: 500 });
   }

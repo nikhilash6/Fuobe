@@ -661,7 +661,7 @@ function EngineBadge({ model }: { model?: ModelDef }) {
 
 function costLabel(isDemo: (m: ModelDef) => boolean, model: ModelDef | undefined, cost: number | null): string {
   if (!model) return "";
-  if (isDemo(model)) return "Demo · free";
+  if (isDemo(model)) return "Placeholder · free";
   if (model.engine === "open") return "Free · your GPU";
   return cost == null ? "Price unknown" : cost === 0 ? "Free" : `≈ ${formatCost(cost)}`;
 }

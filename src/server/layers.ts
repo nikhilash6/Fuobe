@@ -35,7 +35,7 @@ import {
 } from "@/lib/layers";
 import { createPipeline, type PipelineStep } from "./chains";
 import { db } from "./db";
-import { cancelGeneration, getGeneration, previewGeneration } from "./generations";
+import { cancelGeneration, ConnectComfyError, getGeneration, previewGeneration } from "./generations";
 import { firstOn } from "./model-access";
 import { getAsset } from "./storage";
 
@@ -629,6 +629,7 @@ export function startJob(id: string, input: LayerJobInput): LayerJob {
     ids = createPipeline(steps, { batchId: `layers-${id}` }).items.map((g) => g.id);
   } catch (e) {
     if (e instanceof LayersError) throw e;
+    if (e instanceof ConnectComfyError) throw e;
     throw new LayersError((e as Error).message || "Could not start the split");
   }
   // Starting the same tool again on the same target retires its failed or canceled run.

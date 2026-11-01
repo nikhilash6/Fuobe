@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { retryPhoto } from "@/server/photodump";
+import { refusedRun } from "@/server/connect-refusal";
 
 const Body = z.object({ id: z.string().min(1).max(40) });
 
@@ -13,6 +14,6 @@ export async function POST(request: Request) {
   try {
     return Response.json({ items: retryPhoto(parsed.data.id) }, { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
 }

@@ -893,13 +893,13 @@ export const ReferenceSchema = z.union([
 ]);
 
 /** The faceless API's `{ error }` responses, plus `needsUpload` when a link gave no clip. */
-export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
+export async function handle(fn: () => Promise<Response> | Response, request?: Request): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
     if (e instanceof NeedsUpload) return Response.json({ error: e.message, needsUpload: true }, { status: e.status });
     return facelessHandle(() => {
       throw e;
-    });
+    }, request);
   }
 }

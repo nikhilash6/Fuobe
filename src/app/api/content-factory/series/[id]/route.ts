@@ -16,7 +16,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/content-fa
   return handle(async () => {
     const { id } = await ctx.params;
     return Response.json(updateSeries(id, await body(request, Patch, "That brief isn't valid")));
-  });
+  }, request);
 }
 
 /**
@@ -27,5 +27,5 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/content-f
   return handle(async () => {
     await deleteSeries((await ctx.params).id, { draftOnly: new URL(request.url).searchParams.get("draft") === "1" });
     return new Response(null, { status: 204 });
-  });
+  }, request);
 }

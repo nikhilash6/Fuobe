@@ -223,7 +223,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   );
   const est = useEstimate<RunEstimate>("/api/marketing/click-to-ad/estimate", body);
   const blocker = !product ? "Select a product or enter a product URL" : !product.images.length ? `${product.name} has no images` : !desc.trim() ? "Add a description" : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   const writeScript = async () => {
     if (!productId) return;

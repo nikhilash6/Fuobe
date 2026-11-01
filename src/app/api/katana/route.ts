@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import { createKatana, KatanaBody, listKatana, previewKatana } from "@/server/katana";
+import { connectRefusal } from "@/server/connect-refusal";
 import { priceAs } from "@/server/visitor";
 
 /** Recent Katana runs with the state of every step. */
@@ -17,11 +18,13 @@ async function post(request: Request) {
     const msg = path === "reference" ? "Add the reference edit" : path === "photos" ? "Add 1–5 photos of your subject" : path === "instructions" ? "Keep the instructions under 2,000 characters" : "Check the Katana settings";
     return Response.json({ error: msg }, { status: 400 });
   }
+  const preview = new URL(request.url).searchParams.get("preview") === "1";
   try {
-    if (new URL(request.url).searchParams.get("preview") === "1") return Response.json(previewKatana(parsed.data));
+    if (preview) return Response.json(previewKatana(parsed.data));
     return Response.json(createKatana(parsed.data), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    // Nothing connected runs it: the connect card in the owner's browser (never on a price check).
+    return connectRefusal(e, request, preview) ?? Response.json({ error: (e as Error).message }, { status: 422 });
   }
 }
 

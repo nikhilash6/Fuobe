@@ -18,7 +18,7 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/shorts/ses
     const { id } = await ctx.params;
     const { title } = await body(request, z.object({ title: z.string().trim().min(1).max(120) }), "Give the short a name");
     return Response.json(renameSession(id, title));
-  });
+  }, request);
 }
 
 /** Delete the session; its videos move to the Trash unless ?keep=1. */
@@ -27,5 +27,5 @@ export async function DELETE(request: Request, ctx: RouteContext<"/api/shorts/se
     const { id } = await ctx.params;
     const keep = new URL(request.url).searchParams.get("keep") === "1";
     return Response.json({ trashed: deleteSession(id, { keep }) });
-  });
+  }, request);
 }

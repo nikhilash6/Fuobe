@@ -30,5 +30,5 @@ export async function POST(request: Request) {
     const lengths = getChannel(input.channelId)?.settings.brief ? CF_LENGTH_VALUES : FACELESS_LENGTHS;
     if (!lengths.includes(input.settings.length)) throw new FacelessError("Choose one of the offered video lengths");
     return Response.json(createEpisode({ kind: "faceless", channelId: input.channelId, topic: input.topic, script: input.script, settings: input.settings, saveLook: input.saveLook }), { status: 201 });
-  });
+  }, request);
 }

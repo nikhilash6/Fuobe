@@ -21,5 +21,5 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, Create, "Describe the channel and pick a genre");
     return Response.json(await createChannel(input), { status: 201 });
-  });
+  }, request);
 }

@@ -199,7 +199,7 @@ function useBuilderRun(projectId: string) {
 function CostLabel({ plan }: { plan: { costUsd: number | null } }) {
   const status = useStatus().data;
   const demo = placeholdersOn(status?.demoMode);
-  return <span className="font-mono text-[12px] whitespace-nowrap text-muted-foreground">{demo ? "Demo · free" : plan.costUsd === 0 ? "Free" : plan.costUsd != null ? `≈ ${formatCost(plan.costUsd)}` : ""}</span>;
+  return <span className="font-mono text-[12px] whitespace-nowrap text-muted-foreground">{demo ? "Placeholder · free" : plan.costUsd === 0 ? "Free" : plan.costUsd != null ? `≈ ${formatCost(plan.costUsd)}` : ""}</span>;
 }
 
 function SaveElement({ kind, defaultName, picked, description, onSaved }: { kind: "character" | "location"; defaultName: string; picked: string[]; description: string; onSaved: () => void }) {

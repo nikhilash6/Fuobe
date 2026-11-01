@@ -373,7 +373,7 @@ async function status(ctx) {
     .filter((p) => p.label)
     .map((p) => `${p.label} ${p.configured ? "✓" : "–"}`);
   ctx.print(`Fuobe at ${t.url}${t.urlFrom === "default" ? "" : ` (from ${t.urlFrom})`}`);
-  ctx.print(`Engine mode: ${s.engineMode} · Demo mode: ${s.demoMode} · Preferred cloud: ${s.cloudProvider}`);
+  ctx.print(`Engine mode: ${s.engineMode} · Placeholder results: ${s.demoMode === "on" ? "on" : "off"} · Preferred cloud: ${s.cloudProvider}`);
   ctx.print(`Providers: ${providers.join(", ")}`);
   // Older servers don't say which local model server they use.
   const local = s.llm?.local;

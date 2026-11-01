@@ -5,7 +5,7 @@
 // black-image catch shown whole; a cut note opened with "More" from the keyboard). A LoRA run's price is unknown, never
 // free (the preview API: no picker attaches a LoRA to MOSS yet). Each page at 1440 and 390 px, light and dark, without
 // sideways scroll. The prices follow the server, as /api/status says it runs: without a fal key the cloud runs are free
-// demos, and without a reachable ComfyUI so are the open engine's (both "Demo · free", as every model in demo mode).
+// demos, and without a reachable ComfyUI so are the open engine's (both "Placeholder · free", as every model in demo mode).
 // Usage: node tests/e2e/moss-image.mjs [appUrl] [--shots <dir>] [--fal] [--live]   verify.sh runs it on each of its three
 // servers: demo mode, FAL_KEY=anything with --fal for the hosted price ($0.05, unknown with a LoRA), and the live ComfyUI
 // with --live for Free on your GPU. --fal and --live each fail the run when the server lacks a fal key or can't reach
@@ -31,8 +31,8 @@ const fal = !!status.providers?.fal?.configured;
 const comfy = !!status.providers?.comfyui?.configured;
 // Demo mode (the default) runs a model whose providers aren't connected as a free placeholder; with it off, nothing does.
 const demo = status.demoMode !== "off";
-if (!fal) console.log('note: no fal key on this server: the cloud composer shows "Demo · free" (start it with FAL_KEY=anything for the hosted price)');
-if (!comfy) console.log('note: ComfyUI is unreachable from this server: the open engine shows "Demo · free" too (Free once it is reachable)');
+if (!fal) console.log('note: no fal key on this server: the cloud composer shows "Placeholder · free" (start it with FAL_KEY=anything for the hosted price)');
+if (!comfy) console.log('note: ComfyUI is unreachable from this server: the open engine shows "Placeholder · free" too (Free once it is reachable)');
 if (argv.includes("--fal")) check("server: a fal key is set (--fal), so the hosted price is checked", fal);
 if (argv.includes("--live")) check("server: ComfyUI is reachable (--live), so Free on your GPU is checked", comfy);
 
@@ -115,7 +115,7 @@ try {
         const t = flat(await composer(page).innerText());
         check(`${tag} ${engine}: the composer now runs MOSS-Image`, /MOSS-Image/.test(t), t.slice(0, 100));
         const price = engine === "open" ? (comfy ? /\bFree\b/ : /Demo/) : fal ? /≈ \$0\.05\b/ : /Demo/;
-        check(`${tag} ${engine}: its price shows before the run`, price.test(t), (t.match(/Demo · free|Demo|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
+        check(`${tag} ${engine}: its price shows before the run`, price.test(t), (t.match(/Placeholder · free|Demo|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
         if (engine === "open") {
           // Quality under Options, from the keyboard; on a phone Options is in the Settings sheet (a popover in a sheet).
           let scope = composer(page);

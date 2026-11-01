@@ -20,13 +20,13 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/cinema/pro
     const { id } = await ctx.params;
     const patch = await body(request, ProjectPatch, "Those project settings aren't valid");
     return Response.json(updateProject(id, patch));
-  });
+  }, request);
 }
 
-export async function DELETE(_req: Request, ctx: RouteContext<"/api/cinema/projects/[id]">) {
+export async function DELETE(request: Request, ctx: RouteContext<"/api/cinema/projects/[id]">) {
   return handle(async () => {
     const { id } = await ctx.params;
     deleteProject(id);
     return new Response(null, { status: 204 });
-  });
+  }, request);
 }

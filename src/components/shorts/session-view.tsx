@@ -311,7 +311,7 @@ function SegmentCard({
 }) {
   const primary = gens[seg.primary];
   const video = videoOf(primary);
-  const price = demo ? "Demo · free" : cost === null ? "" : cost === 0 ? "Free" : `≈ ${formatCost(cost)}`;
+  const price = demo ? "Placeholder · free" : cost === null ? "" : cost === 0 ? "Free" : `≈ ${formatCost(cost)}`;
   return (
     <article className="min-w-0 rounded-2xl border bg-background p-3 sm:p-4" aria-label={`Segment ${index + 1}`}>
       <div className="flex items-center gap-2">

@@ -6,8 +6,8 @@
 // at 1440 and 390 px, light and dark, without sideways scroll.
 // Usage: node tests/e2e/open-tools.mjs [appUrl] [--shots <dir>]   (the app in demo mode; no run reaches a GPU or fal:
 // open-engine plans are previewed only). Exits 1 on a failed check. Open-engine prices say "Free" when the app reaches
-// a ComfyUI and "Demo · free" when it doesn't (each check reads which from the page's own /api/status answer); cloud
-// prices are fal's with a fal key (FAL_KEY=anything: nothing is sent) and "Demo · free" without.
+// a ComfyUI and "Placeholder · free" when it doesn't (each check reads which from the page's own /api/status answer); cloud
+// prices are fal's with a fal key (FAL_KEY=anything: nothing is sent) and "Placeholder · free" without.
 import fs from "node:fs";
 import path from "node:path";
 import { launch, root } from "./_browser.mjs";
@@ -49,17 +49,17 @@ async function settled(query, count, timeoutMs = 60_000) {
 
 const status = (await api("/api/status")).body ?? {};
 const fal = !!status.providers?.fal?.configured;
-if (!fal) console.log("note: no fal key on this server: cloud runs are demo runs and show \"Demo · free\" (start it with FAL_KEY=anything for hosted prices; nothing is sent)");
+if (!fal) console.log("note: no fal key on this server: cloud runs are demo runs and show \"Placeholder · free\" (start it with FAL_KEY=anything for hosted prices; nothing is sent)");
 /**
- * What an open-engine price says, by the composer's rule, for an /api/status answer: "Free" when the app reaches its
- * ComfyUI (or demo mode is off, so nothing runs as a demo), else "Demo · free" (a run would be a demo run).
+ * What an open-engine price says, by the composer's rule, for an /api/status answer: "Placeholder · free" while
+ * placeholder results are on (Settings: every run is a placeholder then, ComfyUI connected or not), else "Free".
  */
 const gpuPrice = (s) => {
-  const label = s?.providers?.comfyui?.configured || s?.demoMode === "off" ? "Free" : "Demo · free";
-  return { label, re: label === "Free" ? /\bFree\b/ : /Demo · free/ };
+  const label = s?.demoMode === "on" ? "Placeholder · free" : "Free";
+  return { label, re: label === "Free" ? /\bFree\b/ : /Placeholder · free/ };
 };
 if (gpuPrice(status).label !== "Free")
-  console.log("note: ComfyUI isn't reachable from this server: open-engine runs are demo runs and show \"Demo · free\" (with a ComfyUI it reaches they say \"Free\"; nothing is queued on it)");
+  console.log("note: placeholder results are on (Settings): open-engine runs are placeholders and show \"Placeholder · free\" (with them off they say \"Free\"; nothing is queued on ComfyUI)");
 const photo = await upload("scripts/eval/fixtures/start-frame.png", "image/png", "angles.png");
 /** A silent 16-bit mono WAV `seconds` long (a voice track whose length the Lipsync composer reads from its header). */
 function wav(seconds, rate = 8000) {
@@ -118,7 +118,7 @@ const open = async (page, url) => {
   return seen ?? status;
 };
 /** Wait until the composer shows a price (a cold dev server compiles the page first, and the engine is read after hydration). */
-const priced = (page, re = /\bFree\b|Demo · free|\$\d/) =>
+const priced = (page, re = /\bFree\b|Placeholder · free|\$\d/) =>
   page.waitForFunction((src) => new RegExp(src).test(document.querySelector("[data-composer]")?.textContent ?? ""), re.source, { timeout: 30_000 }).catch(() => {});
 const shoot = (page, name) => (shots ? page.screenshot({ path: path.join(shots, name) }) : undefined);
 /** Pick a model in the composer's model menu (search, then the item whose value ends with the id). */
@@ -198,7 +198,7 @@ try {
     await priced(page);
     const t = await composerText(page);
     check("cloud: the Fuobe Angles app runs on Fuobe Angles", /Fuobe Angles/.test(t));
-    check(`cloud: its price shows before the run (${fal ? "fal's per-megapixel price" : "Demo · free"})`, fal ? /\$0\.0[34]/.test(t) : /Demo · free/.test(t), (t.match(/Demo · free|\$[\d.]+/) ?? ["no price"])[0]);
+    check(`cloud: its price shows before the run (${fal ? "fal's per-megapixel price" : "Placeholder · free"})`, fal ? /\$0\.0[34]/.test(t) : /Placeholder · free/.test(t), (t.match(/Placeholder · free|\$[\d.]+/) ?? ["no price"])[0]);
     await shoot(page, "angles-cloud-1440.png");
     if (!fal) {
       // A demo run: the hosted route's own fields go with it.
@@ -222,9 +222,9 @@ try {
     await page.waitForTimeout(800);
     const t = await composerText(page);
     check(
-      `${engine}: Fuobe Speak picked, priced before the run (${engine === "open" ? gpu.label : fal ? "fal's price" : "Demo · free"})`,
-      /Fuobe Speak/.test(t) && (engine === "open" ? gpu.re.test(t) : fal ? /\$0\.20/.test(t) || /\$\d/.test(t) : /Demo · free/.test(t)),
-      (t.match(/Demo · free|\bFree\b|\$[\d.]+(\/s)?/) ?? ["no price"])[0],
+      `${engine}: Fuobe Speak picked, priced before the run (${engine === "open" ? gpu.label : fal ? "fal's price" : "Placeholder · free"})`,
+      /Fuobe Speak/.test(t) && (engine === "open" ? gpu.re.test(t) : fal ? /\$0\.20/.test(t) || /\$\d/.test(t) : /Placeholder · free/.test(t)),
+      (t.match(/Placeholder · free|\bFree\b|\$[\d.]+(\/s)?/) ?? ["no price"])[0],
     );
     await shoot(page, `speak-${engine}-1440.png`);
     await context.close();
@@ -237,8 +237,8 @@ try {
     await priced(page);
     await page.waitForTimeout(1500);
     const t = await composerText(page);
-    const shown = (t.match(/Demo · free|\$[\d.]+/) ?? ["no price"])[0];
-    check(`cloud: Fuobe Speak with a 12 s voice is priced for 12 s (${fal ? "$2.40" : "Demo · free"})`, fal ? /\$2\.40?\b/.test(t) : /Demo · free/.test(t), shown);
+    const shown = (t.match(/Placeholder · free|\$[\d.]+/) ?? ["no price"])[0];
+    check(`cloud: Fuobe Speak with a 12 s voice is priced for 12 s (${fal ? "$2.40" : "Placeholder · free"})`, fal ? /\$2\.40?\b/.test(t) : /Placeholder · free/.test(t), shown);
     await shoot(page, "speak-voice-cloud-1440.png");
     await context.close();
     const { body } = await api("/api/generations?preview=1", { feature: "lipsync", modelId: "fuobe-speak", engine: "cloud", inputs: { images: [photo], audio: voice12 }, params: { sourceDuration: 40 } });
@@ -310,7 +310,7 @@ try {
     await composer(page).locator("textarea, [contenteditable=true]").first().fill("A woman in a denim jacket on a rooftop at dusk");
     await priced(page, gpu.re);
     const t = await composerText(page);
-    check(`open: PixeletedFace on your GPU says ${gpu.label} (the mosaic too)`, /PixeletedFace/.test(t) && gpu.re.test(t), (t.match(/Demo · free|\bFree\b|\$[\d.]+/) ?? ["no price"])[0]);
+    check(`open: PixeletedFace on your GPU says ${gpu.label} (the mosaic too)`, /PixeletedFace/.test(t) && gpu.re.test(t), (t.match(/Placeholder · free|\bFree\b|\$[\d.]+/) ?? ["no price"])[0]);
     await context.close();
   }
 

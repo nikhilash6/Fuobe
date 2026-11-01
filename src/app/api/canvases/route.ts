@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { createCanvas, listCanvases, parseGraph, parsePages } from "@/server/canvas";
+import { refusedRun } from "@/server/connect-refusal";
 
 const Body = z.object({
   name: z.string().max(80).optional(),
@@ -25,6 +26,6 @@ export async function POST(request: Request) {
   try {
     return Response.json(createCanvas({ ...rest, graph, pages }), { status: 201 });
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
 }

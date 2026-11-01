@@ -72,10 +72,10 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-/** "$0.62 on Cloud", "Free on your GPU", "$12.40 for 20 runs", "Demo — no provider connected". */
+/** "$0.62 on Cloud", "Free on your GPU", "$12.40 for 20 runs", "Placeholder · free". */
 function priceLine(e: RecipeEstimate | undefined, runs: number): string {
   if (!e) return "";
-  if (e.demo) return `Demo — no provider connected, free${runs > 1 ? ` · ${runs} runs` : ""}`;
+  if (e.demo) return `Placeholder · free${runs > 1 ? ` · ${runs} runs` : ""}`;
   if (e.total === null) return "Some prices vary";
   const where = e.engine === "open" ? "on your GPU" : "on Cloud";
   if (e.total === 0) return runs > 1 ? `Free · ${runs} runs ${where}` : `Free ${where}`;

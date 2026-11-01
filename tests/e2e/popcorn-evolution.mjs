@@ -69,7 +69,7 @@ try {
       await page.waitForFunction(() => !document.body.innerText.includes("Uploading references"), null, { timeout: 30_000 }).catch(() => {});
       const direction = page.getByRole("textbox", { name: "Creative direction" });
       // A direction longer than the models take: the page says so as you type (the words stay out of the estimate).
-      await page.waitForFunction(() => /Demo · free|≈ \$|Free/.test(document.body.innerText), null, { timeout: 30_000 }).catch(() => {});
+      await page.waitForFunction(() => /Placeholder · free|≈ \$|Free/.test(document.body.innerText), null, { timeout: 30_000 }).catch(() => {});
       await direction.fill("A night market in the rain. ".repeat(80));
       await page.waitForFunction(() => /Only the first 1,500 characters of the direction reach the model/.test(document.body.innerText), null, { timeout: 15_000 }).catch(() => {});
       check(`${tag}: a long direction is said to be cut`, /Only the first 1,500 characters of the direction reach the model/.test(await text()));
@@ -80,8 +80,8 @@ try {
       await page.waitForFunction(() => (document.querySelector("#evolution-direction")?.value ?? "").length > 40, null, { timeout: 30_000 }).catch(() => {});
       const written = await direction.inputValue();
       check(`${tag}: the offline writer wrote the direction`, /reimagined from the ground up/.test(written) && /Written by Fuobe's offline writer/.test(await text()), JSON.stringify(written.slice(0, 50)));
-      await page.waitForFunction(() => /Demo · free|≈ \$|Free/.test(document.body.innerText), null, { timeout: 30_000 }).catch(() => {});
-      check(`${tag}: the price before it runs (a demo here)`, /Demo · free/.test(await text()) && /Fuobe Evolution · \d+(\.\d+)? s · 720p/.test(await text()));
+      await page.waitForFunction(() => /Placeholder · free|≈ \$|Free/.test(document.body.innerText), null, { timeout: 30_000 }).catch(() => {});
+      check(`${tag}: the price before it runs (a demo here)`, /Placeholder · free/.test(await text()) && /Fuobe Evolution · \d+(\.\d+)? s · 720p/.test(await text()));
       check(`${tag}: no sideways scroll (Evolution, set up)`, (await sideways()) <= 1, `${await sideways()} px`);
       await shot("evolution-setup");
       await page.getByRole("button", { name: "Evolve" }).click();
@@ -137,8 +137,8 @@ try {
       check(`${tag}: a look is picked`, (await page.getByRole("button", { name: "Look: DigitalCam" }).count()) === 1);
       await page.waitForFunction(() => /Frame 1 on Fuobe Soul in the DigitalCam look/.test(document.body.innerText), null, { timeout: 15_000 }).catch(() => {});
       check(`${tag}: it says frame 1 is made on Fuobe Soul in the look`, /Frame 1 on Fuobe Soul in the DigitalCam look/.test(await text()));
-      await page.waitForFunction(() => /Demo · free/.test(document.body.innerText), null, { timeout: 15_000 }).catch(() => {});
-      check(`${tag}: the board's price before it runs (a demo here)`, /Demo · free/.test(await text()) && /4 frames/.test(await text()));
+      await page.waitForFunction(() => /Placeholder · free/.test(document.body.innerText), null, { timeout: 15_000 }).catch(() => {});
+      check(`${tag}: the board's price before it runs (a demo here)`, /Placeholder · free/.test(await text()) && /4 frames/.test(await text()));
       check(`${tag}: no sideways scroll (Storyboard)`, (await sideways()) <= 1, `${await sideways()} px`);
       await shot("storyboard-look");
       await page.getByRole("button", { name: "Generate storyboard" }).click();

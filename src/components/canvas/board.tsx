@@ -188,7 +188,7 @@ function GroupPrice({ id }: { id: string }) {
     const m = getModel(mid);
     return !!m && isDemo(m);
   });
-  const price = demo ? "demo, free" : p.unknown ? "price unknown" : p.usd === 0 ? "free" : `≈ ${formatCost(p.usd)}`;
+  const price = demo ? "placeholder, free" : p.unknown ? "price unknown" : p.usd === 0 ? "free" : `≈ ${formatCost(p.usd)}`;
   return (
     <>
       Runs {p.steps === 1 ? "1 node" : `${p.steps} nodes`} (with what they need) · {price}

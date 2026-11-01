@@ -347,7 +347,7 @@ function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: Sc
                 : preview.isError
                   ? (preview.error as Error).message
                   : preview.data
-                    ? `Re-renders ${preview.data.labels.length} step${preview.data.labels.length === 1 ? "" : "s"} (${stepWords(preview.data.labels)})${preview.data.retime ? ", plus any scene whose timing moves" : ""} · ${preview.data.demo ? "Demo · free" : ep.settings.engine === "open" ? (visitor ? "Self-hosted only" : "Free · your GPU") : preview.data.costUsd === null ? "price unknown" : `≈ ${usd(preview.data.costUsd)}${preview.data.retime ? "+" : ""}`}`
+                    ? `Re-renders ${preview.data.labels.length} step${preview.data.labels.length === 1 ? "" : "s"} (${stepWords(preview.data.labels)})${preview.data.retime ? ", plus any scene whose timing moves" : ""} · ${preview.data.demo ? "Placeholder · free" : ep.settings.engine === "open" ? (visitor ? "Self-hosted only" : "Free · your GPU") : preview.data.costUsd === null ? "price unknown" : `≈ ${usd(preview.data.costUsd)}${preview.data.retime ? "+" : ""}`}`
                     : "Pricing…"}
           </p>
           <Button variant="ghost" onClick={discard} disabled={!draft}>
@@ -531,7 +531,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
                   <DropdownMenuItem disabled={upscaling || action.isPending} onClick={() => run("upscale", "Upscaling to 1080p — the download switches to it when it's done")}>
                     <MonitorUp /> {upscaling ? "Upscaling to 1080p…" : "Upscale to 1080p"}
                     <span className="ml-auto pl-3 font-mono text-[11px] text-muted-foreground tabular-nums">
-                      {view.upscale.demo ? "Demo" : view.upscale.costUsd === null ? "" : view.upscale.costUsd === 0 ? "Free" : `≈ ${usd(view.upscale.costUsd)}`}
+                      {view.upscale.demo ? "Placeholder" : view.upscale.costUsd === null ? "" : view.upscale.costUsd === 0 ? "Free" : `≈ ${usd(view.upscale.costUsd)}`}
                     </span>
                   </DropdownMenuItem>
                 )}

@@ -26,5 +26,5 @@ export async function POST(request: Request) {
     const input = await body(request, Create, "Add a prompt, or attach a file or link");
     const episode = createEpisode({ kind: "explainer", topic: input.prompt, sources: input.sources, settings: input.settings, autoRender: !input.review });
     return Response.json(episode, { status: 201 });
-  });
+  }, request);
 }

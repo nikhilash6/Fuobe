@@ -8,5 +8,5 @@ export async function POST(request: Request) {
     // A repeated requestId (a second click on Remove) gets the run the first one started.
     const { final, items } = await once("remove-object", input.requestId, () => createRemoval(input));
     return Response.json({ final, items }, { status: 201 });
-  });
+  }, request);
 }

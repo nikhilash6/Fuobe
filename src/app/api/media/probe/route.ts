@@ -36,5 +36,5 @@ export async function POST(request: Request) {
       releaseAll();
       release();
     }
-  });
+  }, request);
 }

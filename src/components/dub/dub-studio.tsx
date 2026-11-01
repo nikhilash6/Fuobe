@@ -11,12 +11,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { CueEditor, useCueEditor } from "@/components/av/cue-editor";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { SourceLanguageSelect, TargetLanguages } from "@/components/av/language-picker";
 import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { isPlaceholder } from "@/lib/demo-mode";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cueProblems } from "@/lib/av/cue-edit";
 import { BACKGROUND_DB, crowdedLines, dubResult, languageStage, ONE_SHOT_MODELS, priceLine, reviewCues, takeLines, translateKey, voiceOnly, type DubPrice, type DubSessionView, type DubStage, type OneShotModel } from "@/lib/av/dub";
@@ -233,7 +235,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
 }
 
 /**
- * The price of the next step, next to its button: "≈ $8.13 + ElevenLabs v4", "Demo · free", "Free on your GPU" ("Self-hosted
+ * The price of the next step, next to its button: "≈ $8.13 + ElevenLabs v4", "Placeholder · free", "Free on your GPU" ("Self-hosted
  * only" for a guest or an account: a dub doesn't run on their own GPU yet).
  */
 function PriceNote({ price, loading, error, hint }: { price?: DubPrice; loading?: boolean; error?: Error | null; hint?: string }) {
@@ -469,7 +471,12 @@ function ResultCard({ s, lang }: { s: DubSessionView; lang: string }) {
       }
     >
       <video src={out.url} controls playsInline preload="metadata" className="max-h-[42vh] w-full rounded-xl bg-media object-contain" />
-      {g.provider === "mock" && <p className="mt-2 text-[12px] text-muted-foreground">Demo result — connect a provider (or start ComfyUI) to dub for real.</p>}
+      {isPlaceholder(g) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+          <PlaceholderChip g={g} />
+          <span>A stand-in, not a real dub.</span>
+        </div>
+      )}
       {voiceOnly(s) && <p className="mt-2 text-[12px] text-muted-foreground">Voice only: no music or effects were separated from this clip, so the new voice plays alone.</p>}
     </Panel>
   );

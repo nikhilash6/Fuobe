@@ -11,7 +11,7 @@ import type { ChainSlot, Engine, GenerationRequest, Operation } from "@/lib/cata
 import { TOOL_MODELS } from "@/lib/layers";
 import { createPipeline, type PipelineStep } from "../chains";
 import { db } from "../db";
-import { chooseRoute, createGenerations, outputKind, previewChained } from "../generations";
+import { chooseRoute, ConnectComfyError, createGenerations, outputKind, previewChained } from "../generations";
 import { engineMode } from "../settings";
 import { fileUrl, saveFile } from "../storage";
 import { defineTool, type JobPlace, type ToolContext, type ToolOutcome } from "./define";
@@ -262,13 +262,17 @@ function dubSteps(i: DubToolInput, ctx: ToolContext): PipelineStep[] {
 const NEEDS_SAMPLE =
   "Add a voice sample for the narrator: open-source narration clones a voice. Attach or record 10–60 s of clear speech (or use a saved voice), then pass it as voice_sample.";
 
-/** Whether a model's operation would run as a demo right now (no provider connected). */
+/**
+ * Whether a model's operation would run as a placeholder right now. Nothing connected that runs it (placeholders off)
+ * throws the ConnectComfyError: the answer is to connect something, not to add a voice sample.
+ */
 function runsAsDemo(modelId: string, op: Operation): boolean {
   const m = getModel(modelId);
   if (!m) return false;
   try {
     return chooseRoute(routesFor(m, op)).demo;
-  } catch {
+  } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     return false;
   }
 }

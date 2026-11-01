@@ -27,7 +27,7 @@ export function MediaThumb({
   autoPlay?: boolean;
   /** Letterbox instead of crop (Library "Fit"). */
   fit?: boolean;
-  /** A small badge ("Demo") a text card shows in its own header row, where it can't cover the label. */
+  /** A small badge ("Placeholder") a text card shows in its own header row, where it can't cover the label. */
   tag?: string;
   /** Room at the end of a text card's header for a control in the tile's top-right corner (the feed's ⋯ or heart). */
   inset?: boolean;

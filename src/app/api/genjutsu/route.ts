@@ -8,5 +8,5 @@ export async function POST(request: Request) {
     // A repeated requestId (a second click on Generate) gets the run the first one started.
     const { final, items } = await once("genjutsu", input.requestId, () => createGenjutsu(input));
     return Response.json({ final, items }, { status: 201 });
-  });
+  }, request);
 }

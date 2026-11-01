@@ -7,5 +7,5 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, z.object({ id: z.string().min(1).max(64), requestId: z.string().trim().min(8).max(64).optional() }), "Pick a render to try again");
     return Response.json(await once("mixed-retry", input.requestId, () => retryMixed(input.id)), { status: 201 });
-  });
+  }, request);
 }

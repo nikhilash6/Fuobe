@@ -68,8 +68,8 @@ try {
       check(true, `${label}: the cloud engine says Split soundtrack runs on your GPU`);
       await page.screenshot({ path: path.join(out, `split-cloud-${dname}-${theme}.png`), fullPage: true });
       await page.getByRole("button", { name: "Use open source" }).click();
-      await page.getByText(/Free · runs on your ComfyUI|Demo · free/).waitFor({ timeout: 20_000 });
-      const bar = await page.getByText(/Free · runs on your ComfyUI|Demo · free/).first().locator("..").innerText();
+      await page.getByText(/Free · runs on your ComfyUI|Placeholder · free/).waitFor({ timeout: 20_000 });
+      const bar = await page.getByText(/Free · runs on your ComfyUI|Placeholder · free/).first().locator("..").innerText();
       check(true, `${label}: the open engine prices it: ${bar.replace(/\s+/g, " ")}`);
       const picked = await page.getByRole("radio", { checked: true, name: /Fast \(DBS-BSRNN\)|Best \(DBS-TIGER\)/ }).innerText();
       check(/Fast|Best/.test(picked), `${label}: the host's model is preselected (${picked})`);
@@ -125,7 +125,7 @@ try {
     check(await empty.isVisible(), `${dname}: a soundtrack removed while it uploads stays removed`);
     refusal = null;
     await page.locator('input[type="file"]').setInputFiles(wav);
-    await page.getByText(/Free · runs on your ComfyUI|Demo · free/).waitFor({ timeout: 30_000 });
+    await page.getByText(/Free · runs on your ComfyUI|Placeholder · free/).waitFor({ timeout: 30_000 });
     check(true, `${dname}: a file is taken as usual afterwards`);
     await page.screenshot({ path: path.join(out, `split-after-refusal-${dname}.png`), fullPage: true });
     await ctx.close();
@@ -140,7 +140,7 @@ try {
     const page = await ctx.newPage();
     await openRoute(page, `${app}/audio/split`);
     await page.locator('input[type="file"]').setInputFiles(file);
-    await page.getByText(/Free · runs on your ComfyUI|Demo · free/).waitFor({ timeout: 30_000 });
+    await page.getByText(/Free · runs on your ComfyUI|Placeholder · free/).waitFor({ timeout: 30_000 });
     await page.getByRole("button", { name: "Split it" }).click();
     await page.getByRole("heading", { name: "Stems and mixer" }).waitFor({ timeout: RUN_MS });
     const tiles = page.getByRole("list", { name: "Stems" }).getByRole("listitem");

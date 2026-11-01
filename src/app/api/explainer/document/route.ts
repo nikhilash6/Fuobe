@@ -17,5 +17,5 @@ export async function POST(request: Request) {
     if (file.size > MAX_DOCUMENT_BYTES) throw new FacelessError(`${file.name} is over ${MAX_DOCUMENT_BYTES / 1024 / 1024} MB — add the part that matters, or paste its text into the prompt`, 413);
     const engine = EngineSchema.safeParse(form?.get("engine"));
     return Response.json(await readDocument({ name: file.name, data: Buffer.from(await file.arrayBuffer()), type: file.type }, engine.success ? engine.data : "cloud"));
-  });
+  }, request);
 }

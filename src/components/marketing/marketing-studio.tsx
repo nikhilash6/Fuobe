@@ -345,7 +345,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       : badSite
         ? "Enter a valid website URL"
         : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   // Until a template is picked or you start on the composer it stays slim (the attachment tiles fold
   // away), so the template gallery behind it stays in view.

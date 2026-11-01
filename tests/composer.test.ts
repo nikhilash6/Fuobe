@@ -303,8 +303,8 @@ describe("model picker groups", () => {
 describe("cost and mentions", () => {
   const fmt = (n: number) => `$${n.toFixed(2)}`;
   it("labels the cost", () => {
-    expect(costLabel({ demo: true, cost: 0.4 }, fmt)).toBe("Demo · free");
-    expect(costLabel({ demo: true, cost: 0.4, compact: true }, fmt)).toBe("Demo");
+    expect(costLabel({ demo: true, cost: 0.4 }, fmt)).toBe("Placeholder · free");
+    expect(costLabel({ demo: true, cost: 0.4, compact: true }, fmt)).toBe("Placeholder");
     expect(costLabel({ demo: false, cost: 0 }, fmt)).toBe("Free");
     expect(costLabel({ demo: false, cost: 0.4 }, fmt)).toBe("≈ $0.40");
     expect(costLabel({ demo: false, cost: null }, fmt)).toBe("");

@@ -8,5 +8,5 @@ export async function POST(request: Request) {
   return handle(async () => {
     const { url, engine } = await body(request, Ask, "Paste a link – article, page");
     return Response.json(await summarizeLink(url, engine));
-  });
+  }, request);
 }

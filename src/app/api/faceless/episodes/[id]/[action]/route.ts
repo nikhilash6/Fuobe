@@ -13,12 +13,12 @@ const ACTIONS = {
   upscale: upscaleEpisode,
 } as const;
 
-export async function POST(_req: Request, ctx: RouteContext<"/api/faceless/episodes/[id]/[action]">) {
+export async function POST(request: Request, ctx: RouteContext<"/api/faceless/episodes/[id]/[action]">) {
   return handle(async () => {
     const { id, action } = await ctx.params;
     const run = ACTIONS[action as keyof typeof ACTIONS];
     if (!run) return Response.json({ error: "Not found" }, { status: 404 });
     run(id);
     return Response.json(episodeView(id));
-  });
+  }, request);
 }

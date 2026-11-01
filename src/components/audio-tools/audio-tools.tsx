@@ -43,7 +43,7 @@ type Curve = "equal-power" | "linear";
 type Clip = SlotValue & { duration?: number };
 
 const money = (p: AudioToolPreview, engine: Engine) =>
-  p.demo ? "Demo · free" : engine === "open" ? "Free · runs on your ComfyUI" : p.costUsd === null ? "Price unknown" : p.costUsd < 0.01 ? "Under $0.01" : `≈ $${p.costUsd.toFixed(2)}`;
+  p.demo ? "Placeholder · free" : engine === "open" ? "Free · runs on your ComfyUI" : p.costUsd === null ? "Price unknown" : p.costUsd < 0.01 ? "Under $0.01" : `≈ $${p.costUsd.toFixed(2)}`;
 
 const nameOf = (c: Clip) => (c.name ?? "Audio clip").replace(/\.[a-z0-9]{2,4}$/i, "");
 

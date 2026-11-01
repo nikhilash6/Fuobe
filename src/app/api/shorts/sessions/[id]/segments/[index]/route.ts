@@ -9,5 +9,5 @@ export async function POST(request: Request, ctx: RouteContext<"/api/shorts/sess
     if (!Number.isInteger(i) || i < 0) throw new ShortsError("No such segment", 404);
     const { requestId } = await optionalBody(request, NonceSchema);
     return Response.json(await once(`shorts-take:${id}:${i}`, requestId, () => regenerateSegment(id, i)), { status: 201 });
-  });
+  }, request);
 }

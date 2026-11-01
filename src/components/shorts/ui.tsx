@@ -231,13 +231,13 @@ export function Steps({ steps, current, className }: { steps: string[]; current:
 }
 
 /**
- * "≈ $0.42", "Demo · free", "Free · your GPU". visitor: a guest or an account, whose GPU these tools don't run on yet
+ * "≈ $0.42", "Placeholder · free", "Free · your GPU". visitor: a guest or an account, whose GPU these tools don't run on yet
  * (the page says why): "Self-hosted only", a demo's price too, since its button is off.
  */
 export function costText(e: { costUsd: number | null; demo: boolean } | undefined, engine: "cloud" | "open", visitor?: boolean): string {
   if (!e) return "…";
   if (visitor && (e.demo || engine === "open")) return "Self-hosted only";
-  if (e.demo) return "Demo · free";
+  if (e.demo) return "Placeholder · free";
   if (engine === "open") return "Free · your GPU";
   if (e.costUsd === null) return "Price unknown";
   if (e.costUsd === 0) return "Free";

@@ -19,5 +19,5 @@ export async function POST(request: Request) {
     if (!idea) return Response.json({ error: "Describe the channel first" }, { status: 400 });
     const reference = channel?.reference ? [channel.reference.title, channel.reference.author].filter(Boolean).join(" by ") || undefined : undefined;
     return Response.json(await suggestTopics({ idea, genre: q.genre ?? channel?.genre ?? "education", engine: q.engine, avoid: q.avoid, round: q.round, reference }));
-  });
+  }, request);
 }

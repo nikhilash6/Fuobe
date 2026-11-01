@@ -6,5 +6,5 @@ export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, TranscribeSchema, "Add a clip first");
     return Response.json(transcribeClip(input), { status: 201 });
-  });
+  }, request);
 }

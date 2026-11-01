@@ -22,7 +22,7 @@ import type { Engine, Generation } from "@/lib/catalog/types";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { createPipeline } from "./chains";
 import { llmText, llmTextBackend } from "./enhance";
-import { previewChained } from "./generations";
+import { ConnectComfyError, previewChained } from "./generations";
 import { isOffered, offeredModel } from "./model-access";
 import { probeOllama } from "./providers/llm";
 import { engineMode, getSetting } from "./settings";
@@ -220,6 +220,7 @@ function price(steps: PlanStep[]): { costUsd: number | null; demo: boolean } {
     try {
       p = previewChained(withChain(s), s.after?.length ?? 0);
     } catch (e) {
+      if (e instanceof ConnectComfyError) throw e;
       throw new ShortsError((e as Error).message, 422);
     }
     demo ||= p.demo;
@@ -281,6 +282,7 @@ export async function createEvolution(body: z.infer<typeof EvolutionBodySchema>)
   try {
     p = createPipeline(plan.steps);
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
   return { final: p.byKey[plan.final], items: p.items, direction, by };
