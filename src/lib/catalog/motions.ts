@@ -29,8 +29,8 @@ const OPEN_MODEL = "oss-wan22-14b";
 const START: InputSlot = { key: "image", label: "Start frame", accept: "image", required: true, hint: "The shot to animate" };
 const END: InputSlot = { key: "endImage", label: "End frame", accept: "image", required: true, hint: "Where the transition lands" };
 
-/** Higgsfield applies these to an uploaded video; we generate from a still. */
-const RESTYLE = "Approximation: Higgsfield restyles an uploaded video; Fuobe animates a still image with this look";
+/** The reference applies these to an uploaded video; Fuobe animates a still in the look (Details says it plainly). */
+const RESTYLE = "Animates your still in this look";
 
 function slug(s: string): string {
   return s
@@ -64,7 +64,8 @@ function build(type: "motion" | "effect", specs: MotionSpec[], baseHue: number):
         params: { duration: 5, resolution: "480p" },
         loras: m.loras,
       },
-      parity: m.parity ?? (m.loras?.length ? "Open version uses a dedicated LoRA" : "Open version is prompt-driven on Wan 2.2"),
+      // Fuobe DoP writes each motion's and effect's own line (dopPreset); this one is kept only where it adds to it.
+      parity: m.parity ?? (m.loras?.length ? "On your GPU it adds a LoRA trained for this look" : "On your GPU it follows the preset's words"),
     };
   });
 }

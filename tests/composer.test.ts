@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getModel, getPreset, modelsFor, MODELS } from "@/lib/catalog";
+import { APPS, EFFECTS, getModel, getPreset, modelsFor, MODELS, MOTIONS } from "@/lib/catalog";
 import type { InputSlot, ModelDef } from "@/lib/catalog/types";
 import {
   acceptedKinds,
@@ -330,7 +330,7 @@ describe("studio catalog slice", () => {
 });
 
 describe("an app page's hero", () => {
-  it("says what you get: how it differs from Higgsfield stays in Details, a missing engine is said", () => {
+  it("says what you get: the notes stay in Details, a missing engine is said", () => {
     for (const id of ["app-similarity-score", "app-angles", "app-rap-god", "app-video-background-remover", "app-gtai", "app-shots", "app-clipcut"]) {
       const p = getPreset(id)!;
       expect(appStudio(p).subtitle ?? "", id).not.toMatch(/Higgsfield|Approximation|silent|LoRA/);
@@ -338,6 +338,17 @@ describe("an app page's hero", () => {
     const cloudOnly = getPreset("app-similarity-score")!;
     expect(appStudio({ ...cloudOnly, open: null }).subtitle).toBe("Cloud only for now");
     expect(appStudio({ ...cloudOnly, cloud: null }).subtitle).toBe("Open source only for now");
+  });
+
+  it("Details says what Fuobe makes, naming no other product and no developer notes", () => {
+    for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) {
+      expect(p.parity ?? "", p.id).not.toMatch(/Higgsfield|Approximation|Not reproducible|Not yet measured|evaluation suite|\.safetensors|Kling 2\.5 \/ Wan 2\.2/i);
+    }
+    const note = (id: string) => getPreset(id)!.parity;
+    expect(note("app-similarity-score")).toBe("Finds logos and recognizable characters and replaces them with unbranded ones of the same shape and color.");
+    expect(note("app-clipcut")).toBe("Makes one continuous clip from your selfie. Add music with Video to audio.");
+    for (const id of ["app-asmr-classic", "app-rap-god"]) expect(note(id), id).toBe("This makes a silent clip. Add sound with Video to audio.");
+    expect(note("app-asmr-add-on")).toMatch(/This makes a silent clip\. Add sound with Video to audio\.$/);
   });
 
   it("names IP Cleanup for what it does, on its old address", () => {

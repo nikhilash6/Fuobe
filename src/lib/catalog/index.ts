@@ -28,7 +28,8 @@ function withOssLoras(p: Preset): Preset {
   return {
     ...p,
     open: { ...p.open, loras, promptTemplate: trigger ? `${trigger}. ${p.open.promptTemplate ?? p.promptTemplate}` : p.open.promptTemplate },
-    parity: `Open version adds ${loras.map((l) => l.file).join(" + ")}`,
+    // The LoRA files stay in the route; Details says what they do, after the app's own note.
+    parity: [p.parity, `On your GPU it adds ${loras.length > 1 ? "LoRAs" : "a LoRA"} trained for this look.`].filter(Boolean).join(" "),
   };
 }
 
@@ -61,7 +62,7 @@ const APP_OPEN_OVERRIDES: Record<string, Preset["open"]> = {
 
 /** What the open version does differently, shown on the app page next to an override above. */
 const APP_OPEN_PARITY: Record<string, string> = {
-  "app-virtual-try-on": "The open version uses FLUX.2 [klein] 4B with a try-on LoRA and masks the old outfit out first (10 GB GPU, Apache-2.0)",
+  "app-virtual-try-on": "The open version uses FLUX.2 [klein] 4B with a try-on LoRA and masks the old outfit out first (10 GB GPU, Apache-2.0).",
 };
 
 export const APPS: Preset[] = RAW_APPS.map((a) =>
