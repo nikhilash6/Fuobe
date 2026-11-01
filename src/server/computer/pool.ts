@@ -157,7 +157,9 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
     const state = workerState(fresh, now);
     d.prepare("UPDATE relay_workers SET state = ? WHERE id = ?").run(state.state, w.id);
     const h = hoursAt(hoursOf(fresh), now);
-    const waiting = (d.prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND (',' || pools || ',') LIKE ?").get(`%,${fresh.pool},%`) as { n: number }).n;
+    // Pool names are validated at creation (/^[a-z0-9-]{1,32}$/), so they never contain commas. INSTR on the
+    // CSV avoids the LIKE-wildcard class of risk (%, _) entirely.
+    const waiting = (d.prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND INSTR(',' || pools || ',', ?) > 0").get(`,${fresh.pool},`) as { n: number }).n;
     return {
       runner: eligible(fresh, now),
       heldElsewhere: false,
@@ -295,8 +297,8 @@ function beforeWindowEnds(t: TaskRow, w: WorkerRow, now: number): boolean {
 
 function pick(w: WorkerRow, now: number): TaskRow | null {
   const rows = db()
-    .prepare("SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND (',' || pools || ',') LIKE ? ORDER BY rank_at LIMIT ?")
-    .all(`%,${w.pool},%`, LOOK_AT) as TaskRow[];
+    .prepare("SELECT * FROM relay_tasks WHERE pools IS NOT NULL AND state = 'waiting' AND stop = 0 AND INSTR(',' || pools || ',', ?) > 0 ORDER BY rank_at LIMIT ?")
+    .all(`,${w.pool},`, LOOK_AT) as TaskRow[];
   const ok = rows.filter((t) => fits(t, w, now) && retryOk(t, w, now) && beforeWindowEnds(t, w, now));
   if (!ok.length) return null;
   const warm = w.warm_lane ? ok.find((t) => t.lane === w.warm_lane) : undefined;
@@ -397,6 +399,12 @@ export function poolFields(workflowId: string, o: { account?: string; boostMs?: 
     notAfter: o.waitMs ? now + o.waitMs : undefined,
     onlyWorker: o.onlyWorker,
   };
+}
+
+/** The queue block for GET /api/generations/<id>: the task's place in its lane and the estimated wait. Null when no pool task waits. */
+export function queueOfGeneration(generationId: string, now = Date.now()): { place: number; etaSeconds: number | null } | null {
+  const t = db().prepare("SELECT * FROM relay_tasks WHERE generation_id = ? AND pools IS NOT NULL AND state = 'waiting' LIMIT 1").get(generationId) as TaskRow | undefined;
+  return t ? placeInLine(t, now) : null;
 }
 
 /** FUOBE_POOL_WAIT_MIN: how long a task for workers waits before it fails (30 minutes). */

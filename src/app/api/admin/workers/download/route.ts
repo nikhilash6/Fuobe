@@ -34,6 +34,7 @@ export async function GET(request: Request) {
   if (fs.existsSync(workerDir)) {
     const walk = (dir: string, prefix: string) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isSymbolicLink()) continue;
         const rel = `${prefix}/${entry.name}`;
         if (entry.isDirectory()) walk(path.join(dir, entry.name), rel);
         else files.push({ name: rel, data: fs.readFileSync(path.join(dir, entry.name)) });

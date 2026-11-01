@@ -205,9 +205,8 @@ interface PairingRow {
 }
 
 function newCode(): string {
-  const bytes = crypto.randomBytes(8);
   let s = "";
-  for (let i = 0; i < 8; i++) s += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  for (let i = 0; i < 8; i++) s += CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)];
   return `${s.slice(0, 4)}-${s.slice(4)}`;
 }
 
