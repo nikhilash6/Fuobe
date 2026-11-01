@@ -1583,7 +1583,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   return {
     manifest,
     workflow: wf,
-    meta: { workflowId: manifest.id, nodeCount: Object.keys(wf).length, prefix: `fuobe/${ctx.generationId}`, ...(metaBatch ? { metaBatch: true } : {}) },
+    // The seed the graph drew with (one Fuobe picked when none was asked): its pictures keep it, so Edit layout redraws the same one.
+    meta: { workflowId: manifest.id, nodeCount: Object.keys(wf).length, prefix: `fuobe/${ctx.generationId}`, ...(metaBatch ? { metaBatch: true } : {}), ...(b.seed && typeof values.seed === "number" ? { seed: values.seed } : {}) },
   };
 }
 
@@ -1996,6 +1997,8 @@ export const comfyProvider: ProviderAdapter = {
       } catch (e) {
         return { state: "failed" as const, error: (e as Error).message };
       }
+      const seed = typeof meta.seed === "number" ? meta.seed : undefined;
+      if (seed !== undefined) outputs = outputs.map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, seed } } : o));
       return { state: "succeeded" as const, outputs: await withLayerBoxes(outputs) };
     };
     const isDone = (e: HistoryEntry | undefined): e is HistoryEntry => !!e && (!!e.status?.completed || e.status?.status_str === "success" || e.status?.status_str === "error");

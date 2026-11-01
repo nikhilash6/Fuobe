@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, AtSign, Cloud, Cpu, GalleryHorizontalEnd, Loader2, Sparkles, X } from "lucide-react";
+import { ArrowUp, AtSign, Cloud, Cpu, GalleryHorizontalEnd, LayoutDashboard, Loader2, Sparkles, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToday } from "@/hooks/use-today";
-import { estimateCost, imageLimit, planGeneration, routesFor } from "@/lib/catalog/plan";
+import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
 import type { Engine, GenerationRequest, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
 import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
@@ -46,6 +46,7 @@ import {
   costLabel,
   engineSwitchModel,
   enterFrames,
+  enterLayout,
   filterModels,
   firstMissingSlot,
   followEngineParams,
@@ -53,7 +54,12 @@ import {
   framesShape,
   framesSlots,
   framesUploading,
+  layoutBoxModel,
+  layoutNotes,
+  layoutRequest,
+  layoutShape,
   leaveFrames,
+  leaveLayout,
   namedImageSlots,
   needsMask,
   onImageChange,
@@ -82,6 +88,7 @@ import { AttachMenu } from "./attach-menu";
 import { useAttach, useComposerBridge, useUploadReaper } from "./attachments";
 import { DialogueEditor, LanguageChip, VoicePicker } from "./audio-controls";
 import { FramesStrip, type FramesNotice } from "./frames-strip";
+import { LayoutStrip } from "./layout-strip";
 import { loadFullCatalog, useCatalog } from "./catalog";
 import { Chip, chipBase, chipIdle } from "./chip";
 import { MediaSlot, SlotPreview, type SlotValue } from "./media-slot";
@@ -104,6 +111,12 @@ const EMPTY: StudioElement[] = [];
 const PresetChips = dynamic(() => import("./preset-chips"), {
   loading: () => <span aria-hidden className="h-8 w-32 shrink-0 animate-pulse rounded-full bg-secondary" />,
 });
+
+/** Layout mode's editor (the canvas, the boxes and their rows): its own chunk, loaded when Layout is turned on. */
+const LayoutEditor = dynamic(() => import("./layout-editor").then((m) => m.LayoutEditor));
+
+/** The model Layout mode suggests where the picked one reads boxes as words: MOSS-Image on each engine. */
+const BOX_MODELS: Record<Engine, string> = { open: "oss-moss-image", cloud: "moss-image" };
 
 /** Fuobe Soul's Look picker (the look cards): its own chunk. */
 const LookChip = dynamic(() => import("./look-chip"), {
@@ -135,7 +148,7 @@ interface FramesContext {
 
 function buildRequest(
   feature: string,
-  draft: Pick<Draft, "slots" | "refs" | "presetId" | "modelId" | "prompt" | "negativePrompt" | "params" | "presetOptions" | "presetStrength" | "mix" | "frames">,
+  draft: Pick<Draft, "slots" | "refs" | "presetId" | "modelId" | "prompt" | "negativePrompt" | "params" | "presetOptions" | "presetStrength" | "mix" | "frames" | "layout">,
   op: Operation | undefined,
   promptSuffix?: string,
   refKind: MediaKind = "image",
@@ -161,6 +174,8 @@ function buildRequest(
     params = { ...params, ...sent.params };
     pinned = op ?? sent.op;
   }
+  // Layout mode: the boxes ride as params.extra.layout, captioned with the prompt; the plan compiles them for the model.
+  if (draft.layout) params = layoutRequest(draft.layout, draft.prompt, params).params;
   return {
     feature,
     presetId: draft.presetId,
@@ -528,6 +543,9 @@ export function Composer({ docked }: { docked: boolean }) {
   const framesAt = framesCtx && draft.frames ? frameTimes(draft.frames.map((f) => f.at), framesCtx.duration) : [];
   // The open chain's gaps (and one frame's clip) must be clips its model makes; the planner checks two or more frames too.
   const framesGap = framesCtx?.chained && model && framesAt.length ? chainGapProblem(framesAt, framesCtx.duration, chainTiming(model)) : null;
+  // Layout mode (Image studio): boxes on the picture, one row each, compiled for the model at the size it renders.
+  const layoutOn = !!config.layout && !!draft.layout;
+  const [layoutEditing, setLayoutEditing] = useState(false);
 
   // The page's drop zone hands its files to this composer.
   useEffect(() => {
@@ -572,6 +590,8 @@ export function Composer({ docked }: { docked: boolean }) {
   // The run goes to a LoRA endpoint whose price isn't published (fal's MOSS-Image /lora).
   let loraPriceUnknown = false;
   let planError: string | null = null;
+  // What the plan made of the layout: the form the model reads it in and the canvas it was compiled at.
+  let laid: Plan["layout"];
   if (model && !engineError && !presetLoading) {
     try {
       const stand = (v: SlotValue | null | undefined, kind: MediaKind): SlotValue | null | undefined => (v?.uploading ? { ...v, ref: PLACEHOLDER[kind] } : v);
@@ -589,6 +609,7 @@ export function Composer({ docked }: { docked: boolean }) {
       });
       const plan = planGeneration({ ...planned, prompt: planned.prompt || (config.promptOptional ? " " : "") }, catalog.getModel, catalog.getPreset);
       op = plan.op;
+      laid = plan.layout;
       // A run with LoRAs (a Soul look) goes to the route's LoRA endpoint, which has its own price.
       const withLoras = plan.loras.length > 0 && routesFor(plan.model, plan.op).some((r) => !!r.loraEndpoint);
       cost = estimateCost(plan.model, plan.params, plan.jobs, plan.op, withLoras, today);
@@ -608,7 +629,15 @@ export function Composer({ docked }: { docked: boolean }) {
   if (signed.blocker) planError = signed.blocker;
   // Models that take no prompt (try-on, 3D, transcription, upscalers), or can run without one, never ask for one.
   const promptMissing =
-    !config.promptOptional && !opts.promptless && !opts.promptOptional && preset?.userPrompt !== "none" && preset?.userPrompt !== "optional" && !draft.prompt.trim() && !draft.params.shots?.some((s) => s.prompt.trim());
+    !config.promptOptional &&
+    !opts.promptless &&
+    !opts.promptOptional &&
+    preset?.userPrompt !== "none" &&
+    preset?.userPrompt !== "optional" &&
+    !draft.prompt.trim() &&
+    !draft.params.shots?.some((s) => s.prompt.trim()) &&
+    // Boxes say what the picture holds: the whole picture's caption can stay empty.
+    !(layoutOn && draft.layout!.items.length > 0);
   const blocker = blockerFor({
     // A model outside the studio's slice (remembered, or handed over) is known once the full catalog arrives: loading until then, not "Pick a model".
     loading: !catalog.ready || (!model && !catalog.complete) ? "Loading models…" : presetLoading ? "Loading presets…" : null,
@@ -739,7 +768,7 @@ export function Composer({ docked }: { docked: boolean }) {
   };
   // Enhance writes a scene; a tool's optional words (FLUX.3 Upscale's details) stay as typed.
   const baseShape = settingsShape(model, effectiveOp, config.kind, showPrompt && !config.hidePrompt, p, config.ops, studioFormats);
-  const shape = framesCtx ? framesShape(baseShape, framesCtx.chained) : baseShape;
+  const shape = framesCtx ? framesShape(baseShape, framesCtx.chained) : layoutOn ? layoutShape(baseShape) : baseShape;
   const outcome = config.clipFacts && draft.slots.video?.ref ? clipOutcome(effectiveOp, facts, p, model) : null;
   const video = draft.slots.video?.ref;
   const alternative = config.comfyOnly?.alternative;
@@ -861,6 +890,47 @@ export function Composer({ docked }: { docked: boolean }) {
     if (dropped) toast(`Frames off — frames 1 and ${draft.frames.length} are your start and end frames`, { action: { label: "Undo", onClick: () => setDraft(before) } });
   };
 
+  // Layout on: an empty layout on the picture's shape, and the editor opens to draw the first box. Off: the boxes go (Undo
+  // brings them back); the prompt stays as written.
+  const toggleLayout = () => {
+    if (!draft.layout) {
+      setDraft((d) => ({ layout: enterLayout(d.params, model) }));
+      setLayoutEditing(true);
+      setFocused(true);
+      return;
+    }
+    const before = { layout: draft.layout, params: draft.params };
+    const { params, dropped } = leaveLayout(draft.layout, draft.params);
+    setDraft({ layout: undefined, params });
+    if (dropped) toast(`Layout off — ${dropped} box${dropped === 1 ? "" : "es"} set aside`, { id: "layout-off", action: { label: "Undo", onClick: () => setDraft(before) } });
+  };
+  // The canvas the boxes are drawn on: the size this model renders (src/lib/catalog/plan.ts layoutCanvas).
+  const canvasFor = (aspect: string | undefined) => layoutCanvas(model!, { ...draft.params, aspectRatio: aspect }, studioOp ?? "t2i");
+  const layoutCanvasNow = layoutOn && model ? canvasFor(p.aspectRatio ?? model.defaults?.aspectRatio) : undefined;
+  const boxModel = layoutOn && model ? layoutBoxModel(model, { id: BOX_MODELS[model.engine], getModel: catalog.getModel, offered: catalog.offered }) : undefined;
+  const layoutStripNotes = layoutOn ? layoutNotes(model, layoutCanvasNow) : [];
+  const layoutSummary = !model
+    ? ""
+    : laid?.width
+      ? `Compiled for ${model.name} at ${laid.width} × ${laid.height}, the size it renders`
+      : laid?.format === "flux3" || laid?.format === "ideogram"
+        ? `${model.name} reads the boxes in place (its own layout form)`
+        : laid
+          ? `Sent to ${model.name} as sentences`
+          : layoutCanvasNow
+            ? `Drawn at ${layoutCanvasNow.exact ? "" : "about "}${layoutCanvasNow.width} × ${layoutCanvasNow.height}`
+            : "";
+  const layoutChip = config.layout ? (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Chip icon={LayoutDashboard} active={layoutOn} aria-pressed={layoutOn} onClick={toggleLayout}>
+          Layout
+        </Chip>
+      </TooltipTrigger>
+      <TooltipContent>{layoutOn ? "Back to a plain prompt" : "Draw boxes for where things go, with the exact words"}</TooltipContent>
+    </Tooltip>
+  ) : null;
+
   // What the model does with the frames, said under the strip before anything runs (with the model that takes them all).
   let framesNotice: FramesNotice | null = null;
   if (framesCtx && model && draft.frames) {
@@ -972,6 +1042,7 @@ export function Composer({ docked }: { docked: boolean }) {
   );
   const hasSecondary =
     !!config.frames ||
+    !!config.layout ||
     (!!model && (!!opts.voices?.length || !!opts.voiceClone || !!opts.languages || !!opts.controls || !!opts.looks)) ||
     !!config.presetPicker ||
     !!config.signature ||
@@ -1020,6 +1091,36 @@ export function Composer({ docked }: { docked: boolean }) {
           onAddPick={attach.attach}
           onClose={toggleFrames}
           notice={framesNotice}
+        />
+      )}
+      {layoutOn && !collapsed && draft.layout && (
+        <LayoutStrip
+          layout={draft.layout}
+          aspect={p.aspectRatio ?? model?.defaults?.aspectRatio}
+          summary={layoutSummary}
+          notes={layoutStripNotes}
+          action={boxModel ? { label: `Use ${boxModel.name}`, onClick: () => pickModel(boxModel) } : undefined}
+          onEdit={() => setLayoutEditing(true)}
+          onClose={toggleLayout}
+        />
+      )}
+      {layoutEditing && layoutOn && draft.layout && model && (
+        <LayoutEditor
+          open
+          onOpenChange={(o) => !o && setLayoutEditing(false)}
+          layout={draft.layout}
+          caption={draft.prompt}
+          aspect={p.aspectRatio ?? model.defaults?.aspectRatio}
+          aspects={model.options.aspectRatios}
+          canvasFor={canvasFor}
+          model={model}
+          onDone={(r) =>
+            setDraft((d) => ({
+              layout: r.layout,
+              prompt: r.caption,
+              ...(r.aspect && r.aspect !== (d.params.aspectRatio ?? model.defaults?.aspectRatio) && { params: { ...d.params, aspectRatio: r.aspect } }),
+            }))
+          }
         />
       )}
       {showAttachments && !collapsed && !framesOn && (
@@ -1077,7 +1178,11 @@ export function Composer({ docked }: { docked: boolean }) {
           value={draft.prompt}
           onChange={(v) => setDraft({ prompt: v })}
           onSubmit={submit}
-          placeholder={preset?.promptPlaceholder ?? (config.hidePrompt && config.modelPrompt ? config.modelPrompt : config.placeholder)}
+          placeholder={
+            layoutOn
+              ? "Describe the whole picture… the boxes say what goes where"
+              : (preset?.promptPlaceholder ?? (config.hidePrompt && config.modelPrompt ? config.modelPrompt : config.placeholder))
+          }
           elements={elements}
           collapsed={collapsed}
         />
@@ -1184,6 +1289,7 @@ export function Composer({ docked }: { docked: boolean }) {
                   recipe={recipeModel}
                   flat={appChoice}
                   madeWith={madeWith}
+                  boxes={layoutOn}
                 />
               ) : (
                 <Chip icon={Loader2} disabled className="[&>svg]:animate-spin">
@@ -1226,6 +1332,7 @@ export function Composer({ docked }: { docked: boolean }) {
           )}
           <span className="contents max-sm:hidden">
             {framesChip}
+            {layoutChip}
             {voiceChips}
           </span>
           <SettingsChip
@@ -1248,6 +1355,7 @@ export function Composer({ docked }: { docked: boolean }) {
               hasSecondary ? (
                 <>
                   {framesChip}
+                  {layoutChip}
                   {voiceChips}
                   {styleChips}
                 </>

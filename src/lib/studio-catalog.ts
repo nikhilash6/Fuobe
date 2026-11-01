@@ -26,8 +26,8 @@ export function slimModel(m: ModelDef): ModelDef {
     routes: m.routes.map((r) => {
       const copy = { ...r };
       delete copy.map;
-      const { upscaleFactor, numFrames } = r.map ?? {};
-      if (upscaleFactor || numFrames) copy.preview = { ...(upscaleFactor && { upscaleFactor }), ...(numFrames && { numFrames }) };
+      const { upscaleFactor, numFrames, size } = r.map ?? {};
+      if (upscaleFactor || numFrames || size) copy.preview = { ...(upscaleFactor && { upscaleFactor }), ...(numFrames && { numFrames }), ...(size && { size }) };
       return copy;
     }),
   };
