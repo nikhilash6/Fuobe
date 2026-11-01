@@ -160,6 +160,8 @@ describe("round-4 ComfyUI workflows", () => {
       "any-angle-3d",
       "any-angle-shot",
       "video-regenerate-h3",
+      // Head Swap: hand-built, waiting for its first /prompt check on a ComfyUI that has the LoRA.
+      "head-swap-qwen-image-21",
       // Genjutsu's Openjutsu modes: their packs aren't on the validation server yet; each opens only after its /prompt
       // check and a real render (workflows/comfyui/gpu-tested.json, src/server/genjutsu-live.ts).
       "video-group-swap-h3",

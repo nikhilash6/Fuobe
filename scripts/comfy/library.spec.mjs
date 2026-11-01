@@ -150,6 +150,9 @@
 //   targetX, targetY, targetZ             (CreateCameraInfo look-at point: a close-up aims at the face's height)
 // Output roles added with Any Angle: "sweep" and "sweep-mask" (the turntable at 192 px as lossless animated WebP, colour and
 // coverage, that the server measures the photo's front view on), "mesh" (a GLB made from a splat, for the 3D viewer).
+// Keys added with Head Swap, model controls (params.extra):
+//   maskBlur                              (GrowMaskWithBlur blur radius of a paste-back edge, px)
+//   pasteBack                             (true: only the masked area comes from the edit, the rest is the input's pixels)
 
 import fs from 'node:fs';
 
@@ -5488,5 +5491,34 @@ export const SPEC = [
     vramGb: 2,
     license: 'n/a (no model; Image Detail Contrast MIT, Orion4D_FXMax MIT, VideoHelperSuite GPL-3.0 code)',
     notes: 'params.extra.openjutsu: finish soft | filmic | rich | off (the tone mapper\'s settings travel in raw_settings, no preset files), strength 0-1 (Orion 0-0.5), soften 0-1 (detail contrast 0 to -0.6; 0 drops the step). Both steps work frame by frame, so the clip goes through in passes (VHS_BatchManager re-queues the prompt until the clip is done, as upscale-video-esrgan-chunked does) into one H.264 encode that stays open; the last pass writes the file with the source\'s sound. framesPerBatch: the provider sizes it from the clip\'s header so a pass holds about 1.5 GB of frames (three frame-sized copies: decoded, softened, toned), so memory stays flat whatever the length.',
+  },
+  // Head Swap (app-head-swap): the BFS head-swap LoRA on the Qwen-Image 2.1 edit, then the new head pasted onto the untouched shot.
+  {
+    id: 'head-swap-qwen-image-21',
+    title: 'Qwen-Image 2.1 Head Swap (BFS head LoRA V1.1, pasted back onto the shot)',
+    capability: 'edit',
+    handBuilt: 'hand-built/head-swap-qwen-image-21.json',
+    bindings: {
+      prompt: [b('30', 'prompt')], image: [b('10', 'image')], image2: [b('11', 'image')],
+      seed: [b('32', 'seed')], steps: [b('32', 'steps')], loraStrength: [b('4', 'strength_model')],
+      maskPrompt: [b('43', 'text')], maskGrow: [b('50', 'expand')], maskBlur: [b('50', 'blur_radius')], pasteBack: [b('52', 'switch')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    defaults: { maskPrompt: 'head', maskGrow: 32, maskBlur: 16, pasteBack: true },
+    limits: { maxWidth: 2048, maxHeight: 2048 },
+    modelUrls: {
+      'bfs_head_v1.1_qwen_2.1.safetensors': 'https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/0ca3913ade4b4ada458d60c232354e8586c4c181/bfs_head_v1.1_qwen_2.1.safetensors',
+      'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors',
+    },
+    vramGb: 20,
+    license: "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; BFS head-swap LoRA by Alissonerdx MIT; SAM 3.1 under Meta's SAM License (commercial use allowed under its terms); GrowMaskWithBlur from ComfyUI-KJNodes (GPL-3.0 code)",
+    notes:
+      "qwen-image-21-edit (int8, 25 steps, euler / simple, cfg 1, both pictures 2048 on the long side, resolution 0) with Alissonerdx's BFS head LoRA V1.1 at 1.0 and its training prompt " +
+      '("head_swap: start with <image1> as the base image ..."). image = the shot to keep (body, pose, light, background), image2 = the head (identity, hair, eye colour): body first, head second, as V1.1 was trained; ' +
+      'other BFS versions take other orders, so the file is pinned. V1.1 is V1 without the second-half img_mlp.gate_up modules (less skin softening, slightly weaker expression transfer); ' +
+      "the V1.1 \"alternative\" file copies expression better at about 1 degree more head-pose error. Paste-back (pasteBack, on by default): SAM 3.1 finds the head (\"head\") on the swap and on the shot scaled to the swap's size, " +
+      'the two masks are joined (ImageCompositeMasked of the mask images, so old long hair goes too), grown by maskGrow and blurred by maskBlur (GrowMaskWithBlur), and only that area comes from the swap: ' +
+      "every other pixel is the shot's, which removes Qwen 2.1's colour and detail drift over the whole picture. pasteBack false returns the whole swap (the switch is lazy, SAM does not run). " +
+      "No head found: the shot comes back unchanged. BFS's own workflow runs the Pruna 8-step LoRA with deis_2m (RES4LYF); this graph keeps core samplers.",
   },
 ];

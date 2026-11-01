@@ -950,6 +950,8 @@ const SLOT_RULES: Record<string, { reuse?: boolean; required?: string[]; hints?:
   "palette-transfer-video": { hints: { image: "Pick a palette or add a reference image" } },
   "relight-qwen-edit-2509-reference": { hints: { image2: "Add the photo whose light to copy" } },
   "face-swap-reactor": { hints: { image2: "Add the face to put in" } },
+  // Qwen-Image 2.1's encoder takes its references as optional inputs: without the head it would run as a plain edit.
+  "head-swap-qwen-image-21": { required: ["image2"], hints: { image: "Add the photo to keep", image2: "Add a photo of the head to put in" } },
   "video-swap-wan-vace": { hints: { image: "Add a picture of what goes in" } },
   "video-insert-wan-vace": { hints: { image: "Add a picture of what to add", mask: "Paint where it goes on the first frame" } },
   // Pixal3D multi-view: the front, then any of the other sides.

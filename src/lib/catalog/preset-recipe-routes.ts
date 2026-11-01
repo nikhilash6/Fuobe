@@ -51,6 +51,7 @@ export type RecipeKind = "h3" | "orbit" | "qwen";
  * - Tap to Recolor: a tool of its own, whose taps make the mask its graph repaints.
  * - Steam It: its own graph finds the clothes and repaints only them, so every other pixel stays the upload's.
  * - Restore Photo: its Restore LoRA keeps every face and the framing, where a plain edit redraws them.
+ * - Head Swap: the whole head, hair included, comes from its own head LoRA; a plain edit keeps the first hair.
  */
 export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-fuobe-angles",
@@ -71,6 +72,7 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-tap-to-recolor",
   "app-steam-it",
   "app-restore-photo",
+  "app-head-swap",
 ]);
 
 /**

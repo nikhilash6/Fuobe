@@ -24506,6 +24506,151 @@
       "notes": "params.format exr of the sdr-to-hdr operation (Higgsfield's \"EXR 16-bit: uncompressed frame sequence for compositing\"). The same ImageSDRToHDR expansion as video-sdr-to-hdr; SaveImageAdvanced writes each frame as a half-float EXR with input_color_space HDR, i.e. the inverse HLG curve: scene-linear light in Rec.2020 primaries, highlights above 1.0 kept. Node 6 saves the 10-bit HLG MP4 with the clip's sound as the result to watch (role preview); Fuobe zips the frames (role frames) and attaches the zip to it. Decodes the whole clip: RAM grows with the length (Fuobe refuses a clip too long for the memory it has). Tested through Fuobe on CPU (2 s 160x96 30 fps clip with sound): 60 half-float EXR frames zipped onto an H.264 High 10 HLG (arib-std-b67, bt2020) preview with AAC."
     },
     {
+      "id": "head-swap-qwen-image-21",
+      "title": "Qwen-Image 2.1 Head Swap (BFS head LoRA V1.1, pasted back onto the shot)",
+      "capability": "edit",
+      "file": "head-swap-qwen-image-21.json",
+      "source": "hand-built (scripts/comfy/hand-built/head-swap-qwen-image-21.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "32",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "32",
+            "input": "steps"
+          }
+        ],
+        "loraStrength": [
+          {
+            "node": "4",
+            "input": "strength_model"
+          }
+        ],
+        "maskPrompt": [
+          {
+            "node": "43",
+            "input": "text"
+          }
+        ],
+        "maskGrow": [
+          {
+            "node": "50",
+            "input": "expand"
+          }
+        ],
+        "maskBlur": [
+          {
+            "node": "50",
+            "input": "blur_radius"
+          }
+        ],
+        "pasteBack": [
+          {
+            "node": "52",
+            "input": "switch"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ],
+        "maxDimension": [
+          {
+            "node": "20",
+            "input": "largest_size"
+          },
+          {
+            "node": "21",
+            "input": "largest_size"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 25,
+        "loraStrength": 1,
+        "maskPrompt": "head",
+        "maskGrow": 32,
+        "maskBlur": 16,
+        "pasteBack": true
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "bfs_head_v1.1_qwen_2.1.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/0ca3913ade4b4ada458d60c232354e8586c4c181/bfs_head_v1.1_qwen_2.1.safetensors",
+          "sizeGb": 0.26
+        },
+        {
+          "file": "sam3.1_multiplex_fp16.safetensors",
+          "folder": "checkpoints",
+          "url": "https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors",
+          "sizeGb": 1.75
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-KJNodes",
+          "repo": "https://github.com/kijai/ComfyUI-KJNodes"
+        }
+      ],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; BFS head-swap LoRA by Alissonerdx MIT; SAM 3.1 under Meta's SAM License (commercial use allowed under its terms); GrowMaskWithBlur from ComfyUI-KJNodes (GPL-3.0 code)",
+      "validated": false,
+      "notes": "qwen-image-21-edit (int8, 25 steps, euler / simple, cfg 1, both pictures 2048 on the long side, resolution 0) with Alissonerdx's BFS head LoRA V1.1 at 1.0 and its training prompt (\"head_swap: start with <image1> as the base image ...\"). image = the shot to keep (body, pose, light, background), image2 = the head (identity, hair, eye colour): body first, head second, as V1.1 was trained; other BFS versions take other orders, so the file is pinned. V1.1 is V1 without the second-half img_mlp.gate_up modules (less skin softening, slightly weaker expression transfer); the V1.1 \"alternative\" file copies expression better at about 1 degree more head-pose error. Paste-back (pasteBack, on by default): SAM 3.1 finds the head (\"head\") on the swap and on the shot scaled to the swap's size, the two masks are joined (ImageCompositeMasked of the mask images, so old long hair goes too), grown by maskGrow and blurred by maskBlur (GrowMaskWithBlur), and only that area comes from the swap: every other pixel is the shot's, which removes Qwen 2.1's colour and detail drift over the whole picture. pasteBack false returns the whole swap (the switch is lazy, SAM does not run). No head found: the shot comes back unchanged. BFS's own workflow runs the Pruna 8-step LoRA with deis_2m (RES4LYF); this graph keeps core samplers."
+    },
+    {
       "id": "video-group-swap-h3",
       "title": "Group swap: 1-4 characters each take over one person, named by role (Openjutsu advanced: SAM 3.1 tracks, Qwen3-VL labels them, MiniMax H3 + DMAD redraw the labelled people clip by clip)",
       "capability": "video-group-swap",

@@ -58,6 +58,10 @@ const third = (label: string, hint?: string): InputSlot => ({ key: "image3", lab
 const TWO_STEP = "Animates the change from your photo in one pass.";
 const NO_AUDIO = "This makes a silent clip. Add sound with Video to audio.";
 
+/** The BFS head LoRA's training prompt, word for word (its "head_swap:" trigger, <image1> = the shot, <image2> = the head). */
+export const HEAD_SWAP_OPEN =
+  "head_swap: start with <image1> as the base image, keeping its lighting, environment, and background. remove the head from <image1> completely and replace it with the head from <image2>, strictly preserving the hair, eye color, nose structure from <image2>. copy the direction of the eye, head rotation, micro expressions from <image1>, high quality, sharp details, 4k";
+
 type AppSpec = {
   /** Kept when an app is renamed, so links, previews and saved runs still find it (default: from the name). */
   id?: string;
@@ -149,6 +153,23 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Replace the face of the person in the first image with the face of the person in the second image. Keep the first image's pose, hairstyle, clothing, lighting, color grading, camera angle and background exactly. Match skin tone, head angle, perspective and lighting so the result looks like an untouched photograph.",
+  }),
+  // Face Swap keeps the first person's hair, jaw and ears; this brings the whole head over. On the GPU it runs the BFS
+  // head LoRA with its training prompt, body first and head second (workflows/comfyui/head-swap-qwen-image-21.json).
+  app({
+    name: "Head Swap",
+    category: "Identity",
+    description: "Put your whole head on any photo, hair and all",
+    icon: "UserRound",
+    hue: 310,
+    inputs: [
+      { key: "image", label: "Photo", accept: "image", required: true, hint: "The shot to keep" },
+      second("Head", "A clear photo of your head and hair. Use your own photo, or one you have permission to use."),
+    ],
+    prompt:
+      "Replace the whole head of the person in the first image, hair included, with the head of the person in the second image: their face, hair, hairline and ears. Keep the first image's body, pose, head angle, eye direction, expression, clothing, lighting, color grading and background exactly. Light the new head like the rest of the shot and match the skin tone of the neck and hands, so the result looks like an untouched photograph.",
+    open: { modelId: "oss-qwen-head-swap", promptTemplate: HEAD_SWAP_OPEN },
+    parity: "Brings the whole head over: face, hair and ears, lit like the shot. Everything else stays exactly as it was.",
   }),
   app({
     name: "Character Swap",

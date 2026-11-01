@@ -9,6 +9,11 @@
   "sizeBytes": 1706030528,
   "sha256": "aa2311c6b22b07cf3afe9aac6e8bcb02a2b19dd8671b2a91d0b144071577e600"
  },
+ "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/0ca3913ade4b4ada458d60c232354e8586c4c181/bfs_head_v1.1_qwen_2.1.safetensors": {
+  "revision": "0ca3913ade4b4ada458d60c232354e8586c4c181",
+  "sizeBytes": 260096144,
+  "sha256": "d1d748d5601077f3b6d05766f6823510e901970d916afa404a97e85dc92fa88e"
+ },
  "https://huggingface.co/ByteZSzn/Flux.2-Turbo-ComfyUI/resolve/main/Flux_2-Turbo-LoRA_comfyui.safetensors": {
   "revision": "57231752b9c5632e42911c73ee0ed138d381a6d4",
   "sizeBytes": 2760814880,

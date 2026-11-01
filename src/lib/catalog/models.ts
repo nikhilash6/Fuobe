@@ -1402,6 +1402,18 @@ const open: ModelDef[] = [
       ...(QMA_LORA && { loras: [loraRef(QMA_LORA)] }),
     },
   }),
+  // The Head Swap app's open route: image 1 = the shot to keep, image 2 = the head (hair included).
+  o({
+    id: "oss-qwen-head-swap",
+    name: "Qwen-Image 2.1 Head Swap",
+    vendor: "Alibaba Qwen × Alissonerdx",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Puts the whole head from image 2, hair included, on the person in image 1; everything else stays the shot's own pixels · 20 GB GPU · non-commercial",
+    routes: [comfy("edit", "head-swap-qwen-image-21", "BFS head LoRA V1.1; the new head pasted back onto the shot")],
+    options: { seed: true, maxImages: 2, requires: { images: 2, msg: "Add the photo to keep, then a photo of the head" } },
+    hidden: true,
+  }),
   o({
     id: "oss-qwen-next-scene",
     name: "Qwen-Image-Edit Next Scene",
