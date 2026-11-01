@@ -471,7 +471,10 @@ encodes is a poster's small copy that's missing or older than its poster (a post
 which it makes first, so the copy never keeps the old picture under the new version. `--dry-run` says
 how many URLs would change and which copies it would make, and fails while any copy is due.
 `node scripts/gen-preset-peaks.mjs` versions Home's peak frames the same way (`--versions` alone
-does only that).
+does only that). So does `node scripts/gen-before-after.mjs --masters <dir>`, which makes the HD before
+and after (1280 and 512 px) of every app whose cover is a reveal clip, for Home's before/after slider,
+from the clips' masters (start.png, end.png and any donor.png): it checks each pair against the app's
+poster and clip and writes nothing when one doesn't match. Run it again when a reveal clip is made again.
 
 - `--variant catalog` takes that variant's renders for every case instead, such as what ships today.
 - `--dry-run` lists what it would pick.

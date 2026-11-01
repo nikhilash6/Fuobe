@@ -6,6 +6,7 @@
 import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { BeforeAfterStill } from "@/components/home/before-after";
 import { NAV } from "@/components/nav-items";
 import { APPS, EFFECTS, MODELS, MOTIONS, getPreset } from "@/lib/catalog";
 import { CAMERA_MOVES } from "@/lib/catalog/cinema";
@@ -18,6 +19,7 @@ import { buildLicenceList } from "@/lib/licences";
 import { modelHref } from "@/lib/palette-index";
 import { cacheLife } from "next/cache";
 import { toPresetCard } from "@/lib/preset-card-data";
+import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { onPeak, thumbOf, type PresetCardData } from "@/lib/preset-cards";
 
 /**
@@ -71,8 +73,9 @@ export const HOME_MOTIONS = [
 ];
 
 /**
- * The before/after under Apps: the poster is the before, the peak frame the after. `zoom` enlarges both alike: the
- * sketch is a sheet of paper on white, and its edges would show.
+ * The before/after under Apps: the app's HD stills (preset-before-after.generated.ts, at 512 and 1280 px), else its
+ * poster as the before and its peak frame as the after. `zoom` enlarges both alike: the sketch is a sheet of paper on
+ * white, and its edges would show.
  */
 export const HOME_BEFORE_AFTER = [
   { id: "app-sketch-to-real", tags: ["Sketch", "Photo"], zoom: 1.22 },
@@ -296,7 +299,12 @@ export async function homeShowcase() {
     reveals: HOME_REVEALS.map(captioned),
     beforeAfter: HOME_BEFORE_AFTER.map(({ id, tags, zoom }) => {
       const card = homeCard(id);
-      return { id, name: card.name, before: card.preview.poster, after: card.preview.rest?.src ?? card.preview.poster, thumb: thumbOf(card.preview.poster), tags: [...tags], zoom, href: presetHref(id) };
+      const v = PRESET_BEFORE_AFTER[id];
+      const still = (side: "before" | "after"): BeforeAfterStill =>
+        v
+          ? { src: `/previews/presets/ba/512/${id}-${side}.jpg?v=${v}`, hd: `/previews/presets/ba/1280/${id}-${side}.jpg?v=${v}` }
+          : { src: side === "before" ? card.preview.poster : (card.preview.rest?.src ?? card.preview.poster) };
+      return { id, name: card.name, before: still("before"), after: still("after"), thumb: thumbOf(card.preview.poster), tags: [...tags], zoom, href: presetHref(id) };
     }),
     studios: HOME_STUDIOS.map((s) => ({ href: s.href, label: navLabel(s.href), line: s.line(facts), card: s.id ? homeCard(s.id) : undefined })),
     audioTools: audioTools(),

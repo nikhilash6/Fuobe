@@ -8,6 +8,7 @@ import { SOUL_LOOK_CARDS } from "@/lib/catalog/soul-looks.generated";
 import { previewFor, toPresetCard } from "@/lib/preset-card-data";
 import { isCover, onPeak } from "@/lib/preset-cards";
 import { coverPreview, presetCover, thumbOf } from "@/lib/preset-covers";
+import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
@@ -30,6 +31,8 @@ const versionOf = (...files: string[]) => {
   for (const f of files) hash.update(fs.readFileSync(f));
   return hash.digest("hex").slice(0, 8);
 };
+/** An app's HD before/after stills for Home, in the order gen-before-after.mjs versions them. */
+const beforeAfterFiles = (id: string) => [1280, 512].flatMap((w) => ["before", "after"].map((side) => `/previews/presets/ba/${w}/${id}-${side}.jpg`));
 
 describe("the preset covers manifest", () => {
   it("lists catalog presets (or Soul looks) only, in the order the generator writes them", () => {
@@ -62,11 +65,14 @@ describe("the preset covers manifest", () => {
       const still = `/previews/presets/peak/${id}.jpg`;
       expect(v, id).toBe(versionOf(fileOf(still), fileOf(thumbOf(still))));
     }
+    // Home's HD before/after stills: one version for an app's four (gen-before-after.mjs, in its order).
+    for (const [id, v] of Object.entries(PRESET_BEFORE_AFTER)) expect(v, id).toBe(versionOf(...beforeAfterFiles(id).map(fileOf)));
   });
 
-  it("leaves no cover file in public/previews that no entry names (with its poster's small copy for the pickers, and its clip's peak frame and its small copy for Home)", () => {
+  it("leaves no cover file in public/previews that no entry names (with its poster's small copy for the pickers, and its clip's peak frame and its small copy and its HD before/after for Home)", () => {
     const named = new Set(entries.flatMap(([, e]) => [e.poster, thumbOf(e.poster), e.video].filter((u): u is string => !!u).map((u) => u.split("?")[0])));
     for (const id of Object.keys(PRESET_PEAKS)) for (const f of [`/previews/presets/peak/${id}.jpg`, thumbOf(`/previews/presets/peak/${id}.jpg`)]) named.add(f);
+    for (const id of Object.keys(PRESET_BEFORE_AFTER)) for (const f of beforeAfterFiles(id)) named.add(f);
     const dir = path.join(root, "public", "previews");
     const files = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(jpg|mp4)$/.test(f)) : [];
     const orphans = files.map((f) => `/previews/${f.replaceAll("\\", "/")}`).filter((u) => !named.has(u));
