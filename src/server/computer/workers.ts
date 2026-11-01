@@ -52,6 +52,8 @@ export interface WorkerRow {
   local_until: number | null;
   drain: number;
   stop_now: number;
+  /** The automatic resume after a busy GPU: 1 on, 0 off, NULL as the worker's own worker.json says. */
+  auto_resume: number | null;
   hours_json: string | null;
   allow_json: string | null;
   claim_after_ms: number;

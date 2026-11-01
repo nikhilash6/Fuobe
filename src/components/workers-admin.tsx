@@ -32,6 +32,7 @@ interface WorkerView {
   pausedServer: boolean;
   pausedLocal: boolean;
   drain: boolean;
+  autoResume: boolean | null;
   hours: Hours | null;
   allow: Record<string, { delayMs: number }>;
   lanes: string[];
@@ -207,6 +208,22 @@ function WorkerCard({ w, lanes, onToken }: { w: WorkerView; lanes: Lane[]; onTok
         </div>
       </div>
       <p className="text-[12px] text-muted-foreground">{hoursWords(w.hours)}</p>
+      <label className="flex items-start gap-2 text-[13px]">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-4 accent-[var(--primary)]"
+          checked={!!w.autoResume}
+          disabled={patch.isPending}
+          onChange={(e) => patch.mutate({ autoResume: e.target.checked })}
+        />
+        <span>
+          Resume by itself after another program used the GPU
+          <span className="block text-[12px] text-muted-foreground">
+            Once the GPU has been free for its cool-down. A pause by hand always waits for a resume by hand.
+            {w.autoResume === null && " Now: as the PC's own setting says."}
+          </span>
+        </span>
+      </label>
       <HoursEditor w={w} onSave={(hours) => patch.mutate({ hours })} />
       <LanesEditor key={JSON.stringify(w.allow)} w={w} lanes={lanes} onSave={(allow) => patch.mutate({ allow })} />
       <div className="flex flex-wrap gap-1.5 border-t pt-2">

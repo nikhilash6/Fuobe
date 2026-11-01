@@ -238,6 +238,18 @@ describe("losing a worker (checks 3, 4, 5)", () => {
     expect(pool.workerState(row(w), clock).words).toBe("Your GPU is busy (python.exe)");
   });
 
+  it("the automatic resume: the PC's own setting until the owner sets it on the website", () => {
+    const w = worker("auto");
+    expect(beat(w).worker.autoResume).toBeNull();
+    expect(pool.patchWorker(w.id, { autoResume: true }).view?.autoResume).toBe(true);
+    expect(beat(w).worker.autoResume).toBe(true);
+    pool.patchWorker(w.id, { autoResume: false });
+    expect(beat(w).worker.autoResume).toBe(false);
+    pool.patchWorker(w.id, { autoResume: null });
+    expect(beat(w).worker.autoResume).toBeNull();
+    expect(() => pool.patchWorker(w.id, { autoResume: "yes" as unknown as boolean })).toThrow();
+  });
+
   it("a task past its wait limit fails, not charged", () => {
     const id = task({ notAfter: clock + MIN });
     clock += 2 * MIN;

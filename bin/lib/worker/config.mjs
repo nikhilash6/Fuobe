@@ -17,7 +17,7 @@ export const DEFAULTS = {
   port: 8190,
   /** Another program's VRAM above this pauses the worker. */
   busyVramMb: 1024,
-  /** The automatic resume: off unless switched on for this PC. */
+  /** The automatic resume: off unless switched on for this PC (here, or on the studio's Workers page). */
   autoResume: false,
   /** The GPU must stay free this long before an automatic resume, and be cooler than this. */
   resumeAfterMin: 10,

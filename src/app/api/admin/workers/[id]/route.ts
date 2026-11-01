@@ -4,7 +4,7 @@ import { patchWorker, type WorkerPatch } from "@/server/computer/pool";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
- * Change a worker (owner only): `{ paused, pauseNow, drain, hours, allow, claimAfterMs, switchAfterMs, rotate, revoke }`.
+ * Change a worker (owner only): `{ paused, pauseNow, drain, autoResume, hours, allow, claimAfterMs, switchAfterMs, rotate, revoke }`.
  * Each reaches the worker at its next beat. Rotate answers with the new token, once; revoke stops the old token at once
  * and puts its job back in line.
  */

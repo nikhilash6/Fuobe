@@ -7,8 +7,9 @@
 //
 // Checks: the owner adds a worker, and it starts paused; resumed in both places with hours and a lane, it runs the
 // owner's run to the end and cleans up its ComfyUI's history; another program on the GPU (per-process memory [N/A])
-// pauses it and its ComfyUI is gone within 10 s; with the automatic resume off it stays paused, and a resume by hand
-// brings it back; pause --now sends a running job back in line and stops its ComfyUI; a port another program holds is
+// pauses it and its ComfyUI is gone within 10 s; with the automatic resume off it stays paused, a resume by hand
+// brings it back, and with it turned on from the website it comes back by itself after the cool-down;
+// pause --now sends a running job back in line and stops its ComfyUI; a port another program holds is
 // never used or connected to.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -105,7 +106,7 @@ try {
 
   // This PC: set up (as `worker setup` writes it), paused here at first.
   fs.mkdirSync(home, { recursive: true });
-  fs.writeFileSync(path.join(home, "worker.json"), JSON.stringify({ site: SITE, token: added.body.token, comfyDir: workDir, workDir, modelDirs: [], port: COMFY_PORT, nvidiaSmi: [process.execPath, path.join(root, "tests/helpers/fake-nvidia-smi.mjs"), smiState], autoResume: false, busyVramMb: 1024 }));
+  fs.writeFileSync(path.join(home, "worker.json"), JSON.stringify({ site: SITE, token: added.body.token, comfyDir: workDir, workDir, modelDirs: [], port: COMFY_PORT, nvidiaSmi: [process.execPath, path.join(root, "tests/helpers/fake-nvidia-smi.mjs"), smiState], autoResume: false, resumeAfterMin: 0.1, busyVramMb: 1024 }));
   fs.writeFileSync(path.join(home, "control.json"), JSON.stringify({ paused: true }));
   smi({ usedMb: 300, tempC: 45, apps: [] });
   startWorker();
@@ -153,6 +154,19 @@ try {
   check("with the automatic resume off, it stays paused when the GPU is free again", !(await comfyUp()) && /busy/.test((await view()).words), (await view()).words);
   await cli("resume");
   check("a resume by hand brings it back", !!(await until(comfyUp, 30_000)));
+
+  // The owner turns the automatic resume on in Settings → Workers (a 6 s cool-down in this worker.json): busy, then free,
+  // and it comes back by itself.
+  await owner(`/api/admin/workers/${id}`, { method: "PATCH", body: JSON.stringify({ autoResume: true }) });
+  check("the website shows the automatic resume on", (await view()).autoResume === true);
+  await sleep(7_000); // one beat carries it to the worker
+  smi({ usedMb: 6000, tempC: 60, apps: [{ pid: 999999, name: "blender.exe", usedMb: null }] });
+  check("with it on, a busy GPU still stops its ComfyUI", !!(await until(async () => !(await comfyUp()), 15_000)));
+  smi({ usedMb: 300, tempC: 45, apps: [] });
+  const t2 = Date.now();
+  const back2 = await until(comfyUp, 45_000);
+  check("after the cool-down it resumes by itself", !!back2 && Date.now() - t2 >= 6_000, `${Date.now() - t2} ms`);
+  await owner(`/api/admin/workers/${id}`, { method: "PATCH", body: JSON.stringify({ autoResume: null }) });
 
   // pause --now: a running job goes back in line and its ComfyUI stops within 30 s.
   await stopWorker();

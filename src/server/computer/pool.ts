@@ -167,6 +167,7 @@ export function workerBeat(w: WorkerRow, b: WorkerBeat, now = Date.now()): BeatA
         paused: !!fresh.paused_server,
         pauseNow: stopNow,
         drain: !!fresh.drain,
+        autoResume: fresh.auto_resume === null || fresh.auto_resume === undefined ? null : !!fresh.auto_resume,
         insideHours: h.inside,
         nextChangeAt: h.nextChangeAt,
         lanes: Object.keys(allowOf(fresh)),
@@ -424,6 +425,7 @@ export interface WorkerView {
   pausedLocal: boolean;
   localWhy: string | null;
   drain: boolean;
+  autoResume: boolean | null;
   hours: Hours | null;
   allow: Record<string, Allow>;
   claimAfterMs: number;
@@ -454,6 +456,7 @@ export function workerView(w: WorkerRow, now = Date.now()): WorkerView {
     pausedLocal: !!w.paused_local,
     localWhy: w.local_why,
     drain: !!w.drain,
+    autoResume: w.auto_resume === null || w.auto_resume === undefined ? null : !!w.auto_resume,
     hours: hoursOf(w),
     allow: allowOf(w),
     claimAfterMs: w.claim_after_ms,
@@ -487,6 +490,8 @@ export interface WorkerPatch {
   paused?: boolean;
   pauseNow?: boolean;
   drain?: boolean;
+  /** true or false sets the automatic resume for this worker; null leaves it to the worker's worker.json. */
+  autoResume?: boolean | null;
   hours?: unknown;
   allow?: unknown;
   claimAfterMs?: number;
@@ -513,6 +518,10 @@ export function patchWorker(id: string, p: WorkerPatch, now = Date.now()): { vie
   }
   if (p.pauseNow) Object.assign(set, { paused_server: 1, stop_now: 1 });
   if (p.drain !== undefined) set.drain = p.drain ? 1 : 0;
+  if (p.autoResume !== undefined) {
+    if (p.autoResume !== null && typeof p.autoResume !== "boolean") throw new Error("The automatic resume is on, off or the PC's own setting");
+    set.auto_resume = p.autoResume === null ? null : p.autoResume ? 1 : 0;
+  }
   if (p.hours !== undefined) {
     if (p.hours !== null && !parseHours(p.hours)) throw new Error("Hours need a time zone and windows like 01:00–09:00");
     set.hours_json = p.hours === null ? null : JSON.stringify(parseHours(p.hours));

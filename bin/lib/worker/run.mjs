@@ -99,7 +99,12 @@ export async function runWorker(cfg, deps) {
         inventoryHash: invHash,
         warmLane: null,
       }),
-      onBeat: (a) => (answer = a),
+      onBeat: (a) => {
+        answer = a;
+        // The owner's switch on the Workers page wins over worker.json; null leaves worker.json's.
+        const site = a?.worker?.autoResume;
+        gpu.o.autoResume = typeof site === "boolean" ? site : !!cfg.autoResume;
+      },
     },
     { device: "worker", port: cfg.port, clientId: crypto.randomBytes(8).toString("hex") },
   );

@@ -159,6 +159,8 @@ export interface WorkerAnswer {
   pauseNow: boolean;
   /** Finish the current job, then take nothing new. */
   drain: boolean;
+  /** The automatic resume after a busy GPU, as the owner set it; null: the worker's own setting. */
+  autoResume: boolean | null;
   insideHours: boolean;
   /** When its hours start or end next. */
   nextChangeAt: number | null;

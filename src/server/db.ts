@@ -695,6 +695,7 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
     local_until INTEGER,
     drain INTEGER NOT NULL DEFAULT 0,
     stop_now INTEGER NOT NULL DEFAULT 0,
+    auto_resume INTEGER,
     hours_json TEXT,
     allow_json TEXT,
     claim_after_ms INTEGER NOT NULL DEFAULT 0,
