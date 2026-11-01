@@ -1,5 +1,5 @@
 /**
- * The Project status page (/status): docs/STATUS.md rendered under a short public summary. Pure, so it can be tested:
+ * The Project status page (/status): a short summary, and docs/STATUS.md rendered under it for the studio's owner. Pure, so it can be tested:
  * where the log's links go, the ids of its headings and its outline, and the date it was last updated.
  */
 import { defaultUrlTransform } from "react-markdown";

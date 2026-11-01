@@ -2,7 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ExternalLink } from "lucide-react";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
+import { Suspense } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PageHeader, PageShell } from "@/components/page-shell";
@@ -10,6 +12,7 @@ import { modelCounts } from "@/lib/catalog";
 import type { Manifest } from "@/lib/comfy";
 import { FUOBE_REPO } from "@/lib/connections";
 import { headingId, STATUS_ON_GITHUB, statusBody, statusDate, statusLink, statusOutline } from "@/lib/status-page";
+import { requestViewer } from "@/server/auth";
 
 export const metadata: Metadata = { title: "Project status" };
 
@@ -63,18 +66,67 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 
 const link = "text-brand-text underline underline-offset-2";
 
+function LogOnGitHub({ children }: { children: React.ReactNode }) {
+  return (
+    <a href={STATUS_ON_GITHUB} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text underline underline-offset-2">
+      {children} <ExternalLink className="size-3" aria-hidden />
+      <span className="sr-only">(opens in a new tab)</span>
+    </a>
+  );
+}
+
+/** Anyone but the studio's owner: where the engineering log is. */
+function LogLink() {
+  return (
+    <p className="mt-8 max-w-3xl text-[14px] text-muted-foreground">
+      Its builders keep an engineering log after every round of work: <LogOnGitHub>read it on GitHub</LogOnGitHub>
+    </p>
+  );
+}
+
+/** The engineering log, with its contents, for the studio's owner; anyone else gets its link. */
+async function Log({ md }: { md: string }) {
+  const viewer = requestViewer(new Request("http://localhost/status", { headers: await headers() }));
+  if (viewer.kind !== "owner") return <LogLink />;
+  const outline = statusOutline(md);
+  return (
+    <>
+      <nav aria-labelledby="contents" className="mt-8 max-w-3xl rounded-2xl bg-muted/60 px-5 py-4">
+        <h2 id="contents" className="text-[15px] font-semibold">
+          In the engineering log
+        </h2>
+        <ol className="mt-2 space-y-1 text-[14px]">
+          {outline.map((h) => (
+            <li key={h.id} className={h.depth === 3 ? "pl-4 text-[13px]" : undefined}>
+              <a href={`#${h.id}`} className="text-brand-text underline-offset-2 hover:underline">
+                {h.text}
+              </a>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
+          The log is written by the coding agents that build Fuobe, on machines with no GPU and no paid keys, so “here” in it means those machines: what needs real
+          weights or a paid key is marked built (🟢) rather than verified there. <LogOnGitHub>The log on GitHub</LogOnGitHub>
+        </p>
+      </nav>
+
+      <article className="prose-fuobe mt-10 max-w-3xl border-t pt-6">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={statusLink} components={LOG}>
+          {statusBody(md)}
+        </ReactMarkdown>
+      </article>
+    </>
+  );
+}
+
 export default async function Page() {
   const [md, workflows] = await Promise.all([readStatus(), readWorkflows()]);
   // The same numbers as Home and /models: models a visitor can pick, each once.
   const models = modelCounts();
   const updated = statusDate(md);
-  const outline = statusOutline(md);
   return (
     <PageShell>
-      <PageHeader
-        title="Project status"
-        description="Fuobe is an open-source creative studio on ComfyUI. Here is what works today, and below it the engineering log its builders keep after every round of work."
-      />
+      <PageHeader title="Project status" description="Fuobe is an open-source creative studio on ComfyUI. Here is what works today." />
 
       <dl className="grid grid-cols-1 gap-4 rounded-2xl border p-5 sm:grid-cols-2 lg:grid-cols-4">
         <Fact label="ComfyUI workflows">
@@ -133,34 +185,10 @@ export default async function Page() {
         </ul>
       </section>
 
-      <nav aria-labelledby="contents" className="mt-8 max-w-3xl rounded-2xl bg-muted/60 px-5 py-4">
-        <h2 id="contents" className="text-[15px] font-semibold">
-          In the engineering log
-        </h2>
-        <ol className="mt-2 space-y-1 text-[14px]">
-          {outline.map((h) => (
-            <li key={h.id} className={h.depth === 3 ? "pl-4 text-[13px]" : undefined}>
-              <a href={`#${h.id}`} className="text-brand-text underline-offset-2 hover:underline">
-                {h.text}
-              </a>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
-          The log is written by the coding agents that build Fuobe, on machines with no GPU and no paid keys, so “here” in it means those machines: what needs real
-          weights or a paid key is marked built (🟢) rather than verified there.{" "}
-          <a href={STATUS_ON_GITHUB} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text underline underline-offset-2">
-            The log on GitHub <ExternalLink className="size-3" aria-hidden />
-            <span className="sr-only">(opens in a new tab)</span>
-          </a>
-        </p>
-      </nav>
-
-      <article className="prose-fuobe mt-10 max-w-3xl border-t pt-6">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={statusLink} components={LOG}>
-          {statusBody(md)}
-        </ReactMarkdown>
-      </article>
+      {/* Who is looking comes from the request: under Suspense, so the rest of the page prerenders. */}
+      <Suspense fallback={<LogLink />}>
+        <Log md={md} />
+      </Suspense>
     </PageShell>
   );
 }
