@@ -119,6 +119,12 @@
 // Workflows page's presence check and its install commands cover them.
 // Keys added with the owner's SOTA image families (2026-10-31), model controls (params.extra):
 //   preset                                (Ideogram 4's sampling preset by name: Quality | Default | Turbo, the graph's own table)
+// Keys added with Open-H3 Regenerate (n7-3, docs/research/new-models-7.md §2.6). * = the provider fills it:
+//   resolution*                           (OpenH3RegenUpscale's output size as the pack's string: params.resolution 1080p / 1440p / 2160p
+//                                          -> "1080p (1920x1080)" | "2k (2560x1440)" | "4k (3840x2160)")
+//   draftSize*                            (OpenH3RegenPrepareDraft's size: "768p (1344x768)" for H3 drafts, "576p (1024x576)" for other
+//                                          models, "keep (snap to 32)" for odd shapes; src/lib/catalog/regenerate.ts draftSizeFor)
+//   startSigma                            (OpenH3RegenSigmas start noise: the Creativity control, 0 = the release 0.909 grid)
 
 import fs from 'node:fs';
 
@@ -165,6 +171,11 @@ export const CUSTOM_NODE_REPOS = {
   // PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel needs Triton). Pinned in install-comfyui.sh.
   'ComfyUI-MiniMax-H3-Turbo': 'https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo/tree/77bfa67575b14e3be6214f1747732e540c68b5dd',
   'plaguekind-nodes': 'https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes/tree/d58d006a4ea32c25c06499f2ff104f0852a045a6',
+  // Open-H3 Regenerate 2K (Upscale → Video's Regenerate · creative, docs/research/new-models-7.md §2.6): rdh9616's refine
+  // nodes (Apache-2.0) and the H3 latent upscaler they call by class name (LBH-123-AI, MIT). Opt-in in install-comfyui.sh
+  // (OPEN_H3_REGEN=1); not on the validation server (video-regenerate-h3 lists both with `packs`).
+  'ComfyUI-Open-H3-Regenerate': 'https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate/tree/9b686c5ffd380e9d1351f9b8beef6d20d703ca3e',
+  Comfyui_Minimax_h3_latent_Upscaler: 'https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler/tree/40316cf008b2fd8663263270669eb4da23f89d2c',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -182,6 +193,8 @@ export const PACK_CLASSES = {
   // MiniMax H3 video. The turbo classes need naming here: a ComfyUI with comfyui-workflow-encrypt reports that pack as their module.
   'ComfyUI-MiniMax-H3-Turbo': /^MiniMaxH3Turbo(LoRA|Sampler)$/,
   'plaguekind-nodes': /^H3(SLAAttention|AdaLNLoRAFix)$/,
+  'ComfyUI-Open-H3-Regenerate': /^OpenH3(Regen(Lora|Sigmas|PrepareDraft|Upscale|RefineLatent|FastVAEDecode|Finish)|SaveRefinedLatent|LoadRefinedLatent|VideoToPrompt)$/,
+  Comfyui_Minimax_h3_latent_Upscaler: /^(MinimaxH3LatentUpscaler(3D|Node2D)|MMH3(TemporalSplitParamsV10|SpatialSplitParamsV10|SplitUpscale))$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -242,6 +255,13 @@ export const KNOWN_MODELS = {
   'h3_character_swap_v1.5.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/d06323b7c8e70e97cdab48b78a1e05f786c8cba9/h3_character_swap_v1.5.safetensors' },
   'h3_character_swap_pro4500_1000.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/a665bb7e3bb9804e487d2925f67744f554c8ad49/h3_character_swap_pro4500_1000.safetensors' },
   'H3-Person-Remover-V1.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA/resolve/fe136b3dc93aea993b9f194d48ea9859fdc2de14/H3-Person-Remover-V1.safetensors' },
+  // Open-H3 Regenerate 2K (video-regenerate-h3; docs/research/new-models-7.md §2.4, sizes and SHA-256 there and in
+  // workflows/comfyui/model-pins.json): NVIDIA's merged refiner LoRA (refiner + LightX2V Turbo v1.2 + LMS Sharp, 12.45 GB),
+  // the fast H3 VAE decoder and the LBH latent upscaler (the same bytes as LBH-123-AI/Minimax_h3_latent_Upscaler at
+  // 3f941d5d), all at the model card's revision. The curve-branch file is left out: its tensors are zero (§2.3).
+  'open_h3_regenerate_2k_lora.safetensors': { folder: 'loras', url: 'https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/lora/open_h3_regenerate_2k_lora.safetensors' },
+  'fast_h3_vae_noncausal_24l.safetensors': { folder: 'vae', url: 'https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/vae_fast/fast_h3_vae_noncausal_24l.safetensors' },
+  'minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors': { folder: 'latent_upscale_models', url: 'https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/latent_upsampler/minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors' },
   // MiniMax H3 video (minimax-h3-*): the first+last-frame model (pruned int8), Kijai's int8 video VAE (the file
   // the H3 preview clips were rendered with), larryvrh's turbo v4 LoRA (Apache-2.0) and pablodawson's 360 Orbit LoRA, each at a pinned revision.
   'minimax_h3_fl2va_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors' },
@@ -4204,6 +4224,40 @@ export const SPEC = [
       'Caveat: VHS\'s ProRes "hq" profile leaves the pixel format to prores_ks, which picks yuv444p10le for the RGB frames, so "ProRes 422 HQ" is the HQ profile (apch) carrying 4:4:4 10-bit samples ' +
       '(FFmpeg decodes it; a strict 4:2:2 file needs a VHS format with -pix_fmt yuv422p10le, which would be a change to the node pack). The same holds for video-export-pro. ' +
       'Tested on CPU (3 s 320x180 25 fps clip with sound): ProRes apch / yuv444p10le / PCM and H.265 Main 10 yuv420p10le with AAC; on a silent 2 s 24 fps clip FFV1 gbrap16le .mkv, 48 of 48 frames; each ffprobe-checked.',
+  },
+  // ---- Open-H3 Regenerate 2K (package n7-3-regenerate-2k; docs/research/new-models-7.md §2.6): Upscale → Video's
+  // "Regenerate · creative", the "Regenerate in 2K" result action and the Canvas Upscale node's choice, on your GPU only.
+  {
+    id: 'video-regenerate-h3',
+    title: 'Regenerate a soft clip at 1080p, 2K or 4K: Open-H3 Regenerate 2K (MiniMax H3 FL2VA + NVIDIA\'s refiner LoRA, 3 Euler steps, the LBH latent upscaler, the fast H3 VAE decoder) (ComfyUI-Open-H3-Regenerate + LBH packs)',
+    capability: 'upscale-video',
+    handBuilt: 'hand-built/video-regenerate-h3.json',
+    packs: ['ComfyUI-Open-H3-Regenerate', 'Comfyui_Minimax_h3_latent_Upscaler'],
+    bindings: {
+      video: [b('9', 'file')], prompt: [b('16', 'text')], resolution: [b('17', 'resolution')], draftSize: [b('11', 'size')],
+      frames: [b('11', 'max_frames')], startSigma: [b('19', 'start_sigma')], steps: [b('19', 'steps')], seed: [b('20', 'noise_seed')],
+      startTime: [b('29', 'start_time')], duration: [b('29', 'duration')], filenamePrefix: [b('28', 'filename_prefix')],
+    },
+    outputs: [{ node: '28', kind: 'video' }],
+    defaults: { resolution: '2k (2560x1440)', draftSize: '768p (1344x768)', frames: 121, startSigma: 0.8, steps: 3, fps: 24 },
+    limits: { maxFrames: 360 },
+    vramGb: 48,
+    license:
+      'MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder, NVIDIA\'s Open-H3-Regenerate-2K LoRA and the fast H3 VAE decoder, a distilled ' +
+      'Model Derivative): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax\'s written authorization; show "MiniMax H3" on the ' +
+      'product\'s interface; Comfy\'s docs add that commercial use of locally made outputs needs a MiniMax licence · the LoRA\'s merged LightX2V Turbo v1.2 part Apache-2.0 (at 3ec17a3), its LMS Sharp ' +
+      'part no stated licence · LBH latent upscaler weights Apache-2.0, its node code MIT · ComfyUI-Open-H3-Regenerate Apache-2.0 · Qwen3-VL-32B base Apache-2.0',
+    notes:
+      'rdh9616\'s "Open-H3 Regenerate 2K - Draft Video" example (ComfyUI-Open-H3-Regenerate at 9b686c5) without the note, the three PreviewAny nodes and OpenH3VideoToPrompt: the prompt goes straight into ' +
+      'CLIPTextEncode 16, so nothing calls a server from inside the graph. curve_name "none" (the tensors of the Sharp curve branches are zero in the blocks checked), so the curve table is never read ' +
+      '("(model\'s own table)": no 21 GB ref2va file needed). A Video Slice (29) in front cuts the 15 s window a longer clip is regenerated in (startTime, duration; 0 = the whole clip). ' +
+      'Prepare Draft (11) resamples to 24 fps, cover-crops to draftSize (768p for H3 drafts, 576p for other models, "keep (snap to 32)" for odd shapes; a portrait clip gets the preset turned) and ' +
+      'cuts frames (round(seconds x 24), at most 360 = 15 s per pass); Save Refined Latent (24) and Finish (26) read its frame count. The LBH upscaler puts the latent on the target grid ' +
+      '(resolution: 1080p (1920x1080) | 2k (2560x1440) | 4k (3840x2160), 4K via 2K), the refine re-noises it to startSigma (0 = the release 0.909 grid; Close 0.7, Balanced 0.8) and runs steps (3, or 2 = ' +
+      'Faster) Euler steps at CFG 1 with Sol-Attn sparse attention and the audio held as encoded silence; the refined latent is saved before decoding (output/open_h3_latents/, redo a failed decode with ' +
+      'rdh\'s "Decode Saved Latent" graph) and decoded by the fast H3 VAE decoder (tiled H3 VAE fallback). Finish trims the padding, crops 1088 -> 1080 and 2176 -> 2160 and cuts the draft\'s own sound to ' +
+      'length, which CreateVideo muxes back at 24 fps. Measured by the pack\'s author: about 3 min per 5 s at 2K on a 72 GB RTX PRO 5000 (9.5 min with dense attention); 22 s on a B200 (NVIDIA); ' +
+      'a community run reached about 1080p on 32 GB with a lossy LoRA. The packs were tested by their author on ComfyUI 0.42.0.',
   },
   {
     id: 'video-sdr-to-hdr-exr',

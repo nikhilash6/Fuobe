@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-31T12:47:46.118Z",
+  "generatedAt": "2026-11-01T16:34:33.664Z",
   "comfyuiCommit": "5841c187a76ffdb565c14d9565aacbdb9a54b056",
   "comfyuiVersion": "0.42.0",
   "workflowTemplatesVersion": "0.11.93",
@@ -19196,6 +19196,159 @@
       "license": "n/a (no model; VideoHelperSuite GPL-3.0 code and the system ffmpeg's prores_ks / libx265 / ffv1 / libx264 encoders)",
       "validated": true,
       "notes": "video-export-pro with VHS_LoadVideo decoding framesPerBatch frames per pass (64 by default) into one VHS_VideoCombine encode that stays open across passes, at the source frame rate, with the source's sound: the export Fuobe's Export mode runs (video-export-pro decodes the whole clip). Same params.format mapping (prores_422_hq -> video/ProRes + hq, prores_4444 -> + 4444, h265_10bit -> video/h265-mp4 (yuv420p10le), ffv1 -> video/ffv1-mkv, h264 -> video/h264-mp4; exr -> video-export-exr). VHS lists only <prefix>_00001-audio.<ext> when the clip has sound, <prefix>_00001.<ext> otherwise, on the last pass. Caveat: VHS's ProRes \"hq\" profile leaves the pixel format to prores_ks, which picks yuv444p10le for the RGB frames, so \"ProRes 422 HQ\" is the HQ profile (apch) carrying 4:4:4 10-bit samples (FFmpeg decodes it; a strict 4:2:2 file needs a VHS format with -pix_fmt yuv422p10le, which would be a change to the node pack). The same holds for video-export-pro. Tested on CPU (3 s 320x180 25 fps clip with sound): ProRes apch / yuv444p10le / PCM and H.265 Main 10 yuv420p10le with AAC; on a silent 2 s 24 fps clip FFV1 gbrap16le .mkv, 48 of 48 frames; each ffprobe-checked."
+    },
+    {
+      "id": "video-regenerate-h3",
+      "title": "Regenerate a soft clip at 1080p, 2K or 4K: Open-H3 Regenerate 2K (MiniMax H3 FL2VA + NVIDIA's refiner LoRA, 3 Euler steps, the LBH latent upscaler, the fast H3 VAE decoder) (ComfyUI-Open-H3-Regenerate + LBH packs)",
+      "capability": "upscale-video",
+      "file": "video-regenerate-h3.json",
+      "source": "hand-built (scripts/comfy/hand-built/video-regenerate-h3.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "9",
+            "input": "file"
+          }
+        ],
+        "prompt": [
+          {
+            "node": "16",
+            "input": "text"
+          }
+        ],
+        "resolution": [
+          {
+            "node": "17",
+            "input": "resolution"
+          }
+        ],
+        "draftSize": [
+          {
+            "node": "11",
+            "input": "size"
+          }
+        ],
+        "frames": [
+          {
+            "node": "11",
+            "input": "max_frames"
+          }
+        ],
+        "startSigma": [
+          {
+            "node": "19",
+            "input": "start_sigma"
+          }
+        ],
+        "steps": [
+          {
+            "node": "19",
+            "input": "steps"
+          }
+        ],
+        "seed": [
+          {
+            "node": "20",
+            "input": "noise_seed"
+          }
+        ],
+        "startTime": [
+          {
+            "node": "29",
+            "input": "start_time"
+          }
+        ],
+        "duration": [
+          {
+            "node": "29",
+            "input": "duration"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "28",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "28",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "frames": 121,
+        "steps": 3,
+        "duration": 0,
+        "startTime": 0,
+        "resolution": "2k (2560x1440)",
+        "draftSize": "768p (1344x768)",
+        "startSigma": 0.8,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 360
+      },
+      "models": [
+        {
+          "file": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "sizeGb": 20.97
+        },
+        {
+          "file": "open_h3_regenerate_2k_lora.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/lora/open_h3_regenerate_2k_lora.safetensors",
+          "sizeGb": 12.45
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "minimax_h3_video_vae_fp16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_fp16.safetensors",
+          "sizeGb": 5.21
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors",
+          "folder": "latent_upscale_models",
+          "url": "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/latent_upsampler/minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors",
+          "sizeGb": 0.69
+        },
+        {
+          "file": "fast_h3_vae_noncausal_24l.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/vae_fast/fast_h3_vae_noncausal_24l.safetensors",
+          "sizeGb": 6.47
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-Open-H3-Regenerate",
+          "repo": "https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate/tree/9b686c5ffd380e9d1351f9b8beef6d20d703ca3e"
+        },
+        {
+          "name": "Comfyui_Minimax_h3_latent_Upscaler",
+          "repo": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler/tree/40316cf008b2fd8663263270669eb4da23f89d2c"
+        }
+      ],
+      "vramGb": 48,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder, NVIDIA's Open-H3-Regenerate-2K LoRA and the fast H3 VAE decoder, a distilled Model Derivative): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; Comfy's docs add that commercial use of locally made outputs needs a MiniMax licence · the LoRA's merged LightX2V Turbo v1.2 part Apache-2.0 (at 3ec17a3), its LMS Sharp part no stated licence · LBH latent upscaler weights Apache-2.0, its node code MIT · ComfyUI-Open-H3-Regenerate Apache-2.0 · Qwen3-VL-32B base Apache-2.0",
+      "validated": false,
+      "notes": "rdh9616's \"Open-H3 Regenerate 2K - Draft Video\" example (ComfyUI-Open-H3-Regenerate at 9b686c5) without the note, the three PreviewAny nodes and OpenH3VideoToPrompt: the prompt goes straight into CLIPTextEncode 16, so nothing calls a server from inside the graph. curve_name \"none\" (the tensors of the Sharp curve branches are zero in the blocks checked), so the curve table is never read (\"(model's own table)\": no 21 GB ref2va file needed). A Video Slice (29) in front cuts the 15 s window a longer clip is regenerated in (startTime, duration; 0 = the whole clip). Prepare Draft (11) resamples to 24 fps, cover-crops to draftSize (768p for H3 drafts, 576p for other models, \"keep (snap to 32)\" for odd shapes; a portrait clip gets the preset turned) and cuts frames (round(seconds x 24), at most 360 = 15 s per pass); Save Refined Latent (24) and Finish (26) read its frame count. The LBH upscaler puts the latent on the target grid (resolution: 1080p (1920x1080) | 2k (2560x1440) | 4k (3840x2160), 4K via 2K), the refine re-noises it to startSigma (0 = the release 0.909 grid; Close 0.7, Balanced 0.8) and runs steps (3, or 2 = Faster) Euler steps at CFG 1 with Sol-Attn sparse attention and the audio held as encoded silence; the refined latent is saved before decoding (output/open_h3_latents/, redo a failed decode with rdh's \"Decode Saved Latent\" graph) and decoded by the fast H3 VAE decoder (tiled H3 VAE fallback). Finish trims the padding, crops 1088 -> 1080 and 2176 -> 2160 and cuts the draft's own sound to length, which CreateVideo muxes back at 24 fps. Measured by the pack's author: about 3 min per 5 s at 2K on a 72 GB RTX PRO 5000 (9.5 min with dense attention); 22 s on a B200 (NVIDIA); a community run reached about 1080p on 32 GB with a lossy LoRA. The packs were tested by their author on ComfyUI 0.42.0.",
+      "validationError": "HTTP 400: missing_node_type: Node 'Open-H3 Regenerate LoRA (curve branches off)' not found. The custom node may not be installed. (Node ID '#3')"
     },
     {
       "id": "video-sdr-to-hdr-exr",

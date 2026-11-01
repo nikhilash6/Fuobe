@@ -106,6 +106,26 @@ if [ "${H3_RELAY:-0}" = "1" ]; then
     echo "warn: could not fetch h3-relay"
   fi
 fi
+# Open-H3 Regenerate 2K (Upscale → Video's "Regenerate · creative", docs/research/new-models-7.md §2.6): rdh9616's pack
+# (Apache-2.0) runs NVIDIA's refine recipe, and its upscale node calls LBH-123-AI's H3 latent upscaler (MIT), so both go
+# in. Opt-in, since the graph needs about 40 GB of new files and a 48 GB+ GPU: OPEN_H3_REGEN=1. The rdh pack needs av and
+# safetensors, which ComfyUI's own requirements.txt already installs; the LBH pack has no requirements. (ComfyUI core
+# master merged its own H3 latent upscaler on 2026-10-28, but the rdh pack looks up LBH's class by name.)
+OPEN_H3_REGEN_REF="${OPEN_H3_REGEN_REF:-9b686c5ffd380e9d1351f9b8beef6d20d703ca3e}"   # v1.0.0, 2026-10-28
+H3_LATENT_UPSCALER_REF="${H3_LATENT_UPSCALER_REF:-40316cf008b2fd8663263270669eb4da23f89d2c}"   # 2026-09-17
+if [ "${OPEN_H3_REGEN:-0}" = "1" ]; then
+  for pack in "ComfyUI-Open-H3-Regenerate https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate $OPEN_H3_REGEN_REF" \
+              "Comfyui_Minimax_h3_latent_Upscaler https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler $H3_LATENT_UPSCALER_REF"; do
+    read -r name url ref <<<"$pack"
+    dest="$COMFYUI_DIR/custom_nodes/$name"
+    if [ -d "$dest/.git" ] || git clone -q "$url" "$dest"; then
+      git -C "$dest" fetch -q --depth 1 origin "$ref" 2>/dev/null || true
+      git -C "$dest" checkout -q "$ref" 2>/dev/null || echo "warn: could not pin $name to $ref"
+    else
+      echo "warn: could not fetch $name"
+    fi
+  done
+fi
 
 # Union of the packs' requirements, minus GPU-only / unbuildable extras
 # (onnxruntime-gpu, cupy, groundingdino-py). triton + decord + pycocotools are needed only so
