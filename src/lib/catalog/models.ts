@@ -938,7 +938,7 @@ const open: ModelDef[] = [
     vendor: "Netflix",
     family: "void",
     kind: "video",
-    tagline: "Removes the object and what it causes — shadows, reflections, things it moves · 197 frames a run (Video tools → Remove object does whole clips) · 24–40 GB GPU (unverified) · CogVideoX License: commercial use needs registration",
+    tagline: "Removes the object and what it causes — shadows, reflections, things it moves · 197 frames a run (Video tools → Remove object does whole clips) · 24–40 GB GPU · CogVideoX License: commercial use needs registration",
     badges: ["new"],
     routes: [comfy("remove-object", "video-erase-void", "SAM 3.1 text track + VOID (CogVideoX-5B fine-tune), two passes; up to 197 frames per window")],
     options: { seed: true, negativePrompt: true },

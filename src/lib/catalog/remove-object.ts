@@ -201,7 +201,7 @@ export const ERASERS: Eraser[] = [
     engine: "open",
     modes: ["type"],
     label: "VOID",
-    note: "Also removes shadows and reflections · 24–40 GB GPU (unverified) · CogVideoX License: commercial use needs registration",
+    note: "Also removes shadows and reflections · 24–40 GB GPU · CogVideoX License: commercial use needs registration",
     window: VOID_WINDOW,
     keepsSound: true,
     effects: true,
