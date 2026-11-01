@@ -286,7 +286,7 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
           : `MiniMax H3 swaps it in one window of up to ${plan.window} frames at 24 fps; the clip's sound stays`,
       );
       // One prompt for the whole part: past H3's trained range (~362 frames) the pack itself says quality is unverified.
-      if (len > CHARACTER_SWAP.maxSeconds + 0.05) notes.push("Past 15 s is beyond what H3 was trained on: quality there is unverified");
+      if (len > CHARACTER_SWAP.maxSeconds + 0.05) notes.push("Past 15 s is beyond what H3 was trained on, so quality there can drop");
     } else if (n > 1) notes.push(`fal's H3 takes up to 15 s a call: the part runs as ${n} pieces, joined with the clip's own sound. Each piece starts fresh (no history between them), so a seam can show where they meet`);
     if (m.engine === "cloud" && !source.hasAudio) notes.push("Your clip has no sound, and neither will the result: fal's H3 makes a soundtrack of its own, which is replaced with silence");
     if (m.h3.anchor && c.anchor !== false) {
