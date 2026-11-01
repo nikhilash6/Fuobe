@@ -15,6 +15,7 @@
  * Research: docs/research/higgsfield-studios.md §3, docs/research/fuobe-originals-recipes-5.md §8 mixed-media.
  */
 import { scenePoster, type PresetPreview, type PreviewFx, type PreviewScene } from "../preset-cards";
+import { templateCover, templatePreview } from "../template-covers";
 import { planShorts, SHORTS_ORIGINAL, type PlanStep, type ShortsLook } from "./shorts";
 import type { Engine, GenerationRequest, LoraRef } from "./types";
 
@@ -363,8 +364,10 @@ export function getMixedPreset(id: string): MixedPreset | undefined {
   return MIXED_PRESETS.find((p) => p.id === id);
 }
 
-export function mixedPreview(p: Pick<MixedPreset, "scene" | "fx">): PresetPreview {
-  return { poster: scenePoster(p.scene), scene: p.scene, fx: p.fx };
+/** A look's card preview: its real cover when it has one (templateCover), else drawn. */
+export function mixedPreview(p: Pick<MixedPreset, "id" | "scene" | "fx">): PresetPreview {
+  const cover = templateCover("mixed-media", p.id);
+  return cover ? templatePreview(cover) : { poster: scenePoster(p.scene), scene: p.scene, fx: p.fx };
 }
 
 export function defaultValues(p: Pick<MixedPreset, "settings">): MixedValues {

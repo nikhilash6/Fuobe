@@ -1,7 +1,9 @@
 "use client";
 
 import { memo } from "react";
+import { CoverArt } from "@/components/template-cover";
 import type { PreviewScene, TemplateLook } from "@/lib/catalog/marketing";
+import type { TemplateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 
 /**
@@ -369,7 +371,36 @@ function Scene({ scene, id, look, W, H, video }: { scene: PreviewScene; id: stri
   }
 }
 
-export const TemplatePreview = memo(function TemplatePreview({ id, look, video, className }: { id: string; look: TemplateLook; video?: boolean; className?: string }) {
+/**
+ * A template's preview: its real cover when it has one (`cover`, templateCover: `playing` runs its clip), else the
+ * drawn one. `sizes` is how wide the cover shows, so a small tile gets the 320 px copy.
+ */
+export const TemplatePreview = memo(function TemplatePreview({
+  id,
+  look,
+  video,
+  className,
+  cover,
+  playing,
+  asked,
+  sizes = "220px",
+}: {
+  id: string;
+  look: TemplateLook;
+  video?: boolean;
+  className?: string;
+  cover?: TemplateCover;
+  playing?: boolean;
+  asked?: boolean;
+  sizes?: string;
+}) {
+  if (cover) {
+    return (
+      <div className={cn("relative size-full overflow-hidden", className)}>
+        <CoverArt cover={cover} sizes={sizes} playing={playing} asked={asked} />
+      </div>
+    );
+  }
   const W = 240;
   const H = 320;
   const h1 = look.hue;

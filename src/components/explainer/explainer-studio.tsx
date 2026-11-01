@@ -272,7 +272,7 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
             <p className="px-1 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Fuobe Explainer</p>
             <div className="mt-2 flex items-center gap-3 rounded-2xl bg-muted/60 p-2">
               <div className="h-14 w-24 shrink-0 overflow-hidden rounded-xl">
-                <StyleArt styleId={settings.styleId} />
+                <StyleArt styleId={settings.styleId} sizes="96px" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 text-[14px] leading-tight font-medium" title={style.name}>

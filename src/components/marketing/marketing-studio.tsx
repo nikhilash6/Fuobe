@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { addRuns, send, useBrands, useEstimate } from "./hooks";
 import type { MarketingRun } from "@/lib/catalog/marketing";
 import { toastError } from "@/lib/refusals";
+import { templateCover } from "@/lib/template-covers";
 import type { ModelInfo } from "./model-info";
 import { AvatarSlot, HookPicker, ProductSlot, SettingPicker, VoiceControl, type ProductChoice } from "./pickers";
 import { RunsList } from "./runs";
@@ -449,7 +450,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
             {template && (
               <div className="relative flex h-14 shrink-0 items-center gap-2 rounded-xl bg-muted py-1 pr-7 pl-1">
                 <div className="h-12 w-9 overflow-hidden rounded-lg">
-                  <TemplatePreview id={template.id} look={template.look} />
+                  <TemplatePreview id={template.id} look={template.look} cover={templateCover("marketing", template.id)} sizes="36px" />
                 </div>
                 <div className="min-w-0">
                   <p className="max-w-32 truncate text-[12px] font-medium">{template.name}</p>

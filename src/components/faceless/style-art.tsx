@@ -3,13 +3,15 @@
 import { Check } from "lucide-react";
 import { memo, useId } from "react";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
+import { CoverImg } from "@/components/template-cover";
 import { getStyle, type VisualStyle } from "@/lib/catalog/faceless";
+import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 
 /**
- * A small procedural picture of each visual style (no generated samples needed): a motif per family —
- * cutouts and labels, line drawings, paper layers, 3D spheres, watercolour blooms, flat shapes, pixels,
- * clay — tinted with the style's hue.
+ * A small picture of each visual style: its real cover when it has one (templateCover, a frame made in that style),
+ * else a procedural one (no generated samples needed): a motif per family — cutouts and labels, line drawings,
+ * paper layers, 3D spheres, watercolour blooms, flat shapes, pixels, clay — tinted with the style's hue.
  */
 
 type Motif = "graphics" | "lines" | "sketch" | "paper" | "collage" | "fold" | "solid3d" | "figure" | "mix" | "paint" | "flat" | "pixel" | "clay" | "toy" | "iso" | "poly";
@@ -255,11 +257,14 @@ function Motif({ style, u }: { style: VisualStyle; u: string }) {
   }
 }
 
-export const StyleArt = memo(function StyleArt({ styleId, className }: { styleId: string; className?: string }) {
+/** `sizes`: how wide a real cover shows, so a small picture gets its 320 px copy. */
+export const StyleArt = memo(function StyleArt({ styleId, className, sizes = "(max-width: 640px) 50vw, 280px" }: { styleId: string; className?: string; sizes?: string }) {
   const style = getStyle(styleId);
   const h = style.hue;
   // Gradient and filter ids are document-wide: each picture gets its own.
   const u = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const cover = templateCover("explainer", style.id);
+  if (cover) return <CoverImg frame={cover.frames[0]} sizes={sizes} className={className} />;
   return (
     <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice" className={cn("size-full", className)} aria-hidden>
       <defs>

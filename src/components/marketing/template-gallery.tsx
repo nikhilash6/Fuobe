@@ -3,24 +3,31 @@
 import { Play, Search } from "lucide-react";
 import { useDeferredValue, useMemo, useState } from "react";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
+import { useCoverPlayback } from "@/components/template-cover";
 import { CATEGORIES, FORMATS, interleaved, templatesFor, type MarketingCategory, type MarketingTemplate } from "@/lib/catalog/marketing";
+import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 import { TemplatePreview } from "./template-preview";
 
 export type MediaFilter = "all" | "image" | "video";
 
-function TemplateCard({ t, selected, onPick }: { t: MarketingTemplate; selected: boolean; onPick: (t: MarketingTemplate) => void }) {
+export function TemplateCard({ t, selected, onPick }: { t: MarketingTemplate; selected: boolean; onPick: (t: MarketingTemplate) => void }) {
   const f = FORMATS[t.format];
   const video = f.kind === "video";
+  // Its real cover when it has one (a clip plays as the gallery cards' do), else its drawn preview.
+  const cover = templateCover("marketing", t.id);
+  const { ref, playing, asked, handlers } = useCoverPlayback<HTMLButtonElement>(`marketing/${t.id}`, cover);
   return (
     <button
+      ref={ref}
       type="button"
+      {...handlers}
       onClick={() => onPick(t)}
       aria-pressed={selected}
       className={cn("group/tpl min-w-0 rounded-2xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", selected && "ring-2 ring-primary ring-offset-2 ring-offset-background")}
     >
       <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-muted transition-transform duration-300 ease-move group-hover/tpl:scale-[1.015]">
-        <TemplatePreview id={t.id} look={t.look} video={video} />
+        <TemplatePreview id={t.id} look={t.look} video={video} cover={cover} playing={playing} asked={asked} sizes="(max-width: 640px) 50vw, 220px" />
         <span className="absolute top-2 left-2 rounded-full bg-black/45 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">{f.cardLabel}</span>
         {video && (
           <span className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-black/45 text-white backdrop-blur" aria-hidden>

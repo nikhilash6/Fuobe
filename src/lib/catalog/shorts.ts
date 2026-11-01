@@ -14,6 +14,7 @@
  * docs/research/fuobe-originals-recipes-5.md (studios[shorts]).
  */
 import { scenePoster, type PresetPreview, type PreviewFx, type PreviewScene } from "../preset-cards";
+import { templateCover, templatePreview } from "../template-covers";
 import type { ChainSlot, Engine, Generation, GenerationRequest } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -197,8 +198,10 @@ export function getShortsPreset(id: string): ShortsPreset | undefined {
   return SHORTS_PRESETS.find((p) => p.id === id);
 }
 
-export function shortsPreview(p: Pick<ShortsPreset, "scene" | "fx">): PresetPreview {
-  return { poster: scenePoster(p.scene), scene: p.scene, fx: p.fx };
+/** A look's card preview: its real cover when it has one (templateCover: the restyled frame, and its reveal), else drawn. */
+export function shortsPreview(p: Pick<ShortsPreset, "id" | "scene" | "fx">): PresetPreview {
+  const cover = templateCover("shorts", p.id);
+  return cover ? templatePreview(cover) : { poster: scenePoster(p.scene), scene: p.scene, fx: p.fx };
 }
 
 /** A preset the user made from reference images (stored in shorts_presets). */

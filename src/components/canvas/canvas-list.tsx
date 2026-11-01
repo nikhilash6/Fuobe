@@ -15,11 +15,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
+import { CoverArt, CoverImg, useCoverPlayback } from "@/components/template-cover";
 import { useEngine, useIsVisitor } from "@/lib/api";
 // Types only: the catalog (models, templates) stays on the server; the page passes slim template cards.
 import type { CanvasNodeType, CanvasSummary, Outline } from "@/lib/catalog/canvas";
 import type { Engine } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
+import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { NodeIcon } from "./canvas-context";
@@ -153,16 +155,40 @@ const GROUP_NOTES: Record<string, (visitor: boolean) => string> = {
 };
 
 /** onUse: none for a guest or an account (a canvas is saved to the owner's library: the page says so once). */
-function TemplateCard({ t, engine, onUse, busy }: { t: TemplateCardData; engine: Engine; onUse?: () => void; busy: boolean }) {
+export function TemplateCard({ t, engine, onUse, busy }: { t: TemplateCardData; engine: Engine; onUse?: () => void; busy: boolean }) {
   const { outline, models } = t.byEngine[engine];
+  // Its real cover when it has one (what it makes: a still, a clip, or its frames side by side), with the board in
+  // miniature over a corner; else the board alone.
+  const cover = templateCover("canvas", t.id);
+  const { ref, playing, asked, handlers } = useCoverPlayback<HTMLElement>(`canvas/${t.id}`, cover);
   return (
-    <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card">
-      <div className="relative aspect-[16/9] bg-muted/50" style={{ background: `linear-gradient(135deg, oklch(0.62 0.12 ${t.hue} / 0.14), transparent 70%)` }}>
-        <Schematic outline={outline} className="p-4" />
-        <span className="absolute top-3 left-3 grid size-8 place-items-center rounded-lg bg-background/90 text-foreground shadow-soft">
-          <NodeIcon name={t.icon} className="size-4" />
-        </span>
-      </div>
+    <article ref={ref} {...handlers} className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card">
+      {cover ? (
+        <div className="relative aspect-[16/9] overflow-hidden bg-muted">
+          {cover.frames.length > 1 ? (
+            <div className="absolute inset-0 grid auto-cols-fr grid-flow-col gap-0.5">
+              {cover.frames.map((f) => (
+                <CoverImg key={f.src} frame={f} sizes="(max-width: 640px) 34vw, 125px" />
+              ))}
+            </div>
+          ) : (
+            <CoverArt cover={cover} sizes="(max-width: 640px) 100vw, 370px" playing={playing} asked={asked} />
+          )}
+          <span className="pointer-events-none absolute right-2.5 bottom-2.5 h-[36%] w-[32%] overflow-hidden rounded-lg bg-background/80 shadow-soft backdrop-blur">
+            <Schematic outline={outline} className="p-1.5" />
+          </span>
+          <span className="absolute top-3 left-3 grid size-8 place-items-center rounded-lg bg-background/90 text-foreground shadow-soft">
+            <NodeIcon name={t.icon} className="size-4" />
+          </span>
+        </div>
+      ) : (
+        <div className="relative aspect-[16/9] bg-muted/50" style={{ background: `linear-gradient(135deg, oklch(0.62 0.12 ${t.hue} / 0.14), transparent 70%)` }}>
+          <Schematic outline={outline} className="p-4" />
+          <span className="absolute top-3 left-3 grid size-8 place-items-center rounded-lg bg-background/90 text-foreground shadow-soft">
+            <NodeIcon name={t.icon} className="size-4" />
+          </span>
+        </div>
+      )}
       <div className="flex flex-1 flex-col gap-2 p-3.5">
         <div>
           <h3 className="text-[14px] font-medium">{t.name}</h3>
