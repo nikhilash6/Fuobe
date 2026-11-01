@@ -377,6 +377,66 @@
     "error": null,
     "at": "2026-10-21T16:25:18.796Z"
   },
+  "qwen-image-21-edit": {
+    "sha256": "552cb279fe235af2d9db1445e206b4fe4acfb399d0a51b16af18af811060776b",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:32:06.780Z"
+  },
+  "qwen-image-21-edit-details": {
+    "sha256": "6f9bfd2edc58067b890191b3621d34eea9fae68041fa38a48c5fe426b899f046",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:31:50.818Z"
+  },
+  "qwen-image-21-edit-draft": {
+    "sha256": "3e58c31b3464559f727b22ee46ea54b5594c86c3a7563d3c3c29ed1cd368d205",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:31:47.304Z"
+  },
+  "qwen-image-21-edit-fast": {
+    "sha256": "e3115ead6e85061507db558634754589503ceb6c0f192a7f10ab669124f723e9",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:31:50.425Z"
+  },
+  "qwen-image-21-next-scene": {
+    "sha256": "4746af6e956861071b2e4341546390c150f987ecf758041391cd1d2327bcae7e",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:31:53.873Z"
+  },
+  "qwen-image-21-t2i": {
+    "sha256": "4cb5c638906665a1d1d50ae1b271eb6b4f8a13330c65ad05abc07609926633ce",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:32:05.680Z"
+  },
+  "qwen-image-21-t2i-details": {
+    "sha256": "b94ffdeb8d884a55e98c823f0f60080bb2f3e13f3df6709c3c889c127325591e",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:31:46.352Z"
+  },
+  "qwen-image-21-t2i-draft": {
+    "sha256": "70237732a98d072e569dd7fb9588a91a0e285b7088e9664276d01ec1fbb25079",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:31:46.099Z"
+  },
+  "qwen-image-21-t2i-fast": {
+    "sha256": "4869518eaa2fbbd4add385feddfaf0c853d0acb6172fc0f6b528d7d1c3cad65b",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:31:46.235Z"
+  },
+  "qwen-image-21-turbo-edit": {
+    "sha256": "2e5032ac5a831fa251a10bed9a9ed3c377ce211aa9dbb3809616555f925c1a44",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T19:32:09.903Z"
+  },
   "qwen-image-2512-t2i": {
     "sha256": "c18da4a3488120bdcee722e4ae7d187385544ec4805753e7dae6946ddb6f6ba5",
     "validated": true,
