@@ -315,6 +315,39 @@ function zoomValue(z: NonNullable<FieldMap["zoom"]>, input: GenInput): Record<st
   return out;
 }
 
+/** `text` cut to `max` characters, at a word where one is near the end (a shot's prompt: Kling 4.0 takes 512). */
+function clipWords(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return (space > max * 0.8 ? cut.slice(0, space) : cut).replace(/[\s,;:.]+$/, "");
+}
+
+/**
+ * Kling 4.0's elements (@Element1..) from params.elements: each group's images (its first the frontal view, the next
+ * ones more angles) or its clip, up to the API's limits (7 elements, 3 angles, 3 clips); the rest are left out. Returns
+ * the list and the images and clips it took, which leave the image and clip lists so the rest keep their numbers.
+ */
+function elementList(e: NonNullable<FieldMap["elements"]>, images: string[], videos: string[], groups: NonNullable<GenInput["elements"]>) {
+  const usedImages = new Set<number>();
+  const usedVideos = new Set<number>();
+  const list: Record<string, unknown>[] = [];
+  for (const g of groups) {
+    if (list.length >= e.max) break;
+    if (g.video !== undefined && e.video && videos[g.video] !== undefined && !usedVideos.has(g.video) && usedVideos.size < (e.maxVideos ?? e.max)) {
+      list.push({ [e.video]: videos[g.video] });
+      usedVideos.add(g.video);
+      continue;
+    }
+    const own = (g.images ?? []).filter((i) => images[i] !== undefined && !usedImages.has(i));
+    if (!own.length) continue;
+    const views = own.slice(1, 1 + e.maxViews);
+    list.push({ [e.frontal]: images[own[0]], ...(views.length && { [e.views]: views.map((i) => images[i]) }) });
+    for (const i of [own[0], ...views]) usedImages.add(i);
+  }
+  return { list, usedImages, usedVideos };
+}
+
 /** Build a provider payload from canonical input using a route's {@link FieldMap}. Pure + unit-tested. */
 export function buildPayload(map: FieldMap, input: GenInput): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -366,8 +399,13 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
   if (map.multiShot && (input.shots?.length || input.multiShot === "auto")) {
     const ms = map.multiShot;
     if (input.shots?.length) {
-      const shots = input.shots.map((s) => ({ prompt: s.prompt, duration: ms.durationType === "string" ? String(s.duration) : s.duration }));
+      const shots = input.shots.map((s) => {
+        // Whole seconds where the API takes them (Kling 4.0): the take is as long as its shots, so the duration follows.
+        const seconds = ms.integer ? Math.max(1, Math.round(s.duration)) : s.duration;
+        return { prompt: ms.maxPrompt ? clipWords(s.prompt, ms.maxPrompt) : s.prompt, duration: ms.durationType === "string" ? String(seconds) : seconds };
+      });
       out[ms.key] = ms.json ? JSON.stringify(shots) : shots;
+      if (ms.integer && map.duration) out[map.duration.key] = timeValue(map.duration, shots.reduce((n, s) => n + Number(s.duration), 0));
       if (map.prompt !== false) delete out[map.prompt ?? "prompt"];
       if (ms.shotType) out[ms.shotType] = "customize";
     } else if (ms.shotType) {
@@ -376,6 +414,20 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
     if (ms.flag) out[ms.flag] = true;
   }
   if (map.draft && input.draft) out[map.draft] = true;
+  if (map.elements && input.elements?.length) {
+    const { list, usedImages, usedVideos } = elementList(map.elements, images, input.videos ?? [], input.elements);
+    if (list.length) {
+      out[map.elements.key] = list;
+      const rest = (key: string | undefined, all: string[], used: Set<number>) => {
+        if (!key || !used.size) return;
+        const left = all.filter((_, i) => !used.has(i));
+        if (left.length) out[key] = left;
+        else delete out[key];
+      };
+      rest(map.images, images, usedImages);
+      rest(map.videos, input.videos ?? [], usedVideos);
+    }
+  }
   // Voices, dialogue and dubbing.
   if (map.voice && input.voice) setPath(out, map.voice, input.voice);
   if (map.voiceAudio && input.voiceAudio) out[map.voiceAudio] = input.voiceAudio;

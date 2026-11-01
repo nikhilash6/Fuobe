@@ -6,6 +6,8 @@
  */
 const SOURCE_SECONDS: Record<string, { min?: number; max?: number }> = {
   "kling-o3-4k-edit": { min: 3, max: 15 },
+  // fal: "3-30 s" (up to 30.05 s), 300 MB, 700-4553 px a side (research part 4, re-read 2026-11-01).
+  "kling-4": { min: 3, max: 30 },
   // It reads 3–60 s but returns at most the first 15 s.
   "happy-horse-video-edit": { min: 3, max: 15 },
   "runway-aleph-2": { min: 2, max: 30 },
@@ -16,6 +18,19 @@ const SOURCE_SECONDS: Record<string, { min?: number; max?: number }> = {
 
 export function sourceSeconds(modelId: string): { min?: number; max?: number } {
   return SOURCE_SECONDS[modelId] ?? {};
+}
+
+/**
+ * The most seconds of clips a run takes in all, where the model says (Kling 4.0: "the source, reference and element
+ * videos must total at most 30s").
+ */
+const CLIP_TOTAL_SECONDS: Record<string, number> = { "kling-4": 30 };
+
+/** Why clips `seconds` long in all are too long for the model ("Kling 4.0 takes 30 s of clips in all…"), or null. */
+export function clipTotalProblem(model: { id: string; name: string }, seconds: number): string | null {
+  const max = CLIP_TOTAL_SECONDS[model.id];
+  if (max === undefined || seconds <= max + 0.05) return null;
+  return `${model.name} takes ${max} s of clips in all (the clip you edit, reference clips and clip elements together), and these add up to ${secs(seconds)}: trim them first`;
 }
 
 const secs = (n: number) => `${Math.round(n * 10) / 10} s`;

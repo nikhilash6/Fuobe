@@ -35,6 +35,7 @@ const BADGE_LABEL: Record<string, string> = {
   open: "Open",
   uncensored: "Uncensored",
   beta: "Beta",
+  "30s": "30 s",
 };
 
 export function ModelBadges({ model, max }: { model: ModelDef; max?: number }) {
@@ -85,6 +86,7 @@ function ModelRow({
   gpuName,
   needs,
   made,
+  edits,
 }: {
   m: ModelDef;
   selected: boolean;
@@ -100,6 +102,8 @@ function ModelRow({
   needs?: CloudProvider[] | null;
   /** The active preset's live preview was made with this model. */
   made?: boolean;
+  /** The studio edits clips (Edit video): the price is an edit's, on the seconds in and out (Kling 4.0). */
+  edits?: boolean;
 }) {
   return (
     <>
@@ -149,7 +153,7 @@ function ModelRow({
           <span className="max-sm:hidden">{addKeyLabel(needs[0])}</span>
         </span>
       ) : (
-        <span className="shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">{pickerPrice(m, today)}</span>
+        <span className="shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">{pickerPrice(m, today, edits)}</span>
       )}
       {/* Pointer only: inside an option it would be a nested control. Keyboard: Alt+S on the highlighted row (starKey). */}
       <button
@@ -289,6 +293,8 @@ function PickerList({
   const [recent] = useStoredList(RECENT_MODELS);
   const [starred, setStarred] = useStoredList(STARRED_MODELS);
   const today = useToday();
+  // A studio for clip edits (Edit video: its first operation edits a clip) prices models as an edit bills.
+  const editsClips = ops?.[0] === "v2v" || ops?.[0] === "video-swap" || ops?.[0] === "video-insert";
   const engines = useMemo<Engine[]>(() => (mode === "both" ? ["cloud", "open"] : [mode]), [mode]);
   // "Best" ranks models that do what the studio is for, not single-purpose tools.
   // A preset's recipe leads, when it runs on this engine.
@@ -397,6 +403,7 @@ function PickerList({
                   gpuName={badges?.gpu}
                   needs={needsKey(m, status)}
                   made={m.id === madeWith}
+                  edits={editsClips}
                 />
               </CommandItem>
             ))}

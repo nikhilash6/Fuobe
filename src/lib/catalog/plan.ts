@@ -387,6 +387,9 @@ export function planGeneration(
     prompt = `${prompt.replace(/[.\s]+$/, "")}. Multi-shot sequence: tell it in several distinct shots with clean cuts between them.`;
   }
   op = op ?? inferOperation(model, req);
+  // Reference clips and video elements on a model that bills them with the output (Kling 4.0, Pricing.clipInput): priced
+  // at the least they bill (twice the output) until the server reads their length (params.clipSeconds).
+  if (model.pricing?.clipInput && req.inputs?.videos?.length && params.clipSeconds === undefined) params = { ...params, clipSeconds: 0 };
   if (!routesFor(model, op).length) {
     throw new Error(`${model.name} can't do ${op} — try another model`);
   }
@@ -713,6 +716,43 @@ export function clipEditSeconds(model: Pick<ModelDef, "id" | "options" | "routes
   return max !== undefined ? Math.min(seconds, max) : seconds;
 }
 
+/** The edits of a clip that keep its length: the clip goes in whole, and the result is as long (Kling 4.0's edit). */
+const CLIP_EDIT_OPS = new Set<Operation>(["v2v", "video-swap", "video-insert", "remove-object"]);
+
+export interface ClipBilling {
+  /** Seconds of clips going in: the edited clip's and the reference clips'. */
+  input: number;
+  output: number;
+  /** What's billed: input plus output, at least twice the output. */
+  billed: number;
+  /** Per billed second. */
+  rate: number;
+  /** The input's length isn't known yet (no clip header read): priced at the least it bills, twice the output. */
+  guessed: boolean;
+}
+
+/**
+ * How a run with a clip going in is billed, on a model that bills those runs on input plus output (Pricing.clipInput,
+ * Kling 4.0): an edit of a clip (its length, params.sourceDuration, in and out: the edit keeps it), or a run with
+ * reference clips or video elements (params.clipSeconds: their seconds; 0 while they aren't read yet). Undefined for
+ * a run with no clip, or a model that bills them as any other.
+ */
+export function clipBilling(model: Pick<ModelDef, "pricing" | "defaults">, params: GenParams, op?: Operation, now?: PriceClock): ClipBilling | undefined {
+  const p = model.pricing && pricingOn(model.pricing, now);
+  const c = p?.clipInput;
+  if (!c || p.unit !== "second") return undefined;
+  const edit = !!op && CLIP_EDIT_OPS.has(op);
+  if (!edit && params.clipSeconds === undefined) return undefined;
+  const res = params.resolution ?? model.defaults?.resolution;
+  const rate = (res && (c.byResolution?.[res] ?? c.byResolution?.[res.toLowerCase()])) || c.usd;
+  const source = params.sourceDuration && params.sourceDuration > 0 ? params.sourceDuration : undefined;
+  const output = edit ? (source ?? params.duration ?? model.defaults?.duration ?? 5) : (params.duration ?? model.defaults?.duration ?? 5);
+  const refs = Math.max(0, params.clipSeconds ?? 0);
+  const guessed = edit ? !source : !refs;
+  const input = (edit ? (source ?? output) : 0) + refs;
+  return { input, output, billed: Math.max(input + output, 2 * output), rate, guessed };
+}
+
 /**
  * The seconds a talking avatar is made (and billed) for a voice `seconds` long: as long as the voice, or what a
  * frame-count route's limits make of it, in the seconds it bills (fal's InfiniteTalk: 41–721 frames, 25 a second; Wan 2.2
@@ -823,7 +863,9 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
       : (routeMegapixels(model, params, op) ?? sentMegapixels(params) ?? 1);
     per = usd * (p.roundUp ? Math.ceil(mp - 1e-9) : mp) * n;
   }
-  if (p.unit === "second") {
+  const clipped = p.unit === "second" ? clipBilling(model, params, op, now) : undefined;
+  if (clipped) per = clipped.rate * clipped.billed;
+  else if (p.unit === "second") {
     // A length the caller set wins (Shorts, Mixed Media and Genjutsu say the seconds they bill); then a clip edit's clip.
     const seconds = clip ?? voice ?? params.duration ?? clipEditSeconds(model, params, op) ?? model.defaults?.duration ?? 5;
     const mp = p.videoMegapixel ? videoMegapixels(model, params, seconds) : undefined;

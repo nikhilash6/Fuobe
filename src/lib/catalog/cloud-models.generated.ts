@@ -4107,6 +4107,277 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "kling-4",
+    "name": "Kling 4.0",
+    "vendor": "Kuaishou",
+    "family": "kling",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Kuaishou's newest flagship \u2014 3\u201330 s takes, multi-shot, @Elements and video edits up to 1080p",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/text-to-video",
+        "map": {
+          "multiShot": {
+            "key": "multi_prompt",
+            "durationType": "number",
+            "maxPrompt": 512,
+            "integer": true
+          },
+          "aspectRatio": "aspect_ratio",
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/image-to-video",
+        "map": {
+          "image": "start_image_url",
+          "endImage": "end_image_url",
+          "multiShot": {
+            "key": "multi_prompt",
+            "durationType": "number",
+            "maxPrompt": 512,
+            "integer": true
+          },
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "flf2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/image-to-video",
+        "map": {
+          "image": "start_image_url",
+          "endImage": "end_image_url",
+          "multiShot": {
+            "key": "multi_prompt",
+            "durationType": "number",
+            "maxPrompt": 512,
+            "integer": true
+          },
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "ref2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/reference-to-video",
+        "map": {
+          "images": "image_urls",
+          "videos": "video_urls",
+          "multiShot": {
+            "key": "multi_prompt",
+            "durationType": "number",
+            "maxPrompt": 512,
+            "integer": true
+          },
+          "elements": {
+            "key": "elements",
+            "frontal": "frontal_image_url",
+            "views": "reference_image_urls",
+            "max": 7,
+            "maxViews": 3,
+            "video": "video_url",
+            "maxVideos": 3
+          },
+          "aspectRatio": "aspect_ratio",
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "v2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/video-to-video/edit",
+        "map": {
+          "videos": "video_urls",
+          "images": "image_urls",
+          "video": "video_url",
+          "elements": {
+            "key": "elements",
+            "frontal": "frontal_image_url",
+            "views": "reference_image_urls",
+            "max": 7,
+            "maxViews": 3,
+            "video": "video_url",
+            "maxVideos": 3
+          },
+          "resolution": "resolution"
+        }
+      },
+      {
+        "op": "video-swap",
+        "provider": "fal",
+        "endpoint": "kling/v4/video-to-video/edit",
+        "map": {
+          "videos": "video_urls",
+          "images": "image_urls",
+          "video": "video_url",
+          "elements": {
+            "key": "elements",
+            "frontal": "frontal_image_url",
+            "views": "reference_image_urls",
+            "max": 7,
+            "maxViews": 3,
+            "video": "video_url",
+            "maxVideos": 3
+          },
+          "resolution": "resolution"
+        }
+      },
+      {
+        "op": "video-insert",
+        "provider": "fal",
+        "endpoint": "kling/v4/video-to-video/edit",
+        "map": {
+          "videos": "video_urls",
+          "images": "image_urls",
+          "video": "video_url",
+          "elements": {
+            "key": "elements",
+            "frontal": "frontal_image_url",
+            "views": "reference_image_urls",
+            "max": 7,
+            "maxViews": 3,
+            "video": "video_url",
+            "maxVideos": 3
+          },
+          "resolution": "resolution"
+        }
+      },
+      {
+        "op": "t2v",
+        "provider": "replicate",
+        "endpoint": "kwaivgi/kling-v4.0",
+        "map": {
+          "aspectRatio": "aspect_ratio",
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "replicate",
+        "endpoint": "kwaivgi/kling-v4.0",
+        "map": {
+          "image": "start_image",
+          "endImage": "end_image",
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "flf2v",
+        "provider": "replicate",
+        "endpoint": "kwaivgi/kling-v4.0",
+        "map": {
+          "image": "start_image",
+          "endImage": "end_image",
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "multiShot": {
+        "mode": "native",
+        "maxShots": 6
+      },
+      "aspectRatios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "21:9",
+        "auto"
+      ],
+      "resolutions": [
+        "720p",
+        "1080p"
+      ],
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15,
+        20,
+        30
+      ],
+      "endFrame": true,
+      "maxImages": 10,
+      "maxVideos": 5,
+      "elements": {
+        "max": 7,
+        "views": 3,
+        "videos": 3,
+        "voices": false,
+        "ops": [
+          "ref2v",
+          "v2v",
+          "video-swap",
+          "video-insert"
+        ]
+      }
+    },
+    "badges": [
+      "top",
+      "30s",
+      "new"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5,
+      "resolution": "1080p"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.235,
+      "note": "1080p; 720p $0.157. An edit, reference clips or video elements bill $0.141/s at 1080p ($0.094 at 720p) on the seconds in plus the seconds out, at least twice the output",
+      "byResolution": {
+        "720p": 0.157,
+        "1080p": 0.235
+      },
+      "clipInput": {
+        "usd": 0.141,
+        "byResolution": {
+          "720p": 0.094,
+          "1080p": 0.141
+        }
+      }
+    }
+  },
+  {
     "id": "seedance-2-0",
     "name": "Seedance 2.0",
     "vendor": "ByteDance",
