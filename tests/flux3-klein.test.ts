@@ -6,6 +6,7 @@ import { getModel, getPreset, MODELS } from "@/lib/catalog";
 import { loraEndpointFor } from "@/lib/catalog/loras";
 import { buildPayload } from "@/lib/catalog/payload";
 import { estimateCost, planGeneration, routesFor } from "@/lib/catalog/plan";
+import { modelChoices } from "@/lib/catalog/canvas";
 import { aiToolkitJob, falTrainingInput, familyOfModel, getTrainer, getTrainingTarget, TRAINING_FAMILIES } from "@/lib/catalog/training";
 import type { GenerationRequest, GenInput, LoraRef, ModelRoute, Operation } from "@/lib/catalog/types";
 import { PROMPT_HELPER_GRAPHS, skipPromptHelper, type ComfyWorkflow, type Manifest } from "@/lib/comfy";
@@ -235,6 +236,11 @@ describe("FLUX 3 Klein in the catalog, both engines", () => {
     // Ten references: the Image studio's refs, or the Edit studio's image and nine refs.
     expect(IMAGE_STUDIO.multiRef!.max).toBe(10);
     expect(1 + EDIT_STUDIO.multiRef!.max).toBe(10);
+  });
+
+  it("is a choice on the Canvas image node, on both engines", () => {
+    const ids = modelChoices({ type: "model", data: { mediaKind: "image" } }).map((m) => m.id);
+    for (const id of ["oss-flux3-klein", "oss-flux3-klein-base", "flux-3-klein", "flux-3-klein-base"]) expect(ids, id).toContain(id);
   });
 
   it("plans an edit with ten references on either engine; your GPU's graph refuses an eleventh rather than drop it", () => {
