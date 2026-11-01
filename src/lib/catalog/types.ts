@@ -506,6 +506,12 @@ export interface FieldMap {
   /** params.extra keys this route has no field for (a model-wide control only its other routes read): left out. */
   ignore?: string[];
   /**
+   * Song lyrics (params.extra.lyrics, section tags such as [Verse] on lines of their own: src/lib/lyrics.ts): the API's lyrics
+   * field and the most characters it takes, or (`inPrompt`) written after the prompt for an API that reads them there
+   * (Lyria 3.5). A route without it never sends params.extra.lyrics.
+   */
+  lyrics?: { key?: string; inPrompt?: true; max?: number };
+  /**
    * An upscaler that takes a factor, not a size (Topaz, FLUX Upscale): params.resolution ("1080p", "4K",
    * "Original" = 1) becomes target ÷ the clip's shorter edge (GenInput.sourceSize), kept within min–max.
    * Nothing is sent when the clip's size is unknown (the API's default factor applies).
@@ -590,6 +596,13 @@ export interface ModelOptions {
    * way to make the provider's voice ids yet, so voices aren't sent).
    */
   elements?: { max: number; views: number; videos: number; voices: false; ops: Operation[] };
+  /**
+   * The model sings lyrics (Audio → Music's lyrics editor, params.extra.lyrics): the most characters it takes, and whether they
+   * go after the prompt (Lyria 3.5) rather than in a field of their own. Section tags ([Verse], [Chorus]) on lines of their own.
+   */
+  lyrics?: { max?: number; inPrompt?: true; required?: true };
+  /** Takes a song to cover (inputs.audio: YuE2 sings its melody with the new style and lyrics). */
+  cover?: true;
   /** Draft mode (cheap preview, then a full render of the take you like). */
   draft?: boolean;
   /**
@@ -722,8 +735,10 @@ export interface Pricing {
    * count, rather than on `usd` / `byResolution` (one shape's per-second rate). `withLoras`: the LoRA endpoint's rate.
    */
   videoMegapixel?: { usd: number; withLoras?: number };
-  /** Per-megapixel prices billed on whole megapixels (fal's Qwen-Image 2512). */
+  /** Per-megapixel prices billed on whole megapixels (fal's Qwen-Image 2512); per-minute prices on started minutes (ElevenLabs Music v2.5). */
   roundUp?: true;
+  /** The price per request when the run brings its own lyrics (params.extra.lyrics): Mureka bills a song from lyrics less than one it writes. */
+  withLyrics?: number;
   /** What an animation preset adds to a run (params.animation: Meshy rigging +$0.12). */
   animationUsd?: number;
   /**
@@ -1282,6 +1297,8 @@ export interface InputSlot {
   required?: boolean;
   /** A voice slot: offers "Clean up voice" (RE-USE on the open engine) under it, which cleans the file as it lands. */
   cleanVoice?: boolean;
+  /** Shown only for a model that covers a song (ModelOptions.cover: YuE2 in Audio → Music); others never read it. */
+  cover?: boolean;
 }
 
 export interface PresetChoice {

@@ -20,6 +20,7 @@ import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soul
 import { computeDimensions, fitCanvas } from "@/lib/comfy";
 import { carriesLayout, flux3Boxes, flux3Caption, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
 import { pricingOn, type PriceClock } from "./promo";
+import { isInstrumental, lyricsOf, lyricsProblem, LYRICS_PARAM } from "@/lib/lyrics";
 import { presetRoutes } from "./preset-recipe-routes";
 
 export { pricingAt } from "./promo";
@@ -485,6 +486,25 @@ export function planGeneration(
   if (model.options.promptFormat === "minimax-h3" && op === "i2v" && params.extra?.orbit === true && req.params?.duration === undefined && params.duration === model.defaults?.duration) {
     params = { ...params, duration: 3 };
   }
+  // Song lyrics (params.extra.lyrics, Audio → Music's editor): normalized for a model that sings them, checked against its
+  // length; a model that writes its own words never gets them, and the run says so when they had words to sing.
+  if (params.extra && LYRICS_PARAM in params.extra) {
+    const words = lyricsOf(params.extra);
+    const rest = { ...params.extra };
+    delete rest[LYRICS_PARAM];
+    if (model.options.lyrics && words) {
+      const problem = lyricsProblem(words, model.options.lyrics.max, model.name);
+      if (problem) throw new Error(problem);
+      params = { ...params, extra: { ...rest, [LYRICS_PARAM]: words } };
+    } else {
+      if (words && !isInstrumental(words) && op === "music") notes.push(`${model.name} writes its own words from your description: the lyrics aren't sent`);
+      params = { ...params, extra: Object.keys(rest).length ? rest : undefined };
+    }
+  }
+  if (op === "music" && model.options.lyrics?.required && isInstrumental(lyricsOf(params.extra))) {
+    throw new Error(`${model.name} sings your lyrics: write them first, with [Verse] and [Chorus] on lines of their own`);
+  }
+  if (op === "music" && req.inputs?.audio && !model.options.cover) throw new Error(`${model.name} makes a new song: remove the song you added, or pick YuE2 to cover it`);
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");
@@ -1031,7 +1051,9 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   const res = params.resolution ?? model.defaults?.resolution;
   // A run with LoRAs goes to the LoRA endpoint, which has its own price.
   const at = (table: Record<string, number> | undefined) => (res && table ? (table[res] ?? table[res.toLowerCase()]) : undefined);
-  const usd = withLoras && p.withLoras !== undefined ? (at(p.withLorasByResolution) ?? p.withLoras) : at(p.byResolution) || p.usd;
+  // A song sung from the run's own lyrics costs less on Mureka (Pricing.withLyrics).
+  const sung = p.withLyrics !== undefined && !!model.options.lyrics && !!lyricsOf(params.extra);
+  const usd = withLoras && p.withLoras !== undefined ? (at(p.withLorasByResolution) ?? p.withLoras) : sung ? p.withLyrics! : at(p.byResolution) || p.usd;
   let per = usd;
   const clip = op && CLIP_LENGTH_OPS.has(op) && params.sourceDuration && params.sourceDuration > 0 ? params.sourceDuration * (op === "interpolate" ? Math.max(1, params.slowdown ?? 1) : 1) : undefined;
   // A talking avatar is as long as its voice (params.sourceDuration: the voice's header, read by the studio or the server).
@@ -1057,7 +1079,11 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
     const rate = p.videoMegapixel && (withLoras && p.videoMegapixel.withLoras !== undefined ? p.videoMegapixel.withLoras : p.videoMegapixel.usd);
     per = mp !== undefined && rate ? Math.ceil(mp - 1e-9) * rate : usd * seconds;
   }
-  if (p.unit === "minute") per = (usd * (voice ?? params.duration ?? 60)) / 60;
+  if (p.unit === "minute") {
+    const minutes = (voice ?? params.duration ?? 60) / 60;
+    // Billed per started minute (ElevenLabs Music v2.5: "a generation with 30 seconds output will be billed as 1 minute").
+    per = usd * (p.roundUp ? Math.max(1, Math.ceil(minutes - 1e-9)) : minutes);
+  }
   // Settings that change the price (60 fps, a Pro tier, a cheaper model).
   for (const f of p.factors ?? []) {
     const v = f.param === "targetFps" ? (params.targetFps ?? model.defaults?.targetFps) : (params.extra?.[f.param] ?? model.options.controls?.find((c) => c.param === f.param)?.default);

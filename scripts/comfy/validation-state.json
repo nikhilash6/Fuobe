@@ -347,6 +347,24 @@
     "error": null,
     "at": "2026-10-16T20:57:26.870Z"
   },
+  "music-minimax-3": {
+    "sha256": "c3f2541a0d072413bca9e17a32b08bd7a984174b08cc0a5839d2570e904876ea",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T23:40:28.816Z"
+  },
+  "music-yue2-cover": {
+    "sha256": "3f16ba0d5a1c318fffe8716310586275082468492fb501d8bc37083dca7cf7d6",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T23:40:28.886Z"
+  },
+  "music-yue2-song": {
+    "sha256": "4311ddb267a42f406956c3f81e9080aee7a85f4b6de470727fb0574e57424607",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T23:40:28.854Z"
+  },
   "ocr-lines-qwen35": {
     "sha256": "2cc591a75dbc160f91475e1f0e06c4a6a321adf6ad3a90b92648eea456322705",
     "validated": true,

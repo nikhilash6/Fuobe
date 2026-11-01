@@ -87,6 +87,7 @@ function sampleValue(key, entry, uploads) {
     case 'skipPass2': return true; // switches: the non-default branch, so both values are known to pass
     case 'cutout': return false;
     case 'invertDepth': return true;
+    case 'tiledDecode': return true; // MiniMax Music 3's tiled decode branch (the default is the plain one)
     case 'video': case 'video2': case 'video3': case 'video4': return uploads.mp4;
     case 'audio': case 'audio2': return uploads.wav;
     case 'tracks': {

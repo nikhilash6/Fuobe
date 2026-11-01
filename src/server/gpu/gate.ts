@@ -52,6 +52,7 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
     images: req.inputs?.images?.length ?? 0,
     format: req.params?.format,
     audio2: !!req.inputs?.audio2 || !!req.params?.extra?.audio2,
+    audio: !!req.inputs?.audio,
     extra,
     has,
   });

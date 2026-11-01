@@ -12592,13 +12592,21 @@ export const CLOUD_MODELS: ModelDef[] = [
         "provider": "fal",
         "endpoint": "fal-ai/minimax-music/v2.5",
         "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 3500
+          },
           "fixed": {
             "lyrics_optimizer": true
           }
         }
       }
     ],
-    "options": {},
+    "options": {
+      "lyrics": {
+        "max": 3500
+      }
+    },
     "pricing": {
       "unit": "request",
       "usd": 0.15
@@ -12655,35 +12663,248 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "mureka",
     "engine": "cloud",
     "kind": "audio",
-    "tagline": "Full songs with vocals in many genres",
+    "tagline": "Full songs with vocals in many genres, 2 to 5 minutes",
     "routes": [
       {
         "op": "music",
         "provider": "fal",
-        "endpoint": "mureka/api/generate/song",
-        "map": {}
+        "endpoint": "mureka/v9.5/generate/song",
+        "map": {
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          },
+          "ignore": [
+            "model"
+          ]
+        }
       }
     ],
     "options": {
-      "controls": [
-        {
-          "param": "model",
-          "label": "Version",
-          "values": [
-            "mureka-7.6",
-            "mureka-o2",
-            "mureka-8",
-            "mureka-9",
-            "mureka-9.5"
-          ],
-          "default": "mureka-9.5"
-        }
+      "lyrics": {
+        "max": 5000
+      },
+      "durations": [
+        120,
+        180,
+        240,
+        300
       ]
+    },
+    "defaults": {
+      "duration": 180
     },
     "pricing": {
       "unit": "request",
-      "usd": 0.75,
-      "note": "prompt-to-song on mureka-9.5; with lyrics $0.225"
+      "usd": 0.5,
+      "note": "a song from a prompt; with your lyrics $0.15",
+      "withLyrics": 0.15
+    }
+  },
+  {
+    "id": "mureka-9",
+    "name": "Mureka 9",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Songs with vocals at a lower price, sung from your lyrics or written for you",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9/generate/song",
+        "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "max": 5000
+      }
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.3,
+      "note": "a song from a prompt; with your lyrics $0.045",
+      "withLyrics": 0.045
+    }
+  },
+  {
+    "id": "mureka-9-instrumental",
+    "name": "Mureka 9 Instrumental",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Instrumental tracks and beds, no vocals",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9/generate/instrumental",
+        "map": {}
+      }
+    ],
+    "options": {},
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.045
+    }
+  },
+  {
+    "id": "minimax-music-3",
+    "name": "MiniMax Music 3 \u00b7 both engines",
+    "vendor": "MiniMax",
+    "family": "minimax-music",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "minimax/music-3",
+        "map": {
+          "seed": "seed",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "lyrics": {
+            "key": "lyrics"
+          },
+          "defaults": {
+            "lyrics": "[instrumental]"
+          }
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "lyrics": {},
+      "durations": [
+        30,
+        60,
+        120,
+        180,
+        240,
+        300
+      ]
+    },
+    "badges": [
+      "new",
+      "top"
+    ],
+    "licence": {
+      "licence": "MiniMax-Music3 Community License",
+      "commercial": true,
+      "note": "MIT-style grant with notice and an Acceptable Use Policy; commercial products show \"MiniMax-Music3\" in their interface; above US$20M yearly revenue needs MiniMax's written authorisation. The Comfy-Org repack is tagged Apache-2.0.",
+      "checked": "2026-11-01"
+    },
+    "defaults": {
+      "duration": 120
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.002
+    }
+  },
+  {
+    "id": "elevenlabs-music-2-5",
+    "name": "ElevenLabs Music v2.5",
+    "vendor": "ElevenLabs",
+    "family": "elevenlabs",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Studio-quality songs and scores up to 10 minutes",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "elevenlabs/music/v2.5",
+        "map": {
+          "duration": {
+            "key": "music_length_ms",
+            "type": "number",
+            "multiplier": 1000
+          }
+        }
+      }
+    ],
+    "options": {
+      "durations": [
+        15,
+        30,
+        60,
+        120,
+        180,
+        300,
+        600
+      ]
+    },
+    "badges": [
+      "new"
+    ],
+    "defaults": {
+      "duration": 60
+    },
+    "pricing": {
+      "unit": "minute",
+      "usd": 0.6,
+      "note": "billed per started minute",
+      "roundUp": true
+    }
+  },
+  {
+    "id": "lyria-3-5",
+    "name": "Lyria 3.5",
+    "vendor": "Google",
+    "family": "lyria",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Google DeepMind's newest music model: full songs from words or a picture",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "google/lyria-3.5",
+        "map": {
+          "image": "image_url",
+          "lyrics": {
+            "inPrompt": true,
+            "max": 5000
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "inPrompt": true,
+        "max": 5000
+      },
+      "maxImages": 1
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.1
     }
   },
   {

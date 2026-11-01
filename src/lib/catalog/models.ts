@@ -1252,8 +1252,34 @@ const open: ModelDef[] = [
     kind: "audio",
     tagline: "Open music generation with lyrics",
     routes: [comfy("music", "music-ace-step-15")],
-    options: { durations: [30, 60, 120, 180], seed: true },
+    options: { durations: [30, 60, 120, 180], seed: true, lyrics: {} },
     defaults: { duration: 60 },
+  }),
+  // Full songs on core nodes (nm10-music3, research #10 §6.6). MiniMax Music 3 is the same model the cloud runs as
+  // minimax-music-3 (fal hosts it); YuE2 is open-engine only (neither fal nor Replicate hosts it), and covers a song you add.
+  o({
+    id: "oss-minimax-music-3",
+    name: "MiniMax Music 3",
+    vendor: "MiniMax",
+    family: "minimax-music",
+    kind: "audio",
+    tagline: "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
+    badges: ["new", "top"],
+    routes: [comfy("music", "music-minimax-3", "int8 DiT and text encoder, 30 steps; songs over 2 minutes decode in tiles")],
+    options: { durations: [30, 60, 120, 180, 240, 300], seed: true, lyrics: {} },
+    defaults: { duration: 120 },
+  }),
+  o({
+    id: "oss-yue2",
+    name: "YuE2",
+    vendor: "Multimodal Art Projection",
+    family: "yue",
+    kind: "audio",
+    tagline: "Songs sung from your lyrics, or a cover of a song you add with a new style and words",
+    badges: ["new"],
+    routes: [comfy("music", "music-yue2-song", "plans the melody and chords, then sings; with a song added, SheetSage2 reads its melody for the cover")],
+    options: { durations: [60, 120, 180, 240, 300], seed: true, lyrics: { required: true }, cover: true },
+    defaults: { duration: 120 },
   }),
   // Utilities used by chained jobs (multi-shot, storyboard films, extend) and the Video tools page.
   o({

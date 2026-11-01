@@ -1159,7 +1159,11 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
 const OVER_LIMIT: Record<string, (s: number) => string> = {
   "still-motion": (s) => `Ken Burns on the open engine makes up to ${s} s per clip — split a longer move into pieces`,
   "audio-loop": (s) => `Loops on the open engine run up to ${s / 60} minutes (${s} s)`,
+  music: (s) => `This model writes songs up to ${s % 60 ? `${s} s` : `${s / 60} minutes`} on your GPU: pick a shorter length`,
 };
+
+/** Songs longer than this decode in tiles on your GPU (MiniMax Music 3's switch). */
+export const TILED_SONG_SECONDS = 120;
 
 /**
  * Turn a canonical request into the exact ComfyUI prompt: picks the workflow variant, maps Fuobe's inputs
@@ -1199,6 +1203,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     images: input.images?.length ?? 0,
     format: input.format,
     audio2: !!audio2 || !!extra.audio2,
+    audio: !!input.audio,
     extra,
     has: (id) => loadManifest().workflows.some((w) => w.id === id),
   });
@@ -1382,6 +1387,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     values.tracks = JSON.stringify(tracksFor(paths, Number(values.width ?? d.width ?? 832), Number(values.height ?? d.height ?? 480), frames));
   }
   if (b.tags && !b.prompt) values.tags = input.prompt;
+  // MiniMax Music 3: a song over 2 minutes decodes in tiles (much less VRAM), as the template's Tiled decode switch offers.
+  if (b.tiledDecode && extra.tiledDecode === undefined) values.tiledDecode = Number(values.duration ?? d.duration ?? 0) > TILED_SONG_SECONDS;
   if (b.description && !extra.description) values.description = input.prompt;
   if (b.numLayers && input.numLayers) values.numLayers = Math.max(1, Math.min(Number(manifest.limits?.maxLayers ?? 10), Math.round(input.numLayers)));
 

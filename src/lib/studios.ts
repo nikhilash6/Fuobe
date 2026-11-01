@@ -316,11 +316,12 @@ export const MUSIC_STUDIO: StudioConfig = {
   feature: "audio",
   title: "Audio",
   hero: "What should it sound like?",
-  placeholder: "Genre, mood, instruments, tempo — add lyrics on new lines",
+  placeholder: "Genre, mood, voice, instruments, tempo",
   kind: "audio",
   ops: ["music"],
   feed: { kind: "audio", features: ["audio"] },
-  slots: [],
+  // A song to cover, for a model that covers one (YuE2); the lyrics have an editor of their own under the prompt.
+  slots: [{ key: "audio", label: "Song to cover", accept: "audio", cover: true }],
   defaultModels: { cloud: "sonilo-music", open: "oss-ace-step" },
   suggestions: ["Lo-fi hip hop beat with soft piano, 80 bpm", "Epic orchestral trailer music building to a drop", "Upbeat indie pop with handclaps and a whistled hook"],
 };

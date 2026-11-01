@@ -1,4 +1,5 @@
 import { readTimeline, timelineTracks } from "@/lib/av/timeline";
+import { LYRICS_PARAM, lyricsOf, promptWithLyrics } from "@/lib/lyrics";
 import { toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { upscaleFactorFor } from "@/lib/av/upscale";
 import { carriesBoxes, carriesLayout, LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -525,8 +526,15 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
 
   // A layout draft rides in params.extra for Reuse and Edit layout; the prompt already carries it, in the model's own form.
   // Options → Prompt helper (params.extra.promptHelper) is Fuobe's own: it goes out as the API's prompt expansion, below.
-  const ignore = new Set([...(map.ignore ?? []), LAYOUT_PARAM, PROMPT_HELPER_PARAM, ...(asked ? [map.size!.key!] : [])]);
+  // Song lyrics (params.extra.lyrics) go out only where the route says (FieldMap.lyrics), in the models' own form.
+  const ignore = new Set([...(map.ignore ?? []), LAYOUT_PARAM, PROMPT_HELPER_PARAM, LYRICS_PARAM, ...(asked ? [map.size!.key!] : [])]);
   for (const [k, v] of Object.entries({ ...map.fixed, ...input.extra })) if (!(map.timeline && k === "timeline") && !ignore.has(k)) setPath(out, k, v);
+  const lyrics = map.lyrics ? lyricsOf(input.extra) : "";
+  if (lyrics && map.lyrics?.key) out[map.lyrics.key] = lyrics;
+  else if (lyrics && map.lyrics?.inPrompt && map.prompt !== false) {
+    const key = map.prompt ?? "prompt";
+    setPath(out, key, promptWithLyrics(typeof out[key] === "string" ? (out[key] as string) : (input.prompt ?? ""), lyrics));
+  }
   // The API's prompt expansion would rewrite a layout's boxes: off whenever the request carries one (a route that takes the
   // boxes in a field of their own, fal's FLUX 3 Klein, only when the draft places any). Prompt helper "off" turns it off too;
   // "on" leaves the API's default (on).
