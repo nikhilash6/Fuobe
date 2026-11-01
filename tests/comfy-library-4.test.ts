@@ -126,7 +126,6 @@ describe("round-4 ComfyUI workflows", () => {
       "video-person-remove-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
-      // Open-H3 Regenerate (n7-3): its two packs are opt-in and not on this server (tests/regenerate-2k.test.ts).
       "video-regenerate-h3",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);

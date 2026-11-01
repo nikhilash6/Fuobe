@@ -1,7 +1,8 @@
 // Browser check of Open-H3 Regenerate 2K (n7-3-regenerate-2k).
 // Usage: node tests/e2e/regenerate-2k.mjs [appUrl] [outDir]   (the app in demo mode, Settings → demo on: no keys, no ComfyUI)
 // At 1440 px and 390 px, light and dark: Upscale → Video on the open engine with Restore · faithful and Regenerate ·
-// creative side by side (picked by keyboard), the prompt box Regenerate needs, its "Free on your GPU" and GPU lines,
+// creative side by side (picked by keyboard), the prompt box Regenerate needs, its "Free on your GPU", GPU and shape lines,
+// "Describe the clip for me" filling the box for a clip with no words,
 // and the Options chip with Creativity and Speed; the cloud engine's line that Regenerate runs on your GPU; the
 // "Regenerate a soft AI clip in 2K" row; "Regenerate in 2K" in a feed tile's menu (and a tap on it at 390 px) and in
 // the Library viewer; the Canvas palette's "Regenerate (creative)" (disabled with the GPU-only reason on a cloud
@@ -43,8 +44,10 @@ const made = await json("/api/generations", {
   body: JSON.stringify({ feature: "video", modelId: "oss-minimax-h3", op: "t2v", prompt: "A red fox trots through fresh snow at dawn, slow push-in", params: { duration: 5, aspectRatio: "16:9" } }),
 });
 const gid = (made.items ?? [made])[0].id;
+let clipUrl = "";
 for (let i = 0; i < 60; i++) {
   const g = await json(`/api/generations/${gid}`);
+  clipUrl = (g.generation ?? g).outputs?.[0]?.url ?? "";
   if ((g.generation ?? g).status === "succeeded") break;
   await new Promise((r) => setTimeout(r, 1000));
 }
@@ -76,7 +79,9 @@ try {
       check((await regen.getAttribute("aria-checked")) === "true", `${label}: the arrow key picks Regenerate`);
       check(await page.evaluate(() => document.activeElement?.getAttribute("role") === "radio"), `${label}: focus stays on the choice`);
       const gpu = page.getByText(/Free on your GPU · About 3 minutes per 5 s at 2K on a 72 GB GPU\. Needs about 40 GB of new files/);
-      check(await gpu.isVisible(), `${label}: the price and GPU lines show`);
+      // (The owner's line replaces the visitor's once the viewer is known.)
+      check(await gpu.waitFor({ timeout: 15_000 }).then(() => true, () => false), `${label}: the price and GPU lines show (the owner's view)`);
+      check(await page.getByText(/Comes out 16:9, or 9:16 for a tall clip: other shapes are cropped to fit\./).isVisible(), `${label}: the 16:9 / 9:16 line shows`);
       const box = page.locator("[data-composer] textarea");
       check((await box.count()) > 0 && (await box.first().isVisible()), `${label}: the prompt box shows for Regenerate`);
       check(((await box.first().getAttribute("placeholder")) ?? "").startsWith("Describe the clip"), `${label}: its placeholder asks to describe the clip`);
@@ -102,6 +107,29 @@ try {
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(out, `upscale-regenerate-${dname}-${theme}.png`), fullPage: true });
       await noSideScroll(page, `${label} open`);
+      await ctx.close();
+
+      // ---- A clip with no words (as from an upload): "Describe the clip for me" fills the prompt box, by keyboard.
+      ctx = await setup(browser, device, theme, "open");
+      page = await ctx.newPage();
+      page.on("pageerror", (e) => !/Hydration failed[\s\S]*ViewerRowPlaceholder/.test(e.message) && failures.push(`${label} page error: ${e.message.split("\n")[0]}`));
+      await openRoute(page, `${app}/upscale/video?video=${encodeURIComponent(clipUrl)}&model=oss-h3-regenerate&resolution=1440p`);
+      const describe = page.getByRole("button", { name: "Describe the clip for me" });
+      await describe.waitFor({ timeout: 30_000 }).catch(() => {});
+      check(await describe.isVisible(), `${label}: a clip with no words offers "Describe the clip for me"`);
+      await describe.focus();
+      check(await describe.evaluate((el) => el === document.activeElement), `${label}: the describe button takes keyboard focus`);
+      await page.keyboard.press("Enter");
+      const words = page.locator("[data-composer] textarea").first();
+      let filled = "";
+      for (let i = 0; i < 40 && !filled; i++) {
+        await page.waitForTimeout(500);
+        filled = (await words.inputValue().catch(() => "")).trim();
+      }
+      check(filled.length > 0, `${label}: the clip's words fill the prompt box (${filled.slice(0, 40)}…)`);
+      check(!(await describe.isVisible().catch(() => false)), `${label}: the button goes once the box has words`);
+      await page.screenshot({ path: path.join(out, `upscale-regenerate-described-${dname}-${theme}.png`), fullPage: true });
+      await noSideScroll(page, `${label} described`);
       await ctx.close();
 
       // ---- Upscale → Video, cloud engine: Regenerate says it runs on your GPU.

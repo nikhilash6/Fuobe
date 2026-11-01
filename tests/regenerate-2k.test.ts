@@ -23,15 +23,44 @@ const canvas = await import("@/lib/catalog/canvas");
 const { UPSCALE_FIRST_STEPS } = await import("@/lib/catalog/upscale-first");
 const { VIDEO_UPSCALE_STUDIO } = await import("@/lib/studios");
 const { NODE_PACKS } = await import("@/lib/licences");
-const { prepareWorkflow, getWorkflow, promptRefusal } = await import("@/server/providers/comfyui");
+const { prepareWorkflow, getWorkflow, promptRefusal, onOwnGpu } = await import("@/server/providers/comfyui");
 const { setSetting } = await import("@/server/settings");
 const gens = await import("@/server/generations");
-const { clipMaker } = await import("@/server/regenerate");
+const { clipMaker, regenSwitchedOff } = await import("@/server/regenerate");
 const { saveFile } = await import("@/server/storage");
 const { runAsTenant } = await import("@/server/tenant");
 const { db } = await import("@/server/db");
 const { STUDIO_ROWS, studioTool, modelTool } = await import("@/server/gpu/tools");
 const { buildPayload } = await import("@/lib/catalog/payload");
+const { readAccess, saveAccess } = await import("@/server/model-access");
+
+/** A tiny MP4 header `seconds` long (ftyp + moov with one `width`×`height` video trak), enough for the server's header read. */
+function mp4(seconds: number, width = 1280, height = 720): Buffer {
+  const box = (type: string, ...body: Buffer[]) => {
+    const data = Buffer.concat(body);
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(8 + data.length);
+    head.write(type, 4, "latin1");
+    return Buffer.concat([head, data]);
+  };
+  const mvhd = Buffer.alloc(100);
+  mvhd.writeUInt32BE(1000, 12);
+  mvhd.writeUInt32BE(seconds * 1000, 16);
+  const tkhd = Buffer.alloc(84);
+  tkhd.writeUInt32BE(0x10000, 40);
+  tkhd.writeUInt32BE(0x10000, 56);
+  tkhd.writeUInt32BE(width << 16, 76);
+  tkhd.writeUInt32BE(height << 16, 80);
+  const mdhd = Buffer.alloc(24);
+  mdhd.writeUInt32BE(1000, 12);
+  mdhd.writeUInt32BE(seconds * 1000, 16);
+  const hdlr = Buffer.alloc(24);
+  hdlr.write("vide", 8, "latin1");
+  const trak = box("trak", box("tkhd", tkhd), box("mdia", box("mdhd", mdhd), box("hdlr", hdlr)));
+  return Buffer.concat([box("ftyp", Buffer.from("isom\0\0\0\0isomiso2mp41", "latin1")), box("moov", box("mvhd", mvhd), trak)]);
+}
+const stored = (seconds: number, width?: number, height?: number) =>
+  saveFile({ data: mp4(seconds, width, height), contentType: "video/mp4", name: `regen-${seconds}-${width ?? 1280}x${height ?? 720}.mp4`, source: "upload" }).url;
 
 beforeAll(() => setSetting("demoMode", "auto"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -206,16 +235,17 @@ describe("tiers, frames, windows and the draft preset", () => {
     expect(forty[2].start + forty[2].duration).toBeCloseTo(40, 2);
   });
 
-  it("takes 768p for H3 clips, 576p for other models, keep for odd shapes; a portrait clip takes the turned preset", () => {
+  it("takes 768p for H3 clips and 576p for other models, whatever the shape: results are 16:9 or 9:16, never stretched", () => {
     for (const id of ["oss-minimax-h3", "minimax-h3", "minimax-h3-max", "fuobe-character-swap", "oss-h3-swap-segment", "oss-h3-character-swap-relay", "h3-max-recast"])
       expect(R.isH3Source(id), id).toBe(true);
     for (const id of ["oss-ltx25", "oss-wan22-14b", "kling-3", "seedance-2-5", undefined]) expect(R.isH3Source(id), String(id)).toBe(false);
-    expect(R.draftSizeFor({ fromH3: true, width: 1344, height: 768 })).toBe("768p (1344x768)");
-    expect(R.draftSizeFor({ fromH3: false, width: 1280, height: 720 })).toBe("576p (1024x576)");
-    expect(R.draftSizeFor({ fromH3: true, width: 720, height: 1280 })).toBe("768p (1344x768)");
-    expect(R.draftSizeFor({ fromH3: true, width: 768, height: 768 })).toBe("keep (snap to 32)");
-    expect(R.draftSizeFor({ fromH3: false, width: 640, height: 480 })).toBe("keep (snap to 32)");
+    expect(R.draftSizeFor({ fromH3: true })).toBe("768p (1344x768)");
     expect(R.draftSizeFor({ fromH3: false })).toBe("576p (1024x576)");
+    // The pack's upscale always targets 16:9 (9:16 when taller than wide), so Prepare Draft's cover-crop decides the shape.
+    expect([R.regenShape(1344, 768), R.regenShape(720, 1280), R.regenShape(768, 768), R.regenShape(640, 480), R.regenShape()]).toEqual(["16:9", "9:16", "16:9", "16:9", "16:9"]);
+    expect([R.regenCrops(1280, 720), R.regenCrops(720, 1280), R.regenCrops(768, 768), R.regenCrops(640, 480), R.regenCrops(2560, 1080)]).toEqual([false, false, true, true, true]);
+    expect(R.regenCropNote(1024, 1024)).toBe("Regenerate makes 16:9 video, so this 1024×1024 clip is cropped to 16:9 at the centre");
+    expect(R.REGEN_COPY.shape).toMatch(/16:9.*9:16/);
   });
 });
 
@@ -321,18 +351,26 @@ describe("the provider fills the pack's strings and the frames", () => {
     expect(JSON.stringify(wf)).not.toContain("draftFrom");
   });
 
-  it("4K from another model's clip at 576p; keep for a square clip; one 15 s window of a longer clip", async () => {
+  it("4K from another model's clip at 576p; a square clip takes the preset (cropped, not stretched); one 15 s window of a longer clip", async () => {
     const other = await prepare({ resolution: "2160p", extra: { draftFrom: "other" } }, { "draft.mp4": clip(1280, 720, 8) });
     expect([at(other.workflow, "17", "resolution"), at(other.workflow, "11", "size"), at(other.workflow, "11", "max_frames")]).toEqual(["4k (3840x2160)", "576p (1024x576)", 192]);
     const square = await prepare({ resolution: "1080p", extra: { draftFrom: "h3" } }, { "draft.mp4": clip(768, 768, 5) });
-    expect([at(square.workflow, "17", "resolution"), at(square.workflow, "11", "size")]).toEqual(["1080p (1920x1080)", "keep (snap to 32)"]);
+    expect([at(square.workflow, "17", "resolution"), at(square.workflow, "11", "size")]).toEqual(["1080p (1920x1080)", "768p (1344x768)"]);
+    const odd = await prepare({ extra: { draftFrom: "other" } }, { "draft.mp4": clip(1440, 1080, 5) });
+    expect(JSON.stringify(odd.workflow)).not.toContain("keep (snap to 32)");
     const part = await prepare({ startTime: 13.333, endTime: 26.667, extra: { draftFrom: "other" } }, { "draft.mp4": clip(1280, 720, 40) });
     expect(at(part.workflow, "29", "start_time")).toBe(13.333);
     expect(at(part.workflow, "29", "duration")).toBeCloseTo(13.334, 3);
     expect(at(part.workflow, "11", "max_frames")).toBe(320);
   });
 
-  it("refuses a run without words, and names OPEN_H3_REGEN=1 when the nodes are missing", async () => {
+  it("refuses a single pass over 15 s (a clip from an earlier step) rather than cutting it short", async () => {
+    await expect(prepare({ extra: { draftFrom: "h3" } }, { "draft.mp4": clip(1344, 768, 24) })).rejects.toThrow(/up to 15 s in one pass, and this clip runs 24 s/);
+    await expect(prepare({ startTime: 2, extra: { draftFrom: "h3" } }, { "draft.mp4": clip(1344, 768, 17) })).resolves.toBeTruthy();
+    await expect(prepare({ extra: { draftFrom: "h3" } }, { "draft.mp4": clip(1344, 768, 15.04) })).resolves.toBeTruthy();
+  });
+
+  it("refuses a run without words, and names OPEN_H3_REGEN=1 when the nodes are missing (plain words on an account's own ComfyUI)", async () => {
     await expect(prepare({ prompt: "  " })).rejects.toThrow(/describe what is in it/);
     const { manifest } = getWorkflow(R.REGEN_WORKFLOW);
     const r = promptRefusal(
@@ -345,6 +383,11 @@ describe("the provider fills the pack's strings and the frames", () => {
       [],
     );
     expect(r.message).toBe(R.REGEN_COPY.missing);
+    const own = onOwnGpu({ url: "https://gpu.example.com" }, () =>
+      promptRefusal({ error: { type: "missing_node_type", message: "Node 'x' not found" }, node_errors: {} } as never, 400, manifest, []),
+    );
+    expect(own.message).toBe(R.REGEN_COPY.missingVisitor);
+    expect(own.message).not.toMatch(/OPEN_H3_REGEN|install-comfyui|\.sh|LoRA/);
   });
 });
 
@@ -460,6 +503,100 @@ describe("a run: the draft preset from the clip's maker, and 15 s parts joined",
   });
 });
 
+describe("a run's length: the stored file's header first, capped, and never cut short", () => {
+  const run = (video: string, params: Record<string, unknown> = {}, opts?: { dependsOn?: string }) =>
+    gens.createGenerations({ feature: "upscale", modelId: R.REGEN_MODEL, prompt: "a fox", inputs: { video }, params: params as never }, opts);
+
+  it("splits by the file's own header, whatever sourceDuration the client sends", () => {
+    const twenty = stored(20);
+    const [film, ...parts] = run(twenty, { sourceDuration: 5 });
+    expect(film.modelId).toBe(R.REGEN_JOIN);
+    expect(parts.map((p) => [p.request.params!.startTime, p.request.params!.endTime])).toEqual([
+      [0, 10],
+      [10, 20],
+    ]);
+    // A huge sourceDuration on an 8 s file: one run, not thousands.
+    expect(run(stored(8), { sourceDuration: 36000 })).toHaveLength(1);
+  });
+
+  it("refuses more than 40 parts (10 minutes) in one run, and takes 10 minutes", () => {
+    expect(R.REGEN_MAX_PARTS).toBe(40);
+    expect(R.REGEN_MAX_SECONDS).toBe(600);
+    const before = (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;
+    expect(() => run("https://example.com/long.mp4", { sourceDuration: 36000 })).toThrow("Regenerate takes up to 10 minutes of video in one run, and this clip runs 600:00. Trim it, or regenerate it in shorter pieces");
+    expect(() => run(stored(601), {})).toThrow(/up to 10 minutes .* runs 10:01/);
+    // Nothing was created by a refused run.
+    expect((db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n).toBe(before);
+    const [, ...parts] = run(stored(600), {});
+    expect(parts).toHaveLength(40);
+    expect(Math.max(...parts.map((p) => p.request.params!.endTime! - p.request.params!.startTime!))).toBeLessThanOrEqual(15);
+  });
+
+  it("a span over 15 s is split inside the span, not cut to its first 15 s", () => {
+    const [film, ...parts] = run(stored(40), { startTime: 5, endTime: 35 });
+    expect(film.notes).toContain(R.REGEN_SEAM_NOTE);
+    expect(parts.map((p) => [p.request.params!.startTime, p.request.params!.endTime])).toEqual([
+      [5, 20],
+      [20, 35],
+    ]);
+    // A span up to 15 s is one pass of that span.
+    const [one] = run(stored(40), { startTime: 5, endTime: 12 });
+    expect(one.request.params).toMatchObject({ startTime: 5, endTime: 12 });
+  });
+
+  it("a run that waits for an earlier step says it redraws up to 15 s in one pass; a clip that isn't 16:9 says it is cropped", () => {
+    const [waits] = gens.createGenerations({ feature: "upscale", modelId: R.REGEN_MODEL, prompt: "a fox", chain: [{ slot: "video" }] } as never, { dependsOn: "h3run000001" });
+    expect(waits.notes).toContain(R.REGEN_ONE_PASS_NOTE);
+    const [square] = run(stored(5, 1024, 1024));
+    expect(square.notes).toContain("Regenerate makes 16:9 video, so this 1024×1024 clip is cropped to 16:9 at the centre");
+    const [wide] = run(stored(5, 1280, 720));
+    expect(wide.notes ?? []).toEqual([]);
+  });
+
+  it("won't run with the refiner LoRA switched off in Settings → Models & licences (the owner is told where; a visitor gets plain words)", () => {
+    const was = readAccess();
+    saveAccess({ ...was, loras: [...was.loras, R.REGEN_LORA.file] });
+    try {
+      expect(() => run(stored(5))).toThrow(/switched off in Settings → Models & licences/);
+      runAsTenant({ kind: "account", id: "acct-a" }, () => expect(regenSwitchedOff()).toBe(R.REGEN_COPY.off));
+      expect(R.REGEN_COPY.off).not.toMatch(/LoRA|Settings/);
+    } finally {
+      saveAccess(was);
+    }
+    expect(regenSwitchedOff()).toBeUndefined();
+  });
+});
+
+describe("words for an upload: Fuobe's reading model on your GPU describes the clip", () => {
+  it("asks oss-reference-brief for one paragraph about the clip's first 15 s", async () => {
+    const r = R.regenDescribeRequest("/api/files/uploads/a.mp4", 40);
+    expect(r).toMatchObject({
+      modelId: "oss-reference-brief",
+      op: "write",
+      feature: R.REGEN_DESCRIBE_FEATURE,
+      inputs: { video: "/api/files/uploads/a.mp4" },
+      params: { duration: 15, numOutputs: 1, extra: { instruction: R.REGEN_DESCRIBE_INSTRUCTION } },
+    });
+    expect(R.regenDescribeRequest("/a.mp4", 6.5).params?.duration).toBe(6.5);
+    expect(getModel(R.REGEN_DESCRIBE_MODEL)).toMatchObject({ engine: "open", kind: "text" });
+    // The instruction reaches Gemma's prompt input, and the frames cover the 15 s.
+    const { workflow: wf } = await prepareWorkflow(
+      "reference-brief-gemma4",
+      { video: "a.mp4", duration: 15, extra: { instruction: R.REGEN_DESCRIBE_INSTRUCTION } } as GenInput,
+      { generationId: "g2", op: "write", upload: async (_d, _t, name) => `up_${name}`, media: () => clip(1280, 720, 40) },
+    );
+    expect(at(wf, "3", "prompt")).toBe(R.REGEN_DESCRIBE_INSTRUCTION);
+    expect(at(wf, "1", "frame_load_cap")).toBeGreaterThanOrEqual(360);
+  });
+
+  it("cleans the answer into one editable line", () => {
+    expect(R.regenDescription('  "A red fox trots through deep snow.\n\nThe camera pushes in slowly."  ')).toBe("A red fox trots through deep snow. The camera pushes in slowly.");
+    expect(R.regenDescription("```\nDescription: A city at night.\n```")).toBe("A city at night.");
+    expect(R.regenDescription(undefined)).toBe("");
+    expect(R.regenDescription("x".repeat(3000))).toHaveLength(1500);
+  });
+});
+
 describe("result actions per source and engine", () => {
   const out = (url = "/api/files/a.mp4", meta?: OutputFile["meta"]): OutputFile => ({ url, kind: "video", ...(meta && { meta }) }) as OutputFile;
   const gen = (p: Partial<Generation>): Generation =>
@@ -564,6 +701,10 @@ describe("result actions per source and engine", () => {
       expect(ids(g), other).not.toContain("regenerate");
       expect(ids(g), other).not.toContain("rerender-2k");
     }
+    // Already at 2K or 4K: a re-render would be a paid duplicate. Engine mode "Open source only": the paid run is refused, so not offered.
+    for (const size of ["2K", "4K", "2k"]) expect(ids({ ...h3, request: { ...h3.request, params: { ...h3.request.params, resolution: size } } }), size).not.toContain("rerender-2k");
+    expect(ids(h3, { engineMode: "open" })).not.toContain("rerender-2k");
+    expect(ids(h3, { engineMode: "both" })).toContain("rerender-2k");
     // A step whose inputs came from earlier steps can't be re-sent as it is.
     expect(ids({ ...h3, request: { ...h3.request, chain: [{ slot: "images" }] } })).not.toContain("rerender-2k");
   });
@@ -685,6 +826,14 @@ describe("Canvas: the Upscale node's Regenerate (creative) choice", () => {
     // A board switched to the cloud has no stand-in for it.
     const { missing } = canvas.convertEngine({ nodes: [withModel], edges: [] } as never, "cloud");
     expect(missing).toEqual(["n"]);
+  });
+});
+
+describe("the library's validation state", () => {
+  it("lists video-regenerate-h3 as unvalidated until it runs on a GPU ComfyUI with its packs (they are not on the validation server)", () => {
+    const { manifest } = getWorkflow(R.REGEN_WORKFLOW);
+    expect(manifest.validated).toBe(false);
+    expect(manifest.customNodes.map((c) => c.name)).toEqual(expect.arrayContaining(["ComfyUI-Open-H3-Regenerate", "Comfyui_Minimax_h3_latent_Upscaler"]));
   });
 });
 
