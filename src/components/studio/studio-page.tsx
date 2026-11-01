@@ -139,11 +139,13 @@ function initialDraft(
   if (sp.get("voice")) slots.voiceAudio = slot(sp.get("voice"));
   // An output format handed over in the link (Export → "ProRes in the cloud"), when the model writes it.
   const format = model?.options.formats?.find((f) => f === sp.get("format"));
+  // A size handed over (Regenerate in 2K → 1440p), when the model offers it.
+  const resolution = model?.options.resolutions?.find((r) => r === sp.get("resolution"));
   return {
     prompt: sp.get("prompt") ?? "",
     negativePrompt: "",
     modelId,
-    params: { ...model?.defaults, ...routeSettings, ...(format && { format }) },
+    params: { ...model?.defaults, ...routeSettings, ...(format && { format }), ...(resolution && { resolution }) },
     slots,
     refs,
     presetId: sp.get("preset") ?? config.preset?.id,
@@ -428,7 +430,9 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
 function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs?: React.ReactNode; examples?: StudioExampleRow }) {
   // Config and actions only: the draft lives in the composer, so typing doesn't re-render the page or the feed.
   const { config, setDraft } = useStudioActions();
-  const [engine, setEngine] = useEngine();
+  const [engine, setEngine, engineMode] = useEngine();
+  // A GPU-only step (Regenerate) isn't offered while the install runs paid APIs only.
+  const firstSteps = config.firstSteps?.filter((f) => !f.openOnly || engineMode !== "cloud");
   const feed = useGenerations(config.feed);
   const bridge = useComposerBridge();
   const [dragging, setDragging] = useState(false);
@@ -523,9 +527,9 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
                 <ArrowRight className="size-3" />
               </Link>
             )}
-            {config.firstSteps?.length ? (
+            {firstSteps?.length ? (
               <ul aria-label="Before upscaling" className="mt-3 flex max-w-xl flex-col items-center gap-2">
-                {config.firstSteps.map((f) => (
+                {firstSteps.map((f) => (
                   <li key={f.id} className="flex flex-col items-center gap-1">
                     <Link
                       href={f.href}

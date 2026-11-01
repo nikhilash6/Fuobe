@@ -7,6 +7,7 @@ import type { Signature } from "@/lib/catalog/palettes";
 import type { FrameAttachment } from "@/lib/composer";
 import type { LayoutDraft } from "@/lib/layout-prompt";
 import type { UpscaleFirstStep } from "@/lib/catalog/upscale-first";
+import type { FINISH_CHOICES } from "@/lib/catalog/regenerate";
 import type { SlotValue } from "./media-slot";
 
 export type SlotKey = InputSlot["key"];
@@ -22,6 +23,8 @@ export interface StudioConfig {
   related?: { href: string; label: string };
   /** Steps a tool runs before this one, then this one after it, as one job (Upscale → Restore archive footage first). */
   firstSteps?: UpscaleFirstStep[];
+  /** Open finishing models shown side by side above the toolbar (Upscale → Video: Restore · faithful, Regenerate · creative). */
+  finishChoices?: typeof FINISH_CHOICES;
   placeholder: string;
   kind: MediaKind;
   /** Operations whose models appear in the picker. */

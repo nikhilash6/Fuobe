@@ -9443,6 +9443,88 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "topaz-astra",
+    "name": "Topaz Astra 2",
+    "vendor": "Topaz Labs",
+    "family": "topaz",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Creative upscale that invents fine detail and texture, steered by optional words: to 1080p or 4K",
+    "routes": [
+      {
+        "op": "upscale-video",
+        "provider": "fal",
+        "endpoint": "topaz/upscale/video/creative",
+        "map": {
+          "omitEmptyPrompt": true,
+          "video": "video_url",
+          "targetFps": "target_fps",
+          "upscaleFactor": {
+            "key": "upscale_factor",
+            "min": 1,
+            "max": 4
+          },
+          "ranges": {
+            "target_fps": {
+              "min": 16,
+              "max": 60,
+              "integer": true
+            }
+          },
+          "defaults": {
+            "H264_output": true
+          }
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "creativity",
+          "label": "Creativity",
+          "min": 0,
+          "max": 1,
+          "step": 0.05,
+          "default": 0.5
+        }
+      ],
+      "fpsTargets": [
+        24,
+        30,
+        60
+      ],
+      "resolutions": [
+        "1080p",
+        "4K"
+      ],
+      "promptOptional": true
+    },
+    "badges": [
+      "new",
+      "4k"
+    ],
+    "defaults": {
+      "resolution": "4K"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.5,
+      "note": "4K at 30 fps; up to 1080p $0.30/s; 60 fps doubles",
+      "byResolution": {
+        "1080p": 0.3,
+        "4K": 0.5
+      },
+      "factors": [
+        {
+          "param": "targetFps",
+          "values": {
+            "60": 2
+          }
+        }
+      ]
+    }
+  },
+  {
     "id": "bytedance-video-upscale",
     "name": "ByteDance Upscale",
     "vendor": "ByteDance",
@@ -20047,10 +20129,12 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "pricing": {
       "unit": "second",
       "usd": 0.075,
-      "note": "768p; 480p $0.0625/s; whole seconds, 5\u201315 per call",
+      "note": "768p; 480p $0.0625/s; whole seconds, 5\u201315 per call; a re-render at 2K $0.1625/s, 4K $0.20/s",
       "byResolution": {
         "768p": 0.075,
-        "480p": 0.0625
+        "480p": 0.0625,
+        "2K": 0.1625,
+        "4K": 0.2
       }
     }
   },

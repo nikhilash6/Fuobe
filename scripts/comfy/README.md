@@ -466,6 +466,32 @@ COMFYUI_URL=http://127.0.0.1:<port> COMFYUI_MODELS_DIR=<that ComfyUI>/models nod
 The provider fills it like graph A (host pick, a model that isn't there refused in words, a surround source's background
 from music + effects); it has no `channels` binding: the dub's split is always mono.
 
+## Open-H3 Regenerate 2K (n7-3)
+
+One hand-built graph for Upscale → Video's "Regenerate · creative", the "Regenerate in 2K" result action and the Canvas
+Upscale node's "Regenerate (creative)" choice (docs/research/new-models-7.md §2.6):
+
+```bash
+npm run build -- video-regenerate-h3
+node validate-workflows.mjs --subset-only video-regenerate-h3   # GET /object_info only; then node build-requirements.mjs
+```
+
+| id | capability | what | validated here |
+|---|---|---|---|
+| `video-regenerate-h3` | upscale-video | rdh9616's "Draft Video" example without the note, the PreviewAny nodes and `OpenH3VideoToPrompt` (the prompt goes straight into `CLIPTextEncode` 16), `curve_name` "none" (so the curve table is never read: `(model's own table)`), and `OpenH3SaveRefinedLatent` (24) kept so a failed decode can be redone from the saved latent. A `Video Slice` (29) in front cuts a 15 s window (`startTime`, `duration`). Bindings: `video`, `prompt`, `resolution` (the pack's strings: `1080p (1920x1080)`, `2k (2560x1440)`, `4k (3840x2160)`), `draftSize` (`768p (1344x768)` for H3 drafts, `576p (1024x576)` for the rest; `keep (snap to 32)` is never sent, since the pack's upscale always targets 16:9 or 9:16 and would stretch any other shape), `frames` (node 11's `max_frames`; 24 and 26 read 11's frame count), `startSigma`, `steps`, `seed`, `filenamePrefix`. 48 GB | no: `missing_node_type` (the packs are not on the CPU validation server) |
+
+- **Node packs** (opt-in, `OPEN_H3_REGEN=1` in `install-comfyui.sh`): rdh9616/ComfyUI-Open-H3-Regenerate at `9b686c5`
+  (Apache-2.0) and LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler at `40316cf` (MIT): `OpenH3RegenUpscale` looks up LBH's
+  `MinimaxH3LatentUpscaler3D` class by name. ComfyUI core master merged its own H3 latent upscaler and a Sol-H3-VAE loader
+  on 2026-10-28 (PRs #17411 / #17412); the pinned 0.41.0-7 and the CPU server here have neither, and the rdh pack would
+  still need LBH's class, so the LBH pack stays.
+- **Weights** (19.6 GB new, plus the 20.97 GB FL2VA base the H3 video graphs already pin): NVIDIA's merged refiner LoRA
+  (12.45 GB), the fast H3 VAE decoder (6.47 GB) and the LBH latent upscaler (0.69 GB), pinned to the model card's revision
+  `5809c33` with their SHA-256 in `workflows/comfyui/model-pins.json`. The Qwen3-VL encoder and the H3 video and audio VAEs
+  are the ones already pinned. `sharp_curve_branches.safetensors` is left out (its tensors are zero in the blocks checked).
+- **Not run**: nothing has run on a GPU, and the pack was tested by its author on ComfyUI 0.42.0. Validate on a disposable
+  GPU ComfyUI with the packs: `node validate-workflows.mjs video-regenerate-h3`.
+
 ## Fly path (N7-5)
 
 One hand-built graph films a still along a camera path keyframed in Cinema's 3D scene, on core nodes only

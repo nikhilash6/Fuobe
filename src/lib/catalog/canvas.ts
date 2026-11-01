@@ -13,6 +13,7 @@ import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
 import { estimateCost, inferOperation, planGeneration, routesFor, type Plan } from "./plan";
 import { replacedBy, replacementOf } from "./replaced";
+import { REGEN_COPY, REGEN_MODEL } from "./regenerate";
 import {
   OPERATION_LABELS,
   OPERATION_OUTPUT,
@@ -275,6 +276,15 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("join"), id: "join", keywords: "concat merge stitch film" },
   { ...pick("frame"), id: "frame", keywords: "still last frame screenshot" },
   { ...pick("upscale"), id: "upscale", data: { mediaKind: "image" }, keywords: "enhance resolution 4k sharpen" },
+  // The Upscale node on Open-H3 Regenerate: a clip redrawn at 2K from its words, on your GPU only (nobody hosts it).
+  {
+    ...pick("upscale"),
+    id: "upscale-regenerate",
+    label: "Regenerate (creative)",
+    description: "Redraws a soft clip at 1080p, 2K or 4K from its words: details may change, motion and layout stay (your GPU)",
+    data: { mediaKind: "video", modelId: REGEN_MODEL },
+    keywords: "regenerate redraw 2k 4k h3 creative upscale sharpen finish",
+  },
   { ...pick("bg-remove"), id: "bg-remove", data: { mediaKind: "image" }, keywords: "cutout matte transparent" },
   { ...pick("tts"), id: "tts", keywords: "voice speech narration clone" },
   { ...pick("voice-change"), id: "voice-change", keywords: "voice changer speech to speech revoice convert" },
@@ -295,19 +305,27 @@ function pick(type: CanvasNodeType): Omit<PaletteItem, "id"> {
 
 const paletteCache = new Map<string, PaletteItem[]>();
 
+/** Why a GPU-only entry (Regenerate: nobody hosts its model) can't be added on a cloud board, or on a cloud-only install. */
+export const GPU_ONLY_ENTRY = `${REGEN_COPY.gpuOnly}: switch the board to Open source`;
+export const GPU_ONLY_INSTALL = `${REGEN_COPY.gpuOnly}: this install uses paid APIs only`;
+
 /**
  * Palette entries whose models exist in this catalog (no text models until an LLM model is
- * installed). On an install locked to one engine, entries with no model there are disabled, with why.
+ * installed). On an install locked to one engine, entries with no model there are disabled, with why. An entry fixed to
+ * an open model nobody hosts (Regenerate) is disabled on the cloud engine too, with that reason.
  */
-export function paletteItems(mode: "both" | "open" | "cloud" = "both"): PaletteItem[] {
-  const hit = paletteCache.get(mode);
+export function paletteItems(mode: "both" | "open" | "cloud" = "both", engine?: Engine): PaletteItem[] {
+  const key = `${mode}:${engine ?? ""}`;
+  const hit = paletteCache.get(key);
   if (hit) return hit;
   // Clean up voice has no cloud route: a cloud-only install doesn't offer it at all.
   const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice")).map((p): PaletteItem => {
+    const fixed = p.data?.modelId ? getModel(p.data.modelId) : undefined;
+    if (fixed && !runsOn(fixed, "cloud") && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? GPU_ONLY_INSTALL : GPU_ONLY_ENTRY };
     if (mode === "both" || !isGenerator(p) || defaultModelForNode({ type: p.type, data: p.data ?? {} }, mode)) return p;
     return { ...p, disabled: `No ${mode === "open" ? "open-source" : "cloud"} model for ${p.label.toLowerCase()} yet` };
   });
-  paletteCache.set(mode, items);
+  paletteCache.set(key, items);
   return items;
 }
 
@@ -422,6 +440,9 @@ export function defaultModelForNode(n: Pick<CanvasNode, "type" | "data">, engine
     return defaultModelFor(n.data.op ?? KIND_OP[kind], engine) ?? MODELS.find((m) => m.engine === engine && !m.hidden && m.kind === kind);
   }
   const op = nodeOps(n)[0];
+  // The Upscale node's Regenerate choice starts on Open-H3 Regenerate (on the cloud the entry is disabled: paletteItems).
+  const fixed = n.data.modelId === REGEN_MODEL ? getModel(REGEN_MODEL) : undefined;
+  if (fixed && op && supportsOp(fixed, op) && runsOn(fixed, engine)) return fixed;
   return op ? defaultModelFor(op, engine, { hidden: true }) : undefined;
 }
 
@@ -558,6 +579,8 @@ export function inputPorts(n: Pick<CanvasNode, "type" | "data">): PortDef[] {
   // A cloned voice only where the model clones voices (Text to speech and Change voice always show it, and say
   // which models clone when a voice is connected to one that doesn't).
   if (ids.has("voice") && model && !model.options.voiceClone && n.type !== "tts" && n.type !== "voice-change") ids.delete("voice");
+  // A model that redraws from words even where its operation takes none (Open-H3 Regenerate on the Upscale node).
+  if (model?.options.requires?.prompt) ids.add("prompt");
   // Visual elements only on image and video models.
   if (ids.has("elements") && model && model.kind !== "image" && model.kind !== "video") ids.delete("elements");
   const maxImages = model?.options.maxImages ?? (ops.some((op) => MULTI_IMAGE_OPS.has(op)) ? 4 : 1);
@@ -1570,6 +1593,8 @@ export function counterpart(graph: CanvasGraph, n: CanvasNode, engine: Engine): 
   const current = n.data.modelId ? getModel(n.data.modelId) : undefined;
   // A Fuobe Original runs on both: it stays, on the other engine.
   if (current && runsOn(current, engine)) return current;
+  // Open-H3 Regenerate is GPU-only: nobody hosts it, so it has no cloud stand-in (the owner's rule).
+  if (current?.id === REGEN_MODEL) return undefined;
   if (n.type !== "model") return defaultModelForNode(n, engine);
   const op = n.data.op ?? effectiveOp(graph, n) ?? (current ? current.routes[0].op : KIND_OP[n.data.mediaKind ?? "image"]);
   const kind = current?.kind ?? n.data.mediaKind;

@@ -630,6 +630,8 @@ export interface ModelOptions {
   promptOptional?: boolean;
   /** The words a run takes when none are given (Fuobe Try-On: its try-on LoRA's own instruction). */
   defaultPrompt?: string;
+  /** The prompt box's placeholder for this model (Open-H3 Regenerate: describe the clip it redraws). */
+  promptPlaceholder?: string;
   /**
    * The prompt the model reads, when it isn't plain words: "ideogram4" = an Ideogram 4 JSON caption. The server writes
    * one from the words before the run (src/lib/ideogram-caption.ts) and keeps it as the run's prompt.

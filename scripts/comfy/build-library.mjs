@@ -72,6 +72,10 @@ export const LOADER_FOLDERS = {
   LTXICLoRALoaderModelOnly: { lora_name: 'loras' },
   // MiniMax H3 video: larryvrh's turbo LoRA loader (ComfyUI-MiniMax-H3-Turbo) reads models/loras.
   MiniMaxH3TurboLoRA: { lora_name: 'loras' },
+  // Open-H3 Regenerate (rdh9616's pack): the merged refiner LoRA, LBH's latent upscaler and NVIDIA's fast H3 VAE decoder.
+  OpenH3RegenLora: { lora_name: 'loras' },
+  OpenH3RegenUpscale: { model_name: 'latent_upscale_models' },
+  OpenH3RegenFastVAEDecode: { vae_name: 'vae' },
   // Clean up voice: ComfyUI-RE-USE's loader reads models/reuse.
   REUSELoader: { model: 'reuse' },
 };
@@ -149,6 +153,8 @@ export const BINDING_KEYS = new Set([
   'windowStart', 'canvasWidth', 'canvasHeight', 'fieldWidth', 'fieldHeight', 'prefixFrom', 'prefixFrames', 'tileWidth', 'tileHeight', 'streaming', 'tileFrames',
   // The owner's SOTA image families (2026-10-31): Ideogram 4's sampling preset
   'preset',
+  // Open-H3 Regenerate (n7-3): the pack's output size and draft size (its combo strings) and the refine's start noise
+  'resolution', 'draftSize', 'startSigma',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
 ]);

@@ -815,6 +815,12 @@
     "error": null,
     "at": "2026-10-16T23:33:14.272Z"
   },
+  "video-regenerate-h3": {
+    "sha256": "d14cfe87c39865b088e1977989375da3f3e2a0f640b8bb24b70a7591b561362b",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'Open-H3 Regenerate LoRA (curve branches off)' not found. The custom node may not be installed. (Node ID '#3')",
+    "at": "2026-11-01T16:34:43.069Z"
+  },
   "video-relight-bernini-r": {
     "sha256": "218ca68fa4c552a6e5f986973f33f122ad43f27b6808ef493a2d9f9733b8a72d",
     "validated": true,

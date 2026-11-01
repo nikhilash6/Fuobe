@@ -43,6 +43,7 @@ import {
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
+import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
@@ -1287,6 +1288,18 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // Video finishing (Upscale hub): export formats, HDR curves, FPS Boost's m / n, chunked upscaling.
   const finish = videoFinishValues(manifest, input, clip, extra);
   Object.assign(values, finish.values);
+  // Open-H3 Regenerate (video-regenerate-h3): the output size and the draft preset as the pack's strings, and the frames
+  // this pass reads (its seconds at 24 fps, at most 15 s); the words are what it redraws from (regenerate.ts).
+  if (manifest.id === REGEN_WORKFLOW) {
+    if (!(typeof values.prompt === "string" && values.prompt.trim())) throw new ProviderError("Regenerate redraws the clip from words: describe what is in it", 400);
+    const length = span ?? (clipLength !== undefined ? Math.max(0, clipLength - start) : input.sourceDuration);
+    // One pass reads at most 15 s: a longer one (a clip from an earlier step) is refused, never cut short.
+    if (length !== undefined && length > REGEN_WINDOW_SECONDS + 0.05) throw new ProviderError(regenOnePassRefusal(length), 400);
+    values.resolution = regenResolution(input.resolution);
+    values.draftSize = draftSizeFor({ fromH3: extra.draftFrom === "h3" });
+    values.frames = regenFrames(length);
+    delete extra.draftFrom;
+  }
 
   // Drawn motion paths (normalised to the start frame) → one pixel point per output frame (Wan-Move).
   const paths = extra.motionPaths as MotionPaths | undefined;
@@ -1763,7 +1776,13 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
   const packs = missingClass?.pack ? [missingClass.pack] : manifest.customNodes.map((c) => c.name);
   const where = worker === "isolated" ? "the isolated ComfyUI worker" : "your ComfyUI";
   const missingPack =
-    body.error?.type === "missing_node_type" && packs.length ? `This workflow needs the ${packs.join(" + ")} node pack${packs.length > 1 ? "s" : ""} on ${where} (see scripts/comfy/README.md)` : undefined;
+    body.error?.type === "missing_node_type" && manifest.id === REGEN_WORKFLOW && worker === "main"
+      ? ownGpu()
+        ? REGEN_COPY.missingVisitor
+        : REGEN_COPY.missing
+      : body.error?.type === "missing_node_type" && packs.length
+        ? `This workflow needs the ${packs.join(" + ")} node pack${packs.length > 1 ? "s" : ""} on ${where} (see scripts/comfy/README.md)`
+        : undefined;
   // A LoRA it lacks: point at its model card (a civitai download URL answers 401 without the key) and the LoRA folder setting.
   const loraModels = loras.map((l) => ({ file: l.file, folder: "loras", url: loraByFile(l.file)?.page ?? (l.url && !needsToken(l.url) ? l.url : undefined) }));
   let detail = body.node_errors && Object.keys(body.node_errors as object).length ? explainComfyError(body.node_errors, { ...manifest, models: [...manifest.models, ...loraModels] }) : (missingPack ?? (typeof body.error?.message === "string" ? body.error.message.slice(0, 1024) : undefined));
