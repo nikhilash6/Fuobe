@@ -23,6 +23,7 @@ Run:  python3 scripts/fetch-hosted-schemas.py
       python3 scripts/fetch-hosted-schemas.py --partner                                          (partner routes in partnerEndpoints, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --part4 [endpoint …]                               (PART4's records in paid-model-apis-4.json, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --new10 [endpoint …]                               (FLUX 3 Klein: NEW10's records in new-models-10.json, its trainers; or those named)
+      python3 scripts/fetch-hosted-schemas.py --music [endpoint …]                               (full songs: MUSIC10's records in new-models-10.json; or those named)
 
 --part4 re-reads endpoints that research part 4 recorded (docs/research/paid-model-apis-4.json) and refreshes them in
 place: their inputs, the price lines of their llms.txt, their status in fal's catalog (active / playground-only, read
@@ -204,6 +205,70 @@ NEW10_TRAINERS = {
     "blackforestlabs/flux-3/klein/base/trainer": ("FLUX 3 Klein base", "Soul ID on FLUX 3 Image Klein (nm10-flux3-klein; FLUX Kommunity licence, shown as information)"),
     "blackforestlabs/flux-3/klein/base/trainer/edit": ("FLUX 3 Klein base", "Edit LoRAs from before / after pairs on FLUX 3 Image Klein (recorded; Soul ID trains subjects with the plain trainer)"),
 }
+
+
+# Research #10 (build package nm10-music3): full songs in the cloud, read with --music into new-models-10.json endpointRecords.
+# MiniMax Music 3 is the same open model the open engine runs (its weights' own licence and the Comfy-Org repack's tag are
+# both recorded); Mureka, ElevenLabs and Lyria are proprietary APIs. Mureka's song tools take a song_id from one of its own
+# answers or an id from its files/upload (purpose "audio" / "remix"); its stems take a plain URL and answer with a zip.
+MM3_LICENCE = ("MiniMax-Music3 Community License (MiniMaxAI/MiniMax-Music3 @ 1b525ccb, LICENSE read 2026-11-01): an MIT-style grant with the notice "
+               "kept, use within the law and its Acceptable Use Policy (Exhibit A); commercial products show \"MiniMax-Music3\" in their interface and "
+               "need MiniMax's written authorisation above US$20M yearly revenue; a hosted service keeps safeguards against infringing outputs. "
+               "The Comfy-Org repack (Comfy-Org/MiniMax-Music-3 @ 9e364ccd) is tagged Apache-2.0 on Hugging Face; the weights' own licence is the one above")
+MUREKA_NOTE = "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take"
+MUSIC10 = {
+    # endpoint: (op, keyFields, family, model, vendor, licence or note)
+    "minimax/music-3": ("music", {"prompt": "prompt", "lyrics": "lyrics", "duration": "duration", "seed": "seed"}, "minimax-music", "MiniMax Music 3", "MiniMax", MM3_LICENCE),
+    "mureka/v9.5/generate/song": ("music", {"prompt": "prompt", "lyrics": "lyrics", "duration": "duration"}, "mureka", "Mureka 9.5", "Mureka", MUREKA_NOTE),
+    "mureka/v9/generate/song": ("music", {"prompt": "prompt", "lyrics": "lyrics"}, "mureka", "Mureka 9", "Mureka", MUREKA_NOTE),
+    "mureka/v9.5/generate/instrumental": ("music", {"prompt": "prompt"}, "mureka", "Mureka 9.5 Instrumental", "Mureka", MUREKA_NOTE),
+    "mureka/v9/generate/instrumental": ("music", {"prompt": "prompt"}, "mureka", "Mureka 9 Instrumental", "Mureka", MUREKA_NOTE),
+    # Recorded: a soundtrack reads a picture or a clip by an id from mureka/api/files/upload (purpose "soundtrack").
+    "mureka/v9.5/generate/soundtrack": ("v2a", {"prompt": "prompt"}, "mureka", "Mureka 9.5 Soundtrack", "Mureka", MUREKA_NOTE),
+    "mureka/v9/generate/soundtrack": ("v2a", {"prompt": "prompt"}, "mureka", "Mureka 9 Soundtrack", "Mureka", MUREKA_NOTE),
+    "mureka/v8/song/extend": ("song-extend", {"lyrics": "lyrics", "songId": "song_id", "uploadId": "upload_audio_id", "extendAt": "extend_at"}, "mureka", "Mureka 8 Extend", "Mureka", MUREKA_NOTE),
+    "mureka/v8/song/remix": ("song-remix", {"prompt": "prompt", "lyrics": "lyrics", "songId": "song_id", "uploadId": "upload_audio_id"}, "mureka", "Mureka 8 Remix", "Mureka", MUREKA_NOTE),
+    "mureka/api/song/stem": ("song-stems", {"audio": "audio_url"}, "mureka", "Mureka stems", "Mureka", MUREKA_NOTE),
+    "mureka/api/files/upload": ("upload", {"file": "file_url", "purpose": "purpose"}, "mureka", "Mureka file upload", "Mureka", MUREKA_NOTE),
+    # Recorded only: an edit of a region's words, voice cloning ($5 a voice) and the lyrics writer.
+    "mureka/api/song/edit": ("song-edit", {"lyrics": "lyrics", "songId": "song_id", "uploadId": "upload_audio_id"}, "mureka", "Mureka song edit", "Mureka", MUREKA_NOTE),
+    "mureka/api/voice/clone": ("voice-clone", {"audio": "audio_url"}, "mureka", "Mureka voice clone", "Mureka", MUREKA_NOTE),
+    "mureka/api/generate/lyrics": ("write", {"prompt": "prompt"}, "mureka", "Mureka lyrics", "Mureka", MUREKA_NOTE),
+    # The route Fuobe called before (a version field; 9.5's duration); fal's catalog lists it with no metadata now.
+    "mureka/api/generate/song": ("music", {"prompt": "prompt", "lyrics": "lyrics", "duration": "duration"}, "mureka", "Mureka song (versioned)", "Mureka", MUREKA_NOTE),
+    "elevenlabs/music/v2.5": ("music", {"prompt": "prompt", "duration": "music_length_ms"}, "elevenlabs", "ElevenLabs Music v2.5", "ElevenLabs",
+                              "Proprietary hosted API; billed per output minute, rounded up; lyrics go in a composition plan of timed chunks (recorded, not sent)"),
+    "google/lyria-3.5": ("music", {"prompt": "prompt", "image": "image_url", "lyricsInPrompt": "prompt"}, "lyria", "Lyria 3.5", "Google",
+                         "Proprietary hosted API; lyrics and section timings go in the prompt (its description says so)"),
+}
+
+
+def music10(ids):
+    """Research #10's music records (MUSIC10) in new-models-10.json endpointRecords; only those named in `ids` when it names any."""
+    path = ROOT / "docs/research/new-models-10.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    records = {e["endpoint"]: e for e in data.get("endpointRecords") or []}
+    for ep, (op, kf, family, model, vendor, licence) in MUSIC10.items():
+        if ids and ep not in ids:
+            continue
+        inputs = fal(ep)
+        missing = [f for f in kf.values() if f not in inputs]
+        if missing:
+            sys.exit(f"{ep}: keyFields {missing} are not inputs")
+        root = json.loads(get(f"https://fal.ai/api/openapi/queue/openapi.json?endpoint_id={ep}"))
+        result = root["paths"][f"/{ep}/requests/{{request_id}}"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]
+        outputs = list(resolve(result, root).get("properties") or {})
+        price = llms_price(ep)
+        records[ep] = {
+            "family": family, "model": model, "title": model, "vendor": vendor, "operation": op, "provider": "fal", "endpoint": ep,
+            "falCategory": "text-to-audio", "status": fal_catalog_status(ep), "keyFields": kf, "inputs": inputs,
+            "output": "zip_url" if "zip_url" in outputs else ("id" if op == "upload" else "audio.url"), "outputFields": outputs,
+            "price": price, "license": licence, "verified": True, "sourceUrl": f"https://fal.ai/models/{ep}",
+            "schemaUrl": f"https://fal.ai/api/openapi/queue/openapi.json?endpoint_id={ep}", "capability": op, "fetched": TODAY,
+        }
+        print(f"{ep}: {records[ep]['status']}, {len(inputs)} inputs, out {outputs}, {price}")
+    data["endpointRecords"] = list(records.values())
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def get(url):
@@ -523,6 +588,9 @@ def new10(ids):
 
 
 def main():
+    if "--music" in sys.argv:
+        music10(sys.argv[sys.argv.index("--music") + 1:])
+        return
     if "--new10" in sys.argv:
         new10(sys.argv[sys.argv.index("--new10") + 1:])
         return

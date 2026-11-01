@@ -3561,6 +3561,1339 @@
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/edit-image",
    "capability": "edit",
    "fetched": "2026-11-01"
+  },
+  {
+   "family": "minimax-music",
+   "model": "MiniMax Music 3",
+   "title": "MiniMax Music 3",
+   "vendor": "MiniMax",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "minimax/music-3",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics",
+    "duration": "duration",
+    "seed": "seed"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "Music description: style, mood, vocals, instrumentation and arrangement. For precise control use a Structured Caption with global metadata (genre, BPM, key, emotional progression), vocal details, and a section-by-section arrangement.",
+     "examples": [
+      "Genre: acoustic pop. BPM: 96. Key: C major. Warm and intimate, building gently into the chorus. Vocals: soft female lead, close and breathy, light stacked harmonies in the chorus. Arrangement: fingerpicked guitar and soft piano; brushed drums and upright bass enter in the chorus."
+     ]
+    },
+    "lyrics": {
+     "type": "string",
+     "required": true,
+     "desc": "The lyrics to sing. Structure tags such as [intro], [verse], [pre-chorus], [chorus], [post-chorus], [bridge], [instrumental], [solo] and [outro] must each be on their own line; text on the same line as a leading tag is dropped by the model's input contract.",
+     "examples": [
+      "[verse]\nMorning light filtering through the pine\nEvery quiet street is yours and mine\n[chorus]\nSoftly the world begins to breathe"
+     ]
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 60,
+     "minimum": 1,
+     "maximum": 300,
+     "desc": "Upper bound on the generated audio length in seconds. The model may stop earlier; the actual duration is returned in the output."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for reproducibility. If not provided, a random seed will be used."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 30,
+     "minimum": 1,
+     "maximum": 100,
+     "desc": "Number of flow-matching Euler steps per 8-second denoising chunk. More steps improve quality at the cost of speed.",
+     "examples": [
+      30
+     ]
+    },
+    "guidance_scale": {
+     "type": "number",
+     "required": false,
+     "default": 1.7,
+     "minimum": 0,
+     "maximum": 20,
+     "desc": "Classifier-free guidance scale of the flow-matching stage.",
+     "examples": [
+      1.7
+     ]
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "duration",
+    "audio",
+    "seed"
+   ],
+   "price": "Price: $0.002 per seconds",
+   "license": "MiniMax-Music3 Community License (MiniMaxAI/MiniMax-Music3 @ 1b525ccb, LICENSE read 2026-11-01): an MIT-style grant with the notice kept, use within the law and its Acceptable Use Policy (Exhibit A); commercial products show \"MiniMax-Music3\" in their interface and need MiniMax's written authorisation above US$20M yearly revenue; a hosted service keeps safeguards against infringing outputs. The Comfy-Org repack (Comfy-Org/MiniMax-Music-3 @ 9e364ccd) is tagged Apache-2.0 on Hugging Face; the weights' own licence is the one above",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/minimax/music-3",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/music-3",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9.5",
+   "title": "Mureka 9.5",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/v9.5/generate/song",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics",
+    "duration": "duration"
+   },
+   "inputs": {
+    "lyrics": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Lyrics to sing, up to 5,000 characters. Provide this for lyrics-to-song generation; otherwise provide prompt for prompt-to-song generation."
+    },
+    "styles": {
+     "nullable": true,
+     "type": "array",
+     "items": "string",
+     "minItems": 1,
+     "required": false,
+     "desc": "One or more musical genres for prompt-to-song generation. This cannot be used when lyrics is provided.",
+     "examples": [
+      [
+       "pop",
+       "rock"
+      ]
+     ]
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 2000,
+     "desc": "Describe the desired song, mood, instrumentation, and vocals. Required when lyrics is omitted, up to 2,000 characters. With lyrics, it acts as a music-style control and supports up to 1,024 characters.",
+     "examples": [
+      "A bright summer love song with a catchy chorus"
+     ]
+    },
+    "gender": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "female",
+      "male"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Preferred vocal gender for lyrics-to-song generation. An uploaded or cloned voice takes precedence."
+    },
+    "reference_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Reference-music ID returned by /files/upload with purpose='reference'."
+    },
+    "vocal_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Voice ID returned by /voice/clone."
+    },
+    "melody_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Melody ID returned by /files/upload with purpose='melody'. This cannot be combined with prompt, reference_id, or vocal_id."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    },
+    "duration": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 120,
+     "maximum": 300,
+     "desc": "Target song duration in seconds. If omitted, the model determines the duration automatically. The length of the lyrics also affects the target duration."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated song. When you provide lyrics, your request will cost $0.15 per song; when you provide only a prompt without lyrics, it will cost $0.50 per song. Each request returns one song. For $1 you can generate about 6 songs from your own lyrics or 2 songs from a prompt alone.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9.5/generate/song",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9.5/generate/song",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9",
+   "title": "Mureka 9",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/v9/generate/song",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics"
+   },
+   "inputs": {
+    "lyrics": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Lyrics to sing, up to 5,000 characters. Provide this for lyrics-to-song generation; otherwise provide prompt for prompt-to-song generation."
+    },
+    "styles": {
+     "nullable": true,
+     "type": "array",
+     "items": "string",
+     "minItems": 1,
+     "required": false,
+     "desc": "One or more musical genres for prompt-to-song generation. This cannot be used when lyrics is provided.",
+     "examples": [
+      [
+       "pop",
+       "rock"
+      ]
+     ]
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 2000,
+     "desc": "Describe the desired song, mood, instrumentation, and vocals. Required when lyrics is omitted, up to 2,000 characters. With lyrics, it acts as a music-style control and supports up to 1,024 characters.",
+     "examples": [
+      "A bright summer love song with a catchy chorus"
+     ]
+    },
+    "gender": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "female",
+      "male"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Preferred vocal gender for lyrics-to-song generation. An uploaded or cloned voice takes precedence."
+    },
+    "reference_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Reference-music ID returned by /files/upload with purpose='reference'."
+    },
+    "vocal_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Voice ID returned by /voice/clone."
+    },
+    "melody_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Melody ID returned by /files/upload with purpose='melody'. This cannot be combined with prompt, reference_id, or vocal_id."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated song. When you provide lyrics, your request will cost $0.045 per song; when you provide only a prompt without lyrics, it will cost $0.30 per song. Each request returns one song. For $1 you can generate about 22 songs from your own lyrics or 3 songs from a prompt alone.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9/generate/song",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9/generate/song",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9.5 Instrumental",
+   "title": "Mureka 9.5 Instrumental",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/v9.5/generate/instrumental",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Description of the desired instrumental. Provide exactly one of prompt or instrumental_id."
+    },
+    "instrumental_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Instrumental ID returned by /files/upload with purpose='instrumental'. Provide exactly one of instrumental_id or prompt."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated instrumental track. Your request will cost $0.15 per track, and each request returns one track. For $1 you can generate about 6 instrumental tracks.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9.5/generate/instrumental",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9.5/generate/instrumental",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9 Instrumental",
+   "title": "Mureka 9 Instrumental",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/v9/generate/instrumental",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Description of the desired instrumental. Provide exactly one of prompt or instrumental_id."
+    },
+    "instrumental_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Instrumental ID returned by /files/upload with purpose='instrumental'. Provide exactly one of instrumental_id or prompt."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated instrumental track. Your request will cost $0.045 per track, and each request returns one track. For $1 you can generate about 22 instrumental tracks.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9/generate/instrumental",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9/generate/instrumental",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9.5 Soundtrack",
+   "title": "Mureka 9.5 Soundtrack",
+   "vendor": "Mureka",
+   "operation": "v2a",
+   "provider": "fal",
+   "endpoint": "mureka/v9.5/generate/soundtrack",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "image_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Image ID returned by /files/upload with purpose='soundtrack'. Provide exactly one of image_id or video_id."
+    },
+    "video_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Video ID returned by /files/upload with purpose='soundtrack'. Provide exactly one of image_id or video_id."
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Optional description of the desired soundtrack style and mood."
+    },
+    "audio_start": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Start time of the soundtrack audio in milliseconds. If only audio_start is specified, generation starts there and continues for the video duration, stopping at the end of the song if the remaining audio is shorter. The soundtrack audio segment must be at least 3 seconds long, and a 1-second fade-in is added at the beginning."
+    },
+    "audio_end": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "End time of the soundtrack audio in milliseconds. If both audio_start and audio_end are specified, generation uses those times. If audio_end exceeds the song duration, generation stops at the end of the song. The soundtrack audio segment must be at least 3 seconds long, and a 1-second fade-out is added at the end."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated soundtrack. Your request will cost $0.10 per soundtrack, and each request returns one track. For $1 you can generate 10 soundtracks.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9.5/generate/soundtrack",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9.5/generate/soundtrack",
+   "capability": "v2a",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 9 Soundtrack",
+   "title": "Mureka 9 Soundtrack",
+   "vendor": "Mureka",
+   "operation": "v2a",
+   "provider": "fal",
+   "endpoint": "mureka/v9/generate/soundtrack",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "image_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Image ID returned by /files/upload with purpose='soundtrack'. Provide exactly one of image_id or video_id."
+    },
+    "video_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Video ID returned by /files/upload with purpose='soundtrack'. Provide exactly one of image_id or video_id."
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Optional description of the desired soundtrack style and mood."
+    },
+    "audio_start": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Start time of the soundtrack audio in milliseconds. If only audio_start is specified, generation starts there and continues for the video duration, stopping at the end of the song if the remaining audio is shorter. The soundtrack audio segment must be at least 3 seconds long, and a 1-second fade-in is added at the beginning."
+    },
+    "audio_end": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "End time of the soundtrack audio in milliseconds. If both audio_start and audio_end are specified, generation uses those times. If audio_end exceeds the song duration, generation stops at the end of the song. The soundtrack audio segment must be at least 3 seconds long, and a 1-second fade-out is added at the end."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated soundtrack. Your request will cost $0.10 per soundtrack, whether it is guided by an image or a video. Each request returns one soundtrack. For $1 you can generate 10 soundtracks.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v9/generate/soundtrack",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v9/generate/soundtrack",
+   "capability": "v2a",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 8 Extend",
+   "title": "Mureka 8 Extend",
+   "vendor": "Mureka",
+   "operation": "song-extend",
+   "provider": "fal",
+   "endpoint": "mureka/v8/song/extend",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "lyrics": "lyrics",
+    "songId": "song_id",
+    "uploadId": "upload_audio_id",
+    "extendAt": "extend_at"
+   },
+   "inputs": {
+    "song_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Generated song ID from song_id in a /generate/song response. Provide exactly one of song_id or upload_audio_id."
+    },
+    "upload_audio_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Audio ID returned by /files/upload with purpose='audio'. Provide exactly one of song_id or upload_audio_id."
+    },
+    "lyrics": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 3000,
+     "desc": "Lyrics for the extended section, up to 3,000 characters."
+    },
+    "extend_at": {
+     "type": "integer",
+     "required": true,
+     "minimum": 0,
+     "desc": "Timestamp in milliseconds where extension begins."
+    },
+    "extend_type": {
+     "type": "enum",
+     "values": [
+      "tail",
+      "head"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "tail",
+     "desc": "Direction of extension: append to the tail or prepend to the head."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Price: $0.004 per requests",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v8/song/extend",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v8/song/extend",
+   "capability": "song-extend",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka 8 Remix",
+   "title": "Mureka 8 Remix",
+   "vendor": "Mureka",
+   "operation": "song-remix",
+   "provider": "fal",
+   "endpoint": "mureka/v8/song/remix",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics",
+    "songId": "song_id",
+    "uploadId": "upload_audio_id"
+   },
+   "inputs": {
+    "song_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Generated song ID from song_id in a /generate/song response. Provide exactly one of song_id or upload_audio_id."
+    },
+    "upload_audio_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Audio ID returned by /files/upload with purpose='remix'. Provide exactly one of song_id or upload_audio_id."
+    },
+    "lyrics": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Complete lyrics for the remixed song, up to 5,000 characters."
+    },
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 1024,
+     "desc": "Control the remix's genre, mood, instrumentation, and arrangement with a prompt, up to 1,024 characters."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per remixed song. Your request will cost $0.20 per song, and each request returns one song. For $1 you can remix about 5 songs.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/v8/song/remix",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/v8/song/remix",
+   "capability": "song-remix",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka stems",
+   "title": "Mureka stems",
+   "vendor": "Mureka",
+   "operation": "song-stems",
+   "provider": "fal",
+   "endpoint": "mureka/api/song/stem",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "audio": "audio_url"
+   },
+   "inputs": {
+    "model": {
+     "type": "enum",
+     "values": [
+      "audio-separation-1",
+      "audio-separation-2",
+      "audio-separation-3"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "audio-separation-3",
+     "desc": "Stem-separation model, which determines available stems and MIDI output."
+    },
+    "audio_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Public HTTPS URL or data URI for an MP3 or M4A song to separate, up to 10 MB."
+    }
+   },
+   "output": "zip_url",
+   "outputFields": [
+    "midi_zip_url",
+    "zip_url"
+   ],
+   "price": "Billing is calculated per separated song and depends on the selected model. With audio-separation-1, your request will cost $0.06 per song; with audio-separation-3 (the default), $0.20 per song; and with audio-separation-2, $0.70 per song.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/song/stem",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/song/stem",
+   "capability": "song-stems",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka file upload",
+   "title": "Mureka file upload",
+   "vendor": "Mureka",
+   "operation": "upload",
+   "provider": "fal",
+   "endpoint": "mureka/api/files/upload",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "file": "file_url",
+    "purpose": "purpose"
+   },
+   "inputs": {
+    "file_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Public HTTPS URL or data URI of the file to upload."
+    },
+    "purpose": {
+     "type": "enum",
+     "values": [
+      "reference",
+      "melody",
+      "instrumental",
+      "voice",
+      "audio",
+      "remix",
+      "soundtrack",
+      "lyrics-video"
+     ],
+     "valueType": "string",
+     "required": true,
+     "desc": "Intended use of the uploaded file. The returned ID can only be used in parameters that accept this purpose."
+    }
+   },
+   "output": "id",
+   "outputFields": [
+    "id",
+    "bytes",
+    "purpose",
+    "created_at",
+    "filename"
+   ],
+   "price": "Billing is calculated per uploaded file. Your request will cost $0.01 per upload. For $1 you can upload 100 files.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/files/upload",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/files/upload",
+   "capability": "upload",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka song edit",
+   "title": "Mureka song edit",
+   "vendor": "Mureka",
+   "operation": "song-edit",
+   "provider": "fal",
+   "endpoint": "mureka/api/song/edit",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "lyrics": "lyrics",
+    "songId": "song_id",
+    "uploadId": "upload_audio_id"
+   },
+   "inputs": {
+    "song_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Generated song ID from song_id in a /generate/song response. Provide exactly one of song_id or upload_audio_id."
+    },
+    "upload_audio_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Audio ID returned by /files/upload with purpose='audio'. Provide exactly one of song_id or upload_audio_id."
+    },
+    "lyrics": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 3000,
+     "desc": "Replacement lyrics for the selected region."
+    },
+    "edit_start": {
+     "type": "integer",
+     "required": true,
+     "minimum": 0,
+     "desc": "Start of the region to rewrite in milliseconds."
+    },
+    "edit_end": {
+     "type": "integer",
+     "required": true,
+     "minimum": 0,
+     "desc": "End of the region to rewrite in milliseconds. The region must be at least three seconds long."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per edit. Your request will cost $0.10 per edited region, and each request returns one edited song. For $1 you can run 10 edits.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/song/edit",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/song/edit",
+   "capability": "song-edit",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka voice clone",
+   "title": "Mureka voice clone",
+   "vendor": "Mureka",
+   "operation": "voice-clone",
+   "provider": "fal",
+   "endpoint": "mureka/api/voice/clone",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "audio": "audio_url"
+   },
+   "inputs": {
+    "audio_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Public HTTPS URL or data URI for an MP3 or M4A vocal sample between 15 and 30 seconds and smaller than 10 MB."
+    },
+    "description": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "maxLength": 1024,
+     "desc": "Optional text describing the cloned voice."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "vocal_id",
+    "description",
+    "created_at"
+   ],
+   "price": "Billing is calculated per cloned voice. Your request will cost $5.00 per voice clone.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/voice/clone",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/voice/clone",
+   "capability": "voice-clone",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka lyrics",
+   "title": "Mureka lyrics",
+   "vendor": "Mureka",
+   "operation": "write",
+   "provider": "fal",
+   "endpoint": "mureka/api/generate/lyrics",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "desc": "Topic, theme, or title to use when writing the lyrics.",
+     "examples": [
+      "Embrace of Night"
+     ]
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics",
+    "title"
+   ],
+   "price": "Billing is calculated per request. Your request will cost $0.009 per set of generated lyrics. For $1 you can generate about 111 sets of lyrics.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/generate/lyrics",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/generate/lyrics",
+   "capability": "write",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "mureka",
+   "model": "Mureka song (versioned)",
+   "title": "Mureka song (versioned)",
+   "vendor": "Mureka",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "mureka/api/generate/song",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "lyrics": "lyrics",
+    "duration": "duration"
+   },
+   "inputs": {
+    "lyrics": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Lyrics to sing, up to 5,000 characters. Provide this for lyrics-to-song generation; otherwise provide prompt for prompt-to-song generation."
+    },
+    "styles": {
+     "nullable": true,
+     "type": "array",
+     "items": "string",
+     "minItems": 1,
+     "required": false,
+     "desc": "One or more musical genres for prompt-to-song generation. This cannot be used when lyrics is provided.",
+     "examples": [
+      [
+       "pop",
+       "rock"
+      ]
+     ]
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 2000,
+     "desc": "Describe the desired song, mood, instrumentation, and vocals. Required when lyrics is omitted, up to 2,000 characters. With lyrics, it acts as a music-style control and supports up to 1,024 characters.",
+     "examples": [
+      "A bright summer love song with a catchy chorus"
+     ]
+    },
+    "gender": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "female",
+      "male"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Preferred vocal gender for lyrics-to-song generation. An uploaded or cloned voice takes precedence."
+    },
+    "reference_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Reference-music ID returned by /files/upload with purpose='reference'."
+    },
+    "vocal_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Voice ID returned by /voice/clone."
+    },
+    "melody_id": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Melody ID returned by /files/upload with purpose='melody'. This cannot be combined with prompt, reference_id, or vocal_id."
+    },
+    "model": {
+     "type": "enum",
+     "values": [
+      "mureka-7.6",
+      "mureka-o2",
+      "mureka-8",
+      "mureka-9",
+      "mureka-9.5"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "mureka-9.5",
+     "desc": "The model to use for song generation."
+    },
+    "duration": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 120,
+     "maximum": 300,
+     "desc": "Target song duration in seconds. Supported only by model 9.5. If omitted, the model determines the duration automatically. The length of the lyrics also affects the target duration."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "lyrics_sections",
+    "duration",
+    "audio",
+    "song_id"
+   ],
+   "price": "Billing is calculated per generated song and depends on the selected model and whether you provide lyrics. With lyrics, your request will cost $0.03 per song with mureka-7.6, $0.045 with mureka-o2, mureka-8 and mureka-9, and $0.15 with mureka-9.5 (the default). With only a prompt, it will cost $0.30 per song with mureka-7.6, mureka-o2, mureka-8 and mureka-9, and $0.50 with mureka-9.5. Each request returns one song.",
+   "license": "Proprietary hosted API (Mureka on fal); songs come back with a song_id the song tools (extend, remix, edit) take",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/mureka/api/generate/song",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=mureka/api/generate/song",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "elevenlabs",
+   "model": "ElevenLabs Music v2.5",
+   "title": "ElevenLabs Music v2.5",
+   "vendor": "ElevenLabs",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "elevenlabs/music/v2.5",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "duration": "music_length_ms"
+   },
+   "inputs": {
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "maxLength": 4100,
+     "desc": "The text prompt describing the music to generate",
+     "examples": [
+      "Mysterious original soundtrack, themes of jungle, rainforest, nature, woodwinds, busy rhythmic tribal percussion."
+     ]
+    },
+    "composition_plan": {
+     "nullable": true,
+     "type": "object",
+     "fields": {
+      "chunks": {
+       "type": "array",
+       "items": "object",
+       "itemSchema": {
+        "text": {
+         "type": "string",
+         "required": false,
+         "desc": "The text to generate for this chunk. Can start with an optional section name in square brackets, e.g. [Verse 1], followed by lyric lines, plus inline directions in curly braces, e.g. {scratching}. Section names must be between 1 and 100 characters. At most 30 lines are allowed, each at most 200 characters.",
+         "examples": [
+          "[Verse 1]\nNeon rain on empty streets\nI keep walking to the beat"
+         ]
+        },
+        "duration_ms": {
+         "type": "integer",
+         "required": false,
+         "minimum": 3000,
+         "maximum": 120000,
+         "desc": "The duration of the chunk in milliseconds. Must be between 3000ms and 120000ms."
+        },
+        "negative_styles": {
+         "nullable": true,
+         "type": "array",
+         "items": "string",
+         "required": false,
+         "desc": "The styles and musical directions that should not be present in this chunk. Leaving this empty is a good default; only set it to explicitly avoid a particular style or direction."
+        },
+        "positive_styles": {
+         "type": "array",
+         "items": "string",
+         "required": false,
+         "desc": "The styles and musical directions that should be present in this chunk. Use English for best results. The styles of the first chunk matter most as they set the overall tone and genre; later chunks can add nuance, progression or change direction.",
+         "examples": [
+          [
+           "synthwave",
+           "analog drum machine",
+           "great production quality"
+          ]
+         ]
+        },
+        "context_adherence": {
+         "nullable": true,
+         "type": "enum",
+         "values": [
+          "low",
+          "medium",
+          "high"
+         ],
+         "valueType": "string",
+         "required": false,
+         "desc": "How closely this chunk follows the context of its surrounding chunks. Low adherence lets the model deviate and be more creative, high adherence keeps it consistent with the surrounding context."
+        },
+        "audio_reference": {
+         "nullable": true,
+         "type": "object",
+         "fields": {
+          "start_ms": {
+           "type": "integer",
+           "required": false,
+           "default": 0,
+           "minimum": 0,
+           "desc": "Offset into the clip where the referenced window starts, in milliseconds."
+          },
+          "strength": {
+           "nullable": true,
+           "type": "enum",
+           "values": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+           ],
+           "valueType": "string",
+           "required": false,
+           "desc": "How strongly the model follows the reference. Low lets it deviate and be more creative, high keeps it close to the reference."
+          },
+          "end_ms": {
+           "nullable": true,
+           "type": "integer",
+           "required": false,
+           "minimumExclusive": 0,
+           "desc": "Offset into the clip where the referenced window ends, in milliseconds. Defaults to 30000ms after start_ms, or the end of the clip if it is shorter. The window must be at most 30000ms long."
+          },
+          "audio_url": {
+           "type": "string",
+           "required": false,
+           "desc": "URL of the audio clip to use as the style reference.",
+           "examples": [
+            "https://storage.googleapis.com/falserverless/example_outputs/elevenlabs/music_generated.mp3"
+           ]
+          }
+         },
+         "required": false,
+         "desc": "An audio clip whose style conditions this chunk. The reference on the first chunk matters most: it influences every later chunk, so condition from the first chunk to style the whole song."
+        }
+       },
+       "itemRequired": [
+        "text",
+        "duration_ms",
+        "positive_styles"
+       ],
+       "minItems": 1,
+       "maxItems": 30,
+       "required": false,
+       "desc": "The chunks that make up the generation, in order. At most 30 chunks, totalling between 3000ms and 600000ms."
+      }
+     },
+     "required": false,
+     "desc": "The chunk-based composition plan for the music"
+    },
+    "music_length_ms": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 3000,
+     "maximum": 600000,
+     "desc": "The length of the song to generate in milliseconds. Used only in conjunction with prompt. Must be between 3000ms and 600000ms. Optional - if not provided, the model will choose a length based on the prompt."
+    },
+    "force_instrumental": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If true, guarantees that the generated song will be instrumental. If false, the song may or may not be instrumental depending on the prompt. Can only be used with prompt."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed to initialize the music generation process. Can only be used with composition_plan. The same seed with the same parameters gives more consistent results, but exact reproducibility is not guaranteed."
+    },
+    "output_format": {
+     "type": "enum",
+     "values": [
+      "mp3_22050_32",
+      "mp3_24000_48",
+      "mp3_44100_32",
+      "mp3_44100_64",
+      "mp3_44100_96",
+      "mp3_44100_128",
+      "mp3_44100_192",
+      "mp3_48000_128",
+      "mp3_48000_192",
+      "mp3_48000_240",
+      "mp3_48000_320",
+      "pcm_8000",
+      "pcm_16000",
+      "pcm_22050",
+      "pcm_24000",
+      "pcm_32000",
+      "pcm_44100",
+      "pcm_48000",
+      "ulaw_8000",
+      "alaw_8000",
+      "opus_48000_32",
+      "opus_48000_64",
+      "opus_48000_96",
+      "opus_48000_128",
+      "opus_48000_192"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "mp3_48000_192",
+     "desc": "Output format of the generated audio. Formatted as codec_sample_rate_bitrate. So an mp3 with 22.05kHz sample rate at 32kbs is represented as mp3_22050_32. Note that the μ-law format (sometimes written mu-law, often approximated as u-law) is commonly used for Twilio audio inputs."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "audio"
+   ],
+   "price": "Your request will cost $0.6 per output audio minute. The audio will be rounded up to the closest minute. For instance, a generation with 30 seconds output will be billed as 1 minute.",
+   "license": "Proprietary hosted API; billed per output minute, rounded up; lyrics go in a composition plan of timed chunks (recorded, not sent)",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/elevenlabs/music/v2.5",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=elevenlabs/music/v2.5",
+   "capability": "music",
+   "fetched": "2026-11-01"
+  },
+  {
+   "family": "lyria",
+   "model": "Lyria 3.5",
+   "title": "Lyria 3.5",
+   "vendor": "Google",
+   "operation": "music",
+   "provider": "fal",
+   "endpoint": "google/lyria-3.5",
+   "falCategory": "text-to-audio",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "lyricsInPrompt": "prompt"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "The text prompt describing the music you want to generate. Include genre, mood, instrumentation, tempo, vocals, and structure for best results. Lyria 3.5 supports full-length songs up to a few minutes — use timestamps or duration hints in your prompt to control song length, e.g. 'a 2-minute track' or section markers like '[0:00-0:30] Intro: ...' / '[0:30-1:00] Verse: ...'. Supports English, German, Spanish, French, Hindi, Japanese, Korean, and Portuguese.",
+     "examples": [
+      "An uplifting pop song with driving electric guitar, energetic drums, and a catchy chorus singing 'Rise up and shine today'. 120 BPM. Two minutes long with a verse-chorus-verse-chorus-bridge-chorus structure."
+     ]
+    },
+    "negative_prompt": {
+     "type": "string",
+     "required": false,
+     "default": "",
+     "desc": "Negative prompting is not supported by Lyria 3.5."
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional image URL to use as visual inspiration for music generation. The model will create music that matches the mood and theme of the image.",
+     "examples": [
+      "https://v3b.fal.media/files/b/0a93b559/qjT9o0CId1B65PbD6Yp06_9c94501900464c5aa98f302fa4b00375.png"
+     ]
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "audio.url",
+   "outputFields": [
+    "audio",
+    "lyrics"
+   ],
+   "price": "Price: $0.1 per generations",
+   "license": "Proprietary hosted API; lyrics and section timings go in the prompt (its description says so)",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/google/lyria-3.5",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=google/lyria-3.5",
+   "capability": "music",
+   "fetched": "2026-11-01"
   }
  ]
 }
