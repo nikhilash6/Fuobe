@@ -748,6 +748,23 @@ model("fuobe-evolution", "Fuobe Evolution", "Fuobe Original", "fuobe-evolution",
                                                {"byResolution": {"720p": 0.1, "580p": 0.075, "480p": 0.05}}),
       options={"resolutions": EVOLUTION["resolutions"]}, api_defaults=EVOLUTION["defaults"], defaults={"resolution": "720p"},
       licence={**SHORTS_O["licence"], "note": "Wan 2.2 Fun VACE A14B and Qwen-Image-Edit 2511 (the direction frames) are Apache-2.0"})
+# ----- Original (package archive-restore): Fuobe Restore's cloud half, Lightricks' Restore IC-LoRA on fal's LTX-2.3 22B
+# reference video to video (research studios[archive-restore].original.cloud). The archive clip is the reference video, the
+# LoRA (gated on Hugging Face) goes by Fuobe's mirror URL; fal's own IC-LoRAs and preprocessors stay out. One untiled pass a
+# call at the tier's size for the clip's nearest shape (Fuobe Cinema's table: the card's 1440x1088 / 1920x1088 at 1080p), as
+# many frames as the piece (src/lib/catalog/restore.ts cuts 97-frame pieces), at the clip's own frame rate. Priced per
+# megapixel of video like Fuobe Cinema; the endpoint is the /lora one, so its price is the LoRA price.
+RESTORE_O = next(s for s in ORIGINALS["studios"] if s["id"] == "archive-restore")["original"]["cloud"]
+RESTORE_MP = per_megapixel(RESTORE_O["endpoint"])
+RESTORE_PER_SECOND = {t: round(s["4:3"][0] * s["4:3"][1] * 24 / 1e6 * RESTORE_MP, 4) for t, s in CINEMA_SIZES.items() if t != "480p"}
+model("fuobe-restore", "Fuobe Restore", "Fuobe Original", "fuobe-restore", "video",
+      "Restore and colourise archive footage: Lightricks' Restore IC-LoRA on LTX-2.3, one untiled pass a piece",
+      [("restore-video", RESTORE_O["endpoint"], "fal", {"fixed": RESTORE_O["fixed"], "defaults": RESTORE_O["defaults"]})],
+      original=True, sizes={t: s for t, s in CINEMA_SIZES.items() if t != "480p"},
+      pricing=("second", RESTORE_PER_SECOND["720p"],
+               f"${RESTORE_MP} per megapixel of video (width × height × frames): about ${round(RESTORE_PER_SECOND['720p'] * 4, 2)} for 4 s of a 4:3 clip at 720p",
+               {"byResolution": RESTORE_PER_SECOND, "videoMegapixel": {"usd": RESTORE_MP}}),
+      defaults={"aspectRatio": "4:3", "resolution": "720p"}, frame_step=8)
 # ----- Originals (O11): the rebranded open tools and Speak on hosted open weights (research studios[angles].original,
 # studios[speak].original). Fuobe Angles is fal's LoRA-gallery route of Qwen-Image-Edit 2509 with dx8152's Multiple-angles
 # LoRA: Higgsfield Angles' controls are its fields (rotate −90…90°, positive = left; vertical −1…1, −1 = bird's-eye;
@@ -1874,7 +1891,7 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # becomes frames (FieldMap.numFrames, 4n+1 / 8n+1 by model), and the durations offered are the ones that fit.
     nf = kf.get("numFrames") or (kf.get("duration") if kf.get("duration") in ("num_frames", "frames") else None)
     # A talking avatar's frame count (fal's InfiniteTalk, Wan 2.2 S2V) follows the voice's length (params.sourceDuration).
-    if nf and op in ("t2v", "i2v", "flf2v", "extend", "v2v", "avatar") and (inputs.get(nf) or {}).get("type") == "integer":
+    if nf and op in ("t2v", "i2v", "flf2v", "extend", "v2v", "avatar", "restore-video") and (inputs.get(nf) or {}).get("type") == "integer":
         kf.pop("duration", None)
         kf.pop("numFrames", None)
         spec = inputs.get(nf) or {}

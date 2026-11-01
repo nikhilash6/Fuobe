@@ -815,6 +815,12 @@
     "error": null,
     "at": "2026-10-16T23:33:15.433Z"
   },
+  "video-restore-ltx25-tiled": {
+    "sha256": "5da276f2353f7394c408dee24bf62110f74061efde401a9ba5741f85aa6d7c85",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'the archive clip as the frame-aligned IC-LoRA reference (downscale 1, untiled encode); use_streaming only for a whole clip past 97 frames' not found. The custom node may not be installed. (Node ID '#guide')",
+    "at": "2026-10-30T14:25:45.648Z"
+  },
   "video-restyle-wan22-fun-vace": {
     "sha256": "e11ef47ba766cc4ce8bda70c6e16b6c4736a683b88f8cf86e6c569e56eaed1c6",
     "validated": true,

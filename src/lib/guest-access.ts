@@ -101,7 +101,7 @@ const PREVIEWS = [/^\/api\/(generations|audio-tools|dub|katana|turnaround|influe
 
 /** The estimate routes (named: a dynamic segment called "estimate" on another route must not pass for one). */
 const ESTIMATES =
-  /^\/api\/(ads|ads\/multiplier|assist\/skills\/[^/]+|content-factory|evolution|faceless|genjutsu|influencer|marketing|marketing\/click-to-ad|mixed-media|remove-object|shorts|storyboards|turnaround)\/estimate$/;
+  /^\/api\/(ads|ads\/multiplier|assist\/skills\/[^/]+|content-factory|evolution|faceless|genjutsu|influencer|marketing|marketing\/click-to-ad|mixed-media|remove-object|restore|shorts|storyboards|turnaround)\/estimate$/;
 
 /** A POST that only plans and prices a run (an estimate route, or ?preview=1 where PREVIEWS honours it): free, and open to guests. */
 export function isPriceCheck(method: string, pathname: string, search: string): boolean {

@@ -155,6 +155,8 @@ export const CUSTOM_NODE_REPOS = {
   'h3-relay': 'https://github.com/akatz-ai/h3-relay/tree/e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220',
   // DBS soundtrack separation (docs/research/dbs-separation-7.md §4): pinned in install-comfyui.sh, not on the validation server.
   'ComfyUI-DBS': 'https://github.com/hiroki-abe-58/ComfyUI-DBS/tree/f656e53434b5485c148a2866fbd6ddc6b6152ed6',
+  // Restore & colourise (package archive-restore): Lightricks' LTX nodes, pinned in install-comfyui.sh, not on the validation server.
+  'ComfyUI-LTXVideo': 'https://github.com/Lightricks/ComfyUI-LTXVideo/tree/220e1d45aa0469f518e982102fca4dca92a61862',
   // Owner's SOTA image families (2026-10-31): AusBoss's crop, pad and stitch nodes (Qwen-Image 2.1 inpaint and expand), MIT.
   'ausboss-nodes': 'https://github.com/ausboss/ComfyUI-AusBoss',
   // Krea 2 edits (the owner's SOTA families, 2026-10-31): the Krea 2 Identity Edit nodes, and Ostris' edit nodes that
@@ -174,6 +176,7 @@ export const PACK_CLASSES = {
   h3_character_swap: /^H3CharacterSwap/,
   'h3-relay': /^(H3Relay|LabsH3)/,
   'ComfyUI-DBS': /^DBS(Loader|Separate)$/,
+  'ComfyUI-LTXVideo': /^(LTXICLoRALoaderModelOnly|LTXAddVideoICLoRAGuide|LTXVTiledFusionSampler)$/,
   'ausboss-nodes': /^AUSBOSS_NODES_/,
   // Installed on the validation server, but a ComfyUI with comfyui-workflow-encrypt names that pack as these classes' module.
   'comfyui-krea2edit': /^Krea2Edit(ModelPatch|GroundedEncode)$/,
@@ -186,6 +189,8 @@ export const PACK_CLASSES = {
 // Model download locations for files that the source workflow does not annotate
 // (UI templates usually carry node.properties.models; custom-node examples do not).
 export const KNOWN_MODELS = {
+  // archive-restore: Lightricks' Detail Refine IC-LoRA (stage 2 of Restore & colourise), gated, at the researched commit.
+  'ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors': { folder: 'loras', url: 'https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details/resolve/4912c478b35dd96b6cdcc5f7c7ff9d72c2c57929/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors' },
   'ltx-2.3-22b-distilled-fp8.safetensors': { folder: 'checkpoints', url: 'https://huggingface.co/Lightricks/LTX-2.3-fp8/resolve/main/ltx-2.3-22b-distilled-fp8.safetensors' },
   'gemma_3_12B_it_fp4_mixed.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors' },
   'RealESRGAN_x4plus.safetensors': { folder: 'upscale_models', url: 'https://huggingface.co/Comfy-Org/Real-ESRGAN_repackaged/resolve/main/RealESRGAN_x4plus.safetensors' },
@@ -2854,6 +2859,57 @@ export const SPEC = [
     notes:
       'ltx23-i2v-lora without the start frame: the empty latent takes width x height directly. LoRAs injected after the CheckpointLoaderSimple. Silent (the audio is not decoded). ' +
       'Suits LTX camera LoRAs when there is no start frame.',
+  },
+
+  // ---- Restore & colourise (package archive-restore): Lightricks' Restore IC-LoRA, tiled latent fusion --------------
+  {
+    id: 'video-restore-ltx25-tiled',
+    title: 'Restore & colourise archive footage: LTX-2.5 22B distilled + the Restore IC-LoRA, tiled latent fusion, one 97-frame window with the 17-frame prefix hand-off (stage 2: the Detail Refine IC-LoRA) (ComfyUI-LTXVideo pack)',
+    capability: 'restore-video',
+    handBuilt: 'hand-built/video-restore-ltx25-tiled.json',
+    packs: ['ComfyUI-LTXVideo'],
+    modelUrls: {
+      // The LTX-2.5 files ltx25-i2v / ltx25-t2v load (their template's links), and the Restore IC-LoRA at the researched commit.
+      'ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors': 'https://huggingface.co/Lightricks/LTX-2.5/resolve/main/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors',
+      'ltx-2.5-video-vae-bf16.safetensors': 'https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-bf16.safetensors',
+      'gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors': 'https://huggingface.co/Lightricks/LTX-2.5/resolve/main/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors',
+      'ltx-2.5-22b-ic-lora-restore-1.0.safetensors': 'https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore/resolve/79245e197a6cd3251e77d178dc380b0e9f2d6563/ltx-2.5-22b-ic-lora-restore-1.0.safetensors',
+    },
+    optionalModels: ['ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors'],
+    bindings: {
+      video: [b('source', 'video')], video2: [b('prefix_source', 'video')], image: [b('reference', 'image')],
+      prompt: [b('positive', 'text')], negativePrompt: [b('negative', 'text')], seed: [b('sample', 'seed')], cfg: [b('sample', 'cfg')],
+      fps: [b('conditioning', 'frame_rate'), b('video', 'fps')],
+      windowStart: [b('source', 'skip_first_frames')], windowFrames: [b('source', 'frame_load_cap'), b('empty', 'length')],
+      canvasWidth: [b('canvas', 'width'), b('empty', 'width'), b('reference_fit', 'width')],
+      canvasHeight: [b('canvas', 'height'), b('empty', 'height'), b('reference_fit', 'height')],
+      fieldWidth: [b('field', 'width')], fieldHeight: [b('field', 'height')],
+      prefixFrom: [b('prefix_source', 'skip_first_frames')], prefixFrames: [b('keep', 'batch_index')],
+      lora: [b('lora', 'lora_name')], loraStrength: [b('lora', 'strength_model')],
+      tileWidth: [b('sample', 'tile_width')], tileHeight: [b('sample', 'tile_height')],
+      streaming: [b('guide', 'use_streaming')], tileFrames: [b('sample', 'tile_frames')],
+      filenamePrefix: [b('save', 'filename_prefix')],
+    },
+    outputs: [{ node: 'save', kind: 'video' }],
+    defaults: {
+      lora: 'ltx-2.5-22b-ic-lora-restore-1.0.safetensors', windowStart: 0, windowFrames: 97, prefixFrames: 0, prefixFrom: 80, canvasWidth: 1440, canvasHeight: 1088,
+      fieldWidth: 640, fieldHeight: 240, tileWidth: 960, tileHeight: 544, streaming: false, tileFrames: 0,
+    },
+    limits: { maxWidth: 3840, maxHeight: 3840, maxFrames: 481, dimensionMultiple: 32, frameStep: 8 },
+    vramGb: 24,
+    license:
+      'LTX-2.x Community License (LTX-2.5 22B distilled, its video VAE, and Lightricks\' Restore and Detail Refine IC-LoRAs, both gated on Hugging Face: free under US$10M annual revenue); ' +
+      'Gemma 4 text encoder packaged by Lightricks; ComfyUI-LTXVideo nodes under the LTX-2 Community License (its LICENSE file)',
+    notes:
+      'Built from the Restore IC-LoRA card\'s recipe (Hugging Face Lightricks/LTX-2.5-22b-IC-LoRA-Restore at 79245e1, read as data) and the node definitions of ComfyUI-LTXVideo at 220e1d4 ' +
+      '(its LTX-2.5_V2V_TiledFusion_Upscale example wires the same nodes): the window (windowStart, windowFrames: 8n+1, at most 97) read at the clip\'s own rate, lanczos to the canvas ' +
+      '(canvasWidth x canvasHeight: 1440x1088 for 4:3, 1920x1088 for 16:9), the frame-aligned IC-LoRA guide at downscale 1, LTXVTiledFusionSampler with 960x544 tiles at 50% overlap ' +
+      'and the 8 distilled sigmas (euler, cfg 1), tiled decode, silent H.264 (the pipeline puts the sound back after the join). ' +
+      'video2 = the window before\'s saved frames; its last 17 (prefixFrom) go in as LTXVAddGuide at frame 0, and prefixFrames (17) drops them from this window\'s output; absent on the ' +
+      'first window (the provider removes that branch). image = an optional reference picture at frame_idx -1 (a second IC-LoRA guide; removed without one). deinterlace keeps one field ' +
+      '(fieldWidth x fieldHeight, nearest rows: no blending; ComfyUI has no fieldmatch/yadif/decimate node), removed when off. Stage 2 (Restore to 4K): the same graph on the restored clip ' +
+      'with the Detail Refine IC-LoRA, a 2x canvas and 1024x576 tiles. A single generation of a whole clip past 97 frames streams: streaming on the guide and tileFrames 97 on the sampler ' +
+      '(the card\'s other long-clip path; no reference picture there). Needs the ComfyUI-LTXVideo pack.',
   },
 
   // ---- Shorts Studio / Mixed Media: trim, segment, restyle ------------------------

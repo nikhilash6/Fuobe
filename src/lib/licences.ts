@@ -458,6 +458,12 @@ export const NODE_PACKS: NodePack[] = [
     ...GPL,
     note: "H3 Relay 2.0 (Sendy Software LLC and contributors); GPL-3.0 code, vendored Context Loop and Spectrum GPL-3.0. Opt-in (H3_RELAY=1): it registers HTTP routes when it loads",
   }),
+  // Restore & colourise (package archive-restore): Lightricks' LTX nodes (IC-LoRA loader and guide, tiled fusion sampler).
+  pack("ComfyUI-LTXVideo", "https://github.com/Lightricks/ComfyUI-LTXVideo/tree/220e1d45aa0469f518e982102fca4dca92a61862", {
+    name: "LTX-2 Community License",
+    class: "conditions",
+    note: "Lightricks' LTX nodes (IC-LoRA loader and guide, per-step tiled latent fusion); the repository's LICENSE is the LTX-2 Community License: free, commercial use included, below US$10M annual revenue",
+  }),
   // DBS soundtrack separation (docs/research/dbs-separation-7.md §3.2), pinned in install-comfyui.sh.
   pack("ComfyUI-DBS", "https://github.com/hiroki-abe-58/ComfyUI-DBS/tree/f656e53434b5485c148a2866fbd6ddc6b6152ed6", {
     name: "MIT",

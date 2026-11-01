@@ -53,6 +53,15 @@
     "subdir": null,
     "folders": []
   },
+  "ComfyUI-LTXVideo": {
+    "repo": "https://github.com/Lightricks/ComfyUI-LTXVideo",
+    "commit": "220e1d45aa0469f518e982102fca4dca92a61862",
+    "registry": { "id": "ComfyUI-LTXVideo", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
   "ComfyUI-LatentSyncWrapper": {
     "repo": "https://github.com/ShmuelRonen/ComfyUI-LatentSyncWrapper",
     "commit": "360d5283d7276aee68b4237b1387e594e4ce640e",

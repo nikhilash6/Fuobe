@@ -20196,6 +20196,168 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     }
   },
   {
+    "id": "fuobe-restore",
+    "name": "Fuobe Restore",
+    "vendor": "Fuobe Original",
+    "family": "fuobe-restore",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Restore and colourise archive footage: Lightricks' Restore IC-LoRA on LTX-2.3, one untiled pass a piece",
+    "routes": [
+      {
+        "op": "restore-video",
+        "provider": "fal",
+        "endpoint": "fal-ai/ltx-2.3-22b/reference-video-to-video/lora",
+        "map": {
+          "negativePrompt": "negative_prompt",
+          "image": "image_url",
+          "video": "video_url",
+          "seed": "seed",
+          "generateAudio": "generate_audio",
+          "fps": "fps",
+          "numFrames": {
+            "key": "num_frames",
+            "fps": 24,
+            "min": 9,
+            "max": 481,
+            "step": 8
+          },
+          "size": {
+            "key": "video_size",
+            "multiple": 16,
+            "table": {
+              "720p": {
+                "21:9": [
+                  1504,
+                  640
+                ],
+                "16:9": [
+                  1280,
+                  704
+                ],
+                "4:3": [
+                  1024,
+                  768
+                ],
+                "1:1": [
+                  960,
+                  960
+                ],
+                "3:4": [
+                  768,
+                  1024
+                ],
+                "9:16": [
+                  704,
+                  1280
+                ]
+              },
+              "1080p": {
+                "21:9": [
+                  2240,
+                  960
+                ],
+                "16:9": [
+                  1920,
+                  1088
+                ],
+                "4:3": [
+                  1440,
+                  1088
+                ],
+                "1:1": [
+                  1088,
+                  1088
+                ],
+                "3:4": [
+                  1088,
+                  1440
+                ],
+                "9:16": [
+                  1088,
+                  1920
+                ]
+              }
+            }
+          },
+          "fixed": {
+            "ic_lora_type": "none",
+            "preprocessor": "none",
+            "enable_prompt_expansion": false,
+            "generate_audio": false,
+            "match_video_length": true,
+            "match_input_fps": true
+          },
+          "defaults": {
+            "negative_prompt": "modern cars, modern buildings, shipping containers, mobile phones, logos, signage, lettering, graffiti, satellite dishes, plastic furniture, blocky compression, banding, mosquito noise, ringing, blurry, smeared, ghosting, low resolution"
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "required": true,
+            "range": {
+              "min": 0,
+              "max": 4
+            },
+            "weightName": true
+          }
+        }
+      }
+    ],
+    "options": {
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15,
+        20
+      ],
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "resolutions": [
+        "720p",
+        "1080p"
+      ],
+      "negativePrompt": true,
+      "seed": true,
+      "audio": true,
+      "maxImages": 1
+    },
+    "licence": {
+      "licence": "LTX-2 / LTX-2.x Community License",
+      "commercial": true,
+      "note": "Free for companies under US$10M annual revenue; above that a paid licence (github.com/Lightricks/LTX-2 LICENSE-2, LICENSE-2_x, section 2.1)",
+      "checked": "2026-10-23"
+    },
+    "defaults": {
+      "aspectRatio": "4:3",
+      "resolution": "720p",
+      "generateAudio": true
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.0341,
+      "note": "$0.001805 per megapixel of video (width \u00d7 height \u00d7 frames): about $0.14 for 4 s of a 4:3 clip at 720p",
+      "byResolution": {
+        "720p": 0.0341,
+        "1080p": 0.0679
+      },
+      "videoMegapixel": {
+        "usd": 0.001805
+      }
+    }
+  },
+  {
     "id": "fuobe-angles",
     "name": "Fuobe Angles",
     "vendor": "Fuobe Original",

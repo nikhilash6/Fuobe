@@ -18,8 +18,10 @@ import {
   Heart,
   ImagePlus,
   Layers2,
+  Palette,
   LayoutDashboard,
   Mic2,
+  MicOff,
   MoreHorizontal,
   Pin,
   Repeat,
@@ -91,6 +93,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "voice-change": AudioLines,
   "loop-audio": Repeat,
   "split-soundtrack": SlidersVertical,
+  "remove-dialogue": MicOff,
   "copy-text": Copy,
   "view-3d": Box,
   download: Download,
@@ -111,6 +114,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   delete: Trash2,
   "delete-upload": Trash2,
   restore: ArchiveRestore,
+  "restore-video": Palette,
   "delete-forever": Trash2,
 };
 

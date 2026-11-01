@@ -1,11 +1,14 @@
 import "server-only";
 import { SPLIT_MODEL } from "@/lib/av/split";
+import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
 import { graphLoras } from "@/lib/catalog/character-swap";
 import { PATH_MODELS } from "@/lib/catalog/cinema";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
-import { libraryEntry, needsToken } from "@/lib/catalog/loras";
+import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
+import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
+import { libraryEntry, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
 import { ANGLES_2511_LORA } from "@/lib/catalog/open-tools";
 import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
@@ -187,10 +190,32 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/upscale/hdr", label: "SDR to HDR", group: "Video tools", config: S.SDR_TO_HDR_STUDIO },
   { href: "/upscale/export", label: "Export", group: "Video tools", config: S.VIDEO_EXPORT_STUDIO },
   { href: "/video-tools", label: "Remove background", group: "Video tools", config: S.VIDEO_MATTE_STUDIO },
+  // DBS D2: the split, then the stream-copy mux (one stem in place of the sound, or the voice over the lowered bed).
+  {
+    href: "/video-tools/remove-dialogue",
+    label: "Remove dialogue",
+    group: "Video tools",
+    steps: [
+      { modelId: REMOVE_DIALOGUE_MODELS.split, op: "separate-audio" },
+      { modelId: REMOVE_DIALOGUE_MODELS.mux, op: "mux" },
+    ],
+  },
   { href: "/video-tools/relight", label: "Relight", group: "Video tools", config: S.VIDEO_RELIGHT_STUDIO },
   { href: "/video-tools/depth", label: "Depth map", group: "Video tools", config: S.VIDEO_DEPTH_STUDIO },
   { href: "/video-tools/join", label: "Join clips", group: "Video tools", config: S.JOIN_CLIPS_STUDIO },
   { href: "/video-tools/colors", label: "Match colors", group: "Video tools", config: S.VIDEO_COLOR_MATCH_STUDIO },
+  // Restore & colourise (archive-restore): the tiled-fusion graph with the gated Restore IC-LoRA (the graph loads it
+  // itself), then the windows joined packet by packet (the join planRestore runs) and the sound put back. "Restore to 4K"'s Detail Refine LoRA is an option, not listed.
+  {
+    href: "/video-tools/restore",
+    label: "Restore & colourise",
+    group: "Video tools",
+    steps: [
+      { modelId: RESTORE.model, op: "restore-video", loras: [loraRef(loraEntry(RESTORE.loras.restore.key)!)] },
+      { modelId: RESTORE_OPEN_JOIN, op: "concat" },
+      { modelId: REMOVE_TOOLS.open.mux, op: "mux" },
+    ],
+  },
 ];
 
 /** A studio row's tool: its open default model on the studio's operations (or its own graphs, or its steps). */

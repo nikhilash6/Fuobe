@@ -360,6 +360,7 @@ describe("studio tools", () => {
     ],
     create_ads: [{ brief: "oat milk for runners" }, { brief: "oat milk", product_image: image, count: 2, aspect_ratios: ["1:1", "9:16"] }],
     add_captions: [{ video }, { video, translate_to: "Spanish" }],
+    restore_video: [{ video }, { video, prompt: "a harbour in the 1930s, natural colour", reference: image }],
   };
 
   it("every studio tool plans without errors on both engines in demo mode", () => {

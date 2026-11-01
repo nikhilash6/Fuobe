@@ -5,6 +5,7 @@ import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
+import { RESTORE, offlineRestorePrompt } from "./restore";
 import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
@@ -47,6 +48,11 @@ const VIDEO_UPSCALE_TIERS = ["720p", "1080p", "1440p", "2160p"];
 // ---------------------------------------------------------------------------
 // Open source · ComfyUI
 
+/** Fuobe Restore's LoRA in the cloud (research adapterLoras): Lightricks' Restore IC-LoRA, gated, sent as Fuobe's mirror. */
+const RESTORE_LORA = (() => {
+  const e = loraEntry("ltx-2-5-22b-ic-lora-restore-1-0");
+  return e ? { ...loraRef(e), adapter: true as const } : undefined;
+})();
 /** Fuobe Try-On's LoRA (research adapterLoras): xocialize's try-on LoRA for FLUX.2 [klein] 4B, Apache-2.0. */
 const TRYON_LORA = loraEntry("tryon-klein-4b");
 /** The try-on LoRA card's own instruction, for a run with no words. */
@@ -2230,6 +2236,36 @@ const originals: ModelDef[] = [
     }),
     engineDefaults: { open: { aspectRatio: "9:16" } },
     engineOptions: { open: { aspectRatios: VID_AR, resolutions: ["480p", "720p"] } },
+  },
+  // Fuobe Restore (package archive-restore): Restore & colourise archive footage with Lightricks' Restore IC-LoRA. On your GPU
+  // LTX-2.5 22B distilled with per-step tiled fusion (src/lib/restore-graph.ts: a whole clip in one pass up to 20 s; Video
+  // tools → Restore runs any clip in chained 97-frame windows, src/lib/catalog/restore.ts); in the cloud fal's LTX-2.3 22B
+  // reference video to video with the same LoRA by Fuobe's mirror, one untiled pass. The GPU graph loads its LoRA itself.
+  {
+    ...original({
+      id: RESTORE.model,
+      open: [comfy("restore-video", RESTORE.workflow, "LTX-2.5 22B distilled + the Restore IC-LoRA, 960x544 tiles fused every step, 8 steps; stage 2 the Detail Refine IC-LoRA")],
+      tagline:
+        "Old, faded or black-and-white footage back in colour and sharp · Lightricks' Restore IC-LoRA on LTX-2.5, free on your GPU (24 GB class), or on LTX-2.3 hosted on fal",
+      options: {
+        promptOptional: true,
+        defaultPrompt: offlineRestorePrompt().prompt,
+        negativePrompt: true,
+        seed: true,
+        maxImages: 1,
+        imageLabels: ["reference picture: true colours, a face or a sign (optional)"],
+      },
+    }),
+    // The cloud renders at a tier's size for the clip's shape, and its image is the first frame (already in colour).
+    engineDefaults: { cloud: { aspectRatio: "4:3", resolution: RESTORE.cloudResolution } },
+    engineOptions: {
+      cloud: {
+        aspectRatios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+        resolutions: [...RESTORE.cloudResolutions],
+        imageLabels: ["first frame, already in colour (optional)"],
+        ...(RESTORE_LORA && { loras: [RESTORE_LORA] }),
+      },
+    },
   },
 ];
 

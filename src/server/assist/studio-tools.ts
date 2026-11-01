@@ -6,6 +6,7 @@ import { getModel } from "@/lib/catalog";
 import { routesFor } from "@/lib/catalog/plan";
 import { FACELESS_STYLE_IDS, STYLES } from "@/lib/catalog/faceless";
 import { FRAME_SEED, MIXED_ORIGINAL } from "@/lib/catalog/mixed-media";
+import { offlineRestorePrompt, RESTORE, restoreNegative } from "@/lib/catalog/restore";
 import { SHORTS_MODELS } from "@/lib/catalog/shorts";
 import type { ChainSlot, Engine, GenerationRequest, Operation } from "@/lib/catalog/types";
 import { TOOL_MODELS } from "@/lib/layers";
@@ -129,7 +130,22 @@ const CaptionsInput = z.object({
   translate_to: z.string().optional().describe("Caption in this language instead (translated subtitles)."),
 });
 
+const RestoreInput = z.object({
+  video: ref.describe("The archive clip: an old scan, tape or black-and-white film (up to 2 minutes)."),
+  prompt: z
+    .string()
+    .optional()
+    .describe("Period, place, light, materials and clothing, ending with the colour wanted, e.g. 'a harbour in the 1930s, overcast morning, wool coats, natural colour'. Left out: written for the clip."),
+  hint: z.string().optional().describe("A few words for the writer when prompt is left out, e.g. 'fishing boats, 1930s'."),
+  negative: z.string().optional().describe("What it must not invent (default: modern objects and video artefacts such as blocky compression)."),
+  restore_to_4k: z.boolean().optional().describe("Your GPU only: a detail pass at twice the size with Lightricks' Detail Refine IC-LoRA."),
+  deinterlace: z.boolean().optional().describe("Your GPU only: keep one field of interlaced tape first."),
+  reference: ref.optional().describe("A picture with the true colours (a colour photo of the place, a face). In the cloud it is the first frame: give the clip's first frame already in colour."),
+  resolution: z.enum(["720p", "1080p"]).optional().describe("Cloud size (default 720p)."),
+});
+
 export type LayersToolInput = z.infer<typeof LayersInput>;
+export type RestoreToolInput = z.infer<typeof RestoreInput>;
 export type RestyleToolInput = z.infer<typeof RestyleInput>;
 export type DubToolInput = z.infer<typeof DubInput>;
 export type FacelessToolInput = z.infer<typeof FacelessInput>;
@@ -144,6 +160,7 @@ export const STUDIO_ROUTES: {
   faceless_episode?: StudioRoute<FacelessToolInput>;
   create_ads?: StudioRoute<AdsToolInput>;
   add_captions?: StudioRoute<CaptionsToolInput>;
+  restore_video?: StudioRoute<RestoreToolInput>;
 } = {};
 
 // ---------------------------------------------------------------------------
@@ -615,7 +632,43 @@ const addCaptions = defineTool({
   },
 });
 
-export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions];
+/** A clip the restore tool can't read: one generation of Fuobe Restore on the whole clip (the graph streams it up to 481 frames). */
+function restoreSteps(i: RestoreToolInput, ctx: ToolContext): PipelineStep[] {
+  const engine = engineOf(ctx);
+  return labelled([
+    {
+      key: "restore",
+      label: "Restored video",
+      request: req({
+        modelId: RESTORE.model,
+        engine,
+        op: "restore-video",
+        prompt: i.prompt?.trim() || offlineRestorePrompt(i.hint).prompt,
+        negativePrompt: i.negative?.trim() || restoreNegative(),
+        inputs: { video: i.video, ...(i.reference && { images: [i.reference] }) },
+        ...(engine === "cloud" && { params: { resolution: i.resolution ?? RESTORE.cloudResolution } }),
+      }),
+    },
+  ]);
+}
+
+const restoreVideo = defineTool({
+  name: "restore_video",
+  description:
+    "Restore and colourise archive footage (old scans, tape, black-and-white film, up to 2 minutes) with Lightricks' Restore IC-LoRA — Fuobe's Restore & colourise tool (Video tools → Restore & colourise), where the result sits beside the original with a Before/After wipe. " +
+    "On your GPU: LTX-2.5 with tiled fusion in 97-frame windows, the sound kept, optional Restore to 4K and deinterlacing (the LoRA is gated: a Hugging Face token in Settings → LoRAs downloads it). " +
+    "In the cloud: fal's LTX-2.3 reference video-to-video in pieces, priced per megapixel. Leave prompt out to have one written. Gated by the same approval card as generate.",
+  schema: RestoreInput,
+  gated: true,
+  title: () => "Restore & colourise",
+  place: (i, ctx) => placeFor(STUDIO_ROUTES.restore_video, i, ctx),
+  plan: (i, ctx) => planVia("restore_video", STUDIO_ROUTES.restore_video, i, ctx, () => planSteps("restore_video", restoreSteps(i, ctx))),
+  async run(i, ctx) {
+    return runVia(STUDIO_ROUTES.restore_video, i, ctx, "Started a restoration", () => startPipeline("Restore & colourise", restoreSteps(i, ctx), "Restore & colourise"));
+  },
+});
+
+export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo];
 
 /** For tests: the fallback pipelines, as they would be created. */
-export const fallbackSteps = { layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests };
+export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests };
