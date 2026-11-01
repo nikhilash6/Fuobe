@@ -90,9 +90,11 @@ describe("moss-image on fal", () => {
     expect(plain).not.toHaveProperty("enable_prompt_expansion");
     const compiled = layoutCompilerFor(cloud)(poster, 1024, 1024);
     expect(compiled.format).toBe("moss");
-    const laid = payload({ extra: { layout: poster, image_size: { width: 1024, height: 1024 } } }, compiled.prompt);
+    // The plan compiles the draft (N7-2): the prompt is its caption.
+    const laid = payload({ aspectRatio: "1:1", extra: { layout: poster } }, poster.summary.caption);
     expect(laid.enable_prompt_expansion).toBe(false);
     expect(laid.prompt).toBe(compiled.prompt);
+    expect(laid.image_size).toEqual({ width: 1024, height: 1024 });
     // The draft rides along for Reuse; it is never sent as a field.
     expect(laid).not.toHaveProperty("layout");
   });

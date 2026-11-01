@@ -304,8 +304,11 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g:
   const single = g.status === "succeeded" && shown.length === 1 ? g.outputs[shown[0]] : null;
   const singleName = single ? downloadName(g, single, shown[0]) : "";
   const p = g.request.params ?? {};
+  // A layout run says so, with its box count (Edit layout reopens them).
+  const boxes = (p.extra?.layout as { items?: unknown[] } | undefined)?.items?.length;
   const meta = [
     g.request.step?.label,
+    boxes ? `Layout · ${boxes} box${boxes === 1 ? "" : "es"}` : undefined,
     g.presetName,
     g.modelName ?? g.modelId,
     OPERATION_LABELS[g.op],

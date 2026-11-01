@@ -53,6 +53,7 @@ import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
 import { createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d } from "./chains";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
+import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
 import { comfyLoraFiles, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, probeComfy, relayFile, type OwnGpu } from "./providers/comfyui";
@@ -1523,7 +1524,9 @@ async function submitNow(
     };
     let prompt = plan.prompt;
     const captioned = plan.model.options.promptFormat === "ideogram4";
-    if (req.params?.enhancePrompt && prompt && !captioned) {
+    // A layout's prompt is compiled boxes (plan.layout): the enhancer would rewrite them, so it never runs on one.
+    const laidOut = !!plan.layout || carriesLayout(req.params?.extra);
+    if (req.params?.enhancePrompt && prompt && !captioned && !laidOut) {
       update(id, { message: "Enhancing prompt" });
       const words = plan.soul?.words;
       const at = words ? prompt.indexOf(words) : -1;
@@ -1535,11 +1538,14 @@ async function submitNow(
       update(id, { prompt });
     }
     // Ideogram 4 reads a JSON caption (src/lib/ideogram-caption.ts): one given as the prompt (a reused run) is kept, plain
-    // words get one written. It becomes the run's prompt, as Enhance's rewrite does, so Reuse makes the same picture.
+    // words get one written. It becomes the run's prompt, as Enhance's rewrite does, so Reuse makes the same picture. A
+    // layout's words are never rewritten by the helper: they get the fixed wrapper.
     if (captioned && prompt) {
       update(id, { message: "Writing the caption" });
       const words = prompt;
-      prompt = parseCaption(words) ?? (await ideogramCaption(words, computeDimensions(plan.params.aspectRatio, plan.params.resolution, {})).catch(() => captionFromWords(words)));
+      prompt =
+        parseCaption(words) ??
+        (laidOut ? captionFromWords(words) : await ideogramCaption(words, computeDimensions(plan.params.aspectRatio, plan.params.resolution, {})).catch(() => captionFromWords(words)));
       update(id, { prompt });
     }
     // MiniMax H3 on your GPU reads its own layout (src/lib/h3-prompt.ts): the words (after any Enhance) go into it, with the

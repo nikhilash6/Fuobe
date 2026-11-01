@@ -1,0 +1,7 @@
+{
+  "_note": "A hand-written fal-ai/moss-image response in the shape of its OpenAPI output (images[], seed, has_nsfw_concepts[], actual_prompt): the layout its prompt expansion planned, with bbox before text as fal's own sample orders it. Not copied from fal; written for Fuobe's Edit layout test.",
+  "images": [{ "url": "https://v3.fal.media/files/example/moss-poster.png", "content_type": "image/png", "width": 1360, "height": 768 }],
+  "seed": 418207,
+  "has_nsfw_concepts": [false],
+  "actual_prompt": "{\"summary\":{\"caption\":\"A warm autumn sale poster for a candle shop\",\"canvas\":\"single\",\"meta\":[\"poster\",\"flat design\"]},\"items\":[{\"label\":\"text\",\"caption\":\"Large cream serif headline\",\"bbox\":[-320,-560,-160,560],\"text\":\"秋季特卖 30% OFF\"},{\"label\":\"object\",\"caption\":\"Three lit amber candles on a wooden tray\",\"bbox\":[-96,-400,320,400],\"tags\":[\"warm light\"]}],\"bbox_coord_space\":\"abs_centralized\",\"bbox_format\":\"yxyx\"}"
+}

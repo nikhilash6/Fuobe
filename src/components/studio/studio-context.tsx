@@ -5,6 +5,7 @@ import type { Engine, GenParams, InputSlot, MediaKind, Operation, Preset } from 
 import type { FeedFilter } from "@/lib/api";
 import type { Signature } from "@/lib/catalog/palettes";
 import type { FrameAttachment } from "@/lib/composer";
+import type { LayoutDraft } from "@/lib/layout-prompt";
 import type { SlotValue } from "./media-slot";
 
 export type SlotKey = InputSlot["key"];
@@ -85,6 +86,11 @@ export interface StudioConfig {
   comfyOnly?: { note: string; alternative?: { label: string; href: string } };
   /** Frames mode (Video studio): up to 10 stills, each at its own time in the clip, instead of a start and an end frame. */
   frames?: boolean;
+  /**
+   * Layout mode (Image studio): boxes drawn on the picture, one row each (an object, a character or exact words),
+   * compiled for the model at the size it renders (src/lib/layout-prompt.ts); the prompt is the whole picture's caption.
+   */
+  layout?: boolean;
 }
 
 export interface Draft {
@@ -103,6 +109,8 @@ export interface Draft {
   signature?: Signature;
   /** Frames mode is on (studios with `frames`): the stills in order, each at its place in the clip. */
   frames?: FrameAttachment<SlotValue>[];
+  /** Layout mode is on (studios with `layout`): the boxes, as fractions of the picture (the prompt is its caption). */
+  layout?: LayoutDraft;
 }
 
 interface Actions {
