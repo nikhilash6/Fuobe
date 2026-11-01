@@ -224,6 +224,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "ideogram4+qwen-image-2.1-edit",
     "variant": "lean-json"
   },
+  "app-clean-up-voice": {
+    "poster": "/previews/presets/app-clean-up-voice.jpg?v=c94ee000",
+    "video": "/previews/presets/app-clean-up-voice.mp4?v=480d1752",
+    "run": "comfyui-previews-2026-10",
+    "engine": "comfyui",
+    "model": "ideogram4+depth-anything-3",
+    "variant": "lean-json"
+  },
   "app-click-to-ad": {
     "poster": "/previews/presets/app-click-to-ad.jpg?v=754f743c",
     "video": "/previews/presets/app-click-to-ad.mp4?v=1d8d8753",

@@ -35,6 +35,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-chameleon": ["c7ce795d","8ca0b29d"],
   "app-change-background": ["063ff95d","4e82f730"],
   "app-character-swap": ["12c015b3","3a0a31dc"],
+  "app-clean-up-voice": ["c94ee000","480d1752"],
   "app-click-to-ad": ["754f743c","1d8d8753"],
   "app-clipcut": ["650eaeac","536db050"],
   "app-cloud-surf": "71a82586",
