@@ -225,8 +225,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-clean-up-voice": {
-    "poster": "/previews/presets/app-clean-up-voice.jpg?v=c94ee000",
-    "video": "/previews/presets/app-clean-up-voice.mp4?v=480d1752",
+    "poster": "/previews/presets/app-clean-up-voice.jpg?v=fc2aa150",
+    "video": "/previews/presets/app-clean-up-voice.mp4?v=e9bfbc55",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "ideogram4+depth-anything-3",
