@@ -15,7 +15,7 @@ const SCOPE: Record<string, Scope[]> = { hide: ["outputs:hide", "outputs:moderat
  */
 export async function POST(request: Request, ctx: RouteContext<"/api/admin/outputs/[action]">) {
   const { action } = await ctx.params;
-  const access = adminAccess(request, SCOPE[action] ?? ["outputs:moderate"], "Only the studio's owner can take results down");
+  const access = adminAccess(request, Object.hasOwn(SCOPE, action) ? SCOPE[action] : ["outputs:moderate"],"Only the studio's owner can take results down");
   if (access instanceof Response) return access;
   const body = (await request.json().catch(() => null)) as { assetIds?: unknown; generationIds?: unknown; evidence?: unknown } | null;
   const t: Targets = { assetIds: list(body?.assetIds), generationIds: list(body?.generationIds) };

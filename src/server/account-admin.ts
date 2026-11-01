@@ -1,5 +1,6 @@
 import "server-only";
-import type { Generation } from "@/lib/catalog/types";
+import path from "node:path";
+import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { accountsMaxBytes, accountTotalBytes } from "./account-files";
 import { listAccounts, type AccountInfo } from "./auth";
 import { db } from "./db";
@@ -122,8 +123,26 @@ export function accountRunOptions(sp: URLSearchParams): ListOptions | { error: s
   };
 }
 
-/** An account's run as the owner sees it: whose it is (null email: the account was deleted). */
-export type AccountRun = Generation & { account: { id: string; email: string | null } };
+/**
+ * Where a result stands: `shown` (served as usual), `held` (hidden, or waiting for its check: served to no account and
+ * by no link) or `removed` (its file is gone).
+ */
+export type OutputState = "shown" | "held" | "removed";
+
+/** An account's run as the owner sees it: whose it is (null email: the account was deleted), and each result's state. */
+export type AccountRun = Omit<Generation, "outputs"> & { outputs: (OutputFile & { state: OutputState })[]; account: { id: string; email: string | null } };
+
+/** Each result's state, read from its stored file (its asset row; none: removed). An output that isn't a stored file is shown. */
+function withStates(outputs: OutputFile[]): (OutputFile & { state: OutputState })[] {
+  const byId = db().prepare("SELECT held FROM assets WHERE id = ?");
+  const byPath = db().prepare("SELECT held FROM assets WHERE rel_path IN (?, ?) LIMIT 1");
+  return outputs.map((o) => {
+    const rel = o.url.startsWith("/api/files/") ? o.url.slice("/api/files/".length) : null;
+    if (!o.assetId && !rel) return { ...o, state: "shown" };
+    const row = (o.assetId ? byId.get(o.assetId) : byPath.get(rel, rel!.split("/").join(path.sep))) as { held: number } | undefined;
+    return { ...o, state: !row ? "removed" : row.held ? "held" : "shown" };
+  });
+}
 
 /** One page of accounts' runs, newest first, and the cursor of the next (null on the last page). Never the owner's. */
 export function listAccountRuns(o: ListOptions): { items: AccountRun[]; next: string | null } {
@@ -134,7 +153,7 @@ export function listAccountRuns(o: ListOptions): { items: AccountRun[]; next: st
   const found = listGenerations(opts).filter((g) => g.request.account);
   const last = found.at(-1);
   return {
-    items: found.map((g) => ({ ...g, account: { id: g.request.account!, email: emails.get(g.request.account!) ?? null } })),
+    items: found.map((g) => ({ ...g, outputs: withStates(g.outputs), account: { id: g.request.account!, email: emails.get(g.request.account!) ?? null } })),
     next: last && found.length === limit ? `${last.createdAt}:${last.id}` : null,
   };
 }

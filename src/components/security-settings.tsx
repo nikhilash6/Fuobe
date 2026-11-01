@@ -155,7 +155,7 @@ function Tokens({ status, onChange }: { status: AuthStatus; onChange: () => void
           <p className="text-[12px] font-medium">Copy this token now — it won&apos;t be shown again.</p>
           <div className="mt-2 flex items-center gap-2">
             {/* The whole token, wrapped (a phone can't show it on one line); one tap selects it all. */}
-            <code aria-label="New API token" className="min-w-0 flex-1 rounded-md bg-background px-2 py-1.5 font-mono text-[12px] break-all select-all">
+            <code aria-label="New API token" className="ph-no-capture min-w-0 flex-1 rounded-md bg-background px-2 py-1.5 font-mono text-[12px] break-all select-all">
               {fresh}
             </code>
             <Button size="sm" variant="secondary" className="shrink-0" onClick={() => void copyWithToast(fresh)}>

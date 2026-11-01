@@ -67,7 +67,7 @@ export function removeOutputs(t: Targets, evidence: boolean): number {
     if (a.generationId) {
       const r = db().prepare("SELECT outputs_json FROM generations WHERE id = ?").get(a.generationId) as { outputs_json: string } | undefined;
       if (r) {
-        const left = (JSON.parse(r.outputs_json) as OutputFile[]).filter((o) => o.assetId !== id);
+        const left = (JSON.parse(r.outputs_json) as OutputFile[]).filter((o) => o.assetId !== id && o.url !== a.url);
         db().prepare("UPDATE generations SET outputs_json = ?, updated_at = ? WHERE id = ?").run(JSON.stringify(left), Date.now(), a.generationId);
       }
     }

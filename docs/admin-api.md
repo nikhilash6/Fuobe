@@ -10,7 +10,7 @@ An admin token:
   `403 "An admin token only works on the admin API."`;
 - does **only what you ticked** when you made it (its scopes);
 - is **never the owner**: it can't sign in, change settings or keys, or make or revoke tokens;
-- is judged on its own: a session cookie sent with it is ignored;
+- stands on its own: a session cookie sent with it is ignored;
 - is stored only as its SHA-256. You see the token once, when you make it.
 
 Every change made through the admin API is written to the **admin log**, and so is every file a token opens and its
@@ -35,16 +35,17 @@ Keep the token out of URLs, logs and shared files. Send it only in the `Authoriz
 | Scope | Lets the token |
 |---|---|
 | `accounts:read` | `GET /api/admin/accounts` (JSON or CSV), `GET /api/admin/accounts/{id}` |
-| `accounts:write` | `PATCH /api/admin/accounts/{id}` with `{ "disabled": true \| false }` or `{ "signOut": true }` |
+| `accounts:write` | `PATCH /api/admin/accounts/{id}` with `{ "disabled": true \| false }` or `{ "signOut": true }` (its paired ComfyUIs stop too) |
 | `accounts:delete` | `DELETE /api/admin/accounts/{id}`: its runs, files and record go. It can't be undone |
 | `runs:read` | `GET /api/admin/generations`: accounts' runs, prompts included (never the owner's own runs) |
 | `runs:delete` | `DELETE /api/admin/generations/{id}`: a run still going is canceled first |
-| `outputs:view` | `GET /api/admin/files/{path}`: an account's stored file, or a held one. Each view is logged |
+| `outputs:view` | `GET /api/admin/files/{path}`: an account's stored file, held ones too (never the owner's own). Each view is logged |
 | `outputs:hide` | `POST /api/admin/outputs/hide` |
 | `outputs:moderate` | `POST /api/admin/outputs/hide`, `/unhide` and `/remove` |
 | `reports:read` | `GET /api/admin/reports` (reporters' emails included) |
 | `workers:read` | `GET /api/admin/workers`, `GET /api/admin/workers/download` |
-| `workers:write` | `POST /api/admin/workers`, `PATCH /api/admin/workers/{id}` |
+| `workers:write` | `PATCH /api/admin/workers/{id}`: pause, resume, drain, hours, lanes, revoke |
+| `workers:tokens` | `POST /api/admin/workers`, and `PATCH /api/admin/workers/{id}` with `rotate`: both answer with a worker token. A worker receives accounts' queued jobs with their input files and sends back the results, so give this scope only to a tool you'd trust with those |
 | `queue:read` | `GET /api/admin/queue` |
 | `audit:read` | `GET /api/admin/audit` |
 
@@ -97,28 +98,31 @@ Times are epoch milliseconds and sizes are bytes. Every answer is `Cache-Control
 | `GET /api/admin/accounts/{id}` | | one account with its numbers; 404 `No such account` |
 | `PATCH /api/admin/accounts/{id}` | exactly one of `{ disabled: boolean }` or `{ signOut: true }` | the account (no numbers) |
 | `DELETE /api/admin/accounts/{id}` | | 204 |
-| `GET /api/admin/generations` | `account`, `status` (`finished`, `running`, `failed`), `kind` (`image`, `video`, `audio`, `model3d`, `text`), `before` (the last page's `next`), `limit` (1 to 100, default 30) | `{ items, next }`; `next` is null on the last page |
+| `GET /api/admin/generations` | `account`, `status` (`finished`, `running`, `failed`), `kind` (`image`, `video`, `audio`, `model3d`, `text`), `before` (the last page's `next`), `limit` (1 to 100, default 30) | `{ items, next }`; `next` is null on the last page. Each output has a `state`: `shown`, `held` (hidden, or waiting for its check) or `removed` (its file is gone) |
 | `DELETE /api/admin/generations/{id}` | | 204; 404 for an unknown run or the owner's own |
 | `POST /api/admin/outputs/hide` | `{ assetIds?, generationIds? }` (up to 500 each) | `{ hidden }` |
 | `POST /api/admin/outputs/unhide` | the same | `{ shown }` |
 | `POST /api/admin/outputs/remove` | the same, and `evidence?: true` to keep the files in a locked folder | `{ removed }` |
-| `GET /api/admin/files/{path}` | `Range` works | the file; 404 for the owner's own files and unknown paths |
+| `GET /api/admin/files/{path}` | `Range` works | the file; 404 for the owner's own files (held or not) and unknown paths |
 | `GET /api/admin/reports` | `limit` (1 to 500, default 100) | `{ items }`, newest first |
 | `GET /api/admin/queue` | | `{ lanes }` |
 | `GET /api/admin/workers` | | `{ workers, lanes }` |
 | `POST /api/admin/workers` | `{ name, pool? }` | 201 `{ id, token }`: the worker's token, once |
-| `PATCH /api/admin/workers/{id}` | any of `paused`, `pauseNow`, `drain`, `autoResume`, `hours`, `allow`, `claimAfterMs`, `switchAfterMs`, `rotate`, `revoke` | `{ worker, token? }`: a new worker token after `rotate`, once |
+| `PATCH /api/admin/workers/{id}` | any of `paused`, `pauseNow`, `drain`, `autoResume`, `hours`, `allow`, `claimAfterMs`, `switchAfterMs`, `rotate` (needs `workers:tokens`), `revoke` | `{ worker, token? }`: a new worker token after `rotate`, once |
 | `GET /api/admin/workers/download` | | the worker program, `fuobe-worker.zip` |
-| `GET /api/admin/audit` | `before` (the last page's `next`), `limit` (1 to 200, default 50), `actor` (`owner` or `token`), `token` (a token id), `action` | `{ items, next }` |
+| `GET /api/admin/audit` | `before` (the last page's `next`), `limit` (1 to 200, default 50), `actor` (`owner` or `token`), `token` (a token id), `action`, `changes=1` (changes only: no reads, file views or refusals) | `{ items, next }` |
 | `GET /api/admin/tokens/self` | | `{ id, name, prefix, scopes, expiresAt, createdAt }` |
 
 A log row is `{ id, at, actor: "owner" | "token", token: { id, name } | null, action, target, detail, status }`.
 `token.name` is the name the token had at the time. Actions: `account.disable`, `account.enable`, `account.signout`,
 `account.delete`, `run.delete`, `outputs.hide`, `outputs.unhide`, `outputs.remove`, `worker.add`, `worker.change`,
-`worker.rotate`, `worker.revoke`, `token.create`, `token.revoke`; a token's reads `accounts.list`, `accounts.csv`,
+`worker.rotate`, `worker.revoke`, `token.create`, `token.revoke`, `token.revoke_all`; a token's reads `accounts.list`, `accounts.csv`,
 `account.read`, `runs.list`, `reports.list`, `audit.read` (one row per token and action every 10 minutes) and
 `file.view` (one row per token and file every hour); and refusals `scope.denied` and `rate.limited`. The owner's own
 reads in the browser aren't logged. Rows go after a year.
+
+A row is written once the change is made. If the server can't write it (a full disk, say), the change still stands and
+the server's own log notes the missing row.
 
 ## Errors and limits
 
@@ -133,9 +137,9 @@ Errors are `{ "error": "…" }`, with a `code` where a tool may want to act on i
 | 404 | not found | `{ error }` |
 | 429 | too many requests | `{ error: "Too many requests. Try again in a minute.", code: "rate" }` and `Retry-After` |
 
-A token may send 120 requests a minute, of which 30 may be changes. Wrong tokens count against their sender only (10 a
-minute per client behind a trusted proxy, `FUOBE_TRUST_PROXY=1`; else 60 a minute together) and never slow down a
-valid token.
+Each minute, a token may send 120 reads, 30 changes and 600 file views (`/api/admin/files`), each counted on its own,
+so a page of previews never uses up the next change. Wrong tokens count against their sender only (10 a minute per
+client behind a trusted proxy, `FUOBE_TRUST_PROXY=1`; else 60 a minute together) and never slow down a valid token.
 
 The limits are kept in the server's memory: a restart starts them again.
 

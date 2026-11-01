@@ -2,14 +2,14 @@ import "server-only";
 import crypto from "node:crypto";
 import { authEnabled, hasAdminBearer, isOwnerRequest, LoginGuard, sessionCookieOf, validSession } from "./auth";
 import { db } from "./db";
-import { hit, peek } from "./rate";
+import { hit } from "./rate";
 
 /**
  * Admin tokens: an install can be managed from your own tools with an admin API token (docs/admin-api.md).
  *
  * A token (`fuobe_adm_` + 43 characters) works only on /api/admin (src/proxy.ts refuses it everywhere else), and only for
  * the scopes the owner ticked when making it in Settings → Security. It is never the owner: it can't sign in, open a
- * page, change settings or make tokens. A request that carries one is judged by the token alone (a session cookie beside
+ * page, change settings or make tokens. A request that carries one is checked by the token alone (a session cookie beside
  * it is ignored). Only its SHA-256 is stored; the token itself is in the answer that made it and nowhere else.
  *
  * Every change made through the admin API (by the owner or a token) is written to admin_audit, and so are a token's
@@ -29,6 +29,7 @@ export const SCOPES = [
   "reports:read",
   "workers:read",
   "workers:write",
+  "workers:tokens",
   "queue:read",
   "audit:read",
 ] as const;
@@ -47,7 +48,8 @@ export const SCOPE_LABELS: Record<Scope, string> = {
   "outputs:moderate": "Hide, show again and remove results",
   "reports:read": "See reports",
   "workers:read": "See workers",
-  "workers:write": "Add and change workers",
+  "workers:write": "Pause, resume, change and revoke workers",
+  "workers:tokens": "Add workers and give them new tokens (a worker runs accounts' queued jobs, with their files)",
   "queue:read": "See the queue",
   "audit:read": "See the admin log",
 };
@@ -61,9 +63,10 @@ const SHAPE = /^fuobe_adm_[A-Za-z0-9_-]{43}$/;
 export const MAX_LIVE_TOKENS = 20;
 const NAME_MAX = 60;
 
-/** Requests a token may send a minute, and how many of them may be changes. */
+/** What a token may send a minute: reads, changes and file views, each counted on its own. */
 export const TOKEN_PER_MINUTE = 120;
 export const TOKEN_CHANGES_PER_MINUTE = 30;
+export const FILE_VIEWS_PER_MINUTE = 600;
 /** Wrong tokens a client may send a minute (or every client together, when they can't be told apart). */
 const MISSES_PER_MINUTE = 10;
 const SHARED_MISSES_PER_MINUTE = 60;
@@ -241,15 +244,14 @@ export function tokenActor(request: Request, now = Date.now()): Extract<Actor, {
     return r.ok ? invalid() : tooMany(r.retryAfterS);
   }
   const actor = { kind: "token" as const, id: row.id, name: row.name, scopes: scopesOf(row.scopes_json) };
-  // Changes have their own, smaller budget inside the whole one.
-  const change = isChange(request.method);
-  const changes = change ? peek(`admin-change:${row.id}`, TOKEN_CHANGES_PER_MINUTE, MINUTE, now) : { ok: true, retryAfterS: 0 };
-  const all = changes.ok ? hit(`admin-token:${row.id}`, TOKEN_PER_MINUTE, MINUTE, now) : changes;
-  if (!all.ok) {
-    auditOnce(`rate:${row.id}`, MINUTE, actor, "rate.limited", null, { change }, 429, now);
-    return tooMany(all.retryAfterS);
+  // Reads, changes and file views each have their own budget: a page of previews never uses up the next change.
+  const kind = isChange(request.method) ? "change" : new URL(request.url).pathname.startsWith("/api/admin/files/") ? "file" : "read";
+  const budget = { change: TOKEN_CHANGES_PER_MINUTE, file: FILE_VIEWS_PER_MINUTE, read: TOKEN_PER_MINUTE }[kind];
+  const r = hit(`admin-${kind}:${row.id}`, budget, MINUTE, now);
+  if (!r.ok) {
+    auditOnce(`rate:${row.id}:${kind}`, MINUTE, actor, "rate.limited", null, { kind }, 429, now);
+    return tooMany(r.retryAfterS);
   }
-  if (change) hit(`admin-change:${row.id}`, TOKEN_CHANGES_PER_MINUTE, MINUTE, now);
   touch(row.id, now);
   return actor;
 }
@@ -262,15 +264,22 @@ export function adminAccess(request: Request, scopes: Scope | Scope[], denied: s
   const t = tokenActor(request);
   if (t instanceof Response) return t;
   if (t) {
-    const wanted = Array.isArray(scopes) ? scopes : [scopes];
-    if (!wanted.some((s) => t.scopes.includes(s))) {
-      auditOnce(`scope:${t.id}:${wanted[0]}:${new URL(request.url).pathname}:${request.method}`, MINUTE, t, "scope.denied", null, { scope: wanted[0], method: request.method }, 403);
-      return json({ error: "This admin token can't do that.", code: "scope", scope: wanted[0] }, 403);
-    }
-    return { actor: t };
+    return lacksScope(t, scopes, request) ?? { actor: t };
   }
   if (isOwnerRequest(request, sessionCookieOf(request))) return { actor: { kind: "owner" } };
   return json({ error: denied }, 403);
+}
+
+/**
+ * The 403 for a token that has none of `scopes` (logged once a minute per token, scope and method), or null when it has
+ * one. The owner always may. For a need that depends on the body (a worker's new token), call it after adminAccess.
+ */
+export function lacksScope(actor: Actor, scopes: Scope | Scope[], request: Request): Response | null {
+  if (actor.kind !== "token") return null;
+  const wanted = Array.isArray(scopes) ? scopes : [scopes];
+  if (wanted.some((s) => actor.scopes.includes(s))) return null;
+  auditOnce(`scope:${actor.id}:${wanted[0]}:${request.method}`, MINUTE, actor, "scope.denied", null, { scope: wanted[0], method: request.method }, 403);
+  return json({ error: "This admin token can't do that.", code: "scope", scope: wanted[0] }, 403);
 }
 
 /**
@@ -318,14 +327,22 @@ export function audit(actor: Actor, action: string, target: string | null, detai
   }
 }
 
+const SEEN_MAX = 5000;
+const SEEN_KEEP = 4000;
+
 /** One row per key in `windowMs`: a token's repeated reads or refusals don't fill the log. */
 function auditOnce(key: string, windowMs: number, actor: Actor, action: string, target: string | null, detail: Record<string, unknown> | null, status: number, now = Date.now()): void {
   const seen = (globalThis.__fuobeAdminAuditSeen ??= new Map());
   if (now - (seen.get(key) ?? 0) < windowMs) return;
+  // In the order last written: past SEEN_MAX keys, the oldest go (a key that comes back only writes one more row).
+  seen.delete(key);
   seen.set(key, now);
-  if (seen.size > 5000) for (const [k, t] of seen) if (now - t > DAY) seen.delete(k);
+  if (seen.size > SEEN_MAX) for (const k of [...seen.keys()].slice(0, seen.size - SEEN_KEEP)) seen.delete(k);
   audit(actor, action, target, detail, status, now);
 }
+
+/** Actions that change nothing: a token's reads, its file views and refusals (the log's "only changes" leaves them out). */
+export const READ_ACTIONS = ["accounts.list", "accounts.csv", "account.read", "runs.list", "reports.list", "audit.read", "file.view", "scope.denied", "rate.limited"];
 
 /** A token's read of people's data: one row per token and action every 10 minutes. The owner's own reads aren't logged. */
 export function auditRead(actor: Actor, action: string, detail: Record<string, unknown> | null = null, target: string | null = null): void {
@@ -334,9 +351,9 @@ export function auditRead(actor: Actor, action: string, detail: Record<string, u
 }
 
 /** A token opened a stored file: one row per token and file every hour. */
-export function auditFileView(actor: Actor, path: string, account: string): void {
+export function auditFileView(actor: Actor, path: string, account: string, held = false): void {
   if (actor.kind !== "token") return;
-  auditOnce(`file:${actor.id}:${path}`, 60 * MINUTE, actor, "file.view", path, { account }, 200);
+  auditOnce(`file:${actor.id}:${path}`, 60 * MINUTE, actor, "file.view", path, { account, ...(held && { held: true }) }, 200);
 }
 
 export interface AuditQuery {
@@ -345,6 +362,8 @@ export interface AuditQuery {
   actor?: "owner" | "token";
   token?: string;
   action?: string;
+  /** Changes only: no reads, file views or refusals. */
+  changes?: boolean;
 }
 
 /** GET /api/admin/audit's query, or the reason it's wrong. */
@@ -359,8 +378,10 @@ export function auditQueryFrom(sp: URLSearchParams): AuditQuery | { error: strin
   const token = sp.get("token");
   if (token !== null && !/^[0-9a-f]{12}$/.test(token)) return { error: "token is a token id" };
   const action = sp.get("action");
-  if (action !== null && !/^[a-z.]{1,40}$/.test(action)) return { error: "Unknown action" };
-  return { limit, ...(before !== null && { before: Number(before) }), ...(actor && { actor }), ...(token && { token }), ...(action && { action }) };
+  if (action !== null && !/^[a-z_.]{1,40}$/.test(action)) return { error: "Unknown action" };
+  const changes = sp.get("changes");
+  if (changes !== null && changes !== "1") return { error: "changes is 1" };
+  return { limit, ...(before !== null && { before: Number(before) }), ...(actor && { actor }), ...(token && { token }), ...(action && { action }), ...(changes && { changes: true }) };
 }
 
 /** The log, newest first; `next` is the last row's id (pass it as `before`), null on the last page. */
@@ -373,7 +394,11 @@ export function listAudit(q: AuditQuery): { items: AuditRow[]; next: string | nu
   ];
   const used = filters.filter((f): f is [string, string | number] => f[1] !== undefined);
   const where = used.map((f) => f[0]);
-  const args = used.map((f) => f[1]);
+  const args: (string | number)[] = used.map((f) => f[1]);
+  if (q.changes) {
+    where.push(`action NOT IN (${READ_ACTIONS.map(() => "?").join(", ")})`);
+    args.push(...READ_ACTIONS);
+  }
   const rows = db()
     .prepare(`SELECT * FROM admin_audit ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY id DESC LIMIT ?`)
     .all(...args, q.limit) as { id: number; at: number; actor: string; token_id: string | null; token_name: string | null; action: string; target: string | null; detail_json: string | null; status: number }[];

@@ -21,6 +21,7 @@ const { db } = await import("@/server/db");
 const { resetRates } = await import("@/server/rate");
 const { saveFile } = await import("@/server/storage");
 const { proxy } = await import("@/proxy");
+const workers = await import("@/server/computer/workers");
 const routes = {
   accounts: await import("@/app/api/admin/accounts/route"),
   account: await import("@/app/api/admin/accounts/[id]/route"),
@@ -173,7 +174,7 @@ describe("admin tokens: never the owner, only the admin API", () => {
     for (const p of ["/api/admin/queue", "/api/admin/accounts", "/api/admin/tokens/self", "/api/admin/files/outputs/x.png"]) {
       expect(proxy(req(p, { token })).headers.get("x-middleware-next"), p).toBe("1");
     }
-    // Even a made-up one: the route judges it.
+    // Even a made-up one: the route checks it.
     expect(proxy(req("/api/admin/queue", { token: `fuobe_adm_${"x".repeat(43)}` })).headers.get("x-middleware-next")).toBe("1");
   });
 
@@ -209,7 +210,7 @@ describe("admin tokens: never the owner, only the admin API", () => {
     expect(body.tokens.some((t) => t.id === info.id)).toBe(true);
     expect(body.scopes.map((s) => s.id)).toEqual([...admin.SCOPES]);
     expect(JSON.stringify(body)).not.toContain("hash");
-    const made = await routes.tokens.POST(req("/api/admin/tokens", { cookie: ownerCookie, method: "POST", body: { name: "Panel", scopes: [...admin.SCOPES], expiresInDays: 90 } }));
+    const made = await routes.tokens.POST(req("/api/admin/tokens", { cookie: ownerCookie, method: "POST", body: { name: "Tool", scopes: [...admin.SCOPES], expiresInDays: 90 } }));
     expect(made.status).toBe(201);
     const fresh = (await made.json()) as { token: string; info: { id: string; expiresAt: number } };
     expect(fresh.token).toMatch(/^fuobe_adm_/);
@@ -250,8 +251,9 @@ describe("admin tokens: every admin route asks for its scope", () => {
     { name: "GET queue", scope: "queue:read", run: (o) => routes.queue.GET(req("/api/admin/queue", o)) },
     { name: "GET workers", scope: "workers:read", run: (o) => routes.workers.GET(req("/api/admin/workers", o)) },
     { name: "GET download", scope: "workers:read", run: (o) => routes.download.GET(req("/api/admin/workers/download", o)) },
-    { name: "POST workers", scope: "workers:write", run: (o) => routes.workers.POST(req("/api/admin/workers", { ...o, method: "POST", body: { name: `w${++n}` } })) },
+    { name: "POST workers", scope: "workers:tokens", run: (o) => routes.workers.POST(req("/api/admin/workers", { ...o, method: "POST", body: { name: `w${++n}` } })) },
     { name: "PATCH worker", scope: "workers:write", run: (o) => routes.worker.PATCH(req("/api/admin/workers/nope", { ...o, method: "PATCH", body: { paused: true } }), ctx({ id: "nope" })) },
+    { name: "PATCH worker rotate", scope: "workers:tokens", run: (o) => routes.worker.PATCH(req("/api/admin/workers/nope", { ...o, method: "PATCH", body: { rotate: true } }), ctx({ id: "nope" })) },
     { name: "GET reports", scope: "reports:read", run: (o) => routes.reports.GET(req("/api/admin/reports", o)) },
     { name: "GET audit", scope: "audit:read", run: (o) => routes.audit.GET(req("/api/admin/audit", o)) },
   ];
@@ -275,7 +277,7 @@ describe("admin tokens: every admin route asks for its scope", () => {
       const res = await c.run({ token: other.token });
       expect(res.status, c.name).toBe(403);
       expect(await res.json(), c.name).toMatchObject({ code: "scope", scope: c.scope });
-      const own = make([c.scope]);
+      const own = make(c.name === "PATCH worker rotate" ? ["workers:write", c.scope] : [c.scope]);
       const ok = await c.run({ token: own.token });
       expect([200, 201, 204, 404], c.name).toContain(ok.status);
       admin.revokeAllAdminTokens();
@@ -298,7 +300,7 @@ describe("admin tokens: every admin route asks for its scope", () => {
     expect((await routes.outputs.POST(req("/api/admin/outputs/hide", { token: mod.token, method: "POST", body }), ctx({ action: "hide" }))).status).toBe(200);
   });
 
-  it("judges a request by its token alone: an owner session beside it doesn't help", async () => {
+  it("checks a request by its token alone: an owner session beside it doesn't help", async () => {
     const { token } = make(["queue:read"]);
     expect((await routes.accounts.GET(req("/api/admin/accounts", { token, cookie: ownerCookie }))).status).toBe(403);
     expect((await routes.accounts.GET(req("/api/admin/accounts", { token: `fuobe_adm_${"w".repeat(43)}`, cookie: ownerCookie }))).status).toBe(401);
@@ -323,19 +325,33 @@ describe("admin tokens: every admin route asks for its scope", () => {
 });
 
 describe("admin tokens: limits", () => {
-  it("allows 120 requests a minute per token, 30 of them changes", () => {
+  it("counts a token's reads (120), changes (30) and file views (600) a minute, each on its own", () => {
     const { token, info } = make(["workers:write"]);
     const now = Date.now();
-    for (let i = 0; i < admin.TOKEN_CHANGES_PER_MINUTE; i++) expect(admin.tokenActor(req("/api/admin/workers", { token, method: "POST" }), now)).toMatchObject({ kind: "token" });
-    const change = admin.tokenActor(req("/api/admin/workers", { token, method: "POST" }), now) as Response;
-    expect(change.status).toBe(429);
-    expect(change.headers.get("retry-after")).toBeTruthy();
-    for (let i = admin.TOKEN_CHANGES_PER_MINUTE; i < admin.TOKEN_PER_MINUTE; i++) expect(admin.tokenActor(req("/api/admin/workers", { token }), now)).toMatchObject({ kind: "token" });
-    const read = admin.tokenActor(req("/api/admin/workers", { token }), now) as Response;
-    expect(read.status).toBe(429);
-    expect(auditRows().some((r) => r.action === "rate.limited" && r.token_id === info.id)).toBe(true);
-    // A minute later it works again.
+    const ok = (r: Request) => expect(admin.tokenActor(r, now)).toMatchObject({ kind: "token" });
+    const limited = (r: Request) => {
+      const res = admin.tokenActor(r, now) as Response;
+      expect(res.status).toBe(429);
+      expect(res.headers.get("retry-after")).toBeTruthy();
+    };
+    // A page of previews: file views don't touch the reads or the changes.
+    for (let i = 0; i < admin.FILE_VIEWS_PER_MINUTE; i++) ok(req(`/api/admin/files/outputs/${i}.png`, { token }));
+    limited(req("/api/admin/files/outputs/more.png", { token }));
+    for (let i = 0; i < admin.TOKEN_PER_MINUTE; i++) ok(req("/api/admin/workers", { token }));
+    limited(req("/api/admin/workers", { token }));
+    // Reads used up: a change still goes through.
+    for (let i = 0; i < admin.TOKEN_CHANGES_PER_MINUTE; i++) ok(req("/api/admin/workers/x", { token, method: "PATCH" }));
+    limited(req("/api/admin/workers/x", { token, method: "PATCH" }));
+    const rows = auditRows().filter((r) => r.action === "rate.limited" && r.token_id === info.id);
+    expect(rows.map((r) => JSON.parse(r.detail_json!).kind).sort()).toEqual(["change", "file", "read"]);
+    // A minute later each works again.
     expect(admin.tokenActor(req("/api/admin/workers", { token }), now + 61_000)).toMatchObject({ kind: "token" });
+  });
+
+  it("logs a token's refusals once per scope and method, whatever the path", async () => {
+    const { token, info } = make(["queue:read"]);
+    for (let i = 0; i < 50; i++) await routes.account.GET(req(`/api/admin/accounts/x${i}`, { token }), ctx({ id: `x${i}` }));
+    expect(auditRows().filter((r) => r.action === "scope.denied" && r.token_id === info.id)).toHaveLength(1);
   });
 
   it("slows down wrong tokens without ever blocking a valid one", async () => {
@@ -407,10 +423,16 @@ describe("admin tokens: accounts and files", () => {
     const a = auth.createAccount(`signout-${++n}@example.com`, "long enough");
     const s = auth.createSession(a.id).value;
     expect(auth.sessionViewer(s)?.kind).toBe("account");
+    const paired = workers.createWorker({ name: "Studio PC", kind: "personal", principal: `acct:${a.id}` });
+    expect(workers.workerFromAuth(`Bearer ${paired.token}`)?.id).toBe(paired.id);
     const res = await routes.account.PATCH(req(`/api/admin/accounts/${a.id}`, { token, method: "PATCH", body: { signOut: true } }), ctx({ id: a.id }));
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ id: a.id, disabled: false });
     expect(auth.sessionViewer(s)).toBeNull();
+    // Its paired ComfyUI stops too: a worker token is no sign-in, so it is revoked.
+    expect(workers.workerFromAuth(`Bearer ${paired.token}`)).toBeNull();
+    expect(workers.pairedOf(`acct:${a.id}`)).toEqual([]);
+    expect(JSON.parse(auditRows().at(-1)!.detail_json!)).toEqual({ computers: 1 });
     await new Promise((r) => setTimeout(r, 5));
     expect(auth.sessionViewer(auth.createSession(a.id).value)?.kind).toBe("account");
     expect(auditRows().at(-1)).toMatchObject({ action: "account.signout", target: a.id });
@@ -424,7 +446,8 @@ describe("admin tokens: accounts and files", () => {
     const mine = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload" });
     const theirs = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload", accountId: a.id });
     const held = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload", accountId: a.id });
-    db().prepare("UPDATE assets SET held = 1 WHERE id = ?").run(held.id);
+    const mineHeld = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload" });
+    db().prepare("UPDATE assets SET held = 1 WHERE id IN (?, ?)").run(held.id, mineHeld.id);
     const get = (url: string) => {
       const rel = url.replace(/^\/api\/files\//, "");
       return routes.files.GET(req(`/api/admin/files/${rel}`, { token }), ctx({ path: rel.split("/") }));
@@ -435,9 +458,10 @@ describe("admin tokens: accounts and files", () => {
     expect(Buffer.from(await ok.arrayBuffer()).equals(TINY_PNG)).toBe(true);
     expect((await get(held.url)).status).toBe(200);
     expect((await get(mine.url)).status).toBe(404);
+    expect((await get(mineHeld.url)).status).toBe(404);
     expect((await get("/api/files/outputs/none.png")).status).toBe(404);
     const views = auditRows().filter((r) => r.action === "file.view" && r.token_id === info.id);
-    expect(views.map((v) => JSON.parse(v.detail_json!))).toEqual([{ account: a.id }, { account: "held" }]);
+    expect(views.map((v) => JSON.parse(v.detail_json!))).toEqual([{ account: a.id }, { account: a.id, held: true }]);
     // One row per file an hour.
     await get(theirs.url);
     expect(auditRows().filter((r) => r.action === "file.view" && r.token_id === info.id)).toHaveLength(2);
@@ -450,6 +474,67 @@ describe("admin tokens: accounts and files", () => {
     expect(res.status).toBe(200);
     expect((await routes.queue.GET(req("/api/admin/queue", { token }))).status).toBe(401);
     expect(admin.liveAdminTokenCount()).toBe(0);
+    expect(auditRows().at(-1)).toMatchObject({ actor: "owner", action: "token.revoke_all", status: 200 });
+    expect(JSON.parse(auditRows().at(-1)!.detail_json!).count).toBeGreaterThanOrEqual(1);
     ownerCookie = auth.createSession().value;
+  });
+});
+
+describe("admin tokens: runs, the log's changes and every admin route", () => {
+  it("says whether each of an account's results is shown, held or removed", async () => {
+    const { token } = make(["runs:read", "outputs:moderate"]);
+    const a = auth.createAccount(`runs-${++n}@example.com`, "long enough");
+    const id = `run-state-${++n}`;
+    db()
+      .prepare("INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at) VALUES (?, 'image', 'm', 'open', 'comfyui', 't2i', 'image', 'succeeded', ?, '[]', ?, ?)")
+      .run(id, JSON.stringify({ feature: "image", modelId: "m", prompt: "p", account: a.id }), Date.now(), Date.now());
+    const files = [0, 1, 2].map(() => saveFile({ data: TINY_PNG, contentType: "image/png", source: "generation", generationId: id }));
+    // The last one is listed by its url only.
+    db()
+      .prepare("UPDATE generations SET outputs_json = ? WHERE id = ?")
+      .run(JSON.stringify(files.map((f, i) => ({ url: f.url, kind: "image", ...(i < 2 && { assetId: f.id }) }))), id);
+    const states = async () => {
+      const page = (await (await routes.runs.GET(req(`/api/admin/generations?account=${a.id}`, { token }))).json()) as { items: { id: string; outputs: { url: string; state: string }[] }[] };
+      return page.items.find((r) => r.id === id)!.outputs.map((o) => o.state);
+    };
+    expect(await states()).toEqual(["shown", "shown", "shown"]);
+    const body = (assetIds: string[]) => ({ token, method: "POST", body: { assetIds } });
+    await routes.outputs.POST(req("/api/admin/outputs/hide", body([files[1].id])), ctx({ action: "hide" }));
+    expect(await states()).toEqual(["shown", "held", "shown"]);
+    // Removing a result listed by url only takes it off the run too.
+    await routes.outputs.POST(req("/api/admin/outputs/remove", body([files[2].id])), ctx({ action: "remove" }));
+    expect(await states()).toEqual(["shown", "held"]);
+    db().prepare("DELETE FROM assets WHERE id = ?").run(files[0].id);
+    expect(await states()).toEqual(["removed", "held"]);
+  });
+
+  it("filters the log to changes", async () => {
+    const { token } = make(["audit:read", "queue:read"]);
+    await routes.accounts.GET(req("/api/admin/accounts", { token }));
+    const page = (await (await routes.audit.GET(req("/api/admin/audit?changes=1&limit=200", { token }))).json()) as { items: { action: string }[] };
+    expect(page.items.length).toBeGreaterThan(0);
+    expect(page.items.some((r) => admin.READ_ACTIONS.includes(r.action))).toBe(false);
+    expect((await routes.audit.GET(req("/api/admin/audit?changes=yes", { token }))).status).toBe(400);
+  });
+
+  it("every admin route checks who asks itself (the proxy lets any admin token through to them)", () => {
+    const root = path.join(process.cwd(), "src", "app", "api", "admin");
+    const found: string[] = [];
+    const walk = (d: string) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (e.name === "route.ts") found.push(p);
+      }
+    };
+    walk(root);
+    expect(found.length).toBeGreaterThanOrEqual(14);
+    for (const f of found) {
+      const src = fs.readFileSync(f, "utf8");
+      const handlers = src.match(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g) ?? [];
+      const checks = src.match(/\b(adminAccess|ownerBrowser|tokenActor)\(/g) ?? [];
+      expect(handlers.length, f).toBeGreaterThan(0);
+      expect(checks.length, f).toBeGreaterThanOrEqual(handlers.length);
+    }
   });
 });

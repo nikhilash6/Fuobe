@@ -44,6 +44,7 @@ interface AuditRow {
   token: { id: string; name: string } | null;
   action: string;
   target: string | null;
+  detail: Record<string, unknown> | null;
   status: number;
 }
 
@@ -72,6 +73,7 @@ const ACTION_WORDS: Record<string, string> = {
   "worker.revoke": "Revoked a worker",
   "token.create": "Made an admin token",
   "token.revoke": "Revoked an admin token",
+  "token.revoke_all": "Revoked every admin token",
   "accounts.list": "Read the accounts",
   "accounts.csv": "Downloaded the accounts",
   "account.read": "Read an account",
@@ -84,6 +86,18 @@ const ACTION_WORDS: Record<string, string> = {
 };
 
 export const ADMIN_TOKENS_KEY = ["admin-tokens"];
+
+/** What a log row was about, in short: a name the action kept, the results it named, or its target. */
+function rowSubject(r: AuditRow): string | null {
+  const d = r.detail ?? {};
+  if (typeof d.name === "string" && d.name) return d.name;
+  if (typeof d.count === "number") return String(d.count);
+  if (Array.isArray(d.ids) && d.ids.length) {
+    const ids = d.ids.filter((x): x is string => typeof x === "string");
+    return ids.length > 3 ? `${ids.slice(0, 3).join(", ")} +${ids.length - 3}` : ids.join(", ");
+  }
+  return r.target;
+}
 
 async function call<T>(url: string, method = "GET", body?: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -105,7 +119,7 @@ function expiryText(t: AdminTokenRow, now = Date.now()): string {
   return days <= 1 ? "expires within a day" : `expires in ${days} days`;
 }
 
-function CreateForm({ scopes, onMade, onCancel }: { scopes: AdminTokensAnswer["scopes"]; onMade: (token: string) => void; onCancel: () => void }) {
+function CreateForm({ scopes, onMade, onCancel }: { scopes: AdminTokensAnswer["scopes"]; onMade: (made: { id: string; token: string }) => void; onCancel: () => void }) {
   const id = useId();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<Set<string>>(() => new Set(READ_ONLY));
@@ -116,9 +130,9 @@ function CreateForm({ scopes, onMade, onCancel }: { scopes: AdminTokensAnswer["s
   const create = async () => {
     setBusy(true);
     try {
-      const r = await call<{ token: string }>("/api/admin/tokens", "POST", { name: name.trim(), scopes: [...picked], expiresInDays: expiry === "never" ? null : Number(expiry) });
+      const r = await call<{ token: string; info: { id: string } }>("/api/admin/tokens", "POST", { name: name.trim(), scopes: [...picked], expiresInDays: expiry === "never" ? null : Number(expiry) });
       setName("");
-      onMade(r.token);
+      onMade({ id: r.info.id, token: r.token });
     } catch (e) {
       toastError(e);
     } finally {
@@ -129,7 +143,7 @@ function CreateForm({ scopes, onMade, onCancel }: { scopes: AdminTokensAnswer["s
     <div className="space-y-3 rounded-xl border p-3 sm:w-[36rem] sm:max-w-full">
       <div className="space-y-1.5">
         <Label htmlFor={`${id}-name`} className="text-[13px]">Name</Label>
-        <Input id={`${id}-name`} placeholder="What it's for, e.g. “Admin panel”" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
+        <Input id={`${id}-name`} placeholder="What it's for, e.g. “Moderation script”" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <div role="group" aria-labelledby={`${id}-scopes`} className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -222,22 +236,33 @@ function TokenItem({ t, onRevoke }: { t: AdminTokenRow; onRevoke: () => void }) 
 
 /** The admin log, newest first: what the admin API changed, and what tokens read. */
 function AdminLog() {
+  const [changes, setChanges] = useState(true);
   const q = useInfiniteQuery({
-    queryKey: ["admin-audit"],
+    queryKey: ["admin-audit", changes],
     initialPageParam: "",
-    queryFn: ({ pageParam }) => call<{ items: AuditRow[]; next: string | null }>(`/api/admin/audit?limit=20${pageParam ? `&before=${pageParam}` : ""}`),
+    queryFn: ({ pageParam }) => call<{ items: AuditRow[]; next: string | null }>(`/api/admin/audit?limit=20${changes ? "&changes=1" : ""}${pageParam ? `&before=${pageParam}` : ""}`),
     getNextPageParam: (last) => last.next ?? undefined,
   });
   const rows = q.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <div className="space-y-1.5 sm:w-[36rem] sm:max-w-full">
-      <h4 className="text-[12px] font-medium">Admin log</h4>
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="flex-1 text-[12px] font-medium">Admin log</h4>
+        <div role="group" aria-label="Show" className="flex gap-1">
+          <Button size="sm" variant={changes ? "secondary" : "ghost"} className="h-7" aria-pressed={changes} onClick={() => setChanges(true)}>
+            Changes
+          </Button>
+          <Button size="sm" variant={changes ? "ghost" : "secondary"} className="h-7" aria-pressed={!changes} onClick={() => setChanges(false)}>
+            Everything
+          </Button>
+        </div>
+      </div>
       {q.isPending ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       ) : q.isError ? (
         <p className="text-[12px] text-muted-foreground">{q.error.message}</p>
       ) : rows.length === 0 ? (
-        <p className="text-[12px] text-muted-foreground">Nothing yet. Changes made through the admin API, and what tokens read, show here.</p>
+        <p className="text-[12px] text-muted-foreground">{changes ? "No changes yet. What the admin API changes shows here." : "Nothing yet. Changes made through the admin API, and what tokens read, show here."}</p>
       ) : (
         <>
           <ul className="divide-y rounded-xl border text-[12px]">
@@ -245,7 +270,7 @@ function AdminLog() {
               <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5">
                 <span className="min-w-0 flex-1">
                   {ACTION_WORDS[r.action] ?? r.action}
-                  {r.target && <span className="ml-1.5 font-mono text-[11px] break-all text-muted-foreground">{r.target}</span>}
+                  {rowSubject(r) && <span className="ml-1.5 font-mono text-[11px] break-all text-muted-foreground">{rowSubject(r)}</span>}
                   {r.status >= 400 && <span className="ml-1.5 text-[11px] text-destructive">{r.status}</span>}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
@@ -273,7 +298,7 @@ function AdminLog() {
 export function AdminTokens() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ADMIN_TOKENS_KEY, queryFn: fetchAdminTokens });
-  const [fresh, setFresh] = useState<string | null>(null);
+  const [fresh, setFresh] = useState<{ id: string; token: string } | null>(null);
   const [making, setMaking] = useState(false);
   const [revoking, setRevoking] = useState<AdminTokenRow | null>(null);
   const refresh = () => {
@@ -284,6 +309,8 @@ export function AdminTokens() {
   const revoke = async (t: AdminTokenRow) => {
     try {
       await call(`/api/admin/tokens?id=${encodeURIComponent(t.id)}`, "DELETE");
+      // A token shown once and revoked since is no use to copy.
+      setFresh((f) => (f?.id === t.id ? null : f));
       toast.success(`Revoked ${t.name}`);
     } catch (e) {
       toastError(e);
@@ -310,11 +337,16 @@ export function AdminTokens() {
         <div className="rounded-xl border border-primary/40 bg-brand-faint p-3 sm:w-[36rem] sm:max-w-full">
           <p className="text-[12px] font-medium">Copy this token now — it won&apos;t be shown again.</p>
           <div className="mt-2 flex items-center gap-2">
-            <code aria-label="New admin token" className="min-w-0 flex-1 rounded-md bg-background px-2 py-1.5 font-mono text-[12px] break-all select-all">
-              {fresh}
+            <code aria-label="New admin token" className="ph-no-capture min-w-0 flex-1 rounded-md bg-background px-2 py-1.5 font-mono text-[12px] break-all select-all">
+              {fresh.token}
             </code>
-            <Button size="sm" variant="secondary" className="shrink-0" onClick={() => void copyWithToast(fresh)}>
+            <Button size="sm" variant="secondary" className="shrink-0" onClick={() => void copyWithToast(fresh.token)}>
               <Copy /> Copy
+            </Button>
+          </div>
+          <div className="mt-2 flex justify-end">
+            <Button size="sm" variant="ghost" className="h-7" onClick={() => setFresh(null)}>
+              Done
             </Button>
           </div>
         </div>
@@ -323,8 +355,8 @@ export function AdminTokens() {
         <CreateForm
           scopes={q.data.scopes}
           onCancel={() => setMaking(false)}
-          onMade={(token) => {
-            setFresh(token);
+          onMade={(made) => {
+            setFresh(made);
             setMaking(false);
             refresh();
           }}

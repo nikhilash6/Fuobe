@@ -170,6 +170,13 @@ export function unpair(principal: Principal, id: string): boolean {
   return revokeWorker(id);
 }
 
+/** Every paired ComfyUI of a principal stops at once, and a pairing it was in the middle of is dropped (signed out everywhere). How many were revoked. */
+export function revokeWorkersOf(principal: Principal, now = Date.now()): number {
+  const n = db().prepare("UPDATE relay_workers SET revoked_at = ? WHERE kind = 'personal' AND principal = ? AND revoked_at IS NULL").run(now, principal).changes;
+  db().prepare("DELETE FROM relay_pairings WHERE principal = ?").run(principal);
+  return n;
+}
+
 /** Every paired ComfyUI of a principal goes (its account was deleted). */
 export function forgetWorkersOf(principal: Principal): void {
   db().prepare("DELETE FROM relay_workers WHERE kind = 'personal' AND principal = ?").run(principal);

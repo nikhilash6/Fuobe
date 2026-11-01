@@ -4,6 +4,7 @@ import { accountsWithStats } from "@/server/account-admin";
 import { adminAccess, audit, auditRead, type Actor } from "@/server/admin-tokens";
 import { AccountError, listAccounts, setAccountDisabled, signOutAccount } from "@/server/auth";
 import { removeAccount } from "@/server/account-sweep";
+import { revokeWorkersOf } from "@/server/computer/workers";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 const DENIED = "You can't open this.";
@@ -33,7 +34,7 @@ const Patch = z.union([z.object({ disabled: z.boolean() }).strict(), z.object({ 
 
 /**
  * Switch an account off (`{ disabled: true }`: signed out, can't log in) or on again, or sign it out everywhere
- * (`{ signOut: true }`: every sign-in ends, and it stays on).
+ * (`{ signOut: true }`: every sign-in ends and its paired ComfyUIs stop, and it stays on).
  */
 export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/accounts/[id]">) {
   const access = adminAccess(request, "accounts:write", DENIED);
@@ -42,13 +43,16 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/admin/acco
   if (!parsed.success) return Response.json({ error: "Send { disabled: true }, { disabled: false } or { signOut: true }" }, { status: 400, headers: NO_STORE });
   const { id } = await ctx.params;
   const action = "signOut" in parsed.data ? "account.signout" : parsed.data.disabled ? "account.disable" : "account.enable";
+  let computers = 0;
   try {
-    if ("signOut" in parsed.data) signOutAccount(id);
-    else setAccountDisabled(id, parsed.data.disabled);
+    if ("signOut" in parsed.data) {
+      signOutAccount(id);
+      computers = revokeWorkersOf(`acct:${id}`);
+    } else setAccountDisabled(id, parsed.data.disabled);
   } catch (e) {
     return failed(e, access.actor, action, id);
   }
-  audit(access.actor, action, id, null, 200);
+  audit(access.actor, action, id, computers ? { computers } : null, 200);
   return Response.json(listAccounts().find((a) => a.id === id), { headers: NO_STORE });
 }
 

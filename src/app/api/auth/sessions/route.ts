@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { revokeAllAdminTokens } from "@/server/admin-tokens";
+import { audit, revokeAllAdminTokens } from "@/server/admin-tokens";
 import { authEnabled, SESSION_COOKIE, sessionCookieOf, signOutEveryone, validSession } from "@/server/auth";
 
 /**
@@ -14,7 +14,10 @@ export async function POST(request: Request) {
   const parsed = z.object({ tokens: z.boolean().optional() }).safeParse(await request.json().catch(() => ({})));
   const tokensRevoked = parsed.success && parsed.data.tokens === true;
   signOutEveryone({ tokens: tokensRevoked });
-  if (tokensRevoked) revokeAllAdminTokens();
+  if (tokensRevoked) {
+    const n = revokeAllAdminTokens();
+    if (n) audit({ kind: "owner" }, "token.revoke_all", null, { count: n }, 200);
+  }
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
   return Response.json(
     { ok: true, tokensRevoked },

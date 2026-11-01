@@ -24,6 +24,14 @@ export function generationAccount(id: string): string | null | undefined {
 export const HELD_FILE = "\u0000held";
 
 export function fileAccount(rel: string): string | null | undefined {
+  const row = fileRecord(rel);
+  // A result held for the moderation service's check (output-checks.ts) is nobody's to read until it passes.
+  if (row?.held) return HELD_FILE;
+  return row ? row.account : undefined;
+}
+
+/** A stored file's account (null: the owner's) and whether it is held; undefined when no asset has this path. */
+export function fileRecord(rel: string): { account: string | null; held: boolean } | undefined {
   // Rows store the platform's separator (backslashes on Windows); a URL always has /.
   const native = rel.split("/").join(path.sep);
   const row = db()
@@ -32,9 +40,7 @@ export function fileAccount(rel: string): string | null | undefined {
        FROM assets a LEFT JOIN generations g ON g.id = a.generation_id WHERE a.rel_path IN (?, ?) LIMIT 1`,
     )
     .get(rel, native) as { account: string | null; held: number | null } | undefined;
-  // A result held for the moderation service's check (output-checks.ts) is nobody's to read until it passes.
-  if (row?.held) return HELD_FILE;
-  return row ? (row.account ?? null) : undefined;
+  return row ? { account: row.account ?? null, held: !!row.held } : undefined;
 }
 
 /** A stored file that is held (hidden, or waiting for its check): served to no account and by no link. */

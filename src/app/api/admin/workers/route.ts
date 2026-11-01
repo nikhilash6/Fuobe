@@ -6,9 +6,10 @@ const NO_STORE = { "Cache-Control": "no-store" };
 const DENIED = "Only the studio's owner manages workers";
 
 /**
- * Settings → Workers (owner only, or an admin token with workers:read / workers:write; docs/gpu-workers.md): the shared
- * GPUs with their state in words, and the lanes this studio's catalog has (to allow per worker). POST
- * `{ name, pool? }` adds one: paused, with no hours and no lanes; its token is in this answer only.
+ * Settings → Workers (owner only, or an admin token with workers:read / workers:tokens; docs/gpu-workers.md): the
+ * shared GPUs with their state in words, and the lanes this studio's catalog has (to allow per worker). POST
+ * `{ name, pool? }` adds one: paused, with no hours and no lanes; its token is in this answer only. A worker's token
+ * receives accounts' queued jobs and their files, so making one needs workers:tokens, not just workers:write.
  */
 export async function GET(request: Request) {
   await connection();
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const access = adminAccess(request, "workers:write", DENIED);
+  const access = adminAccess(request, "workers:tokens", DENIED);
   if (access instanceof Response) return access;
   const body = (await request.json().catch(() => null)) as { name?: unknown; pool?: unknown } | null;
   const name = typeof body?.name === "string" ? body.name.slice(0, 48) : "";

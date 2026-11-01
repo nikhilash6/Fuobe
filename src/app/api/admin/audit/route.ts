@@ -5,7 +5,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
  * The admin log, newest first (an admin token with audit:read, or the owner): `before=<id>` (the `next` of the last
- * page), `limit` (1 to 200, 50 when not given), `actor=owner|token`, `token=<id>`, `action=<name>`.
+ * page), `limit` (1 to 200, 50 when not given), `actor=owner|token`, `token=<id>`, `action=<name>`, `changes=1` (no reads, file views or refusals).
  */
 export async function GET(request: Request) {
   await connection();
