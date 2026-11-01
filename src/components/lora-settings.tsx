@@ -243,14 +243,14 @@ export function LoraSettings({ folder, civitaiKey, hfToken }: { folder?: PublicS
       />
       <ConnectField
         id="huggingface"
-        name="huggingfaceToken"
+        name="huggingfaceDownloadToken"
         setting={hfToken}
         provider="huggingface"
-        label="Hugging Face token"
+        label="Hugging Face token for downloads"
         placeholder="hf_…"
         hint={
           <span>
-            Only for gated LoRAs (Lightricks&apos; Restore and Detail Refine IC-LoRAs): accept each one&apos;s licence on its Hugging Face page with your account, then a
+            Only for downloading gated LoRAs (Lightricks&apos; Restore and Detail Refine IC-LoRAs; Assist&apos;s Hugging Face key is separate): accept each one&apos;s licence on its Hugging Face page with your account, then a
             “Read” token lets Fuobe download it. It stays on this server: a cloud run gets Fuobe&apos;s copy of the file, never your token.{" "}
             <a href={HF_TOKENS_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text hover:underline">
               Make a token <ExternalLink className="size-3" />

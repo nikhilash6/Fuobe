@@ -73,7 +73,7 @@
   },
   {
    "id": "restore/written",
-   "title": "The words written for the clip (Claude, Ollama or the template)",
+   "title": "The words written for the clip (Claude, a local model or the template)",
    "inputs": {
     "video": "local/restore/scan.mp4"
    },

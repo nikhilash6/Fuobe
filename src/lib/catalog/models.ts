@@ -50,7 +50,7 @@ const VIDEO_UPSCALE_TIERS = ["720p", "1080p", "1440p", "2160p"];
 /** Fuobe Restore's LoRA in the cloud (research adapterLoras): Lightricks' Restore IC-LoRA, gated, sent as Fuobe's mirror. */
 const RESTORE_LORA = (() => {
   const e = loraEntry("ltx-2-5-22b-ic-lora-restore-1-0");
-  return e ? loraRef(e) : undefined;
+  return e ? { ...loraRef(e), adapter: true as const } : undefined;
 })();
 /** Fuobe Try-On's LoRA (research adapterLoras): xocialize's try-on LoRA for FLUX.2 [klein] 4B, Apache-2.0. */
 const TRYON_LORA = loraEntry("tryon-klein-4b");

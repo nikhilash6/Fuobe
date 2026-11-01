@@ -24,9 +24,9 @@ import { ACCESS_PLACE } from "@/lib/model-access";
 import { createPipeline } from "./chains";
 import { llmText, llmTextBackend } from "./enhance";
 import { previewChained } from "./generations";
-import { hasHfToken } from "./loras";
+import { gatedHint, hasHfToken } from "./loras";
 import { isOffered, offeredModel } from "./model-access";
-import { probeOllama } from "./providers/llm";
+import { localLabel, localWhat, probeLocal } from "./llm";
 import { engineMode, getSetting } from "./settings";
 import { probeSource, ShortsError } from "./shorts";
 
@@ -34,7 +34,7 @@ import { probeSource, ShortsError } from "./shorts";
  * Video tools → Restore & colourise (Fuobe Restore, package archive-restore): plans, prices and starts a run
  * (src/lib/catalog/restore.ts) as one pipeline of ordinary generations: feature "restore" for the finished video,
  * "restore-step" for the windows, pieces, hand-off frames and joins. The prompt is written by an LLM from a few frames
- * (Claude, or Ollama on the open engine), else by Fuobe's offline template. No table of its own: the page's history is a
+ * (Claude, or a local model on the open engine), else by Fuobe's offline template. No table of its own: the page's history is a
  * feed. The gated Restore IC-LoRA is fetched before the first window with the user's Hugging Face token (src/server/loras.ts).
  */
 
@@ -82,14 +82,14 @@ export const RestoreEstimateSchema = RestoreBodySchema.extend({
 
 const frame = z
   .string()
-  .max(2_000_000)
+  .max(900_000)
   .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/);
 
-/** The body of /api/restore/prompt: what the writer works from. */
+/** The body of /api/restore/prompt: what the writer works from (it stays under the sign-in proxy's 4 MB: next.config.ts). */
 export const PromptSchema = z.object({
   engine: z.enum(["cloud", "open"]),
   hint: z.string().max(600).optional(),
-  /** A few frames of the clip the browser grabbed (JPEG or PNG data URLs, about 1.5 MB each at most). */
+  /** A few frames of the clip the browser grabbed (small JPEG or PNG data URLs, under 900 KB each). */
   frames: z.array(frame).max(4).default([]),
   seconds: z.number().finite().positive().max(3600).optional(),
 });
@@ -114,14 +114,15 @@ const mustBeOffered = (engine: Engine) => {
 export interface PromptAnswer {
   prompt: string;
   negative: string;
-  by: "claude" | "ollama" | "offline";
+  /** Claude, a local model (Settings → AI helper: Ollama, LM Studio, Unsloth Studio or another server), or the template. */
+  by: "claude" | "local" | "offline";
   why?: string;
 }
 
 /**
- * Write the prompt and the negative: Claude (cloud engine) or Ollama with a vision model (open engine, or no Claude key)
- * sees up to four frames; without one (no key, Ollama not running, demo mode, the text model switched off) Fuobe's
- * offline template is filled with the user's words. Never generates video.
+ * Write the prompt and the negative: Claude (cloud engine) or a local model that sees pictures (open engine, or no
+ * Claude key; src/server/llm) sees up to four frames; without one (no key, no local model answering, demo mode, the
+ * text model switched off) Fuobe's offline template is filled with the user's words. Never generates video.
  */
 export async function writeRestorePrompt(body: z.infer<typeof PromptSchema>): Promise<PromptAnswer> {
   mustMatchMode(body.engine);
@@ -130,13 +131,13 @@ export async function writeRestorePrompt(body: z.infer<typeof PromptSchema>): Pr
   const textModel = getModel(body.engine === "open" ? "oss-text-llm" : "text-llm");
   if (!textModel || !offeredModel(textModel)) return offline(`the text model is switched off in ${ACCESS_PLACE}`);
   const backend = llmTextBackend();
-  const ollama = backend === "ollama" || (backend === "claude" && body.engine === "open");
-  if (!backend) return offline("no text model is set up (Settings → Prompt enhancement)");
-  if (ollama && !(await probeOllama())) return offline("Ollama isn't running");
+  const local = backend === "ollama" || (backend === "claude" && body.engine === "open");
+  if (!backend) return offline("no AI helper is set up (Settings → AI helper)");
+  if (local && !(await probeLocal())) return offline(`${localWhat()} isn't running`);
   const images = body.frames.map((f) => ({ data: Buffer.from(f.split(",")[1], "base64"), contentType: f.slice(5, f.indexOf(";")) }));
   const answer = parsePromptAnswer(await llmText(PROMPT_SYSTEM, promptRequest({ hint: body.hint, frames: images.length, seconds: body.seconds }), images, { ollamaOnly: body.engine === "open" }));
-  if (!answer) return offline(ollama ? "Ollama didn't answer (it needs a vision model to see the frames: qwen3-vl, gemma3…)" : "the text model didn't answer");
-  return { ...answer, by: ollama ? "ollama" : "claude" };
+  if (!answer) return offline(local ? `${localLabel()} didn't answer (it needs a model that sees pictures for the frames: qwen3-vl, gemma3…)` : "the text model didn't answer");
+  return { ...answer, by: local ? "local" : "claude" };
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +264,11 @@ export async function createRestore(body: z.infer<typeof RestoreBodySchema>): Pr
   }
   const { input } = planInput({ ...body, negative }, info, prompt, true);
   const plan = planRestore(input);
+  // The cloud carries the gated Restore IC-LoRA as Fuobe's copy, made with the Hugging Face token: without one, every piece
+  // would fail at submit, so the run is refused before anything starts (a placeholder run needs no file).
+  if (body.engine === "cloud" && !hasHfToken() && !price(plan.steps).demo) {
+    throw new ShortsError(`${gatedHint("Lightricks' Restore IC-LoRA", RESTORE.loras.restore.page)}. A cloud run gets Fuobe's copy of the file, never your token`, 422);
+  }
   let p: ReturnType<typeof createPipeline>;
   try {
     p = createPipeline(plan.steps);

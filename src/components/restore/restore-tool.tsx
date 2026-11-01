@@ -16,7 +16,8 @@ import { ClipBar, ClipDrop, costText, Field, Segmented } from "@/components/shor
 import { clipDuration, clipSize, useSourceClip } from "@/components/shorts/use-source-clip";
 import { Feed } from "@/components/studio/feed";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
-import { useEngine, useGenerations } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
 import { CLOUD_NOTE, GPU_NOTE, RESTORE, restoreNegative } from "@/lib/catalog/restore";
 import { chainState } from "@/lib/catalog/shorts";
 import { downloadHref, downloadName } from "@/lib/library";
@@ -24,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { grabFrames, useRestoreActions, useRestoreEstimate, type RestoreBody } from "./hooks";
 
 const LIMITS = `MP4, MOV, WebM, MKV or AVI · up to ${RESTORE.maxSeconds / 60} minutes · ${RESTORE.maxBytes / 1024 / 1024 / 1024} GB`;
-const BY: Record<string, string> = { claude: "Written by Claude from your frames", ollama: "Written by Ollama on your computer", offline: "Fuobe's template: edit it to fit your footage", you: "Your words" };
+const BY: Record<string, string> = { claude: "Written by Claude from your frames", local: "Written by a local model", offline: "Fuobe's template: edit it to fit your footage", you: "Your words" };
 const DEFAULT_NEGATIVE = restoreNegative();
 
 interface Run {
@@ -44,6 +45,8 @@ interface Run {
  */
 export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
   const [engine] = useEngine();
+  // Guests and free accounts: it plans with the studio's own AI helpers and joins on the server (own-gpu-tool).
+  const visitor = useLikelyVisitor();
   const source = useSourceClip(RESTORE.maxBytes);
   const clip = source.clip;
   const [prompt, setPrompt] = useState("");
@@ -86,7 +89,9 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
   const estimate = useRestoreEstimate(body);
   const est = estimate.data && !estimate.isError ? estimate.data : undefined;
 
-  const blocker = !clip
+  const blocker = visitor
+    ? "Restore runs on a self-hosted Fuobe for now"
+    : !clip
     ? "Add a clip"
     : clip.error
       ? clip.error
@@ -136,18 +141,21 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
   };
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide>
+    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title="Restore & colourise"
-          subtitle="Old scans, tape and black-and-white film back in colour, clean and sharp, with Lightricks' Restore IC-LoRA. Priced before it runs; free on your own ComfyUI."
-        />
+          subtitle={`Old scans, tape and black-and-white film back in colour, clean and sharp, with Lightricks' Restore IC-LoRA. Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}
+        >
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">Restore & colourise runs on a self-hosted Fuobe for now.</SelfHostNote>}
+        </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>
         {!clip ? (
           <ClipDrop
             accept={RESTORE.accept}
             limits={LIMITS}
+            disabled={visitor}
             onFile={(f) => {
               const err = source.pick(f);
               if (err) toast.error(err);
@@ -230,10 +238,10 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
                   className="max-h-56 resize-y"
                 />
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="outline" className="rounded-full" onClick={() => void write()} disabled={writing || !clip}>
+                  <Button size="sm" variant="outline" className="rounded-full" onClick={() => void write()} disabled={writing || !clip || visitor}>
                     {writing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} Write it from the frames
                   </Button>
-                  <span className="text-[12px] text-muted-foreground">{open ? "Ollama with a vision model" : "Claude"}, else Fuobe&apos;s template · never starts a run</span>
+                  <span className="text-[12px] text-muted-foreground">{open ? "A local model that sees pictures" : "Claude"}, else Fuobe&apos;s template · never starts a run</span>
                 </div>
               </Field>
 
@@ -278,7 +286,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
                     ) : (
                       <>
                         <p className="flex items-center gap-1.5 text-[15px] font-semibold tabular-nums">
-                          {costText(est, engine)}
+                          {costText(est, engine, visitor)}
                           {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" aria-label="Updating the price" />}
                         </p>
                         {est && (
@@ -289,7 +297,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
                       </>
                     )}
                   </div>
-                  <Button className="rounded-full" onClick={start} disabled={!!blocker || actions.run.isPending}>
+                  <Button className="rounded-full" onClick={start} disabled={!!blocker || actions.run.isPending || visitor}>
                     {actions.run.isPending ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />} Restore
                   </Button>
                 </div>

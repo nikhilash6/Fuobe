@@ -867,6 +867,12 @@ export interface LoraRef {
    * off the cloud: a cloud route then leaves such a LoRA out (localOnly). Without it they are sent like any other.
    */
   keepOnGpu?: true;
+  /**
+   * The model's own adapter (Fuobe Restore's IC-LoRA): a run without it would be another model. A cloud run carries it
+   * even from a gated Hugging Face repo, as Fuobe's copy made with the user's Hugging Face token, and refuses to start
+   * without the token. Other gated LoRAs stay optional: a cloud run leaves them out with a note.
+   */
+  adapter?: true;
 }
 
 /** Scale limits of a LoRA field. */

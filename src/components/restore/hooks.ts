@@ -41,7 +41,7 @@ export interface RestoreEstimate {
 export interface PromptAnswer {
   prompt: string;
   negative: string;
-  by: "claude" | "ollama" | "offline";
+  by: "claude" | "local" | "offline";
   why?: string;
 }
 
@@ -108,7 +108,7 @@ export async function grabFrames(src: string, duration: number | undefined, at =
     canvas.getContext("2d")?.drawImage(v, 0, 0, canvas.width, canvas.height);
     try {
       const url = canvas.toDataURL("image/jpeg", 0.8);
-      if (url.length < 1_900_000) out.push(url);
+      if (url.length < 900_000) out.push(url);
     } catch {
       // A clip from another origin taints the canvas: no frames, the writer works from the words.
     }

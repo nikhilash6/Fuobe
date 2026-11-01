@@ -60,7 +60,7 @@ export const PROVIDER_SETTINGS = {
   // Not a model provider: the key that downloads a recipe's civitai LoRAs (Settings → LoRAs).
   civitai: ["civitaiKey"],
   // Nor this: the token that downloads gated Hugging Face LoRAs once their licence is accepted (Settings → LoRAs).
-  huggingface: ["huggingfaceToken"],
+  huggingface: ["huggingfaceDownloadToken"],
   // Not a model provider either: the trainer Soul IDs and Fuobe looks train on, on your GPU (Settings → Training).
   "ai-toolkit": ["aiToolkitUrl", "aiToolkitToken", "aiToolkitDatasetDir"],
 } as const satisfies Record<TestProvider, readonly string[]>;

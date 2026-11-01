@@ -108,8 +108,8 @@ function recordCopy(c: Omit<LoraCopy, "createdAt">): void {
 /** The civitai key, as set in Settings or CIVITAI_API_KEY. */
 const civitaiKey = () => getSetting("civitaiKey");
 
-/** The Hugging Face token (Settings or HF_TOKEN): used only to download gated Hugging Face files. */
-const hfToken = () => getSetting("huggingfaceToken");
+/** The Hugging Face token for downloads (Settings → LoRAs or FUOBE_HF_DOWNLOAD_TOKEN): used only to download gated Hugging Face files. */
+const hfToken = () => getSetting("huggingfaceDownloadToken");
 
 /** Whether a Hugging Face token is set (gated downloads need one). */
 export const hasHfToken = (): boolean => !!hfToken();
@@ -401,6 +401,8 @@ export async function prepareCloudLoras(
       continue;
     }
     const locked = gated(l);
+    // Only a model's own adapter goes to the cloud from a gated repo (fitLoras leaves the optional ones out).
+    if (locked && !l.adapter) throw new LoraError(`${name} is in a gated Hugging Face repo, so it can't be sent to ${host}: it runs on your GPU once you've accepted its licence`);
     if (!l.url || (!needsToken(l.url) && !locked)) throw new LoraError(`${name} can't be sent to ${host}: it exists only as a file on your ComfyUI`);
     const cached = getCopy(l.file, target);
     if (cached?.hostedUrl && Date.now() - cached.createdAt < MIRROR_TTL_MS[target]) {
@@ -416,7 +418,14 @@ export async function prepareCloudLoras(
   return out;
 }
 
-/** A civitai LoRA copied to the provider's storage (once: prepareCloudLoras runs it through mirrorOnce). */
+/** What the research's snapshot says about hosting a gated Hugging Face file (its hostedOk on record, never assumed). */
+function gatedHosting(l: LoraRef, entry: LoraEntry | undefined): string {
+  const ok = (l.licence ?? entry?.licence)?.hostedOk;
+  const says = ok === true ? "its licence allows hosted use" : ok === false ? "its licence is for your own GPU only" : "its licence says nothing on hosted use";
+  return `a gated Hugging Face file, downloaded once with your token; ${says} (the research's snapshot)`;
+}
+
+/** A civitai LoRA, or a model's gated Hugging Face adapter, copied to the provider's storage (once: prepareCloudLoras runs it through mirrorOnce). */
 async function mirrorCivitai(
   l: LoraRef & { url: string },
   entry: LoraEntry | undefined,
@@ -467,7 +476,7 @@ async function mirrorCivitai(
     hostedUrl,
     sha256: facts?.sha256 ?? crypto.createHash("sha256").update(data).digest("hex"),
     sizeBytes: data.length,
-    licence: { ...licenceSnapshot(l, entry, now), ...(civitai && hostingNote(now) && { hosting: hostingNote(now) }), ...(!civitai && { hosting: "a gated Hugging Face file, downloaded once with your token; its licence allows hosted use (the research's snapshot)" }) },
+    licence: { ...licenceSnapshot(l, entry, now), ...(civitai && hostingNote(now) && { hosting: hostingNote(now) }), ...(!civitai && { hosting: gatedHosting(l, entry) }) },
   });
   return { ...l, hostedUrl };
 }
@@ -654,7 +663,6 @@ export function withoutMissingOnComfy(loras: LoraRef[], listed: string[] | null)
   };
 }
 
-/** Test the civitai key (Settings → Save & test): civitai's /me answers 200 for a good key. */
 /** Settings → LoRAs' Save & test for the Hugging Face token: who it belongs to (whoami), and whether it can read. */
 export async function testHfToken(): Promise<{ ok: boolean; detail: string }> {
   const token = hfToken();
@@ -673,6 +681,7 @@ export async function testHfToken(): Promise<{ ok: boolean; detail: string }> {
   return { ok: true, detail: `${who}${role ? ` (${role} token)` : ""}. Accept each gated LoRA's licence on its Hugging Face page with this account` };
 }
 
+/** Test the civitai key (Settings → Save & test): civitai's /me answers 200 for a good key. */
 export async function testCivitaiKey(): Promise<{ ok: boolean; detail: string }> {
   const token = civitaiKey();
   if (!token) return { ok: false, detail: "No key set" };

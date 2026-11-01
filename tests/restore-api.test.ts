@@ -45,7 +45,7 @@ async function settle(id: string, ms = 90_000): Promise<Generation> {
 
 const batchOf = (id: string) => {
   const b = (db().prepare("SELECT batch_id FROM generations WHERE id = ?").get(id) as { batch_id: string }).batch_id;
-  return db().prepare("SELECT id, model_id, op, feature, engine FROM generations WHERE batch_id = ? ORDER BY created_at, id").all(b) as { id: string; model_id: string; op: string; feature: string; engine: string }[];
+  return db().prepare("SELECT id, model_id, op, feature, engine FROM generations WHERE batch_id = ? ORDER BY rowid").all(b) as { id: string; model_id: string; op: string; feature: string; engine: string }[];
 };
 
 const src = { duration: 12, fps: 16, width: 72, height: 128, hasAudio: true };
@@ -97,7 +97,7 @@ describe("Restore: estimates", () => {
 });
 
 describe("Restore: the prompt writer", () => {
-  it("offline (no Claude key, no Ollama): the template from your words, and the default negative", async () => {
+  it("offline (no Claude key, no local model): the template from your words, and the default negative", async () => {
     const r = await (await promptRoute.POST(json({ engine: "open", hint: "fishing boats in a harbour in the 1930s" }))).json();
     expect(r.by).toBe("offline");
     expect(r.prompt).toMatch(/^fishing boats in a harbour in 1930s, .*natural colour/);
