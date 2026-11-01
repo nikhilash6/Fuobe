@@ -2,7 +2,6 @@ import { connection } from "next/server";
 import { z } from "zod";
 import { MAX_TOPIC } from "@/lib/catalog/faceless";
 import { body, createEpisode, handle, listEpisodes, SettingsSchema, SourceSchema } from "@/server/faceless";
-import { handler } from "@/server/access/route";
 
 const Create = z.object({
   prompt: z.string().max(MAX_TOPIC, "Prompt is too long (max 5000 characters)"),
@@ -13,19 +12,19 @@ const Create = z.object({
 });
 
 /** History: your explainers, newest first (`?q=` search, `?liked=1`). */
-export const GET = handler({ access: "signed-in" }, async (request: Request) => {
+export async function GET(request: Request) {
   await connection();
   return handle(() => {
     const p = new URL(request.url).searchParams;
     return Response.json({ items: listEpisodes({ kind: "explainer", q: p.get("q") ?? undefined, liked: p.get("liked") === "1", limit: 200 }) });
   });
-});
+}
 
 /** Explain something: the script is written from the prompt and sources, then rendered. */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   return handle(async () => {
     const input = await body(request, Create, "Add a prompt, or attach a file or link");
     const episode = createEpisode({ kind: "explainer", topic: input.prompt, sources: input.sources, settings: input.settings, autoRender: !input.review });
     return Response.json(episode, { status: 201 });
-  });
-});
+  }, request);
+}

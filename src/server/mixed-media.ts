@@ -10,6 +10,7 @@ import {
   MIXED_FEATURE,
   MIXED_FRAME_FEATURE,
   MIXED_FRAME_MODELS,
+  MIXED_FRAME_MOVES,
   MIXED_MODELS,
   MIXED_MODES,
   MIXED_OPEN_LEGACY,
@@ -30,7 +31,7 @@ import { sourceSeconds, takesImage } from "@/lib/catalog/shorts-models";
 import type { Engine, Generation, ProviderId } from "@/lib/catalog/types";
 import { createPipeline } from "./chains";
 import { db } from "./db";
-import { DROPPED_UNUSED, getGeneration, previewChained, unfilledRequest, waitedOnFailure } from "./generations";
+import { ConnectComfyError, DROPPED_UNUSED, getGeneration, previewChained, unfilledRequest, waitedOnFailure } from "./generations";
 import { withoutMissingOnComfy, withoutUnreachableCivitai } from "./loras";
 import { comfyLoraFiles, probeComfy } from "./providers/comfyui";
 import { engineMode, getSetting } from "./settings";
@@ -108,12 +109,16 @@ async function planInput(body: MixedBody, opts: { probe: boolean }): Promise<{ i
   const problem = mixedRangeProblem(body.range, duration, sourceFps);
   if (problem) throw new ShortsError(problem);
   const fps = clampFps(body.fps, sourceFps);
+  // A frame model Per frame has moved on from runs on its successor, and says so.
+  const movedFrom = body.modelId && MIXED_FRAME_MOVES[body.modelId] ? body.modelId : undefined;
+  if (movedFrom) body = { ...body, modelId: MIXED_FRAME_MOVES[movedFrom] };
   const mode = renderMode(body);
   const choices = modeModels(body.engine, mode);
   const modelId = body.modelId && choices.includes(body.modelId) ? body.modelId : choices[0];
   const model = getModel(modelId);
   const len = body.range.end - body.range.start;
   const notes: string[] = [];
+  if (movedFrom && modelId === body.modelId) notes.push(`${getModel(movedFrom)?.name ?? movedFrom} is now ${model?.name ?? modelId} here`);
   let frames = mixedFrames(len, fps);
   let rate = fps;
   const size = info.width && info.height ? { width: info.width, height: info.height } : body.source.width && body.source.height ? { width: body.source.width, height: body.source.height } : undefined;
@@ -125,7 +130,7 @@ async function planInput(body: MixedBody, opts: { probe: boolean }): Promise<{ i
     frames = s.frames;
     rate = s.fps;
     if (Math.abs(s.fps - fps) > 0.01) notes.push(`Frames are every ${s.interval === 1 ? "" : `${ordinal(s.interval)} `}frame of this ${+sourceFps.toFixed(2)} FPS clip: ${+s.fps.toFixed(2)} FPS, ${frames} frames`);
-    if (modelId === "seedream-5-flash") notes.push(`Seedream 5.0 Flash takes no seed, so frames vary a little more than with Nano Banana 2${body.resolution === "4K" ? "; it draws up to 2K" : ""}`);
+    if (modelId === "seedream-5-flash") notes.push(`Seedream 5.0 Flash takes no seed, so frames vary a little more than with Nano Banana 2.1${body.resolution === "4K" ? "; it draws up to 2K" : ""}`);
     else if (original && body.resolution === "4K") notes.push(`${model?.name} draws frames at up to 2K (about 4 megapixels)`);
     else if (frames > FRAME_LIMITS.perClip && body.resolution !== "1K") {
       // merge-videos sizes the joined clips 512–2048 px a side.
@@ -257,6 +262,7 @@ function run(steps: PlanStep[], opts: { existing?: Record<string, string> } = {}
   try {
     return createPipeline(steps, opts);
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
 }

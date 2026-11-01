@@ -12,7 +12,7 @@ import { ACCEPT, fileToList, fileToSlot, kindOfFile, LibraryGrid, wrongKindMessa
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useDraft } from "@/components/av/use-draft";
-import { useEngine, useGenerations } from "@/lib/api";
+import { useAskBeforeUpload, useEngine, useGenerations } from "@/lib/api";
 import {
   clock,
   CROSSFADE_MAX,
@@ -29,6 +29,7 @@ import { cloudLoopLength, cloudLoopPasses } from "@/lib/av/crossfade";
 import { parseCueTime } from "@/lib/av/cue-edit";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useAudioToolPreview, useAudioToolRun, useSettled, type AudioToolBody } from "./hooks";
 
 /**
@@ -42,7 +43,7 @@ type Curve = "equal-power" | "linear";
 type Clip = SlotValue & { duration?: number };
 
 const money = (p: AudioToolPreview, engine: Engine) =>
-  p.demo ? "Demo · free" : engine === "open" ? "Free · runs on your ComfyUI" : p.costUsd === null ? "Price unknown" : p.costUsd < 0.01 ? "Under $0.01" : `≈ $${p.costUsd.toFixed(2)}`;
+  p.demo ? "Placeholder · free" : engine === "open" ? "Free · runs on your ComfyUI" : p.costUsd === null ? "Price unknown" : p.costUsd < 0.01 ? "Under $0.01" : `≈ $${p.costUsd.toFixed(2)}`;
 
 const nameOf = (c: Clip) => (c.name ?? "Audio clip").replace(/\.[a-z0-9]{2,4}$/i, "");
 
@@ -76,15 +77,18 @@ function AddAudio({ multiple, onFiles, onPick, compact, disabled }: { multiple?:
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [picking, setPicking] = useState(false);
+  // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
+  const askFirst = useAskBeforeUpload();
   const take = (list: FileList | null | undefined) => {
     const files = [...(list ?? [])];
+    if (!files.length || askFirst()) return;
     const audio = files.filter((f) => kindOfFile(f) === "audio");
     if (files.length > audio.length) toast(wrongKindMessage("audio"));
     if (audio.length) onFiles(multiple ? audio : audio.slice(0, 1));
   };
   const buttons = (
     <div className="flex flex-wrap items-center justify-center gap-1.5">
-      <Button size="sm" variant={compact ? "outline" : "default"} className="rounded-full" onClick={() => input.current?.click()} disabled={disabled}>
+      <Button size="sm" variant={compact ? "outline" : "default"} className="rounded-full" onClick={() => askFirst() || input.current?.click()} disabled={disabled}>
         {compact ? <Plus className="size-3.5" /> : <Upload className="size-3.5" />} {compact ? "Add a clip" : multiple ? "Upload audio clips" : "Upload audio"}
       </Button>
       <Popover open={picking} onOpenChange={setPicking}>
@@ -327,14 +331,14 @@ export function AudioLoopTool({ tabs }: { tabs?: React.ReactNode }) {
   const go = () => {
     if (blocker) return void toast(blocker);
     if (preview.error) return void toast.error((preview.error as Error).message);
-    run.mutate(body!, { onSuccess: () => toast.success(engine === "open" ? "Looping on your ComfyUI" : "Looping"), onError: (e) => toast.error((e as Error).message) });
+    run.mutate(body!, { onSuccess: () => toast.success(engine === "open" ? "Looping on your ComfyUI" : "Looping"), onError: (e) => toastError(e) });
   };
   return (
     <ToolShell title="Audio" tabs={tabs}>
       {!clip && (
         <ToolHero
           title="Make it as long as you need"
-          subtitle="Loop a music bed, ambience or a beat to any length up to 10 minutes. Smooth crossfaded seams on your ComfyUI (free, runs on CPU); whole repeats on the cloud, for under a cent."
+          subtitle={`Loop a music bed, ambience or a beat to any length up to 10 minutes. Smooth crossfaded seams on your ComfyUI (free, runs on CPU)${mode === "open" ? "." : "; whole repeats on the cloud, for under a cent."}`}
         />
       )}
       <div className={cn("mx-auto max-w-[820px] space-y-3", clip ? "pt-4" : "mt-8")}>
@@ -417,14 +421,14 @@ export function AudioJoinTool({ tabs }: { tabs?: React.ReactNode }) {
   const go = () => {
     if (blocker) return void toast(blocker);
     if (preview.error) return void toast.error((preview.error as Error).message);
-    run.mutate(body!, { onSuccess: () => toast.success(engine === "open" ? "Joining on your ComfyUI" : "Joining"), onError: (e) => toast.error((e as Error).message) });
+    run.mutate(body!, { onSuccess: () => toast.success(engine === "open" ? "Joining on your ComfyUI" : "Joining"), onError: (e) => toastError(e) });
   };
   return (
     <ToolShell title="Audio" tabs={tabs}>
       {!clips.length && (
         <ToolHero
           title="Join clips into one track"
-          subtitle={`Up to ${JOIN_MAX_CLIPS} clips, in the order you set. Crossfaded on your ComfyUI (free, runs on CPU); end to end on the cloud, for under a cent.`}
+          subtitle={`Up to ${JOIN_MAX_CLIPS} clips, in the order you set. Crossfaded on your ComfyUI (free, runs on CPU)${mode === "open" ? "." : "; end to end on the cloud, for under a cent."}`}
         />
       )}
       <div className={cn("mx-auto max-w-[820px] space-y-3", clips.length ? "pt-4" : "mt-8")}>

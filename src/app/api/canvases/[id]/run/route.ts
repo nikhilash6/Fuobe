@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { CanvasConflict, graphProblem, pagesProblem, parseGraph, parsePages, runCanvas } from "@/server/canvas";
-import { handler } from "@/server/access/route";
 
 const Body = z.object({
   /** The page to run (the first one when omitted). */
@@ -21,7 +20,7 @@ const Body = z.object({
  * Turn the graph into generations: one per generator node that needs to run, chained with
  * dependsOn along the edges. Fresh and pinned nodes are reused. 422 when nothing could start.
  */
-export const POST = handler({ access: "signed-in" }, async (request: Request, ctx: RouteContext<"/api/canvases/[id]/run">) => {
+export async function POST(request: Request, ctx: RouteContext<"/api/canvases/[id]/run">) {
   const { id } = await ctx.params;
   const parsed = Body.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return Response.json({ error: "Invalid run request" }, { status: 400 });
@@ -42,4 +41,4 @@ export const POST = handler({ access: "signed-in" }, async (request: Request, ct
     return Response.json({ ...result, error: result.errors.length > 1 ? `${first} (and ${result.errors.length - 1} more)` : first }, { status: 422 });
   }
   return Response.json(result, { status: result.ran.length ? 201 : 200 });
-});
+}

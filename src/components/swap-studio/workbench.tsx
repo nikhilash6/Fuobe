@@ -13,6 +13,7 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { uploadFile } from "@/lib/api";
 import { clipExtension, clipNeedsPreview, clipProblem, jobState, MODE_LABELS, pageClip, secondsLabel, SWAP_STUDIO, type GenSummary, type StudioEstimate, type SwapClip, type SwapProject, type SwapShot } from "@/lib/catalog/swap-studio";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { decisionsHref, useAddClip, usePrepareClip, useSwapEdit, useSwapEstimate, useSwapProject, type EditInput } from "./hooks";
 import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
 import { AnchorsStage } from "./stage-anchors";
@@ -101,7 +102,7 @@ export function SwapWorkbench({ id }: { id: string }) {
     try {
       return await editMutation.mutateAsync(e);
     } catch (err) {
-      toast.error((err as Error).message);
+      toastError(err);
       return undefined;
     }
   };
@@ -241,7 +242,7 @@ function ProjectPanel({ project, estimate, edit }: { project: SwapProject; estim
           <dd className="mt-0.5 font-medium">{project.engine === "open" ? "Your GPU (ComfyUI)" : "Cloud (fal)"}</dd>
         </div>
       </dl>
-      {estimate?.demo && <Note className="mt-2">Demo mode: nothing is paid for and the takes are sample clips. Connect {project.engine === "open" ? "ComfyUI" : "fal"} in Settings to run it for real.</Note>}
+      {estimate?.demo && <Note className="mt-2">Placeholder results: nothing is paid for and the takes are sample clips. Connect {project.engine === "open" ? "ComfyUI" : "fal"} in Settings to run it for real.</Note>}
       <Button asChild variant="outline" size="sm" className="mt-3 w-full rounded-full sm:hidden">
         <a href={decisionsHref(project.id)} download>
           <Download className="size-4" /> Export decisions
@@ -261,7 +262,7 @@ function CharacterPanel({ project, edit }: { project: SwapProject; edit: StagePr
       const a = await uploadFile(file);
       await edit({ type: "character", image: a.url });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -336,7 +337,7 @@ function ClipsPanel({
       const p = await add.mutateAsync({ url: up.url, name: file.name, bytes: file.size, playable, ...facts });
       onSelect(p.clips.at(-1)!.id);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setUpload(null);
     }
@@ -434,7 +435,7 @@ function ClipHeader({ id, project, clip, gens }: StageProps) {
           <span className="text-[12px] text-muted-foreground">24 fps copy</span>
           <GenChip genId={clip.normalized?.genId} gens={gens} />
           {(!clip.normalized?.genId || norm.status === "failed" || norm.status === "canceled" || norm.status === "missing") && (
-            <Button size="sm" variant="outline" className="h-7 rounded-full px-2.5 text-[12px]" disabled={prepare.isPending} onClick={() => prepare.mutate({ clipId: clip.id }, { onError: (e) => toast.error((e as Error).message) })}>
+            <Button size="sm" variant="outline" className="h-7 rounded-full px-2.5 text-[12px]" disabled={prepare.isPending} onClick={() => prepare.mutate({ clipId: clip.id }, { onError: (e) => toastError(e) })}>
               <RotateCcw className="size-3.5" /> Prepare at 24 fps
             </Button>
           )}
@@ -445,7 +446,7 @@ function ClipHeader({ id, project, clip, gens }: StageProps) {
           <span className="text-[12px] text-muted-foreground">Browser copy</span>
           <GenChip genId={clip.preview?.genId} gens={gens} />
           {(!clip.preview?.genId || copy.status === "failed" || copy.status === "canceled" || copy.status === "missing") && (
-            <Button size="sm" variant="outline" className="h-7 rounded-full px-2.5 text-[12px]" disabled={prepare.isPending} onClick={() => prepare.mutate({ clipId: clip.id }, { onError: (e) => toast.error((e as Error).message) })}>
+            <Button size="sm" variant="outline" className="h-7 rounded-full px-2.5 text-[12px]" disabled={prepare.isPending} onClick={() => prepare.mutate({ clipId: clip.id }, { onError: (e) => toastError(e) })}>
               <RotateCcw className="size-3.5" /> Make a browser copy
             </Button>
           )}

@@ -3,7 +3,6 @@
 import { ArrowUp, AudioLines, Loader2, Paperclip, Slash, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
@@ -12,6 +11,7 @@ import { uploadFile } from "@/lib/api";
 import { insertSlash, pickSlash, slashQuery, slashSkills, type SkillSummary } from "@/lib/assist";
 import type { MediaKind } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { SkillIcon } from "./skill-icon";
 
@@ -103,7 +103,7 @@ export function AssistComposer({
           setTimeout(() => release(blob), 1500);
         })
         .catch((e) => {
-          toast.error((e as Error).message);
+          toastError(e);
           setFiles((xs) => xs.filter((x) => x.id !== id));
           release(blob);
         });
@@ -142,7 +142,7 @@ export function AssistComposer({
       setText("");
       setFiles([]);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setSending(false);
     }

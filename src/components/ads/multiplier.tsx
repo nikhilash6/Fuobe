@@ -12,12 +12,14 @@ import { areaCls } from "@/components/brand/fields";
 import { uploadImages } from "@/components/brand/image-list";
 import { fileToSlot, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
-import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
+import { getModel } from "@/lib/catalog";
+import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, UGC_MODELS, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { probeBlob, probeUrl } from "@/lib/media-probe";
-import { useModelAccess } from "@/lib/api";
+import { useAskBeforeUpload, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { addRuns, send, useEstimate } from "@/components/marketing/hooks";
 import type { ModelInfo } from "@/components/marketing/model-info";
 import { RunsList } from "@/components/marketing/runs";
@@ -41,6 +43,8 @@ function ReferenceDrop({ onFile, onPick }: { onFile: (f: File) => void; onPick: 
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [lib, setLib] = useState(false);
+  // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
+  const askFirst = useAskBeforeUpload();
   return (
     <div
       onDragOver={(e) => (e.preventDefault(), setOver(true))}
@@ -49,7 +53,7 @@ function ReferenceDrop({ onFile, onPick }: { onFile: (f: File) => void; onPick: 
         e.preventDefault();
         setOver(false);
         const f = e.dataTransfer.files[0];
-        if (f) onFile(f);
+        if (f && !askFirst()) onFile(f);
       }}
       className={cn("flex aspect-[4/3] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border-strong p-6 text-center transition-colors sm:aspect-video", over && "border-primary bg-brand-faint")}
     >
@@ -59,7 +63,7 @@ function ReferenceDrop({ onFile, onPick }: { onFile: (f: File) => void; onPick: 
         MP4, MOV or WebM · {MULTIPLIER.minSeconds}–{MULTIPLIER.maxSeconds} seconds (trim a longer one here)
       </p>
       <div className="mt-4 flex flex-wrap justify-center gap-2">
-        <Button onClick={() => input.current?.click()}>
+        <Button onClick={() => askFirst() || input.current?.click()}>
           <Upload /> Upload video
         </Button>
         <Popover open={lib} onOpenChange={setLib}>
@@ -94,7 +98,10 @@ function MentionImages({ value, onChange, onMention, max }: { value: string[]; o
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(0);
   const [lib, setLib] = useState(false);
+  // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
+  const askFirst = useAskBeforeUpload();
   const add = async (files: File[]) => {
+    if (!files.length || askFirst()) return;
     const room = max - value.length;
     if (room <= 0) return void toast(`Up to ${max} images`);
     setBusy(Math.min(room, files.length));
@@ -130,7 +137,7 @@ function MentionImages({ value, onChange, onMention, max }: { value: string[]; o
       ))}
       {value.length + busy < max && (
         <div className="relative flex size-16 shrink-0 flex-col overflow-hidden rounded-xl border border-dashed border-border-strong">
-          <button type="button" onClick={() => input.current?.click()} className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] text-muted-foreground hover:bg-brand-faint hover:text-brand-text" aria-label="Add images">
+          <button type="button" onClick={() => askFirst() || input.current?.click()} className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] text-muted-foreground hover:bg-brand-faint hover:text-brand-text" aria-label="Add images">
             <ImagePlus className="size-4" />
             Add
           </button>
@@ -173,7 +180,7 @@ function MentionImages({ value, onChange, onMention, max }: { value: string[]; o
 /** Ad Multiplier: a reference ad (4–30 s) → new versions: recreated from a prompt, or with a new hook / CTA. */
 export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) {
   const qc = useQueryClient();
-  const { engine, setEngine } = useMarketingEngine();
+  const { engine, setEngine, mode: engineMode } = useMarketingEngine();
   const access = useModelAccess();
   const [video, setVideo] = useState<SlotValue | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
@@ -263,7 +270,7 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
   const estBody = useMemo(() => (body && sections ? { ...body, firstFrame: hookOn ? body.video : undefined, lastFrame: ctaOn ? body.video : undefined } : body), [body, sections, hookOn, ctaOn]);
   const est = useEstimate<RunEstimate>("/api/ads/multiplier/estimate", estBody);
   const blocker = !video ? "Upload a reference video" : video.uploading ? "Uploading the video…" : duration == null ? "Reading the video…" : length < MULTIPLIER.minSeconds - 0.05 || length > MULTIPLIER.maxSeconds + 0.05 ? "Video duration: 4-30 seconds" : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   const mention = (n: number) => {
     const tag = `@image_${n}`;
@@ -295,7 +302,7 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
       toast.success(r.runs.length > 1 ? `Making ${r.runs.length} versions` : "Making your new version", { duration: 1600 });
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(null);
     }
@@ -493,7 +500,7 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
           />
         </div>
         <p className="flex flex-wrap items-center justify-center gap-1.5 pt-6 text-center text-[12px] text-muted-foreground">
-          <Sparkles className="size-3" /> Cloud: Kling O3 edit, Happy Horse edit, Gemini Omni Flash · Open source: Fuobe Genjutsu (Wan Animate), Wan 2.2 clips joined around your ad
+          <Sparkles className="size-3" /> {engineMode === "open" ? "" : "Cloud: Kling O3 edit, Happy Horse edit, Gemini Omni Flash · "}Open source: Fuobe Genjutsu (Wan Animate), {getModel(UGC_MODELS.open.clip)?.name} clips joined around your ad
         </p>
       </div>
     </div>

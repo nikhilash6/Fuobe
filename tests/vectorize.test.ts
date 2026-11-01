@@ -24,6 +24,7 @@ const { planGeneration } = await import("@/lib/catalog/plan");
 const { buildPayload, extractOutputs } = await import("@/lib/catalog/payload");
 const { outputActions } = await import("@/lib/output-actions");
 const { appStudio } = await import("@/lib/studios");
+const { withRecipe } = await import("@/lib/catalog/preset-recipes");
 const { studioCatalog } = await import("@/lib/studio-catalog");
 const files = await import("@/app/api/files/[...path]/route");
 
@@ -54,9 +55,11 @@ describe("Vectorize app", () => {
       expect(plan.jobs).toBe(1);
     }
     expect(() => planGeneration({ feature: "app:app-vectorize", presetId: app.id, modelId: "oss-vtracer" }, getModel, getPreset)).toThrow(/Add the image to turn into an SVG/);
-    // The app page knows both models (the studio slice carries them), and VTracer is an open model of its own.
-    const config = appStudio(app);
+    // The app page knows both models (the studio slice carries them), and VTracer is an open model of its own. A tool keeps
+    // its own models: no other model is listed first.
+    const config = withRecipe(appStudio(app), (id) => !!getModel(id));
     expect(config.defaultModels).toEqual({ cloud: "recraft-vectorize", open: "oss-vtracer" });
+    expect(config.appModels).toEqual({ cloud: ["recraft-vectorize"], open: ["oss-vtracer"] });
     expect(studioCatalog(config).models.map((m) => m.id)).toEqual(expect.arrayContaining(["recraft-vectorize", "oss-vtracer"]));
     expect(getModel("oss-vtracer")).toMatchObject({ engine: "open", kind: "image" });
     expect(getModel("oss-vtracer")!.hidden).toBeFalsy();

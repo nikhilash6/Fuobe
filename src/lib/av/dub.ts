@@ -22,7 +22,7 @@ import { timelineFor } from "./timeline";
  * speaks each phrase in the cloned voice; the audio-timeline workflow lays them out; InfiniteTalk
  * re-syncs the lips and the mux mixes the voice over the background stem.
  * Cloud: ElevenLabs Voice Isolation (the clean voice to clone), Scribe v2 on it (transcript), Claude or
- * Ollama (translation), and in parallel the source's sound split by Demucs (drums, bass and other: the
+ * a local model (translation), and in parallel the source's sound split by Demucs (drums, bass and other: the
  * music and effects). ElevenLabs v4 speaks each phrase, fal's compose lays them out over a blank still
  * (its soundtrack is read back as audio), Chatterbox voice conversion turns the track into the speaker's
  * voice and Sync Lipsync 3 re-syncs the lips; compose then mixes the new voice over the Demucs stems and
@@ -405,9 +405,9 @@ export interface DubPrice {
   steps: number;
 }
 
-/** The price as one short line: "≈ $8.13 + ElevenLabs v4", "Demo · free", "Free on your GPU". */
+/** The price as one short line: "≈ $8.13 + ElevenLabs v4", "Placeholder · free", "Free on your GPU". */
 export function priceLine(p: DubPrice): string {
-  if (p.demo) return "Demo · free";
+  if (p.demo) return "Placeholder · free";
   if (p.engine === "open") return "Free on your GPU";
   const usd = p.costUsd > 0 && p.costUsd < 0.01 ? "< $0.01" : `≈ $${p.costUsd.toFixed(2)}`;
   return p.unpriced.length ? `${usd} + ${p.unpriced.join(" + ")}` : usd;

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useGenerationEvents } from "@/lib/api";
 import type { AdCreative, BrandKit, BrandKitFields, MarketingRun, Product, RunEstimate, RunFeature } from "@/lib/catalog/marketing";
 import type { Generation } from "@/lib/catalog/types";
+import { responseError } from "@/lib/refusals";
 
 /**
  * React Query hooks for /api/brands, /api/products, /api/marketing and /api/ads (kept next to the
@@ -13,8 +14,8 @@ import type { Generation } from "@/lib/catalog/types";
 
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
-  const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw Object.assign(new Error(body.error ?? `Request failed (${res.status})`), { status: res.status });
+  const body = (await res.json().catch(() => ({}))) as T & { error?: string; code?: string };
+  if (!res.ok) throw Object.assign(responseError(res, body.error ?? `Request failed (${res.status})`), { status: res.status, code: body.code });
   return body;
 }
 

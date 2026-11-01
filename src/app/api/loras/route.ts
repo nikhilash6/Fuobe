@@ -3,14 +3,12 @@ import { LORA_LIBRARY, LORA_LIBRARY_AS_OF } from "@/lib/catalog/lora-library.gen
 import { licenceLine } from "@/lib/catalog/loras";
 import { downloadToComfy, filesInLoraFolder, listLoraCopies, LoraError } from "@/server/loras";
 import { getSetting } from "@/server/settings";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 /**
  * The LoRA library for Settings → LoRAs: every researched LoRA with its licence, where it downloads from,
  * whether it is in the LoRA folder and where Fuobe mirrored it. Keys are never in the answer.
  */
-export const GET = handler({ access: "signed-in" }, async () => {
+export async function GET() {
   await connection();
   const folder = getSetting("comfyLorasDir");
   // A folder setting that can't be read (a file, no permission) is said, not a 500.
@@ -39,17 +37,16 @@ export const GET = handler({ access: "signed-in" }, async () => {
       mirrored: mirrored.get(e.file) ?? [],
     })),
   });
-});
+}
 
 /** Download one library LoRA into the LoRA folder now (`{ file }`), instead of before the first run that needs it. */
-export const POST = handler({ access: "perm:install.settings" }, async (request: Request) => {
+export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { file?: unknown };
   if (typeof body.file !== "string" || !body.file) return Response.json({ error: "Say which LoRA to download" }, { status: 400 });
   try {
     const copy = await downloadToComfy(body.file);
     return Response.json({ file: copy.file, sizeBytes: copy.sizeBytes, sha256: copy.sha256 });
   } catch (e) {
-    rethrowAccess(e);
     return Response.json({ error: (e as Error).message }, { status: e instanceof LoraError ? 422 : 500 });
   }
-});
+}

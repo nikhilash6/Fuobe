@@ -95,6 +95,7 @@ import type { Engine, MediaKind, ModelDef } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { useModKey } from "@/lib/keys";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import {
   buildViews,
   DescribeCache,
@@ -452,7 +453,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
       savedName.current = v;
       void qc.invalidateQueries({ queryKey: ["canvases"], exact: true });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     }
   };
 
@@ -732,7 +733,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
               if (!r.ran.length) toast("Everything's up to date", { description: issues, action: { label: "Run again", onClick: () => go(t, true) } });
               else toast.success(r.ran.length === 1 ? "Running 1 node" : `Running ${r.ran.length} nodes`, { description: issues, duration: 1800 });
             },
-            onError: (e) => toast.error((e as Error).message),
+            onError: (e) => toastError(e),
           },
         );
       };
@@ -1219,7 +1220,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
   const attention = new Set(plan.errors.filter((e) => e.message !== OPEN_DUB_HINT).map((e) => e.nodeId)).size;
   const summary = [
     plan.steps.length
-      ? `${plan.steps.length} to run · ${planDemo ? "Demo · free" : plan.costUnknown ? "price unknown" : plan.costUsd === 0 ? "Free" : `≈ ${formatCost(plan.costUsd)}`}`
+      ? `${plan.steps.length} to run · ${planDemo ? "Placeholder · free" : plan.costUnknown ? "price unknown" : plan.costUsd === 0 ? "Free" : `≈ ${formatCost(plan.costUsd)}`}`
       : generators.length && !attention
         ? "Up to date"
         : "",

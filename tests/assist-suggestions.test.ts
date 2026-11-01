@@ -56,14 +56,14 @@ describe("Assist's suggestion chips on the offline planner (R4-04)", () => {
     expect(plan.jobs).toMatchObject([{ kind: "image", op: "t2i", count: 4 }]);
     // The same request with a plural noun and a "best one" also asks.
     const fox = agent.offlinePlan("Make 3 portraits of a fox in a trench coat, then animate the best one into a 5 s video", "open")!;
-    expect(jobsOf(fox)).toEqual([expect.objectContaining({ model_id: "oss-z-image-turbo", outputs: 3, prompt: "Portrait of a fox in a trench coat" })]);
+    expect(jobsOf(fox)).toEqual([expect.objectContaining({ model_id: "oss-ideogram-4", outputs: 3, prompt: "Portrait of a fox in a trench coat" })]);
     // "… then animate them": every still gets its own clip.
     const all = agent.offlinePlan("Two posters of a jazz club, then animate them", "cloud")!;
     expect(jobsOf(all).map((j) => [j.model_id, j.after])).toEqual([
       ["nano-banana-pro", undefined],
-      ["seedance-2-5", 0],
+      ["minimax-h3", 0],
       ["nano-banana-pro", undefined],
-      ["seedance-2-5", 2],
+      ["minimax-h3", 2],
     ]);
   });
 
@@ -73,11 +73,11 @@ describe("Assist's suggestion chips on the offline planner (R4-04)", () => {
 
   it("a 10-second vertical video with sound: the length the model lists and its own soundtrack", () => {
     expect(jobsOf(agent.offlinePlan(ASSIST_SUGGESTIONS[3], "cloud"))).toEqual([
-      expect.objectContaining({ model_id: "seedance-2-5", aspect_ratio: "9:16", duration: 10, generate_audio: true }),
+      expect.objectContaining({ model_id: "minimax-h3", aspect_ratio: "9:16", duration: 10 }),
     ]);
-    // The open model's longest is 5 s, and it makes no sound.
+    // MiniMax H3 lists 10 s on both engines and always makes its own sound, so there is no sound switch to send.
     const open = jobsOf(agent.offlinePlan(ASSIST_SUGGESTIONS[3], "open"))[0];
-    expect(open).toMatchObject({ model_id: "oss-wan22-14b-fast", aspect_ratio: "9:16", duration: 5 });
+    expect(open).toMatchObject({ model_id: "oss-minimax-h3", aspect_ratio: "9:16", duration: 10 });
     expect(open.generate_audio).toBeUndefined();
   });
 
@@ -141,7 +141,7 @@ describe("picking a take", () => {
     await agent.run(one.id, agent.offline);
     v = agent.getThread(one.id)!;
     const clip = v.generations.find((g) => g.kind === "video")!;
-    expect(clip.request).toMatchObject({ modelId: "seedance-2-5", inputs: { images: ["/api/files/outputs/it-1-1.png"] }, params: expect.objectContaining({ duration: 5 }) });
+    expect(clip.request).toMatchObject({ modelId: "minimax-h3", inputs: { images: ["/api/files/outputs/it-1-1.png"] }, params: expect.objectContaining({ duration: 5 }) });
 
     // Two stills (a plain request makes 2 takes): it asks, and a bare number then answers.
     const two = agent.createThread({ agent: "offline", engine: "cloud", autoApprove: true });
@@ -165,7 +165,7 @@ describe("picking a take", () => {
     await agent.run(t.id, agent.offline);
     let v = agent.getThread(t.id)!;
     expect(v.generations).toHaveLength(4);
-    expect(v.generations.every((g) => g.request.modelId === "oss-z-image-turbo")).toBe(true);
+    expect(v.generations.every((g) => g.request.modelId === "oss-ideogram-4")).toBe(true);
     // Done out of order: the numbers follow the order they were started in, like the chat shows them.
     for (const g of [...v.generations].reverse()) {
       db()
@@ -178,7 +178,7 @@ describe("picking a take", () => {
     const stills = v.generations.filter((g) => g.kind === "image").sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
     const clip = v.generations.find((g) => g.kind === "video")!;
     expect(clip).toBeTruthy();
-    expect(clip.request.modelId).toBe("oss-wan22-14b-fast");
+    expect(clip.request.modelId).toBe("oss-minimax-h3");
     const started = (v.thread.items.find((i) => i.role === "generations") as { ids: string[] } | undefined)?.ids ?? stills.map((g) => g.id);
     expect(clip.request.inputs?.images).toEqual([`/api/files/outputs/open-${started[1]}.png`]);
     expect(v.thread.items.filter((i) => i.role === "assistant").map((i) => (i as { text: string }).text)).toContain("I'll animate take 2 with the default video model.");
@@ -210,7 +210,7 @@ describe("picking a take", () => {
     v = agent.getThread(t.id)!;
     const clip = v.generations.find((g) => g.kind === "video")!;
     expect(clip).toBeTruthy();
-    expect(clip.request).toMatchObject({ modelId: "seedance-2-5", inputs: { images: ["/api/files/outputs/take-2.png"] } });
+    expect(clip.request).toMatchObject({ modelId: "minimax-h3", inputs: { images: ["/api/files/outputs/take-2.png"] } });
     expect(clip.request.prompt).toMatch(/^Moody portrait of a lighthouse keeper, 35mm film\. The still comes to life/);
     expect(v.thread.items.filter((i) => i.role === "assistant").map((i) => (i as { text: string }).text)).toContain("I'll animate take 2 with the default video model.");
   });

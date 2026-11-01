@@ -23,6 +23,7 @@ import { EpisodeTile } from "@/components/faceless/cards";
 import { voiceLabel } from "@/components/faceless/narrator";
 import { animationStyle, CF_LENGTHS, MAX_EPISODES } from "@/lib/catalog/content-factory";
 import { genreInfo, type PickerData } from "@/lib/catalog/faceless";
+import { toastError } from "@/lib/refusals";
 import { BriefCard, ReferenceCard, SeriesPriceLine } from "./parts";
 import { useAddEpisodes, useDeleteSeries, useSeries, useSeriesEstimate, useUpdateSeries } from "./hooks";
 
@@ -70,7 +71,7 @@ export function SeriesView({ id, voices }: { id: string; voices: PickerData["voi
           toast("Series deleted");
           router.push("/content-factory");
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       });
     return (
       <div className="flex min-h-svh min-w-0 flex-col">
@@ -150,7 +151,7 @@ export function SeriesView({ id, voices }: { id: string; voices: PickerData["voi
                   brief={s.brief}
                   note={s.analysis?.note}
                   saving={update.isPending}
-                  onSave={(b) => update.mutate({ id: s.id, brief: b }, { onSuccess: () => toast("Saved — episodes you add from now on follow it"), onError: (e) => toast.error((e as Error).message) })}
+                  onSave={(b) => update.mutate({ id: s.id, brief: b }, { onSuccess: () => toast("Saved — episodes you add from now on follow it"), onError: (e) => toastError(e) })}
                 />
               )}
             </div>
@@ -213,7 +214,7 @@ export function SeriesView({ id, voices }: { id: string; voices: PickerData["voi
                           setNext("");
                           toast(count === 1 ? "Next episode started" : `${count} episodes started`);
                         },
-                        onError: (e) => toast.error((e as Error).message),
+                        onError: (e) => toastError(e),
                       },
                     )
                   }
@@ -247,7 +248,7 @@ export function SeriesView({ id, voices }: { id: string; voices: PickerData["voi
                           toast("Series deleted");
                           router.push("/content-factory");
                         },
-                        onError: (e) => toast.error((e as Error).message),
+                        onError: (e) => toastError(e),
                       })
                     }
                   >

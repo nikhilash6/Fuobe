@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, CheckCircle2, Globe, Info, Search } from "lucide-react";
+import { Ban, CheckCircle2, ExternalLink, Globe, Info, Search } from "lucide-react";
 import { useDeferredValue, useState } from "react";
 import { FLAG_LABEL, kindLabel, type LicenceFlag, type LicenceList, type LicenceRow } from "@/lib/licences";
 import { cn } from "@/lib/utils";
@@ -59,9 +59,17 @@ function Row({ row }: { row: LicenceRow }) {
           {row.inCatalog ? `${row.by} · ` : ""}
           {kindLabel(row.kind)}
         </p>
-        {row.licences.map((l) => (
+        {row.licences.map((l, i) => (
           <p key={l} className="mt-1 text-[12px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
-            {l}
+            {row.links[i] ? (
+              <a href={row.links[i] ?? undefined} target="_blank" rel="noreferrer" className="underline-offset-2 hover:text-foreground hover:underline">
+                {l}
+                <ExternalLink className="ml-1 inline size-3 align-[-1px]" aria-hidden />
+                <span className="sr-only"> (the licence, in a new tab)</span>
+              </a>
+            ) : (
+              l
+            )}
           </p>
         ))}
       </div>

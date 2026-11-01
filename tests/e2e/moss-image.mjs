@@ -4,9 +4,13 @@
 // Models & licences with their switches on and their licence facts on screen (the cloud row's weights and fal's
 // black-image catch shown whole; a cut note opened with "More" from the keyboard). A LoRA run's price is unknown, never
 // free (the preview API: no picker attaches a LoRA to MOSS yet). Each page at 1440 and 390 px, light and dark, without
-// sideways scroll.
-// Usage: FAL_KEY=anything pnpm dev, then node tests/e2e/moss-image.mjs [appUrl] [--shots <dir>]   (with a fal key the
-// cloud price shows instead of "Demo · free"; nothing is sent: Generate is never pressed). Exits 1 on a failed check.
+// sideways scroll. The prices follow the server, as /api/status says it runs: without a fal key the cloud runs are free
+// demos, and without a reachable ComfyUI so are the open engine's (both "Placeholder · free", as every model in demo mode).
+// Usage: node tests/e2e/moss-image.mjs [appUrl] [--shots <dir>] [--fal] [--live]   verify.sh runs it on each of its three
+// servers: demo mode, FAL_KEY=anything with --fal for the hosted price ($0.05, unknown with a LoRA), and the live ComfyUI
+// with --live for Free on your GPU. --fal and --live each fail the run when the server lacks a fal key or can't reach
+// ComfyUI, so those prices are never skipped unseen.
+// Nothing is sent: Generate is never pressed. Exits 1 on a failed check.
 import fs from "node:fs";
 import path from "node:path";
 import { launch } from "./_browser.mjs";
@@ -24,7 +28,13 @@ const check = (label, ok, extra = "") => {
 const flat = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 const status = await (await fetch(`${app}/api/status`)).json().catch(() => ({}));
 const fal = !!status.providers?.fal?.configured;
-if (!fal) console.log('note: no fal key on this server: the cloud composer shows "Demo · free" (start it with FAL_KEY=anything for the hosted price)');
+const comfy = !!status.providers?.comfyui?.configured;
+// Placeholder results (Settings, off by default) make every run a free placeholder; with them off, nothing does.
+const demo = status.demoMode === "on";
+if (!fal) console.log('note: no fal key on this server: the cloud composer shows "Placeholder · free" (start it with FAL_KEY=anything for the hosted price)');
+if (!comfy) console.log('note: ComfyUI is unreachable from this server: the open engine shows "Placeholder · free" too (Free once it is reachable)');
+if (argv.includes("--fal")) check("server: a fal key is set (--fal), so the hosted price is checked", fal);
+if (argv.includes("--live")) check("server: ComfyUI is reachable (--live), so Free on your GPU is checked", comfy);
 
 const browser = await launch();
 const contextFor = async (engine, width = 1440, colorScheme = "light") => {
@@ -59,8 +69,14 @@ try {
     ).json();
   const plain = await preview();
   const withLora = await preview([{ file: "moss-style.safetensors", url: "https://huggingface.co/example/moss-style/resolve/main/moss-style.safetensors", strength: 0.8 }]);
-  check("api: a plain MOSS-Image run is priced at $0.05 (1024 × 1024)", plain.costUsd === 0.05, JSON.stringify(plain.costUsd));
-  check("api: a MOSS-Image run with a LoRA goes to /lora at an unknown price, not free", withLora.costUsd === null && withLora.route?.endpoint === "fal-ai/moss-image/lora", `${JSON.stringify(withLora.costUsd)} ${withLora.route?.endpoint ?? withLora.error ?? ""}`);
+  if (fal) {
+    check("api: a plain MOSS-Image run is priced at $0.05 (1024 × 1024)", plain.costUsd === 0.05 && !plain.demo, JSON.stringify(plain.costUsd));
+    check("api: a MOSS-Image run with a LoRA goes to /lora at an unknown price, not free", withLora.costUsd === null && withLora.route?.endpoint === "fal-ai/moss-image/lora", `${JSON.stringify(withLora.costUsd)} ${withLora.route?.endpoint ?? withLora.error ?? ""}`);
+  } else if (demo) {
+    // No fal key: a free demo run (placeholders), whatever it would cost; the LoRA still picks fal's /lora twin.
+    check("api: without a fal key a plain MOSS-Image run is a free demo", plain.demo === true && plain.costUsd === 0, `${JSON.stringify(plain.costUsd)} demo=${plain.demo}`);
+    check("api: without a fal key a MOSS-Image run with a LoRA goes to /lora, as a free demo", withLora.demo === true && withLora.costUsd === 0 && withLora.route?.endpoint === "fal-ai/moss-image/lora", `${JSON.stringify(withLora.costUsd)} ${withLora.route?.endpoint ?? withLora.error ?? ""}`);
+  }
 
   for (const width of [1440, 390]) {
     for (const scheme of ["light", "dark"]) {
@@ -98,8 +114,8 @@ try {
           .catch(() => {});
         const t = flat(await composer(page).innerText());
         check(`${tag} ${engine}: the composer now runs MOSS-Image`, /MOSS-Image/.test(t), t.slice(0, 100));
-        const price = engine === "open" ? /\bFree\b/ : fal ? /≈ \$0\.05\b/ : /Demo/;
-        check(`${tag} ${engine}: its price shows before the run`, price.test(t), (t.match(/Demo · free|Demo|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
+        const price = engine === "open" ? (comfy ? /\bFree\b/ : /Demo/) : fal ? /≈ \$0\.05\b/ : /Demo/;
+        check(`${tag} ${engine}: its price shows before the run`, price.test(t), (t.match(/Placeholder · free|Demo|≈ \$[\d.]+|\bFree\b/) ?? ["no price"])[0]);
         if (engine === "open") {
           // Quality under Options, from the keyboard; on a phone Options is in the Settings sheet (a popover in a sheet).
           let scope = composer(page);
@@ -119,17 +135,36 @@ try {
           const qbox = await quality.boundingBox();
           check(`${tag} open: Quality fits the screen`, !!qbox && qbox.x >= 0 && qbox.x + qbox.width <= width + 1, qbox ? `${Math.round(qbox.x)}+${Math.round(qbox.width)}` : "no box");
           check(`${tag} open: Options shows Quality, Auto = Standard · 25 steps`, /Auto · Standard · 25 steps/.test(flat(await quality.innerText())), flat(await quality.innerText()));
+          // The words read in full: the text is no wider than the box that shows it (it was cut at "Auto · Standard · 2").
+          const cut = () =>
+            quality.evaluate((b) => {
+              const v = b.querySelector('[data-slot="select-value"]') ?? b;
+              const r = document.createRange();
+              r.selectNodeContents(v);
+              return { text: Math.round(r.getBoundingClientRect().width * 10) / 10, box: Math.round(v.getBoundingClientRect().width * 10) / 10 };
+            });
+          const before = await cut();
+          check(`${tag} open: Quality's Auto · Standard · 25 steps isn't cut off`, before.text <= before.box + 0.5, `${before.text} px of text in ${before.box} px`);
           await quality.focus();
           await page.keyboard.press("Enter");
           const best = page.getByRole("option", { name: "Best · 50 steps" });
           await best.waitFor({ timeout: 10_000 });
           const opts = flat(await page.getByRole("listbox").innerText());
           check(`${tag} open: Quality offers Best · 50 steps and Fast · 8 steps`, /Best · 50 steps/.test(opts) && /Fast · 8 steps/.test(opts), opts);
-          // The keyboard picks Best (arrows to it, Enter); the setting says so.
-          for (let i = 0; i < 6 && (await best.getAttribute("data-highlighted")) === null; i++) await page.keyboard.press("ArrowDown");
+          // The keyboard picks Best (arrows to it, Enter); the setting says so. Radix Select moves the focus in a timer
+          // after each arrow key, so each key waits for that move as a person's next key does: keys sent faster all
+          // start from the same option, and Enter then picks the one before Best.
+          const focused = () => page.evaluate(() => document.activeElement?.textContent ?? "");
+          for (let i = 0; i < 6 && (await best.getAttribute("data-highlighted")) === null; i++) {
+            const from = await focused();
+            await page.keyboard.press("ArrowDown");
+            await page.waitForFunction((f) => (document.activeElement?.textContent ?? "") !== f, from, { timeout: 2_000 }).catch(() => {});
+          }
           await page.keyboard.press("Enter");
           await page.waitForTimeout(300);
           check(`${tag} open: Best picked from the keyboard`, /Best · 50 steps/.test(flat(await quality.innerText())), flat(await quality.innerText()));
+          const after = await cut();
+          check(`${tag} open: Quality's Best · 50 steps isn't cut off`, after.text <= after.box + 0.5, `${after.text} px of text in ${after.box} px`);
           await shoot(page, `moss-options-${width}-${scheme}.png`);
           await page.keyboard.press("Escape");
           await page.keyboard.press("Escape");

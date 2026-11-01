@@ -22,8 +22,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright-core';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const COMFYUI_URL = process.env.COMFYUI_URL || 'http://127.0.0.1:8188';
@@ -138,6 +137,9 @@ export function resolveSource(arg) {
 }
 
 async function main() {
+  // playwright-core is scripts/comfy's own dependency (npm install here), loaded only when the export runs:
+  // build-library.mjs and the tests import this file's other exports with the root node_modules alone.
+  const { chromium } = await import('playwright-core');
   let args = process.argv.slice(2);
   if (!args.length) {
     const { SPEC } = await import(path.join(HERE, 'library.spec.mjs'));
@@ -216,7 +218,7 @@ async function main() {
   if (results.some((r) => !r.ok)) process.exitCode = 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => {
     console.error(e);
     process.exit(1);

@@ -12,9 +12,11 @@ import { LibraryGrid } from "@/components/studio/media-slot";
 import { uploadFile, useEngine, useStatus } from "@/lib/api";
 import type { RGB } from "@/lib/catalog/palettes";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useMoodboardActions } from "./hooks";
 import { loadImage, pixelsOf, renderCollages } from "./images";
 import { colorFeature, COPY, imageProblem, moodboardError, MOODBOARD_LIMITS, representativeOrder, suggestMoodboardName, type Moodboard } from "./logic";
+import { placeholdersOn } from "@/lib/demo-mode";
 
 interface Item {
   id: string;
@@ -93,7 +95,7 @@ export function CreateMoodboardDialog({ open, onOpenChange, onCreated }: { open:
     } catch (e) {
       keys.current.delete(src.key);
       setItems((xs) => xs.filter((x) => x.id !== id));
-      toast.error((e as Error).message || "Upload failed");
+      toastError(e, "Upload failed");
     }
   };
   const addFiles = (files: Iterable<File>) => {
@@ -121,7 +123,7 @@ export function CreateMoodboardDialog({ open, onOpenChange, onCreated }: { open:
       onCreated?.(m);
       setOpen(false);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -146,14 +148,14 @@ export function CreateMoodboardDialog({ open, onOpenChange, onCreated }: { open:
   const n = Math.min(items.length, MOODBOARD_LIMITS.refs);
   const st = status.data;
   const fal = !!st?.providers.fal?.configured;
-  const demo = st?.demoMode === "on" || (!fal && st?.demoMode !== "off");
+  const demo = placeholdersOn(st?.demoMode);
   const how =
     engine === "open"
       ? `Open source: collages for Qwen-Image-Edit from the ${n} most representative images`
       : !st
         ? `Cloud: a Recraft style from the ${n} most representative images`
         : demo
-          ? `Cloud: a Recraft style from the ${n} most representative images · demo, free`
+          ? `Cloud: a Recraft style from the ${n} most representative images · placeholder, free`
           : fal
             ? `Cloud: Recraft V4 Styles saves a style and draws the cover from the ${n} most representative images · ≈ $0.04 on fal`
             : `Cloud: no fal key, so no saved Recraft style — the ${n} most representative images are used as references`;

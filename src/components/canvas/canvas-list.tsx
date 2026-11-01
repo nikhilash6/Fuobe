@@ -14,12 +14,16 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { PageShell } from "@/components/page-shell";
-import { useEngine } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { CoverArt, CoverImg, useCoverPlayback } from "@/components/template-cover";
+import { useEngine, useIsVisitor } from "@/lib/api";
 // Types only: the catalog (models, templates) stays on the server; the page passes slim template cards.
 import type { CanvasNodeType, CanvasSummary, Outline } from "@/lib/catalog/canvas";
 import type { Engine } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
+import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { NodeIcon } from "./canvas-context";
 import { useCanvasActions, useCanvases } from "./use-canvas";
 
@@ -116,7 +120,7 @@ function CanvasCard({ c, onRename, onDelete }: { c: CanvasSummary; onRename: () 
             onSelect={() =>
               void duplicate(c.id).then(
                 (copy) => toast.success("Duplicated", { action: { label: "Open", onClick: () => router.push(`/canvas/${copy.id}`) } }),
-                (e) => toast.error((e as Error).message),
+                (e) => toastError(e),
               )
             }
           >
@@ -144,21 +148,47 @@ export interface TemplateCardData {
   byEngine: Record<Engine, { outline: Outline; models: string[] }>;
 }
 
-/** What each template section is, under its heading. */
-const GROUP_NOTES: Record<string, string> = {
-  "Effects 2.0 chains": "A photo, an image edit that sets the scene, then Fuobe DoP animates it with the effect. Open weights on both engines: free on your GPU.",
+/** What each template section is, under its heading (a guest or an account runs a canvas on a self-hosted Fuobe only). */
+const GROUP_NOTES: Record<string, (visitor: boolean) => string> = {
+  "Effects 2.0 chains": (visitor) =>
+    `A photo, an image edit that sets the scene, then Fuobe DoP animates it with the effect. Open weights on both engines${visitor ? "." : ": free on your GPU."}`,
 };
 
-function TemplateCard({ t, engine, onUse, busy }: { t: TemplateCardData; engine: Engine; onUse: () => void; busy: boolean }) {
+/** onUse: none for a guest or an account (a canvas is saved to the owner's library: the page says so once). */
+export function TemplateCard({ t, engine, onUse, busy }: { t: TemplateCardData; engine: Engine; onUse?: () => void; busy: boolean }) {
   const { outline, models } = t.byEngine[engine];
+  // Its real cover when it has one (what it makes: a still, a clip, or its frames side by side), with the board in
+  // miniature over a corner; else the board alone.
+  const cover = templateCover("canvas", t.id);
+  const { ref, playing, asked, handlers } = useCoverPlayback<HTMLElement>(`canvas/${t.id}`, cover);
   return (
-    <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card">
-      <div className="relative aspect-[16/9] bg-muted/50" style={{ background: `linear-gradient(135deg, oklch(0.62 0.12 ${t.hue} / 0.14), transparent 70%)` }}>
-        <Schematic outline={outline} className="p-4" />
-        <span className="absolute top-3 left-3 grid size-8 place-items-center rounded-lg bg-background/90 text-foreground shadow-soft">
-          <NodeIcon name={t.icon} className="size-4" />
-        </span>
-      </div>
+    <article ref={ref} {...handlers} className="flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card">
+      {cover ? (
+        <div className="relative aspect-[16/9] overflow-hidden bg-muted">
+          {cover.frames.length > 1 ? (
+            <div className="absolute inset-0 grid auto-cols-fr grid-flow-col gap-0.5">
+              {cover.frames.map((f) => (
+                <CoverImg key={f.src} frame={f} sizes="(max-width: 640px) 34vw, 125px" />
+              ))}
+            </div>
+          ) : (
+            <CoverArt cover={cover} sizes="(max-width: 640px) 100vw, 370px" playing={playing} asked={asked} />
+          )}
+          <span className="pointer-events-none absolute right-2.5 bottom-2.5 h-[36%] w-[32%] overflow-hidden rounded-lg bg-background/80 shadow-soft backdrop-blur">
+            <Schematic outline={outline} className="p-1.5" />
+          </span>
+          <span className="absolute top-3 left-3 grid size-8 place-items-center rounded-lg bg-background/90 text-foreground shadow-soft">
+            <NodeIcon name={t.icon} className="size-4" />
+          </span>
+        </div>
+      ) : (
+        <div className="relative aspect-[16/9] bg-muted/50" style={{ background: `linear-gradient(135deg, oklch(0.62 0.12 ${t.hue} / 0.14), transparent 70%)` }}>
+          <Schematic outline={outline} className="p-4" />
+          <span className="absolute top-3 left-3 grid size-8 place-items-center rounded-lg bg-background/90 text-foreground shadow-soft">
+            <NodeIcon name={t.icon} className="size-4" />
+          </span>
+        </div>
+      )}
       <div className="flex flex-1 flex-col gap-2 p-3.5">
         <div>
           <h3 className="text-[14px] font-medium">{t.name}</h3>
@@ -168,9 +198,11 @@ function TemplateCard({ t, engine, onUse, busy }: { t: TemplateCardData; engine:
           {engine === "open" ? <Cpu className="mt-px size-3.5 shrink-0" /> : <Cloud className="mt-px size-3.5 shrink-0" />}
           <span className="line-clamp-2">{models.join(" · ")}</span>
         </p>
-        <Button size="sm" className="mt-auto w-fit rounded-full" onClick={onUse} disabled={busy}>
-          {busy ? <Loader2 className="animate-spin" /> : <Plus />} Use template
-        </Button>
+        {onUse && (
+          <Button size="sm" className="mt-auto w-fit rounded-full" onClick={onUse} disabled={busy}>
+            {busy ? <Loader2 className="animate-spin" /> : <Plus />} Use template
+          </Button>
+        )}
       </div>
     </article>
   );
@@ -188,6 +220,8 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
   const [renaming, setRenaming] = useState<CanvasSummary | null>(null);
   const [draft, setDraft] = useState("");
   const [deleting, setDeleting] = useState<CanvasSummary | null>(null);
+  // A canvas is saved to the studio's library, which is its owner's: a guest or an account can look, not start one.
+  const visitor = useIsVisitor();
 
   const items = (canvases.data ?? []).filter((c) => !q || c.name.toLowerCase().includes(q.toLowerCase()));
   const setTab = (t: "mine" | "templates") => router.replace(t === "templates" ? "/canvas?tab=templates" : "/canvas", { scroll: false });
@@ -198,7 +232,7 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
       const c = await create(body);
       router.push(`/canvas/${c.id}`);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
       setCreating(null);
     }
   };
@@ -210,9 +244,13 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
           <h1 className="font-heading text-[34px] leading-tight">Canvas</h1>
           <p className="mt-1 max-w-xl text-[15px] text-muted-foreground">Make images, videos and ideas in one place: wire prompts, files and models together, then run them in order or side by side.</p>
         </div>
-        <Button className="w-fit rounded-full" onClick={() => void start("new", {})} disabled={!!creating}>
-          {creating === "new" ? <Loader2 className="animate-spin" /> : <Plus />} New canvas
-        </Button>
+        {visitor ? (
+          <SelfHostNote className="max-w-xs sm:text-right">Canvas editing is coming to free accounts.</SelfHostNote>
+        ) : (
+          <Button className="w-fit rounded-full" onClick={() => void start("new", {})} disabled={!!creating}>
+            {creating === "new" ? <Loader2 className="animate-spin" /> : <Plus />} New canvas
+          </Button>
+        )}
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -277,9 +315,11 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
               <EmptyDescription>Build a workflow once — prompt → image → video, three models side by side — and run it again whenever you like.</EmptyDescription>
             </EmptyHeader>
             <EmptyContent className="flex-row justify-center">
-              <Button className="rounded-full" onClick={() => void start("new", {})} disabled={!!creating}>
-                <Plus /> New canvas
-              </Button>
+              {!visitor && (
+                <Button className="rounded-full" onClick={() => void start("new", {})} disabled={!!creating}>
+                  <Plus /> New canvas
+                </Button>
+              )}
               <Button variant="secondary" className="rounded-full" onClick={() => setTab("templates")}>
                 Browse templates
               </Button>
@@ -295,14 +335,14 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
                   <h2 id={`tpl-${group.replace(/\W+/g, "-")}`} className="font-heading text-[22px] leading-tight">
                     {group}
                   </h2>
-                  {GROUP_NOTES[group] && <p className="mt-0.5 text-[13px] text-muted-foreground">{GROUP_NOTES[group]}</p>}
+                  {GROUP_NOTES[group] && <p className="mt-0.5 text-[13px] text-muted-foreground">{GROUP_NOTES[group](visitor)}</p>}
                 </div>
               )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {templates
                   .filter((t) => (t.group ?? "") === group)
                   .map((t) => (
-                    <TemplateCard key={t.id} t={t} engine={engine} busy={creating === t.id} onUse={() => void start(t.id, { templateId: t.id, engine })} />
+                    <TemplateCard key={t.id} t={t} engine={engine} busy={creating === t.id} onUse={visitor ? undefined : () => void start(t.id, { templateId: t.id, engine })} />
                   ))}
               </div>
             </section>
@@ -322,7 +362,7 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
               const c = renaming!;
               const name = draft.trim();
               setRenaming(null);
-              if (name && name !== c.name) void rename(c.id, name).then(() => toast.success("Renamed", { duration: 1500 }), (err) => toast.error((err as Error).message));
+              if (name && name !== c.name) void rename(c.id, name).then(() => toast.success("Renamed", { duration: 1500 }), (err) => toastError(err));
             }}
           >
             <Input autoFocus value={draft} maxLength={80} onChange={(e) => setDraft(e.target.value)} aria-label="Name" />
@@ -351,7 +391,7 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
               onClick={() => {
                 const c = deleting!;
                 setDeleting(null);
-                void remove(c.id).then(() => toast("Deleted", { duration: 1500 }), (e) => toast.error((e as Error).message));
+                void remove(c.id).then(() => toast("Deleted", { duration: 1500 }), (e) => toastError(e));
               }}
             >
               Delete

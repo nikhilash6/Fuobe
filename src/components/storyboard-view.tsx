@@ -18,13 +18,14 @@ import { finishGaveUp, useSoulFinish } from "@/components/studio/soul-finish";
 import { FailedTile, MediaThumb, PendingTile, tileRatio } from "@/components/studio/feed";
 import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { Viewer } from "@/components/studio/viewer";
-import { useCreateGeneration, useEngine, useGenerationActions, useGenerations } from "@/lib/api";
+import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsVisitor, useStatus } from "@/lib/api";
 import { MAX_FRAMES, STORYBOARD_ASPECTS, STORYBOARD_LOOK_MODEL, STORYBOARD_PARTNER_IDS, storyboardModels, type StoryboardPartner } from "@/lib/catalog/storyboard";
 import { lookCard } from "@/lib/catalog/soul-cards";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
 import { BOARD_TITLES_KEY, boardTitle, filmReady, rememberTitle } from "@/lib/storyboard-board";
 import { cn } from "@/lib/utils";
+import { responseError, toastError } from "@/lib/refusals";
 
 const ASPECTS: readonly string[] = STORYBOARD_ASPECTS;
 
@@ -128,7 +129,7 @@ function FilmStrip({ items, ratio, onOpen }: { items: Generation[]; ratio: numbe
         <MediaThumb output={g.outputs[0]} autoPlay={g === film} />
       </button>
     ) : g.status === "failed" || g.status === "canceled" ? (
-      <FailedTile g={g} ratio={ratio} onRetry={() => create.mutate(g.request, { onError: (e) => toast.error((e as Error).message) })} />
+      <FailedTile g={g} ratio={ratio} onRetry={() => create.mutate(g.request, { onError: (e) => toastError(e) })} />
     ) : (
       <PendingTile g={g} ratio={ratio} />
     );
@@ -174,7 +175,7 @@ function FrameTile({ g, index, ratio, onOpen }: { g: Generation; index: number; 
             </span>
           </>
         ) : g.status === "failed" || g.status === "canceled" ? (
-          <FailedTile g={g} ratio={ratio} onRetry={() => create.mutate(g.request, { onError: (e) => toast.error((e as Error).message) })} />
+          <FailedTile g={g} ratio={ratio} onRetry={() => create.mutate(g.request, { onError: (e) => toastError(e) })} />
         ) : (
           <PendingTile g={g} ratio={ratio} />
         )}
@@ -211,14 +212,14 @@ function Board({
     mutationFn: async () => {
       const res = await fetch(`/api/storyboards/${first.batchId}/film`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error);
+      if (!res.ok) throw responseError(res, body.error);
       return body as { items: Generation[] };
     },
     onSuccess: (b) => {
       toast.success(`Animating ${b.items.length - 1} shots, then joining them into one film`);
       void qc.invalidateQueries({ queryKey: ["generations"] });
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
   const filmButton = (
     <Button variant="secondary" size="sm" disabled={!ready || makeFilm.isPending} onClick={() => makeFilm.mutate()} className="whitespace-nowrap">
@@ -271,6 +272,13 @@ function Board({
 export function StoryboardView({ modelNames = {} }: { /** Display names of the storyboard models, from the server. */ modelNames?: Record<string, string> }) {
   const qc = useQueryClient();
   const [engine, setEngine] = useEngine();
+  // The engine is known once the install's engine mode is and the page has hydrated (until then useEngine answers the
+  // server's "cloud"): no price asked for a cloud board an open-only install refuses.
+  const hydrated = useHydrated();
+  const status = useStatus().data;
+  const statusReady = hydrated && !!status;
+  // A storyboard doesn't run on an account's own GPU yet (only the studios' generations do), nor for a guest who signs up.
+  const visitor = useIsVisitor();
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [story, setStory] = useState("");
   const [count, setCount] = useState(4);
@@ -311,6 +319,9 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
   const boardPartner = engine === "cloud" ? partner : undefined;
   const m = storyboardModels(engine as Engine, boardPartner);
   const nextName = `${modelNames[m.next] ?? m.next}${m.nextLoras?.length ? " with the next-scene LoRA" : ""}`;
+  // Frame 1's model (with references: the edit that takes them), named when it isn't the one that makes the rest.
+  const firstId = refs.length ? m.firstWithRefs : m.first;
+  const runsOn = firstId === m.next ? ` Runs on ${nextName}.` : ` Frame 1 on ${modelNames[firstId] ?? firstId}, then ${nextName}.`;
   const lookName = look ? lookCard(look)?.name : undefined;
   const filled = scenes.filter((s) => s.trim());
   const boardBody = {
@@ -329,12 +340,13 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
     queryFn: async () => {
       const res = await fetch("/api/storyboards/estimate", { method: "POST", headers: { "Content-Type": "application/json" }, body: priceKey });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error);
+      if (!res.ok) throw responseError(res, body.error);
       return body as BoardEstimate;
     },
     placeholderData: keepPreviousData,
     retry: false,
     staleTime: 30_000,
+    enabled: statusReady && (JSON.parse(priceKey) as { engine?: string }).engine === engine,
   });
   const est = estimate.data && !estimate.isError ? estimate.data : undefined;
   const submit = useMutation({
@@ -345,7 +357,7 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
         body: JSON.stringify({ ...boardBody, references: refs.filter((r) => r.ref).map((r) => r.ref) }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error);
+      if (!res.ok) throw responseError(res, body.error);
       return body as { scenes: string[]; batchId?: string };
     },
     onSuccess: (b) => {
@@ -354,7 +366,7 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
       toast.success(`${b.scenes.length} frames on the way — each one builds on the last`);
       void qc.invalidateQueries({ queryKey: ["generations"] });
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
 
   const ready = (mode === "auto" ? story.trim().length > 3 : scenes.some((s) => s.trim())) && !refs.some((r) => r.uploading);
@@ -384,7 +396,7 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
           <h2 className="font-heading text-display text-balance">Tell it frame by frame</h2>
           <p className="mt-2 text-[13px] text-muted-foreground">
             Up to {MAX_FRAMES} consistent frames — each one is made from the previous frame, so faces, wardrobe and light carry through.
-            {lookName && !refs.length ? ` Frame 1 on ${modelNames[STORYBOARD_LOOK_MODEL] ?? "Fuobe Soul"} in the ${lookName} look, then ${nextName}.` : ` Runs on ${nextName}.`}
+            {lookName && !refs.length ? ` Frame 1 on ${modelNames[STORYBOARD_LOOK_MODEL] ?? "Fuobe Soul"} in the ${lookName} look, then ${nextName}.` : runsOn}
           </p>
           <div className="mt-6 rounded-[20px] border bg-background p-3 text-left shadow-soft focus-within:border-primary focus-within:ring-4 focus-within:ring-brand-faint sm:rounded-composer">
             <div role="radiogroup" aria-label="How to write it" className="mb-2 flex items-center gap-1 rounded-full bg-muted p-0.5 text-[13px] font-medium sm:w-fit">
@@ -482,7 +494,9 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
               {engine === "cloud" && <PartnerPill value={partner} onChange={setPartner} names={modelNames} />}
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 <span className="text-right text-[12px] leading-tight tabular-nums text-muted-foreground" aria-live="polite">
-                  {estimate.isError ? (
+                  {visitor ? (
+                    <span className="block font-semibold text-foreground">Not on free accounts yet</span>
+                  ) : estimate.isError ? (
                     <span className="text-destructive">{(estimate.error as Error).message}</span>
                   ) : (
                     <>
@@ -491,14 +505,18 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
                     </>
                   )}
                 </span>
-                <Button size="icon" className="size-10 shrink-0 rounded-full" disabled={!ready || submit.isPending || estimate.isError} onClick={() => submit.mutate()} aria-label="Generate storyboard">
+                <Button size="icon" className="size-10 shrink-0 rounded-full" disabled={!ready || submit.isPending || estimate.isError || visitor} onClick={() => submit.mutate()} aria-label="Generate storyboard">
                   {submit.isPending ? <Loader2 className="animate-spin" /> : <ArrowUp />}
                 </Button>
               </div>
             </div>
             <p className="mt-2 flex items-start gap-1.5 text-[11px] text-muted-foreground">
               <Sparkles className="mt-px size-3 shrink-0" />
-              {mode === "auto" ? "Your story is split into frames by the prompt LLM (Settings → Prompt enhancement), or a shot list when none is set." : "One prompt per frame. References keep the cast consistent."}
+              {mode === "auto"
+                ? visitor
+                  ? "Fuobe splits your story into frames."
+                  : "Your story is split into frames by the prompt LLM (Settings → AI helper), or a shot list when none is set."
+                : "One prompt per frame. References keep the cast consistent."}
               {lookName && ` Every frame gets the ${lookName} look's grade${aspect === "21:9" ? ", made at 16:9 and cropped to 21:9" : ""}.`}
             </p>
           </div>

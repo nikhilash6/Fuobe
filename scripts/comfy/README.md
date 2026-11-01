@@ -270,7 +270,7 @@ node validate-workflows.mjs image-to-3d-trellis2-multiview image-to-3d-trellis2 
 
 | id | capability | what | ran for real here |
 |---|---|---|---|
-| `image-to-3d-trellis2-multiview` | image-to-3d | One upload per side (image = front, image2 = left, image3 = back, image4 = right) → BiRefNet cut-out and crop per side → `Pixal3DMultiViewConditioning` (a fixed orbit rig; its field of view measured on the front crop by MoGe 2) → TRELLIS.2 stages on `pixal3d_multiview_int8_convrot` (5.58 GB, MIT) → PBR GLB + the single-view graph's 36-view turntable | no (GPU); /prompt only (every side, and front + back / front + right pruned); the MoGe FOV subgraph ran on CPU |
+| `image-to-3d-trellis2-multiview` | image-to-3d | One upload per side (image = front, image2 = left, image3 = back, image4 = right) → BiRefNet cut-out and crop per side → `Pixal3DMultiViewConditioning` (a fixed orbit rig; its field of view measured on the front crop by MoGe 2) → TRELLIS.2 stages on `pixal3d_multiview_int8_convrot` (5.58 GB, MIT) → PBR GLB + a 36-view turntable (RotateMesh + RenderMesh, 12 fps), which the server replaces with its CPU turntable when it can | no (GPU); /prompt only (every side, and front + back / front + right pruned); the MoGe FOV subgraph ran on CPU |
 
 - **What the provider does**: `SLOT_RULES` gives the workflow its sides; each photo goes to the side
   `params.extra.views` names (in order when unnamed), and a side with no photo is cut out of the graph
@@ -281,8 +281,14 @@ node validate-workflows.mjs image-to-3d-trellis2-multiview image-to-3d-trellis2 
   instead (0 = estimate; 20 for a generated sheet). On the CPU server two runs of the subgraph (resolution level 9, one estimating,
   one given 20°) took 137 s in all, model load included: 40.0° estimated on a test image, 20° passed through.
 - **Sides**: the rig's left is the object's own left (camera at +90° azimuth): facing the front, walk to your right to photograph it.
-- **Licences**: the TRELLIS.2 graphs (single and multi-view) encode with DINOv3 ViT-L (`dino_v3_L_naf`), so their
-  licence now names the DINOv3 License and its "Built with DINOv3" notice, like TripoSplat's.
+- **Single view**: `image-to-3d-pixal3d` (Pixal3D with MoGe 2's camera, the default "From an image" route) and
+  `image-to-3d-trellis2` (the fallback) remesh with `sign_mode` solid (fill 20) and decimate to 250,000 faces, and have no
+  turntable in the graph: the Fuobe server finishes every open image-to-3D GLB (a meshopt + WebP web GLB as `meta.web`, the
+  pivot at the bottom) and renders a 96-frame turntable on the CPU (`src/server/model3d-finish.ts`, `scripts/model3d/`).
+  The multi-view graph still has the template's udf remesh, a 700,000-face decimate and its GPU turntable; moving it to the
+  single-view settings needs a new /prompt validation.
+- **Licences**: the TRELLIS.2 and Pixal3D graphs (single and multi-view) encode with DINOv3 ViT-L (`dino_v3_L_naf`), so their
+  licence names the DINOv3 License and its "Built with DINOv3" notice, like TripoSplat's.
 - **Not open**: rigging. UniRig (MIT) has no ComfyUI pack verified against v0.41, so Rig & animate is Meshy on fal only.
   SAM 3D Objects has no open route either (the core SAM 3D nodes are body only).
 
@@ -354,7 +360,44 @@ node validate-workflows.mjs video-character-swap-h3-segment video-mask-h3-relay 
 - **Not run**: neither graph has loaded in a ComfyUI with H3 Relay, and nothing has run on a GPU.
   `tests/comfy-swap-studio.test.ts` checks the provider's rewrites on the library files.
 
+### Round 5: open tools and Evolution (Originals O11 and O13, 2026-10-29)
+
+Four hand-built entries and one rebuilt one, all `validated: true` (the library then: 154 workflows, 149 validated). No new
+node pack and no new worker; ComfyUI stays at 0.41.0. Fuobe Mixed Media, Fuobe Shorts, Fuobe Marketing Image and
+Fuobe Try-On (O9 and O10) run graphs that were already in the library.
+
+```bash
+npm run build -- qwen-image-edit-2509-angles image-face-mosaic-sam3 video-depth-vda-large video-evolution-wan22-fun-vace infinitetalk-wanwrapper
+node validate-workflows.mjs qwen-image-edit-2509-angles image-face-mosaic-sam3 video-depth-vda-large video-evolution-wan22-fun-vace infinitetalk-wanwrapper --shared
+```
+
+| id | capability | what | validated here |
+|---|---|---|---|
+| `qwen-image-edit-2509-angles` | edit | Fuobe Angles on your GPU: the library's `qwen-image-edit-2509` (fp8, the Lightning 4-step LoRA) with dx8152's Multiple-angles LoRA after it at 1.25, 6 steps (fal's default for this LoRA; a guess until measured). The prompt is the LoRA's own camera words in Chinese with English, which `src/lib/catalog/open-tools.ts` writes from the app's controls. 24 GB | yes (/prompt only; no Qwen weights here) |
+| `image-face-mosaic-sam3` | face-mosaic | Fuobe Soul's PixeletedFace look: SAM 3.1 finds every face from the words ("face" by default, `threshold` 0.4), the mask grows 12 px, and the picture is shrunk by `mosaicScale` (0.04: blocks of about 25 px) and blown back up only under the mask. No face: the picture comes back unchanged. Core nodes and SAM 3.1 (1.75 GB); 4 GB | yes |
+| `video-depth-vda-large` | depth-video | `video-depth-vda-small` with Video Depth Anything's Large model. Its weights are CC-BY-NC-4.0 (information: Settings → Models & licences lists them as Non-commercial with a switch); Depth map's default stays the small model. It downloads about 1.5 GB on its first run (`autoDownloads`); 8 GB | yes |
+| `video-evolution-wan22-fun-vace` | v2v | Fuobe Evolution, one segment of up to 81 frames at 16 fps: Wan 2.2 Fun VACE starts from the segment itself, noised to `denoise` (Low 0.45, Medium 0.65, High 0.85), with Depth Anything 3 depth on every frame as control and the direction frame (`image`, from `qwen-image-edit-2511`) as the reference. Any clip loads: `VHS_LoadVideo` resamples it to 16 fps and cuts it to 4n+1 frames. The graph computes the schedule so that the last 4 steps (the Lightx2v 4-step LoRAs) start within a few hundredths of the asked `denoise`, and Wan 2.2's high-noise expert only takes steps above its switch point. Same 45.49 GB of weights as `video-restyle-wan22-fun-vace`; 24 GB | yes |
+| `infinitetalk-wanwrapper` (rebuilt) | lipsync | Now hand-built from the graph kijai's example 03 export gave, so it builds without a frontend export. New bindings `lora`, `loraStrength`, `cfg`, `shift`, `scheduler`, `motionFrame`, `colormatch` and `audioCfg` carry Fuobe Speak's settings (FusioniX at 1, 25 steps, cfg 5, audio cfg 5, shift 10, `unipc`, 15 motion frames, `reinhard` colour match); its defaults stay the fast lightx2v pass. FusioniX (0.37 GB) is an optional model; 16 GB | yes |
+
+- **Weights**: two new files, both LoRAs Fuobe downloads into the LoRA folder before a run: dx8152's Multiple-angles LoRA
+  (0.24 GB, renamed from `镜头转换.safetensors` to `qwen-edit-2509-multiple-angles-dx8152.safetensors`) and FusioniX
+  (0.37 GB, optional). Both are pinned to a Hugging Face commit in `KNOWN_MODELS`.
+- **Build**: `build-library.mjs` gains the binding keys `scheduler`, `motionFrame`, `colormatch`, `audioCfg`, `threshold`
+  and `mosaicScale`.
+- **Licences, as information**: Apache-2.0 (Qwen-Image-Edit 2509, the Multiple-angles and Lightning LoRAs, Wan 2.2 Fun
+  VACE, lightx2v, Depth Anything 3 mono-large, InfiniteTalk); FusioniX has an Apache-2.0 card, but the LoRAs it merges
+  weren't checked; Meta's SAM License; CC-BY-NC-4.0 (Video Depth Anything Large).
+- **Not run**: the validator posts each graph to `/prompt` on the CPU server and never lets it run, so none of these has
+  rendered anything. Nothing has run on a GPU: not the Lightning LoRA at 6 steps with the angles LoRA, not InfiniteTalk's
+  colour correction as `reinhard`, and not the Evolution intensities. `tests/open-tools.test.ts` and
+  `tests/evolution-comfy.test.ts` check the provider's bindings on the library files.
+
 ## DBS soundtrack separation (DBS D1)
+
+PR #15 adds three hand-built graphs: this one, the fly path's and MOSS-Image's (below), all `validated: true` (the
+library: 158 workflows, 153 validated; the five that aren't are the H3 graphs above, whose node packs the validation
+server doesn't have). One new node pack, ComfyUI-DBS; the other two graphs use core nodes only. None of the three has
+run on a GPU.
 
 One hand-built graph splits a soundtrack into dialogue, music and effects (docs/research/dbs-separation-7.md §4.4, graph A):
 
@@ -381,6 +424,9 @@ COMFYUI_URL=http://127.0.0.1:<port> COMFYUI_MODELS_DIR=<that ComfyUI>/models nod
   job is queued. `each channel` for stereo stems. ComfyUI saves audio as mono or stereo only (a 5.1 waveform is written as
   scrambled stereo three times as long), so a file with more than 2 channels is split in `mono` and its background is the
   music and effects stems added up (the provider rewires node 4 to `AudioMerge` add).
+- **Validation**: the shared validation server doesn't have ComfyUI-DBS, so validate this graph on a ComfyUI that has it
+  (the command above). A run of every id against the shared server records it as `missing_node_type`, not validated,
+  like the H3 entries.
 
 ## Fly path (N7-5)
 
@@ -418,13 +464,16 @@ node validate-workflows.mjs moss-image-t2i --shared
 
 | id | capability | what | validated here |
 |---|---|---|---|
-| `moss-image-t2i` | t2i | `UNETLoader` (SFT int8; `unet`) → `CLIPLoader` qwen3.5-9b w4a8, type `moss_image` → `VAELoader` FLUX.2 small → `CLIPTextEncode` ×2 (the prompt: plain words or a compiled layout, verbatim) → `EmptyFlux2LatentImage` (`width` / `height`: the layout's canvas) → `SkipLayerGuidanceDiTSimple` (layer 22, first half) → `KSampler` (`steps`, `cfg`, `sampler`, `scheduler`) → `VAEDecode` → `SaveImage` | `/prompt` only (CPU, zero-byte model stand-ins): no render here |
+| `moss-image-t2i` | t2i | `UNETLoader` (SFT int8; `unet`) → `CLIPLoader` qwen3.5-9b int8, type `moss_image` → `VAELoader` FLUX.2 small → `CLIPTextEncode` ×2 (the prompt: plain words or a compiled layout, verbatim) → `EmptyFlux2LatentImage` (`width` / `height`: the layout's canvas) → `SkipLayerGuidanceDiTSimple` (layer 22, first half) → `KSampler` (`steps`, `cfg`, `sampler`, `scheduler`) → `VAEDecode` → `SaveImage` | `/prompt` only with the w4a8 encoder (CPU, zero-byte model stand-ins); the int8 one is not checked by `/prompt` yet; no render here |
 
-- **Weights** (13 GB): Comfy-Org/MOSS-Image at `530a4c94f92c35ef6818b1b035a983fe9dcf5f54` (diffusion model 5.41 GB, text encoder
-  7.34 GB, small VAE 0.25 GB), and, for the Fast setting only, Spectrallic's SFT with the 8-step DMD LoRA merged in (5.41 GB,
-  `optionalModels`). All Apache-2.0. The Workflows page's install commands fetch them; nothing is downloaded at build time.
+- **Weights** (15 GB): Comfy-Org/MOSS-Image at `530a4c94f92c35ef6818b1b035a983fe9dcf5f54` (diffusion model 5.41 GB, small VAE
+  0.25 GB) and its int8 Qwen3.5-9B text encoder (9.75 GB, the row FIBO 2 shares), and, for the Fast setting only, Spectrallic's SFT
+  with the 8-step DMD LoRA merged in (5.41 GB), for Base only MOSS-Image Base int8 (5.41 GB; both `optionalModels`). All Apache-2.0.
+  Not the template's w4a8 encoder: in testing (2026-10-23), loading it after other model families faulted the NVIDIA driver;
+  the preview pipeline then ran 23 MOSS renders on the int8 file with no fault. The Workflows page's install commands fetch them; nothing is downloaded at build time.
 - **Settings**: Standard is the Comfy template's (25 steps, CFG 2.5, er_sde / simple), Best OpenMOSS's guide (50, 3, euler),
-  Fast the DMD file at 8 steps and CFG 1 (`ModelOptions.controls[].sets` on `oss-moss-image` writes them).
+  Fast the DMD file at 8 steps and CFG 1, Base the Base file at 50 steps, CFG 3, euler (`ModelOptions.controls[].sets` on
+  `oss-moss-image` writes them).
 - **Canvas**: a size the request names (`params.extra.width` / `height`, a layout's canvas) is fitted to the 16-pixel grid
   and 2048 px a side with its shape kept (`fitCanvas` in `src/lib/comfy.ts`), as fal's `image_size` is, so both engines
   render one size (2560 × 1000 becomes 2048 × 800 on both).
@@ -433,8 +482,64 @@ node validate-workflows.mjs moss-image-t2i --shared
 - **Not installed on purpose**: LinXce's Comfyui-Moss-LayoutPrompt (its `MOSSImageLayoutPrompt` id collides with core's) and
   OpenMOSS's loader pack (core's native path is what its own README recommends). Fuobe compiles layouts itself
   (`src/lib/layout-prompt.ts`).
-- **GPU**: no official VRAM figure (16 GB is a guess with ComfyUI's offloading). comfy-kitchen's int8 / w4a8 kernels need a
+- **GPU**: no official VRAM figure (16 GB is a guess with ComfyUI's offloading). comfy-kitchen's int8 kernels need a
   PyTorch built for CUDA 13 (cu130); otherwise `comfy/quant_ops.py` turns them off with a warning.
+
+## Owner's SOTA image families (2026-10-31)
+
+Sixteen hand-built graphs for Ideogram 4, Qwen-Image 2.1, Krea 2 and FIBO 2 (MOSS-Image is the graph above). They are the
+first picks on the open engine: the Image studio opens on Ideogram 4, Edit and Inpaint on Qwen-Image 2.1, and every
+studio's "Best" list ranks the new models first (`src/lib/catalog/models.ts`, `tests/open-sota-studios.test.ts`). Each graph
+comes from the owner's saved ComfyUI workflows or from a graph rendered in the preview pipeline, converted once to API
+format; the UI-only nodes (notes, compares, previews, resolution pickers, switches) are removed.
+
+They were built from a ComfyUI that was busy rendering, so nothing was posted to it:
+
+```bash
+npm run build -- <ids>                                  # GET /object_info only (+ Hugging Face sizes)
+node validate-workflows.mjs --subset-only <ids>         # writes their classes to object_info.subset.json, posts nothing
+node build-requirements.mjs
+```
+
+All sixteen are `validated: false` until `node validate-workflows.mjs <ids> --shared` runs on an idle ComfyUI 0.42.0 (the
+library: 174 workflows, 153 validated). Proof: [P] rendered in the preview pipeline, [O] the owner's saved workflow, [I] built
+from an example and not rendered yet.
+
+| id | capability | source | proof |
+|---|---|---|---|
+| `ideogram4-t2i` | t2i | the owner's `image_ideogram4_t2i_int8`: conditional and unconditional int8 models (`DualModelGuider`, `CFGOverride`), the Quality / Default / Turbo table into `Ideogram4Scheduler` (`preset`); the prompt is a JSON caption written from the words (`src/lib/ideogram-caption.ts`) | [P] |
+| `qwen-image-21-t2i` | t2i | the owner's default Qwen-Image 2.1 graph: 25 steps, cfg 1, euler / simple, up to 2048 px on the 32 grid | [O] |
+| `qwen-image-21-edit` | edit | `TextEncodeQwenImage21` with up to 4 references (each scaled to 2048 px, lanczos), `QwenImage21Cache`, 25 steps | [P] |
+| `qwen-image-21-turbo-edit` | edit | the Turbo model on its fixed 8-step `ManualSigmas`, the same 4-reference encoder | [P] |
+| `qwen-image-21-inpaint` | inpaint | AusBoss's example: crop around the mask (red channel, white = change), 25 steps, stitched back | [I] |
+| `qwen-image-21-outpaint` | outpaint | the owner's `qwenImage21Outpaint_v12`: AusBoss pad nodes (`padLeft`…`padBottom` on both), the outpaint-v2 LoRA, Qwen3-VL describes the canvas; the words only add what goes in the margins | [P] |
+| `krea2-realism-t2i` / `krea2-turbo-t2i` | t2i | the owner's Krea 2 Turbo graph, with the Realism V2 LoRA (`loraStrength`) at 6 steps, or plain at 8 | [O]; the LoRA [I] |
+| `krea2-edit-general` / `krea2-edit-identity` | edit | the owner's `Krea2 Image Edit` on comfyui-krea2edit (General or Identity Edit V2 LoRA, `ref_boost` 4 or 2, 8 steps); image 2 is an optional person | [O] |
+| `krea2-turbo-i2i` | edit | the picture scaled to about 2 MP, then Krea 2 Turbo at `denoise` = `strength` | [I] |
+| `krea2-inpaint` / `krea2-outpaint` | inpaint / outpaint | Cierpliwy's examples on ComfyUI-Krea2-Ostris-Edit: the area to paint made black, the inpaint-edit LoRA, 8 steps, euler_ancestral | [I] |
+| `fibo2-dev-t2i` | t2i | the owner's FIBO 2 VGL graph: Qwen3.5 9B writes Bria's JSON prompt, 30 steps, cfg 5 | [O] |
+| `fibo2-dev-edit` / `fibo2-edit-turbo-edit` | edit | the owner's FIBO 2 edit graphs with references 3 and 4 wired like 2: Dev 30 steps / cfg 5, Edit Turbo 4 steps / cfg 1 | [O] |
+
+- **Optional references**: a reference the run doesn't have is left out of `TextEncodeQwenImage21`, `TextEncodeFibo2` and
+  Krea 2's edit nodes (`OPTIONAL_REFERENCE_INPUTS` in `src/server/providers/comfyui.ts`).
+- **Node packs** (`packs.json`; the GPU pre-flight lists them, `install-comfyui.sh` doesn't install them yet): ausboss-nodes
+  @ `bce780f2` (MIT; Qwen-Image 2.1 inpaint and expand), comfyui-krea2edit @ `13ef60f2` (Apache-2.0; Krea 2 Edit and
+  Identity Edit), ComfyUI-Krea2-Ostris-Edit @ `77565661` (MIT; Krea 2 Inpaint). A ComfyUI with comfyui-workflow-encrypt
+  reports that pack as the module of other packs' nodes, so the build names a class's pack from `PACK_CLASSES` first
+  (`packOfClass` in `build-requirements.mjs`).
+- **Weights** (about 92 GB new, revisions, sizes and SHA-256 from the Hugging Face API in `model-pins.json`): the int8 builds
+  of Comfy-Org's Ideogram-4, Qwen-Image-2.1, Fibo-2.0 and MOSS-Image (Qwen3.5 9B) repositories, AusBoss's outpaint LoRA and
+  the Krea 2 LoRAs (Realism V2, General and Identity Edit V2, inpaint-edit v1 512). The Krea 2 graphs load Comfy-Org's fp8 Krea 2
+  Turbo (`krea2_turbo_fp8_scaled`, 13.14 GB), the build the Krea 2 edit workflow loads. `variants` in
+  `KNOWN_MODELS` names the same weights in another precision in the same repository (Krea 2 Turbo's bf16 build, …); nothing
+  reads it yet, so a ComfyUI with only those builds still needs the pinned file.
+- **Ideogram 4's safety card**: when its filter refuses a prompt, the graph saves a flat grey "Image blocked by safety filter"
+  card. `src/server/safety-card.ts` (the preview pipeline's `blocked-check.mjs`) finds it in a finished run's picture: the card
+  is deleted and the run fails with what to try.
+- **Licences, as information**: Qwen-Image 2.1 and Ideogram 4 weights are non-commercial, FIBO 2 CC BY-NC 4.0, Krea 2 the
+  Krea 2 Community License (the edit LoRAs non-commercial without their author's licence).
+- **GPU**: 20–24 GB estimates (`vramGb`), none measured here. ComfyUI 0.42.0 or newer: `TextEncodeQwenImage21`,
+  `QwenImage21Cache`, `Ideogram4Scheduler`, `DualModelGuider`, `CFGOverride` and `TextEncodeFibo2` came with it.
 
 ## Adding a workflow
 

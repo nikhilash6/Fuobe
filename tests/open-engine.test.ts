@@ -8,6 +8,7 @@ import { planGeneration } from "@/lib/catalog/plan";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
 import { resample, tracksFor } from "@/lib/motion-paths";
 import { ANGLES_FIELDS, ANGLES_ORIGINAL } from "@/lib/catalog/open-tools";
+import { H3_BEST_GRAPH } from "@/lib/comfy-variants";
 
 describe("motion paths (Wan-Move draw to video)", () => {
   it("resamples a path to evenly spaced points, one per frame", () => {
@@ -71,6 +72,7 @@ const ROUND3_MODELS: Record<string, { op: Operation; kind: MediaKind; workflow: 
   "oss-infinitetalk-v2v": { op: "lipsync", kind: "video", workflow: "lipsync-v2v-infinitetalk" },
   "oss-latentsync": { op: "lipsync", kind: "video", workflow: "lipsync-latentsync16" },
   "oss-mux": { op: "mux", kind: "video", workflow: "video-mux-audio" },
+  "oss-pixal3d": { op: "image-to-3d", kind: "model3d", workflow: "image-to-3d-pixal3d" },
   "oss-trellis2": { op: "image-to-3d", kind: "model3d", workflow: "image-to-3d-trellis2" },
   "oss-hunyuan3d-21": { op: "image-to-3d", kind: "model3d", workflow: "image-to-3d-hunyuan3d-21" },
   "oss-tryon-klein": { op: "edit", kind: "image", workflow: "tryon-flux2-klein-4b" },
@@ -130,6 +132,8 @@ describe("round-3 open models", () => {
           );
           for (const p of params) {
             // Fuobe Angles' camera fields become the Multiple-angles LoRA's words in the planner (src/lib/catalog/open-tools.ts).
+            // MiniMax H3's Quality picks the graph that runs (its -hq graph: src/lib/comfy-variants.ts).
+            if (p === "quality" && H3_BEST_GRAPH[wid]) continue;
             if (!PROVIDER_PARAMS.has(p) && p !== "cameraMotion" && !(m.id === ANGLES_ORIGINAL && (ANGLES_FIELDS as readonly string[]).includes(p))) expect(keys, `${m.id} → ${wid}: ${p}`).toContain(p);
           }
         }

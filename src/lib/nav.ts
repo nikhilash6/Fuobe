@@ -3,14 +3,28 @@
 /** Group labels the user collapsed, in localStorage. */
 export const NAV_CLOSED_KEY = "fuobe:nav-closed";
 /**
- * Folded until the user opens them (nothing remembered yet): the sidebar starts short, with Create
- * and Library in view. ⌘K reaches everything in the folded groups too.
+ * Folded until the user opens them (nothing remembered yet). Studios starts open, so a first visit shows
+ * that the studios exist; Engine (models, workflows, settings) starts folded. ⌘K reaches folded rows too.
  */
-export const DEFAULT_NAV_CLOSED: readonly string[] = ["studios", "engine"];
+export const DEFAULT_NAV_CLOSED: readonly string[] = ["engine"];
 /** Written by the shadcn SidebarProvider ("true" / "false"). */
 export const SIDEBAR_COOKIE = "sidebar_state";
 
 export const groupId = (label: string) => label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+/** "New creation" (the sidebar and ⌘K): Home with a fresh composer, so it does more than the Home row. Home drops the flag. */
+export const NEW_CREATION_PARAM = "new";
+export const NEW_CREATION_HREF = `/?${NEW_CREATION_PARAM}=1`;
+
+/**
+ * How deep the sidebar's fades are, in px: as much as is hidden past each edge, up to 24 at the top
+ * and 40 at the bottom. So a few pixels of padding past the edge never dim the last row, and a row
+ * the edge cuts through is always faded, never cut sharp.
+ */
+export function scrollFades(el: { scrollTop: number; clientHeight: number; scrollHeight: number }): { above: number; below: number } {
+  const depth = (hidden: number, max: number) => (hidden < 1 ? 0 : Math.round(Math.min(hidden, max)));
+  return { above: depth(el.scrollTop, 24), below: depth(el.scrollHeight - el.clientHeight - el.scrollTop, 40) };
+}
 
 function pathMatches(path: string, pathname: string) {
   return path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(`${path}/`);
@@ -23,7 +37,8 @@ function queryMatches(query: string, search: URLSearchParams) {
 /**
  * Whether a nav link is the current page. A link with a query (`/library?tab=favorites`) is active
  * when the path and every one of its params match; a plain link is active on its path (and below it)
- * unless a sibling query link to the same path matches better.
+ * unless a sibling matches better: a query link to the same path, or a link to a page below it
+ * (Settings yields to About & licences on /settings/about).
  */
 export function navActive(href: string, pathname: string, search: URLSearchParams, siblings: string[] = []): boolean {
   if (!pathname) return false;
@@ -32,6 +47,7 @@ export function navActive(href: string, pathname: string, search: URLSearchParam
   if (query) return queryMatches(query, search);
   return !siblings.some((s) => {
     const [p, q] = s.split("?");
+    if (p !== path && p.startsWith(`${path === "/" ? "" : path}/`)) return pathMatches(p, pathname);
     return !!q && p === path && pathMatches(p, pathname) && queryMatches(q, search);
   });
 }

@@ -14,6 +14,7 @@ import { FORMATS, overlayLayout, runStatus, type BrandKit, type MarketingRun, ty
 import type { Generation } from "@/lib/catalog/types";
 import { elapsed, formatCost, ratioValue, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { addRuns, send, useBrands, useForgetRun, useRuns } from "./hooks";
 
 const Viewer = dynamic(() => import("@/components/studio/viewer").then((m) => m.Viewer), { ssr: false });
@@ -107,7 +108,7 @@ function RunCard({ run, brand, onOpen, onCompose }: { run: MarketingRun; brand?:
         addRuns(qc, run.feature, r.runs);
         toast.success("Started again", { duration: 1500 });
       })
-      .catch((e) => toast.error((e as Error).message))
+      .catch((e) => toastError(e))
       .finally(() => setAgain(false));
   };
   return (

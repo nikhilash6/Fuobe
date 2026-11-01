@@ -92,7 +92,7 @@ describe("connectors in Settings", () => {
   it("keeps the token on the server: every view masks it, and the API never returns it", async () => {
     const c = connectors.createConnector({ name: "Notion", url: "https://mcp.notion.com/mcp?workspace=SECRET", token: `Bearer ${TOKEN}` });
     expect(c).toMatchObject({ name: "Notion", slug: "notion", url: "https://mcp.notion.com/mcp?••••", hasToken: true, enabled: true, token: "sk-l••••cdef" });
-    const res = await listRoute.GET(new Request("http://localhost/"));
+    const res = await listRoute.GET();
     const body = await res.text();
     expect(body).not.toContain(TOKEN);
     expect(body).not.toContain("SECRET");
@@ -114,7 +114,7 @@ describe("connectors in Settings", () => {
     const secret = "ODk1YjQ2NzQtZmFrZS1zZWNyZXQtMTIzNDU2";
     const c = connectors.createConnector({ name: "Zapier", url: `https://mcp.zapier.com/api/mcp/s/${secret}/mcp` });
     expect(c.url).toBe("https://mcp.zapier.com/api/mcp/s/…/mcp");
-    const body = await (await listRoute.GET(new Request("http://localhost/"))).text();
+    const body = await (await listRoute.GET()).text();
     expect(body).not.toContain(secret);
     // The full URL stays on the server: the duplicate check and the Claude request use it.
     expect(() => connectors.createConnector({ name: "Zapier again", url: `https://mcp.zapier.com/api/mcp/s/${secret}/mcp` })).toThrow(/already/);

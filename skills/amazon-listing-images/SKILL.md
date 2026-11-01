@@ -36,7 +36,7 @@ metadata:
 
 ## Models
 `nano-banana-pro` for every step (product fidelity + text), `ideogram-4-5` for text-heavy
-infographics. Open source: `oss-qwen-edit`; `oss-qwen-image` for text layouts. Product photo
+infographics. Open source: `oss-qwen-image-21` (`oss-qwen-edit` after it); `oss-qwen-image` for text layouts. Product photo
 always in `images`.
 
 ## A+ modules (if asked)

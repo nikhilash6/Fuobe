@@ -4,13 +4,14 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { studioHandOff, type HandOffInput, type QueueMode, type StudioEstimate, type SwapProject, type SwapProjectCard, type SwapProjectView } from "@/lib/catalog/swap-studio";
 import type { SwapEdit } from "@/lib/catalog/swap-studio-edit";
 import type { Engine, PixelPoint } from "@/lib/catalog/types";
+import { responseError } from "@/lib/refusals";
 
 /** React Query hooks for /api/swap-studio/** (Character Swap Studio). */
 
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
   return body;
 }
 

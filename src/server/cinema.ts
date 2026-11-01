@@ -4,7 +4,7 @@ import { getModel } from "@/lib/catalog";
 import type { CinemaFolder, CinemaItem, CinemaProject, CinemaTakeInfo, CinemaTile, DirectorMessage, DirectorSettings } from "@/lib/catalog/cinema";
 import type { Generation, GenerationRequest } from "@/lib/catalog/types";
 import { db } from "./db";
-import { createGenerations, getGeneration, listGenerations, previewChained, previewGeneration, toGeneration } from "./generations";
+import { ConnectComfyError, createGenerations, getGeneration, listGenerations, previewChained, previewGeneration, toGeneration } from "./generations";
 import { trashGenerations } from "./library";
 
 /**
@@ -672,6 +672,7 @@ export function retryItem(projectId: string, generationId: string): Generation[]
       if (p.deps.length) previewChained(p.req, p.deps.length);
       else previewGeneration(p.req);
     } catch (e) {
+      if (e instanceof ConnectComfyError) throw e;
       throw new CinemaError((e as Error).message, 422);
     }
   }
@@ -689,6 +690,7 @@ export function retryItem(projectId: string, generationId: string): Generation[]
       recordTakes(projectId, made, p.s.row.folder_id, parse<ItemMeta>(p.s.row.meta_json, {}).take);
     }
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new CinemaError((e as Error).message, 422);
   }
   const replaced = order.filter((s) => BROKEN.has(s.g.status) || waiting(s.g, s.deps)).map((s) => s.g.id);

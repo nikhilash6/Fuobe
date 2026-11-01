@@ -10,6 +10,7 @@ import { areaCls, inputCls } from "@/components/brand/fields";
 import { uploadFile } from "@/lib/api";
 import type { BrandKit } from "@/lib/catalog/marketing";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { AdCanvas } from "./ad-canvas";
 import { AD_LAYOUTS, exportName, themeFrom, type AdLayout } from "./layout";
 import { downloadBlob, exportPng, type RenderInput } from "./render";
@@ -99,7 +100,7 @@ export function AdEditor({
         toast.success("Saved to your library", { duration: 2000 });
       }
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy("");
     }

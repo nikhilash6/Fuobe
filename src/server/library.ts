@@ -21,7 +21,6 @@ import {
   type Folder,
   type ReviewFilter,
 } from "@/lib/library";
-import { asSystem } from "./access/actor";
 import { db } from "./db";
 import { assetUses, cancelGeneration, deleteGeneration, getGeneration, type ListOptions } from "./generations";
 import { absolutePath, deleteAsset, getAsset } from "./storage";
@@ -37,7 +36,7 @@ const DAY = 86_400_000;
 const MAX_IDS = 500;
 
 const STATUSES = new Set(["queued", "running", "succeeded", "failed", "canceled"]);
-const KINDS = new Set(["image", "video", "audio", "text", "model3d"]);
+export const KINDS = new Set(["image", "video", "audio", "text", "model3d"]);
 
 /** A library request that can't be done, with the HTTP status the routes answer with. */
 export class LibraryError extends Error {
@@ -186,13 +185,10 @@ declare global {
 export function ensureTrashPurge(): void {
   if (globalThis.__fuobeTrashPurge) return;
   const run = () => void purgeTrash().catch((e) => console.warn(`[fuobe] trash purge failed: ${(e as Error).message}`));
-  // Housekeeping for everyone's Trash: the server's work, whichever library read started it.
-  asSystem(() => {
-    const timer = setInterval(run, DAY);
-    timer.unref?.();
-    globalThis.__fuobeTrashPurge = { timer };
-    run();
-  });
+  const timer = setInterval(run, DAY);
+  timer.unref?.();
+  globalThis.__fuobeTrashPurge = { timer };
+  run();
 }
 
 export function trashCount(): number {
@@ -228,7 +224,7 @@ export function setReview(list: string[], review: ReviewStatus | null): number {
 // Folders (nested: each has a parent, null at the library root; one folder per generation)
 
 /** The SQL test for a helper step of `g` (isHelperFeature); the names are constants, not input. */
-const HELPER_SQL = `(g.feature LIKE '%${HELPER_SUFFIX}' OR g.feature IN (${HELPER_FEATURES.map((f) => `'${f}'`).join(", ")}))`;
+export const HELPER_SQL = `(g.feature LIKE '%${HELPER_SUFFIX}' OR g.feature IN (${HELPER_FEATURES.map((f) => `'${f}'`).join(", ")}))`;
 
 interface FolderRow {
   id: string;
@@ -394,21 +390,26 @@ export interface LibraryFacets {
   reviews: Partial<Record<ReviewStatus, number>>;
 }
 
-/** Counts for the Library's tabs and filters; helper steps are left out unless `steps` (as the lists do). */
-export function libraryFacets(opts: { steps?: boolean } = {}): LibraryFacets {
-  const all = "FROM generations g LEFT JOIN generation_trash t ON t.generation_id = g.id WHERE t.generation_id IS NULL";
+/**
+ * Counts for the owner's Library tabs and filters; helper steps are left out unless `steps` (as the lists do). Accounts'
+ * runs are theirs, never counted here (public sign-up); with `account`, that account's own runs only (it has no Trash).
+ */
+export function libraryFacets(opts: { steps?: boolean; account?: string } = {}): LibraryFacets {
+  const whose = opts.account ? "json_extract(g.request_json, '$.account') = ?" : "json_extract(g.request_json, '$.account') IS NULL";
+  const args = opts.account ? [opts.account] : [];
+  const all = `FROM generations g LEFT JOIN generation_trash t ON t.generation_id = g.id WHERE t.generation_id IS NULL AND ${whose}`;
   const live = opts.steps ? all : `${all} AND NOT ${HELPER_SQL}`;
-  const models = db().prepare(`SELECT g.model_id AS id, COUNT(*) AS n ${live} GROUP BY g.model_id ORDER BY n DESC`).all() as { id: string; n: number }[];
-  const kinds = db().prepare(`SELECT g.kind AS kind, COUNT(*) AS n ${live} GROUP BY g.kind`).all() as { kind: MediaKind; n: number }[];
-  const reviews = db().prepare(`SELECT g.review AS review, COUNT(*) AS n ${live} AND g.review IS NOT NULL GROUP BY g.review`).all() as { review: string; n: number }[];
-  const one = (sql: string) => (db().prepare(sql).get() as { n: number }).n;
+  const models = db().prepare(`SELECT g.model_id AS id, COUNT(*) AS n ${live} GROUP BY g.model_id ORDER BY n DESC`).all(...args) as { id: string; n: number }[];
+  const kinds = db().prepare(`SELECT g.kind AS kind, COUNT(*) AS n ${live} GROUP BY g.kind`).all(...args) as { kind: MediaKind; n: number }[];
+  const reviews = db().prepare(`SELECT g.review AS review, COUNT(*) AS n ${live} AND g.review IS NOT NULL GROUP BY g.review`).all(...args) as { review: string; n: number }[];
+  const one = (sql: string) => (db().prepare(sql).get(...args) as { n: number }).n;
   return {
     models: models.map((m) => ({ id: m.id, name: getModel(m.id)?.name ?? m.id, count: m.n })),
     kinds: Object.fromEntries(kinds.map((k) => [k.kind, k.n])),
     total: one(`SELECT COUNT(*) AS n ${live}`),
     favorites: one(`SELECT COUNT(*) AS n ${live} AND g.favorite = 1`),
     failed: one(`SELECT COUNT(*) AS n ${live} AND g.status IN ('failed','canceled')`),
-    trash: trashCount(),
+    trash: opts.account ? 0 : trashCount(),
     pinned: one(`SELECT COUNT(*) AS n ${live} AND g.pinned_at IS NOT NULL`),
     steps: one(`SELECT COUNT(*) AS n ${all} AND ${HELPER_SQL}`),
     reviews: Object.fromEntries(reviews.filter((r) => isReviewStatus(r.review)).map((r) => [r.review, r.n])),

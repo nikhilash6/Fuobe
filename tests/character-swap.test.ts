@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   alignFrames,
+  ANCHOR_MODELS,
   anchorModel,
   anchorPrompt,
   CHARACTER_LICENCES,
@@ -33,6 +34,7 @@ import {
   windowPlan,
   windowProblem,
 } from "@/lib/catalog/character-swap";
+import { getModel } from "@/lib/catalog";
 import { licenceInfo, licenceTerms, NODE_PACKS } from "@/lib/licences";
 
 // Genjutsu's Character swap (docs/research/openjutsu-6.md): Openjutsu's prompt and limits, H3's windows and canvas,
@@ -85,12 +87,16 @@ describe("Character swap: the prompt", () => {
     expect(brief).toMatch(/One full-aspect edited source frame\.$/);
   });
 
-  it("the anchor model per engine: GPT Image 2.5 Sunburst (low) or Nano Banana Pro in the cloud, Qwen-Image-Edit on your GPU", () => {
+  it("the anchor model per engine: GPT Image 2.5 Sunburst (low) or Nano Banana Pro in the cloud, Qwen-Image 2.1 (or Krea 2 Identity Edit) on your GPU", () => {
     expect(anchorModel("cloud")).toMatchObject({ id: "gpt-image-2-5-sunburst", extra: { quality: "low" } });
     expect(anchorModel("cloud", "nano-banana-pro").id).toBe("nano-banana-pro");
-    expect(anchorModel("open").id).toBe("oss-qwen-edit");
-    // Another engine's model falls back to the engine's own.
-    expect(anchorModel("open", "nano-banana-pro").id).toBe("oss-qwen-edit");
+    expect(ANCHOR_MODELS.open.map((m) => m.id)).toEqual(["oss-qwen-image-21", "oss-krea2-identity-edit"]);
+    expect(anchorModel("open").id).toBe("oss-qwen-image-21");
+    expect(anchorModel("open", "oss-krea2-identity-edit")).toMatchObject({ id: "oss-krea2-identity-edit", label: "Krea 2 Identity Edit" });
+    // A Qwen-Image-Edit 2511 pick saved before, or another engine's model, falls back to the engine's own.
+    expect(anchorModel("open", "oss-qwen-edit").id).toBe("oss-qwen-image-21");
+    expect(anchorModel("open", "nano-banana-pro").id).toBe("oss-qwen-image-21");
+    for (const m of ANCHOR_MODELS.open) expect(getModel(m.id)?.engine, m.id).toBe("open");
   });
 });
 

@@ -79,9 +79,9 @@ fuobe models --hidden                          # also the helper models studios 
 ```
 
 `--kind` is `image`, `video`, `audio`, `text` or `model3d`; `--engine` is `open` or `cloud`. The
-price says how a run goes today, following Settings → Demo mode: "(demo)" runs but returns demo
-media for free (no provider set up yet, or Demo mode is on); "(not set up)" won't run until its
-provider is set up, because Demo mode is off. `--json` gives the same as `runs` (`real`, `demo` or
+price says how a run goes today, following Settings → Placeholder results: "(demo)" runs but returns placeholder
+media for free (placeholder results are on); "(not set up)" won't run until its
+provider is set up. `--json` gives the same as `runs` (`real`, `demo` or
 `refused`) per model. An install set to one engine only (Settings → Engine mode) lists that
 engine's models only.
 
@@ -149,7 +149,7 @@ Without `--wait` or `--out`, `generate` prints the job ids and returns at once.
 ### `fuobe status`, `fuobe wait`, `fuobe download`, `fuobe cancel`
 
 ```bash
-fuobe status                         # the server: engine mode, demo mode, providers, the token
+fuobe status                         # the server: engine mode, placeholder results, providers, the local LLM, the token
 fuobe status V1StGXR8_Z5j            # one or more generations
 fuobe wait V1StGXR8_Z5j 3Kp9x2LmQa7c # until each is done; prints the output URLs (text results inline)
 fuobe wait V1StGXR8_Z5j --out renders/
@@ -194,7 +194,9 @@ fuobe skills add ./my-skills --replace              # overwrite your own skills 
 else `skills/`, `.agents/skills/`, `.claude/skills/` and the folders right under it (up to three
 levels), else any `SKILL.md` a few levels down; skills marked `metadata.internal: true` are left out
 unless named with `--skill`. Each skill is uploaded as a zip with its text files (binaries and
-dot-files are left out, and listed). Git sources need `git`.
+dot-files are left out, and listed). Git sources need `git`. A skill's `recipe.json` (a skill that runs
+by itself; see `skills/README.md`) goes up with it but starts unchecked: check it in **Assist → Skills**
+before you run it. The CLI has no command to run a skill yet.
 
 ### `fuobe tools`, `fuobe tool` — the MCP tools
 
@@ -283,11 +285,11 @@ server too (`fuobe mcp`).
 - **"… refused the API token"** — it was revoked, or belongs to another server: create a new one.
 - **"The token "fuobe login" saved is for …, so it isn't sent here"** — `--url` or `FUOBE_URL` names
   another server than the one you signed in to: pass `--token`, or `fuobe login --url <that server>`.
-- **"(demo)" results** — no provider is set up for that model, or Settings → Demo mode is on: add a
+- **"(demo)" results** — Settings → Placeholder results is on (for a tour): turn it off, and add a
   key in Settings (cloud), or start ComfyUI (open source). Demo results cost nothing and are
   labelled in the Library.
-- **"(not set up)" in `fuobe models`, or "Connect … in Settings to run this model"** — Demo mode is
-  off and the model's provider isn't set up yet.
+- **"(not set up)" in `fuobe models`, or "Connect … in Settings to run this model"** — the
+  model's provider isn't set up yet.
 - **"… is a cloud model, but you asked for --engine open"** — pick a model of that engine
   (`fuobe models --engine open`) or leave out `--engine`.
 

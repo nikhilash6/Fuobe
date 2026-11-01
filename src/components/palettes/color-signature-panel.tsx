@@ -17,9 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { uploadFile } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { uploadFile, useIsVisitor } from "@/lib/api";
 import { MAX_SOURCE_IMAGES, NAME_MAX, suggestName, type Palette, type PalettePick } from "@/lib/catalog/palettes";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { extractFromFiles } from "./extract";
 import { usePaletteActions, usePalettes } from "./hooks";
 import { PaletteCard, Strip } from "./palette-card";
@@ -52,7 +54,7 @@ function FromImages({ files, setFiles, onSaved }: { files: File[]; setFiles: (f:
       .catch((e) => {
         if (!live) return;
         setDone({ files, colors: [], background: null, name: "" });
-        toast.error((e as Error).message);
+        toastError(e);
       });
     return () => {
       live = false;
@@ -71,7 +73,7 @@ function FromImages({ files, setFiles, onSaved }: { files: File[]; setFiles: (f:
       toast.success("Palette saved");
       onSaved(p);
     } catch (e) {
-      toast.error((e as Error).message || "Failed to save palette");
+      toastError(e, "Failed to save palette");
     } finally {
       setSaving(false);
     }
@@ -136,6 +138,8 @@ export function ColorSignaturePanel({
 }) {
   const { items, isLoading } = usePalettes();
   const { create, remove } = usePaletteActions();
+  // A guest or a free account: the Cinema palettes only (saving one of its own is refused).
+  const visitor = useIsVisitor();
   const [view, setView] = useState<View>("list");
   const [files, setFiles] = useState<File[]>([]);
   const [draft, setDraft] = useState<PaletteDraft>(manualDraft);
@@ -173,27 +177,41 @@ export function ColorSignaturePanel({
             {!compact && (
               <>
                 <p className="text-[14px] font-semibold text-brand-text">Control your colors</p>
-                <p className="mt-0.5 text-[12.5px] text-muted-foreground">Upload a reference image and bring its colors into your own style.</p>
+                <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                  {visitor ? "Pick a Cinema palette below and bring its colors into your image." : "Upload a reference image and bring its colors into your own style."}
+                </p>
               </>
             )}
-            {compact && <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">Upload a reference image to create your color signature.</p>}
-            <Button size="sm" className={cn("h-8", !compact && "mt-2")} onClick={() => setView("create")}>
-              <Upload /> Upload &amp; Create
-            </Button>
+            {compact && (
+              <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+                {visitor ? "Pick a Cinema palette to use its colors." : "Upload a reference image to create your color signature."}
+              </p>
+            )}
+            {/* Saving a palette is a library change, which only the owner makes here (the server refuses it). */}
+            {!visitor && (
+              <Button size="sm" className={cn("h-8", !compact && "mt-2")} onClick={() => setView("create")}>
+                <Upload /> Upload &amp; Create
+              </Button>
+            )}
           </div>
-          {engine === "open" && value && (
+          {/* The lock is a second run on the studio's own ComfyUI, which a visitor's request never asks for. */}
+          {engine === "open" && value && !visitor && (
             <label className="mb-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12.5px]">
               <span>
-                Lock the colours after generating
-                <span className="block text-[11.5px] text-muted-foreground">A palette-transfer step recolours each image (open source, CPU)</span>
+                Lock the colors after generating
+                <span className="block text-[11.5px] text-muted-foreground">Keeps each image to the palette&apos;s colors after it&apos;s made</span>
               </span>
-              <Switch checked={value.lock ?? lockByDefault} onCheckedChange={(lock) => onPick({ ...value, lock })} aria-label="Lock the colours after generating" />
+              <Switch checked={value.lock ?? lockByDefault} onCheckedChange={(lock) => onPick({ ...value, lock })} aria-label="Lock the colors after generating" />
             </label>
           )}
           <div className="max-h-[52svh] space-y-4 overflow-y-auto pr-0.5 sm:max-h-[360px]" onScroll={(e) => setCompact(e.currentTarget.scrollTop > 24)}>
             <section>
               <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Your palettes</p>
-              {isLoading ? (
+              {visitor ? (
+                <div className="rounded-lg border border-dashed p-4 text-center">
+                  <SelfHostNote className="text-[12px]">Saving palettes isn&apos;t on free accounts yet.</SelfHostNote>
+                </div>
+              ) : isLoading ? (
                 <div className="grid grid-cols-2 gap-2">
                   <Skeleton className="aspect-video" />
                   <Skeleton className="aspect-video" />
@@ -212,7 +230,7 @@ export function ColorSignaturePanel({
                             if (value?.id === p.id) onPick(undefined);
                             toast("Palette deleted");
                           },
-                          onError: (e) => toast.error((e as Error).message),
+                          onError: (e) => toastError(e),
                         })
                       }
                     />
@@ -225,14 +243,16 @@ export function ColorSignaturePanel({
                 </div>
               )}
             </section>
-            <section>
-              <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Cinema palettes</p>
-              <div className="grid grid-cols-2 gap-2">
-                {builtins.map((p) => (
-                  <PaletteCard key={p.id} palette={p} selected={value?.id === p.id} onSelect={() => onPick(value?.id === p.id ? undefined : toPalettePick(p, value?.lock))} />
-                ))}
-              </div>
-            </section>
+            {builtins.length > 0 && (
+              <section>
+                <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Cinema palettes</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {builtins.map((p) => (
+                    <PaletteCard key={p.id} palette={p} selected={value?.id === p.id} onSelect={() => onPick(value?.id === p.id ? undefined : toPalettePick(p, value?.lock))} />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </>
       )}
@@ -246,7 +266,7 @@ export function ColorSignaturePanel({
           <button type="button" onClick={() => setView("manual")} className="flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-colors hover:bg-accent">
             <PaletteIcon className="size-5 text-brand-text" />
             <span className="text-[13px] font-medium">Pick colors manually</span>
-            <span className="text-[11.5px] text-muted-foreground">Up to 12 colours, a background, random starters</span>
+            <span className="text-[11.5px] text-muted-foreground">Up to 12 colors, a background, random starters</span>
           </button>
         </div>
       )}
@@ -276,7 +296,7 @@ export function ColorSignaturePanel({
                   setView("list");
                   onPick(toPalettePick(p, value?.lock));
                 },
-                onError: (e) => toast.error((e as Error).message || "Failed to save palette"),
+                onError: (e) => toastError(e, "Failed to save palette"),
               },
             )
           }

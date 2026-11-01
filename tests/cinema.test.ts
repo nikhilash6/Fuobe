@@ -434,7 +434,7 @@ describe("planCinema", () => {
 
     const loc = planCinema(base({ action: "location", mode: "image", prompt: "an abandoned diner on Route 66", brief: "" }), ctx);
     expect(loc.steps[0].request).toMatchObject({ modelId: "fuobe-soul", presetId: "v1-movie", params: { aspectRatio: "16:9", resolution: "1080p" } });
-    expect(loc.steps[0].request.prompt).toMatch(/^Establishing shot of a film location: an abandoned diner on Route 66\. An empty set with no people/);
+    expect(loc.steps[0].request.prompt).toMatch(/^Establishing shot of a film location: an abandoned diner on Route 66\. An empty set, the place itself the only subject/);
     expect(LOCATION_MODELS.cloud).not.toContain("soul-cinema");
 
     const still = { url: "/api/files/diner.png", kind: "image" as const };

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { candidateValues, connectionSummary, FIRST_RUN_KEY, FIRST_RUN_SCRIPT, isTestProvider, nothingConnected, settingProblem, showFirstRun, type ConnectionState } from "@/lib/connections";
+import { candidateValues, connectionSummary, FIRST_RUN_KEY, FIRST_RUN_SCRIPT, isTestProvider, nothingConnected, PROVIDER_SETTINGS, settingProblem, showFirstRun, type ConnectionState } from "@/lib/connections";
 
 /** Settings' "Save & test", the first-run guide's rule and the connection status strip (R4-02, R4-03, R4-33). */
 
@@ -105,7 +105,7 @@ describe("first-run guide and status strip", () => {
     expect(nothingConnected(state(["replicate"], "cloud"))).toBe(false);
   });
 
-  it("hides Home's shell guide before the first paint only where this browser put it away", () => {
+  it("shows Home's shell guide before the first paint only where this browser showed it last time", () => {
     const run = (stored: string | null | Error) => {
       const attrs: Record<string, string> = {};
       const localStorage = {
@@ -119,9 +119,10 @@ describe("first-run guide and status strip", () => {
       return attrs["data-first-run"];
     };
     expect(run("0")).toBe("0");
-    // A first visit, or a guide still wanted: the shell keeps it, so it doesn't push the page down later.
+    // A guide still wanted: the shell shows it, so it doesn't push the page down later.
+    expect(run("1")).toBe("1");
+    // A first visit (a public studio's visitor never gets the guide): the shell leaves it out.
     expect(run(null)).toBeUndefined();
-    expect(run("1")).toBeUndefined();
     // Storage blocked (a private window): nothing breaks.
     expect(run(new Error("denied"))).toBeUndefined();
   });
@@ -137,8 +138,26 @@ describe("first-run guide and status strip", () => {
     expect(s.map((c) => c.href)).toEqual(["#fal", "#replicate", "#comfyui", "#text-ai"]);
   });
 
+  it("says the owner's computer as Your GPU, and Connect on a hosted studio with nothing connected", () => {
+    const gpu = (g: ConnectionState["ownerGpu"], place?: "here" | "network" | "hosted") => connectionSummary({ ...state(["comfyui"], "open"), ownerGpu: g }, place).find((c) => c.id === "comfyui");
+    expect(gpu({ mode: "computer", online: true, device: "cuda:0 NVIDIA GeForce RTX 5090" })).toMatchObject({ label: "Your GPU", text: "Your computer · Online", ok: true, href: "#comfyui" });
+    expect(gpu({ mode: "computer", online: false, comfy: "down" })).toMatchObject({ label: "Your GPU", text: "Your computer · ComfyUI not running", ok: false });
+    expect(gpu({ mode: "computer", online: false, comfy: "no-setting" })).toMatchObject({ text: "Your computer · Needs a setting", ok: false });
+    expect(gpu({ mode: "computer", online: false }, "hosted")).toMatchObject({ text: "Your computer · Offline", ok: false });
+    const hosted = connectionSummary(state([], "open"), "hosted").find((c) => c.id === "comfyui");
+    expect(hosted).toMatchObject({ label: "Your GPU", text: "Connect", ok: false, href: "#comfyui" });
+    // On the server's own machine, or once a server ComfyUI answers: as before.
+    expect(connectionSummary(state([], "open"), "here").find((c) => c.id === "comfyui")).toMatchObject({ label: "ComfyUI", text: "Offline" });
+    expect(connectionSummary(state(["comfyui"], "open"), "hosted").find((c) => c.id === "comfyui")).toMatchObject({ label: "ComfyUI", text: "Online" });
+  });
+
+  it("lets a ComfyUI test say where ComfyUI runs, so a server address is tested as a server", () => {
+    expect(PROVIDER_SETTINGS.comfyui).toContain("comfyWhere");
+    expect(candidateValues("comfyui", { comfyUrl: "https://gpu.example.com", comfyWhere: "server" })).toEqual({ comfyUrl: "https://gpu.example.com", comfyWhere: "server" });
+  });
+
   it("quotes a first image and clip on the default paid models", () => {
-    expect(starterPriceLine()).toMatch(/^Nano Banana Pro ≈ \$[\d.]+ an image · Seedance 2\.5 ≈ \$[\d.]+ a 5 s clip$/);
+    expect(starterPriceLine()).toMatch(/^Nano Banana Pro ≈ \$[\d.]+ an image · MiniMax H3 ≈ \$0\.30 a 5 s clip$/);
   });
 });
 
@@ -201,7 +220,7 @@ describe("POST /api/providers/test with unsaved values", () => {
     const goodKey = { "https://api.anthropic.com/v1/models": [200, { data: [], has_more: false }], "http://127.0.0.1:9/api/tags": [200, tags] } as Record<string, [number, unknown]>;
     for (const [mode, enhancer, note] of [
       ["open", "auto", "Open source only mode keeps text steps on Ollama"],
-      ["both", "ollama", "text steps use Ollama (Enhancer)"],
+      ["both", "ollama", "text steps use Ollama (AI helper)"],
     ] as const) {
       setSetting("engineMode", mode);
       setSetting("enhanceProvider", enhancer);
@@ -332,7 +351,7 @@ describe("POST /api/providers/test with unsaved values", () => {
 });
 
 describe("GET /api/status", () => {
-  const onboarded = async () => ((await (await statusRoute(new Request("http://localhost/"))).json()) as { onboarded: boolean }).onboarded;
+  const onboarded = async () => ((await (await statusRoute()).json()) as { onboarded: boolean }).onboarded;
 
   it("says whether the first-run guide was put away", async () => {
     expect(await onboarded()).toBe(false);

@@ -40,8 +40,8 @@ export interface ScheduleView {
   approval: ScheduleApproval;
   capUsd: number | null;
   engine: "cloud" | "open";
-  /** The mode choice runs start with (null: the default from Settings). */
-  mode: { mode: "free" | "smart" | "manual"; agent?: "claude" | "ollama" | "offline"; model?: string | null; effort?: "low" | "medium" | "high" | "xhigh" | "max" | null } | null;
+  /** The mode choice runs start with (null: the default from Settings). The local agent is "local"; tasks saved before LM Studio and Unsloth Studio support say "ollama" (read as "local"). */
+  mode: { mode: "free" | "smart" | "manual"; agent?: "claude" | "hosted" | "local" | "ollama" | "offline"; provider?: string | null; model?: string | null; effort?: "low" | "medium" | "high" | "xhigh" | "max" | null } | null;
   /** Whether runs may use the connectors in Settings (Claude runs only). Their tools run without asking, so it's off unless the task opts in. */
   connectors: boolean;
   paused: boolean;

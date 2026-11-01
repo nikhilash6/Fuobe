@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { addSource, ProjectError } from "@/server/assist/projects";
+import { gateAsProxy, readBodyWithin, readFormWithin } from "@/server/direct-gate";
 import { contentTypeFor, deleteAsset, saveFile } from "@/server/storage";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const MAX_BYTES = 25 * 1024 * 1024;
+/** A source sent as JSON: a link, an element or a note of up to 20,000 characters (4 bytes each at most), with room to spare. */
+const JSON_MAX_BYTES = 256 * 1024;
 /** Documents Assist can read (text, Markdown, PDF), plus media it can pass on as inputs. */
 const ALLOWED = /^(text\/[\w.+-]+|application\/(json|pdf|xml|x-subrip|x-yaml|yaml)|image\/(png|jpeg|webp|gif)|video\/(mp4|webm|quicktime)|audio\/(mpeg|wav|x-wav|ogg|flac|mp4|webm))$/;
 const TEXT_EXT: Record<string, string> = { md: "text/markdown", markdown: "text/markdown", txt: "text/plain", csv: "text/csv", srt: "application/x-subrip", vtt: "text/vtt", json: "application/json", yml: "application/x-yaml", yaml: "application/x-yaml", pdf: "application/pdf" };
@@ -20,11 +21,15 @@ const Json = z.discriminatedUnion("kind", [
  * Add a source: JSON (a link, an uploaded file URL, an element, a note) or multipart "file"
  * (documents and media are stored like uploads). Links are fetched through the guarded fetcher.
  */
-export const POST = handler({ access: "signed-in" }, async (request: Request, ctx: RouteContext<"/api/assist/projects/[projectId]/sources">) => {
+export async function POST(request: Request, ctx: RouteContext<"/api/assist/projects/[projectId]/sources">) {
+  // The proxy doesn't run on this route (a big form): its checks run here.
+  const denied = gateAsProxy(request);
+  if (denied) return denied;
   const { projectId } = await ctx.params;
   try {
     if ((request.headers.get("content-type") ?? "").startsWith("multipart/form-data")) {
-      const form = await request.formData().catch(() => null);
+      const form = await readFormWithin(request, MAX_BYTES);
+      if (form === "too-big") return Response.json({ error: "That file is over 25 MB" }, { status: 413 });
       const file = form?.get("file");
       if (!(file instanceof File)) return Response.json({ error: "No file" }, { status: 400 });
       if (file.size > MAX_BYTES) return Response.json({ error: "That file is over 25 MB" }, { status: 413 });
@@ -43,11 +48,17 @@ export const POST = handler({ access: "signed-in" }, async (request: Request, ct
         throw e;
       }
     }
-    const parsed = Json.safeParse(await request.json().catch(() => null));
+    // A link, an element or a note: words only (a note is at most 20,000 characters).
+    const body = await readBodyWithin(request, JSON_MAX_BYTES);
+    if (body === "too-big") return Response.json({ error: "That note is too long" }, { status: 413 });
+    let json: unknown = null;
+    try {
+      json = body ? JSON.parse(body.toString("utf8")) : null;
+    } catch {}
+    const parsed = Json.safeParse(json);
     if (!parsed.success) return Response.json({ error: "Add a link, a file, an element or a note" }, { status: 400 });
     return Response.json(await addSource(projectId, parsed.data), { status: 201 });
   } catch (e) {
-    rethrowAccess(e);
     return Response.json({ error: (e as Error).message }, { status: e instanceof ProjectError ? e.status : 500 });
   }
-});
+}

@@ -14,12 +14,15 @@ const label = (v: string | number) =>
     .replace(/^f(\d)(\d)?/, (_, a, b) => `f/${a}${b ? `.${b}` : ""}`)
     .replace(/^\w/, (c) => c.toUpperCase());
 
-/** "Director" popover for enum settings such as genre, lens, light, grade and camera move. */
+/**
+ * "Director" popover for enum settings such as genre, lens, light, grade and camera move. A model whose only settings are
+ * its Quality (MiniMax H3's Fast / Best, MOSS-Image's tiers) shows them under "Quality".
+ */
 export function ControlsChip({
   controls,
   values,
   onChange,
-  title = "Director",
+  title: named,
 }: {
   controls: NonNullable<ModelOptions["controls"]>;
   values: Record<string, unknown>;
@@ -27,6 +30,7 @@ export function ControlsChip({
   /** The chip's name: "Director" (Cinema's genre, lens, light…), "Options" for a tool's model settings (Upscale). */
   title?: string;
 }) {
+  const title = named ?? (controls.length && controls.every((c) => c.param === "quality") ? "Quality" : "Director");
   const set = controls.filter((c) => values[c.param] !== undefined);
   return (
     <Popover>
@@ -40,7 +44,8 @@ export function ControlsChip({
         <p className="text-[12px] text-muted-foreground">Leave one on Auto and the model decides.</p>
         <div className="grid grid-cols-2 gap-2">
           {controls.map((c) => (
-            <label key={c.param} className="space-y-1">
+            // A control alone on its row (MOSS-Image's one Quality) takes both columns, so its value reads in full.
+            <label key={c.param} className="space-y-1 odd:last:col-span-2">
               <span className="text-[12px] text-muted-foreground">{c.label}</span>
               <Select value={values[c.param] === undefined ? "__auto" : String(values[c.param])} onValueChange={(v) => onChange(c.param, v === "__auto" ? undefined : typeof c.values[0] === "number" ? Number(v) : v)}>
                 <SelectTrigger size="sm" className="w-full" aria-label={c.label}>

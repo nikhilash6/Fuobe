@@ -163,10 +163,10 @@ describe("offline planner", () => {
   it("reads counts, formats and attachments into one tool call", () => {
     expect(agent.offlinePlan("Make three vertical videos of a fox running", "cloud")).toMatchObject({
       tool: "generate",
-      input: { jobs: [{ model_id: "seedance-2-5", aspect_ratio: "9:16", outputs: 3 }] },
+      input: { jobs: [{ model_id: "minimax-h3", aspect_ratio: "9:16", outputs: 3 }] },
     });
     expect(agent.offlinePlan("Put a hat on him\n\nAttached files (pass these URLs as inputs):\n- image 1: /api/files/a.png", "open")).toMatchObject({
-      input: { jobs: [{ model_id: "oss-qwen-edit", images: ["/api/files/a.png"] }] },
+      input: { jobs: [{ model_id: "oss-qwen-image-21", images: ["/api/files/a.png"] }] },
     });
     expect(agent.offlinePlan("A storyboard in 6 frames: a heist in Paris", "cloud")).toMatchObject({ tool: "create_storyboard", input: { frames: 6 } });
     expect(agent.offlinePlan("Write a lo-fi song for studying", "open")).toMatchObject({ input: { jobs: [{ model_id: "oss-ace-step" }] } });
@@ -236,7 +236,7 @@ describe("claude request", () => {
   });
 });
 
-describe("ollama agent", () => {
+describe("local agent on Ollama", () => {
   it("talks to Ollama's chat API with tools and maps its tool calls back", async () => {
     const http = await import("node:http");
     const seen: { messages: { role: string; content: string; tool_calls?: unknown[]; tool_name?: string }[]; tools: { function: { name: string } }[]; model: string }[] = [];
@@ -259,8 +259,10 @@ describe("ollama agent", () => {
     setSetting("ollamaUrl", `http://127.0.0.1:${port}`);
     setSetting("ollamaModel", "qwen3:8b");
     try {
-      expect(await agent.resolveAgent()).toBe("ollama");
+      expect(await agent.resolveAgent()).toBe("local");
+      // "ollama", the agent's old name, still makes a local chat.
       const t = agent.createThread({ engine: "open", agent: "ollama" });
+      expect(t.agent).toBe("local");
       agent.addMessage(t.id, "Which image model should I use?");
       await agent.run(t.id);
       expect(seen).toHaveLength(2);

@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { BrandKit, Product } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useBrandChat, useEstimate, type ChatMessage } from "@/components/marketing/hooks";
 import { insertMention, mentionMatches, mentionQuery } from "./mention";
 
@@ -67,7 +68,7 @@ function Proposal({ msg, brand, products, engine, onConfirmed }: { msg: ChatMess
             onClick={() =>
               confirm.mutate(
                 { messageId: msg.id, engine },
-                { onSuccess: (r) => (toast.success(`Generating ${total} ads`, { duration: 1500 }), onConfirmed(r.batchId)), onError: (e) => toast.error((e as Error).message) },
+                { onSuccess: (r) => (toast.success(`Generating ${total} ads`, { duration: 1500 }), onConfirmed(r.batchId)), onError: (e) => toastError(e) },
               )
             }
             disabled={confirm.isPending}
@@ -116,7 +117,7 @@ export function AdChat({ brand, products, engine, onBatch, onClose, className }:
     if (!v) return;
     setText("");
     setMenu("closed");
-    say.mutate(v, { onError: (e) => toast.error((e as Error).message) });
+    say.mutate(v, { onError: (e) => toastError(e) });
   };
   const insert = (p: Product) => {
     const at = box.current?.selectionStart ?? caret;

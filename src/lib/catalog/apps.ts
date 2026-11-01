@@ -5,13 +5,14 @@ import type { InputSlot, Preset, PresetOption, PresetRoute } from "./types";
 /*
  * One-click "Apps". Most are an edit model plus a carefully written instruction —
  * exactly how Higgsfield builds them on Nano Banana / Seedream. The open-source route
- * runs the same instruction on Qwen-Image-Edit (or a dedicated ComfyUI workflow).
+ * runs the same instruction on Qwen-Image 2.1 (or a dedicated ComfyUI workflow; apps whose
+ * LoRA was trained on Qwen-Image-Edit 2509 or 2511 name that model).
  * Video apps animate the photo with an image-to-video model and a template prompt
  * (Higgsfield's "viral_transform_video" templates work the same way).
  */
 
 const EDIT_CLOUD = "nano-banana-pro";
-const EDIT_OPEN = "oss-qwen-edit";
+const EDIT_OPEN = "oss-qwen-image-21";
 
 /** Image → video templates. */
 const VIDEO_CLOUD: PresetRoute = { modelId: "kling-2-5-turbo", op: "i2v", params: { duration: 5 } };
@@ -20,15 +21,24 @@ const VIDEO_OPEN: PresetRoute = { modelId: "oss-wan22-14b", op: "i2v", params: {
 const FLF_CLOUD: PresetRoute = { ...VIDEO_CLOUD, op: "flf2v" };
 const FLF_OPEN: PresetRoute = { ...VIDEO_OPEN, op: "flf2v" };
 /** Portrait + voice → talking video. */
-const AVATAR_CLOUD: PresetRoute = { modelId: "kling-avatar", op: "avatar" };
+const AVATAR_CLOUD: PresetRoute = { modelId: "kling-avatar-2", op: "avatar" };
 const AVATAR_OPEN: PresetRoute = { modelId: "oss-infinitetalk", op: "avatar" };
-/** Character image + driving video → video (open source only). */
+/** Character image + driving video → video on your GPU. */
 const ANIMATE_OPEN: PresetRoute = { modelId: "oss-wan22-animate", op: "motion-transfer" };
 const BG_CLOUD: PresetRoute = { modelId: "birefnet-cloud", op: "bg-remove" };
 const BG_OPEN: PresetRoute = { modelId: "oss-rmbg", op: "bg-remove" };
 const UPSCALE_CLOUD: PresetRoute = { modelId: "topaz-image", op: "upscale-image" };
-const UPSCALE_OPEN: PresetRoute = { modelId: "oss-upscale-image", op: "upscale-image" };
-const OUTPAINT_OPEN: PresetRoute = { modelId: "oss-flux-fill", op: "outpaint" };
+/** SeedVR2 (image) restores detail as it enlarges (4x ESRGAN stays in the Upscale studio's list). */
+const UPSCALE_OPEN: PresetRoute = { modelId: "oss-seedvr2-image", op: "upscale-image" };
+/**
+ * Qwen-Image 2.1's expand: Qwen3-VL describes the picture on its grown canvas, and the words only add what goes in the
+ * new margins. They never name the subject (it would appear again there), so the apps send their own short hint.
+ */
+const OUTPAINT_OPEN: PresetRoute = {
+  modelId: "oss-qwen-image-21",
+  op: "outpaint",
+  promptTemplate: "more of the surrounding scene, continuing naturally past every edge with the same light, perspective and textures",
+};
 
 const photo: InputSlot = { key: "image", label: "Photo", accept: "image", required: true };
 const product: InputSlot = { key: "image", label: "Product", hint: "A clear photo of the product", accept: "image", required: true };
@@ -37,12 +47,18 @@ const voice: InputSlot = { key: "audio", label: "Voice audio", hint: "Speech or 
 const second = (label: string, hint?: string): InputSlot => ({ key: "image2", label, hint, accept: "image", required: true });
 const third = (label: string, hint?: string): InputSlot => ({ key: "image3", label, hint, accept: "image", required: false });
 
-/** Shared parity notes. */
-const TWO_STEP =
-  "Approximation: Higgsfield restyles the photo with Nano Banana and then animates it; Fuobe animates the transformation in a single image-to-video pass";
-const NO_AUDIO = "Kling 2.5 / Wan 2.2 output is silent — add sound with the Audio → Video to audio tool";
+/**
+ * Shared notes for an app's Details popover (`parity`): a plain line about what Fuobe makes, for visitors. How a
+ * preset differs from the app it was modelled on stays in code comments. TWO_STEP: the reference restyles the photo
+ * with an edit model and then animates it, where Fuobe animates the change in one image-to-video pass. NO_AUDIO: the
+ * i2v models these apps run on make silent clips.
+ */
+const TWO_STEP = "Animates the change from your photo in one pass.";
+const NO_AUDIO = "This makes a silent clip. Add sound with Video to audio.";
 
 type AppSpec = {
+  /** Kept when an app is renamed, so links, previews and saved runs still find it (default: from the name). */
+  id?: string;
   name: string;
   category: string;
   description: string;
@@ -70,7 +86,7 @@ function app(a: AppSpec): Preset {
   const cloud = a.cloud === null ? null : { modelId: EDIT_CLOUD, op: "edit" as const, ...a.cloud };
   const open = a.open === null ? null : { modelId: EDIT_OPEN, op: "edit" as const, ...a.open };
   return {
-    id: `app-${slug(a.name)}`,
+    id: a.id ?? `app-${slug(a.name)}`,
     type: "app",
     name: a.name,
     category: a.category,
@@ -176,7 +192,7 @@ export const APPS: Preset[] = [
       ]),
     ],
     prompt:
-      "Give the portrait {option:level}. Make the skin look like a high-end editorial photograph shot on a sharp lens — real texture, no plastic smoothing, no makeup changes. Keep the face shape, identity, expression, hair, lighting and background exactly the same.",
+      "Give the portrait {option:level}. Make the skin look like a high-end editorial photograph shot on a sharp lens, with real, natural skin texture and the same makeup. Keep the face shape, identity, expression, hair, lighting and background exactly the same.",
   }),
   app({
     name: "Age Shift",
@@ -253,7 +269,7 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Turn the person in this photo into the face of {option:ad}. Keep their exact face, identity, skin tone and hair; photograph them as a polished commercial model with professional retouching, magazine-quality lighting and empty space for ad copy.",
-    parity: "Higgsfield also lists the face for licensing (Higgsfield Earn); Fuobe only generates the images",
+    parity: "Makes ad-ready pictures of you for the campaign you pick.",
   }),
   // ---------------- Camera & light
   app({
@@ -302,7 +318,7 @@ export const APPS: Preset[] = [
       loras: [ANGLES_2511_LORA],
       promptTemplate: "<sks> {option:angle} {option:height} {option:distance}. {prompt}",
     },
-    parity: "Both engines run the same Multiple-Angles LoRA: hosted by fal on the cloud, added to Qwen-Image-Edit 2511 on the open engine (0.3 GB)",
+    parity: "Both engines run the same Multiple-Angles LoRA: hosted by fal on the cloud, added to Qwen-Image-Edit 2511 on the open engine (0.3 GB).",
   }),
   app({
     name: "Fuobe Angles",
@@ -350,8 +366,10 @@ export const APPS: Preset[] = [
     prompt: "{prompt}",
     cloud: { modelId: "fuobe-angles", op: "edit" },
     open: { modelId: "fuobe-angles", op: "edit" },
+    // The reference's recipe (Qwen-Image-Edit 2509 + the Multiple-angles LoRA), hosted on fal or with Qwen-Image-Lightning
+    // on the GPU. Not yet measured: the Angles app stays the default until the angles evaluation suite promotes it.
     parity:
-      "Both engines run Higgsfield Angles' recipe, Qwen-Image-Edit 2509 + the Multiple-angles LoRA: hosted on fal, or with Qwen-Image-Lightning on your GPU (24 GB). fal's route takes no words of its own. Not yet measured: the Angles app stays the default until the angles evaluation suite promotes this recipe",
+      "Both engines run the same recipe: Qwen-Image-Edit 2509 with a multiple-angles LoRA, in the cloud or on your GPU (24 GB). In the cloud it follows the camera settings alone, without your words.",
   }),
   app({
     name: "Shots",
@@ -376,7 +394,7 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Re-shoot this scene as {option:shot}. Same characters, faces, wardrobe, location, lighting and color grade — consistent frames from one film, cinematic composition.",
-    parity: "Higgsfield returns 9 separate images per run; Fuobe makes one chosen shot or a single 3x3 grid",
+    parity: "Makes the shot you pick, or nine shots as one 3x3 storyboard.",
   }),
   app({
     name: "Zooms",
@@ -398,7 +416,7 @@ export const APPS: Preset[] = [
       ]),
     ],
     prompt: "Show the same moment as {option:level}, centered on the main subject. Keep subject, outfit, lighting, time of day and environment consistent.",
-    parity: "Higgsfield returns 9 separate images per run; Fuobe makes one chosen level or a single 3x3 grid",
+    parity: "Makes the zoom level you pick, or all nine as one 3x3 grid.",
   }),
   app({
     name: "What's Next",
@@ -421,7 +439,7 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Imagine what happens next in this story: {option:dir}. {prompt}. Show it as a new cinematic film frame with the same characters, faces, wardrobe, world and visual style.",
-    parity: "Higgsfield returns 8 scenes per run; Fuobe makes one direction (or an 8-panel grid) per run",
+    parity: "Makes the direction you pick, or eight next scenes as one storyboard.",
   }),
   app({
     name: "Relight",
@@ -481,7 +499,7 @@ export const APPS: Preset[] = [
       promptTemplate: "An original character: {prompt}. The same face, hairstyle and outfit in every view, photorealistic, high detail.",
     },
     parity:
-      "Save the sheet as a character (tile menu) to use it in any prompt with @. From your own photos or a Soul Cast build, use Character Sheet. Fuobe Soul draws it in the Realistic look; the open version draws the turnaround in the same look on Z-Image Turbo and cuts it into the four views",
+      "Save the sheet as a character (tile menu) to use it in any prompt with @. From your own photos or a Soul Cast build, use Character Sheet. Fuobe Soul draws it in the Realistic look; the open version draws the turnaround in the same look on Z-Image Turbo and cuts it into the four views.",
   }),
   app({
     name: "Match Lighting",
@@ -504,7 +522,7 @@ export const APPS: Preset[] = [
     prompt:
       "Recolor image 1 to match the color palette and grade of image 2: the same hues, saturation, contrast and tone in the shadows and highlights. Keep the content, composition and details of image 1 unchanged.",
     open: { modelId: "oss-palette-image", op: "color-match" },
-    parity: "The open version transfers the palette directly (no AI model, runs on CPU); the cloud version re-grades with Nano Banana Pro",
+    parity: "The open version transfers the palette directly (no AI model, runs on CPU); the cloud version re-grades with Nano Banana Pro.",
   }),
   app({
     name: "Expand Image",
@@ -522,9 +540,9 @@ export const APPS: Preset[] = [
       ]),
     ],
     prompt:
-      "Expand this image outward into {option:ratio}, continuing the scene naturally beyond every edge with matching perspective, lighting, textures and grain. Keep the original content untouched and add no new people or text.",
+      "Expand this image outward into {option:ratio}, continuing the scene naturally beyond every edge with matching perspective, lighting, textures and grain. Keep the original content untouched, and fill the new area with more of the same surroundings.",
     open: OUTPAINT_OPEN,
-    parity: "Set the matching aspect ratio in settings for an exact canvas size",
+    parity: "Set the matching aspect ratio in settings for an exact canvas size.",
   }),
   app({
     name: "Zoom Out",
@@ -566,7 +584,7 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Create a professional product packshot of the product from the image on {option:bg}. Keep the product's exact shape, label, text and colors. Commercial photography, crisp focus.",
-    parity: "Higgsfield renders it as an animated end-card video; Fuobe makes the still (animate it with Product 360)",
+    parity: "Makes the packshot as a still. Animate it with Product 360.",
   }),
   app({
     name: "Product Shot",
@@ -592,7 +610,8 @@ export const APPS: Preset[] = [
     prompt: "The product {option:scene}. {prompt}",
     cloud: { modelId: "bria-product-shot", op: "edit" },
     open: { modelId: "oss-product-shot", op: "edit" },
-    parity: "The open version cuts the product out, puts it on white and relights it into the scene with Qwen-Image-Edit 2509 + the White_to_Scene LoRA",
+    // The open version is Qwen-Image-Edit 2509 with the White_to_Scene LoRA.
+    parity: "On your GPU it cuts the product out, puts it on white and relights it into the scene.",
   }),
   app({
     name: "Product Placement",
@@ -688,8 +707,8 @@ export const APPS: Preset[] = [
     inputs: [product],
     prompt: "",
     cloud: { modelId: "hunyuan-3d-3-1-pro", op: "image-to-3d" },
-    open: { modelId: "oss-trellis2", op: "image-to-3d" },
-    parity: "The open version (TRELLIS.2) also renders a turntable video; for cloud models the 3D page records one in your browser",
+    open: { modelId: "oss-pixal3d", op: "image-to-3d" },
+    parity: "The open version (Pixal3D) also gets a turntable video rendered on the server; for cloud models the 3D page records one in your browser.",
   }),
   videoApp({
     name: "Billboard Ad",
@@ -856,7 +875,7 @@ export const APPS: Preset[] = [
     inputs: [{ key: "image", label: "Character with product", hint: "Combine them first with Product Placement for best results", accept: "image", required: true }],
     prompt:
       "Intimate ASMR studio scene: the person gently presents the product, slowly turning it in their hands, tapping its surface with their nails and bringing it close to a microphone, soft warm light, calm and subtle movements.",
-    parity: `Approximation: Higgsfield merges a separate product and character image; Fuobe animates one combined image. ${NO_AUDIO}`,
+    parity: `Animates one photo of your character with the product. ${NO_AUDIO}`,
   }),
   app({
     name: "ASMR Host",
@@ -870,7 +889,7 @@ export const APPS: Preset[] = [
     prompt: "A soft-spoken ASMR host whispers close to a studio microphone with calm, gentle expressions and slow hand movements. {prompt}",
     cloud: AVATAR_CLOUD,
     open: AVATAR_OPEN,
-    parity: "Higgsfield writes and voices the whisper script; in Fuobe you supply the voice track (e.g. from Text to speech)",
+    parity: "Your photo whispers the voice track you add. Make one with Text to speech.",
   }),
   app({
     name: "ASMR Promo",
@@ -887,7 +906,7 @@ export const APPS: Preset[] = [
     prompt: "The person softly whispers the product message to the camera in an ASMR studio, gently showing the product with slow, soothing gestures. {prompt}",
     cloud: AVATAR_CLOUD,
     open: AVATAR_OPEN,
-    parity: "Approximation: Higgsfield builds the scene from separate character and product images and voices your script; Fuobe needs a combined image and a voice track",
+    parity: "Uses one photo of your character with the product, and the voiceover you add. Make one with Text to speech.",
   }),
   // ---------------- Fashion
   app({
@@ -917,7 +936,7 @@ export const APPS: Preset[] = [
       second("Outfit reference", "A photo of someone wearing the outfit you want"),
     ],
     prompt:
-      "Take the complete outfit worn in the second image — every garment, shoes and accessories, with their exact colors, fabrics, prints and fit — and put it on the person in the first image. Keep the first person's face, hair, body shape, pose, lighting and background unchanged; do not copy the second person's face or body.",
+      "Take the complete outfit worn in the second image — every garment, shoes and accessories, with their exact colors, fabrics, prints and fit — and put it on the person in the first image. Keep the first person's face, hair, body shape, pose, lighting and background unchanged; only the clothing comes from the second image.",
   }),
   app({
     name: "AI Stylist",
@@ -1000,7 +1019,7 @@ export const APPS: Preset[] = [
     placeholder: "Model or location (optional)",
     prompt:
       "Create a professional fashion campaign photo of a stylish model wearing all the clothing items from the images together as one outfit, reproducing each item's exact color, fabric, print and logo. {prompt}. Full-body editorial pose, natural light, high-end lookbook photography.",
-    parity: "Approximation: Higgsfield outputs a short avatar video; Fuobe creates the photoshoot still (animate it with Bring to Life)",
+    parity: "Makes the photoshoot as a still. Animate it with Bring to Life.",
   }),
   // ---------------- Style & art
   app({
@@ -1013,7 +1032,7 @@ export const APPS: Preset[] = [
     placeholder: "What is it? (optional)",
     prompt:
       "Turn this sketch into a photorealistic image, following the drawing's composition and shapes exactly. {prompt}. Natural lighting, real materials, high detail.",
-    parity: "Higgsfield also animates the result; Fuobe makes the photo (animate it with Bring to Life)",
+    parity: "Makes the photo. Animate it with Bring to Life.",
   }),
   app({
     name: "Style Transfer",
@@ -1061,7 +1080,7 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Color grade this photo with {option:grade} {option:grain}. Only change color, contrast, tone and grain; keep every object, face, detail and the composition identical.",
-    parity: "Higgsfield grades in real time in the browser (WebGL sliders); Fuobe applies the grade with an edit model",
+    parity: "Repaints your photo in the grade you pick, with film grain if you want it.",
   }),
   app({
     name: "Colorize",
@@ -1122,7 +1141,7 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Turn the person or pet in the image into {option:kind}, keeping their hairstyle, outfit colors and recognizable features in cute chibi proportions. Photograph it sitting on a cozy bed with soft daylight.",
-    parity: "Higgsfield can also output a video; animate the result with Bring to Life",
+    parity: "Makes the plush doll as a still. Animate it with Bring to Life.",
   }),
   // ---------------- Video
   app({
@@ -1152,7 +1171,7 @@ export const APPS: Preset[] = [
     prompt: "The character from the image performs exactly the motion, expressions and timing of the source video.",
     cloud: null,
     open: ANIMATE_OPEN,
-    parity: "Open source only (Wan 2.2 Animate) — there is no cloud character-replacement route yet",
+    parity: "Runs on open-source models only, on your own GPU.",
   }),
   app({
     name: "Video Face Swap",
@@ -1167,7 +1186,7 @@ export const APPS: Preset[] = [
     prompt: "The person from the image performs exactly the motion, expressions and timing of the target video.",
     cloud: null,
     open: ANIMATE_OPEN,
-    parity: "Approximation: Wan 2.2 Animate re-renders the whole character from your photo rather than swapping only the face; open source only",
+    parity: "Draws the whole person again from your photo, not only the face. Runs on open-source models only.",
   }),
   app({
     name: "Transitions",
@@ -1191,10 +1210,10 @@ export const APPS: Preset[] = [
         ["Glitch", "a digital glitch with RGB split and pixel tearing jumps from the first shot to the second"],
       ]),
     ],
-    prompt: "Seamless transition: {option:fx}. Continuous camera motion, no cuts, both shots keep their exact content.",
+    prompt: "Seamless transition: {option:fx}. One continuous shot, the camera moving throughout; both shots keep their exact content.",
     cloud: FLF_CLOUD,
     open: FLF_OPEN,
-    parity: "Higgsfield also accepts video clips; Fuobe transitions between two stills (start and end frame)",
+    parity: "Makes the transition between two stills: the first shot and the second.",
   }),
   videoApp({
     name: "Hug",
@@ -1234,7 +1253,7 @@ export const APPS: Preset[] = [
   videoApp({
     name: "ClipCut",
     category: "Video",
-    description: "One selfie → a beat-synced multi-outfit reel",
+    description: "One selfie → an outfit-change clip",
     icon: "Film",
     hue: 330,
     options: [
@@ -1247,19 +1266,19 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Fashion reel: the person strikes a pose facing the camera, and on every beat their outfit snaps instantly into the next one — {option:vibe} — with a quick flash between each change while their face, hair and pose stay continuous. Energetic, music-video pacing.",
-    parity: "Approximation: Higgsfield edits several generated clips to the beat with music; Fuobe makes one continuous silent clip",
+    parity: "Makes one continuous clip from your selfie. Add music with Video to audio.",
   }),
   videoApp({
     name: "Urban Cuts",
     category: "Video",
-    description: "Beat-matched outfit transitions in the city",
+    description: "Outfit changes in the city, in one clip",
     icon: "Building2",
     hue: 200,
     userPrompt: "optional",
     placeholder: "Describe the outfit to switch into (optional)",
     prompt:
       "Urban fashion edit: the person walks toward the camera down a city street at night, spins on the beat and instantly reappears in a new outfit {prompt}, keeping their face and stride; neon reflections, handheld music-video energy.",
-    parity: "Approximation: Higgsfield uses your outfit image and music track for a 10 s beat-matched cut; Fuobe makes one silent clip from the photo",
+    parity: "Makes one continuous clip from your photo. Add music with Video to audio.",
   }),
   videoApp({
     name: "Sticker Match Cut",
@@ -1269,7 +1288,7 @@ export const APPS: Preset[] = [
     hue: 60,
     prompt:
       "The subject peels off the scene as a glossy die-cut sticker with a white border, flips toward the camera with sparkles, and slaps back down into a new matching pose in the same frame. Playful stop-motion sticker animation with glitter bursts.",
-    parity: "Approximation: Higgsfield restyles an uploaded clip; Fuobe animates a still frame",
+    parity: "Animates your photo into the match cut.",
   }),
   // ---------------- Fun: games, characters & trending templates
   app({
@@ -1296,7 +1315,7 @@ export const APPS: Preset[] = [
     ],
     prompt:
       "Reimagine the person from the image as {option:game}, faithful to that game's art style, UI and lighting. Keep their face, hairstyle and outfit colors recognizable.",
-    parity: "Higgsfield renders all 12 styles at once; Fuobe makes one style per run",
+    parity: "Makes the game style you pick, one per run.",
   }),
   videoApp({
     name: "Nano Strike",
@@ -1307,7 +1326,7 @@ export const APPS: Preset[] = [
     inputs: [{ key: "image", label: "Squad photo", hint: "One photo of you or your group", accept: "image", required: true }],
     prompt:
       "Tactical shooter game cinematic: the people from the image, now in matching tactical gear and helmets, move in formation through a dusty compound with rifles raised, dust and light shafts, then turn to the camera in a heroic squad pose. Game-engine graphics with a HUD overlay.",
-    parity: `${TWO_STEP}. Higgsfield accepts up to 5 separate photos; Fuobe uses one`,
+    parity: `${TWO_STEP} Put the whole squad in that one photo.`,
   }),
   videoApp({
     name: "Nano Theft",
@@ -1337,7 +1356,7 @@ export const APPS: Preset[] = [
     hue: 130,
     prompt:
       "Life-simulation game character creator screen: the person from the image appears as a 3D game avatar with a green diamond floating above their head, rotating on a pedestal while outfits change with a soft chime, then they wave at the camera.",
-    parity: `${TWO_STEP}. Higgsfield also takes up to 2 clothing images`,
+    parity: TWO_STEP,
   }),
   videoApp({
     name: "3D Render",
@@ -1357,7 +1376,7 @@ export const APPS: Preset[] = [
     hue: 35,
     prompt:
       "The camera glides across a desk to reveal a detailed collectible figurine of the person from the image on a clear acrylic base, next to its colorful retail box with their artwork; the figurine slowly rotates under soft light. Realistic plastic paint details.",
-    parity: `${TWO_STEP}. For a still, use Figurine`,
+    parity: `${TWO_STEP} For a still, use Figurine.`,
   }),
   videoApp({
     name: "Pixel Game",
@@ -1389,7 +1408,7 @@ export const APPS: Preset[] = [
     placeholder: 'Caption, e.g. "me pretending to work when the boss walks by"',
     prompt:
       'Turn the image into a funny meme: exaggerate the subject\'s expression for comedic effect and add the caption "{prompt}" in bold white Impact-style text with a black outline at the top and bottom. Keep the subject recognizable.',
-    parity: "Higgsfield also offers preset AI characters and AI-written captions; Fuobe uses your photo and caption",
+    parity: "Makes the meme from your photo and the caption you write.",
   }),
   app({
     name: "Micro-Beasts",
@@ -1693,7 +1712,7 @@ export const APPS: Preset[] = [
     prompt: "Remove the background",
     cloud: { modelId: "birefnet-video", op: "bg-remove-video" },
     open: { modelId: "oss-video-matte-birefnet", op: "bg-remove-video" },
-    parity: "BiRefNet mattes every frame into a transparent video; to keep one object you name (Higgsfield uses SAM 3), use Video tools → Remove background with SAM 3",
+    parity: "Cuts the subject out of every frame into a transparent video. To keep one object you name, use Video tools → Remove background with SAM 3.",
   }),
   app({
     name: "Object Remover",
@@ -1737,7 +1756,7 @@ export const APPS: Preset[] = [
     prompt: "Vectorize",
     cloud: { modelId: "recraft-vectorize", op: "vectorize" },
     open: { modelId: "oss-vtracer", op: "vectorize" },
-    parity: "The open version traces the colours with VTracer (no AI): crisp on logos and flat art, many small shapes on photos. Recraft redraws the shapes",
+    parity: "The open version traces the colours with VTracer (no AI): crisp on logos and flat art, many small shapes on photos. Recraft redraws the shapes.",
   }),
   app({
     name: "Text Edit",
@@ -1757,7 +1776,7 @@ export const APPS: Preset[] = [
     hue: 210,
     prompt:
       "Create an exploded knolling layout of everything in the image: each object, garment and accessory separated and neatly arranged on a clean light background, each with a small label naming it. Keep every item's exact design, colors and logos.",
-    parity: "Approximation: Higgsfield's AI Lens also identifies brands and prices; Fuobe only produces the breakdown image",
+    parity: "Makes one image of your picture's parts, each one labeled.",
   }),
   // Higgsfield's Virality Predictor (a brain-response model) is the /virality page: a labelled heuristic hook
   // analysis. This app is the "make a stronger opening frame" step it links to.
@@ -1769,17 +1788,19 @@ export const APPS: Preset[] = [
     hue: 95,
     inputs: [{ key: "image", label: "Opening frame", hint: "The first frame of your video", accept: "image", required: true }],
     prompt:
-      "Rework this opening frame into a scroll-stopping hook thumbnail: stronger contrast and color, clearer focal point on the face or product, a more expressive moment and bold composition. Keep the same people, product and setting; add no text.",
+      "Rework this opening frame into a scroll-stopping hook thumbnail: stronger contrast and color, clearer focal point on the face or product, a more expressive moment and bold composition. Keep the same people, product and setting in a clean, purely photographic frame.",
   }),
   app({
-    name: "Similarity Score",
+    // Named for what it does: it takes out logos and recognizable IP (Fuobe has no detector to score similarity).
+    id: "app-similarity-score",
+    name: "IP Cleanup",
     category: "Utility",
     description: "Clean up logos and recognizable IP before posting",
     icon: "ShieldCheck",
     hue: 160,
     prompt:
       "Make this image safe to publish: replace every visible brand logo, trademark, copyrighted character and recognizable branded design with generic, unbranded equivalents of the same shape and color. Keep everything else — people, composition, lighting — exactly the same.",
-    parity:
-      "Not reproducible: Higgsfield runs an IP-similarity detector and returns a score; Fuobe has no detector, so this app removes likely IP instead",
+    // The reference scores IP similarity with a detector; Fuobe has none, so this app removes likely IP instead.
+    parity: "Finds logos and recognizable characters and replaces them with unbranded ones of the same shape and color.",
   }),
 ];

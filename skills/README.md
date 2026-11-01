@@ -39,6 +39,35 @@ Files are read from disk at run time (`src/server/skills.ts`), so editing one he
 on the next request. People add their own skills on the Skills page, by uploading a `.zip`,
 `.skill` or `SKILL.md` file, or with `fuobe skills add`; those live in the database, not here.
 
+## Skills that run by themselves (`recipe.json`)
+
+A skill of your own can carry a `recipe.json` next to its `SKILL.md`. `SKILL.md` stays the playbook
+people and agents read; the recipe is the part Fuobe runs by itself, with new inputs and no chat or
+AI. The format is in `src/lib/recipe.ts` (and `docs/research/work2skill-7.md`):
+
+- `fuobeRecipe: 1`, then `params`: up to 12 typed inputs (`image`, `video`, `audio`, `text`, `number`,
+  `choice` or `element`), each with an id, a label and optional limits, options and a hint.
+- `steps`: up to 24 `generate` steps (a generation request each, waiting for earlier steps with `after`
+  and taking their results with `chain`), or one `tool` step that calls a studio's Assist tool
+  (`dub_video`, `katana`, `add_captions`…). A string that is exactly `"{{id}}"` takes that input as it
+  is; `{{id}}` inside longer text puts the input's text there. An unknown or unused placeholder is
+  refused when the recipe is saved.
+- Optional `checks` per step (what it makes, how many, the shape, the length, sound, a sentence about
+  the look) and `source` (where the recipe came from).
+
+The easiest way to write one is not to: **Make a skill from this…** on a result, or **Make a skill**
+in the Library, builds the recipe from the steps behind your results, and you pick which inputs change.
+
+A recipe runs on an engine only after a free check has passed there: Fuobe plans and prices every
+step. The check also does a dry run on demo mode's mock provider (not for a studio tool step), but a
+run doesn't wait for it. A retired, switched-off or repriced model asks for a new check. Fuobe
+writes the `verified` dates itself: an uploaded `recipe.json` loses them and starts unchecked, and a
+downloaded `.zip` leaves out this install's checks (and, unless you ask, the examples and where the
+recipe came from). The built-in skills here carry no recipe and can't be checked: duplicate one
+first. `draft` is now a reserved skill name, as `upload` and `new` are. The Run form, runs of up to
+50 CSV rows and ⌘K's "Run a skill" are in **Assist → Skills**; the recipe's routes are under
+`/api/assist/skills/[name]/` (`recipe`, `estimate`, `run`, `verify`).
+
 ## Installing them in other agents
 
 The open `skills` CLI finds these folders (and `.agents/skills/fuobe`, the skill that teaches an

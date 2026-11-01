@@ -99,7 +99,24 @@ export const PromptInput = forwardRef<
     // Mount only: afterwards the field and the draft move together.
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The "@" (and the space before it) that the @ button put in, while nothing was picked or typed after it.
+  const started = useRef<{ at: number; len: number } | null>(null);
+  const latest = useRef(value);
+  useLayoutEffect(() => {
+    latest.current = value;
+  });
+  /** The @ button's "@" left alone (Escape, or a click elsewhere): taken out again, so the prompt isn't left with a stray "@". */
+  const dropBareMention = () => {
+    const s = started.current;
+    started.current = null;
+    const v = latest.current;
+    if (!s || v.slice(s.at + s.len - 1, s.at + s.len) !== "@" || /\S/.test(v[s.at + s.len] ?? " ")) return;
+    onChange(v.slice(0, s.at) + v.slice(s.at + s.len));
+    setCaret(s.at);
+  };
+
   const insert = (el: StudioElement) => {
+    started.current = null;
     if (!mention) return;
     const end = caret ?? value.length;
     const next = `${value.slice(0, mention.start)}@${el.handle} ${value.slice(end)}`;
@@ -120,6 +137,7 @@ export const PromptInput = forwardRef<
       const needsSpace = at > 0 && !/\s/.test(value[at - 1] ?? "");
       const next = `${value.slice(0, at)}${needsSpace ? " " : ""}@${value.slice(at)}`;
       const pos = at + (needsSpace ? 2 : 1);
+      started.current = { at, len: needsSpace ? 2 : 1 };
       onChange(next);
       setDismissed(null);
       requestAnimationFrame(() => {
@@ -147,7 +165,12 @@ export const PromptInput = forwardRef<
         }}
         onSelect={syncCaret}
         onClick={syncCaret}
-        onBlur={() => setTimeout(() => setCaret(null), 120)}
+        onBlur={() =>
+          setTimeout(() => {
+            setCaret(null);
+            if (document.activeElement !== ta.current) dropBareMention();
+          }, 120)
+        }
         onScroll={(e) => {
           if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop;
         }}
@@ -167,8 +190,11 @@ export const PromptInput = forwardRef<
           if (open && e.key === "Escape") {
             e.preventDefault();
             setDismissed(mention!.start);
+            dropBareMention();
             return;
           }
+          // Anything typed after the @ button's "@" is the visitor's own: it stays.
+          if (e.key.length === 1 || e.key === "Backspace") started.current = null;
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             onSubmit();

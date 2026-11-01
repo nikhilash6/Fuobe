@@ -46,8 +46,6 @@ import { cloudMaskCut, frozenTakePlan, planAnchor, planAssembly, planMask, planN
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { createPipeline } from "./chains";
-import { asSystem, runAs, type Actor } from "./access/actor";
-import { AccountOffError, ownerActor, rowOwner } from "./access/permissions";
 import { db } from "./db";
 import { cancelGeneration, getGeneration, previewChained } from "./generations";
 import { isOffered, offeredLoras } from "./model-access";
@@ -327,30 +325,9 @@ function settle(p: SwapProject, look: Look): SwapProject {
   return clips.some((c, i) => c !== p.clips[i]) ? { ...p, clips } : p;
 }
 
-/** Every take still waiting stops, saying why: it never launches (its project's owner was turned off). */
-function stopWaiting(p: SwapProject, reason: string): SwapProject {
-  if (!takesOf(p).some((t) => t.state === "waiting")) return p;
-  const stop = (t: SwapTake): SwapTake => (t.state === "waiting" ? { ...t, state: "stopped", reason, waitsOn: undefined } : t);
-  return { ...p, clips: p.clips.map((c) => ({ ...c, shots: c.shots.map((s) => (s.segments ? { ...s, segments: s.segments.map((g) => ({ ...g, takes: g.takes.map(stop) })) } : s)) })) };
-}
-
-/**
- * Read a project and bring it up to date (saved when anything changed). Waiting takes launch as the person who started
- * the project, whoever's read (the page's poll, the sweep) noticed they could; when that person is turned off they stop
- * with the reason instead, so nothing launches for them and the sweep lets the project go.
- */
+/** Read a project and bring it up to date (saved when anything changed). */
 export function advanceProject(id: string): SwapProject {
-  const row = rowOf(id);
-  if (!row) return mustProject(id);
-  let owner: Actor;
-  try {
-    owner = ownerActor(rowOwner(row));
-  } catch (e) {
-    if (!(e instanceof AccountOffError)) throw e;
-    const reason = e.message;
-    return mutate(id, (p) => settle(stopWaiting(p, reason), lookup()));
-  }
-  return runAs(owner, () => mutate(id, (p) => settle(p, lookup())));
+  return mutate(id, (p) => settle(p, lookup()));
 }
 
 declare global {
@@ -368,7 +345,6 @@ export function ensureSwapStudioRunner(): void {
       const rows = db().prepare("SELECT id FROM swap_projects WHERE waiting > 0").all() as { id: string }[];
       for (const r of rows) {
         try {
-          // Waiting takes launch as the person who started the project (or stop, saying why, when they're off).
           advanceProject(r.id);
         } catch (e) {
           console.error(`[swap-studio] ${r.id}:`, (e as Error).message);
@@ -378,12 +354,9 @@ export function ensureSwapStudioRunner(): void {
       console.error("[swap-studio] sweep:", (e as Error).message);
     }
   };
-  // The server's timers, whichever request started them; each project then advances as its owner.
-  asSystem(() => {
-    globalThis.__fuobeSwapStudioRunner = setInterval(tick, 3000);
-    globalThis.__fuobeSwapStudioRunner.unref?.();
-    setTimeout(tick, 500).unref?.();
-  });
+  globalThis.__fuobeSwapStudioRunner = setInterval(tick, 3000);
+  globalThis.__fuobeSwapStudioRunner.unref?.();
+  setTimeout(tick, 500).unref?.();
 }
 
 // ---------------------------------------------------------------------------

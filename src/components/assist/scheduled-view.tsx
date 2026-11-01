@@ -23,11 +23,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useNow } from "@/components/studio/use-now";
 import { describeRule, formatWhen, untilText, zoneLabel, type ScheduleResult, type ScheduleView } from "@/lib/assist-schedule";
+import { useIsOwner, useIsVisitor } from "@/lib/api";
 import { formatCost, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useProjects, useScheduleActions, useSchedules } from "./hooks";
 import { ScheduleDialog } from "./schedule-dialog";
 import { ProjectDot, RailButton } from "./shell";
+import { AssistVisitorNote } from "./visitor-note";
 
 const RESULT: Record<ScheduleResult["status"], { icon: typeof Clock; tone: string }> = {
   running: { icon: Loader2, tone: "text-brand-text" },
@@ -46,6 +49,9 @@ export function ScheduledView({ projectId }: { projectId?: string } = {}) {
   const schedules = useSchedules(projectId);
   const [creating, setCreating] = useState(false);
   const list = schedules.data ?? [];
+  // A guest or an account (public sign-up): scheduled tasks are the owner's, so nothing to schedule.
+  const owner = useIsOwner();
+  const visitor = useIsVisitor();
 
   return (
     <div className={cn("flex min-w-0 flex-col", !projectId && "min-h-svh")}>
@@ -54,19 +60,24 @@ export function ScheduledView({ projectId }: { projectId?: string } = {}) {
           <SidebarTrigger className="md:hidden" />
           <RailButton />
           <h1 className="font-heading text-[22px] leading-none">Scheduled</h1>
-          <div className="ml-auto">
-            <Button size="sm" onClick={() => setCreating(true)}>
-              <Plus /> <span className="hidden sm:inline">Schedule a task</span>
-              <span className="sm:hidden">New</span>
-            </Button>
-          </div>
+          {owner && (
+            <div className="ml-auto">
+              <Button size="sm" onClick={() => setCreating(true)}>
+                <Plus /> <span className="hidden sm:inline">Schedule a task</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            </div>
+          )}
         </header>
       )}
       <div className={cn("w-full max-w-[900px] min-w-0 flex-1 px-3 pb-16 sm:px-6", projectId ? "pt-2" : "pt-4 md:pt-8")}>
         {!projectId ? (
-          <p className="max-w-2xl text-[15px] text-pretty text-muted-foreground">
-            Prompts that run by themselves — daily ad variations, a weekly competitor scan, a content calendar. Each run is a new chat; it asks before spending unless you let it run within a cap.
-          </p>
+          <>
+            <p className="max-w-2xl text-[15px] text-pretty text-muted-foreground">
+              Prompts that run by themselves — daily ad variations, a weekly competitor scan, a content calendar. Each run is a new chat; it asks before spending unless you let it run within a cap.
+            </p>
+            <AssistVisitorNote className="mt-4 max-w-2xl" />
+          </>
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[13px] text-muted-foreground">Runs here follow the project&apos;s instructions and sources.</p>
@@ -96,14 +107,26 @@ export function ScheduledView({ projectId }: { projectId?: string } = {}) {
                 <EmptyMedia variant="icon">
                   <CalendarClock />
                 </EmptyMedia>
-                <EmptyTitle>No scheduled tasks yet</EmptyTitle>
-                <EmptyDescription>Schedule a prompt here, or with the Schedule button in any chat. You choose whether each run asks you first.</EmptyDescription>
+                {/* A visitor can't schedule (the note above says why); nothing until it's known who's looking, so neither text flashes. */}
+                {owner ? (
+                  <>
+                    <EmptyTitle className="font-heading text-[22px] font-normal">No scheduled tasks yet</EmptyTitle>
+                    <EmptyDescription>Schedule a prompt here, or with the Schedule button in any chat. You choose whether each run asks you first.</EmptyDescription>
+                  </>
+                ) : visitor ? (
+                  <>
+                    <EmptyTitle className="font-heading text-[22px] font-normal">Schedules belong to the owner</EmptyTitle>
+                    <EmptyDescription>The studio&apos;s owner sets Assist&apos;s scheduled tasks here, and they stay private to them.</EmptyDescription>
+                  </>
+                ) : null}
               </EmptyHeader>
-              <EmptyContent>
-                <Button size="sm" onClick={() => setCreating(true)}>
-                  <Plus /> Schedule a task
-                </Button>
-              </EmptyContent>
+              {owner && (
+                <EmptyContent>
+                  <Button size="sm" onClick={() => setCreating(true)}>
+                    <Plus /> Schedule a task
+                  </Button>
+                </EmptyContent>
+              )}
             </Empty>
           )}
         </div>
@@ -129,7 +152,7 @@ function TaskRow({ s, showProject }: { s: ScheduleView; showProject: boolean }) 
     try {
       await fn();
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }

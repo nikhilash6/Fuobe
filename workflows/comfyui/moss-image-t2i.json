@@ -12,12 +12,12 @@
   "2": {
     "class_type": "CLIPLoader",
     "inputs": {
-      "clip_name": "qwen3.5_9b_w4a8_gptq.safetensors",
+      "clip_name": "qwen3.5_9b_int8_convrot.safetensors",
       "type": "moss_image",
       "device": "default"
     },
     "_meta": {
-      "title": "Qwen3.5-9B text encoder (w4a8)"
+      "title": "Qwen3.5-9B text encoder (int8)"
     }
   },
   "3": {

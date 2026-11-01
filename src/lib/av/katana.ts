@@ -41,7 +41,10 @@ export const MOTION_MODELS: Record<Engine, MotionModel[]> = {
   ],
 };
 
-export const KEYFRAME_MODEL: Record<Engine, string> = { cloud: "nano-banana-pro", open: "oss-qwen-edit" };
+/** The keyframe edit: Nano Banana Pro in the cloud; on your GPU Qwen-Image 2.1 Turbo (8 steps, up to 4 images). */
+export const KEYFRAME_MODEL: Record<Engine, string> = { cloud: "nano-banana-pro", open: "oss-qwen-image-21-turbo" };
+/** Your photos the open keyframe edit takes beside the frame (Qwen-Image 2.1 Turbo: the frame and three photos). */
+export const OPEN_KEYFRAME_PHOTOS = 3;
 
 /** Katana's earlier open motion model, now Fuobe Genjutsu's Original (a saved job or an API call may still name it). */
 export const RETIRED_MOTION_MODELS: Record<string, string> = { "oss-wan22-animate": "fuobe-genjutsu-motion" };
@@ -230,8 +233,8 @@ export function katanaSteps(o: KatanaInput): KatanaStep[] {
     // The keyframe a few frames in on the open engine (frame accurate); the cloud tool takes the first frame.
     const pick = o.engine === "open" ? { at: KEYFRAME_OFFSET } : ("first" as const);
     steps.push({ key: `frame${i}`, after: `cut${i}`, chain: [{ slot: "video" }], request: { ...base, modelId: FRAME_MODEL[o.engine], op: "frame", params: frameParams(o.engine, pick), step: label("first frame") } });
-    // Your subject in that frame (Qwen-Image-Edit takes up to 3 images: the frame and two photos).
-    const photos = o.engine === "open" ? o.photos.slice(0, 2) : o.photos;
+    // Your subject in that frame (Qwen-Image 2.1 Turbo takes up to 4 images: the frame and three photos).
+    const photos = o.engine === "open" ? o.photos.slice(0, OPEN_KEYFRAME_PHOTOS) : o.photos;
     steps.push({ key: `key${i}`, after: `frame${i}`, chain: [{ slot: "images", position: "first" }], request: { ...base, modelId: KEYFRAME_MODEL[o.engine], op: "edit", prompt: keyframePrompt(o.instructions, photos.length), inputs: { images: photos }, step: label("your subject") } });
     // Open models render as long as they're told (Wan Fun Control defaults to 81 frames ≈ 5 s): ask for the segment's length.
     // The engine is named: a Fuobe Original (Genjutsu's motion) runs on both.

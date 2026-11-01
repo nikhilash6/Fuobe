@@ -19,7 +19,7 @@ export function SetupCode({ setup, onPaste }: { setup: GenjutsuSetup; onPaste: (
   const [text, setText] = useState("");
   const copy = async () => {
     const link = `${window.location.origin}/genjutsu?setup=${encodeSetup(setup)}`;
-    if (await copyText(link)) toast("Setup copied", { description: "A link with this mode, model and references — paste it here, or send it to someone on this Fuobe." });
+    if (await copyText(link)) toast("Setup copied", { description: "A link with this mode, model and references — paste it here, or send it to someone on this site." });
     else toast.error("Couldn't copy — your browser blocked the clipboard");
   };
   const paste = () => {

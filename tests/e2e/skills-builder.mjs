@@ -163,7 +163,7 @@ try {
         const run = page.getByRole("dialog");
         check(`${tagLine}: the Run form has the words it was made from`, (await run.getByRole("textbox").first().inputValue()) === words.still, title);
         await run.getByRole("textbox").first().fill(`${tag} green ceramic vase, studio light`);
-        check(`${tagLine}: the run is priced first`, await seen(run.getByText(/Demo — no provider connected|Free on your GPU|on Cloud/), 30_000));
+        check(`${tagLine}: the run is priced first`, await seen(run.getByText(/Placeholder · free|Free on your GPU|on Cloud/), 30_000));
         await run.getByRole("button", { name: /^Run/ }).click();
         check(`${tagLine}: Run starts it`, await seen(page.getByText("Started the run"), 30_000));
         const r = await api("GET", "/api/generations?limit=50&steps=1");

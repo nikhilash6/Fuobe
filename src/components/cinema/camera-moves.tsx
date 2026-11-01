@@ -1,103 +1,30 @@
 "use client";
 
-import { ArrowDownAZ, Check, Hash, ListOrdered, X } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import dynamic from "next/dynamic";
+import { Check, Hash, Loader2, X } from "lucide-react";
+import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { CAMERA_MOVES, cinemaMoveRoute, moveBySlug, type CameraMove } from "@/lib/catalog/cinema";
+import { moveBySlug } from "@/lib/catalog/cinema";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 
-/** Name matches first (prefix, then word start, then anywhere), the slug and the hint after. */
-function moveScore(value: string, search: string, keywords?: string[]): number {
-  const q = search.trim().toLowerCase();
-  if (!q) return 1;
-  const name = value.toLowerCase();
-  if (name.startsWith(q)) return 1;
-  if (name.split(/\s+/).some((w) => w.startsWith(q))) return 0.9;
-  if (name.includes(q)) return 0.8;
-  const [slug = "", hint = ""] = (keywords ?? []).map((k) => k.toLowerCase());
-  if (slug.includes(q.replace(/\s+/g, "-"))) return 0.6;
-  return hint.includes(q) ? 0.2 : 0;
-}
+/**
+ * The camera moves list, with each move's cover (move-list.tsx): its own chunk, with the covers map and the clip
+ * player, loaded when the "#" picker or the Director panel's Movement tab shows it rather than with every Cinema
+ * Studio page.
+ */
+export const MoveList = dynamic(() => import("./move-list").then((m) => m.MoveList), {
+  loading: () => (
+    <div className="grid h-40 place-items-center" role="status" aria-label="Loading camera moves">
+      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+    </div>
+  ),
+});
 
-/** How Fuobe Cinema drives a move on this engine, given a start frame (a small badge in the picker). */
-function routeBadge(m: CameraMove, engine: Engine, civitai?: boolean): string | null {
-  const r = cinemaMoveRoute(m.slug, engine, true, { civitai });
-  return r.via === "camera-lora" ? "Camera LoRA" : r.via === "lora" ? "LoRA" : r.via === "fun-camera" ? "Fun Camera" : r.via === "hosted-move" ? "Focus move" : null;
-}
+/** Load the moves list ahead, once a move is likely: a video prompt being typed, the # button or Movement tab pointed at. */
+export const prefetchMoves = () => void import("./move-list");
 
-export function MoveList({
-  engine,
-  badges = true,
-  civitai,
-  selected,
-  onPick,
-  defaultQuery,
-  autoFocus,
-}: {
-  engine: Engine;
-  /** Say how Fuobe Cinema drives each move (off when a partner model gets the moves in words). */
-  badges?: boolean;
-  /** A civitai key is set (false: a cloud move whose LoRA downloads from civitai runs on its words, so no badge). */
-  civitai?: boolean;
-  selected: string[];
-  onPick: (slug: string) => void;
-  /** What was typed after "#" in the prompt (the list mounts fresh each time the picker opens). */
-  defaultQuery?: string;
-  autoFocus?: boolean;
-}) {
-  const [sort, setSort] = useState<"default" | "name">("default");
-  const [query, setQuery] = useState(defaultQuery ?? "");
-  const moves = useMemo(() => (sort === "name" ? [...CAMERA_MOVES].sort((a, b) => a.name.localeCompare(b.name)) : CAMERA_MOVES), [sort]);
-  return (
-    <Command loop className="bg-transparent" filter={moveScore}>
-      <div className="flex items-center gap-1 pr-1">
-        <div className="min-w-0 flex-1">
-          <CommandInput placeholder="Search camera moves…" value={query} onValueChange={setQuery} autoFocus={autoFocus} />
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => setSort((s) => (s === "default" ? "name" : "default"))}
-              className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
-              aria-label={sort === "default" ? "Sort by name" : "Default order"}
-            >
-              {sort === "default" ? <ArrowDownAZ className="size-4" /> : <ListOrdered className="size-4" />}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>{sort === "default" ? "Sort: Name (A–Z)" : "Sort: Default"}</TooltipContent>
-        </Tooltip>
-      </div>
-      <CommandList className="max-h-[min(52vh,360px)]">
-        <CommandEmpty>No camera moves match your search</CommandEmpty>
-        <CommandGroup>
-          {moves.map((m) => {
-            const badge = badges ? routeBadge(m, engine, civitai) : null;
-            const n = selected.indexOf(m.slug);
-            return (
-              <CommandItem key={m.slug} value={m.name} keywords={[m.slug, m.hint]} onSelect={() => onPick(m.slug)} className="group/move items-start gap-2.5 py-2">
-                <span className={cn("mt-0.5 grid size-6 shrink-0 place-items-center rounded-md text-[11px] font-semibold", n >= 0 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-                  {n >= 0 ? n + 1 : <Hash className="size-3" />}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5 text-[13px] font-medium">
-                    {m.name}
-                    {badge && <span className="rounded-full bg-brand-faint px-1.5 py-px text-[10px] font-medium text-brand-text">{badge}</span>}
-                  </span>
-                  <span className="block text-[12px] leading-snug text-muted-foreground">{m.hint}</span>
-                </span>
-                <span className="mt-0.5 shrink-0 text-[11px] font-medium text-brand-text opacity-0 group-data-[selected=true]/move:opacity-100">Use</span>
-              </CommandItem>
-            );
-          })}
-        </CommandGroup>
-      </CommandList>
-    </Command>
-  );
-}
 
 /** "#" picker: opens from the # button or when "#" is typed in the prompt; several moves per shot, in order. */
 export function MovePicker({
@@ -130,6 +57,8 @@ export function MovePicker({
               selected.length ? "bg-brand-faint text-brand-text hover:bg-brand-faint-hover" : "bg-secondary text-secondary-foreground hover:bg-accent",
             )}
             aria-label="Add a camera move"
+            onPointerEnter={prefetchMoves}
+            onFocus={prefetchMoves}
           >
             <Hash className="size-3.5" />
           </button>

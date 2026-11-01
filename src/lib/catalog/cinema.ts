@@ -1,6 +1,7 @@
 import { DEFAULT_MOTION, PATH_FPS, PATH_FRAMES, normalizeKeys, toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { APERTURE, LENS, anglesNote, poseWords, recomposePrompt, type ScenePose } from "@/lib/scene3d";
 import { getModel, getPreset } from "./index";
+import { plannedDurations } from "./clip-lengths";
 import { DOP_MODEL, LTX25_HOSTED } from "./dop";
 import { dualEngine, onEngine } from "./engines";
 import { localOnly, needsToken, triggerOf } from "./loras";
@@ -430,7 +431,7 @@ export const PALETTES: CinemaPalette[] = [
   { name: "Favela Gold", slug: "favela-gold", hex: ["#0a0807", "#563322", "#464969", "#57594d", "#765636", "#586f93", "#867b7e", "#aca389", "#85b1f7", "#acb4b5", "#f3f7f3", "#d3ac74"] },
   { name: "A Hotel for One", slug: "a-hotel-for-one", hex: ["#07070c", "#1f1414", "#362e25", "#094b27", "#494b4b", "#2c5354", "#584e3c", "#686664", "#423b30", "#314041", "#4f3a2f", "#101821"] },
   { name: "After Dark", slug: "after-dark", hex: ["#0a090c", "#651113", "#1d2d6c", "#794f3d", "#575a67", "#118d65", "#5b8aa0", "#a99a93", "#ba9569", "#919faf", "#cfcbc6", "#1d1885"] },
-  { name: "Crimson Vigi", slug: "crimson-vigi", hex: ["#0b080a", "#483125", "#98261c", "#654f46", "#4870ca", "#926b51", "#e95531", "#bf9982", "#f0854a", "#fec17b", "#dbd6d4", "#c72f1f"] },
+  { name: "Crimson Vigil", slug: "crimson-vigi", hex: ["#0b080a", "#483125", "#98261c", "#654f46", "#4870ca", "#926b51", "#e95531", "#bf9982", "#f0854a", "#fec17b", "#dbd6d4", "#c72f1f"] },
   { name: "The Neighbors Saw Everything", slug: "the-neighbors-saw-everything", hex: ["#0f1116", "#2e1c11", "#644727", "#76554a", "#3b6084", "#646058", "#948676", "#9d9fa4", "#778082", "#6293b2", "#b7bcc9", "#5b3b29"] },
   { name: "The Grey Channel", slug: "the-grey-channel", hex: ["#081214", "#164942", "#494d3e", "#6b533b", "#30706c", "#787b61", "#5b8f82", "#9aa491", "#b1b898", "#a4c8b0", "#e7ddb3", "#cecfa5"] },
   { name: "Mirage at Noon", slug: "mirage-at-noon", hex: ["#0c0b0c", "#403733", "#5d463b", "#7f503e", "#695d5a", "#707e9b", "#a47e70", "#b2a3a1", "#a5b9b3", "#d5ced3", "#f4ddaf", "#954924"] },
@@ -596,11 +597,15 @@ export const CAST_SHEET_MODEL = "oss-zimage-soul-cast";
 
 /**
  * Models offered in the prompt bar, per mode and engine. The first is the default: the Original on both engines.
- * Partner models stay as choices (the Director compiled into the prompt); LTX-2.5 is the open choice with sound.
+ * Partner models stay as choices (the Director compiled into the prompt). MiniMax H3 comes next on both engines (a clip
+ * with its own sound); LTX-2.5 is the other open choice with sound.
  */
 export const CINEMA_MODELS: Record<CinemaMode, Record<Engine, string[]>> = {
-  video: { cloud: [CINEMA_MODEL, "seedance-2-5", "kling-3", "veo-3-1"], open: [CINEMA_MODEL, "oss-ltx25", "oss-wan22-14b"] },
-  image: { cloud: [CINEMA_STILL_MODEL, "nano-banana-pro", "seedream-5-pro"], open: [CINEMA_STILL_MODEL, "oss-z-image-turbo", "oss-qwen-image"] },
+  video: {
+    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-3", "veo-3-1", "minimax-h3-max"],
+    open: [CINEMA_MODEL, "oss-minimax-h3", "oss-ltx25", "oss-wan22-14b"],
+  },
+  image: { cloud: [CINEMA_STILL_MODEL, "nano-banana-pro", "seedream-5-pro"], open: [CINEMA_STILL_MODEL, "oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism", "oss-moss-image"] },
 };
 
 /**
@@ -714,7 +719,7 @@ export function gridPrompt(scene: string, size: GridSize, type: GridType): strin
   const { rows, cols } = gridDims(size);
   const t = GRID_TYPES.find((g) => g.id === type) ?? GRID_TYPES[0];
   return [
-    `A cinematic contact sheet: a ${cols}×${rows} grid of ${rows * cols} equally sized film stills separated by thin, straight white gutters, no text, no numbers, no borders around the sheet`,
+    `A cinematic contact sheet: a ${cols}×${rows} grid of ${rows * cols} equally sized film stills separated by thin, straight white gutters, the grid filling the frame edge to edge, every panel a clean picture of the scene alone`,
     `The panels, in reading order (left to right, top to bottom), show ${t.instruction}`,
     `Same characters, wardrobe, location, lighting and colour grade in every panel`,
     `Scene: ${tidy(scene)}`,
@@ -820,7 +825,7 @@ export function castPrompt(values: CastValues, description?: string): string {
     `Casting turnaround sheet for an original film character${film ? ` in a ${film}` : ""}: a ${who}${looks.length ? `, ${looks.join(", ")}` : ""}`,
     tidy(description) || undefined,
     "Full-body front view, three-quarter view, side profile and back view side by side, plus a close-up portrait of the face, on a seamless neutral studio backdrop with soft, even lighting",
-    "The same person, face and wardrobe in every view; photorealistic, natural skin texture, no text",
+    "The same person, face and wardrobe in every view, the views alone on the backdrop; photorealistic, natural skin texture",
   ]
     .filter(Boolean)
     .join(". ") + ".";
@@ -846,14 +851,14 @@ export const LOCATION_VIEWS: { id: string; name: string; prompt: string; pose: S
   { id: "high", name: "High angle", prompt: "Show the same location from a high angle looking down, as from a crane or a balcony", pose: { horizontal: 0, vertical: 60, zoom: 3 } },
 ];
 
-/** An empty 16:9 set: no people, the place itself is the subject. */
+/** An empty 16:9 set: the place itself is the subject. */
 export function locationPrompt(description: string, settings: DirectorSettings): string {
   const camera = cameraWords(settings, true);
   const palette = paletteWords(settings.palette);
   const light = lightingWords(settings.lighting);
   return [
     `Establishing shot of a film location: ${tidy(description)}`,
-    "An empty set with no people, wide 16:9 composition with depth, production-designed detail, cinematic lighting",
+    "An empty set, the place itself the only subject, wide 16:9 composition with depth, production-designed detail, cinematic lighting",
     camera,
     light,
     palette,
@@ -862,7 +867,7 @@ export function locationPrompt(description: string, settings: DirectorSettings):
     .join(". ") + ".";
 }
 
-const LOCATION_KEEP = "Keep everything about the place the same: architecture, props, materials, time of day, lighting and colour grade. No people";
+const LOCATION_KEEP = "Keep everything about the place the same: architecture, props, materials, time of day, lighting and colour grade. The place stands empty";
 
 export function locationViewPrompt(view: string, description?: string): string {
   const v = LOCATION_VIEWS.find((x) => x.id === view) ?? LOCATION_VIEWS[0];
@@ -1289,6 +1294,27 @@ function nearest<T extends number>(values: T[], want: number): T {
 /** Cinema's image tiers on a model whose tiers are 720p / 1080p (Fuobe Soul: about 1 and 2 megapixels). */
 const IMAGE_TIER: Record<string, string> = { "1K": "720p", "2K": "1080p", "4K": "1080p" };
 
+/** A video tier's height in pixels: "720p" and "768P" name theirs, "2K" and "4K" are 1440 and 2160. */
+function tierHeight(label: string): number | undefined {
+  const p = /^(\d{3,4})p$/i.exec(label);
+  if (p) return Number(p[1]);
+  return ({ "2k": 1440, "4k": 2160 } as Record<string, number>)[label.toLowerCase()];
+}
+
+/**
+ * The model's video tier for a Cinema tier: the same one in any case ("1080p" is "1080P"), else the nearest in height,
+ * the higher one on a tie. On MiniMax H3, 720p and 1080p are both its 768P (its 2K is further from 1080p).
+ */
+function videoTier(options: string[], want: string): string | undefined {
+  const h = tierHeight(want);
+  if (h === undefined) return undefined;
+  const sized = options.flatMap((o) => {
+    const oh = tierHeight(o);
+    return oh === undefined ? [] : [{ o, d: Math.abs(oh - h), oh }];
+  });
+  return sized.sort((a, b) => a.d - b.d || b.oh - a.oh)[0]?.o;
+}
+
 /** Fit ratio, resolution, duration and batch to what the model takes, saying what changed. */
 function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[], kind: CinemaMode): GenParams {
   const o = model.options;
@@ -1304,6 +1330,12 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
     else if (IMAGE_TIER[res] && o.resolutions.includes(IMAGE_TIER[res])) {
       params.resolution = IMAGE_TIER[res];
       if (res === "4K") notes.push(`${model.name} makes up to about 2 megapixels (its ${params.resolution} size)`);
+    } else if (kind === "video" && videoTier(o.resolutions, res)) {
+      const tier = videoTier(o.resolutions, res)!;
+      params.resolution = tier;
+      if (tier.toLowerCase() !== res.toLowerCase()) {
+        notes.push(tierHeight(tier)! < tierHeight(res)! ? `${model.name} renders up to ${tier} here` : `${model.name} renders at ${tier} here`);
+      }
     } else {
       const order = kind === "video" ? VIDEO_RESOLUTIONS : [...IMAGE_RESOLUTIONS, "0.5K", "1.5K", "720p", "1080p"];
       const below = o.resolutions.filter((r) => order.indexOf(r) <= order.indexOf(res) && order.indexOf(r) >= 0);
@@ -1313,7 +1345,7 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
   }
   if (kind === "video" && model.kind === "video") {
     const want = Math.max(DURATION.min, Math.min(DURATION.max, Math.round(input.duration ?? DURATION.default)));
-    const allowed = o.durations;
+    const allowed = plannedDurations(model);
     // Fuobe Cinema in the cloud: any whole second; past 20 s planVideo adds an extend for the rest.
     if (anyLength(model)) params.duration = Math.min(want, CINEMA_MAX_SECONDS);
     else {
@@ -1394,15 +1426,15 @@ function label(steps: CinemaStep[], labels: Record<string, string>): CinemaStep[
 
 /**
  * Reference clips on the cloud default: Fuobe Cinema takes none yet (research studios[cinema-studio].original
- * .referenceClips), so a take that carries some runs on the first partner model in the menu that takes them all
- * (Seedance 2.5). A model picked from the menu stays, and clipInputs says what it leaves out.
+ * .referenceClips), so a take that carries some runs on the first partner model in the menu that takes them all, as
+ * many as were added (MiniMax H3 takes 3 of each kind, Seedance 2.5 more), else the first that takes their kinds. A
+ * model picked from the menu stays, and clipInputs says what it leaves out.
  */
 function clipModel(model: ModelDef, input: CinemaGenerateInput, notes: string[]): ModelDef {
   const kinds = (["videos", "audios"] as const).filter((k) => !!input[k]?.length);
   if (input.engine !== "cloud" || input.modelId || model.id !== CINEMA_MODEL || !kinds.length || kinds.every((k) => takesClips(model, "ref2v", k))) return model;
-  const instead = CINEMA_MODELS.video.cloud
-    .flatMap((id) => (id === CINEMA_MODEL ? [] : (modelOn(id, "cloud") ?? [])))
-    .find((m) => kinds.every((k) => takesClips(m, "ref2v", k)));
+  const partners = CINEMA_MODELS.video.cloud.flatMap((id) => (id === CINEMA_MODEL ? [] : (modelOn(id, "cloud") ?? []))).filter((m) => kinds.every((k) => takesClips(m, "ref2v", k)));
+  const instead = partners.find((m) => kinds.every((k) => (input[k]?.length ?? 0) <= clipMax(m, k))) ?? partners[0];
   if (!instead) return model;
   notes.push(`${model.name} doesn't take reference clips yet, so this take runs on ${instead.name} (a partner model) with them — pick ${model.name} in the menu to leave them out`);
   return instead;
@@ -1539,17 +1571,29 @@ function planVideo(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
 
 const STILL_CLIPS_NOTE = "Stills use image references — reference videos and audio are left out";
 
-/** What edits a still with references: Qwen-Image-Edit 2511 on the user's GPU, Nano Banana Pro in the cloud. */
+/**
+ * What edits a frame on the user's GPU outside stills and grids (the moment before a take, a take's first frame), and a
+ * location's other view (with the Multiple-Angles LoRA trained on it): Qwen-Image-Edit 2511. Nano Banana Pro in the cloud.
+ */
 function editModel(engine: Engine): ModelDef {
   return getModel(engine === "open" ? "oss-qwen-edit" : "nano-banana-pro")!;
+}
+
+/** What makes a still or a grid with references: Qwen-Image 2.1 on the user's GPU (up to 4), Nano Banana Pro in the cloud. */
+export const STILL_EDIT_MODELS: Record<Engine, string> = { cloud: "nano-banana-pro", open: "oss-qwen-image-21" };
+/** How many references a still or a grid sends, per engine. */
+export const STILL_REFERENCES: Record<Engine, number> = { cloud: 10, open: 4 };
+
+function stillEditModel(engine: Engine): ModelDef {
+  return getModel(STILL_EDIT_MODELS[engine]) ?? editModel(engine);
 }
 
 function planStill(input: CinemaGenerateInput): CinemaPlan {
   const notes: string[] = [];
   let model = pickModel("image", input);
-  const images = (input.images ?? []).slice(0, input.engine === "open" ? 3 : 10);
+  const images = (input.images ?? []).slice(0, STILL_REFERENCES[input.engine]);
   if (images.length && !model.routes.some((r) => r.op === "edit")) {
-    const instead = editModel(input.engine);
+    const instead = stillEditModel(input.engine);
     notes.push(`Stills with references run on ${instead.name}`);
     model = instead;
   }
@@ -1585,10 +1629,10 @@ function planGrid(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
   const has = ctx.has ?? ((id: string) => !!getModel(id));
   const size = input.grid?.size ?? "2x2";
   const type = input.grid?.type ?? "freeform";
-  const images = (input.images ?? []).slice(0, input.engine === "open" ? 3 : 10);
+  const images = (input.images ?? []).slice(0, STILL_REFERENCES[input.engine]);
   let model: ModelDef;
   const extra: Record<string, unknown> = {};
-  if (images.length) model = editModel(input.engine);
+  if (images.length) model = stillEditModel(input.engine);
   else if (input.engine === "open" && has("oss-zimage-grid")) {
     model = getModel("oss-zimage-grid")!;
     const { rows, cols } = gridDims(size);
@@ -1613,8 +1657,14 @@ function planGrid(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
  * words), which also cuts the sheet's four views, else Fuobe Soul alone.
  */
 export const CAST_MODELS: Record<Engine, string[]> = { cloud: [SOUL_BUILDER_MODEL, "nano-banana-pro"], open: [CAST_SHEET_MODEL, SOUL_BUILDER_MODEL] };
-/** Soul Location's makers: Fuobe Soul (the Movie look) on both engines, partner and open alternatives after it. */
-export const LOCATION_MODELS: Record<Engine, string[]> = { cloud: [SOUL_BUILDER_MODEL, "nano-banana-pro", "seedream-5-pro"], open: [SOUL_BUILDER_MODEL, "oss-z-image-turbo", "oss-qwen-image"] };
+/**
+ * Soul Location's makers: Fuobe Soul (the Movie look) on both engines, partner and open alternatives after it. Not Ideogram 4:
+ * its safety filter answers most pictures of a place with no one in it with a grey card.
+ */
+export const LOCATION_MODELS: Record<Engine, string[]> = {
+  cloud: [SOUL_BUILDER_MODEL, "nano-banana-pro", "seedream-5-pro"],
+  open: [SOUL_BUILDER_MODEL, "oss-qwen-image-21", "oss-krea2-realism", "oss-moss-image", "oss-z-image-turbo"],
+};
 
 /** A builder's maker: the one asked for when this engine offers it (and this install has it), else the first. */
 function builderModel(list: string[], input: CinemaGenerateInput, ctx: CinemaContext): ModelDef {
@@ -1833,7 +1883,7 @@ export function editPrompt(change: string, scene?: string): string {
   return `${sc ? `${sc}. The same shot with one change` : "The same shot with one change"}: ${c}. ${keep}.`;
 }
 
-/** A take made on a partner model in the menu (Seedance 2.5, Kling 3.0, Veo 3.1): a partner editor edits it. */
+/** A take made on a partner model in the menu (MiniMax H3, Seedance 2.5, Kling 3.0, Veo 3.1…): a partner editor edits it. */
 const partnerTake = (modelId: string) => modelId !== CINEMA_MODEL && CINEMA_MODELS.video.cloud.includes(modelId);
 
 function planEdit(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
@@ -1908,8 +1958,11 @@ function planEdit(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
 
 /** What builds a still's 3D scene: MoGe 2's textured mesh on the open engine, a Marigold depth map on the cloud. */
 export const SCENE_MODELS: Record<Engine, string> = { cloud: "marigold-depth", open: "oss-scene-moge" };
-/** What re-renders a captured view. The first is the default. */
-export const RECOMPOSE_MODELS: Record<Engine, string[]> = { cloud: ["nano-banana-pro", "qwen-multiple-angles"], open: ["oss-qwen-edit"] };
+/**
+ * What re-renders a captured view. The first is the default. On your GPU that stays Qwen-Image-Edit 2511, which runs it
+ * with the Multiple-Angles LoRA trained on it; Qwen-Image 2.1 is the choice after it, with plain words.
+ */
+export const RECOMPOSE_MODELS: Record<Engine, string[]> = { cloud: ["nano-banana-pro", "qwen-multiple-angles"], open: ["oss-qwen-edit", "oss-qwen-image-21"] };
 /** The open scene mesh skips every other pixel: about a quarter of the triangles, light enough for a phone. */
 export const SCENE_DECIMATION = 2;
 
@@ -1935,15 +1988,14 @@ function planScene(input: CinemaGenerateInput): CinemaPlan {
 const REFERENCE_POSE: ScenePose = { horizontal: 0, vertical: 0, zoom: 5 };
 
 /**
- * Re-render a captured view. Nano Banana Pro (cloud) and Qwen-Image-Edit 2511 with the Multiple-Angles LoRA
- * (open) get the capture as image 1 and the still as image 2. The LoRA turns its input by the angles it is told,
+ * Re-render a captured view. Nano Banana Pro (cloud), Qwen-Image 2.1 and Qwen-Image-Edit 2511 with the Multiple-Angles
+ * LoRA (open) get the capture as image 1 and the still as image 2. The LoRA turns its input by the angles it is told,
  * and the capture already shows the new view, so it is told the reference pose (front view, eye level, medium
  * shot: keep this camera); the flown angles stay on the take. Qwen Multiple Angles on the cloud re-shoots the
  * still itself from the flown camera's angles instead.
  */
 function planRecompose(input: CinemaGenerateInput): CinemaPlan {
   const notes: string[] = [];
-  const open = input.engine === "open";
   const list = RECOMPOSE_MODELS[input.engine];
   const model = getModel(input.modelId && list.includes(input.modelId) ? input.modelId : list[0])!;
   const src = input.source?.kind === "image" ? input.source.url : undefined;
@@ -1958,13 +2010,13 @@ function planRecompose(input: CinemaGenerateInput): CinemaPlan {
     request = { feature: "cinema-recompose", modelId: model.id, op: "edit", prompt: anglesNote(lens, aperture, input.prompt), inputs: src ? { images: [src] } : undefined, params };
     notes.push(`${model.name} re-shoots the still from the angles you flew to (${Math.round(pose.horizontal)}° round, ${Math.round(pose.vertical)}° up, zoom ${pose.zoom}) — the capture itself isn't sent`);
   } else {
-    const loras = open ? [ANGLES_2511_LORA] : undefined;
+    const loras = model.id === "oss-qwen-edit" ? [ANGLES_2511_LORA] : undefined;
     const words = recomposePrompt(lens, aperture, input.prompt);
     request = {
       feature: "cinema-recompose",
       modelId: model.id,
       op: "edit",
-      prompt: open ? `<sks> ${poseWords(REFERENCE_POSE)}. ${words}` : words,
+      prompt: loras ? `<sks> ${poseWords(REFERENCE_POSE)}. ${words}` : words,
       inputs: src && cap ? { images: [cap.url, src] } : undefined,
       params,
       ...(loras?.length ? { loras } : {}),

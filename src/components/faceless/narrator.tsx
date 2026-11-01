@@ -12,6 +12,7 @@ import { useElements } from "@/lib/api";
 import type { NarratorVoice, PickerData } from "@/lib/catalog/faceless";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { voicePreview, waitFor } from "./hooks";
 
 /** One shared player, so starting a sample stops the one before. */
@@ -51,7 +52,7 @@ function usePlayer() {
       cache.current.set(key, url);
       play(key, url);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setLoading((l) => (l === key ? "" : l));
     }

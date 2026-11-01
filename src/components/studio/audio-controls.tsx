@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
-import { useElements } from "@/lib/api";
+import { useAskBeforeUpload, useElements } from "@/lib/api";
 import type { GenParams, ModelDef } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { fileToSlot, type SlotValue } from "./media-slot";
@@ -69,6 +69,12 @@ export function VoicePicker({
     onChange(c);
     setOpen(false);
   };
+  // Someone whose upload would be refused (a guest, an account with no GPU or key) gets its card, not the file chooser.
+  const askFirst = useAskBeforeUpload();
+  const upload = () => {
+    if (!askFirst()) return file.current?.click();
+    setOpen(false);
+  };
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -82,7 +88,7 @@ export function VoicePicker({
           <Section title="Clone a voice">
             <div className="flex flex-wrap gap-1.5 px-2 pb-1">
               <VoiceRecorder onRecorded={(v) => pick({ kind: "sample", value: v })} />
-              <button type="button" onClick={() => file.current?.click()} className={cn(chip, idle)}>
+              <button type="button" onClick={upload} className={cn(chip, idle)}>
                 <Upload className="size-3.5" /> Upload
               </button>
               <input
@@ -262,7 +268,7 @@ export function DialogueEditor({ model, lines, onChange }: { model: ModelDef; li
             value={l.text}
             onChange={(e) => set(i, { text: e.target.value })}
             rows={1}
-            placeholder={i % 2 ? "…and the reply. Try audio tags like [laughs] or [whispers]" : "What does the first speaker say?"}
+            placeholder={i % 2 ? "…and the reply." : "What does the first speaker say?"}
             className="field-sizing-content max-h-32 min-h-8 flex-1 resize-none bg-transparent py-1 text-[14px] leading-snug outline-none placeholder:text-subtle-foreground"
           />
           <button

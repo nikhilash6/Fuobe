@@ -8,6 +8,7 @@ import { sourceSeconds } from "./clip-windows";
 import { onEngine } from "./engines";
 import { getModel } from "./index";
 import { routesFor } from "./plan";
+import { pricingOn } from "./promo";
 import { SHORTS, SHORTS_ORIGINAL } from "./shorts";
 import type { Engine, ModelDef } from "./types";
 
@@ -75,10 +76,11 @@ export interface RestyleModelInfo {
 
 /**
  * What one unit costs at the resolution the studios ask for. Fuobe Shorts in the cloud bills frames ÷ 16 as seconds:
- * a second of a 30 fps clip, the common case, is shown.
+ * a second of a 30 fps clip, the common case, is shown. Read for the studio pages, prerendered at build time, so the
+ * clock isn't (`now` null by default): a launch-priced model's unit price is unknown there (./promo).
  */
-export function unitPrice(m: ModelDef): number | null {
-  const p = m.pricing;
+export function unitPrice(m: ModelDef, now: number | null = null): number | null {
+  const p = m.pricing && pricingOn(m.pricing, now);
   if (!p) return null;
   const res = resolutionFor(m.id, m.engine) ?? m.defaults?.resolution;
   const usd = (res && p.byResolution?.[res]) || p.usd;

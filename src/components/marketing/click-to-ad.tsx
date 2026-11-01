@@ -11,11 +11,14 @@ import { LogoField } from "@/components/brand/brand-kit-form";
 import { areaCls, ColorList, inputCls } from "@/components/brand/fields";
 import { ImageList } from "@/components/brand/image-list";
 import { AddFromLink, priceText, ProductThumb, UploadProductButton } from "@/components/brand/products";
+import { SelfHostNote } from "@/components/self-host-note";
 import type { SlotValue } from "@/components/studio/media-slot";
-import { uploadFile } from "@/lib/api";
-import { AD_STYLES, END_CARD, KIT_LABELS, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
+import { uploadFile, useLikelyVisitor } from "@/lib/api";
+import { getModel } from "@/lib/catalog";
+import { AD_STYLES, END_CARD, KIT_LABELS, UGC_MODELS, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { endCardPng, renderEndCard, siteLabel, type EndCardInput } from "./end-card";
 import { addRuns, send, useBrand, useEstimate, useProductActions, useProducts, useReadingProduct, useUpdateBrand } from "./hooks";
 import type { ModelInfo } from "./model-info";
@@ -93,7 +96,7 @@ function KitBrand({ brand }: { brand: BrandKit }) {
   }
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<(() => void) | null>(null);
-  const save = (patch: Partial<Pick<BrandKit, "logo" | "colors">>) => update.mutate(patch, { onError: (e) => toast.error((e as Error).message) });
+  const save = (patch: Partial<Pick<BrandKit, "logo" | "colors">>) => update.mutate(patch, { onError: (e) => toastError(e) });
   // Colours typed just before leaving the step still get saved.
   useEffect(() => {
     const t = timer;
@@ -131,7 +134,7 @@ function KitBrand({ brand }: { brand: BrandKit }) {
 /** Click to Ad: product link → product kit → style → a 9:16 ad of up to 12 s with voiceover and captions. */
 export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   const qc = useQueryClient();
-  const { engine, setEngine } = useMarketingEngine();
+  const { engine, setEngine, mode: engineMode } = useMarketingEngine();
   const products = useProducts();
   const { update } = useProductActions();
   // The link is read by AddFromLink's own mutation: follow it by its key.
@@ -150,6 +153,9 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   const [script, setScript] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
   const [busy, setBusy] = useState(false);
+  // A product is saved to the studio's library and an ad doesn't run on an account's own GPU or key yet: a guest or an
+  // account is told so up front, and can't add a product or start one.
+  const visitor = useLikelyVisitor();
   const resultsRef = useRef<HTMLDivElement>(null);
   const product = products.data?.find((p) => p.id === productId) ?? null;
   const brand = useBrand(product?.brandId).data?.brand;
@@ -217,7 +223,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   );
   const est = useEstimate<RunEstimate>("/api/marketing/click-to-ad/estimate", body);
   const blocker = !product ? "Select a product or enter a product URL" : !product.images.length ? `${product.name} has no images` : !desc.trim() ? "Add a description" : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   const writeScript = async () => {
     if (!productId) return;
@@ -225,14 +231,15 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
     try {
       const r = await send<{ script: string; by: "llm" | "rules" }>("/api/marketing/script", "POST", { engine, productId, styleId, presenter: withPresenter, instructions: mode === "custom" ? instructions : undefined });
       setScript(r.script);
-      if (r.by === "rules") toast("Written from your product's facts — connect Claude or Ollama in Settings for livelier scripts", { duration: 4000 });
+      if (r.by === "rules") toast("Written from your product's facts — connect Claude or a local model (Ollama, LM Studio or Unsloth Studio) in Settings for livelier scripts", { duration: 4000 });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setWriting(false);
     }
   };
   const generate = async () => {
+    if (visitor) return;
     if (blocker) return void toast(blocker, { id: "c2a-blocker" });
     setBusy(true);
     try {
@@ -243,7 +250,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
       toast.success("Creating your video", { duration: 1600 });
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -251,20 +258,21 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
 
   return (
     <div className="flex min-h-svh min-w-0 flex-col">
-      <MarketingHeader title="Click to Ad" active="click" engine={engine} onEngine={setEngine} />
+      <MarketingHeader title="Click to Ad" active="click" engine={engine} onEngine={setEngine} selfHostedOnly />
       <div className="mx-auto w-full min-w-0 max-w-[980px] flex-1 space-y-5 px-3 pt-6 pb-20 sm:px-6 sm:pt-10">
         <div className="pb-2 text-center">
           <h2 className="font-heading text-display text-balance">Make a video ad in one click</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">Drop a product link, get a 9:16 ad with voiceover and captions — ready for TikTok, Reels and Shorts. No filming, no editing, no brief.</p>
+          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Click to Ad runs on a self-hosted Fuobe for now.</SelfHostNote>}
         </div>
 
         <Step n={1} title="Your product" hint="Paste the product's own page, or pick one you saved." done={!!product}>
-          <AddFromLink limit={1} withBrand placeholder="https://yourshop.com/products/…" onAdded={(ps, extra) => ps[0] && choose(ps[0], extra.brand)} />
+          <AddFromLink limit={1} withBrand placeholder="https://yourshop.com/products/…" onAdded={(ps, extra) => ps[0] && choose(ps[0], extra.brand)} disabled={visitor} />
           {reading && <KitProgress />}
           <div className="mt-5">
             <div className="mb-2 flex items-center justify-between gap-2">
               <p className="text-[12px] font-medium text-muted-foreground">Or select your product</p>
-              <UploadProductButton variant="ghost" onSaved={(p) => choose(p)} />
+              <UploadProductButton variant="ghost" onSaved={(p) => choose(p)} disabled={visitor} />
             </div>
             {products.data?.length ? (
               <div className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -431,7 +439,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
                 {est.data?.steps.length ? ` · ${est.data.steps.length} steps` : ""}
               </p>
               {cost && <span className="font-mono text-[13px] text-muted-foreground">{cost}</span>}
-              <Button size="lg" onClick={() => void generate()} aria-disabled={!!blocker || busy} className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")} title={blocker}>
+              <Button size="lg" onClick={() => void generate()} disabled={visitor} aria-disabled={!!blocker || busy} className={cn(blocker && "bg-muted text-muted-foreground hover:bg-muted")} title={blocker}>
                 {busy ? <Loader2 className="animate-spin" /> : <Wand2 />} Generate video
               </Button>
             </div>
@@ -439,7 +447,8 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
           </Step>
         )}
 
-        <div ref={resultsRef} className="scroll-mt-28 pt-6">
+        {/* A guest or an account has no video ads here and can't make one (the note at the top says why). */}
+        <div ref={resultsRef} className={cn("scroll-mt-28 pt-6", visitor && "hidden")}>
           <h2 className="mb-4 font-heading text-[24px]">Your video ads</h2>
           <RunsList
             feature="click-to-ad"
@@ -452,7 +461,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
           />
         </div>
         <p className="flex items-center justify-center gap-1.5 pt-4 text-[12px] text-muted-foreground">
-          <Sparkles className="size-3" /> Cloud: Seedance 2.5 shots or an OmniHuman presenter, ElevenLabs voice, Auto Subtitle · Open source: Wan 2.2, InfiniteTalk, Chatterbox (your voice sample), caption burn-in
+          <Sparkles className="size-3" /> {engineMode === "open" ? "" : "Cloud: Seedance 2.5 shots or an OmniHuman presenter, ElevenLabs voice, Auto Subtitle · "}Open source: {getModel(UGC_MODELS.open.clip)?.name}, InfiniteTalk, Chatterbox (your voice sample), caption burn-in
         </p>
       </div>
     </div>

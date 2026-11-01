@@ -55,7 +55,7 @@ describe("H3 person removal: the plan", () => {
     expect(step("fit").request).toMatchObject({ modelId: "oss-fit-clip", op: "trim", inputs: { video: src.url }, params: { startTime: 2, endTime: 9, fps: PERSON_REMOVAL_FPS, extra: size } });
     expect(step("frame").request).toMatchObject({ modelId: "oss-extract-frame", op: "frame", params: { startTime: 0, extra: { frameIndex: 0 } } });
     expect(step("frame").chain).toEqual([{ slot: "video" }]);
-    expect(step("clean").request).toMatchObject({ modelId: "oss-qwen-edit", op: "edit", params: { seed: 7 } });
+    expect(step("clean").request).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit", params: { seed: 7 }, step: { label: "A clean first frame (Qwen-Image 2.1)" } });
     expect(step("clean").request.prompt).toBe(cleanFramePrompt("Remove the man in the grey shirt"));
     expect(step("clean").request.prompt).toMatch(/^Remove the man in the grey shirt from the picture completely/);
     // The removal reads the fitted part and the clean frame; SAM 3.1 gets the person's words.
@@ -111,6 +111,26 @@ describe("H3 person removal: the graph", () => {
     expect([at(wf, "plan", "window_frames"), at(wf, "plan", "history_frames"), at(wf, "schedule", "steps"), at(wf, "grow_mask", "expand")]).toEqual(["22", "18", 12, 5]);
     expect(wf.save.class_type).toBe("SaveVideo");
     await expect(prepare({ prompt: "" })).rejects.toThrow(/Say what to remove/);
+  });
+
+  it("the clean frame keeps the part's framing: Qwen-Image 2.1 follows image 1's shape, the relay centre-crops it back", async () => {
+    // The planned clean step, bound into its graph with the frame the plan chains in.
+    const clean = planRemoval(input()).steps.find((s) => s.key === "clean")!.request;
+    const route = getModel(clean.modelId)!.routes.find((r) => r.op === clean.op)!;
+    const bound = (await prepareWorkflow(route.endpoint, { prompt: clean.prompt, images: ["frame.png"], ...clean.params } as GenInput, {
+      generationId: "g2",
+      op: clean.op!,
+      upload: async (_d, _t, name) => `up_${name}`,
+      media: (n) => (n === "frame.png" ? { container: "image", width: 1344, height: 736, hasVideo: false, hasAudio: false } : undefined),
+    })).workflow as Graph;
+    // Image 1 is the frame, scaled to 2048 px on its long side, and the latent is made on its own shape (resolution 0):
+    // nothing in the request sets a canvas of its own.
+    expect(bound["10"]).toMatchObject({ class_type: "LoadImage", inputs: { image: "frame.png" } });
+    expect(bound["20"]).toMatchObject({ class_type: "ImageScaleToMaxDimension", inputs: { image: ["10", 0], largest_size: 2048 } });
+    expect(bound["30"]).toMatchObject({ class_type: "TextEncodeQwenImage21", inputs: { resolution: 0 } });
+    // The relay fits the clean frame back to the part's exact size from its centre.
+    const relay = await prepare({ prompt: "the man in the grey shirt" });
+    expect(relay.anchor_fit).toMatchObject({ class_type: "ImageScale", inputs: { image: ["anchor", 0], width: ["dimensions", 0], height: ["dimensions", 1], crop: "center" } });
   });
 
   it("downloads the Person Remover LoRA before it runs", () => {

@@ -1,6 +1,5 @@
 import "server-only";
 import { z } from "zod";
-import { rethrowAccess } from "./access/errors";
 import { RecipeError } from "./recipes";
 import { SkillError } from "./skills";
 
@@ -14,7 +13,6 @@ export const RunBody = z.object({
 
 /** A refusal as JSON: the reason, every problem of a recipe, and the status a SkillError carries. */
 export function recipeFailure(e: unknown): Response {
-  rethrowAccess(e);
   const status = e instanceof SkillError ? e.status : 500;
   return Response.json({ error: (e as Error).message, ...(e instanceof RecipeError && { problems: e.problems }) }, { status });
 }

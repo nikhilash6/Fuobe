@@ -43,17 +43,38 @@ import {
 import { genreInfo, pickerData, type ChannelSettings, type EpisodeSettings, type NarratorVoice, type TimedText } from "@/lib/catalog/faceless";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { probeMedia } from "@/lib/media-probe";
-import { rethrowAccess } from "./access/errors";
-import { rowOwner, runAsOwner } from "./access/permissions";
 import { authEnabled } from "./auth";
 import { db } from "./db";
 import { llmText, llmTextBackend, type LlmImage } from "./enhance";
 import { askLlm, createChannel, createEpisode, deleteChannel, estimateEpisode, FacelessError, getChannel, handle as facelessHandle, listEpisodes, VoiceSchema } from "./faceless";
 import { cancelGeneration, createGenerations, getGeneration, previewGeneration } from "./generations";
+import type { JsonSpec } from "./llm";
 import { fetchRemote, RemoteFetchError } from "./remote-fetch";
 import { engineMode } from "./settings";
 import { readRef, saveFile } from "./storage";
 import { probeWebm } from "./webm-probe";
+
+/** BRIEF_SYSTEM's JSON as a schema, so a local model answers with a brief rather than prose (Claude reads the prompt). */
+const S = { type: "string" };
+const N = { type: "number" };
+const oneOf = (...values: string[]) => ({ type: "string", enum: values });
+const objectOf = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+const BRIEF_SCHEMA: JsonSpec = {
+  name: "style_brief",
+  schema: objectOf({
+    format: S,
+    hook: S,
+    pacing: objectOf({ average_shot_seconds: N, description: S }),
+    shots: { type: "array", items: S },
+    visual_style: objectOf({ medium: S, palette: S, lighting: S, texture: S }),
+    animation_style: oneOf("Fully animated", "Seamless motion video", "Scene by scene video", "Frame by frame"),
+    narration: objectOf({ tone: S, words_per_minute: N, language: S }),
+    music: objectOf({ genre: S, mood: S, energy: oneOf("low", "medium", "high") }),
+    captions: objectOf({ style: S, position: oneOf("top", "center", "bottom") }),
+    aspect_ratio: oneOf("9:16", "16:9"),
+    topic_ideas: { type: "array", items: S, minItems: 5, maxItems: 5 },
+  }),
+};
 
 /*
  * Content Factory on the server: a series (a reference clip, a preset or nothing; the style brief read
@@ -438,12 +459,13 @@ async function writeBrief(id: string): Promise<void> {
         : `The clip couldn't be read (${framesGen?.error ?? wordsGen?.error ?? "no frames or words came back"}). This brief comes from its shape and length — read it again to retry.`;
     } else if (!llmTextBackend()) {
       offline = true;
-      note = "No LLM is connected (Settings → Prompt enhancement), so this brief comes from the clip's shape, length and narration pace.";
+      note = "No LLM is connected (Settings → AI helper), so this brief comes from the clip's shape, length and narration pace.";
     } else {
       const transcript = cues.map((c) => `[${mmss(c.start)}] ${c.text.trim()}`).join("\n");
       const user = briefRequest({ seconds: ref.seconds, width: ref.width, height: ref.height, frames: frames.length, transcript, title: ref.title });
       // A text-only Ollama model can't take pictures: it answers from the words then.
-      const answer = (await llmText(BRIEF_SYSTEM, user, frames)) ?? (frames.length && llmTextBackend() === "ollama" ? await llmText(BRIEF_SYSTEM, user) : null);
+      const json = { json: BRIEF_SCHEMA };
+      const answer = (await llmText(BRIEF_SYSTEM, user, frames, json)) ?? (frames.length && llmTextBackend() === "ollama" ? await llmText(BRIEF_SYSTEM, user, json) : null);
       const parsed = answer ? parseBrief(answer, fallback) : null;
       if (parsed) brief = { ...parsed.brief, ...header };
       else {
@@ -460,11 +482,8 @@ async function writeBrief(id: string): Promise<void> {
   });
 }
 
-/**
- * Moves a reading series on: the steps' progress, then the brief once they're all done. The brief is written as the
- * person who started the series (`owner`), whoever's read happened to notice the steps had finished.
- */
-function advance(id: string, d: SeriesData, owner: string): SeriesData {
+/** Moves a reading series on: the steps' progress, then the brief once they're all done. */
+function advance(id: string, d: SeriesData): SeriesData {
   const a = d.analysis;
   if (!a || a.status !== "reading") return d;
   const gens = Object.values(a.steps).map((g) => getGeneration(g, { includeDeleted: true }));
@@ -473,8 +492,7 @@ function advance(id: string, d: SeriesData, owner: string): SeriesData {
     return { ...d, analysis: { ...a, stage: running?.status === "queued" ? "Waiting for its turn…" : a.stage } };
   }
   if (!writing().has(id)) {
-    const job = Promise.resolve()
-      .then(() => runAsOwner(owner, () => writeBrief(id)))
+    const job = writeBrief(id)
       .catch((e: Error) => {
         patch(id, (cur) => {
           if (cur.analysis?.status === "reading") cur.analysis = { ...cur.analysis, status: "failed", stage: undefined, error: e.message || "Couldn't write the brief" };
@@ -517,7 +535,7 @@ function toView(r: SeriesRow, d: SeriesData): SeriesView {
 
 export function seriesView(id: string): SeriesView {
   const r = mustRow(id);
-  return toView(r, advance(id, dataOf(r), rowOwner(r)));
+  return toView(r, advance(id, dataOf(r)));
 }
 
 /** A new series around a reference (reading starts straight away), a preset (its brief is ready), or nothing yet. */
@@ -875,14 +893,13 @@ export const ReferenceSchema = z.union([
 ]);
 
 /** The faceless API's `{ error }` responses, plus `needsUpload` when a link gave no clip. */
-export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
+export async function handle(fn: () => Promise<Response> | Response, request?: Request): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
-    rethrowAccess(e);
     if (e instanceof NeedsUpload) return Response.json({ error: e.message, needsUpload: true }, { status: e.status });
     return facelessHandle(() => {
       throw e;
-    });
+    }, request);
   }
 }

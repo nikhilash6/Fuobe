@@ -237,6 +237,631 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "AUSBOSS_NODES_CropForInpaint": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE",
+          {
+            "tooltip": "BHWC image or video frames to crop around the mask."
+          }
+        ],
+        "mask": [
+          "MASK",
+          {
+            "tooltip": "White marks the area to inpaint. A multi-frame mask is unioned into one crop window; an empty mask selects the whole image."
+          }
+        ],
+        "context_factor": [
+          "FLOAT",
+          {
+            "default": 1.2,
+            "min": 1,
+            "max": 10,
+            "step": 0.05,
+            "tooltip": "Grows the mask bounding box symmetrically by this factor so the inpainter sees surrounding context."
+          }
+        ],
+        "blend_pixels": [
+          "INT",
+          {
+            "default": 16,
+            "min": 0,
+            "max": 256,
+            "step": 1,
+            "tooltip": "Feather width for pasting the result back: the paste mask is widened by this many pixels and blurred. It never touches the sampling mask (mask_blur softens that). 0 pastes hard."
+          }
+        ],
+        "output_multiple": [
+          "INT",
+          {
+            "default": 8,
+            "min": 1,
+            "max": 128,
+            "step": 1,
+            "tooltip": "Crop and target dimensions are rounded up to a multiple of this so samplers accept them."
+          }
+        ]
+      },
+      "optional": {
+        "target_width": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 8,
+            "tooltip": "Rescale the crop to this width for the sampler; 0 keeps the native crop width (or follows target_height at the crop's aspect ratio)."
+          }
+        ],
+        "target_height": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 8,
+            "tooltip": "Rescale the crop to this height for the sampler; 0 keeps the native crop height (or follows target_width at the crop's aspect ratio)."
+          }
+        ],
+        "mask_grow": [
+          "INT",
+          {
+            "default": 0,
+            "min": -256,
+            "max": 256,
+            "step": 1,
+            "tooltip": "Dilate the sampling mask by this many pixels (negative shrinks) so the inpainter repaints past the drawn edge. Reshapes what gets painted, unlike blend_pixels which only feathers the paste-back."
+          }
+        ],
+        "mask_blur": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 64,
+            "step": 0.5,
+            "tooltip": "Gaussian sigma softening the sampling mask's edge for models that honor soft masks. 0 keeps the hard edge."
+          }
+        ],
+        "invert_mask": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Inpaint the black area instead of the white area — everything outside the drawn region."
+          }
+        ],
+        "context_pixels": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 4096,
+            "step": 8,
+            "tooltip": "Flat extra context in pixels added around the mask box after context_factor's growth."
+          }
+        ],
+        "target_megapixels": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 64,
+            "step": 0.05,
+            "tooltip": "Rescale the crop for the sampler so its area is about this many megapixels — 1.0 suits SDXL-class models, 0 keeps the native crop size. Explicit target_width/height overrides this."
+          }
+        ],
+        "rescale_algorithm": [
+          [
+            "bilinear",
+            "bicubic",
+            "area",
+            "nearest"
+          ],
+          {
+            "default": "bilinear",
+            "tooltip": "Resize filter for the sampler round trip. bilinear is the safe default, bicubic keeps upscales a touch crisper, area suits heavy downscales, nearest never invents pixels."
+          }
+        ],
+        "extend_left": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 8192,
+            "step": 8,
+            "tooltip": "Outpainting: grow the frame this many pixels leftward. The new band is added to the mask and becomes part of the stitched output."
+          }
+        ],
+        "extend_right": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 8192,
+            "step": 8,
+            "tooltip": "Outpainting: grow the frame this many pixels rightward. The new band is added to the mask and becomes part of the stitched output."
+          }
+        ],
+        "extend_up": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 8192,
+            "step": 8,
+            "tooltip": "Outpainting: grow the frame this many pixels upward. The new band is added to the mask and becomes part of the stitched output."
+          }
+        ],
+        "extend_down": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 8192,
+            "step": 8,
+            "tooltip": "Outpainting: grow the frame this many pixels downward. The new band is added to the mask and becomes part of the stitched output."
+          }
+        ],
+        "keep_inside": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "Keep the crop inside the picture. On: the context stops at the picture's edges, so the model sees only real picture. Off: the crop can run past the edges, filled with stretched copies of the edge pixels (the old behavior)."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "mask",
+        "context_factor",
+        "blend_pixels",
+        "output_multiple"
+      ],
+      "optional": [
+        "target_width",
+        "target_height",
+        "mask_grow",
+        "mask_blur",
+        "invert_mask",
+        "context_pixels",
+        "target_megapixels",
+        "rescale_algorithm",
+        "extend_left",
+        "extend_right",
+        "extend_up",
+        "extend_down",
+        "keep_inside"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "AUSBOSS_STITCHER"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "image",
+      "mask",
+      "stitcher"
+    ],
+    "name": "AUSBOSS_NODES_CropForInpaint",
+    "display_name": "Crop For Inpaint 🆎",
+    "description": "Cuts the masked region plus surrounding context out of an image so an inpainter works at native resolution, and emits a stitcher that Stitch Inpaint 🆎 uses to paste the result back seamlessly. The selection can be inverted, grown or shrunk, and edge-softened before cropping; context comes from a growth factor plus optional flat pixels, and stops at the picture's edges unless keep_inside is off. target_megapixels rescales the crop to a sampler-friendly area, and the extend inputs grow the frame itself for outpainting. By default the sampling mask stays hard-edged; feathering lives in a separate blend mask used only while pasting. An empty mask selects the full image and stitches back unchanged.",
+    "python_module": "custom_nodes.ausboss-nodes",
+    "category": "🆎 AusBoss/Inpaint",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "output_tooltips": [
+      "Cropped BHWC region around the mask, sized for the sampler.",
+      "The sampling mask, cropped like the image: the input mask after invert, grow and blur. blend_pixels never feathers it.",
+      "Stitch data for Stitch Inpaint 🆎: canvas, rects, blend mask, scale."
+    ],
+    "search_aliases": [
+      "inpaint crop",
+      "crop and stitch",
+      "context crop",
+      "masked region",
+      "zoom inpaint",
+      "outpaint",
+      "extend image",
+      "ausboss"
+    ]
+  },
+  "AUSBOSS_NODES_ImageCropRotatePad": {
+    "input": {
+      "required": {
+        "image": [
+          [],
+          {
+            "image_upload": true,
+            "tooltip": "Choose or upload an image from ComfyUI's input folder."
+          }
+        ],
+        "rotation_degrees": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": -180,
+            "max": 180,
+            "step": 0.1,
+            "tooltip": "Clockwise rotation applied before crop and padding."
+          }
+        ],
+        "crop_aspect_ratio": [
+          [
+            "free",
+            "source",
+            "1:1",
+            "9:16",
+            "16:9",
+            "2:3",
+            "3:2",
+            "3:4",
+            "4:3",
+            "9:21",
+            "21:9"
+          ],
+          {
+            "default": "free",
+            "tooltip": "Locks crop handles to a ratio; free allows any rectangle."
+          }
+        ],
+        "crop_x": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 65536,
+            "step": 1,
+            "tooltip": "Left edge of the crop in pixels, measured on the rotated image."
+          }
+        ],
+        "crop_y": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 65536,
+            "step": 1,
+            "tooltip": "Top edge of the crop in pixels, measured on the rotated image."
+          }
+        ],
+        "crop_width": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 65536,
+            "step": 1,
+            "tooltip": "0 keeps the full available width."
+          }
+        ],
+        "crop_height": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 65536,
+            "step": 1,
+            "tooltip": "0 keeps the full available height."
+          }
+        ],
+        "pad_left": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 32768,
+            "step": 1,
+            "tooltip": "Fill-color pixels added on the left; padding lands in the output mask."
+          }
+        ],
+        "pad_top": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 32768,
+            "step": 1,
+            "tooltip": "Fill-color pixels added on top; padding lands in the output mask."
+          }
+        ],
+        "pad_right": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 32768,
+            "step": 1,
+            "tooltip": "Fill-color pixels added on the right; padding lands in the output mask."
+          }
+        ],
+        "pad_bottom": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 32768,
+            "step": 1,
+            "tooltip": "Fill-color pixels added on the bottom; padding lands in the output mask."
+          }
+        ],
+        "feather": [
+          "INT",
+          {
+            "default": 24,
+            "min": 0,
+            "max": 4096,
+            "step": 1,
+            "tooltip": "Feathers the mask into kept pixels; the image keeps a hard edge against the fill."
+          }
+        ],
+        "canvas_multiple": [
+          "INT",
+          {
+            "default": 1,
+            "min": 1,
+            "max": 4096,
+            "step": 1,
+            "tooltip": "Makes the width and height divide evenly by this number: padding grows by a few pixels, and a side with no padding is trimmed by a few instead. Some models need sizes divisible by 8, 16 or 32; 1 = off."
+          }
+        ],
+        "fill_color": [
+          "STRING",
+          {
+            "default": "#808080",
+            "tooltip": "Color for rotation voids and padding; accepts #RGB/#RRGGBB hex, R, G, B (0-255 or 0..1 floats), one grayscale number, or a CSS color name. Unparseable values fall back to mid-gray."
+          }
+        ]
+      },
+      "optional": {
+        "resize_to_megapixels": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Resize the output to the megapixel budget below, aspect preserved."
+          }
+        ],
+        "megapixels": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": 0.01,
+            "max": 16,
+            "step": 0.01,
+            "tooltip": "Output pixel budget in megapixels (x 1024x1024, matching the core Scale Image to Total Pixels node)."
+          }
+        ],
+        "resize_method": [
+          [
+            "lanczos",
+            "area",
+            "bicubic",
+            "bilinear",
+            "nearest-exact"
+          ],
+          {
+            "default": "lanczos",
+            "tooltip": "Sampling filter for the resize; lanczos is the sharp default."
+          }
+        ],
+        "resolution_steps": [
+          "INT",
+          {
+            "default": 1,
+            "min": 1,
+            "max": 256,
+            "tooltip": "Rounds each resized dimension to a multiple of this - 8 or 64 keeps VAE-friendly sizes."
+          }
+        ],
+        "stitch_blend": [
+          "INT",
+          {
+            "default": 32,
+            "min": 0,
+            "max": 512,
+            "step": 1,
+            "tooltip": "Ramp of the stitcher's paste, in pixels, into the kept picture: where generated pixels fade over the source. Separate from feather, which shapes the mask itself."
+          }
+        ],
+        "stitch_grow": [
+          "INT",
+          {
+            "default": 0,
+            "min": -256,
+            "max": 256,
+            "step": 1,
+            "tooltip": "Moves the paste boundary before the ramp: positive lets the generation replace a strip of the source next to the seam, negative keeps more of the source."
+          }
+        ],
+        "painted_area": [
+          [
+            "fill",
+            "keep picture"
+          ],
+          {
+            "default": "fill",
+            "tooltip": "What the parts you painted in the MaskEditor are handed on as (see-through parts of a PNG count too). Fill: flat fill, so the model never sees what was there. Keep picture: your picture stays under the paint and only the mask marks it. Pick keep picture when a later step needs what was there, like a denoise under 1."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "rotation_degrees",
+        "crop_aspect_ratio",
+        "crop_x",
+        "crop_y",
+        "crop_width",
+        "crop_height",
+        "pad_left",
+        "pad_top",
+        "pad_right",
+        "pad_bottom",
+        "feather",
+        "canvas_multiple",
+        "fill_color"
+      ],
+      "optional": [
+        "resize_to_megapixels",
+        "megapixels",
+        "resize_method",
+        "resolution_steps",
+        "stitch_blend",
+        "stitch_grow",
+        "painted_area"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "AUSBOSS_STITCHER",
+      "IMAGE",
+      "INT",
+      "INT",
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "image",
+      "mask",
+      "stitcher",
+      "original",
+      "width",
+      "height",
+      "prompt_image"
+    ],
+    "name": "AUSBOSS_NODES_ImageCropRotatePad",
+    "display_name": "Image Crop + Rotate + Pad 🆎",
+    "description": "Loads an image and applies one visual rotate, crop, and pad transform. The mask marks what to paint: new padding, the corners a turn leaves empty, and see-through parts of the picture (less than 90% solid), which are filled like the padding unless painted_area keeps the picture there. Optionally resizes the result to a megapixel budget (core Scale Image to Total Pixels semantics: aspect preserved, dimensions rounded to resolution_steps).",
+    "python_module": "custom_nodes.ausboss-nodes",
+    "category": "🆎 AusBoss/Image",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "output_tooltips": [
+      "The transformed image batch in BHWC format.",
+      "White where the model paints: padding, the corners a turn leaves empty, and see-through parts of your picture.",
+      "Full-canvas stitcher: restores kept source pixels over an outpaint result; wire to Stitch Inpaint.",
+      "Your picture before rotation, crop, padding or resize. See-through parts show as white, or as your picture when painted_area keeps it.",
+      "Output width after the transform and any resize.",
+      "Output height after the transform and any resize.",
+      "The image with see-through parts shown on white instead of the fill. Wire it to the node that writes your prompt, so a cutout gets a real backdrop. The same as image when your picture has no see-through parts, or painted_area keeps the picture."
+    ],
+    "search_aliases": [
+      "image crop",
+      "rotate image",
+      "pad image",
+      "outpaint canvas",
+      "ausboss"
+    ]
+  },
+  "AUSBOSS_NODES_StitchInpaint": {
+    "input": {
+      "required": {
+        "stitcher": [
+          "AUSBOSS_STITCHER",
+          {
+            "tooltip": "The stitcher from Crop For Inpaint 🆎, Load Image + Pad 🆎 or a Crop + Rotate + Pad 🆎 node."
+          }
+        ],
+        "inpainted": [
+          "IMAGE",
+          {
+            "tooltip": "Inpainted crop to paste back. It is resized to the crop window if the sampler changed its size."
+          }
+        ]
+      },
+      "optional": {
+        "fix_edge_halo": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Recover the true color under the feathered seam before pasting, so half-transparent edge pixels stop blending their background in twice and leaving a dark or light rim. Needs the optional pymatting package; without it the paste is unchanged and the console notes it once."
+          }
+        ],
+        "color_match": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 1,
+            "step": 0.05,
+            "tooltip": "Match the new area's tone to your picture when it comes back lighter, darker or warmer. 1 is the full match, 0 is off; it needs a feather, since it reads the strip of your picture the model repainted."
+          }
+        ],
+        "seam": [
+          [
+            "classic",
+            "blend in"
+          ],
+          {
+            "default": "classic",
+            "tooltip": "How the new area joins your picture. Pick blend in for outpaints, turned or straight; classic keeps older workflows exactly as they were (Crop For Inpaint always stitches classic for now)."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "stitcher",
+        "inpainted"
+      ],
+      "optional": [
+        "fix_edge_halo",
+        "color_match",
+        "seam"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "image",
+      "blend_mask"
+    ],
+    "name": "AUSBOSS_NODES_StitchInpaint",
+    "display_name": "Stitch Inpaint 🆎",
+    "description": "Pastes an inpainted crop from Crop For Inpaint 🆎, or an outpainted canvas from Load Image + Pad 🆎 or a Crop + Rotate + Pad 🆎 node, back into the original image. Seam picks how the new area joins your picture: classic, the default, blends with the feathered mask recorded in the stitcher, as every earlier workflow did; blend in fades the model's picture into yours a little way inside your picture, which suits outpaints, turned or straight. Raise color_match (Tone match) when the new area reads lighter, darker or warmer than your picture. Classic measures that drift across the seam; blend in measures it where the model repainted the edge of your picture, and leaves the colours alone when the drift does not hold up along the edge. Pixels the stitch does not reach are bit-identical to the original — they never pass through a resize. A stitcher built from one image broadcasts across an inpainted frame batch. With classic, turn on fix_edge_halo when the seam shows a dark or light rim. The blend_mask output marks what the stitch changed, in the stitched image's own coordinates, ready for a downstream color match.",
+    "python_module": "custom_nodes.ausboss-nodes",
+    "category": "🆎 AusBoss/Inpaint",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "output_tooltips": [
+      "Original-size image with the inpainted crop blended in; pixels outside the blend region are untouched.",
+      "The feathered paste mask in the stitched image's coordinates - white where the inpaint blended in, zero where the original survived. Wire it to a color-match or compositing node to treat exactly the pasted region without rebuilding the mask. With Seam on blend in it shows the blend instead: white on the new area, fading to zero where your picture is untouched."
+    ],
+    "search_aliases": [
+      "stitch inpaint",
+      "paste back",
+      "crop and stitch",
+      "recompose",
+      "ausboss"
+    ]
+  },
   "Add Subtitles To Frames": {
     "input": {
       "required": {
@@ -2560,6 +3185,65 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "ComfyNumberConvert": {
+    "input": {
+      "required": {
+        "value": [
+          "INT,FLOAT,STRING,BOOLEAN",
+          {
+            "display_name": "value"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "value"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "FLOAT",
+      "INT"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "FLOAT",
+      "INT"
+    ],
+    "output_tooltips": [
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "ComfyNumberConvert",
+    "display_name": "Convert Number",
+    "description": "",
+    "python_module": "comfy_extras.nodes_number_convert",
+    "category": "utilities",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "int to float",
+      "float to int",
+      "number convert",
+      "int2float",
+      "float2int",
+      "cast",
+      "parse number",
+      "string to number",
+      "bool to int"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "ComfySwitchNode": {
     "input": {
       "required": {
@@ -3214,6 +3898,56 @@
       "images to video"
     ],
     "essentials_category": "Video Tools",
+    "has_intermediate_output": false
+  },
+  "CustomCombo": {
+    "input": {
+      "required": {
+        "choice": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": []
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "choice"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "STRING",
+      "INT"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "STRING",
+      "INDEX"
+    ],
+    "output_tooltips": [
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "CustomCombo",
+    "display_name": "Custom Combo",
+    "description": "",
+    "python_module": "comfy_extras.nodes_logic",
+    "category": "utilities",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
     "has_intermediate_output": false
   },
   "DA3Inference": {
@@ -3935,6 +4669,85 @@
     "output_node": false,
     "has_intermediate_output": false,
     "search_aliases": []
+  },
+  "DualModelGuider": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL",
+          {
+            "tooltip": "Model used for the positive (conditional) pass."
+          }
+        ],
+        "positive": [
+          "CONDITIONING",
+          {}
+        ],
+        "cfg": [
+          "FLOAT",
+          {
+            "default": 4,
+            "min": 0,
+            "max": 100,
+            "step": 0.1,
+            "round": 0.01
+          }
+        ]
+      },
+      "optional": {
+        "model_negative": [
+          "MODEL",
+          {
+            "tooltip": "Model used for the negative (unconditional) pass. Use the same model for ordinary CFG."
+          }
+        ],
+        "negative": [
+          "CONDITIONING",
+          {
+            "tooltip": "Negative conditioning run on the negative model. Leave unconnected for a text-free (image-only) unconditional pass."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "positive",
+        "cfg"
+      ],
+      "optional": [
+        "model_negative",
+        "negative"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "GUIDER"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "GUIDER"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "DualModelGuider",
+    "display_name": "Dual Model CFG Guider",
+    "description": "",
+    "python_module": "comfy_extras.nodes_custom_sampler",
+    "category": "model/sampling/guiders",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
   },
   "EmptyAceStep1.5LatentAudio": {
     "input": {
@@ -6112,6 +6925,65 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "H3AdaLNLoRAFix": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL",
+          {
+            "tooltip": "MODEL, after the LoRA loader(s)."
+          }
+        ],
+        "mode": [
+          "COMBO",
+          {
+            "tooltip": "port: rebase the AdaLN weights onto the basis the model actually uses - quiet log, and the timestep modulation is restored. strip: just drop the incompatible weights - quiet log, output identical to having no fix at all. off: passthrough, leaves the errors in place.",
+            "default": "port",
+            "multiselect": false,
+            "options": [
+              "port",
+              "strip",
+              "off"
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "mode"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "H3AdaLNLoRAFix",
+    "display_name": "H3 AdaLN LoRA Fix",
+    "description": "Rebases dense MiniMax-H3 LoRA AdaLN weights onto a pruned (curve-form) checkpoint, so they are applied instead of being skipped with 51 'ERROR lora ... adaln_proj' lines. Place it after your LoRA loader. Works in both directions: dense LoRA on a pruned base, or curve-form LoRA on a full one.",
+    "python_module": "custom_nodes.plaguekind-nodes",
+    "category": "PlagueKind/model_patches/minimax",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "H3CharacterSwapAssemble": null,
   "H3CharacterSwapController": null,
   "H3CharacterSwapExpandMask": null,
@@ -6135,6 +7007,218 @@
   "H3RelayTextMemory": null,
   "H3RelayWindowInputs": null,
   "H3RelayWindowPlan": null,
+  "H3SLAAttention": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL",
+          {
+            "tooltip": "MODEL,"
+          }
+        ],
+        "sparsity_ratio": [
+          "FLOAT",
+          {
+            "tooltip": "Fraction of key blocks skipped. 0.85 is the shipped default and what the SLA turbo LoRA was distilled against; 0.90 is the value validated here and is ~15% faster. Sparsity did NOT turn out to drive the speech artefacts on H3 -- step count did, so use 6 steps rather than lowering this. Break-even is about 0.60 -- below that this kernel is SLOWER than dense attention,0.0 disables sparsity without removing the node.",
+            "default": 0.8,
+            "min": 0,
+            "max": 0.95,
+            "step": 0.05,
+            "round": false
+          }
+        ],
+        "block_size": [
+          "COMBO",
+          {
+            "tooltip": "How many sequence tokens share one key selection. Unrelated to the model's 128-wide heads. This matters far more for audio than video: H3 packs audio at 80 rows per second, so a 128-row block forces 1.6 s of audio down one attention pattern, while the same 128 rows are only 3% of a video frame. Speech came out robotic at 128 and clean at 64, for about 2% more time -- halving the block doubles the block count, so the attention work is identical and only the routing gets finer. Use 128 only if you generate without meaningful audio. Coming down to 32 has increased the quality even further for marginal slowdown ",
+            "default": "32",
+            "multiselect": false,
+            "options": [
+              "32",
+              "64",
+              "128"
+            ]
+          }
+        ]
+      },
+      "optional": {
+        "min_seq_len": [
+          "INT",
+          {
+            "tooltip": "Sequences shorter than this stay dense. Guards two things: the short text-refiner attention, which must never be sparsified, and low-resolution or short clips, where block selection would cost more than it saves. Lower it only if you know your sequence is long enough to benefit.",
+            "default": 12228,
+            "min": 0,
+            "max": 1000000,
+            "step": 1024
+          }
+        ],
+        "dense_last_steps": [
+          "INT",
+          {
+            "tooltip": "Run the last N sampling steps at full attention. 0 matches the turbo LoRA's original distillation setup exactly. 1 costs a little speed and can recover fine detail, since the final step's error is the one you actually see. Stacks with dense_steps below rather than replacing it.",
+            "default": 0,
+            "min": 0,
+            "max": 8
+          }
+        ],
+        "protect_audio": [
+          "BOOLEAN",
+          {
+            "tooltip": "Always attend blocks overlapping actual language tokens, target audio, and audio-reference segments. Visual-reference blocks are controlled separately. Disable only for turbo-style uniform sparsity; testing found partial or unprotected audio unstable for very little speed gain.",
+            "default": false,
+            "label_on": "protect",
+            "label_off": "uniform (turbo parity)"
+          }
+        ],
+        "enabled": [
+          "BOOLEAN",
+          {
+            "tooltip": "Turn off to pass the model straight through, for a like-for-like speed baseline without rewiring.",
+            "default": true,
+            "label_on": "sparse",
+            "label_off": "dense (bypass)"
+          }
+        ],
+        "dense_steps": [
+          "STRING",
+          {
+            "tooltip": "Explicit 0-based step indices to force dense, on top of dense_last_steps -- e.g. '0,1' or '0-2'. Early steps set global composition and prompt adherence, so keeping just those exact and sparsifying the rest can fix prompt-following regressions without paying for full attention on every step. Blank = none.",
+            "default": "1",
+            "multiline": false
+          }
+        ],
+        "dense_backend": [
+          "COMBO",
+          {
+            "tooltip": "Attention kernel used on every dense fall-through (short sequences, dense_last_steps, dense_steps). 'comfy_kitchen' (default, Comfy Kitchen int8) is fast enough on the handful of dense steps this node runs to be worth its precision tradeoff there. 'pytorch' pins the plain reference kernel instead if you want zero quantization anywhere in the dense path, at real cost to dense-step speed -- dense steps are the ones this node already decided must be exact, so that's the safest choice if you're chasing maximum quality over speed there. The 'sage:*' modes match an existing sage-attention kernel dropdown one-for-one -- 'sage:auto' lets the sageattention package pick; the rest pin a specific kernel + pv_accum_dtype: fp16_cuda uses fp32 accum (safest), fp8_cuda uses fp32+fp32 (safest of the fp8 pair), fp8_cuda++ uses fp32+fp16 (faster, more overflow-prone -- try this first if fp8_cuda works but you want more speed). Needs the sageattention package installed; falls back to whatever's already active with a logged warning if it isn't, or if a specific kernel is missing from your installed version. 'auto' restores the old behaviour of using whatever backend is already active globally. The sparse path is unaffected by this setting either way -- it never goes through backend selection at all.",
+            "default": "comfy_kitchen",
+            "multiselect": false,
+            "options": [
+              "pytorch",
+              "comfy_kitchen",
+              "sage:auto",
+              "sage:qk_int8_pv_fp16_cuda",
+              "sage:qk_int8_pv_fp16_triton",
+              "sage:qk_int8_pv_fp8_cuda",
+              "sage:qk_int8_pv_fp8_cuda++",
+              "auto"
+            ]
+          }
+        ],
+        "disable_fp16_accum": [
+          "BOOLEAN",
+          {
+            "tooltip": "Force off the fp16/bf16 reduced-precision matmul reduction path for this model's sampling run, regardless of the global --fast fp16_accumulation flag. Measured to cost quality on H3 with no throughput gain. Turn off only to A/B against the global flag.",
+            "default": true,
+            "label_on": "disabled (recommended)",
+            "label_off": "follow --fast"
+          }
+        ],
+        "stabilize_motion": [
+          "BOOLEAN",
+          {
+            "tooltip": "Bias each layer's block selection toward what it picked last step, so a near-tie between two blocks doesn't flip for no reason and show up as a faint double-exposure on fast motion. Only target-video query rows are stabilized; text and audio choices remain step-local. It is a fix for that one specific symptom, not a general quality dial. - Uses more Vram ",
+            "default": false,
+            "label_on": "on",
+            "label_off": "off"
+          }
+        ],
+        "reference_protection": [
+          "COMBO",
+          {
+            "display_name": "Protect Vid/Ref",
+            "tooltip": "Protect Image/Video Reference. Heavy Enforcement guarantees every Qwen vision-token, conditioning/image-reference, and video-reference block, matching the broad legacy prefix protection -- this is a reinforcement of those blocks, not a protection tuned for reference quality, and is most likely unusable with max ref size mode. Light uses fixed 0.85 reference sparsity and guarantees the best-scoring 15% of each visual-reference range. Off adds no special quota; references still participate in ordinary top-k. Default Off preserves the precise audio patch's fastest behaviour.",
+            "default": "Off",
+            "multiselect": false,
+            "options": [
+              "Heavy Enforcement",
+              "Light",
+              "Off"
+            ]
+          }
+        ],
+        "tail_correction": [
+          "BOOLEAN",
+          {
+            "tooltip": "Instead of a hard zero for every key block topk left out, fold in one pooled term standing in for all of them, so nothing leaves the softmax -- same idea as a widely-used block-sparse kernel's tail handling. Scored from the same pooled centroids selection already computes, so the only added cost is one more mean-pool of V plus a small reduction per call, not a second attention pass. Should help most at high sparsity, where the discarded tail is largest. Off by default: new, and its effect on H3 output quality specifically hasn't been validated the way sparsity_ratio's defaults have -- test before trusting it in a real render.",
+            "default": false,
+            "label_on": "on (experimental)",
+            "label_off": "off"
+          }
+        ],
+        "use_int8_qk": [
+          "BOOLEAN",
+          {
+            "tooltip": "Quantize Q and K to int8 (per-token, dynamic scale) before the QK dot product on the selected topk blocks -- PV stays full precision (the mirror use_int8_pv toggle was removed from this node: its hidden widget could still be converted to an input socket and connected, which broke the node -- PV quantization is no longer exposed here). This is SageAttention's qk_int8_pv_fp16 split, not full int8 attention, and it's a different lever from dense_backend above: that setting only affects dense fall-through steps, this affects the sparse compute itself, on every sparse step. Ignored entirely when engine is comfy_kitchen, which quantizes internally regardless. UNTESTED ON HARDWARE: the quantize/dequantize math checks out against exact fp32 scores in isolation, but real speed, launch stability, and output quality on H3 have not been measured on a GPU. Try it against a known-good render before trusting it, and expect to possibly hit a launch failure on some GPU/Triton combinations before it's been shaken out.",
+            "default": true,
+            "label_on": "on (experimental)",
+            "label_off": "off"
+          }
+        ],
+        "engine": [
+          "COMBO",
+          {
+            "tooltip": "Which attention implementation runs the sparse path. triton (default) is this node pack's own kernel -- every other widget above applies to it fully. comfy_kitchen instead calls comfy_kitchen's real compiled sol_attn kernel (Comfy-Org/ComfyUI PR #16072, needs comfy-kitchen>=0.2.32 installed): genuine CUDA int8 compute and a built-in pooled tail term, but it can only express ONE contiguous protected range, has no reference-quota tier, and has no cross-step stabilize_motion -- reference_protection, multi-span protect_ranges, and stabilize_motion are silently disabled (one-time log warning each) rather than approximated, and tail_correction/use_int8_qk above are ignored since the real kernel quantizes internally regardless, but now honours tail_correction's on/off setting rather than always applying it. Both fall back to dense the same as any other kernel failure if their kernel is unavailable or throws.",
+            "default": "comfy_kitchen",
+            "multiselect": false,
+            "options": [
+              "triton",
+              "comfy_kitchen"
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "sparsity_ratio",
+        "block_size"
+      ],
+      "optional": [
+        "min_seq_len",
+        "dense_last_steps",
+        "protect_audio",
+        "enabled",
+        "dense_steps",
+        "dense_backend",
+        "disable_fp16_accum",
+        "stabilize_motion",
+        "reference_protection",
+        "tail_correction",
+        "use_int8_qk",
+        "engine"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "H3SLAAttention",
+    "display_name": "H3 SLA Attention",
+    "description": "Block-sparse attention for MiniMax-H3, matching the inference sequences benefit most, so the gain grows with resolution and duration; short ones fall back to dense automatically.",
+    "python_module": "custom_nodes.plaguekind-nodes",
+    "category": "PlagueKind/model_patches/minimax",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "Hunyuan3Dv2Conditioning": {
     "input": {
       "required": {
@@ -6591,6 +7675,93 @@
       "integer",
       "value"
     ]
+  },
+  "Ideogram4Scheduler": {
+    "input": {
+      "required": {
+        "steps": [
+          "INT",
+          {
+            "default": 20,
+            "min": 1,
+            "max": 200
+          }
+        ],
+        "width": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 256,
+            "max": 8192,
+            "step": 16
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 256,
+            "max": 8192,
+            "step": 16
+          }
+        ],
+        "mu": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": -10,
+            "max": 10,
+            "step": 0.05
+          }
+        ],
+        "std": [
+          "FLOAT",
+          {
+            "default": 1.75,
+            "min": 0.1,
+            "max": 5,
+            "step": 0.05
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "steps",
+        "width",
+        "height",
+        "mu",
+        "std"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "SIGMAS"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "SIGMAS"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "Ideogram4Scheduler",
+    "display_name": "Ideogram 4 Scheduler",
+    "description": "",
+    "python_module": "comfy_extras.nodes_ideogram4",
+    "category": "model/sampling/schedulers",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
   },
   "ImageBatch": {
     "input": {
@@ -8238,6 +9409,64 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "JsonExtractString": {
+    "input": {
+      "required": {
+        "json_string": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "key": [
+          "STRING",
+          {
+            "multiline": false
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "json_string",
+        "key"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "STRING"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "STRING"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "JsonExtractString",
+    "display_name": "Extract Text from JSON",
+    "description": "Extract a key's value from the first valid JSON object in the text, including Markdown code blocks.",
+    "python_module": "comfy_extras.nodes_string",
+    "category": "text",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "json",
+      "extract json",
+      "parse json",
+      "json value",
+      "read json"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "KSampler": {
     "input": {
       "required": {
@@ -8689,6 +9918,223 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "Krea2EditGroundedEncode": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP"
+        ],
+        "prompt": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": ""
+          }
+        ]
+      },
+      "optional": {
+        "image": [
+          "IMAGE"
+        ],
+        "image_b": [
+          "IMAGE",
+          {
+            "tooltip": "2nd reference (subject) for multi-ref LoRAs; vision blocks in training order: scene, subject"
+          }
+        ],
+        "grounding_px": [
+          "INT",
+          {
+            "default": 768,
+            "min": 0,
+            "max": 4096,
+            "step": 64,
+            "tooltip": "cap longest side fed to Qwen3-VL; 0 = native"
+          }
+        ],
+        "system_prompt": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "",
+            "tooltip": "advanced (optional): override the grounding system prompt (empty = training default). Steers what the vision encoder attends to, e.g. facial identity detail."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "prompt"
+      ],
+      "optional": [
+        "image",
+        "image_b",
+        "grounding_px",
+        "system_prompt"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "CONDITIONING"
+    ],
+    "name": "Krea2EditGroundedEncode",
+    "display_name": "Krea2 Edit (grounded encode)",
+    "description": "Encodes the edit instruction grounded on the source image (training-matched semantic path).",
+    "python_module": "custom_nodes.comfyui-krea2edit",
+    "category": "krea2edit",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "Krea2EditModelPatch": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL"
+        ],
+        "source_latent": [
+          "LATENT"
+        ]
+      },
+      "optional": {
+        "source_latent_b": [
+          "LATENT",
+          {
+            "tooltip": "2nd reference (subject photo) for multi-ref LoRAs -> RoPE frame=2, training-matched order: scene first, subject second"
+          }
+        ],
+        "ref_boost": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": 0,
+            "max": 1000,
+            "step": 0.01,
+            "round": 0.001,
+            "tooltip": "reference-fidelity dial: multiplies target->reference attention. Applies to the LAST ref (= the subject in two-ref workflows, the only ref in single-ref). 1.0 = off, >1 pulls harder toward the reference's appearance, <1 loosens. Optimal value is model-specific"
+          }
+        ],
+        "ref_boost_a": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": 0,
+            "max": 1000,
+            "step": 0.01,
+            "round": 0.001,
+            "tooltip": "same dial for the FIRST ref (= the scene in two-ref workflows). No effect in single-ref workflows. 1.0 = off"
+          }
+        ],
+        "fit_mode": [
+          [
+            "fit",
+            "crop (legacy)"
+          ],
+          {
+            "default": "fit",
+            "tooltip": "how an image source fits a mismatched output aspect ratio (needs vae + source_image connected): fit = resample the source to the target grid at a centered offset — matches how this model was trained (default, use this); crop (legacy) = center-crop to the target AR then resize (v1/v1.1 geometry, only for older weights)"
+          }
+        ],
+        "ref_boost_mask": [
+          "MASK",
+          {
+            "tooltip": "optional region on the (last) reference to boost, e.g. the face; empty = whole reference"
+          }
+        ],
+        "vae": [
+          "VAE",
+          {
+            "tooltip": "RECOMMENDED with source_image: enables the blur-proof pixel-space path (crop+resize in pixels, encode internally) — immune to input/output resolution mismatches"
+          }
+        ],
+        "source_image": [
+          "IMAGE",
+          {
+            "tooltip": "source as IMAGE (with vae connected): overrides source_latent with exact pixel-space fitting — fixes blurry results from mismatched resolutions"
+          }
+        ],
+        "source_image_b": [
+          "IMAGE",
+          {
+            "tooltip": "2nd reference as IMAGE (with vae)"
+          }
+        ],
+        "target_latent": [
+          "LATENT",
+          {
+            "tooltip": "RECOMMENDED with vae + source_image: wire the SAME latent you feed KSampler.latent_image. Lets the node VAE-encode the source here, before sampling starts, instead of on the first step — otherwise the VAE is pulled onto the GPU mid-sampling and can evict part of the diffusion model, slowing every remaining step on VRAM-tight setups"
+          }
+        ],
+        "ref_position": [
+          [
+            "aligned (trained)",
+            "beside (right of target)",
+            "bag of features"
+          ],
+          {
+            "default": "aligned (trained)",
+            "tooltip": "where the LAST reference (the person in two-image workflows, or the only image) sits in position space. aligned (trained) = pinned onto the output layout, how the models were trained (default). beside = placed next to the canvas: identity still flows but the layout pin is gone, so the person can be restaged more freely. bag of features = experimental, content without layout"
+          }
+        ],
+        "ref_position_a": [
+          [
+            "aligned (trained)",
+            "beside (right of target)",
+            "bag of features"
+          ],
+          {
+            "default": "aligned (trained)",
+            "tooltip": "the same choice for the FIRST reference (the scene in two-image workflows); no effect with a single image. For putting a person into a scene: scene aligned + person beside"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "source_latent"
+      ],
+      "optional": [
+        "source_latent_b",
+        "ref_boost",
+        "ref_boost_a",
+        "fit_mode",
+        "ref_boost_mask",
+        "vae",
+        "source_image",
+        "source_image_b",
+        "target_latent",
+        "ref_position",
+        "ref_position_a"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "name": "Krea2EditModelPatch",
+    "display_name": "Krea2 Edit (source patch)",
+    "description": "Adds the krea2_edit in-context source-preservation path (source latent as frame=1 tokens) to a Krea2 model.",
+    "python_module": "custom_nodes.comfyui-krea2edit",
+    "category": "krea2edit",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "Krea2OstrisEditModelPatch": null,
   "LTXAVTextEncoderLoader": {
     "input": {
       "required": {
@@ -11143,6 +12589,111 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "MiniMaxH3ImageToVideo": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP",
+          {}
+        ],
+        "vae": [
+          "VAE",
+          {}
+        ],
+        "prompt": [
+          "STRING",
+          {
+            "multiline": true,
+            "dynamicPrompts": true
+          }
+        ],
+        "width": [
+          "INT",
+          {
+            "default": 1344,
+            "min": 32,
+            "max": 16384,
+            "step": 32
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 768,
+            "min": 32,
+            "max": 16384,
+            "step": 32
+          }
+        ],
+        "length": [
+          "INT",
+          {
+            "tooltip": "Frame count at 24 fps, snapped up to the model's 17k+5 grid (124 = ~5s; trained range is ~124-362, longer is untested)",
+            "default": 124,
+            "min": 5,
+            "max": 3600,
+            "step": 17
+          }
+        ]
+      },
+      "optional": {
+        "first_frame": [
+          "IMAGE",
+          {}
+        ],
+        "last_frame": [
+          "IMAGE",
+          {}
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "vae",
+        "prompt",
+        "width",
+        "height",
+        "length"
+      ],
+      "optional": [
+        "first_frame",
+        "last_frame"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "LATENT"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "positive",
+      "LATENT"
+    ],
+    "output_tooltips": [
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "MiniMaxH3ImageToVideo",
+    "display_name": "MiniMax H3 Image to Video",
+    "description": "",
+    "python_module": "comfy_extras.nodes_minimax_h3",
+    "category": "model/conditioning/minimax",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "MiniMaxH3ReferenceToVideo": {
     "input": {
       "required": {
@@ -11409,6 +12960,113 @@
     ],
     "essentials_category": null,
     "has_intermediate_output": false
+  },
+  "MiniMaxH3TurboLoRA": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL"
+        ],
+        "lora_name": [
+          [
+            "Flux_2-Turbo-LoRA_comfyui.safetensors",
+            "Krea2-realism-V2.safetensors",
+            "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
+            "Qwen-Image-Edit-2509-Light-Migration.safetensors",
+            "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+            "Qwen-Image-Edit-2509-Relight.safetensors",
+            "Qwen-Image-Edit-2509-White_to_Scene.safetensors",
+            "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+            "krea2_general_edit_v2.safetensors",
+            "krea2_identity_edit_v2.safetensors",
+            "krea2_inpaint_edit.safetensors",
+            "krea2_style_reference.safetensors",
+            "lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors",
+            "lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16.safetensors",
+            "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+            "minimax_h3_turbo_v4_step600_ema.safetensors",
+            "next-scene_lora-v2-3000.safetensors",
+            "qwen-image-2.1-outpaint-v2.safetensors",
+            "tryon-klein-4b.safetensors",
+            "uso-flux1-dit-lora-v1.safetensors",
+            "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+            "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+            "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+            "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors"
+          ]
+        ],
+        "strength": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": -10,
+            "max": 10,
+            "step": 0.01
+          }
+        ],
+        "low_vram": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "label_on": "merge (low VRAM, softer)",
+            "label_off": "bypass (sharp, more VRAM)",
+            "tooltip": "OFF (default): apply the LoRA at run time (bypass) — sharpest, but costs extra peak VRAM. ON: merge the LoRA into the weights — lowest VRAM so small GPUs can run, but softer on quantized bases (the delta is partly rounded away). Turn ON only if you OOM."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "lora_name",
+        "strength",
+        "low_vram"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "name": "MiniMaxH3TurboLoRA",
+    "display_name": "MiniMax-H3 Turbo LoRA",
+    "description": "Apply the MiniMax-H3 Turbo LoRA to the H3 diffusion model.",
+    "python_module": "custom_nodes.ComfyUI-MiniMax-H3-Turbo",
+    "category": "MiniMaxH3Turbo",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "MiniMaxH3TurboSampler": {
+    "input": {
+      "required": {}
+    },
+    "input_order": {
+      "required": []
+    },
+    "is_input_list": false,
+    "output": [
+      "SAMPLER"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "SAMPLER"
+    ],
+    "name": "MiniMaxH3TurboSampler",
+    "display_name": "MiniMax-H3 Turbo Sampler (4-step)",
+    "description": "4-step sampler for the MiniMax-H3 Turbo LoRA. Feed into SamplerCustomAdvanced and set the scheduler to 4 steps. Auto-adapts to the ComfyUI version: on recent builds that handle the audio schedule natively (ModelSamplingAV) it steps as a plain single-schedule sampler; on older builds it steps video and audio on their separate clocks.",
+    "python_module": "custom_nodes.ComfyUI-MiniMax-H3-Turbo",
+    "category": "MiniMaxH3Turbo",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
   },
   "MoGeGeometryToFOV": {
     "input": {
@@ -12250,6 +13908,74 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "Pixal3DConditioning": {
+    "input": {
+      "required": {
+        "clip_vision_model": [
+          "CLIP_VISION",
+          {
+            "tooltip": "DINOv3 ViT-L/16 ClipVision."
+          }
+        ],
+        "image": [
+          "IMAGE",
+          {
+            "tooltip": "Preprocessed image from ImageCropToMask (pad_factor=1.1 for Pixal3D)."
+          }
+        ],
+        "camera_angle_x": [
+          "FLOAT",
+          {
+            "display_name": "fov",
+            "tooltip": "Horizontal FOV in degrees. Wire a MoGeGeometryToFOV (axis='horizontal', unit='degrees') for a per-image FoV (matches upstream default).",
+            "default": 49.13,
+            "min": 1,
+            "max": 170,
+            "step": 0.01
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip_vision_model",
+        "image",
+        "camera_angle_x"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "CONDITIONING"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "positive",
+      "negative"
+    ],
+    "output_tooltips": [
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "Pixal3DConditioning",
+    "display_name": "Pixal3D Conditioning",
+    "description": "",
+    "python_module": "comfy_extras.nodes_trellis2",
+    "category": "model/conditioning/trellis",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "Pixal3DMultiViewConditioning": {
     "input": {
       "required": {
@@ -12634,6 +14360,78 @@
     "output_node": false,
     "deprecated": false,
     "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "QwenImage21Cache": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL",
+          {}
+        ],
+        "device": [
+          "COMBO",
+          {
+            "tooltip": "auto uses spare VRAM, then RAM. cpu (RAM) is prefetched behind compute and costs little speed. off recomputes the prefix every step, which is slower but is the one way to rule the cache out.",
+            "default": "auto",
+            "multiselect": false,
+            "options": [
+              "auto",
+              "gpu",
+              "cpu",
+              "off"
+            ]
+          }
+        ],
+        "dtype": [
+          "COMBO",
+          {
+            "tooltip": "Storage precision. default is lossless. int8 halves the cache at about bf16 accuracy, int4 quarters it but roughly doubles the per-step error.",
+            "default": "default",
+            "multiselect": false,
+            "options": [
+              "default",
+              "int8",
+              "int4"
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "device",
+        "dtype"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "QwenImage21Cache",
+    "display_name": "Qwen Image 2.1 Cache",
+    "description": "Allows setting the KV cache device and quantization, by default the model uses the auto -option. Quantization potentially speeds up edit workflows when memory starved ",
+    "python_module": "comfy_extras.nodes_qwen",
+    "category": "model/conditioning/qwen image",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
     "dev_only": false,
     "api_node": false,
     "price_badge": null,
@@ -13304,6 +15102,110 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "RegexReplace": {
+    "input": {
+      "required": {
+        "string": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "regex_pattern": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "replace": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ]
+      },
+      "optional": {
+        "case_insensitive": [
+          "BOOLEAN",
+          {
+            "advanced": true,
+            "default": true
+          }
+        ],
+        "multiline": [
+          "BOOLEAN",
+          {
+            "advanced": true,
+            "default": false
+          }
+        ],
+        "dotall": [
+          "BOOLEAN",
+          {
+            "tooltip": "When enabled, the dot (.) character will match any character including newline characters. When disabled, dots won't match newlines.",
+            "advanced": true,
+            "default": false
+          }
+        ],
+        "count": [
+          "INT",
+          {
+            "tooltip": "Maximum number of replacements to make. Set to 0 to replace all occurrences (default). Set to 1 to replace only the first match, 2 for the first two matches, etc.",
+            "advanced": true,
+            "default": 0,
+            "min": 0,
+            "max": 100
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "string",
+        "regex_pattern",
+        "replace"
+      ],
+      "optional": [
+        "case_insensitive",
+        "multiline",
+        "dotall",
+        "count"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "STRING"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "STRING"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "RegexReplace",
+    "display_name": "Replace Text (Regex)",
+    "description": "Find and replace text using regex patterns.",
+    "python_module": "comfy_extras.nodes_string",
+    "category": "text",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "regex replace",
+      "regex",
+      "pattern replace",
+      "substitution"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "RemeshMesh": {
     "input": {
       "required": {
@@ -13324,7 +15226,7 @@
           "COMFY_DYNAMICCOMBO_V3",
           {
             "display_name": "sign_mode",
-            "tooltip": "udf: robust to messy/non-manifold input. sdf: clean single surface with QEF (Quadratic Error Function) sharp-feature recovery, but needs consistent winding.",
+            "tooltip": "udf: robust to messy/non-manifold input. sdf: clean single surface with QEF (Quadratic Error Function) sharp-feature recovery, but needs consistent winding. solid: one watertight solid from messy input: a global inside/outside graph cut (CelloCut) removes double shells and closes small holes. Slower.",
             "options": [
               {
                 "key": "udf",
@@ -13333,7 +15235,7 @@
                     "qef": [
                       "BOOLEAN",
                       {
-                        "tooltip": "QEF (Quadratic Error Function) dual-vertex placement for sharper edges.",
+                        "tooltip": "QEF (Quadratic Error Function) vertex placement: sharp edges on hard-surface input, jagged creases on organic input.",
                         "advanced": true,
                         "default": false
                       }
@@ -13377,6 +15279,31 @@
                     ]
                   }
                 }
+              },
+              {
+                "key": "solid",
+                "inputs": {
+                  "required": {
+                    "fill": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Cost of closing an opening relative to following the surface. Lower closes larger openings (0 puts a lid on a cup); higher only closes small holes and cracks.",
+                        "default": 20,
+                        "min": 0,
+                        "max": 1000,
+                        "step": 1
+                      }
+                    ],
+                    "qef": [
+                      "BOOLEAN",
+                      {
+                        "tooltip": "QEF (Quadratic Error Function) vertex placement: sharp edges on hard-surface input, jagged creases on organic input.",
+                        "advanced": true,
+                        "default": false
+                      }
+                    ]
+                  }
+                }
               }
             ]
           }
@@ -13384,7 +15311,7 @@
         "band": [
           "FLOAT",
           {
-            "tooltip": "Narrow-band width in voxel units. In UDF mode also offsets the surface.",
+            "tooltip": "Narrow-band width in voxel units. In udf mode also offsets the surface; in solid mode it is the closing radius: creases are filleted and gaps bridged at this size, the surface sits half a voxel out.",
             "advanced": true,
             "default": 1,
             "min": 0.5,
@@ -16697,6 +18624,42 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "SetLatentNoiseMask": {
+    "input": {
+      "required": {
+        "samples": [
+          "LATENT"
+        ],
+        "mask": [
+          "MASK"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "samples",
+        "mask"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "LATENT"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "LATENT"
+    ],
+    "name": "SetLatentNoiseMask",
+    "display_name": "Set Latent Noise Mask",
+    "description": "",
+    "python_module": "nodes",
+    "category": "model/latent",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "SkipLayerGuidanceDiTSimple": {
     "input": {
       "required": {
@@ -16953,6 +18916,57 @@
     "price_badge": null,
     "search_aliases": [
       "stereo to mono"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "SplitImageWithAlpha": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE",
+          {}
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "IMAGE",
+      "MASK"
+    ],
+    "output_tooltips": [
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "SplitImageWithAlpha",
+    "display_name": "Split Image with Alpha",
+    "description": "",
+    "python_module": "comfy_extras.nodes_compositing",
+    "category": "image/compositing",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "extract alpha",
+      "separate transparency",
+      "remove alpha"
     ],
     "essentials_category": null,
     "has_intermediate_output": false
@@ -17351,6 +19365,70 @@
     "search_aliases": [
       "string",
       "format"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "StringReplace": {
+    "input": {
+      "required": {
+        "string": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "find": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "replace": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "string",
+        "find",
+        "replace"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "STRING"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "STRING"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "StringReplace",
+    "display_name": "Replace Text",
+    "description": "",
+    "python_module": "comfy_extras.nodes_string",
+    "category": "text",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "replace",
+      "find and replace",
+      "substitute",
+      "swap text"
     ],
     "essentials_category": null,
     "has_intermediate_output": false
@@ -17781,6 +19859,273 @@
     "description": "",
     "python_module": "comfy_extras.nodes_ace",
     "category": "model/conditioning/ace",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "TextEncodeFibo2": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP",
+          {}
+        ],
+        "prompt": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "negative_prompt": [
+          "STRING",
+          {
+            "tooltip": "Empty is the null caption Fibo 2.0 was trained with for classifier-free guidance.",
+            "advanced": true,
+            "multiline": true
+          }
+        ],
+        "images": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "tooltip": "Images to edit, referred to as <image_1>, <image_2> and so on in the instruction. A single image is scaled and center cropped to the result's size, since the edit lines up with it pixel for pixel; several images each to their own trained size.",
+            "template": {
+              "input": {
+                "required": {
+                  "image": [
+                    "IMAGE",
+                    {}
+                  ]
+                }
+              },
+              "names": [
+                "image_1",
+                "image_2",
+                "image_3",
+                "image_4",
+                "image_5",
+                "image_6",
+                "image_7",
+                "image_8",
+                "image_9",
+                "image_10",
+                "image_11",
+                "image_12",
+                "image_13",
+                "image_14",
+                "image_15",
+                "image_16"
+              ],
+              "min": 0
+            }
+          }
+        ],
+        "width": [
+          "INT",
+          {
+            "tooltip": "Width of the result. 0 = the size Fibo 2.0 was trained at for the first image's aspect ratio, about 1 megapixel, or 1024 without images.",
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 16
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "tooltip": "Height of the result. 0 = the size Fibo 2.0 was trained at for the first image's aspect ratio, about 1 megapixel, or 1024 without images.",
+            "default": 0,
+            "min": 0,
+            "max": 16384,
+            "step": 16
+          }
+        ],
+        "batch_size": [
+          "INT",
+          {
+            "default": 1,
+            "min": 1,
+            "max": 4096
+          }
+        ]
+      },
+      "optional": {
+        "vae": [
+          "VAE",
+          {}
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "prompt",
+        "negative_prompt",
+        "images",
+        "width",
+        "height",
+        "batch_size"
+      ],
+      "optional": [
+        "vae"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "CONDITIONING",
+      "LATENT"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "positive",
+      "negative",
+      "latent"
+    ],
+    "output_tooltips": [
+      null,
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "TextEncodeFibo2",
+    "display_name": null,
+    "description": "Encode a Fibo 2.0 prompt, a structured JSON caption or plain text. With images, the prompt is the edit instruction, or a JSON caption of the result with an edit_instruction key, and the images become reference latents of both outputs when a vae is connected. Sample the latent output, the result's size the images are cropped for.",
+    "python_module": "comfy_extras.nodes_fibo2",
+    "category": "model/conditioning/fibo",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "TextEncodeKrea2OstrisEdit": null,
+  "TextEncodeQwenImage21": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP",
+          {}
+        ],
+        "prompt": [
+          "STRING",
+          {
+            "multiline": true,
+            "dynamicPrompts": true
+          }
+        ],
+        "negative_prompt": [
+          "STRING",
+          {
+            "multiline": true,
+            "dynamicPrompts": true
+          }
+        ],
+        "resolution": [
+          "INT",
+          {
+            "tooltip": "Reference images are resized to about resolution x resolution pixels, at multiples of 32, preserving aspect ratio. 0 keeps each reference at its own size, rounded to a multiple of 32. ",
+            "default": 1024,
+            "min": 0,
+            "max": 4096,
+            "step": 32
+          }
+        ],
+        "images": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "tooltip": "Reference images, seen by the text encoder and spliced into the sequence as VAE latents.",
+            "template": {
+              "input": {
+                "required": {
+                  "image": [
+                    "IMAGE",
+                    {}
+                  ]
+                }
+              },
+              "names": [
+                "image_1",
+                "image_2",
+                "image_3",
+                "image_4",
+                "image_5",
+                "image_6",
+                "image_7",
+                "image_8",
+                "image_9",
+                "image_10",
+                "image_11",
+                "image_12",
+                "image_13",
+                "image_14",
+                "image_15",
+                "image_16"
+              ],
+              "min": 0
+            }
+          }
+        ]
+      },
+      "optional": {
+        "vae": [
+          "VAE",
+          {}
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "prompt",
+        "negative_prompt",
+        "resolution",
+        "images"
+      ],
+      "optional": [
+        "vae"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "CONDITIONING",
+      "LATENT"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "positive",
+      "negative",
+      "latent"
+    ],
+    "output_tooltips": [
+      null,
+      null,
+      "Empty latent on the first reference image's size, to match with sampling as any other size shifts the edit."
+    ],
+    "output_matchtypes": null,
+    "name": "TextEncodeQwenImage21",
+    "display_name": "Text Encode Qwen Image 2.1",
+    "description": "",
+    "python_module": "comfy_extras.nodes_qwen",
+    "category": "model/conditioning/qwen image",
     "output_node": false,
     "deprecated": false,
     "experimental": false,

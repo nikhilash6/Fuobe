@@ -328,7 +328,7 @@ describe("Settings → LoRAs (/api/loras)", () => {
     setSetting("civitaiKey", KEY);
     setSetting("comfyLorasDir", folder);
     fs.writeFileSync(path.join(folder, "AWPortrait-Z.safetensors"), "x");
-    const res = await route.GET(new Request("http://localhost/"));
+    const res = await route.GET();
     const text = await res.text();
     expect(text).not.toContain(KEY);
     const body = JSON.parse(text) as { folder: string; civitaiKey: boolean; loras: { key: string; inFolder: boolean; licence: string; target?: string }[] };
@@ -342,13 +342,13 @@ describe("Settings → LoRAs (/api/loras)", () => {
     const file = path.join(folder, "not-a-folder.txt");
     fs.writeFileSync(file, "x");
     setSetting("comfyLorasDir", file);
-    const res = await route.GET(new Request("http://localhost/"));
+    const res = await route.GET();
     expect(res.status).toBe(200);
     const body = (await res.json()) as { folderProblem?: string; loras: unknown[] };
     expect(body.folderProblem).toBe(`The LoRA folder ${file} is a file, not a folder`);
     expect(body.loras.length).toBeGreaterThan(100);
     setSetting("comfyLorasDir", path.join(folder, "missing"));
-    expect(((await (await route.GET(new Request("http://localhost/"))).json()) as { folderProblem?: string }).folderProblem).toMatch(/doesn't exist on this machine/);
+    expect(((await (await route.GET()).json()) as { folderProblem?: string }).folderProblem).toMatch(/doesn't exist on this machine/);
   });
 
   it("downloads one LoRA on request, or says why it can't", async () => {

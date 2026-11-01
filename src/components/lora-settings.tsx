@@ -12,6 +12,7 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { saveSettings } from "@/lib/api";
 import { CIVITAI_KEYS_URL } from "@/lib/connections";
 import { cn } from "@/lib/utils";
+import { responseError, toastError } from "@/lib/refusals";
 
 interface LibraryLora {
   key: string;
@@ -86,7 +87,7 @@ function FolderField({ setting }: { setting?: PublicSetting }) {
       void qc.invalidateQueries({ queryKey: ["settings"] });
       void qc.invalidateQueries({ queryKey: ["loras"] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toastError(e),
   });
   return (
     <div className="min-w-0 space-y-1.5">
@@ -194,11 +195,11 @@ export function LoraSettings({ folder, civitaiKey }: { folder?: PublicSetting; c
       setPending(l.file);
       const res = await fetch("/api/loras", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file: l.file }) });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(body.error ?? `The download didn't finish (${res.status})`);
+      if (!res.ok) throw responseError(res, body.error ?? `The download didn't finish (${res.status})`);
       return l;
     },
     onSuccess: (l) => toast.success(`${l.name} is in your LoRA folder`),
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toastError(e),
     onSettled: () => {
       setPending(null);
       void qc.invalidateQueries({ queryKey: ["loras"] });

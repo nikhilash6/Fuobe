@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { uploadFile } from "@/lib/api";
 import { SHORTS, type ShortsCustomPreset } from "@/lib/catalog/shorts";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { usePresetActions } from "./hooks";
 
 interface Ref {
@@ -70,7 +71,7 @@ export function CustomPresetDialog({
       uploadFile(f)
         .then((a) => setRefs((xs) => xs.map((r) => (r.id === id ? { ...r, url: a.url, uploading: false } : r))))
         .catch((e) => {
-          toast.error((e as Error).message);
+          toastError(e);
           setRefs((xs) => xs.filter((r) => r.id !== id));
         });
     }
@@ -88,7 +89,7 @@ export function CustomPresetDialog({
       onSaved(p);
       onOpenChange(false);
     };
-    const fail = (e: Error) => toast.error(e.message);
+    const fail = (e: Error) => toastError(e);
     if (preset) actions.update.mutate({ id: preset.id, ...body }, { onSuccess: done, onError: fail });
     else actions.create.mutate(body, { onSuccess: done, onError: fail });
   };
@@ -198,7 +199,7 @@ export function CustomPresetDialog({
                     toast("Preset deleted");
                     onOpenChange(false);
                   },
-                  onError: (e) => toast.error((e as Error).message),
+                  onError: (e) => toastError(e),
                 })
               }
             >

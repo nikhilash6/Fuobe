@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { directorSummary, moveBySlug, type CinemaProject, type DirectorMessage, type DirectorSettings, type DirectorShot } from "@/lib/catalog/cinema";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useAutosave, useDirectorChat, useUpdateProject } from "./hooks";
 
 const SUGGESTIONS = ["Write a script", "Generate an 8-shot storyboard for a sci-fi chase scene", "Create a 15-second cinematic perfume commercial"];
@@ -57,7 +58,7 @@ function Message({ m, onLoad, onBrief }: { m: DirectorMessage; onLoad: (s: Direc
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap">{m.text}</p>
-          {m.source === "offline" && <p className="mt-0.5 text-[11px] text-muted-foreground">Offline breakdown — connect Claude or Ollama in Settings for a smarter Director.</p>}
+          {m.source === "offline" && <p className="mt-0.5 text-[11px] text-muted-foreground">Offline breakdown — connect Claude or a local model (Ollama, LM Studio or Unsloth Studio) in Settings for a smarter Director.</p>}
         </div>
       </div>
       {m.brief && (
@@ -91,7 +92,7 @@ function DirectorChat({ projectId, onLoadShot, onBrief, promptText }: { projectI
     const v = t.trim();
     if (!v || ask.isPending) return;
     setText("");
-    ask.mutate(v, { onError: (e) => toast.error((e as Error).message) });
+    ask.mutate(v, { onError: (e) => toastError(e) });
   };
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -180,7 +181,7 @@ function Brief({ project }: { project: CinemaProject }) {
   const [state, setState] = useState<"saved" | "saving" | "dirty">("saved");
   const saver = useAutosave<{ title: string; body: string }>((brief, { keepalive }) => {
     setState("saving");
-    update.mutate({ brief, keepalive }, { onSuccess: () => setState("saved"), onError: (e) => (setState("dirty"), toast.error((e as Error).message)) });
+    update.mutate({ brief, keepalive }, { onSuccess: () => setState("saved"), onError: (e) => (setState("dirty"), toastError(e)) });
   }, 700);
   const save = (t: string, b: string) => {
     setState("dirty");
@@ -265,7 +266,7 @@ export function SidePanel({
                   setBriefVersion((v) => v + 1);
                   toast.success("Brief updated", { duration: 1500, action: { label: "Open", onClick: () => setTab("brief") } });
                 },
-                onError: (e) => toast.error((e as Error).message),
+                onError: (e) => toastError(e),
               },
             )
           }

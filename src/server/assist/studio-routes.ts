@@ -246,7 +246,7 @@ const ONE_SHOT_NAMES: Record<OneShotModel, string> = { "heygen-translate": "HeyG
 /**
  * Why the review flow's first stage (voice, transcript, translations) can't start as one pipeline, or
  * null: a step no provider can run, or a demo step among real ones, which createPipeline refuses (a
- * fal key without Claude or Ollama: the translation would be a demo while the rest runs for real).
+ * fal key without Claude or a local model: the translation would be a demo while the rest runs for real).
  */
 function prepareProblem(input: Pick<CreateDubInput, "engine" | "video" | "source" | "targets">): string | null {
   const modes: { label: string; needs: string; demo: boolean }[] = [];

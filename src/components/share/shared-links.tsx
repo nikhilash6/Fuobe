@@ -32,6 +32,7 @@ import { copyWithToast } from "@/lib/clipboard";
 import { timeAgo } from "@/lib/format";
 import { EXPIRY_CHOICES, expiryLabel, isExpired, KIND_LABELS, pieces, PUBLISH_LAYOUTS, type ShareListItem, type SharePatch } from "@/lib/share";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { forgetLink, rememberLink, shareUrl, useRememberedLinks, useShare } from "./share-provider";
 
 /**
@@ -111,7 +112,7 @@ function Row({ s, token, now }: { s: ShareListItem; token?: string; now: number 
   const [confirm, setConfirm] = useState(false);
   const expired = isExpired(s, now);
   const dead = s.gone || expired;
-  const fail = (e: Error) => toast.error(e.message);
+  const fail = (e: Error) => toastError(e);
   const kind = s.kind === "publish" ? `${PUBLISH_LAYOUTS.find((l) => l.id === s.layout)?.label ?? "Published"} page` : KIND_LABELS[s.kind];
   // A new token (and, for an expired link, a new expiry with it): the dialog shows the link to copy.
   const renew = (patch: SharePatch = {}) =>

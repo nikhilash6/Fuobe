@@ -1,35 +1,35 @@
+import { headers } from "next/headers";
 import { connection } from "next/server";
 import { z } from "zod";
-import { createToken, listTokens, revokeToken } from "@/server/identity/tokens";
-import { currentActor } from "@/server/access/actor";
-import { gate } from "@/server/access/gates";
-import { handler } from "@/server/access/route";
+import { authEnabled, authStatus, createToken, revokeToken, sessionCookieFrom, validSession } from "@/server/auth";
 
-/**
- * API tokens, managed from a signed-in browser (or Just me on this computer): a token can't mint or revoke
- * tokens (access "browser" answers it 403). Each person sees and revokes their own (admins revoking anyone's arrives
- * with the admin console).
- */
+/** Tokens are managed from a signed-in browser only: a token can't mint or revoke tokens. */
+async function browserOnly(): Promise<Response | null> {
+  if (!authEnabled() || validSession(sessionCookieFrom((await headers()).get("cookie")))) return null;
+  return Response.json({ error: "Manage API tokens from a signed-in browser" }, { status: 403 });
+}
 
-export const GET = handler({ access: "browser" }, async () => {
+export async function GET() {
   await connection();
-  const actor = currentActor();
-  return Response.json({ tokens: listTokens(actor.userId) });
-});
+  const denied = await browserOnly();
+  if (denied) return denied;
+  return Response.json({ tokens: authStatus().tokens });
+}
 
 /** Create a token; the full value is in this response only. */
-export const POST = handler({ access: "browser" }, async (request: Request) => {
-  const actor = currentActor();
-  gate("token.create", actor);
+export async function POST(request: Request) {
+  const denied = await browserOnly();
+  if (denied) return denied;
   const parsed = z.object({ name: z.string().max(60) }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Name the token" }, { status: 400 });
-  return Response.json(createToken(actor.userId, parsed.data.name), { status: 201 });
-});
+  return Response.json(createToken(parsed.data.name), { status: 201 });
+}
 
-export const DELETE = handler({ access: "browser" }, async (request: Request) => {
-  const actor = currentActor();
+export async function DELETE(request: Request) {
+  const denied = await browserOnly();
+  if (denied) return denied;
   const id = new URL(request.url).searchParams.get("id");
   if (!id) return Response.json({ error: "Which token?" }, { status: 400 });
-  if (!revokeToken(actor.userId, id)) return Response.json({ error: "No such token" }, { status: 404 });
+  revokeToken(id);
   return new Response(null, { status: 204 });
-});
+}

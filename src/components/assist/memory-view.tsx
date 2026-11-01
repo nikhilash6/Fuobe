@@ -22,13 +22,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsOwner, useIsVisitor } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { guessCategory, MEMORY_CATEGORIES, MEMORY_HINTS, MEMORY_MAX_CHARS, parseMemoryImport, type AssistMemory, type AssistProject, type MemoryCategory, type MemoryScope } from "@/lib/assist";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { useMemories, useMemoryActions, useProjects } from "./hooks";
 import { ProjectDot, RailButton } from "./shell";
+import { AssistVisitorNote } from "./visitor-note";
 
 /** Where memories live: personal, or one project's. */
 type Place = { scope: "personal" } | { scope: "project"; projectId: string } | { scope: "all" };
@@ -49,6 +52,9 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
   const memories = useMemories({ scope: place.scope, projectId: place.scope === "project" ? place.projectId : null });
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  // A guest or an account (public sign-up): Assist's memory is the owner's, so no Add or Import.
+  const owner = useIsOwner();
+  const visitor = useIsVisitor();
   const list = (memories.data ?? []).filter((m) => category === "all" || m.category === category);
   const counts = useMemo(() => {
     const c = new Map<string, number>();
@@ -64,73 +70,81 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
           <SidebarTrigger className="md:hidden" />
           <RailButton />
           <h1 className="font-heading text-[22px] leading-none">Memory</h1>
-          <div className="ml-auto flex items-center gap-1.5">
-            <Button variant="outline" size="sm" onClick={() => setImporting(true)} aria-label="Import memories">
-              <Import /> <span className="hidden sm:inline">Import</span>
-            </Button>
-            <Button size="sm" onClick={() => setAdding(true)}>
-              <Plus /> <span className="hidden sm:inline">Add a memory</span>
-              <span className="sm:hidden">Add</span>
-            </Button>
-          </div>
+          {owner && (
+            <div className="ml-auto flex items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={() => setImporting(true)} aria-label="Import memories">
+                <Import /> <span className="hidden sm:inline">Import</span>
+              </Button>
+              <Button size="sm" onClick={() => setAdding(true)}>
+                <Plus /> <span className="hidden sm:inline">Add a memory</span>
+                <span className="sm:hidden">Add</span>
+              </Button>
+            </div>
+          )}
         </header>
       )}
       <div className={cn("w-full max-w-[900px] min-w-0 flex-1 px-3 pb-16 sm:px-6", projectId ? "pt-2" : "pt-4 md:pt-8")}>
         {!projectId && <p className="max-w-2xl text-[15px] text-pretty text-muted-foreground">Learning from every chat. Assist follows these in every reply, and saves new ones when you tell it something worth keeping{" "}— it asks first while Ask first is on.</p>}
+        {!projectId && <AssistVisitorNote className="mt-4 max-w-2xl" />}
         {projectId && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[13px] text-muted-foreground">Only this project&apos;s chats see these.</p>
-            <div className="flex gap-1.5">
-              <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
-                <Import /> Import
-              </Button>
-              <Button size="sm" onClick={() => setAdding(true)}>
-                <Plus /> Add
-              </Button>
+            {owner && (
+              <div className="flex gap-1.5">
+                <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
+                  <Import /> Import
+                </Button>
+                <Button size="sm" onClick={() => setAdding(true)}>
+                  <Plus /> Add
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+        {/* Whose memory and its categories: only the owner has any (a visitor's list is always empty). */}
+        {owner && (
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {!projectId && (
+              <Select value={placeKey(place)} onValueChange={(k) => setPlace(fromKey(k))}>
+                <SelectTrigger className="h-8 rounded-full" aria-label="Whose memory">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="personal">Personal</SelectItem>
+                  {projects.data?.map((p) => (
+                    <SelectItem key={p.id} value={`project:${p.id}`}>
+                      <ProjectDot project={p} /> {p.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="all">Everything</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            <div className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto px-1 scrollbar-none" role="radiogroup" aria-label="Category" onKeyDown={radioKeys}>
+              {(["all", ...MEMORY_CATEGORIES] as const).map((c) => {
+                const n = c === "all" ? (memories.data?.length ?? 0) : (counts.get(c) ?? 0);
+                // Empty categories are hidden, except the picked one (it stays the group's Tab stop).
+                if (c !== "all" && !n && category !== c) return null;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={category === c}
+                    tabIndex={radioTab(category === c)}
+                    onClick={() => setCategory(c)}
+                    className={cn(
+                      "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      category === c ? "bg-brand-faint text-brand-text hover:bg-brand-faint-hover" : "bg-secondary text-secondary-foreground hover:bg-accent",
+                    )}
+                  >
+                    {c === "all" ? "All" : c} <span className="font-mono text-[11px] opacity-70">{n}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
-        <div className="mt-5 flex flex-wrap items-center gap-2">
-          {!projectId && (
-            <Select value={placeKey(place)} onValueChange={(k) => setPlace(fromKey(k))}>
-              <SelectTrigger className="h-8 rounded-full" aria-label="Whose memory">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="personal">Personal</SelectItem>
-                {projects.data?.map((p) => (
-                  <SelectItem key={p.id} value={`project:${p.id}`}>
-                    <ProjectDot project={p} /> {p.name}
-                  </SelectItem>
-                ))}
-                <SelectItem value="all">Everything</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-          <div className="-mx-1 flex min-w-0 flex-1 gap-1 overflow-x-auto px-1 scrollbar-none" role="radiogroup" aria-label="Category" onKeyDown={radioKeys}>
-            {(["all", ...MEMORY_CATEGORIES] as const).map((c) => {
-              const n = c === "all" ? (memories.data?.length ?? 0) : (counts.get(c) ?? 0);
-              // Empty categories are hidden, except the picked one (it stays the group's Tab stop).
-              if (c !== "all" && !n && category !== c) return null;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  role="radio"
-                  aria-checked={category === c}
-                  tabIndex={radioTab(category === c)}
-                  onClick={() => setCategory(c)}
-                  className={cn(
-                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors",
-                    category === c ? "bg-brand-faint text-brand-text hover:bg-brand-faint-hover" : "bg-secondary text-secondary-foreground hover:bg-accent",
-                  )}
-                >
-                  {c === "all" ? "All" : c} <span className="font-mono text-[11px] opacity-70">{n}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
         <div className="mt-4">
           {memories.isLoading ? (
             <div className="space-y-2">
@@ -150,17 +164,29 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
                 <EmptyMedia variant="icon">
                   <Brain />
                 </EmptyMedia>
-                <EmptyTitle className="font-heading text-[22px] font-normal">{category === "all" ? "Nothing remembered yet" : `No ${category.toLowerCase()} memories`}</EmptyTitle>
-                <EmptyDescription>Tell Assist “remember that I always want 9:16” in a chat, add one here, or bring over what another assistant knows about you.</EmptyDescription>
+                {/* A visitor can't add or import (the note above says why); nothing until it's known who's looking, so neither text flashes. */}
+                {owner ? (
+                  <>
+                    <EmptyTitle className="font-heading text-[22px] font-normal">{category === "all" ? "Nothing remembered yet" : `No ${category.toLowerCase()} memories`}</EmptyTitle>
+                    <EmptyDescription>Tell Assist “remember that I always want 9:16” in a chat, add one here, or bring over what another assistant knows about you.</EmptyDescription>
+                  </>
+                ) : visitor ? (
+                  <>
+                    <EmptyTitle className="font-heading text-[22px] font-normal">Memory belongs to the owner</EmptyTitle>
+                    <EmptyDescription>Assist keeps what the studio&apos;s owner tells it, and that stays private to them.</EmptyDescription>
+                  </>
+                ) : null}
               </EmptyHeader>
-              <EmptyContent className="flex-row justify-center">
-                <Button variant="outline" onClick={() => setImporting(true)}>
-                  <Import /> Import
-                </Button>
-                <Button onClick={() => setAdding(true)}>
-                  <Plus /> Add a memory
-                </Button>
-              </EmptyContent>
+              {owner && (
+                <EmptyContent className="flex-row justify-center">
+                  <Button variant="outline" onClick={() => setImporting(true)}>
+                    <Import /> Import
+                  </Button>
+                  <Button onClick={() => setAdding(true)}>
+                    <Plus /> Add a memory
+                  </Button>
+                </EmptyContent>
+              )}
             </Empty>
           )}
         </div>
@@ -184,7 +210,7 @@ function MemoryRow({ m, project }: { m: AssistMemory; project?: AssistProject })
       await actions.update(m.id, { text, category });
       setEditing(false);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -240,7 +266,7 @@ function MemoryRow({ m, project }: { m: AssistMemory; project?: AssistProject })
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => void actions.remove(m.id).catch((e) => toast.error((e as Error).message))}>
+            <AlertDialogAction variant="destructive" onClick={() => void actions.remove(m.id).catch((e) => toastError(e))}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -317,7 +343,7 @@ function AddForm({ place, projects, onDone }: { place: Place; projects: AssistPr
       toast.success("Remembered", { duration: 1500 });
       onDone();
     } catch (err) {
-      toast.error((err as Error).message);
+      toastError(err);
     } finally {
       setBusy(false);
     }
@@ -387,7 +413,7 @@ function ImportForm({ place, projects, onDone }: { place: Place; projects: Assis
       toast.success(`Imported ${r.added} memor${r.added === 1 ? "y" : "ies"}`, { description: r.skipped ? `${r.skipped} were already there` : undefined });
       onDone();
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }

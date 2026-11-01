@@ -22,7 +22,7 @@ import type { Engine, Generation } from "@/lib/catalog/types";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { createPipeline } from "./chains";
 import { llmText, llmTextBackend } from "./enhance";
-import { previewChained } from "./generations";
+import { ConnectComfyError, previewChained } from "./generations";
 import { isOffered, offeredModel } from "./model-access";
 import { probeOllama } from "./providers/llm";
 import { engineMode, getSetting } from "./settings";
@@ -142,7 +142,7 @@ export async function writeDirection(body: z.infer<typeof DirectionSchema>): Pro
   if (!textModel || !offeredModel(textModel)) return offline(`the text model is switched off in ${ACCESS_PLACE}`);
   const backend = llmTextBackend();
   const ollama = backend === "ollama" || (backend === "claude" && body.engine === "open");
-  if (!backend) return offline("no text model is set up (Settings → Prompt enhancement)");
+  if (!backend) return offline("no text model is set up (Settings → AI helper)");
   if (ollama && !(await probeOllama())) return offline("Ollama isn't running");
   const max = EVOLUTION.llmReferences[body.engine];
   const frame = body.frame ? [{ data: Buffer.from(body.frame.split(",")[1], "base64"), contentType: body.frame.slice(5, body.frame.indexOf(";")) }] : [];
@@ -182,9 +182,10 @@ function planInput(body: z.infer<typeof EvolutionBodySchema>, info: Awaited<Retu
   const name = getModel(EVOLUTION.model)?.name ?? "Fuobe Evolution";
   const n = body.references.length;
   if (engine === "open") {
-    notes.push(`Each ≤5 s segment: Qwen-Image-Edit takes its first frame toward the direction${n ? ` with your first ${Math.min(n, EVOLUTION.openReferences) === 1 ? "reference" : "two references"}` : ""}, then Wan 2.2 Fun VACE re-renders it from itself at 16 fps`);
+    const k = Math.min(n, EVOLUTION.openReferences);
+    notes.push(`Each ≤5 s segment: Qwen-Image 2.1 Turbo takes its first frame toward the direction${n ? ` with your first ${k === 1 ? "reference" : `${k} references`}` : ""}, then Wan 2.2 Fun VACE re-renders it from itself at 16 fps`);
     if (n > EVOLUTION.openReferences) notes.push(`The other ${n - EVOLUTION.openReferences} reference${n - EVOLUTION.openReferences > 1 ? "s" : ""} shape the direction only`);
-    notes.push("Needs a 24 GB GPU · Wan 2.2 Fun VACE and Qwen-Image-Edit are Apache-2.0");
+    notes.push("Needs a 24 GB GPU · Wan 2.2 Fun VACE is Apache-2.0; Qwen-Image 2.1's weights are non-commercial");
   } else {
     notes.push(`${name} runs LTX-2.3 video to video on fal in your clip's shape (${nearestShape(source.width, source.height)}) at 24 fps`);
     if (n) notes.push(`LTX-2.3 takes no pictures: your ${n === 1 ? "reference shapes" : `${n} references shape`} the direction`);
@@ -219,6 +220,7 @@ function price(steps: PlanStep[]): { costUsd: number | null; demo: boolean } {
     try {
       p = previewChained(withChain(s), s.after?.length ?? 0);
     } catch (e) {
+      if (e instanceof ConnectComfyError) throw e;
       throw new ShortsError((e as Error).message, 422);
     }
     demo ||= p.demo;
@@ -280,6 +282,7 @@ export async function createEvolution(body: z.infer<typeof EvolutionBodySchema>)
   try {
     p = createPipeline(plan.steps);
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
   return { final: p.byKey[plan.final], items: p.items, direction, by };

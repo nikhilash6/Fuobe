@@ -320,7 +320,7 @@ describe("folder routes", () => {
     const f = (await res.json()) as { id: string; name: string };
     expect((await folderRoutes.POST(body({ name: "routes" }))).status).toBe(409);
     expect((await folderRoutes.POST(body({ name: " " }))).status).toBe(400);
-    expect(((await (await folderRoutes.GET(new Request("http://localhost/"))).json()) as { items: { id: string }[] }).items.map((x) => x.id)).toContain(f.id);
+    expect(((await (await folderRoutes.GET()).json()) as { items: { id: string }[] }).items.map((x) => x.id)).toContain(f.id);
     const renamed = await folderIdRoutes.PATCH(body({ name: "Routes 2" }, "PATCH"), ctx(f.id));
     expect(((await renamed.json()) as { name: string }).name).toBe("Routes 2");
     expect((await folderIdRoutes.PATCH(body({ name: "x" }, "PATCH"), ctx("missing"))).status).toBe(404);
@@ -514,7 +514,7 @@ describe("nested folders", () => {
     expect(sub.parentId).toBe(top.id);
     expect((await folderRoutes.POST(jsonReq("/api/folders", "POST", { name: "Orphan", parentId: "missing" }))).status).toBe(404);
     // The flat list has both, each with its parent.
-    const all = ((await (await folderRoutes.GET(new Request("http://localhost/"))).json()) as { items: { id: string; parentId: string | null }[] }).items;
+    const all = ((await (await folderRoutes.GET()).json()) as { items: { id: string; parentId: string | null }[] }).items;
     expect(all.find((f) => f.id === sub.id)?.parentId).toBe(top.id);
     // PATCH moves (409 into its own subfolder), pins and unpins.
     expect((await folderIdRoutes.PATCH(jsonReq("/x", "PATCH", { parentId: sub.id }), ctxOf(top.id))).status).toBe(409);

@@ -2,7 +2,8 @@ import "server-only";
 import { createFalClient } from "@fal-ai/client";
 import { loraEndpointFor, routeLoraField } from "@/lib/catalog/loras";
 import { buildPayload, extractOutputs, noOutputsError } from "@/lib/catalog/payload";
-import { getSetting } from "../settings";
+import { accountKeyError, balanceRefusal, cloudKey, missingKeyError, originOf, redactKey, standIn } from "../provider-keys";
+import { tenant } from "../tenant";
 import { ProviderError, type ProviderAdapter } from "./types";
 
 /**
@@ -13,17 +14,34 @@ import { ProviderError, type ProviderAdapter } from "./types";
  *   cancel: PUT  <cancel_url>
  * We always use the URLs returned at submit time: for nested endpoint ids
  * (fal-ai/kling-video/v2.5-turbo/pro/image-to-video) the status/result paths drop the sub-path.
+ *
+ * The key is the run's own (provider-keys.ts cloudKey: an account's run sends its own key, never the studio's), and it
+ * goes to fal.ai's own hosts only.
  */
 const QUEUE = "https://queue.fal.run";
+const REST = "https://rest.fal.ai";
+
+/** fal.ai's queue: the real one, or a stand-in on this machine in tests and `next dev` (provider-keys.ts standIn). */
+export const falQueue = () => standIn("fal") ?? QUEUE;
+
+/** Where a fal.ai key may go: the queue and the REST API (storage uploads), or the stand-in. */
+function keyOrigin(url: string): boolean {
+  const o = originOf(url);
+  return o === QUEUE || o === REST || (!!o && o === standIn("fal"));
+}
 
 function key(): string {
-  return getSetting("falKey");
+  return cloudKey("fal");
 }
 
 export async function falFetch(url: string, init: RequestInit = {}): Promise<unknown> {
+  const k = key();
+  if (!k && tenant()) throw missingKeyError("fal");
+  // A status, result or cancel address is the one fal.ai gave at submit: the key goes to fal.ai's own hosts only.
+  if (!keyOrigin(url)) throw new ProviderError("fal.ai gave an address outside fal.ai, so Fuobe didn't send the key there");
   const res = await fetch(url, {
     ...init,
-    headers: { Authorization: `Key ${key()}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
+    headers: { Authorization: `Key ${k}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
   });
   const text = await res.text();
   let body: unknown = text;
@@ -31,10 +49,25 @@ export async function falFetch(url: string, init: RequestInit = {}): Promise<unk
     body = JSON.parse(text);
   } catch {}
   if (!res.ok) {
-    throw new ProviderError(`fal ${res.status}: ${describeError(body)}`, res.status);
+    // A provider's error may echo the request: the key never reaches a message, a row or a log.
+    const said = redactKey(`fal ${res.status}: ${describeError(body)}`, k);
+    throw accountKeyError("fal", res.status, said, k) ?? new ProviderError(said, res.status);
   }
   return body;
 }
+
+/**
+ * The fal client's requests. The client adds the key on calls to fal.ai's REST API only (a file's upload address gets
+ * none); this keeps it so. In tests and `next dev` the REST API is the stand-in.
+ */
+const clientFetch: typeof fetch = (input, init) => {
+  const url = input instanceof Request ? input.url : String(input);
+  const local = standIn("fal");
+  const target = local && url.startsWith(REST) ? local + url.slice(REST.length) : url;
+  const headers = new Headers(init?.headers);
+  if (!keyOrigin(target)) headers.delete("authorization");
+  return fetch(target, { ...init, headers });
+};
 
 function describeError(body: unknown): string {
   if (typeof body === "string") return body.slice(0, 500);
@@ -60,12 +93,21 @@ export const falProvider: ProviderAdapter = {
   isConfigured: () => !!key(),
 
   async prepareFile(data, contentType, name) {
-    const client = createFalClient({ credentials: key() });
+    // Always a key as a string ("" too): left out, the fal client would take FAL_KEY from the environment.
+    const k = key();
+    if (!k && tenant()) throw missingKeyError("fal");
+    const client = createFalClient({ credentials: k, fetch: clientFetch, suppressLocalCredentialsWarning: true });
     // The file keeps its name (and so its extension): an unnamed blob is stored as "<time>.<subtype>", and
     // a LoRA mirrored as application/octet-stream would land at ….octet, which loaders that go by the
     // extension (fal's LTX-2.3 quality takes only .safetensors URLs) refuse.
     const blob = fileName(name) ? new File([new Uint8Array(data)], fileName(name)!, { type: contentType }) : new Blob([new Uint8Array(data)], { type: contentType });
-    return client.storage.upload(blob);
+    try {
+      return await client.storage.upload(blob);
+    } catch (e) {
+      const status = (e as { status?: number }).status ?? 0;
+      const said = redactKey(`fal ${status || "upload"}: ${(e as Error).message}`, k);
+      throw accountKeyError("fal", status, said, k) ?? new ProviderError(said, status || undefined);
+    }
   },
 
   async submit({ route, input }) {
@@ -79,7 +121,7 @@ export const falProvider: ProviderAdapter = {
     } catch (e) {
       throw new ProviderError((e as Error).message);
     }
-    const res = (await falFetch(`${QUEUE}/${endpoint}`, {
+    const res = (await falFetch(`${falQueue()}/${endpoint}`, {
       method: "POST",
       body: JSON.stringify(payload),
     })) as { request_id: string; status_url: string; response_url: string; cancel_url: string };
@@ -127,20 +169,40 @@ export const falProvider: ProviderAdapter = {
   },
 
   async test() {
-    if (!key()) return { ok: false, detail: "No key set" };
-    // Status lookup of a bogus request id: 401/403 means bad key, 404/422 means the key works.
-    let res: Response;
-    try {
-      res = await fetch(`${QUEUE}/fal-ai/flux/dev/requests/00000000-0000-0000-0000-000000000000/status`, {
-        headers: { Authorization: `Key ${key()}` },
-        signal: AbortSignal.timeout(15_000),
-      });
-    } catch (e) {
-      return { ok: false, detail: `Can't reach fal.ai (${(e as Error).message})` };
-    }
-    if (res.status === 401 || res.status === 403) return { ok: false, detail: `Key rejected (${res.status})` };
-    if (res.ok || [400, 404, 422].includes(res.status)) return { ok: true, detail: "Key accepted" };
-    // A proxy or an outage (405, 407, 5xx) says nothing about the key: don't call it accepted.
-    return { ok: false, detail: `Couldn't check the key: fal.ai answered ${res.status}. Try again in a moment` };
+    const { ok, detail } = await testFalKey(key());
+    return { ok, detail };
   },
 };
+
+/**
+ * What a key check found: accepted, refused by the provider, a key that works on an account with no balance left, the
+ * provider out of reach, or an answer that says nothing.
+ */
+export type KeyCheck = { ok: true; detail: string } | { ok: false; detail: string; reason: "rejected" | "balance" | "unreachable" | "odd"; status?: number };
+
+/**
+ * Check a fal.ai key, and only that key (Settings' "Save & test", an account's Your keys): the status of a request that
+ * doesn't exist. Free, and nothing runs: 401/403 means a bad key (or, saying so, an empty balance), 404/422 a key that
+ * works. The path is the app's (fal-ai/flux), as fal.ai's status paths are: with an endpoint's sub-path
+ * (fal-ai/flux/dev) fal.ai answers 405 to every key.
+ */
+export async function testFalKey(k: string): Promise<KeyCheck> {
+  if (!k) return { ok: false, detail: "No key set", reason: "rejected" };
+  let res: Response;
+  try {
+    res = await fetch(`${falQueue()}/fal-ai/flux/requests/00000000-0000-0000-0000-000000000000/status`, {
+      headers: { Authorization: `Key ${k}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    return { ok: false, detail: redactKey(`Can't reach fal.ai (${(e as Error).message})`, k), reason: "unreachable" };
+  }
+  if (res.status === 401 || res.status === 402 || res.status === 403) {
+    const text = await res.text().catch(() => "");
+    if (balanceRefusal(res.status, text)) return { ok: false, detail: "Key works, but the fal.ai balance is empty: top it up on fal.ai", reason: "balance", status: res.status };
+    return { ok: false, detail: `Key rejected (${res.status})`, reason: "rejected", status: res.status };
+  }
+  if (res.ok || [400, 404, 422].includes(res.status)) return { ok: true, detail: "Key accepted" };
+  // A proxy or an outage (405, 407, 5xx) says nothing about the key: don't call it accepted.
+  return { ok: false, detail: `Couldn't check the key: fal.ai answered ${res.status}. Try again in a moment`, reason: "odd", status: res.status };
+}

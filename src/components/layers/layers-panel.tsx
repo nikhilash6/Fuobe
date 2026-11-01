@@ -62,6 +62,7 @@ import {
   type LayerRevision,
 } from "@/lib/layers";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { Field } from "./bits";
 import { costLabel, modelsFor, TOOL_FOR_JOB, useEditor } from "./editor-context";
 import { useKeepAlpha } from "./keep-alpha";
@@ -148,7 +149,7 @@ function AddLayer() {
             const a = await uploadFile(f);
             await add(a.url, f.name.replace(/\.[^.]+$/, "") || "Uploaded layer");
           } catch (err) {
-            toast.error((err as Error).message);
+            toastError(err);
           }
         }}
       />
@@ -273,7 +274,7 @@ export function RefPicker({ value, onChange }: { value: string | null; onChange:
           try {
             onChange((await uploadFile(f)).url);
           } catch (err) {
-            toast.error((err as Error).message);
+            toastError(err);
           } finally {
             setUploading(false);
           }

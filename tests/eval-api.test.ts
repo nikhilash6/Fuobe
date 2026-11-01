@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
 import { planGeneration, routeLoras } from "@/lib/catalog/plan";
 
@@ -14,6 +14,8 @@ process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 process.env.OLLAMA_URL = "http://127.0.0.1:9";
 const { POST } = await import("@/app/api/generations/route");
+// Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
+beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const post = async (body: unknown, preview = true) => {

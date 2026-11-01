@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import type { CinemaProject } from "@/lib/catalog/cinema";
 import { untitledName } from "@/lib/format";
+import { toastError } from "@/lib/refusals";
 import { formatUsd } from "./money";
 import { useCinemaProjects, useCreateProject, useDeleteProject, useUpdateProject } from "./hooks";
 
@@ -68,9 +69,9 @@ function ProjectForm({ project, spentUsd, onDone, onDeleted }: FormProps) {
           toast.success("Saved", { duration: 1500 });
           onDone(p);
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       });
-    else create.mutate(body, { onSuccess: (p) => onDone(p), onError: (e) => toast.error((e as Error).message) });
+    else create.mutate(body, { onSuccess: (p) => onDone(p), onError: (e) => toastError(e) });
   };
 
   return (
@@ -183,7 +184,7 @@ function ProjectForm({ project, spentUsd, onDone, onDeleted }: FormProps) {
                       toast("Project deleted");
                       onDeleted?.();
                     },
-                    onError: (e) => toast.error((e as Error).message),
+                    onError: (e) => toastError(e),
                   })
                 }
               >

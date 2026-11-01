@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { MAX_CLOTHING, MAX_DIRECTION } from "@/lib/influencer";
 import { createInfluencer, previewInfluencer, type InfluencerBody } from "@/server/influencer";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
+import { refusedRun } from "@/server/connect-refusal";
 
 const File = z.string().startsWith("/api/files/").max(500);
 
@@ -32,7 +31,7 @@ function bodyError(issues: z.core.$ZodIssue[]): string {
  * Seedream 5.0 Pro when asked), the Soul Cast sheet workflow on the open engine, each followed by Qwen-Image-Edit 2511
  * for a face, a reference or clothing. `?preview=1` (or POST /api/influencer/estimate) prices it instead.
  */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: bodyError(parsed.error.issues) }, { status: 400 });
   const body = parsed.data as InfluencerBody;
@@ -40,7 +39,6 @@ export const POST = handler({ access: "signed-in" }, async (request: Request) =>
   try {
     return Response.json(createInfluencer(body), { status: 201 });
   } catch (e) {
-    rethrowAccess(e);
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
-});
+}

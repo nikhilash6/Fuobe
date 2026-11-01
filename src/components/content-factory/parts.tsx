@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { StyleArt } from "@/components/faceless/style-art";
+import { CoverArt, useCoverPlayback } from "@/components/template-cover";
 import { usd } from "@/components/faceless/controls";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import {
@@ -24,7 +25,9 @@ import {
 } from "@/lib/catalog/content-factory";
 import { formatLength } from "@/lib/catalog/faceless";
 import type { Engine } from "@/lib/catalog/types";
+import { useLikelyVisitor } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 import { claudePrompt, type SeriesAsk } from "./hooks";
 
@@ -76,7 +79,7 @@ export function ReferenceCard({
             <video src={`${reference.url}#t=0.5`} muted playsInline preload="metadata" className="relative size-full object-cover" aria-hidden />
           </>
         ) : (
-          <StyleArt styleId={styleId} />
+          <StyleArt styleId={styleId} sizes="56px" />
         )}
         {reading && (
           <span className="absolute inset-0 grid place-items-center bg-black/35 text-white">
@@ -226,51 +229,68 @@ export function PresetGrid({ value, onPick }: { value: string | null; onPick: (p
   const picked = PRESETS.some((p) => p.id === value);
   return (
     <div role="radiogroup" aria-label="Preset styles" onKeyDown={radioKeys} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      {PRESETS.map((p, i) => {
-        const on = value === p.id;
-        return (
-          <button
-            key={p.id}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            tabIndex={radioTab(picked ? on : i === 0)}
-            onClick={() => onPick(p)}
-            className={cn(
-              "group/preset relative min-w-0 overflow-hidden rounded-2xl border bg-background text-left transition-[box-shadow,border-color] outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              on ? "border-primary ring-2 ring-brand-faint" : "hover:border-border-strong",
-            )}
-          >
-            <div className="relative aspect-[4/3] w-full overflow-hidden">
-              <StyleArt styleId={p.brief.styleId} className="transition-transform duration-300 ease-move group-hover/preset:scale-[1.04]" />
-              <span className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">{p.brief.aspect === "9:16" ? "Vertical" : "Horizontal"}</span>
-              {on && (
-                <span className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-primary text-primary-foreground shadow-soft">
-                  <Check className="size-3.5" />
-                </span>
-              )}
-            </div>
-            <div className="p-3">
-              <p className="truncate text-[14px] font-medium">{p.name}</p>
-              <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">{p.tagline}</p>
-              <p className="mt-2 text-[12px] font-medium text-brand-text">{on ? "In use" : "Use as reference"}</p>
-            </div>
-          </button>
-        );
-      })}
+      {PRESETS.map((p, i) => (
+        <PresetTile key={p.id} p={p} on={value === p.id} tabStop={picked ? value === p.id : i === 0} onPick={onPick} />
+      ))}
     </div>
+  );
+}
+
+/** A trending style: its real cover when it has one (a clip plays as the gallery cards' do), else its style's picture. */
+export function PresetTile({ p, on, tabStop, onPick }: { p: StylePreset; on: boolean; tabStop: boolean; onPick: (p: StylePreset) => void }) {
+  const cover = templateCover("content-factory", p.id);
+  const { ref, playing, asked, handlers } = useCoverPlayback<HTMLButtonElement>(`content-factory/${p.id}`, cover);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      role="radio"
+      aria-checked={on}
+      tabIndex={radioTab(tabStop)}
+      {...handlers}
+      onClick={() => onPick(p)}
+      className={cn(
+        "group/preset relative min-w-0 overflow-hidden rounded-2xl border bg-background text-left transition-[box-shadow,border-color] outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        on ? "border-primary ring-2 ring-brand-faint" : "hover:border-border-strong",
+      )}
+    >
+      <div className="relative aspect-[4/3] w-full overflow-hidden">
+        {cover ? (
+          <CoverArt cover={cover} sizes="(max-width: 640px) 50vw, 280px" playing={playing} asked={asked} />
+        ) : (
+          <StyleArt styleId={p.brief.styleId} className="transition-transform duration-300 ease-move group-hover/preset:scale-[1.04]" />
+        )}
+        <span className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">{p.brief.aspect === "9:16" ? "Vertical" : "Horizontal"}</span>
+        {on && (
+          <span className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-primary text-primary-foreground shadow-soft">
+            <Check className="size-3.5" />
+          </span>
+        )}
+      </div>
+      <div className="p-3">
+        <p className="line-clamp-2 text-[14px] leading-tight font-medium" title={p.name}>
+          {p.name}
+        </p>
+        <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">{p.tagline}</p>
+        <p className="mt-2 text-[12px] font-medium text-brand-text">{on ? "In use" : "Use as reference"}</p>
+      </div>
+    </button>
   );
 }
 
 // ---------------------------------------------------------------------------
 // The price
 
-/** "≈ $4.20 · 3 episodes × $1.40" / "Demo · free" / "Free · your GPU", with the research's pricing note. */
+/**
+ * "≈ $4.20 · 3 episodes × $1.40" / "Placeholder · free" / "Free · your GPU", with the research's pricing note. A guest or an
+ * account reads "Self-hosted only" for the open engine: a series doesn't run on their own GPU yet.
+ */
 export function SeriesPriceLine({ data, loading, engine, className }: { data: SeriesEstimate | undefined; loading?: boolean; engine: Engine; className?: string }) {
+  const visitor = useLikelyVisitor();
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
   const p = data.price;
   const each = p.episodes > 1 ? ` · ${p.episodes} × ${usd(p.perEpisode)}` : "";
-  const price = data.demo ? "Demo · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
+  const price = visitor && (data.demo || engine === "open") ? "Self-hosted only" : data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(p.total)}${p.unknown ? "+" : ""}${each}`;
   return (
     <span className={cn("inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5", className)}>
       <Popover>
@@ -282,7 +302,7 @@ export function SeriesPriceLine({ data, loading, engine, className }: { data: Se
         </PopoverTrigger>
         <PopoverContent className="w-72 p-3 text-[13px]" collisionPadding={12}>
           <p className="font-medium">How the price works</p>
-          <p className="mt-1 text-[12px] text-muted-foreground">{data.demo ? "Nothing is connected for some steps, so this runs as a free demo with placeholder results." : engine === "open" ? "Every step runs on your own ComfyUI: no fees." : PRICE_NOTE}</p>
+          <p className="mt-1 text-[12px] text-muted-foreground">{data.demo ? "Nothing is connected for some steps, so this runs as a free demo with placeholder results." : engine === "open" ? (visitor ? "Every step runs on open-source models, free on a self-hosted Fuobe." : "Every step runs on your own ComfyUI: no fees.") : PRICE_NOTE}</p>
           {!data.demo && engine === "cloud" && p.episodes > 1 && (
             <p className="mt-2 font-mono text-[12px] tabular-nums">
               {p.episodes} episodes × {usd(p.perEpisode)} = {usd(p.total)}

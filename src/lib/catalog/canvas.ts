@@ -329,14 +329,14 @@ const needsMarks = (m: ModelDef) => !!(m.options.requires?.mask || m.options.req
 
 /** Preferred defaults; anything missing falls back to the first catalog model for that op and engine. */
 const PREFERRED: Partial<Record<Operation, Partial<Record<Engine, string>>>> = {
-  t2i: { cloud: "nano-banana-pro", open: "oss-z-image-turbo" },
-  edit: { cloud: "nano-banana-pro", open: "oss-qwen-edit" },
-  t2v: { cloud: "kling-2-5-turbo", open: "oss-wan22-14b-fast" },
-  i2v: { cloud: "kling-2-5-turbo", open: "oss-wan22-14b-fast" },
-  flf2v: { cloud: "kling-2-5-turbo", open: "oss-wan22-14b-fast" },
+  t2i: { cloud: "nano-banana-pro", open: "oss-ideogram-4" },
+  edit: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
+  t2v: { cloud: "minimax-h3", open: "oss-minimax-h3" },
+  i2v: { cloud: "minimax-h3", open: "oss-minimax-h3" },
+  flf2v: { cloud: "minimax-h3", open: "oss-minimax-h3" },
   ref2v: { cloud: "seedance-2-5", open: "oss-wan-vace" },
   avatar: { cloud: "kling-avatar-2", open: "oss-infinitetalk" },
-  lipsync: { cloud: "sync-lipsync-2-pro" },
+  lipsync: { cloud: "sync-lipsync-3" },
   tts: { cloud: "elevenlabs-v4", open: "oss-chatterbox" },
   "voice-change": { cloud: "elevenlabs-voice-changer", open: "oss-chatterbox-vc" },
   dub: { cloud: "elevenlabs-dubbing" },
@@ -344,8 +344,8 @@ const PREFERRED: Partial<Record<Operation, Partial<Record<Engine, string>>>> = {
   sfx: { cloud: "elevenlabs-sfx" },
   concat: { cloud: "join-clips", open: "oss-join-clips" },
   frame: { cloud: "extract-frame" },
-  "upscale-image": { cloud: "topaz-image", open: "oss-upscale-image" },
-  "upscale-video": { cloud: "topaz-video", open: "oss-upscale-video-esrgan" },
+  "upscale-image": { cloud: "topaz-image", open: "oss-seedvr2-image" },
+  "upscale-video": { cloud: "topaz-video", open: "oss-seedvr2" },
   "bg-remove": { cloud: "birefnet-cloud", open: "oss-rmbg" },
   "bg-remove-video": { cloud: "birefnet-video", open: "oss-video-matte-birefnet" },
   write: { cloud: "text-llm", open: "oss-text-llm" },
@@ -1785,8 +1785,8 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     build: tpl(
       [
         { id: "prompt", type: "prompt", x: 0, y: 80, data: { label: "Prompt", text: "A lighthouse on a sea cliff at golden hour, waves crashing below, cinematic wide shot" } },
-        { id: "still", type: "model", x: COL, y: 40, data: { mediaKind: "image", label: "Still", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-z-image-turbo" } },
-        { id: "animate", type: "model", x: COL * 2, y: 40, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in as the waves roll and the beam sweeps across the sea", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "kling-2-5-turbo", open: "oss-wan22-14b-fast" } },
+        { id: "still", type: "model", x: COL, y: 40, data: { mediaKind: "image", label: "Still", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        { id: "animate", type: "model", x: COL * 2, y: 40, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in as the waves roll and the beam sweeps across the sea", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
         { id: "out", type: "output", x: COL * 3, y: 60, data: { label: "Film" } },
       ],
       [
@@ -1805,9 +1805,9 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     build: tpl(
       [
         { id: "product", type: "image-input", x: 0, y: ROW, data: { label: "Product photo" } },
-        { id: "front", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "Front ¾ angle", op: "edit", prompt: "The same product from a three-quarter front angle on a seamless studio background, soft key light, sharp details" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-edit" } },
-        { id: "side", type: "model", x: COL, y: ROW, data: { mediaKind: "image", label: "Side profile", op: "edit", prompt: "The same product in a clean side profile on a seamless studio background, rim light, sharp details" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-edit" } },
-        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-edit" } },
+        { id: "front", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "Front ¾ angle", op: "edit", prompt: "The same product from a three-quarter front angle on a seamless studio background, soft key light, sharp details" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        { id: "side", type: "model", x: COL, y: ROW, data: { mediaKind: "image", label: "Side profile", op: "edit", prompt: "The same product in a clean side profile on a seamless studio background, rim light, sharp details" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
         { id: "video", type: "model", x: COL * 2, y: ROW - 40, data: { mediaKind: "video", label: "Ad clip", op: "ref2v", prompt: "A premium product commercial: the camera orbits the product from the reference angles, studio lighting, slow and smooth", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "seedance-2-5", open: "oss-wan-vace" } },
         { id: "out", type: "output", x: COL * 3, y: ROW, data: { label: "Ad" } },
       ],
@@ -1851,7 +1851,7 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
           x: COL * 2,
           y: i * FILM_ROW,
           data: { mediaKind: "image" as const, label: `Frame ${i + 1}`, prompt: "Cinematic storyboard still, one consistent look across the film: {text}", params: { aspectRatio: "16:9" } },
-          models: { cloud: "nano-banana-pro", open: "oss-z-image-turbo" },
+          models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
         })),
         ...[0, 1, 2].map((i) => ({
           id: `shot${i + 1}`,
@@ -1859,7 +1859,7 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
           x: COL * 3,
           y: i * FILM_ROW,
           data: { mediaKind: "video" as const, label: `Shot ${i + 1}`, op: "i2v" as const, prompt: "Animate this moment, smooth cinematic camera move: {text}", params: { aspectRatio: "16:9", duration: 5 } },
-          models: { cloud: "kling-2-5-turbo", open: "oss-wan22-14b-fast" },
+          models: { cloud: "minimax-h3", open: "oss-minimax-h3" },
         })),
         { id: "film", type: "join", x: COL * 4, y: FILM_ROW / 2, data: { label: "Film" }, models: { cloud: "join-clips", open: "oss-join-clips" } },
         { id: "out", type: "output", x: COL * 4, y: FILM_ROW * 1.5, data: { label: "Film" } },
@@ -1891,7 +1891,7 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     icon: "Columns3",
     hue: 150,
     build: (engine) => {
-      const models = engine === "open" ? ["oss-z-image-turbo", "oss-qwen-image", "oss-flux1-krea"] : ["nano-banana-pro", "seedream-5-pro", "flux-2-pro"];
+      const models = engine === "open" ? ["oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism"] : ["nano-banana-pro", "seedream-5-pro", "flux-3"];
       return tpl(
         [
           { id: "prompt", type: "prompt", x: 0, y: ROW - 60, data: { label: "Prompt", text: "Portrait of an elderly fisherman mending a net at dawn, soft window light, film grain" } },
@@ -1935,8 +1935,8 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     build: tpl(
       [
         { id: "cast", type: "table", x: 0, y: 40, data: { label: "Shots", columns: ["Animal", "Place"], rows: [["red fox", "a snowy pine forest"], ["barn owl", "an old wooden barn at dusk"], ["sea otter", "a kelp forest at sunrise"]] } },
-        { id: "still", type: "model", x: COL + 140, y: 0, data: { mediaKind: "image", label: "Still", prompt: "A {Animal} in {Place}, wildlife photography, soft natural light", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-z-image-turbo" } },
-        { id: "animate", type: "model", x: COL * 2 + 140, y: 0, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in, the animal turns its head", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "kling-2-5-turbo", open: "oss-wan22-14b-fast" } },
+        { id: "still", type: "model", x: COL + 140, y: 0, data: { mediaKind: "image", label: "Still", prompt: "A {Animal} in {Place}, wildlife photography, soft natural light", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        { id: "animate", type: "model", x: COL * 2 + 140, y: 0, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in, the animal turns its head", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
         { id: "film", type: "concat", x: COL * 3 + 140, y: 0, data: { label: "Film", params: { aspectRatio: "16:9" } }, models: { cloud: CONCAT_MODELS.cloud, open: CONCAT_MODELS.open } },
       ],
       [
@@ -1972,13 +1972,13 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
 // Effects 2.0 chains (build plan O13): Higgsfield's "Prompt based" effect chains as Fuobe templates. A photo goes
 // through an image edit that sets the scene, then Fuobe DoP animates it with the effect's words (research
 // higgsfield-originals-5.md §3.8: an image edit, then image to video). Both steps are open weights on both engines:
-// Qwen-Image-Edit 2511 (on your GPU, or hosted on fal) and Fuobe DoP (Wan 2.2 14B on your GPU, or hosted on fal).
+// Qwen-Image 2.1 Turbo on your GPU (Qwen-Image-Edit 2511 hosted on fal) and Fuobe DoP (Wan 2.2 14B on your GPU, or hosted on fal).
 // The edit prompts are Fuobe's own words; the motion is the effect's own prompt from the effects catalog.
 
 export const EFFECT_CHAIN_GROUP = "Effects 2.0 chains";
 
 /** Image edit, then image to video: the models per engine (Fuobe DoP is an Original, run on the template's engine). */
-export const EFFECT_CHAIN_MODELS = { edit: { cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-edit" }, video: "fuobe-dop" } as const;
+export const EFFECT_CHAIN_MODELS = { edit: { cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-image-21-turbo" }, video: "fuobe-dop" } as const;
 
 /** The researched Effects 2.0 chains with a scene to set first: the effect (its name in the effects catalog) and the edit. */
 export const EFFECT_CHAINS: { effect: string; edit: string; icon: string; hue: number }[] = [

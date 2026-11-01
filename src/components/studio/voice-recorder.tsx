@@ -3,8 +3,9 @@
 import { Loader2, Mic, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { uploadFile } from "@/lib/api";
+import { uploadFile, useAskBeforeUpload } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import type { SlotValue } from "./media-slot";
 
 /** Decode any recording the browser made and re-encode it as 16-bit mono WAV — every voice API takes WAV. */
@@ -39,7 +40,7 @@ export async function toWav(blob: Blob): Promise<File> {
   }
 }
 
-/** Mic button: record a voice sample, convert it to WAV and upload it. */
+/** Mic button: record a voice sample, convert it to WAV and upload it. Whoever the upload would refuse is asked first. */
 export function VoiceRecorder({ onRecorded, max = 60, className }: { onRecorded: (v: SlotValue) => void; max?: number; className?: string }) {
   const [state, setState] = useState<"idle" | "recording" | "saving">("idle");
   const [secs, setSecs] = useState(0);
@@ -55,8 +56,11 @@ export function VoiceRecorder({ onRecorded, max = 60, className }: { onRecorded:
   );
 
   const stop = () => rec.current?.state === "recording" && rec.current.stop();
+  // A guest, or an account with neither its own GPU nor its own key, gets its card before the microphone: the sample would be refused.
+  const askFirst = useAskBeforeUpload();
 
   const start = async () => {
+    if (askFirst()) return;
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
@@ -77,7 +81,7 @@ export function VoiceRecorder({ onRecorded, max = 60, className }: { onRecorded:
         const asset = await uploadFile(file);
         onRecorded({ ref: asset.url, preview: asset.url, kind: "audio", name: "Recording" });
       } catch (e) {
-        toast.error((e as Error).message || "Couldn't save the recording");
+        toastError(e, "Couldn't save the recording");
       } finally {
         setState("idle");
       }

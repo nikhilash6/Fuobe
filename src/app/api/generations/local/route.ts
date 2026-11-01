@@ -1,7 +1,5 @@
 import { z } from "zod";
 import { recordLocalGeneration } from "@/server/generations";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const Body = z.object({
   feature: z.string().min(1).max(80),
@@ -10,17 +8,16 @@ const Body = z.object({
   prompt: z.string().max(2000),
   inputs: z.object({ images: z.array(z.string()).max(1).optional(), video: z.string().optional() }),
   params: z.object({ extra: z.record(z.string(), z.unknown()).optional() }).optional(),
-  output: z.object({ url: z.string().startsWith("/api/files/"), kind: z.enum(["image", "video"]), contentType: z.string().optional() }),
+  output: z.object({ url: z.string().startsWith("/api/files/").max(500), kind: z.enum(["image", "video"]), contentType: z.string().optional() }),
 });
 
 /** Record a result rendered in the browser (e.g. a colour grade) so it shows up in the library. */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid result" }, { status: 400 });
   try {
     return Response.json(recordLocalGeneration(parsed.data), { status: 201 });
   } catch (e) {
-    rethrowAccess(e);
     return Response.json({ error: (e as Error).message }, { status: 422 });
   }
-});
+}

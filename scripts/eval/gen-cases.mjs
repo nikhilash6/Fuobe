@@ -9,6 +9,7 @@
 // The prompts are Fuobe's own (never Higgsfield's). Run: node scripts/eval/gen-cases.mjs [--check]
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { CASES_DIR, REPO_DIR } from "./lib/paths.mjs";
 import { pinnedLora, research, slug, soulLooks } from "./lib/recipes.mjs";
 import { schemaJson } from "./lib/schema.mjs";
@@ -397,7 +398,8 @@ const write = (name, data, check) => {
   const file = path.join(CASES_DIR, name);
   const text = `${JSON.stringify(data, null, 2)}\n`;
   if (check) {
-    const now = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+    // A Windows checkout may have CRLF line endings: the same content.
+    const now = fs.existsSync(file) ? fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n") : "";
     if (now !== text) throw new Error(`${path.relative(REPO_DIR, file)} is out of date: run node scripts/eval/gen-cases.mjs`);
     return;
   }
@@ -410,7 +412,7 @@ export function generated() {
   return { "soul.json": soulSuite(), "soul-cinema.json": soulCinemaSuite(), "soul-hex.json": soulHexSuite(), "dop.json": dop.suite, "dop-mix.json": dopMixSuite(), "case.schema.json": schemaJson(), later: dop.later };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const check = process.argv.includes("--check");
   const out = generated();
   for (const name of ["soul.json", "soul-cinema.json", "soul-hex.json", "dop.json", "dop-mix.json", "case.schema.json"]) write(name, out[name], check);

@@ -40,14 +40,17 @@ async function prepare(id: string, input: GenInput, op: Operation) {
 describe("Fuobe Marketing Image", () => {
   const m = getModel(MARKETING_IMAGE_MODEL)!;
 
-  it("runs Qwen-Image-Edit 2511 (and Qwen-Image 2512 without a photo) on both engines", () => {
+  it("runs Qwen-Image 2.1 on your GPU (edit with up to 4 references, text to image without a photo) and hosted Qwen-Image-Edit 2511", () => {
     expect(m).toMatchObject({ vendor: "Fuobe Original", engines: ["open", "cloud"], kind: "image" });
     const open = onEngine(m, "open");
     expect(open.routes.map((r) => [r.op, r.endpoint])).toEqual([
-      ["edit", "qwen-image-edit-2511-multi"],
-      ["t2i", "qwen-image-2512-t2i"],
+      ["edit", "qwen-image-21-edit"],
+      ["t2i", "qwen-image-21-t2i"],
     ]);
-    expect(open.options.maxImages).toBe(3);
+    expect(open.options.maxImages).toBe(4);
+    // Neither Qwen-Image 2.1 graph takes a negative prompt; the hosted half keeps one.
+    expect(open.options.negativePrompt).toBe(false);
+    expect(onEngine(m, "cloud").options.negativePrompt).toBe(true);
     const cloud = onEngine(m, "cloud");
     expect(cloud.routes.map((r) => [r.op, r.provider, r.endpoint, r.loraEndpoint])).toEqual([
       ["edit", "fal", "fal-ai/qwen-image-edit-2511", "fal-ai/qwen-image-edit-2511/lora"],
@@ -78,12 +81,12 @@ describe("Fuobe Marketing Image", () => {
   });
 
   it("runs a Standalone product shot of one photo on the product-shot graph on the user's GPU", async () => {
-    const shot = await prepare("qwen-image-edit-2511-multi", { prompt: "on wet marble", images: ["product.png"], extra: { productShot: true } }, "edit");
+    const shot = await prepare("qwen-image-21-edit", { prompt: "on wet marble", images: ["product.png"], extra: { productShot: true } }, "edit");
     expect(shot.manifest.id).toBe("product-shot-qwen-edit-2509");
     expect(JSON.stringify(shot.workflow)).not.toContain("productShot");
     // Two photos (or no flag): the multi-reference edit.
-    expect((await prepare("qwen-image-edit-2511-multi", { prompt: "x", images: ["a.png", "b.png"], extra: { productShot: true } }, "edit")).manifest.id).toBe("qwen-image-edit-2511-multi");
-    expect((await prepare("qwen-image-edit-2511-multi", { prompt: "x", images: ["a.png"] }, "edit")).manifest.id).toBe("qwen-image-edit-2511-multi");
+    expect((await prepare("qwen-image-21-edit", { prompt: "x", images: ["a.png", "b.png"], extra: { productShot: true } }, "edit")).manifest.id).toBe("qwen-image-21-edit");
+    expect((await prepare("qwen-image-21-edit", { prompt: "x", images: ["a.png"] }, "edit")).manifest.id).toBe("qwen-image-21-edit");
   });
 });
 
@@ -147,11 +150,11 @@ describe("Fuobe Try-On and its LoRA", () => {
     }
   });
 
-  it("is Fashion Factory's outfit model on both engines, with Qwen-Image-Edit 2511 making the photoset", () => {
+  it("is Fashion Factory's outfit model on both engines, with Qwen-Image-Edit 2511 making the photoset in the cloud", () => {
     expect(FASHION_MODELS.outfit.open[0]).toBe(TRYON_MODEL);
     expect(FASHION_MODELS.outfit.cloud[0]).toBe(TRYON_MODEL);
-    expect(FASHION_MODELS.photoset).toEqual({ cloud: ["qwen-image-edit-2511-cloud", "nano-banana-pro"], open: ["oss-qwen-edit"] });
-    expect(PHOTODUMP_MODELS.cloud).toEqual(["fuobe-soul", "qwen-image-edit-2511-cloud", "nano-banana-pro", "seedream-5-pro"]);
+    expect(FASHION_MODELS.photoset).toEqual({ cloud: ["qwen-image-edit-2511-cloud", "nano-banana-pro"], open: ["oss-qwen-image-21", "oss-krea2-identity-edit"] });
+    expect(PHOTODUMP_MODELS.cloud).toEqual(["fuobe-soul", "qwen-image-edit-2511-cloud", "nano-banana-pro", "nano-banana-2-1", "seedream-5-pro"]);
   });
 });
 
@@ -300,13 +303,13 @@ describe("Fuobe Try-On's LoRA is never left out of a run", () => {
 describe("Fashion Factory moves on when a model can't run", () => {
   const t = getTemplate("red-room")!;
 
-  it("offers Qwen-Image-Edit 2511 after Fuobe Try-On on your GPU and takes the photoset's pick", () => {
-    expect(FASHION_MODELS.outfit.open).toEqual([TRYON_MODEL, "oss-qwen-edit"]);
-    const qwen = fashionOutfitRequest(t, "/b.png", "/g.png", "open", "oss-qwen-edit");
-    expect(qwen).toMatchObject({ modelId: "oss-qwen-edit", params: { aspectRatio: "3:4" } });
+  it("offers Qwen-Image 2.1 Turbo and Qwen-Image 2.1 after Fuobe Try-On on your GPU and takes the photoset's pick", () => {
+    expect(FASHION_MODELS.outfit.open).toEqual([TRYON_MODEL, "oss-qwen-image-21-turbo", "oss-qwen-image-21"]);
+    const qwen = fashionOutfitRequest(t, "/b.png", "/g.png", "open", "oss-qwen-image-21-turbo");
+    expect(qwen).toMatchObject({ modelId: "oss-qwen-image-21-turbo", params: { aspectRatio: "3:4" } });
     expect(qwen.prompt).toMatch(/^Dress the person in image 1/);
     expect(fashionPhotosetRequests(t, "/d.png", "cloud", "nano-banana-pro")[0].modelId).toBe("nano-banana-pro");
-    expect(fashionModel("photoset", "open", "nano-banana-pro")).toBe("oss-qwen-edit");
+    expect(fashionModel("photoset", "open", "nano-banana-pro")).toBe("oss-qwen-image-21");
     const set = previewFashion({ step: "photoset", templateId: t.id, dressed: "/api/files/d.png", engine: "cloud", modelId: "nano-banana-pro" });
     expect(set).toMatchObject({ modelId: "nano-banana-pro" });
   });
@@ -320,7 +323,7 @@ describe("Fashion Factory moves on when a model can't run", () => {
     expect(offeredSummary()?.off).toEqual(expect.arrayContaining([TRYON_MODEL, "oss-tryon-klein"]));
     const base = { step: "outfit" as const, templateId: t.id, base: "/api/files/b.png", garment: "/api/files/g.png" };
     expect(previewFashion({ ...base, engine: "cloud" })).toMatchObject({ modelId: "fashn-tryon" });
-    expect(previewFashion({ ...base, engine: "open" })).toMatchObject({ modelId: "oss-qwen-edit" });
+    expect(previewFashion({ ...base, engine: "open" })).toMatchObject({ modelId: "oss-qwen-image-21-turbo" });
     // Picked anyway (the API): refused, naming the LoRA's switch.
     expect(previewFashion({ ...base, engine: "cloud", modelId: TRYON_MODEL })).toMatchObject({ error: expect.stringMatching(/switched off in Settings → Models & licences/) });
   });

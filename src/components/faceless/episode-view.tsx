@@ -55,9 +55,11 @@ import {
   type StepView,
 } from "@/lib/catalog/faceless";
 import type { Generation } from "@/lib/catalog/types";
+import { useIsVisitor } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import { downloadHref, downloadName } from "@/lib/library";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { Segmented, usd } from "./controls";
 import { useApplyChange, useChangePreview, useDeleteEpisode, useEpisode, useEpisodeAction, useUpdateEpisode, type ChangeDraft } from "./hooks";
 import { ScriptReview } from "./script-review";
@@ -217,6 +219,8 @@ const PART_OPTIONS: { value: ChangePart; label: string }[] = [
 /** Change the selected scenes: describe the change, see what re-runs and the price, apply or discard. */
 function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: SceneRow[]; onClose: () => void; onOpen: (g: Generation) => void }) {
   const ep = view.episode;
+  // A guest or an account: the open engine runs on a self-hosted Fuobe only (not on their own GPU yet).
+  const visitor = useIsVisitor();
   const [part, setPart] = useState<ChangePart>("picture");
   const [instruction, setInstruction] = useState("");
   const [lines, setLines] = useState<string[]>(() => scenes.map((s) => s.narration));
@@ -251,7 +255,7 @@ function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: Sc
         toast.success(`Re-rendering ${scenes.length > 1 ? `${scenes.length} scenes` : `scene ${scenes[0].index + 1}`}`);
         discard();
       },
-      onError: (e) => toast.error((e as Error).message),
+      onError: (e) => toastError(e),
     });
   };
 
@@ -294,7 +298,7 @@ function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: Sc
             size="sm"
             variant="outline"
             disabled={retry.isPending || busy}
-            onClick={() => retry.mutate("retry", { onSuccess: () => toast.success("Retrying what failed"), onError: (e) => toast.error((e as Error).message) })}
+            onClick={() => retry.mutate("retry", { onSuccess: () => toast.success("Retrying what failed"), onError: (e) => toastError(e) })}
           >
             <RotateCcw /> Retry
           </Button>
@@ -343,7 +347,7 @@ function SceneEditor({ view, scenes, onClose, onOpen }: { view: View; scenes: Sc
                 : preview.isError
                   ? (preview.error as Error).message
                   : preview.data
-                    ? `Re-renders ${preview.data.labels.length} step${preview.data.labels.length === 1 ? "" : "s"} (${stepWords(preview.data.labels)})${preview.data.retime ? ", plus any scene whose timing moves" : ""} · ${preview.data.demo ? "Demo · free" : ep.settings.engine === "open" ? "Free · your GPU" : preview.data.costUsd === null ? "price unknown" : `≈ ${usd(preview.data.costUsd)}${preview.data.retime ? "+" : ""}`}`
+                    ? `Re-renders ${preview.data.labels.length} step${preview.data.labels.length === 1 ? "" : "s"} (${stepWords(preview.data.labels)})${preview.data.retime ? ", plus any scene whose timing moves" : ""} · ${preview.data.demo ? "Placeholder · free" : ep.settings.engine === "open" ? (visitor ? "Self-hosted only" : "Free · your GPU") : preview.data.costUsd === null ? "price unknown" : `≈ ${usd(preview.data.costUsd)}${preview.data.retime ? "+" : ""}`}`
                     : "Pricing…"}
           </p>
           <Button variant="ghost" onClick={discard} disabled={!draft}>
@@ -476,7 +480,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
   const upscaling = !!view?.upscaled && active(view.upscaled);
   const film = upscaled ?? view?.final;
   const filmOut = film?.outputs.find((o) => o.kind === "video");
-  const run = (a: "retry" | "rewrite" | "undo" | "upscale", ok?: string) => action.mutate(a, { onSuccess: () => ok && toast.success(ok), onError: (e) => toast.error((e as Error).message) });
+  const run = (a: "retry" | "rewrite" | "undo" | "upscale", ok?: string) => action.mutate(a, { onSuccess: () => ok && toast.success(ok), onError: (e) => toastError(e) });
 
   return (
     <div className="flex min-h-svh min-w-0 flex-col">
@@ -527,7 +531,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
                   <DropdownMenuItem disabled={upscaling || action.isPending} onClick={() => run("upscale", "Upscaling to 1080p — the download switches to it when it's done")}>
                     <MonitorUp /> {upscaling ? "Upscaling to 1080p…" : "Upscale to 1080p"}
                     <span className="ml-auto pl-3 font-mono text-[11px] text-muted-foreground tabular-nums">
-                      {view.upscale.demo ? "Demo" : view.upscale.costUsd === null ? "" : view.upscale.costUsd === 0 ? "Free" : `≈ ${usd(view.upscale.costUsd)}`}
+                      {view.upscale.demo ? "Placeholder" : view.upscale.costUsd === null ? "" : view.upscale.costUsd === 0 ? "Free" : `≈ ${usd(view.upscale.costUsd)}`}
                     </span>
                   </DropdownMenuItem>
                 )}
@@ -639,7 +643,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
                     toast("Episode deleted");
                     router.push(backHref);
                   },
-                  onError: (e) => toast.error((e as Error).message),
+                  onError: (e) => toastError(e),
                 })
               }
             >

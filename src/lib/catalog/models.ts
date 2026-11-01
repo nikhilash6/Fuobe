@@ -1,5 +1,4 @@
 import { CLOUD_MODELS, ORIGINAL_CLOUD } from "./cloud-models.generated";
-import { pricingAt } from "./plan";
 import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { loraEntry, loraRef } from "./loras";
@@ -55,18 +54,20 @@ export const TRYON_PROMPT = "a full-body photo of a person. Replace the outfit w
 /**
  * MOSS-Image's sampler settings on your GPU (the graph's own defaults are Standard): Standard is Comfy's template
  * (25 steps, CFG 2.5, er_sde), Quality OpenMOSS's guide (50 steps, CFG 3, euler), Fast Spectrallic's SFT with the
- * 8-step DMD LoRA merged in (8 steps, CFG 1; a 5.4 GB file of its own; untested on layouts).
+ * 8-step DMD LoRA merged in (8 steps, CFG 1; a 5.4 GB file of its own; untested on layouts), Base MOSS-Image Base, the
+ * model before its SFT (the owner's image_moss_image_base_t2i: 50 steps, CFG 3, euler; a 5.4 GB file of its own).
  */
 const MOSS_QUALITY: NonNullable<ModelOptions["controls"]>[number] = {
   param: "quality",
   label: "Quality",
-  values: ["standard", "quality", "fast"],
+  values: ["standard", "quality", "fast", "base"],
   default: "standard",
-  labels: { standard: "Standard · 25 steps", quality: "Best · 50 steps", fast: "Fast · 8 steps (extra 5.4 GB file)" },
+  labels: { standard: "Standard · 25 steps", quality: "Best · 50 steps", fast: "Fast · 8 steps (extra 5.4 GB file)", base: "Base model · 50 steps (extra 5.4 GB file)" },
   sets: {
     standard: { steps: 25, cfg: 2.5, sampler: "er_sde", scheduler: "simple" },
     quality: { steps: 50, cfg: 3, sampler: "euler", scheduler: "simple" },
     fast: { steps: 8, cfg: 1, sampler: "euler", scheduler: "simple", unet: "moss_image_sft_8stepdmd_int8_convrot.safetensors" },
+    base: { steps: 50, cfg: 3, sampler: "euler", scheduler: "simple", unet: "moss_image_base_int8_convrot.safetensors" },
   },
 };
 
@@ -74,6 +75,216 @@ type OpenSpec = Omit<ModelDef, "engine" | "badges"> & { badges?: ModelDef["badge
 const o = (m: OpenSpec): ModelDef => ({ ...m, engine: "open", badges: ["open", ...(m.badges ?? [])] });
 
 const open: ModelDef[] = [
+  // ---------------- The owner's newest image models, first picks on your GPU (2026-10-31): text to image in his order
+  // (Ideogram 4, Qwen-Image 2.1, Krea 2, MOSS-Image, FIBO 2), then the edit models (Qwen-Image 2.1, FIBO 2, Krea 2).
+  // A studio's "Best" list is its default, then the `top` models in this order (bestForStudio in src/lib/composer.ts).
+  // Ideogram 4: the prompt is a JSON caption the server writes from the words (promptFormat; src/lib/ideogram-caption.ts).
+  o({
+    id: "oss-ideogram-4",
+    name: "Ideogram 4",
+    vendor: "Ideogram",
+    family: "ideogram",
+    kind: "image",
+    tagline: "Typography, posters and photographic stills from structured captions · 24 GB GPU · non-commercial weights",
+    badges: ["new", "top"],
+    routes: [comfy("t2i", "ideogram4-t2i", "lean JSON caption; Quality preset")],
+    options: {
+      aspectRatios: IMG_AR,
+      resolutions: ["1K", "1.5K", "2K"],
+      seed: true,
+      controls: [
+        {
+          param: "preset",
+          label: "Quality",
+          values: ["Quality", "Default", "Turbo"],
+          default: "Quality",
+          labels: { Quality: "Quality (48 steps)", Default: "Balanced (20 steps)", Turbo: "Turbo (12 steps)" },
+        },
+      ],
+      promptFormat: "ideogram4",
+    },
+    defaults: { aspectRatio: "1:1", resolution: "1.5K" },
+  }),
+
+  // Qwen-Image 2.1: text to image, edits with up to 4 references, inpaint and expand; its Turbo makes 8-step edits.
+  o({
+    id: "oss-qwen-image-21",
+    name: "Qwen-Image 2.1",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Native 2K images with clean lettering; edits with up to 4 references, inpaint and expand · 20 GB GPU · non-commercial weights",
+    badges: ["new", "top"],
+    // Aspect ratio and size are for text to image: an edit or inpaint follows image 1, an expand the canvas its pads grow.
+    // The inpaint and expand graphs read the picture alone.
+    routes: [
+      comfy("t2i", "qwen-image-21-t2i"),
+      { ...comfy("edit", "qwen-image-21-edit", "25 steps, up to 4 references"), unsized: true },
+      { ...comfy("inpaint", "qwen-image-21-inpaint", "crops around the mask, 25 steps, pasted back"), unsized: true, maxImages: 1 },
+      { ...comfy("outpaint", "qwen-image-21-outpaint", "outpaint-v2 LoRA; Qwen3-VL describes the scene"), unsized: true, maxImages: 1 },
+    ],
+    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K"], maxImages: 4, seed: true },
+    defaults: { aspectRatio: "1:1", resolution: "1K" },
+  }),
+  o({
+    id: "oss-qwen-image-21-turbo",
+    name: "Qwen-Image 2.1 Turbo",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "8-step edits with up to 4 references, close to the full model except on big camera turns · 20 GB GPU · non-commercial weights",
+    badges: ["new", "top", "fast"],
+    routes: [comfy("edit", "qwen-image-21-turbo-edit", "8 steps, up to 4 references")],
+    options: { maxImages: 4, seed: true },
+  }),
+
+  // Krea 2 text to image (its edit models come after FIBO 2's, as the owner ranks them).
+  o({
+    id: "oss-krea2-realism",
+    name: "Krea 2 Realism",
+    vendor: "Krea",
+    family: "krea",
+    kind: "image",
+    tagline: "Natural skin, light and faces from detailed prose · 20 GB GPU · Krea 2 Community License",
+    badges: ["new", "top"],
+    routes: [comfy("t2i", "krea2-realism-t2i", "Krea 2 Turbo + the Realism V2 LoRA, 6 steps")],
+    options: {
+      aspectRatios: IMG_AR,
+      resolutions: ["1K", "1.5K", "2K"],
+      seed: true,
+      sliders: [{ param: "loraStrength", label: "Realism", min: 0, max: 2, step: 0.05, default: 1 }],
+    },
+    // Krea 2 makes about 2 MP; at 1 MP it gets noisy.
+    defaults: { aspectRatio: "1:1", resolution: "1.5K" },
+  }),
+  o({
+    id: "oss-krea2-turbo",
+    name: "Krea 2 Turbo",
+    vendor: "Krea",
+    family: "krea",
+    kind: "image",
+    tagline: "Krea 2 in 8 steps: photos and illustrations from prose · 20 GB GPU · Krea 2 Community License",
+    badges: ["new", "fast"],
+    routes: [comfy("t2i", "krea2-turbo-t2i", "8 steps")],
+    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K"], seed: true },
+    defaults: { aspectRatio: "1:1", resolution: "1K" },
+  }),
+
+  // MOSS-Image (OpenMOSS, Apache-2.0; research #7 §4.6): plain words, or a layout of boxes compiled to its JSON
+  // (src/lib/layout-prompt.ts). The cloud half is `moss-image` on fal.
+  o({
+    id: "oss-moss-image",
+    name: "MOSS-Image",
+    vendor: "OpenMOSS",
+    family: "moss",
+    kind: "image",
+    tagline: "Clean Chinese and English text, follows layout boxes · on your GPU, about 15 GB of files",
+    badges: ["new", "top"],
+    // The int8 Qwen3.5-9B, never the template's w4a8 build: that one faulted the NVIDIA driver here (scripts/comfy/library.spec.mjs).
+    routes: [comfy("t2i", "moss-image-t2i", "MOSS-Image SFT int8, Qwen3.5-9B int8, FLUX.2 small decoder; core nodes")],
+    options: {
+      aspectRatios: IMG_AR,
+      resolutions: ["1K", "1.5K"],
+      seed: true,
+      negativePrompt: true,
+      layout: "moss",
+      controls: [MOSS_QUALITY],
+    },
+    defaults: { aspectRatio: "1:1", resolution: "1K" },
+  }),
+
+  // FIBO 2 (Bria FIBO 2.0): text to image from Bria's structured JSON prompt, edits with up to 4 references.
+  o({
+    id: "oss-fibo2-dev",
+    name: "FIBO 2 Dev",
+    vendor: "Bria",
+    family: "bria",
+    kind: "image",
+    tagline: "Structured JSON prompts for exact control; edits with up to 4 references · 24 GB GPU · non-commercial weights",
+    badges: ["new", "top"],
+    routes: [
+      comfy("t2i", "fibo2-dev-t2i", "Qwen3.5 writes Bria's structured JSON prompt; 30 steps"),
+      // An edit follows image 1's size and shape.
+      { ...comfy("edit", "fibo2-dev-edit", "30 steps, up to 4 references"), unsized: true },
+    ],
+    options: { aspectRatios: IMG_AR, resolutions: ["1K"], maxImages: 4, seed: true, negativePrompt: true },
+    defaults: { aspectRatio: "1:1", resolution: "1K" },
+  }),
+  o({
+    id: "oss-fibo2-edit-turbo",
+    name: "FIBO 2 Edit Turbo",
+    vendor: "Bria",
+    family: "bria",
+    kind: "image",
+    tagline: "4-step edits with up to 4 references · 16 GB GPU · non-commercial weights",
+    badges: ["new", "top", "fast"],
+    routes: [comfy("edit", "fibo2-edit-turbo-edit", "4 steps, up to 4 references")],
+    options: { maxImages: 4, seed: true },
+  }),
+
+  // Krea 2 edits, image to image, inpaint and expand.
+  o({
+    id: "oss-krea2-edit",
+    name: "Krea 2 Edit",
+    vendor: "Krea",
+    family: "krea",
+    kind: "image",
+    tagline: "Instruction edits that keep the picture: relight, recolour, add, remove, restyle; a second photo puts a person in the scene · 20 GB GPU · non-commercial LoRA",
+    badges: ["new", "top"],
+    routes: [comfy("edit", "krea2-edit-general", "General Edit V2 LoRA, 8 steps; image 2 = a person to put in the scene")],
+    options: {
+      aspectRatios: ["auto", ...IMG_AR],
+      resolutions: ["1K", "1.5K"],
+      maxImages: 2,
+      seed: true,
+      imageLabels: ["photo to edit", "a person to put in it (optional)"],
+    },
+    defaults: { aspectRatio: "auto", resolution: "1K" },
+  }),
+  o({
+    id: "oss-krea2-identity-edit",
+    name: "Krea 2 Identity Edit",
+    vendor: "Krea",
+    family: "krea",
+    kind: "image",
+    tagline: "Restages a person from one photo: new place, pose or outfit, same face · 20 GB GPU · non-commercial LoRA",
+    badges: ["new"],
+    routes: [comfy("edit", "krea2-edit-identity", "Identity Edit V2 LoRA, 8 steps; image 2 = a second person")],
+    options: {
+      aspectRatios: ["auto", ...IMG_AR],
+      resolutions: ["1K", "1.5K"],
+      maxImages: 2,
+      seed: true,
+      imageLabels: ["photo of the person", "a second person (optional)"],
+    },
+    defaults: { aspectRatio: "auto", resolution: "1K" },
+  }),
+  o({
+    id: "oss-krea2-i2i",
+    name: "Krea 2 Turbo · Image to image",
+    vendor: "Krea",
+    family: "krea",
+    kind: "image",
+    tagline: "Your picture redrawn in Krea 2's look at the strength you pick · 20 GB GPU · Krea 2 Community License",
+    badges: ["new"],
+    routes: [comfy("edit", "krea2-turbo-i2i", "about 2 MP, keeps the picture's shape")],
+    options: { maxImages: 1, seed: true, sliders: [{ param: "strength", label: "Change", min: 0.1, max: 1, step: 0.05, default: 0.6 }] },
+  }),
+  o({
+    id: "oss-krea2-inpaint",
+    name: "Krea 2 Inpaint",
+    vendor: "Krea",
+    family: "krea",
+    kind: "image",
+    tagline: "Paints the masked area or extends the canvas · 20 GB GPU · needs the Krea 2 Ostris Edit add-on",
+    // No `new`: it stays out of Inpaint's "Best" list while its add-on isn't on the owner's ComfyUI (a pick there would fail).
+    routes: [
+      comfy("inpaint", "krea2-inpaint", "the masked area made black, then the inpaint-edit LoRA paints it"),
+      comfy("outpaint", "krea2-outpaint", "the canvas grown on black, then the inpaint-edit LoRA fills it"),
+    ],
+    options: { maxImages: 1, seed: true },
+  }),
+
   // ---------------- Image
   o({
     id: "oss-z-image-turbo",
@@ -188,27 +399,8 @@ const open: ModelDef[] = [
     routes: [comfy("t2i", "sdxl-t2i")],
     options: { aspectRatios: IMG_AR, seed: true, negativePrompt: true },
     defaults: { aspectRatio: "1:1" },
-  }),
-  // MOSS-Image (OpenMOSS, Apache-2.0; research #7 §4.6): plain words, or a layout of boxes compiled to its JSON
-  // (src/lib/layout-prompt.ts). The cloud half is `moss-image` on fal.
-  o({
-    id: "oss-moss-image",
-    name: "MOSS-Image",
-    vendor: "OpenMOSS",
-    family: "moss",
-    kind: "image",
-    tagline: "Clean Chinese and English text, follows layout boxes · on your GPU, about 13 GB of files",
-    badges: ["new"],
-    routes: [comfy("t2i", "moss-image-t2i", "MOSS-Image SFT int8, Qwen3.5-9B w4a8, FLUX.2 small decoder; core nodes")],
-    options: {
-      aspectRatios: IMG_AR,
-      resolutions: ["1K", "1.5K"],
-      seed: true,
-      negativePrompt: true,
-      layout: "moss",
-      controls: [MOSS_QUALITY],
-    },
-    defaults: { aspectRatio: "1:1", resolution: "1K" },
+    // Out of the Image picker; links and earlier runs still resolve.
+    hidden: true,
   }),
   o({
     id: "oss-qwen-edit",
@@ -313,13 +505,62 @@ const open: ModelDef[] = [
   }),
 
   // ---------------- Video
+  // MiniMax H3: text, image and start + end frame to video with its own sound, on the fl2va model. Fast runs larryvrh's
+  // turbo v4 LoRA (8 steps) with SLA attention; Best (params.extra.quality) runs the 20-step graph without them
+  // (resolveWorkflowId). The prompt is wrapped in H3's own layout on the server (promptFormat; src/lib/h3-prompt.ts), and
+  // the canvas and frame count follow H3's grid (the provider). The graphs are not validated yet (validated: false).
+  o({
+    id: "oss-minimax-h3",
+    name: "MiniMax H3",
+    vendor: "MiniMax",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Video with its own synchronized sound from words, a start frame, or start and end frames · about 2-3 min for a 5 s clip on a 32 GB GPU",
+    badges: ["new", "audio", "top"],
+    routes: [
+      comfy("t2v", "minimax-h3-t2v", "turbo v4 LoRA, 8 steps"),
+      comfy("i2v", "minimax-h3-i2v", "turbo v4 LoRA, 8 steps; the clip takes the start frame's shape"),
+      comfy("flf2v", "minimax-h3-flf2v", "turbo v4 LoRA, 8 steps; the clip takes the start frame's shape"),
+    ],
+    options: {
+      aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"],
+      durations: [3, 5, 10, 15],
+      resolutions: ["768p"],
+      seed: true,
+      endFrame: true,
+      audio: "always",
+      promptFormat: "minimax-h3",
+      controls: [
+        {
+          param: "quality",
+          label: "Quality",
+          values: ["fast", "best"],
+          default: "fast",
+          labels: { fast: "Fast · 8 steps", best: "Best · 20 steps, about 2.3x longer" },
+        },
+      ],
+    },
+    defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },
+  }),
+  o({
+    id: "oss-ltx25",
+    name: "LTX-2.5",
+    vendor: "Lightricks",
+    family: "ltx",
+    kind: "video",
+    tagline: "Open video with native synchronized audio, up to 10s",
+    badges: ["audio", "top", "new"],
+    routes: [comfy("t2v", "ltx25-t2v"), comfy("i2v", "ltx25-i2v")],
+    options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [5, 8, 10], resolutions: ["720p", "1080p"], seed: true, negativePrompt: true, audio: "always" },
+    defaults: { aspectRatio: "16:9", duration: 5, resolution: "720p" },
+  }),
   o({
     id: "oss-wan22-14b-fast",
     name: "Wan 2.2 14B Lightning",
     vendor: "Alibaba Wan",
     family: "wan",
     kind: "video",
-    tagline: "Best open video model with Lightx2v 4-step LoRAs — minutes, not hours",
+    tagline: "The fast open choice: Wan 2.2 14B with Lightx2v 4-step LoRAs, minutes per clip",
     badges: ["fast", "top"],
     routes: [comfy("t2v", "wan22-t2v-14b-lightx2v", "Lightx2v 4-step"), comfy("i2v", "wan22-i2v-14b-lightx2v", "Lightx2v 4-step"), comfy("flf2v", "wan22-flf2v-14b"), KEYFRAME_FILM],
     options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [3, 5], resolutions: ["480p", "720p"], seed: true, negativePrompt: true, endFrame: true },
@@ -346,18 +587,6 @@ const open: ModelDef[] = [
     badges: ["fast"],
     routes: [comfy("t2v", "wan22-ti2v-5b"), comfy("i2v", "wan22-ti2v-5b-i2v")],
     options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [3, 5], resolutions: ["720p"], seed: true, negativePrompt: true },
-    defaults: { aspectRatio: "16:9", duration: 5, resolution: "720p" },
-  }),
-  o({
-    id: "oss-ltx25",
-    name: "LTX-2.5",
-    vendor: "Lightricks",
-    family: "ltx",
-    kind: "video",
-    tagline: "Open video with native synchronized audio, up to 10s",
-    badges: ["audio", "new"],
-    routes: [comfy("t2v", "ltx25-t2v"), comfy("i2v", "ltx25-i2v")],
-    options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [5, 8, 10], resolutions: ["720p", "1080p"], seed: true, negativePrompt: true, audio: "always" },
     defaults: { aspectRatio: "16:9", duration: 5, resolution: "720p" },
   }),
   o({
@@ -709,7 +938,7 @@ const open: ModelDef[] = [
     vendor: "Netflix",
     family: "void",
     kind: "video",
-    tagline: "Removes the object and what it causes — shadows, reflections, things it moves · 197 frames a run (Video tools → Remove object does whole clips) · 24–40 GB GPU (unverified) · CogVideoX License: commercial use needs registration",
+    tagline: "Removes the object and what it causes — shadows, reflections, things it moves · 197 frames a run (Video tools → Remove object does whole clips) · 24–40 GB GPU · CogVideoX License: commercial use needs registration",
     badges: ["new"],
     routes: [comfy("remove-object", "video-erase-void", "SAM 3.1 text track + VOID (CogVideoX-5B fine-tune), two passes; up to 197 frames per window")],
     options: { seed: true, negativePrompt: true },
@@ -1011,7 +1240,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Tongyi",
     family: "z-image",
     kind: "image",
-    tagline: "Generates in your hex colours and locks them with a colour transfer · 12 GB GPU · Apache-2.0",
+    tagline: "Generates in your hex colors and keeps them with a color transfer · 12 GB GPU · Apache-2.0",
     badges: ["new", "fast"],
     routes: [comfy("t2i", "palette-zimage-hex", "hex list in the prompt + ColorTransfer to a swatch")],
     options: {
@@ -1368,16 +1597,29 @@ const open: ModelDef[] = [
     options: { maxAudios: 10, promptless: true },
     hidden: true,
   }),
-  // Product 3D, try-on
+  // Product 3D, try-on. Every image-to-3D route on ComfyUI (Pixal3D, TRELLIS.2 from one photo or several, Hunyuan3D 2.1) ends in the
+  // server's finish (src/server/model3d-finish.ts): a web GLB and, when Chromium and ffmpeg are there, a
+  // CPU-rendered turntable video.
+  o({
+    id: "oss-pixal3d",
+    name: "Pixal3D",
+    vendor: "Tencent ARC",
+    family: "trellis",
+    kind: "model3d",
+    tagline: "A textured 3D model (.glb) that stays true to your photo (camera-aware), plus a turntable video · 16 GB GPU",
+    badges: ["new", "top"],
+    routes: [comfy("image-to-3d", "image-to-3d-pixal3d", "MoGe-2 camera → Pixal3D; ~250k triangles; web GLB + turntable made after the job")],
+    options: { seed: true },
+  }),
   o({
     id: "oss-trellis2",
     name: "TRELLIS.2",
     vendor: "Microsoft",
     family: "trellis",
     kind: "model3d",
-    tagline: "A textured 3D model (.glb) from one product photo, plus a turntable video · 16 GB GPU · MIT",
-    badges: ["new", "top"],
-    routes: [comfy("image-to-3d", "image-to-3d-trellis2", "PBR textures; second output = 36-view turntable MP4")],
+    tagline: "A textured 3D model (.glb) from one product photo, plus a turntable video; the fallback to Pixal3D · 16 GB GPU · MIT",
+    badges: ["new"],
+    routes: [comfy("image-to-3d", "image-to-3d-trellis2", "~250k triangles; web GLB + turntable made after the job")],
     options: { seed: true },
   }),
   o({
@@ -1405,14 +1647,14 @@ const open: ModelDef[] = [
   }),
   o({
     id: "oss-text-trellis2",
-    name: "Z-Image Turbo → TRELLIS.2",
-    vendor: "Alibaba Tongyi × Microsoft",
+    name: "Qwen-Image 2.1 → TRELLIS.2",
+    vendor: "Alibaba Qwen × Microsoft",
     family: "trellis",
     kind: "model3d",
-    tagline: "Describe one object: Z-Image Turbo draws it on a plain background, then TRELLIS.2 builds the textured 3D model and a turntable · 16 GB GPU · Apache-2.0 + MIT",
+    tagline: "Describe one object: Qwen-Image 2.1 draws it on a plain background, then TRELLIS.2 builds the textured 3D model and a turntable · 20 GB GPU · non-commercial weights + MIT",
     badges: ["new"],
-    // Built on the server as two steps: a Z-Image Turbo still, then image-to-3d-trellis2 on it (src/server/chains.ts).
-    routes: [{ op: "text-to-3d", provider: "comfyui", endpoint: "image-to-3d-trellis2", chained: true, note: "a Z-Image Turbo still → TRELLIS.2" }],
+    // Built on the server as two steps: a Qwen-Image 2.1 still, then image-to-3d-trellis2 on it (src/server/chains.ts).
+    routes: [{ op: "text-to-3d", provider: "comfyui", endpoint: "image-to-3d-trellis2", chained: true, note: "a Qwen-Image 2.1 still → TRELLIS.2" }],
     options: { seed: true },
   }),
   o({
@@ -1623,19 +1865,11 @@ function withLastFrameExtend(m: ModelDef): ModelDef {
 }
 
 /**
- * A launch price while it lasts, the list price after (FLUX 3 Max, H3 Max camera controls): read each time the price is,
- * so a run is priced at the rate of the day it runs, even on a server started before the launch price ended.
+ * Cloud models (fal and Replicate) and the cloud tools. A launch price (FLUX 3 Max, H3 Max camera controls) stays in
+ * Pricing.promo beside the list price: whoever prices reads the clock (./promo), never the catalog, so the studios'
+ * slices and the pages prerendered at build time carry both and the browser shows the one of the day it is.
  */
-const withCurrentPrice = (m: ModelDef): ModelDef => {
-  const raw = m.pricing;
-  if (!raw?.promo) return m;
-  const out = { ...m };
-  Object.defineProperty(out, "pricing", { get: () => pricingAt(raw), enumerable: true, configurable: true });
-  return out;
-};
-
-/** Cloud models (fal and Replicate) and the cloud tools. */
-const cloud: ModelDef[] = [...CLOUD_MODELS.map(withLastFrameExtend).map(withCurrentPrice), ...cloudTools];
+const cloud: ModelDef[] = [...CLOUD_MODELS.map(withLastFrameExtend), ...cloudTools];
 
 // ---------------------------------------------------------------------------
 // Fuobe Originals: one model on both engines
@@ -1841,14 +2075,15 @@ const originals: ModelDef[] = [
       open: [
         // A Standalone product shot (params.extra.productShot, one product photo) runs product-shot-qwen-edit-2509 instead:
         // cut out with BiRefNet, put on white, relit into the scene by the White_to_Scene LoRA.
-        comfy("edit", "qwen-image-edit-2511-multi", "Qwen-Image-Edit 2511 with up to 3 references (product, person, setting) and the template's prompt"),
-        comfy("t2i", "qwen-image-2512-t2i", "Qwen-Image 2512 when there is no product photo"),
+        comfy("edit", "qwen-image-21-edit", "Qwen-Image 2.1 with up to 4 references (product, person, setting) and the template's prompt"),
+        comfy("t2i", "qwen-image-21-t2i", "Qwen-Image 2.1 when there is no product photo"),
       ],
-      tagline: "Product shots, ads, posters and listings from your product photo · Qwen-Image-Edit 2511 free on your GPU (24 GB), or hosted on fal",
+      tagline: "Product shots, ads, posters and listings from your product photo · Qwen-Image 2.1 free on your GPU (20 GB), or hosted on fal",
       options: { aspectRatios: IMG_AR, maxImages: 10, maxOutputs: 4, seed: true, negativePrompt: true },
     }),
-    // TextEncodeQwenImageEditPlus takes three pictures, and the edit keeps the first one's shape.
-    engineOptions: { open: { maxImages: 3 } },
+    // Qwen-Image 2.1's edit graph reads up to four pictures and keeps the first one's shape. Neither of its graphs takes a
+    // negative prompt, so the open half has none (the hosted half keeps it).
+    engineOptions: { open: { maxImages: 4, negativePrompt: false } },
   },
   {
     ...original({

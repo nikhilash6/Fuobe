@@ -173,11 +173,11 @@ describe("round-4 cloud models", () => {
     const after = pricingAt(raw, Date.parse("2026-11-08T00:00:01Z"));
     expect(after).toMatchObject({ usd: 0.17, byResolution: { "720p": 0.17, "1080p": 0.29 } });
     expect(after.promo).toBeUndefined();
-    // The catalog holds the price that applies today, without the promo record.
+    // The catalog keeps both prices (no clock read when it loads or is copied); estimateCost picks the one of `now`.
     const live = getModel("flux-3-max")!;
-    expect(live.pricing!.promo).toBeUndefined();
-    expect(live.pricing!.usd).toBe(pricingAt(raw).usd);
-    expect(estimateCost({ ...live, pricing: pricingAt(raw, Date.parse("2026-10-22T00:00:00Z")) }, { duration: 10, resolution: "1080p" })).toBe(0.725);
+    expect(live.pricing).toEqual(raw);
+    expect(estimateCost(live, { duration: 10, resolution: "1080p" }, 1, undefined, false, Date.parse("2026-10-22T00:00:00Z"))).toBe(0.725);
+    expect(estimateCost(live, { duration: 10, resolution: "1080p" }, 1, undefined, false, Date.parse("2026-11-08T00:00:01Z"))).toBe(2.9);
     expect(estimateCost({ ...live, pricing: after }, { duration: 10, resolution: "1080p" })).toBe(2.9);
   });
 

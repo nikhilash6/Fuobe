@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { useNow } from "@/components/studio/use-now";
-import { useEngine } from "@/lib/api";
+import { useEngine, useStatus } from "@/lib/api";
 import { threadTitle, type AssistModeChoice } from "@/lib/assist";
 import {
   DEFAULT_SCHEDULE_CAP_USD,
@@ -33,6 +33,7 @@ import {
 } from "@/lib/assist-schedule";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useChats, useConnectors, useProjects, useScheduleActions, type ScheduleRuleInput } from "./hooks";
 import { ModePicker } from "./mode-picker";
 import { ProjectDot } from "./project-dot";
@@ -80,7 +81,7 @@ function tomorrowAt9(now: number): string {
 export function ScheduleDialog({ open, onOpenChange, schedule, seed }: { open: boolean; onOpenChange: (open: boolean) => void; schedule?: ScheduleView; seed?: ScheduleSeed }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[min(92svh,820px)] gap-0 overflow-hidden p-0 sm:max-w-[600px]">{open && <Form schedule={schedule} seed={seed} onDone={() => onOpenChange(false)} />}</DialogContent>
+      <DialogContent className="flex max-h-[min(92svh,820px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[600px]">{open && <Form schedule={schedule} seed={seed} onDone={() => onOpenChange(false)} />}</DialogContent>
     </Dialog>
   );
 }
@@ -152,13 +153,14 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
       toast.success(schedule ? "Schedule saved" : "Scheduled", { description: s.nextRunAt ? `Next run ${formatWhen(s.nextRunAt, s.tz)}` : undefined, duration: 2500 });
       onDone();
     } catch (err) {
-      toast.error((err as Error).message);
+      toastError(err);
     } finally {
       setBusy(false);
     }
   };
 
   const toggleDay = (d: number) => setDays((xs) => (xs.includes(d) ? xs.filter((x) => x !== d) : [...xs, d]));
+  const onComputer = !!useStatus().data?.ownerGpu;
 
   return (
     <form onSubmit={save} className="flex min-h-0 flex-col">
@@ -167,6 +169,8 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
           <CalendarClock className="size-5 text-muted-foreground" /> {schedule ? "Edit scheduled task" : "Schedule a task"}
         </DialogTitle>
         <DialogDescription>Each run is a new chat on this server — it runs even when Fuobe isn&apos;t open in a browser. What it makes lands in your Library.</DialogDescription>
+        {/* ComfyUI on the owner's computer: its open-source runs wait for a Fuobe tab there. */}
+        {onComputer && <p className="text-[13px] text-muted-foreground">Runs on your computer: keep Fuobe open there at that time.</p>}
       </DialogHeader>
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5">
         <div className="space-y-2">
@@ -336,7 +340,7 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
             <EngineSwitch value={engine} onChange={setEngine} size="sm" compact />
           </div>
           <p className="text-[12px] text-muted-foreground">
-            {engine === "open" ? "Open-source models run free on your GPU." : "Paid models cost what the approval card shows."} Smart uses Claude (your Anthropic key, billed per run); Free uses a local model or the offline planner.
+            {engine === "open" ? "Open-source models run free on your GPU." : "Paid models cost what the approval card shows."} Smart plans with the best model you&apos;ve connected (a paid one bills each run); Free uses free models, then the offline planner.
           </p>
         </fieldset>
 
@@ -348,7 +352,7 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
                 {
                   id: "ask",
                   title: "Ask me first",
-                  body: "Each run plans the job, then waits in its chat for your OK — nothing is generated until you approve. A run on Claude uses your Anthropic key to plan.",
+                  body: "Each run plans the job, then waits in its chat for your OK — nothing is generated until you approve. A run on a paid model uses that provider's key to plan.",
                 },
                 { id: "auto", title: "Run on its own, within a cap", body: "Plans start without asking while they fit the cap. A plan that would pass it, or has no known price, waits for you." },
               ] as const

@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import type { ClaudePrompt, SeriesCard, SeriesEstimate, SeriesSettings, SeriesView, StyleBrief } from "@/lib/catalog/content-factory";
 import type { NarratorVoice } from "@/lib/catalog/faceless";
 import type { Engine } from "@/lib/catalog/types";
+import { responseError } from "@/lib/refusals";
 import { useDebounced } from "@/components/faceless/hooks";
 
 /** React Query hooks for /api/content-factory/** (kept next to the views that use them). */
@@ -20,7 +21,7 @@ export class ApiError extends Error {
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as T & { error?: string; needsUpload?: boolean };
-  if (!res.ok) throw new ApiError(body.error ?? `Request failed (${res.status})`, !!body.needsUpload);
+  if (!res.ok) throw responseError(res, new ApiError(body.error ?? `Request failed (${res.status})`, !!body.needsUpload));
   return body;
 }
 

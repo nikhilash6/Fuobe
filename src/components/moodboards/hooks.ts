@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import type { Engine } from "@/lib/catalog/types";
+import { responseError } from "@/lib/refusals";
 import { CURATED_SETS, type CuratedMoodboard, type CuratedSource, type Moodboard } from "./logic";
 
 /** A curated set (Fuobe Soul's Soul 2.0 looks or its Soul looks): built in, nothing to fetch. */
@@ -12,7 +13,7 @@ export function useCuratedSet(source: CuratedSource): CuratedMoodboard[] {
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
   return body;
 }
 

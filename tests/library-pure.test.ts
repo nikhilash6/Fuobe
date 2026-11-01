@@ -337,6 +337,8 @@ describe("round-3 fixes", () => {
     // No stream on this server: poll, look again in 5 minutes.
     expect(streamResponse({ ...sse, ok: false, status: 404 }, 0)).toEqual({ open: false, retryIn: 300_000 });
     expect(streamResponse({ ...sse, contentType: "text/html" }, 0)).toEqual({ open: false, retryIn: 300_000 });
+    // A guest or an account: no content (the proxy answers 204, which the browser logs as no error), same wait.
+    expect(streamResponse({ ok: true, status: 204, contentType: null, hasBody: false }, 0)).toEqual({ open: false, retryIn: 300_000 });
     // A server error backs off.
     expect(streamResponse({ ...sse, ok: false, status: 502 }, 2)).toEqual({ open: false, retryIn: 4000 });
     expect(needsCatchUp(false, true, false)).toBe(false); // first connection: the lists just loaded

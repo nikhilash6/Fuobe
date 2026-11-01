@@ -9,7 +9,6 @@ import type {
   Operation,
   Preset,
   PresetRoute,
-  Pricing,
 } from "./types";
 import { sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
@@ -19,6 +18,10 @@ import { askedSize, numFramesValue, sizeValue } from "./payload";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
 import { computeDimensions, fitCanvas } from "@/lib/comfy";
 import { carriesLayout, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
+import { pricingOn, type PriceClock } from "./promo";
+import { presetRoutes } from "./preset-recipe-routes";
+
+export { pricingAt } from "./promo";
 
 /** Infer the operation from what the user attached. */
 export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op" | "inputs" | "params">): Operation {
@@ -66,6 +69,15 @@ export function routesFor(model: ModelDef, op: Operation): ModelRoute[] {
   return model.routes.filter((r) => r.op === op);
 }
 
+/**
+ * The most images a run of `op` sends this model: its routes' own limit when they all have one (ModelRoute.maxImages:
+ * Qwen-Image 2.1 inpaints and expands the picture alone), else the model's options.maxImages.
+ */
+export function imageLimit(model: Pick<ModelDef, "options" | "routes">, op: Operation | undefined): number | undefined {
+  const own = op ? model.routes.filter((r) => r.op === op).map((r) => r.maxImages) : [];
+  return own.length && own.every((n) => n !== undefined) ? Math.max(...(own as number[])) : model.options.maxImages;
+}
+
 const clamp01 = (n: number) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 1));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -101,8 +113,42 @@ export function composeShots(overall: string, shots: { prompt: string; duration:
   return [overall.trim() && `${overall.trim().replace(/[.\s]+$/, "")}.`, ...parts].filter(Boolean).join(" ");
 }
 
+/** The preset's own route on an engine (its recipe, the route its preview was made with, is in presetRoutes). */
 export function presetRoute(preset: Preset, engine: Engine): PresetRoute | null {
   return engine === "open" ? preset.open : preset.cloud;
+}
+
+export { presetRoutes };
+
+/**
+ * The model apps ran on before they moved to a newer one: the edit apps left Qwen-Image-Edit 2511, Expand and Zoom Out
+ * left FLUX Fill, both for Qwen-Image 2.1 (2026-10-31); the talking apps left Kling AI Avatar for Kling Avatar 2.0 in
+ * the cloud, and Upscale left 4x ESRGAN for SeedVR2 on your GPU (2026-11-01).
+ */
+const APP_MODEL_MOVES: Readonly<Record<string, string>> = {
+  "oss-qwen-edit": "oss-qwen-image-21",
+  "oss-flux-fill": "oss-qwen-image-21",
+  "kling-avatar": "kling-avatar-2",
+  "oss-upscale-image": "oss-seedvr2-image",
+};
+
+/**
+ * Apps pin their model, so a stored app run on the model its app ran on before (a retry, Run again, Reuse, a script)
+ * would be refused: it runs on the app's model now, with the app's operation, and `note` says so. Anything else is
+ * returned as it is (an app a LoRA ties to the old model, Multiple Angles on 2511, still names it).
+ */
+export function movedAppRequest<T extends Pick<GenerationRequest, "modelId" | "op" | "presetId">>(
+  req: T,
+  getModel: (id: string) => ModelDef | undefined,
+  getPreset: (id: string) => Preset | undefined,
+): { request: T; note?: string } {
+  const was = getModel(req.modelId);
+  const preset = req.presetId ? getPreset(req.presetId) : undefined;
+  const route = was && preset?.type === "app" ? presetRoute(preset, was.engine) : null;
+  if (!was || !route || route.modelId === was.id || !Object.hasOwn(APP_MODEL_MOVES, was.id) || APP_MODEL_MOVES[was.id] !== route.modelId) return { request: req };
+  const now = getModel(route.modelId);
+  if (!now) return { request: req };
+  return { request: { ...req, modelId: now.id, ...(route.op && { op: route.op }) }, note: `${preset!.name} now runs on ${now.name}` };
 }
 
 /** Model families a Mix's LoRA may run on instead (said when it can't join the first preset's model). */
@@ -207,17 +253,29 @@ export function planGeneration(
   let op: Operation | undefined = req.op;
 
   if (preset) {
-    const route = presetRoute(preset, model.engine);
-    if (!route) throw new Error(`${preset.name} has no ${model.engine === "open" ? "open-source" : "cloud"} version yet`);
-    if (route.modelId !== model.id && !preset.type.match(/motion|effect/)) {
-      // Apps pin their model; motions/effects let the user pick any compatible video model.
-      throw new Error(`${preset.name} runs on ${route.modelId}, not ${model.id}`);
+    // The preset's routes on this engine: the one its preview was made with (when this catalog has its model), then its own.
+    const routes = presetRoutes(preset, model.engine, (id) => !!getModel(id));
+    if (!routes.length) throw new Error(`${preset.name} has no ${model.engine === "open" ? "open-source" : "cloud"} version yet`);
+    const matched = routes.find((r) => r.modelId === model.id);
+    if (!matched && !preset.type.match(/motion|effect/)) {
+      // Apps run on their own models; motions/effects let the user pick any compatible video model.
+      throw new Error(`${preset.name} runs on ${[...new Set(routes.map((r) => r.modelId))].join(" or ")}, not ${model.id}`);
     }
-    // Preset params/LoRAs are tuned for the preset's own model; other compatible models only get the prompt (without
+    const route = matched ?? routes[0];
+    // Preset params/LoRAs are tuned for the route's own model; other compatible models only get the prompt (without
     // a LoRA's trigger word, which means nothing to them).
-    const sameModel = route.modelId === model.id;
-    prompt = composePrompt((sameModel || preset.type === "app" ? route.promptTemplate : undefined) ?? preset.promptTemplate, req.prompt, preset, req.presetOptions);
-    params = { ...model.defaults, ...(sameModel ? route.params : {}), ...req.params };
+    const sameModel = !!matched;
+    prompt = composePrompt((sameModel ? route.promptTemplate : undefined) ?? preset.promptTemplate, req.prompt, preset, req.presetOptions);
+    // The route's extra settings (H3's orbit, a camera pose) stay under what the request sets itself. A setting the composer
+    // shows as a control (H3's Quality) is the request's own: the composer starts it at the route's value, and its Auto
+    // sends none, which is the model's default.
+    const shown = new Set((model.options.controls ?? []).map((c) => c.param));
+    const routeExtra = Object.fromEntries(Object.entries(route.params?.extra ?? {}).filter(([k]) => !shown.has(k)));
+    const routePlain = { ...route.params };
+    delete routePlain.extra;
+    const hasExtra = Object.keys(routeExtra).length > 0 || !!req.params?.extra;
+    const extra = sameModel && hasExtra ? { extra: { ...routeExtra, ...req.params?.extra } } : {};
+    params = { ...model.defaults, ...(sameModel ? routePlain : {}), ...req.params, ...extra };
     // Option choices that set model settings (Angles: rotate / tilt / zoom); a value the user set wins.
     const chosen = Object.assign({}, ...(preset.options ?? []).map((o) => o.choices.find((c) => c.value === (req.presetOptions?.[o.key] ?? o.default ?? o.choices[0]?.value))?.extra ?? {}));
     if (sameModel && Object.keys(chosen).length) params = { ...params, extra: { ...chosen, ...params.extra } };
@@ -350,6 +408,11 @@ export function planGeneration(
     params = compiled.params;
     layoutPlan = compiled.layout;
   }
+  // MiniMax H3's orbit of a still (its Orbit LoRA graph, src/lib/comfy-variants.ts) runs at the LoRA's own length, 3 s
+  // (73 frames), unless the run names a length.
+  if (model.options.promptFormat === "minimax-h3" && op === "i2v" && params.extra?.orbit === true && req.params?.duration === undefined && params.duration === model.defaults?.duration) {
+    params = { ...params, duration: 3 };
+  }
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");
@@ -393,6 +456,8 @@ export function planGeneration(
 
   const missing = missingInputs(op, req) ?? unreadInputs(model, op, req) ?? missingImages(model, req);
   if (missing) throw new Error(missing);
+  const tooMany = extraImages(model, op, req);
+  if (tooMany) throw new Error(tooMany);
 
   // Soul Cinema's 21:9 (research §4.5: a crop option): made at 16:9 on both engines, then cropped to 21:9 with
   // its grade after generation (meta.crop).
@@ -697,20 +762,26 @@ function unreadInputs(model: ModelDef, op: Operation, req: Pick<GenerationReques
   return words.length ? `${model.name} works from ${words.join(" or ")} — add one` : null;
 }
 
+/**
+ * More images than the operation's routes read (ModelRoute.maxImages): refused, never dropped without a word (a reference
+ * added in the Inpaint studio would be ignored by Qwen-Image 2.1's inpaint graph).
+ */
+function extraImages(model: ModelDef, op: Operation, req: Pick<GenerationRequest, "inputs">): string | null {
+  const routes = routesFor(model, op);
+  if (!routes.length || routes.some((r) => r.maxImages === undefined)) return null;
+  const max = imageLimit(model, op)!;
+  if ((req.inputs?.images?.length ?? 0) <= max) return null;
+  if (max === 1 && op === "inpaint") return `${model.name} paints the masked area of one picture — remove the references, or clear the mask to edit with them`;
+  if (max === 1 && op === "outpaint") return `${model.name} expands one picture at a time — remove the other images`;
+  return `${model.name} takes up to ${max} image${max === 1 ? "" : "s"} for this — remove the others`;
+}
+
 /** Models that need several images (try-on: the person, then the garment). */
 function missingImages(model: ModelDef, req: Pick<GenerationRequest, "inputs">): string | null {
   const min = model.options.minImages ?? 0;
   if ((req.inputs?.images?.length ?? 0) >= min) return null;
   const labels = model.options.imageLabels?.slice(0, min);
   return labels?.length === min ? `Add the ${labels.join(" and the ")}` : `${model.name} needs ${min} images`;
-}
-
-/** The price that holds at `now`: a launch promo to the end of its last day (UTC), then the list price. */
-export function pricingAt(p: Pricing, now = Date.now()): Pricing {
-  if (!p.promo) return p;
-  const { promo, ...list } = p;
-  if (!(now <= Date.parse(`${promo.until}T23:59:59.999Z`))) return list;
-  return { ...list, usd: promo.usd, ...(promo.byResolution ? { byResolution: promo.byResolution } : {}) };
 }
 
 /**
@@ -817,10 +888,15 @@ function routeMegapixels(model: ModelDef, params: GenParams, op?: Operation): nu
   return (width * height) / (1024 * 1024);
 }
 
-/** Rough USD estimate for a plan (BYO-key cloud runs). Open-source runs are free. */
-export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: Operation, withLoras = false): number | null {
+/**
+ * Rough USD estimate for a plan (BYO-key cloud runs). Open-source runs are free. A launch price (Pricing.promo) is read
+ * at `now` (./promo): the clock when not given (the server planning a run, the browser after it hydrates); with null (a
+ * page prerendering, the browser before it hydrates) a launch-priced model's price isn't known yet (null).
+ */
+export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: Operation, withLoras = false, now?: PriceClock): number | null {
   if (model.engine === "open" || !model.pricing) return model.engine === "open" ? 0 : null;
-  const p = model.pricing;
+  const p = pricingOn(model.pricing, now);
+  if (!p) return null;
   // A LoRA endpoint with no published price (fal's MOSS-Image /lora): unknown, never free.
   if (withLoras && p.lorasUnknown) return null;
   const n = params.numOutputs ?? 1;

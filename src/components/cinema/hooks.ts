@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { CinemaFolder, CinemaGenerateInput, CinemaProject, CinemaTile, DirectorMessage, DirectorSettings } from "@/lib/catalog/cinema";
 import type { Generation } from "@/lib/catalog/types";
 import { useGenerationEvents } from "@/lib/api";
+import { responseError } from "@/lib/refusals";
 import { Autosaver } from "./autosave";
 import { applyToTakes, type CinemaGeneration } from "./live";
 
@@ -22,7 +23,7 @@ export interface ProjectView {
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
   return body;
 }
 

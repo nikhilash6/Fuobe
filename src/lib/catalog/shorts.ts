@@ -5,7 +5,7 @@
  * segments are stitched back together under the original sound.
  *
  * Fuobe Shorts (build plan O9) is the default on both engines: each segment's first frame drawn in the look
- * (Qwen-Image-Edit 2511), then Wan 2.2 Fun VACE carries it through every frame by depth, on your GPU (81 frames at
+ * (Qwen-Image 2.1 Turbo on your GPU, hosted Qwen-Image-Edit 2511 on fal), then Wan 2.2 Fun VACE carries it through every frame by depth, on your GPU (81 frames at
  * 16 fps a segment) or on fal (pieces of up to 241 frames at the clip's own rate). Gemini Omni Flash (Higgsfield's
  * Shorts engine) and the other partner models stay as choices.
  *
@@ -14,6 +14,7 @@
  * docs/research/fuobe-originals-recipes-5.md (studios[shorts]).
  */
 import { scenePoster, type PresetPreview, type PreviewFx, type PreviewScene } from "../preset-cards";
+import { templateCover, templatePreview } from "../template-covers";
 import type { ChainSlot, Engine, Generation, GenerationRequest } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -30,7 +31,7 @@ export const SHORTS = {
   openFps: 16,
   openMaxFrames: 81,
   maxReferences: 10,
-  /** Qwen-Image-Edit takes the frame plus two references (the Original's first frame, on both engines). */
+  /** The first frame's edit takes the frame plus two references (the Original's first frame, on both engines). */
   openReferences: 2,
   /**
    * Fuobe Shorts in the cloud: fal's Wan 2.2 Fun VACE makes 17–241 frames at 5–30 fps, matching its input clip's count and
@@ -95,10 +96,13 @@ export const SHORTS_MODELS: Record<Engine, string[]> = {
   open: [SHORTS_ORIGINAL],
 };
 
-/** The helper models of the pipeline (the cloud Original's first frame: `still` takes it, `frame` restyles it). */
+/**
+ * The helper models of the pipeline (the cloud Original's first frame: `still` takes it, `frame` restyles it). The
+ * first frame in the look: hosted Qwen-Image-Edit 2511 in the cloud, Qwen-Image 2.1 Turbo (8 steps) on your GPU.
+ */
 export const SHORTS_TOOLS = {
   cloud: { cut: "trim-video", trim: "trim-video", fit: "scale-video", still: "extract-frame", frame: "qwen-image-edit-2511-cloud", join: "join-clips", mux: "merge-audio-video", joinMax: 24 },
-  open: { cut: "oss-segment", trim: "oss-trim", frame: "oss-qwen-edit", join: "oss-join-clips", mux: "oss-mux", joinMax: 4 },
+  open: { cut: "oss-segment", trim: "oss-trim", frame: "oss-qwen-image-21-turbo", join: "oss-join-clips", mux: "oss-mux", joinMax: 4 },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -194,8 +198,10 @@ export function getShortsPreset(id: string): ShortsPreset | undefined {
   return SHORTS_PRESETS.find((p) => p.id === id);
 }
 
-export function shortsPreview(p: Pick<ShortsPreset, "scene" | "fx">): PresetPreview {
-  return { poster: scenePoster(p.scene), scene: p.scene, fx: p.fx };
+/** A look's card preview: its real cover when it has one (templateCover: the restyled frame, and its reveal), else drawn. */
+export function shortsPreview(p: Pick<ShortsPreset, "id" | "scene" | "fx">): PresetPreview {
+  const cover = templateCover("shorts", p.id);
+  return cover ? templatePreview(cover) : { poster: scenePoster(p.scene), scene: p.scene, fx: p.fx };
 }
 
 /** A preset the user made from reference images (stored in shorts_presets). */
@@ -267,7 +273,7 @@ export function restylePrompt(look: Pick<ShortsLook, "look" | "type" | "referenc
   return `Restyle this video as ${tidy(look.look)}. Keep everything that happens exactly as it is: the same people, faces, poses, motion, timing and camera moves; change only the look.${refs}${wordsLine(look, language)}`;
 }
 
-/** Open engine, step 1: restyle the segment's first frame (image 1) with Qwen-Image-Edit; references are images 2 and 3. */
+/** Step 1: restyle the segment's first frame (image 1) with the edit model (SHORTS_TOOLS.frame); references are images 2 and 3. */
 export function firstFramePrompt(look: Pick<ShortsLook, "look" | "type">, language = "auto", refs = 0): string {
   const match = refs ? ` Match the style, colours and textures of ${refs > 1 ? "images 2 and 3" : "image 2"}.` : "";
   return `Redraw image 1 as ${tidy(look.look)}. Keep the composition, framing, people, faces, poses and expressions of image 1 exactly.${match}${wordsLine(look, language)}`;

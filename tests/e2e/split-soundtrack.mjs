@@ -4,8 +4,10 @@
 //   ComfyUI-DBS and its weights (a CPU split of the 6 s clip takes about half a minute).
 // Checks, at 1440 px and 390 px in light and dark: the empty tool, the cloud engine's "runs on your GPU" note, the open
 // engine's options (model preselected for the host, stereo stems) and "Free" with a time estimate, no sideways scroll;
-// then one run per source kind: the four stem tiles, the live mixer playing, a preset, Export mix landing in the Library,
-// and, for a video, "Put back on the video" giving a video. Screenshots go to outDir.
+// a refused upload (a guest's, an account's without its GPU, a file of another kind) and one removed while it uploads
+// bring back the empty tool, never "Uploading…" for good; then one run per source kind: the four stem tiles, the live
+// mixer playing, a preset, Export mix landing in the Library, and, for a video, "Put back on the video" giving a video.
+// Screenshots go to outDir.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -66,8 +68,8 @@ try {
       check(true, `${label}: the cloud engine says Split soundtrack runs on your GPU`);
       await page.screenshot({ path: path.join(out, `split-cloud-${dname}-${theme}.png`), fullPage: true });
       await page.getByRole("button", { name: "Use open source" }).click();
-      await page.getByText(/Free · runs on your ComfyUI|Demo · free/).waitFor({ timeout: 20_000 });
-      const bar = await page.getByText(/Free · runs on your ComfyUI|Demo · free/).first().locator("..").innerText();
+      await page.getByText(/Free · runs on your ComfyUI|Placeholder · free/).waitFor({ timeout: 20_000 });
+      const bar = await page.getByText(/Free · runs on your ComfyUI|Placeholder · free/).first().locator("..").innerText();
       check(true, `${label}: the open engine prices it: ${bar.replace(/\s+/g, " ")}`);
       const picked = await page.getByRole("radio", { checked: true, name: /Fast \(DBS-BSRNN\)|Best \(DBS-TIGER\)/ }).innerText();
       check(/Fast|Best/.test(picked), `${label}: the host's model is preselected (${picked})`);
@@ -80,6 +82,55 @@ try {
     }
   }
 
+  // ---- A refused upload (a guest's 401, an account's Connect your GPU, a file the server reads as another kind) and one
+  // removed while it uploads: the empty tool comes back, never "Uploading…" for good; then a file is taken as usual.
+  for (const [dname, device] of [
+    ["1440", DESKTOP],
+    ["390", PHONE],
+  ]) {
+    const ctx = await setup(browser, device, "light", "open");
+    // Connect your GPU's card looks for a ComfyUI on this computer (127.0.0.1:8188…): it reaches nothing but the app.
+    await ctx.route((u) => u.origin !== new URL(app).origin && /^https?:$/.test(u.protocol), (r) => r.abort());
+    const page = await ctx.newPage();
+    let refusal = null;
+    await page.route("**/api/uploads", async (r) => {
+      if (r.request().method() !== "POST" || !refusal) return r.continue();
+      const [status, headers, body, delay = 0] = refusal;
+      if (delay) await new Promise((res) => setTimeout(res, delay));
+      return r.fulfill({ status, contentType: "application/json", headers, body: JSON.stringify(body) }).catch(() => {});
+    });
+    await openRoute(page, `${app}/audio/split`);
+    const empty = page.getByText("Add a soundtrack to split");
+    for (const [why, answer] of [
+      ["a guest's refused upload", [401, { "x-fuobe-guest": "1" }, { error: "Create a free account to run this." }]],
+      ["an account's upload without its GPU", [403, { "x-fuobe-connect-gpu": "1" }, { error: "Connect your GPU to run this.", code: "connect-gpu" }]],
+      ["a file the server reads as a picture", [201, {}, { id: "x", url: "/api/files/uploads/x.png", kind: "image" }]],
+    ]) {
+      refusal = answer;
+      await page.locator('input[type="file"]').setInputFiles(wav);
+      await empty.waitFor({ timeout: 10_000 }).catch(() => {});
+      await page.waitForTimeout(500);
+      const uploading = await page.getByText("Uploading…").count();
+      check((await empty.isVisible()) && uploading === 0, `${dname}: after ${why} the empty tool is back (Uploading… ×${uploading})`);
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+    }
+    if (dname === "390") await page.screenshot({ path: path.join(out, `split-refused-${dname}.png`), fullPage: true });
+    // Removed while it uploads: its answer, when it comes, doesn't bring it back.
+    refusal = [201, {}, { id: "y", url: "/api/files/uploads/y.wav", kind: "audio" }, 2500];
+    await page.locator('input[type="file"]').setInputFiles(wav);
+    await page.getByRole("status").filter({ hasText: "Uploading…" }).waitFor({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Remove the soundtrack" }).click();
+    await page.waitForTimeout(3500);
+    check(await empty.isVisible(), `${dname}: a soundtrack removed while it uploads stays removed`);
+    refusal = null;
+    await page.locator('input[type="file"]').setInputFiles(wav);
+    await page.getByText(/Free · runs on your ComfyUI|Placeholder · free/).waitFor({ timeout: 30_000 });
+    check(true, `${dname}: a file is taken as usual afterwards`);
+    await page.screenshot({ path: path.join(out, `split-after-refusal-${dname}.png`), fullPage: true });
+    await ctx.close();
+  }
+
   // ---- A run per source kind: stems, mixer, export; a video goes back on the video.
   for (const [kind, file, device, dname] of [
     ["audio", wav, DESKTOP, "1440"],
@@ -89,7 +140,7 @@ try {
     const page = await ctx.newPage();
     await openRoute(page, `${app}/audio/split`);
     await page.locator('input[type="file"]').setInputFiles(file);
-    await page.getByText(/Free · runs on your ComfyUI|Demo · free/).waitFor({ timeout: 30_000 });
+    await page.getByText(/Free · runs on your ComfyUI|Placeholder · free/).waitFor({ timeout: 30_000 });
     await page.getByRole("button", { name: "Split it" }).click();
     await page.getByRole("heading", { name: "Stems and mixer" }).waitFor({ timeout: RUN_MS });
     const tiles = page.getByRole("list", { name: "Stems" }).getByRole("listitem");

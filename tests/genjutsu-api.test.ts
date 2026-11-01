@@ -139,11 +139,11 @@ describe("Genjutsu: estimates", () => {
     expect(e).toMatchObject({ modelId: "fuobe-character-swap", source: "original", costUsd: 0, anchors: 1, gpu: { weightsGb: 46.33 } });
     expect(e.notes.join(" ")).toMatch(/2 windows of up to 124 frames at 24 fps, each continuing from the 18 frames before it/);
     expect(e.notes.join(" ")).toMatch(/nodes GPL-3\.0 · SAM License/);
-    expect(e.notes.join(" ")).toMatch(/Qwen-Image-Edit 2511 first puts your character into the part's first frame/);
+    expect(e.notes.join(" ")).toMatch(/Qwen-Image 2.1 first puts your character into the part's first frame/);
   });
 
   describe("key mixes: a run is all real or all a demo, so a missing key is said before anything is paid for", () => {
-    const say = async (b: Record<string, unknown>, route: { POST: (r: Request, ctx?: unknown) => Promise<Response> } = estimateRoute) => {
+    const say = async (b: Record<string, unknown>, route: { POST: (r: Request) => Promise<Response> } = estimateRoute) => {
       const res = await route.POST(json(b));
       const out = await res.json();
       expect(res.status, JSON.stringify(out)).toBe(422);
@@ -382,10 +382,10 @@ describe("Genjutsu: runs (demo)", () => {
     expect(rows.filter((r) => r.feature === "genjutsu")).toHaveLength(1);
   });
 
-  it("Character swap on the open engine: the first frame, the anchor on Qwen-Image-Edit, one H3 job on the upload", async () => {
+  it("Character swap on the open engine: the first frame, the anchor on Qwen-Image 2.1, one H3 job on the upload", async () => {
     const { final } = await run(body({ engine: "open", mode: "character", range: { start: 2, end: 9 }, character: { who: "index", index: 1, subject: "the drummer", lora: "v1" } }));
     const rows = batchOf(final.id);
-    expect(rows.map((r) => r.model_id).sort()).toEqual(["fuobe-character-swap", "oss-extract-frame", "oss-qwen-edit"]);
+    expect(rows.map((r) => r.model_id).sort()).toEqual(["fuobe-character-swap", "oss-extract-frame", "oss-qwen-image-21"]);
     expect(final.modelId).toBe("fuobe-character-swap");
     expect(final.request.params).toMatchObject({ startTime: 2, endTime: 9, resolution: "768p", extra: { selection: "index", subjectIndex: 1, maskPrompt: "the drummer", lora: "v1" } });
     expect((await settle(final.id)).status).toBe("succeeded");

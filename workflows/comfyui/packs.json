@@ -1,0 +1,227 @@
+{
+  "ComfyUI-DBS": {
+    "repo": "https://github.com/hiroki-abe-58/ComfyUI-DBS",
+    "commit": "f656e53434b5485c148a2866fbd6ddc6b6152ed6",
+    "registry": { "id": "dbs-soundtrack-separation", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": ["dbs"]
+  },
+  "ComfyUI-Frame-Interpolation": {
+    "repo": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation",
+    "commit": "26545cc2dd95bc3d27f056016300673bdeee78f5",
+    "registry": { "id": "comfyui-frame-interpolation", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-HunyuanVideo-Foley": {
+    "repo": "https://github.com/phazei/ComfyUI-HunyuanVideo-Foley",
+    "commit": "afd2960b8ad9036a9f55a15daf514112ff68e010",
+    "registry": { "id": "ComfyUI-HunyuanVideo-Foley", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": ["foley"]
+  },
+  "ComfyUI-IndexTTS2": {
+    "repo": "https://github.com/snicolast/ComfyUI-IndexTTS2",
+    "commit": "5b33e02bc0112b8aaf1fc823d5e5a609ca07fc27",
+    "registry": null,
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-KJNodes": {
+    "repo": "https://github.com/kijai/ComfyUI-KJNodes",
+    "commit": "17195fcfa8a05f601b766a0f09c9733284f47416",
+    "registry": { "id": "comfyui-kjnodes", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-Krea2-Ostris-Edit": {
+    "repo": "https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit",
+    "commit": "7756566160c4a1b24bb1bd9f0ff3ced1a83d7547",
+    "registry": { "id": "comfyui-krea2-ostris-edit", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-LatentSyncWrapper": {
+    "repo": "https://github.com/ShmuelRonen/ComfyUI-LatentSyncWrapper",
+    "commit": "360d5283d7276aee68b4237b1387e594e4ce640e",
+    "registry": null,
+    "requirementsTxt": true,
+    "isolated": true,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-MMAudio": {
+    "repo": "https://github.com/kijai/ComfyUI-MMAudio",
+    "commit": "8eaeb72edc3aaf2059b57f2d96a1f6f689f19ae2",
+    "registry": { "id": "comfyui-mmaudio", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": ["mmaudio"]
+  },
+  "ComfyUI-MelBandRoFormer": {
+    "repo": "https://github.com/kijai/ComfyUI-MelBandRoFormer",
+    "commit": "92c86854e6654f4aacc97484471af95c98ea16d4",
+    "registry": { "id": "ComfyUI-MelBandRoFormer", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-MiniMax-H3-Turbo": {
+    "repo": "https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo",
+    "commit": "77bfa67575b14e3be6214f1747732e540c68b5dd",
+    "registry": { "id": "comfyui-minimax-h3-turbo", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-QwenASR": {
+    "repo": "https://github.com/1038lab/ComfyUI-QwenASR",
+    "commit": "3f9a652a617e578e4e3bd090e3dbc75274bf4775",
+    "registry": { "id": "ComfyUI-QwenASR", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-RMBG": {
+    "repo": "https://github.com/1038lab/ComfyUI-RMBG",
+    "commit": "229529e0ea63fb7085848225d74f91f6dc164956",
+    "registry": { "id": "comfyui-rmbg", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-ReActor": {
+    "repo": "https://github.com/Gourieff/ComfyUI-ReActor",
+    "commit": "3be5f356fe5b120a7a274d2509c0ecef5d0a7498",
+    "registry": { "id": "comfyui-reactor", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": ["facerestore_models", "insightface"]
+  },
+  "ComfyUI-ThinkSound_Wrapper": {
+    "repo": "https://github.com/ShmuelRonen/ComfyUI-ThinkSound_Wrapper",
+    "commit": "9a2fb40ae30cabbdb55fb6f6fe02b01c23ab1a3b",
+    "registry": null,
+    "requirementsTxt": true,
+    "isolated": true,
+    "subdir": null,
+    "folders": ["thinksound"]
+  },
+  "ComfyUI-ToSVG": {
+    "repo": "https://github.com/Yanick112/ComfyUI-ToSVG",
+    "commit": "1022ba05318dccb4fe586ce5bbd09f1f0b3c7909",
+    "registry": { "id": "comfyui-tosvg", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-Video-Depth-Anything": {
+    "repo": "https://github.com/yuvraj108c/ComfyUI-Video-Depth-Anything",
+    "commit": "a0db08e63d1ea571601c45cde4aaee0acdd0544d",
+    "registry": { "id": "ComfyUI-Video-Depth-Anything", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-VideoHelperSuite": {
+    "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite",
+    "commit": "4d907bee61e92c2e65af3bd6383a4e4d356126d1",
+    "registry": { "id": "comfyui-videohelpersuite", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-WanVideoWrapper": {
+    "repo": "https://github.com/kijai/ComfyUI-WanVideoWrapper",
+    "commit": "088128b224242e110d3906c6750e9a3a348a659b",
+    "registry": { "id": "ComfyUI-WanVideoWrapper", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-Whisper": {
+    "repo": "https://github.com/yuvraj108c/ComfyUI-Whisper",
+    "commit": "006a709848259ed3d69e2f9fcfd7a75f6c860ddd",
+    "registry": { "id": "ComfyUI-Whisper", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI_Fill-ChatterBox": {
+    "repo": "https://github.com/filliptm/ComfyUI_Fill-ChatterBox",
+    "commit": "f7d7a16187430abcaf91a3039b9c83aa9960816a",
+    "registry": { "id": "comfyui_fill-chatterbox", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ausboss-nodes": {
+    "repo": "https://github.com/ausboss/ComfyUI-AusBoss",
+    "commit": "bce780f2598f47c239cbf6503ea0984f96229391",
+    "registry": { "id": "ausboss-nodes", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "comfyui-krea2edit": {
+    "repo": "https://github.com/lbouaraba/comfyui-krea2edit",
+    "commit": "13ef60f20828949becada815d3cbc371eb5ccaab",
+    "registry": { "id": "comfyui-krea2edit", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "h3-relay": {
+    "repo": "https://github.com/akatz-ai/h3-relay",
+    "commit": "e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220",
+    "registry": { "id": "h3-relay", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "h3_character_swap": {
+    "repo": "https://github.com/akatz-labs/h3-character-swap-tool",
+    "commit": "0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b",
+    "registry": null,
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": "worker_nodes/h3_character_swap",
+    "folders": []
+  },
+  "plaguekind-nodes": {
+    "repo": "https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes",
+    "commit": "d58d006a4ea32c25c06499f2ff104f0852a045a6",
+    "registry": { "id": "plaguekind-nodes", "version": "" },
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  }
+}

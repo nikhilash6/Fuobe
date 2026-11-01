@@ -27,7 +27,10 @@ beforeAll(() => setSetting("demoMode", "auto"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const view = (id: string, engine: "open" | "cloud") => onEngine(getModel(id)!, engine);
-const plan = (engine: "open" | "cloud", req: Partial<GenerationRequest> & { presetId?: string }, modelId = presetModel(getPreset(req.presetId ?? "")!, engine) ?? "fuobe-dop") => {
+// A move's own route: as when the model its preview was made with (MiniMax H3) isn't in the catalog, or Fuobe DoP is picked.
+const noRecipe = () => false;
+const inCatalog = (id: string) => !!getModel(id);
+const plan = (engine: "open" | "cloud", req: Partial<GenerationRequest> & { presetId?: string }, modelId = presetModel(getPreset(req.presetId ?? "")!, engine, noRecipe) ?? "fuobe-dop") => {
   const m = view(modelId, engine);
   return planGeneration({ feature: "motion", modelId: m.id, prompt: "a woman in a red coat on a bridge", inputs: { images: ["/a.png"] }, ...req }, (id) => (id === m.id ? m : getModel(id)), getPreset);
 };
@@ -207,7 +210,7 @@ describe("effects as steps", () => {
     const pink = getPreset("effect-candy-pink")!;
     expect(pink.grade).toBe("candy-pink");
     // The grade is Fuobe DoP's step: the effect runs on it on both engines, without a LoRA.
-    for (const engine of ["open", "cloud"] as const) expect(presetModel(pink, engine)).toBe("fuobe-dop");
+    for (const engine of ["open", "cloud"] as const) expect(presetModel(pink, engine, noRecipe)).toBe("fuobe-dop");
     expect(plan("cloud", { presetId: "effect-candy-pink" }).loras).toEqual([]);
     const g = {
       id: "gen123",
@@ -226,7 +229,8 @@ describe("effects as steps", () => {
     const req = { feature: "motion", modelId: "fuobe-dop", presetId: "effect-window", prompt: "a woman reading", inputs: { images: ["/api/files/uploads/a.png"] } };
     for (const engine of ["open", "cloud"] as const) {
       const [clip, relit] = createGenerations({ ...req, engine });
-      expect(relit.modelId).toBe(engine === "open" ? "oss-qwen-relight" : "qwen-image-edit-2509-cloud");
+      expect(relit.modelId).toBe(engine === "open" ? "oss-qwen-image-21-turbo" : "qwen-image-edit-2509-cloud");
+      if (engine === "open") expect(relit.prompt).toMatch(/^Relight <image1>: soft natural window light from the side/);
       expect(relit.op).toBe("edit");
       expect(clip.modelId).toBe("fuobe-dop");
       expect(clip.engine).toBe(engine);
@@ -302,11 +306,11 @@ describe("review fixes", () => {
 
   it("runs Focus Change on LTX-2.5's fast endpoint: 720p, the start frame's shape, silent, about $0.54", async () => {
     const focus = getPreset("motion-focus-change")!;
-    expect(presetModel(focus, "cloud")).toBe("ltx-2-5-fast");
+    expect(presetModel(focus, "cloud", noRecipe)).toBe("ltx-2-5-fast");
     const m = getModel("ltx-2-5-fast")!;
     expect(m.hidden).toBe(true);
     // As the composer sends it: the model's defaults, then the move's own settings over them.
-    const p = plan("cloud", { presetId: "motion-focus-change", params: { ...m.defaults, ...presetParams(focus, "cloud") } });
+    const p = plan("cloud", { presetId: "motion-focus-change", params: { ...m.defaults, ...presetParams(focus, "cloud", noRecipe) } });
     expect(p.params).toMatchObject({ duration: 6, resolution: "720p", aspectRatio: "auto", generateAudio: false, extra: { camera_motion: "focus_shift" } });
     expect(estimateCost(m, p.params, 1, "i2v")).toBeCloseTo(0.54);
     const { url, body } = await submit(m, m.routes[0], { ...p.params, prompt: p.prompt, images: ["https://fal.media/a.png"] });
@@ -318,7 +322,9 @@ describe("review fixes", () => {
     const whip = getPreset("motion-whip-pan")!;
     expect(whip.open).toMatchObject({ modelId: "fuobe-dop" });
     expect(whip.cloud).toMatchObject({ modelId: "kling-2-5-turbo", partner: true });
-    expect(whip.parity).toMatch(/partner model until the evaluation harness measures Fuobe DoP/);
+    expect(whip.parity).toMatch(/In the cloud it runs on a partner model\.$/);
+    // The Details popover reads as plain words: no notes for us about checks still to run.
+    for (const p of [...MOTIONS, ...EFFECTS]) expect(p.parity ?? "", p.id).not.toMatch(/evaluation harness|checked on a GPU run|unverified/);
     // Every cloud route on Fuobe DoP brings something of its own: a LoRA, a camera LoRA or move, a grade or a relight.
     for (const p of [...MOTIONS, ...EFFECTS]) {
       if (!p.cloud || p.cloud.partner) continue;
@@ -368,30 +374,50 @@ describe("the composer follows the engine, not a person's pick", () => {
   const jib = getPreset("motion-jib-up")!;
   const defaults = { open: "oss-wan22-14b", cloud: "kling-2-5-turbo" };
   it("moves a move to its model on the new engine when the engine changes", () => {
-    expect(presetModel(jib, "open")).toBe("fuobe-dop");
-    expect(presetModel(jib, "cloud")).toBe("fuobe-dop-ltx");
+    expect(presetModel(jib, "open", noRecipe)).toBe("fuobe-dop");
+    expect(presetModel(jib, "cloud", noRecipe)).toBe("fuobe-dop-ltx");
     // GPU → cloud on Fuobe DoP: Jib Up follows to Fuobe DoP · LTX.
-    expect(engineSwitchModel({ model: view("fuobe-dop", "cloud"), preset: jib, engine: "cloud", from: "open", defaults })).toBe("fuobe-dop-ltx");
+    expect(engineSwitchModel({ model: view("fuobe-dop", "cloud"), preset: jib, engine: "cloud", from: "open", defaults, has: noRecipe })).toBe("fuobe-dop-ltx");
     // A partner model left behind on the other engine gives way to the move's model here.
-    expect(engineSwitchModel({ model: getModel("kling-2-5-turbo")!, preset: jib, engine: "open", from: "cloud", defaults })).toBe("fuobe-dop");
+    expect(engineSwitchModel({ model: getModel("kling-2-5-turbo")!, preset: jib, engine: "open", from: "cloud", defaults, has: noRecipe })).toBe("fuobe-dop");
+  });
+
+  it("opens a Fuobe DoP move on the model its preview was made with, DoP one pick away and following the engine", () => {
+    // MiniMax H3 on both engines when the catalog has it.
+    expect(presetModel(jib, "open", inCatalog)).toBe("oss-minimax-h3");
+    expect(presetModel(jib, "cloud", inCatalog)).toBe("minimax-h3");
+    expect(presetOriginal(getPreset("motion-whip-pan")!, "cloud", inCatalog)).toBe("minimax-h3");
+    // Hosted H3 follows to H3 on the GPU; Fuobe DoP picked on the GPU still follows to Jib Up's DoP · LTX in the cloud.
+    expect(engineSwitchModel({ model: getModel("minimax-h3")!, preset: jib, engine: "open", from: "cloud", defaults, has: inCatalog })).toBe("oss-minimax-h3");
+    expect(engineSwitchModel({ model: view("fuobe-dop", "cloud"), preset: jib, engine: "cloud", from: "open", defaults, has: inCatalog })).toBe("fuobe-dop-ltx");
+    expect(engineSwitchModel({ model: view("fuobe-dop", "open"), preset: jib, engine: "open", from: "open", defaults, has: inCatalog })).toBeUndefined();
+    // The effects with a start-frame step (relight, Mixed Media) stay on Fuobe DoP, which runs the step.
+    const steps = EFFECTS.filter((p) => p.prestep);
+    expect(steps).toHaveLength(38);
+    for (const p of steps) for (const engine of ["open", "cloud"] as const) expect(presetModel(p, engine, inCatalog), p.id).toBe(p[engine]!.modelId);
+    // A colour-grade effect stays on Fuobe DoP on both engines, whose clip carries the grade (as its cover was made).
+    for (const engine of ["open", "cloud"] as const) expect(presetModel(getPreset("effect-candy-pink")!, engine, inCatalog)).toBe("fuobe-dop");
+    // Fuobe DoP picked: its own route runs as before (LoRAs, the trigger, its settings).
+    const dop = plan("open", { presetId: "motion-jib-up" }, "fuobe-dop");
+    expect(dop.loras.map((l) => l.file)).toEqual(jib.open!.loras?.map((l) => l.file) ?? []);
   });
 
   it("keeps the sibling Original picked on purpose on the same engine", () => {
     // In the cloud, Fuobe DoP (Wan) picked for Jib Up stays: the engine didn't change.
-    expect(engineSwitchModel({ model: view("fuobe-dop", "cloud"), preset: jib, engine: "cloud", from: "cloud", defaults })).toBeUndefined();
+    expect(engineSwitchModel({ model: view("fuobe-dop", "cloud"), preset: jib, engine: "cloud", from: "cloud", defaults, has: noRecipe })).toBeUndefined();
     // On the GPU, Fuobe DoP · LTX picked for Jib Up stays too.
-    expect(engineSwitchModel({ model: view("fuobe-dop-ltx", "open"), preset: jib, engine: "open", from: "open", defaults })).toBeUndefined();
+    expect(engineSwitchModel({ model: view("fuobe-dop-ltx", "open"), preset: jib, engine: "open", from: "open", defaults, has: noRecipe })).toBeUndefined();
     // Focus Change: Fuobe DoP picked in the cloud doesn't snap back to LTX 2.5 Fast.
-    expect(engineSwitchModel({ model: view("fuobe-dop", "cloud"), preset: getPreset("motion-focus-change")!, engine: "cloud", from: "cloud", defaults })).toBeUndefined();
+    expect(engineSwitchModel({ model: view("fuobe-dop", "cloud"), preset: getPreset("motion-focus-change")!, engine: "cloud", from: "cloud", defaults, has: noRecipe })).toBeUndefined();
   });
 
   it("moves to a picked or linked move's Original, never to a partner route", () => {
-    expect(presetOriginal(jib, "cloud")).toBe("fuobe-dop-ltx");
-    expect(presetOriginal(getPreset("motion-whip-pan")!, "cloud")).toBeUndefined();
-    expect(presetOriginal(getPreset("motion-whip-pan")!, "open")).toBe("fuobe-dop");
-    expect(presetOriginal(getPreset("app-face-swap") ?? undefined, "cloud")).toBeUndefined();
+    expect(presetOriginal(jib, "cloud", noRecipe)).toBe("fuobe-dop-ltx");
+    expect(presetOriginal(getPreset("motion-whip-pan")!, "cloud", noRecipe)).toBeUndefined();
+    expect(presetOriginal(getPreset("motion-whip-pan")!, "open", noRecipe)).toBe("fuobe-dop");
+    expect(presetOriginal(getPreset("app-face-swap") ?? undefined, "cloud", inCatalog)).toBeUndefined();
     // The move's own settings start the composer, its extra (a camera LoRA) stays the preset's.
-    expect(presetParams(jib, "cloud")).toEqual({ duration: 5 });
+    expect(presetParams(jib, "cloud", noRecipe)).toEqual({ duration: 5 });
   });
 
   it("takes the other engine's defaults for the settings left alone when the same Original changes engine", () => {

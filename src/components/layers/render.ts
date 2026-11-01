@@ -21,6 +21,7 @@ import {
   type LayerDoc,
   type LayerNode,
 } from "@/lib/layers";
+import { responseError } from "@/lib/refusals";
 
 // ---------------------------------------------------------------------------
 // Images
@@ -258,7 +259,7 @@ export async function uploadDerived(blob: Blob, name: string): Promise<string> {
   form.append("file", new File([blob], `${slugify(name) || "layer"}.png`, { type: "image/png" }));
   const res = await fetch("/api/layers/renders", { method: "POST", body: form });
   const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-  if (!res.ok || !body.url) throw new Error(body.error ?? "Couldn't save the picture for the model. Please try again.");
+  if (!res.ok || !body.url) throw responseError(res, body.error ?? "Couldn't save the picture for the model. Please try again.");
   return body.url;
 }
 

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { licenceNote, trainingSettingsHref, type TrainingTarget } from "@/lib/catalog/training";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useMoodboardActions } from "./hooks";
 import type { Moodboard } from "./logic";
 
@@ -69,7 +70,7 @@ export function TrainBoardDialog({ board, open, onOpenChange }: { board: Moodboa
                           toast.success(t.demo ? "Demo training: nothing real is trained" : `Training “${board.name}” as a look — you can keep working`);
                           onOpenChange(false);
                         },
-                        onError: (e) => toast.error((e as Error).message),
+                        onError: (e) => toastError(e),
                       },
                     )
                   }

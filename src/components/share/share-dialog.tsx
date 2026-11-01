@@ -3,7 +3,6 @@
 import { Check, Copy, ExternalLink, Link2, Loader2, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { toast } from "sonner";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,6 +14,7 @@ import type { Generation } from "@/lib/catalog/types";
 import { copyWithToast } from "@/lib/clipboard";
 import { EXPIRY_CHOICES, expiryLabel, type ShareCreated, type ShareInfo } from "@/lib/share";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { PublishWizard } from "./publish-wizard";
 import { rememberLink, shareUrl, type ShareTarget } from "./share-provider";
 
@@ -54,7 +54,7 @@ function ShareForm({ target, onMade }: { target: ShareTarget; onMade: (c: ShareC
     try {
       onMade(await actions.create({ kind: target.kind, targetId: target.id, title, showPrompts, expiresInDays: days }));
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }

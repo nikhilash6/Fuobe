@@ -6,6 +6,7 @@
  * `/name` invocation), Memory (categories, import parsing) and the context the agent is given
  * (rendered once per chat, then updated with append-only "Context update" messages).
  */
+import { getLlmModel } from "./catalog/llm-providers";
 import type { Engine, Generation, MediaKind, Operation } from "./catalog/types";
 
 /** One job the agent wants to run, priced before the user approves it. */
@@ -50,13 +51,20 @@ export type AssistItem =
 
 export type AssistStatus = "idle" | "running" | "waiting";
 
-export type AssistAgent = "claude" | "ollama" | "offline";
+export type AssistAgent = "claude" | "hosted" | "local" | "offline";
+
+/** Chats saved before LM Studio and Unsloth Studio came along call the local model "ollama". */
+export const normalizeAgent = (a: string | null | undefined): AssistAgent | undefined =>
+  a === "ollama" ? "local" : a === "claude" || a === "hosted" || a === "local" || a === "offline" ? a : undefined;
 
 export interface AssistThread {
   id: string;
   title: string;
   status: AssistStatus;
-  /** "claude" = Claude; "ollama" = a local model through Ollama; "offline" = a rule-based planner (no LLM). */
+  /**
+   * "claude" = Claude; "hosted" = another provider's model on the owner's key (OpenAI, Gemini, DeepSeek, OpenRouter…);
+   * "local" = a local model (Ollama, LM Studio, Unsloth Studio…); "offline" = a rule-based planner (no LLM).
+   */
   agent: AssistAgent;
   engine: Engine;
   /** Run plans without the approval card. */
@@ -68,8 +76,10 @@ export interface AssistThread {
   projectId?: string | null;
   /** How the LLM was chosen (Free / Smart / Manual). */
   mode?: AssistMode;
-  /** Claude model id, or the Ollama model name (null: the default). */
+  /** The model's id at its provider, or the local model's name (null: the default). */
   model?: string | null;
+  /** Hosted models: the provider ("openai", "openrouter"…; src/lib/catalog/llm-providers.ts). */
+  provider?: string | null;
   effort?: AssistEffort | null;
   /** Skills loaded into this chat (by `/name` or by the agent). */
   skills?: string[];
@@ -113,6 +123,18 @@ export const ASSIST_SUGGESTIONS = [
   "A 10-second vertical video of a fox running through snow, with sound",
 ] as const;
 
+/** The longest prompt a link can type into a new chat (/assist?prompt=). */
+export const ASSIST_PROMPT_MAX = 2000;
+
+/**
+ * What a new chat's composer starts with, from its address: "/name " for ?skill=<name> (a skill's "Use in a new
+ * chat"), else ?prompt=<text> (Home's examples), cut to ASSIST_PROMPT_MAX. Nothing is sent until the viewer sends it.
+ */
+export function assistDraft(skill: string | null, prompt: string | null): string {
+  if (skill) return /^[a-z0-9-]+$/.test(skill) ? `/${skill} ` : "";
+  return (prompt ?? "").slice(0, ASSIST_PROMPT_MAX);
+}
+
 // ---------------------------------------------------------------------------
 // Modes (Supercomputer's Free / Smart / Manual)
 
@@ -120,8 +142,8 @@ export type AssistMode = "free" | "smart" | "manual";
 export type AssistEffort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export const ASSIST_MODES: { id: AssistMode; label: string; hint: string }[] = [
-  { id: "smart", label: "Smart", hint: "Claude plans, picks models and checks results" },
-  { id: "free", label: "Free", hint: "A local model through Ollama, or the offline planner — no API cost" },
+  { id: "smart", label: "Smart", hint: "The best model you've connected plans, picks models and checks results" },
+  { id: "free", label: "Free", hint: "Free models only (on this machine, OpenRouter's free models, free plans), then the offline planner" },
   { id: "manual", label: "Manual", hint: "Pick the model and how hard it thinks" },
 ];
 
@@ -143,35 +165,103 @@ export const CLAUDE_MODELS: { id: string; label: string; hint: string }[] = [
 export const DEFAULT_CLAUDE_MODEL = "claude-opus-5-5";
 export const DEFAULT_EFFORT: AssistEffort = "medium";
 
-/** What the composer's mode picker sends. `agent` only matters in Manual mode. */
+/** What the composer's mode picker sends. `agent`, `provider` and `model` only matter in Manual mode. */
 export interface AssistModeChoice {
   mode: AssistMode;
   agent?: AssistAgent;
+  /** Hosted models: the provider of `model`. */
+  provider?: string | null;
   model?: string | null;
   effort?: AssistEffort | null;
+}
+
+/** A chat's mode as the picker shows it and Schedule this request saves it: with a hosted model's provider, or Manual can't find the model. */
+export const threadModeChoice = (t: Pick<AssistThread, "mode" | "agent" | "provider" | "model" | "effort">): AssistModeChoice => ({
+  mode: t.mode ?? "smart",
+  agent: t.agent,
+  provider: t.provider ?? null,
+  model: t.model ?? null,
+  effort: t.effort ?? null,
+});
+
+/** A model the mode picker offers (GET /api/assist): words and flags only, never a key or an address. */
+export interface AssistModelOption {
+  provider: string;
+  model: string;
+  name: string;
+  providerLabel: string;
+  agent: "claude" | "hosted" | "local";
+  /** "$2 in, $10 out per million tokens", "Free · 20 a minute, 50 a day". */
+  price: string;
+  note?: string;
+  /** "Open weights · MIT · runs on DeepSeek's servers". */
+  open?: string;
+  caveat?: string;
+  sees: boolean;
+  free: boolean;
+  /** The effort levels it offers. */
+  efforts: AssistEffort[];
+  /** Why it can't be picked now. */
+  disabled?: string;
+  /** Smart and Free never pick it ("Most capable, slowest, priciest"). */
+  manualOnly?: string;
+}
+
+/** The local model server behind Free and Manual's local models (Ollama, LM Studio, Unsloth Studio, or another OpenAI-compatible one). */
+export interface AssistLocal {
+  /** "ollama" | "lmstudio" | "unsloth" | "custom"; null: Automatic found none. */
+  kind: string | null;
+  /** "LM Studio"; "a local model" when Automatic found none. */
+  label: string;
+  /** It answers and has a model to use. */
+  ok: boolean;
+  /** Its chat models (Manual mode lists them). */
+  models: string[];
+  /** The model a chat uses by default. */
+  model: string | null;
+  /** Why it can't run (needs a key, no model loaded…). */
+  problem?: string;
 }
 
 /** What the server can run right now (GET /api/assist). */
 export interface AssistAvailability {
   /** An Anthropic key is set and Settings allows Claude here. */
   claude: boolean;
-  /** Ollama answered. */
-  ollama: boolean;
-  ollamaModels: string[];
-  ollamaModel: string;
+  /** The local model server Free and Manual use. */
+  local: AssistLocal;
   /** Settings → AI helper is "none": every chat runs the offline planner. */
   aiOff: boolean;
-  /** Smart when Claude can run, else Free. */
+  /** Smart when its planner is a paid model, else Free. */
   defaultMode: AssistMode;
+  /** The model Smart plans with, the one that checks pictures for a planner that can't, and the sentence that says so. */
+  smart: { plan: AssistModelOption | null; check: AssistModelOption | null; text: string };
+  /** The model Free runs on and the sentence that says so (with its limits). */
+  free: { pick: AssistModelOption | null; text: string; caveat?: string };
+  /** Manual: the connected providers' models, grouped, and the providers without a key. */
+  manual: { groups: { id: string; label: string; status: string; models: AssistModelOption[] }[]; missing: { id: string; label: string }[] };
+  /** Settings → Engine is Open source only: only open-weight models run. */
+  openOnly: boolean;
+  /** The day the model list was last checked against the providers' pages. */
+  checked: string;
 }
 
-export function modeLabel(t: Pick<AssistThread, "mode" | "agent" | "model" | "effort">): string {
+/** "Smart · GPT-6.1 Sol", "Free · Nemotron 3 Ultra", "GPT-6.1 Sol · Medium" (Manual), "Offline planner". */
+export function modeLabel(t: Pick<AssistThread, "mode" | "agent" | "model" | "effort" | "provider">): string {
   if (t.agent === "offline") return "Offline planner";
-  if (t.agent === "ollama") return t.model ? `Local · ${t.model}` : "Local LLM";
-  const m = CLAUDE_MODELS.find((x) => x.id === (t.model ?? DEFAULT_CLAUDE_MODEL));
   const effort = ASSIST_EFFORTS.find((e) => e.id === (t.effort ?? DEFAULT_EFFORT))?.label;
-  if (t.mode === "manual") return `${m?.label.replace("Claude ", "") ?? t.model} · ${effort}`;
-  return "Smart";
+  let name: string;
+  if (t.agent === "local") {
+    if (t.mode === "manual" || !t.model) return t.model ? `Local · ${t.model}` : "Local LLM";
+    name = t.model;
+  } else if (t.agent === "hosted") {
+    name = getLlmModel(t.provider, t.model)?.name ?? t.model ?? "a hosted model";
+    if (t.mode === "manual") return `${name} · ${effort}`;
+  } else {
+    const m = CLAUDE_MODELS.find((x) => x.id === (t.model ?? DEFAULT_CLAUDE_MODEL));
+    if (t.mode === "manual") return `${m?.label.replace("Claude ", "") ?? t.model} · ${effort}`;
+    name = m?.label ?? "Claude";
+  }
+  return `${t.mode === "free" ? "Free" : "Smart"} · ${name}`;
 }
 
 // ---------------------------------------------------------------------------

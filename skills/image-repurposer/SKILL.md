@@ -32,8 +32,8 @@ For "a pack for every platform" make 9:16, 4:5, 1:1 and 16:9 (four jobs in one `
 - Use op `edit` with the image in `images` and the new `aspect_ratio`, prompt: "Extend this exact
   image to <ratio>: keep everything that's already there unchanged and in place; continue the
   background naturally; move nothing; keep all text exactly as written." Cloud `nano-banana-pro`
-  (takes many ratios), open `oss-qwen-edit`; for pure canvas extension on open source,
-  `oss-flux-fill` with op `outpaint`.
+  (takes many ratios), open `oss-qwen-image-21` (`oss-qwen-edit` after it); for pure canvas extension
+  on open source, `oss-qwen-image-21` with op `outpaint` (`oss-flux-fill` after it).
 - When going much taller (16:9 → 9:16), the headline may need to move: say "re-arrange the text
   block to sit in the top third, same font and colours" instead of "move nothing".
 

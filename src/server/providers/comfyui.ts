@@ -1,6 +1,8 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { tracksFor, type MotionPaths } from "@/lib/motion-paths";
 import { nanoid } from "nanoid";
 import {
@@ -36,11 +38,15 @@ import {
   type ManifestWorkflow,
 } from "@/lib/comfy";
 import { fpsPlan } from "@/lib/av/fps";
+import { resolveWorkflowId } from "@/lib/comfy-variants";
+import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
+import { fixFromPromptError } from "@/lib/gpu/fix-codes";
+import { loadIndex } from "../gpu/index-file";
 import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
 import { dbsChannelsFor, dbsModelFor, dbsSurroundBed, installedDbs, surroundSource, type DbsModel } from "@/lib/av/split";
 import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
-import { exportValues, exrWorkflow, framesPerPass, hdrColorSpace, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
+import { exportValues, framesPerPass, hdrColorSpace, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
 import { guessKind } from "@/lib/catalog/payload";
 import { loraByFile, needsToken } from "@/lib/catalog/loras";
 import { CHARACTER_SWAP, packResolution, samCoords, swapPrompt, SWAP_LORAS, windowPlan } from "@/lib/catalog/character-swap";
@@ -58,9 +64,35 @@ import { decodePng, encodePng } from "../png";
 import { probeAvi } from "../avi-probe";
 import { probeWebm } from "../webm-probe";
 import { adoptFile, readRef, scratchDir } from "../storage";
+import { CONNECT_GPU_MESSAGE } from "@/lib/guest-access";
+import { discardBody, fetchPublic, RemoteFetchError } from "../remote-fetch";
 import { zipToFile } from "../zip";
+import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "../account-files";
+import { accountSend } from "../account-send";
+import { outsideTenant, runAsTenant, tenantAccount } from "../tenant";
 import { ask, checkReach, reachSync, sharedCheck, type Reach } from "./reach";
-import { ProviderError, type ProviderAdapter, type RemoteOutput } from "./types";
+import { ProviderError, type PollResult, type ProviderAdapter, type RemoteOutput } from "./types";
+import { isOutOfMemory } from "@/lib/gpu/fix-codes";
+import { makingWords, queueWords, RELAY_TIMES, RELAY_WORDS, savingWords, sendingWords, tabFailureWords, type HistoryEntryLike, type TabFailure, type WantedFile } from "@/lib/relay";
+import type { GenerationFix } from "@/lib/catalog/types";
+import {
+  checkClocks,
+  createTask,
+  extraOf,
+  getTask,
+  inputKinds,
+  receivedFile,
+  receivedOf,
+  refusalOf,
+  requestStop,
+  resultOf,
+  runnerFacts,
+  stageInput,
+  taskProgress,
+  type FinishedPlan,
+  type Principal,
+  type TaskRow,
+} from "../computer/tasks";
 
 export const WORKFLOW_DIR = path.join(process.cwd(), "workflows", "comfyui");
 
@@ -93,7 +125,119 @@ export type ComfyWorker = "main" | "isolated";
 /** Where the isolated worker's address is set, for messages. */
 export const ISOLATED_SETTING = "Settings → Open-source engine · ComfyUI → Isolated worker URL";
 
+// ---------------------------------------------------------------------------
+// An account's own ComfyUI (public sign-up, "Your GPU")
+
+/**
+ * Where an account's run goes: its own ComfyUI at a public address (a link: a tunnel), with its own token; or the
+ * ComfyUI on the person's own computer ("computer"), which only their Fuobe tab reaches (src/server/computer).
+ */
+export type OwnGpu = { kind?: "link"; url: string; token?: string } | { kind: "computer"; principal: `acct:${string}` };
+
+const ownGpuStore = new AsyncLocalStorage<OwnGpu>();
+
+/**
+ * Run `fn` on an account's own ComfyUI: every ComfyUI call inside (uploads, the prompt, polls, outputs)
+ * goes to `gpu` through fetchPublic, which connects only to public addresses, so it can't reach the
+ * install's own ComfyUI, even when the account's name is re-pointed at this machine. The install's
+ * address and token are never used. Without a socket: progress comes from polling. On the account's own
+ * computer, every ComfyUI job becomes a task its Fuobe tab runs, and nothing is fetched from here.
+ */
+export function onOwnGpu<T>(gpu: OwnGpu, fn: () => T): T {
+  return ownGpuStore.run(gpu.kind === "computer" ? { kind: "computer", principal: gpu.principal } : { url: gpu.url.replace(/\/+$/, ""), token: gpu.token }, fn);
+}
+
+/** Inside onOwnGpu: the account's ComfyUI. */
+export const ownGpu = (): OwnGpu | undefined => ownGpuStore.getStore();
+
+/** Run `fn` outside any account's ComfyUI (the install's own again). */
+export const outsideOwnGpu = <T,>(fn: () => T): T => ownGpuStore.exit(fn);
+
+/**
+ * The ComfyUI in scope runs on someone's own computer, reached only through their Fuobe tab: whose (an account's
+ * "acct:<id>", or the owner's when Settings says ComfyUI runs on the owner's computer), else undefined.
+ */
+export function computerScope(): Principal | undefined {
+  const own = ownGpu();
+  if (own) return own.kind === "computer" ? own.principal : undefined;
+  if (serverScope.getStore()) return undefined;
+  return getSetting("comfyWhere") === "computer" ? "owner" : undefined;
+}
+
+/** A run the owner sent to the studio's own ComfyUI before Settings moved ComfyUI to the owner's computer. */
+const serverScope = new AsyncLocalStorage<true>();
+
+/**
+ * Whose computer a run sent there belongs to, whatever ComfyUI's place is now: the account's (as its tenant), or the
+ * owner's.
+ */
+function relayPrincipal(): Principal {
+  const account = tenantAccount();
+  return account ? `acct:${account}` : "owner";
+}
+
+/**
+ * Said when a workflow for the isolated worker (LatentSync 1.6, ThinkSound) would go to someone's computer: it needs a
+ * second ComfyUI beside the first, which the tab doesn't reach yet. Refused before anything is staged or queued.
+ */
+export const ISOLATED_ON_COMPUTER = "This one needs a second ComfyUI running alongside the first, which Fuobe doesn't connect from your computer yet.";
+
+/** Said when something would call a ComfyUI that only the person's own tab may reach. */
+export const ON_COMPUTER_ONLY = "This ComfyUI is on your own computer: only your Fuobe tab there talks to it.";
+
+/** The most an account's ComfyUI may send back for one output file, and how long it may take. */
+export const OWN_OUTPUT_LIMITS = { maxBytes: 2 ** 30, deadlineMs: 15 * 60_000 };
+
+/**
+ * A result a computer sent in (relay:<task>/view?…&n=…): the file its task received, for that task's principal only:
+ * whose run this is (an account, as its tenant; else the owner), whatever ComfyUI's place is now, as poll and cancel.
+ */
+export function relayFile(url: string): { path: string; contentType?: string } | null {
+  const principal = relayPrincipal();
+  const m = /^relay:([A-Za-z0-9_-]{16})\/view\?(.*)$/.exec(url);
+  const n = m ? Number(new URLSearchParams(m[2]).get("n")) : NaN;
+  return principal && m && Number.isInteger(n) ? receivedFile(principal, m[1], n) : null;
+}
+
+/** A computer's result as a fetch() answer (bundleFrames and the layer boxes read results this way). */
+function relayResponse(url: string): Response {
+  const file = relayFile(url);
+  if (!file) return new Response("Not found", { status: 404 });
+  const stream = Readable.toWeb(fs.createReadStream(file.path)) as ReadableStream<Uint8Array>;
+  return new Response(stream, { headers: { "content-type": file.contentType ?? "application/octet-stream", "content-length": String(fs.statSync(file.path).size) } });
+}
+
+/** fetch() for a provider's file: through fetchPublic on an account's own ComfyUI (1 GB and 15 minutes at most, or less). */
+export function outputFetch(url: string, init: RequestInit = {}, o: { maxBytes?: number } = {}): Promise<Response> {
+  if (url.startsWith("relay:")) return Promise.resolve(relayResponse(url));
+  if (!ownGpu()) return fetch(url, init);
+  const maxBytes = Math.max(1, Math.min(OWN_OUTPUT_LIMITS.maxBytes, o.maxBytes ?? Infinity));
+  return fetchPublic(url, init, { timeoutMs: 120_000, ...OWN_OUTPUT_LIMITS, maxBytes });
+}
+
+/** An account's ComfyUI: one EXR frame, at most. */
+export const OWN_FRAME_MAX_BYTES = 100 * 2 ** 20;
+
+/**
+ * What an account's ComfyUI may answer, by path: a file (/view) up to 1 GB in 15 minutes; an upload's answer 1 MB, in
+ * 5 minutes (the time covers sending the file); the node list (/object_info) 64 MB in 2 minutes; anything else 8 MB in
+ * 60 seconds. A slow or endless answer can't hold the server.
+ */
+export function ownGpuLimits(p: string): { maxBytes: number; deadlineMs: number } {
+  const at = p.split("?")[0];
+  if (at.startsWith("/view")) return OWN_OUTPUT_LIMITS;
+  if (at.startsWith("/upload/")) return { maxBytes: 2 ** 20, deadlineMs: 5 * 60_000 };
+  if (at.startsWith("/object_info")) return { maxBytes: 64 * 2 ** 20, deadlineMs: 2 * 60_000 };
+  return { maxBytes: 8 * 2 ** 20, deadlineMs: 60_000 };
+}
+
+/** A job id as ComfyUI gives it (a UUID): anything else from an account's ComfyUI is refused, never put in a path. */
+export const PROMPT_ID = /^[\w-]{1,64}$/;
+
 function baseUrl(worker: ComfyWorker = "main"): string {
+  const own = ownGpu();
+  if (own) return own.kind === "computer" ? "" : own.url;
+  if (computerScope()) return "";
   return getSetting(worker === "isolated" ? "comfyIsolatedUrl" : "comfyUrl").replace(/\/+$/, "");
 }
 
@@ -106,6 +250,9 @@ export function workerFor(endpoint: string | undefined): ComfyWorker {
 const sameAddress = (a: string, b: string) => a.replace(/\/+$/, "") === b.replace(/\/+$/, "");
 
 function authHeaders(worker: ComfyWorker = "main"): Record<string, string> {
+  const own = ownGpu();
+  if (own) return own.kind !== "computer" && own.token ? { Authorization: `Bearer ${own.token}` } : {};
+  if (computerScope()) return {};
   // Save & test of an address that isn't the saved one: the saved token stays with the server it
   // was saved for. Only a token typed for this test goes to the new address.
   const address = worker === "isolated" ? "comfyIsolatedUrl" : "comfyUrl";
@@ -115,7 +262,19 @@ function authHeaders(worker: ComfyWorker = "main"): Record<string, string> {
 }
 
 async function comfyFetch(p: string, init: RequestInit = {}, worker: ComfyWorker = "main"): Promise<Response> {
+  // A ComfyUI on someone's own computer is never called from here: not the install's, not a link (every caller in that
+  // scope goes through its task instead; this is the last guard).
+  if (computerScope()) throw new ProviderError(ON_COMPUTER_ONLY);
   const base = baseUrl(worker);
+  if (ownGpu()) {
+    // A visitor without a GPU of its own (a price check): nothing to reach, and never the install's.
+    if (!base) throw new ProviderError(CONNECT_GPU_MESSAGE);
+    try {
+      return await fetchPublic(`${base}${p}`, { ...init, headers: { ...authHeaders(worker), ...(init.headers ?? {}) } }, { timeoutMs: 120_000, ...ownGpuLimits(p) });
+    } catch (e) {
+      throw new ProviderError(`Can't reach your ComfyUI at ${base} (${(e as Error).message}). Is it running, and is its tunnel up?`);
+    }
+  }
   if (worker === "isolated" && !base) {
     throw new ProviderError(`This model runs on the isolated ComfyUI worker, which isn't set up yet: add its address in ${ISOLATED_SETTING} (or COMFYUI_ISOLATED_URL). scripts/comfy/README.md shows how to start one, usually on port 8189`);
   }
@@ -125,6 +284,14 @@ async function comfyFetch(p: string, init: RequestInit = {}, worker: ComfyWorker
     if (worker === "isolated") throw new ProviderError(`The isolated ComfyUI worker at ${base} doesn't answer (${(e as Error).message}). Start it (scripts/comfy/README.md) or check ${ISOLATED_SETTING}`);
     throw new ProviderError(`Can't reach ComfyUI at ${base} (${(e as Error).message}). Is it running?`);
   }
+}
+
+/**
+ * A raw request to the ComfyUI in scope: the install's (its address and token), or an account's inside onOwnGpu.
+ * The GPU pre-flight's reads go through it (src/server/gpu/target.ts).
+ */
+export function comfyRequest(p: string, init: RequestInit = {}, worker: ComfyWorker = "main"): Promise<Response> {
+  return comfyFetch(p, init, worker);
 }
 
 /**
@@ -147,7 +314,10 @@ const reasonOf = (text: string) => (/^\s*</.test(text) ? "" : text.trim().slice(
 async function comfyJson<T>(p: string, worker: ComfyWorker = "main"): Promise<T> {
   const res = await comfyFetch(p, {}, worker);
   const path = p.split("?")[0];
-  if (!res.ok) throw worker === "isolated" ? isolatedAnswer(path, res.status) : new ProviderError(`ComfyUI ${path} answered HTTP ${res.status}`, res.status);
+  if (!res.ok) {
+    discardBody(res);
+    throw worker === "isolated" ? isolatedAnswer(path, res.status) : new ProviderError(`ComfyUI ${path} answered HTTP ${res.status}`, res.status);
+  }
   try {
     return (await res.json()) as T;
   } catch {
@@ -182,6 +352,8 @@ function setSocket(worker: ComfyWorker, s: ComfySocket | undefined) {
 }
 
 function ensureSocket(worker: ComfyWorker = "main"): { clientId: string; progress: Map<string, Progress> } {
+  // An account's own ComfyUI: no socket (the install's stays as it is); its progress comes from polling, or from its tab.
+  if (ownGpu() || computerScope()) return { clientId: "fuobe-account", progress: new Map() };
   const url = baseUrl(worker);
   const cur = socketOf(worker);
   if (cur && cur.url === url && cur.ws.readyState <= 1) return cur;
@@ -371,23 +543,32 @@ function ocrOutput(answer: string, frame: OcrFrame | undefined): ComfyOutput {
   return { url: dataUrl(Buffer.from(text), "text/plain"), kind: "text", contentType: "text/plain", text, meta: { lines, ...(size ? { size } : {}), ...(ok ? {} : { unreadable: true }) } };
 }
 
-/** Layers: download each RGBA layer once, add its bounding box (from alpha) and hand the bytes on as a data URL. */
+/**
+ * Layers: download each RGBA layer once, add its bounding box (from alpha) and hand the bytes on as a data URL. On an
+ * account's ComfyUI nothing is downloaded or decoded here: decoding a big layer holds up the whole server (over a second
+ * for 40 megapixels), so its layers stay links, saved later straight to disk (16 at most), without a box, as a cloud
+ * provider's layers often are.
+ */
 async function withLayerBoxes(outputs: ComfyOutput[]): Promise<ComfyOutput[]> {
-  return Promise.all(
-    outputs.map(async (o) => {
-      if (o.kind !== "image" || typeof o.meta?.z !== "number" || o.url.startsWith("data:")) return o;
-      try {
-        const res = await fetch(o.url, { headers: o.headers });
-        if (!res.ok) return o;
-        const data = Buffer.from(await res.arrayBuffer());
-        const png = decodePng(data);
-        const bbox = alphaBBox(png.data, png.width, png.height);
-        return { ...o, url: dataUrl(data, "image/png"), contentType: "image/png", headers: undefined, meta: { ...o.meta, bbox: bbox ?? [0, 0, 0, 0], width: png.width, height: png.height } };
-      } catch {
-        return o; // keep the layer without a box rather than failing the job
+  if (ownGpu()) return outputs;
+  const isLayer = (o: ComfyOutput) => o.kind === "image" && typeof o.meta?.z === "number" && !o.url.startsWith("data:");
+  const box = async (o: ComfyOutput): Promise<ComfyOutput> => {
+    try {
+      const res = await outputFetch(o.url, { headers: o.headers });
+      if (!res.ok) {
+        discardBody(res);
+        return o;
       }
-    }),
-  );
+      const data = Buffer.from(await res.arrayBuffer());
+      const png = decodePng(data);
+      const bbox = alphaBBox(png.data, png.width, png.height);
+      const meta = { ...o.meta, bbox: bbox ?? [0, 0, 0, 0], width: png.width, height: png.height };
+      return { ...o, url: dataUrl(data, "image/png"), contentType: "image/png", headers: undefined, meta };
+    } catch {
+      return o; // keep the layer without a box rather than failing the job
+    }
+  };
+  return Promise.all(outputs.map((o) => (isLayer(o) ? box(o) : o)));
 }
 
 /**
@@ -401,15 +582,43 @@ async function bundleFrames(outputs: ComfyOutput[], generationId: string): Promi
   const rest = outputs.filter((o) => o.meta?.role !== "frames");
   const preview = rest.find((o) => o.kind === "video");
   if (!preview) throw new ProviderError("The EXR export finished without its preview clip");
+  // An account's ComfyUI: a frame count that fits a clip, room on the server, 100 MB a frame, and no more in all than
+  // the account's files have room for (3 GB).
+  const account = ownGpu() ? tenantAccount() : undefined;
+  let budget = Infinity;
+  if (account) {
+    if (frames.length > ACCOUNT_LIMITS.framesPerJob) throw new ProviderError(`Your ComfyUI made ${frames.length} EXR frames. A run on your GPU keeps up to ${ACCOUNT_LIMITS.framesPerJob}: export a shorter clip.`);
+    if (!diskHasRoom()) throw new ProviderError(ACCOUNT_MESSAGES.diskLow);
+    budget = accountTotalBytes(account) - accountUsage(account).total;
+    if (budget <= 0) throw new ProviderError(filesFullMessage(account));
+  }
   const dest = path.join(scratchDir(), `${generationId || nanoid(8)}-${nanoid(6)}.zip`);
+  let total = 0;
+  // Past what the account's files have room for: say that, not the size of one answer.
+  const full = (e: unknown) => (account && budget - total < OWN_FRAME_MAX_BYTES && e instanceof RemoteFetchError && /^The answer was over/.test(e.message) ? new ProviderError(filesFullMessage(account)) : e);
   async function* files() {
     for (const [i, f] of frames.entries()) {
-      const res = await fetch(f.url, { headers: f.headers });
-      if (!res.ok) throw new ProviderError(`ComfyUI answered HTTP ${res.status} for EXR frame ${i + 1}`);
-      yield { name: `frame_${String(i + 1).padStart(5, "0")}.exr`, data: Buffer.from(await res.arrayBuffer()) };
+      let data: Buffer;
+      try {
+        const res = await outputFetch(f.url, { headers: f.headers }, account ? { maxBytes: Math.min(OWN_FRAME_MAX_BYTES, budget - total) } : {});
+        if (!res.ok) {
+          discardBody(res);
+          throw new ProviderError(`ComfyUI answered HTTP ${res.status} for EXR frame ${i + 1}`);
+        }
+        data = Buffer.from(await res.arrayBuffer());
+      } catch (e) {
+        throw full(e);
+      }
+      total += data.length;
+      yield { name: `frame_${String(i + 1).padStart(5, "0")}.exr`, data };
     }
   }
-  await zipToFile(files(), dest);
+  try {
+    await zipToFile(files(), dest);
+  } catch (e) {
+    fs.rmSync(dest, { force: true });
+    throw e;
+  }
   const zip = adoptFile({ from: dest, contentType: "application/zip", name: "exr-frames.zip", source: "generation", generationId: generationId || undefined });
   return rest.map((o) => (o === preview ? { ...o, meta: { ...o.meta, artifacts: { exr: zip.url }, frames: frames.length } } : o));
 }
@@ -445,10 +654,28 @@ async function checkComfy(url: string): Promise<boolean> {
 
 /** Is the ComfyUI server reachable? Cached for 10 s (`force` checks now); one check runs at a time. */
 export async function probeComfy(force = false): Promise<boolean> {
+  // An account's own ComfyUI is taken as there: its run says so when it isn't (the install's state stays its own). So is
+  // one on a computer: its runs wait for a tab there.
+  if (ownGpu() || computerScope()) return true;
   const url = baseUrl();
   const cur = globalThis.__fuobeComfyReach;
   if (!force && cur && cur.url === url && Date.now() - cur.at < 10_000) return cur.ok;
   return sharedCheck("comfy", url, () => checkComfy(url));
+}
+
+declare global {
+  /** comfyDevice's and comfyDbsModels' requests on their way, by path and address. */
+  var __fuobeComfyAsks: Map<string, Promise<unknown>> | undefined;
+}
+
+/** One request at a time per path and address: callers that arrive while it is on its way share its answer. */
+function oneAsk<T>(key: string, ask: () => Promise<T>): Promise<T> {
+  const asks = (globalThis.__fuobeComfyAsks ??= new Map());
+  const going = asks.get(key);
+  if (going) return going as Promise<T>;
+  const p = ask().finally(() => asks.delete(key));
+  asks.set(key, p);
+  return p;
 }
 
 declare global {
@@ -461,15 +688,20 @@ declare global {
  * (devices[0], as Settings' test reads it), kept for a minute; undefined when the server doesn't say or can't be reached.
  */
 export async function comfyDevice(worker: ComfyWorker = "main"): Promise<string | undefined> {
+  // On someone's computer: what its Fuobe tab last said ("cuda:0 NVIDIA …").
+  const computer = computerScope();
+  if (computer) return /^[a-z]+/i.exec(runnerFacts(computer)?.device ?? "")?.[0].toLowerCase();
   const url = baseUrl(worker);
   if (!url) return undefined;
   const cache = (globalThis.__fuobeComfyDevice ??= new Map());
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < 60_000) return hit.type;
-  const s = await comfyJson<{ devices?: { type?: unknown }[] }>("/system_stats", worker).catch(() => undefined);
-  const type = typeof s?.devices?.[0]?.type === "string" ? (s.devices[0].type as string) : undefined;
-  if (s) cache.set(url, { type, at: Date.now() });
-  return type;
+  return oneAsk(`/system_stats ${url}`, async () => {
+    const s = await comfyJson<{ devices?: { type?: unknown }[] }>("/system_stats", worker).catch(() => undefined);
+    const type = typeof s?.devices?.[0]?.type === "string" ? (s.devices[0].type as string) : undefined;
+    if (s) cache.set(url, { type, at: Date.now() });
+    return type;
+  });
 }
 
 declare global {
@@ -488,14 +720,19 @@ export async function comfyDbsModels(worker: ComfyWorker = "main", maxAgeMs = 10
   const cache = (globalThis.__fuobeComfyDbs ??= new Map());
   const hit = cache.get(url);
   if (hit && Date.now() - hit.at < maxAgeMs) return hit.models;
-  const files = await comfyJson<unknown>("/models/dbs", worker).catch(() => undefined);
-  const models = Array.isArray(files) ? installedDbs(files.filter((f): f is string => typeof f === "string")) : undefined;
-  cache.set(url, { models, at: Date.now() });
-  return models;
+  return oneAsk(`/models/dbs ${url}`, async () => {
+    const files = await comfyJson<unknown>("/models/dbs", worker).catch(() => undefined);
+    const models = Array.isArray(files) ? installedDbs(files.filter((f): f is string => typeof f === "string")) : undefined;
+    cache.set(url, { models, at: Date.now() });
+    return models;
+  });
 }
 
 /** The connected ComfyUI's RAM in bytes, as the last reachability check read it (whole-clip tools' budget). */
 export function comfyRam(): number | undefined {
+  const computer = computerScope();
+  if (computer) return runnerFacts(computer)?.ramBytes;
+  if (ownGpu()) return undefined;
   const cur = globalThis.__fuobeComfyReach;
   return cur?.ok && cur.url === baseUrl() ? cur.ram : undefined;
 }
@@ -506,6 +743,7 @@ export function comfyRam(): number | undefined {
  * the background to say for sure.
  */
 export function probeComfySync(timeoutMs = 1500): boolean {
+  if (ownGpu() || computerScope()) return true;
   const url = baseUrl();
   const { reach, sure } = reachSync(url, `${url}/system_stats`, timeoutMs, authHeaders());
   globalThis.__fuobeComfyReach = reach;
@@ -516,8 +754,8 @@ export function probeComfySync(timeoutMs = 1500): boolean {
 // ---------------------------------------------------------------------------
 // Building the prompt
 
-/** Loader classes whose input is an uploaded file, and which input holds it. */
-const MEDIA_LOADERS: Record<string, string> = { LoadImage: "image", LoadImageMask: "image", LoadVideo: "file", VHS_LoadVideo: "video", LoadAudio: "audio", VHS_LoadAudioUpload: "audio" };
+/** Loader classes whose input is an uploaded file, and which input holds it (AusBoss's Crop + Rotate + Pad loads the upload itself). */
+const MEDIA_LOADERS: Record<string, string> = { LoadImage: "image", LoadImageMask: "image", LoadVideo: "file", VHS_LoadVideo: "video", LoadAudio: "audio", VHS_LoadAudioUpload: "audio", AUSBOSS_NODES_ImageCropRotatePad: "image" };
 
 // What we learned about each uploaded clip / track from its header (duration, size, fps, audio), by ComfyUI file name.
 declare global {
@@ -526,9 +764,29 @@ declare global {
 const MEDIA_FILE = /^(video|audio)\//;
 const MEDIA_EXT = /\.(mp4|m4v|mov|m4a|wav|flac|mp3)$/i;
 
+/** A file name as remembered: an account's ComfyUI names its own files, so they are kept apart by its address (or whose computer). */
+const mediaKey = (name: string) => {
+  const own = ownGpu();
+  const computer = computerScope();
+  if (computer) return `${computer}|${name}`;
+  return own && own.kind !== "computer" ? `${own.url}|${name}` : name;
+};
+
+/** What the server reads from a file it sends to ComfyUI (a clip's length and size, a picture's size), by its name there. */
+function rememberSent(uploaded: string, data: Buffer, contentType: string, name: string) {
+  if (MEDIA_FILE.test(contentType) || MEDIA_EXT.test(name) || /\.(webm|mkv|avi)$/i.test(name)) {
+    const info = probeMedia(data) ?? webmInfo(data) ?? aviInfo(data);
+    if (info) rememberMedia(uploaded, info);
+  } else if (/^image\//.test(contentType)) {
+    // A start frame's size: "auto" makes an image-to-video clip in the picture's own shape.
+    const size = imageSize(data);
+    if (size) rememberMedia(uploaded, { container: "image", ...size, hasVideo: false, hasAudio: false });
+  }
+}
+
 function rememberMedia(name: string, info: MediaInfo) {
   const seen = (globalThis.__fuobeComfyMedia ??= new Map());
-  seen.set(name, info);
+  seen.set(mediaKey(name), info);
   if (seen.size > 256) seen.delete(seen.keys().next().value!);
 }
 
@@ -550,20 +808,8 @@ function aviInfo(data: Buffer): MediaInfo | null {
 
 /** The header facts of a file this server uploaded to ComfyUI (a still has only its size; undefined for unreadable containers). */
 export function mediaInfoFor(name: unknown): MediaInfo | undefined {
-  return typeof name === "string" ? globalThis.__fuobeComfyMedia?.get(name) : undefined;
+  return typeof name === "string" ? globalThis.__fuobeComfyMedia?.get(mediaKey(name)) : undefined;
 }
-
-/**
- * Image-to-video graphs whose camera moves Wan 2.2 Fun Camera makes natively: a request with a pose (params.extra.cameraMotion)
- * runs there (Fuobe DoP on Wan 2.2 14B, Fuobe Cinema on its Lightning graph).
- */
-const CAMERA_POSE_GRAPH: Record<string, string> = { "wan22-i2v-14b": "wan22-fun-camera-14b", "wan22-i2v-14b-lightx2v": "wan22-fun-camera-14b" };
-
-/**
- * Fuobe Marketing Image's Standalone product shot (params.extra.productShot with one product photo) runs the product-shot
- * graph: the product cut out with BiRefNet, put on white and relit into the scene (Qwen-Image-Edit 2509 + White_to_Scene).
- */
-const PRODUCT_SHOT_GRAPH: Record<string, string> = { "qwen-image-edit-2511-multi": "product-shot-qwen-edit-2509" };
 
 /** Inputs a workflow handles its own way (the manifest doesn't say). */
 const SLOT_RULES: Record<string, { reuse?: boolean; required?: string[]; hints?: Record<string, string>; views?: ViewSlots }> = {
@@ -580,6 +826,13 @@ const SLOT_RULES: Record<string, { reuse?: boolean; required?: string[]; hints?:
   // Pixal3D multi-view: the front, then any of the other sides.
   "image-to-3d-trellis2-multiview": { hints: { image: "Add a photo of the front" }, views: { sides: ["front", "left", "back", "right"], into: "Pixal3DMultiViewConditioning" } },
 };
+
+/**
+ * Encoders that take their extra references as optional inputs (Qwen-Image 2.1's and FIBO 2's image list, Krea 2 Edit's
+ * person): a reference left out goes with the nodes only it feeds, and the encoder runs on the ones it was given.
+ * Slots drop from the last, so an encoder's numbered inputs never have a gap.
+ */
+const OPTIONAL_REFERENCE_INPUTS: ReadonlySet<string> = new Set(["TextEncodeQwenImage21", "TextEncodeFibo2", "Krea2EditModelPatch", "Krea2EditGroundedEncode"]);
 
 /** Uploads that are sides of one object (image = the first side, image2 the second…), and the node they all go into. */
 interface ViewSlots {
@@ -666,6 +919,14 @@ function captionCues(input: GenInput, extra: Record<string, unknown>): CaptionCu
 }
 
 const seconds = (n: number) => (n >= 10 ? String(Math.round(n)) : String(Math.round(n * 10) / 10));
+
+/**
+ * Per-frame restyle graphs that follow the clip when a run sets nothing else (Edit video sends a clip and words): the clip's
+ * shape, its frame rate up to FOLLOW_CLIP_MAX_FPS, and its whole length. The Mixed Media studio sends its own size, rate and
+ * frame count (src/lib/catalog/mixed-media.ts), and those win.
+ */
+const FOLLOW_CLIP: ReadonlySet<string> = new Set(["mixed-media-zimage-frames"]);
+const FOLLOW_CLIP_MAX_FPS = 24;
 const GB = 2 ** 30;
 
 const clipFacts = (clip: MediaInfo | undefined) => ({ width: clip?.width, height: clip?.height, fps: clip?.fps, frames: clip?.frames, duration: clip?.videoDuration ?? clip?.duration });
@@ -760,7 +1021,6 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // "video-concat-{n}": one workflow per clip count.
   const clips = input.videos ?? [];
   if (endpointTemplate.includes("{n}") && clips.length > 4) throw new ProviderError("ComfyUI joins up to 4 clips at a time");
-  let endpoint = endpointTemplate.replace("{n}", String(Math.max(2, Math.min(4, clips.length))));
   const extra: Record<string, unknown> = { ...(input.extra ?? {}) };
   // The second audio track (mux background): the canonical input when the runtime sends it, else params.extra.audio2.
   const given2 = (input as GenInput & { audio2?: unknown }).audio2;
@@ -770,22 +1030,26 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // Media refs in params.extra (e.g. a background stem for "audio2") are uploaded like regular inputs.
   for (const [k, v] of Object.entries(extra)) {
     if (!isMediaRef(v)) continue;
-    const f = await readRef(v);
-    extra[k] = await ctx.upload(f.data, f.contentType, f.name);
+    // An account's file is read and sent when it may send (account-send.ts), as the run's other inputs are.
+    const send = async () => {
+      const f = await readRef(v);
+      return ctx.upload(f.data, f.contentType, f.name);
+    };
+    const account = ownGpu() ? tenantAccount() : undefined;
+    extra[k] = await (account ? accountSend(account, send) : send());
   }
-  // Soundtrack without a background stem: the single-track graph.
-  if (ctx.op === "mux" && !audio2 && !extra.audio2 && loadManifest().workflows.some((w) => w.id === `${endpoint}-replace`)) endpoint = `${endpoint}-replace`;
-  // EXR frames have graphs of their own (export, SDR to HDR).
-  if (input.format === "exr" && (ctx.op === "export-video" || ctx.op === "sdr-to-hdr")) {
-    const exr = exrWorkflow(ctx.op);
-    if (loadManifest().workflows.some((w) => w.id === exr)) endpoint = exr;
-  }
-  // Fuobe DoP: a camera move Wan 2.2 Fun Camera makes natively (a pose, no LoRA needed) runs on its graph; a LoRA mixed
-  // in is injected on its experts as on the plain image-to-video graph.
-  const posed = CAMERA_POSE_GRAPH[endpoint];
-  if (posed && typeof extra.cameraMotion === "string" && extra.cameraMotion) endpoint = posed;
-  const shot = PRODUCT_SHOT_GRAPH[endpoint];
-  if (shot && extra.productShot === true && (input.images?.length ?? 0) === 1 && loadManifest().workflows.some((w) => w.id === shot)) endpoint = shot;
+  // The variant this request runs (one graph per clip count, the single-track soundtrack, EXR frames, a Fun Camera pose,
+  // the product shot): src/lib/comfy-variants.ts, which the GPU pre-flight's gate reads too. A LoRA mixed into a pose is
+  // injected on its experts as on the plain image-to-video graph.
+  const endpoint = resolveWorkflowId(endpointTemplate, {
+    op: ctx.op,
+    clips: clips.length,
+    images: input.images?.length ?? 0,
+    format: input.format,
+    audio2: !!audio2 || !!extra.audio2,
+    extra,
+    has: (id) => loadManifest().workflows.some((w) => w.id === id),
+  });
   delete extra.productShot;
 
   const { manifest, workflow } = getWorkflow(endpoint);
@@ -850,6 +1114,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // Frame rate (params.fps, or a model's fps control), trim window and frame counts.
   const fpsIn = input.fps ?? (typeof extra.fps === "number" && extra.fps > 0 ? extra.fps : undefined);
   if (b.fps && fpsIn) values.fps = fpsIn;
+  const followClip = FOLLOW_CLIP.has(manifest.id) && ctx.op === "v2v" && !!clip;
+  if (followClip && b.fps && !fpsIn && clip?.fps && clip.fps > 0) values.fps = Math.max(1, Math.min(FOLLOW_CLIP_MAX_FPS, Math.round(clip.fps)));
   const fps = Number(values.fps ?? d.fps ?? 16);
   const start = Math.max(0, input.startTime ?? 0);
   if (b.startTime || b.startFrame) {
@@ -870,22 +1136,31 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     else if (soundLength) values.duration = soundLength;
     else if (ctx.op === "trim") values.duration = 0; // from the start time to the end
   }
+  // MiniMax H3 stretches the start frame to the canvas with no crop: a clip from a still (or the orbit of one) always takes the
+  // still's shape, so an aspect ratio left over from a text draft can't distort it.
+  const h3 = isH3Graph(manifest.id);
+  const aspectRatio = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || b.image) ? "auto" : followClip && !input.aspectRatio ? "auto" : input.aspectRatio;
   if (b.width || b.height) {
     const multiple = Number(manifest.limits?.dimensionMultiple ?? 16);
     // With motion paths the frame keeps the start image's shape, so the paths need no cropping;
     // "auto" keeps the source clip's shape when its header told us.
     const srcAspect = (extra.motionPaths as MotionPaths | undefined)?.aspect;
     // "auto" keeps the source clip's shape when its header told us, else the start frame's (image-to-video).
-    const still = input.aspectRatio === "auto" && !clip?.width ? ctx.media?.(String(values.image ?? "")) : undefined;
+    const still = aspectRatio === "auto" && !clip?.width ? ctx.media?.(String(values.image ?? "")) : undefined;
     const src = clip?.width && clip.height ? clip : still?.width && still.height ? still : undefined;
-    const shape = srcAspect ? `${srcAspect[0]}:${srcAspect[1]}` : input.aspectRatio === "auto" ? (src ? `${src.width}:${src.height}` : undefined) : input.aspectRatio;
-    const dims = computeDimensions(shape, input.resolution, { width: Number(d.width ?? 1024), height: Number(d.height ?? 1024) }, multiple);
-    // Respect the workflow's size limits while keeping the aspect ratio.
-    const maxW = Number(manifest.limits?.maxWidth ?? Infinity);
-    const maxH = Number(manifest.limits?.maxHeight ?? Infinity);
-    const k = Math.min(1, maxW / dims.width, maxH / dims.height);
-    values.width = Math.max(multiple, Math.floor((dims.width * k) / multiple) * multiple);
-    values.height = Math.max(multiple, Math.floor((dims.height * k) / multiple) * multiple);
+    const shape = srcAspect ? `${srcAspect[0]}:${srcAspect[1]}` : aspectRatio === "auto" ? (src ? `${src.width}:${src.height}` : undefined) : aspectRatio;
+    if (h3) {
+      // H3's own canvas (ComfyUI's adapt_canvas): 768 px on the short side, at most 768 × 1344, multiples of 32.
+      Object.assign(values, h3Canvas(shape));
+    } else {
+      const dims = computeDimensions(shape, input.resolution, { width: Number(d.width ?? 1024), height: Number(d.height ?? 1024) }, multiple);
+      // Respect the workflow's size limits while keeping the aspect ratio.
+      const maxW = Number(manifest.limits?.maxWidth ?? Infinity);
+      const maxH = Number(manifest.limits?.maxHeight ?? Infinity);
+      const k = Math.min(1, maxW / dims.width, maxH / dims.height);
+      values.width = Math.max(multiple, Math.floor((dims.width * k) / multiple) * multiple);
+      values.height = Math.max(multiple, Math.floor((dims.height * k) / multiple) * multiple);
+    }
   }
   // An end card appended to an ad (video-append-endcard): the card is encoded at the ad's own size and frame rate,
   // so the ad's packets are copied as they are. Only the ad's header knows them.
@@ -893,7 +1168,23 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     if (!clip?.width || !clip.height || !clip.fps) throw new ProviderError("Couldn't read the ad's size and frame rate, so the end card can't be added");
     Object.assign(values, { width: clip.width, height: clip.height, fps: Math.round(clip.fps * 1000) / 1000 });
   }
-  if (b.frames && span) values.frames = computeFrames(span, fps, Number(d.frameStep ?? 4), manifest.limits?.maxFrames);
+  if (b.frames && span) {
+    if (h3) {
+      // H3's 17n + 5 grid at 24 fps (3 s → 73, 5 s → 124, 10 s → 243, 15 s → 362): the clip h3Prompt's end-frame mark names.
+      const cap = Number(manifest.limits?.maxFrames ?? Infinity);
+      let frames = h3Frames(span);
+      while (frames > cap) frames -= 17;
+      values.frames = frames;
+    } else values.frames = computeFrames(span, fps, Number(d.frameStep ?? 4), manifest.limits?.maxFrames);
+  } else if (followClip && b.frames && !span && extra.frames === undefined && clipLength) {
+    // The whole clip from its start (or the start time asked), refused past the graph's frame cap rather than cut short.
+    const frames = Math.max(1, Math.floor((clipLength - start) * fps));
+    const cap = Number(manifest.limits?.maxFrames ?? Infinity);
+    if (frames > cap) {
+      throw new ProviderError(`This model redraws up to ${cap} frames per job on the open engine (${seconds(cap / fps)} s at ${fps} fps; this clip is ${seconds(clipLength - start)} s) — trim the clip, or pick a range and a frame rate in the Mixed Media studio`);
+    }
+    values.frames = frames;
+  }
   // Lip re-sync and a talking avatar run as long as the voice (its header, or the length the run was given); a voice past
   // the frame cap is refused, not cut.
   const voiceLength =
@@ -1148,6 +1439,19 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
+  // SeedVR2's `scale` multiplies the picture before one diffusion pass over all of it, and its graph is made for up to
+  // limits.maxWidth × maxHeight: the multiplier comes down to fit the picture (a 3000 × 2000 photo at the template's 4x
+  // would ask for 12000 × 8000), to the resize node's 0.01 step.
+  if (manifest.id === "upscale-image-seedvr2" && b.scale) {
+    const src = ctx.media?.(String(values.image ?? ""));
+    if (src?.width && src.height) {
+      const [maxW, maxH] = [Number(manifest.limits?.maxWidth ?? Infinity), Number(manifest.limits?.maxHeight ?? Infinity)];
+      const room = Math.min(maxW / src.width, maxH / src.height);
+      const asked = Number(values.scale ?? d.scale ?? 1);
+      if (room < 1) throw new ProviderError(`SeedVR2 makes pictures up to ${maxW} × ${maxH} px on your GPU, and this one is already ${src.width} × ${src.height}: pick 4x ESRGAN for it`, 400);
+      if (asked > room) values.scale = Math.floor(room * 100) / 100;
+    }
+  }
   // A canvas the request names (a layout's, Soul's exact sizes) stays on the graph's grid and inside its limits, as the
   // cloud fits the same canvas (FieldMap.size): both engines render one size, the size a layout is compiled at.
   if (b.width && b.height && (extra.width !== undefined || extra.height !== undefined)) {
@@ -1161,8 +1465,9 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     values.duration = Math.round((clipLength ?? (Math.max(...tracks) || 600)) * 100) / 100 + 0.5; // the mux trims it to the picture
   }
 
-  // Reference images the user left out: dropped from a FLUX.2 reference chain, else the previous image
-  // again where that's harmless (style boards, multi-reference edits), else a clear "add …" message.
+  // Reference images the user left out: dropped from a FLUX.2 reference chain or from an encoder that takes them as
+  // optional inputs, else the previous image again where that's harmless (style boards, multi-reference edits), else a
+  // clear "add …" message.
   let graph = workflow;
   const left: string[] = [...studioLeft];
   // A side nobody photographed is left out (its cut-out and crop with it); the front is needed.
@@ -1181,7 +1486,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   for (const [k, prev] of [["image2", "image"], ["image3", "image2"], ["image4", "image3"]] as const) {
     if (rules.views || !b[k] || values[k] !== undefined || rules.required?.includes(k) || left.includes(k)) continue;
     if (values[prev] === undefined && !left.includes(prev)) continue;
-    const bypassed = b[k]!.length === 1 ? bypassReference(graph, b[k]![0].node) : null;
+    const loader = b[k]!.length === 1 ? b[k]![0].node : undefined;
+    const bypassed = loader ? (bypassReference(graph, loader) ?? dropBranch(graph, loader, OPTIONAL_REFERENCE_INPUTS, manifest.outputs.map((o) => o.node))) : null;
     if (bypassed) {
       graph = bypassed;
       left.push(k);
@@ -1306,10 +1612,42 @@ export function withoutAnchor(wf: ComfyWorkflow, loaderId: string): ComfyWorkflo
   return out;
 }
 
+/** What ComfyUI's /prompt answers when it refuses a graph. */
+export type PromptRefusalBody = { error?: { type?: string; message?: string; extra_info?: { class_type?: string } }; node_errors?: unknown };
+
+/**
+ * A /prompt refusal in words, with what was missing as a code its failed tile turns into "Fix it" (the GPU pre-flight's
+ * guided fix). The same for the server's own ComfyUI, a link, and one on someone's computer (its tab reports the answer).
+ */
+export function promptRefusal(body: PromptRefusalBody, status: number, manifest: ManifestWorkflow, loras: { file: string; url?: string }[], worker: ComfyWorker = "main"): { message?: string; fix?: ReturnType<typeof fixFromPromptError> } {
+  // The index names the pack a missing class comes from, so the message names that pack, not every pack the workflow uses.
+  let packOf: (cls: string) => string | undefined = () => undefined;
+  try {
+    const idx = loadIndex();
+    packOf = (cls) => Object.entries(idx.packs).find(([, p]) => p.classes.includes(cls))?.[0];
+  } catch {}
+  const fix = fixFromPromptError(body, manifest.id, manifest.models, packOf);
+  const missingClass = fix?.code === "comfy_missing_node" ? fix.items[0] : undefined;
+  // A node class the server doesn't have: name the pack to install (opt-in packs like ComfyUI-Whisper).
+  const packs = missingClass?.pack ? [missingClass.pack] : manifest.customNodes.map((c) => c.name);
+  const where = worker === "isolated" ? "the isolated ComfyUI worker" : "your ComfyUI";
+  const missingPack =
+    body.error?.type === "missing_node_type" && packs.length ? `This workflow needs the ${packs.join(" + ")} node pack${packs.length > 1 ? "s" : ""} on ${where} (see scripts/comfy/README.md)` : undefined;
+  // A LoRA it lacks: point at its model card (a civitai download URL answers 401 without the key) and the LoRA folder setting.
+  const loraModels = loras.map((l) => ({ file: l.file, folder: "loras", url: loraByFile(l.file)?.page ?? (l.url && !needsToken(l.url) ? l.url : undefined) }));
+  let detail = body.node_errors && Object.keys(body.node_errors as object).length ? explainComfyError(body.node_errors, { ...manifest, models: [...manifest.models, ...loraModels] }) : (missingPack ?? (typeof body.error?.message === "string" ? body.error.message.slice(0, 1024) : undefined));
+  // (Settings → LoRAs is the owner's page, for the server's own ComfyUI: an account's, or one on a computer, gets its LoRAs by hand.)
+  if (detail && !ownGpu() && !computerScope() && loraModels.some((l) => detail!.includes(`"${l.file}"`))) detail = `${detail}\nSet the LoRA folder in Settings → LoRAs and Fuobe downloads LoRAs before a run`;
+  void status;
+  return { message: detail, ...(fix && { fix }) };
+}
+
 /** Friendlier words for errors that a workflow's nodes report in their own terms. */
 function explainExecutionError(err: { exception_message?: string; node_type?: string } | undefined, manifest?: ManifestWorkflow): string {
   if (!err) return "Execution error";
   const msg = (err.exception_message ?? "").trim();
+  // On someone's own computer the words are theirs: their GPU ran out (the server's own runs keep ComfyUI's words).
+  if (computerScope() && isOutOfMemory(msg)) return RELAY_WORDS.outOfMemory;
   const outOfClip = /division by zero|failed to slice video|failed to trim video|no frames exist/i.test(msg);
   if (manifest?.expand === "captions" && outOfClip) return "A caption starts after the end of the video — check the cue times";
   if (manifest?.capability === "trim" && outOfClip) return "The start time is past the end of the clip";
@@ -1345,6 +1683,14 @@ async function followMetaBatch(prefix: string, manifest: ManifestWorkflow | unde
 
 /** Upload a file to a worker's input folder; returns the name LoadImage / LoadAudio / LoadVideo take there. */
 async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, name: string): Promise<string> {
+  // On someone's computer: kept here for the run's task, under the name ComfyUI will get from their tab.
+  const computer = computerScope();
+  if (computer) {
+    if (worker === "isolated") throw new ProviderError(ISOLATED_ON_COMPUTER);
+    const staged = stageInput(computer, data, contentType, name);
+    rememberSent(staged, data, contentType, name);
+    return staged;
+  }
   const form = new FormData();
   const ext = name.includes(".") ? name.split(".").pop() : contentType.split("/")[1];
   form.append("image", new Blob([new Uint8Array(data)], { type: contentType }), `fuobe_${nanoid(8)}.${ext}`);
@@ -1352,25 +1698,19 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   form.append("overwrite", "true");
   const res = await comfyFetch("/upload/image", { method: "POST", body: form }, worker);
   if (res.status === 413) {
+    discardBody(res);
     // ComfyUI's own limit (--max-upload-size, 100 MB unless it was started with more).
     const mb = Math.ceil(data.length / 2 ** 20);
     throw new ProviderError(`ComfyUI refused a ${mb} MB upload as too large (its --max-upload-size, 100 MB unless set) — start ComfyUI with a higher --max-upload-size, or send a smaller file`);
   }
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
+    const text = (await res.text().catch(() => "")).slice(0, 500);
     throw worker === "isolated" ? isolatedAnswer("an upload", res.status, reasonOf(text)) : new ProviderError(`ComfyUI upload failed: ${res.status} ${text}`);
   }
   const j = (await res.json()) as { name: string; subfolder?: string };
   const uploaded = j.subfolder ? `${j.subfolder}/${j.name}` : j.name;
   // Remember a clip's / track's header facts (length, size, fps, audio) for prepareWorkflow.
-  if (MEDIA_FILE.test(contentType) || MEDIA_EXT.test(name) || /\.(webm|mkv|avi)$/i.test(name)) {
-    const info = probeMedia(data) ?? webmInfo(data) ?? aviInfo(data);
-    if (info) rememberMedia(uploaded, info);
-  } else if (/^image\//.test(contentType)) {
-    // A start frame's size: "auto" makes an image-to-video clip in the picture's own shape.
-    const size = imageSize(data);
-    if (size) rememberMedia(uploaded, { container: "image", ...size, hasVideo: false, hasAudio: false });
-  }
+  rememberSent(uploaded, data, contentType, name);
   return uploaded;
 }
 
@@ -1406,10 +1746,148 @@ async function sweepPasses(prefix: string, worker: ComfyWorker = "main"): Promis
   }
 }
 
+// ---------------------------------------------------------------------------
+// A ComfyUI on someone's own computer: its runs are tasks their Fuobe tab does (src/server/computer)
+
+/** Run `fn` as a principal's work on its own computer: an account's (as that account), or the owner's. */
+export function onComputer<T>(principal: Principal, fn: () => T): T {
+  if (principal === "owner") return outsideTenant(() => outsideOwnGpu(fn));
+  return runAsTenant({ kind: "account", id: principal.slice(5) }, () => onOwnGpu({ kind: "computer", principal }, fn));
+}
+
+/** The most one result may weigh when it comes from a computer: an account's 1 GB (less when its files are fuller); the owner's 8 GB. */
+const OWNER_RESULT_BYTES = 8 * 2 ** 30;
+/** A text result (a transcript, captions). */
+const TEXT_RESULT_BYTES = 8 * 2 ** 20;
+
+/**
+ * A computer's finished prompt (its /history entry, or a meta-batch's passes): the results to collect, as the server's
+ * own run would collect them (collectOutputs), each one a file the tab uploads under its number. An account keeps up to
+ * 16 results and 1,800 EXR frames, never more than its files have room for. Call it as the task's principal (onComputer).
+ */
+export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_batch" | "prefix">, entries: HistoryEntryLike[], passes: boolean): FinishedPlan {
+  let manifest: ManifestWorkflow | undefined;
+  try {
+    manifest = t.workflow_id ? getWorkflow(t.workflow_id).manifest : undefined;
+  } catch {}
+  const list = (passes ? [...entries].sort((a, c) => Number(c.prompt?.[0] ?? 0) - Number(a.prompt?.[0] ?? 0)) : entries.slice(0, 1)) as HistoryEntry[];
+  // A pass that failed (out of memory, a node exception) ends the job: say why instead of "no output".
+  const failed = list.find((e) => e?.status?.status_str === "error");
+  if (failed) {
+    const interrupted = failed.status?.messages?.some(([type]) => type === "execution_interrupted");
+    return { error: interrupted ? RELAY_WORDS.stopped : explainExecutionError(executionError(failed), manifest) };
+  }
+  let outputs: ComfyOutput[] = [];
+  for (const e of list) {
+    outputs = collectOutputs(e, manifest, `relay:${t.id}`);
+    if (outputs.length) break;
+  }
+  if (!outputs.length) return t.meta_batch && !passes && t.prefix ? { follow: t.prefix } : { error: "Workflow finished without saving any output" };
+  const account = tenantAccount();
+  let budget = Infinity;
+  if (account) {
+    const frames = outputs.filter((o) => o.meta?.role === "frames");
+    if (frames.length > ACCOUNT_LIMITS.framesPerJob) return { error: `Your ComfyUI made ${frames.length} EXR frames. A run on your GPU keeps up to ${ACCOUNT_LIMITS.framesPerJob}: export a shorter clip.` };
+    outputs = [...outputs.filter((o) => o.meta?.role !== "frames").slice(0, ACCOUNT_LIMITS.outputsPerJob), ...frames];
+    if (!diskHasRoom()) return { error: ACCOUNT_MESSAGES.diskLow };
+    budget = accountTotalBytes(account) - accountUsage(account).total;
+    if (budget <= 0) return { error: filesFullMessage(account) };
+  }
+  const wanted: WantedFile[] = [];
+  outputs = outputs.map((o) => {
+    if (!o.url.startsWith("relay:")) return o;
+    const q = new URLSearchParams(o.url.split("?")[1] ?? "");
+    const n = wanted.length;
+    const frame = o.meta?.role === "frames";
+    const kind: WantedFile["kind"] = frame ? "frame" : o.kind === "image" || o.kind === "video" || o.kind === "audio" || o.kind === "text" || o.kind === "model3d" ? o.kind : "image";
+    const cap = frame ? OWN_FRAME_MAX_BYTES : kind === "text" ? TEXT_RESULT_BYTES : account ? OWN_OUTPUT_LIMITS.maxBytes : OWNER_RESULT_BYTES;
+    wanted.push({ n, filename: q.get("filename") ?? "", subfolder: q.get("subfolder") ?? "", type: q.get("type") === "temp" ? "temp" : "output", kind, maxBytes: Math.max(1, Math.min(cap, budget)) });
+    return { ...o, url: `${o.url}&n=${n}`, headers: undefined };
+  });
+  return { wanted, outputs, budget: Number.isFinite(budget) ? budget : Number.MAX_SAFE_INTEGER };
+}
+
+/** A task's error as the run's words (and what was missing, for "Fix it"). */
+function relayFailure(t: TaskRow, manifest: ManifestWorkflow | undefined): { error: string; fix?: GenerationFix } {
+  const refusal = refusalOf(t);
+  if (refusal && manifest) {
+    const r = promptRefusal((refusal.body ?? {}) as PromptRefusalBody, refusal.status, manifest, extraOf(t).loras ?? []);
+    return { error: r.message ?? `Your ComfyUI refused the job (HTTP ${refusal.status})`, ...(r.fix && { fix: r.fix }) };
+  }
+  if (refusal) return { error: `Your ComfyUI refused the job (HTTP ${refusal.status})` };
+  const e = t.error ?? "";
+  const tab = /^tab:([a-z-]+)(?::(\d+))?$/.exec(e);
+  if (tab) return { error: tabFailureWords(tab[1] as TabFailure, tab[2] ? Number(tab[2]) : undefined) };
+  const words: Record<string, string> = { lost: RELAY_WORDS.lost, silent: RELAY_WORDS.computerSilent, down: RELAY_WORDS.comfyDownTooLong, tooBig: RELAY_WORDS.tooBig };
+  if (e === "full") {
+    const account = tenantAccount();
+    return { error: account ? filesFullMessage(account) : "There's no room to keep this result." };
+  }
+  return { error: words[e] ?? (e || "Your ComfyUI couldn't finish this run") };
+}
+
+/** A run on someone's computer: where its task is, in the words its tile shows. */
+async function pollComputer(principal: Principal, meta: Record<string, unknown>, manifest: ManifestWorkflow | undefined, made: string | undefined): Promise<PollResult> {
+  const found = typeof meta.relay === "string" ? getTask(principal, meta.relay) : null;
+  if (!found) return { state: "failed", error: "This run was lost. Press Retry." };
+  const t = checkClocks(found);
+  const p = taskProgress(t.id);
+  const kind = extraOf(t).made ?? made ?? "image";
+  const waitMs = tenantAccount() ? ACCOUNT_LIMITS.queueMs : 4 * 3_600_000;
+  const sentAt = t.sent_at ?? undefined;
+  // Sent, and the computer's tab stopped answering (closed, asleep): not a run that looks alive for half an hour.
+  const r = t.state === "waiting" ? null : runnerFacts(principal);
+  const away = t.state !== "waiting" && (!r || Date.now() - r.seenAt >= RELAY_TIMES.onlineMs);
+  const down = t.down_at ? (t.down_why === "setting" ? RELAY_WORDS.comfyNoSetting : RELAY_WORDS.comfyDown) : away ? RELAY_WORDS.computerAway : undefined;
+  switch (t.state) {
+    case "waiting": {
+      // The computer's tab is open, but its ComfyUI is closed or runs without Fuobe's setting: say that, not "open Fuobe".
+      const f = runnerFacts(principal);
+      const message = f?.online ? RELAY_WORDS.starting : f?.comfy === "no-setting" ? RELAY_WORDS.comfyNoSetting : f?.comfy === "down" ? RELAY_WORDS.comfyDown : RELAY_WORDS.noComputer;
+      return { state: "queued", message, timeoutError: RELAY_WORDS.waitedTooLong(waitMs) };
+    }
+    case "sending":
+      return { state: "queued", message: down ?? (t.note === "resent" ? RELAY_WORDS.resent : sendingWords(inputKinds(t))), timeoutError: RELAY_WORDS.waitedTooLong(waitMs), ...(sentAt && { sentAt }) };
+    case "queued":
+      return { state: "queued", message: down ?? queueWords(p?.position), ...(sentAt && { sentAt }) };
+    case "running": {
+      const total = Number(meta.nodeCount ?? 0);
+      const stepFrac = p?.max ? (p.value ?? 0) / p.max : 0;
+      const value = total ? Math.min(0.99, (Math.max(1, p?.nodesDone ?? 1) - 1 + stepFrac) / total) : stepFrac || undefined;
+      return { state: "running", progress: value && value > 0 ? value : undefined, message: down ?? makingWords(kind, p?.value, p?.max), ...(sentAt && { sentAt }) };
+    }
+    case "collecting": {
+      const got = receivedOf(t);
+      const total = got.reduce((s, r) => s + r.total, 0);
+      return { state: "running", progress: 0.99, message: down ?? savingWords(total ? got.reduce((s, r) => s + r.bytes, 0) / total : undefined), ...(sentAt && { sentAt }) };
+    }
+    case "done": {
+      const types = new Map(receivedOf(t).map((r) => [r.n, r.contentType]));
+      let outputs = resultOf<ComfyOutput>(t).map((o) => {
+        const n = Number(new URLSearchParams(o.url.split("?")[1] ?? "").get("n"));
+        const type = o.url.startsWith("relay:") ? types.get(n) : undefined;
+        return type ? { ...o, contentType: type } : o;
+      });
+      if (!outputs.length) return { state: "failed", error: "Workflow finished without saving any output" };
+      try {
+        outputs = await bundleFrames(outputs, String(meta.generationId ?? ""));
+      } catch (e) {
+        return { state: "failed", error: (e as Error).message };
+      }
+      return { state: "succeeded", outputs: await withLayerBoxes(outputs) };
+    }
+    case "canceled":
+      return { state: "failed", error: t.error === "switched" ? RELAY_WORDS.switched : t.error === "disconnected" ? RELAY_WORDS.disconnected : RELAY_WORDS.stopped };
+    default:
+      return { state: "failed", ...relayFailure(t, manifest) };
+  }
+}
+
 export const comfyProvider: ProviderAdapter = {
   id: "comfyui",
   label: "ComfyUI",
   isConfigured: () => {
+    if (ownGpu() || computerScope()) return true;
     const cur = globalThis.__fuobeComfyReach;
     // First check for this server: wait for the answer, so a request right after start isn't sent to demo.
     if (!cur || cur.url !== baseUrl()) return probeComfySync();
@@ -1422,8 +1900,9 @@ export const comfyProvider: ProviderAdapter = {
     return uploadTo(workerFor(route?.endpoint), data, contentType, name);
   },
 
-  async submit({ route, input, generationId }) {
+  async submit({ route, input, generationId, model }) {
     const worker = workerFor(route.endpoint);
+    if (worker === "isolated" && computerScope()) throw new ProviderError(ISOLATED_ON_COMPUTER);
     // A route's own graph settings (Fuobe Speak's InfiniteTalk recipe) go in unless the run sets them.
     const asked = route.extra ? { ...input, extra: { ...route.extra, ...input.extra } } : input;
     const { manifest, workflow: wf, meta } = await prepareWorkflow(route.endpoint, asked, {
@@ -1432,11 +1911,33 @@ export const comfyProvider: ProviderAdapter = {
       loraSlot: route.loraSlot === true,
       upload: (data, contentType, name) => uploadTo(worker, data, contentType, name),
       media: mediaInfoFor,
-      serverRam: async () => (await comfyJson<{ system?: { ram_total?: number } }>("/system_stats", worker).catch(() => undefined))?.system?.ram_total,
+      serverRam: async () => {
+        const computer = computerScope();
+        if (computer) return runnerFacts(computer)?.ramBytes;
+        return (await comfyJson<{ system?: { ram_total?: number } }>("/system_stats", worker).catch(() => undefined))?.system?.ram_total;
+      },
       device: () => comfyDevice(worker),
-      // Fresh: a model installed a moment ago runs.
+      // Fresh: a model installed a moment ago runs. (On someone's computer, nothing to ask: its ComfyUI has the last word.)
       dbsModels: () => comfyDbsModels(worker, 0),
     });
+    // On someone's computer: the job waits for their Fuobe tab, which sends exactly this graph under the prompt id minted
+    // here. A refusal comes back in its report, and the poll explains it as below.
+    const computer = computerScope();
+    if (computer) {
+      const metaBatch = !!meta.metaBatch;
+      const task = createTask({
+        principal: computer,
+        generationId,
+        graph: wf,
+        prefix: typeof meta.prefix === "string" ? meta.prefix : undefined,
+        metaBatch,
+        preview: true,
+        workflowId: manifest.id,
+        made: model?.kind,
+        loras: (input.loras ?? []).map((l) => ({ file: l.file, ...(l.url && { url: l.url }) })),
+      });
+      return { externalId: task.promptId, meta: { ...meta, generationId, relay: task.id }, payload: wf };
+    }
     const { clientId } = ensureSocket(worker);
     const res = await comfyFetch(
       "/prompt",
@@ -1447,29 +1948,33 @@ export const comfyProvider: ProviderAdapter = {
       },
       worker,
     );
-    const body = (await res.json().catch(() => ({}))) as { prompt_id?: string; error?: { type?: string; message?: string }; node_errors?: unknown };
+    const body = (await res.json().catch(() => ({}))) as PromptRefusalBody & { prompt_id?: string };
     if (!res.ok || !body.prompt_id) {
-      // A node class the server doesn't have: name the pack to install (opt-in packs like ComfyUI-Whisper).
-      const packs = manifest.customNodes.map((c) => c.name);
-      const where = worker === "isolated" ? "the isolated ComfyUI worker" : "your ComfyUI";
-      const missingPack =
-        body.error?.type === "missing_node_type" && packs.length ? `This workflow needs the ${packs.join(" + ")} node pack${packs.length > 1 ? "s" : ""} on ${where} (see scripts/comfy/README.md)` : undefined;
-      // A LoRA it lacks: point at its model card (a civitai download URL answers 401 without the key) and the LoRA folder setting.
-      const loraModels = (input.loras ?? []).map((l) => ({ file: l.file, folder: "loras", url: loraByFile(l.file)?.page ?? (l.url && !needsToken(l.url) ? l.url : undefined) }));
-      let detail = body.node_errors && Object.keys(body.node_errors as object).length ? explainComfyError(body.node_errors, { ...manifest, models: [...manifest.models, ...loraModels] }) : (missingPack ?? body.error?.message);
-      if (detail && loraModels.some((l) => detail!.includes(`"${l.file}"`))) detail = `${detail}\nSet the LoRA folder in Settings → LoRAs and Fuobe downloads LoRAs before a run`;
-      if (!detail && !res.ok && worker === "isolated") throw isolatedAnswer("the prompt", res.status);
-      throw new ProviderError(detail ?? `ComfyUI /prompt failed (${res.status})`, res.status);
+      const refusal = promptRefusal(body, res.status, manifest, input.loras ?? [], worker);
+      if (!refusal.message && !res.ok && worker === "isolated") throw isolatedAnswer("the prompt", res.status);
+      throw Object.assign(new ProviderError(refusal.message ?? `ComfyUI /prompt failed (${res.status})`, res.status), refusal.fix ? { fix: refusal.fix } : {});
+    }
+    if (!PROMPT_ID.test(body.prompt_id)) {
+      // Stop it there: an id Fuobe can't use would never be collected.
+      throw new ProviderError(ownGpu() ? "Your ComfyUI answered with a job id Fuobe can't use." : "ComfyUI answered with a job id Fuobe can't use.");
     }
     return { externalId: body.prompt_id, meta: { ...meta, generationId, ...(worker === "isolated" && { worker }) }, payload: wf };
   },
 
-  async poll({ externalId, meta }) {
+  async poll({ externalId, meta, model, ...rest }) {
+    if (!PROMPT_ID.test(externalId)) return { state: "failed", error: "ComfyUI answered with a job id Fuobe can't use." };
     const worker: ComfyWorker = meta.worker === "isolated" ? "isolated" : "main";
     let manifest: ManifestWorkflow | undefined;
     try {
       manifest = getWorkflow(String(meta.workflowId)).manifest;
     } catch {}
+    // A run is followed where it was sent (Settings, or the account's GPU, may have moved since).
+    if (typeof meta.relay === "string") return pollComputer(relayPrincipal(), meta, manifest, model?.kind);
+    if (computerScope()) {
+      // Sent to a link before the account chose this computer: that link is gone.
+      if (ownGpu()) return { state: "failed", error: RELAY_WORDS.switched };
+      return serverScope.run(true, () => comfyProvider.poll({ externalId, meta, model, ...rest }));
+    }
     const finished = async (entry: HistoryEntry) => {
       if (entry.status?.status_str === "error") {
         forget(externalId);
@@ -1498,7 +2003,7 @@ export const comfyProvider: ProviderAdapter = {
     };
     const isDone = (e: HistoryEntry | undefined): e is HistoryEntry => !!e && (!!e.status?.completed || e.status?.status_str === "success" || e.status?.status_str === "error");
 
-    const entry = (await comfyJson<Record<string, HistoryEntry>>(`/history/${externalId}`, worker))[externalId];
+    const entry = (await comfyJson<Record<string, HistoryEntry>>(`/history/${encodeURIComponent(externalId)}`, worker))[externalId];
     if (isDone(entry)) return finished(entry);
 
     // Still queued or running?
@@ -1509,7 +2014,7 @@ export const comfyProvider: ProviderAdapter = {
     const pendingIdx = queue.queue_pending?.findIndex((q) => q[1] === externalId) ?? -1;
     if (!running && pendingIdx < 0 && !entry) {
       // It may have finished between the two requests (ComfyUI moves it from the queue to the history at once).
-      const again = (await comfyJson<Record<string, HistoryEntry>>(`/history/${externalId}`, worker))[externalId];
+      const again = (await comfyJson<Record<string, HistoryEntry>>(`/history/${encodeURIComponent(externalId)}`, worker))[externalId];
       if (isDone(again)) return finished(again);
       const misses = globalThis.__fuobeComfyMisses ?? (globalThis.__fuobeComfyMisses = new Map());
       const n = (misses.get(externalId) ?? 0) + 1;
@@ -1530,7 +2035,15 @@ export const comfyProvider: ProviderAdapter = {
     };
   },
 
-  async cancel({ externalId, meta }) {
+  async cancel(ctx) {
+    const { externalId, meta } = ctx;
+    // On someone's computer: the task ends now, and its prompt comes off their ComfyUI at their tab's next beat.
+    if (typeof meta?.relay === "string") return requestStop(relayPrincipal(), meta.relay);
+    if (computerScope()) {
+      // Sent before ComfyUI moved to a computer: the owner's goes off the studio's own ComfyUI (a link is gone).
+      if (!ownGpu()) await serverScope.run(true, () => comfyProvider.cancel!(ctx));
+      return;
+    }
     const worker: ComfyWorker = meta?.worker === "isolated" ? "isolated" : "main";
     forget(externalId);
     // A meta-batch job's later passes have prompt ids of their own (and jump the queue): find them by prefix.
@@ -1540,9 +2053,19 @@ export const comfyProvider: ProviderAdapter = {
   },
 
   async test(opts) {
+    // On someone's computer: what its tab last said about it.
+    const computer = computerScope();
+    if (computer) {
+      const f = runnerFacts(computer);
+      if (!f?.online) return { ok: false, detail: RELAY_WORDS.noComputer };
+      return { ok: true, detail: `ComfyUI ${f.version ?? ""} · ${f.device ?? "unknown device"}${f.vramBytes ? ` · ${(f.vramBytes / 2 ** 30).toFixed(0)} GB` : ""} · on your computer`.replace(/\s+/g, " ") };
+    }
     const describe = async (worker: ComfyWorker) => {
       const res = await comfyFetch("/system_stats", {}, worker);
-      if (!res.ok) throw new ProviderError(`HTTP ${res.status}`);
+      if (!res.ok) {
+        discardBody(res);
+        throw new ProviderError(`HTTP ${res.status}`);
+      }
       const s = (await res.json()) as { system?: { comfyui_version?: string }; devices?: { name?: string; vram_total?: number }[] };
       const dev = s.devices?.[0];
       return `ComfyUI ${s.system?.comfyui_version ?? ""} · ${dev?.name ?? "unknown device"}${dev?.vram_total ? ` · ${(dev.vram_total / 2 ** 30).toFixed(0)} GB` : ""}`;
@@ -1576,8 +2099,12 @@ export const comfyProvider: ProviderAdapter = {
 
 /** The LoRA files the ComfyUI server that runs `route` has (GET /models/loras), or null when it can't say. */
 export async function comfyLoraFiles(route?: ModelRoute): Promise<string[] | null> {
+  // On someone's computer: the list its tab last sent (null: it can't say, and ComfyUI's own check has the last word).
+  const computer = computerScope();
+  if (computer) return runnerFacts(computer)?.loras ?? null;
   try {
     const res = await comfyFetch("/models/loras", {}, workerFor(route?.endpoint));
+    if (!res.ok) discardBody(res);
     return res.ok ? ((await res.json()) as string[]) : null;
   } catch {
     return null;
@@ -1586,6 +2113,7 @@ export async function comfyLoraFiles(route?: ModelRoute): Promise<string[] | nul
 
 /** Which manifest models are present on the connected ComfyUI server. */
 export async function modelInventory(): Promise<Record<string, string[]> | null> {
+  if (computerScope()) return null;
   try {
     const listed = await comfyFetch("/models");
     const folders = listed.ok ? ((await listed.json()) as string[]) : ["diffusion_models", "checkpoints", "text_encoders", "vae", "loras"];

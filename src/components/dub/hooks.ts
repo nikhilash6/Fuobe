@@ -6,10 +6,11 @@ import { useGenerationEvents } from "@/lib/api";
 import type { DubPrice, DubSessionView, OneShotModel } from "@/lib/av/dub";
 import type { Cue } from "@/lib/cues";
 import type { Engine, Generation } from "@/lib/catalog/types";
+import { responseError } from "@/lib/refusals";
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
   return body;
 }
 
@@ -109,7 +110,7 @@ export function useDubActions() {
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/dub/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 404) throw new Error("Couldn't remove it");
+      if (!res.ok && res.status !== 404) throw responseError(res, "Couldn't remove it");
       return id;
     },
     onSuccess: (id) => qc.setQueryData<DubSessionView[]>(["dub"], (xs) => xs?.filter((x) => x.id !== id)),

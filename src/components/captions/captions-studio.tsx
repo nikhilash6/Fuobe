@@ -36,6 +36,7 @@ import {
 } from "@/lib/av/captions";
 import { parseCues, toSrt, toVtt, type Cue } from "@/lib/cues";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 
 const STORE = "fuobe.captions";
 
@@ -183,7 +184,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
         loaded.current = null;
         setTranscriptId(items[0].id);
       },
-      onError: (e) => toast.error((e as Error).message),
+      onError: (e) => toastError(e),
     });
 
   const importFile = useRef<HTMLInputElement>(null);
@@ -198,7 +199,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
     }
     create.mutate(req, {
       onSuccess: () => toast.success("Burning captions — it'll show under Captioned videos"),
-      onError: (e) => toast.error((e as Error).message),
+      onError: (e) => toastError(e),
     });
   };
   const transcribing = t && (t.status === "queued" || t.status === "running");

@@ -4,10 +4,10 @@
  * much of the clip stays. Research: docs/research/fuobe-originals-recipes-5.md §8 evolution and its JSON twin
  * (studios[evolution].original); what Higgsfield's does: higgsfield-originals-5.md §3.20.
  *
- * - On your GPU: per ≤81-frame segment at 16 fps, Qwen-Image-Edit takes the segment's first frame toward the direction
- *   (the first references as images 2–3), then Wan 2.2 Fun VACE re-renders the segment from the segment itself, noised
- *   to the intensity's denoise, with depth control and that frame as its reference (video-evolution-wan22-fun-vace, which
- *   also loads a whole clip at 16 fps when Edit video sends one).
+ * - On your GPU: per ≤81-frame segment at 16 fps, Qwen-Image 2.1 Turbo takes the segment's first frame toward the
+ *   direction (the first references as images 2–4), then Wan 2.2 Fun VACE re-renders the segment from the segment
+ *   itself, noised to the intensity's denoise, with depth control and that frame as its reference
+ *   (video-evolution-wan22-fun-vace, which also loads a whole clip at 16 fps when Edit video sends one).
  * - In the cloud: LTX-2.3 22B video to video on fal, video_strength = 1 − denoise, the direction as the scene; a clip
  *   over 20 s runs as equal pieces. The endpoint takes no images: there the references shape the direction only.
  * - Then the pieces are joined and the clip's own sound put back.
@@ -31,12 +31,12 @@ export const EVOLUTION = {
   promptChars: 1500,
   /** LTX-2.3 makes at most 481 frames a call: 20 s at 24 fps. */
   cloudPieceSeconds: 20,
-  /** Qwen-Image-Edit takes the frame plus two references. */
-  openReferences: 2,
+  /** Qwen-Image 2.1 Turbo takes the frame plus three references. */
+  openReferences: 3,
   /** The LLM sees this many references (Claude reads up to 20 images a turn; a local vision model fewer). */
   llmReferences: { cloud: 8, open: 4 } as Record<Engine, number>,
-  /** Helper on the GPU: the segment's first frame taken toward the direction. */
-  frameModel: "oss-qwen-edit",
+  /** Helper on the GPU: the segment's first frame taken toward the direction (Qwen-Image 2.1 Turbo, 8 steps). */
+  frameModel: "oss-qwen-image-21-turbo",
   maxBytes: 500 * 1024 * 1024,
   accept: "video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm",
 } as const;
@@ -137,11 +137,17 @@ const FRAME_VERB: Record<Intensity, string> = {
   high: "Reimagine image 1 boldly in this direction",
 };
 
-/** On the GPU: Qwen-Image-Edit's instruction for the segment's first frame (references are images 2 and 3). */
+/** "image 2", "images 2 and 3", "images 2, 3 and 4": the references after the frame. */
+function refImages(refs: number): string {
+  const n = Array.from({ length: refs }, (_, k) => String(k + 2));
+  return n.length === 1 ? `image ${n[0]}` : `images ${n.slice(0, -1).join(", ")} and ${n.at(-1)}`;
+}
+
+/** On the GPU: the edit model's instruction for the segment's first frame (references are images 2 onward). */
 export function directionFramePrompt(direction: string, i: Intensity, refs: number): string {
   const d = directionPrompt(direction).text.replace(/[.\s]+$/, "");
   const keep = i === "high" ? "Keep the composition and the poses of image 1." : "Keep the composition, the people, their faces and poses, and the framing of image 1.";
-  const match = refs ? ` Use the characters, objects and style of ${refs > 1 ? "images 2 and 3" : "image 2"} where they fit.` : "";
+  const match = refs ? ` Use the characters, objects and style of ${refImages(refs)} where they fit.` : "";
   return `${FRAME_VERB[i]}: ${d}. ${keep}${match}`;
 }
 

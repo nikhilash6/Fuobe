@@ -1,12 +1,11 @@
 import { stitchSession } from "@/server/shorts";
 import { NonceSchema, handle, once, optionalBody } from "@/server/shorts-schemas";
-import { handler } from "@/server/access/route";
 
 /** Stitch again: join the chosen takes and put the original sound back (a repeated requestId gets the first answer). */
-export const POST = handler({ access: "signed-in" }, async (request: Request, ctx: RouteContext<"/api/shorts/sessions/[id]/stitch">) => {
+export async function POST(request: Request, ctx: RouteContext<"/api/shorts/sessions/[id]/stitch">) {
   return handle(async () => {
     const { id } = await ctx.params;
     const { requestId } = await optionalBody(request, NonceSchema);
     return Response.json(await once(`shorts-stitch:${id}`, requestId, () => stitchSession(id)), { status: 201 });
-  });
-});
+  }, request);
+}

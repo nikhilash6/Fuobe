@@ -1,6 +1,9 @@
 "use client";
 
-import { Cloud, Copy, Cpu, Download, FolderDown, Heart, MoreHorizontal, RotateCcw, Sparkles, Trash2, X } from "lucide-react";
+import { Cloud, Copy, Cpu, Download, FolderDown, Heart, MoreHorizontal, RotateCcw, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { openGpuSetup } from "@/hooks/use-gpu";
+import { useLocalJob } from "@/components/gpu/computer-runner";
+import { jobFraction, jobWords } from "@/lib/relay";
 import Link from "next/link";
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -20,9 +23,11 @@ import { downloadHref, downloadName, userTitle } from "@/lib/library";
 import { isLayered, nextSteps, shownOutputs } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
+import { toastError } from "@/lib/refusals";
 import { ACTION_ICONS, TileActions, useCanHover, type RunnerOptions } from "./result-actions";
 import { LayersStack, MediaThumb } from "./result-media";
 import { useNow } from "./use-now";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { Viewer } from "./viewer";
 
 export { MediaThumb } from "./result-media";
@@ -40,21 +45,51 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
   const { cancel } = useGenerationActions();
   // The clock runs between the job's reports (a fal queue or Higgsfield may report rarely).
   const now = useNow(1000);
-  const pct = g.progress != null ? Math.round(g.progress * 100) : null;
-  const label = g.status === "queued" ? (g.message ?? "Queued") : (g.message ?? "Generating…");
+  // Running on the ComfyUI on this computer: its live preview (sharper with each step), where it runs, and its step now.
+  // Its % and time left come from its own steps then, so they agree with "step 9 of 12".
+  const local = useLocalJob(g.id, now);
+  const label = (local && jobWords(local.job, g.kind, g.message ?? undefined, local.comfy)) ?? (g.status === "queued" ? (g.message ?? "Queued") : (g.message ?? "Generating…"));
+  const steps = local ? jobFraction(local.job) : null;
+  const saving = local && (local.job.phase === "saving" || local.job.phase === "done");
+  const fraction = local ? (saving ? null : steps) : g.progress;
+  const pct = fraction != null ? Math.round(fraction * 100) : null;
   // When progress moved (not every poll: each one rewrites updatedAt) gives the pace, so the time left.
   // Keyed by id: a chain's tile moves on to its next step's generation.
-  const report = g.status === "running" ? g.progress : null;
-  const [track, setTrack] = useState(() => ({ id: g.id, pace: notePace(null, g.updatedAt, report) }));
-  const pace = track.id === g.id ? notePace(track.pace, g.updatedAt, report) : notePace(null, g.updatedAt, report);
+  const report = local ? steps : g.status === "running" ? g.progress : null;
+  const at = local ? now : g.updatedAt;
+  const [track, setTrack] = useState(() => ({ id: g.id, pace: notePace(null, at, report) }));
+  const pace = track.id === g.id ? notePace(track.pace, at, report) : notePace(null, at, report);
   if (track.id !== g.id || pace !== track.pace) setTrack({ id: g.id, pace });
-  const left = pace.first && pace.last ? timeLeft(pace.first, pace.last, now) : null;
+  const left = !saving && pace.first && pace.last ? timeLeft(pace.first, pace.last, now) : null;
+  // The bar: the steps, or how much of the result has reached the studio.
+  const bar = saving ? Math.round((local.job.phase === "done" ? 1 : (local.job.saved ?? 0)) * 100) : pct;
+  const where = local ? (local.here ? "Keep this tab open" : "Running in another Fuobe tab") : null;
   return (
-    <div className="relative h-full overflow-hidden rounded-xl bg-muted" style={{ aspectRatio: ratio }}>
+    // max-w-full: in a grid row stretched by a taller neighbour (a card with a footer), h-full + aspect-ratio would
+    // otherwise make the tile wider than its column and spill over the next card.
+    <div className="relative h-full max-w-full overflow-hidden rounded-xl bg-muted" style={{ aspectRatio: ratio }}>
       <div className="skeleton-sweep absolute inset-0 animate-skeleton" />
-      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
+      {local?.preview && (
+        // eslint-disable-next-line @next/next/no-img-element -- a live frame from the person's own ComfyUI (a blob: address)
+        <img
+          src={local.preview}
+          alt=""
+          // Shown once a frame decodes (a frame that doesn't keeps the shimmer).
+          onLoad={(e) => (e.currentTarget.style.opacity = "0.9")}
+          onError={(e) => (e.currentTarget.style.opacity = "0")}
+          className="absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-300"
+        />
+      )}
+      <div className={cn("absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3", local?.preview && "bg-gradient-to-t from-background/85 to-transparent pt-8")}>
         <div className="min-w-0">
-          <p className="shimmer-text animate-shimmer-text truncate text-[13px] font-medium">{label}</p>
+          <p title={label} className="shimmer-text animate-shimmer-text line-clamp-2 text-[13px] font-medium">
+            {label}
+          </p>
+          {where && (
+            <p title={where} className="line-clamp-2 text-[11px] text-muted-foreground">
+              {where}
+            </p>
+          )}
           <p className="flex flex-wrap gap-x-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
             {pct != null && <span>{pct}%</span>}
             <span className={cn(pct != null && "before:mr-1.5 before:content-['·']")}>{elapsed(g.createdAt, Math.max(now, g.createdAt))}</span>
@@ -77,9 +112,9 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
           <TooltipContent>Cancel</TooltipContent>
         </Tooltip>
       </div>
-      {pct != null && (
+      {bar != null && (
         <div className="absolute inset-x-0 top-0 h-0.5 bg-transparent">
-          <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${pct}%` }} />
+          <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${bar}%` }} />
         </div>
       )}
     </div>
@@ -88,20 +123,34 @@ export function PendingTile({ g, ratio }: { g: Generation; ratio: number }) {
 
 export function FailedTile({ g, ratio, onRetry }: { g: Generation; ratio: number; onRetry: () => void }) {
   return (
-    <div className="flex h-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style={{ aspectRatio: Math.max(ratio, 0.8) }}>
+    <div className="flex h-full max-w-full flex-col justify-between rounded-xl border border-dashed bg-background p-3" style={{ aspectRatio: Math.max(ratio, 0.8) }}>
       <div className="min-h-0 space-y-1 overflow-hidden">
         <p className="text-[13px] font-medium">{g.status === "canceled" ? "Canceled" : "Couldn't generate this one"}</p>
         {g.error && <p className="line-clamp-5 text-[12px] leading-snug break-words whitespace-pre-line text-muted-foreground">{g.error}</p>}
       </div>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRetry();
-        }}
-        className="mt-2 inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent"
-      >
-        <RotateCcw className="size-3" /> Retry
-      </button>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {g.status === "failed" && g.fix && (
+          // Something was missing on the GPU: the guided fix shows what, and how to add it.
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openGpuSetup({ ref: g.presetId ? `preset:${g.presetId}` : `model:${g.modelId}#${g.op}`, name: g.presetName ?? g.modelName });
+            }}
+            className="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-highlight px-2.5 text-[12px] font-medium text-highlight-foreground hover:opacity-90"
+          >
+            <Wrench className="size-3" /> Fix it
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRetry();
+          }}
+          className="inline-flex h-7 w-fit items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent"
+        >
+          <RotateCcw className="size-3" /> Retry
+        </button>
+      </div>
     </div>
   );
 }
@@ -112,7 +161,7 @@ export function useFinalizeDraft() {
   return (g: Generation, draftId: string) =>
     create.mutate(
       { feature: g.feature, modelId: g.modelId, op: "finalize", prompt: g.request.prompt, params: { draftId, resolution: "1080p", duration: g.request.params?.duration } },
-      { onSuccess: () => toast.success("Rendering the final 1080p version"), onError: (e) => toast.error((e as Error).message) },
+      { onSuccess: () => toast.success("Rendering the final 1080p version"), onError: (e) => toastError(e) },
     );
 }
 
@@ -180,6 +229,12 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
         className="pointer-events-none absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       />
       {o.draftId && <DraftButton g={g} draftId={o.draftId} />}
+      {/* A placeholder says so on the picture itself, with the ways out (a text card keeps its header clear: the chip goes at the bottom). */}
+      <PlaceholderChip
+        g={g}
+        overlay
+        className={cn("absolute", o.kind === "text" ? "bottom-2" : o.draftId ? "top-11" : "top-2", audio && canHover && "group-focus-within/tile:opacity-0 group-hover/tile:opacity-0 focus-within:opacity-100! has-data-[state=open]:opacity-100!")}
+      />
       {g.favorite && <Heart className={cn("absolute top-2 right-2 size-4 fill-highlight text-highlight drop-shadow", audio && canHover && "group-focus-within/tile:opacity-0 group-hover/tile:opacity-0")} />}
       {canHover && hot === "bar" && (
         <TileActions
@@ -272,7 +327,7 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g:
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               {g.engine === "open" ? <Cpu className="size-3" /> : <Cloud className="size-3" />}
-              {g.provider === "mock" ? "Demo" : g.provider === "local" ? "Browser" : g.engine === "open" ? "Open source" : "Cloud"}
+              {g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "Browser" : g.engine === "open" ? "Open source" : "Cloud"}
             </span>
             {meta.map((m, i) => (
               <span key={i} className="before:mr-1.5 before:content-['·']">
@@ -280,7 +335,12 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g:
               </span>
             ))}
             <span className="before:mr-1.5 before:content-['·']">{timeAgo(g.createdAt)}</span>
-            {g.costUsd ? <span className="font-mono before:mr-1.5 before:content-['·']">{formatCost(g.costUsd)}</span> : null}
+            {/* A run its provider never took (a refused key, an empty balance) cost nothing: said, not priced. */}
+            {g.costUsd && g.notBilled ? (
+              <span className="before:mr-1.5 before:content-['·']">Not billed</span>
+            ) : g.costUsd ? (
+              <span className="font-mono before:mr-1.5 before:content-['·']">{formatCost(g.costUsd)}</span>
+            ) : null}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/gen:opacity-100 sm:focus-within:opacity-100 [@media(hover:none)]:opacity-100">
@@ -382,7 +442,7 @@ export function Feed({
   const api = useMemo<FeedApi>(
     () => ({
       open: openAt,
-      retry: (g) => createRef.current.mutate(g.request, { onError: (e) => toast.error((e as Error).message) }),
+      retry: (g) => createRef.current.mutate(g.request, { onError: (e) => toastError(e) }),
       reuse: hasReuse ? (g) => reuseRef.current?.(g) : undefined,
       runner: { onOpen: openAt, onReuse: hasReuse ? (g) => reuseRef.current?.(g) : undefined },
     }),

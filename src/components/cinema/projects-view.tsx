@@ -7,6 +7,8 @@ import { useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { PageHeader } from "@/components/page-shell";
 import { HadItemsScript, useHadItems } from "@/components/use-had-items";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useIsVisitor } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -107,7 +109,8 @@ const GRID = "grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:
  * The first-production block, or (`loading`) a placeholder of exactly its size: a grid skeleton
  * swapped for this block moved the page (CLS 0.048 in the round-4 audit).
  */
-function EmptyProjects({ loading, onCreate, className }: { loading?: boolean; onCreate: () => void; className?: string }) {
+/** onCreate: none for a guest or an account (a project is saved to the owner's library), who is told so instead. */
+function EmptyProjects({ loading, onCreate, className }: { loading?: boolean; onCreate?: () => void; className?: string }) {
   return (
     <div className={cn("mx-auto flex max-w-md flex-col items-center pt-[8vh] text-center", className)} aria-busy={loading || undefined} aria-label={loading ? "Loading projects" : undefined}>
       {loading ? (
@@ -128,11 +131,20 @@ function EmptyProjects({ loading, onCreate, className }: { loading?: boolean; on
           <div className="grid size-14 place-items-center rounded-2xl bg-brand-faint text-brand-text">
             <Clapperboard className="size-6" />
           </div>
-          <h2 className="mt-5 font-heading text-[26px] leading-tight">Start your first production</h2>
-          <p className="mt-2 text-[15px] text-muted-foreground">Projects keep your generations, elements, and chats together – create one to start.</p>
-          <Button className="mt-6" onClick={onCreate}>
-            <Plus /> New project
-          </Button>
+          {onCreate ? (
+            <>
+              <h2 className="mt-5 font-heading text-[26px] leading-tight">Start your first production</h2>
+              <p className="mt-2 text-[15px] text-muted-foreground">Projects keep your generations, elements, and chats together – create one to start.</p>
+              <Button className="mt-6" onClick={onCreate}>
+                <Plus /> New project
+              </Button>
+            </>
+          ) : (
+            <>
+              <h2 className="mt-5 font-heading text-[26px] leading-tight">Projects aren&apos;t on free accounts yet</h2>
+              <SelfHostNote className="mt-2 text-[15px]">Free accounts can use the Image, Video and Audio studios, camera motions, effects and apps.</SelfHostNote>
+            </>
+          )}
         </>
       )}
     </div>
@@ -144,13 +156,18 @@ export function CinemaProjects() {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<CinemaProject | null>(null);
+  // A project is saved to the studio's library, which is its owner's: a guest or an account can't start one.
+  const visitor = useIsVisitor();
+  const onCreate = visitor ? undefined : () => setCreating(true);
   useHadItems("cinema-projects", data?.length);
   return (
     <PageShell wide>
       <PageHeader title="Cinema Studio" description="Direct films shot by shot: genre, camera, lens, palette and light, with characters and locations that stay the same.">
-        <Button onClick={() => setCreating(true)}>
-          <Plus /> New project
-        </Button>
+        {!visitor && (
+          <Button onClick={() => setCreating(true)}>
+            <Plus /> New project
+          </Button>
+        )}
       </PageHeader>
       {isLoading ? (
         // Both shapes are in the server's shell; the one this browser saw last time shows from the first paint.
@@ -165,10 +182,10 @@ export function CinemaProjects() {
               </div>
             ))}
           </div>
-          <EmptyProjects loading className="[html[data-had-cinema-projects='1']_&]:hidden" onCreate={() => setCreating(true)} />
+          <EmptyProjects loading className="[html[data-had-cinema-projects='1']_&]:hidden" onCreate={onCreate} />
         </div>
       ) : !data?.length ? (
-        <EmptyProjects key="empty" onCreate={() => setCreating(true)} />
+        <EmptyProjects key="empty" onCreate={onCreate} />
       ) : (
         <div key="cards" className={GRID}>
           {data.map((p) => (

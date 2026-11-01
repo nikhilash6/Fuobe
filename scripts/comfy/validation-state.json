@@ -167,11 +167,17 @@
     "error": null,
     "at": "2026-10-17T21:02:04.747Z"
   },
-  "image-to-3d-trellis2": {
-    "sha256": "7bfa7ebe14aa128a4b9b513e653998c5293ddc9221ca1d668191d27dc52725f6",
+  "image-to-3d-pixal3d": {
+    "sha256": "581d29c7322dbb089db04cef398428c1ec3ba13208f020a39eaadb8d23ce5a6f",
     "validated": true,
     "error": null,
-    "at": "2026-10-26T00:46:02.904Z"
+    "at": "2026-10-23T16:54:45.150Z"
+  },
+  "image-to-3d-trellis2": {
+    "sha256": "71818818d7bec8ee685bcb5e3e6a81aa9abb9f60104c46900d2ce429a693dbb1",
+    "validated": true,
+    "error": null,
+    "at": "2026-10-23T16:54:45.150Z"
   },
   "image-to-3d-trellis2-multiview": {
     "sha256": "06ac47b57c4007ed0bb6f96ecde799de1e24285baf590f14357ffde87081b118",

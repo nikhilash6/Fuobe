@@ -5,14 +5,12 @@ import type { PlannedJob } from "@/lib/assist";
 import { finalKey, KATANA_FEATURE, KATANA_LIMITS, katanaSteps, katanaStage, motionModel, MOTION_MODELS, planSegments, currentMotionModel, stepsToRedo, type KatanaInput, type KatanaJob, type KatanaJobView, type Segment } from "@/lib/av/katana";
 import { getModel } from "@/lib/catalog";
 import type { Engine, Generation } from "@/lib/catalog/types";
-import { probeMedia } from "@/lib/media-probe";
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { cancelGeneration, createGenerations, getGeneration, previewChained } from "./generations";
 import { firstOn } from "./model-access";
 import { engineMode } from "./settings";
-import fs from "node:fs";
-import { absolutePath } from "./storage";
+import { storedMedia } from "./storage";
 
 /**
  * Katana jobs: a reference edit rebuilt with your subject (src/lib/av/katana.ts plans it). The steps
@@ -132,8 +130,8 @@ const Seg = z.object({ start: z.number().min(0).max(KATANA_LIMITS.maxReference),
 
 export const KatanaBody = z.object({
   engine: z.enum(["cloud", "open"]),
-  reference: z.string().startsWith("/api/files/"),
-  photos: z.array(z.string().startsWith("/api/files/")).min(1).max(KATANA_LIMITS.maxPhotos),
+  reference: z.string().startsWith("/api/files/").max(500),
+  photos: z.array(z.string().startsWith("/api/files/").max(500)).min(1).max(KATANA_LIMITS.maxPhotos),
   instructions: z.string().max(KATANA_LIMITS.maxInstructions).optional(),
   /** Segments chosen in the studio (scene cuts); without them the clip is cut every `length` seconds. */
   segments: z.array(Seg).max(KATANA_LIMITS.maxSegments).optional(),
@@ -146,16 +144,14 @@ export const KatanaBody = z.object({
 });
 export type KatanaRequest = z.infer<typeof KatanaBody>;
 
-/** The reference's length: what the browser measured, else the file's header (MP4, MOV). */
+/**
+ * The reference's length: what the browser measured, else the file's header (MP4, MOV). Only the header is read; a
+ * visitor's price check reads only its own file (storedMedia).
+ */
 function referenceLength(ref: string, given?: number): number {
   if (given) return given;
-  let d: number | undefined;
-  try {
-    const info = probeMedia(fs.readFileSync(absolutePath(decodeURIComponent(ref.slice("/api/files/".length)))));
-    d = info?.videoDuration ?? info?.duration;
-  } catch {
-    d = undefined;
-  }
+  const info = storedMedia(ref)?.info;
+  const d = info?.videoDuration ?? info?.duration;
   if (!d) throw new Error("Couldn't read how long the reference is — try an MP4");
   return d;
 }

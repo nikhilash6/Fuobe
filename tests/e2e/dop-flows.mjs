@@ -31,7 +31,7 @@ async function uploadStart() {
 }
 
 const start = await uploadStart();
-// Cloud prices show when a fal key is set (any key: nothing is sent to fal here); demo mode shows "Demo · free".
+// Cloud prices show when a fal key is set (any key: nothing is sent to fal here); demo mode shows "Placeholder · free".
 const status = await (await fetch(`${app}/api/status`)).json().catch(() => ({}));
 const fal = !!status?.providers?.fal?.configured;
 if (!fal) console.log("note: no fal key on this server, so the cloud price checks are skipped (start it with FAL_KEY=anything to run them)");

@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { NotFoundState } from "@/components/empty-state";
 import { FACELESS_STYLE_IDS, genreInfo, getStyle, type ChannelSettings, type FacelessChannel, type PickerData } from "@/lib/catalog/faceless";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { ChannelAvatar, EpisodeTile } from "./cards";
 import { Section, Segmented, ToggleRow } from "./controls";
 import { makeAvatar, useChannel, useDeleteChannel, useLikeEpisode, useUpdateChannel } from "./hooks";
@@ -87,7 +88,7 @@ function ChannelSettingsSheet({ channel, picker, open, onOpenChange }: { channel
                     toast.success("Saved");
                     onOpenChange(false);
                   },
-                  onError: (e) => toast.error((e as Error).message),
+                  onError: (e) => toastError(e),
                 },
               )
             }
@@ -129,7 +130,7 @@ export function ChannelView({ id, picker }: { id: string; picker: PickerData }) 
       await qc.invalidateQueries({ queryKey: ["faceless", "channel", id] });
       toast("Drawing a new avatar", { description: "It appears here when it's done — you can leave this page." });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setAsking(false);
     }
@@ -176,7 +177,7 @@ export function ChannelView({ id, picker }: { id: string; picker: PickerData }) 
                     className="flex items-center gap-2"
                     onSubmit={(e) => {
                       e.preventDefault();
-                      update.mutate({ name }, { onError: (err) => toast.error((err as Error).message) });
+                      update.mutate({ name }, { onError: (err) => toastError(err) });
                       setEditing(false);
                     }}
                   >
@@ -308,7 +309,7 @@ export function ChannelView({ id, picker }: { id: string; picker: PickerData }) 
                           toast("Channel deleted");
                           router.push("/faceless");
                         },
-                        onError: (e) => toast.error((e as Error).message),
+                        onError: (e) => toastError(e),
                       })
                     }
                   >

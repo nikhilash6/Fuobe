@@ -25,8 +25,11 @@ beforeAll(async () => {
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   setSetting("falKey", "test-key");
   setSetting("aiToolkitUrl", base);
+  // The stand-in answers as fal.ai: a fal.ai key is sent only to fal.ai's own hosts (provider-keys.ts standIn).
+  globalThis.__fuobeTestFalUrl = base;
 });
 afterAll(() => {
+  globalThis.__fuobeTestFalUrl = undefined;
   server.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });

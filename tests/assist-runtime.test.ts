@@ -47,16 +47,19 @@ describe("offline planner (U18)", () => {
     expect(jobs).toHaveLength(2);
     expect(jobs[0]).toMatchObject({ model_id: "nano-banana-pro", prompt: "A product ad for a matte black perfume bottle — hero still" });
     expect(jobs[0].after).toBeUndefined();
+    // MiniMax H3, the Video studio's default, makes one shot a clip: a 3-shot clip runs on the next model in Best that cuts shots.
     expect(jobs[1]).toMatchObject({ model_id: "seedance-2-5", after: 0, shots: 3 });
     expect(p.say).toMatch(/still first, then animate it as a 3-shot clip/);
-    // The open engine picks the open defaults.
-    expect((agent.offlinePlan("A photo of a lighthouse, then animate it", "open")!.input as { jobs: { model_id: string }[] }).jobs.map((j) => j.model_id)).toEqual(["oss-z-image-turbo", "oss-wan22-14b-fast"]);
+    // The open engine picks the open defaults (the Image studio's is Ideogram 4).
+    expect((agent.offlinePlan("A photo of a lighthouse, then animate it", "open")!.input as { jobs: { model_id: string }[] }).jobs.map((j) => j.model_id)).toEqual(["oss-ideogram-4", "oss-minimax-h3"]);
   });
 
   it("reads 'N portraits' as N takes and 'N-shot' video as one multi-shot clip", () => {
     expect(agent.offlinePlan("4 portraits of a jazz singer in a smoky club", "cloud")).toMatchObject({ input: { jobs: [{ model_id: "nano-banana-pro", outputs: 4 }] } });
     const shot = agent.offlinePlan("a 3-shot video of a fox running through snow", "cloud")!;
     expect(shot.input).toMatchObject({ jobs: [{ model_id: "seedance-2-5", shots: 3 }] });
+    expect(agent.offlinePlan("a 3-shot video of a fox running through snow", "open")).toMatchObject({ input: { jobs: [{ model_id: "oss-ltx25", shots: 3 }] } });
+    expect(agent.offlinePlan("a video of a fox running through snow", "cloud")).toMatchObject({ input: { jobs: [{ model_id: "minimax-h3" }] } });
     expect((shot.input as { jobs: { outputs?: number }[] }).jobs[0].outputs).toBeUndefined();
     // Still a storyboard when it asks for frames.
     expect(agent.offlinePlan("6 frames of a heist in Paris", "cloud")).toMatchObject({ tool: "create_storyboard", input: { frames: 6 } });
@@ -82,7 +85,7 @@ describe("offline planner (U18)", () => {
     expect(said.text).not.toContain(agent.OFFLINE_NOTE);
     const at = v.thread.items.findIndex((i) => i.role === "approval");
     expect(v.thread.items[at + 1]).toMatchObject({ role: "notice", tone: "info", text: agent.OFFLINE_NOTE });
-    expect(agent.OFFLINE_NOTE).toBe("Offline planner — connect Claude or Ollama in Settings for better plans.");
+    expect(agent.OFFLINE_NOTE).toBe("Offline planner — connect a model in Settings → AI helper (Anthropic, OpenAI, Google, OpenRouter… or a local model) for better plans.");
     const card = v.thread.items.find((i) => i.role === "approval") as { jobs: { kind: string; op: string; error?: string }[] };
     expect(card.jobs.map((j) => [j.kind, j.op, j.error])).toEqual([
       ["image", "t2i", undefined],
@@ -169,7 +172,7 @@ describe("new kinds and operations in the tools", () => {
   it("finds text models and runs chained jobs, returning text inline", async () => {
     const found = await tools.executeTool("search_models", { kind: "text", task: "translate" }, { engine: "open" });
     const models = JSON.parse(found.content as string).models as { id: string; engine: string }[];
-    expect(models[0]).toMatchObject({ id: "oss-text-llm", engine: "open source (Ollama, on this machine)" });
+    expect(models[0]).toMatchObject({ id: "oss-text-llm", engine: "open source (a local model, on this machine)" });
     expect(models.map((m) => m.id)).toContain("text-llm");
 
     const out = await tools.executeTool(

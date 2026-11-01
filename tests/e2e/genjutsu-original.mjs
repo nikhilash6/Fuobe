@@ -80,7 +80,7 @@ try {
       check(`${tag}: the licence line is in the picker`, /MiniMax H3 Community License — not licensed in the US, the EU, the UK and South Korea/.test(listed));
       check(`${tag}: each model's own licence (MIT for SCAIL-2, closed for partners)`, /SCAIL-2 weights: MIT/.test(listed) && /Closed model: pay per use/.test(listed));
       // The price (demo: no keys), the limits.
-      await page.getByText(/Demo · free|≈ \$|Price unknown/).first().waitFor({ timeout: 60_000 });
+      await page.getByText(/Placeholder · free|≈ \$|Price unknown/).first().waitFor({ timeout: 60_000 });
       const body = await text();
       check(`${tag}: the limits are shown`, /One continuous shot: a hard cut breaks the swap/.test(body) && /The person must be visible in the part's first frame/.test(body));
       check(`${tag}: no Higgsfield anywhere`, !/higgsfield/i.test(body));

@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration, useGenerationList } from "@/components/av/use-generation";
+import { SelfHostNote } from "@/components/self-host-note";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { ClipBar, ClipDrop, costText, Field, Segmented } from "@/components/shorts/ui";
 import { clipDuration, clipSize, useSourceClip } from "@/components/shorts/use-source-clip";
@@ -17,7 +18,7 @@ import { Feed } from "@/components/studio/feed";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SketchEditor, type Stroke } from "@/components/studio/sketch-editor";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
-import { useEngine, useGenerations, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import {
   CLICK_OPEN_PROBLEM,
   chooseEraser,
@@ -33,6 +34,7 @@ import type { Generation, PixelPoint } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { FrameStage, frameFromBlob, type Frame } from "./frame-stage";
 import { useRemovalActions, useRemovalEstimate, type RemovalBody } from "./hooks";
 import { VideoCompare } from "./video-compare";
@@ -70,6 +72,9 @@ interface Run {
  */
 export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const [engine, setEngine, engineMode] = useEngine();
+  // Removing an object doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front,
+  // and the upload, the mask preview and Remove are off, instead of a run the server refuses.
+  const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const source = useSourceClip(REMOVE.maxBytes);
   const clip = source.clip;
@@ -184,7 +189,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const estimate = useRemovalEstimate(body);
   const est = estimate.data && !estimate.isError ? estimate.data : undefined;
 
-  const blocker = !clip
+  const setupBlocker = !clip
     ? "Add a clip"
     : clip.error
       ? clip.error
@@ -209,6 +214,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
               : estimate.isError
                 ? (estimate.error as Error).message
                 : null;
+  const blocker = visitor ? "Remove object runs on a self-hosted Fuobe for now" : setupBlocker;
 
   const start = () => {
     if (blocker || !body) return void toast(blocker ?? "Not ready yet", { id: "remove-blocker" });
@@ -219,32 +225,35 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
         setRun({ final: r.final.id, ids: r.items.map((g) => g.id), before: clip!.preview, start: range!.startTime, ratio });
         toast("Removing it", { description: "Follow it below — it lands in your Library too." });
       })
-      .catch((e: Error) => toast.error(e.message));
+      .catch((e: Error) => toastError(e));
   };
 
   const canPreview = !!body && est?.previewUsd != null;
   const makePreview = () => {
-    if (!body || !canPreview || !est) return;
+    if (visitor || !body || !canPreview || !est) return;
     const of = { exact: est.previewExact, eraser: est.modelName };
     void previewGuard(JSON.stringify(body), (requestId) => actions.preview.mutateAsync({ ...body, requestId }))
       .then((g) => g && setPreviewOf({ id: g.id, ...of }))
-      .catch((e: Error) => toast.error(e.message));
+      .catch((e: Error) => toastError(e));
   };
   const preview = useGeneration(previewOf?.id ?? null).data;
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide>
+    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title="Remove anything from a video"
-          subtitle="Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays. Priced before it runs; free on your own ComfyUI."
-        />
+          subtitle={`Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays. Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}
+        >
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">Remove object runs on a self-hosted Fuobe for now.</SelfHostNote>}
+        </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>
         {!clip ? (
           <ClipDrop
             accept={REMOVE.accept}
             limits={LIMITS}
+            disabled={visitor}
             onFile={(f) => {
               const err = source.pick(f);
               if (err) toast.error(err);
@@ -436,11 +445,11 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
               <div className="space-y-3 border-t pt-3">
                 {body && est?.previewUsd != null && (
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="rounded-full" onClick={makePreview} disabled={actions.preview.isPending || (preview && (preview.status === "queued" || preview.status === "running"))}>
+                    <Button variant="outline" size="sm" className="rounded-full" onClick={makePreview} disabled={actions.preview.isPending || (preview && (preview.status === "queued" || preview.status === "running")) || visitor}>
                       {actions.preview.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Eye className="size-3.5" />} Preview the mask
                     </Button>
                     <span className="min-w-0 text-[12px] leading-snug text-muted-foreground">
-                      first {REMOVE.previewSeconds} s · {est.demo ? "demo" : engine === "open" ? "free" : costText({ costUsd: est.previewUsd, demo: false }, "cloud")}
+                      first {REMOVE.previewSeconds} s · {est.demo ? "demo" : engine === "open" ? (visitor ? "self-hosted only" : "free") : costText({ costUsd: est.previewUsd, demo: false }, "cloud")}
                       {!est.previewExact && ` · how SAM 3.1 reads it — ${est.modelName} finds the object itself`}
                     </span>
                   </div>
@@ -452,7 +461,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
                     ) : (
                       <>
                         <p className="flex items-center gap-1.5 text-[15px] font-semibold tabular-nums">
-                          {costText(est, engine)}
+                          {costText(est, engine, visitor)}
                           {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" aria-label="Updating the price" />}
                         </p>
                         {est && (
@@ -463,7 +472,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
                       </>
                     )}
                   </div>
-                  <Button className="rounded-full" onClick={start} disabled={!!blocker || actions.run.isPending}>
+                  <Button className="rounded-full" onClick={start} disabled={!!blocker || actions.run.isPending || visitor}>
                     {actions.run.isPending ? <Loader2 className="size-4 animate-spin" /> : <EraserIcon className="size-4" />} Remove it
                   </Button>
                 </div>

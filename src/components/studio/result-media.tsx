@@ -2,8 +2,9 @@
 
 import { AudioLines, Box, Download, FileText, Film, Layers } from "lucide-react";
 import { createElement, useEffect, useState } from "react";
+import { loadModelViewer, useViewerSrc, viewerLook } from "@/components/model3d/model-viewer";
 import { FORMAT_INFO } from "@/lib/av/formats";
-import { splatFormatOf } from "@/lib/av/model3d";
+import { splatFormatOf, viewerGlb } from "@/lib/av/model3d";
 import type { Generation, OutputFile, VideoFormat } from "@/lib/catalog/types";
 import { extensionOf } from "@/lib/library";
 import { cuesOf, cueTime, editOnlyFormat, isLayered, layerInfo, modelPreview, textOf, videoPoster } from "@/lib/output-actions";
@@ -26,7 +27,7 @@ export function MediaThumb({
   autoPlay?: boolean;
   /** Letterbox instead of crop (Library "Fit"). */
   fit?: boolean;
-  /** A small badge ("Demo") a text card shows in its own header row, where it can't cover the label. */
+  /** A small badge ("Placeholder") a text card shows in its own header row, where it can't cover the label. */
   tag?: string;
   /** Room at the end of a text card's header for a control in the tile's top-right corner (the feed's ⋯ or heart). */
   inset?: boolean;
@@ -196,11 +197,15 @@ export function LayersStack({ g, className, bare }: { g: Generation; className?:
 export function ModelViewer({ output, g }: { output: OutputFile; g: Generation }) {
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [viewer, setViewer] = useState<HTMLElement | null>(null);
   const splat = splatFormatOf(output);
+  // The web GLB (meshopt, WebP) when the server made one, else (older results, or if it fails to load) the original.
+  const src = useViewerSrc(viewer, viewerGlb(output), output.url);
+  const material = (output.meta?.finish as { material?: unknown } | undefined)?.material;
   useEffect(() => {
     if (splat) return;
     let live = true;
-    import("@google/model-viewer").then(
+    loadModelViewer().then(
       () => live && setReady(true),
       () => live && setFailed(true),
     );
@@ -220,14 +225,17 @@ export function ModelViewer({ output, g }: { output: OutputFile; g: Generation }
     );
   }
   return createElement("model-viewer", {
-    src: output.url,
+    ref: setViewer,
+    src,
     poster,
     alt: g.request.prompt || "3D model",
+    loading: "lazy",
+    reveal: "auto",
     "camera-controls": "",
+    // A rigged character plays its animation; a still model turns.
     ...(output.meta?.rigged === true ? { autoplay: "" } : { "auto-rotate": "" }),
-    "shadow-intensity": "1",
-    exposure: "1",
     "touch-action": "pan-y",
+    ...viewerLook(typeof material === "string" ? material : undefined),
     style: { width: "100%", height: "100%", background: "transparent" },
   });
 }

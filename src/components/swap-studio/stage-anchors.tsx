@@ -13,6 +13,7 @@ import { jobState, SWAP_STUDIO, type AnchorVariant, type GenSummary, type SwapSe
 import { anchorWords } from "@/lib/catalog/swap-studio-plan";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useMakeAnchor, useStopJob, useSwapEdit } from "./hooks";
 import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
 import type { StageProps } from "./workbench";
@@ -37,7 +38,7 @@ export function AnchorMaker({ id, project, clip, shotId, segment, estimate }: Pi
       await importer.mutateAsync({ type: "anchor-import", clipId: clip.id, shotId, ...(segment ? { segmentId: segment.id } : {}), url: a.url });
       toast(`Imported the ${which}`);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setImporting(false);
     }
@@ -67,7 +68,7 @@ export function AnchorMaker({ id, project, clip, shotId, segment, estimate }: Pi
         disabled={make.isPending || !project.character.image}
         title={!project.character.image ? "Add a picture of your character first" : picked?.note}
         onClick={() =>
-          make.mutate({ clipId: clip.id, shotId, ...(segment ? { segmentId: segment.id } : {}), modelId }, { onSuccess: () => toast(`Making a ${which} with ${picked?.label ?? "the image model"}`), onError: (e) => toast.error((e as Error).message) })
+          make.mutate({ clipId: clip.id, shotId, ...(segment ? { segmentId: segment.id } : {}), modelId }, { onSuccess: () => toast(`Making a ${which} with ${picked?.label ?? "the image model"}`), onError: (e) => toastError(e) })
         }
       >
         {make.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} Make {which}

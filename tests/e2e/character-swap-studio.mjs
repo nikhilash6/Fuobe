@@ -148,7 +148,7 @@ try {
     await page.getByRole("tab", { name: "Segments" }).click();
     await page.getByRole("button", { name: "Split", exact: true }).click();
     await page.getByRole("listitem", { name: "Segment 2" }).waitFor();
-    check("price shown before running", /Demo · free/.test(await text()));
+    check("price shown before running", /Placeholder · free/.test(await text()));
     await page.getByRole("button", { name: "Queue all segments" }).click();
     await page.getByText("waits for the segment before").waitFor({ timeout: 20_000 });
     check("the continuing segment waits for the one before", true);

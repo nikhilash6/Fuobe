@@ -4,7 +4,6 @@ import { useMutation, useQuery, keepPreviousData } from "@tanstack/react-query";
 import { AlertTriangle, Check, ImageOff, Loader2, Rotate3d, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
@@ -32,6 +31,7 @@ import {
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { responseError, toastError } from "@/lib/refusals";
 
 /** The body /api/turnaround takes (src/server/turnaround.ts TurnaroundSchema). */
 export interface TurnaroundBody {
@@ -73,7 +73,7 @@ interface Props {
 async function post<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const out = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(out.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, out.error ?? `Request failed (${res.status})`);
   return out;
 }
 
@@ -203,7 +203,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
       onRun ? { items: await onRun(b) } : post<{ items: Generation[]; filmId: string }>("/api/turnaround", { ...b, requestId }),
     // The film: the one the server names, else the joined clips, else the one video the run makes (drawn pictures are stills).
     onSuccess: ({ items, filmId }) => onStarted({ ids: items.map((g) => g.id), filmId: filmId ?? (items.find((g) => g.op === "concat") ?? items.find((g) => g.kind === "video") ?? items[0])?.id }),
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
   const makeIt = () => void guard(JSON.stringify(body), (requestId) => make.mutateAsync({ b: body, requestId })).catch(() => {});
 
@@ -214,7 +214,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
     if (k === "sheet") setSheet(url);
     else setViews((v) => ({ ...v, [k]: url }));
   };
-  const price = !p ? "" : p.demo ? "Demo · free" : engine === "open" ? `Free · on your GPU${p.gpuGb ? `, about ${p.gpuGb} GB` : ""}` : p.costUsd != null ? `≈ ${formatCost(p.costUsd)}` : "";
+  const price = !p ? "" : p.demo ? "Placeholder · free" : engine === "open" ? `Free · on your GPU${p.gpuGb ? `, about ${p.gpuGb} GB` : ""}` : p.costUsd != null ? `≈ ${formatCost(p.costUsd)}` : "";
   const heading = headingOf({ title, flyAround, name });
 
   return (

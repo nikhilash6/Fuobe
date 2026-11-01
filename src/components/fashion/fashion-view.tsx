@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { SelfHostNote } from "@/components/self-host-note";
 import { Button } from "@/components/ui/button";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import type { SlotValue } from "@/components/studio/media-slot";
@@ -14,26 +15,29 @@ import { useRun, useRunPreview } from "@/components/photodump/hooks";
 import { RunLine, Steps } from "@/components/photodump/steps";
 import { CharacterPicker } from "@/components/photodump/subject";
 import { UploadBox } from "@/components/photodump/upload-box";
-import { useEngine, useGenerations, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { FASHION, FASHION_MODELS, FASHION_START, FASHION_STEPS, fashionBlocker, fashionReducer, getTemplate, type FashionState } from "@/lib/catalog/packs";
 import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useStoredReducer } from "./stored";
 import { TemplatePreview } from "./template-preview";
 
-const LABELS = ["Select presets", "Character", "Generation", "Clothing", "Photoset"];
+const LABELS = ["Select a template", "Character", "Generation", "Clothing", "Photoset"];
 const BANNER_KEY = "fuobe.fashion.banner";
 /**
  * The outfit and photoset models' names (FASHION_MODELS has each step's per engine): Fuobe Try-On (the Original, FLUX.2
- * [klein] 4B + a try-on LoRA) and Qwen-Image-Edit 2511 first, partners after.
+ * [klein] 4B + a try-on LoRA), the Qwen-Image and Krea 2 edit models, partners after.
  */
 const MODEL_LABELS: Record<string, string> = {
   "fuobe-tryon": "Fuobe Try-On",
   "fashn-tryon": "FASHN Try-On",
   "nano-banana-pro": "Nano Banana Pro",
   "qwen-image-edit-2511-cloud": "Qwen-Image-Edit 2511",
-  "oss-qwen-edit": "Qwen-Image-Edit 2511",
+  "oss-qwen-image-21": "Qwen-Image 2.1",
+  "oss-qwen-image-21-turbo": "Qwen-Image 2.1 Turbo",
+  "oss-krea2-identity-edit": "Krea 2 Identity Edit",
 };
 
 const bannerListeners = new Set<() => void>();
@@ -70,6 +74,9 @@ function useBannerSeen(): [boolean, () => void] {
 export function FashionView() {
   const [s, dispatch] = useStoredReducer<FashionState, Parameters<typeof fashionReducer>[1]>("fuobe.fashion", fashionReducer, FASHION_START);
   const [engine, setEngine] = useEngine();
+  // A shoot doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // steps that run or upload are off. The templates stay open to browse.
+  const visitor = useLikelyVisitor();
   const [garment, setGarment] = useState<SlotValue | null>(null);
   const [pickedOutfit, setOutfitModel] = useState<string>();
   const [pickedSet, setSetModel] = useState<string>();
@@ -112,24 +119,24 @@ export function FashionView() {
     return !!msg;
   };
   const startBase = () => {
-    if (block(fashionBlocker(s)) || !baseBody) return;
+    if (visitor || block(fashionBlocker(s)) || !baseBody) return;
     base.mutate(baseBody, {
       onSuccess: (r) => dispatch({ type: "baseStarted", ids: r.items.map((g) => g.id) }),
-      onError: (e) => toast.error((e as Error).message || "JobSet wasn't created"),
+      onError: (e) => toastError(e, "JobSet wasn't created"),
     });
   };
   const startOutfit = () => {
-    if (block(fashionBlocker(s, "outfit")) || !outfitBody) return;
+    if (visitor || block(fashionBlocker(s, "outfit")) || !outfitBody) return;
     outfit.mutate(outfitBody, {
       onSuccess: (r) => dispatch({ type: "outfitStarted", ids: r.items.map((g) => g.id) }),
-      onError: (e) => toast.error((e as Error).message || "JobSet wasn't created"),
+      onError: (e) => toastError(e, "JobSet wasn't created"),
     });
   };
   const startSet = () => {
-    if (block(fashionBlocker(s)) || !setBody) return;
+    if (visitor || block(fashionBlocker(s)) || !setBody) return;
     photoset.mutate(setBody, {
       onSuccess: (r) => dispatch({ type: "photosetStarted", batchId: r.batchId ?? r.items[0]?.batchId ?? r.items[0]?.id }),
-      onError: (e) => toast.error((e as Error).message || "JobSet wasn't created"),
+      onError: (e) => toastError(e, "JobSet wasn't created"),
     });
   };
 
@@ -142,17 +149,17 @@ export function FashionView() {
               <RotateCcw /> Start over
             </Button>
           )}
-          <EngineSwitch value={engine} onChange={setEngine} />
+          <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
       </PageHeader>
+      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Fashion Factory runs on a self-hosted Fuobe for now.</SelfHostNote>}
 
       {!bannerSeen && at === 0 && (
         <div className="relative mb-6 overflow-hidden rounded-2xl border bg-gradient-to-br from-brand-faint to-background p-5">
           <button type="button" onClick={hideBanner} aria-label="Hide" className="absolute top-3 right-3 grid size-7 place-items-center rounded-full hover:bg-accent">
             <X className="size-4" />
           </button>
-          <p className="font-heading text-[26px] leading-tight">Fashion factory</p>
-          <p className="mt-1 max-w-xl text-[14px] text-muted-foreground">Easily create branded photoshoots by combining your product with a consistent character, delivering unique and professional visuals every time.</p>
+          <p className="max-w-xl pr-8 text-[14px] text-muted-foreground">Easily create branded photoshoots by combining your product with a consistent character, delivering unique and professional visuals every time.</p>
           <Button className="mt-3" size="sm" onClick={hideBanner}>
             Select template
           </Button>
@@ -164,9 +171,9 @@ export function FashionView() {
       </div>
 
       {s.step === "template" && (
-        <section aria-label="Select presets" className="space-y-4">
+        <section aria-label="Select a template" className="space-y-4">
           <div>
-            <h2 className="font-heading text-[26px] leading-tight">Select presets</h2>
+            <h2 className="font-heading text-[26px] leading-tight">Select a template</h2>
             <p className="text-[14px] text-muted-foreground">Choose a template or aesthetic for the photo set</p>
           </div>
           <div role="radiogroup" aria-label="Templates" className="grid grid-cols-2 gap-3 lg:grid-cols-3">
@@ -213,7 +220,7 @@ export function FashionView() {
           </div>
           <CharacterPicker value={s.elementId} onChange={(id) => dispatch({ type: "element", id })} />
           <Footer onBack={() => dispatch({ type: "back" })} line={<RunLine preview={baseBody ? preview.data : undefined} loading={preview.isFetching} />}>
-            <Button onClick={startBase} disabled={base.isPending || !!(baseBody && preview.data?.error)}>
+            <Button onClick={startBase} disabled={base.isPending || !!(baseBody && preview.data?.error) || visitor}>
               {base.isPending ? <Loader2 className="animate-spin" /> : null} {base.isPending ? "Generating..." : "Next"}
             </Button>
           </Footer>
@@ -227,7 +234,7 @@ export function FashionView() {
               <h2 className="font-heading text-[26px] leading-tight">See instant variations of the selected character</h2>
               <p className="text-[14px] text-muted-foreground">Pick the base shot to dress.</p>
             </div>
-            <Button variant="outline" size="sm" onClick={startBase} disabled={base.isPending || busy(baseItems)}>
+            <Button variant="outline" size="sm" onClick={startBase} disabled={base.isPending || busy(baseItems) || visitor}>
               <RefreshCw /> Regenerate
             </Button>
           </div>
@@ -251,11 +258,14 @@ export function FashionView() {
                   <img src={s.base} alt="Base shot" className="aspect-[3/4] w-full object-cover" />
                 )}
               </div>
-              <UploadBox value={garmentValue} onChange={setGarmentValue} title="Upload outfit" hint="The product: a garment on a model or flat-lay" className="aspect-[3/4]" />
+              {/* A guest's or an account's outfit would be uploaded for a shoot that can't start here. */}
+              <div inert={visitor} className={cn(visitor && "opacity-50")}>
+                <UploadBox value={garmentValue} onChange={setGarmentValue} title="Upload outfit" hint="The product: a garment on a model or flat-lay" className="aspect-[3/4]" />
+              </div>
             </div>
             <ModelChips label="Outfit model" ids={outfitModels} value={outfitModel} onChange={setOutfitModel} />
             <RunLine preview={outfitBody && !s.outfit ? preview.data : undefined} loading={!s.outfit && preview.isFetching} />
-            <Button className="w-full" variant={s.outfitIds.length ? "outline" : "default"} onClick={startOutfit} disabled={outfit.isPending}>
+            <Button className="w-full" variant={s.outfitIds.length ? "outline" : "default"} onClick={startOutfit} disabled={outfit.isPending || visitor}>
               {outfit.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} {outfit.isPending ? "Generating..." : "Generate outfit"}
             </Button>
           </div>
@@ -276,7 +286,7 @@ export function FashionView() {
             )}
             {s.outfit && <ModelChips label="Photoset model" ids={setModels} value={setModel} onChange={setSetModel} />}
             <Footer onBack={() => dispatch({ type: "back" })} line={s.outfit ? <RunLine preview={preview.data} loading={preview.isFetching} /> : undefined}>
-              <Button onClick={startSet} disabled={photoset.isPending}>
+              <Button onClick={startSet} disabled={photoset.isPending || visitor}>
                 {photoset.isPending ? <Loader2 className="animate-spin" /> : null} {photoset.isPending ? "Generating..." : "Get your photoset"}
               </Button>
             </Footer>

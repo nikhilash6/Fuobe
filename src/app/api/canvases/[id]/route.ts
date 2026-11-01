@@ -1,7 +1,6 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { CanvasConflict, canvasView, deleteCanvas, graphProblem, pagesProblem, parseGraph, parsePages, updateCanvas } from "@/server/canvas";
-import { handler } from "@/server/access/route";
 
 const Patch = z.object({
   name: z.string().trim().min(1).max(80).optional(),
@@ -13,15 +12,15 @@ const Patch = z.object({
 });
 
 /** The board, its nodes' last runs and the generations they made. */
-export const GET = handler({ access: "signed-in" }, async (_req: Request, ctx: RouteContext<"/api/canvases/[id]">) => {
+export async function GET(_req: Request, ctx: RouteContext<"/api/canvases/[id]">) {
   await connection();
   const { id } = await ctx.params;
   const view = canvasView(id);
   return view ? Response.json(view) : Response.json({ error: "Not found" }, { status: 404 });
-});
+}
 
 /** Rename and/or autosave the pages (or one page's graph). */
-export const PATCH = handler({ access: "signed-in" }, async (request: Request, ctx: RouteContext<"/api/canvases/[id]">) => {
+export async function PATCH(request: Request, ctx: RouteContext<"/api/canvases/[id]">) {
   const { id } = await ctx.params;
   const parsed = Patch.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Give the canvas a name" }, { status: 400 });
@@ -36,9 +35,9 @@ export const PATCH = handler({ access: "signed-in" }, async (request: Request, c
     if (e instanceof CanvasConflict) return Response.json({ error: e.message }, { status: e.status });
     throw e;
   }
-});
+}
 
-export const DELETE = handler({ access: "signed-in" }, async (_req: Request, ctx: RouteContext<"/api/canvases/[id]">) => {
+export async function DELETE(_req: Request, ctx: RouteContext<"/api/canvases/[id]">) {
   const { id } = await ctx.params;
   return deleteCanvas(id) ? new Response(null, { status: 204 }) : Response.json({ error: "Not found" }, { status: 404 });
-});
+}

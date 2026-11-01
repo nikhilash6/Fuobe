@@ -446,7 +446,7 @@ describe("dub sessions (demo mode)", () => {
       setSetting("falKey", "");
     }
     expect(priceLine({ engine: "open", costUsd: 0, unpriced: [], demo: false, steps: 4 })).toBe("Free on your GPU");
-    expect(priceLine({ engine: "cloud", costUsd: 0, unpriced: [], demo: true, steps: 4 })).toBe("Demo · free");
+    expect(priceLine({ engine: "cloud", costUsd: 0, unpriced: [], demo: true, steps: 4 })).toBe("Placeholder · free");
   });
 
   it("cloud: a failed background split still reaches review and voices over silence (voice only)", async () => {

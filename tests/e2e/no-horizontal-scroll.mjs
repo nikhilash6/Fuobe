@@ -10,9 +10,6 @@
 // dynamic route without a sample is visited with "does-not-exist" for each segment, and named. For each route it
 // asserts document.documentElement.scrollWidth === clientWidth once the page has rendered, and names
 // the widest elements when it isn't. Pages that don't load are reported apart from layout failures.
-// A route that redirects is measured where it lands and named with that page (`/login → /`), so a page that was
-// never shown isn't counted as checked: in Just me (demo mode) /login goes to /, and the sign-in card is only
-// measured on a server with a password.
 import { launch, openRoute, PHONE, post, root } from "./_browser.mjs";
 import { dynamicSamples, querySamples, studioRoutes } from "./_routes.mjs";
 
@@ -76,7 +73,6 @@ const routes = only ?? (await discoverRoutes());
 const browser = await launch();
 const wide = [];
 const broken = [];
-const redirected = new Map();
 for (const scheme of schemes) {
   console.log(`\n${scheme} mode, 390 × 844`);
   const ctx = await browser.newContext({ ...PHONE, colorScheme: scheme });
@@ -90,9 +86,6 @@ for (const scheme of schemes) {
       await page.close();
       continue;
     }
-    const landed = new URL(page.url());
-    const shown = landed.pathname === new URL(app + route).pathname ? route : `${route} → ${landed.pathname}`;
-    if (shown !== route) redirected.set(route, landed.pathname);
     try {
       const r = await page.evaluate(() => {
         const W = document.documentElement.clientWidth;
@@ -117,7 +110,7 @@ for (const scheme of schemes) {
         return { scrollWidth: document.documentElement.scrollWidth, clientWidth: W, culprits };
       });
       const ok = r.scrollWidth === r.clientWidth;
-      console.log(`${ok ? "ok  " : "WIDE"} ${shown.padEnd(36)} ${r.scrollWidth}/${r.clientWidth}`);
+      console.log(`${ok ? "ok  " : "WIDE"} ${route.padEnd(36)} ${r.scrollWidth}/${r.clientWidth}`);
       if (!ok) {
         for (const c of r.culprits) console.log(`       ${c}`);
         wide.push(`${route} (${scheme})`);
@@ -138,6 +131,5 @@ const checks = routes.length * schemes.length;
 console.log("");
 if (wide.length) console.log(`${wide.length} of ${checks} pages scroll sideways at 390 px: ${wide.join(", ")}`);
 if (broken.length) console.log(`${broken.length} of ${checks} pages didn't load: ${broken.join(", ")}`);
-if (redirected.size) console.log(`${redirected.size} redirected, measured where they landed (not their own page): ${[...redirected].map(([a, b]) => `${a} → ${b}`).join(", ")}`);
 if (!wide.length && !broken.length) console.log(`All ${routes.length} routes fit 390 px (${schemes.join(" and ")}).`);
 process.exit(wide.length || broken.length ? 1 : 0);

@@ -1,5 +1,7 @@
 import { describeMove, KEN_BURNS_FPS, sceneMoves } from "@/lib/av/ken-burns";
+import { COPY_JOIN_VIDEOS, lengthRange, plannedDurations } from "./clip-lengths";
 import { estimateCost } from "./plan";
+import { pricingAt } from "./promo";
 import type { ChainSlot, Engine, Generation, GenerationRequest, ModelDef } from "./types";
 
 /*
@@ -15,9 +17,11 @@ import type { ChainSlot, Engine, Generation, GenerationRequest, ModelDef } from 
  *
  *   still(b) ──► clip(b, s)… ──► join (folded) ──► mix ◄── narration, music ──► captions ──► final
  *
- * - still: a picture per block in the episode's style (Nano Banana Pro / Z-Image Turbo; with style
- *   references Nano Banana Pro edit / Qwen-Image-Edit Style Reference).
- * - clip: the still animated (Gemini Omni Flash, Higgsfield's engine, or Seedance 2.5 / Wan 2.2 Lightning).
+ * - still: a picture per block in the episode's style (Nano Banana Pro / Qwen-Image 2.1; with style
+ *   references Nano Banana Pro edit / Krea 2 Style Reference).
+ * - clip: the still animated (Gemini Omni Flash, Higgsfield's engine, MiniMax H3 or Seedance 2.5 / MiniMax H3 or
+ *   Wan 2.2 Lightning). Clips that carry their own sound (MiniMax H3) lose it in the mix: the narration and the
+ *   music take its place (the open join keeps the picture only; oss-mux lays the new soundtrack on).
  *   Frame by frame keeps the still and moves the camera slowly over it with no video model: a real Ken Burns
  *   (src/lib/av/ken-burns.ts) — fal's image-to-video zooms in and out by turns on the cloud; ComfyUI's
  *   kenburns-still zooms and pans on the open engine, at most 10 s a job, so longer scenes are split into
@@ -103,6 +107,34 @@ export const CHANNEL_IDEAS = [
   "Channel with songs for kids",
 ];
 
+/** The examples for each genre (CHANNEL_IDEAS sorted by genre, with a few more where a genre had one or none). */
+export const GENRE_IDEAS: Record<FacelessGenre, string[]> = {
+  education: [
+    "Channel about survival in the wild",
+    "Channel about how everyday things are made",
+    "Channel explaining space in five minutes",
+    "Channel about the science of sleep and the body",
+  ],
+  history: [
+    "Channel about the rise and fall of empires",
+    "Channel about ancient civilizations",
+    "Channel with daily history facts",
+    "Channel about famous heists and scams",
+  ],
+  kids: [
+    "Channel with songs for kids",
+    "Channel about animals for curious kids",
+    "Channel with bedtime stories about friendly dragons",
+    "Channel about how things work, for kids",
+  ],
+  storytelling: [
+    "Channel retelling myths and legends",
+    "Channel with true mysteries that were never solved",
+    "Channel about famous heists and scams",
+    "Channel with short ghost stories by the campfire",
+  ],
+};
+
 export interface VisualStyle {
   id: string;
   name: string;
@@ -172,7 +204,7 @@ export const STYLES: VisualStyle[] = [
   style(
     "Pastel Flat 2D",
     "Soft pastel colours and simple flat illustrations",
-    "soft pastel flat 2D illustration: simple rounded shapes without outlines, gentle gradients, calm friendly characters, lots of breathing room",
+    "soft pastel flat 2D illustration: simple rounded shapes in flat fills of colour, edges defined by colour alone, gentle gradients, calm friendly characters, lots of breathing room",
     "soft eased motion, elements float gently, calm pacing",
     330,
   ),
@@ -580,7 +612,7 @@ export interface EngineModels {
   join: string;
   /** Joins at most this many clips at once (longer films are folded). */
   joinMax: number;
-  /** Frame by frame's join (open: packet copy of the Ken Burns clips, flat memory) and its fold size. */
+  /** The join of clips on one canvas (Frame by frame, MiniMax H3 on your GPU; open: packet copy, flat memory) and its fold size. */
   framesJoin: string;
   framesJoinMax: number;
   /** Puts the voice on the film (no music). */
@@ -607,7 +639,7 @@ export const ENGINE_MODELS: Record<Engine, EngineModels> = {
     styleStill: "nano-banana-pro",
     editStill: "nano-banana-pro",
     video: "gemini-omni-flash",
-    videoChoices: ["gemini-omni-flash", "seedance-2-5"],
+    videoChoices: ["gemini-omni-flash", "minimax-h3", "seedance-2-5"],
     narration: "elevenlabs-v4",
     cloneNarration: "chatterbox-cloud",
     longNarration: "elevenlabs-multilingual-v2",
@@ -629,11 +661,11 @@ export const ENGINE_MODELS: Record<Engine, EngineModels> = {
     write: "text-llm",
   },
   open: {
-    still: "oss-z-image-turbo",
-    styleStill: "oss-style-qwen-edit",
-    editStill: "oss-qwen-edit",
-    video: "oss-wan22-14b-fast",
-    videoChoices: ["oss-wan22-14b-fast"],
+    still: "oss-qwen-image-21",
+    styleStill: "oss-style-krea2",
+    editStill: "oss-qwen-image-21-turbo",
+    video: "oss-minimax-h3",
+    videoChoices: ["oss-minimax-h3", "oss-wan22-14b-fast"],
     narration: "oss-chatterbox",
     cloneNarration: "oss-chatterbox",
     longNarration: "oss-chatterbox",
@@ -650,7 +682,7 @@ export const ENGINE_MODELS: Record<Engine, EngineModels> = {
     captions: "oss-captions-burnin",
     align: "oss-qwen3-asr",
     captionsUseWords: true,
-    sourceStill: "oss-qwen-edit",
+    sourceStill: "oss-qwen-image-21-turbo",
     upscale: "oss-upscale-video-esrgan",
     write: "oss-text-llm",
   },
@@ -658,15 +690,18 @@ export const ENGINE_MODELS: Record<Engine, EngineModels> = {
 
 /**
  * Clip lengths each block video model can make. Gemini Omni Flash takes any whole number of seconds
- * from 3 to 10 (research: duration 3–10); the Ken Burns moves 1–30 s (fal) and 1–10 s per job (ComfyUI,
- * longer scenes split); the others list their durations in the catalog.
+ * from 3 to 10 (research: duration 3–10), hosted MiniMax H3 any from 5 to 15 (fal's schema); the Ken Burns
+ * moves 1–30 s (fal) and 1–10 s per job (ComfyUI, longer scenes split); MiniMax H3 on your GPU any from 3 to 15
+ * (lengthRange), so each scene is cut to where its lines are spoken; the others list their durations in the catalog.
  */
-export const DURATION_RANGES: Record<string, [number, number]> = { "gemini-omni-flash": [3, 10], "ken-burns": [1, 30], "oss-ken-burns": [1, 10] };
+export const DURATION_RANGES: Record<string, [number, number]> = { "gemini-omni-flash": [3, 10], "minimax-h3": [5, 15], "ken-burns": [1, 30], "oss-ken-burns": [1, 10] };
 
 /** Default quality per mode. Frame by frame trades resolution for price on the cloud. */
 export const DEFAULT_RESOLUTION: Record<string, Record<AnimationMode, string>> = {
   "gemini-omni-flash": { animated: "720p", frames: "360p" },
+  "minimax-h3": { animated: "768P", frames: "768P" },
   "seedance-2-5": { animated: "720p", frames: "480p" },
+  "oss-minimax-h3": { animated: "768p", frames: "768p" },
   "oss-wan22-14b-fast": { animated: "480p", frames: "480p" },
   // No model in the loop: 720p costs CPU time and memory (~11 MB a frame), not a GPU.
   "oss-ken-burns": { animated: "720p", frames: "720p" },
@@ -725,10 +760,10 @@ export function shotsFor(seconds: number, durations: number[] | undefined, range
   return best ?? Array.from({ length: n }, () => max);
 }
 
-/** The block video model's shots for a block. */
+/** The block video model's shots for a block (MiniMax H3 on your GPU: any 3 to 15 s each). */
 export function blockShots(seconds: number, model: ModelDef | undefined): number[] {
   if (!model) return [Math.round(seconds)];
-  return shotsFor(seconds, model.options.durations, DURATION_RANGES[model.id]);
+  return shotsFor(seconds, plannedDurations(model), DURATION_RANGES[model.id] ?? lengthRange(model));
 }
 
 // ---------------------------------------------------------------------------
@@ -744,18 +779,18 @@ export function stillPrompt(style: VisualStyle, block: Pick<ScriptBlock, "visual
     : `Style: ${style.look}`;
   const sources = o.sources ? `Use the attached source picture${o.sources > 1 ? "s" : ""} for what the subject looks like` : "";
   const brief = o.look?.trim() && !o.refs ? `Look: ${clean(o.look)}` : "";
-  return [clean(block.visual), look, brief, sources, frame, "No text, letters, captions or watermarks in the image"].filter(Boolean).join(". ") + ".";
+  return [clean(block.visual), look, brief, sources, frame, "A clean, full-frame picture of the scene alone"].filter(Boolean).join(". ") + ".";
 }
 
 /** What moves when a block's still is animated (Fully animated; Frame by frame moves the camera with no model, see sceneMoves). */
 export function motionPrompt(style: VisualStyle, block: Pick<ScriptBlock, "motion">, shot = 0, camera?: string): string {
   const then = shot ? "The camera keeps moving from where the last shot ended. " : "";
   const brief = camera?.trim() ? ` Camera: ${clean(camera)}.` : "";
-  return `${then}${clean(block.motion) || DEFAULT_MOTION}. ${style.motion.charAt(0).toUpperCase()}${style.motion.slice(1)}.${brief} Keep the art style, characters and colours exactly as in the first frame. No text.`;
+  return `${then}${clean(block.motion) || DEFAULT_MOTION}. ${style.motion.charAt(0).toUpperCase()}${style.motion.slice(1)}.${brief} Keep the art style, characters and colours exactly as in the first frame, the picture clean throughout.`;
 }
 
 export const musicPrompt = (genre: GenreInfo, style: VisualStyle, mood?: string) =>
-  `Instrumental background music for a narrated video: ${mood?.trim() ? clean(mood) : genre.music}. It sits under a voice-over, no vocals, steady level, no sudden hits. Mood to match ${style.name.toLowerCase()} visuals.`;
+  `Instrumental background music for a narrated video: ${mood?.trim() ? clean(mood) : genre.music}. It sits under a voice-over: purely instrumental, at a steady level with smooth, even dynamics. Mood to match ${style.name.toLowerCase()} visuals.`;
 
 // ---------------------------------------------------------------------------
 // The render graph
@@ -823,6 +858,9 @@ export function resolveModels(settings: EpisodeSettings, narrationChars: number,
   const narration = settings.engine === "open" ? m.narration : sample ? m.cloneNarration : narrationChars > m.narrationMaxChars ? m.longNarration : m.narration;
   // Style references win; attached source images otherwise go to a model that reads them.
   const fromSources = !settings.styleRefs.length && !!settings.sourceImages?.length && !!m.sourceStill;
+  // Clips that share one canvas and frame rate are joined packet by packet, in flat memory however long the film: the
+  // Ken Burns moves, and MiniMax H3 on your GPU from stills drawn in the episode's shape (an edit keeps its source's).
+  const copyJoin = frames || (COPY_JOIN_VIDEOS.has(video) && !fromSources);
   return {
     still: settings.styleRefs.length ? m.styleStill : fromSources ? m.sourceStill! : m.still,
     ...(fromSources && { stillOp: "edit" as const }),
@@ -833,8 +871,8 @@ export function resolveModels(settings: EpisodeSettings, narrationChars: number,
     loop: settings.music ? m.loop : null,
     level: settings.music ? (m.levelMusic ?? null) : null,
     mux: settings.music ? m.mixMusic : m.mux,
-    join: frames ? m.framesJoin : m.join,
-    joinMax: frames ? m.framesJoinMax : m.joinMax,
+    join: copyJoin ? m.framesJoin : m.join,
+    joinMax: copyJoin ? m.framesJoinMax : m.joinMax,
     captions: settings.subtitles ? m.captions : null,
     align: m.align,
     captionsUseWords: m.captionsUseWords,
@@ -1469,7 +1507,8 @@ export const CAMERA_WORDS: Record<Engine, { placeholder: string; hint: string; s
 export function stepCostUsd(model: ModelDef | undefined, request: GenerationRequest, seconds?: number): number | null {
   if (!model) return null;
   if (model.engine === "open") return 0;
-  const p = model.pricing;
+  // A launch price while it lasts (./promo): read when the episode is priced.
+  const p = model.pricing && pricingAt(model.pricing);
   if (!p) return null;
   const params = { ...model.defaults, ...request.params, ...(seconds !== undefined && (p.unit === "second" || p.unit === "minute") && { duration: seconds }) };
   if (p.unit === "request" && /per 1k char/i.test(p.note ?? "")) {
@@ -1540,6 +1579,16 @@ Reply with JSON only: {"topics": [{"title": string, "hook": string}]}.
 - title: a specific, clickable episode title (under 70 characters), not generic.
 - hook: one sentence on why someone would watch it.
 - Every topic fits the channel and its genre, and they differ from each other.`;
+
+/**
+ * The answers' JSON as JSON Schemas, for local models that decode to one (Ollama, LM Studio,
+ * Unsloth Studio); they match the prompts, which still ask for the same JSON.
+ */
+const objectOf = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+const listOf = (items: unknown, min: number, max: number) => ({ type: "array", items, minItems: min, maxItems: max });
+const STRING = { type: "string" };
+
+export const topicsSchema = (count: number) => ({ name: "topics", schema: objectOf({ topics: listOf(objectOf({ title: STRING, hook: STRING }), count, count) }) });
 
 export function topicsBrief(o: { idea: string; genre: GenreInfo; count: number; avoid?: string[]; reference?: string }): string {
   return [
@@ -1699,6 +1748,12 @@ Reply with JSON only: {"title": string, "scenes": [{"narration": string, "visual
 - Keep each scene's narration within its word limit, so the voice fits the scene.
 - Start with a hook in the first scene; end with a short, satisfying close.`;
 
+/** `scenes` null: the length decides itself (4 to 12 scenes, as the brief says). */
+export const scriptSchema = (scenes: number | null) => ({
+  name: "script",
+  schema: objectOf({ title: STRING, scenes: listOf(objectOf({ narration: STRING, visual: STRING, motion: STRING }), scenes ?? 4, scenes ?? 12) }),
+});
+
 export interface ScriptBrief {
   topic: string;
   genre: GenreInfo;
@@ -1744,6 +1799,8 @@ export const visualsSystem = `You plan the pictures for a narrated faceless vide
 Reply with JSON only: {"scenes": [{"n": number, "visual": string, "motion": string}]}, one per line, in order.
 - visual: one or two sentences describing the illustration for that line: subject, setting, composition. No text in the picture.
 - motion: a few words on what moves and how the camera moves.`;
+
+export const visualsSchema = (count: number) => ({ name: "visuals", schema: objectOf({ scenes: listOf(objectOf({ n: { type: "integer" }, visual: STRING, motion: STRING }), count, count) }) });
 
 export const visualsBrief = (blocks: Pick<ScriptBlock, "narration">[], styleName: string, topic: string) =>
   [`Topic: ${topic}`, `Style: ${styleName}`, ...blocks.map((b, i) => `[${i + 1}] ${b.narration}`)].join("\n");
@@ -1833,7 +1890,7 @@ export function offlineScript(topic: string, genre: FacelessGenre, scenes: numbe
   );
 }
 
-export const OFFLINE_NOTE = "Written offline — connect Claude or Ollama in Settings for a real script.";
+export const OFFLINE_NOTE = "Written offline — connect Claude or a local model (Ollama, LM Studio or Unsloth Studio) in Settings for a real script.";
 
 // ---------------------------------------------------------------------------
 // Validation the wizard and the API share

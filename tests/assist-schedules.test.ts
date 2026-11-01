@@ -60,6 +60,14 @@ afterEach(() => {
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 describe("scheduled tasks", () => {
+  it("show a task saved with the old Ollama agent as a local-model task", () => {
+    const s = sched.createSchedule({ ...base, title: "Old local", mode: { mode: "manual", agent: "local", model: "qwen3:8b" }, rule: { kind: "daily", time: "09:00" } }, T("2026-10-27T08:00:00Z"));
+    expect(s.mode).toMatchObject({ mode: "manual", agent: "local" });
+    db().prepare("UPDATE assist_schedules SET mode_json = json_set(mode_json, '$.agent', 'ollama') WHERE id = ?").run(s.id);
+    expect(sched.getSchedule(s.id)!.mode).toEqual({ mode: "manual", agent: "local", model: "qwen3:8b" });
+    sched.deleteSchedule(s.id);
+  });
+
   it("are checked when saved: the zone, a time that has passed, the project", () => {
     const now = T("2026-10-27T08:00:00Z");
     expect(() => sched.createSchedule({ ...base, title: "x", tz: "Mars/Base", rule: { kind: "daily", time: "09:00" } }, now)).toThrow("Pick a time zone");

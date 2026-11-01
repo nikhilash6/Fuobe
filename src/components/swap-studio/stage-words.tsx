@@ -1,11 +1,11 @@
 "use client";
 
 import { Loader2, Mic, Wand2 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Panel } from "@/components/av/tool-shell";
 import { buildShotPrompt, ROLE_LABELS, secondsLabel, shotDialogue, shotSpeaker, SWAP_STUDIO, voiceLabel, voicesOf, type SwapRole } from "@/lib/catalog/swap-studio";
+import { toastError } from "@/lib/refusals";
 import { useTranscribe } from "./hooks";
 import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
 import type { StageProps } from "./workbench";
@@ -49,7 +49,7 @@ export function WordsStage({ id, project, clip, gens, estimate, edit }: StagePro
               variant={t?.cues ? "outline" : "default"}
               className="h-8 rounded-full"
               disabled={busy || transcribe.isPending || !clip.source.hasAudio}
-              onClick={() => transcribe.mutate({ clipId: clip.id }, { onError: (e) => toast.error((e as Error).message) })}
+              onClick={() => transcribe.mutate({ clipId: clip.id }, { onError: (e) => toastError(e) })}
             >
               {busy || transcribe.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Mic className="size-3.5" />}
               {t?.cues ? "Transcribe again" : "Transcribe"}

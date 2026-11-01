@@ -4,11 +4,9 @@ import { targetsFor, TRAINING_TARGETS } from "@/lib/catalog/training";
 import { getElement } from "@/server/elements";
 import { ensureRunner } from "@/server/generations";
 import { describeTargets, listTrainings, startTraining } from "@/server/training";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 /** The targets this element can train on (each with what stops it, its price and whether it's a demo), and its trainings. */
-export const GET = handler({ access: "signed-in" }, async (_req: Request, ctx: RouteContext<"/api/elements/[id]/trainings">) => {
+export async function GET(_req: Request, ctx: RouteContext<"/api/elements/[id]/trainings">) {
   await connection();
   const { id } = await ctx.params;
   ensureRunner(); // the background poller also checks training jobs
@@ -17,12 +15,12 @@ export const GET = handler({ access: "signed-in" }, async (_req: Request, ctx: R
     targets: describeTargets(el ? targetsFor(el.kind) : TRAINING_TARGETS),
     items: listTrainings(id),
   });
-});
+}
 
 // consent: the person in the photos agreed (required for a character; SOUL_ID_COPY.consent is the line they confirm).
 const Body = z.object({ target: z.string().min(1), consent: z.boolean().optional() });
 
-export const POST = handler({ access: "signed-in" }, async (request: Request, ctx: RouteContext<"/api/elements/[id]/trainings">) => {
+export async function POST(request: Request, ctx: RouteContext<"/api/elements/[id]/trainings">) {
   const { id } = await ctx.params;
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Pick what to train" }, { status: 400 });
@@ -30,7 +28,6 @@ export const POST = handler({ access: "signed-in" }, async (request: Request, ct
     ensureRunner();
     return Response.json(startTraining(id, parsed.data.target, { consent: parsed.data.consent }), { status: 201 });
   } catch (e) {
-    rethrowAccess(e);
     return Response.json({ error: (e as Error).message }, { status: 422 });
   }
-});
+}

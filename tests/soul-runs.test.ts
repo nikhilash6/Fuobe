@@ -211,7 +211,7 @@ describe("Fuobe Soul through the server", () => {
 
 describe("Soul HEX: a palette on Fuobe Soul", () => {
   const PAL = { id: "p1", name: "Teal Dusk", colors: ["#102030", "#2A9D8F"], background: "#264653", slug: null };
-  const signed = async (engine: "open" | "cloud", modelId = "fuobe-soul", lock?: boolean) => {
+  const signed = async (engine: "open" | "cloud", modelId = "fuobe-soul", lock?: boolean, visitor?: boolean) => {
     const { applySignature } = await import("@/lib/catalog/palettes");
     const { signatureCaps } = await import("@/server/palettes");
     // The composer's catalog is the engine's view of each model.
@@ -219,7 +219,7 @@ describe("Soul HEX: a palette on Fuobe Soul", () => {
       const m = getModel(id);
       return m && onEngine(m, engine);
     };
-    return applySignature({ feature: "image", modelId, prompt: "a lighthouse at dusk", presetId: "v1-90s-grain", engine }, { palette: { ...PAL, ...(lock !== undefined && { lock }) } }, { caps: signatureCaps(), getModel: view });
+    return applySignature({ feature: "image", modelId, prompt: "a lighthouse at dusk", presetId: "v1-90s-grain", engine }, { palette: { ...PAL, ...(lock !== undefined && { lock }) } }, { caps: signatureCaps(), getModel: view, visitor });
   };
 
   it("writes the colours into the prompt on both engines and locks them on the open engine unless turned off", async () => {
@@ -230,6 +230,10 @@ describe("Soul HEX: a palette on Fuobe Soul", () => {
     expect(open.lock).toEqual({ colors: ["#102030", "#2A9D8F", "#264653"] });
     expect((await signed("open", "fuobe-soul-cinema")).lock).toBeTruthy();
     expect((await signed("open", "fuobe-soul", false)).lock).toBeUndefined();
+    // A guest or a free account: the colors in the prompt only (the lock runs on the studio's own ComfyUI).
+    const visitor = await signed("open", "fuobe-soul", undefined, true);
+    expect(visitor.lock).toBeUndefined();
+    expect(visitor.request.signature?.words).toMatch(/Color palette/);
     // fal has no colour-match step: the cloud gets the words only.
     const cloud = await signed("cloud");
     expect(cloud.lock).toBeUndefined();

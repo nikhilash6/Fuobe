@@ -15,7 +15,11 @@ export interface StudioCatalog {
   lookup?: ModelDef[];
 }
 
-/** A model without its provider field maps (server-only detail), keeping what the composer previews results with. */
+/**
+ * A model without its provider field maps (server-only detail), keeping what the composer previews results with. Its
+ * pricing goes as it is, a launch price (Pricing.promo) and all: the page is prerendered at build time, so the browser
+ * picks the price of the day it is (useToday), and nothing here reads the clock.
+ */
 export function slimModel(m: ModelDef): ModelDef {
   return {
     ...m,
@@ -29,10 +33,12 @@ export function slimModel(m: ModelDef): ModelDef {
   };
 }
 
-export function studioCatalog(config: Pick<StudioConfig, "kind" | "ops" | "pickerOps" | "defaultModels" | "preset" | "extraModels">): StudioCatalog {
+export function studioCatalog(config: Pick<StudioConfig, "kind" | "ops" | "pickerOps" | "defaultModels" | "preset" | "extraModels" | "appModels">): StudioCatalog {
   const list = modelsFor({ kind: config.kind, ops: config.pickerOps ?? config.ops });
   const ids = new Set(list.map((m) => m.id));
-  const extra = [config.defaultModels.cloud, config.defaultModels.open, config.preset?.cloud?.modelId, config.preset?.open?.modelId]
+  // An app's models on both engines: the one its preview was made with and its own route's (withRecipe).
+  const own = [...(config.appModels?.cloud ?? []), ...(config.appModels?.open ?? [])];
+  const extra = [config.defaultModels.cloud, config.defaultModels.open, config.preset?.cloud?.modelId, config.preset?.open?.modelId, ...own]
     .filter((id): id is string => !!id && !ids.has(id))
     .map((id) => getModel(id))
     .filter((m): m is ModelDef => !!m);

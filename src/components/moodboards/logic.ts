@@ -122,7 +122,7 @@ export const STATUS_LABEL: Record<MoodboardStatus, string> = {
 };
 
 export const COVER_PROMPT = (name: string) =>
-  `A moodboard cover for “${name}”: one striking image that sums up this style — its palette, light, texture, grain and mood. No text.`;
+  `A moodboard cover for “${name}”: one striking, purely visual image that sums up this style — its palette, light, texture, grain and mood.`;
 
 /** What stops a board from being saved, in Higgsfield's words, or null. */
 export function moodboardError(b: { name: string; images: string[] }): string | null {

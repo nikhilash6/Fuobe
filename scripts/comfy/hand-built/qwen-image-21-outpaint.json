@@ -1,0 +1,408 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP (Qwen3-VL 8B)"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "4": {
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "qwen-image-2.1-outpaint-v2.safetensors",
+      "strength_model": 1
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Outpaint LoRA"
+    }
+  },
+  "10": {
+    "inputs": {
+      "image": "image.png",
+      "rotation_degrees": 0,
+      "crop_aspect_ratio": "free",
+      "crop_x": 0,
+      "crop_y": 0,
+      "crop_width": 0,
+      "crop_height": 0,
+      "pad_left": 384,
+      "pad_top": 288,
+      "pad_right": 384,
+      "pad_bottom": 288,
+      "feather": 12,
+      "canvas_multiple": 1,
+      "fill_color": "#808080",
+      "resize_to_megapixels": true,
+      "megapixels": 1,
+      "resize_method": "lanczos",
+      "resolution_steps": 32,
+      "stitch_blend": 0,
+      "stitch_grow": 0
+    },
+    "class_type": "AUSBOSS_NODES_ImageCropRotatePad",
+    "_meta": {
+      "title": "Image Crop + Rotate + Pad - Your image on the gray canvas (1 MP)"
+    }
+  },
+  "11": {
+    "inputs": {
+      "image": "image.png",
+      "rotation_degrees": 0,
+      "crop_aspect_ratio": "free",
+      "crop_x": 0,
+      "crop_y": 0,
+      "crop_width": 0,
+      "crop_height": 0,
+      "pad_left": 384,
+      "pad_top": 288,
+      "pad_right": 384,
+      "pad_bottom": 288,
+      "feather": 48,
+      "canvas_multiple": 1,
+      "fill_color": "#808080",
+      "resize_to_megapixels": false,
+      "megapixels": 1,
+      "resize_method": "lanczos",
+      "resolution_steps": 32,
+      "stitch_blend": 0,
+      "stitch_grow": 0
+    },
+    "class_type": "AUSBOSS_NODES_ImageCropRotatePad",
+    "_meta": {
+      "title": "Image Crop + Rotate + Pad - Your image at full size"
+    }
+  },
+  "20": {
+    "inputs": {
+      "image": [
+        "10",
+        6
+      ],
+      "mask": [
+        "10",
+        1
+      ],
+      "context_factor": 1,
+      "blend_pixels": 0,
+      "output_multiple": 1,
+      "target_width": 0,
+      "target_height": 0,
+      "mask_grow": 0,
+      "mask_blur": 0,
+      "invert_mask": true,
+      "context_pixels": 0,
+      "target_megapixels": 0,
+      "rescale_algorithm": "bilinear",
+      "extend_left": 0,
+      "extend_right": 0,
+      "extend_up": 0,
+      "extend_down": 0,
+      "keep_inside": true
+    },
+    "class_type": "AUSBOSS_NODES_CropForInpaint",
+    "_meta": {
+      "title": "Crop For Inpaint - Your picture, see-through parts filled"
+    }
+  },
+  "21": {
+    "inputs": {
+      "string": "",
+      "regex_pattern": "^\\s*(?:also include in the prompt\\s*:?\\s*)?",
+      "replace": "Also include in the prompt: ",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "count": 1
+    },
+    "class_type": "RegexReplace",
+    "_meta": {
+      "title": "Add the lead-in if it's missing"
+    }
+  },
+  "22": {
+    "inputs": {
+      "string_a": "Write the text-to-image prompt that would generate this exact picture. One paragraph of 50 to 90 words. Begin with the medium and style in a few words, such as \"Photograph\", \"Smartphone photo\", \"Anime illustration\", \"Oil painting\" or \"3D render\". Then describe the subject, the setting, and what fills every part of the frame from edge to edge, including the background and the areas near the borders. Any flat mid-gray parts, such as corners or a background, are blank space that will be painted to continue the scene: describe the scene as if it filled the whole frame, and don't describe a border, frame or vignette around it. Include materials, colours, lighting, time of day, camera angle and framing. Quote any readable text exactly. Use plain factual language; do not start with 'The image' or 'This picture' and do not give opinions. Output only the prompt.",
+      "string_b": [
+        "21",
+        0
+      ],
+      "delimiter": " "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Instruction plus what goes there"
+    }
+  },
+  "23": {
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "image": [
+        "20",
+        0
+      ],
+      "prompt": [
+        "22",
+        0
+      ],
+      "max_length": 300,
+      "sampling_mode": "on",
+      "sampling_mode.temperature": 0.3,
+      "sampling_mode.top_k": 64,
+      "sampling_mode.top_p": 0.95,
+      "sampling_mode.min_p": 0.05,
+      "sampling_mode.repetition_penalty": 1.05,
+      "sampling_mode.seed": 20260925,
+      "sampling_mode.presence_penalty": 0,
+      "thinking": false,
+      "use_default_template": true,
+      "mtp": "auto"
+    },
+    "class_type": "TextGenerate",
+    "_meta": {
+      "title": "Describe the picture"
+    }
+  },
+  "24": {
+    "inputs": {
+      "string_a": "Outpaint the image: replace the solid gray areas with a seamless continuation of the scene, keeping the existing picture unchanged.",
+      "string_b": [
+        "23",
+        0
+      ],
+      "delimiter": " Scene: "
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Outpaint instruction plus description"
+    }
+  },
+  "30": {
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "prompt": [
+        "24",
+        0
+      ],
+      "negative_prompt": "",
+      "resolution": 0,
+      "images.image_1": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImage21",
+    "_meta": {
+      "title": "Text Encode Qwen Image 2.1 - Prompt and canvas"
+    }
+  },
+  "31": {
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "device": "auto",
+      "dtype": "default"
+    },
+    "class_type": "QwenImage21Cache",
+    "_meta": {
+      "title": "Reference cache"
+    }
+  },
+  "32": {
+    "inputs": {
+      "model": [
+        "31",
+        0
+      ],
+      "positive": [
+        "30",
+        0
+      ],
+      "negative": [
+        "30",
+        1
+      ],
+      "latent_image": [
+        "30",
+        2
+      ],
+      "seed": 0,
+      "steps": 25,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "Qwen 2.1 sampler"
+    }
+  },
+  "33": {
+    "inputs": {
+      "samples": [
+        "32",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Decode"
+    }
+  },
+  "34": {
+    "inputs": {
+      "image": [
+        "33",
+        0
+      ]
+    },
+    "class_type": "SplitImageWithAlpha",
+    "_meta": {
+      "title": "Drop the alpha"
+    }
+  },
+  "35": {
+    "inputs": {
+      "stitcher": [
+        "10",
+        2
+      ],
+      "inpainted": [
+        "34",
+        0
+      ],
+      "fix_edge_halo": false,
+      "color_match": 1,
+      "seam": "blend in"
+    },
+    "class_type": "AUSBOSS_NODES_StitchInpaint",
+    "_meta": {
+      "title": "Stitch Inpaint - Put the new part back"
+    }
+  },
+  "40": {
+    "inputs": {
+      "image": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Full-size canvas"
+    }
+  },
+  "41": {
+    "inputs": {
+      "image": [
+        "35",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": [
+        "40",
+        0
+      ],
+      "height": [
+        "40",
+        1
+      ],
+      "crop": "disabled"
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Scale to the full-size canvas"
+    }
+  },
+  "42": {
+    "inputs": {
+      "mask": [
+        "11",
+        1
+      ]
+    },
+    "class_type": "InvertMask",
+    "_meta": {
+      "title": "Where your image is"
+    }
+  },
+  "43": {
+    "inputs": {
+      "destination": [
+        "41",
+        0
+      ],
+      "source": [
+        "11",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": [
+        "42",
+        0
+      ]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "Your image back on top"
+    }
+  },
+  "90": {
+    "inputs": {
+      "filename_prefix": "fuobe/qwen-image-21-outpaint",
+      "images": [
+        "43",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

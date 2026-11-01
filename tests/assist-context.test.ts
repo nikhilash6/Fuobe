@@ -181,13 +181,22 @@ describe("a chat's context", () => {
 });
 
 describe("modes", () => {
-  it("falls back from Smart and Manual Claude to Free without a key, with a note", async () => {
+  it("falls back from Smart and Manual Claude to Free with nothing connected, with a note", async () => {
     setSetting("anthropicKey", "");
-    expect(await agent.resolveMode({ mode: "smart" })).toMatchObject({ mode: "free", agent: "offline", note: expect.stringMatching(/Anthropic API key/) });
+    expect(await agent.resolveMode({ mode: "smart" })).toMatchObject({ mode: "free", agent: "offline", note: expect.stringMatching(/Smart needs a model: add a key in Settings \(Anthropic, OpenAI, Google, OpenRouter…\)/) });
     expect(await agent.resolveMode({ mode: "manual", agent: "claude", model: "claude-haiku-5-5" })).toMatchObject({ agent: "offline", note: expect.any(String) });
     expect(await agent.resolveMode({ mode: "manual", agent: "offline" })).toMatchObject({ mode: "manual", agent: "offline" });
-    expect(await agent.resolveMode({ mode: "manual", agent: "ollama", model: "llama3.2:3b" })).toMatchObject({ agent: "ollama", model: "llama3.2:3b", note: expect.stringMatching(/Ollama isn't answering/) });
-    expect(await agent.resolveMode({ mode: "manual", agent: "ollama", model: "bad name; rm -rf" })).toMatchObject({ model: null });
+    expect(await agent.resolveMode({ mode: "manual", agent: "local", model: "llama3.2:3b" })).toMatchObject({
+      agent: "local",
+      model: "llama3.2:3b",
+      note: expect.stringMatching(/No local model server is answering \(Ollama, LM Studio or Unsloth Studio\)/),
+    });
+    expect(await agent.resolveMode({ mode: "manual", agent: "local", model: "bad name; rm -rf" })).toMatchObject({ model: null });
+    // LM Studio names its models publisher/model@quant.
+    expect(await agent.resolveMode({ mode: "manual", agent: "local", model: "qwen/qwen3-8b@q4_k_m" })).toMatchObject({ model: "qwen/qwen3-8b@q4_k_m" });
+    // A choice saved by an older browser still says "ollama".
+    const { ModeChoice } = await import("@/server/assist/schemas");
+    expect(await agent.resolveMode(ModeChoice.parse({ mode: "manual", agent: "ollama", model: "llama3.2:3b" }))).toMatchObject({ mode: "manual", agent: "local", model: "llama3.2:3b" });
     setSetting("enhanceProvider", "none");
     expect(await agent.resolveMode({ mode: "smart" })).toMatchObject({ agent: "offline", note: expect.stringMatching(/AI helper is off/) });
     setSetting("enhanceProvider", "auto");
@@ -238,7 +247,7 @@ describe("modes", () => {
 
   it("the offline planner follows a loaded skill's hints and turns 'remember that' into a memory", () => {
     expect(agent.offlinePlan("a cozy cafe", "cloud", { kind: "video", aspect: "9:16", style: "handheld" })).toMatchObject({
-      input: { jobs: [{ model_id: "seedance-2-5", aspect_ratio: "9:16", prompt: "a cozy cafe. handheld" }] },
+      input: { jobs: [{ model_id: "minimax-h3", aspect_ratio: "9:16", prompt: "a cozy cafe. handheld" }] },
     });
     expect(agent.offlinePlan("a cozy cafe", "cloud", { kind: "image", outputs: 4, aspect: "1:1" })).toMatchObject({ input: { jobs: [{ outputs: 4, aspect_ratio: "1:1" }] } });
     expect(agent.offlinePlan("Remember that I always want vertical 9:16 videos", "cloud")).toEqual({ tool: "remember", input: { text: "I always want vertical 9:16 videos.", category: "Convention" }, say: "I'll remember that for every chat." });
@@ -278,11 +287,12 @@ describe("studio tools", () => {
     expect(jobs.studio).toBeUndefined();
   });
 
-  it("a faceless episode joins its clips in groups of four on the open engine", () => {
+  it("a faceless episode joins all its clips at once on both engines (the copy join on your GPU)", () => {
     const scenes = Array.from({ length: 6 }, (_, i) => ({ narration: `Line ${i}`, visual: `Scene ${i}` }));
     const steps = studio.fallbackSteps.faceless({ scenes, style: "flat 2D", aspect_ratio: "9:16" }, { engine: "open" });
     expect(steps.filter((s) => s.request.op === "t2i")).toHaveLength(6);
-    expect(steps.filter((s) => s.request.op === "concat").map((s) => s.key)).toEqual(["part0", "part1", "film"]);
+    expect(steps.filter((s) => s.request.op === "concat").map((s) => [s.key, s.request.modelId])).toEqual([["film", "oss-join-encoded"]]);
+    expect(steps.find((s) => s.key === "film")!.after).toEqual(scenes.map((_, k) => `clip${k}`));
     expect(steps.find((s) => s.key === "episode")).toMatchObject({ after: ["film", "voice"], request: { op: "mux", modelId: "oss-mux" } });
     expect(steps.find((s) => s.key === "voice")!.request.prompt).toBe(scenes.map((s) => s.narration).join("\n\n"));
     const cloud = studio.fallbackSteps.faceless({ scenes, style: "flat 2D" }, { engine: "cloud" });
@@ -304,6 +314,33 @@ describe("studio tools", () => {
     const ads =studio.fallbackSteps.ads({ brief: "oat milk", product_image: "/api/files/uploads/p.png", count: 8, aspect_ratios: ["1:1", "4:5", "9:16"] }, { engine: "cloud" });
     expect(ads).toHaveLength(12);
     expect(ads[0]).toMatchObject({ modelId: "nano-banana-pro", op: "edit", inputs: { images: ["/api/files/uploads/p.png"] } });
+  });
+
+  // Words that name what a picture or clip should leave out: an image or video model with no negative branch adds them.
+  const NEGATION = /\b(no|not|never|without|none|nothing|avoid|don't|do not|free of)\b/i;
+
+  it("a faceless episode on your GPU: Qwen-Image 2.1 stills, MiniMax H3 clips, the narration in place of their sound", () => {
+    const scenes = Array.from({ length: 3 }, (_, i) => ({ narration: `Line ${i}`, visual: `Scene ${i}` }));
+    const steps = studio.fallbackSteps.faceless({ scenes, style: "flat 2D", aspect_ratio: "9:16" }, { engine: "open" });
+    const still = steps.find((s) => s.key === "still0")!;
+    expect(still.request).toMatchObject({ modelId: "oss-qwen-image-21", op: "t2i", params: { aspectRatio: "9:16" } });
+    const clip = steps.find((s) => s.key === "clip0")!;
+    expect(clip.request).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v", params: { aspectRatio: "9:16", duration: 5 } });
+    // The clips are joined by copy (one canvas, no decode), and the mux lays the narration on in place of their sound.
+    expect(steps.find((s) => s.key === "film")!.request.modelId).toBe("oss-join-encoded");
+    expect(steps.find((s) => s.key === "episode")).toMatchObject({ after: ["film", "voice"], chain: [{ slot: "video" }, { slot: "audio" }], request: { modelId: "oss-mux" } });
+    for (const s of steps.filter((x) => x.key.startsWith("still") || x.key.startsWith("clip"))) expect(s.request.prompt, s.key).not.toMatch(NEGATION);
+  });
+
+  it("ads on your GPU run on Qwen-Image 2.1 (its edit with the product photo, text-to-image without), worded as what is wanted", () => {
+    const withProduct = studio.fallbackSteps.ads({ brief: "oat milk", product_image: "/api/files/uploads/p.png", count: 2, cta: "Shop now" }, { engine: "open" });
+    expect(withProduct[0]).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit", inputs: { images: ["/api/files/uploads/p.png"] } });
+    expect(withProduct[0].prompt).toMatch(/the headline and the button are the only added lettering, spelled exactly\.$/);
+    const words = studio.fallbackSteps.ads({ brief: "oat milk", count: 2 }, { engine: "open" });
+    expect(words[0]).toMatchObject({ modelId: "oss-qwen-image-21", op: "t2i" });
+    expect(words[0].inputs).toBeUndefined();
+    expect(words[0].prompt).toMatch(/the headline is the only added lettering, spelled exactly\.$/);
+    for (const r of [...withProduct, ...words]) expect(r.prompt).not.toMatch(NEGATION);
   });
 
   const image = "/api/files/uploads/2026-10-19/still.png";
@@ -349,7 +386,15 @@ describe("studio tools", () => {
     // No sample on a real open engine: the card says what to add and can't run, in Faceless Studio
     // and in the pipeline it falls back to (a square episode).
     setSetting("demoMode", "off");
+    const g = globalThis as unknown as { __fuobeComfyReach?: { ok: boolean; at: number; url: string } };
+    const before = g.__fuobeComfyReach;
     try {
+      // Nothing connected: the card says to connect ComfyUI first, not to add a sample it couldn't use yet.
+      const none = plan("faceless_episode", { scenes, style: "flat 2D" }, "open");
+      expect(none.jobs.find((j) => j.error)?.error ?? none.error).toMatch(/Connect ComfyUI in Settings/);
+      expect(planRunnable(none.jobs)).toBe(false);
+      // A ComfyUI that answers: now the sample is what's missing.
+      g.__fuobeComfyReach = { ok: true, at: Date.now(), url: "http://127.0.0.1:9" };
       const p = plan("faceless_episode", { scenes, style: "flat 2D" }, "open");
       expect(p.studio).toBe("Faceless Studio");
       expect(p.jobs.find((j) => j.error)?.error).toMatch(/Pick the narrator's voice/);
@@ -361,6 +406,7 @@ describe("studio tools", () => {
       expect(voice.error).toMatch(/Add a voice sample for the narrator/);
       expect(planRunnable(square.jobs)).toBe(false);
     } finally {
+      g.__fuobeComfyReach = before;
       setSetting("demoMode", "auto");
     }
     // A sample is cloned on either engine; the cloud engine otherwise uses a premade voice.

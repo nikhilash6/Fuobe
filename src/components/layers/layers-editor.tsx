@@ -32,6 +32,7 @@ import {
   type LayerProjectView,
   type LayerTool,
 } from "@/lib/layers";
+import { toastError } from "@/lib/refusals";
 import { applyMeasured, idPool, type Applied } from "./apply";
 import { costLabel, Ctx, isFailed, isRunning, keysBelongElsewhere, latestJob, TOOL_FOR_JOB, type EditorCtx, type MaskEdit, type PaintEdit, type RunInput, type StageMode, type ToolId } from "./editor-context";
 import { LayersPanel } from "./layers-panel";
@@ -335,7 +336,7 @@ function Editor({ view, refetch, models }: { view: LayerProjectView; refetch: ()
           settings: { aspect, ...rest.settings },
         });
       } catch (e) {
-        toast.error((e as Error).message || "Could not start the tool");
+        toastError(e, "Could not start the tool");
         return null;
       }
     },
@@ -343,7 +344,7 @@ function Editor({ view, refetch, models }: { view: LayerProjectView; refetch: ()
   );
 
   const endJob = useCallback<EditorCtx["endJob"]>(
-    (jobId, how) => void actions.endJob(id, jobId, how).catch((e) => toast.error((e as Error).message)),
+    (jobId, how) => void actions.endJob(id, jobId, how).catch((e) => toastError(e)),
     [actions, id],
   );
 
@@ -473,7 +474,7 @@ function Editor({ view, refetch, models }: { view: LayerProjectView; refetch: ()
       toast.success("Mask saved", { duration: 1500 });
       setMode("select");
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setSavingMask(false);
     }
@@ -663,7 +664,7 @@ function Editor({ view, refetch, models }: { view: LayerProjectView; refetch: ()
       <div className="flex h-svh min-w-0 flex-col overflow-hidden md:h-[calc(100svh-0.5rem)]">
         <TopBar
           name={view.project.name}
-          onRename={(n) => void actions.rename(id, n).catch((e) => toast.error((e as Error).message))}
+          onRename={(n) => void actions.rename(id, n).catch((e) => toastError(e))}
           save={save}
           onRetrySave={() => void saveNow()}
           canUndo={hist.past.length > 0}
@@ -681,7 +682,7 @@ function Editor({ view, refetch, models }: { view: LayerProjectView; refetch: ()
               select(null);
               toast.success("Version restored", { duration: 1500 });
             } catch (e) {
-              toast.error((e as Error).message);
+              toastError(e);
             }
           }}
           compare={compare}

@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { MIXED } from "@/lib/catalog/mixed-media";
 import { SHORTS } from "@/lib/catalog/shorts";
-import { rethrowAccess } from "./access/errors";
+import { connectRefusal } from "./connect-refusal";
 import { ShortsError } from "./shorts";
 
 /** Request bodies for /api/shorts/** and /api/mixed-media/** (zod), and the shared error answer. */
@@ -65,9 +65,8 @@ export const NonceSchema = z.object({ requestId }).default({});
 
 export const MixedEstimateSchema = MixedBodySchema.extend({ source: source.extend({ url: z.string().max(500).default("/api/files/placeholder.mp4") }) });
 
-/** A user-facing error answer: ShortsError keeps its status; anything else from the planner is a 422 (a refusal goes on to handler()). */
+/** A user-facing error answer: ShortsError keeps its status; anything else from the planner is a 422. */
 export function errorResponse(e: unknown): Response {
-  rethrowAccess(e);
   if (e instanceof ShortsError) return Response.json({ error: e.message }, { status: e.status });
   return Response.json({ error: (e as Error).message || "Something went wrong" }, { status: 422 });
 }
@@ -119,10 +118,11 @@ export function once<T>(scope: string, id: string | undefined, fn: () => Promise
 }
 
 /** Run a route body, answering errors as `{ error }`. */
-export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
+export async function handle(fn: () => Promise<Response> | Response, request?: Request): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
-    return errorResponse(e);
+    // A run nothing connected can make: the connect card in the owner's browser (src/server/connect-refusal.ts).
+    return (request && connectRefusal(e, request)) || errorResponse(e);
   }
 }

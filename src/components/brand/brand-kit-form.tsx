@@ -2,10 +2,10 @@
 
 import { Check, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
-import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BRAND_LANGUAGES, MAX_SELLING_POINTS, SOCIAL_NETWORKS, type BrandKit, type BrandKitFields } from "@/lib/catalog/marketing";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useUpdateBrand } from "@/components/marketing/hooks";
 import { areaCls, ColorList, FieldRow, FontField, inputCls, TagInput } from "./fields";
 import { ImageList, uploadImages } from "./image-list";
@@ -56,7 +56,7 @@ function useAutosave(brand: BrandKit) {
       },
       onError: (e) => {
         setState("idle");
-        toast.error((e as Error).message);
+        toastError(e);
       },
     });
     };

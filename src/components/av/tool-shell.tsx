@@ -15,6 +15,7 @@ export function ToolShell({
   tabs,
   header,
   engineSwitch = true,
+  selfHostedOnly,
   children,
   wide,
 }: {
@@ -23,6 +24,8 @@ export function ToolShell({
   header?: React.ReactNode;
   /** Tools that run in the browser only (Virality) have no engine to pick. */
   engineSwitch?: boolean;
+  /** A tool that runs on a self-hosted Fuobe only: the engine badge says so to anyone but the owner (EngineSwitch). */
+  selfHostedOnly?: boolean;
   children: React.ReactNode;
   wide?: boolean;
 }) {
@@ -35,7 +38,7 @@ export function ToolShell({
           <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{title}</h1>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {header}
-            {engineSwitch && <EngineSwitch value={engine} onChange={setEngine} />}
+            {engineSwitch && <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly={selfHostedOnly} />}
           </div>
         </header>
         {tabs}

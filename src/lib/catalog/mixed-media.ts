@@ -15,6 +15,7 @@
  * Research: docs/research/higgsfield-studios.md §3, docs/research/fuobe-originals-recipes-5.md §8 mixed-media.
  */
 import { scenePoster, type PresetPreview, type PreviewFx, type PreviewScene } from "../preset-cards";
+import { templateCover, templatePreview } from "../template-covers";
 import { planShorts, SHORTS_ORIGINAL, type PlanStep, type ShortsLook } from "./shorts";
 import type { Engine, GenerationRequest, LoraRef } from "./types";
 
@@ -53,7 +54,7 @@ export const MIXED_MODELS: Record<Engine, string[]> = {
   open: [MIXED_ORIGINAL],
 };
 export const MIXED_TOOLS = {
-  cloud: { cut: "trim-video", mux: "merge-audio-video", preview: "nano-banana-2", frames: "extract-frames", assemble: "images-to-video", join: "join-clips" },
+  cloud: { cut: "trim-video", mux: "merge-audio-video", preview: "nano-banana-2-1", frames: "extract-frames", assemble: "images-to-video", join: "join-clips" },
   open: { preview: MIXED_ORIGINAL },
 } as const;
 
@@ -66,10 +67,12 @@ export type MixedMode = "frames" | "smooth" | "fast";
 export const MIXED_MODES: Record<Engine, MixedMode[]> = { cloud: ["frames", "smooth", "fast"], open: ["frames", "smooth"] };
 /**
  * Cloud models that draw each frame (the first is the default): Fuobe Mixed Media (Z-Image Turbo + ControlNet with the
- * look's LoRA, one seed, every frame on its own), then the partner image editors, Nano Banana 2 (it takes a seed) and
+ * look's LoRA, one seed, every frame on its own), then the partner image editors, Nano Banana 2.1 (it takes a seed) and
  * Seedream 5.0 Flash, which redraw each frame looking at the one styled before it.
  */
-export const MIXED_FRAME_MODELS = [MIXED_ORIGINAL, "nano-banana-2", "seedream-5-flash"] as const;
+export const MIXED_FRAME_MODELS = [MIXED_ORIGINAL, "nano-banana-2-1", "seedream-5-flash"] as const;
+/** Frame models Per frame no longer lists, and the one a render that names them (a saved setup, an API caller) runs on now. */
+export const MIXED_FRAME_MOVES: Readonly<Record<string, string>> = { "nano-banana-2": "nano-banana-2-1" };
 
 /**
  * Cloud per-frame limits: fal's extract-nth-frame returns up to 500 frames a call and images-to-video
@@ -361,8 +364,10 @@ export function getMixedPreset(id: string): MixedPreset | undefined {
   return MIXED_PRESETS.find((p) => p.id === id);
 }
 
-export function mixedPreview(p: Pick<MixedPreset, "scene" | "fx">): PresetPreview {
-  return { poster: scenePoster(p.scene), scene: p.scene, fx: p.fx };
+/** A look's card preview: its real cover when it has one (templateCover), else drawn. */
+export function mixedPreview(p: Pick<MixedPreset, "id" | "scene" | "fx">): PresetPreview {
+  const cover = templateCover("mixed-media", p.id);
+  return cover ? templatePreview(cover) : { poster: scenePoster(p.scene), scene: p.scene, fx: p.fx };
 }
 
 export function defaultValues(p: Pick<MixedPreset, "settings">): MixedValues {

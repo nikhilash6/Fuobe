@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { claudePrompt, handle, SeriesInputSchema } from "@/server/content-factory";
 import { body } from "@/server/faceless";
-import { handler } from "@/server/access/route";
 
 const Ask = SeriesInputSchema.extend({
   prompt: z.string().trim().min(1, "Say what the video is about").max(2000),
@@ -10,6 +9,6 @@ const Ask = SeriesInputSchema.extend({
 });
 
 /** "Generate in Claude": the message to paste into Claude Code (Fuobe's MCP server connected); nothing is sent anywhere. */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   return handle(async () => Response.json(claudePrompt(await body(request, Ask, "Say what the video is about and pick the settings"))));
-});
+}

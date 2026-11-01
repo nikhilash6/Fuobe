@@ -6,7 +6,7 @@
 //
 // Inputs:  build/raw/<key>.api.json + .meta.json (from export-templates.mjs),
 //          hand-built/*.json, a running ComfyUI (for /object_info), Hugging Face (model sizes).
-// Outputs: ../../workflows/comfyui/<id>.json, manifest.json
+// Outputs: ../../workflows/comfyui/<id>.json, manifest.json, requirements.json (build-requirements.mjs, no network)
 // The "validated" flag of each manifest entry is carried over from validation-state.json when the
 // workflow file content is unchanged; run validate-workflows.mjs afterwards to (re)validate.
 
@@ -14,10 +14,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { SPEC, KNOWN_MODELS, CUSTOM_NODE_REPOS, PACK_CLASSES } from './library.spec.mjs';
 import * as G from './lib/graph.mjs';
 import { resolveSource } from './export-templates.mjs';
+import { packOfClass, writeIndex } from './build-requirements.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -67,6 +68,8 @@ export const LOADER_FOLDERS = {
   // comfyui-oss-4 additions
   OpticalFlowLoader: { model_name: 'optical_flow' },
   LoadMoGeModel: { model_name: 'geometry_estimation' },
+  // MiniMax H3 video: larryvrh's turbo LoRA loader (ComfyUI-MiniMax-H3-Turbo) reads models/loras.
+  MiniMaxH3TurboLoRA: { lora_name: 'loras' },
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
 const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode']);
@@ -134,6 +137,8 @@ export const BINDING_KEYS = new Set([
   'separationModel', 'channels',
   // MOSS-Image (docs/research/new-models-7.md §4.6): the KSampler's sampler and the UNET file its Quality / Fast settings pick
   'sampler', 'unet',
+  // The owner's SOTA image families (2026-10-31): Ideogram 4's sampling preset
+  'preset',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.
@@ -159,7 +164,11 @@ async function hfTreeSize(url) {
 async function hfSize(url, cache) {
   if (cache[url] !== undefined && !cache[url]?.error) return cache[url];
   try {
-    const res = await fetch(url, { method: 'HEAD', redirect: 'manual' });
+    let res = await fetch(url, { method: 'HEAD', redirect: 'manual' });
+    // A renamed repository answers with a redirect to its new name on huggingface.co (Comfy-Org/flux2-dev → Flux-2-Dev):
+    // follow that one. The download's own redirect, to the CDN, carries the size and isn't followed.
+    const moved = res.headers.get('location');
+    if ([301, 302, 307, 308].includes(res.status) && moved?.startsWith('/')) res = await fetch(new URL(moved, url), { method: 'HEAD', redirect: 'manual' });
     const linked = res.headers.get('x-linked-size');
     const len = linked || (res.status === 200 ? res.headers.get('content-length') : null);
     if (res.status === 401 || res.status === 403) {
@@ -211,6 +220,7 @@ async function main() {
   const sizeCache = readJson(SIZE_CACHE, {});
   const state = readJson(STATE_FILE, {});
   const prevManifest = readJson(path.join(OUT_DIR, 'manifest.json'), { workflows: [] });
+  const prevSubset = readJson(path.join(OUT_DIR, 'object_info.subset.json'), {});
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   const ids = new Set();
@@ -286,7 +296,7 @@ async function main() {
     }
 
     // Every media input must be bound, otherwise the workflow references a template example asset.
-    const FILE_INPUTS = { LoadImage: 'image', LoadImageMask: 'image', LoadVideo: 'file', VHS_LoadVideo: 'video', LoadAudio: 'audio', VHS_LoadAudioUpload: 'audio' };
+    const FILE_INPUTS = { LoadImage: 'image', LoadImageMask: 'image', LoadVideo: 'file', VHS_LoadVideo: 'video', LoadAudio: 'audio', VHS_LoadAudioUpload: 'audio', AUSBOSS_NODES_ImageCropRotatePad: 'image' };
     const boundTargets = new Set(Object.values(bindings).flat().map((t) => `${t.node}.${t.input}`));
     for (const [nid, n] of Object.entries(graph)) {
       const inp = FILE_INPUTS[n.class_type];
@@ -361,8 +371,12 @@ async function main() {
     const custom = new Set();
     for (const n of Object.values(graph)) {
       const mod = objectInfo[n.class_type]?.python_module || '';
-      const m = mod.match(/^custom_nodes\.([^.]+)/);
-      if (m) custom.add(m[1]);
+      if (!mod.startsWith('custom_nodes.')) continue;
+      try {
+        custom.add(packOfClass(n.class_type, mod, prevSubset[n.class_type]?.python_module));
+      } catch (e) {
+        errs.push(e.message);
+      }
     }
     // Packs this server doesn't have installed (their classes have no python_module here): declared by the entry.
     for (const p of spec.packs || []) custom.add(p);
@@ -423,6 +437,13 @@ async function main() {
   writeJson(path.join(OUT_DIR, 'manifest.json'), manifest);
   fs.mkdirSync(path.dirname(SIZE_CACHE), { recursive: true });
   writeJson(SIZE_CACHE, sizeCache);
+  // The GPU pre-flight's requirement index follows the manifest (pins come from the committed model-pins.json).
+  try {
+    const { index, bytes } = writeIndex(OUT_DIR);
+    console.log(`requirements.json: ${Object.keys(index.files).length} files, ${Object.keys(index.packs).length} packs, ${bytes} bytes`);
+  } catch (e) {
+    errors.push(`requirements.json: ${e.message}`);
+  }
   if (errors.length) {
     console.error(`\n${errors.length} problem(s):\n  ${errors.join('\n  ')}`);
     process.exitCode = 1;
@@ -430,7 +451,7 @@ async function main() {
   console.log(`\nWrote ${entries.length} workflows + manifest.json to ${path.relative(REPO, OUT_DIR)}/`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((e) => {
     console.error(e);
     process.exit(1);

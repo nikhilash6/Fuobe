@@ -2,15 +2,18 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, CheckCircle2, CircleHelp, CreditCard, ExternalLink, FlaskConical, Globe, Info, RotateCcw, Search } from "lucide-react";
+import Link from "next/link";
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useProgressive } from "@/components/use-progressive";
+import { useHydrated, useViewer } from "@/lib/api";
 import { kindLabel, LICENCE_CLASSES, CLASS_LABEL, type LicenceClass, type LicenceInfo } from "@/lib/licences";
 import { allOn, applyChange, type AccessChange, type AccessList, type LoraInfo, type ModelAccess, type ModelEntry, type PackInfo } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
+import { responseError } from "@/lib/refusals";
 
 /** Settings → Models & licences: every model, LoRA and node pack with its licence, and the switches. */
 
@@ -125,7 +128,7 @@ const chip = (active: boolean) =>
 
 const ENGINE_WORDS: Record<string, string> = { open: "Open source", cloud: "Cloud" };
 
-function ModelRow({ m, on, onChange }: { m: ModelEntry; on: boolean; onChange: (on: boolean) => void }) {
+function ModelRow({ m, on, onChange, disabled }: { m: ModelEntry; on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
   const id = `model-${m.id}`;
   const runs = on && !m.offBy.length;
   return (
@@ -144,7 +147,7 @@ function ModelRow({ m, on, onChange }: { m: ModelEntry; on: boolean; onChange: (
         {on && m.offBy.length > 0 && <p className="mt-1 text-[12px] font-medium text-warning">Not offered: {m.offBy.join(" and ")}</p>}
         {on && m.partly.length > 0 && <p className="mt-1 text-[12px] text-muted-foreground">Partly: {m.partly.join(" and ")}, so it runs on what is still on</p>}
       </div>
-      <Switch id={id} className="mt-1" checked={on} onCheckedChange={onChange} aria-describedby={runs ? undefined : `${id}-state`} />
+      <Switch id={id} className="mt-1" checked={on} onCheckedChange={onChange} disabled={disabled} aria-describedby={runs ? undefined : `${id}-state`} />
       {!runs && (
         <span id={`${id}-state`} className="sr-only">
           {on ? "on, but not offered" : "off"}
@@ -154,7 +157,7 @@ function ModelRow({ m, on, onChange }: { m: ModelEntry; on: boolean; onChange: (
   );
 }
 
-function LoraRow({ l, on, onChange }: { l: LoraInfo; on: boolean; onChange: (on: boolean) => void }) {
+function LoraRow({ l, on, onChange, disabled }: { l: LoraInfo; on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
   const id = `lora-${l.file}`;
   return (
     <li className="flex items-start gap-3 py-3.5">
@@ -167,12 +170,12 @@ function LoraRow({ l, on, onChange }: { l: LoraInfo; on: boolean; onChange: (on:
         </p>
         <LicenceLine licence={l.licence} />
       </div>
-      <Switch id={id} className="mt-1" checked={on} onCheckedChange={onChange} />
+      <Switch id={id} className="mt-1" checked={on} onCheckedChange={onChange} disabled={disabled} />
     </li>
   );
 }
 
-function PackRow({ p, on, onChange }: { p: PackInfo; on: boolean; onChange: (on: boolean) => void }) {
+function PackRow({ p, on, onChange, disabled }: { p: PackInfo; on: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
   const id = `pack-${p.name}`;
   return (
     <li className="flex items-start gap-3 py-3.5">
@@ -186,12 +189,32 @@ function PackRow({ p, on, onChange }: { p: PackInfo; on: boolean; onChange: (on:
         </p>
         <LicenceLine licence={p.licence} />
       </div>
-      <Switch id={id} className="mt-1" checked={on} onCheckedChange={onChange} />
+      <Switch id={id} className="mt-1" checked={on} onCheckedChange={onChange} disabled={disabled} />
     </li>
   );
 }
 
 const matches = (q: string, ...texts: (string | undefined)[]) => !q || texts.some((t) => t?.toLowerCase().includes(q));
+
+/** The page's line under its title. The owner decides what this install offers; anyone else reads what it does. */
+export function ModelAccessIntro() {
+  const hydrated = useHydrated();
+  const v = useViewer().data;
+  const known = hydrated && v;
+  return (
+    <>
+      Every model, LoRA and node pack Fuobe can run, with its licence: paid and open, commercial or not.{" "}
+      {known &&
+        (v.owner
+          ? "Licences are information here; you decide what this install offers. Everything is on until you switch it off, and what is off leaves every picker and is refused on the server. "
+          : "What is switched off leaves every picker. ")}
+      <Link href="/settings/about" className="text-brand-text underline-offset-2 hover:underline">
+        About &amp; licences
+      </Link>{" "}
+      has the notices and a link to each open model&apos;s licence.
+    </>
+  );
+}
 
 export function ModelAccessView() {
   const qc = useQueryClient();
@@ -208,7 +231,7 @@ export function ModelAccessView() {
     mutationFn: async (changes: AccessChange[]) => {
       const res = await fetch("/api/settings/models", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ changes }) });
       const body = (await res.json().catch(() => ({}))) as Partial<AccessList> & { error?: string };
-      if (!res.ok || !body.access) throw new Error(body.error ?? `The switch didn't save (${res.status})`);
+      if (!res.ok || !body.access) throw responseError(res, body.error ?? `The switch didn't save (${res.status})`);
       return body as AccessList;
     },
     // The switch moves at once; the server's answer brings what else changed (models now off, counts).
@@ -226,7 +249,11 @@ export function ModelAccessView() {
     // Pickers, ⌘K and the Models page read what is off from the status.
     onSettled: () => void qc.invalidateQueries({ queryKey: ["status"] }),
   });
-  const flip = (c: AccessChange) => change.mutate([c]);
+  // The switches are the owner's: anyone else reads them (the server would refuse a change anyway).
+  const owner = useViewer().data?.owner === true;
+  const flip = (c: AccessChange) => {
+    if (owner) change.mutate([c]);
+  };
 
   const [tab, setTab] = useState<Tab>("models");
   const [show, setShow] = useState<Show>("all");
@@ -273,7 +300,9 @@ export function ModelAccessView() {
   const offLoras = data.loras.filter((l) => access.loras.includes(l.file) || access.classes.includes(l.licence.class)).length;
   // What the switches do, each said once: models that no longer run, LoRAs left out, and the GPU-only LoRA rule.
   const summary = allOn(access)
-    ? "Everything is on. Switch off what this install shouldn't offer: it leaves the pickers and the server refuses it."
+    ? owner
+      ? "Everything is on. Switch off what this install shouldn't offer: it leaves the pickers and the server refuses it."
+      : "Everything is on."
     : [
         offModels ? `${offModels} ${offModels === 1 ? "model is" : "models are"} turned off by the switches below` : "Every model still runs",
         offLoras > 0 && `${offLoras} ${offLoras === 1 ? "LoRA is" : "LoRAs are"} left out of runs`,
@@ -303,8 +332,9 @@ export function ModelAccessView() {
             {data.models.length - offModels} of {data.models.length} models offered
           </p>
           <p className="mt-0.5 text-[13px] text-muted-foreground">{summary}</p>
+          {!owner && <p className="mt-0.5 text-[13px] text-muted-foreground">The studio&apos;s owner chooses what this install offers.</p>}
         </div>
-        {!allOn(access) && (
+        {owner && !allOn(access) && (
           <Button variant="secondary" size="sm" className="h-9 shrink-0 self-start sm:self-center" onClick={() => flip({ kind: "reset" })} disabled={change.isPending}>
             <RotateCcw /> Back to the defaults
           </Button>
@@ -316,7 +346,8 @@ export function ModelAccessView() {
           By licence
         </h2>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Switch off a whole kind of licence at once: the models and LoRAs under it. A model whose cloud and GPU halves differ keeps the half that is on. Node packs have their own switches below.
+          {owner && "Switch off a whole kind of licence at once: the models and LoRAs under it. A model whose cloud and GPU halves differ keeps the half that is on. Node packs have their own switches below. "}
+          The counts are the {data.models.length} models in Fuobe&apos;s catalog, open and paid: one that runs both on a GPU and in the cloud counts under each of its licences.
         </p>
         <ul className="mt-1 divide-y">
           {data.classes.map((c) => (
@@ -328,6 +359,7 @@ export function ModelAccessView() {
               hint={c.hint}
               checked={!access.classes.includes(c.id)}
               onChange={(on) => flip({ kind: "class", id: c.id, on })}
+              disabled={!owner}
             />
           ))}
         </ul>
@@ -347,6 +379,7 @@ export function ModelAccessView() {
               count={`· ${p.models} ${p.models === 1 ? "model" : "models"}`}
               checked={!access.providers.includes(p.id)}
               onChange={(on) => flip({ kind: "provider", id: p.id, on })}
+              disabled={!owner}
             />
           ))}
         </ul>
@@ -363,6 +396,7 @@ export function ModelAccessView() {
             hint="Some civitai LoRAs allow commercial use but not running them on another hosted service (no “Rent” permission). Off: they go to fal.ai or Replicate like any other LoRA, and the run says so. On: cloud runs leave them out."
             checked={access.keepGpuOnlyLoras}
             onChange={(on) => flip({ kind: "keepGpuOnlyLoras", on })}
+            disabled={!owner}
           />
         </ul>
       </section>
@@ -411,7 +445,7 @@ export function ModelAccessView() {
               </h3>
               <ul className="divide-y">
                 {g.items.map((m) => (
-                  <ModelRow key={m.id} m={m} on={modelOn(m)} onChange={(on) => flip({ kind: "model", id: m.id, on })} />
+                  <ModelRow key={m.id} m={m} on={modelOn(m)} onChange={(on) => flip({ kind: "model", id: m.id, on })} disabled={!owner} />
                 ))}
               </ul>
             </Fragment>
@@ -419,14 +453,14 @@ export function ModelAccessView() {
         {tab === "loras" && (
           <ul className="divide-y">
             {loras.slice(0, shown).map((l) => (
-              <LoraRow key={l.file} l={l} on={!access.loras.includes(l.file)} onChange={(on) => flip({ kind: "lora", id: l.file, on })} />
+              <LoraRow key={l.file} l={l} on={!access.loras.includes(l.file)} onChange={(on) => flip({ kind: "lora", id: l.file, on })} disabled={!owner} />
             ))}
           </ul>
         )}
         {tab === "packs" && (
           <ul className="divide-y">
             {packs.slice(0, shown).map((p) => (
-              <PackRow key={p.name} p={p} on={!access.packs.includes(p.name)} onChange={(on) => flip({ kind: "pack", id: p.name, on })} />
+              <PackRow key={p.name} p={p} on={!access.packs.includes(p.name)} onChange={(on) => flip({ kind: "pack", id: p.name, on })} disabled={!owner} />
             ))}
           </ul>
         )}

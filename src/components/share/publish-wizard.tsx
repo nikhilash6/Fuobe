@@ -16,6 +16,7 @@ import { userTitle } from "@/lib/library";
 import { shownOutputs } from "@/lib/output-actions";
 import { MAX_PUBLISH_ITEMS, MAX_TAGS, moveItem, parseTags, pieces, PUBLISH_LAYOUTS, type ShareCreated, type ShareLayout } from "@/lib/share";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { ExpiryPicker } from "./share-dialog";
 
 const STEPS = ["Details", "Assets", "Cover", "Access"] as const;
@@ -60,7 +61,7 @@ export function PublishWizard({ items, onClose, onPublished }: { items: Generati
         await actions.create({ kind: "publish", items: order.map((g) => g.id), title, description, tags, layout, cover: coverOf, showPrompts, expiresInDays: days }),
       );
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }

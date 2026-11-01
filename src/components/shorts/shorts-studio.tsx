@@ -6,9 +6,10 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
-import { useEngine, useModelAccess } from "@/lib/api";
+import { useEngine, useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import {
   clipShapeProblem,
   rangeProblem,
@@ -27,6 +28,7 @@ import type { Engine } from "@/lib/catalog/types";
 import type { TrimRange } from "@/lib/trim-range";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { CustomPresetDialog } from "./custom-preset-dialog";
 import { useShortsActions, useShortsEstimate, useShortsPresets, useSubmitGuard, type ShortsBody } from "./hooks";
 import { CreateCard, CustomCard, LookCard } from "./preset-card";
@@ -50,6 +52,9 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
   const source = useSourceClip(SHORTS.maxBytes);
   const { clip } = source;
   const [range, setRange] = useState<TrimRange | null>(null);
+  // A short doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // upload and Generate are off, instead of a run the server refuses.
+  const visitor = useLikelyVisitor();
 
   // Hand-offs: /shorts?tab=history, ?preset=shorts-claymation, ?video=/api/files/….
   useEffect(() => {
@@ -77,8 +82,8 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
     <div className="flex min-h-svh min-w-0 flex-col">
       <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
         <SidebarTrigger className="md:hidden" />
-        <h1 className="truncate font-heading text-[22px] leading-none">Shorts Studio</h1>
-        <div role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} className="ml-2 flex h-8 items-center rounded-full bg-muted p-0.5 sm:ml-4">
+        <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">Shorts Studio</h1>
+        <div role="tablist" aria-label="Shorts Studio" onKeyDown={tabKeys} className="ml-2 flex h-8 shrink-0 items-center rounded-full bg-muted p-0.5 sm:ml-4">
           {(["presets", "history"] as const).map((t) => (
             <button
               key={t}
@@ -93,8 +98,9 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
             </button>
           ))}
         </div>
-        <div className="ml-auto">
-          <EngineSwitch value={engine} onChange={setEngine} />
+        <div className="ml-auto shrink-0">
+          {/* A phone's header has room for the title and the tabs, not "Add key" too. */}
+          <EngineSwitch value={engine} onChange={setEngine} wordless selfHostedOnly />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">
@@ -108,9 +114,11 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
               <p className="mx-auto mt-2 max-w-[560px] text-body text-pretty text-muted-foreground">
                 Upload a clip, pick a look, get a finished short. Motion stays yours — up to 2 minutes in, cut into segments and stitched back under your sound.
               </p>
+              {visitor && <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Shorts Studio runs on a self-hosted Fuobe for now.</SelfHostNote>}
               <Steps steps={STEPS} current={!presetId ? 0 : !clip?.url ? 1 : 1} className="mt-5" />
             </div>
             <Workspace
+              visitor={visitor}
               engine={engine}
               models={engineModels}
               presetId={presetId}
@@ -127,6 +135,7 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
 }
 
 function Workspace({
+  visitor,
   engine,
   models,
   presetId,
@@ -135,6 +144,7 @@ function Workspace({
   range,
   setRange,
 }: {
+  visitor: boolean;
   engine: Engine;
   models: ModelChoice[];
   presetId: string | null;
@@ -149,6 +159,9 @@ function Workspace({
   const selectedBuiltIn = SHORTS_PRESETS.find((p) => p.id === presetId);
   const selectedCustom = custom.data?.find((p) => p.id === presetId);
   const selectedName = selectedBuiltIn?.name ?? selectedCustom?.name;
+  // A preset of your own is saved to the studio's library, which is its owner's: its card shows once that's known, so
+  // a visitor never sees it in the grid and then gone.
+  const isOwner = useIsOwner();
 
   // Phones: after picking a look, a bar points down to the upload step until it's on screen.
   const [setupVisible, setSetupVisible] = useState(false);
@@ -167,12 +180,13 @@ function Workspace({
           custom={custom.data ?? []}
           presetId={presetId}
           onSelect={setPresetId}
-          onCreate={() => setDialog({ open: true })}
+          onCreate={isOwner ? () => setDialog({ open: true }) : undefined}
           onEdit={(id) => setDialog({ open: true, preset: custom.data?.find((p) => p.id === id) })}
         />
       </section>
       <aside ref={setup} id="shorts-setup" aria-labelledby="shorts-step-2" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-16 lg:max-h-[calc(100svh-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
         <SetupPanel
+          visitor={visitor}
           engine={engine}
           models={models}
           presetId={presetId}
@@ -214,7 +228,8 @@ function PresetGrid({
   custom: ShortsCustomPreset[];
   presetId: string | null;
   onSelect: (id: string) => void;
-  onCreate: () => void;
+  /** None for a guest or an account: no "Create preset" card. */
+  onCreate?: () => void;
   onEdit: (id: string) => void;
 }) {
   const [q, setQ] = useState("");
@@ -265,7 +280,7 @@ function PresetGrid({
         ))}
       </div>
       <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-4">
-        {!query && (cat === "All" || cat === CUSTOM) && <CreateCard onClick={onCreate} />}
+        {onCreate && !query && (cat === "All" || cat === CUSTOM) && <CreateCard onClick={onCreate} />}
         {mine.map((p) => (
           <CustomCard key={p.id} {...p} selected={presetId === p.id} onSelect={onSelect} onEdit={onEdit} />
         ))}
@@ -289,6 +304,7 @@ function PresetGrid({
 const LIMITS = "MP4 or MOV · 4 s to 2 min · up to 200 MB";
 
 function SetupPanel({
+  visitor,
   engine,
   models,
   presetId,
@@ -299,6 +315,8 @@ function SetupPanel({
   range,
   setRange,
 }: {
+  /** A guest or an account: the upload and Generate are off (the page says shorts run on a self-hosted Fuobe). */
+  visitor: boolean;
   engine: Engine;
   models: ModelChoice[];
   presetId: string | null;
@@ -322,6 +340,8 @@ function SetupPanel({
   const pickedOn = models.some((m) => m.id === pickedModel[engine]) ? pickedModel[engine] : "";
   const modelId = pickedOn || (customRefs > 0 && engine === "cloud" && refModel ? refModel : models[0]?.id);
   const model = models.find((m) => m.id === modelId);
+  // An open model is free on a self-hosted Fuobe: a guest or an account reads that, not "your GPU".
+  const priceOf = (m?: ModelChoice) => (visitor && m?.engine === "open" ? "Self-hosted only" : m?.price);
   const duration = clipDuration(clip);
   const actions = useShortsActions();
   const presetType = SHORTS_PRESETS.find((p) => p.id === presetId)?.type;
@@ -350,7 +370,7 @@ function SetupPanel({
   const estimate = useShortsEstimate(estimateBody);
   const est = estimate.data;
 
-  const blocker = !presetId
+  const setupBlocker = !presetId
     ? "Pick a preset first"
     : !clip
       ? "Upload a video"
@@ -369,6 +389,7 @@ function SetupPanel({
                 : estimate.error
                   ? (estimate.error as Error).message
                   : null;
+  const blocker = visitor ? "Shorts Studio runs on a self-hosted Fuobe for now" : setupBlocker;
 
   const guard = useSubmitGuard();
   const [leaving, setLeaving] = useState(false);
@@ -384,7 +405,7 @@ function SetupPanel({
         setLeaving(true);
         router.push(`/shorts/${s.id}`);
       })
-      .catch((e: Error) => toast.error(e.message));
+      .catch((e: Error) => toastError(e));
   };
 
   return (
@@ -408,6 +429,7 @@ function SetupPanel({
         <ClipDrop
           accept={SHORTS.accept}
           limits={LIMITS}
+          disabled={visitor}
           onFile={(f) => {
             const err = source.pick(f);
             if (err) toast.error(err);
@@ -472,7 +494,7 @@ function SetupPanel({
               <SelectValue>
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate">{model?.name}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{model?.price}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{priceOf(model)}</span>
                 </span>
               </SelectValue>
             </SelectTrigger>
@@ -481,7 +503,7 @@ function SetupPanel({
                 <SelectItem key={m.id} value={m.id}>
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate">{m.name}</span>
-                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{m.price}</span>
+                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{priceOf(m)}</span>
                     {m.refs > 0 && <span className="shrink-0 rounded bg-brand-faint px-1 text-[10px] text-brand-text">refs</span>}
                   </span>
                 </SelectItem>
@@ -490,13 +512,13 @@ function SetupPanel({
           </Select>
         ) : (
           <div className="rounded-lg border px-3 py-2 text-[13px]">
-            <span className="font-medium">{model?.name ?? "—"}</span> <span className="text-muted-foreground">· {model?.price}</span>
+            <span className="font-medium">{model?.name ?? "—"}</span> <span className="text-muted-foreground">· {priceOf(model)}</span>
           </div>
         )}
         {model && (
           <p className="text-[12px] leading-snug text-muted-foreground">
             {engine === "open"
-              ? "Each ≤5 s segment: its first frame is restyled with Qwen-Image-Edit, then Wan 2.2 Fun VACE follows it and the clip's depth."
+              ? "Each ≤5 s segment: its first frame is restyled with Qwen-Image 2.1 Turbo, then Wan 2.2 Fun VACE follows it and the clip's depth."
               : model.id === SHORTS_ORIGINAL
                 ? "Fuobe Original · each segment's first frame is drawn in the look (Qwen-Image-Edit 2511), then Wan 2.2 Fun VACE carries it through every frame by depth, on open weights hosted by fal."
                 : model.tagline}
@@ -515,7 +537,7 @@ function SetupPanel({
           <span className="text-[13px] text-muted-foreground">{est ? `${est.segments} segment${est.segments === 1 ? "" : "s"} · ${est.seconds} s` : "Estimate"}</span>
           <span className="flex items-center gap-1.5 font-mono text-[13px] font-medium tabular-nums" aria-live="polite">
             {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-            {estimateBody ? costText(est, engine) : "—"}
+            {estimateBody ? costText(est, engine, visitor) : "—"}
           </span>
         </div>
         {est && !est.demo && engine === "cloud" && <p className="text-[12px] text-muted-foreground">You&apos;re only charged for the actual length.</p>}
@@ -534,7 +556,7 @@ function SetupPanel({
         <button
           type="button"
           onClick={generate}
-          disabled={busy}
+          disabled={busy || visitor}
           aria-disabled={!!blocker || busy}
           aria-describedby={blocker ? "shorts-blocker" : undefined}
           className={cn(

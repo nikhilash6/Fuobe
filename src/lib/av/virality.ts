@@ -22,6 +22,7 @@ export const SILENCE_DB = -45;
 
 export const VIRALITY_PARITY = {
   title: "A heuristic hook check, not a prediction",
+  lead: "A quick check of your first 3 seconds: motion, cuts, faces, text and sound, held against common rules of thumb. Useful for spotting a slow opening, not a forecast of views.",
   body: "Higgsfield's Virality Predictor scores videos with Meta's TRIBE v2, a brain-response model released for non-commercial use only (CC BY-NC 4.0). No cloud provider hosts it, so Fuobe shows no virality score. This page measures your first 3 seconds in your browser and holds them against common rules of thumb — useful for spotting a slow opening, not a forecast of views.",
   cloud: "Cloud: no hosted TRIBE v2 model exists to call.",
   open: "Open engine: TRIBE v2 can run on your own GPU as an optional, non-commercial worker; Fuobe doesn't bundle it.",

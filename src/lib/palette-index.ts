@@ -76,13 +76,13 @@ const TOOL_PAGES: [string, Operation][] = [
 /**
  * Where a model opens: the first studio that offers it, Image to 3D, an app that runs it (each with
  * ?model=, which also brings the model's engine), the Layers editor or a tool of its operation, else
- * its row on the Models page (which reads ?q=).
+ * its row on the Models page (which reads ?q=). A model kept out of the pickers (hidden) has no studio to open in.
  */
 export function modelHref(m: ModelDef): string {
   const ops = new Set(m.routes.map((r) => r.op));
   const pick = `?model=${encodeURIComponent(m.id)}`;
   const studio = MODEL_STUDIOS.find(([, c]) => c.kind === m.kind && (c.pickerOps ?? c.ops).some((op) => ops.has(op)));
-  if (studio) return studio[0] + pick;
+  if (studio && !m.hidden) return studio[0] + pick;
   if (IN_3D.has(m.id)) return `/image-to-3d${pick}`;
   const app = APPS.find((a) => a.cloud?.modelId === m.id || a.open?.modelId === m.id);
   if (app) return `/apps/${app.id}${pick}`;

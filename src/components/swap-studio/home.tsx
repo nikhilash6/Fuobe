@@ -10,14 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { EngineSwitch } from "@/components/studio/engine-switch";
-import { useEngine } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEngine, useLikelyVisitor } from "@/lib/api";
 import { characterLicenceLine } from "@/lib/catalog/character-swap";
 import { SWAP_STUDIO, type SwapProjectCard } from "@/lib/catalog/swap-studio";
 import { STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
+import { toastError } from "@/lib/refusals";
+import { cn } from "@/lib/utils";
 import { useCreateSwapProject, useDeleteSwapProject, useSwapProjects } from "./hooks";
 
 const STEPS = [
-  { icon: Film, title: "Clips and your character", text: "Add whole clips (MP4, MOV, MKV, WebM or AVI, up to 149.66 s) and a picture of who comes in." },
+  { icon: Film, title: "Clips and your character", text: "Add whole clips (MP4, MOV, MKV, WebM or AVI, up to 2½ minutes) and a picture of who comes in." },
   { icon: Scissors, title: "Shots and words", text: "Find the edits, keep or replace each shot, transcribe who says what and build the prompts." },
   { icon: UserRound, title: "Who and the scene", text: "Click who to swap on any frame, track the shot, approve a mask and a scene anchor." },
   { icon: Layers, title: "Segments and takes", text: "Render each shot in segments that continue from each other, compare takes, keep the best, assemble." },
@@ -40,27 +43,29 @@ export function SwapStudioHome() {
   const [name, setName] = useState("");
   const [confirm, setConfirm] = useState<SwapProjectCard | null>(null);
   const nameId = useId();
+  // A project is saved to the studio's library, which is its owner's: a guest or an account is told so up front.
+  const visitor = useLikelyVisitor();
 
   const start = () =>
     create.mutate(
       { name: name.trim() || undefined, engine },
       {
         onSuccess: (p) => router.push(`/character-swap/${p.id}`),
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
 
   return (
-    <ToolShell title="Character Swap Studio" engineSwitch={false} header={<EngineSwitch value={engine} onChange={setEngine} />} wide>
+    <ToolShell title="Character Swap Studio" engineSwitch={false} header={<EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />} wide>
       <ToolHero
         title="Swap a character through whole clips"
-        subtitle="Akatz Labs' H3 Character Swap workbench, shot by shot: on your GPU with H3 Relay 2.0 (masks, history, lossless continuations), or in the cloud with fal's MiniMax H3 and the swap LoRA."
+        subtitle="Put your character into whole clips, shot by shot: pick who to swap, check each shot, keep the best take."
       >
         <form
           className="mt-6 flex w-full max-w-lg flex-col gap-2 sm:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
-            start();
+            if (!visitor) start();
           }}
         >
           <label htmlFor={nameId} className="sr-only">
@@ -71,14 +76,16 @@ export function SwapStudioHome() {
             value={name}
             maxLength={SWAP_STUDIO.maxNameChars}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Name the project (“Rain scene, take 2”)"
-            className="h-10 min-w-0 flex-1 rounded-full border bg-background px-4 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            placeholder="Project name, e.g. Rain scene"
+            disabled={visitor}
+            className="h-10 min-w-0 shrink-0 rounded-full border bg-background px-4 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 sm:flex-1"
           />
-          <Button type="submit" className="h-10 rounded-full px-5" disabled={create.isPending}>
+          <Button type="submit" className="h-10 rounded-full px-5" disabled={create.isPending || visitor}>
             {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Drama className="size-4" />}
-            New project · {engine === "open" ? "your GPU" : "cloud"}
+            {visitor ? "New project" : `New project · ${engine === "open" ? "your GPU" : "cloud"}`}
           </Button>
         </form>
+        {visitor && <SelfHostNote className="mt-3 max-w-lg">Character Swap runs on a self-hosted Fuobe for now.</SelfHostNote>}
       </ToolHero>
 
       <ol className="mx-auto mt-8 grid max-w-[1040px] gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="How it works">
@@ -95,7 +102,8 @@ export function SwapStudioHome() {
         ))}
       </ol>
 
-      <section className="mt-8" aria-labelledby="swap-projects">
+      {/* A guest or an account has no projects here and can't make one (the note above says why). */}
+      <section className={cn("mt-8", visitor && "hidden")} aria-labelledby="swap-projects">
         <h2 id="swap-projects" className="mb-3 text-[15px] font-semibold">
           Projects
         </h2>
@@ -142,12 +150,15 @@ export function SwapStudioHome() {
         )}
       </section>
 
-      <Panel title="Licences" className="mt-8">
-        <ul className="space-y-1 text-[12px] text-pretty text-muted-foreground">
-          <li>Your GPU: {characterLicenceLine("open", STUDIO_MODELS.open.swap)}</li>
-          <li>Cloud: {characterLicenceLine("cloud", STUDIO_MODELS.cloud.swap)}</li>
-          <li>The workbench follows Akatz Labs&apos; H3 Character Swap tool (MIT); its prompts are reused with that notice. The swap LoRA releases are Akatz Labs&apos;.</li>
-        </ul>
+      <Panel className="mt-8">
+        <details>
+          <summary className="cursor-pointer text-[13px] font-semibold">Models and licences</summary>
+          <ul className="mt-2 space-y-1 text-[12px] text-pretty text-muted-foreground">
+            <li>The workbench follows Akatz Labs&apos; H3 Character Swap tool (MIT): H3 Relay 2.0 on your GPU (masks, history, lossless continuations), or fal&apos;s MiniMax H3 with the swap LoRA in the cloud. Its prompts are reused with that notice; the swap LoRA releases are Akatz Labs&apos;.</li>
+            <li>Your GPU: {characterLicenceLine("open", STUDIO_MODELS.open.swap)}</li>
+            <li>Cloud: {characterLicenceLine("cloud", STUDIO_MODELS.cloud.swap)}</li>
+          </ul>
+        </details>
         <Link href="/genjutsu?mode=character" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
           <Sparkles className="size-3.5" /> One quick swap of one part instead? Genjutsu → Character swap <ArrowRight className="size-3.5" />
         </Link>
@@ -166,7 +177,7 @@ export function SwapStudioHome() {
                 confirm &&
                 del.mutate(confirm.id, {
                   onSuccess: () => toast("Project deleted"),
-                  onError: (e) => toast.error((e as Error).message),
+                  onError: (e) => toastError(e),
                 })
               }
             >

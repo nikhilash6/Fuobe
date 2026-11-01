@@ -104,8 +104,12 @@ const PING_MS = 15_000;
  * A server-sent events stream of generation changes: `event: generation` (the Generation JSON,
  * exactly as GET /api/generations returns it), `event: deleted` ({"id"}), `: ping` every 15 s.
  * The listener and the ping are removed as soon as the client goes away.
+ *
+ * `allowed`: whether whoever opened the stream may still read it, asked before every event and on every ping (`ping`
+ * true: look again even when nothing changed, so a sign-in that expires is caught too). The stream ends at the first
+ * no: a sign-in ended by Sign everyone out, a new password or a revoked token never receives another event.
  */
-export function generationEventStream(signal: AbortSignal, opts: { pingMs?: number } = {}): Response {
+export function generationEventStream(signal: AbortSignal, opts: { pingMs?: number; allowed?: (ping: boolean) => boolean } = {}): Response {
   let stop = () => {};
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -118,8 +122,20 @@ export function generationEventStream(signal: AbortSignal, opts: { pingMs?: numb
           stop();
         }
       };
-      const off = subscribe((e) => send(`event: ${e.type}\ndata: ${e.json}\n\n`));
-      const ping = setInterval(() => send(": ping\n\n"), opts.pingMs ?? PING_MS);
+      const still = (ping: boolean) => {
+        let ok = false;
+        try {
+          ok = !opts.allowed || opts.allowed(ping);
+        } catch {}
+        if (!ok) stop();
+        return ok;
+      };
+      const off = subscribe((e) => {
+        if (still(false)) send(`event: ${e.type}\ndata: ${e.json}\n\n`);
+      });
+      const ping = setInterval(() => {
+        if (still(true)) send(": ping\n\n");
+      }, opts.pingMs ?? PING_MS);
       stop = () => {
         if (!open) return;
         open = false;

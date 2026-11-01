@@ -1,7 +1,7 @@
 /**
  * Studio hubs: Audio, Video tools and Upscale group several studios, one path per mode
  * (/audio/music, /video-tools/join, /upscale/video, /upscale/fps). The hub's own path is its first mode.
- * Pure data (client and server). Old `/audio?mode=music` links redirect in next.config.ts.
+ * Pure data (client and server). Old `/audio?mode=music` links redirect in src/proxy.ts (hubModeLink).
  */
 export type HubKind = "audio" | "video-tools" | "upscale";
 

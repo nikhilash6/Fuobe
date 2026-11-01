@@ -1,0 +1,194 @@
+{
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 1234,
+      "steps": 30,
+      "cfg": 5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "37",
+        0
+      ],
+      "positive": [
+        "112",
+        0
+      ],
+      "negative": [
+        "112",
+        1
+      ],
+      "latent_image": [
+        "112",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "37": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "fibo2_dev_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "38": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_4b_int8_convrot.safetensors",
+      "type": "fibo2",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "39": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "56": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "fuobe/fibo2-dev-edit",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "112": {
+    "class_type": "TextEncodeFibo2",
+    "inputs": {
+      "clip": [
+        "38",
+        0
+      ],
+      "prompt": "",
+      "negative_prompt": "",
+      "images.image_1": [
+        "115",
+        0
+      ],
+      "images.image_2": [
+        "116",
+        0
+      ],
+      "images.image_3": [
+        "117",
+        0
+      ],
+      "images.image_4": [
+        "118",
+        0
+      ],
+      "width": 0,
+      "height": 0,
+      "batch_size": 1,
+      "vae": [
+        "39",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "TextEncodeFibo2 (prompt)"
+    }
+  },
+  "113": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "input.png"
+    },
+    "_meta": {
+      "title": "Picture to edit (image)"
+    }
+  },
+  "114": {
+    "class_type": "ResizeImageMaskNode",
+    "inputs": {
+      "input": [
+        "113",
+        0
+      ],
+      "resize_type": "scale total pixels",
+      "resize_type.megapixels": 1,
+      "scale_method": "bicubic"
+    },
+    "_meta": {
+      "title": "Scale to 1 MP"
+    }
+  },
+  "115": {
+    "class_type": "ResizeImageMaskNode",
+    "inputs": {
+      "input": [
+        "114",
+        0
+      ],
+      "resize_type": "scale to multiple",
+      "resize_type.multiple": 16,
+      "scale_method": "bicubic"
+    },
+    "_meta": {
+      "title": "Scale to a multiple of 16"
+    }
+  },
+  "116": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "input.png"
+    },
+    "_meta": {
+      "title": "Reference 2 (image2)"
+    }
+  },
+  "117": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "input.png"
+    },
+    "_meta": {
+      "title": "Reference 3 (image3)"
+    }
+  },
+  "118": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "input.png"
+    },
+    "_meta": {
+      "title": "Reference 4 (image4)"
+    }
+  }
+}

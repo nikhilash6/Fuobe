@@ -25,7 +25,7 @@ import {
 import type { PlanStep } from "@/lib/catalog/shorts";
 import type { Engine, GenParams, Generation, PixelPoint } from "@/lib/catalog/types";
 import { createPipeline } from "./chains";
-import { previewChained } from "./generations";
+import { ConnectComfyError, previewChained } from "./generations";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { isOffered, offeredLoras } from "./model-access";
 import { decodePng } from "./png";
@@ -206,12 +206,12 @@ async function planInput(body: RemovalBody, opts: { probe: boolean; preview?: bo
     }
     if (eraser.cleanFrame) {
       notes.push(
-        "Qwen-Image-Edit first makes a clean copy of the part's first frame with the person gone; MiniMax H3 with Akatz Labs' Person Remover LoRA then rebuilds what was behind them, 22 frames at a time from it, and the clip's sound goes back on",
+        "Qwen-Image 2.1 first makes a clean copy of the part's first frame with the person gone; MiniMax H3 with Akatz Labs' Person Remover LoRA then rebuilds what was behind them, 22 frames at a time from it, and the clip's sound goes back on",
         "People only — for an object, pick Wan 2.1 VACE + SAM 3.1",
         "Needs the H3 Relay nodes on your ComfyUI (scripts/comfy/install-comfyui.sh with H3_RELAY=1) and 24 GB of VRAM with offloading (64–128 GB of RAM); the part runs at 24 fps",
         characterLicenceLine("open", "fuobe-character-swap").replace("nodes GPL-3.0", "H3 Relay nodes GPL-3.0"),
       );
-    } else notes.push(eraser.effects ? "VOID needs a 24–40 GB GPU (unverified). Its CogVideoX base is licensed for commercial use only after registering, up to 1 million visits a month" : "Wan 2.1 VACE 14B needs a 24 GB GPU · Apache-2.0 (SAM 3.1: Meta's SAM License)");
+    } else notes.push(eraser.effects ? "VOID needs a 24–40 GB GPU. Its CogVideoX base is licensed for commercial use only after registering, up to 1 million visits a month" : "Wan 2.1 VACE 14B needs a 24 GB GPU · Apache-2.0 (SAM 3.1: Meta's SAM License)");
   } else {
     const max = pieceSeconds(eraser, source.fps);
     const limit = eraser.window ? `up to ${eraser.window.cap} frames (${max.toFixed(1)} s of this clip)` : max < 5 ? "clips under 5 s" : `up to ${Math.floor(max)} s`;
@@ -252,6 +252,7 @@ function price(steps: PlanStep[], source: RemoveSource): { costUsd: number | nul
     try {
       p = previewChained(withChain(s), s.after?.length ?? 0);
     } catch (e) {
+      if (e instanceof ConnectComfyError) throw e;
       throw new ShortsError((e as Error).message, 422);
     }
     demo ||= p.demo;
@@ -305,6 +306,7 @@ function run(steps: PlanStep[]) {
   try {
     return createPipeline(steps);
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
 }

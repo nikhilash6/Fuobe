@@ -36,16 +36,20 @@ import {
   sceneSpans,
   sceneTiming,
   scriptBrief,
+  scriptSchema,
   scriptSystem,
   splitScript,
   spokenTimes,
   staleSteps,
   styleRefLimit,
+  subjectOf,
   TIMING_PARTS,
   topicsBrief,
+  topicsSchema,
   topicsSystem,
   totalSeconds,
   visualsBrief,
+  visualsSchema,
   visualsSystem,
   withTiming,
   wordsFor,
@@ -75,17 +79,17 @@ import {
   type TopicIdea,
 } from "@/lib/catalog/faceless";
 import { routesFor } from "@/lib/catalog/plan";
+import { pricingAt } from "@/lib/catalog/promo";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { DocxError, docxText } from "./assist/docx";
 import { PdfError, pdfText } from "./assist/pdf";
-import { asSystem } from "./access/actor";
-import { rethrowAccess } from "./access/errors";
-import { rowOwner, runAsOwner } from "./access/permissions";
 import { db } from "./db";
 import { listElements } from "./elements";
-import { cancelGeneration, chooseRoute, createGenerations, getGeneration, previewChained } from "./generations";
+import { connectRefusal } from "./connect-refusal";
+import { cancelGeneration, chooseRoute, ConnectComfyError, createGenerations, getGeneration, previewChained } from "./generations";
 import { provider } from "./providers";
-import { llmBackends, probeOllama } from "./providers/llm";
+import type { JsonSpec } from "./llm";
+import { llmBackends, probeLocal } from "./providers/llm";
 import { fetchRemote } from "./remote-fetch";
 import { engineMode, getSetting } from "./settings";
 import { fileUrl, saveFile } from "./storage";
@@ -197,7 +201,7 @@ function mustEpisode(id: string): FacelessEpisode {
 }
 
 // ---------------------------------------------------------------------------
-// The LLM (the install's own: Claude or Ollama for the cloud engine, Ollama only for the open one)
+// The LLM (the install's own: Claude or a local model for the cloud engine, a local model only for the open one)
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -208,6 +212,8 @@ export interface AskOptions {
   signal?: AbortSignal;
   /** How long to wait for the answer (default 8 minutes: a script on a slow local model). */
   timeoutMs?: number;
+  /** The JSON Schema the answer follows on a local model that supports it (the prompt asks for the same JSON). */
+  json?: JsonSpec;
 }
 
 /** Channel names and topic suggestions are waited for: a slow model gives way to the offline wording. */
@@ -222,11 +228,11 @@ export async function askLlm(engine: Engine, system: string, user: string, o: As
   const model = found && offeredModel(found);
   const route = model?.routes.find((r) => r.op === "write");
   if (!model || !route) return null;
-  await probeOllama();
+  await probeLocal();
   if (!llmBackends(route).length) return null;
   const llm = provider("llm");
   try {
-    const { externalId } = await llm.submit({ generationId: `faceless_${nanoid(6)}`, model, route, input: { prompt: user, extra: { system } } });
+    const { externalId } = await llm.submit({ generationId: `faceless_${nanoid(6)}`, model, route, input: { prompt: user, extra: { system, ...(o.json && { json: o.json }) } } });
     const ctx = { externalId, meta: {}, route, model, createdAt: Date.now() };
     const deadline = Date.now() + (o.timeoutMs ?? 8 * 60_000);
     while (Date.now() < deadline) {
@@ -412,7 +418,8 @@ export function makeAvatar(id: string): Generation {
   const [g] = createGenerations({
     feature: "faceless-avatar",
     modelId: ENGINE_MODELS[engine].still,
-    prompt: `A round channel avatar for a YouTube channel called “${c.name}” (${c.idea}): one bold, simple central emblem, centred on a plain background. Style: ${style.look}. No text or letters.`,
+    // The words name only what the picture shows (the open still model draws any words it is given, and reads no negatives).
+    prompt: `A round channel avatar for a YouTube channel about ${subjectOf(c.idea) || c.name}: one bold, simple pictorial emblem, centred on a plain background. Style: ${style.look}.`,
     params: { aspectRatio: "1:1", numOutputs: 1 },
     title: `${c.name} · avatar`,
   });
@@ -426,7 +433,7 @@ export function makeAvatar(id: string): Generation {
 export async function suggestTopics(input: { idea: string; genre: FacelessGenre; engine: Engine; avoid?: string[]; count?: number; round?: number; reference?: string }): Promise<{ topics: TopicIdea[]; offline: boolean }> {
   const count = Math.max(4, Math.min(6, input.count ?? 5));
   const genre = genreInfo(input.genre);
-  const answer = await askLlm(input.engine, topicsSystem, topicsBrief({ idea: input.idea, genre, count, avoid: input.avoid, reference: input.reference }), { timeoutMs: TOPICS_TIMEOUT_MS });
+  const answer = await askLlm(input.engine, topicsSystem, topicsBrief({ idea: input.idea, genre, count, avoid: input.avoid, reference: input.reference }), { timeoutMs: TOPICS_TIMEOUT_MS, json: topicsSchema(count) });
   const topics = answer ? parseTopics(answer).slice(0, count) : [];
   if (topics.length >= 3) return { topics, offline: false };
   return { topics: offlineTopics(input.idea, genre.id, count, input.round ?? 0, input.avoid), offline: true };
@@ -587,12 +594,12 @@ async function writeScript(id: string, pasted: string, signal: AbortSignal): Pro
   let script: EpisodeScript;
   if (pasted) {
     const blocks = splitScript(pasted);
-    const answer = await askLlm(s.engine, visualsSystem, visualsBrief(blocks, style.name, ep.topic || pasted.slice(0, 200)), ask);
+    const answer = await askLlm(s.engine, visualsSystem, visualsBrief(blocks, style.name, ep.topic || pasted.slice(0, 200)), { ...ask, json: visualsSchema(blocks.length) });
     const visuals = answer ? parseVisuals(answer, blocks.length) : null;
     script = {
       source: "pasted",
       blocks: visuals ? blocks.map((b, i) => ({ ...b, visual: visuals[i].visual, motion: visuals[i].motion || b.motion })) : blocks,
-      ...(!visuals && { offline: true, note: failure ? `Pictures planned offline (${failure}).` : "Pictures planned from your words — connect Claude or Ollama in Settings for better scenes." }),
+      ...(!visuals && { offline: true, note: failure ? `Pictures planned offline (${failure}).` : "Pictures planned from your words — connect Claude or a local model (Ollama, LM Studio or Unsloth Studio) in Settings for better scenes." }),
     };
   } else {
     const topic = ep.topic || textSources[0]?.slice(0, 300) || "this topic";
@@ -609,7 +616,7 @@ async function writeScript(id: string, pasted: string, signal: AbortSignal): Pro
       auto,
       style: s.brief?.script,
     });
-    const answer = await askLlm(s.engine, scriptSystem, brief, ask);
+    const answer = await askLlm(s.engine, scriptSystem, brief, { ...ask, json: scriptSchema(auto ? null : scenes) });
     const parsed = answer ? parseScript(answer) : null;
     if (parsed?.blocks.length) {
       script = { source: "ai", title: parsed.title ?? undefined, blocks: parsed.blocks };
@@ -707,13 +714,17 @@ function demoVoice(): string {
   return saveFile({ data: buf, contentType: "audio/wav", name: "fuobe-demo-voice.wav", source: "upload" }).url;
 }
 
-/** Whether a model's operation would run as a demo right now. */
+/**
+ * Whether a model's operation would run as a placeholder right now. Nothing connected that runs it (placeholders off)
+ * throws the ConnectComfyError, so the caller says to connect something rather than ask for what the real run needs.
+ */
 function runsAsDemo(modelId: string, op: GenerationRequest["op"]): boolean {
   const m = getModel(modelId);
   if (!m || !op) return true;
   try {
     return chooseRoute(routesFor(m, op)).demo;
-  } catch {
+  } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     return false;
   }
 }
@@ -747,6 +758,7 @@ function buildGraph(ep: FacelessEpisode, blocks = ep.script.blocks, stillEdits?:
     return buildEpisodeGraph(graphInput(ep, blocks, stillEdits), getModel);
   } catch (e) {
     if (e instanceof FacelessError) throw e;
+    if (e instanceof ConnectComfyError) throw e;
     throw new FacelessError((e as Error).message, 422);
   }
 }
@@ -762,6 +774,7 @@ function validate(steps: GraphStep[]): void {
     try {
       return { label: s.label, ...previewStep(s) };
     } catch (e) {
+      if (e instanceof ConnectComfyError) throw e;
       throw new FacelessError(`${s.label}: ${(e as Error).message}`, 422);
     }
   });
@@ -794,6 +807,7 @@ function relaunch(graph: GraphStep[], ids: Record<string, string>, rerun: string
     }
   } catch (e) {
     for (const g of made) void cancelGeneration(g.id);
+    if (e instanceof ConnectComfyError) throw e;
     throw new FacelessError((e as Error).message, 422);
   }
   return next;
@@ -1066,8 +1080,13 @@ function upscaleOffer(ep: FacelessEpisode, seconds: number): EpisodeView["upscal
   const modelId = ENGINE_MODELS[ep.settings.engine].upscale;
   const model = modelId ? getModel(modelId) : undefined;
   if (!model) return null;
-  const demo = runsAsDemo(model.id, "upscale-video");
-  const p = model.pricing;
+  let demo = false;
+  try {
+    demo = runsAsDemo(model.id, "upscale-video");
+  } catch {
+    // Nothing connected runs the upscale yet: offered at its price, and the click opens the connect card.
+  }
+  const p = model.pricing && pricingAt(model.pricing);
   const costUsd = demo || model.engine === "open" ? 0 : p?.unit === "megapixel" ? Math.round(p.usd * UPSCALE_MP * UPSCALE_FPS * seconds * 100) / 100 : p?.unit === "second" ? Math.round(p.usd * seconds * 100) / 100 : null;
   return { costUsd, demo };
 }
@@ -1088,6 +1107,7 @@ export function upscaleEpisode(id: string): FacelessEpisode {
       { batchId: ep.plan.batchId, dependsOn: final.id },
     );
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new FacelessError((e as Error).message, 422);
   }
   updateEpisodeRow(id, { plan_json: JSON.stringify({ ...ep.plan, upscaled: g.id } satisfies EpisodePlan) });
@@ -1108,9 +1128,6 @@ function finalOf(ep: FacelessEpisode): Generation | null {
 
 const brokenMessage = (g: Generation | null) =>
   !g ? "A step was deleted — retry to make it again" : g.status === "canceled" ? "A step was cancelled — retry to make it again" : (g.error ?? "A step didn't finish — retry it");
-
-/** Who started an episode (its row's owner). */
-const episodeOwner = (id: string) => rowOwner(db().prepare("SELECT * FROM faceless_episodes WHERE id = ?").get(id) ?? {});
 
 /**
  * The episode's status from its generations (saved when it changes). Once stage one has finished, the
@@ -1133,9 +1150,7 @@ function settle(ep: FacelessEpisode, gens?: Map<string, Generation | null>): Fac
   if (ep.plan.awaiting) {
     if (!active && !broken && ep.status !== "failed") {
       try {
-        // Stage two starts as the person who started the episode, whoever's look noticed stage one had finished; when
-        // they're turned off it doesn't start, and the episode fails saying so.
-        return settle(runAsOwner(episodeOwner(ep.id), () => advance(ep)));
+        return settle(advance(ep));
       } catch (e) {
         status = "failed";
         error = (e as Error).message;
@@ -1162,7 +1177,6 @@ function sweep(): void {
   const rows = db().prepare("SELECT * FROM faceless_episodes WHERE status = 'rendering' AND plan_json LIKE '%\"awaiting\":true%'").all() as EpisodeRow[];
   for (const r of rows) {
     try {
-      // Stage two starts as the person who started the episode (settle).
       settle(toEpisode(r));
     } catch (e) {
       console.warn(`[faceless] couldn't continue ${r.id}: ${(e as Error).message}`);
@@ -1178,8 +1192,7 @@ export function ensureFacelessRunner(): void {
     cur.tick = sweep;
     return;
   }
-  // The server's timer, whichever request started it; each episode then continues as its owner (sweep).
-  const state = { tick: sweep, timer: asSystem(() => setInterval(() => globalThis.__fuobeFacelessRunner?.tick(), SWEEP_MS)) };
+  const state = { tick: sweep, timer: setInterval(() => globalThis.__fuobeFacelessRunner?.tick(), SWEEP_MS) };
   state.timer.unref?.();
   globalThis.__fuobeFacelessRunner = state;
 }
@@ -1534,13 +1547,16 @@ export async function body<S extends z.ZodType>(request: Request, schema: S, mes
   return parsed.data;
 }
 
-/** Turn thrown errors into the API's `{ error }` responses. */
-export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
+/**
+ * Turn thrown errors into the API's `{ error }` responses. With the `request`, a run nothing connected can make opens
+ * the connect card in the owner's browser (src/server/connect-refusal.ts) instead of an error.
+ */
+export async function handle(fn: () => Promise<Response> | Response, request?: Request): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
-    rethrowAccess(e);
     if (e instanceof FacelessError) return Response.json({ error: e.message }, { status: e.status });
+    if (e instanceof ConnectComfyError) return (request && connectRefusal(e, request)) || Response.json({ error: e.message }, { status: 422 });
     console.error("[faceless]", e);
     return Response.json({ error: (e as Error).message || "Something went wrong" }, { status: 500 });
   }

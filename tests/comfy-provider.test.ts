@@ -242,18 +242,11 @@ describe("ComfyUI output mapping", () => {
     expect(outs[3].meta?.cues).toBeUndefined();
   });
 
-  it("reads Save3D's ui['3d'] as a .glb model and the turntable as video", () => {
-    const outs = collectOutputs(
-      done({
-        "322": { "3d": [file("product_00001_.glb", "fuobe")], camera_info: [{ position: { x: 1 } }], model_3d_info: [] },
-        "702": { images: [file("turntable_00001_.mp4")], animated: [true] },
-      }),
-      manifestOf("image-to-3d-trellis2"),
-    );
-    expect(outs.map((o) => [o.kind, o.contentType, o.meta?.role])).toEqual([
-      ["model3d", "model/gltf-binary", undefined],
-      ["video", undefined, "turntable"],
-    ]);
+  it("reads Save3D's ui['3d'] as a .glb model (the turntable is rendered after the job, not in the graph)", () => {
+    for (const id of ["image-to-3d-pixal3d", "image-to-3d-trellis2"]) {
+      const outs = collectOutputs(done({ "322": { "3d": [file("product_00001_.glb", "fuobe")], camera_info: [{ position: { x: 1 } }], model_3d_info: [] } }), manifestOf(id));
+      expect(outs.map((o) => [o.kind, o.contentType, o.meta?.role]), id).toEqual([["model3d", "model/gltf-binary", undefined]]);
+    }
   });
 
   it("returns layers back to front with z, name and a bounding box from alpha (one download each)", async () => {
@@ -361,15 +354,18 @@ describe("ComfyUI uploads and submit", () => {
     expect(mediaInfoFor(await comfyProvider.prepareFile(Buffer.from("\x89PNG...."), "image/png", "a.png"))).toBeUndefined();
   });
 
-  it("names the node pack to install when ComfyUI lacks a node class", async () => {
+  it("names the node pack to install when ComfyUI lacks a node class: the missing class's pack, with a code for Fix it", async () => {
     handler = (url) =>
       url.endsWith("/prompt")
         ? json({ error: { type: "missing_node_type", message: "Node 'Apply Whisper' not found. The custom node may not be installed." }, node_errors: {} }, 400)
         : json({});
     const whisperRoute: ModelRoute = { op: "captions", provider: "comfyui", endpoint: "captions-whisper-burnin" };
-    await expect(
-      comfyProvider.submit({ generationId: "g-np", model, route: whisperRoute, input: { video: "clip.mp4", prompt: "" } }),
-    ).rejects.toThrow("This workflow needs the ComfyUI-VideoHelperSuite + ComfyUI-Whisper node packs on your ComfyUI (see scripts/comfy/README.md)");
+    const err = (await comfyProvider.submit({ generationId: "g-np", model, route: whisperRoute, input: { video: "clip.mp4", prompt: "" } }).then(
+      () => new Error("submitted"),
+      (e: unknown) => e,
+    )) as Error & { fix?: unknown };
+    expect(err.message).toBe("This workflow needs the ComfyUI-Whisper node pack on your ComfyUI (see scripts/comfy/README.md)");
+    expect(err.fix).toEqual({ code: "comfy_missing_node", workflowId: "captions-whisper-burnin", items: [{ class: "Apply Whisper", pack: "ComfyUI-Whisper" }] });
   });
 });
 
@@ -381,7 +377,7 @@ const ROUND3 = [
   "style-ref-uso-flux1", "palette-zimage-hex", "video-trim", "video-segment-resample", "video-restyle-wan22-fun-vace", "mixed-media-zimage-frames",
   "sfx-stable-audio-3-small", "sfx-stable-audio-open", "sfx-hunyuan-foley", "sfx-mmaudio-t2a", "sfx-thinksound", "dub-prepare-separate-transcribe",
   "captions-qwen3-asr", "captions-burnin", "captions-whisper-burnin", "translate-qwen35-textgen", "speech-translate-gemma4", "lipsync-v2v-infinitetalk",
-  "lipsync-latentsync16", "video-mux-audio", "video-mux-audio-replace", "image-to-3d-trellis2", "image-to-3d-hunyuan3d-21", "tryon-flux2-klein-4b",
+  "lipsync-latentsync16", "video-mux-audio", "video-mux-audio-replace", "image-to-3d-pixal3d", "image-to-3d-trellis2", "image-to-3d-hunyuan3d-21", "tryon-flux2-klein-4b",
   "grid-zimage-contact-sheet", "soul-cast-sheet-zimage",
 ];
 const LOADERS: Record<string, string> = { LoadImage: "image", LoadImageMask: "image", LoadVideo: "file", VHS_LoadVideo: "video", LoadAudio: "audio" };

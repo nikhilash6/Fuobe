@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ASSIST_EFFORTS, ASSIST_MODES, MEMORY_CATEGORIES, PROJECT_COLORS } from "@/lib/assist";
+import { ASSIST_EFFORTS, ASSIST_MODES, MEMORY_CATEGORIES, normalizeAgent, PROJECT_COLORS } from "@/lib/assist";
 import { MAX_SCHEDULE_CAP_USD, MAX_SCHEDULE_HOURS, MAX_SCHEDULE_PROMPT } from "@/lib/assist-schedule";
 
 export const AssistMessage = z.object({
@@ -9,8 +9,15 @@ export const AssistMessage = z.object({
 
 export const ModeChoice = z.object({
   mode: z.enum(ASSIST_MODES.map((m) => m.id) as ["free", "smart", "manual"]),
-  agent: z.enum(["claude", "ollama", "offline"]).optional(),
-  model: z.string().max(100).nullish(),
+  // "ollama": the local agent's old name, from browsers that saved a choice before.
+  agent: z
+    .enum(["claude", "hosted", "local", "ollama", "offline"])
+    .optional()
+    .transform((a) => normalizeAgent(a)),
+  // A hosted model's provider (checked against the registry when the choice is resolved).
+  provider: z.string().regex(/^[a-z0-9-]{2,32}$/).nullish(),
+  // LM Studio ids can be long (publisher/model@quant); OpenRouter's say vendor/model:free, Fireworks' accounts/….
+  model: z.string().max(200).nullish(),
   effort: z.enum(ASSIST_EFFORTS.map((e) => e.id) as ["low", "medium", "high", "xhigh", "max"]).nullish(),
 });
 

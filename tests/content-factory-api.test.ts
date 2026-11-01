@@ -203,11 +203,19 @@ describe("prices, Generate here and Next episode", () => {
     // The open engine needs a narrator's voice sample first (in demo mode the demo narrator stands in).
     expect(((await (await estimateRoute.POST(json("POST", { prompt: "x", settings: { ...settings, engine: "open" }, seriesId: series.id, voice: null }))).json()) as SeriesEstimate).demo).toBe(true);
     setSetting("demoMode", "off");
+    const g = globalThis as unknown as { __fuobeComfyReach?: { ok: boolean; at: number; url: string } };
+    const before = g.__fuobeComfyReach;
     try {
-      const open: SeriesEstimate = await (await estimateRoute.POST(json("POST", { prompt: "x", settings: { ...settings, engine: "open" }, seriesId: series.id, voice: null }))).json();
+      const ask = async () => (await (await estimateRoute.POST(json("POST", { prompt: "x", settings: { ...settings, engine: "open" }, seriesId: series.id, voice: null }))).json()) as SeriesEstimate;
+      // Nothing connected: the price says to connect ComfyUI first.
+      expect((await ask()).error).toMatch(/Connect ComfyUI in Settings/);
+      // A ComfyUI that answers: then the voice sample is what's missing.
+      g.__fuobeComfyReach = { ok: true, at: Date.now(), url: "http://127.0.0.1:9" };
+      const open = await ask();
       expect(open.error).toMatch(/narrator's voice/);
       expect(open.analysisPerMinute).toBe(0);
     } finally {
+      g.__fuobeComfyReach = before;
       setSetting("demoMode", "auto");
     }
     // A length outside 30 s – 5 min is refused.

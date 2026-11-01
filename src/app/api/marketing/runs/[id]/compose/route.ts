@@ -1,10 +1,8 @@
 import { z } from "zod";
 import { failure, readBody, saveRunComposite } from "@/server/marketing";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const Body = z.object({
-  url: z.string().startsWith("/api/files/"),
+  url: z.string().startsWith("/api/files/").max(500),
   ratio: z.string().regex(/^\d+:\d+$/),
   text: z.string().max(1000).default(""),
   /** The words as set (kept on the run, so "Edit text" opens with them). */
@@ -14,14 +12,13 @@ const Body = z.object({
 });
 
 /** Save a result with its words set in the browser (an uploaded PNG: open models, Fuobe Marketing Image) to the Library. */
-export const POST = handler({ access: "signed-in" }, async (request: Request, ctx: RouteContext<"/api/marketing/runs/[id]/compose">) => {
+export async function POST(request: Request, ctx: RouteContext<"/api/marketing/runs/[id]/compose">) {
   const { id } = await ctx.params;
   const body = await readBody(request, Body, "Upload the image first");
   if (body instanceof Response) return body;
   try {
     return Response.json(saveRunComposite(id, body), { status: 201 });
   } catch (e) {
-    rethrowAccess(e);
     return (e as Error).message === "Not found" ? Response.json({ error: "Not found" }, { status: 404 }) : failure(e);
   }
-});
+}

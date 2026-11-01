@@ -1,8 +1,10 @@
 import "server-only";
 import { loraEndpointFor } from "@/lib/catalog/loras";
 import { buildPayload, extractOutputs, noOutputsError } from "@/lib/catalog/payload";
-import { getSetting } from "../settings";
+import { accountKeyError, balanceRefusal, cloudKey, missingKeyError, originOf, redactKey, standIn } from "../provider-keys";
 import { toDataUri } from "../storage";
+import { tenant } from "../tenant";
+import type { KeyCheck } from "./fal";
 import { ProviderError, type ProviderAdapter } from "./types";
 
 /**
@@ -11,17 +13,27 @@ import { ProviderError, type ProviderAdapter } from "./types";
  *   POST /v1/predictions { version, input }                  (endpoint "owner/name:version")
  *   GET  /v1/predictions/{id}  → { status: starting|processing|succeeded|failed|canceled, output, error, logs }
  *   POST /v1/predictions/{id}/cancel
+ *
+ * The token is the run's own (provider-keys.ts cloudKey: an account's run sends its own token, never the studio's), and
+ * it goes to Replicate's API only.
  */
-const API = "https://api.replicate.com/v1";
+const HOST = "https://api.replicate.com";
+
+/** Replicate's API: the real one, or a stand-in on this machine in tests and `next dev` (provider-keys.ts standIn). */
+const api = () => `${standIn("replicate") ?? HOST}/v1`;
 
 function token(): string {
-  return getSetting("replicateToken");
+  return cloudKey("replicate");
 }
 
 async function rFetch(url: string, init: RequestInit = {}): Promise<unknown> {
+  const t = token();
+  if (!t && tenant()) throw missingKeyError("replicate");
+  const origin = originOf(url);
+  if (origin !== HOST && origin !== standIn("replicate")) throw new ProviderError("That address is outside Replicate, so Fuobe didn't send the token there");
   const res = await fetch(url, {
     ...init,
-    headers: { Authorization: `Bearer ${token()}`, ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(init.headers ?? {}) },
+    headers: { Authorization: `Bearer ${t}`, ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(init.headers ?? {}) },
   });
   const text = await res.text();
   let body: unknown = text;
@@ -30,7 +42,9 @@ async function rFetch(url: string, init: RequestInit = {}): Promise<unknown> {
   } catch {}
   if (!res.ok) {
     const b = body as { detail?: string; title?: string };
-    throw new ProviderError(`replicate ${res.status}: ${b?.detail ?? b?.title ?? String(text).slice(0, 300)}`, res.status);
+    // A provider's error may echo the request: the token never reaches a message, a row or a log.
+    const said = redactKey(`replicate ${res.status}: ${b?.detail ?? b?.title ?? String(text).slice(0, 300)}`, t);
+    throw accountKeyError("replicate", res.status, said, t) ?? new ProviderError(said, res.status);
   }
   return body;
 }
@@ -44,7 +58,7 @@ export const replicateProvider: ProviderAdapter = {
     if (data.length < 1_000_000) return toDataUri(data, contentType);
     const form = new FormData();
     form.append("content", new Blob([new Uint8Array(data)], { type: contentType }), name);
-    const file = (await rFetch(`${API}/files`, { method: "POST", body: form })) as { urls: { get: string } };
+    const file = (await rFetch(`${api()}/files`, { method: "POST", body: form })) as { urls: { get: string } };
     return file.urls.get;
   },
 
@@ -59,15 +73,15 @@ export const replicateProvider: ProviderAdapter = {
     }
     const [slug, version] = endpoint.split(":");
     const res = (await (version
-      ? rFetch(`${API}/predictions`, { method: "POST", body: JSON.stringify({ version, input: payload }) })
-      : rFetch(`${API}/models/${slug}/predictions`, { method: "POST", body: JSON.stringify({ input: payload }) }))) as {
+      ? rFetch(`${api()}/predictions`, { method: "POST", body: JSON.stringify({ version, input: payload }) })
+      : rFetch(`${api()}/models/${slug}/predictions`, { method: "POST", body: JSON.stringify({ input: payload }) }))) as {
       id: string;
     };
     return { externalId: res.id, payload };
   },
 
   async poll({ externalId, route }) {
-    const p = (await rFetch(`${API}/predictions/${externalId}`)) as {
+    const p = (await rFetch(`${api()}/predictions/${externalId}`)) as {
       status: string;
       output: unknown;
       error?: string;
@@ -89,16 +103,32 @@ export const replicateProvider: ProviderAdapter = {
   },
 
   async cancel({ externalId }) {
-    await rFetch(`${API}/predictions/${externalId}/cancel`, { method: "POST" }).catch(() => {});
+    await rFetch(`${api()}/predictions/${externalId}/cancel`, { method: "POST" }).catch(() => {});
   },
 
   async test() {
-    if (!token()) return { ok: false, detail: "No token set" };
-    try {
-      const a = (await rFetch(`${API}/account`)) as { username?: string };
-      return { ok: true, detail: `Signed in as ${a.username ?? "unknown"}` };
-    } catch (e) {
-      return { ok: false, detail: (e as Error).message };
-    }
+    const { ok, detail } = await testReplicateKey(token());
+    return { ok, detail };
   },
 };
+
+/** Check a Replicate token, and only that token (Settings' "Save & test", an account's Your keys): who it signs in as. Free. */
+export async function testReplicateKey(t: string): Promise<KeyCheck> {
+  if (!t) return { ok: false, detail: "No token set", reason: "rejected" };
+  let res: Response;
+  try {
+    res = await fetch(`${api()}/account`, { headers: { Authorization: `Bearer ${t}` }, signal: AbortSignal.timeout(15_000) });
+  } catch (e) {
+    return { ok: false, detail: redactKey(`Can't reach Replicate (${(e as Error).message})`, t), reason: "unreachable" };
+  }
+  const text = await res.text().catch(() => "");
+  let body: { username?: string; detail?: string; title?: string } = {};
+  try {
+    body = JSON.parse(text);
+  } catch {}
+  if (res.ok) return { ok: true, detail: `Signed in as ${body.username ?? "unknown"}` };
+  const said = redactKey(`replicate ${res.status}: ${body.detail ?? body.title ?? text.slice(0, 300)}`, t);
+  // No credit left (402): the token works.
+  const reason = balanceRefusal(res.status, text) ? "balance" : res.status === 401 || res.status === 403 ? "rejected" : "odd";
+  return { ok: false, detail: said, reason, status: res.status };
+}

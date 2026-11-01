@@ -40,7 +40,7 @@ export async function serverFacts(client) {
 /** Why this engine can't run on that server (or null). */
 export function engineProblem(engine, facts) {
   if (engine === "demo") {
-    return facts.demoMode === "off" ? "--engine demo needs Settings → Demo mode set to Auto or On on that Fuobe (it is Off)" : null;
+    return facts.demoMode === "off" ? "--engine demo needs Settings → Placeholder results turned on on that Fuobe (they are off)" : null;
   }
   if (facts.engineMode !== "both" && facts.engineMode !== engine) {
     return `That Fuobe runs ${facts.engineMode === "open" ? "open-source" : "cloud"} models only (Settings → Engine mode), so --engine ${engine} can't run there`;

@@ -25,6 +25,7 @@ import {
   type SwapTake,
 } from "@/lib/catalog/swap-studio";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useQueue, useStopJob, useStopTake } from "./hooks";
 import { AnchorGrid, AnchorMaker } from "./stage-anchors";
 import { JobChip, Note, NumberField, priceText, SavedText } from "./parts";
@@ -178,7 +179,7 @@ function SegmentCard(props: StageProps & { shot: SwapShot; seg: SwapSegment; ind
           toast(`Queued ${r.takes.length} take${r.takes.length === 1 ? "" : "s"}`);
           for (const note of r.notes) toast(note);
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
   const price = estimate?.segments[seg.id];
@@ -339,7 +340,7 @@ function SegmentCard(props: StageProps & { shot: SwapShot; seg: SwapSegment; ind
               selected={seg.selectedTake === t.id}
               gens={gens}
               onSelect={() => void edit({ type: "take", clipId: clip.id, shotId: shot.id, segmentId: seg.id, takeId: t.id, select: true })}
-              onStop={() => stopTake.mutate({ clipId: clip.id, shotId: shot.id, segmentId: seg.id, takeId: t.id }, { onError: (e) => toast.error((e as Error).message) })}
+              onStop={() => stopTake.mutate({ clipId: clip.id, shotId: shot.id, segmentId: seg.id, takeId: t.id }, { onError: (e) => toastError(e) })}
               onRetry={() => run("segment")}
             />
           ))}
@@ -403,7 +404,7 @@ export function SegmentsStage(props: StageProps) {
             onClick={() =>
               queue.mutate(
                 { clipId: clip.id, shotId: shot.id, segmentId: items[0].id, mode: "all" },
-                { onSuccess: (r) => toast(`Queued ${r.takes.length} take${r.takes.length === 1 ? "" : "s"}`), onError: (e) => toast.error((e as Error).message) },
+                { onSuccess: (r) => toast(`Queued ${r.takes.length} take${r.takes.length === 1 ? "" : "s"}`), onError: (e) => toastError(e) },
               )
             }
           >

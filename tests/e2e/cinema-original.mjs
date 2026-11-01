@@ -223,7 +223,7 @@ async function session(width, height, scheme) {
   const cast = await builder("Soul Cast: build a character");
   const castText = await cast.innerText();
   check(`${tag}: Soul Cast runs on Fuobe Soul, Realistic look, in the cloud`, /Fuobe Soul · Realistic look/.test(castText) && !/on your GPU/.test(castText), castText.match(/Fuobe[^\n]*/)?.[0] ?? "");
-  check(`${tag}: Soul Cast shows a price before running`, /Demo · free|Free|≈ \$/.test(castText));
+  check(`${tag}: Soul Cast shows a price before running`, /Placeholder · free|Free|≈ \$/.test(castText));
   check(`${tag}: no sideways scroll in Soul Cast`, (await sideways()) <= 1);
   await shot("soul-cast");
   await page.keyboard.press("Escape");

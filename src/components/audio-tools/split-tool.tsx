@@ -14,7 +14,7 @@ import { ACCEPT, fileToSlot, kindOfFile, LibraryGrid, type SlotValue } from "@/c
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { useEngine, useGenerations } from "@/lib/api";
+import { useAskBeforeUpload, useEngine, useGenerations } from "@/lib/api";
 import type { AudioToolPreview } from "@/lib/av/audio-tools";
 import {
   backgroundLowered,
@@ -54,6 +54,7 @@ import type { Engine, Generation, OutputFile } from "@/lib/catalog/types";
 import { downloadHref } from "@/lib/library";
 import { probeUrl } from "@/lib/media-probe";
 import { cn } from "@/lib/utils";
+import { responseError, toastError } from "@/lib/refusals";
 import { useAudioToolPreview, useAudioToolRun, useSettled, type AudioToolBody } from "./hooks";
 
 /**
@@ -116,15 +117,36 @@ const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 // ---------------------------------------------------------------------------
 // Input
 
-function AddMedia({ onPick }: { onPick: (s: Source) => void }) {
+/**
+ * Upload a file as the soundtrack: `put` shows it at once with its local preview, then `update` gives it its address,
+ * or takes it away when the upload is refused (a guest, an account without its GPU, a file of another kind) or fails,
+ * so the tool never stays on "Uploading…". Its answer counts only while it's still this upload: a soundtrack removed or
+ * replaced meanwhile stays as it is.
+ */
+export function uploadSource(f: File, kind: "audio" | "video", put: (s: Source) => void, update: (next: (cur: Source | null) => Source | null) => void): Promise<void> {
+  const id = nanoid(8);
+  return fileToSlot(
+    f,
+    (v) => {
+      const s: Source | null = v && { ...v, id, kind: v.kind === "video" ? "video" : "audio", name: f.name };
+      if (s?.uploading) put(s);
+      else update((cur) => (cur?.id === id ? s : cur));
+    },
+    kind,
+  );
+}
+
+function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate: (next: (cur: Source | null) => Source | null) => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [picking, setPicking] = useState(false);
+  // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
+  const askFirst = useAskBeforeUpload();
   const take = (f: File | undefined) => {
-    if (!f) return;
+    if (!f || askFirst()) return;
     const kind = kindOfFile(f);
     if (kind !== "audio" && kind !== "video") return void toast("Audio or video only — drop a sound file or a clip here");
-    void fileToSlot(f, (v) => v && onPick({ ...v, kind: v.kind === "video" ? "video" : "audio", name: f.name }), kind);
+    void uploadSource(f, kind, onPick, onUpdate);
   };
   return (
     <div
@@ -149,7 +171,7 @@ function AddMedia({ onPick }: { onPick: (s: Source) => void }) {
         <p className="mt-1 text-[13px] text-muted-foreground">A song, podcast, film clip or video, up to 200 MB</p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
-        <Button size="sm" className="rounded-full" onClick={() => input.current?.click()}>
+        <Button size="sm" className="rounded-full" onClick={() => askFirst() || input.current?.click()}>
           <Upload className="size-3.5" /> Upload audio or video
         </Button>
         <Popover open={picking} onOpenChange={setPicking}>
@@ -486,7 +508,7 @@ async function exportWav(stems: Stem[], buffers: Partial<Record<StemId, AudioBuf
     const q = new URLSearchParams({ offset: String(offset), ...(id && { id }), ...(last && { last: "1", name }) });
     const res = await fetch(`/api/audio-tools/export?${q}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: new Blob([mixPart(plan, f, f + per, k) as BlobPart]) });
     const body = (await res.json().catch(() => ({}))) as { id?: string; received?: number; url?: string; error?: string };
-    if (!res.ok) throw new Error(body.error ?? `Export failed (${res.status})`);
+    if (!res.ok) throw responseError(res, body.error ?? `Export failed (${res.status})`);
     if (last) {
       if (!body.url) throw new Error("Export failed");
       return { url: body.url, lowered: k < 1 };
@@ -526,7 +548,7 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
       await exportMix();
       toast.success("Mix saved to your Library", { action: { label: "Open Library", onClick: () => router.push("/library") } });
     } catch (e) {
-      toast.error((e as Error).message || "Couldn't export the mix");
+      toastError(e, "Couldn't export the mix");
     } finally {
       setBusy(null);
     }
@@ -538,7 +560,7 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
       await remux.mutateAsync({ tool: "remux", engine, video: source.ref, audio, name });
       toast.success(engine === "open" ? "Putting the mix on your video (picture copied as it is)" : "Putting the mix on your video");
     } catch (e) {
-      toast.error((e as Error).message || "Couldn't put the mix on the video");
+      toastError(e, "Couldn't put the mix on the video");
     } finally {
       setBusy(null);
     }
@@ -555,7 +577,7 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
     }
     return backgroundLowered(peak);
   }, [bed]);
-  const remuxCost = remuxPrice.data ? (remuxPrice.data.demo ? "Demo · free" : engine === "open" ? "Free" : remuxPrice.data.costUsd !== null && remuxPrice.data.costUsd < 0.01 ? "under $0.01" : `≈ $${remuxPrice.data.costUsd?.toFixed(2)}`) : null;
+  const remuxCost = remuxPrice.data ? (remuxPrice.data.demo ? "Placeholder · free" : engine === "open" ? "Free" : remuxPrice.data.costUsd !== null && remuxPrice.data.costUsd < 0.01 ? "under $0.01" : `≈ $${remuxPrice.data.costUsd?.toFixed(2)}`) : null;
 
   return (
     <section aria-labelledby="mixer" className="space-y-3">
@@ -628,7 +650,9 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
 // ---------------------------------------------------------------------------
 // The tool
 
-const money = (p: AudioToolPreview) => (p.demo ? "Demo · free" : "Free · runs on your ComfyUI");
+const money = (p: AudioToolPreview) => (p.demo ? "Placeholder · free" : "Free · runs on your ComfyUI");
+/** Where the time estimate is for: the host's device when it said; else a CPU's, the figures the estimate then uses. */
+const onDevice = (device?: string) => (device === "cuda" ? "on your GPU" : device ? "on your CPU" : "on a CPU");
 
 /** What each model is, shown under the choice (not only on hover). */
 const MODEL_HINTS: Record<SplitQuality, string> = {
@@ -702,7 +726,7 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
         setResultId(r.result.id);
         toast.success("Splitting on your ComfyUI");
       },
-      onError: (e) => toast.error((e as Error).message),
+      onError: (e) => toastError(e),
     });
   };
   const g = result.data;
@@ -718,7 +742,7 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
       )}
       <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-8")}>
         {!source ? (
-          <AddMedia onPick={take} />
+          <AddMedia onPick={take} onUpdate={setSource} />
         ) : (
           <SourcePanel
             source={source}
@@ -757,7 +781,7 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
                   onChange={(v) => setQuality(v)}
                   options={(["fast", "best"] as const).map((q) => ({ value: q, label: `${QUALITY_LABELS[q]}${p?.installed && !p.installed.includes(q) ? " · not installed" : ""}`, hint: MODEL_HINTS[q] }))}
                 />
-                {!quality && p?.hostPick && <span className="text-[12px] text-muted-foreground">picked for your {p.device === "cuda" ? "GPU" : "CPU"}</span>}
+                {!quality && p?.hostPick && p.device && <span className="text-[12px] text-muted-foreground">picked for your {p.device === "cuda" ? "GPU" : "CPU"}</span>}
               </div>
               <p className="text-[12px] text-muted-foreground sm:pl-[4.5rem]">{MODEL_HINTS[picked]}</p>
               {channels === 1 ? null : channels && channels > 2 ? (
@@ -800,7 +824,7 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
                 ) : p ? (
                   <>
                     <span className="font-mono text-foreground">{money(p)}</span>
-                    {p.estimate && !p.demo ? ` · ${durationWords(p.estimate)} on your ${p.device === "cuda" ? "GPU" : "CPU"}` : ""}
+                    {p.estimate && !p.demo ? ` · ${durationWords(p.estimate)} ${onDevice(p.device)}` : ""}
                   </>
                 ) : (
                   "Checking…"

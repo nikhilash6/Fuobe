@@ -2,14 +2,15 @@ import "server-only";
 import { z } from "zod";
 import { DISTANCE, MAX_KEYS } from "@/lib/camera-path";
 import { APERTURE, LENS } from "@/lib/scene3d";
-import { rethrowAccess } from "./access/errors";
 import { CinemaError } from "./cinema";
+import { connectRefusal } from "./connect-refusal";
+import { ConnectComfyError } from "./generations";
 import { TurnaroundSchema } from "./turnaround";
 
 /** Request bodies of /api/cinema/** (zod drops unknown keys). */
 
 const Hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
-const FileRef = z.string().startsWith("/api/files/");
+const FileRef = z.string().startsWith("/api/files/").max(500);
 const Slug = z.string().max(80).nullable().optional();
 
 export const DirectorSchema = z.object({
@@ -155,12 +156,13 @@ export async function body<S extends z.ZodType>(request: Request, schema: S, mes
 }
 
 /** Turn thrown errors into the API's `{ error }` responses. */
-export async function handle(fn: () => Promise<Response> | Response): Promise<Response> {
+export async function handle(fn: () => Promise<Response> | Response, request?: Request): Promise<Response> {
   try {
     return await fn();
   } catch (e) {
-    rethrowAccess(e);
     if (e instanceof CinemaError) return Response.json({ error: e.message }, { status: e.status });
+    // A run nothing connected can make: the connect card in the owner's browser (src/server/connect-refusal.ts).
+    if (e instanceof ConnectComfyError) return (request && connectRefusal(e, request)) || Response.json({ error: e.message }, { status: 422 });
     console.error("[cinema]", e);
     return Response.json({ error: (e as Error).message || "Something went wrong" }, { status: 500 });
   }

@@ -20,7 +20,10 @@ function toolModels(): Record<string, LayerModelInfo> {
       name: m.name,
       engine: m.engine,
       tagline: m.tagline,
-      ...(m.pricing ? { pricing: { unit: m.pricing.unit, usd: m.pricing.usd, ...(m.pricing.note ? { note: m.pricing.note } : {}) } } : {}),
+      // A launch price goes too: the editor shows the one of the day it is (costLabel), never one read here.
+      ...(m.pricing
+        ? { pricing: { unit: m.pricing.unit, usd: m.pricing.usd, ...(m.pricing.note ? { note: m.pricing.note } : {}), ...(m.pricing.promo ? { promo: m.pricing.promo } : {}) } }
+        : {}),
       providers: [...new Set(m.routes.map((r) => r.provider))],
     };
   }

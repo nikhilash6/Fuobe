@@ -18,11 +18,13 @@ import { frameDiff, openVideo, releaseVideo, sampleFrames } from "@/components/a
 import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
-import { useEngine, useModelAccess } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { formatCueTime } from "@/lib/av/cue-edit";
-import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
+import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useKatanaActions, useKatanaJobs, useKatanaPreview, type KatanaBody } from "./hooks";
 
 type SplitMode = "fixed" | "scenes";
@@ -53,11 +55,16 @@ async function findCuts(src: string, duration: number, onProgress: (p: number) =
   }
 }
 
-const money = (usd: number | null | undefined, demo?: boolean, open?: boolean) => (demo ? "Demo · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`);
+/** visitor: a guest or an account, whose own GPU doesn't run Katana yet (the page says so). */
+const money = (usd: number | null | undefined, demo?: boolean, open?: boolean, visitor?: boolean) =>
+  visitor && (demo || open) ? "Self-hosted only" : demo ? "Placeholder · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
 
 /** Katana: rebuild a reference edit with your subject, shot for shot. */
 export function KatanaStudio() {
   const [engine] = useEngine();
+  // An edit doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // uploads and Recreate are off, instead of a run the server refuses.
+  const visitor = useLikelyVisitor();
   const jobs = useKatanaJobs();
   const { start } = useKatanaActions();
   const [reference, setReference] = useState<SlotValue | null>(null);
@@ -103,7 +110,7 @@ export function KatanaStudio() {
     : null;
   const preview = useKatanaPreview(useDeferredValue(body));
   const shown = segments ?? preview.data?.segments ?? null;
-  const blocker = !reference
+  const setupBlocker = !reference
     ? "Add the reference edit"
     : reference.uploading
       ? "Uploading…"
@@ -120,6 +127,8 @@ export function KatanaStudio() {
               : preview.error
                 ? (preview.error as Error).message
                 : null;
+  // A guest or an account reads why Recreate is off, not a step on an upload that is off too.
+  const blocker = visitor ? "Katana runs on a self-hosted Fuobe for now" : setupBlocker;
 
   const scan = async () => {
     if (!reference || !meta || scanning !== null) return;
@@ -132,25 +141,29 @@ export function KatanaStudio() {
       toast(found.length ? `${found.length} cut${found.length === 1 ? "" : "s"} found` : "No hard cuts — it'll be split evenly");
     } catch (e) {
       if (!cuts) setMode("fixed");
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setScanning(null);
     }
   };
 
   const go = () => {
+    if (visitor) return;
     if (blocker || !body) return void toast(blocker ?? "Not ready yet", { id: "katana-blocker" });
     start.mutate(body, {
       onSuccess: (j) => toast.success(`Katana started · ${j.segments.length} segment${j.segments.length === 1 ? "" : "s"}`),
-      onError: (e) => toast.error((e as Error).message),
+      onError: (e) => toastError(e),
     });
   };
 
   return (
-    <ToolShell title="Katana">
-      <ToolHero title="Recreate the edit. Make it yours." subtitle="Drop a reference edit and up to 5 photos of your subject — Katana rebuilds it shot for shot, at the original cut times, with the original sound." />
+    <ToolShell title="Katana" selfHostedOnly>
+      <ToolHero title="Recreate the edit. Make it yours." subtitle="Drop a reference edit and up to 5 photos of your subject — Katana rebuilds it shot for shot, at the original cut times, with the original sound.">
+        {visitor && <SelfHostNote className="mt-3 max-w-xl">Katana runs on a self-hosted Fuobe for now.</SelfHostNote>}
+      </ToolHero>
       <div className="mx-auto mt-8 grid max-w-[1040px] gap-4 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
-        <div className="min-w-0 space-y-3">
+        {/* A guest's or an account's files would be uploaded for an edit that can't start here. */}
+        <div inert={visitor} className={cn("min-w-0 space-y-3", visitor && "opacity-50")}>
           <MediaDrop
             kind="video"
             value={reference}
@@ -224,7 +237,7 @@ export function KatanaStudio() {
         </div>
         <div className="min-w-0 space-y-3">
           <Panel title="Your subject" aside={<span className="text-[12px] text-muted-foreground">{photos.length}/5</span>}>
-            <div className="flex flex-wrap gap-2">
+            <div inert={visitor} className={cn("flex flex-wrap gap-2", visitor && "opacity-50")}>
               {photos.map((p) => (
                 <MediaSlot key={p.id} label="Photo" kind="image" value={p} onChange={(v) => setPhotos((xs) => (v ? xs.map((x) => (x.id === p.id ? { ...v, id: p.id } : x)) : xs.filter((x) => x.id !== p.id)))} size="lg" />
               ))}
@@ -233,7 +246,7 @@ export function KatanaStudio() {
             <p className="mt-2 flex items-start gap-1.5 text-[12px] text-muted-foreground">
               <Users className="mt-0.5 size-3.5 shrink-0" /> A person, a product or an outfit. Clear, well-lit photos from a couple of angles work best.
             </p>
-            {engine === "open" && <p className="mt-1 text-[12px] text-muted-foreground">The open engine uses your first 2 photos (Qwen-Image-Edit takes the frame and two references).</p>}
+            {engine === "open" && <p className="mt-1 text-[12px] text-muted-foreground">The open engine uses your first {OPEN_KEYFRAME_PHOTOS} photos (Qwen-Image 2.1 Turbo takes the frame and {OPEN_KEYFRAME_PHOTOS} references).</p>}
           </Panel>
           <Panel title="Instructions (optional)">
             <Textarea
@@ -253,8 +266,9 @@ export function KatanaStudio() {
                 Model
               </Label>
               <Select value={m.id} onValueChange={setModelId}>
-                <SelectTrigger id="katana-model" className="h-9 w-full rounded-full sm:w-72">
-                  <SelectValue />
+                <SelectTrigger id="katana-model" className="h-9 w-full rounded-full sm:w-auto sm:min-w-0 sm:flex-1">
+                  {/* The name alone here: the menu says each model's seconds. */}
+                  <SelectValue>{m.label}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {motionModels.map((x) => (
@@ -277,13 +291,13 @@ export function KatanaStudio() {
               {preview.data ? (
                 <>
                   {preview.data.segments.length} segment{preview.data.segments.length === 1 ? "" : "s"} · {preview.data.steps} steps ·{" "}
-                  <span className="font-mono text-foreground">{money(preview.data.costUsd, preview.data.demo, engine === "open")}</span>
+                  <span className="font-mono text-foreground">{money(preview.data.costUsd, preview.data.demo, engine === "open", visitor)}</span>
                 </>
               ) : (
                 (blocker ?? "Pricing…")
               )}
             </p>
-            <Button size="lg" className={cn("rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={start.isPending || scanning !== null}>
+            <Button size="lg" className={cn("rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={start.isPending || scanning !== null || visitor}>
               {start.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Recreate
             </Button>
           </div>
@@ -336,7 +350,7 @@ function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
   const again = (id: string, all: boolean) =>
     retry.mutate(
       { id, all },
-      { onSuccess: (j) => toast.success(all ? `Started again · ${j.segments.length} segment${j.segments.length === 1 ? "" : "s"}` : "Retrying the failed steps"), onError: (e) => toast.error((e as Error).message) },
+      { onSuccess: (j) => toast.success(all ? `Started again · ${j.segments.length} segment${j.segments.length === 1 ? "" : "s"}` : "Retrying the failed steps"), onError: (e) => toastError(e) },
     );
   if (loading)
     return (
@@ -394,14 +408,14 @@ function Runs({ jobs, loading }: { jobs?: KatanaJobView[]; loading: boolean }) {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Keep it</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => remove.mutate(j.id, { onSuccess: () => toast("Removed — its clips stay in your Library"), onError: (e) => toast.error((e as Error).message) })}>Remove</AlertDialogAction>
+                          <AlertDialogAction onClick={() => remove.mutate(j.id, { onSuccess: () => toast("Removed — its clips stay in your Library"), onError: (e) => toastError(e) })}>Remove</AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </div>
                   <p className="mt-0.5 text-[12px] text-muted-foreground">
                     {j.segments.length} segment{j.segments.length === 1 ? "" : "s"} · {MOTION_MODELS[j.engine].find((x) => x.id === j.motionModel)?.label ?? j.motionModel} · {j.engine === "open" ? "Open source" : "Cloud"}
-                    {final?.provider === "mock" ? " · demo" : ""}
+                    {final?.provider === "mock" ? " · placeholder" : ""}
                   </p>
                   {stage !== "done" && (
                     <div className="mt-3">
