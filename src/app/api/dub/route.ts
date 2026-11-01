@@ -1,6 +1,6 @@
 import { connection } from "next/server";
 import { z } from "zod";
-import { ONE_SHOT_MODELS } from "@/lib/av/dub";
+import { ONE_SHOT_MODELS, VOICE_SPLIT_IDS, type VoiceSplit } from "@/lib/av/dub";
 import { createDubSession, listDubSessions, previewDub } from "@/server/dub";
 import { connectRefusal } from "@/server/connect-refusal";
 import { priceAs } from "@/server/visitor";
@@ -15,6 +15,8 @@ const Body = z.object({
   model: z.enum(ONE_SHOT_MODELS).optional(),
   /** The video's length as the browser measured it (seconds). */
   duration: z.number().positive().max(36_000).optional(),
+  /** Open engine: the voice split (MelBand RoFormer or DBS). */
+  voiceSplit: z.enum(VOICE_SPLIT_IDS as [VoiceSplit, ...VoiceSplit[]]).optional(),
 });
 
 /** Recent dubs with the state of every step. */

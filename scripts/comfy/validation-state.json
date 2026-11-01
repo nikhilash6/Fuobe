@@ -53,6 +53,12 @@
     "error": null,
     "at": "2026-10-16T23:33:15.735Z"
   },
+  "dub-prepare-dbs-transcribe": {
+    "sha256": "bbb7b31a35cb858c1f92835b73b13f5dd93de06441637ca57bd40253ab8c7a7d",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T14:15:07.842Z"
+  },
   "dub-prepare-separate-transcribe": {
     "sha256": "9e19d9c940f8e38941e2581fbd8619ccf48ff9dad07edc69941acd7d262aa60f",
     "validated": true,

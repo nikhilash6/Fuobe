@@ -2966,6 +2966,42 @@ export const SPEC = [
       'Outputs in order: voice stem, background stem (music + effects), cue lines ("start-end: text", seconds), plain transcript, detected language (PreviewAny, folded into the text outputs\' meta). ' +
       'ASR runs on the separated vocals. 52 languages auto-detected (30 selectable).',
   },
+  // Graph B of docs/research/dbs-separation-7.md §4.4 (DBS D3): the open dub's first step with DBS in place of MelBand
+  // RoFormer, so the background keeps the score and the sound effects (a vocals model takes singing with the voice).
+  // Same output contract as dub-prepare-separate-transcribe; node 7 is that graph's Qwen3-ASR node with its bindings.
+  {
+    id: 'dub-prepare-dbs-transcribe',
+    title: 'Separate the dialogue from the music and effects (DBS) and transcribe it with timestamps (Qwen3-ASR 1.7B)',
+    capability: 'separate-audio',
+    handBuilt: 'hand-built/dub-prepare-dbs-transcribe.json',
+    packs: ['ComfyUI-DBS'],
+    // Both DBS models, as in separate-soundtrack-dbs: a CUDA host runs DBS-TIGER unless asked otherwise.
+    requiredModels: ['DBS-BSRNN-DnR/model.safetensors', 'DBS-BSRNN-DnR/config.json', 'DBS-TIGER-DnR/model.safetensors', 'DBS-TIGER-DnR/config.json'],
+    bindings: {
+      audio: [b('1', 'audio')], separationModel: [b('2', 'model')],
+      sourceLanguage: [b('7', 'language')], asrModel: [b('7', 'model')], hints: [b('7', 'hints')], maxChars: [b('7', 'max_chars')],
+    },
+    outputs: [
+      { node: '5', kind: 'audio', stem: 'voice' },
+      { node: '6', kind: 'audio', stem: 'background' },
+      { node: '8', kind: 'text', role: 'cues' },
+      { node: '9', kind: 'text', role: 'transcript' },
+      { node: '10', kind: 'text', role: 'language' },
+    ],
+    defaults: { separationModel: 'DBS-BSRNN-DnR', sourceLanguage: 'auto', asrModel: 'Qwen/Qwen3-ASR-1.7B-hf' },
+    vramGb: 8,
+    license: 'DBS weights Apache-2.0 (trained on DnR v2, CC BY 4.0); Qwen3-ASR / ForcedAligner Apache-2.0; ComfyUI-QwenASR GPL-3.0; ComfyUI-DBS MIT',
+    autoDownloads: [
+      'AILab_Qwen3ASRSubtitle downloads Qwen/Qwen3-ASR-1.7B-hf (4.08 GB; 0.6B: 1.56 GB) and Qwen/Qwen3-ForcedAligner-0.6B-hf (1.84 GB) into models/Qwen3-ASR on first run',
+    ],
+    notes:
+      'Dubbing step 1 with DBS: the voice split runs on a CPU (23 MB of weights) and the background keeps the music and the sound effects, singing included. ' +
+      'Qwen3-ASR still needs the 8 GB listing on a GPU. audio = an audio file or a video (LoadAudio reads a video\'s soundtrack without decoding frames). ' +
+      'DBSLoader model DBS-BSRNN-DnR (fast, the CPU default) or DBS-TIGER-DnR (best, the CUDA default); DBSSeparate in mono at the input\'s rate. ' +
+      'Outputs in order: voice stem (speech), background stem = the original minus the speech (AudioMerge subtract: it keeps the stereo image), cue lines ("start-end: text", seconds), plain transcript, ' +
+      'detected language (PreviewAny, folded into the text outputs\' meta). Both stems are FLAC, so voice + background add up to the source. ' +
+      'The provider splits a file with more than 2 channels with its background from music + effects (node 4 rewired to AudioMerge add): ComfyUI saves mono or stereo only. ASR runs on the separated speech.',
+  },
   // DBS soundtrack separation (docs/research/dbs-separation-7.md §4.4, graph A): the one graph behind Split soundtrack (and
   // Remove dialogue, Clean up dialogue, "Original sound" later). ComfyUI-DBS is not on the validation server: checked
   // statically there (core nodes) and validated + run on an isolated worker with the pack and the weights.

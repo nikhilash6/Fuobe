@@ -248,9 +248,9 @@ const ONE_SHOT_NAMES: Record<OneShotModel, string> = { "heygen-translate": "HeyG
  * null: a step no provider can run, or a demo step among real ones, which createPipeline refuses (a
  * fal key without Claude or a local model: the translation would be a demo while the rest runs for real).
  */
-function prepareProblem(input: Pick<CreateDubInput, "engine" | "video" | "source" | "targets">): string | null {
+function prepareProblem(input: Pick<CreateDubInput, "engine" | "video" | "source" | "targets" | "voiceSplit">): string | null {
   const modes: { label: string; needs: string; demo: boolean }[] = [];
-  for (const s of prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: input.targets })) {
+  for (const s of prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: input.targets, voiceSplit: input.voiceSplit })) {
     const m = getModel(s.request.modelId);
     if (!m || !s.request.op) continue;
     const label = s.request.step?.label ?? s.key;
@@ -282,6 +282,8 @@ function dubJob(i: DubToolInput, ctx: ToolContext): Checked<{ input: CreateDubIn
     title: fileTitle(i.video),
     source: (i.source_language && dubLanguageFor(i.source_language)?.code) || "auto",
     targets: [...new Set(langs.map((l) => l.lang!.code))],
+    // The open engine's voice split (the cloud's step mode ignores it).
+    ...(engine === "open" && i.voice_split && { voiceSplit: i.voice_split }),
   };
   const steps: CreateDubInput = { ...base, mode: "steps" };
   const once: CreateDubInput = { ...base, mode: "oneshot", model: oneShot };

@@ -230,6 +230,22 @@ describe("Translate & dub", () => {
     expect(b.next).toMatch(/reviews every line/);
   });
 
+  it("takes the open engine's Voice split: DBS splits the first step, and the dub remembers it", async () => {
+    const b = body(await run("dub_video", { video: clip, languages: ["Spanish"], voice_split: "dbs" }, "open"));
+    const s = dub.getDubSession(b.dub)!;
+    expect(s).toMatchObject({ engine: "open", mode: "steps", voiceSplit: "dbs" });
+    expect(gen(s.prepare!.stems)).toMatchObject({ modelId: "oss-dbs-voice-separate", op: "separate-audio", provider: "mock" });
+    // Unknown splits are refused by the tool's schema (melband or dbs).
+    expect((await run("dub_video", { video: clip, languages: ["Spanish"], voice_split: "sam" }, "open")).isError).toBe(true);
+    // The studio's price check takes it too, and refuses one it doesn't know.
+    const post = (b: unknown) => dubRoute.POST(new Request("http://x/api/dub?preview=1", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }));
+    const ok = await post({ engine: "open", mode: "steps", video: clip, targets: ["es"], voiceSplit: "dbs" });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toMatchObject({ engine: "open", costUsd: 0, steps: 2 });
+    const bad = await post({ engine: "open", mode: "steps", video: clip, targets: ["es"], voiceSplit: "sam" });
+    expect([bad.status, (await bad.json()).error]).toEqual([400, "Check the dub settings"]);
+  });
+
   it("dubs in one go on the cloud when asked, without lip sync", async () => {
     const b = body(await run("dub_video", { video: clip, languages: ["French"], review: false, lipsync: false }));
     const s = dub.getDubSession(b.dub)!;

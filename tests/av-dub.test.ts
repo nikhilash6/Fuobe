@@ -4,7 +4,31 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Generation } from "@/lib/catalog/types";
 import { cueReducer, cueProblems, formatCueTime, normalizeCues, parseCueTime } from "@/lib/av/cue-edit";
-import { BLANK_FRAME, crowdedLines, linearGain, dubPhrases, languageStage, oneShotRequests, PHRASE_MAX, prepareMedia, prepareSteps, priceLine, reviewCues, spokenText, takeLines, voiceOnly, voiceSteps, type DubSessionView } from "@/lib/av/dub";
+import {
+  BLANK_FRAME,
+  crowdedLines,
+  DEFAULT_VOICE_SPLIT,
+  DUB_STEP_MODELS,
+  linearGain,
+  dubPhrases,
+  languageStage,
+  MUSIC_MODEL_NOTE,
+  OPTIONAL_PREPARE,
+  oneShotRequests,
+  PHRASE_MAX,
+  prepareMedia,
+  prepareSteps,
+  priceLine,
+  reviewCues,
+  spokenText,
+  takeLines,
+  VOICE_SPLITS,
+  voiceOnly,
+  voiceSplitModel,
+  voiceSplitOf,
+  voiceSteps,
+  type DubSessionView,
+} from "@/lib/av/dub";
 import { timelineFor, timelineTracks } from "@/lib/av/timeline";
 import { DUB_LANGUAGES, supportsTarget } from "@/lib/av/languages";
 import { getModel } from "@/lib/catalog";
@@ -93,6 +117,44 @@ describe("dub pipeline DAGs", () => {
       { label: "Original sound", index: 3, of: 5 },
       { label: "Music and effects", index: 4, of: 5 },
     ]);
+  });
+
+  it("open: the Voice split picks the first step's model (MelBand RoFormer by default, or DBS); nothing after it changes", () => {
+    const keys = (steps: ReturnType<typeof prepareSteps>) => steps.map((s) => [s.key, s.request.modelId, s.request.op, s.after ?? null]);
+    const melband = prepareSteps({ engine: "open", video, source: "en", targets: ["es"] });
+    const dbs = prepareSteps({ engine: "open", video, source: "en", targets: ["es"], voiceSplit: "dbs" });
+    expect(DEFAULT_VOICE_SPLIT).toBe("melband");
+    expect(DUB_STEP_MODELS.open.stems).toBe(VOICE_SPLITS.melband.modelId);
+    expect(keys(prepareSteps({ engine: "open", video, source: "en", targets: ["es"], voiceSplit: "melband" }))).toEqual(keys(melband));
+    expect(keys(dbs)).toEqual([
+      ["stems", "oss-dbs-voice-separate", "separate-audio", null],
+      ["translate:es", "oss-text-llm", "translate", "stems"],
+    ]);
+    // Same input, language and step label: only the model id differs.
+    expect({ ...dbs[0].request, modelId: "x" }).toEqual({ ...melband[0].request, modelId: "x" });
+    expect(dbs[1]).toEqual(melband[1]);
+    // Graph B: DBS + Qwen3-ASR in one ComfyUI job.
+    expect(getModel("oss-dbs-voice-separate")!.routes).toEqual([expect.objectContaining({ op: "separate-audio", provider: "comfyui", endpoint: "dub-prepare-dbs-transcribe" })]);
+    expect(getModel("oss-dbs-voice-separate")!.name).toBe("DBS + Qwen3-ASR");
+    expect(voiceSplitModel("dbs")).toBe("oss-dbs-voice-separate");
+    expect(voiceSplitModel("nope")).toBe("oss-voice-separate");
+    expect(voiceSplitModel()).toBe("oss-voice-separate");
+    expect(voiceSplitOf("oss-dbs-voice-separate")).toBe("dbs");
+    expect(voiceSplitOf("oss-voice-separate")).toBe("melband");
+    expect(voiceSplitOf("demucs")).toBeUndefined();
+    expect(VOICE_SPLITS.dbs.note).toBe("Keeps the music and sound effects of the original");
+    expect(VOICE_SPLITS.melband.note).toBe(MUSIC_MODEL_NOTE);
+  });
+
+  it("cloud: the Voice split changes nothing (no SAM Audio on the cloud: Demucs stays, three beds, voice only when it fails)", () => {
+    const keys = (steps: ReturnType<typeof prepareSteps>) => steps.map((s) => [s.key, s.request.modelId, s.after ?? null]);
+    expect(keys(prepareSteps({ engine: "cloud", video, targets: ["fr"], voiceSplit: "dbs" }))).toEqual(keys(prepareSteps({ engine: "cloud", video, targets: ["fr"] })));
+    expect(DUB_STEP_MODELS.cloud).toMatchObject({ sound: "extract-soundtrack", stems: "demucs", voice: "elevenlabs-voice-isolation" });
+    expect([...OPTIONAL_PREPARE]).toEqual(["sound", "background"]);
+    expect(getModel("sam-audio-separate")).toBeUndefined();
+    // Demucs' drums, bass and other: three beds, each lowered, then the mix.
+    const steps = voiceSteps({ engine: "cloud", video, lang: "es", cues: [{ start: 1, end: 2, text: "Hola" }], voiceRef: "/v.mp3", background: ["/a.mp3", "/b.mp3", "/c.mp3"], duration: 10 });
+    expect(steps.filter((s) => s.key.startsWith("bed:")).map((s) => s.request.modelId)).toEqual(["ffmpeg-loudnorm", "ffmpeg-loudnorm", "ffmpeg-loudnorm"]);
   });
 
   // Speech starts at 2 s, pauses at 7–12 s and ends at 26 s of a 30 s clip.
@@ -406,6 +468,36 @@ describe("dub sessions (demo mode)", () => {
     expect(languageStage(dub.dubView(dub.getDubSession(view.id)!), "es")).toBe("done");
     // All steps share the session's batch (one stack in the Library).
     expect(new Set(Object.values(dub.dubView(dub.getDubSession(view.id)!).generations).map((g) => g.batchId))).toEqual(new Set([view.batchId]));
+  });
+
+  it("open with DBS: the split returns voice, background and cues (demo), the session keeps its split, the dub mixes over the bed", async () => {
+    const s = dub.createDubSession({ engine: "open", mode: "steps", video: clip(), title: "Film", source: "en", targets: ["es"], voiceSplit: "dbs" });
+    expect(s.voiceSplit).toBe("dbs");
+    const split = await settle(s.prepare!.stems);
+    expect(split).toMatchObject({ modelId: "oss-dbs-voice-separate", provider: "mock", status: "succeeded" });
+    expect(split.outputs.map((o) => [o.kind, o.meta?.stem ?? o.meta?.role])).toEqual([
+      ["audio", "voice"],
+      ["audio", "background"],
+      ["text", "cues"],
+    ]);
+    for (const id of Object.values(s.prepare!)) await settle(id);
+    const view = dub.dubView(dub.getDubSession(s.id)!);
+    expect(languageStage(view, "es")).toBe("review");
+    const media = prepareMedia(view);
+    expect(media.voice).toBe(split.outputs[0].url);
+    expect(media.background).toBe(split.outputs[1].url);
+    const voiced = dub.voiceDub(s.id, "es");
+    expect(voiced.generations[voiced.voices!.es[0].ids.film].request.inputs?.audio2).toBe(split.outputs[1].url);
+    // The voice split is open-engine only: a cloud dub, or one shot, keeps none.
+    expect(dub.createDubSession({ engine: "cloud", mode: "steps", video: clip(), targets: ["es"], voiceSplit: "dbs" }).voiceSplit).toBeUndefined();
+  });
+
+  it("prices the open dub's first step free with either voice split", () => {
+    for (const voiceSplit of ["melband", "dbs"] as const) {
+      const p = dub.previewDub({ engine: "open", mode: "steps", video: clip(), targets: ["es"], voiceSplit });
+      expect(p).toMatchObject({ engine: "open", costUsd: 0, steps: 2 });
+      expect(priceLine(p)).toMatch(/^(Placeholder · free|Free on your GPU)$/);
+    }
   });
 
   it("refuses to voice before the translation is ready, and one-shot on the open engine", () => {

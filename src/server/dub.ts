@@ -15,6 +15,7 @@ import {
   type DubPrice,
   type DubSessionView,
   type OneShotModel,
+  type VoiceSplit,
 } from "@/lib/av/dub";
 import { normalizeCues } from "@/lib/av/cue-edit";
 import { getModel } from "@/lib/catalog";
@@ -92,6 +93,8 @@ export interface CreateDubInput {
   model?: OneShotModel;
   /** The video's length as the browser measured it (seconds); the file's header wins when it has one. */
   duration?: number;
+  /** Open engine, step mode: the voice split (MelBand RoFormer by default, or DBS). */
+  voiceSplit?: VoiceSplit;
 }
 
 /**
@@ -121,6 +124,7 @@ export function createDubSession(input: CreateDubInput): DubSessionView {
     source: input.source || "auto",
     targets: [...new Set(input.targets)],
     ...(duration && { duration }),
+    ...(input.engine === "open" && input.mode === "steps" && input.voiceSplit && { voiceSplit: input.voiceSplit }),
     batchId: nanoid(10),
     createdAt: now,
     updatedAt: now,
@@ -141,7 +145,7 @@ export function createDubSession(input: CreateDubInput): DubSessionView {
     }
     return dubView(save({ ...base, model, oneshot }));
   }
-  const steps = prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: base.targets, title });
+  const steps = prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: base.targets, title, voiceSplit: input.voiceSplit });
   const run = createPipeline(steps, { batchId: base.batchId });
   const prepare = Object.fromEntries(Object.entries(run.byKey).map(([k, g]) => [k, g.id]));
   return dubView(save({ ...base, prepare }));
@@ -214,7 +218,7 @@ export function previewDub(input: CreateDubInput): DubPrice {
     const jobs = oneShotRequests({ model: input.model ?? "heygen-translate", video: input.video, source: input.source, targets });
     return priceSteps(input.engine, jobs.map((j, i) => ({ key: `dub:${i}`, request: j.request })), seconds);
   }
-  return priceSteps(input.engine, prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets }), seconds);
+  return priceSteps(input.engine, prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets, voiceSplit: input.voiceSplit }), seconds);
 }
 
 /** What voicing one language would cost (POST /api/dub/[id]/voice?preview=1). */

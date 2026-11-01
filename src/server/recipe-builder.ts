@@ -406,7 +406,7 @@ function liftStudio(g: Generation, tool: string, studio: string): Lifted | null 
   if (tool === "dub_video") {
     const rec = recordNaming("dub_sessions", g.id);
     if (!rec) return null;
-    const d = rec.data as { video?: string; source?: string; targets?: string[]; mode?: string; model?: string; voices?: Record<string, { lipsync?: boolean }[]> };
+    const d = rec.data as { video?: string; source?: string; targets?: string[]; mode?: string; model?: string; voiceSplit?: string; voices?: Record<string, { lipsync?: boolean }[]> };
     if (!d.video || !d.targets?.length) return null;
     const runs = Object.values(d.voices ?? {}).flat();
     const lipsync = d.mode === "oneshot" ? d.model !== "elevenlabs-dubbing" : (runs.at(-1)?.lipsync ?? true);
@@ -416,6 +416,8 @@ function liftStudio(g: Generation, tool: string, studio: string): Lifted | null 
       ...(langName(d.source) && { source_language: langName(d.source) }),
       lipsync,
       review: d.mode !== "oneshot",
+      // The open engine's voice split, when the dub picked one (DBS or MelBand RoFormer).
+      ...((d.voiceSplit === "dbs" || d.voiceSplit === "melband") && { voice_split: d.voiceSplit }),
     };
     return { tool, studio, record: `dub:${rec.id}`, input, inputs: [{ path: ["video"], type: "video", label: "Video to dub" }], texts: [] };
   }

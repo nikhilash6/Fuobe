@@ -21,7 +21,28 @@ import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { isPlaceholder } from "@/lib/demo-mode";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cueProblems } from "@/lib/av/cue-edit";
-import { BACKGROUND_DB, crowdedLines, dubResult, languageStage, ONE_SHOT_MODELS, priceLine, reviewCues, takeLines, translateKey, voiceOnly, type DubPrice, type DubSessionView, type DubStage, type OneShotModel } from "@/lib/av/dub";
+import {
+  BACKGROUND_DB,
+  crowdedLines,
+  DEFAULT_VOICE_SPLIT,
+  dubResult,
+  languageStage,
+  MUSIC_MODEL_NOTE,
+  ONE_SHOT_MODELS,
+  priceLine,
+  reviewCues,
+  takeLines,
+  translateKey,
+  VOICE_SPLIT_IDS,
+  VOICE_SPLITS,
+  voiceOnly,
+  voiceSplitOf,
+  type DubPrice,
+  type DubSessionView,
+  type DubStage,
+  type OneShotModel,
+  type VoiceSplit,
+} from "@/lib/av/dub";
 import { languageByCode, supportsTarget, type DubRoute } from "@/lib/av/languages";
 import type { Cue } from "@/lib/cues";
 import { cn } from "@/lib/utils";
@@ -34,8 +55,12 @@ const ONE_SHOT: Record<OneShotModel, { name: string; note: string }> = {
   "elevenlabs-dubbing": { name: "ElevenLabs Dubbing", note: "Keeps each speaker's voice, no lip re-sync · ≈ $0.60 per minute" },
 };
 
+// The Voice split menu (open engine): what each one does to the soundtrack.
+const SPLIT_LABEL: Record<VoiceSplit, string> = { dbs: "DBS: keeps music and effects, CPU-friendly", melband: "MelBand RoFormer" };
+
 const ROUTE_LINE = {
-  open: "Open source: MelBand RoFormer splits the voice from the music and Qwen3-ASR times it → an AI translates each line → you review → Chatterbox speaks each line in the cloned voice, at its time → InfiniteTalk re-syncs the lips → mixed back over the music.",
+  open: (split: VoiceSplit) =>
+    `Open source: ${split === "dbs" ? "DBS splits the dialogue from the music and effects" : "MelBand RoFormer splits the voice from the music"} and Qwen3-ASR times it → an AI translates each line → you review → Chatterbox speaks each line in the cloned voice, at its time → InfiniteTalk re-syncs the lips → mixed back over the ${split === "dbs" ? "music and effects" : "music"}.`,
   cloud: "Cloud: ElevenLabs isolates the voice and Demucs lifts out the music and effects → Scribe v2 times the voice → Claude (or a local model) translates → you review → ElevenLabs speaks each line at its time and Chatterbox turns it into the speaker's voice → Sync Lipsync 3 → mixed back over the music and effects.",
 };
 
@@ -106,6 +131,11 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   const access = useModelAccess();
   const oneShotModels = keepOffered(ONE_SHOT_MODELS, (m) => offered(access, m, "cloud"));
   const model: OneShotModel = oneShotModels.includes(picked) ? picked : oneShotModels[0];
+  // The open engine's voice split: MelBand RoFormer (the default until the separation evaluation says otherwise) or DBS,
+  // either one left out when it's switched off in Settings → Models & licences.
+  const [pickedSplit, setSplit] = useState<VoiceSplit>(DEFAULT_VOICE_SPLIT);
+  const splits = keepOffered(VOICE_SPLIT_IDS, (k) => offered(access, VOICE_SPLITS[k].modelId, "open"));
+  const split: VoiceSplit = splits.includes(pickedSplit) ? pickedSplit : splits[0];
   const [source, setSource] = useState("auto");
   const [targets, setTargets] = useState<string[]>(["es"]);
   const oneShot = mode === "oneshot" && engine === "cloud";
@@ -115,7 +145,10 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
     return l && supportsTarget(route, l);
   });
   const blocker = !video ? "Add the video to translate" : video.uploading ? "Uploading…" : !usable.length ? "Pick a language to dub into" : null;
-  const body = video && !video.uploading && usable.length ? { engine, mode: oneShot ? ("oneshot" as const) : ("steps" as const), model: oneShot ? model : undefined, video: video.ref, source, targets: usable, duration } : null;
+  const body =
+    video && !video.uploading && usable.length
+      ? { engine, mode: oneShot ? ("oneshot" as const) : ("steps" as const), model: oneShot ? model : undefined, video: video.ref, source, targets: usable, duration, ...(engine === "open" && { voiceSplit: split }) }
+      : null;
   const price = useDubPrice(body);
   const start = () => {
     if (visitor) return;
@@ -189,6 +222,36 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
               <p className="text-[12px] text-muted-foreground sm:ml-2">{ONE_SHOT[model].note}</p>
             </div>
           )}
+          {!oneShot && engine === "open" && (
+            <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-start">
+              <Label htmlFor="dub-split" className="text-[13px] sm:w-32 sm:pt-2">
+                Voice split
+              </Label>
+              <div className="min-w-0 flex-1">
+                {splits.length > 1 ? (
+                  <Select value={split} onValueChange={(v) => setSplit(v as VoiceSplit)}>
+                    <SelectTrigger id="dub-split" className="h-9 w-full rounded-full sm:w-80">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {splits.map((k) => (
+                        <SelectItem key={k} value={k}>
+                          {SPLIT_LABEL[k]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p id="dub-split" className="pt-1.5 text-[13px] font-medium">
+                    {VOICE_SPLITS[split].name}
+                  </p>
+                )}
+                <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground">{VOICE_SPLITS[split].note}.</p>
+              </div>
+            </div>
+          )}
+          {/* The cloud splits the music and effects with Demucs (no SAM Audio on the cloud: the owner's call). */}
+          {!oneShot && engine === "cloud" && <p className="mt-3 text-[12px] leading-snug text-muted-foreground">Music and effects: Demucs. {MUSIC_MODEL_NOTE}.</p>}
         </Panel>
         <Panel title="Languages">
           <div className="space-y-3">
@@ -214,7 +277,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
         </Panel>
         <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
           <p className="flex-1 text-[12px] leading-relaxed text-muted-foreground">
-            {oneShot ? `${ONE_SHOT[model].name} returns the finished video for each language.` : engine === "open" ? ROUTE_LINE.open : ROUTE_LINE.cloud}
+            {oneShot ? `${ONE_SHOT[model].name} returns the finished video for each language.` : engine === "open" ? ROUTE_LINE.open(split) : ROUTE_LINE.cloud}
           </p>
           <div className="flex shrink-0 items-center gap-3 self-end sm:self-auto">
             <PriceNote price={price.data} loading={price.isFetching && !price.data} error={price.error as Error | null} hint={oneShot ? undefined : "Translating costs little; you'll see the voice's price before it speaks"} />
@@ -319,7 +382,13 @@ const PREPARE_LABEL: Record<string, string> = { stems: "Voice, background and tr
 function prepareRows(s: DubSessionView, lang: string): StepRow[] {
   // Older open dubs transcribed in a step of their own.
   const keys = Object.keys(s.prepare ?? {}).filter((k) => !k.startsWith("translate:"));
-  const label = (k: string) => (k === "stems" && keys.includes("words") ? "Voice and background" : (PREPARE_LABEL[k] ?? k));
+  // An open dub's split names its model (DBS keeps the music and effects; dubs before the setting ran MelBand RoFormer).
+  const stems = s.generations[s.prepare?.stems ?? ""];
+  const split = s.engine === "open" ? (s.voiceSplit ?? voiceSplitOf(stems?.modelId) ?? DEFAULT_VOICE_SPLIT) : undefined;
+  const label = (k: string) => {
+    const base = k === "stems" && keys.includes("words") ? "Voice and background" : (PREPARE_LABEL[k] ?? k);
+    return k === "stems" && split ? `${base} · ${VOICE_SPLITS[split].name}` : base;
+  };
   return [...keys.map((k) => ({ key: k, label: label(k), g: s.generations[s.prepare![k]] })), { key: "t", label: `Translate into ${languageByCode(lang)?.name ?? lang}`, g: s.generations[s.prepare?.[translateKey(lang)] ?? ""] }];
 }
 

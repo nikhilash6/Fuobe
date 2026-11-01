@@ -275,6 +275,11 @@ describe("studio tools", () => {
     expect(steps.find((s) => s.key === "voice1")).toMatchObject({ after: ["tr1", "stems"], chain: [{ slot: "prompt" }, { slot: "voiceAudio", stem: "voice" }] });
     expect(steps.find((s) => s.key === "film0")).toMatchObject({ after: ["lips0", "voice0", "stems"], chain: [{ slot: "video" }, { slot: "audio" }, { slot: "audio2", stem: "background" }] });
     expect(steps[3].request.step).toMatchObject({ label: "Voice · Spanish", of: 10 });
+    expect(steps[0].request.modelId).toBe("oss-voice-separate");
+    // The Voice split: DBS keeps the music and effects; the rest of the plan is the same.
+    const withDbs = studio.fallbackSteps.dub({ video, languages: ["Spanish", "German"], voice_split: "dbs" }, { engine: "open" });
+    expect(withDbs[0].request.modelId).toBe("oss-dbs-voice-separate");
+    expect(withDbs.slice(1)).toEqual(steps.slice(1));
     const noLips = studio.fallbackSteps.dub({ video, languages: ["French"], lipsync: false }, { engine: "open" });
     expect(noLips.map((s) => s.request.op)).toEqual(["separate-audio", "transcribe", "translate", "tts", "mux"]);
     // Cloud: one HeyGen job per language.
