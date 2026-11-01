@@ -20,8 +20,8 @@ import {
  *   the stream-copy mux (oss-mux): one stem for No dialogue (background) and Dialogue only (voice), which the provider
  *   runs as video-mux-audio-replace; the voice over the background at a lower level for Lower the music, which it runs
  *   as video-mux-audio. Concatenate Video with complete_audio copies the picture packet by packet.
- * - Cloud: none. DBS is hosted nowhere, and SAM Audio in its place is the owner's call, not taken
- *   (docs/handoff/owner-decisions.json samAudioCloud: false): the cloud engine says the tool runs on your GPU.
+ * - Cloud: none. DBS is hosted nowhere and no other model stands in for it: the cloud engine says the tool runs on
+ *   your GPU.
  */
 
 export const REMOVE_DIALOGUE_FEATURE = "remove-dialogue";

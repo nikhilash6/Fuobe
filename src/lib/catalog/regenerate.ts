@@ -5,7 +5,7 @@
  * result at 2K (the same hosted model asked for a size it offers, never a stand-in for the open model).
  *
  * Nobody hosts the open model, so Regenerate · creative is GPU-only: the cloud engine says it runs on your GPU, and
- * Engine mode "Paid APIs only" hides it (the owner's rule of 10-30).
+ * Engine mode "Paid APIs only" hides it.
  */
 import type { Generation, GenerationRequest, LoraRef } from "./types";
 

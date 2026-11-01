@@ -418,7 +418,7 @@ export const KNOWN_MODELS = {
   'qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors', variants: ['qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors', 'qwen3.5_9b_flux3_prompt_upsampler_bf16.safetensors'] },
 };
 
-// FLUX 3 Image Klein (flux3-klein-*): every file's licence, as information (the owner's rule: never a gate).
+// FLUX 3 Image Klein (flux3-klein-*): every file's licence, as information (never a gate).
 const KLEIN_LICENSE =
   'FLUX Kommunity License v1.0 (FLUX 3 Image Klein and Klein Base: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross ' +
   'annual revenue; other commercial use needs a BFL licence; not blanket permission for commercial fine-tuning or distribution); Qwen3-VL-4B-Instruct ' +

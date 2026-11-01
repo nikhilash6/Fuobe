@@ -8,8 +8,7 @@ import { clock, type ToolPlan } from "./audio-tools";
  * channel rules.
  *
  * - Open engine (ComfyUI + ComfyUI-DBS, CPU or GPU): one job on oss-dbs-separate (graph separate-soundtrack-dbs).
- * - Cloud: none. DBS is hosted nowhere, and a different model in its place (fal's SAM Audio) is the owner's call, not
- *   taken: the cloud engine says the tool runs on your GPU. A result's mix still goes back on a video on either engine
+ * - Cloud: none. DBS is hosted nowhere and no other model stands in for it: the cloud engine says the tool runs on your GPU. A result's mix still goes back on a video on either engine
  *   (oss-mux / fal merge-audio-video).
  */
 

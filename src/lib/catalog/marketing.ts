@@ -940,7 +940,7 @@ export interface ModelChoice {
   note?: string;
   /** Its name, where the page has no model facts (Ads Studio's picture picker). */
   name?: string;
-  /** Listed with its note but not picked on this engine, and why: it runs on your GPU only (the owner's 10-30 rule). */
+  /** Listed with its note but not picked on this engine, and why: it runs on your GPU only. */
   unavailable?: string;
 }
 

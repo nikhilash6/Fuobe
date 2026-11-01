@@ -1596,7 +1596,7 @@ export function counterpart(graph: CanvasGraph, n: CanvasNode, engine: Engine): 
   const current = n.data.modelId ? getModel(n.data.modelId) : undefined;
   // A Fuobe Original runs on both: it stays, on the other engine.
   if (current && runsOn(current, engine)) return current;
-  // Open-H3 Regenerate is GPU-only: nobody hosts it, so it has no cloud stand-in (the owner's rule).
+  // Open-H3 Regenerate is GPU-only: nobody hosts it, so it has no cloud stand-in.
   if (current?.id === REGEN_MODEL) return undefined;
   if (n.type !== "model") return defaultModelForNode(n, engine);
   const op = n.data.op ?? effectiveOp(graph, n) ?? (current ? current.routes[0].op : KIND_OP[n.data.mediaKind ?? "image"]);

@@ -295,7 +295,7 @@ describe("brand kits", () => {
 
     // A Standalone product shot: on the user's GPU the Original cuts one product photo out and relights it
     // (product-shot-qwen-edit-2509); that recipe has no hosted copy, so the cloud starts on Bria Product Shot and the
-    // Original is listed there as running on your GPU only (the owner's 10-30 rule).
+    // Original is listed there as running on your GPU only.
     const shot = mk.planMarketing({ engine: "cloud", format: "product-standalone", templateId: "ps-ice-bath" }, ctx);
     expect(shot.steps[0].request).toMatchObject({ modelId: "bria-product-shot", op: "edit" });
     expect(shot.steps[0].request.params?.extra).toBeUndefined();

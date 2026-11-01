@@ -361,7 +361,7 @@ describe("Fuobe Speak", () => {
     expect(list.models.find((m) => m.id === "fuobe-speak")).toBeTruthy();
   });
 
-  it("says what each engine runs (the owner's call of 2026-10-30): the GPU adds FusioniX, the cloud runs fal's InfiniteTalk without it", () => {
+  it("says what each engine runs: the GPU adds FusioniX, the cloud runs fal's InfiniteTalk without it", () => {
     const speak = getModel("fuobe-speak")!;
     // The model menu's line on both engines.
     for (const e of ["open", "cloud"] as const) expect(view("fuobe-speak", e).tagline).toMatch(/InfiniteTalk \+ the FusioniX LoRA free on your GPU \(16 GB\), or fal's InfiniteTalk without the LoRA$/);

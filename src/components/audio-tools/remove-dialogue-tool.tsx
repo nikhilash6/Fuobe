@@ -80,7 +80,7 @@ import {
  * Video tools → Remove dialogue (DBS D2). Drop or pick a video; choose No dialogue (music and effects), Dialogue only or
  * Lower the music (−30…0 dB); DBS splits the soundtrack on your ComfyUI and the stream-copy mux puts the new sound on
  * the picture without re-encoding it. Before / after players, and the stem taken out as a download. There's no hosted
- * DBS (and SAM Audio in its place isn't the owner's choice), so the cloud engine says the tool runs on your GPU.
+ * DBS (and no other model stands in for it), so the cloud engine says the tool runs on your GPU.
  */
 
 type Source = {

@@ -1,6 +1,6 @@
 /**
- * Fuobe Restore (package archive-restore): Restore & colourise archive footage with Lightricks' Restore IC-LoRA, the
- * owner's request of 2026-10-29. The recipe is the model card's (Hugging Face Lightricks/LTX-2.5-22b-IC-LoRA-Restore,
+ * Fuobe Restore (package archive-restore): Restore & colourise archive footage with Lightricks' Restore IC-LoRA.
+ * The recipe is the model card's (Hugging Face Lightricks/LTX-2.5-22b-IC-LoRA-Restore,
  * read as data; research studios[archive-restore] in docs/research/fuobe-originals-recipes-5.json):
  *
  * - On your GPU: the clip lanczos-resized to the working canvas (1440 wide for 4:3, 1920x1088 for 16:9, multiples of 32,
@@ -619,7 +619,7 @@ export function restoreTitle(prompt: string, clipName?: string): string {
 /** The hardware line under the GPU choice (no measurement here: the CPU server only checks the graph). */
 export const GPU_NOTE = "LTX-2.5 22B distilled with tiled latent fusion: a 24 GB GPU class, minutes per window. Free on your GPU.";
 
-/** What the cloud does differently (the owner's rule: say plainly what runs where). */
+/** What the cloud does differently (said plainly: what runs where). */
 export const CLOUD_NOTE =
   "The cloud runs LTX-2.3 22B on fal with the same Restore IC-LoRA, one untiled pass a piece at the tier's size. The card recommends tiles at every size, so your GPU's tiled run is the reference recipe.";
 

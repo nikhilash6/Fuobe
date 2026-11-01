@@ -454,8 +454,8 @@ still lands as a diff for a person to review. Defaults stay code changes that a 
 ### DoP's Mixed Media effects: the first run with paid keys
 
 Since build plan O9, DoP's 32 Mixed Media effects run on Fuobe DoP in the cloud (Fuobe Mixed Media draws your
-still in the look, then Fuobe DoP animates it); before, they ran on their words on Kling 2.5 Turbo. The owner
-kept Fuobe DoP as the default on 2026-10-30, on one condition: the first evaluation run with paid keys compares
+still in the look, then Fuobe DoP animates it); before, they ran on their words on Kling 2.5 Turbo. Fuobe DoP
+stayed the default on 2026-10-30, on one condition: the first evaluation run with paid keys compares
 the two blind. The suite says so (`"runFirst": "paid-keys"`; `pnpm eval:validate` marks it), and its `decides`
 field holds the rule:
 

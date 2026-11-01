@@ -392,7 +392,7 @@ node validate-workflows.mjs qwen-image-edit-2509-angles image-face-mosaic-sam3 v
   colour correction as `reinhard`, and not the Evolution intensities. `tests/open-tools.test.ts` and
   `tests/evolution-comfy.test.ts` check the provider's bindings on the library files.
 
-### Restore & colourise (o/archive-restore, 2026-10-30)
+### Restore & colourise (2026-10-30)
 
 One hand-built entry for Video tools → Restore & colourise and the Canvas Restore node: Lightricks' Restore IC-LoRA on
 LTX-2.5 22B distilled with tiled latent fusion (docs/research/fuobe-originals-recipes-5.json, studio `archive-restore`):

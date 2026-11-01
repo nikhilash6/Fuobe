@@ -18704,7 +18704,7 @@
    "original": {
     "model": "fuobe-evolution",
     "added": "2026-10-29 (build plan O13)",
-    "source": "Fuobe's own recipe for Higgsfield Evolution's Original, from build plan O13 (denoise by intensity, an LLM-written direction). The cloud half moved on 2026-11-01 (package owner-calls-1, the owner's call of 2026-10-30) from LTX-2.3 22B video-to-video (a different model) to fal's hosted Wan 2.2 Fun VACE depth, the GPU recipe's model; its schema was read again that day (hostedBaseEndpoints[fal-ai/wan-22-vace-fun-a14b/depth]). Unmeasured until the evaluation harness (O8) runs the evolution suite on a GPU and on fal.",
+    "source": "Fuobe's own recipe for Higgsfield Evolution's Original, from build plan O13 (denoise by intensity, an LLM-written direction). The cloud half moved on 2026-11-01 (package owner-calls-1, decided 2026-10-30) from LTX-2.3 22B video-to-video (a different model) to fal's hosted Wan 2.2 Fun VACE depth, the GPU recipe's model; its schema was read again that day (hostedBaseEndpoints[fal-ai/wan-22-vace-fun-a14b/depth]). Unmeasured until the evaluation harness (O8) runs the evolution suite on a GPU and on fal.",
     "intensity": {
      "low": 0.45,
      "medium": 0.65,
@@ -19124,7 +19124,7 @@
       "checked": "2026-11-01",
       "fal": "fal's model search lists three InfiniteTalk endpoints (fal-ai/infinitalk, fal-ai/infinitalk/video-to-video, fal-ai/infinitalk/single-text); their OpenAPI inputs (prompt, image_url or video_url, audio_url or text_input and voice, num_frames, resolution, seed, acceleration, enable_safety_checker) have no LoRA field, and fal-ai/infinitalk/lora doesn't exist (404)",
       "replicate": "no InfiniteTalk model found at the likely slugs (zsxkib/infinite-talk, zsxkib/infinitetalk, meigen-ai/infinitetalk, lucataco/infinitetalk, fofr/infinitetalk, camenduru/infinitetalk, wan-video/infinitetalk: 404); Replicate's search needs an API token, which this machine doesn't have, so a model under another name isn't ruled out. zsxkib/multitalk exists (MultiTalk, a different model)",
-      "result": "no hosted InfiniteTalk takes a LoRA: the cloud runs fal's InfiniteTalk without FusioniX, the GPU keeps it, and the UI says so (the owner's call of 2026-10-30)"
+      "result": "no hosted InfiniteTalk takes a LoRA: the cloud runs fal's InfiniteTalk without FusioniX, the GPU keeps it, and the UI says so (decided 2026-10-30)"
      }
     },
     "motion": {
@@ -19194,7 +19194,7 @@
      "edit": "fal-ai/qwen-image-edit-2511 (fal-ai/qwen-image-edit-2511/lora with LoRAs; Replicate qwen/qwen-image-edit-2511)",
      "t2i": "fal-ai/qwen-image-2512 (fal-ai/qwen-image-2512/lora with LoRAs)",
      "price": "$0.03 per megapixel for an edit, $0.035 with LoRAs; text to image $0.02 per megapixel",
-     "productShot": "none: the Standalone shot runs on the GPU only (the owner's 10-30 rule, package owner-calls-1's fix, 2026-11-01). fal hosts BiRefNet (fal-ai/birefnet/v2) and Qwen-Image-Edit 2509 with LoRAs by URL (fal-ai/qwen-image-edit-plus-lora, so the White_to_Scene LoRA could load), but no hosted step puts the cut-out on white: fal-ai/birefnet/v2 (output_mask, mask_only, refine_foreground) and fal-ai/bria/background/remove take no background colour (schemas read 2026-11-01), and the LoRA turns a product on white into a scene. The cloud's Standalone format lists the Original as running on your GPU only and starts on a partner; until this fix it made the shot as a plain 2511 edit"
+     "productShot": "none: the Standalone shot runs on the GPU only (the 10-30 rule, package owner-calls-1's fix, 2026-11-01). fal hosts BiRefNet (fal-ai/birefnet/v2) and Qwen-Image-Edit 2509 with LoRAs by URL (fal-ai/qwen-image-edit-plus-lora, so the White_to_Scene LoRA could load), but no hosted step puts the cut-out on white: fal-ai/birefnet/v2 (output_mask, mask_only, refine_foreground) and fal-ai/bria/background/remove take no background colour (schemas read 2026-11-01), and the LoRA turns a product on white into a scene. The cloud's Standalone format lists the Original as running on your GPU only and starts on a partner; until this fix it made the shot as a plain 2511 edit"
     },
     "open": {
      "edit": "qwen-image-edit-2511-multi (up to 3 references: product, person, setting)",
@@ -19258,7 +19258,7 @@
   {
    "id": "archive-restore",
    "name": "Restore & colourise (archive footage)",
-   "higgsfield": "none: an owner request (2026-10-29), not a Higgsfield product",
+   "higgsfield": "none: a Fuobe original (2026-10-29), not a Higgsfield product",
    "original": {
     "model": "fuobe-restore",
     "recipe": "Lightricks' LTX Restore IC-LoRA card (Hugging Face Lightricks/LTX-2.5-22b-IC-LoRA-Restore at 79245e197a6cd3251e77d178dc380b0e9f2d6563)",

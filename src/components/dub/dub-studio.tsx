@@ -251,7 +251,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
               </div>
             </div>
           )}
-          {/* The cloud splits the music and effects with Demucs (no SAM Audio on the cloud: the owner's call). */}
+          {/* The cloud splits the music and effects with Demucs. */}
           {!oneShot && engine === "cloud" && (
             <div className="mt-3 space-y-1 text-[12px] leading-snug text-muted-foreground">
               <p>Music and effects: Demucs. {MUSIC_MODEL_NOTE}.</p>

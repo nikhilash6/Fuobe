@@ -174,7 +174,7 @@ const open: ModelDef[] = [
 
   // FLUX 3 Image Klein (BFL, 2026-10-13; research #10 §6.3): text to image and edits with up to 10 references, a layout of
   // boxes in its own table (compileFlux3), BFL's prompt helper first unless it is off. Klein Base takes your FLUX 3 Klein
-  // LoRAs. The cloud halves are flux-3-klein and flux-3-klein-base on fal. Not a default anywhere (the owner's picks stay).
+  // LoRAs. The cloud halves are flux-3-klein and flux-3-klein-base on fal. Not a default anywhere (the current picks stay).
   o({
     id: "oss-flux3-klein",
     name: "FLUX 3 Klein",
@@ -183,7 +183,7 @@ const open: ModelDef[] = [
     kind: "image",
     tagline: "BFL's open 5.6B model: images up to 4K, edits with up to 10 references, layout boxes · 16-24 GB GPU · FLUX Kommunity licence",
     badges: ["new", "top"],
-    // The Image studio's Best list, as its brief asks; the Edit studio offers it, and its Best list stays the owner's.
+    // The Image studio's Best list, as its brief asks; the Edit studio offers it, and its Best list stays as it is.
     bestOps: ["t2i"],
     // The edit follows reference 1's shape (about 1 MP); text to image takes the aspect ratio and size.
     routes: [
@@ -2210,7 +2210,7 @@ const originals: ModelDef[] = [
   }),
   // Fuobe Evolution (O13): Higgsfield Evolution's Original (src/lib/catalog/evolution.ts plans the segments, the direction
   // frame and the sound; Video tools → Evolution is its studio). Wan 2.2 Fun VACE on both engines: the graph on your GPU,
-  // fal's hosted depth route in the cloud (since the owner's call of 2026-10-30; LTX-2.3 before). The change intensity is
+  // fal's hosted depth route in the cloud (since 2026-10-30; LTX-2.3 before). The change intensity is
   // the denoise the GPU graph starts from; fal's route has no such field, so in the cloud the change shapes only the
   // direction frame Evolution makes, and the composer has no Change control there.
   {

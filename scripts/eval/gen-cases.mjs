@@ -401,7 +401,7 @@ function dopMixSuite() {
  */
 const MIXED_MEDIA_PICKS = ["Sketch", "Noir", "Vintage", "Paper", "Hand Paint", "Comic", "Two Color", "Broken Mirror"];
 
-/** The rule the owner set on 2026-10-30 (docs/handoff/owner-decisions.json ownerCalls_pr14.dopMixedMediaDefault). */
+/** The DoP Mixed Media default since 2026-10-30. */
 export const DOP_MIXED_MEDIA_RULE =
   "Fuobe DoP stays the cloud default for DoP's 32 Mixed Media effects unless it clearly loses this blind comparison: in one cloud run with at least 6 blind ratings per case, Kling 2.5 Turbo takes at least two thirds of all non-tie ratings and more than half of them in at least 6 of the 8 cases. Then the default goes back to Kling 2.5 Turbo, in a reviewed code change (src/lib/catalog/dop.ts); anything less keeps Fuobe DoP.";
 

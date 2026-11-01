@@ -46,7 +46,7 @@ describe("Fuobe Evolution: intensities", () => {
     expect(evo.model).toBe(EVOLUTION.model);
     expect(evo.intensity).toEqual(Object.fromEntries(INTENSITIES.map((i) => [i.id, i.denoise])));
     expect(evo.limits).toEqual({ minSeconds: EVOLUTION.minSeconds, maxSeconds: EVOLUTION.maxSeconds, maxReferences: EVOLUTION.maxReferences, maxDirectionChars: EVOLUTION.maxDirectionChars });
-    // The cloud runs the GPU's model hosted on fal (the owner's call of 2026-10-30), with the GPU's direction frame.
+    // The cloud runs the GPU's model hosted on fal (since 2026-10-30), with the GPU's direction frame.
     expect(evo.cloud.endpoint).toBe("fal-ai/wan-22-vace-fun-a14b/depth");
     expect(evo.cloud.frame).toBe("fal-ai/qwen-image-edit-2511");
     expect(evo.cloud.resolutions).toEqual(["480p", "580p", "720p"]);

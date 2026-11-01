@@ -391,8 +391,8 @@ describe("the runner on the demo provider", () => {
         ["shorts/segment", "gemini-omni-flash", null],
         ["shorts/session", "gemini-omni-flash", null],
       ]);
-      // DoP's Mixed Media effects, blind: the shipped preset on Fuobe DoP against its words on Kling 2.5 Turbo (the
-      // owner's call of 2026-10-30), the first suite to run once paid keys exist, with the rule it decides by.
+      // DoP's Mixed Media effects, blind: the shipped preset on Fuobe DoP against its words on Kling 2.5 Turbo (decided
+      // 2026-10-30), the first suite to run once paid keys exist, with the rule it decides by.
       const dmm = await dry(["--suite", "dop-mixed-media", "--engine", "cloud", "--variants", "original,partner", "--seeds", "1001", "--allow-fixtures"]);
       expect(dmm.jobs).toHaveLength(16);
       expect(new Set(dmm.jobs.map((j) => `${j.variant}:${j.model}:${j.skip ?? ""}`))).toEqual(new Set(["original:fuobe-dop:", "partner:kling-2-5-turbo:"]));
