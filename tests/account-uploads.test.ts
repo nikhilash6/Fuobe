@@ -136,7 +136,7 @@ describe("an account's upload", () => {
     try {
       const r = await upload(TINY_PNG, { cookie: cookieA, type: "image/png" });
       expect(r.status).toBe(413);
-      expect((await r.json()).error).toMatch(/reached 1 GB/);
+      expect((await r.json()).error).toMatch(/used your 1 GB/);
     } finally {
       db().prepare("DELETE FROM assets WHERE id = 'full'").run();
     }

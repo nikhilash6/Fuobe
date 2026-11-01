@@ -135,8 +135,8 @@ try {
       await pick.click();
       await page.getByRole("button", { name: "Look: DigitalCam" }).waitFor({ timeout: 15_000 }).catch(() => {});
       check(`${tag}: a look is picked`, (await page.getByRole("button", { name: "Look: DigitalCam" }).count()) === 1);
-      await page.waitForFunction(() => /Frame 1 on Fuobe Soul in the DigitalCam look/.test(document.body.innerText), null, { timeout: 15_000 }).catch(() => {});
-      check(`${tag}: it says frame 1 is made on Fuobe Soul in the look`, /Frame 1 on Fuobe Soul in the DigitalCam look/.test(await text()));
+      await page.waitForFunction(() => /Frame 1 sets the DigitalCam look/.test(document.body.innerText), null, { timeout: 15_000 }).catch(() => {});
+      check(`${tag}: it says frame 1 sets the look`, /Frame 1 sets the DigitalCam look/.test(await text()));
       await page.waitForFunction(() => /Placeholder · free/.test(document.body.innerText), null, { timeout: 15_000 }).catch(() => {});
       check(`${tag}: the board's price before it runs (a demo here)`, /Placeholder · free/.test(await text()) && /4 frames/.test(await text()));
       check(`${tag}: no sideways scroll (Storyboard)`, (await sideways()) <= 1, `${await sideways()} px`);

@@ -173,10 +173,10 @@ describe("the DBS model and channels a run gets", () => {
     expect(dbsModelFor(undefined, "cuda", ["DBS-BSRNN-DnR"])).toBe("DBS-BSRNN-DnR");
     expect(() => dbsModelFor("best", "cuda", ["DBS-BSRNN-DnR"])).toThrow(missingDbs("DBS-TIGER-DnR", ["DBS-BSRNN-DnR"]));
     expect(missingDbs("DBS-TIGER-DnR", ["DBS-BSRNN-DnR"])).toBe(
-      'Best (DBS-TIGER) isn\'t installed on your ComfyUI (models/dbs/DBS-TIGER-DnR). Copy the install commands from Workflows → "Split a soundtrack", or pick Fast (DBS-BSRNN).',
+      'Best (DBS-TIGER) isn\'t installed on your ComfyUI (models/dbs/DBS-TIGER-DnR). Copy the install commands from the Connect your GPU page, or pick Fast (DBS-BSRNN).',
     );
     // No weights at all: said in words, not a FileNotFoundError from inside ComfyUI.
-    expect(() => dbsModelFor(undefined, "cpu", [])).toThrow(/Fast \(DBS-BSRNN\) isn't installed on your ComfyUI \(models\/dbs\/DBS-BSRNN-DnR\)\. Copy the install commands from Workflows → "Split a soundtrack"\.$/);
+    expect(() => dbsModelFor(undefined, "cpu", [])).toThrow(/Fast \(DBS-BSRNN\) isn't installed on your ComfyUI \(models\/dbs\/DBS-BSRNN-DnR\)\. Copy the install commands from the Connect your GPU page\.$/);
   });
 });
 

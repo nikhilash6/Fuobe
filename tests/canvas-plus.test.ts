@@ -375,7 +375,7 @@ describe("tables", () => {
     g.nodes.push(node("out", "output", {}, 1600, 0), node("t2", "table", { label: "Other", columns: ["X"], rows: [["a"]] }, 0, 300), node("join", "join", { modelId: "join-clips" }, 1200, 400));
     expect(connectionError(g, { source: "t", target: "out", targetHandle: "in" })).toMatch(/Text input/);
     expect(connectionError(g, { source: "t2", target: "vid", targetHandle: "prompt" })).toMatch(/“Other” and “Cast” both reach “vid”|“Cast” and “Other” both reach/);
-    expect(connectionError(g, { source: "vid", target: "join", targetHandle: "videos" })).toMatch(/Video concatenator joins a clip per row/);
+    expect(connectionError(g, { source: "vid", target: "join", targetHandle: "videos" })).toMatch(/Assemble film joins a clip per row/);
     expect(paletteItems("open").find((p) => p.id === "table")!.disabled).toBeUndefined();
   });
 

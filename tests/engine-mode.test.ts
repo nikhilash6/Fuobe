@@ -24,14 +24,14 @@ describe("engine mode", () => {
 
   it("open-source-only blocks paid models on the server", () => {
     setSetting("engineMode", "open");
-    expect(() => createGenerations({ feature: "image", modelId: "nano-banana-pro", prompt: "x" })).toThrow(/open source only/);
+    expect(() => createGenerations({ feature: "image", modelId: "nano-banana-pro", prompt: "x" })).toThrow(/isn't available here/);
     const [g] = createGenerations({ feature: "image", modelId: "oss-z-image-turbo", prompt: "x" });
     expect(g.engine).toBe("open");
   });
 
   it("paid-only blocks open models", () => {
     setSetting("engineMode", "cloud");
-    expect(() => createGenerations({ feature: "image", modelId: "oss-z-image-turbo", prompt: "x" })).toThrow(/paid cloud APIs only/);
+    expect(() => createGenerations({ feature: "image", modelId: "oss-z-image-turbo", prompt: "x" })).toThrow(/isn't available here/);
     setSetting("engineMode", "both");
   });
 });

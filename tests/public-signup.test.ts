@@ -177,7 +177,7 @@ describe("proxy with public sign-up on", () => {
     ]) {
       const r = proxy(req(p, { method, cookie: account }));
       expect(r.status, `${method} ${p}`).toBe(403);
-      expect((await r.json()).error).toMatch(/owner/);
+      expect((await r.json()).error).toMatch(/aren't part of your account/);
     }
   });
 
@@ -311,7 +311,7 @@ describe("accounts never see or change the owner's library", () => {
     expect((await r.json()).code).toBe("library");
     const read = proxy(req("/api/generations/g1", { cookie }));
     expect(read.headers.get(access.GUEST_HEADER)).toBeNull();
-    expect((await read.json()).error).toMatch(/owner/);
+    expect((await read.json()).error).toMatch(/can't find/);
   });
 
   it("keeps the owner's runs unchanged", () => {

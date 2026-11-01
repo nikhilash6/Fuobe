@@ -173,7 +173,7 @@ describe("isolated-worker models in the studios", () => {
     expect(ids(studioCatalog(FOLEY_STUDIO))).not.toContain("oss-thinksound");
     // Neither is a default: they need a second ComfyUI.
     expect([LIPSYNC_STUDIO.defaultModels.open, SFX_STUDIO.defaultModels.open]).toEqual(["oss-infinitetalk", "oss-stable-audio-3"]);
-    expect(toModelRow(getModel("oss-latentsync")!).note).toBe("Runs on the isolated ComfyUI worker");
+    expect(toModelRow(getModel("oss-latentsync")!).note).toBe("Runs on a second ComfyUI");
     expect(toModelRow(getModel("oss-infinitetalk")!).note).toBeUndefined();
   });
 });

@@ -60,13 +60,13 @@ describe("inside an account's work, only its own files", () => {
     await asA(async () => {
       expect((await readRef(mine.url)).data.equals(TINY_PNG)).toBe(true);
       expect((await readRef(`data:text/plain;base64,${Buffer.from("hi").toString("base64")}`)).data.toString()).toBe("hi");
-      await expect(readRef(owners.url)).rejects.toThrow(/isn't yours/);
+      await expect(readRef(owners.url)).rejects.toThrow(/can't find that file/);
       await expect(readRef(owners.id)).rejects.toBeInstanceOf(RefError);
-      await expect(readRef("https://example.com/a.png")).rejects.toThrow(/can't fetch links/);
+      await expect(readRef("https://example.com/a.png")).rejects.toThrow(/Upload the file/);
       await expect(readRef("/api/files/uploads/2020-01-01/nothing.png")).rejects.toThrow(/expired/);
     });
     // Another account can't read it either; the owner reads everything.
-    await runAsTenant({ kind: "account", id: b }, async () => expect(readRef(mine.url)).rejects.toThrow(/isn't yours/));
+    await runAsTenant({ kind: "account", id: b }, async () => expect(readRef(mine.url)).rejects.toThrow(/can't find that file/));
     expect((await readRef(owners.url)).data.length).toBe(TINY_PNG.length);
   });
 
@@ -130,13 +130,13 @@ describe("every step an account's run starts is its own", () => {
   });
 
   it("refuses a request stamped for another account, and a step that waits for someone else's run", () => {
-    expect(() => run(() => createGenerations({ feature: "video", modelId: "oss-wan22-14b", prompt: "x", account: b } as never))).toThrow(/another account/);
+    expect(() => run(() => createGenerations({ feature: "video", modelId: "oss-wan22-14b", prompt: "x", account: b } as never))).toThrow(/can't find that run/);
     db()
       .prepare(
         "INSERT INTO generations (id, feature, model_id, engine, provider, op, kind, status, request_json, outputs_json, created_at, updated_at) VALUES ('owner-dep', 'image', 'm', 'open', 'comfyui', 't2i', 'image', 'succeeded', '{}', '[]', 1, 1)",
       )
       .run();
-    expect(() => run(() => createGenerations({ feature: "video", modelId: "oss-wan22-14b", prompt: "x" } as never, { dependsOn: "owner-dep" }))).toThrow(/isn't yours/);
+    expect(() => run(() => createGenerations({ feature: "video", modelId: "oss-wan22-14b", prompt: "x" } as never, { dependsOn: "owner-dep" }))).toThrow(/can't find that run/);
     // A visitor's price check never starts a run.
     expect(() => runAsTenant({ kind: "guest" }, () => createGenerations({ feature: "video", modelId: "oss-wan22-14b", prompt: "x" } as never))).toThrow(/free account/);
   });

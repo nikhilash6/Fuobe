@@ -109,7 +109,7 @@ describe("adding a key", () => {
     const r = await put("fal", { key: BAD_FAL });
     expect(r.status).toBe(422);
     const text = await r.text();
-    expect(JSON.parse(text).error).toBe("fal.ai didn't accept this key. Copy it again from fal.ai's API keys page.");
+    expect(JSON.parse(text).error).toBe("fal.ai didn't accept this key. Copy it again from fal.ai.");
     expect(text).not.toContain("wrong-key");
     // A key that doesn't look like one gets the format hint too.
     const half = await put("fal", { key: "fal_only_one_half" });
@@ -182,7 +182,7 @@ describe("who may use the routes", () => {
   it("the owner is told where the studio's keys are; an unknown provider is 404", async () => {
     const owner = await put("fal", { key: GOOD_FAL }, "", ownerCookie());
     expect(owner.status).toBe(400);
-    expect((await owner.json()).error).toMatch(/Settings → Paid API configuration/);
+    expect((await owner.json()).error).toMatch(/Log in to add your keys/);
     expect((await put("openai", { key: GOOD_FAL })).status).toBe(404);
   });
 

@@ -107,7 +107,7 @@ try {
     });
     const page = await ctx.newPage();
     if (process.env.E2E_CONSOLE) page.on("console", (m) => console.log(`[page] ${m.type()} ${m.text()}`));
-    await page.goto(`${SITE}/status`, { waitUntil: "load" });
+    await page.goto(`${SITE}/settings`, { waitUntil: "load" });
     if (email) {
       const status = await page.evaluate(
         ({ email, login }) => fetch(login ? "/api/auth/login" : "/api/auth/signup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password: "long enough password" }) }).then((r) => r.status),

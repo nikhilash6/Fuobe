@@ -213,7 +213,7 @@ describe("the switches on the server", () => {
     expect(listed.find((m) => m.id === "fuobe-soul")?.engines).toEqual(["cloud"]);
     // Engine mode still decides first: open source only with ComfyUI switched off refuses an open model by its own message.
     setSetting("engineMode", "open");
-    expect(() => previewGeneration({ feature: "image", modelId: "nano-banana-pro", prompt: "a cat" })).toThrow(/open source only/);
+    expect(() => previewGeneration({ feature: "image", modelId: "nano-banana-pro", prompt: "a cat" })).toThrow(/isn't available here/);
   });
 
   it("picks the next model that is on, or keeps the default so its run says what to turn on", () => {
@@ -305,6 +305,6 @@ describe("chains and Originals refuse a switched-off step before anything is que
       /^Fuobe Soul in the cloud is turned off in Settings → Models & licences \(Proprietary paid API is switched off\)/,
     );
     // Engine mode still refuses the engine it rules out first.
-    expect(() => previewGeneration({ feature: "image", modelId: "fuobe-soul", prompt: "a cat", engine: "open" })).toThrow(/paid cloud APIs only/);
+    expect(() => previewGeneration({ feature: "image", modelId: "fuobe-soul", prompt: "a cat", engine: "open" })).toThrow(/isn't available here/);
   });
 });

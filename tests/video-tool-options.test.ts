@@ -116,7 +116,7 @@ describe("the composer's settings for these tools", () => {
     expect(settingsSummary(biref, { matteOutput: "matte" }, model("oss-video-matte-birefnet"))).toEqual(["Alpha mask"]);
     expect(shape(model("bria-video-bg"), VIDEO_MATTE_STUDIO.ops).matteOutput).toEqual(["cutout"]);
     expect(videoToolNote(model("bria-video-bg"), "matte")).toMatch(/cut-out only — BiRefNet and SAM also make the alpha mask/);
-    expect(videoToolNote(model("sam-3-1-video-mask"), "matte")).toMatch(/SAM 3 on your ComfyUI/);
+    expect(videoToolNote(model("sam-3-1-video-mask"), "matte")).toMatch(/Name what to keep and get its mask/);
     expect(videoToolNote(model("birefnet-video"), "matte")).toBeNull();
   });
 
@@ -125,8 +125,8 @@ describe("the composer's settings for these tools", () => {
     expect(cloud).toMatchObject({ colormap: ["grayscale", "turbo", "inferno", "magma", "viridis"], sideBySide: true, matteOutput: null });
     expect(settingsSummary(cloud, { colormap: "turbo", sideBySide: true }, model("depth-anything-video-cloud"))).toEqual(["auto", "Turbo", "Side by side"]);
     expect(videoToolNote(model("depth-anything-video-cloud"), "colormap")).toBeNull();
-    expect(videoToolNote(model("oss-video-depth-vda"), "colormap")).toBe("The open engine draws Grayscale and Inferno — Turbo, Magma and Viridis need the cloud engine.");
-    expect(videoToolNote(model("oss-video-depth-da3"), "colormap")).toMatch(/grayscale only — Video Depth Anything adds Inferno/);
+    expect(videoToolNote(model("oss-video-depth-vda"), "colormap")).toBe("Grayscale and Inferno work with open-source models. Turbo, Magma and Viridis need Cloud.");
+    expect(videoToolNote(model("oss-video-depth-da3"), "colormap")).toMatch(/grayscale only\. Video Depth Anything adds Inferno/);
     // Other studios don't get these sections.
     expect(settingsShape(model("seedance-2-5"), "t2v", "video", true)).toMatchObject({ matteOutput: null, colormap: null, sideBySide: false });
   });

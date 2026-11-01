@@ -372,8 +372,8 @@ describe("the Video studio and the other studio defaults", () => {
     expect(newOpenModels()[0].id).toBe("oss-minimax-h3");
     expect(getModel("oss-sdxl")!.hidden).toBe(true);
     expect(filterModels(MODELS, { kind: "image", ops: IMAGE_STUDIO.pickerOps ?? IMAGE_STUDIO.ops }).map((m) => m.id)).not.toContain("oss-sdxl");
-    // The Models page has no studio to send it to: its row links to itself.
-    expect(modelHref(getModel("oss-sdxl")!)).toMatch(/^\/models\?q=/);
+    // A hidden model with no picker links to its kind's studio.
+    expect(modelHref(getModel("oss-sdxl")!)).toBe("/image");
     expect(modelHref(h3)).toBe("/video?model=oss-minimax-h3");
   });
 

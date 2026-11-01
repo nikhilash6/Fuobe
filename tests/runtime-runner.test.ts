@@ -103,7 +103,7 @@ describe("timeouts (S3)", () => {
       await until(() => row(g.id).external_id);
       db().prepare("UPDATE generation_runs SET submitted_at = ?, started_at = NULL WHERE id = ?").run(Date.now() - 5 * 3_600_000, g.id);
       const done = await settle(g.id);
-      expect(done.error).toMatch(/waiting 4 hours in the provider's queue/);
+      expect(done.error).toMatch(/took too long to start/);
     } finally {
       restore();
     }
@@ -148,7 +148,7 @@ describe("restarts (S7)", () => {
     globalThis.__fuobeSubmitting!.add("uploading-1");
     try {
       await until(() => row("cut-off-1").status === "failed", 5000);
-      expect(row("cut-off-1").error).toBe("Interrupted before it reached the provider");
+      expect(row("cut-off-1").error).toBe("This run stopped before it started. Press Retry.");
       await sleep(1700);
       expect(row("uploading-1").status).toBe("queued");
     } finally {

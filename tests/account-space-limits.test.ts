@@ -172,7 +172,7 @@ describe("M-6: accounts can't fill the server's disk", () => {
     const r = await from("203.0.113.5", "sixth@example.com");
     expect(r.status).toBe(429);
     // It says what happened: the network, not the person, made the accounts.
-    expect((await r.json()).error).toBe("Too many new accounts from this network today. Try again tomorrow.");
+    expect((await r.json()).error).toBe("That's a lot of new accounts from one network today. Try again tomorrow.");
     const ok = await signup.POST(
       new Request("http://localhost:3000/api/auth/signup", { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.6" }, body: JSON.stringify({ email: "sixth@example.com", password: "long enough" }) }),
     );

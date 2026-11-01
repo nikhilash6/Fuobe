@@ -194,7 +194,7 @@ describe("round-3 open models", () => {
   it("runs Virtual Try-On on the try-on LoRA on the open engine", () => {
     const p = getPreset("app-virtual-try-on")!;
     expect(p.open).toMatchObject({ modelId: "oss-tryon-klein", op: "edit" });
-    expect(p.parity).toMatch(/try-on LoRA/);
+    expect(p.parity).toMatch(/dresses you in the new one/);
     const plan = planGeneration({ feature: "app", presetId: p.id, modelId: "oss-tryon-klein", inputs: { images: ["/me.png", "/dress.png"] } }, getModel, getPreset);
     // The LoRA's trigger leads the words (the graph's own prefix would add it too), and the run carries the LoRA so
     // Settings → Models & licences can switch it off; the graph doesn't load it twice (injectLoras).
