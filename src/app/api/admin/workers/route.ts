@@ -1,27 +1,35 @@
 import { connection } from "next/server";
-import { isOwnerRequest, sessionCookieOf } from "@/server/auth";
+import { adminAccess, audit } from "@/server/admin-tokens";
 import { addWorker, lanesCatalog, listWorkers } from "@/server/computer/pool";
 
 const NO_STORE = { "Cache-Control": "no-store" };
+const DENIED = "Only the studio's owner manages workers";
 
 /**
- * Settings → Workers (owner only, docs/gpu-workers.md): the shared GPUs with their state in words, and the lanes this
- * studio's catalog has (to allow per worker). POST `{ name, pool? }` adds one: paused, with no hours and no lanes; its
- * token is in this answer only.
+ * Settings → Workers (owner only, or an admin token with workers:read / workers:write; docs/gpu-workers.md): the shared
+ * GPUs with their state in words, and the lanes this studio's catalog has (to allow per worker). POST
+ * `{ name, pool? }` adds one: paused, with no hours and no lanes; its token is in this answer only.
  */
 export async function GET(request: Request) {
   await connection();
-  if (!isOwnerRequest(request, sessionCookieOf(request))) return Response.json({ error: "Only the studio's owner manages workers" }, { status: 403, headers: NO_STORE });
+  const access = adminAccess(request, "workers:read", DENIED);
+  if (access instanceof Response) return access;
   return Response.json({ workers: listWorkers(), lanes: lanesCatalog() }, { headers: NO_STORE });
 }
 
 export async function POST(request: Request) {
-  if (!isOwnerRequest(request, sessionCookieOf(request))) return Response.json({ error: "Only the studio's owner manages workers" }, { status: 403, headers: NO_STORE });
+  const access = adminAccess(request, "workers:write", DENIED);
+  if (access instanceof Response) return access;
   const body = (await request.json().catch(() => null)) as { name?: unknown; pool?: unknown } | null;
+  const name = typeof body?.name === "string" ? body.name.slice(0, 48) : "";
+  const pool = typeof body?.pool === "string" ? body.pool : undefined;
   try {
-    const w = addWorker(typeof body?.name === "string" ? body.name.slice(0, 48) : "", typeof body?.pool === "string" ? body.pool : undefined);
+    const w = addWorker(name, pool);
+    // The worker's token is in this answer only: never in the log.
+    audit(access.actor, "worker.add", w.id, { name: name.trim(), pool: pool ?? "pool" }, 201);
     return Response.json(w, { status: 201, headers: NO_STORE });
   } catch (e) {
+    audit(access.actor, "worker.add", null, { name: name.trim().slice(0, 48) }, 400);
     return Response.json({ error: (e as Error).message }, { status: 400, headers: NO_STORE });
   }
 }

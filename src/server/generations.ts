@@ -418,6 +418,8 @@ export const ASSET_FREE: Record<string, string> = {
   "generations.external_meta_json": "the provider's job handles",
   "billing_outbox.payload_json": "reports for the billing service: hold and run ids, counts and words, never a file",
   "reports_inbox.target_json": "what a report is about: a run, asset or share id, never a file",
+  "admin_tokens.scopes_json": "an admin token's scope names",
+  "admin_audit.detail_json": "small facts about an admin action: counts, ids and names, never a file's URL",
   "shorts_sessions.range_json": "start and end times",
   "shorts_sessions.settings_json": "ratio, language, model and resolution",
   "shorts_sessions.segments_json": "generation ids of each take",

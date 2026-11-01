@@ -27,7 +27,7 @@ import {
   ownerOnly,
   ownGpuRun,
 } from "@/lib/guest-access";
-import { authEnabled, crossSite, hasCloudKey, hostAllowed, LoginGuard, publicSignup, sessionCookieOf, sessionViewer, validSession, validToken, type Account, type Viewer } from "@/server/auth";
+import { ADMIN_BEARER, authEnabled, crossSite, hasCloudKey, hostAllowed, LoginGuard, publicSignup, sessionCookieOf, sessionViewer, validSession, validToken, type Account, type Viewer } from "@/server/auth";
 import { fileAccount, generationAccount } from "@/server/account-library";
 import { hit } from "@/server/rate";
 import { recordExists } from "@/server/records";
@@ -46,6 +46,16 @@ const OPEN = new Set(["/login", "/api/auth/login", "/api/auth/signup", "/api/aut
  */
 const WORKER_BEARER = /^Bearer\s+fuobe_wkr_/i;
 const workerRoute = (pathname: string) => pathname.startsWith("/api/gpu/computer/");
+
+/**
+ * An admin token (src/server/admin-tokens.ts) works only on the admin API; the route checks the token and its scope
+ * itself. Making, listing and revoking admin tokens is the owner's signed-in browser's only: /api/admin/tokens/self is
+ * how a token reads its own name and scopes. Anywhere else it is refused, whatever else the request carries.
+ */
+const adminRoute = (pathname: string) => {
+  const p = safeDecode(pathname);
+  return p.startsWith("/api/admin/") && (!/^\/api\/admin\/tokens(\/|$)/i.test(p) || p === "/api/admin/tokens/self");
+};
 
 const APP_IDS = new Set(APPS.map((a) => a.id));
 
@@ -330,6 +340,11 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: "Blocked a request from another website. Use Fuobe from its own address (or add it to FUOBE_ALLOWED_ORIGINS)." }, { status: 403 });
   }
   const { pathname, search } = request.nextUrl;
+  if (ADMIN_BEARER.test(request.headers.get("authorization") ?? "")) {
+    return adminRoute(pathname)
+      ? NextResponse.next()
+      : NextResponse.json({ error: "An admin token only works on the admin API." }, { status: 403, headers: { "Cache-Control": "no-store" } });
+  }
   // Share links are read-only and public, password or not: exactly a share's page and its files.
   const read = request.method === "GET" || request.method === "HEAD";
   const share = read && shareRoute(pathname);

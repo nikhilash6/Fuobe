@@ -72,6 +72,8 @@ Share links are the one exception: `/s/<token>` and its files open for anyone wh
 
 A sign-in lasts 30 days. If you think someone else has signed in as you, open **Settings → Security** and press **Sign everyone out**. It ends every sign-in on every device, yours included (an open live feed too), and can revoke every API token too. Your password stays the same. A new password also ends every owner sign-in: a Settings password change at once (it signs accounts out too), and a new `FUOBE_PASSWORD` when the server restarts (accounts stay signed in). API tokens are not tied to the password: revoke them in **Settings → Security**, or tick **Also revoke every API token** when you sign everyone out.
 
+To manage accounts, runs and workers from your own tools without the owner's sign-in, make an **admin token** in the same place: it works only on `/api/admin`, and only for the rights you tick ([admin-api.md](admin-api.md)).
+
 Public sign-up, guest browsing and connecting your own GPU to a shared install are described in [public-signup.md](public-signup.md).
 
 ## Environment variables

@@ -73,6 +73,8 @@ export interface Account {
   lastLoginAt?: number;
   /** Switched off by the owner (Settings → Accounts): signed out, and can't log in. */
   disabled?: boolean;
+  /** Signed out everywhere by the owner at this time (the admin API): its sign-ins from before then were ended. */
+  sessionsAfter?: number;
   gpu?: AccountGpu;
   /** Its own keys ("Your keys"), sealed: src/server/account-keys.ts opens them. */
   keys?: Partial<Record<CloudProvider, StoredKey>>;
@@ -281,6 +283,8 @@ export function sessionViewer(value: string | undefined): Viewer | null {
   // Signed out with Sign out: a copy of the cookie (another tab's, a stolen one) is refused too.
   if (d.signedOut?.length && d.signedOut.some((s) => s.hash === cookieHash(value))) return null;
   if (!account) return { kind: "owner" };
+  // Signed out everywhere (signOutAccount): a cookie issued at or before then is refused.
+  if (account.sessionsAfter && Number(exp) - SESSION_MS <= account.sessionsAfter) return null;
   return account.disabled ? null : { kind: "account", account };
 }
 
@@ -440,6 +444,14 @@ export function setAccountDisabled(id: string, disabled: boolean): void {
   write({ ...d, accounts: d.accounts.map((a) => (a.id === id ? { ...a, disabled } : a)) });
 }
 
+/** End every sign-in of an account at once, without switching it off: it can log in again. */
+export function signOutAccount(id: string): void {
+  const d = read();
+  if (!d.accounts?.some((a) => a.id === id)) throw new AccountError("No such account", 404);
+  const now = Date.now();
+  write({ ...d, accounts: d.accounts.map((a) => (a.id === id ? { ...a, sessionsAfter: now } : a)) });
+}
+
 /** Delete an account (its sessions stop working at once). */
 export function deleteAccount(id: string): void {
   const d = read();
@@ -539,7 +551,12 @@ export function sessionCookieOf(request: Request): string | undefined {
   return sessionCookieFrom(request.headers.get("cookie"));
 }
 
+/** An admin token (src/server/admin-tokens.ts): only the admin API takes it, and it is never the owner or an account. */
+export const ADMIN_BEARER = /^Bearer\s+fuobe_adm_/i;
+export const hasAdminBearer = (request: Request) => ADMIN_BEARER.test(request.headers.get("authorization") ?? "");
+
 export function requestViewer(request: Request, cookie = sessionCookieOf(request)): RequestViewer {
+  if (hasAdminBearer(request)) return { kind: "guest" };
   if (!authEnabled() || validToken(request.headers.get("authorization"))) return { kind: "owner" };
   const v = sessionViewer(cookie);
   if (v?.kind === "owner") return v;
@@ -549,7 +566,7 @@ export function requestViewer(request: Request, cookie = sessionCookieOf(request
 
 /** The account behind this request's session, while public sign-up is on for its address (null: the owner, a guest, or off). */
 export function requestAccount(request: Request, cookie = sessionCookieOf(request)): Account | null {
-  if (validToken(request.headers.get("authorization"))) return null;
+  if (hasAdminBearer(request) || validToken(request.headers.get("authorization"))) return null;
   const v = sessionViewer(cookie);
   return v?.kind === "account" && publicSignup(request.headers.get("host")) ? v.account : null;
 }
@@ -764,7 +781,10 @@ export class LoginGuard {
 const tokenHash = (t: string) => crypto.createHash("sha256").update(t).digest("hex");
 
 export function createToken(name: string): { token: string; info: Omit<ApiToken, "hash"> } {
-  const token = `fuobe_${crypto.randomBytes(24).toString("base64url")}`;
+  // A random part that starts like a worker's or an admin token's would never work as the owner's (validToken): roll again.
+  let token: string;
+  do token = `fuobe_${crypto.randomBytes(24).toString("base64url")}`;
+  while (/^fuobe_(wkr|adm)_/i.test(token));
   const t: ApiToken = { id: crypto.randomBytes(6).toString("hex"), name: name.trim() || "API token", hash: tokenHash(token), prefix: token.slice(0, 12), createdAt: Date.now() };
   const d = withSecret(read());
   write({ ...d, tokens: [...d.tokens, t] });

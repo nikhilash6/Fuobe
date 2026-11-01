@@ -2,7 +2,7 @@ import "server-only";
 import { NextRequest } from "next/server";
 import { GUEST_HEADER, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
 import { proxy } from "@/proxy";
-import { authEnabled, crossSite, hostAllowed, publicSignup, requestViewer, type Account } from "./auth";
+import { authEnabled, crossSite, hasAdminBearer, hostAllowed, publicSignup, requestViewer, type Account } from "./auth";
 
 /**
  * The proxy's checks, for a route the proxy doesn't run on (src/proxy.ts config.matcher leaves /api/uploads out, so a
@@ -77,6 +77,8 @@ export function gateDirect(request: Request): { kind: "owner" } | { kind: "accou
   if (crossSite(request, url.host)) {
     return Response.json({ error: "Blocked a request from another website. Use Fuobe from its own address (or add it to FUOBE_ALLOWED_ORIGINS)." }, { status: 403 });
   }
+  // An admin token works on the admin API only (as the proxy says).
+  if (hasAdminBearer(request)) return Response.json({ error: "An admin token only works on the admin API." }, { status: 403, headers: { "Cache-Control": "no-store" } });
   const viewer = requestViewer(request);
   if (viewer.kind === "owner" || viewer.kind === "account") return viewer;
   if (publicSignup(host)) return Response.json({ error: GUEST_RUN_MESSAGE }, { status: 401, headers: { [GUEST_HEADER]: "1", "Cache-Control": "no-store" } });

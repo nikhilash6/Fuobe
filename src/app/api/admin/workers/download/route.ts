@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { isOwnerRequest, sessionCookieOf } from "@/server/auth";
+import { adminAccess } from "@/server/admin-tokens";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -7,12 +7,12 @@ import path from "node:path";
  * Download the worker program as a zip, so its version always matches the server's (docs/gpu-workers.md).
  * The zip contains bin/ with the fuobe.mjs entry point, bin/lib/commands.mjs, bin/lib/worker/ and the
  * package.json that names the dependencies (`better-sqlite3` is not needed on the worker; the runner
- * is bundled). Owner only.
+ * is bundled). Owner only, or an admin token with workers:read.
  */
 export async function GET(request: Request) {
   await connection();
-  if (!isOwnerRequest(request, sessionCookieOf(request)))
-    return Response.json({ error: "Only the studio's owner manages workers" }, { status: 403 });
+  const access = adminAccess(request, "workers:read", "Only the studio's owner manages workers");
+  if (access instanceof Response) return access;
 
   // Dynamic import so the zip helper is loaded only for this route.
   const { zipFiles } = await import("../../../../../../bin/lib/zip.mjs");

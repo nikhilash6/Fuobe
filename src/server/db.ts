@@ -759,6 +759,35 @@ export const HOOK_TABLES = `CREATE TABLE IF NOT EXISTS billing_outbox (
     done_at INTEGER
   );`;
 
+/**
+ * Admin tokens (src/server/admin-tokens.ts): scoped tokens for the admin API, stored by their SHA-256 only, and the log
+ * of what the admin API changed and which token read what. A revoked token's row stays, so the log can name it. Made here
+ * rather than as numbered migrations (other branches add those at the same time). Safe to run on every start.
+ */
+export const ADMIN_TABLES = `CREATE TABLE IF NOT EXISTS admin_tokens (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    hash TEXT NOT NULL UNIQUE,
+    prefix TEXT NOT NULL,
+    scopes_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER,
+    last_used_at INTEGER,
+    revoked_at INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS admin_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at INTEGER NOT NULL,
+    actor TEXT NOT NULL,
+    token_id TEXT,
+    token_name TEXT,
+    action TEXT NOT NULL,
+    target TEXT,
+    detail_json TEXT,
+    status INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS admin_audit_at ON admin_audit(at);`;
+
 /** Columns the optional services added to existing tables: [table, column, type]. */
 const HOOK_COLUMNS: [string, string, string][] = [
   // 1: never served to the account (its output check hasn't said "show").
@@ -847,6 +876,8 @@ function open(): Database.Database {
     const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
     if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
   }
+  // Admin tokens and the admin API's log.
+  db.exec(ADMIN_TABLES);
   // A billing hold's rows are found through this index (only rows that have one are in it).
   try {
     db.exec("CREATE INDEX IF NOT EXISTS generations_hold ON generations(json_extract(request_json, '$.hold')) WHERE json_extract(request_json, '$.hold') IS NOT NULL");

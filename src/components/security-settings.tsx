@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { ADMIN_TOKENS_KEY, AdminTokens, fetchAdminTokens, isExpired } from "@/components/admin-tokens";
 import { announceAuthChange, rememberViewer } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
 import { timeAgo } from "@/lib/format";
@@ -319,6 +320,9 @@ export function SecuritySettings() {
   const qc = useQueryClient();
   const router = useRouter();
   const status = useQuery({ queryKey: ["auth"], queryFn: () => call<AuthStatus>("/api/auth/password", "GET") });
+  // Admin tokens are revoked with the API tokens when everyone is signed out: the count includes the live ones.
+  const admin = useQuery({ queryKey: ADMIN_TOKENS_KEY, queryFn: fetchAdminTokens, enabled: status.isSuccess });
+  const liveAdmin = admin.data?.tokens.filter((t) => !isExpired(t)).length ?? 0;
   const refresh = () => void qc.invalidateQueries({ queryKey: ["auth"] });
   if (status.isError) return <p className="text-[13px] text-muted-foreground">{status.error.message} Only the studio&apos;s owner sees these settings.</p>;
   if (!status.data) return <Loader2 className="size-5 animate-spin text-muted-foreground" />;
@@ -352,8 +356,9 @@ export function SecuritySettings() {
       )}
       {!s.fromEnv && <PasswordForm status={s} onDone={refresh} />}
       {s.enabled && <PublicSignup />}
-      {s.enabled && <SignOutEveryone tokens={s.tokens.length} />}
+      {s.enabled && <SignOutEveryone tokens={s.tokens.length + liveAdmin} />}
       <Tokens status={s} onChange={refresh} />
+      <AdminTokens />
     </div>
   );
 }
