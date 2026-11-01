@@ -477,13 +477,13 @@ export function GenjutsuStudio() {
   return (
     <ToolShell title="Genjutsu" tabs={tabs} header={<SetupCode setup={setup} onPaste={apply} />} wide selfHostedOnly>
       {!clip && (
-        <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint} Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}>
+        <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint}${visitor ? "" : " Free on your own ComfyUI."}`}>
           {isCharacter && (
             <Link href="/character-swap" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
               Whole clips, shot by shot? Open in Character Swap Studio
             </Link>
           )}
-          {visitor && <SelfHostNote className="mt-3 max-w-xl">Genjutsu runs on a self-hosted Fuobe for now.</SelfHostNote>}
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">Genjutsu isn&apos;t available here.</SelfHostNote>}
         </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>
@@ -763,7 +763,7 @@ export function GenjutsuStudio() {
                     {runMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />} Generate
                   </Button>
                 </div>
-                {visitor && <SelfHostNote>Genjutsu runs on a self-hosted Fuobe for now.</SelfHostNote>}
+                {visitor && <SelfHostNote>Genjutsu isn&apos;t available here.</SelfHostNote>}
                 {est && est.notes.length > 0 && !blocker && (
                   <ul className="space-y-1 text-[12px] leading-snug text-muted-foreground">
                     {est.notes.map((n) => (

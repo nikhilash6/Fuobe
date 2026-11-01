@@ -79,13 +79,13 @@ export const usd = (n: number) => (n >= 10 ? `$${n.toFixed(0)}` : `$${n.toFixed(
 /**
  * "≈ $7.02" / "Placeholder · free" / "Free · your GPU", with what it's made of in a popover. quiet: the estimate's problem (no
  * narrator voice yet…) is a plain hint, not a warning: nothing has been asked of the visitor yet. A guest or an account
- * reads "Self-hosted only" for the open engine: Faceless and Explainer don't run on their own GPU yet.
+ * reads "Not available here" for the open engine: Faceless and Explainer don't run on their own GPU yet.
  */
 export function EstimateLine({ data, loading, engine, className, quiet }: { data: EstimateResult | undefined; loading?: boolean; engine: Engine; className?: string; quiet?: boolean }) {
   const [open, setOpen] = useState(false);
   const visitor = useLikelyVisitor();
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
-  const price = visitor && (data.demo || engine === "open") ? "Self-hosted only" : data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
+  const price = visitor && (data.demo || engine === "open") ? "Not available here" : data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
   const parts = Object.entries(data.estimate.parts).filter(([, v]) => (v ?? 0) > 0) as [StepPart, number][];
   const notes = !data.error ? (data.notes ?? []) : [];
   return (
@@ -110,7 +110,7 @@ export function EstimateLine({ data, loading, engine, className, quiet }: { data
               ))}
             </dl>
           )}
-          {data.demo && <p className="mt-2 text-[12px] text-muted-foreground">Nothing is connected for some steps, so this runs as a free demo with placeholder results.</p>}
+          {data.demo && <p className="mt-2 text-[12px] text-muted-foreground">Some steps aren&apos;t connected, so this run makes placeholder results.</p>}
           {/* The notes again: on a phone they live here (the bar shows how many), so it stays one or two lines tall. */}
           {notes.length > 0 && (
             <ul className="mt-2.5 space-y-1 border-t pt-2.5 text-[12px] text-muted-foreground">

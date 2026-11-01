@@ -55,8 +55,7 @@ export const emptyBalanceNote = (p: CloudProvider) =>
   `Your ${CLOUD_KEY[p].label} key works, but your ${CLOUD_KEY[p].label} balance is empty. Top it up on ${CLOUD_KEY[p].label} before you run.`;
 export const keyRemovedMessage = (p: CloudProvider) => `Your ${CLOUD_KEY[p].label} key was removed, so this run stopped.`;
 /** The owner (or anyone not signed in as an account) on /api/account/keys. */
-export const NOT_ACCOUNT_KEYS = "Your keys are for accounts. The studio's own keys are in Settings → Paid API configuration.";
-export const OPEN_ONLY_MESSAGE = "This studio runs open-source models only right now, so your keys aren't used.";
+export const NOT_ACCOUNT_KEYS = "Log in to add your keys.";
 
 // ---------------------------------------------------------------------------
 // What the studios say to an account about its keys (pure: tests/your-keys-ui.test.ts)
@@ -106,11 +105,11 @@ export function accountEngine(
 ): { locked: { text: string; tip: string; href: string; addKey?: true } } | { tips: { cloud: string; open: string } } | null {
   const v = s?.viewer;
   if (v?.kind !== "account") return null;
-  if (v.paidAllowed === false) return { locked: { text: "Open source only", tip: "This studio runs open-source models only.", href: "/settings#your-gpu" } };
+  if (v.paidAllowed === false) return { locked: { text: "Open source", tip: "Runs on your own GPU.", href: "/settings#your-gpu" } };
   const keys = v.keys ?? [];
   if (!keys.length) {
     return {
-      locked: { text: "Open source only", tip: "Your runs use your own GPU. Add a fal.ai or Replicate key to use paid models.", href: "/settings#your-keys", addKey: true },
+      locked: { text: "Open source", tip: "Runs on your own GPU. Add a fal.ai or Replicate key to use paid models.", href: "/settings#your-keys", addKey: true },
     };
   }
   return {

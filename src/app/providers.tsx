@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { AUTH_CHANNEL, takeNotice, type ViewerInfo } from "@/lib/api";
 
 /** The GPU pre-flight's guided fix: loaded after the page, listening for "fuobe:gpu-setup". */
+// A run the billing service refused (only on a studio that set one up): loaded when it is needed.
+const BillingCard = dynamic(() => import("@/components/billing-card").then((m) => m.BillingCard), { ssr: false });
 const GuidedFixHost = dynamic(() => import("@/components/gpu/guided-fix").then((m) => m.GuidedFixHost), { ssr: false });
 /** "Use the ComfyUI on this computer": runs the person's jobs from this browser while it's open. */
 const ComputerRunnerHost = dynamic(() => import("@/components/gpu/computer-runner").then((m) => m.ComputerRunnerHost), { ssr: false });
@@ -55,6 +57,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <Toaster position="top-center" gap={8} offset={29} />
           <GuestPrompt />
           <AddKeyPrompt />
+          <BillingCard />
           <GuidedFixHost />
           <ComputerRunnerHost />
         </TooltipProvider>

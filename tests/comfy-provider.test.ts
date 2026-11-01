@@ -94,7 +94,7 @@ describe("ComfyUI poll (S5)", () => {
     expect((await comfyProvider.poll(pollCtx("p-gone"))).state).toBe("running");
     expect((await comfyProvider.poll(pollCtx("p-gone"))).state).toBe("running");
     const third = await comfyProvider.poll(pollCtx("p-gone"));
-    expect(third).toMatchObject({ state: "failed", error: expect.stringMatching(/disappeared/) });
+    expect(third).toMatchObject({ state: "failed", error: expect.stringMatching(/restarted and lost/) });
   });
 
   it("keeps the seed the graph drew with on each picture, so Edit layout draws it again (N7-2)", async () => {
@@ -119,7 +119,7 @@ describe("ComfyUI poll (S5)", () => {
 
   it("reports the queue position while pending", async () => {
     handler = (url) => (url.includes("/history/") ? json({}) : json({ queue_running: [[0, "other"]], queue_pending: [[1, "x"], [2, "p-wait"]] }));
-    expect(await comfyProvider.poll(pollCtx("p-wait"))).toMatchObject({ state: "queued", message: "In ComfyUI queue · position 2" });
+    expect(await comfyProvider.poll(pollCtx("p-wait"))).toMatchObject({ state: "queued", message: "In ComfyUI's queue · 1 ahead" });
   });
 });
 

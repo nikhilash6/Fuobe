@@ -89,7 +89,7 @@ describe("an account's limits hold for runs on its own key", () => {
     const r = await post({ params: { numOutputs: 8 } });
     expect(r.status).toBe(201);
     const body = await r.json();
-    expect(body.notes).toContain("Account runs make up to 4 at a time.");
+    expect(body.notes).toContain("Each run makes up to 4 results.");
     for (let i = 0; i < 50 && submits() < 1; i++) await new Promise((r) => setTimeout(r, 10));
     const sent = fal.log.find((x) => x.method === "POST");
     expect(JSON.parse(sent!.body).num_images ?? 4).toBeLessThanOrEqual(4);

@@ -141,7 +141,7 @@ describe("LLM provider", () => {
     expect(llm.llmBackends({ endpoint: "ollama" })).toEqual(["local"]);
     setSetting("engineMode", "open");
     expect(llm.llmBackends({ endpoint: "auto" })).toEqual(["local"]);
-    expect(() => gens.createGenerations({ feature: "dub", modelId: "text-llm", op: "translate", prompt: "x", params: { targetLanguage: "Spanish" } })).toThrow(/open source only/);
+    expect(() => gens.createGenerations({ feature: "dub", modelId: "text-llm", op: "translate", prompt: "x", params: { targetLanguage: "Spanish" } })).toThrow(/isn't available here/);
     setSetting("engineMode", "");
     setSetting("enhanceProvider", "none");
     expect(llm.llmBackends({ endpoint: "auto" })).toEqual([]);
@@ -284,7 +284,7 @@ describe("LLM provider", () => {
 
   it("fails a job that a restart interrupted", async () => {
     const res = await llm.llmProvider.poll({ externalId: "llm_gone", meta: {}, route: getModel("text-llm")!.routes[0], model: getModel("text-llm")!, createdAt: Date.now() });
-    expect(res).toMatchObject({ state: "failed", error: expect.stringMatching(/Interrupted/) });
+    expect(res).toMatchObject({ state: "failed", error: expect.stringMatching(/stopped before it finished/) });
   });
 });
 

@@ -59,7 +59,7 @@ function SectionLink() {
   );
 }
 
-export function NotFoundState({ title = "Nothing here", children }: { title?: string; children?: React.ReactNode }) {
+export function NotFoundState({ title = "This page isn’t here", children }: { title?: string; children?: React.ReactNode }) {
   return (
     <PageState
       title={title}
@@ -76,14 +76,13 @@ export function NotFoundState({ title = "Nothing here", children }: { title?: st
         </>
       }
     >
-      {children ?? "The page you’re looking for moved, or never existed. Everything you made is still in your library."}
+      {children ?? "It may have moved. Head back to Home, or search with Ctrl+K."}
     </PageState>
   );
 }
 
 export function ErrorState({ error, retry }: { error: unknown; retry?: () => void }) {
   const digest = error && typeof error === "object" && "digest" in error ? String((error as { digest?: string }).digest ?? "") : "";
-  const message = error instanceof Error ? error.message : "";
   return (
     <PageState
       icon={TriangleAlert}
@@ -103,13 +102,8 @@ export function ErrorState({ error, retry }: { error: unknown; retry?: () => voi
         </>
       }
     >
-      <p>This page hit an error. Your creations and settings are safe.</p>
-      {(message || digest) && (
-        <p className="mt-3 rounded-lg bg-muted px-3 py-2 font-mono text-[12px] break-words text-muted-foreground">
-          {message}
-          {digest && <span className="block text-muted-foreground">ref {digest}</span>}
-        </p>
-      )}
+      <p>This page didn&apos;t load. Your work is safe: try again, or go back to Home.</p>
+      {digest && <p className="mt-3 text-[12px] text-muted-foreground">Reference {digest}</p>}
     </PageState>
   );
 }

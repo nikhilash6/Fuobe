@@ -10,7 +10,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * owner's own runs aren't deleted here (the Library has its Trash).
  */
 export async function DELETE(request: Request, ctx: RouteContext<"/api/admin/generations/[id]">) {
-  if (!isOwnerRequest(request, sessionCookieOf(request))) return Response.json({ error: "Only the studio's owner manages accounts" }, { status: 403, headers: NO_STORE });
+  if (!isOwnerRequest(request, sessionCookieOf(request))) return Response.json({ error: "You can't open this." }, { status: 403, headers: NO_STORE });
   const { id } = await ctx.params;
   const account = generationAccount(id);
   if (account === undefined) return Response.json({ error: "No such run" }, { status: 404, headers: NO_STORE });

@@ -1,7 +1,6 @@
 import {
   AtSign,
   AudioLines,
-  Boxes,
   Box,
   Brush,
   Camera,
@@ -19,14 +18,12 @@ import {
   Layers2,
   LayoutGrid,
   Library,
-  ListChecks,
   Megaphone,
   MessageCircle,
   Mic2,
   Network,
   PersonStanding,
   Presentation,
-  Scale,
   Scissors,
   Settings,
   Shapes,
@@ -44,7 +41,7 @@ import {
   Video,
   Wand2,
   WandSparkles,
-  Workflow,
+  Zap,
   ZoomIn,
   type LucideIcon,
 } from "lucide-react";
@@ -64,7 +61,7 @@ export interface NavItem {
 export interface NavGroupDef {
   label: string;
   items: NavItem[];
-  /** Can be folded away; the choice is remembered (Engine starts folded, see DEFAULT_NAV_CLOSED). */
+  /** Can be folded away; the choice is remembered (see DEFAULT_NAV_CLOSED). */
   collapsible?: boolean;
   /** Two small items per row. */
   compact?: boolean;
@@ -80,6 +77,7 @@ export const NAV: NavGroupDef[] = [
       { href: "/image", label: "Image", icon: ImageIcon, eager: true, keywords: "text to image picture photo" },
       { href: "/video", label: "Video", icon: Video, eager: true, keywords: "text to video image to video animate" },
       { href: "/edit", label: "Edit", icon: Wand2, keywords: "edit image change" },
+      { href: "/live-edit", label: "Live edit", icon: Zap, keywords: "realtime live as you type instant change" },
       { href: "/layers", label: "Layers", icon: Layers2, keywords: "layered psd split" },
       { href: "/inpaint", label: "Inpaint", icon: Brush, keywords: "mask fill remove" },
       { href: "/color-grade", label: "Color grading", icon: SlidersHorizontal, keywords: "grade lut colour" },
@@ -126,20 +124,13 @@ export const NAV: NavGroupDef[] = [
       { href: "/audio", label: "Audio", icon: AudioLines, keywords: "voice tts music sfx dub transcribe" },
       { href: "/katana", label: "Katana", icon: Swords, keywords: "cut edit clips" },
       { href: "/image-to-3d", label: "Image to 3D", icon: Box, keywords: "3d mesh glb" },
-      { href: "/virality", label: "Virality predictor", icon: TrendingUp, keywords: "hook score" },
+      { href: "/virality", label: "Hook check", icon: TrendingUp, keywords: "virality predictor hook score" },
     ],
     collapsible: true,
   },
   {
-    label: "Engine",
-    items: [
-      { href: "/models", label: "Models", icon: Boxes, keywords: "catalog prices" },
-      { href: "/workflows", label: "ComfyUI workflows", short: "Workflows", icon: Workflow, keywords: "open source graphs" },
-      { href: "/settings", label: "Settings", icon: Settings, keywords: "keys preferences" },
-      { href: "/status", label: "Project status", short: "Status", icon: ListChecks, keywords: "parity progress" },
-      { href: "/settings/about", label: "About & licences", short: "Licences", icon: Scale, keywords: "licence license mit notices credits version open source" },
-    ],
+    label: "More",
+    items: [{ href: "/settings", label: "Settings", icon: Settings, keywords: "account gpu preferences" }],
     collapsible: true,
-    compact: true,
   },
 ];

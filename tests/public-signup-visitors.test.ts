@@ -132,8 +132,8 @@ describe("Assist is the owner's", () => {
   });
 
   it("says an owner-only read is the owner's to see", async () => {
-    expect((await proxy(req("/api/assist/connectors", { cookie: account })).json()).error).toMatch(/owner can see/);
-    expect((await proxy(req("/api/assist/connectors", { method: "POST", cookie: account })).json()).error).toMatch(/owner can change/);
+    expect((await proxy(req("/api/assist/connectors", { cookie: account })).json()).error).toMatch(/aren't part of your account/);
+    expect((await proxy(req("/api/assist/connectors", { method: "POST", cookie: account })).json()).error).toMatch(/aren't part of your account/);
   });
 });
 

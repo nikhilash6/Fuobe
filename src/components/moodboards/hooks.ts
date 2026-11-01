@@ -13,7 +13,7 @@ export function useCuratedSet(source: CuratedSource): CuratedMoodboard[] {
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? "Something went wrong. Please try again.");
   return body;
 }
 

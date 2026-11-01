@@ -45,7 +45,7 @@ async function until(fn, ms = 30_000, every = 250) {
 // model the studio's workflows need, so the GPU check finds the tools ready.
 let fakeProc = null;
 async function startFake(cors, o = {}) {
-  const args = ["--port", String(FAKE_PORT), "--cors", cors, "--steps", "8", "--step-ms", "300", "--has", path.join(root, "workflows/comfyui/requirements.json"), ...(o.guard ? ["--guard", "1"] : [])];
+  const args = ["--port", String(FAKE_PORT), "--cors", cors, "--steps", "8", "--step-ms", "300", "--has", path.join(root, "workflows/comfyui/requirements.json"), ...(o.guard ? ["--guard", "1"] : []), ...(o.connect ? ["--connect", o.connect] : [])];
   fakeProc = spawn(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", path.join(root, "tests/helpers/fake-local-comfy.ts"), ...args], { stdio: ["ignore", "pipe", "inherit"] });
   await until(() => fetch(`${FAKE}/__fake/stats`).then((r) => r.ok), 15_000);
 }
@@ -107,7 +107,7 @@ try {
     });
     const page = await ctx.newPage();
     if (process.env.E2E_CONSOLE) page.on("console", (m) => console.log(`[page] ${m.type()} ${m.text()}`));
-    await page.goto(`${SITE}/status`, { waitUntil: "load" });
+    await page.goto(`${SITE}/settings`, { waitUntil: "load" });
     if (email) {
       const status = await page.evaluate(
         ({ email, login }) => fetch(login ? "/api/auth/login" : "/api/auth/signup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password: "long enough password" }) }).then((r) => r.status),
@@ -158,10 +158,13 @@ try {
     await page.screenshot({ path: path.join(shots, "1b-link.png") });
     await linkToggle.click();
     await dialog.getByRole("button", { name: "Find my ComfyUI" }).click();
-    await dialog.getByText("It needs one setting to work with Fuobe").waitFor({ timeout: 20_000 });
-    check("ComfyUI without the setting: the one setting it needs", true);
-    check("the fix says what the setting does to other websites, and that Fuobe's guard turns them away, before the download", await dialog.getByText(/other websites send work to your ComfyUI\. The start file adds Fuobe's guard/).isVisible());
+    await dialog.getByText("Found ComfyUI. One step to use it here:").waitFor({ timeout: 20_000 });
+    check("ComfyUI that this page can't use yet: one step, Fuobe Connect from ComfyUI-Manager", await dialog.getByText("Install Fuobe Connect in ComfyUI-Manager").isVisible());
+    check("the step names the Manager's search term and a git address to copy", (await dialog.getByLabel("the search term").first().textContent()) === "Fuobe Connect" && /git clone https:\/\//.test((await dialog.getByLabel("the git command", { exact: true }).textContent()) ?? ""));
+    check("the start setting and the guard are not shown until Advanced is opened", !(await dialog.getByRole("button", { name: "Download start file" }).isVisible()) && !(await dialog.getByText("--enable-cors-header").first().isVisible()));
     await page.screenshot({ path: path.join(shots, "2-needs-setting.png") });
+    await dialog.getByRole("button", { name: /Advanced: a start setting instead/ }).click();
+    check("Advanced: what the setting does to other websites, and that Fuobe's guard turns them away, before the download", await dialog.getByText(/other websites send work to your ComfyUI\. The start file adds Fuobe's guard/).isVisible());
     const startButton = dialog.getByRole("button", { name: "Download start file" });
     if (await startButton.isVisible()) {
       const [dl] = await Promise.all([page.waitForEvent("download"), startButton.click()]);
@@ -180,9 +183,10 @@ try {
     await stopFake();
     const waited = await until(() => dialog.getByText("Waiting for ComfyUI to start").isVisible(), 10_000);
     check("ComfyUI restarting: waiting for it, by itself", !!waited);
-    await startFake(SITE, { guard: true });
+    // ComfyUI comes back with Fuobe Connect installed (no start setting): it connects by itself.
+    await startFake("off", { connect: SITE });
     await dialog.getByText("Your GPU is connected").waitFor({ timeout: 30_000 });
-    check("the connected screen says Fuobe's guard keeps other websites out", await dialog.getByText("Fuobe's guard keeps other websites out of your ComfyUI.").isVisible());
+    check("the connected screen says Fuobe Connect keeps other websites out", await dialog.getByText("Fuobe Connect keeps other websites out of your ComfyUI.").isVisible());
     check("nothing on the connected screen leads away from the run that's about to start", (await dialog.getByRole("link", { name: "See them" }).count()) === 0);
     check("connected by itself, with no click", true);
     check("the GPU is named", await dialog.getByText(/RTX 5090/).first().isVisible());
@@ -303,7 +307,7 @@ try {
       const card = page.getByRole("dialog");
       const opened = await until(() => card.getByText("Your ComfyUI needs Fuobe's setting again").isVisible(), 40_000);
       check("ComfyUI without the setting on a later visit: the card with its fix opens by itself", !!opened);
-      check("the card shows the fix for it", !!(await until(() => card.getByText(/without Fuobe's setting this time/).first().isVisible(), 15_000)));
+      check("the card shows the fix for it", !!(await until(() => card.getByText(/Fuobe can't use it this time/).first().isVisible(), 15_000)));
       await page.screenshot({ path: path.join(shots, "7-setting-again.png") });
       const seen = new Set();
       for (let end = Date.now() + 12_000; Date.now() < end; await sleep(250)) {
@@ -312,7 +316,7 @@ try {
       }
       check("the note says the setting is missing, steadily, with its fix", seen.size > 0 && [...seen].every((t) => t.includes("without Fuobe's setting") && t.includes("Show me how")), [...seen].join(" | "));
       const waiting = (await runs(page)).find((g) => g.id === rid);
-      check("the run says the same", waiting?.message === "ComfyUI is running without Fuobe's setting. Fuobe goes on once it has it.", waiting?.message);
+      check("the run says the same", waiting?.message === "ComfyUI is running, but Fuobe can't use it yet. Install Fuobe Connect in ComfyUI, and Fuobe goes on by itself.", waiting?.message);
       check("the status strip doesn't say all is well", !!(await until(() => page.getByText("needs a setting").first().isVisible(), 15_000)));
       await stopFake();
       await startFake(SITE, { guard: true });

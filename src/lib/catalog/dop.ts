@@ -189,8 +189,8 @@ export function dopPreset(p: Preset): Preset {
   // What the Details popover says each engine does, in plain words. The route keeps the model, the LoRA files and
   // the camera pose; the popover's route rows name the model.
   const thing = p.type === "motion" ? "move" : "effect";
-  const withLora = `uses a LoRA trained for this ${thing}`;
-  const onWords = `follows the ${thing}'s description`;
+  const withLora = `uses a style trained for this ${thing}`;
+  const onWords = `films this ${thing} from a written direction`;
   const cameraControl = "uses a built-in camera control for this move";
 
   // On the user's GPU: Wan first (most LoRAs, Mix stacks there), then LTX-2.3, then LTX-2.5; else a pose; else words.
@@ -267,12 +267,13 @@ export function dopPreset(p: Preset): Preset {
   const local = [...wan, ...ltx].filter(gpuOnlyLicence);
   const used = [...wan, ...ltx, ...(open.modelId === LTX25_OPEN ? ltx25 : [])];
   const nonCommercial = used.filter((l) => (l.licence ?? libraryEntry(l)?.licence)?.commercial === false);
-  // "Its LoRA is", "Its LoRAs are" or "One of its LoRAs is": the LoRA files' names stay in the route, not in Details.
+  // "Its trained style is", "Its trained styles are" or "One of its trained styles is": the LoRA files' names stay in
+  // the route, not in Details.
   const its = (some: LoraRef[]) => {
     const n = new Set(some.map(loraName)).size;
     const of = new Set(used.map(loraName)).size;
-    if (n < of) return n > 1 ? "Some of its LoRAs are" : "One of its LoRAs is";
-    return n > 1 ? "Its LoRAs are" : "Its LoRA is";
+    if (n < of) return n > 1 ? "Some of its trained styles are" : "One of its trained styles is";
+    return n > 1 ? "Its trained styles are" : "Its trained style is";
   };
   let parity: string;
   if (grade) parity = "Fuobe DoP animates your still, then your browser grades the clip.";
@@ -283,13 +284,13 @@ export function dopPreset(p: Preset): Preset {
     // The relight is Qwen-Image 2.1 Turbo on your GPU, Qwen-Image-Edit 2509 with its Relight LoRA in the cloud.
     parity = "Fuobe DoP relights your still first, then animates it.";
   } else if (status === "mixed-media-route") parity = `${p.parity ? `${sentence(p.parity)} ` : ""}For a whole clip restyled frame by frame, use Mixed Media.`;
-  else if (!cloudSays && local.length) parity = `On your GPU, Fuobe DoP ${openSays}. ${its(local)} licensed for your GPU only, so in the cloud it runs on a partner model.`;
-  else if (!cloudSays) parity = `On your GPU, Fuobe DoP ${openSays}. In the cloud it runs on a partner model.`;
+  else if (!cloudSays && local.length) parity = `On your GPU, Fuobe DoP ${openSays}. ${its(local)} licensed for your GPU only.`;
+  else if (!cloudSays) parity = `On your GPU, Fuobe DoP ${openSays}.`;
   else if (openSays === cloudSays) parity = `Fuobe DoP ${openSays}, on your GPU and in the cloud.`;
   else parity = `On your GPU, Fuobe DoP ${openSays}. In the cloud, it ${cloudSays}.`;
   // A LoRA licensed for the GPU only (civitai lists no "Rent") rides along on Fuobe DoP in the cloud unless the admin
-  // keeps such LoRAs on the GPU.
-  if (local.length && cloudSays) parity += ` ${its(local)} licensed for your GPU only. Settings → Models & licences can keep ${local.length > 1 ? "them" : "it"} off the cloud.`;
+  // keeps such LoRAs on the GPU (Settings → Models & licences, the owner's).
+  if (local.length && cloudSays) parity += ` ${its(local)} licensed for your GPU only.`;
   if (nonCommercial.length) parity += ` ${its(nonCommercial)} for non-commercial use.`;
   // A LoRA whose licence the research holds ("licence-hold": BTS, whose Hugging Face and civitai pages disagree) stays
   // in the library; the preset runs on its words until it is evaluated, which the line above already says.

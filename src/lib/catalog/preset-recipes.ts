@@ -8,7 +8,7 @@
  */
 import type { StudioConfig } from "@/components/studio/studio-context";
 import { PRESET_PREVIEWS } from "../preset-previews.generated";
-import { appModels, ORBIT_PRESETS, presetRoutes, recipeKind, recipeRoute, type HasModel, type RecipePreset } from "./preset-recipe-routes";
+import { appModels, presetRoutes, recipeKind, recipeRoute, type HasModel, type RecipePreset } from "./preset-recipe-routes";
 import type { Engine, PresetRoute } from "./types";
 
 export * from "./preset-recipe-routes";
@@ -31,7 +31,7 @@ export function recipeMade(p: RecipePreset, engine: Engine): boolean {
   const cover = PRESET_PREVIEWS[p.id]?.model;
   if (!kind || !cover) return false;
   // Hosted H3 is the same model; the Orbit LoRA runs on the open engine only.
-  if (kind === "h3" || kind === "orbit") return cover === H3_COVER && (engine === "open" || !ORBIT_PRESETS.has(p.id));
+  if (kind === "h3" || kind === "orbit") return cover === H3_COVER && (engine === "open" || kind !== "orbit");
   return engine === "open" && (cover === QWEN_COVER || (cover === H3_COVER && QWEN_MORPHS.has(p.id)));
 }
 

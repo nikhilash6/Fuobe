@@ -173,10 +173,10 @@ describe("the DBS model and channels a run gets", () => {
     expect(dbsModelFor(undefined, "cuda", ["DBS-BSRNN-DnR"])).toBe("DBS-BSRNN-DnR");
     expect(() => dbsModelFor("best", "cuda", ["DBS-BSRNN-DnR"])).toThrow(missingDbs("DBS-TIGER-DnR", ["DBS-BSRNN-DnR"]));
     expect(missingDbs("DBS-TIGER-DnR", ["DBS-BSRNN-DnR"])).toBe(
-      'Best (DBS-TIGER) isn\'t installed on your ComfyUI (models/dbs/DBS-TIGER-DnR). Copy the install commands from Workflows → "Split a soundtrack", or pick Fast (DBS-BSRNN).',
+      'Best (DBS-TIGER) isn\'t installed on your ComfyUI (models/dbs/DBS-TIGER-DnR). Copy the install commands from the Connect your GPU page, or pick Fast (DBS-BSRNN).',
     );
     // No weights at all: said in words, not a FileNotFoundError from inside ComfyUI.
-    expect(() => dbsModelFor(undefined, "cpu", [])).toThrow(/Fast \(DBS-BSRNN\) isn't installed on your ComfyUI \(models\/dbs\/DBS-BSRNN-DnR\)\. Copy the install commands from Workflows → "Split a soundtrack"\.$/);
+    expect(() => dbsModelFor(undefined, "cpu", [])).toThrow(/Fast \(DBS-BSRNN\) isn't installed on your ComfyUI \(models\/dbs\/DBS-BSRNN-DnR\)\. Copy the install commands from the Connect your GPU page\.$/);
   });
 });
 
@@ -418,9 +418,10 @@ describe("the mixer", () => {
 });
 
 describe("Split soundtrack in the Audio hub", () => {
-  it("is a mode after Transcribe with its own path", () => {
+  it("is a mode after Transcribe and Clean up voice, with its own path", () => {
     const ids = HUB_MODES.audio.map((m) => m.id);
-    expect(ids.indexOf("split")).toBe(ids.indexOf("transcribe") + 1);
+    expect(ids.indexOf("split")).toBe(ids.indexOf("clean") + 1);
+    expect(ids.indexOf("clean")).toBe(ids.indexOf("transcribe") + 1);
     expect(HUB_MODES.audio.find((m) => m.id === "split")?.label).toBe("Split soundtrack");
     expect(modeHref("audio", "split")).toBe("/audio/split");
   });

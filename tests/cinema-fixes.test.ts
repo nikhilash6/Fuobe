@@ -156,7 +156,7 @@ describe("Cinema generate", () => {
       const capped = cinema.createProject({ name: "Capped mode", costCapUsd: 5 });
       const res = await generateRoute.POST(json("POST", { input: VIDEO }), params({ id: capped.id }));
       expect(res.status).toBe(422);
-      expect((await res.json()).error).toMatch(/open source only/);
+      expect((await res.json()).error).toMatch(/isn't available here/);
     } finally {
       setSetting("engineMode", "both");
     }

@@ -43,7 +43,7 @@ type Curve = "equal-power" | "linear";
 type Clip = SlotValue & { duration?: number };
 
 const money = (p: AudioToolPreview, engine: Engine) =>
-  p.demo ? "Placeholder · free" : engine === "open" ? "Free · runs on your ComfyUI" : p.costUsd === null ? "Price unknown" : p.costUsd < 0.01 ? "Under $0.01" : `≈ $${p.costUsd.toFixed(2)}`;
+  p.demo ? "Placeholder · free" : engine === "open" ? "Free" : p.costUsd === null ? "Price unknown" : p.costUsd < 0.01 ? "Under $0.01" : `≈ $${p.costUsd.toFixed(2)}`;
 
 const nameOf = (c: Clip) => (c.name ?? "Audio clip").replace(/\.[a-z0-9]{2,4}$/i, "");
 
@@ -331,14 +331,14 @@ export function AudioLoopTool({ tabs }: { tabs?: React.ReactNode }) {
   const go = () => {
     if (blocker) return void toast(blocker);
     if (preview.error) return void toast.error((preview.error as Error).message);
-    run.mutate(body!, { onSuccess: () => toast.success(engine === "open" ? "Looping on your ComfyUI" : "Looping"), onError: (e) => toastError(e) });
+    run.mutate(body!, { onSuccess: () => toast.success("Looping…"), onError: (e) => toastError(e) });
   };
   return (
     <ToolShell title="Audio" tabs={tabs}>
       {!clip && (
         <ToolHero
           title="Make it as long as you need"
-          subtitle={`Loop a music bed, ambience or a beat to any length up to 10 minutes. Smooth crossfaded seams on your ComfyUI (free, runs on CPU)${mode === "open" ? "." : "; whole repeats on the cloud, for under a cent."}`}
+          subtitle="Loop a music bed, ambience or a beat to any length up to 10 minutes, with smooth, seamless joins."
         />
       )}
       <div className={cn("mx-auto max-w-[820px] space-y-3", clip ? "pt-4" : "mt-8")}>
@@ -421,14 +421,14 @@ export function AudioJoinTool({ tabs }: { tabs?: React.ReactNode }) {
   const go = () => {
     if (blocker) return void toast(blocker);
     if (preview.error) return void toast.error((preview.error as Error).message);
-    run.mutate(body!, { onSuccess: () => toast.success(engine === "open" ? "Joining on your ComfyUI" : "Joining"), onError: (e) => toastError(e) });
+    run.mutate(body!, { onSuccess: () => toast.success("Joining…"), onError: (e) => toastError(e) });
   };
   return (
     <ToolShell title="Audio" tabs={tabs}>
       {!clips.length && (
         <ToolHero
           title="Join clips into one track"
-          subtitle={`Up to ${JOIN_MAX_CLIPS} clips, in the order you set. Crossfaded on your ComfyUI (free, runs on CPU)${mode === "open" ? "." : "; end to end on the cloud, for under a cent."}`}
+          subtitle={`Up to ${JOIN_MAX_CLIPS} clips, in the order you set, with smooth crossfades.`}
         />
       )}
       <div className={cn("mx-auto max-w-[820px] space-y-3", clips.length ? "pt-4" : "mt-8")}>

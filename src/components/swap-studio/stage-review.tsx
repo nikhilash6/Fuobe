@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Download, Film, Library, Loader2, Play, Star } from "lucide-react";
+import { Download, Film, Library, Loader2, Play, Star } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Panel } from "@/components/av/tool-shell";
 import { Segmented } from "@/components/faceless/controls";
 import { characterLicenceLine } from "@/lib/catalog/character-swap";
-import { assemblyPieces, assemblyTakes, currentSegments, DECISION_LABELS, FINISH_UNAVAILABLE, jobState, secondsLabel, SWAP_STUDIO, WORKERS_NOTE, type Decision, type SwapTake } from "@/lib/catalog/swap-studio";
+import { assemblyPieces, assemblyTakes, currentSegments, DECISION_LABELS, jobState, secondsLabel, SWAP_STUDIO, WORKERS_NOTE, type Decision, type SwapTake } from "@/lib/catalog/swap-studio";
 import { STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
 import { downloadHref } from "@/lib/library";
 import { cn } from "@/lib/utils";
@@ -243,10 +243,6 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
             </div>
           )}
         </div>
-      </Panel>
-
-      <Panel title={FINISH_UNAVAILABLE.title} aside={<span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"><Ban className="size-3" /> Not available</span>}>
-        <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{FINISH_UNAVAILABLE.reason}</p>
       </Panel>
 
       <Panel title="Where it runs">

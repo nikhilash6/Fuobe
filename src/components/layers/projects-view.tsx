@@ -299,7 +299,7 @@ function ProjectsInner() {
             </Popover>
           </div>
           {visitor ? (
-            <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Layers runs on a self-hosted Fuobe for now.</SelfHostNote>
+            <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Layers isn&apos;t available here.</SelfHostNote>
           ) : (
             <p className="mt-3 text-[12px] text-muted-foreground">Upload an image, or pick one you already generated. Images only — JPG, PNG or WebP.</p>
           )}

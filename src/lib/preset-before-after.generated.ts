@@ -15,7 +15,7 @@ export const PRESET_BEFORE_AFTER: Record<string, string> = {
   "app-colorize": "11cd89f2",
   "app-commercial-faces": "9d0a1e79",
   "app-face-swap": "3047685a",
-  "app-game-dump": "4d950653",
+  "app-game-dump": "2ff43566",
   "app-glitter-sticker": "4108730f",
   "app-hairstyle-try-on": "462dac27",
   "app-headshot-generator": "82657960",

@@ -151,7 +151,7 @@ export interface TemplateCardData {
 /** What each template section is, under its heading (a guest or an account runs a canvas on a self-hosted Fuobe only). */
 const GROUP_NOTES: Record<string, (visitor: boolean) => string> = {
   "Effects 2.0 chains": (visitor) =>
-    `A photo, an image edit that sets the scene, then Fuobe DoP animates it with the effect. Open weights on both engines${visitor ? "." : ": free on your GPU."}`,
+    `A photo, an image edit that sets the scene, then Fuobe DoP animates it with the effect${visitor ? "." : ", free on your GPU."}`,
 };
 
 /** onUse: none for a guest or an account (a canvas is saved to the owner's library: the page says so once). */
@@ -245,7 +245,7 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
           <p className="mt-1 max-w-xl text-[15px] text-muted-foreground">Make images, videos and ideas in one place: wire prompts, files and models together, then run them in order or side by side.</p>
         </div>
         {visitor ? (
-          <SelfHostNote className="max-w-xs sm:text-right">Canvas editing is coming to free accounts.</SelfHostNote>
+          <SelfHostNote className="max-w-xs sm:text-right">Canvas editing isn&apos;t available here.</SelfHostNote>
         ) : (
           <Button className="w-fit rounded-full" onClick={() => void start("new", {})} disabled={!!creating}>
             {creating === "new" ? <Loader2 className="animate-spin" /> : <Plus />} New canvas

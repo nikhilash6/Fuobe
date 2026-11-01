@@ -36,6 +36,8 @@ const nextConfig: NextConfig = {
       // Vendored scripts (public/vendor: the 3D viewer's meshopt decoder) keep their name across upgrades:
       // a day, then revalidated in the background.
       { source: "/vendor/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
+      // Sample media (public/samples: Clean up voice's demo, the demo engine's clips) keep their name too: the same.
+      { source: "/samples/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
       // Preset covers (public/previews, pnpm eval:covers) keep their name when a cover is made again, but every URL the
       // site gives them ends in the file's content version (?v=, 8 hex digits of its sha256, from the generated
       // manifests): a changed file gets a new URL, so a browser keeps a versioned one for a year and never revalidates
@@ -51,6 +53,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/characters", destination: "/elements", permanent: true },
       { source: "/characters/:id", destination: "/elements/:id", permanent: true },
+      ...["/status", "/models", "/workflows"].map((source) => ({ source, destination: "/", permanent: true })),
+      { source: "/settings/about", destination: "/settings", permanent: true },
       // The product-link ad apps open the Click to Ad flow (src/lib/catalog/apps.ts).
       { source: "/apps/:id(app-click-to-ad|app-link-to-video-ad)", destination: "/marketing/click-to-ad", permanent: false },
       // The Virality Predictor app became the /virality page (its frame step is the Hook Frame app).

@@ -112,7 +112,7 @@ describe("canvas node views", () => {
     expect(next.get("img")?.d.request?.prompt).toBe("A red fox in snow");
     expect(next.get("vid")).toBe(first.get("vid"));
     // The engine mode changes every description.
-    expect(cache.run(typed, "open").get("vid")?.d.error).toMatch(/paid cloud model/);
+    expect(cache.run(typed, "open").get("vid")?.d.error).toMatch(/cloud model/);
   });
 
   it("folds a node's results once per change of its generations", () => {

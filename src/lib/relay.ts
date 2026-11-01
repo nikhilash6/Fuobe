@@ -24,7 +24,7 @@ export interface HistoryEntryLike {
 }
 
 /** Why the tab gave up on a task by itself (the server says it in plain words). */
-export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed"] as const;
+export const TAB_FAILURES = ["input-too-big", "input-changed", "unsafe-graph", "output-missing", "comfy-error", "save-failed", "unknown-node", "unsafe-path", "model-unverified"] as const;
 export type TabFailure = (typeof TAB_FAILURES)[number];
 
 /** What the tab reports about one task. */
@@ -37,8 +37,8 @@ export type ReportEvent =
   | { event: "queued"; position: number }
   /** Running: the sampler's steps, and the node. */
   | { event: "running"; value?: number; max?: number; node?: string; nodesDone?: number }
-  /** Finished: its /history entry. */
-  | { event: "finished"; entry: HistoryEntryLike }
+  /** Finished: its /history entry (a worker adds the most VRAM it took, for the benchmarks). */
+  | { event: "finished"; entry: HistoryEntryLike; peakVramBytes?: number }
   /** A meta-batch job (VHS re-queues it pass by pass): whether a pass is still queued, and the passes' entries so far. */
   | { event: "passes"; running: boolean; entries: HistoryEntryLike[] }
   /** ComfyUI has no trace of it (restarted): the server sends it again once. */
@@ -109,6 +109,13 @@ export interface ClaimedTask {
   /** Collecting: the files still to upload, and how far each got. */
   wanted?: WantedFile[];
   received?: { n: number; bytes: number; done: boolean }[];
+  /** A worker's task (docs/gpu-workers.md): its lane, how long it should take there, when to stop it, and its files. */
+  lane?: string;
+  estMs?: number | null;
+  runLimitMs?: number;
+  notAfter?: number | null;
+  attempt?: number;
+  models?: { folder: string; name: string; size: number; sha256: string | null }[];
 }
 
 /** The tab's facts about its ComfyUI (never its command line: that holds paths and user names). */
@@ -140,6 +147,45 @@ export interface BeatAnswer {
   waiting: number;
   /** Prompts to take off this computer's ComfyUI. */
   stops: { task: string; promptId: string; prefix?: string }[];
+  /** A worker's own (docs/gpu-workers.md): what the studio says about it now. */
+  worker?: WorkerAnswer;
+}
+
+/** The beat's answer for a worker. */
+export interface WorkerAnswer {
+  /** Paused on the website. */
+  paused: boolean;
+  /** Stop the current job now (it went back in line). */
+  pauseNow: boolean;
+  /** Finish the current job, then take nothing new. */
+  drain: boolean;
+  /** The automatic resume after a busy GPU, as the owner set it; null: the worker's own setting. */
+  autoResume: boolean | null;
+  insideHours: boolean;
+  /** When its hours start or end next. */
+  nextChangeAt: number | null;
+  /** Lanes the owner allows it. */
+  lanes: string[];
+  minProtocol: number;
+  /** Its inventory is unknown or changed: send it (PUT /api/gpu/computer/inventory). */
+  sendInventory: boolean;
+}
+
+/** What a worker says in its beat, on top of a browser's. */
+export interface WorkerBeat {
+  device: string;
+  protocol: number;
+  version: string;
+  ready: boolean;
+  why: string | null;
+  /** Its own pause switch: by hand ("here", "here-until:<ms>"), by itself ("gpu-busy:<process>", "comfy-crashes", "port-busy"). */
+  local: { paused: boolean; why: string | null; until: number | null };
+  gpu: { otherApps: { pid: number; name: string; vramBytes: number }[]; tempC: number | null };
+  facts?: ComputerFacts;
+  inventoryHash: string | null;
+  warmLane: string | null;
+  running: { task: string; position?: number; value?: number; max?: number; node?: string; nodesDone?: number }[];
+  stopped: string[];
 }
 
 /** Task timings (DESIGN 5.5): the runner lease, how often the tab beats, when a computer counts as gone. */
@@ -157,6 +203,10 @@ export const RELAY_TIMES = {
   keepMs: 24 * 60 * 60_000,
   /** An input staged for a task that never came. */
   stagedMs: 60 * 60_000,
+  /** A worker silent this long (no beat) gives its task back to the line. */
+  poolSilentMs: 2 * 60_000,
+  /** A worker's ComfyUI down this long gives its task back to the line. */
+  poolComfyDownMs: 2 * 60_000,
 };
 
 /**
@@ -270,7 +320,7 @@ export const RELAY_WORDS = {
   waitedTooLong: (ms: number) => `Fuobe couldn't reach your computer for ${duration(ms)}. Open Fuobe there, then press Retry.`,
   computerSilent: "Your computer stopped answering. If ComfyUI finished, open Fuobe there and press Retry.",
   comfyDown: "ComfyUI isn't answering. Start it again, and Fuobe goes on by itself.",
-  comfyNoSetting: "ComfyUI is running without Fuobe's setting. Fuobe goes on once it has it.",
+  comfyNoSetting: "ComfyUI is running, but Fuobe can't use it yet. Install Fuobe Connect in ComfyUI, and Fuobe goes on by itself.",
   comfyDownTooLong: "ComfyUI didn't come back within 30 minutes. Start it, then press Retry.",
   resent: "ComfyUI restarted, so Fuobe sent it again",
   lost: "ComfyUI restarted and lost this run. Press Retry.",
@@ -299,6 +349,12 @@ export function tabFailureWords(reason: TabFailure, status?: number): string {
       return "Your ComfyUI no longer has this run's result. Press Retry.";
     case "save-failed":
       return "Saving the result to Fuobe failed three times. Check your connection, then press Retry.";
+    case "unknown-node":
+      return "The GPU that took this run refused it: it uses a node that GPU doesn't allow.";
+    case "unsafe-path":
+      return "The GPU that took this run refused it: it names a file path.";
+    case "model-unverified":
+      return "The GPU that took this run refused it: it needs a model file that GPU couldn't verify.";
     default:
       return `Your ComfyUI answered HTTP ${Number.isInteger(status) ? status : "?"}. Check that it's running, then press Retry.`;
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import { ConnectChoice } from "@/components/gpu/connect-choice";
+import { PairedComfyUIs } from "@/components/gpu/fuobe-connect";
 import { useHydrated, useViewer } from "@/lib/api";
 
 /**
@@ -18,10 +19,13 @@ export function AccountGpuSection() {
           Your GPU
         </h2>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Connect your own ComfyUI to run open-source models.
+          Run open models on your own graphics card, free and with no run limit.
         </p>
       </div>
-      <ConnectChoice />
+      <div className="min-w-0 space-y-4">
+        <ConnectChoice />
+        <PairedComfyUIs className="sm:max-w-[36rem]" />
+      </div>
     </section>
   );
 }

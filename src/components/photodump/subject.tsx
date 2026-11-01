@@ -137,7 +137,7 @@ export function CharacterPicker({ value, onChange }: { value?: string; onChange:
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
         {visitor ? (
           <p className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed p-3 text-center text-[12px] leading-snug text-pretty text-muted-foreground">
-            <UserRound className="size-5" /> Characters are saved on a self-hosted Fuobe
+            <UserRound className="size-5" /> Saving characters isn&apos;t available here
           </p>
         ) : (
           <button

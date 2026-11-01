@@ -21,12 +21,28 @@ export type AudioToolBody =
       quality?: "fast" | "best";
       channels?: number;
       sourceDuration?: number;
+    }
+  | {
+      tool: "clean";
+      engine: Engine;
+      media: string;
+      kind: "audio" | "video";
+      name?: string;
+      model?: "voice" | "laughter";
+      quality?: "auto" | "full" | "fast";
+      strength?: "full" | "natural" | "light";
+      background?: "remove" | "keep";
+      level?: "match" | "voice";
+      remux?: boolean;
+      stereo?: boolean;
+      channels?: number;
+      sourceDuration?: number;
     };
 
 async function post<T>(url: string, body: AudioToolBody): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw responseError(res, j.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, j.error ?? "Something went wrong. Please try again.");
   return j;
 }
 

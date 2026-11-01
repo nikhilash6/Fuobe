@@ -75,7 +75,7 @@ export const SETTINGS = {
    * Where the owner's ComfyUI runs: on this server (its address above), or on the computer the owner uses, reached
    * through the owner's own Fuobe tab (a studio on a server, a ComfyUI at home: src/server/computer).
    */
-  comfyWhere: { key: "comfyui.where", env: "COMFYUI_WHERE", default: "server", options: ["server", "computer"] },
+  comfyWhere: { key: "comfyui.where", env: "COMFYUI_WHERE", default: "server", options: ["server", "computer", "workers"] },
   /**
    * ComfyUI's models/loras folder, when it's on this machine: trained LoRAs are copied there, and a recipe's
    * LoRAs (looks, motions) are downloaded there before a run needs them (src/server/loras.ts).

@@ -422,7 +422,7 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
                 {create.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate
               </Button>
             </div>
-            {visitor && <SelfHostNote className="mt-2">Explainer videos run on a self-hosted Fuobe for now.</SelfHostNote>}
+            {visitor && <SelfHostNote className="mt-2">Explainer videos aren&apos;t available here.</SelfHostNote>}
           </div>
 
           <ol className="mt-6 grid gap-2 sm:grid-cols-3 lg:grid-cols-1" aria-label="How it works">

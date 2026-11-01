@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hookSignals, hookSummary, hookTimes, loudnessSeries, lumaStats, meanDb, TRIBE_WORKER, VIRALITY_PARITY, type HookInput } from "@/lib/av/virality";
+import { hookSignals, hookSummary, hookTimes, loudnessSeries, lumaStats, meanDb, VIRALITY_PARITY, type HookInput } from "@/lib/av/virality";
 import { getPreset } from "@/lib/catalog";
 
 const base: HookInput = {
@@ -84,16 +84,9 @@ describe("virality heuristic", () => {
     expect(v.sound).toBe("ok");
   });
 
-  it("shows no score anywhere and states the TRIBE v2 licence", () => {
+  it("shows no score anywhere", () => {
     for (const s of hookSignals(base)) expect(`${s.detail} ${s.tip ?? ""}`).not.toMatch(/score|viral|\/ ?100/i);
-    expect(VIRALITY_PARITY.body).toMatch(/TRIBE v2/);
-    expect(VIRALITY_PARITY.body).toMatch(/CC BY-NC/);
-    expect(VIRALITY_PARITY.open).toMatch(/non-commercial/);
-    // The optional worker is documented: its endpoint, output, the gated Llama and the licence.
-    expect(TRIBE_WORKER.endpoint).toMatch(/\/analyze/);
-    expect(TRIBE_WORKER.output.join(" ")).toMatch(/hook_score.*0–3 s/);
-    expect(TRIBE_WORKER.needs.join(" ")).toMatch(/Llama-3\.2-3B.*gated/);
-    expect(TRIBE_WORKER.needs.join(" ")).toMatch(/CC BY-NC/);
+    expect(`${VIRALITY_PARITY.title} ${VIRALITY_PARITY.lead}`).not.toMatch(/score|\/ ?100/i);
   });
 
   it("the app that used to be Virality Predictor is the Hook Frame step (old generations still find it)", () => {

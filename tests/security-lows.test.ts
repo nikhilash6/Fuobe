@@ -195,7 +195,7 @@ describe("L-2: an unknown record or link answers 404 behind an HTTPS reverse pro
     for (const [p, title, back] of [
       ["/apps/does-not-exist", "This app isn’t here", "/apps"],
       ["/canvas/nope-nope-nope", "This canvas isn’t here", "/canvas"],
-      ["/upscale/nope", "Nothing here", "/upscale"],
+      ["/upscale/nope", "This page isn’t here", "/upscale"],
     ]) {
       const r = at(`https://fuobe.example${p}`);
       expect(r.status, p).toBe(404);

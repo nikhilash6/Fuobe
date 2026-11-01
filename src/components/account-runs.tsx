@@ -4,7 +4,7 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { ExternalLink, Filter, Loader2, MoreHorizontal, Trash2, UserCheck, UserX } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { adminCall, OffBadge, runsHref, Stat, useAdminAccounts, useAdminAction, type AccountRow } from "@/components/accounts-admin";
 import { StatusCover } from "@/components/library/asset-card";
 import { PageHeader } from "@/components/page-shell";
@@ -69,6 +69,13 @@ export function playsClip(g: Pick<Generation, "outputs" | "op" | "request">, out
  * account's, with their results, prompts and errors. Its own queries only: the Library's Viewer and result actions act
  * on the owner's library (their delete would move an account's run to the owner's Trash).
  */
+/** Anyone but the owner goes back to Settings: this page is the owner's. */
+function BackToSettings() {
+  const router = useRouter();
+  useEffect(() => router.replace("/settings"), [router]);
+  return <GallerySkeleton cards={8} />;
+}
+
 export function AccountRunsView() {
   const viewer = useViewer();
   const owner = !!viewer.data?.owner;
@@ -100,7 +107,7 @@ export function AccountRunsView() {
   });
 
   if (viewer.isPending) return <GallerySkeleton cards={8} />;
-  if (!owner) return <PageHeader title="Accounts' runs" description="Only the studio's owner sees accounts' runs." />;
+  if (!owner) return <BackToSettings />;
 
   // Another account is another page (Back returns to this one); a filter changes this one.
   const show = (to: { account?: string; status?: Status; kind?: Kind }) => {

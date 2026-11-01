@@ -239,7 +239,7 @@ function PaletteBody({ onPick, onOpenRecent, onClose }: { onPick: (e: PaletteEnt
         {searching ? (
           <>
             <CommandEmpty className="py-10 text-center text-[13px] text-muted-foreground">
-              {index.isLoading ? "Looking through apps, motions and models…" : `Nothing matches “${query.trim()}”.`}
+              {index.isLoading ? "Looking through apps, motions and models…" : `Nothing matches “${query.trim()}”. Try a shorter word.`}
             </CommandEmpty>
             {groups.map((g) => (
               <CommandGroup key={g.kind} heading={g.label}>

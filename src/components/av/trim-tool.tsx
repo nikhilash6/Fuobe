@@ -26,7 +26,7 @@ const MIN_LENGTH = 0.5;
  * trimmed by typed times, with its length read from the file when it says.
  */
 export function TrimTool({ tabs }: { tabs?: React.ReactNode }) {
-  const [engine, , engineMode] = useEngine();
+  const [engine] = useEngine();
   const create = useCreateGeneration();
   const results = useGenerations({ features: [TRIM_FEATURE], limit: 24 });
   const [video, setVideo] = useState<SlotValue | null>(null);
@@ -88,7 +88,7 @@ export function TrimTool({ tabs }: { tabs?: React.ReactNode }) {
   const total = unread?.length ?? length;
   return (
     <ToolShell title="Video tools" tabs={tabs}>
-      {!video && <ToolHero title="Keep just the part you need" subtitle={`Pick where it starts and ends — the sound comes along. Free on your ComfyUI (CPU)${engineMode === "open" ? "." : ", fractions of a cent on the cloud."}`} />}
+      {!video && <ToolHero title="Keep just the part you need" subtitle="Pick where it starts and ends, and the sound comes along." />}
       <div className={cn("mx-auto max-w-[820px] space-y-3", video ? "pt-4" : "mt-8")}>
         <MediaDrop kind="video" value={video} onChange={pick} onFile={(f) => (dropped.current = f)} preview={false} title="Add a video to trim" hint="MP4, MOV or WebM up to 200 MB" compact />
         {video && (

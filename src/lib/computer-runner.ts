@@ -10,7 +10,7 @@
 import { isGuard } from "./comfy-guard";
 import { parseComfyBinary, parseComfyText } from "./comfy-ws";
 import { graphProblem, localBase, mayDownload, readPath, statsFacts, viewPath, writePath, type SystemStats } from "./local-comfy";
-import { DONE_SHOWN_MS, RELAY_LIMITS, RELAY_TIMES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type HistoryEntryLike, type RelayState, type ReportEvent, type WantedFile } from "./relay";
+import { DONE_SHOWN_MS, RELAY_LIMITS, RELAY_TIMES, type BeatAnswer, type ClaimedTask, type ComputerFacts, type HistoryEntryLike, type RelayState, type ReportEvent, type TabFailure, type WantedFile } from "./relay";
 
 /** The parts of a WebSocket the runner uses (the browser's, or Node's). */
 export interface SocketLike {
@@ -41,6 +41,16 @@ export interface RunnerDeps {
   moved?: (port: number, host: string) => void;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * A worker program's own checks (docs/gpu-workers.md) before a graph goes to its ComfyUI: its node allowlist, path
+   * strings, verified models. The failure, or null. (A browser tab has none: graphProblem is its check.)
+   */
+  vet?: (t: ClaimedTask) => TabFailure | null;
+  /** A job ended here, done or not: a worker deletes its files. */
+  ended?: (t: ClaimedTask, phase: LocalJob["phase"]) => void | Promise<void>;
+  /** More to say in each beat (a worker's pause, its GPU, its inventory), and what the studio answered. */
+  beatExtra?: () => Record<string, unknown>;
+  onBeat?: (a: BeatAnswer) => void;
 }
 
 /** What the page shows about one job this tab runs. */
@@ -349,6 +359,7 @@ export class ComputerRunner {
     const stopped = [...this.stoppedDone];
     return this.beatWith(
       {
+        ...this.deps.beatExtra?.(),
         device: this.o.device,
         port: this.o.port,
         ready: !!read,
@@ -377,6 +388,7 @@ export class ComputerRunner {
     const a = (await res.json()) as BeatAnswer;
     Object.assign(this.view, { runner: a.runner, heldElsewhere: a.heldElsewhere, waiting: a.waiting });
     this.emit();
+    this.deps.onBeat?.(a);
     if (!this.o.access) for (const s of a.stops) void this.takeOff(s);
     return a;
   }
@@ -455,12 +467,26 @@ export class ComputerRunner {
 
   /** A whole job, from wherever it was. */
   async run(t: ClaimedTask): Promise<void> {
+    try {
+      await this.runJob(t);
+    } finally {
+      const phase = this.view.jobs.find((j) => j.taskId === t.id)?.phase;
+      if (this.deps.ended && (phase === "done" || phase === "failed")) await Promise.resolve(this.deps.ended(t, phase)).catch(() => {});
+    }
+  }
+
+  private async runJob(t: ClaimedTask): Promise<void> {
     this.promptOf.set(t.id, t.promptId);
     this.job(t, { phase: t.resume === "collecting" ? "saving" : t.resume === "running" ? "running" : t.resume === "queued" ? "queued" : "sending" });
     try {
       const problem = graphProblem(t.graph, t.inputs.map((i) => i.name));
       if (problem) {
         await this.report(t, { event: "failed", reason: "unsafe-graph" });
+        return this.job(t, { phase: "failed" });
+      }
+      const refused = this.deps.vet?.(t);
+      if (refused) {
+        await this.report(t, { event: "failed", reason: refused });
         return this.job(t, { phase: "failed" });
       }
       let entries: HistoryEntryLike[] | null = null;

@@ -42,7 +42,7 @@ async function call<T>(url: string, method: string, body?: unknown): Promise<T> 
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   if (res.status === 204) return undefined as T;
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw responseError(res, j.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, j.error ?? "Something went wrong. Please try again.");
   return j;
 }
 

@@ -7,7 +7,7 @@ import { featuredGallery } from "@/lib/preset-featured";
 
 export const metadata: Metadata = {
   title: "Camera motions",
-  description: "Director-grade camera moves for any image: crash zooms, orbits, bullet time and more, filmed by open-source models on your own GPU.",
+  description: "Director-grade camera moves for any image: crash zooms, orbits, bullet time and more, filmed by Fuobe DoP.",
 };
 
 export default function Page() {
@@ -15,7 +15,7 @@ export default function Page() {
     <PageShell>
       <PageHeader
         title="Camera motions"
-        description="Pick a camera move and add a start frame. Fuobe DoP films it with a trained camera LoRA, free on your GPU or in the cloud."
+        description="Pick a camera move, add a start frame, and Fuobe DoP films it."
       />
       <PresetGallery {...featuredGallery(MOTIONS.map(toPresetCard))} href="/video?preset={id}" noun="moves" />
     </PageShell>

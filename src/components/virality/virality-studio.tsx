@@ -11,7 +11,7 @@ import type { SlotValue } from "@/components/studio/media-slot";
 import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { uploadFile } from "@/lib/api";
-import { HOOK_SECONDS, hookSignals, hookSummary, SILENCE_DB, TRIBE_WORKER, VIRALITY_PARITY, type HookSignal, type SignalId, type Verdict } from "@/lib/av/virality";
+import { HOOK_SECONDS, hookSignals, hookSummary, SILENCE_DB, VIRALITY_PARITY, type HookSignal, type SignalId, type Verdict } from "@/lib/av/virality";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { measureHook, type HookMeasure } from "./measure";
@@ -23,7 +23,7 @@ type Run =
 
 const HOOK_FRAME_APP = "/apps/app-hook-frame";
 
-/** Virality predictor: an honest, in-browser check of a video's first 3 seconds — no invented score. */
+/** Hook check: an in-browser look at a video's first 3 seconds — no invented score. */
 export function ViralityStudio() {
   const [clip, setClip] = useState<SlotValue | null>(null);
   const [run, setRun] = useState<Run | null>(null);
@@ -56,8 +56,8 @@ export function ViralityStudio() {
     }
   };
   return (
-    <ToolShell title="Virality predictor" engineSwitch={false}>
-      <ToolHero title="Will your first 3 seconds hold?" subtitle="An honest check of your video's hook — movement, a cut, faces, on-screen text and sound in the opening seconds, measured right here in your browser. Nothing is generated or charged." />
+    <ToolShell title="Hook check" engineSwitch={false}>
+      <ToolHero title="Will your first 3 seconds hold?" subtitle="See how your opening lands: movement, cuts, faces, text and sound, checked right in your browser. Free, and nothing is uploaded." />
       <div className="mx-auto mt-8 grid max-w-[880px] gap-3">
         <MediaDrop kind="video" value={clip} onChange={change} title="Add your video" hint="MP4 (H.264) or WebM · the opening 3 seconds are what's checked" compact local />
         <div className="flex flex-wrap items-center gap-2">
@@ -100,34 +100,6 @@ function ParityNote() {
             {VIRALITY_PARITY.title}
           </p>
           <p className="text-pretty text-muted-foreground">{VIRALITY_PARITY.lead}</p>
-          <details className="group pt-1">
-            <summary className="cursor-pointer text-[12px] font-medium text-foreground marker:text-muted-foreground">Run TRIBE v2 yourself (non-commercial)</summary>
-            <div className="mt-2 space-y-2 text-[12px] text-muted-foreground">
-              <p className="text-pretty">{VIRALITY_PARITY.body}</p>
-              <p className="text-pretty">{VIRALITY_PARITY.cloud}</p>
-              <p className="text-pretty">{VIRALITY_PARITY.open}</p>
-              <p>
-                <span className="font-medium text-foreground">Worker:</span> <span className="font-mono break-words">{TRIBE_WORKER.endpoint}</span>
-              </p>
-              <div>
-                <p className="font-medium text-foreground">It returns</p>
-                <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
-                  {TRIBE_WORKER.output.map((x) => (
-                    <li key={x}>{x}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="font-medium text-foreground">It needs</p>
-                <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
-                  {TRIBE_WORKER.needs.map((x) => (
-                    <li key={x}>{x}</li>
-                  ))}
-                </ul>
-              </div>
-              <p>{TRIBE_WORKER.status} The full contract is in docs/workers/tribe-v2.md.</p>
-            </div>
-          </details>
         </div>
       </div>
     </aside>

@@ -19,7 +19,7 @@ import { FailedTile, MediaThumb, PendingTile, tileRatio } from "@/components/stu
 import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { Viewer } from "@/components/studio/viewer";
 import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsVisitor, useStatus } from "@/lib/api";
-import { MAX_FRAMES, STORYBOARD_ASPECTS, STORYBOARD_LOOK_MODEL, STORYBOARD_PARTNER_IDS, storyboardModels, type StoryboardPartner } from "@/lib/catalog/storyboard";
+import { MAX_FRAMES, STORYBOARD_ASPECTS, STORYBOARD_PARTNER_IDS, type StoryboardPartner } from "@/lib/catalog/storyboard";
 import { lookCard } from "@/lib/catalog/soul-cards";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
@@ -95,7 +95,7 @@ function RatioPill({ value, onChange }: { value: string; onChange: (v: string) =
 /** What a cloud board's frames are made on: Fuobe's open recipe, or a partner model for every frame. */
 function PartnerPill({ value, onChange, names }: { value?: StoryboardPartner; onChange: (v?: StoryboardPartner) => void; names: Record<string, string> }) {
   const options: { v?: StoryboardPartner; label: string; title: string }[] = [
-    { label: "Fuobe", title: "Fuobe's open recipe: hosted Qwen-Image-Edit with the next-scene LoRA" },
+    { label: "Fuobe", title: "Fuobe's own look, frame to frame" },
     ...STORYBOARD_PARTNER_IDS.map((p) => ({ v: p, label: names[p] ?? p, title: `The frames on ${names[p] ?? p}, a partner model (frame 1 stays on Fuobe Soul in a look)` })),
   ];
   return (
@@ -317,11 +317,6 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
   const pos = open ? flat.findIndex((g) => g.id === open.id) : -1;
 
   const boardPartner = engine === "cloud" ? partner : undefined;
-  const m = storyboardModels(engine as Engine, boardPartner);
-  const nextName = `${modelNames[m.next] ?? m.next}${m.nextLoras?.length ? " with the next-scene LoRA" : ""}`;
-  // Frame 1's model (with references: the edit that takes them), named when it isn't the one that makes the rest.
-  const firstId = refs.length ? m.firstWithRefs : m.first;
-  const runsOn = firstId === m.next ? ` Runs on ${nextName}.` : ` Frame 1 on ${modelNames[firstId] ?? firstId}, then ${nextName}.`;
   const lookName = look ? lookCard(look)?.name : undefined;
   const filled = scenes.filter((s) => s.trim());
   const boardBody = {
@@ -395,8 +390,8 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
         <div className="mx-auto max-w-[820px] pt-6 text-center">
           <h2 className="font-heading text-display text-balance">Tell it frame by frame</h2>
           <p className="mt-2 text-[13px] text-muted-foreground">
-            Up to {MAX_FRAMES} consistent frames — each one is made from the previous frame, so faces, wardrobe and light carry through.
-            {lookName && !refs.length ? ` Frame 1 on ${modelNames[STORYBOARD_LOOK_MODEL] ?? "Fuobe Soul"} in the ${lookName} look, then ${nextName}.` : runsOn}
+            Up to {MAX_FRAMES} consistent frames. Each one is made from the one before, so faces, wardrobe and light carry through.
+            {lookName && !refs.length ? ` Frame 1 sets the ${lookName} look.` : ""}
           </p>
           <div className="mt-6 rounded-[20px] border bg-background p-3 text-left shadow-soft focus-within:border-primary focus-within:ring-4 focus-within:ring-brand-faint sm:rounded-composer">
             <div role="radiogroup" aria-label="How to write it" className="mb-2 flex items-center gap-1 rounded-full bg-muted p-0.5 text-[13px] font-medium sm:w-fit">
@@ -495,7 +490,7 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 <span className="text-right text-[12px] leading-tight tabular-nums text-muted-foreground" aria-live="polite">
                   {visitor ? (
-                    <span className="block font-semibold text-foreground">Not on free accounts yet</span>
+                    <span className="block font-semibold text-foreground">Not available here</span>
                   ) : estimate.isError ? (
                     <span className="text-destructive">{(estimate.error as Error).message}</span>
                   ) : (
@@ -515,7 +510,7 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
               {mode === "auto"
                 ? visitor
                   ? "Fuobe splits your story into frames."
-                  : "Your story is split into frames by the prompt LLM (Settings → AI helper), or a shot list when none is set."
+                  : "Fuobe splits your story into frames."
                 : "One prompt per frame. References keep the cast consistent."}
               {lookName && ` Every frame gets the ${lookName} look's grade${aspect === "21:9" ? ", made at 16:9 and cropped to 21:9" : ""}.`}
             </p>

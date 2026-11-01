@@ -179,7 +179,7 @@ describe("an account's runs reach the provider with its own key only", () => {
     db().prepare("UPDATE generation_runs SET submitted_at = ? WHERE id = ?").run(Date.now() - 31 * 60_000, g.id);
     const done = await settle(g.id);
     expect(done.status).toBe("failed");
-    expect(done.error).toBe("Timed out waiting 30 minutes in fal.ai's queue");
+    expect(done.error).toBe("This waited over 30 minutes to start. Press Retry.");
     const cancel = fal.log.find((r) => r.path.endsWith("/cancel"));
     expect(cancel?.authorization).toBe("Key acct-fal-A");
     expect(keysSeen(fal.log)).toEqual(["Key acct-fal-A"]);
@@ -266,7 +266,7 @@ describe("no fallback, ever", () => {
     // With neither a GPU nor a key, the proxy answers first.
     const p = proxy(new NextRequest("http://localhost:3000/api/generations", { method: "POST", headers: { cookie: cookies.C }, body: "{}" }));
     expect(p.status).toBe(403);
-    expect((await p.json()).error).toMatch(/Connect your GPU, or add your own fal\.ai or Replicate key/);
+    expect((await p.json()).error).toMatch(/Connect your GPU to/);
     // B has a fal.ai key only: a Replicate-only model asks for a Replicate key.
     const r = await post(cookies.B, { feature: "image", modelId: "imagen-4", engine: "cloud", prompt: "x" });
     expect(r.status).toBe(403);
@@ -305,9 +305,9 @@ describe("no fallback, ever", () => {
   });
 
   it("the runner refuses an adapter call outside its run's own account", () => {
-    expect(() => gens.adapterFor("fal", A)).toThrow(/isn't in its account's scope/);
-    runAsTenant({ kind: "account", id: B }, () => expect(() => gens.adapterFor("fal", A)).toThrow(/isn't in its account's scope/));
-    runAsTenant({ kind: "account", id: A }, () => expect(() => gens.adapterFor("fal", undefined)).toThrow(/isn't in its account's scope/));
+    expect(() => gens.adapterFor("fal", A)).toThrow(/can't find that run/);
+    runAsTenant({ kind: "account", id: B }, () => expect(() => gens.adapterFor("fal", A)).toThrow(/can't find that run/));
+    runAsTenant({ kind: "account", id: A }, () => expect(() => gens.adapterFor("fal", undefined)).toThrow(/can't find that run/));
     runAsTenant({ kind: "account", id: A }, () => expect(gens.adapterFor("fal", A).id).toBe("fal"));
     expect(gens.adapterFor("fal", undefined).id).toBe("fal");
   });

@@ -51,7 +51,7 @@ const STARTS: [InfluencerStart, string][] = [
 ];
 
 const CLOUD_MODELS: { id: string; label: string; note: string }[] = [
-  { id: "fuobe-soul", label: "Fuobe Soul", note: "Fuobe Original: a wide sheet in Soul's Realistic look; your face or clothing then go on with Qwen-Image-Edit 2511" },
+  { id: "fuobe-soul", label: "Fuobe Soul", note: "Drawn in Fuobe Soul's Realistic look. Add a photo or clothing and we dress them in it." },
   { id: "nano-banana-pro", label: "Nano Banana Pro", note: "A wide 2K sheet from your picks, keeps a face and clothing closely" },
   { id: "seedream-5-pro", label: "Seedream 5.0 Pro", note: "Photoreal, from the same picks" },
 ];
@@ -98,7 +98,7 @@ function RunInfo({ preview, loading, blocker, visitor }: { preview?: RunPreview 
   if (blocker) return <p className="text-[12.5px] text-destructive">{blocker}</p>;
   if (!preview) return <p className="h-5 text-[12.5px] text-muted-foreground">{loading ? "Pricing…" : ""}</p>;
   if (preview.error) return <p className="text-[12.5px] text-destructive">{preview.error}</p>;
-  const cost = visitor && (preview.demo || preview.costUsd === 0) ? "Self-hosted only" : preview.demo ? "Placeholder · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
+  const cost = visitor && (preview.demo || preview.costUsd === 0) ? "Not available here" : preview.demo ? "Placeholder · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
   return (
     <div className="space-y-0.5 text-[12.5px] text-muted-foreground" aria-live="polite">
       <p>
@@ -202,10 +202,10 @@ export function InfluencerBuilder() {
 
   return (
     <PageShell wide>
-      <PageHeader title="AI Influencer" description="Build an original character, game-style: pick a character type, then a look in up to 18 categories or Shuffle, and get a character sheet to save as a character.">
+      <PageHeader title="AI Influencer" description="Build an original character like in a game: pick a type, style it or hit Shuffle, then save the sheet.">
         <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
-      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">AI Influencer runs on a self-hosted Fuobe for now.</SelfHostNote>}
+      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">AI Influencer isn&apos;t available here.</SelfHostNote>}
 
       <div className="grid gap-4 lg:grid-cols-[212px_minmax(0,1fr)] xl:grid-cols-[212px_minmax(0,1fr)_340px]">
         {/* The rail: Character type, then the categories this type shows. Phones scroll it sideways inside itself. */}
@@ -406,7 +406,7 @@ export function InfluencerBuilder() {
               </div>
             ) : (
               <p className="text-[12.5px] text-muted-foreground">
-                {visitor ? "Fuobe Soul" : "Fuobe Soul on your GPU"}: Z-Image Turbo draws the sheet in Soul&apos;s Realistic look (the Soul Cast sheet workflow); with a photo or clothing, Qwen-Image 2.1 then puts them on it.
+                {visitor ? "Fuobe Soul" : "Fuobe Soul on your GPU"}: drawn in its Realistic look. Add a photo or clothing and we dress them in it.
                 {!visitor && (
                   <>
                     {" "}

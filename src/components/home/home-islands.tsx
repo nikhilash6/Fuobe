@@ -138,7 +138,7 @@ export function StudioName({ label, line }: { label: string; line: string }) {
 /** Over Assist's heading, for everyone but the studio's owner: here, Assist is the owner's (AssistSection). */
 export function AssistTag() {
   if (useIsOwner()) return null;
-  return <p className="mb-2 inline-flex h-6 items-center rounded-full bg-brand-faint px-2.5 text-[12px] font-medium text-brand-text">On your own install</p>;
+  return <p className="mb-2 inline-flex h-6 items-center rounded-full bg-brand-faint px-2.5 text-[12px] font-medium text-brand-text">On your own Fuobe</p>;
 }
 
 const ASSIST_ACTION =
@@ -153,7 +153,7 @@ export function AssistAction() {
     </IntentLink>
   ) : (
     <a href="#home-start" className={ASSIST_ACTION}>
-      Run Fuobe yourself {arrow}
+      Run your own Fuobe {arrow}
     </a>
   );
 }
@@ -234,7 +234,7 @@ export function StartSteps() {
     },
     {
       title: "Sign up free.",
-      text: "A free account runs open models on your own GPU, never on ours.",
+      text: viewer?.hosted ? "Runs on this studio's GPUs, or on your own." : "A free account runs every open model on your own GPU.",
       action:
         viewer?.kind === "account" ? (
           done("You’re signed in")
@@ -250,7 +250,7 @@ export function StartSteps() {
     },
     {
       title: "Connect your ComfyUI.",
-      text: "Use the ComfyUI on this computer, or a link to one elsewhere. Fuobe checks what it has and shows what runs on it.",
+      text: "Use the ComfyUI on your computer, or one you reach by link. Fuobe shows you everything it can run.",
       action: viewer?.gpu.connected ? (
         done("Your GPU is connected")
       ) : viewer?.kind === "account" ? (

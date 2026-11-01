@@ -29,6 +29,12 @@ export const H3_BEST_GRAPH: Record<string, string> = {
 /** MiniMax H3's 360-degree orbit of a still (params.extra.orbit): the Orbit LoRA graph, with the still as first and last frame. */
 export const H3_ORBIT_GRAPH: Record<string, string> = { "minimax-h3-i2v": "minimax-h3-orbit" };
 
+/**
+ * Clean up voice with "Keep music & effects" (params.extra.background "keep"): DBS splits the soundtrack, RE-USE cleans the
+ * dialogue and the music and effects go back under it.
+ */
+export const REUSE_BED_GRAPH: Record<string, string> = { "voice-clean-reuse": "voice-clean-bed-reuse" };
+
 export interface VariantRequest {
   op: string;
   /** Clips a join takes ("video-concat-{n}"). */
@@ -64,5 +70,7 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   const best = H3_BEST_GRAPH[endpoint];
   if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
+  const bed = REUSE_BED_GRAPH[endpoint];
+  if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
   return endpoint;
 }

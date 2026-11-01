@@ -303,7 +303,7 @@ describe("preset route lines (details popover)", () => {
     // The preset's note then speaks of its second choice.
     const truckLines = presetRouteLines(truck, (id) => names[id], h3(true));
     expect(parityNote("Fuobe DoP: Wan 2.2 with the motionpushin LoRA, on your GPU and in the cloud", truckLines)).toBe(
-      "Or Fuobe DoP: Wan 2.2 with the motionpushin LoRA, on your GPU and in the cloud",
+      "As a second choice, Fuobe DoP: Wan 2.2 with the motionpushin LoRA, on your GPU and in the cloud",
     );
     expect(parityNote("Fuobe DoP: Wan 2.2", presetRouteLines(truck, (id) => names[id]))).toBe("Fuobe DoP: Wan 2.2");
     const colors = [

@@ -12,7 +12,7 @@ import { decodePng } from "./png";
  * renders was 26, the card's 9.4).
  */
 export const BLOCKED_CARD_MESSAGE =
-  "Ideogram 4's safety filter blocked this picture and sent its grey card instead. Run it again for a new seed, or try Qwen-Image 2.1 or Krea 2 Realism.";
+  "Ideogram 4 declined this one. Run it again, or try Qwen-Image 2.1 or Krea 2 Realism.";
 
 /** The picture averaged down to w×h (each cell the mean of the pixels it covers), as RGB. */
 function thumb(img: { width: number; height: number; data: Buffer }, w: number, h: number): Uint8Array {

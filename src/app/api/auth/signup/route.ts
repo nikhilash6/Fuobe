@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
+import { accountEvent, accountFacts } from "@/server/billing";
 import { AccountError, createAccount, createSession, LoginGuard, publicSignup, SESSION_COOKIE } from "@/server/auth";
 import { hit, peek } from "@/server/rate";
 
@@ -22,7 +23,7 @@ const DAY = 24 * 60 * 60_000;
 
 /** Public sign-up: an account from an email and a password (8+ characters, no verification), signed in at once. */
 export async function POST(request: Request) {
-  if (!publicSignup(request.headers.get("host"))) return Response.json({ error: "Sign-up is off on this studio" }, { status: 404 });
+  if (!publicSignup(request.headers.get("host"))) return Response.json({ error: "Sign-up is closed right now." }, { status: 404 });
   const key = LoginGuard.clientKey(request.headers);
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Enter an email and a password" }, { status: 400 });
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
   guard().fail(key);
   // At most 20 accounts a day from one address (the shared key, without a trusted proxy, is everyone: not capped here).
   const today = key === LoginGuard.DIRECT ? null : peek(`signup-day:${key}`, SIGNUPS_A_DAY, DAY);
-  if (today && !today.ok) return Response.json({ error: "Too many new accounts from this network today. Try again tomorrow." }, { status: 429, headers: { "Retry-After": String(today.retryAfterS) } });
+  if (today && !today.ok) return Response.json({ error: "That's a lot of new accounts from one network today. Try again tomorrow." }, { status: 429, headers: { "Retry-After": String(today.retryAfterS) } });
   let account;
   try {
     account = createAccount(parsed.data.email, parsed.data.password);
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
     throw e;
   }
   if (key !== LoginGuard.DIRECT) hit(`signup-day:${key}`, SIGNUPS_A_DAY, DAY);
+  // An optional billing service hears of it (none set: nothing is sent).
+  accountEvent("created", accountFacts(account));
   const s = createSession(account.id);
   (await cookies()).set(SESSION_COOKIE, s.value, {
     httpOnly: true,

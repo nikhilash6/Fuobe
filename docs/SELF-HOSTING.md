@@ -88,6 +88,10 @@ Public sign-up, guest browsing and connecting your own GPU to a shared install a
 | `FUOBE_ENGINE_MODE`, `FUOBE_CLOUD_PROVIDER`, `FUOBE_ENHANCE_PROVIDER`, `FUOBE_LLM_PROVIDER` | The Settings choices above |
 | `FUOBE_LLM_CONTEXT` | Tokens of context for the local model (default `16384`): Ollama's `num_ctx`, and the context LM Studio loads a model with. `0` leaves it to the server |
 | `OPENAI_API_KEY`, `GEMINI_API_KEY` | Read into Settings; no feature uses them yet |
+| `FUOBE_HOSTED_RUNS=1` | With public sign-up: accounts with no GPU of their own may run on this install's ComfyUI ([Hosted runs](public-signup.md#hosted-runs)). Off by default |
+| `FUOBE_POOL_WAIT_MIN` | How long a hosted run may wait in line, in minutes (default `30`) |
+| `FUOBE_BILLING_URL`, `FUOBE_BILLING_TOKEN` | An optional external billing service for hosted runs ([billing-hook.md](billing-hook.md)). None: hosted runs are free |
+| `FUOBE_MODERATION_URL`, `FUOBE_MODERATION_TOKEN`, `FUOBE_MODERATION_MAX_WAIT_H` | An optional external moderation service ([moderation-hook.md](moderation-hook.md)). None: nothing is checked |
 
 Uploads up to 200 MB work with sign-in on; Split soundtrack's Export mix sends its WAV in 16 MB parts, up to 2 GiB. Inputs given as URLs are fetched only from public addresses unless `FUOBE_ALLOW_PRIVATE_URLS=1`.
 
@@ -101,6 +105,14 @@ Uploads up to 200 MB work with sign-in on; Split soundtrack's Export mix sends i
 LatentSync 1.6 and ThinkSound are optional and run on a separate, isolated ComfyUI (`scripts/comfy/install-isolated-worker.sh`, port 8189); see [`scripts/comfy/README.md`](../scripts/comfy/README.md). Lipsync offers LatentSync 1.6 and Sound effects offers ThinkSound, marked in the model picker as running on the isolated worker. Set its address as **Isolated worker URL** in Settings (or `COMFYUI_ISOLATED_URL`); without it, those jobs fail with a message naming the setting. Their workflows are validated, but not run with real weights. Open dubbing, Faceless and UGC narration clone a voice with Chatterbox, so they need a voice sample (record or upload one). Open-source translation uses the local model (Settings → AI helper) when one is ready, and Qwen3.5 4B on your ComfyUI when none is.
 
 **Split soundtrack** runs only on your ComfyUI (nobody hosts DBS). On Windows or ComfyUI Desktop, where the install script doesn't run, clone `hiroki-abe-58/ComfyUI-DBS` into `custom_nodes` and check out `f656e53`, then put `config.json` and `model.safetensors` from `JusperLee/DBS-BSRNN-DnR` and `JusperLee/DBS-TIGER-DnR` into `models/dbs/<that name>/` (the Workflows page's "Split a soundtrack" card lists them). DBS runs on a CPU too: Best is preselected on a CUDA GPU (NVIDIA, or AMD with ROCm), Fast anywhere else. The Comfy Registry flags the pack's only version without giving a reason; its code was read at the pinned commit. **MOSS-Image** and the **fly path** use only nodes built into the ComfyUI version Fuobe pins (0.41.0), so an older ComfyUI may not run them. MOSS-Image's int8 files run on kernels that need a PyTorch built for CUDA 13 (cu130); without it ComfyUI logs a warning and probably runs slower (untested). The turnaround video needs no new files: it uses Frames mode's Wan 2.2 14B graphs and the Angles app's Qwen-Image-Edit 2511 with the Multiple-Angles LoRA. **Connect your GPU** (`/connect`) shows what each of them still needs on your ComfyUI.
+
+### Workers and Fuobe Connect
+
+To share your GPUs with your team or your other machines, add **workers** in **Settings → Workers**. Each GPU's PC runs
+`fuobe worker`, which takes the studio's ComfyUI jobs over HTTPS and runs them on its own ComfyUI. The PC opens no
+port. A person who connects their own ComfyUI from the browser needs only **Fuobe Connect**, a ComfyUI custom node
+pack in `integrations/fuobe-connect`. They do not need a start flag. See [gpu-workers.md](gpu-workers.md). With no
+worker added, nothing changes.
 
 To check a ComfyUI connection end to end without downloading any models:
 

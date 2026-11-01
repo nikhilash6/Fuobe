@@ -99,7 +99,7 @@ try {
           .catch(() => false),
       );
       await page.getByText("Advanced").first().click();
-      const loras = (await page.getByRole("radiogroup", { name: "Swap LoRA" }).getByRole("radio").allInnerTexts()).join("|");
+      const loras = (await page.getByRole("radiogroup", { name: "Swap style" }).getByRole("radio").allInnerTexts()).join("|");
       check(`${tag}: cloud: the swap LoRA is V1.5 or V1 (fal's route needs one)`, loras === "V1.5|V1", loras);
       await page.getByRole("button", { name: "Use the clip's words" }).click();
       const said = page.locator("#gj-dialogue");
@@ -137,9 +137,9 @@ try {
       check(`${tag}: open: the GPU it was tested on`, /Tested by its authors on a 96 GB RTX PRO 6000/.test(openBody));
       check(`${tag}: open: the H3 Relay is an open alternative`, /H3 Relay/.test(openBody));
       // Advanced is still open from the cloud: on your GPU "None" is a choice, and the mask switch is the Original's.
-      if (!(await page.getByRole("radiogroup", { name: "Swap LoRA" }).isVisible().catch(() => false))) await page.getByText("Advanced").first().click();
-      check(`${tag}: open: Advanced has the LoRA release and the window`, (await page.getByRole("radiogroup", { name: "Swap LoRA" }).count()) === 1 && (await page.getByText("Window", { exact: true }).count()) >= 1);
-      check(`${tag}: open: no swap LoRA is a choice on your GPU`, (await page.getByRole("radiogroup", { name: "Swap LoRA" }).getByRole("radio", { name: "None" }).count()) === 1);
+      if (!(await page.getByRole("radiogroup", { name: "Swap style" }).isVisible().catch(() => false))) await page.getByText("Advanced").first().click();
+      check(`${tag}: open: Advanced has the LoRA release and the window`, (await page.getByRole("radiogroup", { name: "Swap style" }).count()) === 1 && (await page.getByText("Window", { exact: true }).count()) >= 1);
+      check(`${tag}: open: no swap LoRA is a choice on your GPU`, (await page.getByRole("radiogroup", { name: "Swap style" }).getByRole("radio", { name: "None" }).count()) === 1);
       check(`${tag}: open: Masked generation on the Original's graph`, (await page.getByRole("switch", { name: "Masked generation" }).count()) === 1);
       await page.getByRole("radiogroup", { name: "Who to swap" }).getByRole("radio", { name: "Person #" }).click();
       check(`${tag}: open: person numbers are SAM's detections, said so`, (await page.getByText("Detection number", { exact: true }).count()) === 1 && /not left to right/.test(await text()));

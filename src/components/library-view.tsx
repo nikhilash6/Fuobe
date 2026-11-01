@@ -572,9 +572,9 @@ function Inner() {
                   to keep what you make here.
                 </>
               ) : account && seen?.paidAllowed !== false ? (
-                "What you make on your own GPU or with your own key."
+                "Everything you make, in one place."
               ) : (
-                "What you make on your own GPU."
+                "Everything you make, in one place."
               )}
             </p>
           </div>

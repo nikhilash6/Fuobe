@@ -6,6 +6,7 @@ import { LLM_MODELS } from "./llm-models";
 import { dopPreset, presetLoras } from "./dop";
 import { onEngine, runsOn } from "./engines";
 import { estimateCost } from "./plan";
+import { RECIPE_BOOK } from "./preset-recipe-book";
 import type { Engine, MediaKind, ModelDef, Operation, Preset } from "./types";
 
 MODELS.push(...LLM_MODELS.filter((m) => !MODELS.some((x) => x.id === m.id))); // text steps (translate, write) on the configured LLM; once per hot reload
@@ -29,7 +30,7 @@ function withOssLoras(p: Preset): Preset {
     ...p,
     open: { ...p.open, loras, promptTemplate: trigger ? `${trigger}. ${p.open.promptTemplate ?? p.promptTemplate}` : p.open.promptTemplate },
     // The LoRA files stay in the route; Details says what they do, after the app's own note.
-    parity: [p.parity, `On your GPU it adds ${loras.length > 1 ? "LoRAs" : "a LoRA"} trained for this look.`].filter(Boolean).join(" "),
+    parity: [p.parity, `On your GPU, it adds ${loras.length > 1 ? "styles" : "a style"} trained for this look.`].filter(Boolean).join(" "),
   };
 }
 
@@ -63,14 +64,19 @@ const APP_OPEN_OVERRIDES: Record<string, Preset["open"]> = {
 /** What the open version does differently, shown on the app page next to an override above. */
 const APP_OPEN_PARITY: Record<string, string> = {
   // FLUX.2 [klein] 4B with a try-on LoRA (10 GB GPU, Apache-2.0).
-  "app-virtual-try-on": "On your GPU it masks the old outfit out first, then dresses you with a try-on LoRA.",
+  "app-virtual-try-on": "On your GPU, it takes off the old outfit first, then dresses you in the new one.",
 };
+
+/** The recipe its preview was made with (./preset-recipe-book.json), which the route it opens on follows. */
+const withRecipeBook = (p: Preset): Preset => (RECIPE_BOOK[p.id] ? { ...p, recipe: RECIPE_BOOK[p.id] } : p);
 
 export const APPS: Preset[] = RAW_APPS.map((a) =>
   APP_OPEN_OVERRIDES[a.id] ? { ...a, open: APP_OPEN_OVERRIDES[a.id], parity: a.parity ?? APP_OPEN_PARITY[a.id] } : a,
-).map(withOssLoras);
-export const MOTIONS: Preset[] = RAW_MOTIONS.map(dopPreset);
-export const EFFECTS: Preset[] = RAW_EFFECTS.map(dopPreset).map(withPrestepPrice);
+)
+  .map(withOssLoras)
+  .map(withRecipeBook);
+export const MOTIONS: Preset[] = RAW_MOTIONS.map(dopPreset).map(withRecipeBook);
+export const EFFECTS: Preset[] = RAW_EFFECTS.map(dopPreset).map(withPrestepPrice).map(withRecipeBook);
 export const PRESETS: Preset[] = [...APPS, ...MOTIONS, ...EFFECTS];
 const presetIndex = new Map(PRESETS.map((p) => [p.id, p]));
 

@@ -12,12 +12,12 @@ const notImplemented = (id: ProviderId, label: string): ProviderAdapter => ({
   label,
   isConfigured: () => false,
   prepareFile: async () => {
-    throw new Error(`${label} adapter is not implemented yet`);
+    throw new Error(`${label} isn't available here. Pick another model`);
   },
   submit: async () => {
-    throw new Error(`${label} adapter is not implemented yet — route this model through fal or replicate`);
+    throw new Error(`${label} isn't available here. Pick another model`);
   },
-  poll: async () => ({ state: "failed", error: `${label} adapter is not implemented yet` }),
+  poll: async () => ({ state: "failed", error: `${label} isn't available here. Pick another model` }),
 });
 
 /** Work done in the browser (colour grading) and recorded afterwards; never submitted or polled. */

@@ -3,7 +3,7 @@ import { AccountError, isOwnerRequest, listAccounts, sessionCookieOf, setAccount
 import { removeAccount } from "@/server/account-sweep";
 
 async function owner(request: Request): Promise<Response | null> {
-  return isOwnerRequest(request, sessionCookieOf(request)) ? null : Response.json({ error: "Only the studio's owner manages accounts" }, { status: 403 });
+  return isOwnerRequest(request, sessionCookieOf(request)) ? null : Response.json({ error: "You can't open this." }, { status: 403 });
 }
 
 const failed = (e: unknown) => {
