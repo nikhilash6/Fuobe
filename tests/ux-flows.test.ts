@@ -61,13 +61,17 @@ describe("next steps under a fresh result", () => {
     const vid = nextSteps(gen([{ kind: "video", url: "/api/files/clip.mp4" }], { kind: "video", op: "t2v" }), 0);
     expect(vid.map((a) => a.label)).toEqual(["Extend", "Upscale", "Add sound"]);
     expect(nextSteps(gen([{ kind: "audio", url: "/api/files/a.mp3" }], { kind: "audio", op: "tts" }), 0).map((a) => a.id)).toEqual(["lipsync", "voice-change", "split-soundtrack"]);
-    // A clip that has its sound (Sound for video, a soundtrack mux) offers Split soundtrack in place of Add sound.
+    // A clip that has its sound (Sound for video, a soundtrack mux) offers Split soundtrack in place of Add sound; Sound
+    // for video's generated effects rarely carry speech, so it isn't offered Remove dialogue.
     const sounded = nextSteps(gen([{ kind: "video", url: "/api/files/clip.mp4" }], { kind: "video", op: "v2a" }), 0);
     expect(sounded.map((a) => [a.label, a.href])).toEqual([
       ["Extend", "/extend?video=%2Fapi%2Ffiles%2Fclip.mp4"],
       ["Upscale", "/upscale/video?video=%2Fapi%2Ffiles%2Fclip.mp4"],
       ["Split soundtrack", "/audio/split?video=%2Fapi%2Ffiles%2Fclip.mp4"],
     ]);
+    // A lip-synced clip (speech) keeps Upscale and adds Remove dialogue.
+    const spoken = nextSteps(gen([{ kind: "video", url: "/api/files/clip.mp4" }], { kind: "video", op: "lipsync" }), 0);
+    expect(spoken.map((a) => a.label)).toEqual(["Extend", "Upscale", "Remove dialogue"]);
   });
 
   it("has none for what doesn't hand off (text, vectors) or isn't done", () => {

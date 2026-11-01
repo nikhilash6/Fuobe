@@ -11,6 +11,7 @@ import { downloadHref, downloadName, extensionOf } from "./library";
 import { PRESETS as GRADE_PRESETS } from "./grade";
 import { storedPath } from "./share";
 import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout-prompt";
+import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
 
 export type OutputActionId =
   | "animate"
@@ -29,6 +30,7 @@ export type OutputActionId =
   | "voice-change"
   | "loop-audio"
   | "split-soundtrack"
+  | "remove-dialogue"
   | "copy-text"
   | "view-3d"
   | "download"
@@ -125,6 +127,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("upscale", "Upscale", `/upscale/video?video=${q(o.url)}`);
       link("add-sound", "Add sound", `/audio/video?video=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?video=${q(o.url)}`);
+      link("remove-dialogue", "Remove dialogue", `/video-tools/remove-dialogue?video=${q(o.url)}`);
       // A Fuobe DoP colour-grade effect: the clip opens in Color grading with its grade picked (one click to export).
       const dopGrade = gradeOf(o);
       link("grade", dopGrade ? `Apply the ${dopGrade.name} grade` : "Color grade", `/color-grade?video=${q(o.url)}${dopGrade ? `&preset=${q(dopGrade.id)}` : ""}`);
@@ -177,6 +180,13 @@ const NEXT_STEPS: Partial<Record<OutputFile["kind"], OutputActionId[]>> = {
 };
 /** Clips made with their sound (or keeping the source's): Split soundtrack instead of Add sound. */
 const SOUNDED_VIDEO_OPS = new Set<Generation["op"]>(["v2a", "mux", "lipsync", "trim", "captions"]);
+/**
+ * Sounded clips likely to carry speech also offer Remove dialogue (after Upscale, so it stays): not Sound for video
+ * (v2a: generated effects), and not a Remove dialogue result itself.
+ */
+function likelySpeech(g: Generation): boolean {
+  return g.op !== "v2a" && g.feature !== REMOVE_DIALOGUE_FEATURE;
+}
 
 /**
  * Up to `max` next steps for output `index` (Animate, Upscale, Edit for a picture), taken from
@@ -187,7 +197,10 @@ export function nextSteps(g: Generation, index: number, max = 3): OutputAction[]
   if (!o || g.status !== "succeeded") return [];
   const all = outputActions(g, index);
   // A clip with a grade still to apply (a Fuobe DoP colour-grade effect) offers it first.
-  const video = o.kind === "video" && g.op && SOUNDED_VIDEO_OPS.has(g.op) ? (NEXT_STEPS.video ?? []).map((id) => (id === "add-sound" ? "split-soundtrack" : id)) : NEXT_STEPS.video;
+  const sounded = o.kind === "video" && !!g.op && SOUNDED_VIDEO_OPS.has(g.op);
+  const video: OutputActionId[] | undefined = sounded
+    ? ["extend", "upscale", ...(likelySpeech(g) ? (["remove-dialogue"] as const) : []), "split-soundtrack"]
+    : NEXT_STEPS.video;
   const order: OutputActionId[] = o.kind === "video" ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(video ?? [])] : (NEXT_STEPS[o.kind] ?? []);
   return order
     .map((id) => all.find((a) => a.id === id && a.href))
