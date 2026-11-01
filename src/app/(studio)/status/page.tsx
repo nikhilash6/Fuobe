@@ -23,13 +23,13 @@ async function readStatus(): Promise<string> {
 }
 
 /** The workflow library's size, from the manifest the Workflows page lists. */
-async function readWorkflows(): Promise<{ all: number; validated: number }> {
+async function readWorkflows(): Promise<{ all: number }> {
   "use cache";
   try {
     const manifest = JSON.parse(await fs.readFile(path.join(process.cwd(), "workflows", "comfyui", "manifest.json"), "utf8")) as Manifest;
-    return { all: manifest.workflows.length, validated: manifest.workflows.filter((w) => w.validated).length };
+    return { all: manifest.workflows.length };
   } catch {
-    return { all: 0, validated: 0 };
+    return { all: 0 };
   }
 }
 
@@ -81,7 +81,7 @@ export default async function Page() {
           <Link href="/workflows" className={link}>
             {workflows.all} workflows
           </Link>
-          <span className="text-muted-foreground"> · {workflows.validated} validated on a real ComfyUI</span>
+          <span className="text-muted-foreground"> · each a graph you can download</span>
         </Fact>
         <Fact label="Models">
           <Link href="/models" className={link}>
@@ -123,8 +123,8 @@ export default async function Page() {
             Veo, billed to your own account with them.
           </li>
           <li>
-            <span className="font-medium">The open engine.</span> Each open-source model runs as a ComfyUI workflow; {workflows.validated} of the {workflows.all} graphs are
-            accepted by a real ComfyUI. Every preview clip and still on this site was rendered locally on ComfyUI, on one RTX 5090.
+            <span className="font-medium">The open engine.</span> Each open-source model runs as a ComfyUI workflow, and all {workflows.all} graphs are in the
+            workflow library to download. Every preview clip and still on this site was rendered locally on ComfyUI, on one RTX 5090.
           </li>
           <li>
             <span className="font-medium">Your own studio.</span> Fuobe is MIT-licensed. Run it yourself, with no account limits: the open models on your own GPU and the
