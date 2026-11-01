@@ -3,10 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import nextConfig from "../next.config";
-import { APPS, EFFECTS, MOTIONS } from "@/lib/catalog";
+import { APPS, EFFECTS, getPreset, MOTIONS } from "@/lib/catalog";
 import { SOUL_LOOK_CARDS } from "@/lib/catalog/soul-looks.generated";
 import { previewFor, toPresetCard } from "@/lib/preset-card-data";
-import { isCover, onPeak } from "@/lib/preset-cards";
+import { isCover, onPeak, presetCard } from "@/lib/preset-cards";
 import { coverPreview, presetCover, thumbOf } from "@/lib/preset-covers";
 import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
@@ -116,8 +116,18 @@ describe("the preset covers manifest", () => {
   });
 
   it("gives the preset header, from the slim map, the preview its gallery card shows", () => {
-    // 3D Rotation's motion included: the header shows its procedural preview, as its card does, not the app's shot.
     for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) expect(coverPreview(p), p.id).toEqual(previewFor(p));
+  });
+
+  it("rests every preset header on its own still, never a drawn tile", () => {
+    // The header as PresetHeader builds it (preset-header.tsx): the card from the slim map, on its peak frame.
+    const header = (id: string) => onPeak(presetCard(getPreset(id)!, coverPreview(getPreset(id)!))).preview;
+    for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) expect(isCover(header(p.id)), p.id).toBe(true);
+    // The five that showed a drawn tile until their stills came: Talking Photo's header shows its own.
+    expect(header("app-talking-photo").poster).toBe(PRESET_PREVIEWS["app-talking-photo"].poster);
+    for (const id of ["app-talking-photo", "app-fuobe-angles", "app-3d-rotation", "motion-buckle-up", "motion-dolly-zoom-out"]) {
+      expect(header(id).poster.startsWith(`/previews/presets/${id}.jpg?v=`), id).toBe(true);
+    }
   });
 
   it("is read only on the server", () => {
