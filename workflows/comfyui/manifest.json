@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-31T12:47:46.118Z",
+  "generatedAt": "2026-11-01T13:54:14.821Z",
   "comfyuiCommit": "5841c187a76ffdb565c14d9565aacbdb9a54b056",
   "comfyuiVersion": "0.42.0",
   "workflowTemplatesVersion": "0.11.93",
@@ -1331,6 +1331,420 @@
       "license": "Apache-2.0 (MOSS-Image SFT and Base, Qwen3.5-9B, FLUX.2 small decoder, byte-identical to BFL's Apache-2.0 FLUX.2-small-decoder; Fast: Spectrallic's MOSS-Image SFT 8-step DMD int8 file, Apache-2.0)",
       "validated": false,
       "notes": "Core nodes only (MOSS-Image is native in the pinned ComfyUI): Comfy-Org's template image_moss_image_t2i_bboxes without its subgraph, TextGenerate upsampler and box nodes. The prompt is plain words or a compiled layout (a summary + items with pixel boxes from the canvas centre, y before x), which reaches the model verbatim; width / height are the layout's canvas (multiples of 16, up to 2048). Standard = the template: 25 steps, CFG 2.5, er_sde / simple, skip-layer guidance on layer 22 for the first half; Quality = the MOSS-Image user guide: 50 steps, CFG 3, euler; Fast = Spectrallic's SFT with the 8-step DMD LoRA merged (unet), 8 steps, CFG 1; Base = MOSS-Image Base (unet) at 50 steps, CFG 3, euler. The text encoder is qwen3.5_9b_int8_convrot (the int8 file FIBO 2's prompt writer also loads), not the template's qwen3.5_9b_w4a8_gptq. The 16 GB VRAM figure is an estimate, as MOSS-Image publishes none: about 15 GB of files (DiT 5.4 + encoder 9.7 + VAE 0.25), and ComfyUI offloads. The int8 files run through comfy-kitchen's kernels, which need a PyTorch built for CUDA 13 (cu130): comfy/quant_ops.py turns its CUDA backend off otherwise and logs a warning, and the model may run slower."
+    },
+    {
+      "id": "flux3-klein-t2i",
+      "title": "FLUX 3 Image Klein text to image (16 steps; BFL's prompt helper writes the full caption, or a layout of boxes as typed)",
+      "capability": "t2i",
+      "file": "flux3-klein-t2i.json",
+      "source": "hand-built (scripts/comfy/hand-built/flux3-klein-t2i.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "11",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "6",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "6",
+            "input": "height"
+          }
+        ],
+        "seed": [
+          {
+            "node": "7",
+            "input": "seed"
+          },
+          {
+            "node": "11",
+            "input": "sampling_mode.seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "7",
+            "input": "steps"
+          }
+        ],
+        "unet": [
+          {
+            "node": "1",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "9",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "width": 1024,
+        "height": 1024,
+        "steps": 16,
+        "unet": "flux3-image-klein-int8-convrot.safetensors"
+      },
+      "limits": {
+        "maxWidth": 4096,
+        "maxHeight": 4096,
+        "dimensionMultiple": 16
+      },
+      "models": [
+        {
+          "file": "flux3-image-klein-int8-convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-int8-convrot.safetensors",
+          "sizeGb": 5.83,
+          "gated": true
+        },
+        {
+          "file": "qwen3vl_4b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors",
+          "sizeGb": 4.86
+        },
+        {
+          "file": "flux2-vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+          "sizeGb": 6.72,
+          "gated": true
+        },
+        {
+          "file": "flux3-image-klein-nvfp4.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-nvfp4.safetensors",
+          "sizeGb": 5.28,
+          "gated": true,
+          "optional": true
+        },
+        {
+          "file": "flux3-image-klein-bf16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-bf16.safetensors",
+          "sizeGb": 11.1,
+          "gated": true,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 16,
+      "license": "FLUX Kommunity License v1.0 (FLUX 3 Image Klein and Klein Base: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross annual revenue; other commercial use needs a BFL licence; not blanket permission for commercial fine-tuning or distribution); Qwen3-VL-4B-Instruct encoder and the FLUX 3 prompt upsampler (Qwen3.5 9B fine-tune) Apache-2.0; FLUX.2 VAE Apache-2.0",
+      "validated": true,
+      "notes": "Comfy-Org's image_flux3_klein_distilled_t2i (2026-10-15, minComfyUIVersion 0.41.0) without its subgraph, ResolutionSelector, box editor and notes; core nodes only. The prompt goes to TextGenerate on BFL's FLUX 3 prompt upsampler (CLIPLoader type flux3, 3,584 tokens, top_k 1 as the card's greedy decoding, presence penalty 1.5, the t2i system prompt of black-forest-labs/flux-3-image-klein-pup@3f3edb52), whose caption Qwen3-VL-4B encodes. Prompt helper off (params.extra.promptHelper \"off\"), or a layout of boxes (compileFlux3: a caption citing <obj_N>, then the 0-1000 table), sends the words as typed: the provider takes the helper's branch out. Distilled: 16 steps (the card; the template has 15), CFG 1, er_sde / simple, an empty negative. The template's file names (flux3_image_klein_sd_int8_convrot) are not in the repository: the files are BFL's (flux3-image-klein-int8-convrot). VRAM about 16-24 GB, estimated: BFL's card gives 25-31 GB on a B200 at 1 MP with the helper off, Freefield measured 17.8 GB with the int8 files; the helper adds a 6.7 GB encoder, which ComfyUI offloads after it runs."
+    },
+    {
+      "id": "flux3-klein-edit",
+      "title": "FLUX 3 Image Klein edit with up to 10 references (16 steps; the prompt helper looks at them)",
+      "capability": "edit",
+      "file": "flux3-klein-edit.json",
+      "source": "hand-built (scripts/comfy/hand-built/flux3-klein-edit.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "11",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "20",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "21",
+            "input": "image"
+          }
+        ],
+        "image3": [
+          {
+            "node": "22",
+            "input": "image"
+          }
+        ],
+        "image4": [
+          {
+            "node": "23",
+            "input": "image"
+          }
+        ],
+        "image5": [
+          {
+            "node": "24",
+            "input": "image"
+          }
+        ],
+        "image6": [
+          {
+            "node": "25",
+            "input": "image"
+          }
+        ],
+        "image7": [
+          {
+            "node": "26",
+            "input": "image"
+          }
+        ],
+        "image8": [
+          {
+            "node": "27",
+            "input": "image"
+          }
+        ],
+        "image9": [
+          {
+            "node": "28",
+            "input": "image"
+          }
+        ],
+        "image10": [
+          {
+            "node": "29",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "7",
+            "input": "seed"
+          },
+          {
+            "node": "11",
+            "input": "sampling_mode.seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "7",
+            "input": "steps"
+          }
+        ],
+        "unet": [
+          {
+            "node": "1",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "9",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 16,
+        "unet": "flux3-image-klein-int8-convrot.safetensors"
+      },
+      "limits": {
+        "maxImages": 10
+      },
+      "models": [
+        {
+          "file": "flux3-image-klein-int8-convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-int8-convrot.safetensors",
+          "sizeGb": 5.83,
+          "gated": true
+        },
+        {
+          "file": "qwen3vl_4b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors",
+          "sizeGb": 4.86
+        },
+        {
+          "file": "flux2-vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+          "sizeGb": 6.72,
+          "gated": true
+        },
+        {
+          "file": "flux3-image-klein-nvfp4.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-nvfp4.safetensors",
+          "sizeGb": 5.28,
+          "gated": true,
+          "optional": true
+        },
+        {
+          "file": "flux3-image-klein-bf16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-bf16.safetensors",
+          "sizeGb": 11.1,
+          "gated": true,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 16,
+      "license": "FLUX Kommunity License v1.0 (FLUX 3 Image Klein and Klein Base: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross annual revenue; other commercial use needs a BFL licence; not blanket permission for commercial fine-tuning or distribution); Qwen3-VL-4B-Instruct encoder and the FLUX 3 prompt upsampler (Qwen3.5 9B fine-tune) Apache-2.0; FLUX.2 VAE Apache-2.0",
+      "validated": true,
+      "notes": "Comfy-Org's image_flux3_klein_distilled_image_edit with ten LoadImage nodes on one ReferenceMultiLatent (resize, 1 MP each; the result takes reference 1's shape, as the template's empty_latent) and on the BatchImagesNode the prompt helper looks at (the i2i system prompt, presence penalty 0). References not given are left out (ReferenceMultiLatent and BatchImagesNode take them as optional inputs; slots drop from the last). Prompt: the instruction, references named by order (the first image, the second image… or <ref_image_0> in a typed caption). 16 steps, CFG 1, euler / simple, an empty negative (ConditioningZeroOut) with the references on both sides, as the template. Prompt helper off sends the words as typed. Removed: the box editor, image compare and notes."
+    },
+    {
+      "id": "flux3-klein-base-t2i-lora",
+      "title": "FLUX 3 Image Klein Base text to image with LoRAs (50 steps, CFG 3.5; the base LoRAs are trained on)",
+      "capability": "t2i",
+      "file": "flux3-klein-base-t2i-lora.json",
+      "source": "hand-built (scripts/comfy/hand-built/flux3-klein-base-t2i-lora.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "11",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "6",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "6",
+            "input": "height"
+          }
+        ],
+        "seed": [
+          {
+            "node": "7",
+            "input": "seed"
+          },
+          {
+            "node": "11",
+            "input": "sampling_mode.seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "7",
+            "input": "steps"
+          }
+        ],
+        "cfg": [
+          {
+            "node": "7",
+            "input": "cfg"
+          }
+        ],
+        "unet": [
+          {
+            "node": "1",
+            "input": "unet_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "9",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "width": 1024,
+        "height": 1024,
+        "steps": 50,
+        "cfg": 3.5,
+        "unet": "flux3-image-klein-base-int8-convrot.safetensors"
+      },
+      "limits": {
+        "maxWidth": 4096,
+        "maxHeight": 4096,
+        "dimensionMultiple": 16
+      },
+      "models": [
+        {
+          "file": "flux3-image-klein-base-int8-convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-base-int8-convrot.safetensors",
+          "sizeGb": 5.81,
+          "gated": true
+        },
+        {
+          "file": "qwen3vl_4b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors",
+          "sizeGb": 4.86
+        },
+        {
+          "file": "flux2-vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors",
+          "sizeGb": 6.72,
+          "gated": true
+        },
+        {
+          "file": "flux3-image-klein-base-nvfp4.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-base-nvfp4.safetensors",
+          "sizeGb": 5.26,
+          "gated": true,
+          "optional": true
+        },
+        {
+          "file": "flux3-image-klein-base-bf16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-base-bf16.safetensors",
+          "sizeGb": 11.08,
+          "gated": true,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 16,
+      "license": "FLUX Kommunity License v1.0 (FLUX 3 Image Klein and Klein Base: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross annual revenue; other commercial use needs a BFL licence; not blanket permission for commercial fine-tuning or distribution); Qwen3-VL-4B-Instruct encoder and the FLUX 3 prompt upsampler (Qwen3.5 9B fine-tune) Apache-2.0; FLUX.2 VAE Apache-2.0",
+      "validated": true,
+      "notes": "flux3-klein-t2i on Klein Base, the undistilled checkpoint BFL, fal's trainer and AI-Toolkit train LoRAs on: 50 steps, CFG 3.5, euler / simple (the card), the empty negative now counts. The run's LoRAs (a trained FLUX 3 Klein Soul ID, Settings -> LoRAs) are injected after the UNETLoader as a LoraLoaderModelOnly stack. Same prompt helper, Prompt helper off and layout rules as flux3-klein-t2i. About three times the distilled model's sampling time."
     },
     {
       "id": "qwen-image-edit-2509",
@@ -13849,6 +14263,146 @@
       "license": "MelBand RoFormer weights MIT (KimberleyJSN); Qwen3-ASR / ForcedAligner Apache-2.0; ComfyUI-QwenASR code GPL-3.0 (same as ComfyUI)",
       "validated": true,
       "notes": "Dubbing step 1. Changed from the original graph: LoadAudio replaces LoadVideo + GetVideoComponents (LoadAudio decodes the soundtrack of a video upload too, without decoding frames), so it takes audio or video. Outputs in order: voice stem, background stem (music + effects), cue lines (\"start-end: text\", seconds), plain transcript, detected language (PreviewAny, folded into the text outputs' meta). ASR runs on the separated vocals. 52 languages auto-detected (30 selectable).",
+      "autoDownloads": [
+        "AILab_Qwen3ASRSubtitle downloads Qwen/Qwen3-ASR-1.7B-hf (4.08 GB; 0.6B: 1.56 GB) and Qwen/Qwen3-ForcedAligner-0.6B-hf (1.84 GB) into models/Qwen3-ASR on first run"
+      ]
+    },
+    {
+      "id": "dub-prepare-dbs-transcribe",
+      "title": "Separate the dialogue from the music and effects (DBS) and transcribe it with timestamps (Qwen3-ASR 1.7B)",
+      "capability": "separate-audio",
+      "file": "dub-prepare-dbs-transcribe.json",
+      "source": "hand-built (scripts/comfy/hand-built/dub-prepare-dbs-transcribe.json)",
+      "bindings": {
+        "audio": [
+          {
+            "node": "1",
+            "input": "audio"
+          }
+        ],
+        "separationModel": [
+          {
+            "node": "2",
+            "input": "model"
+          }
+        ],
+        "sourceLanguage": [
+          {
+            "node": "7",
+            "input": "language"
+          }
+        ],
+        "asrModel": [
+          {
+            "node": "7",
+            "input": "model"
+          }
+        ],
+        "hints": [
+          {
+            "node": "7",
+            "input": "hints"
+          }
+        ],
+        "maxChars": [
+          {
+            "node": "7",
+            "input": "max_chars"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "5",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "6",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "8",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "5",
+          "kind": "audio",
+          "stem": "voice"
+        },
+        {
+          "node": "6",
+          "kind": "audio",
+          "stem": "background"
+        },
+        {
+          "node": "8",
+          "kind": "text",
+          "role": "cues"
+        },
+        {
+          "node": "9",
+          "kind": "text",
+          "role": "transcript"
+        },
+        {
+          "node": "10",
+          "kind": "text",
+          "role": "language"
+        }
+      ],
+      "defaults": {
+        "maxChars": 40,
+        "separationModel": "DBS-BSRNN-DnR",
+        "sourceLanguage": "auto",
+        "asrModel": "Qwen/Qwen3-ASR-1.7B-hf"
+      },
+      "limits": {},
+      "models": [
+        {
+          "file": "DBS-BSRNN-DnR/model.safetensors",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/model.safetensors",
+          "sizeGb": 0.02
+        },
+        {
+          "file": "DBS-BSRNN-DnR/config.json",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "DBS-TIGER-DnR/model.safetensors",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/model.safetensors",
+          "sizeGb": 0.004
+        },
+        {
+          "file": "DBS-TIGER-DnR/config.json",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/config.json",
+          "sizeGb": 0
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-DBS",
+          "repo": "https://github.com/hiroki-abe-58/ComfyUI-DBS/tree/f656e53434b5485c148a2866fbd6ddc6b6152ed6"
+        },
+        {
+          "name": "ComfyUI-QwenASR",
+          "repo": "https://github.com/1038lab/ComfyUI-QwenASR"
+        }
+      ],
+      "vramGb": 8,
+      "license": "DBS weights Apache-2.0 (trained on DnR v2, CC BY 4.0); Qwen3-ASR / ForcedAligner Apache-2.0; ComfyUI-QwenASR GPL-3.0; ComfyUI-DBS MIT",
+      "validated": true,
+      "notes": "Dubbing step 1 with DBS: the voice split runs on a CPU (23 MB of weights) and the background keeps the music and the sound effects, singing included. Qwen3-ASR still needs the 8 GB listing on a GPU. audio = an audio file or a video (LoadAudio reads a video's soundtrack without decoding frames). DBSLoader model DBS-BSRNN-DnR (fast, the CPU default) or DBS-TIGER-DnR (best, the CUDA default); DBSSeparate in mono at the input's rate. Outputs in order: voice stem (speech), background stem = the original minus the speech (AudioMerge subtract: it keeps the stereo image), cue lines (\"start-end: text\", seconds), plain transcript, detected language (PreviewAny, folded into the text outputs' meta). Both stems are FLAC, so voice + background add up to the source. The provider splits a file with more than 2 channels with its background from music + effects (node 4 rewired to AudioMerge add): ComfyUI saves mono or stereo only. ASR runs on the separated speech.",
       "autoDownloads": [
         "AILab_Qwen3ASRSubtitle downloads Qwen/Qwen3-ASR-1.7B-hf (4.08 GB; 0.6B: 1.56 GB) and Qwen/Qwen3-ForcedAligner-0.6B-hf (1.84 GB) into models/Qwen3-ASR on first run"
       ]

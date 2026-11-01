@@ -53,6 +53,12 @@
     "error": null,
     "at": "2026-10-16T23:33:15.735Z"
   },
+  "dub-prepare-dbs-transcribe": {
+    "sha256": "bbb7b31a35cb858c1f92835b73b13f5dd93de06441637ca57bd40253ab8c7a7d",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T14:15:07.842Z"
+  },
   "dub-prepare-separate-transcribe": {
     "sha256": "9e19d9c940f8e38941e2581fbd8619ccf48ff9dad07edc69941acd7d262aa60f",
     "validated": true,
@@ -124,6 +130,24 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T20:57:15.735Z"
+  },
+  "flux3-klein-base-t2i-lora": {
+    "sha256": "f5efb062048cb0f88b9c2a8313db4c23b8d52166619c2007ea02fa27843e378c",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T13:51:37.715Z"
+  },
+  "flux3-klein-edit": {
+    "sha256": "dc58d70c1432a916fdb55124e82e757fc0b72b1575d0dc85a44981a4c837bd20",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T13:51:49.612Z"
+  },
+  "flux3-klein-t2i": {
+    "sha256": "35bb355680ed0b6ac49231ad7efe2ae17c3a9786b77de26a4b3ea7789970b917",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T13:51:34.372Z"
   },
   "frame-extract": {
     "sha256": "0f695a5ddf779a1d7b57f1c817e14c36e53534c81148449055f39c55cf9952ab",

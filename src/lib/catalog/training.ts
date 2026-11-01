@@ -2,7 +2,7 @@
  * Fuobe Soul ID (build plan O3): a character or a style trained as a LoRA on open weights, on either engine
  * (AI-Toolkit on the user's GPU, or fal's hosted trainers), then used whenever the element is @mentioned on a
  * model of the family it was trained for: Fuobe Soul and Soul Cinema (Z-Image Turbo), Fuobe Soul HD
- * (Qwen-Image 2512), and every other base fal or AI-Toolkit trains (FLUX.1 / FLUX.2 [dev], FLUX.2 [klein] 4B and 9B,
+ * (Qwen-Image 2512), and every other base fal or AI-Toolkit trains (FLUX.1 / FLUX.2 [dev], FLUX.2 [klein] 4B and 9B, FLUX 3 Klein,
  * Krea 2) on the models of that base. Pure logic, no I/O.
  *
  * - A LoRA belongs to a family (its base), not to one model, and works on both engines where the family has models:
@@ -24,7 +24,7 @@ import type { Engine, ModelDef } from "./types";
 export type TrainingProvider = "fal" | "ai-toolkit";
 
 /** The base a LoRA is trained on. A trained LoRA works on every model of its family. */
-export type TrainingFamily = "z-image-turbo" | "qwen-image-2512" | "flux1-dev" | "flux2-dev" | "flux2-klein-4b" | "flux2-klein-9b" | "krea-2";
+export type TrainingFamily = "z-image-turbo" | "qwen-image-2512" | "flux1-dev" | "flux2-dev" | "flux2-klein-4b" | "flux2-klein-9b" | "krea-2" | "flux3-klein";
 
 /** What a training learns: a subject (a person, a place, an object) or a style (a moodboard). */
 export type TrainingKind = "subject" | "style";
@@ -175,6 +175,16 @@ export const TRAINING_FAMILIES: Record<TrainingFamily, FamilyInfo> = {
     lead: { cloud: "krea-2-turbo-lora-cloud" },
     models: ["krea-2-turbo-lora-cloud"],
     trainer: "fal-ai/krea-2-trainer",
+  },
+  // FLUX 3 Image Klein (nm10-flux3-klein): trained on Klein Base, which a LoRA runs on first (fal recommends it); the distilled
+  // Klein takes it too, on both engines.
+  "flux3-klein": {
+    name: "FLUX 3 Klein",
+    base: "FLUX 3 Image Klein Base",
+    original: false,
+    lead: { open: "oss-flux3-klein-base", cloud: "flux-3-klein-base" },
+    models: ["oss-flux3-klein-base", "oss-flux3-klein", "flux-3-klein-base", "flux-3-klein"],
+    trainer: "blackforestlabs/flux-3/klein/base/trainer",
   },
 };
 
@@ -413,6 +423,32 @@ export const TRAINING_TARGETS: TrainingTarget[] = [
     description: `fal's Krea 2 trainer, at 1024 px. ${TO_FAL}`,
     eta: "~15–30 min",
   }),
+  // FLUX 3 Klein (nm10-flux3-klein): BFL's licence lets Qualifying Users (under US$5M revenue) sell outputs, but it is not
+  // blanket permission for commercial fine-tuning or distribution: the description says so beside the price.
+  target({
+    id: "aitk-flux3-klein",
+    name: "Your GPU",
+    engine: "open",
+    provider: "ai-toolkit",
+    family: "flux3-klein",
+    kinds: ["subject", "style"],
+    steps: 2000,
+    description: `AI-Toolkit on your own GPU (24 GB; Klein Base in 8-bit), its flux3 trainer. Needs a Hugging Face token with the FLUX Kommunity licence accepted, which is not blanket permission for commercial fine-tuning. ${LOCAL}`,
+    eta: "~1–2 h on a 24 GB GPU",
+  }),
+  target({
+    id: "fal-flux3-klein",
+    name: "Cloud",
+    engine: "cloud",
+    provider: "fal",
+    family: "flux3-klein",
+    kinds: ["subject", "style"],
+    trainer: "blackforestlabs/flux-3/klein/base/trainer",
+    steps: 1000,
+    extra: { resolution: 1024 },
+    description: `BFL's FLUX 3 Klein trainer on fal, on Klein Base at 1024 px. The FLUX Kommunity licence is not blanket permission for commercial fine-tuning. ${TO_FAL}`,
+    eta: "~15–30 min",
+  }),
 ];
 
 export const getTrainingTarget = (id: string) => TRAINING_TARGETS.find((t) => t.id === id);
@@ -580,7 +616,7 @@ export function trainedLoraUrl(t: Pick<TrainingTarget, "trainer">, out: Record<s
  * arch names from extensions_built_in/diffusion_models; FLUX.1 and Qwen-Image from config/examples). Z-Image Turbo
  * trains with ostris's training adapter v2 (research §4.5); the gated FLUX [dev] repos need an HF token.
  */
-const AITK_MODELS: Partial<Record<TrainingFamily, { model: Record<string, unknown>; guidance: number; sampleSteps: number }>> = {
+const AITK_MODELS: Partial<Record<TrainingFamily, { model: Record<string, unknown>; guidance: number; sampleSteps: number; timestepType?: string }>> = {
   "z-image-turbo": {
     model: {
       name_or_path: "Tongyi-MAI/Z-Image-Turbo",
@@ -614,6 +650,23 @@ const AITK_MODELS: Partial<Record<TrainingFamily, { model: Record<string, unknow
     model: { name_or_path: "black-forest-labs/FLUX.2-klein-base-4B", arch: "flux2_klein_4b", quantize: true, qtype: "qfloat8", quantize_te: true, qtype_te: "qfloat8", low_vram: true },
     guidance: 4,
     sampleSteps: 25,
+  },
+  // FLUX 3 Image Klein Base (AI-Toolkit's flux3 model, main at e9c72b7, 2026-10-31: its UI's defaults, convrot8 quantization,
+  // shift timesteps; a repack file already in ComfyUI's models folder is used in place). The repo is gated: an HF token.
+  "flux3-klein": {
+    model: {
+      name_or_path: "black-forest-labs/flux-3-image-klein-base",
+      arch: "flux3",
+      quantize: true,
+      qtype: "convrot8",
+      quantize_te: true,
+      qtype_te: "convrot8",
+      low_vram: true,
+      model_kwargs: { match_target_res: true },
+    },
+    guidance: 3.5,
+    sampleSteps: 28,
+    timestepType: "shift",
   },
 };
 
@@ -668,7 +721,7 @@ export function aiToolkitJob(opts: {
             cache_text_embeddings: true,
             ema_config: { use_ema: false },
             steps: opts.steps ?? (style ? 1500 : 2000),
-            timestep_type: "weighted",
+            timestep_type: base.timestepType ?? "weighted",
           },
           model: base.model,
           sample: {

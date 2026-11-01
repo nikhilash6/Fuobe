@@ -15105,6 +15105,124 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "ReferenceMultiLatent": {
+    "input": {
+      "required": {
+        "positive": [
+          "CONDITIONING",
+          {}
+        ],
+        "resolution": [
+          "COMFY_DYNAMICCOMBO_V3",
+          {
+            "options": [
+              {
+                "key": "keep resolution",
+                "inputs": {
+                  "required": {}
+                }
+              },
+              {
+                "key": "resize",
+                "inputs": {
+                  "required": {
+                    "megapixels": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Target size of each reference image, preserving aspect ratio. 1.0 is about 1024 x 1024 pixels.",
+                        "default": 1,
+                        "min": 0.01,
+                        "max": 16,
+                        "step": 0.01
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "optional": {
+        "negative": [
+          "CONDITIONING",
+          {}
+        ],
+        "vae": [
+          "VAE",
+          {
+            "tooltip": "Reference images are ignored when no VAE is connected."
+          }
+        ],
+        "images": [
+          "COMFY_AUTOGROW_V3",
+          {
+            "template": {
+              "input": {
+                "required": {},
+                "optional": {
+                  "image": [
+                    "IMAGE",
+                    {}
+                  ]
+                }
+              },
+              "prefix": "image",
+              "min": 1,
+              "max": 100
+            }
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "positive",
+        "resolution"
+      ],
+      "optional": [
+        "negative",
+        "vae",
+        "images"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "CONDITIONING",
+      "LATENT"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "positive",
+      "negative",
+      "empty_latent"
+    ],
+    "output_tooltips": [
+      null,
+      "Returns the positive output when negative conditioning is not connected.",
+      "First reference latent multiplied by 0.0, or a square empty latent at the selected resolution."
+    ],
+    "output_matchtypes": null,
+    "name": "ReferenceMultiLatent",
+    "display_name": "Set Reference Multi Latent",
+    "description": "Encodes reference images and appends their latents to positive and optional negative conditioning for edit models.",
+    "python_module": "comfy_extras.nodes_edit_model",
+    "category": "model/conditioning",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "RegexReplace": {
     "input": {
       "required": {

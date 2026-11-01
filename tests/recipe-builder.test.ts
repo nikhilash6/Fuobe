@@ -217,6 +217,12 @@ describe("draftFromGenerations", () => {
     expect(refusals).toEqual([]);
     expect(draft!.recipe.steps).toEqual([expect.objectContaining({ kind: "tool", tool: "dub_video", input: { video: clip, languages: ["Spanish", "German"], source_language: "English", lipsync: false, review: true } })]);
     expect(draft!.candidates.filter((c) => c.kind === "media")).toEqual([expect.objectContaining({ type: "video", example: clip, at: [{ step: draft!.recipe.steps[0].key, path: ["video"] }] })]);
+    // An open dub that picked its Voice split keeps it in the recipe.
+    row({ id: "dub-film-dbs", feature: "dub", kind: "video", op: "mux", request: { feature: "dub", modelId: "oss-mux", op: "mux" }, outputs: [{ url: clip, kind: "video" }] });
+    db()
+      .prepare("INSERT INTO dub_sessions (id, data_json, created_at, updated_at) VALUES (?, ?, ?, ?)")
+      .run("dub2", JSON.stringify({ title: "talk", engine: "open", mode: "steps", video: clip, source: "en", targets: ["es"], voiceSplit: "dbs", batchId: "b2", prepare: { stems: "y" }, voices: { es: [{ ids: { film: "dub-film-dbs" }, at: now, lipsync: true }] } }), now, now);
+    expect(builder.draftFromGenerations(["dub-film-dbs"]).draft!.recipe.steps[0]).toMatchObject({ tool: "dub_video", input: { languages: ["Spanish"], voice_split: "dbs", review: true } });
 
     row({ id: "cinema-1", feature: "cinema", kind: "video", request: { feature: "cinema", modelId: "fuobe-cinema", op: "t2v", prompt: "a chase" } });
     row({ id: "dub-orphan", feature: "dub", kind: "video", request: { feature: "dub", modelId: "oss-mux", op: "mux" } });

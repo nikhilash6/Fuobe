@@ -1,7 +1,8 @@
 import { readTimeline, timelineTracks } from "@/lib/av/timeline";
 import { toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { upscaleFactorFor } from "@/lib/av/upscale";
-import { carriesLayout, LAYOUT_PARAM } from "@/lib/layout-prompt";
+import { carriesBoxes, carriesLayout, LAYOUT_PARAM } from "@/lib/layout-prompt";
+import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { loraFields } from "./loras";
 import { OPERATION_OUTPUT, type DurationField, type EnumField, type FieldMap, type GenInput, type MatteOutput, type MediaKind, type Operation, type PixelPoint } from "./types";
 
@@ -120,7 +121,8 @@ export function framedLength(f: FieldMap["numFrames"] | undefined, seconds: numb
 
 /**
  * Width and height for an aspect ratio (FieldMap.size): the table's size for the tier and shape when it has one
- * (Fuobe Soul: its first tier when the tier is unknown), else the shape on a `base`×`base` pixel budget; or the size
+ * (Fuobe Soul: its first tier when the tier is unknown), else the shape on a `base`×`base` pixel budget (the tier's own square
+ * when `bases` names it: fal's FLUX 3 Klein 2K is 2048 × 2048); or the size
  * the request asks for (`asked`: a layout's canvas) on the route's grid. Neither side above `max` (Replicate's Z-Image
  * takes 1440) nor below `min` (fal's MOSS-Image takes 512–2048): the shape is scaled to fit, then a side that still
  * can't keep it is held at the limit.
@@ -131,7 +133,7 @@ export function sizeValue(
   resolution?: string,
   asked?: { width: number; height: number },
 ): { width: number; height: number } {
-  const base = f.base ?? 1024;
+  const base = (resolution !== undefined ? f.bases?.[resolution] : undefined) ?? f.base ?? 1024;
   const ratio = (aspectRatio && ratioOf(aspectRatio)) || 1;
   const round = (v: number) => Math.max(f.multiple, Math.round(v / f.multiple) * f.multiple);
   const tier = f.table && (f.table[resolution ?? ""] ?? Object.values(f.table)[0]);
@@ -522,10 +524,14 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
   for (const [k, r] of Object.entries(map.ranges ?? {})) if (typeof out[k] === "number") out[k] = inRange(out[k] as number, r);
 
   // A layout draft rides in params.extra for Reuse and Edit layout; the prompt already carries it, in the model's own form.
-  const ignore = new Set([...(map.ignore ?? []), LAYOUT_PARAM, ...(asked ? [map.size!.key!] : [])]);
+  // Options → Prompt helper (params.extra.promptHelper) is Fuobe's own: it goes out as the API's prompt expansion, below.
+  const ignore = new Set([...(map.ignore ?? []), LAYOUT_PARAM, PROMPT_HELPER_PARAM, ...(asked ? [map.size!.key!] : [])]);
   for (const [k, v] of Object.entries({ ...map.fixed, ...input.extra })) if (!(map.timeline && k === "timeline") && !ignore.has(k)) setPath(out, k, v);
-  // The API's prompt expansion would rewrite a layout's boxes: off whenever the request carries one.
-  if (map.promptExpansion && carriesLayout(input.extra)) out[map.promptExpansion] = false;
+  // The API's prompt expansion would rewrite a layout's boxes: off whenever the request carries one (a route that takes the
+  // boxes in a field of their own, fal's FLUX 3 Klein, only when the draft places any). Prompt helper "off" turns it off too;
+  // "on" leaves the API's default (on).
+  const laidOut = map.boundingBoxes ? carriesBoxes(input.extra) : carriesLayout(input.extra);
+  if (map.promptExpansion && (laidOut || input.extra?.[PROMPT_HELPER_PARAM] === "off")) out[map.promptExpansion] = false;
   // A background colour given as hex goes out in the palette's shape (Recraft wants {r,g,b}).
   const bg = map.palette?.background;
   if (bg && typeof out[bg] === "string") {

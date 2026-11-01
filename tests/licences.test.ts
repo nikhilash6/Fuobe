@@ -32,6 +32,12 @@ describe("licences", () => {
     const variants = new Set(["video-depth-da3", "video-depth-vda-small", "bg-remove-rmbg"]);
     for (const w of manifest.workflows) {
       const text = workflowLicence(w);
+      // The FLUX Kommunity License (FLUX 3 Image Klein) is non-commercial with a revenue tier: Qualifying Users below US$5M
+      // may sell outputs, so it reads as a licence with conditions.
+      if (/Kommunity License/.test(text)) {
+        expect(licenceTerms(text).flags, w.id).toEqual(["conditions"]);
+        continue;
+      }
       if (!/non-commercial|CC-BY-NC/i.test(text) || variants.has(w.id)) continue;
       expect(licenceTerms(text).flags, w.id).toContain("non-commercial");
     }

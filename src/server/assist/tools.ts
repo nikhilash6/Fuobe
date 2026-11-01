@@ -65,7 +65,7 @@ function summarize(m: ModelDef) {
           ? "free (your machine)"
           : "free (your GPU)"
         : p
-          ? `$${p.usd} per ${p.unit}${p.note ? ` — ${p.note}` : ""}${p.lorasUnknown ? "; with LoRAs the price is unknown (not published yet)" : ""}`
+          ? `$${p.usd} per ${p.unit}${p.note ? ` — ${p.note}` : ""}${p.lorasUnknown ? "; with LoRAs the price is unknown (not published yet)" : ""}${p.withLorasPerMegapixel ? `; with LoRAs $${p.withLorasPerMegapixel} per megapixel` : ""}`
           : "unknown",
     connected: configured,
     ...(o.aspectRatios && { aspectRatios: o.aspectRatios }),
@@ -80,6 +80,9 @@ function summarize(m: ModelDef) {
     ...(o.voiceClone && { voiceClone: true }),
     ...(o.languages?.length && { languages: o.languages.length > 12 ? `${o.languages.slice(0, 12).join(", ")}…` : o.languages.join(", ") }),
     ...(o.looks && { looks: "139 Soul looks: pass a look id as presetId (v1-general, v2-y2k-studio…), presetStrength 0–1 scales its LoRAs" }),
+    // A model that places a layout's boxes (FLUX 3 Klein, MOSS-Image, Ideogram 4.x), and the weights' licence as information.
+    ...(o.layout && { readsLayoutBoxes: o.layout }),
+    ...(m.licence && { licence: `${m.licence.licence}${m.licence.commercial === false ? " (non-commercial weights)" : m.licence.commercial === null ? " (revenue tiers decide commercial use)" : ""}` }),
   };
 }
 

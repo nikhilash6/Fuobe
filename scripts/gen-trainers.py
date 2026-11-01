@@ -40,6 +40,8 @@ USED = {
     "fal-ai/flux-2-trainer-v2": ["steps", "default_caption", "learning_rate"],
     "fal-ai/flux-lora-portrait-trainer": ["steps", "trigger_phrase", "learning_rate"],
     "fal-ai/krea-2-trainer": ["steps", "trigger_phrase", "learning_rate"],
+    # FLUX 3 Image Klein's own trainer (nm10-flux3-klein): it trains on Klein Base; read by fetch-hosted-schemas.py --new10.
+    "blackforestlabs/flux-3/klein/base/trainer": ["steps", "trigger_phrase", "learning_rate"],
 }
 # Where each trainer's dataset zip goes (the first of these its schema requires).
 DATA_FIELDS = ("image_data_url", "images_data_url", "training_data_url")
@@ -93,16 +95,18 @@ def pricing(text):
         (r"\$(\d[\d,]*(?:\.\d+)?) per 1000-step", 1000),
         (r"\$(\d[\d,]*(?:\.\d+)?) for 1,000 requested steps", 1000),
         (r"\$(\d[\d,]*(?:\.\d+)?) per steps?\b", 1),
+        (r"\$(\d[\d,]*(?:\.\d+)?) per training steps?\b", 1),
         (r"(\d+(?:\.\d+)?) \* steps", 1),
     ):
         m = re.search(pat, t)
         if m:
             per = float(m.group(1).replace(",", "")) / div
             break
-    if per is None:
+    # A price that grows with something else as well (the Klein edit trainer's references per pair) has no one rate per step.
+    if per is None or re.search(r"multiplied by", t):
         return None
     floor = 1
-    for pat in (r"(\d[\d,]*) step floor", r"minimum of (\d[\d,]*) steps", r"(\d[\d,]*) steps is the minimum"):
+    for pat in (r"(\d[\d,]*) step floor", r"minimum of (\d[\d,]*) steps", r"(\d[\d,]*) steps is the minimum", r"minimum (\d[\d,]*) steps"):
         m = re.search(pat, t)
         if m:
             floor = int(m.group(1).replace(",", ""))

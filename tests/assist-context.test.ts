@@ -16,6 +16,7 @@ const { setSetting } = await import("@/server/settings");
 const agent = await import("@/server/assist/agent");
 const tools = await import("@/server/assist/tools");
 const studio = await import("@/server/assist/studio-tools");
+const { changeAccess } = await import("@/server/model-access");
 const memory = await import("@/server/assist/memory");
 const projects = await import("@/server/assist/projects");
 const { handleMcp } = await import("@/server/mcp");
@@ -275,6 +276,18 @@ describe("studio tools", () => {
     expect(steps.find((s) => s.key === "voice1")).toMatchObject({ after: ["tr1", "stems"], chain: [{ slot: "prompt" }, { slot: "voiceAudio", stem: "voice" }] });
     expect(steps.find((s) => s.key === "film0")).toMatchObject({ after: ["lips0", "voice0", "stems"], chain: [{ slot: "video" }, { slot: "audio" }, { slot: "audio2", stem: "background" }] });
     expect(steps[3].request.step).toMatchObject({ label: "Voice · Spanish", of: 10 });
+    expect(steps[0].request.modelId).toBe("oss-voice-separate");
+    // The Voice split: DBS keeps the music and effects; the rest of the plan is the same.
+    const withDbs = studio.fallbackSteps.dub({ video, languages: ["Spanish", "German"], voice_split: "dbs" }, { engine: "open" });
+    expect(withDbs[0].request.modelId).toBe("oss-dbs-voice-separate");
+    expect(withDbs.slice(1)).toEqual(steps.slice(1));
+    // With MelBand RoFormer switched off in Settings → Models & licences, a plan that names no split uses DBS.
+    changeAccess([{ kind: "model", id: "oss-voice-separate", on: false }]);
+    try {
+      expect(studio.fallbackSteps.dub({ video, languages: ["Spanish"] }, { engine: "open" })[0].request.modelId).toBe("oss-dbs-voice-separate");
+    } finally {
+      changeAccess([{ kind: "reset" }]);
+    }
     const noLips = studio.fallbackSteps.dub({ video, languages: ["French"], lipsync: false }, { engine: "open" });
     expect(noLips.map((s) => s.request.op)).toEqual(["separate-audio", "transcribe", "translate", "tts", "mux"]);
     // Cloud: one HeyGen job per language.
