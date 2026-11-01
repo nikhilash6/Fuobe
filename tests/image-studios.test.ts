@@ -190,7 +190,7 @@ describe("palettes: routing per model", () => {
     const twelve = { ...PAL, colors: Array.from({ length: 12 }, (_, i) => `#0000${(i * 16).toString(16).padStart(2, "0").toUpperCase()}`) };
     const trimmed = applySignature(req("recraft-4-1"), { palette: twelve }, ctx);
     expect(trimmed.request.params?.palette).toHaveLength(10);
-    expect(trimmed.notes.join()).toMatch(/takes 10 colours/);
+    expect(trimmed.notes.join()).toMatch(/takes 10 colors/);
 
     const ideo = applySignature(req("ideogram-3"), { palette: PAL }, ctx);
     expect(ideo.request.params?.palette).toEqual(PAL.colors);
@@ -229,7 +229,12 @@ describe("palettes: routing per model", () => {
     expect(said(free)).toMatch(/Color palette/);
     const locked = applySignature(req("oss-qwen-image"), { palette: { ...PAL, lock: true } }, ctx);
     expect(locked.lock?.colors).toEqual([...PAL.colors, "#264653"]);
-    expect(locked.notes).toEqual(["Then recoloured to “Teal Dusk” by a palette-transfer step"]);
+    expect(locked.notes).toEqual(["Then kept to the colors of “Teal Dusk” after it's made"]);
+    // A guest or a free account never gets the lock (a run on the studio's own ComfyUI): the colors stay in the prompt.
+    const visitor = applySignature(req("oss-qwen-image"), { palette: { ...PAL, lock: true } }, { ...ctx, visitor: true });
+    expect(visitor.lock).toBeUndefined();
+    expect(visitor.notes).toEqual([]);
+    expect(said(visitor)).toMatch(/Color palette/);
   });
 
   it("leaves requests alone without a signature or an unknown model", () => {

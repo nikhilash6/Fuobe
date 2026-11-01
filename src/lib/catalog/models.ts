@@ -1201,7 +1201,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Tongyi",
     family: "z-image",
     kind: "image",
-    tagline: "Generates in your hex colours and locks them with a colour transfer · 12 GB GPU · Apache-2.0",
+    tagline: "Generates in your hex colors and keeps them with a color transfer · 12 GB GPU · Apache-2.0",
     badges: ["new", "fast"],
     routes: [comfy("t2i", "palette-zimage-hex", "hex list in the prompt + ColorTransfer to a swatch")],
     options: {

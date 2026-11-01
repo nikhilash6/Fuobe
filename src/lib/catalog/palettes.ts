@@ -369,6 +369,11 @@ export interface SignatureCaps {
 export interface SignatureContext {
   caps: SignatureCaps;
   getModel: (id: string) => ModelDef | undefined;
+  /**
+   * A guest or a free account: no palette lock. The lock is a second run on the studio's own ComfyUI
+   * (POST /api/palettes/lock), which only the owner starts, so a visitor's colors stay in the prompt.
+   */
+  visitor?: boolean;
 }
 
 export interface SignedRequest {
@@ -577,12 +582,12 @@ export function applySignature(req: GenerationRequest, sig: Signature | undefine
     const all = paletteColors(pal);
     const native = ctx.caps.native[model.id];
     if (!native && model.engine === "open" && model.id === SIGNATURE_MODELS.openTurbo && !styled && !(r.inputs?.images?.length) && !r.loras?.length) {
-      move(SIGNATURE_MODELS.openPalette, `Runs on {model}: your colours in the prompt, then locked in with a colour transfer`);
+      move(SIGNATURE_MODELS.openPalette, `Runs on {model}: your colors go in the prompt, then a color transfer keeps the image to them`);
     }
     const nativeNow = ctx.caps.native[model.id];
     if (nativeNow) {
       const colors = cardStrip({ colors: pal.colors, background: null });
-      if (colors.length > nativeNow.max) notes.push(`${model.name} takes ${nativeNow.max} colours — the first ${nativeNow.max} are used`);
+      if (colors.length > nativeNow.max) notes.push(`${model.name} takes ${nativeNow.max} colors — the first ${nativeNow.max} are used`);
       r = { ...r, params: { ...r.params, palette: colors.slice(0, nativeNow.max) } };
       if (pal.background && nativeNow.background) r = setExtra(r, nativeNow.background, pal.background.toUpperCase());
     } else if (model.id === SIGNATURE_MODELS.openPalette) {
@@ -590,9 +595,9 @@ export function applySignature(req: GenerationRequest, sig: Signature | undefine
     } else {
       words.push(palettePrompt(pal));
       r = { ...r, params: { ...r.params, palette: all.slice(0, 16) } };
-      if (model.engine === "open" && (pal.lock ?? locksByDefault(model.id))) {
+      if (model.engine === "open" && !ctx.visitor && (pal.lock ?? locksByDefault(model.id))) {
         lock = { colors: all };
-        notes.push(`Then recoloured to “${pal.name}” by a palette-transfer step`);
+        notes.push(`Then kept to the colors of “${pal.name}” after it's made`);
       }
     }
   }

@@ -119,7 +119,7 @@ export function getPalette(id: string): Palette | null {
 export function createPalette(input: { name: string; colors: string[]; background?: string | null; source?: "manual" | "images"; thumb?: string | null }): Palette {
   const colors = input.colors.map((c) => normalizeHex(c)).filter((c): c is string => !!c);
   const background = input.background ? normalizeHex(input.background) : null;
-  if (colors.length !== input.colors.length) throw new Error(`${input.colors.find((c) => !normalizeHex(c))} isn't a colour — use #RRGGBB`);
+  if (colors.length !== input.colors.length) throw new Error(`${input.colors.find((c) => !normalizeHex(c))} isn't a color — use #RRGGBB`);
   const err = paletteError({ name: input.name, colors, background });
   if (err) throw new Error(err);
   const now = Date.now();

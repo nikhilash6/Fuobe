@@ -194,7 +194,8 @@ export function ColorSignaturePanel({
               </Button>
             )}
           </div>
-          {engine === "open" && value && (
+          {/* The lock is a second run on the studio's own ComfyUI, which a visitor's request never asks for. */}
+          {engine === "open" && value && !visitor && (
             <label className="mb-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12.5px]">
               <span>
                 Lock the colors after generating
