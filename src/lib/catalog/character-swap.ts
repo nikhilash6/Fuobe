@@ -158,6 +158,8 @@ export interface CharacterOptions {
   /** Advanced: H3's window and continuation history (frames). */
   windowFrames?: number;
   historyFrames?: number;
+  /** 1080p / 2K / 4K on your GPU: the regenerate's start noise (sharpen.ts; for evaluations, the page leaves it). */
+  sharpenSigma?: number;
 }
 
 // ---------------------------------------------------------------------------

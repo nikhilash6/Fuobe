@@ -18,6 +18,8 @@ export const METRIC_INFO = {
   continuity: { label: "Shot continuity", better: "higher", unit: "cosine", tie: 0.005, digits: 3 },
   paletteFit: { label: "Palette distance", better: "lower", unit: "mean ΔE76", tie: 0.5, digits: 1 },
   paletteCover: { label: "Palette used", better: "higher", unit: "0–1", tie: 0.05, digits: 2 },
+  bgDiff: { label: "Background change vs the source", better: "lower", unit: "0–1", tie: 0.002, digits: 4 },
+  bgPsnr: { label: "Background PSNR vs the source", better: "higher", unit: "dB", tie: 0.3, digits: 1 },
   seconds: { label: "Time", better: "lower", unit: "s (wall clock)", tie: 0.5, digits: 1 },
   costUsd: { label: "Cost", better: "lower", unit: "US$", tie: 0.0005, digits: 4 },
   vramGb: { label: "Peak memory", better: "lower", unit: "GB", tie: 0.1, digits: 2 },

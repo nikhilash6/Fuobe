@@ -1271,6 +1271,7 @@ function openFinish(input: GenjutsuPlanInput, asked: SharpenTier, quality: strin
       tier,
       prompt: sharpenPrompt(prompt, c.description),
       ...(input.seed !== undefined ? { seed: input.seed } : {}),
+      ...(c.sharpenSigma !== undefined ? { sigma: c.sharpenSigma } : {}),
       frames,
       take: { after: "swap" },
       source: { after: "fit", start: 0 },

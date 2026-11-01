@@ -31,6 +31,9 @@ export const CLOUD_TIERS: readonly SharpenTier[] = ["2K", "4K"];
 
 /** The regenerate's start noise for a swap (rdh: 0.8 "stays closer to the draft"; the release's 0.909 can drift a face). */
 export const SHARPEN_SIGMA = 0.8;
+/** The start noises an evaluation may try (Close 0.7 … the release's 0.909). */
+export const SHARPEN_SIGMA_RANGE = { min: 0.5, max: 0.909 } as const;
+const sigmaOf = (v: number | undefined) => (v !== undefined && v >= SHARPEN_SIGMA_RANGE.min && v <= SHARPEN_SIGMA_RANGE.max ? v : SHARPEN_SIGMA);
 
 /** fal's price per second of the LoRA route (the Character swap's), by resolution. */
 export const SWAP_PER_SECOND: Record<"480P" | "768P" | "2K" | "4K", number> = { "480P": 0.0625, "768P": 0.075, ...RERENDER["fuobe-character-swap"].perSecond };
@@ -219,6 +222,8 @@ export interface SharpenStepsInput {
   /** What the regenerate redraws from. */
   prompt: string;
   seed?: number;
+  /** The regenerate's start noise (SHARPEN_SIGMA unless an evaluation asks for another in SHARPEN_SIGMA_RANGE). */
+  sigma?: number;
   /** The swap's length in frames (24 fps). */
   frames: number;
   /** The 768p swap. */
@@ -275,7 +280,7 @@ export function sharpenSteps(s: SharpenStepsInput): { steps: PlanStep[]; final: 
           sourceDuration: sec(w.frames),
           ...(s.seed !== undefined ? { seed: s.seed } : {}),
           // An H3 draft (the 768p preset), and the start noise that keeps the swapped identity closer.
-          extra: { startSigma: SHARPEN_SIGMA, draftFrom: "h3" },
+          extra: { startSigma: sigmaOf(s.sigma), draftFrom: "h3" },
         },
         step: { label: `${s.label} · redraw at ${s.tier}${many ? ` (${wi + 1} of ${regen.length})` : ""}`, index: wi, of: regen.length },
       },

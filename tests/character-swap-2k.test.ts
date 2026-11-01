@@ -230,6 +230,16 @@ describe("Genjutsu's Character swap", () => {
     expect(() => character("open", "2K", { source: { ...hd, width: 1280, height: 720 } })).toThrow(S.SHARPEN_COPY.small);
   });
 
+  it("an evaluation may try another start noise (0.5–0.909); the page leaves it at 0.8", () => {
+    expect(step(character("open", "2K", { character: { sharpenSigma: 0.909 } }), "sharpen-regen0").request.params?.extra).toMatchObject({ startSigma: 0.909 });
+    expect(step(character("open", "2K", { character: { sharpenSigma: 0.3 } }), "sharpen-regen0").request.params?.extra).toMatchObject({ startSigma: 0.8 });
+    // It never reaches the swap's own graph settings.
+    expect(step(character("open", "2K", { character: { sharpenSigma: 0.7 } }), "swap").request.params?.extra).not.toHaveProperty("sharpenSigma");
+    const suite = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts/eval/cases/character-2k.json"), "utf8"));
+    expect(suite.cases.map((c: { submit: { body: { character: { sharpenSigma?: number } } } }) => c.submit.body.character.sharpenSigma)).toEqual([undefined, 0.7, 0.8, 0.909, undefined]);
+    expect(suite.defaults.metrics).toEqual(["identity", "background", "temporal"]);
+  });
+
   it("the cloud at 2K: the same pieces, fal's H3 asked for 2K (no regenerate, no composite)", () => {
     const p = character("cloud", "2K");
     expect(keys(p).some((k) => /regen|comp/.test(k))).toBe(false);

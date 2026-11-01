@@ -19,7 +19,7 @@ import {
   type CharacterOptions,
 } from "@/lib/catalog/character-swap";
 import { ACCESS_PLACE } from "@/lib/model-access";
-import { filmSize, sharpenTierFor } from "@/lib/catalog/sharpen";
+import { filmSize, SHARPEN_SIGMA_RANGE, sharpenTierFor } from "@/lib/catalog/sharpen";
 import {
   chooseMaker,
   cutsInPart,
@@ -118,6 +118,8 @@ const character = z.object({
   useMask: z.boolean().optional(),
   windowFrames: z.number().int().min(22).max(362).optional(),
   historyFrames: z.number().int().min(0).max(341).optional(),
+  /** 1080p / 2K / 4K on your GPU: the regenerate's start noise (an evaluation knob; the page doesn't set it). */
+  sharpenSigma: z.number().min(SHARPEN_SIGMA_RANGE.min).max(SHARPEN_SIGMA_RANGE.max).optional(),
 });
 
 /** The body of /api/genjutsu (and /estimate). */
