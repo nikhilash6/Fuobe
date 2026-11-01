@@ -5,10 +5,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { IntentLink } from "@/components/intent-link";
 import { cn } from "@/lib/utils";
 
-/** One side's picture: a 512 px still, and with HD stills its 1280 px copy (each with its version). */
+/** One side's picture: a 512 px still, and with HD stills its 960 and 1280 px copies (each with its version). */
 export interface BeforeAfterStill {
   src: string;
-  hd?: string;
+  hd?: { 960: string; 1280: string };
 }
 
 export interface BeforeAfterPair {
@@ -35,15 +35,16 @@ const DRAG_SLOP = 6;
 const TAG = "pointer-events-none absolute top-2.5 rounded bg-black/60 px-1.5 text-[11px] leading-5 text-white";
 /**
  * How wide the picture shows, enlarged by the pair's zoom: 460 px from xl, 512 px where the screen has room for that,
- * and on a narrower phone the screen's width less its 1rem gutters. So a 2x or 3x phone takes the 1280 px copy too.
+ * and on a narrower phone the screen's width less its 1rem gutters. The browser picks the copy that screen needs: a 1x
+ * desktop or 2x phone the 960, a 2x desktop or 3x phone the 1280.
  */
 const sizesOf = (zoom: number) =>
   `(min-width: 1280px) ${Math.ceil(460 * zoom)}px, (min-width: 544px) ${Math.ceil(512 * zoom)}px, calc((100vw - 2rem) * ${zoom})`;
-const srcSetOf = (s: BeforeAfterStill) => `${s.src} 512w, ${s.hd} 1280w`;
+const srcSetOf = (s: BeforeAfterStill) => (s.hd ? `${s.src} 512w, ${s.hd[960]} 960w, ${s.hd[1280]} 1280w` : s.src);
 
 /**
- * One side, filling the box and enlarged by `zoom`: its 512 px still, and with `hd` its 1280 px copy (when it has one)
- * for a large or 2x screen, a phone's included.
+ * One side, filling the box and enlarged by `zoom`: its 512 px still, and with `hd` its 960 and 1280 px copies (when
+ * it has them), for the browser to pick from by the screen.
  */
 export function BeforeAfterPicture({ still, zoom, hd, onLoad }: { still: BeforeAfterStill; zoom: number; hd: boolean; onLoad?: () => void }) {
   return (
@@ -71,8 +72,8 @@ export function BeforeAfterPicture({ still, zoom, hd, onLoad }: { still: BeforeA
  * it never moves by itself. A mouse moves the handle as it's pressed; a finger moves it once it goes sideways, or where
  * it taps, so a scroll that starts on the picture leaves the handle where it was. Stills only: it plays no clip.
  *
- * It sits screens below the fold, so its pictures load lazily, each its 512 px still at first. A large or 2x screen (a
- * phone's too) then gets its 1280 px copy (srcset), asked for only once the picture comes within a screen of view: a
+ * It sits screens below the fold, so its pictures load lazily, each its 512 px still at first. Then the screen gets the
+ * 960 or 1280 px copy it needs (srcset), asked for only once the picture comes within a screen of view: a
  * browser fetches lazy images well ahead, and on a slow line those would hold up the page's largest paint.
  *
  * From lg to xl (beside the sidebar) the tabs stand in a column next to the picture, in the room it leaves.
@@ -83,7 +84,7 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
   /** Bumped as each picture comes in, to look again whether the peek can start. */
   const [loaded, setLoaded] = useState(0);
   const [inView, setInView] = useState(false);
-  /** Set once the picture comes within a screen of view: only then may it take its 1280 px copies. */
+  /** Set once the picture comes within a screen of view: only then may it take its larger copies. */
   const [near, setNear] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);

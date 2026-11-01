@@ -9,7 +9,8 @@
  * shows it (bottom right, in a white frame).
  *
  * Output:
- *   public/previews/presets/ba/1280/<id>-before.jpg, <id>-after.jpg   1280x960, for large and 2x screens (phones too)
+ *   public/previews/presets/ba/1280/<id>-before.jpg, <id>-after.jpg   1280x960, for 2x desktops and 3x phones
+ *   public/previews/presets/ba/960/<id>-before.jpg, <id>-after.jpg    960x720, for 1x desktops and 2x phones
  *   public/previews/presets/ba/512/<id>-before.jpg, <id>-after.jpg    512x384, the first paint and 1x phones
  *   src/lib/preset-before-after.generated.ts                          { "<id>": "<version>" }
  *
@@ -22,7 +23,7 @@
  * further by then): the mean difference of 128x96 grey copies, at most MATCH. A pair that doesn't show what the
  * app's card shows fails the run, and nothing is written.
  *
- * The version is the content version of a pair's four files (contentVersion, as the covers' own): all four URLs end
+ * The version is the content version of a pair's six files (contentVersion, as the covers' own): all six URLs end
  * in ?v=<version>, so a pair made again gets new URLs. Every run versions every entry from its files as they are.
  *
  * Run: node scripts/gen-before-after.mjs --masters <dir>             every reveal app, and every id already listed
@@ -42,9 +43,10 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PRESETS = path.join(ROOT, "public", "previews", "presets");
 const OUT_DIR = path.join(PRESETS, "ba");
 const OUT_TS = path.join(ROOT, "src", "lib", "preset-before-after.generated.ts");
-/** The stills' widths (4:3): the large one for large and 2x screens, phones too; the small one at first and on 1x phones. */
-const WIDTHS = [1280, 512];
-const QUALITY = 82;
+/** The stills' widths (4:3), largest first: the slider's srcset picks one per screen, and the smallest shows first. */
+const WIDTHS = [1280, 960, 512];
+/** JPEG quality per width: the large copies' fine grain hides a lower one; the small still, enlarged, would show it. */
+const QUALITY = { 1280: 75, 960: 75, 512: 82 };
 /** The model a reveal clip's cover lists in the manifest: an Ideogram still, and its edit as the after. */
 const REVEAL_MODEL = "ideogram4+qwen-image-2.1-edit";
 /**
@@ -97,7 +99,7 @@ async function inset(donor, width) {
   return { input, left: box.left, top: box.top };
 }
 
-/** A pair's four stills (JPEG buffers, in files()' order), from its masters folder. */
+/** A pair's stills (JPEG buffers, in files()' order), from its masters folder. */
 async function make(folder, zoom) {
   const donor = path.join(folder, "donor.png");
   const out = [];
@@ -105,7 +107,7 @@ async function make(folder, zoom) {
     let before = await framed(path.join(folder, "start.png"), zoom, width);
     if (fs.existsSync(donor)) before = sharp(await before.png().toBuffer()).composite([await inset(donor, width)]);
     const after = await framed(path.join(folder, "end.png"), zoom, width);
-    for (const img of [before, after]) out.push(await img.jpeg({ quality: QUALITY, mozjpeg: true }).toBuffer());
+    for (const img of [before, after]) out.push(await img.jpeg({ quality: QUALITY[width], mozjpeg: true }).toBuffer());
   }
   return out;
 }
@@ -137,7 +139,7 @@ function clipFrame(clip) {
 /** How far the small before is from the poster, and the small after from the clip's late frame (at its best zoom). */
 async function check(id, stills, cover) {
   const local = (url) => path.join(ROOT, "public", ...url.split("?")[0].split("/").filter(Boolean));
-  const [before, after] = stills.slice(2);
+  const [before, after] = stills.slice(-2);
   const result = { before: gap(await grey(before), await grey(local(cover.poster))) };
   if (cover.video) {
     const frame = await grey(clipFrame(local(cover.video)));
@@ -196,8 +198,8 @@ if (masters) {
     const said = `before ${gaps.before.toFixed(2)}, after ${gaps.after === undefined ? "(no clip)" : gaps.after.toFixed(2)}`;
     if (gaps.before > MATCH || gaps.after > MATCH) failed.push(`${id}: doesn't match its cover (${said} of at most ${MATCH})`);
     else made.set(id, stills);
-    const kb = stills.map((b) => Math.round(b.length / 1024));
-    console.log(`${id}: ${said}; 1280 ${kb[0]}+${kb[1]} KB, 512 ${kb[2]}+${kb[3]} KB${fs.existsSync(path.join(folder, "donor.png")) ? ", with its donor" : ""}`);
+    const kb = WIDTHS.map((w, i) => `${w} ${Math.round(stills[2 * i].length / 1024)}+${Math.round(stills[2 * i + 1].length / 1024)} KB`).join(", ");
+    console.log(`${id}: ${said}; ${kb}${fs.existsSync(path.join(folder, "donor.png")) ? ", with its donor" : ""}`);
   }
 }
 if (failed.length) {
@@ -216,7 +218,7 @@ for (const [id, stills] of made) {
   });
   pairs[id] = "";
 }
-// Every pair's version, from its four files as they are now.
+// Every pair's version, from its files as they are now.
 const sorted = Object.keys(pairs)
   .sort()
   .map((id) => {
@@ -226,10 +228,10 @@ const sorted = Object.keys(pairs)
 fs.writeFileSync(
   OUT_TS,
   `/**
- * Stills for Home's before/after slider, sharp on a large or 2x screen: public/previews/presets/ba/1280/<id>-before.jpg
- * and <id>-after.jpg (1280x960), and the same at 512x384 in ba/512/, shown first. The value is the content version all
- * four URLs end in (?v=), so a pair made again gets new URLs. Generated by scripts/gen-before-after.mjs: run it again
- * rather than editing.
+ * Stills for Home's before/after slider, sharp on every screen: public/previews/presets/ba/1280/<id>-before.jpg and
+ * <id>-after.jpg (1280x960), the same at 960x720 in ba/960/, and at 512x384 in ba/512/, shown first. The value is the
+ * content version all six URLs end in (?v=), so a pair made again gets new URLs. Generated by
+ * scripts/gen-before-after.mjs: run it again rather than editing.
  */
 export const PRESET_BEFORE_AFTER: Record<string, string> = {
 ${sorted.map(([id, v]) => `  ${JSON.stringify(id)}: ${JSON.stringify(v)}`).join(",\n")}

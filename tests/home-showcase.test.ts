@@ -103,15 +103,15 @@ describe("Home's showcase", () => {
     const peakedIds = [...HOME_EFFECTS, ...HOME_REVEALS, ...HOME_WALL.filter((t) => !t.id.startsWith("motion-"))].map((t) => t.id).filter((id) => !ON_POSTER.includes(id));
     for (const id of peakedIds) expect(PRESET_PEAKS[id], id).toBeDefined();
     for (const id of ON_POSTER) expect(PRESET_PEAKS[id], id).toBeUndefined();
-    // The before/after: each app's HD stills (512 px, and 1280 px for a large or 2x screen), with their version, so
+    // The before/after: each app's HD stills (512 px, and 960 and 1280 px for sharper screens), with their version, so
     // none shows a small cover enlarged; the poster's small copy on its tab.
     for (const p of home.beforeAfter) {
       const v = PRESET_BEFORE_AFTER[p.id];
       expect(v, `${p.id} has HD stills (node scripts/gen-before-after.mjs)`).toBeDefined();
       for (const side of ["before", "after"] as const) {
-        expect(p[side]).toEqual({ src: `/previews/presets/ba/512/${p.id}-${side}.jpg?v=${v}`, hd: `/previews/presets/ba/1280/${p.id}-${side}.jpg?v=${v}` });
-        expect(exists(p[side].src), p[side].src).toBe(true);
-        expect(exists(p[side].hd!), p[side].hd).toBe(true);
+        const url = (w: number) => `/previews/presets/ba/${w}/${p.id}-${side}.jpg?v=${v}`;
+        expect(p[side]).toEqual({ src: url(512), hd: { 960: url(960), 1280: url(1280) } });
+        for (const u of [p[side].src, p[side].hd![960], p[side].hd![1280]]) expect(exists(u), u).toBe(true);
       }
       expect(p.thumb).toBe(thumbOf(PRESET_PREVIEWS[p.id].poster));
       expect(exists(p.thumb), p.thumb).toBe(true);

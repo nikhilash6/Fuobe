@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ prefetch: () => {} }) })
 /*
  * Home's before/after slider (src/components/home/before-after.tsx) and its HD stills (scripts/gen-before-after.mjs,
  * src/lib/preset-before-after.generated.ts): every app whose cover is a reveal clip has a pair, so any of them can go
- * on Home and stay sharp on a large or 2x screen, a phone's too, and the slider asks for the 1280 px copy only once
+ * on Home and stay sharp on every screen, a phone's too, and the slider asks for its 960 or 1280 px copy only once
  * it comes near the screen. Each pair still shows what its app's card shows, so a cover made again needs its pair
  * made again.
  */
@@ -27,8 +27,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ prefetch: () => {} }) })
 const root = process.cwd();
 /** The apps whose cover is a before → after reveal clip (gen-before-after.mjs's REVEAL_MODEL). */
 const REVEALS = Object.keys(PRESET_PREVIEWS).filter((id) => PRESET_PREVIEWS[id].model === "ideogram4+qwen-image-2.1-edit");
-/** The most one still may weigh: an HD pair is about 260 KB, a phone's about 55 KB. */
-const MAX_BYTES = { 1280: 320_000, 512: 64_000 };
+/** The most one still may weigh: a pair is about 205 KB at 1280 px, 125 KB at 960 and 55 KB at 512. */
+const MAX_BYTES = { 1280: 260_000, 960: 160_000, 512: 64_000 };
 
 /** A JPEG's size, from its frame header (baseline or progressive). */
 function jpegSize(file: string) {
@@ -69,9 +69,9 @@ describe("Home's before/after stills", () => {
     }
   });
 
-  it("makes each still 4:3, 1280 and 512 px wide, light enough for a phone and the repo", () => {
+  it("makes each still 4:3, 1280, 960 and 512 px wide, light enough for a phone and the repo", () => {
     for (const id of Object.keys(PRESET_BEFORE_AFTER)) {
-      for (const w of [1280, 512] as const) {
+      for (const w of [1280, 960, 512] as const) {
         for (const side of ["before", "after"]) {
           const file = path.join(root, "public", "previews", "presets", "ba", String(w), `${id}-${side}.jpg`);
           expect(jpegSize(file), file).toEqual({ width: w, height: (w * 3) / 4 });
@@ -95,25 +95,28 @@ describe("Home's before/after stills", () => {
     }
   }, 30_000);
 
-  it("starts each picture on its 512 px still and adds the 1280 px copy as the screen needs it, never at first paint", async () => {
+  it("starts each picture on its 512 px still and adds the 960 and 1280 px copies for the screen to pick, never at first paint", async () => {
     const { beforeAfter } = await homeShowcase();
     const [{ id, zoom, before, after }] = beforeAfter;
-    expect(before.hd).toContain(`/ba/1280/${id}-before.jpg?v=`);
-    // The page as served: the open tab's two pictures, each its 512 px still, lazily; no 1280 px copy and no preload,
+    expect(before.hd?.[1280]).toContain(`/ba/1280/${id}-before.jpg?v=`);
+    expect(before.hd?.[960]).toContain(`/ba/960/${id}-before.jpg?v=`);
+    // The page as served: the open tab's two pictures, each its 512 px still, lazily; no larger copy and no preload,
     // so nothing large competes with the page's first paint.
     const html = renderToStaticMarkup(createElement(BeforeAfter, { pairs: beforeAfter }));
     expect(html.match(/<picture>/g)).toHaveLength(2);
     for (const s of [before, after]) expect(html).toMatch(new RegExp(`<img src="${s.src.replace(/[?.]/g, "\\$&")}"[^>]* loading="lazy"`));
     expect(html).not.toContain("<source");
     expect(html).not.toContain("1280");
+    expect(html).not.toContain("/ba/960/");
     expect(html).not.toContain("preload");
 
-    // Near the screen (hd): the 1280 px copy as wide as the picture shows, enlarged by its zoom; on a phone narrower
-    // than the 512 px picture plus its gutters, the screen's width less those, so a 2x or 3x phone takes it too.
+    // Near the screen (hd): all three widths, sized as wide as the picture shows, enlarged by its zoom; on a phone
+    // narrower than the 512 px picture plus its gutters, the screen's width less those, so a 2x phone takes the 960
+    // and a 3x phone the 1280.
     const sizes = `(min-width: 1280px) ${Math.ceil(460 * zoom)}px, (min-width: 544px) ${Math.ceil(512 * zoom)}px, calc((100vw - 2rem) * ${zoom})`;
     for (const s of [before, after]) {
       const near = renderToStaticMarkup(createElement(BeforeAfterPicture, { still: s, zoom, hd: true }));
-      expect(near).toContain(`<source srcSet="${s.src} 512w, ${s.hd} 1280w" sizes="${sizes}"/>`);
+      expect(near).toContain(`<source srcSet="${s.src} 512w, ${s.hd![960]} 960w, ${s.hd![1280]} 1280w" sizes="${sizes}"/>`);
       expect(near).toMatch(new RegExp(`<img src="${s.src.replace(/[?.]/g, "\\$&")}"[^>]* loading="lazy"`));
     }
     // A picture without HD stills keeps its small still alone.

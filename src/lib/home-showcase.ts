@@ -73,7 +73,7 @@ export const HOME_MOTIONS = [
 ];
 
 /**
- * The before/after under Apps: the app's HD stills (preset-before-after.generated.ts, at 512 and 1280 px), else its
+ * The before/after under Apps: the app's HD stills (preset-before-after.generated.ts, at 512, 960 and 1280 px), else its
  * poster as the before and its peak frame as the after. `zoom` enlarges both alike: the sketch is a sheet of paper on
  * white, and its edges would show.
  */
@@ -302,7 +302,10 @@ export async function homeShowcase() {
       const v = PRESET_BEFORE_AFTER[id];
       const still = (side: "before" | "after"): BeforeAfterStill =>
         v
-          ? { src: `/previews/presets/ba/512/${id}-${side}.jpg?v=${v}`, hd: `/previews/presets/ba/1280/${id}-${side}.jpg?v=${v}` }
+          ? {
+              src: `/previews/presets/ba/512/${id}-${side}.jpg?v=${v}`,
+              hd: { 960: `/previews/presets/ba/960/${id}-${side}.jpg?v=${v}`, 1280: `/previews/presets/ba/1280/${id}-${side}.jpg?v=${v}` },
+            }
           : { src: side === "before" ? card.preview.poster : (card.preview.rest?.src ?? card.preview.poster) };
       return { id, name: card.name, before: still("before"), after: still("after"), thumb: thumbOf(card.preview.poster), tags: [...tags], zoom, href: presetHref(id) };
     }),

@@ -32,7 +32,7 @@ const versionOf = (...files: string[]) => {
   return hash.digest("hex").slice(0, 8);
 };
 /** An app's HD before/after stills for Home, in the order gen-before-after.mjs versions them. */
-const beforeAfterFiles = (id: string) => [1280, 512].flatMap((w) => ["before", "after"].map((side) => `/previews/presets/ba/${w}/${id}-${side}.jpg`));
+const beforeAfterFiles = (id: string) => [1280, 960, 512].flatMap((w) => ["before", "after"].map((side) => `/previews/presets/ba/${w}/${id}-${side}.jpg`));
 
 describe("the preset covers manifest", () => {
   it("lists catalog presets (or Soul looks) only, in the order the generator writes them", () => {
@@ -65,7 +65,7 @@ describe("the preset covers manifest", () => {
       const still = `/previews/presets/peak/${id}.jpg`;
       expect(v, id).toBe(versionOf(fileOf(still), fileOf(thumbOf(still))));
     }
-    // Home's HD before/after stills: one version for an app's four (gen-before-after.mjs, in its order).
+    // Home's HD before/after stills: one version for an app's six (gen-before-after.mjs, in its order).
     for (const [id, v] of Object.entries(PRESET_BEFORE_AFTER)) expect(v, id).toBe(versionOf(...beforeAfterFiles(id).map(fileOf)));
   });
 
