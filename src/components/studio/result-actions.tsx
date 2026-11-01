@@ -19,6 +19,7 @@ import {
   ImagePlus,
   Layers2,
   Palette,
+  LayoutDashboard,
   Mic2,
   MoreHorizontal,
   Pin,
@@ -72,6 +73,7 @@ import { toSrt, toVtt } from "@/lib/cues";
 import { cuesOf, outputActions, textOf, type ActionContext, type OutputAction, type OutputActionId } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
+import { toastError } from "@/lib/refusals";
 
 export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   animate: Clapperboard,
@@ -80,6 +82,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   reference: ImagePlus,
   grade: SlidersHorizontal,
   layers: Layers2,
+  "edit-layout": LayoutDashboard,
   "save-character": UserRoundPlus,
   extend: FastForward,
   reframe: Crop,
@@ -232,7 +235,7 @@ export function useActionRunner(opts: RunnerOptions = {}) {
       case "finalize":
         return create.mutate(
           { feature: g.feature, modelId: g.modelId, op: "finalize", prompt: g.request.prompt, params: { draftId: o.draftId, resolution: "1080p", duration: g.request.params?.duration } },
-          { onSuccess: () => toast.success("Rendering the final 1080p version"), onError: (e) => toast.error((e as Error).message) },
+          { onSuccess: () => toast.success("Rendering the final 1080p version"), onError: (e) => toastError(e) },
         );
       case "reuse":
         return opts.onReuse?.(g);
@@ -283,7 +286,7 @@ export function SaveElementForm({ g, o, onDone }: { g: Generation; o: OutputFile
           onDone();
           toast.success(`Saved as @${el.handle}`, { action: { label: "Open", onClick: () => router.push(`/elements/${el.id}`) } });
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
   return (

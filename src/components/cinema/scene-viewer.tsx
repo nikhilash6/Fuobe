@@ -20,6 +20,7 @@ import type { Engine } from "@/lib/catalog/types";
 import { ACCESS_PLACE, offered } from "@/lib/model-access";
 import { APERTURE, FLY_KEYS, F_STOPS, LENS, LENS_STOPS, captureSize, formatStop, frameRect, ratioOf, scenePose, twoFinger, type Rect } from "@/lib/scene3d";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useCinemaGenerate } from "./hooks";
 import { usePlanPrice, type SceneTake } from "./scene-actions";
 import { FilmButton, OPEN_SECONDS, PathKeys, PathOptions } from "./scene-path";
@@ -356,7 +357,7 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
       // A render the run didn't take isn't left in Uploads (the server refuses to delete one that is used).
       if (uploaded) deleteUpload.mutate(uploaded);
       // Closing the viewer stops a recording: nothing to report then.
-      if ((e as Error).name !== "AbortError") toast.error((e as Error).message || "Couldn't film this path");
+      if ((e as Error).name !== "AbortError") toastError(e, "Couldn't film this path");
     } finally {
       setFilming(null);
     }
@@ -387,7 +388,7 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
       setQueued((n) => n + 1);
       toast.success("Re-rendering this view — it lands next to the scene as a new take", { duration: 3000 });
     } catch (e) {
-      toast.error((e as Error).message || "Couldn't capture this view");
+      toastError(e, "Couldn't capture this view");
     } finally {
       setCapturing(false);
     }

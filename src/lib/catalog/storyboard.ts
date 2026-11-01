@@ -34,8 +34,9 @@ const NEXT_SCENE = loraEntry("next-scene-qwen-edit-2509");
 export const STORYBOARD_MODELS: Record<Engine, StoryboardModels> = {
   // Hosted open weights: Z-Image Turbo, Qwen-Image-Edit 2511 with references, then Qwen-Image-Edit 2509 + next-scene.
   cloud: { first: "z-image-turbo-cloud", firstWithRefs: "qwen-image-edit-2511-cloud", next: "qwen-image-edit-2509-cloud", chainFrom: "first", ...(NEXT_SCENE && { nextLoras: [loraRef(NEXT_SCENE)] }) },
-  // Qwen-Image-Edit + the next-scene LoRA takes the previous panel as image 1 and the character as image 2.
-  open: { first: "oss-z-image-turbo", firstWithRefs: "oss-qwen-edit", next: "oss-qwen-next-scene", chainFrom: "first" },
+  // Frame 1 on Qwen-Image 2.1 (text to image, or an edit of up to 4 references); then Qwen-Image-Edit 2509 + the
+  // next-scene LoRA takes the previous panel as image 1 and the character as image 2.
+  open: { first: "oss-qwen-image-21", firstWithRefs: "oss-qwen-image-21", next: "oss-qwen-next-scene", chainFrom: "first" },
 };
 
 /** Partner models a cloud board can run on instead (a separate choice): every frame on it, each from the last one. */

@@ -11,13 +11,17 @@ import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { BrandChip } from "@/components/brand/brand-dialog";
 import { inputCls } from "@/components/brand/fields";
-import { FORMATS, formatModels, looksLikeWebsite, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
+import { withoutOwnGpu } from "@/lib/catalog/engines";
+import { FORMATS, formatModels, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
+import { SelfHostNote } from "@/components/self-host-note";
 import { formatCost } from "@/lib/format";
-import { useModelAccess } from "@/lib/api";
+import { useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { addRuns, send, useBrands, useEstimate } from "./hooks";
 import type { MarketingRun } from "@/lib/catalog/marketing";
+import { toastError } from "@/lib/refusals";
+import { templateCover } from "@/lib/template-covers";
 import type { ModelInfo } from "./model-info";
 import { AvatarSlot, HookPicker, ProductSlot, SettingPicker, VoiceControl, type ProductChoice } from "./pickers";
 import { RunsList } from "./runs";
@@ -104,7 +108,12 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
   const f = FORMATS[draft.format];
   // Models switched off in Settings → Models & licences leave the menu, and the pick falls back to one that is on.
   const access = useModelAccess();
-  const choices = keepOffered(formatModels(f, engine, { product: !!draft.product, avatar: !!draft.avatar }), (c) => offered(access, c.id, engine));
+  // A guest or an account: Marketing Studio runs on a self-hosted Fuobe only, so no model reads "on your GPU".
+  const visitor = useLikelyVisitor();
+  const listed = formatModels(f, engine, { product: !!draft.product, avatar: !!draft.avatar });
+  // One listed only to say it runs on your GPU (the Original's Standalone shot in the cloud) is shown, never picked.
+  const choices = keepOffered(pickable(listed), (c) => offered(access, c.id, engine));
+  const elsewhere = listed.filter((c) => c.unavailable);
   const model = choices.find((c) => c.id === draft.modelId) ?? choices[0];
   const summary = [draft.aspectRatio, f.durations && `${draft.duration}s`, draft.batch > 1 && `×${draft.batch}`].filter(Boolean).join(" · ");
   const seg = (active: boolean) => cn("h-7 rounded-full px-2.5 text-[12px] font-medium text-muted-foreground", active && "bg-background text-foreground shadow-soft");
@@ -161,8 +170,14 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
             {choices.map((c) => (
               <button key={c.id} type="button" onClick={() => set({ modelId: c.id })} className={cn("w-full rounded-lg px-2.5 py-1.5 text-left hover:bg-accent", model.id === c.id && "bg-brand-faint")}>
                 <span className={cn("block text-[13px] font-medium", model.id === c.id && "text-brand-text")}>{models[c.id]?.name ?? c.id}</span>
-                <span className="block text-[11px] text-muted-foreground">{c.note ?? models[c.id]?.tagline}</span>
+                <span className="block text-[11px] text-muted-foreground">{visitor ? withoutOwnGpu(c.note ?? models[c.id]?.tagline ?? "") : (c.note ?? models[c.id]?.tagline)}</span>
               </button>
+            ))}
+            {elsewhere.map((c) => (
+              <div key={c.id} aria-disabled="true" className="w-full rounded-lg px-2.5 py-1.5 text-left opacity-60">
+                <span className="block text-[13px] font-medium">{models[c.id]?.name ?? c.id}</span>
+                <span className="block text-[11px] text-muted-foreground">{c.note}</span>
+              </div>
             ))}
           </div>
         </div>
@@ -285,6 +300,11 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   const [engaged, setEngaged] = useState(false);
   const composer = useRef<HTMLDivElement>(null);
   const prompt = useRef<HTMLTextAreaElement>(null);
+  // A run doesn't go to an account's own GPU or key yet (only the studios' generations do): said up front, with no
+  // upload slots and no Generate, instead of a run the server refuses. The slots show once the owner is known
+  // (useIsOwner), so a visitor never sees them and then gone.
+  const visitor = useLikelyVisitor();
+  const isOwner = useIsOwner();
   const set = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }));
   const f = FORMATS[draft.format];
   const template = draft.templateId ? TEMPLATE_INDEX.get(draft.templateId) : undefined;
@@ -305,7 +325,8 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       engine,
       format: draft.format,
       templateId: draft.templateId ?? undefined,
-      modelId: draft.modelId,
+      // A pick that runs on your GPU only (the Original's Standalone shot) isn't sent to the cloud: its default runs.
+      modelId: draft.modelId && !formatModels(f, engine, { product: true, avatar: true }).some((c) => c.unavailable && c.id === draft.modelId) ? draft.modelId : undefined,
       productId: draft.product?.productId,
       productImages: draft.product && !draft.product.productId ? draft.product.images : undefined,
       avatar: f.avatar !== "none" ? draft.avatar?.ref : undefined,
@@ -327,8 +348,14 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   );
   const est = useEstimate<RunEstimate>("/api/marketing/estimate", draft.avatar?.uploading || draft.voiceSample?.uploading ? null : body);
   const badSite = !!f.oneOf?.includes("website") && !!draft.website.trim() && !looksLikeWebsite(draft.website);
-  const blocker = draft.product === null && f.product === "required" ? "Attach a product to generate" : badSite ? "Enter a valid website URL" : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const blocker = visitor
+    ? "Marketing Studio runs on a self-hosted Fuobe for now"
+    : draft.product === null && f.product === "required"
+      ? "Attach a product to generate"
+      : badSite
+        ? "Enter a valid website URL"
+        : est.data?.blocker;
+  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   // Until a template is picked or you start on the composer it stays slim (the attachment tiles fold
   // away), so the template gallery behind it stays in view.
@@ -340,6 +367,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
     });
 
   const generate = async () => {
+    if (visitor) return;
     if (blocker) {
       setEngaged(true);
       toast(blocker, { id: "marketing-blocker" });
@@ -355,7 +383,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       toast.success(r.runs.length > 1 ? `${r.runs.length} runs started` : f.pipeline === "image" ? "Generating" : `Started · ${est.data?.steps.length ?? ""} steps`, { duration: 1600 });
       set({ prompt: "" });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -369,7 +397,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
 
   return (
     <div className="flex min-h-svh min-w-0 flex-col">
-      <MarketingHeader title="Marketing Studio" active="studio" engine={engine} onEngine={setEngine} />
+      <MarketingHeader title="Marketing Studio" active="studio" engine={engine} onEngine={setEngine} selfHostedOnly />
       <Suspense fallback={null}>
         <UrlParams onTemplate={pickTemplate} onTab={setTab} />
       </Suspense>
@@ -377,8 +405,9 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
         <div className="pt-6 pb-2 text-center sm:pt-10">
           <h2 className="font-heading text-display text-balance">Turn a product into ready-to-post content</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">
-            Product shots, motion, UGC presenters, ads, posters and listings — from Fuobe&apos;s templates, on {engine === "open" ? "your own GPU, free" : "Fuobe Marketing Image or partner models in the cloud"}.
+            Product shots, motion, UGC presenters, ads, posters and listings — from Fuobe&apos;s templates, on {engine === "open" ? (visitor ? "open-source models" : "your own GPU, free") : "Fuobe Marketing Image or partner models in the cloud"}.
           </p>
+          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Marketing Studio runs on a self-hosted Fuobe for now.</SelfHostNote>}
         </div>
         <div role="tablist" aria-label="View" className="mx-auto mt-4 flex w-fit rounded-full bg-muted p-0.5">
           {(["templates", "generations"] as const).map((t) => (
@@ -431,7 +460,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
             {template && (
               <div className="relative flex h-14 shrink-0 items-center gap-2 rounded-xl bg-muted py-1 pr-7 pl-1">
                 <div className="h-12 w-9 overflow-hidden rounded-lg">
-                  <TemplatePreview id={template.id} look={template.look} />
+                  <TemplatePreview id={template.id} look={template.look} cover={templateCover("marketing", template.id)} sizes="36px" />
                 </div>
                 <div className="min-w-0">
                   <p className="max-w-32 truncate text-[12px] font-medium">{template.name}</p>
@@ -442,9 +471,10 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
                 </button>
               </div>
             )}
-            {f.product !== "none" && <ProductSlot value={draft.product} onChange={(p) => set({ product: p })} required={f.product === "required"} brandId={brandId} pulse={pulse === "product"} />}
-            {f.avatar !== "none" && <AvatarSlot value={draft.avatar} onChange={(a) => set({ avatar: a })} pulse={pulse === "avatar"} />}
-            {f.pipeline !== "ugc" && <MediaSlot label="Reference" kind="image" value={draft.reference} onChange={(v) => set({ reference: v })} />}
+            {/* A guest or an account gets no upload slots: nothing is uploaded for a run that can't start here. */}
+            {isOwner && f.product !== "none" && <ProductSlot value={draft.product} onChange={(p) => set({ product: p })} required={f.product === "required"} brandId={brandId} pulse={pulse === "product"} />}
+            {isOwner && f.avatar !== "none" && <AvatarSlot value={draft.avatar} onChange={(a) => set({ avatar: a })} pulse={pulse === "avatar"} />}
+            {isOwner && f.pipeline !== "ugc" && <MediaSlot label="Reference" kind="image" value={draft.reference} onChange={(v) => set({ reference: v })} />}
           </div>
           <textarea
             ref={prompt}
@@ -489,6 +519,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
                 <button
                   type="button"
                   onClick={() => void generate()}
+                  disabled={visitor}
                   aria-label={template ? "Recreate template" : "Generate"}
                   aria-disabled={!!blocker || busy}
                   className={cn("grid size-10 shrink-0 place-items-center rounded-full text-primary-foreground transition-colors", blocker ? "bg-primary/70 hover:bg-primary/80" : "bg-primary hover:bg-primary/90")}

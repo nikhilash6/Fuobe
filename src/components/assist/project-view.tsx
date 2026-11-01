@@ -41,14 +41,17 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { MediaThumb } from "@/components/studio/feed";
 import { Viewer } from "@/components/studio/viewer";
 import { AssistComposer } from "@/components/assist/composer";
 import { chatSkills, NewChatControls, SkillStarters } from "@/components/assist-view";
 import { useElements, useEngine } from "@/lib/api";
 import { MAX_PROJECT_SOURCES, type AssistProject, type ProjectSource, type SourceKind } from "@/lib/assist";
+import { isPlaceholder, PLACEHOLDER_CHIP } from "@/lib/demo-mode";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { ChatMenu } from "./chat-menu";
 import { useChatActions, useChats, useProject, useProjectActions, useProjectAssets, useSkills } from "./hooks";
 import { MemoryView } from "./memory-view";
@@ -209,7 +212,7 @@ function Project({ p }: { p: AssistProject }) {
                   toast("Project deleted", { duration: 1500 });
                   router.push("/assist");
                 } catch (e) {
-                  toast.error((e as Error).message);
+                  toastError(e);
                 }
               }}
             >
@@ -246,11 +249,12 @@ function Assets({ p, active }: { p: AssistProject; active: boolean }) {
       </p>
       <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {tiles.map(({ a, at, o, i }) => (
-          <li key={`${a.generation.id}-${i}`}>
+          <li key={`${a.generation.id}-${i}`} className="relative">
             <button onClick={() => setOpen({ at, i })} className="group relative block aspect-square w-full overflow-hidden rounded-xl bg-muted" aria-label={`Open ${a.generation.request.prompt?.slice(0, 60) || "result"} (from ${a.chatTitle})`}>
-              <MediaThumb output={o} g={a.generation} className="transition duration-300 group-hover:scale-[1.03]" tag={a.generation.provider === "mock" && o.kind === "text" ? "Demo" : undefined} />
-              {a.generation.provider === "mock" && o.kind !== "text" && <span className="absolute top-1.5 right-1.5 rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-medium">Demo</span>}
+              <MediaThumb output={o} g={a.generation} className="transition duration-300 group-hover:scale-[1.03]" tag={isPlaceholder(a.generation) && o.kind === "text" ? PLACEHOLDER_CHIP : undefined} />
             </button>
+            {/* Beside the tile, not in it (a button can't hold the chip's own button): the ways to the real thing. */}
+            {o.kind !== "text" && <PlaceholderChip g={a.generation} overlay className="absolute top-1.5" />}
           </li>
         ))}
       </ul>
@@ -286,7 +290,7 @@ function Sources({ p }: { p: AssistProject }) {
       else toast.success(`Added ${s.title}`, { duration: 1500 });
       return true;
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
       return false;
     } finally {
       setBusy(null);
@@ -444,7 +448,7 @@ function SourceRow({ s, projectId }: { s: ProjectSource; projectId: string }) {
                 const r = await actions.refreshSource(projectId, s.id);
                 toast(r.status === "ready" ? "Updated" : "Still can't read it", { duration: 1500 });
               } catch (e) {
-                toast.error((e as Error).message);
+                toastError(e);
               } finally {
                 setBusy(false);
               }
@@ -453,7 +457,7 @@ function SourceRow({ s, projectId }: { s: ProjectSource; projectId: string }) {
             <RotateCw className={cn(busy && "animate-spin")} />
           </Button>
         )}
-        <Button variant="ghost" size="icon-sm" className="hover:text-destructive" aria-label={`Remove ${s.title}`} onClick={() => void actions.removeSource(projectId, s.id).catch((e) => toast.error((e as Error).message))}>
+        <Button variant="ghost" size="icon-sm" className="hover:text-destructive" aria-label={`Remove ${s.title}`} onClick={() => void actions.removeSource(projectId, s.id).catch((e) => toastError(e))}>
           <Trash2 />
         </Button>
       </div>

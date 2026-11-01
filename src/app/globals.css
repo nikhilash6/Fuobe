@@ -216,6 +216,9 @@
   --animate-caret: caret-blink 1s step-end infinite;
   /* Click feedback while a link's route loads: shows only if the navigation takes a moment. */
   --animate-pending-in: pending-in 150ms ease-out 120ms both;
+  /* Home: the composer's ring brightens once when a Try chip fills it; Audio's waveform ripples on hover. */
+  --animate-ring-flash: ring-flash 260ms ease-out both;
+  --animate-wave-bar: wave-bar 900ms ease-in-out infinite;
 
   @keyframes shimmer-text {
     from { mask-position: 100% 0; }
@@ -240,6 +243,15 @@
   @keyframes caret-blink {
     0%, 49% { opacity: 1; }
     50%, 100% { opacity: 0; }
+  }
+  @keyframes ring-flash {
+    0% { opacity: 0; }
+    35% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @keyframes wave-bar {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(0.35); }
   }
 }
 
@@ -328,6 +340,19 @@
 .fade-x[data-fade-start] { --fade-l: 32px; }
 .fade-x[data-fade-end] { --fade-r: 32px; }
 
+/*
+ * Home's sections under the fold (home-sections.tsx): the first paint doesn't wait for their layout. Until the page
+ * is idle (home-view.tsx then marks them data-laid-out, one at a time) each one is laid out only once it comes near
+ * the screen, and is --cv high until then: its measured height at that width, so nothing moves when it's drawn.
+ */
+.home-cv {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--cv, 700px);
+}
+.home-cv[data-laid-out] {
+  content-visibility: visible;
+}
+
 /* Sidebar groups that remember being collapsed (app-sidebar.tsx). In icon mode every item shows. */
 [data-nav-group][data-open="false"] [data-nav-items] { display: none; }
 /* A collapsed group still shows the page you're on (only that item), so something is always lit. */
@@ -336,9 +361,13 @@
 [data-collapsible="icon"] [data-nav-group] [data-nav-items] { display: flex; }
 [data-collapsible="icon"] [data-nav-group][data-open] [data-nav-items] > li { display: revert-layer; }
 
-/* A vertical scroller with more below the fold fades out at the bottom (app-sidebar.tsx). */
-.fade-bottom[data-more-below] {
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 40px), transparent);
+/*
+ * A vertical scroller fades out at an edge with more past it (app-sidebar.tsx). --fade-t and --fade-b
+ * are as deep as what's hidden there, up to 24px and 40px (scrollFades in src/lib/nav.ts).
+ */
+.fade-y[data-more-above],
+.fade-y[data-more-below] {
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-t, 0px), #000 calc(100% - var(--fade-b, 0px)), transparent);
 }
 
 /* ---------------------------------------------------------------------------------------------

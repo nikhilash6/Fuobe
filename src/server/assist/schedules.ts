@@ -1,6 +1,6 @@
 import "server-only";
 import { nanoid } from "nanoid";
-import { threadTitle, type AssistItem, type AssistModeChoice } from "@/lib/assist";
+import { normalizeAgent, threadTitle, type AssistItem, type AssistModeChoice } from "@/lib/assist";
 import {
   DEFAULT_SCHEDULE_CAP_USD,
   describeRule,
@@ -14,8 +14,6 @@ import {
   type ScheduleView,
 } from "@/lib/assist-schedule";
 import { formatCost } from "@/lib/format";
-import { asSystem } from "../access/actor";
-import { rowOwner, runAsOwner } from "../access/permissions";
 import { db } from "../db";
 import { addMessage, createThread, getThread, resolveMode, run, type ModelCall } from "./agent";
 import { getProject } from "./projects";
@@ -131,6 +129,12 @@ export function summarize(status: "idle" | "running" | "waiting", items: AssistI
   return { status: "done", text };
 }
 
+/** A task's stored mode choice. Tasks saved before LM Studio and Unsloth Studio support say agent "ollama": shown as "local", as runs read it. */
+function modeOf(json: string): ScheduleView["mode"] {
+  const m = JSON.parse(json) as NonNullable<ScheduleView["mode"]>;
+  return m.agent ? { ...m, agent: normalizeAgent(m.agent) ?? m.agent } : m;
+}
+
 function toView(r: Row): ScheduleView {
   return {
     id: r.id,
@@ -143,7 +147,7 @@ function toView(r: Row): ScheduleView {
     approval: r.approval,
     capUsd: r.cap_usd,
     engine: r.engine,
-    mode: r.mode_json ? (JSON.parse(r.mode_json) as ScheduleView["mode"]) : null,
+    mode: r.mode_json ? modeOf(r.mode_json) : null,
     connectors: !!r.connectors,
     paused: !!r.paused,
     nextRunAt: r.paused ? null : r.next_run_at,
@@ -316,6 +320,7 @@ export async function startSchedule(id: string, o: { now?: number; model?: Model
       title: `${r.title} · ${formatWhen(now, r.tz)}`,
       projectId: r.project_id,
       mode: m.mode,
+      provider: m.provider,
       model: m.model,
       effort: m.effort,
       scheduleId: r.id,
@@ -356,13 +361,10 @@ export async function sweepSchedules(now = Date.now(), o: { model?: ModelCall } 
     const next = nextRun(JSON.parse(r.rule_json) as ScheduleRule, r.tz, now);
     const claimed = db().prepare("UPDATE assist_schedules SET next_run_at = ? WHERE id = ? AND next_run_at = ? AND paused = 0").run(next, r.id, r.next_run_at).changes;
     if (!claimed) continue;
-    // A task runs as the person who owns it, never as whoever the sweep's timer started under.
-    const begun = await Promise.resolve()
-      .then(() => runAsOwner(rowOwner(r), () => startSchedule(r.id, { now, model: o.model })))
-      .catch((e: Error) => {
-        record(r.id, { last_run_at: now, last_thread_id: null, last_status: "failed", last_text: e.message });
-        return null;
-      });
+    const begun = await startSchedule(r.id, { now, model: o.model }).catch((e: Error) => {
+      record(r.id, { last_run_at: now, last_thread_id: null, last_status: "failed", last_text: e.message });
+      return null;
+    });
     if (begun?.threadId) started.push(begun.threadId);
     if (begun) runs.push(begun.done);
   }
@@ -388,11 +390,8 @@ export function ensureScheduleRunner(o: { soon?: boolean } = {}): void {
     cur.tick = tick;
     return;
   }
-  // The server's timers, whichever request started them (creating a task does): each task runs as its owner.
-  asSystem(() => {
-    const state = { tick, timer: setInterval(() => globalThis.__fuobeScheduleRunner?.tick(), SWEEP_MS) };
-    state.timer.unref?.();
-    globalThis.__fuobeScheduleRunner = state;
-    if (o.soon) setTimeout(() => globalThis.__fuobeScheduleRunner?.tick(), BOOT_SWEEP_MS).unref?.();
-  });
+  const state = { tick, timer: setInterval(() => globalThis.__fuobeScheduleRunner?.tick(), SWEEP_MS) };
+  state.timer.unref?.();
+  globalThis.__fuobeScheduleRunner = state;
+  if (o.soon) setTimeout(() => globalThis.__fuobeScheduleRunner?.tick(), BOOT_SWEEP_MS).unref?.();
 }

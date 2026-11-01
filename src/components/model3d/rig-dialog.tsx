@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateGeneration } from "@/lib/api";
 import { ANIMATION_LIBRARY_URL, ANIMATION_MAX, ANIMATION_PRESETS, animationId, rigRequest } from "@/lib/av/model3d";
+import { toastError } from "@/lib/refusals";
 import { priceLine, useRunPreview } from "./hooks";
 
 const NONE = "none";
@@ -35,7 +36,7 @@ export function RigDialog({ glb, open, onOpenChange, cloudAllowed }: { glb: stri
         toast.success(animation === null ? "Rigging your character" : "Rigging and animating your character");
         onOpenChange(false);
       },
-      onError: (e) => toast.error((e as Error).message),
+      onError: (e) => toastError(e),
     });
   };
   return (

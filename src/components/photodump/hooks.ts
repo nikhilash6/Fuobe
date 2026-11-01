@@ -2,10 +2,11 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Generation } from "@/lib/catalog/types";
+import { responseError } from "@/lib/refusals";
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
   return body;
 }
 

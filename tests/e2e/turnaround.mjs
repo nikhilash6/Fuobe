@@ -124,13 +124,13 @@ for (const [size, scheme] of [
   await open.click();
   const dialog = page.getByRole("dialog");
   await dialog.getByText(/^Views$/).waitFor();
-  const price = dialog.getByText(engine === "open" ? /Free · on your GPU|Demo · free/ : /Demo · free|≈ \$/);
+  const price = dialog.getByText(engine === "open" ? /Free · on your GPU|Placeholder · free/ : /Placeholder · free|≈ \$/);
   await price.waitFor({ timeout: 30_000 });
   const text = await dialog.innerText();
   check(`${tag}: the five slots (Front, Right side, Back, Left side, Sheet)`, ["Front", "Right side", "Back", "Left side", "Sheet"].every((s) => text.includes(s)), text.slice(0, 200));
   check(`${tag}: the person's own left and right are explained`, /their right side is on your left/.test(text));
   const priceText = await price.innerText();
-  check(`${tag}: the price or GPU line shows before running`, (engine === "open" ? /Free · on your GPU|Demo · free/ : /Demo · free|≈ \$\d/).test(priceText), priceText);
+  check(`${tag}: the price or GPU line shows before running`, (engine === "open" ? /Free · on your GPU|Placeholder · free/ : /Placeholder · free|≈ \$\d/).test(priceText), priceText);
   check(`${tag}: the consent line is asked for (photos someone brought)`, /I consent to this biometric data processing/.test(text));
   const make = dialog.getByRole("button", { name: /Make turnaround/ });
   check(`${tag}: Make turnaround waits for the consent line`, await make.isDisabled());
@@ -195,7 +195,7 @@ for (const [size, scheme] of [
   await fly.click();
   const flyDialog = page.getByRole("dialog");
   await flyDialog.getByText(/^Fly around Ada Turn/).waitFor();
-  await flyDialog.getByText(engine === "open" ? /Free · on your GPU|Demo · free/ : /Demo · free|≈ \$/).waitFor({ timeout: 30_000 });
+  await flyDialog.getByText(engine === "open" ? /Free · on your GPU|Placeholder · free/ : /Placeholder · free|≈ \$/).waitFor({ timeout: 30_000 });
   if (engine === "cloud") {
     await flyDialog.getByRole("radio", { name: "Camera path" }).click();
     const paths = flyDialog.getByRole("radiogroup", { name: "Path" });
@@ -243,7 +243,7 @@ for (const [size, scheme] of [
     check(`${tag}: Soul Cast results offer "Turnaround video"`, true);
     await turn.click();
     const td = page.getByRole("dialog").filter({ hasText: /^Turnaround video/ });
-    await td.getByText(/Free · on your GPU|Demo · free/).waitFor({ timeout: 30_000 });
+    await td.getByText(/Free · on your GPU|Placeholder · free/).waitFor({ timeout: 30_000 });
     check(`${tag}: no consent line for a Soul Cast character`, !/I consent to this biometric/.test(await td.innerText()));
     check(`${tag}: no sideways scroll over Soul Cast`, (await sideways(page)) <= 1);
     await shoot(page, `cast-${size}`);

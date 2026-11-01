@@ -3,6 +3,7 @@
  * connection test route: which settings each provider's test reads, what a well-formed key or
  * address looks like, when to offer the first-run guide, and each connection's one-line status.
  */
+import { LLM_PROVIDERS } from "./catalog/llm-providers";
 
 export type TestProvider = "fal" | "replicate" | "comfyui" | "llm" | "civitai" | "huggingface" | "ai-toolkit";
 
@@ -10,8 +11,52 @@ export type TestProvider = "fal" | "replicate" | "comfyui" | "llm" | "civitai" |
 export const PROVIDER_SETTINGS = {
   fal: ["falKey"],
   replicate: ["replicateToken"],
-  comfyui: ["comfyUrl", "comfyToken", "comfyIsolatedUrl"],
-  llm: ["anthropicKey", "ollamaUrl", "ollamaModel", "enhanceProvider"],
+  // comfyWhere "server": a server address tested while ComfyUI runs on the owner's computer is tested as a server.
+  comfyui: ["comfyUrl", "comfyToken", "comfyIsolatedUrl", "comfyWhere"],
+  // Claude, and the local model servers of Settings → AI helper (Ollama, LM Studio, Unsloth Studio, any OpenAI-compatible one).
+  llm: [
+    "anthropicKey",
+    "ollamaUrl",
+    "ollamaModel",
+    "enhanceProvider",
+    "llmProvider",
+    "lmstudioUrl",
+    "lmstudioModel",
+    "lmstudioToken",
+    "unslothUrl",
+    "unslothModel",
+    "unslothKey",
+    "llmUrl",
+    "llmModel",
+    "llmKey",
+    "llmContext",
+    // Assist's hosted providers: keys, regions and Qwen's workspace (src/lib/catalog/llm-providers.ts).
+    "openaiKey",
+    "openaiRegion",
+    "googleKey",
+    "xaiKey",
+    "xaiRegion",
+    "metaKey",
+    "mistralKey",
+    "cohereKey",
+    "deepseekKey",
+    "moonshotKey",
+    "moonshotRegion",
+    "zaiKey",
+    "zaiRegion",
+    "qwenKey",
+    "qwenRegion",
+    "qwenWorkspace",
+    "minimaxKey",
+    "minimaxRegion",
+    "openrouterKey",
+    "groqKey",
+    "cerebrasKey",
+    "togetherKey",
+    "togetherRegion",
+    "fireworksKey",
+    "huggingfaceToken",
+  ],
   // Not a model provider: the key that downloads a recipe's civitai LoRAs (Settings → LoRAs).
   civitai: ["civitaiKey"],
   // Nor this: the token that downloads gated Hugging Face LoRAs once their licence is accepted (Settings → LoRAs).
@@ -88,11 +133,22 @@ export function settingProblem(name: string, raw: string): string | null {
       return addressProblem(v, "http://127.0.0.1:8189");
     case "ollamaUrl":
       return addressProblem(v, "http://127.0.0.1:11434");
+    case "lmstudioUrl":
+      return addressProblem(v, "http://127.0.0.1:1234");
+    case "unslothUrl":
+      return addressProblem(v, "http://127.0.0.1:8888");
+    case "llmUrl":
+      return addressProblem(v, "http://127.0.0.1:8080/v1");
     case "aiToolkitUrl":
       return addressProblem(v, DEFAULT_AI_TOOLKIT_URL);
     case "aiToolkitDatasetDir":
       return v.startsWith("/") || /^[A-Za-z]:[\\/]/.test(v) ? null : "Use a full path, like /mnt/shared/datasets";
+    case "qwenWorkspace":
+      return /^[a-z0-9-]{1,64}$/.test(v) ? null : "Use the workspace id from Model Studio's Workspace page (lowercase letters, digits and hyphens), not an address";
   }
+  // An LLM provider's key: the format its docs give.
+  const hint = LLM_PROVIDERS.find((p) => p.keySetting === name)?.keyHint;
+  if (hint) return new RegExp(hint.pattern).test(v) ? null : hint.text;
   return null;
 }
 
@@ -106,8 +162,28 @@ export interface ConnectionState {
   engineMode: EngineModeName;
   /** The first-run guide was put away, or something this engine mode uses was connected once (Settings → `onboarded`). */
   onboarded?: boolean;
-  /** Settings → Demo mode: auto (a demo when no provider hosts the model), on (always a demo), off (never). */
+  /** Settings → "Show placeholder results (for a tour)": "on" makes every run a placeholder; "off" (the default) never. */
   demoMode?: string;
+  /** The owner's ComfyUI runs on the owner's computer: what its Fuobe tab last said (GET /api/status). */
+  ownerGpu?: OwnerGpuView;
+}
+
+/** The owner's computer, as its Fuobe tab last said (the same view as an account's "this computer"). */
+export interface OwnerGpuView {
+  mode: "computer";
+  online: boolean;
+  comfy?: "down" | "no-setting";
+  guard?: boolean;
+  device?: string;
+  vramBytes?: number;
+  version?: string;
+  port?: number;
+  cors?: "exact" | "any" | "other";
+}
+
+/** "Online", "ComfyUI not running", "Needs a setting" or "Offline": a computer's ComfyUI in a few words. */
+export function computerWords(g: { online?: boolean; comfy?: "down" | "no-setting" }): string {
+  return g.online ? "Online" : g.comfy === "down" ? "ComfyUI not running" : g.comfy === "no-setting" ? "Needs a setting" : "Offline";
 }
 
 const CLOUD_PROVIDERS = ["fal", "replicate"] as const;
@@ -117,7 +193,7 @@ export function connectedEngines(s: ConnectionState): { cloud: boolean; open: bo
   return { cloud: CLOUD_PROVIDERS.some((p) => s.providers[p]?.configured), open: !!s.providers.comfyui?.configured };
 }
 
-/** Nothing this install's engine mode uses is connected, so every run is a demo. */
+/** Nothing this install's engine mode uses is connected, so a run asks to connect one (or makes a placeholder, for a tour). */
 export function nothingConnected(s: ConnectionState): boolean {
   const c = connectedEngines(s);
   return s.engineMode === "open" ? !c.open : s.engineMode === "cloud" ? !c.cloud : !c.cloud && !c.open;
@@ -138,13 +214,13 @@ const PROVIDER_LABEL: Record<string, string> = { fal: "fal.ai", replicate: "Repl
 
 /**
  * The line under Home's composer, before Start is pressed: the model it runs and its price, or why
- * it runs a free demo (no key for a provider that hosts that model, the same rule the composer's
- * "Demo" label follows), plus the other engine when that one would run it for real. Null when
- * nothing is connected: Home's demo notice says so instead.
+ * why it can't run yet (no key for a provider that hosts that model, the same rule the composer's
+ * label follows), plus the other engine when that one would run it for real. Null when
+ * nothing is connected: Home's notice says so instead.
  */
 export function startLine(s: ConnectionState, quote: StartQuote | undefined, engine: "cloud" | "open", mode: "image" | "video" | "edit"): { text: string; other?: "cloud" | "open" } | null {
   if (!quote || nothingConnected(s)) return null;
-  if (s.demoMode === "on") return { text: "Demo mode is on (Settings), so Start runs a free demo" };
+  if (s.demoMode === "on") return { text: "Placeholder results are on (Settings), so Start makes a stand-in" };
   const hosted = (q: { providers: string[] } | null) => !!q && q.providers.some((p) => s.providers[p]?.configured);
   const otherEngine = engine === "open" ? "cloud" : "open";
   const other = s.engineMode === "both" && hosted(quote[otherEngine]) ? otherEngine : undefined;
@@ -157,7 +233,7 @@ export function startLine(s: ConnectionState, quote: StartQuote | undefined, eng
   let why: string;
   if (!connected) why = engine === "open" ? "ComfyUI isn't connected" : "No paid API is connected";
   else why = q ? `${q.name} needs ${engine === "open" ? hosts : `a ${hosts} key`}` : "No model is set for this";
-  return { text: `${why}, so Start ${s.demoMode === "off" ? "can't run it yet" : "runs a free demo"}`, ...(other && { other }) };
+  return { text: `${why}, so Start can't run it yet`, ...(other && { other }) };
 }
 
 /**
@@ -167,8 +243,11 @@ export function startLine(s: ConnectionState, quote: StartQuote | undefined, eng
  */
 export const FIRST_RUN_KEY = "fuobe:first-run";
 
-/** Runs while Home's HTML is parsed: `<html data-first-run="0">` when the guide was put away here before. */
-export const FIRST_RUN_SCRIPT = `(function(){try{if(localStorage.getItem("${FIRST_RUN_KEY}")==="0")document.documentElement.setAttribute("data-first-run","0")}catch(e){}})()`;
+/**
+ * Runs while Home's HTML is parsed: `<html data-first-run="1">` when the guide showed here last time (the shell shows it
+ * then), "0" when it was put away.
+ */
+export const FIRST_RUN_SCRIPT = `(function(){try{var v=localStorage.getItem("${FIRST_RUN_KEY}");if(v==="0"||v==="1")document.documentElement.setAttribute("data-first-run",v)}catch(e){}})()`;
 
 export const ENGINE_MODE_LABEL: Record<EngineModeName, string> = { both: "Open source + paid", open: "Open source only", cloud: "Paid APIs only" };
 
@@ -184,18 +263,28 @@ export interface ConnectionItem {
   unused: boolean;
 }
 
-/** One line per connection for Settings' status strip, in the order the page lists them. */
-export function connectionSummary(s: ConnectionState): ConnectionItem[] {
+/**
+ * One line per connection for Settings' status strip, in the order the page lists them. ComfyUI on the owner's
+ * computer reads as "Your GPU · Your computer · Online" (or what's wrong); on a hosted studio with nothing connected,
+ * "Your GPU · Connect" (`place`: where the page is, lib/page-place.ts).
+ */
+export function connectionSummary(s: ConnectionState, place?: "here" | "network" | "hosted" | null): ConnectionItem[] {
   const key = (id: "fal" | "replicate", label: string): ConnectionItem => {
     const ok = !!s.providers[id]?.configured;
     return { id, label, ok, text: ok ? "Key set" : "Not set", href: `#${id}`, unused: s.engineMode === "open" };
   };
   const comfy = !!s.providers.comfyui?.configured;
   const llm = !!s.providers.llm?.configured;
+  const unused = s.engineMode === "cloud";
+  const gpu: ConnectionItem = s.ownerGpu
+    ? { id: "comfyui", label: "Your GPU", ok: s.ownerGpu.online, text: `Your computer · ${computerWords(s.ownerGpu)}`, href: "#comfyui", unused }
+    : !comfy && place === "hosted"
+      ? { id: "comfyui", label: "Your GPU", ok: false, text: "Connect", href: "#comfyui", unused }
+      : { id: "comfyui", label: "ComfyUI", ok: comfy, text: comfy ? "Online" : "Offline", href: "#comfyui", unused };
   return [
     key("fal", "fal.ai"),
     key("replicate", "Replicate"),
-    { id: "comfyui", label: "ComfyUI", ok: comfy, text: comfy ? "Online" : "Offline", href: "#comfyui", unused: s.engineMode === "cloud" },
-    { id: "llm", label: "Claude / Ollama", ok: llm, text: llm ? "On" : "Off", href: "#text-ai", unused: false },
+    gpu,
+    { id: "llm", label: "AI helper", ok: llm, text: llm ? "On" : "Off", href: "#text-ai", unused: false },
   ];
 }

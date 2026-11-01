@@ -23,6 +23,7 @@ import { formatCost } from "@/lib/format";
 import { checkValues, isMediaType, parseRows, RECIPE_LIMITS, type RecipeEstimate, type RecipeParam, type RecipeView } from "@/lib/recipe";
 import { DEMO_NOTE } from "@/lib/recipe-builder";
 import { cn } from "@/lib/utils";
+import { refusalShown, toastError } from "@/lib/refusals";
 import { useRecipe, useRecipeActions, useSkillActions, type RecipeFailure } from "./hooks";
 import { PlanJobs } from "./plan-jobs";
 import { SkillIcon } from "./skill-icon";
@@ -71,10 +72,10 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-/** "$0.62 on Cloud", "Free on your GPU", "$12.40 for 20 runs", "Demo — no provider connected". */
+/** "$0.62 on Cloud", "Free on your GPU", "$12.40 for 20 runs", "Placeholder · free". */
 function priceLine(e: RecipeEstimate | undefined, runs: number): string {
   if (!e) return "";
-  if (e.demo) return `Demo — no provider connected, free${runs > 1 ? ` · ${runs} runs` : ""}`;
+  if (e.demo) return `Placeholder · free${runs > 1 ? ` · ${runs} runs` : ""}`;
   if (e.total === null) return "Some prices vary";
   const where = e.engine === "open" ? "on your GPU" : "on Cloud";
   if (e.total === 0) return runs > 1 ? `Free · ${runs} runs ${where}` : `Free ${where}`;
@@ -142,6 +143,7 @@ function Loaded({ view, onClose, examples, intro }: { view: RecipeView; onClose:
       if (next.length && !next.includes(engine)) setEngine(next[0]);
     } catch (e) {
       const f = e as RecipeFailure;
+      if (refusalShown(f)) return;
       setProblems(f.problems ?? [f.message]);
       toast.error(f.message);
     } finally {
@@ -155,7 +157,7 @@ function Loaded({ view, onClose, examples, intro }: { view: RecipeView; onClose:
       await skillActions.toggle(name, true);
       await qc.invalidateQueries({ queryKey: ["assist-recipe", name] });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(null);
     }
@@ -180,6 +182,7 @@ function Loaded({ view, onClose, examples, intro }: { view: RecipeView; onClose:
       onClose();
     } catch (e) {
       const f = e as RecipeFailure;
+      if (refusalShown(f)) return;
       setProblems(f.problems ?? [f.message]);
       toast.error(f.message);
     } finally {

@@ -10,6 +10,7 @@ import { AD_VISUAL_MODELS, MAX_ADS_PER_PRODUCT, MAX_PRODUCTS_PER_RUN, type Brand
 import { useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { formatCost } from "@/lib/format";
+import { toastError } from "@/lib/refusals";
 import { useCreativeActions, useEstimate, useProductActions } from "@/components/marketing/hooks";
 
 interface BatchEstimate {
@@ -79,10 +80,10 @@ export function NewAds({ brand, products, engine, onCreated }: { brand: BrandKit
         toast.success(`Generating ${r.creatives.length} ads`, { duration: 1800 });
         onCreated(r.batchId);
       },
-      onError: (e) => toast.error((e as Error).message),
+      onError: (e) => toastError(e),
     });
   };
-  const price = est.data ? (est.data.demo ? "Demo · free" : est.data.costUsd == null ? "price unknown" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const price = est.data ? (est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "price unknown" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border bg-background p-4 sm:p-5">

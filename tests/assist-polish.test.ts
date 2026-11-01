@@ -15,15 +15,15 @@ describe("/apps/<unknown> is a real 404", () => {
   it("the proxy rewrites unknown app ids to the not-found page with status 404", async () => {
     delete process.env.FUOBE_PASSWORD;
     const { proxy } = await import("@/proxy");
-    const unknown = await proxy(new NextRequest("http://localhost:3000/apps/does-not-exist"));
+    const unknown = proxy(new NextRequest("http://localhost:3000/apps/does-not-exist"));
     expect(unknown.status).toBe(404);
     expect(unknown.headers.get("x-middleware-rewrite")).toMatch(/\/_fuobe-not-found$/);
-    const known = await proxy(new NextRequest("http://localhost:3000/apps/app-packshot"));
+    const known = proxy(new NextRequest("http://localhost:3000/apps/app-packshot"));
     expect(known.status).toBe(200);
     expect(known.headers.get("x-middleware-rewrite")).toBeNull();
-    expect((await proxy(new NextRequest("http://localhost:3000/apps"))).headers.get("x-middleware-rewrite")).toBeNull();
+    expect(proxy(new NextRequest("http://localhost:3000/apps")).headers.get("x-middleware-rewrite")).toBeNull();
     // A malformed escape doesn't crash the proxy.
-    expect((await proxy(new NextRequest("http://localhost:3000/apps/%E0%A4%A"))).status).toBe(404);
+    expect(proxy(new NextRequest("http://localhost:3000/apps/%E0%A4%A")).status).toBe(404);
   });
 });
 

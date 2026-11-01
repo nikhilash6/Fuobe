@@ -1,10 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useLinkStatus } from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight, Clapperboard, Moon, Plus, Search, Sun, X } from "lucide-react";
+import { ChevronRight, ChevronsUpDown, Clapperboard, Cpu, LogIn, LogOut, Moon, Plus, Search, Settings2, Sun, UserPlus, X } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -23,16 +24,34 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CommandPalette, CommandPaletteProvider, useCommandPalette } from "@/components/command-palette";
+import { PlaceholdersOnChip } from "@/components/demo-mode";
+import { placeholdersOn } from "@/lib/demo-mode";
+import { GitHubMark } from "@/components/github-mark";
 import { IntentLink } from "@/components/intent-link";
 import { JobNotifications } from "@/components/job-notifications";
 import { NAV, type NavGroupDef } from "@/components/nav-items";
 import { SkillBuilderProvider } from "@/components/skills/skill-builder-provider";
-import { useEngineMode, useStatus } from "@/lib/api";
+import { awayFix, openConnect, useComputerSupport } from "@/components/gpu/open-connect";
+import { usePagePlace } from "@/components/gpu/use-page-place";
+import { ownGpuOf, signInHref, signOut, useEngineMode, useHydrated, useStatus, useViewer, VIEWER_KEY, type StatusInfo } from "@/lib/api";
+import { deviceLabel } from "@/lib/gpu/readiness";
 import { useModKey } from "@/lib/keys";
-import { fullScreenStudio, groupId, NAV_CLOSED_KEY, navActive, parseClosed, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
+import { fullScreenStudio, groupId, NAV_CLOSED_KEY, navActive, NEW_CREATION_HREF, parseClosed, scrollFades, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+
+// The note of a tab that runs the person's jobs on their own computer's ComfyUI (only for someone whose runs go there).
+const ComputerNote = dynamic(() => import("@/components/gpu/computer-runner").then((m) => m.ComputerNote), { ssr: false });
 
 const NO_SEARCH = new URLSearchParams();
 
@@ -96,7 +115,7 @@ function ActiveItems({ group }: { group: NavGroupDef }) {
   );
 }
 
-/** The folded groups: remembered in this browser, else Studios and Engine (DEFAULT_NAV_CLOSED), also on the server. */
+/** The folded groups: remembered in this browser, else Engine (DEFAULT_NAV_CLOSED), also on the server. */
 function readClosed(): string[] {
   try {
     return parseClosed(typeof window === "undefined" ? null : localStorage.getItem(NAV_CLOSED_KEY));
@@ -150,6 +169,46 @@ function SidebarStateScript() {
       dangerouslySetInnerHTML={{ __html: SIDEBAR_STATE_SCRIPT }}
     />
   );
+}
+
+/**
+ * Scrolls `el` into the scrolling `box` as little as it takes, its top first when it doesn't fit, clear of the box's
+ * faded edges (24px above, 40px below).
+ */
+function reveal(box: HTMLElement | null, el: Element | null | undefined) {
+  if (!box || !el) return;
+  const b = box.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  const below = r.bottom + 40 - b.bottom;
+  if (below > 0) box.scrollTop += Math.min(below, Math.max(0, r.top - b.top - 24));
+  else if (r.top - 24 < b.top) box.scrollTop -= b.top - r.top + 24;
+}
+
+/**
+ * Brings the open page's row into view when the page changes: with Studios open, Engine's rows (Models, Settings…)
+ * sit below the fold. Inside Suspense: the pathname is runtime data.
+ */
+function RevealActive({ box }: { box: React.RefObject<HTMLDivElement | null> }) {
+  const pathname = usePathname();
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    // Again whenever the list's box changes size (the guest's Sign up row arrives and pushes it down), until the
+    // person scrolls or clicks in it themselves.
+    let theirs = false;
+    const show = () => theirs || reveal(el, el.querySelector('[data-active="true"]'));
+    const mine = () => (theirs = true);
+    const frame = requestAnimationFrame(show);
+    const resized = new ResizeObserver(show);
+    resized.observe(el);
+    for (const e of ["wheel", "touchstart", "pointerdown", "keydown"]) el.addEventListener(e, mine, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      resized.disconnect();
+      for (const e of ["wheel", "touchstart", "pointerdown", "keydown"]) el.removeEventListener(e, mine);
+    };
+  }, [pathname, box]);
+  return null;
 }
 
 /** Tells the shell which page is open (the pathname is runtime data, so it's read inside Suspense). */
@@ -261,13 +320,22 @@ export function StudioChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Keeps data-more-below on a vertical scroller in sync, so a fade hints at items below the fold. */
-function useMoreBelow<T extends HTMLElement>() {
+/**
+ * Keeps a vertical scroller's fades (.fade-y) in sync: data-more-above / data-more-below, and how deep
+ * each fade is (scrollFades), so a fade hints at items past the edge without dimming a row that fits.
+ */
+function useScrollFades<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const update = () => el.toggleAttribute("data-more-below", el.scrollTop + el.clientHeight < el.scrollHeight - 2);
+    const update = () => {
+      const { above, below } = scrollFades(el);
+      el.toggleAttribute("data-more-above", above > 0);
+      el.toggleAttribute("data-more-below", below > 0);
+      el.style.setProperty("--fade-t", `${above}px`);
+      el.style.setProperty("--fade-b", `${below}px`);
+    };
     update();
     el.addEventListener("scroll", update, { passive: true });
     const ro = new ResizeObserver(update);
@@ -309,12 +377,168 @@ function SearchRow() {
   );
 }
 
-/** The GitHub mark (lucide has no brand icons). */
-function GitHubMark() {
+/**
+ * Runs while the HTML is parsed: `<html data-viewer="owner">` in a browser where the owner was signed in last time, so
+ * the row kept for "Sign up / Log in" (or an account's menu) isn't drawn and then taken away on every page load.
+ */
+const VIEWER_SCRIPT = `(function(){try{var v=localStorage.getItem("${VIEWER_KEY}");if(v)document.documentElement.setAttribute("data-viewer",v)}catch(e){}})()`;
+
+/** The row's place while the viewer isn't known (in the server's shell too: ViewerRow reads the query, so it's the fallback there). */
+function ViewerRowPlaceholder() {
   return (
-    <svg viewBox="0 0 16 16" aria-hidden fill="currentColor">
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-    </svg>
+    <>
+      <script type={typeof window === "undefined" ? "text/javascript" : "text/plain"} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: VIEWER_SCRIPT }} />
+      <SidebarMenuItem aria-hidden className="mt-1 mb-2 h-8 group-data-[collapsible=icon]:h-[70px] [html[data-viewer='owner']_&]:hidden [html[data-viewer='account']_&]:hidden" />
+    </>
+  );
+}
+
+/**
+ * Public sign-up, signed out: "Sign up" and "Log in", coming back to this page with its query (a preset picked…). Until
+ * the viewer is known the row keeps its height, so the menu under it doesn't move when it comes (except in a browser the
+ * owner or an account used last: they get no row here). Under Suspense: it reads the path.
+ */
+function ViewerRow() {
+  const viewer = useViewer().data;
+  const pathname = usePathname();
+  const search = useSearchParams().toString();
+  const here = search ? `${pathname}?${search}` : pathname;
+  const kind = !viewer ? undefined : viewer.owner ? "owner" : viewer.account ? "account" : viewer.publicSignup ? "guest" : "owner";
+  useEffect(() => {
+    if (!kind) return;
+    try {
+      localStorage.setItem(VIEWER_KEY, kind);
+    } catch {}
+    document.documentElement.setAttribute("data-viewer", kind);
+  }, [kind]);
+  if (!kind) return <ViewerRowPlaceholder />;
+  if (kind !== "guest") return null;
+  return (
+    <SidebarMenuItem className="mt-1 mb-2 flex gap-1.5 group-data-[collapsible=icon]:flex-col">
+      <SidebarMenuButton asChild tooltip="Sign up free" className="h-8 flex-1 justify-center bg-primary text-[13px] text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground">
+        <a href={signInHref("signup", here)}>
+          <UserPlus />
+          <span>Sign up</span>
+        </a>
+      </SidebarMenuButton>
+      <SidebarMenuButton asChild tooltip="Log in" className="h-8 flex-1 justify-center border border-sidebar-border text-[13px]">
+        <a href={signInHref("login", here)}>
+          <LogIn />
+          <span>Log in</span>
+        </a>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+/**
+ * "Your GPU" in the status strip: a visitor's own (public sign-up), never the install's, or the owner's computer. A
+ * guest is sent to sign up first; anyone else without one opens "Connect your GPU"; a connected one says whether it
+ * answers.
+ */
+function YourGpuChip({ gpu, guest }: { gpu: NonNullable<StatusInfo["viewer"]>["gpu"]; guest: boolean }) {
+  const cls = "flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left text-[12px] text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden";
+  const g = gpu;
+  // ComfyUI on this computer is closed, or runs without Fuobe's setting: the finder, at that step (elsewhere: /connect).
+  const fix = awayFix(g.connected ? g : undefined, useComputerSupport());
+  if (g.connected) {
+    const vram = g.vramBytes ? `${Math.round(g.vramBytes / 2 ** 30)} GB` : "";
+    const inner = (
+      <>
+        <span className="flex items-center gap-2">
+          <StatusDot ok={g.online} /> Your GPU
+          <span className="ml-auto">{g.online ? "online" : g.comfy === "down" ? "ComfyUI not running" : g.comfy === "no-setting" ? "needs a setting" : "offline"}</span>
+        </span>
+        {(g.device || vram || g.mode === "computer") && (
+          <span className="truncate text-[11px]">{[g.mode === "computer" && "Your computer", deviceLabel(g.device), vram && `${vram} VRAM`].filter(Boolean).join(" · ")}</span>
+        )}
+      </>
+    );
+    return fix ? (
+      <button type="button" className={cls} onClick={fix}>
+        {inner}
+      </button>
+    ) : (
+      <IntentLink href="/connect" className={cls}>
+        {inner}
+      </IntentLink>
+    );
+  }
+  const body = (
+    <span className="flex items-center gap-2">
+      <StatusDot ok={false} /> Your GPU
+      <span className="ml-auto font-medium text-brand-text">Connect</span>
+    </span>
+  );
+  return guest ? (
+    <a href={signInHref("signup", "/connect")} className={cls}>
+      {body}
+    </a>
+  ) : (
+    <button type="button" className={cls} onClick={() => openConnect(true)}>
+      {body}
+    </button>
+  );
+}
+
+/**
+ * Who is signed in (public sign-up): an account's email, with Settings, Your GPU and Sign out. Nothing
+ * for the owner or a guest. In the rail it's the initial alone; on a phone the menu opens upward. Until hydrated it is
+ * the server's HTML (no row), even when the viewer query has already answered; until the viewer is known, a browser an
+ * account used last keeps the row's height, so the footer doesn't move when it comes.
+ */
+function AccountRow() {
+  const hydrated = useHydrated();
+  const viewer = useViewer().data;
+  const account = hydrated ? viewer?.account : undefined;
+  const { isMobile } = useSidebar();
+  if (!account) return hydrated && viewer ? null : <div aria-hidden className="hidden h-9 group-data-[collapsible=icon]:h-8 [html[data-viewer='account']_&]:block" />;
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton className="h-9 px-1.5 text-[13px] group-data-[collapsible=icon]:p-1! data-[state=open]:bg-sidebar-accent" aria-label={`Account: ${account.email}`}>
+              <span aria-hidden className="grid size-6 shrink-0 place-items-center rounded-full bg-brand-faint text-[11px] font-semibold text-brand-text">
+                {account.email.charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1 truncate" title={account.email}>
+                {account.email}
+              </span>
+              <ChevronsUpDown className="text-muted-foreground" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          {/* As wide as the email (on one line, up to 22rem), never narrower than the row: an address breaks only when it must,
+              and the menu keeps clear of the screen's edges. */}
+          <DropdownMenuContent
+            side={isMobile ? "top" : "right"}
+            align="end"
+            collisionPadding={8}
+            className="w-max max-w-[min(22rem,var(--radix-dropdown-menu-content-available-width))] min-w-[max(14rem,var(--radix-dropdown-menu-trigger-width))]"
+          >
+            <DropdownMenuLabel className="font-normal">
+              <span className="block text-[11px]">Signed in as</span>
+              <span className="block text-[13px] [overflow-wrap:anywhere] text-foreground">{account.email}</span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <IntentLink href="/settings">
+                <Settings2 /> Settings
+              </IntentLink>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <IntentLink href="/connect">
+                <Cpu /> Your GPU
+              </IntentLink>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => void signOut()}>
+              <LogOut /> Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }
 
@@ -325,12 +549,19 @@ export function AppSidebar() {
   const closeOnLink = (e: React.MouseEvent) => {
     if (isMobile && (e.target as Element).closest("a[href]")) setOpenMobile(false);
   };
-  const content = useMoreBelow<HTMLDivElement>();
-  const status = useStatus().data;
+  const content = useScrollFades<HTMLDivElement>();
+  // Until hydrated, the server's (status-less) sidebar: a status that lands mid-hydration must not change it.
+  const hydrated = useHydrated();
+  const statusData = useStatus().data;
+  const status = hydrated ? statusData : undefined;
+  const computer = useViewer().data?.computer === true && hydrated;
   const cloud = status && (status.providers.fal?.configured || status.providers.replicate?.configured);
   const comfy = status?.providers.comfyui?.configured;
   const mode = useEngineMode();
-  const ready = mode === "open" ? comfy : mode === "cloud" ? cloud : cloud || comfy;
+  // The owner's GPU as "Your GPU": on the owner's computer, or (a hosted studio with nothing connected) one to connect.
+  const place = usePagePlace();
+  // Not in Paid APIs only mode: ComfyUI isn't used there, wherever it runs.
+  const ownerGpu = status && !status.viewer && mode !== "cloud" && (status.ownerGpu || (place === "hosted" && !comfy)) ? (ownGpuOf(status) ?? { connected: false }) : null;
   const [closed, setClosed] = useState(readClosed);
   const toggle = useCallback((id: string) => {
     setClosed((c) => {
@@ -364,10 +595,13 @@ export function AppSidebar() {
               )}
             </div>
             <SidebarMenu>
+              <Suspense fallback={<ViewerRowPlaceholder />}>
+                <ViewerRow />
+              </Suspense>
               <SearchRow />
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="New creation" className="h-8 text-[13px] has-[[data-pending]]:bg-sidebar-accent">
-                  <IntentLink href="/" eager>
+                  <IntentLink href={NEW_CREATION_HREF} eager>
                     <Plus />
                     <NavLabel>New creation</NavLabel>
                   </IntentLink>
@@ -375,19 +609,54 @@ export function AppSidebar() {
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarHeader>
-          <SidebarContent ref={content} onClick={closeOnLink} className="scrollbar-none fade-bottom group-data-[collapsible=icon]:overflow-y-auto">
+          <SidebarContent ref={content} onClick={closeOnLink} className="scrollbar-none fade-y group-data-[collapsible=icon]:overflow-y-auto">
             {NAV.map((group, i) => {
               const id = groupId(group.label);
               return (
                 <Fragment key={id}>
                   {/* Icon mode hides the group labels: a hairline keeps the groups apart. */}
                   {i > 0 && <SidebarSeparator className="my-1 hidden group-data-[collapsible=icon]:block" />}
-                  <NavGroup group={group} open={!group.collapsible || !closed.includes(id)} onToggle={() => toggle(id)} />
+                  <NavGroup
+                    group={group}
+                    open={!group.collapsible || !closed.includes(id)}
+                    onToggle={() => {
+                      toggle(id);
+                      // A group opened near the bottom scrolls up into view, once its rows are on the page.
+                      if (closed.includes(id)) requestAnimationFrame(() => reveal(content.current, content.current?.querySelector(`[data-nav-group="${id}"]`)));
+                    }}
+                  />
                 </Fragment>
               );
             })}
+            <Suspense fallback={null}>
+              <RevealActive box={content} />
+            </Suspense>
           </SidebarContent>
           <SidebarFooter className="gap-1 border-t border-sidebar-border" onClick={closeOnLink}>
+            {computer && <ComputerNote />}
+            {status?.viewer ? (
+              <YourGpuChip gpu={status.viewer.gpu} guest={status.viewer.kind === "guest"} />
+            ) : ownerGpu ? (
+              <>
+                {mode !== "open" && (
+                  <IntentLink href="/settings" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden">
+                    <StatusDot ok={!!cloud} /> Cloud models
+                    <span className="ml-auto">{cloud ? "connected" : "add key"}</span>
+                  </IntentLink>
+                )}
+                <YourGpuChip gpu={ownerGpu} guest={false} />
+                {mode !== "both" && (
+                  <div className="flex flex-col gap-1.5 px-2 pb-1 text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
+                    <span>{mode === "open" ? "Open source only" : "Paid APIs only"}</span>
+                  </div>
+                )}
+              </>
+            ) : !status ? (
+              // Not known yet: no "add key / offline" the install may not have, for a visitor who never sees them.
+              <div aria-hidden className="flex h-[30px] items-center px-2 group-data-[collapsible=icon]:hidden">
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            ) : (
             <IntentLink
               href="/settings"
               className="flex flex-col gap-1.5 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden"
@@ -405,12 +674,21 @@ export function AppSidebar() {
                 </span>
               )}
               {mode !== "both" && <span className="text-[11px] text-muted-foreground">{mode === "open" ? "Open source only" : "Paid APIs only"}</span>}
-              {status && !ready && status.demoMode !== "off" && (
-                <span className="mt-0.5 rounded-sm bg-highlight/25 px-1.5 py-0.5 text-[11px] text-highlight-foreground dark:text-highlight">
-                  Demo mode · placeholder outputs
-                </span>
-              )}
             </IntentLink>
+            )}
+            {/* Placeholder results, only while the owner has them on (Settings, for a tour): a click turns them off. Its own
+                button beside the status link (a button never sits inside a link). */}
+            {status && !status.viewer && placeholdersOn(status.demoMode) && (
+              <>
+                <div className="-mt-1 px-2 pb-1 group-data-[collapsible=icon]:hidden">
+                  <PlaceholdersOnChip />
+                </div>
+                {/* Collapsed to icons: the same way out, as a round mark. */}
+                <div className="hidden justify-center pb-1 group-data-[collapsible=icon]:flex">
+                  <PlaceholdersOnChip icon />
+                </div>
+              </>
+            )}
             <SidebarMenu className="flex-row gap-1 group-data-[collapsible=icon]:flex-col">
               <SidebarMenuItem className="min-w-0 flex-1">
                 <SidebarMenuButton tooltip="Toggle theme" className="h-8 text-[13px]" onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
@@ -429,6 +707,7 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
+            <AccountRow />
           </SidebarFooter>
         </nav>
         <SidebarRail />

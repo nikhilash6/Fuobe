@@ -258,7 +258,7 @@ export interface FocusPoint {
   y: number;
 }
 
-/** "llm" runs text steps (translate, write) on the configured LLM (Claude or Ollama) inside the server. */
+/** "llm" runs text steps (translate, write) on the configured LLM (Claude or a local model) inside the server. */
 export type ProviderId = "fal" | "replicate" | "openai" | "google" | "comfyui" | "mock" | "local" | "llm";
 
 /** Duration encodings differ between APIs ("5" vs 5 vs "5s"). */
@@ -493,10 +493,10 @@ export interface ModelRoute {
   endpoint: string;
   map?: FieldMap;
   /**
-   * The parts of `map` the composer previews a result with ("1920×1080 → 2880×1620", an EXR frame count),
-   * kept by slimModel when it drops the field maps for the browser. The server reads `map`.
+   * The parts of `map` the composer previews a result with ("1920×1080 → 2880×1620", an EXR frame count, the canvas a
+   * layout is compiled at), kept by slimModel when it drops the field maps for the browser. The server reads `map`.
    */
-  preview?: Pick<FieldMap, "upscaleFactor" | "numFrames">;
+  preview?: Pick<FieldMap, "upscaleFactor" | "numFrames" | "size">;
   /** Optional note shown in the UI (e.g. "uses Lightx2v 4-step LoRA"). */
   note?: string;
   /**
@@ -521,6 +521,16 @@ export interface ModelRoute {
    * Other routes on the graph refuse a LoRA rather than swap out the one its settings are tuned for.
    */
   loraSlot?: true;
+  /**
+   * A ComfyUI graph that takes no size: its picture follows image 1 (Qwen-Image 2.1's and FIBO 2 Dev's edits, Qwen-Image
+   * 2.1's inpaint) or the canvas its pads grow (expand). The composer shows no Aspect ratio or Resolution for its operation.
+   */
+  unsized?: true;
+  /**
+   * The most images this route reads, when fewer than the model's options.maxImages (Qwen-Image 2.1's inpaint and expand
+   * read the picture alone; its edit takes 4): the composer offers no more for its operation, and the plan refuses more.
+   */
+  maxImages?: number;
 }
 
 export type Badge = "new" | "top" | "fast" | "audio" | "4k" | "hd" | "pro" | "open" | "uncensored" | "beta";
@@ -581,6 +591,14 @@ export interface ModelOptions {
   /** The words a run takes when none are given (Fuobe Try-On: its try-on LoRA's own instruction). */
   defaultPrompt?: string;
   /**
+   * The prompt the model reads, when it isn't plain words: "ideogram4" = an Ideogram 4 JSON caption. The server writes
+   * one from the words before the run (src/lib/ideogram-caption.ts) and keeps it as the run's prompt.
+   * "minimax-h3" = MiniMax H3's layout: an alignment line for the start (and end) frame, then integrated_multimodal_description,
+   * overall_soundscape and non_diegetic_music. The server wraps the words in it (src/lib/h3-prompt.ts) and keeps the result
+   * as the run's prompt; words already in the layout pass through.
+   */
+  promptFormat?: "ideogram4" | "minimax-h3";
+  /**
    * LoRAs the model's recipe always loads (Fuobe Try-On's try-on LoRA): every run carries them before the user's own
    * (an API's LoRA cap leaves out the user's first), their trigger words leading the prompt. A ComfyUI graph that loads
    * one itself isn't given it twice (injectLoras), and a run is refused while Settings → Models & licences has one
@@ -634,7 +652,8 @@ export interface Pricing {
   byResolution?: Record<string, number>;
   /**
    * A launch price that runs to the end of `until` (UTC, YYYY-MM-DD); `usd` / `byResolution` are the list
-   * prices after it. The catalog applies whichever holds when it loads (FLUX 3 Max: $0.0425/s until 2026-11-07, then $0.17/s).
+   * prices after it (FLUX 3 Max: $0.0425/s until 2026-11-07, then $0.17/s). The catalog keeps both: whoever prices picks
+   * the one that holds when it reads its clock (./promo: the server when it plans a run, the browser when it shows one).
    */
   promo?: { until: string; usd: number; byResolution?: Record<string, number> };
   /**
@@ -706,6 +725,11 @@ export interface ModelDef {
    * LTX-2.3 graphs make silent clips).
    */
   engineOptions?: Partial<Record<Engine, Partial<ModelOptions>>>;
+  /**
+   * What each engine runs when they differ, in one plain line (the owner's rule of 2026-10-30: each engine does all it
+   * can, the cloud only on hosted models, and the UI says so). Settings → Models & licences shows it under the model.
+   */
+  engineNote?: string;
   /** Hidden from pickers (used only internally by presets). */
   hidden?: boolean;
   /**
@@ -770,6 +794,11 @@ export interface GenParams {
    * many frames a frame-count route renders (LTX 2.3 clean plate / HDR, VOID; FieldMap.numFrames).
    */
   sourceDuration?: number;
+  /**
+   * The input clip's frame rate, when the caller knows it: what a clip edit billed by its frames costs (fal's Wan 2.2
+   * Fun VACE bills frames ÷ 16; src/lib/catalog/clip-windows.ts). The server's header read wins over it.
+   */
+  sourceFps?: number;
   /** Extract every Nth frame. */
   frameInterval?: number;
   /** Frame interpolation: the frame rate to reach, and a slow-motion factor (1–8; 2 = twice as long). */
@@ -863,6 +892,11 @@ export type LoraField =
 
 /** What the UI posts to /api/generations. Asset references are local asset ids or URLs. */
 export interface GenerationRequest {
+  /**
+   * Public sign-up: the account whose own ComfyUI runs this ("Your GPU"), never the install's providers. Set by the
+   * server from the session only (the request schema drops it from what a client sends).
+   */
+  account?: string;
   feature: string;
   presetId?: string;
   modelId: string;
@@ -1112,10 +1146,24 @@ export interface Generation {
   /** Review status (null: none). */
   review?: ReviewStatus | null;
   /**
+   * A failed ComfyUI run that something missing on the GPU caused (a model file, a node class): its tile offers
+   * "Fix it", which opens the GPU pre-flight's guided fix.
+   */
+  fix?: GenerationFix | null;
+  /** Failed or stopped before its paid provider took the job (no external id): the card says "Not billed", not its price. */
+  notBilled?: true;
+  /**
    * What the run leaves out or changes, said when it is created (LoRAs a cloud run can't carry, a clip length
    * the API rounds). Only on the answer that creates it; not stored.
    */
   notes?: string[];
+}
+
+/** Why a ComfyUI run failed, when the GPU was missing something (generations.fix_json). */
+export interface GenerationFix {
+  code: "comfy_missing_model" | "comfy_missing_node" | "comfy_oom";
+  workflowId?: string;
+  items: { folder?: string; file?: string; class?: string; pack?: string }[];
 }
 
 /** Input slot a preset asks the user for. */

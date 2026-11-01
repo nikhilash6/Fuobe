@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { badBody, recipeFailure } from "@/server/recipe-routes";
 import { checkDraft } from "@/server/recipes";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const Body = z.object({
   recipe: z.unknown(),
@@ -12,13 +10,12 @@ const Body = z.object({
 });
 
 /** Check a drafted skill's recipe before it is saved: free, with or without keys. What passed is kept for its save. */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   const parsed = Body.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return badBody(parsed.error.issues);
   try {
     return Response.json(await checkDraft(parsed.data.recipe, parsed.data.level, parsed.data.title || undefined));
   } catch (e) {
-    rethrowAccess(e);
     return recipeFailure(e);
   }
-});
+}

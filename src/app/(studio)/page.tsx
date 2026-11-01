@@ -1,23 +1,42 @@
+import {
+  AppsSection,
+  AssistSection,
+  EffectsSection,
+  HomeFooter,
+  MotionsSection,
+  OpenSourceSection,
+  ShowcaseWall,
+  StartSection,
+  StudiosSection,
+} from "@/components/home/home-sections";
 import { HomeView } from "@/components/home-view";
-import { APPS, EFFECTS, MOTIONS } from "@/lib/catalog";
-import { homeEffects, toPresetCard } from "@/lib/preset-cards";
+import { ASSIST_SUGGESTIONS } from "@/lib/assist";
+import { HOME_TRY, homeShowcase, roundedDown } from "@/lib/home-showcase";
 import { startQuotes, starterPriceLine } from "@/lib/starter-prices";
 
-const HOME_MOTIONS = ["motion-crash-zoom-in", "motion-360-orbit", "motion-bullet-time", "motion-fpv-drone", "motion-dolly-zoom-in", "motion-snorricam"];
-
-/** The catalog stays on the server: the home view gets 18 slim cards, three counts, and what Start and the first-run guide cost. */
-export default function Page() {
+/**
+ * The catalog stays on the server: Home gets slim cards, the numbers it quotes (each computed, lib/home-showcase.ts),
+ * and what Start and the first-run guide cost. The sections under the wall are server components.
+ */
+export default async function Page() {
+  const home = await homeShowcase();
   return (
     <HomeView
-      counts={{ motions: MOTIONS.length, effects: EFFECTS.length, apps: APPS.length }}
-      motions={MOTIONS.filter((m) => HOME_MOTIONS.includes(m.id)).map(toPresetCard)}
-      apps={APPS.slice(0, 12)
-        .filter((a) => a.badges?.includes("top") || a.category === "Camera")
-        .slice(0, 6)
-        .map(toPresetCard)}
-      effects={homeEffects(EFFECTS, 6).map(toPresetCard)}
+      openModels={roundedDown(home.facts.openModels)}
+      chips={HOME_TRY}
+      assist={{ label: "Plan a perfume ad with Assist", href: `/assist?prompt=${encodeURIComponent(ASSIST_SUGGESTIONS[0])}` }}
+      wall={<ShowcaseWall wall={home.wall} />}
       prices={starterPriceLine()}
       quotes={startQuotes()}
-    />
+    >
+      <EffectsSection facts={home.facts} effects={home.effects} />
+      <MotionsSection facts={home.facts} motions={home.motions} />
+      <AppsSection facts={home.facts} beforeAfter={home.beforeAfter} reveals={home.reveals} />
+      <StudiosSection facts={home.facts} studios={home.studios} audioTools={home.audioTools} pills={home.pills} />
+      <AssistSection facts={home.facts} runsOn={home.runsOn} skills={home.skills} />
+      <OpenSourceSection facts={home.facts} newModels={home.newModels} />
+      <StartSection />
+      <HomeFooter />
+    </HomeView>
   );
 }

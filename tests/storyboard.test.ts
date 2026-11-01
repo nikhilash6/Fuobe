@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getModel } from "@/lib/catalog";
-import { framePrompt, heuristicScenes, parseScenes, STORYBOARD_MODELS } from "@/lib/catalog/storyboard";
+import { getModel, getPreset } from "@/lib/catalog";
+import { planGeneration } from "@/lib/catalog/plan";
+import type { GenerationRequest } from "@/lib/catalog/types";
+import { framePrompt, heuristicScenes, parseScenes, planStoryboard, STORYBOARD_MODELS } from "@/lib/catalog/storyboard";
+
+const plan = (r: GenerationRequest) => planGeneration(r, getModel, getPreset);
+const graph = (r: GenerationRequest) => { const p = plan(r); return p.model.routes.find((x) => x.op === p.op)!.endpoint; };
 
 describe("storyboard", () => {
   it("parses LLM answers as a JSON array or a numbered list", () => {
@@ -27,6 +32,22 @@ describe("storyboard", () => {
     for (const m of Object.values(STORYBOARD_MODELS)) {
       expect(getModel(m.next)?.routes.some((r) => r.op === "edit")).toBe(true);
       expect(getModel(m.first)?.routes.some((r) => r.op === "t2i")).toBe(true);
+      expect(getModel(m.firstWithRefs)?.routes.some((r) => r.op === "edit")).toBe(true);
     }
+  });
+
+  it("makes frame 1 on Qwen-Image 2.1 on your GPU (text to image, or an edit of up to 4 references); the next frames and the cloud stay", () => {
+    expect(STORYBOARD_MODELS.open).toMatchObject({ first: "oss-qwen-image-21", firstWithRefs: "oss-qwen-image-21", next: "oss-qwen-next-scene", chainFrom: "first" });
+    expect(STORYBOARD_MODELS.cloud).toMatchObject({ first: "z-image-turbo-cloud", firstWithRefs: "qwen-image-edit-2511-cloud", next: "qwen-image-edit-2509-cloud" });
+    const scenes = ["a girl waits at a bus stop", "the bus arrives"];
+    const plain = planStoryboard({ engine: "open", scenes, aspectRatio: "21:9", resolution: "1K" });
+    expect(plain[0]).toMatchObject({ modelId: "oss-qwen-image-21", params: { aspectRatio: "21:9", resolution: "1K" } });
+    expect(plain[0].inputs).toBeUndefined();
+    expect(graph(plain[0])).toBe("qwen-image-21-t2i");
+    expect(plain[1].modelId).toBe("oss-qwen-next-scene");
+    const refs = ["/api/files/a.png", "/api/files/b.png", "/api/files/c.png", "/api/files/d.png", "/api/files/e.png"];
+    const withRefs = planStoryboard({ engine: "open", scenes, references: refs });
+    expect(withRefs[0]).toMatchObject({ modelId: "oss-qwen-image-21", inputs: { images: refs.slice(0, 4) } });
+    expect(graph(withRefs[0])).toBe("qwen-image-21-edit");
   });
 });

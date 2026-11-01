@@ -17,6 +17,7 @@ const { saveFile } = await import("@/server/storage");
 const { db } = await import("@/server/db");
 const shorts = await import("@/server/shorts");
 const mixed = await import("@/server/mixed-media");
+const { getModel } = await import("@/lib/catalog");
 const sessionsRoute = await import("@/app/api/shorts/sessions/route");
 const sessionRoute = await import("@/app/api/shorts/sessions/[id]/route");
 const regenRoute = await import("@/app/api/shorts/sessions/[id]/segments/[index]/route");
@@ -254,7 +255,7 @@ describe("Shorts sessions", () => {
     expect(s.segments.map((g) => g.frames)).toEqual([65, 65, 61]);
     const take = s.segments[2].takes[0];
     expect(gens.getGeneration(take.cut)).toMatchObject({ modelId: "oss-segment", op: "trim" });
-    expect(gens.getGeneration(take.frame!)).toMatchObject({ modelId: "oss-qwen-edit", op: "edit" });
+    expect(gens.getGeneration(take.frame!)).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit" });
     expect(dependsOn(take.look)).toEqual([take.cut, take.frame]);
     const final = await settle(s.stitches[0].final);
     expect(final).toMatchObject({ status: "succeeded", modelId: "oss-mux" });
@@ -381,7 +382,7 @@ describe("Shorts sessions", () => {
 });
 
 describe("Mixed Media renders", () => {
-  // The cloud's Per frame tests below are Nano Banana 2's lanes unless a test names another model; Fuobe Mixed Media, the
+  // The cloud's Per frame tests below are Nano Banana 2.1's lanes unless a test names another model; Fuobe Mixed Media, the
   // default since build plan O9, has tests of its own (and tests/mixed-shorts-originals.test.ts).
   const mm = (over: Record<string, unknown> = {}) => ({
     engine: "open",
@@ -391,7 +392,7 @@ describe("Mixed Media renders", () => {
     range: { start: 2, end: 7 },
     fps: 24,
     resolution: "1K",
-    ...(over.engine === "cloud" && !over.mode && !over.modelId ? { modelId: "nano-banana-2" } : {}),
+    ...(over.engine === "cloud" && !over.mode && !over.modelId ? { modelId: "nano-banana-2-1" } : {}),
     ...over,
   });
 
@@ -420,7 +421,7 @@ describe("Mixed Media renders", () => {
 
   it("renders on the cloud (Fast): cut → restyle anchored on the preview still → the cut's sound", async () => {
     const preview = await (await mixedPreviewRoute.POST(json("POST", mm({ engine: "cloud", frameUrl: png })))).json();
-    expect(preview).toMatchObject({ modelId: "nano-banana-2", op: "edit", feature: "mixed-media-preview" });
+    expect(preview).toMatchObject({ modelId: "nano-banana-2-1", op: "edit", feature: "mixed-media-preview" });
     const still = await settle(preview.id);
     const anchor = still.outputs[0].url;
     const { final, items } = await mixed.createMixed(mm({ engine: "cloud", mode: "fast", anchor }) as never);
@@ -481,19 +482,25 @@ describe("Mixed Media renders", () => {
     setSetting("falKey", "fal-test-key");
     try {
       const est = await mixed.estimateMixed(mm({ engine: "cloud", source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 30 }, range: { start: 0, end: 10 }, fps: 8 }) as never);
-      expect(est).toMatchObject({ mode: "frames", frames: 75, fps: 7.5, perFrameUsd: 0.08, demo: false, previewUsd: 0.08 });
+      // Nano Banana 2.1: the catalog's one price an image (fal bills its tokens).
+      const per = getModel("nano-banana-2-1")!.pricing!.usd;
+      expect(est).toMatchObject({ mode: "frames", frames: 75, fps: 7.5, perFrameUsd: per, demo: false, previewUsd: per });
       expect(est.notes).toContain("Frames are every 4th frame of this 30 FPS clip: 7.5 FPS, 75 frames");
-      // 75 frames × $0.08, plus the cut, the extraction and the assembly (fal compute, about free).
-      expect(est.costUsd).toBeGreaterThanOrEqual(6);
-      expect(est.costUsd).toBeLessThan(6.01);
+      // A render that names Nano Banana 2 (a saved setup, an API caller) runs on Nano Banana 2.1, not the Original.
+      const older = await mixed.estimateMixed(mm({ engine: "cloud", modelId: "nano-banana-2", source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 30 }, range: { start: 0, end: 10 }, fps: 8 }) as never);
+      expect(older).toMatchObject({ mode: "frames", modelId: "nano-banana-2-1", perFrameUsd: per });
+      expect(older.notes).toContain(`${getModel("nano-banana-2")!.name} is now ${getModel("nano-banana-2-1")!.name} here`);
+      // 75 frames × the frame price, plus the cut, the extraction and the assembly (fal compute, about free).
+      expect(est.costUsd).toBeGreaterThanOrEqual(75 * per);
+      expect(est.costUsd).toBeLessThan(75 * per + 0.01);
       const big = await mixed.estimateMixed(mm({ engine: "cloud", source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 24 }, range: { start: 0, end: 5 }, fps: 24, resolution: "4K" }) as never);
-      expect(big).toMatchObject({ frames: 120, fps: 24, perFrameUsd: 0.16 });
-      expect(big.costUsd).toBeGreaterThanOrEqual(19.2);
+      expect(big).toMatchObject({ frames: 120, fps: 24, perFrameUsd: per });
+      expect(big.costUsd).toBeGreaterThanOrEqual(120 * per);
       // Over 200 frames the clips are joined at up to 2048 px: 4K frames would be paid for and shrunk, so they are drawn at 2K.
       const joined = await mixed.estimateMixed(mm({ engine: "cloud", source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 24 }, range: { start: 0, end: 10 }, fps: 24, resolution: "4K" }) as never);
-      expect(joined).toMatchObject({ frames: 240, perFrameUsd: 0.12 });
-      expect(joined.costUsd).toBeGreaterThanOrEqual(28.8);
-      expect(joined.costUsd).toBeLessThan(28.9);
+      expect(joined).toMatchObject({ frames: 240, perFrameUsd: per });
+      expect(joined.costUsd).toBeGreaterThanOrEqual(240 * per);
+      expect(joined.costUsd).toBeLessThan(240 * per + 0.1);
       expect(joined.notes).toContain("Over 200 frames are made as clips and joined at up to 2048 px, so frames are drawn at 2K");
       const flash = await mixed.estimateMixed(mm({ engine: "cloud", modelId: "seedream-5-flash", source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 24 }, range: { start: 0, end: 5 }, fps: 8 }) as never);
       expect(flash).toMatchObject({ frames: 40, perFrameUsd: 0.027 });
@@ -513,10 +520,10 @@ describe("Mixed Media renders", () => {
       expect(legacy.perFrameUsd).toBeUndefined();
       const wrong = await mixedEstimateRoute.POST(json("POST", mm({ engine: "cloud", mode: "frames", modelId: "ltx-2-3-restyle", source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 24 } })));
       expect(wrong.status).toBe(422);
-      expect((await wrong.json()).error).toBe("LTX 2.3 Reference Restyle restyles the clip as video — pick Fast for it, or Fuobe Mixed Media or Nano Banana 2 or Seedream 5.0 Flash to redraw each frame");
-      const still = await mixedEstimateRoute.POST(json("POST", mm({ engine: "cloud", mode: "fast", modelId: "nano-banana-2", source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 24 } })));
+      expect((await wrong.json()).error).toBe("LTX 2.3 Reference Restyle restyles the clip as video — pick Fast for it, or Fuobe Mixed Media or Nano Banana 2.1 or Seedream 5.0 Flash to redraw each frame");
+      const still = await mixedEstimateRoute.POST(json("POST", mm({ engine: "cloud", mode: "fast", modelId: "nano-banana-2-1", source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 24 } })));
       expect(still.status).toBe(422);
-      expect((await still.json()).error).toMatch(/^Nano Banana 2 redraws single frames — pick Per frame/);
+      expect((await still.json()).error).toMatch(/^Nano Banana 2.1 redraws single frames — pick Per frame/);
     } finally {
       setSetting("falKey", "");
     }
@@ -605,7 +612,7 @@ describe("Mixed Media renders", () => {
     expect(est).toMatchObject({ mode: "smooth", demo: true, modelId: "fuobe-mixed-media" });
     expect(est.notes.join(" ")).toMatch(/Smooth draws the first frame in the look/);
     // Smooth is the Original's own; Fast is the cloud's.
-    expect((await mixedEstimateRoute.POST(json("POST", { ...noir, mode: "smooth", modelId: "nano-banana-2" }))).status).toBe(422);
+    expect((await mixedEstimateRoute.POST(json("POST", { ...noir, mode: "smooth", modelId: "nano-banana-2-1" }))).status).toBe(422);
     expect((await mixedEstimateRoute.POST(json("POST", mm({ mode: "fast" })))).status).toBe(422);
   });
 

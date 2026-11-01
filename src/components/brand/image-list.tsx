@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { LibraryGrid } from "@/components/studio/media-slot";
 import { uploadFile } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 
 /** Upload files as images; resolves the /api/files URLs (bad files are skipped with a toast). */
 export async function uploadImages(files: File[]): Promise<string[]> {
@@ -23,7 +24,7 @@ export async function uploadImages(files: File[]): Promise<string[]> {
     try {
       out.push((await uploadFile(f)).url);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     }
   }
   return out;

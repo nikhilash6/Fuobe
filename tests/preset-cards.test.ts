@@ -1,30 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
 import { APPS, EFFECTS, getPreset, MOTIONS } from "@/lib/catalog";
 
-// One measured cover (pnpm eval:covers writes this file), for a preset id the catalog doesn't have.
+// One measured cover (pnpm eval:covers writes this file) and one still cover (pnpm eval:covers --from-masters), for preset ids the catalog doesn't have.
 vi.mock("@/lib/preset-previews.generated", () => ({
-  PRESET_PREVIEWS: { "effect-measured-cover": { poster: "/previews/dop/effect-measured-cover.jpg", video: "/previews/dop/effect-measured-cover.mp4", run: "r", engine: "open", model: "oss-wan22-14b", variant: "research" } },
+  PRESET_PREVIEWS: {
+    "effect-measured-cover": { poster: "/previews/dop/effect-measured-cover.jpg", video: "/previews/dop/effect-measured-cover.mp4", run: "r", engine: "open", model: "oss-wan22-14b", variant: "research" },
+    "app-still-cover": { poster: "/previews/presets/app-still-cover.jpg", run: "comfyui-previews-2026-10", engine: "comfyui", model: "ideogram4", variant: "lean-json" },
+  },
 }));
 import {
   appFx,
   CAMERA_MOVES,
   effectFx,
   FX,
+  isCover,
   LAYER_BLEED,
   layerTransform,
   lookHue,
   motionMove,
   moveVars,
   PREVIEW_LAYERS,
+  parityNote,
   presetHowTo,
   presetRouteLines,
-  previewFor,
+  previewFlip,
+  readMoreTap,
   searchText,
-  toPresetCard,
+  TAP_TO_READ,
+  matchesSearch,
   type CameraMove,
   type MoveSpec,
   type PreviewLayer,
 } from "@/lib/preset-cards";
+import { previewFor, toPresetCard } from "@/lib/preset-card-data";
 import type { Preset } from "@/lib/catalog/types";
 
 const byName = (list: Preset[], name: string) => {
@@ -224,14 +232,19 @@ describe("slim card DTOs", () => {
     expect(json).not.toMatch(/modelId|loras|https?:|promptTemplate|parity/);
   });
 
+  it("carries the whole description, which a phone opens in place of a tooltip", () => {
+    for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) expect(toPresetCard(p).description, p.id).toBe(p.description);
+    expect(Math.max(...EFFECTS.map((p) => p.description.length))).toBeGreaterThan(100);
+  });
+
   it("is a small fraction of the full preset payload", () => {
     for (const list of [APPS, MOTIONS, EFFECTS]) {
       const full = JSON.stringify(list).length;
       const slim = JSON.stringify(list.map(toPresetCard)).length;
       expect(slim / full).toBeLessThan(0.45);
     }
-    // The 255-card effects gallery ships well under 80 KB of card data.
-    expect(JSON.stringify(EFFECTS.map(toPresetCard)).length).toBeLessThan(80_000);
+    // The 255-card effects gallery ships under 85 KB of card data (2.3 KB of it the descriptions' whole text).
+    expect(JSON.stringify(EFFECTS.map(toPresetCard)).length).toBeLessThan(85_000);
   });
 
   it("reads the hue back from the preset look", () => {
@@ -249,6 +262,10 @@ describe("slim card DTOs", () => {
 
   it("searches name, description and category", () => {
     expect(searchText({ name: "Crash Zoom In", description: "A sudden zoom", category: "Push & Pull" })).toBe("crash zoom in a sudden zoom push & pull");
+    // Every word, in any order and in its plain forms.
+    const t = searchText({ name: "Remove Background", description: "A clean cut-out with one explosion", category: "Edit" });
+    for (const q of ["remover", "removing", "explosions", "background remove", "explosion", "edit"]) expect(matchesSearch(t, q), q).toBe(true);
+    for (const q of ["fire", "remove fire"]) expect(matchesSearch(t, q), q).toBe(false);
   });
 });
 
@@ -271,6 +288,68 @@ describe("preset route lines (details popover)", () => {
     expect(cloud.model).toBe("Kling 2.5 Turbo · words only (its LoRA is licensed for your GPU only)");
     expect(open.model).toBe("Fuobe DoP");
     expect(presetRouteLines(getPreset("motion-overhead")!, () => "Fuobe DoP")[0].model).toBe("Fuobe DoP");
+  });
+
+  it("names the model a preset's preview was made with first, with the label when it made the live preview", () => {
+    const truck = getPreset("motion-truck-left")!;
+    const names: Record<string, string> = { "oss-minimax-h3": "MiniMax H3", "minimax-h3": "MiniMax H3", "fuobe-dop": "Fuobe DoP", "fuobe-dop-ltx": "Fuobe DoP · LTX" };
+    const h3 = (made: boolean) => (e: "cloud" | "open") => ({ route: { modelId: e === "open" ? "oss-minimax-h3" : "minimax-h3" }, made });
+    expect(presetRouteLines(truck, (id) => names[id], h3(true))).toEqual([
+      { engine: "cloud", label: "Cloud", model: "MiniMax H3", made: true },
+      { engine: "cloud", label: "Cloud", model: names[truck.cloud!.modelId], alt: true },
+      { engine: "open", label: "Open source", model: "MiniMax H3", made: true },
+      { engine: "open", label: "Open source", model: names[truck.open!.modelId], alt: true },
+    ]);
+    // The preset's note then speaks of its second choice.
+    const truckLines = presetRouteLines(truck, (id) => names[id], h3(true));
+    expect(parityNote("Fuobe DoP: Wan 2.2 with the motionpushin LoRA, on your GPU and in the cloud", truckLines)).toBe(
+      "Or Fuobe DoP: Wan 2.2 with the motionpushin LoRA, on your GPU and in the cloud",
+    );
+    expect(parityNote("Fuobe DoP: Wan 2.2", presetRouteLines(truck, (id) => names[id]))).toBe("Fuobe DoP: Wan 2.2");
+    const colors = [
+      { engine: "open" as const, model: "Qwen-Image 2.1 Turbo" },
+      { engine: "open" as const, model: "Palette match", alt: true as const },
+    ];
+    expect(parityNote("The open version transfers the palette directly (no AI model, runs on CPU)", colors)).toBe(
+      "Palette match, the second choice on your GPU, transfers the palette directly (no AI model, runs on CPU)",
+    );
+    expect(parityNote("Approximation: one combined image", colors)).toBe("Approximation: one combined image");
+    expect(parityNote(undefined, colors)).toBeUndefined();
+    // A still cover: the recipe leads, without the label.
+    expect(presetRouteLines(truck, (id) => names[id], h3(false))[0]).toEqual({ engine: "cloud", label: "Cloud", model: "MiniMax H3" });
+    // A recipe on the preset's own model (Zooms on Qwen-Image 2.1) is one line; an engine without a recipe keeps its route.
+    const zooms = getPreset("app-zooms")!;
+    const lines = presetRouteLines(zooms, (id) => ({ "oss-qwen-image-21": "Qwen-Image 2.1", "nano-banana-pro": "Nano Banana Pro" })[id], (e) => (e === "open" ? { route: zooms.open!, made: true } : undefined));
+    expect(lines).toEqual([
+      { engine: "cloud", label: "Cloud", model: "Nano Banana Pro" },
+      { engine: "open", label: "Open source", model: "Qwen-Image 2.1", made: true },
+    ]);
+  });
+});
+
+describe("a card's description on a phone", () => {
+  const cut = { scrollHeight: 64, clientHeight: 32 };
+  const fits = { scrollHeight: 32, clientHeight: 32 };
+
+  it("opens text cut short in place, and a second tap closes it", () => {
+    expect(readMoreTap(cut, false, true)).toBe(true);
+    expect(readMoreTap({ scrollHeight: 64, clientHeight: 64 }, true, true)).toBe(false);
+  });
+
+  it("lets a tap on text that fits through to the preset", () => {
+    expect(readMoreTap(fits, false, true)).toBeNull();
+    // Sub-pixel rounding isn't text cut short.
+    expect(readMoreTap({ scrollHeight: 33, clientHeight: 32 }, false, true)).toBeNull();
+  });
+
+  it("leaves the desktop as it is: a click opens the preset", () => {
+    expect(readMoreTap(cut, false, false)).toBeNull();
+    expect(readMoreTap(cut, true, false)).toBeNull();
+  });
+
+  it("applies on phones and on screens with no mouse", () => {
+    expect(TAP_TO_READ).toContain("(max-width: 639px)");
+    expect(TAP_TO_READ).toContain("(hover: none)");
   });
 });
 
@@ -304,5 +383,20 @@ describe("real covers", () => {
     expect(measured.fx).toBeUndefined();
     // The others keep their procedural preview.
     expect(previewFor({ id: "effect-other", type: "effect", name: "Other", category: "Elements" }).video).toBeUndefined();
+  });
+
+  it("a still cover is the card's image: no clip, no move or treatment, never mirrored", () => {
+    const still = previewFor({ id: "app-still-cover", type: "app", name: "Still", category: "Identity" });
+    expect(still).toStrictEqual({ poster: "/previews/presets/app-still-cover.jpg", scene: "portrait" });
+    expect(isCover(still)).toBe(true);
+    // Whatever its id hashes to, a cover is shown as rendered.
+    for (const id of ["app-still-cover", "a", "b", "c", "d", "e", "f"]) expect(previewFlip({ id, preview: still })).toBe(false);
+  });
+
+  it("no procedural preview counts as a cover, and only treatments mirror", () => {
+    const all = [...APPS, ...MOTIONS, ...EFFECTS].map(toPresetCard);
+    for (const c of all) expect(isCover(c.preview), c.id).toBe(false);
+    expect(all.filter((c) => c.preview.move).some((c) => previewFlip(c))).toBe(false);
+    expect(all.filter((c) => c.preview.fx).some((c) => previewFlip(c))).toBe(true);
   });
 });

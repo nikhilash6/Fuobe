@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Manifest } from "@/lib/comfy";
-import { installScript, nodeInstall } from "@/lib/comfy-install";
+import { installScript, nodeInstall, workflowSource } from "@/lib/comfy-install";
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, "../workflows/comfyui/manifest.json"), "utf8")) as Manifest;
 const workflow = (id: string) => manifest.workflows.find((w) => w.id === id)!;
@@ -49,6 +49,26 @@ describe("Workflows → Copy install commands", () => {
     expect(s).toContain(`git -C "$COMFYUI/custom_nodes" clone ${plain.repo}`);
     expect(s.findIndex((l) => l.startsWith("mkdir -p"))).toBeGreaterThan(s.findIndex((l) => l.includes(plain.repo)));
   });
+
+  it("a gated download (LTX-2.5) says to accept its licence first, and sends the Hugging Face token", () => {
+    const s = script("ltx25-t2v").split("\n");
+    const gated = workflow("ltx25-t2v").models.filter((m) => m.gated);
+    expect(gated.length).toBeGreaterThan(0);
+    expect(s.filter((l) => l.startsWith("#"))).toEqual(["# Gated: accept the licence at https://huggingface.co/Lightricks/LTX-2.5, then export HF_TOKEN=<your Hugging Face token>"]);
+    for (const m of gated) expect(s.find((l) => l.includes(m.url!)), m.file).toContain(`wget -c --header="Authorization: Bearer $HF_TOKEN" -O`);
+    // The comment comes before the downloads; an ungated download sends no token.
+    expect(s.findIndex((l) => l.startsWith("#"))).toBeLessThan(s.findIndex((l) => l.startsWith("mkdir -p")));
+    expect(script("flux1-dev-t2i")).not.toMatch(/HF_TOKEN|^#/m);
+  });
+
+  it("links each workflow's graph in the repo: the file to download and its GitHub page", () => {
+    expect(workflowSource("flux1-dev-t2i.json")).toEqual({
+      raw: "https://raw.githubusercontent.com/workingprototype/fuobe/main/workflows/comfyui/flux1-dev-t2i.json",
+      page: "https://github.com/workingprototype/fuobe/blob/main/workflows/comfyui/flux1-dev-t2i.json",
+    });
+    for (const wf of manifest.workflows) expect(fs.existsSync(path.join(__dirname, "../workflows/comfyui", wf.file)), wf.file).toBe(true);
+  });
+
   it("the commands run, and run again, as install-comfyui.sh does: a pinned clone moves to its pin, a copied pack isn't copied twice", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-comfy-install-"));
     const git = (cwd: string, ...args: string[]) =>

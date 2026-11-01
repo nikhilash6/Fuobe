@@ -47,10 +47,10 @@ The harness finds its server the way `bin/fuobe.mjs` does: `--url` / `--token`, 
 the public API (`/api/generations`, `/api/uploads`, `/api/elements`, the studio routes), so the
 harness measures what a user gets.
 
-- `--engine demo` needs **Settings → Demo mode** on Auto or On. A job that would run for real is
+- `--engine demo` needs **Settings → Placeholder results** turned on. A job that would run for real is
   skipped.
 - `--engine open` / `cloud` refuse a server whose engine mode excludes them. A job that would come
-  back as demo media is skipped and says why: Demo mode is On, no ComfyUI is connected, or there is
+  back as demo media is skipped and says why: placeholder results are on, no ComfyUI is connected, or there is
   no cloud key.
 - **The model it names.** A job the server would run on another model than the one the case names
   (a studio's default maker, or a retired model the server runs on the Original that replaced it) is
@@ -74,6 +74,7 @@ harness measures what a user gets.
 | `pnpm eval:compare <runA> <runB>` | Wins, losses and mean gain per metric. Exits 1 when a guarded metric regresses |
 | `pnpm eval:promote <runId>` | Applies the promote rule. `--record` writes the verdicts into the research JSON; `--apply-strengths` also lowers over-cooked strengths there |
 | `pnpm eval:covers <runId>` | Turns each promoted case's best render into its preset's cover (`public/previews/`, `src/lib/preset-previews.generated.ts`) |
+| `pnpm eval:covers --from-masters <dir> --run <name>` | Turns rendered masters (one folder per preset id) into covers, merged into the same file |
 | `pnpm eval:history` | Lists runs, newest first, and the per-case scores of one case (`--case soul/v1-general`) |
 | `pnpm eval:validate` | Checks every case file, and that the generated suites match the research |
 | `pnpm eval:setup` | Creates the metrics venv with uv (`--identity`, `--download`, `--dinov2`, `--torch-backend`) |
@@ -116,15 +117,19 @@ One JSON file per Original in `cases/`. Later Original packages add their own fi
 | `soul-id` | character and look training | your photos → train per family (Fuobe Soul, Soul Cinema, Soul HD, FLUX.1 [dev]) → scenes; a moodboard → a look | `trained`, `half-strength`, `references` | identity (style for the look), clip, aesthetic |
 | `dop` | Fuobe DoP motions and effects | the 69 the research gives a LoRA, and the 20 camera moves it gives a Fun Camera pose or an LTX camera LoRA | `catalog`, `prompt-only`, `research` (the candidate), `partner` (cloud) | temporal, clip |
 | `dop-mix` | Fuobe DoP's Mix | 5 move + effect pairs | `mix` (the candidate), `first` (the move alone) | temporal, clip |
+| `dop-mixed-media` | DoP's Mixed Media effects in the cloud, blind (**run it first once you have paid keys**: [the rule](#dops-mixed-media-effects-the-first-run-with-paid-keys)) | 8 of the 32 (Sketch, Noir, Vintage, Paper, Hand Paint with a look LoRA; Comic, Two Color, Broken Mirror on their words) on your start frame, 2 seeds | `original` (the candidate: Fuobe Mixed Media draws the still in the look, then Fuobe DoP animates it), `partner` (cloud: the preset's words on Kling 2.5 Turbo, the default before O9) | temporal, clip |
 | `genjutsu` | Genjutsu move / swap / restyle / Character swap | 7: Motion transfer and Object swap (each also on the Lite tier), Restyle, and Character swap with and without the first frame (through `/api/genjutsu`) | `original`, `partner` (cloud: each mode's own partner on fal) | temporal, clip |
 | `mixed-media` | Fuobe Mixed Media (O9) | 7 looks on one clip, 3 s at 8 fps (through `/api/mixed-media`): 3 with a look LoRA, 4 on their words | `studio` (the Original frame by frame), `smooth` (its first frame, then Wan 2.2 Fun VACE), `words` (open: the per-frame model before O9), `partner-frames` (cloud: Nano Banana 2 per frame), `fast` (cloud: LTX-2.3 Reference Restyle) | temporal, style |
 | `shorts` | Fuobe Shorts (O9) | 2: one segment from its first frame (`/api/generations`), and a 6 s session (`/api/shorts/sessions`) | `restyle` (Fuobe Shorts), `partner` (cloud: Gemini Omni Flash) | temporal, style, clip |
-| `speak` | talking portraits | 1 portrait + voice | `infinitetalk`, `s2v` | lipsync, temporal, identity |
+| `speak` | Fuobe Speak and Speak · Motion (O11) | 1 portrait + voice | `infinitetalk` (Fuobe Speak: InfiniteTalk with the FusioniX recipe on your GPU, fal's InfiniteTalk in the cloud), `s2v` (Fuobe Speak · Motion: Wan 2.2 speech to video) | lipsync, temporal, identity |
+| `angles` | Fuobe Angles (O11) | 1: your photo with the camera turned 45° to the left, 2 seeds | `recipe` (Fuobe Angles: Qwen-Image-Edit 2509 + the Multiple-angles LoRA), `today-open` (open: the Angles app's 2511 recipe), `today-cloud` (cloud: fal's Qwen Multiple Angles) | identity, clip, aesthetic |
+| `evolution` | Fuobe Evolution (O13) | 4 (through `/api/evolution`): Low, Medium and High on one clip with the same direction and 2 references, and one whose direction the writer makes from 3 references | `original` | temporal, style, clip |
+| `popcorn` | Storyboards in Fuobe Soul's looks (O13) | 4 four-frame boards (through `/api/storyboards`): 3 looks and the same board without one | `original` | clip, continuity, aesthetic |
 | `cinema` | Fuobe Cinema (O6) | 3 Director scenes (the prompt Cinema compiles), 4 camera moves as LTX-2.3's `camera_lora` (cloud), 2 films of 3 shots | `original`, `words` (no camera LoRA), `expansion` (fal's prompt expansion on), `wan` (Wan 2.2 A14B hosted), `partner` (Seedance 2.5); all but `original` cloud only | clip, temporal, continuity |
 | `marketing` | Fuobe Marketing Image, Fuobe Try-On, the AI Influencer sheet and Instadump (O10) | 7: a Standalone product shot (the product-shot graph on your GPU; hosted Qwen-Image-Edit in the cloud), an ad's picture, a poster without a product, a try-on, the builder's sheet (through `/api/influencer`), an Instadump photo from a selfie | `original`, `partner` (cloud: GPT Image 2.5, Nano Banana Pro, Ideogram 3.0, FASHN) | clip, aesthetic, style (the product), identity (try-on, Instadump) |
 | `turnaround` | Turnaround video (N7-6) | 4 through `/api/turnaround`: four views, the front and the back (sides drawn by the Angles app), the front alone, a sheet alone (a front drawn from it) | `default` (Frames on your GPU, H3 Max references in the cloud), `keyframes` (cloud: FLUX 3 Max), `camera` (cloud: H3 Max camera controls) | identity of 8 sampled frames against the views, temporal, clip |
 
-`soul.json`, `soul-cinema.json`, `soul-hex.json`, `dop.json` and `dop-mix.json` are **generated** from the research. They come from
+`soul.json`, `soul-cinema.json`, `soul-hex.json`, `dop.json`, `dop-mix.json` and `dop-mixed-media.json` are **generated** from the research. They come from
 `docs/research/higgsfield-image-studios.json` (the look ids) and
 `docs/research/fuobe-originals-recipes-5.json` (recipes, LoRAs, Soul Cinema's recipe, the motion map).
 `soul-hex`'s palettes are Fuobe's own. Run
@@ -205,7 +210,17 @@ scripts/eval/local/
   speak/portrait.png, speak/voice.wav
   marketing/product.png, person.png   # a product photo on a plain background; a full-body photo of a consenting person
   marketing/garment.png, selfie.jpg   # a garment on its own or flat-lay; a consenting person's selfie
+  angles/subject.png                  # a person or a product in a scene
+  evolution/walk.mp4                  # 4–30 s of someone walking, your own footage
+  evolution/ref-1.png … ref-3.png     # characters, places or a style you own (never Higgsfield previews)
+  turnaround/front.png, right.png     # one consenting person or a made-up character, full body on a plain background;
+  turnaround/back.png, left.png       #   right and left are their own (facing them, their right side is on your left)
+  turnaround/sheet.png                # a turnaround sheet of the same character
 ```
+
+The `popcorn` suite needs no inputs of its own: its boards start from words. The `turnaround` suite's cases with
+views send Soul ID's consent line for a real person (`"consent": true` in `cases/turnaround.json`), so use pictures of
+someone who agreed, or of a made-up character.
 
 **Training needs consent.** `soul-id.json` ships with `"consent": false`, so a character's training
 refuses to start. Copy the file to `local/soul-id.json`. In your copy, set `"consent": true` only
@@ -272,7 +287,8 @@ Other case fields:
 - `shots`: a film's shots. Continuity is measured across them.
 - `train`: photos, a target per engine, `kind` (`character` or `style`), `consent`, and `minPhotos`.
 - `submit`: a studio route and its body, with `{{inputs.video}}`, `{{source:inputs.video}}`,
-  `{{prompt}}`, `{{seed}}`, `{{engine}}` and `{{requestId}}` filled in.
+  `{{prompt}}`, `{{seed}}`, `{{engine}}` and `{{requestId}}` filled in. `pnpm eval:validate` refuses a
+  body that names an input (`{{inputs.images.1}}`, say) the case's `inputs` or `demoInputs` don't have.
 - `engines`: the engines the case runs on.
 - `tags`, `metrics` and `note`.
 
@@ -435,6 +451,28 @@ still lands as a diff for a person to review. Defaults stay code changes that a 
 2. Regenerate the catalog (`pnpm gen:catalog`).
 3. Measure both engines again.
 
+### DoP's Mixed Media effects: the first run with paid keys
+
+Since build plan O9, DoP's 32 Mixed Media effects run on Fuobe DoP in the cloud (Fuobe Mixed Media draws your
+still in the look, then Fuobe DoP animates it); before, they ran on their words on Kling 2.5 Turbo. The owner
+kept Fuobe DoP as the default on 2026-10-30, on one condition: the first evaluation run with paid keys compares
+the two blind. The suite says so (`"runFirst": "paid-keys"`; `pnpm eval:validate` marks it), and its `decides`
+field holds the rule:
+
+```bash
+pnpm eval:run --suite dop-mixed-media --engine cloud --variants original,partner --dry-run   # the jobs and the spend
+pnpm eval:run --suite dop-mixed-media --engine cloud --variants original,partner
+pnpm eval:review latest                                                                    # rate every pair blind
+pnpm eval:report latest                                                                    # the preference per case
+```
+
+**The rule.** Fuobe DoP stays the default unless it clearly loses: in one cloud run with at least 6 blind
+ratings per case, Kling 2.5 Turbo takes at least two thirds of all non-tie ratings, and more than half of them
+in at least 6 of the 8 cases. Then the default for all 32 effects goes back to Kling 2.5 Turbo in a reviewed code
+change (the `mixed-media-route` branch of `src/lib/catalog/dop.ts`), and `docs/STATUS.md` records the run.
+Anything less keeps Fuobe DoP. The metrics are shown beside the ratings but don't decide this one: the two
+models' clips differ in look by design (the still is redrawn first), so the people decide.
+
 ## Covers: the renders become the preview media
 
 `pnpm eval:covers <runId>` takes the best render of each **promoted** case (best on the case's main
@@ -442,7 +480,24 @@ metric) and makes it that preset's cover. A still becomes a JPEG of at most 768 
 first 4 seconds, muted, at most 512 px, with its first frame as the poster. They go to
 `public/previews/<suite>/`, and `src/lib/preset-previews.generated.ts` lists them by preset id (a
 DoP preset, `effect-thunder-god`) or look id (`v1-general`). The gallery cards play a listed cover
-instead of their procedural preview.
+instead of their procedural preview. Next to it, `src/lib/preset-covers.generated.ts` says only which
+presets have a cover and a clip: the pickers (camera motions, Mix, Cinema Studio's moves) read that in
+the browser. Their tiles show each poster's small copy (320 px wide) from `thumbs/` next to it, which
+every run makes where it's missing or older than its poster.
+
+Every URL in both files ends in its file's content version: `?v=` and the first 8 hex digits of the
+sha256 of its bytes (a poster's with its small copy's, whose URL keeps the poster's version). So a
+cover made again under its old name gets a new URL, and the site serves versioned covers for a year
+(`next.config.ts`). Each run versions the whole manifest after making its files.
+`pnpm eval:covers --versions` does only that: it hashes the files as they are. The only thing it
+encodes is a poster's small copy that's missing or older than its poster (a poster copied in by hand),
+which it makes first, so the copy never keeps the old picture under the new version. `--dry-run` says
+how many URLs would change and which copies it would make, and fails while any copy is due.
+`node scripts/gen-preset-peaks.mjs` versions Home's peak frames the same way (`--versions` alone
+does only that). So does `node scripts/gen-before-after.mjs --masters <dir>`, which makes the HD before
+and after (1280 and 512 px) of every app whose cover is a reveal clip, for Home's before/after slider,
+from the clips' masters (start.png, end.png and any donor.png): it checks each pair against the app's
+poster and clip and writes nothing when one doesn't match. Run it again when a reveal clip is made again.
 
 - `--variant catalog` takes that variant's renders for every case instead, such as what ships today.
 - `--dry-run` lists what it would pick.
@@ -451,12 +506,37 @@ instead of their procedural preview.
   Higgsfield preview is used anywhere.
 - It needs ffmpeg. Look at the media and the generated file's diff before committing them.
 
+### Covers from rendered masters
+
+Preview renders made outside a run (the gallery renders made in ComfyUI) become covers the same way:
+
+```sh
+pnpm eval:covers --from-masters <dir> --run comfyui-previews-2026-10 --engine comfyui --model ideogram4 --video-model minimax-h3 --variant lean-json
+```
+
+- `<dir>` has one folder per preset id (`effect-set-on-fire/`). A folder's `clip.mp4` becomes a clip
+  cover (first 4 seconds, its first frame as the poster). The cards play a clip in a loop, so its last 6
+  frames are crossfaded into its first ones and the loop has no jump (every clip cover is made this way,
+  also `eval:covers` from a run). A folder without a clip uses its `start.png` as a still cover (a 4:2:0
+  JPEG at most 768 px). A folder with neither is skipped.
+- The covers go to `public/previews/presets/` (`--suite` names another folder).
+- Each cover records the run, the engine, the model and the variant: `--model` for stills, `--video-model`
+  for clips. A folder's `meta.json` can name its own `model` and `variant`.
+- The manifest is merged. Covers that other runs wrote stay, and only the ids found in `<dir>` are
+  replaced. An id whose cover another run made in another folder (a measured `eval:covers` cover) is
+  skipped and listed, so re-running the masters never undoes a measured cover; `--replace` takes it over
+  and removes its old files. A manifest that can't be read stops the run instead of being overwritten.
+- Run it again as new masters land. A cover that is newer than its master is kept, so only new or
+  changed masters are encoded (`--force` encodes all of them). `--only id,id` limits the run to those
+  presets. A preset whose cover changes from a clip to a still loses its old clip.
+- `--dry-run` lists what it would make. Review the media and the manifest diff before committing them.
+
 ## Tests
 
 - `tests/eval-harness.test.ts` (Vitest) covers several areas:
   - The runner runs end to end against Fuobe's real route handlers, served over HTTP, with the demo
     provider: plan, price, upload, submit, wait, download and record.
-  - A studio route (Genjutsu), and a training case.
+  - Studio routes (Genjutsu, a Shorts session, the Evolution suite), and a training case.
   - The engine checks, the spend cap, `--resume` and the dry run.
   - Case-file validation.
   - Report, blind review, compare (with its exit codes), promote and `--record`.

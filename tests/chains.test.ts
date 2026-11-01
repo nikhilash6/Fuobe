@@ -131,7 +131,11 @@ describe("storyboard film", () => {
     const { items } = createStoryboardFilm(board.batchId);
     const [film, ...clips] = items;
     expect(clips).toHaveLength(3);
-    expect(clips[0].modelId).toBe("oss-wan22-14b-fast");
+    // MiniMax H3 on the GPU, in 5 s shots (its trained range starts there).
+    expect(clips[0].modelId).toBe("oss-minimax-h3");
+    expect(clips.every((c) => c.request.params?.duration === 5)).toBe(true);
+    // H3's shots share one canvas and frame rate: the copy join, which never decodes them.
+    expect(film.modelId).toBe("oss-join-encoded");
     // Start and end frame for every shot but the last.
     expect(dependsOn(clips[0].id)).toEqual([board.items[0].id, board.items[1].id]);
     expect(clips[0].request.chain).toEqual([{ slot: "images", position: "first" }, { slot: "endImage" }]);
@@ -145,9 +149,18 @@ describe("storyboard film", () => {
     expect(first.request.inputs?.endImage).toBe(gens.getGeneration(board.items[1].id)!.outputs[0].url);
   }, 70_000);
 
-  it("joins long films in rounds of four on ComfyUI", async () => {
+  it("joins a long MiniMax H3 film in one copy join", async () => {
     const board = await createStoryboard({ engine: "open", scenes: ["1", "2", "3", "4", "5", "6"] });
     const { batchId, items } = createStoryboardFilm(board.batchId);
+    const joins = gens.listGenerations({ batchId }).filter((g) => g.op === "concat");
+    expect(joins).toHaveLength(1);
+    expect(joins[0].modelId).toBe("oss-join-encoded");
+    expect(dependsOn(items[0].id)).toEqual(items.slice(1).map((g) => g.id));
+  });
+
+  it("joins long films in rounds of four on ComfyUI's decode join (Wan 2.2)", async () => {
+    const board = await createStoryboard({ engine: "open", scenes: ["1", "2", "3", "4", "5", "6"] });
+    const { batchId, items } = createStoryboardFilm(board.batchId, { modelId: "oss-wan22-14b-fast" });
     const joins = gens.listGenerations({ batchId }).filter((g) => g.op === "concat");
     expect(joins).toHaveLength(2);
     // Clips 1–4 are joined first; the final join takes that plus clips 5 and 6.

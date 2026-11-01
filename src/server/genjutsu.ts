@@ -46,7 +46,8 @@ import type { Engine, Generation, PixelPoint, ProviderId } from "@/lib/catalog/t
 import { silenceWriter } from "./canvas";
 import { createPipeline } from "./chains";
 import { llmText, llmTextBackend } from "./enhance";
-import { createGenerations, previewChained } from "./generations";
+import { ConnectComfyError, createGenerations, previewChained } from "./generations";
+import { localLabel } from "./llm";
 import { isOffered, offeredLoras, offeredModel } from "./model-access";
 import { provider } from "./providers";
 import { probeOllama } from "./providers/llm";
@@ -106,7 +107,7 @@ const character = z.object({
   subject: z.string().max(120).optional(),
   maskGrow: z.number().int().min(0).max(256).optional(),
   anchor: z.boolean().optional(),
-  anchorModel: z.enum(["gpt-image-2-5-sunburst", "nano-banana-pro", "oss-qwen-edit"]).optional(),
+  anchorModel: z.enum(["gpt-image-2-5-sunburst", "nano-banana-pro", "oss-qwen-image-21", "oss-krea2-identity-edit", "oss-qwen-edit"]).optional(),
   description: z.string().max(CHARACTER_SWAP.maxDescriptionChars).optional(),
   speech: z.enum(["character", "other", "offscreen", "none"]).optional(),
   dialogue: z.string().max(2000).optional(),
@@ -285,7 +286,7 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
           : `MiniMax H3 swaps it in one window of up to ${plan.window} frames at 24 fps; the clip's sound stays`,
       );
       // One prompt for the whole part: past H3's trained range (~362 frames) the pack itself says quality is unverified.
-      if (len > CHARACTER_SWAP.maxSeconds + 0.05) notes.push("Past 15 s is beyond what H3 was trained on: quality there is unverified");
+      if (len > CHARACTER_SWAP.maxSeconds + 0.05) notes.push("Past 15 s is beyond what H3 was trained on, so quality there can drop");
     } else if (n > 1) notes.push(`fal's H3 takes up to 15 s a call: the part runs as ${n} pieces, joined with the clip's own sound. Each piece starts fresh (no history between them), so a seam can show where they meet`);
     if (m.engine === "cloud" && !source.hasAudio) notes.push("Your clip has no sound, and neither will the result: fal's H3 makes a soundtrack of its own, which is replaced with silence");
     if (m.h3.anchor && c.anchor !== false) {
@@ -426,6 +427,7 @@ function price(steps: PlanStep[], input: GenjutsuPlanInput): { costUsd: number |
         modes.push({ step: s, demo: true });
         continue;
       }
+      if (e instanceof ConnectComfyError) throw e;
       throw new ShortsError((e as Error).message, 422);
     }
     modes.push({ step: s, demo: p.demo });
@@ -473,6 +475,7 @@ export async function estimateGenjutsu(body: GenjutsuBody): Promise<GenjutsuEsti
   try {
     plan = planGenjutsu(input);
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
   const character = body.mode === "character";
@@ -507,6 +510,7 @@ export async function createGenjutsu(body: GenjutsuBody): Promise<{ final: Gener
     return { final: p.byKey[plan.final], items: p.items };
   } catch (e) {
     if (e instanceof ShortsError) throw e;
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
 }
@@ -523,18 +527,19 @@ export const DescribeSchema = z.object({ engine: z.enum(["cloud", "open"]), imag
 
 /**
  * "Describe my character": the engine's text model looks at the character picture and writes the description the
- * prompt and the anchor brief carry (Akatz Labs found generic prompts weak). Cloud: Claude, else Ollama; your GPU:
- * Ollama with a vision model. A text model switched off in Settings → Models & licences doesn't answer.
+ * prompt and the anchor brief carry (Akatz Labs found generic prompts weak). Cloud: Claude, else a local model; your
+ * GPU: a local vision model (Ollama, LM Studio or Unsloth Studio). A text model switched off in Settings → Models &
+ * licences doesn't answer.
  */
 export async function describeCharacter(body: z.infer<typeof DescribeSchema>): Promise<{ description: string }> {
   mustMatchMode(body.engine);
   const textModel = getModel(body.engine === "open" ? "oss-text-llm" : "text-llm");
   if (!textModel || !offeredModel(textModel)) throw new ShortsError(`The text model is switched off in ${ACCESS_PLACE} — describe your character in your own words`, 422);
-  // Ollama is asked on your GPU's engine (and when no Anthropic key is set): it has to be running.
+  // A local model is asked on your GPU's engine (and when no Anthropic key is set): its server has to be running.
   const backend = llmTextBackend();
-  const ollama = backend === "ollama" || (backend === "claude" && body.engine === "open");
-  if (getSetting("demoMode") === "on" || !backend || (ollama && !(await probeOllama()))) {
-    throw new ShortsError("Describing needs a text model: add an Anthropic key, or run Ollama with a vision model (Settings → Prompt enhancement)", 422);
+  const local = backend === "ollama" || (backend === "claude" && body.engine === "open");
+  if (getSetting("demoMode") === "on" || !backend || (local && !(await probeOllama()))) {
+    throw new ShortsError("Describing needs a text model: add an Anthropic key, or run a vision model in Ollama, LM Studio or Unsloth Studio (Settings → AI helper)", 422);
   }
   let file: Awaited<ReturnType<typeof readRef>>;
   try {
@@ -549,7 +554,7 @@ export async function describeCharacter(body: z.infer<typeof DescribeSchema>): P
     .replace(/\s+/g, " ")
     .replace(/[.\s]+$/, "")
     .slice(0, CHARACTER_SWAP.maxDescriptionChars);
-  if (!description) throw new ShortsError(body.engine === "open" ? "Ollama didn't describe the picture — it needs a vision model (qwen3-vl, gemma3…)" : "The text model didn't answer — try again, or describe your character in your own words", 422);
+  if (!description) throw new ShortsError(body.engine === "open" ? `${cap(localLabel())} didn't describe the picture — it needs a vision model (qwen3-vl, gemma3…)` : "The text model didn't answer — try again, or describe your character in your own words", 422);
   return { description };
 }
 
@@ -582,6 +587,7 @@ export function transcribeClip(body: z.infer<typeof TranscribeSchema>): { id: st
     });
     return { id: g.id, modelId };
   } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     throw new ShortsError((e as Error).message, 422);
   }
 }

@@ -4,19 +4,38 @@ import { ArrowRight, ArrowUp, Loader2, Upload } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { HeaderPill } from "@/components/gpu/readiness-chip";
+import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import type { Generation, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
-import { useEngine, useGenerations } from "@/lib/api";
-import { claimStartToken, followEngineDefault, handoffKey, mergeHandoff, presetModel, promptShown, START_PARAM, withoutStart } from "@/lib/composer";
+import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest } from "@/lib/api";
+import {
+  claimStartToken,
+  followEngineDefault,
+  handoffKey,
+  mergeHandoff,
+  presetModel,
+  presetParams,
+  promptShown,
+  routeParams,
+  START_PARAM,
+  withoutLayout,
+  withoutStart,
+  withPreset,
+} from "@/lib/composer";
+import { presetGpuKey, presetRoutes } from "@/lib/catalog/preset-recipe-routes";
+import { editableLayout, EDIT_LAYOUT_PARAM, readEditLayoutParam } from "@/lib/output-actions";
 import { positionsFrom } from "@/lib/catalog/keyframes";
 import { reuseSignature, withSignatureWords } from "@/lib/catalog/palettes";
+import { movedAppRequest } from "@/lib/catalog/plan";
 import { currentModelId, migrateRequest } from "@/lib/catalog/replaced";
 import { matchSpokenLanguage } from "@/lib/speech-languages";
 import { SoulPresetCards } from "@/components/moodboards/soul-preset-cards";
 import type { StudioCatalog } from "@/lib/studio-catalog";
+import type { StudioExample, StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { ComposerBridgeCtx, useComposerBridge, type ComposerBridge } from "./attachments";
 import { CatalogProvider, useCatalog } from "./catalog";
@@ -24,7 +43,7 @@ import { Composer } from "./composer";
 import { EngineSwitch } from "./engine-switch";
 import { Feed } from "./feed";
 import type { SlotValue } from "./media-slot";
-import { StartRequestCtx, StudioProvider, useStudio, useStudioActions, type Draft, type StudioConfig } from "./studio-context";
+import { PresetUrlCtx, StartRequestCtx, StudioProvider, usePresetUrl, useStudio, useStudioActions, type Draft, type StudioConfig } from "./studio-context";
 
 function kindOfUrl(url: string): MediaKind {
   if (/\.(mp4|webm|mov)(\?|$)/i.test(url)) return "video";
@@ -44,21 +63,26 @@ function initialDraft(
   const preset = sp.get("preset") ? lookup.getPreset(sp.get("preset")!) : config.preset;
   // A link or Assist hand-off that names a model Fuobe retired opens on the one that replaced it (replaced.ts).
   const requested = sp.get("model") && currentModelId(sp.get("model")!);
-  // An app opened on one of its own models (?model=, from ⌘K) takes that model's route and params.
-  const presetRoute = preset
-    ? ([preset.cloud, preset.open].find((r) => !!requested && r?.modelId === requested) ?? (engine === "open" ? preset.open : preset.cloud) ?? preset.cloud ?? preset.open)
-    : null;
-  // A camera motion or effect starts on its Original (Fuobe DoP) when the studio has it.
-  const presetOwn = presetModel(preset, engine);
+  const has = (id: string) => !!lookup.getModel(id);
+  // An app starts on the model its preview was made with on this engine, else its own route (else the other engine's,
+  // for an app with no version here); opened on one of its models (?model=, from ⌘K), on that model's route.
+  const other = engine === "open" ? "cloud" : "open";
+  const appRoutes = preset?.type === "app" ? [...presetRoutes(preset, engine, has), ...presetRoutes(preset, other, has)] : [];
+  const appRoute = appRoutes.find((r) => !!requested && r.modelId === requested) ?? appRoutes[0];
+  // A camera motion or effect starts on the model its preview was made with (MiniMax H3), else its Original (Fuobe DoP),
+  // when the studio has it.
+  const presetOwn = presetModel(preset, engine, has);
   const modelId =
     (requested && lookup.getModel(requested)?.id) ||
-    (preset?.type === "app" ? presetRoute?.modelId : undefined) ||
+    appRoute?.modelId ||
     (presetOwn && lookup.getModel(presetOwn)?.id) ||
     config.defaultModels[engine] ||
     config.defaultModels.cloud ||
     // Open-only tools (Match colors) keep their open model under the Cloud switch, like cloud-only ones do under Open.
     config.defaultModels.open;
   const model = lookup.getModel(modelId);
+  // The route's own settings (Wan 2.2 at 480p; a recipe on H3 at the Quality its cover was made at) on its own model.
+  const routeSettings = appRoute && modelId === appRoute.modelId ? routeParams(appRoute, "app") : presetOwn && modelId === presetOwn ? presetParams(preset, engine, has) : {};
   const slots: Draft["slots"] = {};
   const imageSlot = config.slots.find((s) => s.accept === "image")?.key ?? preset?.inputs.find((s) => s.accept === "image")?.key;
   const refs: SlotValue[] = [];
@@ -75,7 +99,7 @@ function initialDraft(
     prompt: sp.get("prompt") ?? "",
     negativePrompt: "",
     modelId,
-    params: { ...model?.defaults, ...(preset?.type === "app" ? presetRoute?.params : {}), ...(format && { format }) },
+    params: { ...model?.defaults, ...routeSettings, ...(format && { format }) },
     slots,
     refs,
     presetId: sp.get("preset") ?? config.preset?.id,
@@ -84,14 +108,15 @@ function initialDraft(
 }
 
 /** Rebuild a composer draft from a past generation ("Reuse"). */
-function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id: string) => ModelDef | undefined): Partial<Draft> {
+function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id: string) => ModelDef | undefined, getPreset: (id: string) => Preset | undefined): Partial<Draft> {
   // A run styled by the Color signature / Moodboard chips comes back as it was before they routed it,
   // with the picks on the chips (studios without the chips get the styled prompt instead).
   const signed = config.signature ? reuseSignature(g.request) : null;
   const asked = signed ? { ...g.request, modelId: signed.modelId, params: signed.params } : config.signature ? g.request : withSignatureWords(g.request);
   // A run on a model Fuobe retired comes back on the one that replaced it (src/lib/catalog/replaced.ts): a Soul style
-  // becomes its Fuobe look, the retired API's own settings are dropped.
-  const r = migrateRequest(asked).request;
+  // becomes its Fuobe look, the retired API's own settings are dropped. An app run on the model its app ran on before comes
+  // back on the app's model now (movedAppRequest).
+  const r = movedAppRequest(migrateRequest(asked).request, getModel, getPreset).request;
   const imgs = signed ? signed.images : (r.inputs?.images ?? []);
   const imageKeys = config.slots.filter((s) => s.accept === "image" && s.key !== "endImage" && s.key !== "mask").map((s) => s.key);
   const slots: Draft["slots"] = {};
@@ -111,11 +136,14 @@ function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id:
   // A spoken language stored as a name (Assist's "Spanish") or a locale comes back as the model's own code.
   const languages = getModel(r.modelId)?.options.sourceLanguages;
   if (languages?.length && params.sourceLanguage) params.sourceLanguage = matchSpokenLanguage(params.sourceLanguage, languages) ?? params.sourceLanguage;
+  // A layout run comes back in Layout mode (studios that have it): its boxes in the editor, the prompt as their caption.
+  const laid = config.layout ? withoutLayout(params) : { params, layout: undefined };
   return {
     prompt: r.prompt ?? "",
     negativePrompt: r.negativePrompt ?? "",
     modelId: r.modelId,
-    params,
+    params: laid.params,
+    layout: laid.layout,
     slots: frames ? {} : slots,
     refs: frames ? [] : refs,
     frames,
@@ -189,11 +217,14 @@ const EMPTY: Generation[] = [];
 
 /** The preset card (U23) is its own chunk: only app pages and studios with a motion or effect picked load it. */
 const PresetHeader = dynamic(() => import("@/components/preset-header").then((m) => m.PresetHeader));
+/** The example covers are one too: only the studios that show them (Image, Video, Edit) load it. */
+const ShowcaseTile = dynamic(() => import("@/components/home/showcase-tile").then((m) => m.ShowcaseTile));
 
 /** While a preset (app, camera motion, effect) is active and the feed is empty: what it does and what to add, above the composer. */
 function ActivePresetHeader() {
   const { config, draft, setDraft } = useStudio();
   const catalog = useCatalog();
+  const presetUrl = usePresetUrl();
   const preset = draft.presetId ? catalog.getPreset(draft.presetId) : config.preset;
   if (!preset) return null;
   return (
@@ -201,7 +232,21 @@ function ActivePresetHeader() {
       preset={preset}
       className="mb-3"
       modelName={(id) => catalog.getModel(id)?.name}
-      onClear={config.preset ? undefined : () => setDraft({ presetId: undefined, mix: undefined, presetStrength: undefined })}
+      gpuKey={presetGpuKey(
+        preset,
+        (id) => !!catalog.getModel(id),
+        draft.modelId,
+        draft.params.extra?.quality,
+        catalog.getModel(draft.modelId)?.options.controls?.find((c) => c.param === "quality")?.default,
+      )}
+      onClear={
+        config.preset
+          ? undefined
+          : () => {
+              presetUrl(undefined);
+              setDraft({ presetId: undefined, mix: undefined, presetStrength: undefined });
+            }
+      }
     />
   );
 }
@@ -231,6 +276,92 @@ function PromptSuggestions({ suggestions }: { suggestions: string[] }) {
   );
 }
 
+/** A row tile's width: half a phone, else a quarter of the row (1000 px at most). */
+const EXAMPLE_SIZES = "(min-width: 640px) 240px, 50vw";
+
+/** The row's tiles. Memoized: the row reads the draft (below), and typing shouldn't re-render four playing covers. */
+const ExampleTiles = memo(function ExampleTiles({ tiles }: { tiles: StudioExample[] }) {
+  const bridge = useComposerBridge();
+  const grid = useRef<HTMLDivElement>(null);
+  // A tile that picks a camera motion or effect in this same studio (/video?preset=…) picks it the way the composer's
+  // own picker does: a photo already attached, the model and its settings stay, where opening the link anew would
+  // start a fresh draft. Its link still opens in a new tab, and is the way in when the composer isn't there.
+  const pickHere = (href: string) => (e: { preventDefault: () => void }) => {
+    const url = new URL(href, window.location.href);
+    const id = url.searchParams.get("preset");
+    if (!id || url.pathname !== window.location.pathname || !bridge?.pick) return;
+    e.preventDefault();
+    // The row goes once a move is picked, and the tile with it: a tile picked from the keyboard hands its focus to this
+    // studio's composer, so the next key types the prompt instead of starting again from the top of the page.
+    const keyboard = !!grid.current?.querySelector(":focus-visible");
+    const composer = grid.current?.closest("[data-studio]")?.querySelector<HTMLElement>("[data-composer]");
+    bridge.pick(id);
+    // The move's card shows above the composer: back up to it, as the link's navigation would have.
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    if (keyboard) requestAnimationFrame(() => (composer?.querySelector("textarea") ?? composer?.querySelector("button"))?.focus({ preventScroll: true }));
+  };
+  return (
+    <div ref={grid} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {tiles.map((e, i) => (
+        <ShowcaseTile
+          key={e.card.id}
+          card={e.card}
+          kind={e.kind}
+          caption={e.caption}
+          href={e.href}
+          index={i}
+          sizes={EXAMPLE_SIZES}
+          small
+          onNavigate={pickHere(e.href)}
+        />
+      ))}
+    </div>
+  );
+});
+
+/**
+ * Real covers from the studio's own presets (src/lib/studio-examples.ts) under the empty composer, each opening its
+ * app or picking its motion or effect. Hidden while a preset is picked: its own card is above the composer then.
+ */
+function StudioExamples({ row }: { row: StudioExampleRow }) {
+  const { draft } = useStudio();
+  // Its own id: a studio left earlier stays in the page, hidden, with a row of its own.
+  const heading = useId();
+  if (draft.presetId) return null;
+  return (
+    <section aria-labelledby={heading} className="mx-auto w-full max-w-[1000px] px-3 pb-10 sm:px-6">
+      <h2 id={heading} className="mb-2 text-center text-[12.5px] font-medium text-muted-foreground">
+        {row.heading}
+      </h2>
+      <ExampleTiles tiles={row.tiles} />
+    </section>
+  );
+}
+
+/**
+ * The picked open model's state on the viewer's GPU (the GPU pre-flight), left of the engine switch: a pill that opens
+ * the guided fix. Its own component, so the draft it reads re-renders only this.
+ */
+function StudioGpuPill() {
+  const { config, draft } = useStudio();
+  const catalog = useCatalog();
+  const [engine] = useEngine();
+  const badges = useGpuBadges().data;
+  if (engine !== "open" || !badges?.connected) return null;
+  const modelId = draft.modelId || config.defaultModels.open;
+  const presetId = draft.presetId ?? config.preset?.id;
+  // A preset's badge describes its route on the model picked, at the route's Quality (presetGpuKey, as the composer).
+  const p = presetId ? catalog.getPreset(presetId) : undefined;
+  const m = catalog.getModel(modelId);
+  const key = p ? presetGpuKey(p, (id) => !!catalog.getModel(id), modelId, draft.params.extra?.quality, m?.options.controls?.find((c) => c.param === "quality")?.default) : undefined;
+  const preset = key ? badges.presets[key] : undefined;
+  const op = config.ops.find((o) => badges.models[`${modelId}#${o}`]);
+  const badge = preset ?? (op ? badges.models[`${modelId}#${op}`] : badgeFor(badges, { modelId }));
+  if (!badge) return null;
+  const ref = preset && key ? `preset:${key}` : `model:${modelId}#${op ?? Object.keys(badges.models).find((k) => k.startsWith(`${modelId}#`))?.split("#")[1] ?? ""}`;
+  return <HeaderPill badge={badge} gpu={badges.gpu} compact onOpen={() => openGpuSetup({ ref })} />;
+}
+
 /** Sticky page header (title + engine), with an optional row of mode tabs under it. */
 function StudioHeader({ title, header, tabs }: { title: string; header?: React.ReactNode; tabs?: React.ReactNode }) {
   const [engine, setEngine] = useEngine();
@@ -241,6 +372,7 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{title}</h1>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {header}
+          <StudioGpuPill />
           <EngineSwitch value={engine} onChange={setEngine} />
         </div>
       </header>
@@ -249,7 +381,7 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
   );
 }
 
-function StudioBody({ header, tabs }: { header?: React.ReactNode; tabs?: React.ReactNode }) {
+function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs?: React.ReactNode; examples?: StudioExampleRow }) {
   // Config and actions only: the draft lives in the composer, so typing doesn't re-render the page or the feed.
   const { config, setDraft } = useStudioActions();
   const [engine, setEngine] = useEngine();
@@ -265,9 +397,10 @@ function StudioBody({ header, tabs }: { header?: React.ReactNode; tabs?: React.R
 
   const reuse = useCallback(
     (g: Generation) => {
-      setDraft(draftFromGeneration(g, config, catalog.getModel));
-      // A run on a model (or an operation) Fuobe retired comes back on what replaced it: say what changed.
-      const moved = migrateRequest(g.request).note;
+      setDraft(draftFromGeneration(g, config, catalog.getModel, catalog.getPreset));
+      // A run on a model (or an operation) Fuobe retired, or an app's old model, comes back on what replaced it: say what changed.
+      const retired = migrateRequest(g.request);
+      const moved = retired.note ?? movedAppRequest(retired.request, catalog.getModel, catalog.getPreset).note;
       if (moved) toast(moved);
       if (g.engine !== engine) setEngine(g.engine);
       requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-composer] textarea")?.focus());
@@ -277,6 +410,7 @@ function StudioBody({ header, tabs }: { header?: React.ReactNode; tabs?: React.R
 
   return (
     <div
+      data-studio
       className="relative flex min-h-svh min-w-0 flex-col"
       onDragEnter={(e) => {
         if (![...e.dataTransfer.types].includes("Files")) return;
@@ -306,7 +440,7 @@ function StudioBody({ header, tabs }: { header?: React.ReactNode; tabs?: React.R
             <Feed items={items} onReuse={reuse} />
           </div>
         ) : (
-          <div className="flex flex-col items-center pt-[16vh] text-center">
+          <div className="flex flex-col items-center pt-6 text-center sm:pt-[16vh]">
             <h2 className="font-heading text-display text-balance">{config.hero}</h2>
             {config.subtitle && <p className="mt-2 max-w-xl text-[13px] text-muted-foreground">{config.subtitle}</p>}
             {config.related && (
@@ -324,7 +458,7 @@ function StudioBody({ header, tabs }: { header?: React.ReactNode; tabs?: React.R
         className={cn(
           hasItems
             ? "sticky bottom-0 z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6"
-            : "px-3 pt-10 sm:px-6",
+            : "px-3 pt-6 sm:px-6 sm:pt-10",
         )}
       >
           {hasItems && offscreen.count > 0 && (
@@ -339,7 +473,12 @@ function StudioBody({ header, tabs }: { header?: React.ReactNode; tabs?: React.R
               </button>
             </div>
           )}
-        {!hasItems && <ActivePresetHeader />}
+        {/* Its own boundary: the card's code loads on the first pick, and only the card waits for it, not the whole studio. */}
+        {!hasItems && (
+          <Suspense fallback={null}>
+            <ActivePresetHeader />
+          </Suspense>
+        )}
         <div data-composer className={cn("mx-auto w-full", hasItems ? "max-w-[800px]" : "max-w-[760px]")}>
           <Composer docked={hasItems} />
         </div>
@@ -347,6 +486,8 @@ function StudioBody({ header, tabs }: { header?: React.ReactNode; tabs?: React.R
 
       {!hasItems && config.suggestions && <PromptSuggestions suggestions={config.suggestions} />}
       {!hasItems && config.signature && <SoulPresetCards />}
+      {/* Only once the feed is known to be empty: a studio with results would show the row, fetch its covers, then drop it. */}
+      {feed.isSuccess && !hasItems && !!examples?.tiles.length && <StudioExamples row={examples} />}
 
       {dragging && (
         <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-overlay p-8">
@@ -375,6 +516,8 @@ interface StudioPageProps {
   initialRefs?: string[];
   /** Prompt to start with when the URL doesn't carry one (e.g. "@Maya "). */
   initialPrompt?: string;
+  /** Real covers of what the studio makes, under the empty composer (`studioExamples()` in a server component). */
+  examples?: StudioExampleRow;
 }
 
 type DraftProps = Omit<StudioPageProps, "catalog">;
@@ -407,6 +550,7 @@ function HandoffSync({
   build,
   adopt,
   follow,
+  ownRef,
   ready,
   onNavigate,
   onStart,
@@ -417,6 +561,8 @@ function HandoffSync({
   adopt: React.RefObject<(key: string) => void>;
   /** The base after the composer's own engine swap (followEngineDefault). */
   follow: React.RefObject<(base: Draft, current: Draft) => Draft>;
+  /** Set here: takes an address the studio wrote itself (a picked or cleared preset) as applied, so it isn't a navigation. */
+  ownRef: React.RefObject<(key: string) => void>;
   ready: boolean;
   onNavigate: (key: string) => void;
   onStart: () => void;
@@ -425,6 +571,9 @@ function HandoffSync({
   const [url, setUrl] = useState<{ key: string; start: string | null } | null>(null);
   const applied = useRef({ key: startKey, ready, base: start, seen: false });
   const started = useRef(false);
+  useLayoutEffect(() => {
+    ownRef.current = (key) => void (applied.current.key = key);
+  }, [ownRef]);
   const onParams = useCallback((key: string, start: string | null) => setUrl((u) => (u?.key === key && u.start === start ? u : { key, start })), []);
   useLayoutEffect(() => {
     if (url === null) return;
@@ -451,14 +600,79 @@ function HandoffSync({
   );
 }
 
-/** One draft's page: the studio and its hand-off. The start request resets with the draft (a new epoch). */
-function StudioSession({ header, tabs, sync }: { header?: React.ReactNode; tabs?: React.ReactNode; sync: Omit<React.ComponentProps<typeof HandoffSync>, "onStart"> }) {
+/**
+ * Edit layout (`/image?layout=<generation>[.<picture>]`, from a result's menu anywhere): the picture's boxes open in
+ * Layout mode with its words, model and seed: the request's own layout, or the one fal's MOSS-Image planned (decoded at
+ * the picture's size). The param isn't part of the hand-off key, so the draft on screen isn't reset first; it is taken
+ * out of the address once read, so a reload doesn't open it again.
+ */
+function LayoutHandoff() {
+  const sp = useSearchParams();
+  const value = sp.get(EDIT_LAYOUT_PARAM);
+  const { config, setDraft } = useStudioActions();
+  const catalog = useCatalog();
+  const [engine, setEngine] = useEngine();
+  const opened = useRef<string | null>(null);
+  const ref = config.layout ? readEditLayoutParam(value) : null;
+  useEffect(() => {
+    // Once the address no longer holds it (read, then taken out), the same picture's Edit layout opens again next time.
+    if (!value) opened.current = null;
+    if (!ref || !value || opened.current === value || !catalog.ready) return;
+    opened.current = value;
+    void fetch(`/api/generations/${encodeURIComponent(ref.id)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("That picture isn't in your library any more");
+        const g = (await res.json()) as Generation;
+        const e = editableLayout(g, ref.index);
+        if (!e) throw new Error("This picture has no layout to open");
+        const base = draftFromGeneration(g, config, catalog.getModel, catalog.getPreset);
+        const params = { ...(base.params ?? {}), ...(e.seed !== undefined && { seed: e.seed }) };
+        setDraft({ ...base, prompt: e.caption, params, layout: { ...e.draft, summary: { ...e.draft.summary, caption: "" } } });
+        if (g.engine !== engine) setEngine(g.engine);
+        toast(e.seed !== undefined ? "Layout opened with the picture's seed: move a box or change a word, then generate" : "Layout opened: move a box or change a word, then generate", { id: "edit-layout" });
+        requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-composer] textarea")?.focus());
+      })
+      .catch((err: Error) => toast.error(err.message, { id: "edit-layout" }))
+      .finally(() => {
+        const u = new URL(window.location.href);
+        u.searchParams.delete(EDIT_LAYOUT_PARAM);
+        window.history.replaceState(null, "", `${u.pathname}${u.search}${u.hash}`);
+      });
+  }, [ref, value, catalog, config, engine, setDraft, setEngine]);
+  return null;
+}
+
+/**
+ * One draft's page: the studio and its hand-off. The start request resets with the draft (a new epoch).
+ *
+ * A guest's Start from Home opens "Create a free account" here instead of sending a run that can only be refused. It
+ * opens after HandoffSync took `go` out of the address (a microtask), so the card's way back is the studio with the
+ * prompt filled in. While who is looking isn't known yet, the run is sent and its refusal opens the same card.
+ */
+function StudioSession({
+  header,
+  tabs,
+  examples,
+  sync,
+}: {
+  header?: React.ReactNode;
+  tabs?: React.ReactNode;
+  examples?: StudioExampleRow;
+  sync: Omit<React.ComponentProps<typeof HandoffSync>, "onStart">;
+}) {
   const [startRequest, setStartRequest] = useState(0);
-  const onStart = useCallback(() => setStartRequest((n) => n + 1), []);
+  const guest = useIsGuest();
+  const onStart = useCallback(() => {
+    if (guest) queueMicrotask(() => window.dispatchEvent(new CustomEvent(GUEST_PROMPT_EVENT, { detail: { action: "run" } })));
+    else setStartRequest((n) => n + 1);
+  }, [guest]);
   return (
     <StartRequestCtx.Provider value={startRequest}>
-      <StudioBody header={header} tabs={tabs} />
+      <StudioBody header={header} tabs={tabs} examples={examples} />
       <HandoffSync {...sync} onStart={onStart} />
+      <Suspense fallback={null}>
+        <LayoutHandoff />
+      </Suspense>
     </StartRequestCtx.Provider>
   );
 }
@@ -468,7 +682,7 @@ function StudioSession({ header, tabs, sync }: { header?: React.ReactNode; tabs?
  * by HandoffSync alone), so the composer the shell painted is the one you type into: nothing
  * typed or focused before hydration is lost.
  */
-function StudioDraft({ config, header, tabs, initialRefs, initialPrompt }: DraftProps) {
+function StudioDraft({ config, header, tabs, initialRefs, initialPrompt, examples }: DraftProps) {
   const [engine, setEngine] = useEngine();
   const catalog = useCatalog();
   const bridge = useMemo<ComposerBridge>(() => ({ current: null }), []);
@@ -487,7 +701,7 @@ function StudioDraft({ config, header, tabs, initialRefs, initialPrompt }: Draft
   };
   // The composer swaps an untouched default for the engine's own when the engine is read after hydration: a
   // hand-off still applies over that swap.
-  const follow = (base: Draft, current: Draft) => followEngineDefault(base, current, config.defaultModels, engine);
+  const follow = (base: Draft, current: Draft) => followEngineDefault(base, current, config.defaultModels, engine, config.uncaptioned);
   const buildRef = useRef(build);
   const adoptRef = useRef(adopt);
   const followRef = useRef(follow);
@@ -504,11 +718,22 @@ function StudioDraft({ config, header, tabs, initialRefs, initialPrompt }: Draft
     setStart((s) => ({ key, epoch: s.epoch + 1 }));
     adoptRef.current(key);
   }, []);
+  // The picked camera motion or effect goes into the address (a reload or a shared link opens on it). HandoffSync
+  // takes that address as applied first: it isn't a hand-off, so the draft isn't rebuilt.
+  const ownRef = useRef<(key: string) => void>(() => {});
+  const presetUrl = useCallback((id: string | undefined) => {
+    const href = withPreset(window.location.href, id);
+    if (href === window.location.href) return;
+    ownRef.current(handoffKey(new URL(href).searchParams));
+    window.history.replaceState(null, "", href);
+  }, []);
   return (
     <ComposerBridgeCtx.Provider value={bridge}>
-      <StudioProvider key={start.epoch} config={config} initial={initial}>
-        <StudioSession header={header} tabs={tabs} sync={{ startKey: start.key, start: initial, build: buildRef, adopt: adoptRef, follow: followRef, ready: catalog.ready, onNavigate }} />
-      </StudioProvider>
+      <PresetUrlCtx.Provider value={presetUrl}>
+        <StudioProvider key={start.epoch} config={config} initial={initial}>
+          <StudioSession header={header} tabs={tabs} examples={examples} sync={{ startKey: start.key, start: initial, build: buildRef, adopt: adoptRef, follow: followRef, ownRef, ready: catalog.ready, onNavigate }} />
+        </StudioProvider>
+      </PresetUrlCtx.Provider>
     </ComposerBridgeCtx.Provider>
   );
 }

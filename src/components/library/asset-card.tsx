@@ -10,6 +10,7 @@ import { elapsed, timeAgo } from "@/lib/format";
 import { coverOf, trashDaysLeft, userTitle, type LibraryEntry } from "@/lib/library";
 import { isLayered, shownOutputs } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { DRAG_TYPE } from "./folders";
 import { ReviewBadge } from "./review";
 import type { Layout } from "./view-options";
@@ -41,7 +42,7 @@ const LIST_MENU ="grid size-8 shrink-0 place-items-center rounded-lg text-muted-
 
 const idsOf = (e: LibraryEntry) => (e.type === "single" ? [e.g.id] : e.items.map((g) => g.id));
 
-function StatusCover({ g }: { g: Generation }) {
+export function StatusCover({ g }: { g: Generation }) {
   if (g.status === "queued" || g.status === "running") {
     const pct = g.progress != null ? Math.round(g.progress * 100) : null;
     return (
@@ -236,6 +237,7 @@ export const AssetCard = memo(function AssetCard({
             <span className="truncate text-[14px] font-medium">{title}</span>
             {g.pinnedAt && !stack && !trashed && <Pin className="size-3 shrink-0 text-muted-foreground" aria-label="Pinned" />}
             {!stack && !trashed && <ReviewBadge status={g.review} className="bg-muted" />}
+            {!stack && !selecting && <PlaceholderChip g={g} className="h-6 shrink-0 px-2 text-[11px]" />}
           </p>
           <p className="truncate text-[12px] text-muted-foreground">
             {stack ? `${stack.label} · ` : `${g.modelName ?? g.modelId} · ${OPERATION_LABELS[g.op]} · `}
@@ -307,6 +309,10 @@ export const AssetCard = memo(function AssetCard({
           </div>
         )}
         {badges}
+        {/* A placeholder says so on the card, past the select dot (not while selecting: a tap there selects). */}
+        {!stack && done && !selecting && !trashed && (
+          <PlaceholderChip g={g} overlay className={cn("absolute top-2", audio && canHover && "group-focus-within/card:opacity-0 group-hover/card:opacity-0 focus-within:opacity-100! has-data-[state=open]:opacity-100!")} />
+        )}
         <SelectDot selected={selected} visible={selecting} onToggle={(s) => api.toggle(entry.key, ids, s)} label={`Select ${title}`} />
         {actions}
         {!stack && (g.status === "failed" || g.status === "canceled") && !trashed && !selecting && (

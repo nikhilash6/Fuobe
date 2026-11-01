@@ -373,8 +373,16 @@ async function status(ctx) {
     .filter((p) => p.label)
     .map((p) => `${p.label} ${p.configured ? "✓" : "–"}`);
   ctx.print(`Fuobe at ${t.url}${t.urlFrom === "default" ? "" : ` (from ${t.urlFrom})`}`);
-  ctx.print(`Engine mode: ${s.engineMode} · Demo mode: ${s.demoMode} · Preferred cloud: ${s.cloudProvider}`);
+  ctx.print(`Engine mode: ${s.engineMode} · Placeholder results: ${s.demoMode === "on" ? "on" : "off"} · Preferred cloud: ${s.cloudProvider}`);
   ctx.print(`Providers: ${providers.join(", ")}`);
+  // Older servers don't say which local model server they use.
+  const local = s.llm?.local;
+  if (s.llm) {
+    // The servers it looked at: the pinned one, or all of them in Automatic.
+    const names = (s.llm.detected ?? []).map((d) => d.label);
+    const tried = names.length > 1 ? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}` : (names[0] ?? "Ollama, LM Studio or Unsloth Studio");
+    ctx.print(`Local LLM: ${local ? `${local.label} at ${local.url}${local.model ? ` · ${local.model}` : ""}` : (s.llm.problem ?? `none answering (${tried})`)}`);
+  }
   ctx.print(
     t.token
       ? `API token: accepted (from ${t.tokenFrom})`
@@ -395,7 +403,7 @@ async function models(ctx) {
     ctx.print(`No models match.${res.engineMode !== "both" ? ` This Fuobe runs ${res.engineMode === "open" ? "open-source" : "cloud"} models only (Settings → Engine mode).` : ""}`);
     return EXIT.ok;
   }
-  // How a run goes today (Settings → Demo mode decides with the providers); an older server only says `connected`.
+  // How a run goes today (Settings → placeholder results decide with the providers); an older server only says `connected`.
   const runs = (m) => m.runs ?? (m.connected ? "real" : "demo");
   const mark = { real: "", demo: " (demo)", refused: " (not set up)" };
   // A Fuobe Original runs on both engines (open+cloud); --engine lists it as that engine's model.
@@ -403,9 +411,9 @@ async function models(ctx) {
   ctx.print(table(["ID", "NAME", "ENGINE", "PRICE", "DOES"], rows, ctx.io.columns));
   const count = (r) => items.filter((m) => runs(m) === r).length;
   const notes = [`${items.length} model${items.length === 1 ? "" : "s"}${items.length < res.items.length ? ` of ${res.items.length}` : ""}.`];
-  if (res.demoMode === "on") notes.push("Demo mode is on (Settings → Demo mode): every run returns demo media, for free.");
-  else if (count("demo")) notes.push("Those marked (demo) have no provider set up here yet: they return demo media, for free.");
-  if (count("refused")) notes.push("Those marked (not set up) need their provider set up in Settings first (Demo mode is off, so they won't run as a demo).");
+  if (res.demoMode === "on") notes.push("Placeholder results are on (Settings → Placeholder results): every run returns placeholder media, for free.");
+  else if (count("demo")) notes.push("Those marked (demo) return placeholder media, for free.");
+  if (count("refused")) notes.push("Those marked (not set up) need their provider set up in Settings first.");
   ctx.note(notes.join(" "));
   return EXIT.ok;
 }

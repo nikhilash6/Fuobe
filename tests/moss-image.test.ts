@@ -90,9 +90,11 @@ describe("moss-image on fal", () => {
     expect(plain).not.toHaveProperty("enable_prompt_expansion");
     const compiled = layoutCompilerFor(cloud)(poster, 1024, 1024);
     expect(compiled.format).toBe("moss");
-    const laid = payload({ extra: { layout: poster, image_size: { width: 1024, height: 1024 } } }, compiled.prompt);
+    // The plan compiles the draft (N7-2): the prompt is its caption.
+    const laid = payload({ aspectRatio: "1:1", extra: { layout: poster } }, poster.summary.caption);
     expect(laid.enable_prompt_expansion).toBe(false);
     expect(laid.prompt).toBe(compiled.prompt);
+    expect(laid.image_size).toEqual({ width: 1024, height: 1024 });
     // The draft rides along for Reuse; it is never sent as a field.
     expect(laid).not.toHaveProperty("layout");
   });
@@ -119,7 +121,9 @@ describe("oss-moss-image on your GPU", () => {
   it("runs the core-node graph, free, with its size on the picker", () => {
     expect(open).toMatchObject({ engine: "open", kind: "image", vendor: "OpenMOSS", family: "moss" });
     expect(open.routes.map((r) => [r.op, r.provider, r.endpoint])).toEqual([["t2i", "comfyui", "moss-image-t2i"]]);
-    expect(open.tagline).toMatch(/on your GPU, about 13 GB of files/);
+    expect(open.tagline).toMatch(/on your GPU, about 15 GB of files/);
+    // The int8 Qwen3.5-9B, never the w4a8 build that faulted the driver.
+    expect(open.routes[0].note).toContain("Qwen3.5-9B int8");
     expect(open.options).toMatchObject({ layout: "moss", seed: true, negativePrompt: true, resolutions: ["1K", "1.5K"] });
     expect(estimateCost(open, { aspectRatio: "1:1" })).toBe(0);
   });
@@ -130,6 +134,8 @@ describe("oss-moss-image on your GPU", () => {
     expect(at({ quality: "quality" })).toEqual({ steps: 50, cfg: 3, sampler: "euler", scheduler: "simple" });
     expect(at({ quality: "fast" })).toEqual({ steps: 8, cfg: 1, sampler: "euler", scheduler: "simple", unet: "moss_image_sft_8stepdmd_int8_convrot.safetensors" });
     expect(at({ quality: "quality", steps: 60 })).toMatchObject({ steps: 60, cfg: 3 });
+    // Base: MOSS-Image Base (the owner's image_moss_image_base_t2i) at the preview pipeline's settings.
+    expect(at({ quality: "base" })).toEqual({ steps: 50, cfg: 3, sampler: "euler", scheduler: "simple", unet: "moss_image_base_int8_convrot.safetensors" });
     // A model without such a control is left alone.
     expect(controlSets(cloud, { extra: { num_inference_steps: 30 } })).toEqual({ extra: { num_inference_steps: 30 } });
   });

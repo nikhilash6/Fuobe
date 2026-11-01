@@ -567,7 +567,7 @@ describe("engine steps", () => {
     const project = projectOf([clip]);
     const shot = shotOf(48, 300, { anchorInstructions: "Rain on her hood", who: { selection: "leftmost", index: 0, words: "person" } });
     const open = planAnchor({ engine: "open", project, clip, shot, frame: 48 });
-    expect(open.map((s) => s.request.modelId)).toEqual(["oss-extract-frame", "oss-qwen-edit"]);
+    expect(open.map((s) => s.request.modelId)).toEqual(["oss-extract-frame", "oss-qwen-image-21"]);
     expect(open[0].request.params).toMatchObject({ startTime: 47.5 / 24, extra: { frameIndex: 0 } });
     expect(open[1].request.prompt).toContain("Replace ONLY the person on the left");
     expect(open[1].request.prompt).toContain("a woman in a yellow raincoat");

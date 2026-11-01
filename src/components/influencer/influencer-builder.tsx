@@ -9,13 +9,14 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 import { useRun, useRunPreview, type RunPreview } from "@/components/photodump/hooks";
 import { ResultsGrid } from "@/components/photodump/results";
 import { UploadBox } from "@/components/photodump/upload-box";
+import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { fileToList, type SlotValue } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useEngine, useGenerations, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import {
   categoriesFor,
@@ -40,6 +41,7 @@ import {
   type InfluencerState,
 } from "@/lib/influencer";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { CATEGORY_ICON, LockButton, OptionTiles, pickRule, TierPanel } from "./option-panel";
 
 const STARTS: [InfluencerStart, string][] = [
@@ -92,11 +94,11 @@ function useSettled<T>(value: T, ms = 250): T {
   return settled;
 }
 
-function RunInfo({ preview, loading, blocker }: { preview?: RunPreview & { steps?: number }; loading: boolean; blocker: string | null }) {
+function RunInfo({ preview, loading, blocker, visitor }: { preview?: RunPreview & { steps?: number }; loading: boolean; blocker: string | null; visitor: boolean }) {
   if (blocker) return <p className="text-[12.5px] text-destructive">{blocker}</p>;
   if (!preview) return <p className="h-5 text-[12.5px] text-muted-foreground">{loading ? "Pricing…" : ""}</p>;
   if (preview.error) return <p className="text-[12.5px] text-destructive">{preview.error}</p>;
-  const cost = preview.demo ? "Demo · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
+  const cost = visitor && (preview.demo || preview.costUsd === 0) ? "Self-hosted only" : preview.demo ? "Placeholder · free" : preview.costUsd === 0 ? "Free · your GPU" : preview.costUsd == null ? "price unknown" : `≈ $${preview.costUsd.toFixed(2)}`;
   return (
     <div className="space-y-0.5 text-[12.5px] text-muted-foreground" aria-live="polite">
       <p>
@@ -117,6 +119,9 @@ function RunInfo({ preview, loading, blocker }: { preview?: RunPreview & { steps
  */
 export function InfluencerBuilder() {
   const [engine, setEngine] = useEngine();
+  // A sheet doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // uploads and Generate are off. The builder itself stays open to play with.
+  const visitor = useLikelyVisitor();
   const wide = useWide();
   const [state, setState] = useState<InfluencerState>(INFLUENCER_START);
   const [active, setActive] = useState("tier");
@@ -186,19 +191,21 @@ export function InfluencerBuilder() {
     list.slice(0, MAX_CLOTHING - clothing.length).forEach((f) => fileToList(f, setClothing, "image"));
   };
   const create = () => {
+    if (visitor) return;
     if (blocker) return toast(blocker);
     if (!body) return toast("Wait for the uploads to finish");
     run.mutate(body, {
       onSuccess: (r) => setIds((xs) => [...r.items.map((g) => g.id), ...xs]),
-      onError: (e) => toast.error((e as Error).message || "Couldn't start the sheet"),
+      onError: (e) => toastError(e, "Couldn't start the sheet"),
     });
   };
 
   return (
     <PageShell wide>
       <PageHeader title="AI Influencer" description="Build an original character, game-style: pick a character type, then a look in up to 18 categories or Shuffle, and get a character sheet to save as a character.">
-        <EngineSwitch value={engine} onChange={setEngine} />
+        <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
+      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">AI Influencer runs on a self-hosted Fuobe for now.</SelfHostNote>}
 
       <div className="grid gap-4 lg:grid-cols-[212px_minmax(0,1fr)] xl:grid-cols-[212px_minmax(0,1fr)_340px]">
         {/* The rail: Character type, then the categories this type shows. Phones scroll it sideways inside itself. */}
@@ -314,13 +321,16 @@ export function InfluencerBuilder() {
             </div>
             {start !== "scratch" && (
               <div className="space-y-1.5">
-                <UploadBox
-                  value={photo}
-                  onChange={setPhoto}
-                  title={start === "face" ? "Your photo" : "Reference image"}
-                  hint={start === "face" ? "A clear, front-facing photo of your face" : "A character whose look to start from"}
-                  className="h-44"
-                />
+                {/* A guest's or an account's photo would be uploaded for a sheet that can't start here. */}
+                <div inert={visitor} className={cn(visitor && "opacity-50")}>
+                  <UploadBox
+                    value={photo}
+                    onChange={setPhoto}
+                    title={start === "face" ? "Your photo" : "Reference image"}
+                    hint={start === "face" ? "A clear, front-facing photo of your face" : "A character whose look to start from"}
+                    className="h-44"
+                  />
+                </div>
                 <p className="text-[12px] text-muted-foreground">
                   {start === "face" ? "Your face goes on the character you build." : "The character starts from this look; your picks change it."} Shuffle keeps the gender, ethnicity and age{state.tier === "normal" ? ", skin and eye colour" : ""} the photo decides.
                 </p>
@@ -351,7 +361,8 @@ export function InfluencerBuilder() {
                     onClick={() => clothingInput.current?.click()}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => (e.preventDefault(), addClothing(e.dataTransfer.files))}
-                    className="grid aspect-square place-items-center rounded-lg border border-dashed text-muted-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                    disabled={visitor}
+                    className="grid aspect-square place-items-center rounded-lg border border-dashed text-muted-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
                     aria-label="Add clothing references"
                   >
                     <ImagePlus className="size-5" />
@@ -395,11 +406,17 @@ export function InfluencerBuilder() {
               </div>
             ) : (
               <p className="text-[12.5px] text-muted-foreground">
-                Fuobe Soul on your GPU: Z-Image Turbo draws the sheet in Soul&apos;s Realistic look (the Soul Cast sheet workflow); with a photo or clothing, Qwen-Image-Edit 2511 then puts them on it. <span className="font-medium text-foreground">Free</span> on your GPU.
+                {visitor ? "Fuobe Soul" : "Fuobe Soul on your GPU"}: Z-Image Turbo draws the sheet in Soul&apos;s Realistic look (the Soul Cast sheet workflow); with a photo or clothing, Qwen-Image 2.1 then puts them on it.
+                {!visitor && (
+                  <>
+                    {" "}
+                    <span className="font-medium text-foreground">Free</span> on your GPU.
+                  </>
+                )}
               </p>
             )}
-            <RunInfo preview={blocker ? undefined : (settled ? preview.data : undefined)} loading={preview.isFetching} blocker={blocker} />
-            <Button className="w-full" onClick={create} disabled={run.isPending || uploading}>
+            <RunInfo preview={blocker ? undefined : (settled ? preview.data : undefined)} loading={preview.isFetching} blocker={blocker} visitor={visitor} />
+            <Button className="w-full" onClick={create} disabled={run.isPending || uploading || visitor}>
               {run.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} {run.isPending ? "Starting…" : "Generate character sheet"}
             </Button>
           </div>

@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BrandKitForm, BrandSummary } from "@/components/brand/brand-kit-form";
 import { ResearchProgress } from "@/components/brand/research-progress";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useBrand, useBrandActions, useCreatives } from "@/components/marketing/hooks";
 import { MarketingHeader, useMarketingEngine } from "@/components/marketing/shell";
 import { AdChat } from "./ad-chat";
@@ -128,7 +129,7 @@ export function BrandWorkspace({ brandId }: { brandId: string }) {
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-highlight/20 px-4 py-3 text-[13px]">
                   <span>{brand.error ?? brand.note ?? "Research canceled — the kit keeps what it found."}</span>
                   {brand.website && (
-                    <Button variant="outline" size="sm" onClick={() => actions.retry.mutate(undefined, { onError: (e) => toast.error((e as Error).message) })} disabled={actions.retry.isPending}>
+                    <Button variant="outline" size="sm" onClick={() => actions.retry.mutate(undefined, { onError: (e) => toastError(e) })} disabled={actions.retry.isPending}>
                       {actions.retry.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />} Retry research
                     </Button>
                   )}

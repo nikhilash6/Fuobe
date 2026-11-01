@@ -26,6 +26,7 @@ import {
   Network,
   PersonStanding,
   Presentation,
+  Scale,
   Scissors,
   Settings,
   Shapes,
@@ -63,7 +64,7 @@ export interface NavItem {
 export interface NavGroupDef {
   label: string;
   items: NavItem[];
-  /** Can be folded away; the choice is remembered (Studios and Engine start folded, see DEFAULT_NAV_CLOSED). */
+  /** Can be folded away; the choice is remembered (Engine starts folded, see DEFAULT_NAV_CLOSED). */
   collapsible?: boolean;
   /** Two small items per row. */
   compact?: boolean;
@@ -136,6 +137,7 @@ export const NAV: NavGroupDef[] = [
       { href: "/workflows", label: "ComfyUI workflows", short: "Workflows", icon: Workflow, keywords: "open source graphs" },
       { href: "/settings", label: "Settings", icon: Settings, keywords: "keys preferences" },
       { href: "/status", label: "Project status", short: "Status", icon: ListChecks, keywords: "parity progress" },
+      { href: "/settings/about", label: "About & licences", short: "Licences", icon: Scale, keywords: "licence license mit notices credits version open source" },
     ],
     collapsible: true,
     compact: true,

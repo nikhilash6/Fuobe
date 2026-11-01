@@ -5,6 +5,8 @@
 //   node validate-workflows.mjs wan22-i2v-14b   # some
 //   node validate-workflows.mjs --keep-dummies  # do not delete the zero-byte model files afterwards
 //   node validate-workflows.mjs --shared        # never send global queue clear / interrupt (shared GPU server)
+//   node validate-workflows.mjs --subset-only qwen-image-21-t2i   # GET /object_info only: add the classes these
+//                                               # workflows use to object_info.subset.json; nothing is posted
 //
 // For each manifest entry:
 //   1. create zero-byte placeholder files for missing models (models/<folder>/<file>) so loader
@@ -17,12 +19,14 @@
 //      single worker busy meanwhile, so validation prompts are only ever *pending*. At the end the blocker is
 //      interrupted and POST /queue {"clear":true} + POST /interrupt are sent (skip with --shared).
 // Results go to manifest.json ("validated", "validationError") and validation-state.json;
-// also writes workflows/comfyui/object_info.subset.json for the node classes the library uses.
+// also writes workflows/comfyui/object_info.subset.json for the node classes the library uses (a custom class under
+// the pack build-library.mjs names for it: packOfClass).
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sha256, STATE_FILE } from './build-library.mjs';
+import { packOfClass } from './build-requirements.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -36,6 +40,8 @@ const args = process.argv.slice(2);
 const keepDummies = args.includes('--keep-dummies');
 // --shared: do not POST a global /queue clear + /interrupt at the end (only touch our own prompt ids).
 const sharedServer = args.includes('--shared');
+// --subset-only: for a ComfyUI that is busy rendering. Classes already in the subset keep their entries.
+const subsetOnly = args.includes('--subset-only');
 const only = new Set(args.filter((a) => !a.startsWith('--')));
 
 const readJson = (p, fallback) => (fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : fallback);
@@ -106,7 +112,7 @@ function sampleValue(key, entry, uploads) {
 
 const DUMMY_LORAS = { loraHigh: 'fuobe_validate_lora_high.safetensors', loraLow: 'fuobe_validate_lora_low.safetensors', lora: 'fuobe_validate_lora.safetensors' };
 // Loader inputs whose combo lists the server's input folder (the same loaders build-library.mjs requires a binding for).
-const UPLOAD_INPUTS = { LoadImage: 'image', LoadImageMask: 'image', LoadVideo: 'file', VHS_LoadVideo: 'video', LoadAudio: 'audio', VHS_LoadAudioUpload: 'audio' };
+const UPLOAD_INPUTS = { LoadImage: 'image', LoadImageMask: 'image', LoadVideo: 'file', VHS_LoadVideo: 'video', LoadAudio: 'audio', VHS_LoadAudioUpload: 'audio', AUSBOSS_NODES_ImageCropRotatePad: 'image' };
 
 function ensureDummy(folder, file, created) {
   const p = path.join(MODELS_DIR, folder, file);
@@ -163,12 +169,56 @@ async function startBlocker(objectInfo) {
   throw new Error('blocker prompt did not appear in the queue');
 }
 
+// The names the fixtures are uploaded under (upload() overwrites, so they keep them).
+const FIXTURE_NAMES = ['fuobe_validate.png', 'fuobe_validate_mask.png', 'fuobe_validate.wav', 'fuobe_validate.mp4'];
+
+/**
+ * object_info.subset.json for every class the library uses. Classes this server lacks keep their recorded definition
+ * (isolated-worker packs validated on another ComfyUI); `onlyMissing` keeps every recorded one and adds the others
+ * (of the workflows named on the command line, or all). Returns the number of classes.
+ */
+function writeSubset(manifest, objectInfo, fixtureNames, { onlyMissing = false } = {}) {
+  const classes = new Set();
+  for (const entry of manifest.workflows) {
+    if (onlyMissing && only.size && !only.has(entry.id)) continue;
+    const g = JSON.parse(fs.readFileSync(path.join(OUT_DIR, entry.file), 'utf8'));
+    for (const n of Object.values(g)) classes.add(n.class_type);
+  }
+  const prevSubset = readJson(path.join(OUT_DIR, 'object_info.subset.json'), {});
+  const subset = onlyMissing ? { ...prevSubset } : {};
+  for (const c of [...classes].sort()) {
+    if (onlyMissing && c in prevSubset) continue;
+    let def = objectInfo[c] || prevSubset[c] || null;
+    // A custom class is recorded under its own pack, whatever pack the server says registered it.
+    const mod = def?.python_module;
+    const pack = typeof mod === 'string' && mod.startsWith('custom_nodes.') ? packOfClass(c, mod, prevSubset[c]?.python_module) : null;
+    if (pack && mod !== `custom_nodes.${pack}`) def = { ...def, python_module: `custom_nodes.${pack}` };
+    // Upload combos list whatever the server's input folder holds right now (other sessions' uploads too):
+    // keep only the validation fixtures, so the file does not change with the server's state.
+    const inp = UPLOAD_INPUTS[c];
+    if (inp && (def?.input?.required?.[inp] ?? def?.input?.optional?.[inp])) {
+      def = JSON.parse(JSON.stringify(def));
+      const spec = def.input.required?.[inp] ?? def.input.optional?.[inp];
+      if (Array.isArray(spec[0])) spec[0] = spec[0].filter((o) => fixtureNames.includes(o));
+      else if (Array.isArray(spec[1]?.options)) spec[1].options = spec[1].options.filter((o) => fixtureNames.includes(o));
+    }
+    subset[c] = def;
+  }
+  const sorted = Object.fromEntries(Object.keys(subset).sort().map((k) => [k, subset[k]]));
+  writeJson(path.join(OUT_DIR, 'object_info.subset.json'), sorted);
+  return Object.keys(sorted).length;
+}
+
 async function main() {
   const manifestPath = path.join(OUT_DIR, 'manifest.json');
   const manifest = readJson(manifestPath);
   if (!manifest) throw new Error('manifest.json not found; run build-library.mjs first');
   const state = readJson(STATE_FILE, {});
   const objectInfo = (await api('GET', '/object_info')).json;
+  if (subsetOnly) {
+    console.log(`object_info.subset.json: ${writeSubset(manifest, objectInfo, FIXTURE_NAMES, { onlyMissing: true })} node classes.`);
+    return;
+  }
 
   const uploads = {
     png: await upload(path.join(FIXTURES, 'test.png'), 'fuobe_validate.png'),
@@ -242,33 +292,12 @@ async function main() {
     }
   }
 
-  // object_info subset for every class used by the library
-  const classes = new Set();
-  for (const entry of manifest.workflows) {
-    const g = JSON.parse(fs.readFileSync(path.join(OUT_DIR, entry.file), 'utf8'));
-    for (const n of Object.values(g)) classes.add(n.class_type);
-  }
-  // Keep the definitions of classes this server lacks (isolated-worker packs validated on another ComfyUI).
-  const prevSubset = readJson(path.join(OUT_DIR, 'object_info.subset.json'), {});
-  const subset = {};
-  for (const c of [...classes].sort()) subset[c] = objectInfo[c] || prevSubset[c] || null;
-  // Upload combos list whatever the server's input folder holds right now (other sessions' uploads too):
-  // keep only the validation fixtures, so the file does not change with the server's state.
-  const fixtures = new Set(Object.values(uploads));
-  for (const [cls, inp] of Object.entries(UPLOAD_INPUTS)) {
-    const def = subset[cls] && JSON.parse(JSON.stringify(subset[cls]));
-    const spec = def?.input?.required?.[inp] ?? def?.input?.optional?.[inp];
-    if (!spec) continue;
-    if (Array.isArray(spec[0])) spec[0] = spec[0].filter((o) => fixtures.has(o));
-    else if (Array.isArray(spec[1]?.options)) spec[1].options = spec[1].options.filter((o) => fixtures.has(o));
-    subset[cls] = def;
-  }
-  writeJson(path.join(OUT_DIR, 'object_info.subset.json'), subset);
+  const classCount = writeSubset(manifest, objectInfo, Object.values(uploads));
 
   writeJson(manifestPath, manifest);
   writeJson(STATE_FILE, Object.fromEntries(Object.entries(state).sort(([a], [b]) => a.localeCompare(b))));
   const passed = results.filter((r) => r.ok).length;
-  console.log(`\n${passed}/${results.length} workflows validated. object_info.subset.json: ${classes.size} node classes.`);
+  console.log(`\n${passed}/${results.length} workflows validated. object_info.subset.json: ${classCount} node classes.`);
   if (passed !== results.length) process.exitCode = 1;
 }
 

@@ -88,7 +88,7 @@ export function TargetLanguages({
                     <CommandItem key={l.code} value={`${l.name} ${l.code}`} disabled={!ok && !on} onSelect={() => toggle(l.code)} className="justify-between">
                       <span className={cn(!ok && "text-muted-foreground")}>
                         {l.name}
-                        {!ok && <span className="ml-1.5 text-[11px]">· not on this route</span>}
+                        {!ok && <span className="ml-1.5 text-[11px]">· not available with these voices yet</span>}
                       </span>
                       {on && <Check className="size-3.5 text-brand-text" />}
                     </CommandItem>

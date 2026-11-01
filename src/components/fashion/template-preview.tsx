@@ -2,7 +2,9 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { CoverImg } from "@/components/template-cover";
 import type { FashionTemplate } from "@/lib/catalog/packs";
+import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 
 /** A fashion figure (long coat, legs, head) as one path in a 60×70 box; `pose` shifts the stance. */
@@ -86,25 +88,41 @@ const SCENES: Record<string, (slide: number) => React.ReactNode> = {
   ),
 };
 
-/** A template's drawn preview: three framings in a carousel (arrows on hover, dots below). */
+/**
+ * A template's preview: three framings in a carousel (arrows on hover, dots below). The framings are its real cover's
+ * slides when it has one (templateCover; only the slide in view loads), else drawn.
+ */
 export function TemplatePreview({ t, className }: { t: Pick<FashionTemplate, "id" | "name">; className?: string }) {
   const [slide, setSlide] = useState(0);
+  const cover = templateCover("fashion", t.id);
+  const n = cover ? cover.frames.length : 3;
+  const at = slide % n;
   const scene = SCENES[t.id] ?? SCENES["light-blue-studio"];
   const arrow = "absolute top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full bg-background/85 text-foreground opacity-0 shadow-soft transition outline-none group-hover/tpl:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50";
   return (
     <span className={cn("group/tpl relative block overflow-hidden", className)}>
-      <svg viewBox="0 0 60 70" preserveAspectRatio="xMidYMid slice" role="img" aria-label={`${t.name} preview ${slide + 1} of 3`} className="size-full">
-        {scene(slide)}
-      </svg>
-      <button type="button" aria-label="Previous preview" onClick={(e) => (e.stopPropagation(), setSlide((s) => (s + 2) % 3))} className={cn(arrow, "left-1.5")}>
-        <ChevronLeft className="size-4" />
-      </button>
-      <button type="button" aria-label="Next preview" onClick={(e) => (e.stopPropagation(), setSlide((s) => (s + 1) % 3))} className={cn(arrow, "right-1.5")}>
-        <ChevronRight className="size-4" />
-      </button>
-      <span className="absolute inset-x-0 bottom-2 flex justify-center gap-1">
-        {[0, 1, 2].map((i) => (
-          <span key={i} className={cn("size-1.5 rounded-full bg-white/60", i === slide && "bg-white")} />
+      {cover ? (
+        <span role="img" aria-label={`${t.name} preview ${at + 1} of ${n}`} className="block size-full bg-muted">
+          <CoverImg key={at} frame={cover.frames[at]} sizes="(max-width: 1024px) 50vw, 370px" />
+        </span>
+      ) : (
+        <svg viewBox="0 0 60 70" preserveAspectRatio="xMidYMid slice" role="img" aria-label={`${t.name} preview ${at + 1} of 3`} className="size-full">
+          {scene(at)}
+        </svg>
+      )}
+      {n > 1 && (
+        <>
+          <button type="button" aria-label="Previous preview" onClick={(e) => (e.stopPropagation(), setSlide((s) => (s + n - 1) % n))} className={cn(arrow, "left-1.5")}>
+            <ChevronLeft className="size-4" />
+          </button>
+          <button type="button" aria-label="Next preview" onClick={(e) => (e.stopPropagation(), setSlide((s) => (s + 1) % n))} className={cn(arrow, "right-1.5")}>
+            <ChevronRight className="size-4" />
+          </button>
+        </>
+      )}
+      <span className={cn("absolute inset-x-0 bottom-2 flex justify-center gap-1", n < 2 && "hidden")}>
+        {Array.from({ length: n }, (_, i) => (
+          <span key={i} className={cn("size-1.5 rounded-full bg-white/60", i === at && "bg-white")} />
         ))}
       </span>
     </span>

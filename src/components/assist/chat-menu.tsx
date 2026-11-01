@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { AssistThreadSummary } from "@/lib/assist";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useChatActions, useProjects } from "./hooks";
 import { ProjectDot } from "./project-dot";
 
@@ -58,7 +59,7 @@ export function ChatMenu({
       const p = projects.data?.find((x) => x.id === projectId);
       toast(p ? `Moved to ${p.name}` : "Moved out of the project", { duration: 1500 });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     }
   };
   const remove = async () => {
@@ -67,7 +68,7 @@ export function ChatMenu({
       onDeleted?.();
       toast("Chat deleted", { duration: 1500 });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     }
   };
   return (
@@ -143,7 +144,7 @@ function RenameForm({ chat, onDone }: { chat: Pick<AssistThreadSummary, "id" | "
       await actions.patch(chat.id, { title: t });
       onDone();
     } catch (err) {
-      toast.error((err as Error).message);
+      toastError(err);
     } finally {
       setBusy(false);
     }

@@ -1,15 +1,13 @@
 import { connection } from "next/server";
 import { folderZipEntries, LibraryError, ZIP_MAX_BYTES } from "@/server/library";
 import { zipSize, zipStream } from "@/server/zip";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 /**
  * Download a folder as one zip: its finished results, and each subfolder's in a folder of its own.
  * `?check=1` answers {files, size} (or the error) without the zip, so the page can explain a refusal.
  * Helper steps are left out, as on the folder's page, unless `?steps=1` (Show steps is on).
  */
-export const GET = handler({ access: "signed-in" }, async (request: Request, ctx: RouteContext<"/api/folders/[id]/zip">) => {
+export async function GET(request: Request, ctx: RouteContext<"/api/folders/[id]/zip">) {
   await connection();
   const { id } = await ctx.params;
   const sp = new URL(request.url).searchParams;
@@ -17,7 +15,6 @@ export const GET = handler({ access: "signed-in" }, async (request: Request, ctx
   try {
     zip = folderZipEntries(id, { steps: sp.get("steps") === "1" });
   } catch (e) {
-    rethrowAccess(e);
     return Response.json({ error: (e as Error).message }, { status: e instanceof LibraryError ? e.status : 500 });
   }
   if (!zip) return Response.json({ error: "That folder doesn't exist anymore" }, { status: 404 });
@@ -34,4 +31,4 @@ export const GET = handler({ access: "signed-in" }, async (request: Request, ctx
       "Cache-Control": "no-store",
     },
   });
-});
+}

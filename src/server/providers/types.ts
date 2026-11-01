@@ -1,4 +1,4 @@
-import type { GenInput, MediaKind, ModelDef, ModelRoute, ProviderId } from "@/lib/catalog/types";
+import type { GenerationFix, GenInput, MediaKind, ModelDef, ModelRoute, ProviderId } from "@/lib/catalog/types";
 
 export interface SubmitContext {
   generationId: string;
@@ -28,11 +28,16 @@ export interface RemoteOutput {
   headers?: Record<string, string>;
 }
 
+/**
+ * What a poll found. A job on someone's own computer (comfyui.ts) also says when it reached their ComfyUI (`sentAt`: the
+ * queue clock starts there, not while it waited for their tab), what to say if it waits too long (`timeoutError`), and
+ * what was missing when it failed (`fix`: the tile's "Fix it").
+ */
 export type PollResult =
-  | { state: "queued"; progress?: number; message?: string }
-  | { state: "running"; progress?: number; message?: string }
+  | { state: "queued"; progress?: number; message?: string; sentAt?: number; timeoutError?: string }
+  | { state: "running"; progress?: number; message?: string; sentAt?: number }
   | { state: "succeeded"; outputs: RemoteOutput[]; message?: string }
-  | { state: "failed"; error: string };
+  | { state: "failed"; error: string; fix?: GenerationFix };
 
 export interface PollContext {
   externalId: string;

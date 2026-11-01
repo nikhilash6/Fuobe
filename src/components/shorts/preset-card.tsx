@@ -3,13 +3,14 @@
 import { Check, Pencil, Plus } from "lucide-react";
 import { memo } from "react";
 import { PresetPreview, usePreviewPlayback } from "@/components/preset-preview";
-import type { PresetPreview as Preview } from "@/lib/preset-cards";
+import { isCover, type PresetPreview as Preview } from "@/lib/preset-cards";
 import { cn } from "@/lib/utils";
 import { LookMotif } from "./look-motif";
 
 /**
- * A selectable look card (Shorts Studio and Mixed Media): the procedural preview from the
- * galleries (plays on hover or focus, the centred card on phones), name and one line.
+ * A selectable look card (Shorts Studio and Mixed Media): the look's real cover when it has one (a still, or a
+ * clip that plays as the galleries' do), else the procedural preview from the galleries (plays on hover or focus;
+ * on phones, by itself while in view) with the look's motif, then its name and one line.
  */
 export const LookCard = memo(function LookCard({
   id,
@@ -30,7 +31,8 @@ export const LookCard = memo(function LookCard({
   onSelect: (id: string) => void;
   badge?: string;
 }) {
-  const { ref, playing, handlers } = usePreviewPlayback<HTMLButtonElement>(id);
+  const { ref, playing, asked, handlers } = usePreviewPlayback<HTMLButtonElement>(id, preview);
+  const real = !!preview.video || isCover(preview);
   return (
     <button
       ref={ref}
@@ -45,9 +47,9 @@ export const LookCard = memo(function LookCard({
       )}
     >
       <div className={cn("relative aspect-[4/5] w-full overflow-hidden rounded-lg bg-muted ring-offset-2 ring-offset-background transition-shadow", selected && "ring-2 ring-primary")}>
-        <PresetPreview preview={preview} hue={hue} playing={playing} />
-        {/* The preset's own motif (lettering, scribbles, paper, a grid…), so similar treatments read apart. */}
-        <LookMotif id={id} hue={hue} />
+        <PresetPreview preview={preview} hue={hue} playing={playing} asked={asked} sizes={real ? "(max-width: 640px) 50vw, 210px" : undefined} />
+        {/* The preset's own motif (lettering, scribbles, paper, a grid…), so similar treatments read apart; a real cover shows the look itself. */}
+        {!real && <LookMotif id={id} hue={hue} />}
         <span className="pointer-events-none absolute inset-x-0 bottom-0 z-[7] h-12 bg-gradient-to-t from-black/40 to-transparent" />
         {badge && <span className="absolute top-1.5 left-1.5 z-[8] rounded-[4px] bg-black/45 px-1.5 text-[10px] font-medium text-white backdrop-blur">{badge}</span>}
         {selected && (

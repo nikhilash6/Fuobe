@@ -14,8 +14,8 @@ const { proxy } = await import("@/proxy");
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 /** Where the proxy sent a page request: its own path, or the not-found page (with the status). */
-async function routed(pathname: string): Promise<{ status: number; to: string | null }> {
-  const res = await proxy(new NextRequest(`http://localhost:3000${pathname}`, { headers: { host: "localhost:3000" } }));
+function routed(pathname: string): { status: number; to: string | null } {
+  const res = proxy(new NextRequest(`http://localhost:3000${pathname}`, { headers: { host: "localhost:3000" } }));
   return { status: res.status, to: res.headers.get("x-middleware-rewrite") };
 }
 
@@ -94,14 +94,14 @@ describe("record pages (real 404s)", () => {
     expect(recordExists({ kind: "explainer", ids: ["ep1"] })).toBe(true);
   });
 
-  it("answers unknown ids with a 404 before the page streams", async () => {
-    expect(await routed("/canvas/nope")).toEqual({ status: 404, to: "http://localhost:3000/_fuobe-not-found" });
-    expect((await routed("/faceless/ch1/nope")).status).toBe(404);
-    expect((await routed("/audio/nope")).status).toBe(404);
-    expect((await routed("/apps/nope")).status).toBe(404);
+  it("answers unknown ids with a 404 before the page streams", () => {
+    expect(routed("/canvas/nope")).toEqual({ status: 404, to: "http://localhost:3000/_fuobe-not-found" });
+    expect(routed("/faceless/ch1/nope").status).toBe(404);
+    expect(routed("/audio/nope").status).toBe(404);
+    expect(routed("/apps/nope").status).toBe(404);
     // Stored records, real modes and other pages go through.
     for (const p of ["/canvas/cv1", "/faceless/ch1", "/faceless/ch1/new", "/faceless/ch1/ep1", "/audio/music", "/ads/multiplier", "/library"]) {
-      expect(await routed(p), p).toEqual({ status: 200, to: null });
+      expect(routed(p), p).toEqual({ status: 200, to: null });
     }
   });
 });

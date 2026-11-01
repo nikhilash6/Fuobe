@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { BoardCover, CuratedCover, StatusBadge } from "./cards";
 import { CreateMoodboardDialog } from "./create-moodboard";
 import { TrainBoardDialog } from "./train-board";
@@ -98,7 +99,7 @@ function BoardCard({ m, onRename, onDelete }: { m: Moodboard; onRename: () => vo
                 onSelect={() =>
                   retry.mutate(
                     { id: m.id, engine: m.status === "complete" ? (m.engine === "cloud" ? "open" : "cloud") : undefined },
-                    { onSuccess: () => toast("Rebuilding the moodboard"), onError: (e) => toast.error((e as Error).message) },
+                    { onSuccess: () => toast("Rebuilding the moodboard"), onError: (e) => toastError(e) },
                   )
                 }
               >
@@ -291,7 +292,7 @@ export function MoodboardsView() {
                 renaming &&
                 rename.mutate(
                   { id: renaming.id, name: newName },
-                  { onSuccess: () => (setRenaming(null), toast("Renamed")), onError: (e) => toast.error((e as Error).message) },
+                  { onSuccess: () => (setRenaming(null), toast("Renamed")), onError: (e) => toastError(e) },
                 )
               }
             >
@@ -311,7 +312,7 @@ export function MoodboardsView() {
             <AlertDialogCancel>{COPY.deleteNo}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => deleting && remove.mutate(deleting.id, { onSuccess: () => toast("Moodboard deleted"), onError: (e) => toast.error((e as Error).message) })}
+              onClick={() => deleting && remove.mutate(deleting.id, { onSuccess: () => toast("Moodboard deleted"), onError: (e) => toastError(e) })}
             >
               {COPY.deleteYes}
             </AlertDialogAction>

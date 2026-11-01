@@ -52,7 +52,7 @@ export function ElementStudio({ id }: { id: string }) {
       feed: { features: [`element:${el.id}`, `character:${el.id}`] },
       slots: [],
       multiRef: { label: "Add ref", max: 8 },
-      defaultModels: { cloud: lead?.cloud ?? "nano-banana-pro", open: lead?.open ?? "oss-qwen-edit" },
+      defaultModels: { cloud: lead?.cloud ?? "nano-banana-pro", open: lead?.open ?? "oss-qwen-image-21" },
     };
   }, [el]);
 

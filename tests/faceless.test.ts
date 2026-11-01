@@ -142,6 +142,23 @@ describe("blocks", () => {
     expect(blockShots(10, getModel("oss-wan22-14b-fast"))).toEqual([5, 5]);
     expect(blockShots(10, getModel("gemini-omni-flash"))).toEqual([10]);
   });
+
+  it("cuts MiniMax H3's shots to the block, any 3–15 s on your GPU, any 5–15 s hosted", () => {
+    const h3 = getModel("oss-minimax-h3")!;
+    // The open graph renders any length on its 17n + 5 frame grid.
+    for (let s = 1; s <= 40; s++) for (const shot of blockShots(s, h3)) expect(shot >= 3 && shot <= 15, `${s}: ${shot}`).toBe(true);
+    expect(blockShots(2, h3)).toEqual([3]);
+    expect(blockShots(4, h3)).toEqual([4]);
+    expect(blockShots(7, h3)).toEqual([7]);
+    expect(blockShots(12, h3)).toEqual([12]);
+    expect(blockShots(20, h3)).toEqual([10, 10]);
+    expect(blockShots(40, h3)).toEqual([14, 13, 13]);
+    expect(filmSeconds(9, h3)).toBe(9);
+    // Hosted H3 takes any whole second from 5 to 15 (fal's schema).
+    expect(blockShots(7, getModel("minimax-h3"))).toEqual([7]);
+    expect(blockShots(3, getModel("minimax-h3"))).toEqual([5]);
+    expect(blockShots(18, getModel("minimax-h3"))).toEqual([9, 9]);
+  });
 });
 
 describe("render graph", () => {
@@ -229,20 +246,25 @@ describe("render graph", () => {
     expect(long.filter((s) => s.part === "join").map((j) => j.after!.length)).toEqual([24, 24, 12, 3]);
   });
 
-  it("open: Wan 2.2 Lightning in 5-second shots, joins folded 4 at a time, Chatterbox, music under the voice, Qwen3-ASR timed burn-in", () => {
+  it("open: MiniMax H3 shots as long as the block, one copy join, Chatterbox, music under the voice, Qwen3-ASR timed burn-in", () => {
     const g = graphFor({ engine: "open", animation: "animated", music: true, voice: null }, six);
+    const stills = g.filter((s) => s.part === "still");
+    expect(stills[0].request).toMatchObject({ modelId: "oss-qwen-image-21", params: { aspectRatio: "16:9", numOutputs: 1 } });
+    expect(stills[0].request.op).toBeUndefined();
+    expect(stills[0].request.inputs).toBeUndefined();
     const clips = g.filter((s) => s.part === "clip");
-    expect(clips).toHaveLength(12);
-    expect(clips[0].request).toMatchObject({ modelId: "oss-wan22-14b-fast", params: { duration: 5, resolution: "480p" } });
-    expect(clips[1].request.prompt).toMatch(/keeps moving/);
+    // Each 9 s block is one 9 s H3 clip at 768p; H3 always makes sound, so no audio switch is sent.
+    expect(clips).toHaveLength(6);
+    expect(clips[0].request).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v", params: { duration: 9, resolution: "768p" } });
+    expect(clips.every((c) => c.request.params?.generateAudio === undefined)).toBe(true);
     const joins = g.filter((s) => s.part === "join");
-    // 12 clips → 3 joins of 4 → the final join of 3.
-    expect(joins.map((j) => j.after!.length)).toEqual([4, 4, 4, 3]);
-    expect(joins.every((j) => j.request.modelId === "oss-join-clips")).toBe(true);
+    // The clips share one canvas and 24 fps: one copy join of all 6, which never decodes them (flat memory).
+    expect(joins.map((j) => j.after!.length)).toEqual([6]);
+    expect(joins.every((j) => j.request.modelId === "oss-join-encoded")).toBe(true);
     const narration = g.find((s) => s.key === "narration")!;
     expect(narration.request).toMatchObject({ modelId: "oss-chatterbox", inputs: { voiceAudio: "/api/files/uploads/demo-voice.wav" } });
-    // The bed is as long as the film (60 s of 5-second shots) plus a second.
-    expect(g.find((s) => s.key === "music")!.request).toMatchObject({ modelId: "oss-ace-step", op: "music", params: { duration: 61, extra: { lyrics: "[Instrumental]" } } });
+    // The bed is as long as the film (six 9 s shots) plus a second.
+    expect(g.find((s) => s.key === "music")!.request).toMatchObject({ modelId: "oss-ace-step", op: "music", params: { duration: 55, extra: { lyrics: "[Instrumental]" } } });
     const mix = g.find((s) => s.key === "mix")!;
     expect(mix).toMatchObject({ after: ["join", "narration", "music"], chain: [{ slot: "video" }, { slot: "audio" }, { slot: "audio2" }] });
     expect(mix.request).toMatchObject({ modelId: "oss-mux", params: { extra: { backgroundVolumeDb: -14 } } });
@@ -252,6 +274,23 @@ describe("render graph", () => {
     expect(words.request.prompt).toBeUndefined();
     expect(g.find((s) => s.key === "captions")).toMatchObject({ after: ["mix", "words"], chain: [{ slot: "video" }, { slot: "prompt" }], request: { modelId: "oss-captions-burnin" } });
     expect(estimateGraph(g, getModel).total).toBe(0);
+    // Wan 2.2 Lightning stays a choice: 5-second shots, 12 clips → 3 joins of 4 → the final join of 3.
+    const wan = graphFor({ engine: "open", animation: "animated", music: true, voice: null, videoModel: "oss-wan22-14b-fast" }, six);
+    const wanClips = wan.filter((s) => s.part === "clip");
+    expect(wanClips).toHaveLength(12);
+    expect(wanClips[0].request).toMatchObject({ modelId: "oss-wan22-14b-fast", params: { duration: 5, resolution: "480p" } });
+    expect(wanClips[1].request.prompt).toMatch(/keeps moving/);
+    expect(wan.filter((s) => s.part === "join").map((j) => j.after!.length)).toEqual([4, 4, 4, 3]);
+    expect(ENGINE_MODELS.open.videoChoices).toEqual(["oss-minimax-h3", "oss-wan22-14b-fast"]);
+    expect(ENGINE_MODELS.cloud.videoChoices).toContain("minimax-h3");
+  });
+
+  it("hosted MiniMax H3 in the cloud: any 5–15 s shot at 768P", () => {
+    const g = graphFor({ engine: "cloud", animation: "animated", music: false, videoModel: "minimax-h3" }, six);
+    const clips = g.filter((s) => s.part === "clip");
+    expect(clips).toHaveLength(6);
+    expect(clips[0].request).toMatchObject({ modelId: "minimax-h3", op: "i2v", params: { duration: 9, resolution: "768P" } });
+    expect(estimateGraph(g, getModel).parts.clip).toBeGreaterThan(0);
   });
 
   it("follows the voice, style references and the music choice", () => {
@@ -262,7 +301,7 @@ describe("render graph", () => {
     expect(still.request.inputs?.images).toEqual(["/api/files/a.png", "/api/files/b.png"]);
     expect(still.request.prompt).toMatch(/style of the reference images/);
     const openRefs = graphFor({ engine: "open", styleRefs: ["/api/files/a.png", "/api/files/b.png", "/api/files/c.png"] }, six);
-    expect(openRefs.find((s) => s.part === "still")!.request).toMatchObject({ modelId: "oss-style-qwen-edit", inputs: { images: ["/api/files/a.png", "/api/files/b.png"] } });
+    expect(openRefs.find((s) => s.part === "still")!.request).toMatchObject({ modelId: "oss-style-krea2", inputs: { images: ["/api/files/a.png", "/api/files/b.png"] } });
     // A cloud episode with music: the Sonilo bed (as long as the film) is levelled to -28 LUFS, then fal's
     // compose lays the voice and the bed on the film in one pass — no ComfyUI needed.
     const music = graphFor({ engine: "cloud", music: true }, six);
@@ -289,7 +328,7 @@ describe("render graph", () => {
 
   it("builds a picture edit for a block the timeline editor changes", () => {
     const g = graphFor({ engine: "open" }, six, { stillEdits: { b2: { source: "/api/files/outputs/still.png", instruction: "make it night" } } });
-    expect(g.find((s) => s.key === "still-b2")!.request).toMatchObject({ modelId: "oss-qwen-edit", op: "edit", inputs: { images: ["/api/files/outputs/still.png"] } });
+    expect(g.find((s) => s.key === "still-b2")!.request).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit", inputs: { images: ["/api/files/outputs/still.png"] } });
     expect(g.find((s) => s.key === "still-b2")!.request.prompt).toMatch(/^make it night\. Keep everything else/);
   });
 
@@ -307,7 +346,8 @@ describe("render graph", () => {
 
 describe("timeline re-runs and retries", () => {
   const blocks = Array.from({ length: 12 }, (_, i) => block(i));
-  const g = graphFor({ engine: "open", music: true }, blocks);
+  // Wan 2.2 Lightning's 5-second shots: two clips per block.
+  const g = graphFor({ engine: "open", music: true, videoModel: "oss-wan22-14b-fast" }, blocks);
 
   it("a picture change re-runs that block's still and clips, the joins up its branch, the mix and the subtitles", () => {
     const plan = planRerun(g, changedKeys(g, ["b3"], "picture"));
@@ -345,7 +385,7 @@ describe("timeline re-runs and retries", () => {
     // A Frame by frame episode rendered before its scenes became Ken Burns moves: Wan 2.2 made each 8 s scene
     // as a 5 s and a 3 s shot. Its Ken Burns graph has one 8 s move per scene under the first shot's key.
     const scenes = [block(0, 20, 8), block(1, 20, 8), block(2, 20, 8)];
-    const wan = graphFor({ engine: "open", animation: "animated", music: false, voice: null }, scenes);
+    const wan = graphFor({ engine: "open", animation: "animated", music: false, voice: null, videoModel: "oss-wan22-14b-fast" }, scenes);
     expect(wan.filter((s) => s.block === 0 && s.part === "clip").map((s) => s.seconds)).toEqual([5, 3]);
     const kb = graphFor({ engine: "open", animation: "frames", music: false, voice: null }, scenes);
     expect(kb.filter((s) => s.part === "clip").map((s) => [s.key, s.seconds])).toEqual([
@@ -553,8 +593,27 @@ describe("timing: every scene cut to its spoken lines", () => {
     expect(plannedTiming(six, wan)).toEqual(Object.fromEntries(six.map((b) => [b.id, 10])));
   });
 
+  it("keeps each scene on its lines with MiniMax H3 on your GPU, short lines too", () => {
+    const h3 = getModel("oss-minimax-h3")!;
+    // Eight short lines of 9 words, about 3.6 s each when spoken.
+    const eight = Array.from({ length: 8 }, (_, i) => block(i, 9));
+    const t = spokenTimes(eight, aligned(eight, 0.36))!;
+    const timing = sceneTiming(eight, t, h3);
+    let film = 0;
+    eight.forEach((b, i) => {
+      if (i > 0) expect(Math.abs(film - t.starts[i]!), `scene ${i + 1}`).toBeLessThan(1);
+      film += timing[b.id];
+    });
+    expect(film).toBeGreaterThanOrEqual(t.end);
+    expect(film).toBeLessThan(t.end + 2);
+    // The graph makes those lengths, each scene one H3 clip.
+    const g = graphFor({ engine: "open", music: false, voice: null }, withTiming(eight, timing));
+    expect(sceneSpans(g, 8).map((s) => s.seconds)).toEqual(eight.map((b) => timing[b.id]));
+    expect(g.filter((s) => s.part === "clip")).toHaveLength(8);
+  });
+
   it("gives a block the same shots planned or timed (the graph derives them from its length)", () => {
-    for (const m of [gemini, wan, getModel("seedance-2-5")]) {
+    for (const m of [gemini, wan, getModel("seedance-2-5"), getModel("oss-minimax-h3")]) {
       for (let s = 3; s <= 25; s++) expect(blockShots(filmSeconds(s, m), m)).toEqual(blockShots(s, m));
     }
   });
@@ -587,12 +646,12 @@ describe("pictures from sources, style references, music length, frame pricing",
   it("draws open pictures from attached images with a multi-image edit model", () => {
     const g = graphFor({ engine: "open", voice: null, sourceImages: [a, b] }, six);
     const still = g.find((s) => s.part === "still")!;
-    expect(still.request).toMatchObject({ modelId: "oss-qwen-edit", op: "edit", inputs: { images: [a, b] } });
+    expect(still.request).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit", inputs: { images: [a, b] } });
     expect(still.request.prompt).toMatch(/attached source pictures/);
     expect(still.request.prompt).toMatch(/Style: /);
     // Style references win over the sources; the open style model reads two of them.
     const refs = graphFor({ engine: "open", voice: null, styleRefs: [a, b, c], sourceImages: [x] }, six);
-    expect(refs.find((s) => s.part === "still")!.request).toMatchObject({ modelId: "oss-style-qwen-edit", inputs: { images: [a, b] } });
+    expect(refs.find((s) => s.part === "still")!.request).toMatchObject({ modelId: "oss-style-krea2", inputs: { images: [a, b] } });
     expect(styleRefLimit("open", getModel)).toBe(2);
     expect(styleRefLimit("cloud", getModel)).toBe(3);
     // The cloud picture model reads the references and the sources.

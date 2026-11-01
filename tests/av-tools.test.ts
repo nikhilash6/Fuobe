@@ -108,7 +108,7 @@ describe("caption style → burn params", () => {
 describe("3D viewer data flow", () => {
   it("asks the engine's 3D model for the photo; an unknown pick falls back to the default", () => {
     expect(model3dRequest({ engine: "cloud", photo: "p.png" })).toEqual({ feature: "image-to-3d", modelId: "hunyuan-3d-3-1-pro", op: "image-to-3d", inputs: { images: ["p.png"] } });
-    expect(model3dRequest({ engine: "open", photo: "p.png", modelId: "trellis-2" }).modelId).toBe("oss-trellis2");
+    expect(model3dRequest({ engine: "open", photo: "p.png", modelId: "trellis-2" }).modelId).toBe("oss-pixal3d");
     expect(model3dRequest({ engine: "cloud", photo: "p.png", modelId: "tripo-h3-1" }).modelId).toBe("tripo-h3-1");
     for (const m of [...MODELS_3D.image.cloud, ...MODELS_3D.image.open]) expect(getModel(m.id)?.routes.some((r) => r.op === "image-to-3d"), m.id).toBe(true);
   });
@@ -119,7 +119,7 @@ describe("3D viewer data flow", () => {
       "image-to-3d",
     );
     const view = model3dView({ outputs: outputs.map((o) => ({ ...o, meta: o.meta ?? {} })) as never, request: model3dRequest({ engine: "cloud", photo: "/api/files/p.png" }) });
-    expect(view).toEqual({ glb: "https://cdn/x/model.glb", poster: "https://cdn/x/thumb.png", photo: "/api/files/p.png", turntable: undefined, formats: { glb: "https://cdn/x/model.glb", obj: "https://cdn/x/model.obj", usdz: "https://cdn/x/model.usdz" } });
+    expect(view).toEqual({ glb: "https://cdn/x/model.glb", web: "https://cdn/x/model.glb", poster: "https://cdn/x/thumb.png", photo: "/api/files/p.png", turntable: undefined, formats: { glb: "https://cdn/x/model.glb", obj: "https://cdn/x/model.obj", usdz: "https://cdn/x/model.usdz" } });
     const href = animateSpinHref(view)!;
     expect(href.startsWith("/video?")).toBe(true);
     expect(new URLSearchParams(href.split("?")[1]).get("image")).toBe("/api/files/p.png");
@@ -129,7 +129,7 @@ describe("3D viewer data flow", () => {
     expect(new URLSearchParams(recorded.split("?")[1]).get("video")).toBe("/api/files/turn.webm");
   });
 
-  it("a TRELLIS.2 / demo result brings its own turntable", () => {
+  it("an open (server-rendered) / demo result brings its own turntable", () => {
     const view = model3dView({
       outputs: [
         { url: "/api/files/m.glb", kind: "model3d", meta: { format: "glb" } },
@@ -178,7 +178,7 @@ describe("apps on the new models", () => {
     expect(plan("app-product-shot", "cloud").model.id).toBe("bria-product-shot");
     expect(plan("app-product-shot", "open").model.id).toBe("oss-product-shot");
     expect(plan("app-image-to-3d", "cloud").model.id).toBe("hunyuan-3d-3-1-pro");
-    expect(plan("app-image-to-3d", "open").model.id).toBe("oss-trellis2");
+    expect(plan("app-image-to-3d", "open").model.id).toBe("oss-pixal3d");
   });
 
   it("Angles: the choices set the camera sliders on the cloud and the LoRA's words on the open engine", () => {

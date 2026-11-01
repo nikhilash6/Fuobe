@@ -25,7 +25,7 @@ import { llmText } from "./enhance";
 /**
  * The AI Director: turns an idea or a script into shots with Director settings, camera moves and
  * prompts. It only proposes — every shot card has "Load into prompt bar" and nothing is generated
- * until the user presses Generate (Higgsfield's rule). Uses the configured LLM (Claude or Ollama)
+ * until the user presses Generate (Higgsfield's rule). Uses the configured LLM (Claude or a local model)
  * and falls back to an offline breakdown so it always answers.
  */
 
@@ -52,6 +52,51 @@ Rules:
 - duration: whole seconds from ${DURATION.min} to ${DURATION.max}. Keep @handles (characters, locations) exactly as the user wrote them.
 - Put shared look decisions (genre, era, camera, palette, lighting) in every shot's settings so each shot can be loaded on its own.
 - Follow the project brief. No shots when the user only asks a question; then just reply.`;
+
+/** The answer's JSON as a JSON Schema, for local models that decode to one: settings left out stay Auto. */
+const oneOf = (values: string[]) => ({ type: "string", enum: values });
+const ANSWER_SCHEMA = {
+  name: "director",
+  schema: {
+    type: "object",
+    properties: {
+      reply: { type: "string" },
+      shots: {
+        type: "array",
+        maxItems: 12,
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            prompt: { type: "string" },
+            duration: { type: "integer" },
+            moves: { type: "array", maxItems: 3, items: oneOf(CAMERA_MOVES.map((m) => m.slug)) },
+            settings: {
+              type: "object",
+              properties: {
+                genre: oneOf(slugs(GENRES)),
+                era: oneOf(slugs(ERAS)),
+                tempo: oneOf(slugs(TEMPOS)),
+                camera: oneOf(slugs(CAMERA_BODIES)),
+                lens: oneOf(slugs(LENSES)),
+                focal: oneOf(slugs(FOCAL_LENGTHS)),
+                aperture: oneOf(slugs(APERTURES)),
+                lighting: oneOf(slugs(LIGHTING_PRESETS)),
+                palette: oneOf(PALETTES.map((p) => p.slug)),
+              },
+              additionalProperties: false,
+            },
+          },
+          required: ["title", "prompt", "duration", "moves", "settings"],
+          additionalProperties: false,
+        },
+      },
+      brief: { type: "string" },
+    },
+    required: ["reply", "shots"],
+    additionalProperties: false,
+  },
+};
 
 const Shot = z.object({
   title: z.string().max(120).catch("Shot"),
@@ -314,7 +359,7 @@ export async function askDirector(projectId: string, text: string): Promise<Dire
   ]
     .filter(Boolean)
     .join("\n\n");
-  const raw = (await llmText(SYSTEM, context).catch(() => null))?.trim() || null;
+  const raw = (await llmText(SYSTEM, context, { json: ANSWER_SCHEMA }).catch(() => null))?.trim() || null;
   const parsed = raw ? parseDirectorAnswer(raw) : null;
   const answer =
     parsed && (parsed.reply || parsed.shots.length || parsed.brief)

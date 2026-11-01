@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { AudioToolPreview } from "@/lib/av/audio-tools";
 import type { Engine, Generation } from "@/lib/catalog/types";
+import { responseError } from "@/lib/refusals";
 
 export type AudioToolBody =
   | { tool: "loop"; engine: Engine; audio: string; name?: string; duration: number; sourceDuration?: number; crossfade?: number; curve?: "equal-power" | "linear" }
@@ -14,7 +15,7 @@ export type AudioToolBody =
 async function post<T>(url: string, body: AudioToolBody): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(j.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, j.error ?? `Request failed (${res.status})`);
   return j;
 }
 

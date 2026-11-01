@@ -490,7 +490,7 @@ describe("pages", () => {
     // Reloaded as stored.
     const view = (await (await one.GET(req("GET"), ctx(c.id))).json()) as { canvas: Canvas };
     expect(view.canvas.pages[1].graph.comments![0].replies![0].text).toBe("Or a fox");
-    const card = ((await (await list.GET(new Request("http://localhost/"))).json()) as { items: { id: string; pageCount: number; nodeCount: number }[] }).items.find((x) => x.id === c.id)!;
+    const card = ((await (await list.GET()).json()) as { items: { id: string; pageCount: number; nodeCount: number }[] }).items.find((x) => x.id === c.id)!;
     expect(card).toMatchObject({ pageCount: 2, nodeCount: 4 });
 
     // Bad pages are refused, naming the page.

@@ -45,7 +45,10 @@ const restoreEstimate = await import("@/app/api/restore/estimate/route");
 
 // The harness is plain ESM JavaScript (it runs with node, no build step).
 const evalCli = (await import("../scripts/eval/eval.mjs")) as { main: (argv: string[], io?: object) => Promise<number> };
-const cases = (await import("../scripts/eval/lib/cases.mjs")) as { loadSuite: (n: string) => Record<string, unknown>; validateAll: () => { ok: boolean; file: string; lines: string[] }[] };
+const cases = (await import("../scripts/eval/lib/cases.mjs")) as {
+  loadSuite: (n: string) => Record<string, unknown> & { cases: { presetId?: string }[]; decides?: string };
+  validateAll: () => { ok: boolean; file: string; suite?: string; runFirst?: string; lines: string[] }[];
+};
 const runner = (await import("../scripts/eval/lib/run.mjs")) as {
   runEval: (opts: object, io: object) => Promise<Record<string, unknown>>;
   routeResult: (answer: unknown, how?: string) => { id: string }[];
@@ -66,7 +69,7 @@ type Row = Record<string, unknown> & { id: string; status: string; variant: stri
 
 const ctx = (params: Record<string, unknown>) => ({ params: Promise.resolve(params) }) as never;
 const ROUTES: [string, RegExp, (req: Request, m: RegExpExecArray) => Promise<Response>][] = [
-  ["GET", /^\/api\/status$/, () => status.GET(new Request("http://localhost/"))],
+  ["GET", /^\/api\/status$/, () => status.GET()],
   ["GET", /^\/api\/models$/, (r) => models.GET(r)],
   ["POST", /^\/api\/generations$/, (r) => generations.POST(r)],
   ["GET", /^\/api\/generations\/([^/]+)$/, (r, m) => generation.GET(r, ctx({ id: m[1] }))],
@@ -388,6 +391,17 @@ describe("the runner on the demo provider", () => {
         ["shorts/segment", "gemini-omni-flash", null],
         ["shorts/session", "gemini-omni-flash", null],
       ]);
+      // DoP's Mixed Media effects, blind: the shipped preset on Fuobe DoP against its words on Kling 2.5 Turbo (the
+      // owner's call of 2026-10-30), the first suite to run once paid keys exist, with the rule it decides by.
+      const dmm = await dry(["--suite", "dop-mixed-media", "--engine", "cloud", "--variants", "original,partner", "--seeds", "1001", "--allow-fixtures"]);
+      expect(dmm.jobs).toHaveLength(16);
+      expect(new Set(dmm.jobs.map((j) => `${j.variant}:${j.model}:${j.skip ?? ""}`))).toEqual(new Set(["original:fuobe-dop:", "partner:kling-2-5-turbo:"]));
+      const suite = cases.loadSuite("dop-mixed-media");
+      expect(suite).toMatchObject({ runFirst: "paid-keys", defaults: { candidate: "original" } });
+      expect(suite.decides).toMatch(/Kling 2\.5 Turbo takes at least two thirds .* goes back to Kling 2\.5 Turbo, in a reviewed code change/);
+      expect(cases.validateAll().filter((r) => r.runFirst === "paid-keys").map((r) => r.suite)).toEqual(["dop-mixed-media"]);
+      const { getPreset } = await import("@/lib/catalog");
+      for (const c of suite.cases) expect(getPreset(c.presetId!)?.cloud?.modelId, c.presetId).toBe("fuobe-dop");
       // A partner variant is a cloud model: on the open engine it would only repeat the Original's run.
       const open = await dry(["--suite", "genjutsu", "--engine", "open", "--variants", "partner", "--allow-fixtures"]);
       expect(open.jobs.every((j) => j.skip === "the partner variant runs on cloud only")).toBe(true);
@@ -425,10 +439,10 @@ describe("the runner on the demo provider", () => {
     const dry = await cli(["run", "--suite", "soul", "--engine", "cloud", "--looks", "v1-general", "--dry-run"]);
     expect(dry.code, dry.stderr).toBe(0);
     expect(dry.stdout).toMatch(/would run as a demo: Z-Image Turbo \(hosted\) has no cloud provider connected/);
-    // With Demo mode On, that is the reason given (a connected engine wouldn't help).
+    // With placeholder results on, that is the reason given (a connected engine wouldn't help).
     setSetting("demoMode", "on");
     try {
-      expect((await cli(["run", "--suite", "soul", "--engine", "open", "--looks", "v1-general", "--dry-run"])).stdout).toMatch(/Demo mode is On on that Fuobe/);
+      expect((await cli(["run", "--suite", "soul", "--engine", "open", "--looks", "v1-general", "--dry-run"])).stdout).toMatch(/placeholder results are on on that Fuobe/);
     } finally {
       setSetting("demoMode", "auto");
     }
@@ -735,7 +749,15 @@ describe("report, blind review, compare and promote", () => {
     const r = await covers(["fake-dop-covers"]);
     expect(r.code, r.stderr).toBe(0);
     const entry = (await import("../scripts/eval/lib/covers.mjs")).readManifest(manifest)["effect-thunder-god"];
-    expect(entry).toEqual({ poster: "/previews/soul/effect-thunder-god.jpg", video: "/previews/soul/effect-thunder-god.mp4", run: "fake-dop-covers", engine: "open", model: "", variant: "research" });
+    // Each URL ends in its file's content version, so a cover made again gets a new URL.
+    expect(entry).toEqual({
+      poster: expect.stringMatching(/^\/previews\/soul\/effect-thunder-god\.jpg\?v=[0-9a-f]{8}$/),
+      video: expect.stringMatching(/^\/previews\/soul\/effect-thunder-god\.mp4\?v=[0-9a-f]{8}$/),
+      run: "fake-dop-covers",
+      engine: "open",
+      model: "",
+      variant: "research",
+    });
     const probe = JSON.parse(spawnSync("ffprobe", ["-v", "error", "-show_entries", "stream=width,height:format=duration", "-of", "json", path.join(out, "effect-thunder-god.mp4")], { encoding: "utf8" }).stdout);
     expect(Math.max(probe.streams[0].width, probe.streams[0].height)).toBeLessThanOrEqual(512);
     expect(Number(probe.format.duration)).toBeLessThanOrEqual(4.1);

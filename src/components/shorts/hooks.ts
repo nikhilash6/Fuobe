@@ -6,13 +6,14 @@ import { useCallback, useDeferredValue, useRef } from "react";
 import type { ShortsCustomPreset, ShortsRange, ShortsRatio, ShortsSession } from "@/lib/catalog/shorts";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { useGenerationEvents } from "@/lib/api";
+import { responseError } from "@/lib/refusals";
 
 /** React Query hooks for /api/shorts/** (kept next to the studio that uses them). */
 
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
   return body;
 }
 

@@ -9,9 +9,9 @@ import { cn } from "@/lib/utils";
 
 /** Small pieces shared by Character Swap Studio's stages. */
 
-/** "≈ $0.38", "Free · your GPU", "Demo · free", "Price unknown". */
+/** "≈ $0.38", "Free · your GPU", "Placeholder · free", "Price unknown". */
 export function priceText(costUsd: number | null | undefined, o: { demo?: boolean; engine: Engine }): string {
-  if (o.demo) return "Demo · free";
+  if (o.demo) return "Placeholder · free";
   if (o.engine === "open") return "Free · your GPU";
   if (costUsd === undefined) return "…";
   if (costUsd === null) return "Price unknown";

@@ -13,6 +13,7 @@ import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { uploadFile } from "@/lib/api";
 import { HOOK_SECONDS, hookSignals, hookSummary, SILENCE_DB, TRIBE_WORKER, VIRALITY_PARITY, type HookSignal, type SignalId, type Verdict } from "@/lib/av/virality";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { measureHook, type HookMeasure } from "./measure";
 
 type Run =
@@ -30,8 +31,13 @@ export function ViralityStudio() {
   useEffect(() => () => abort.current?.abort(), []);
   // A result belongs to the clip it was measured on.
   const current = run && clip && run.ref === clip.ref ? run : null;
+  // The clip is read here, never uploaded: its blob: URL goes when it's replaced and when the page closes.
+  const blob = useRef<string | null>(null);
+  useEffect(() => () => void (blob.current && URL.revokeObjectURL(blob.current)), []);
   const change = (v: SlotValue | null) => {
     abort.current?.abort();
+    if (blob.current && blob.current !== v?.ref) URL.revokeObjectURL(blob.current);
+    blob.current = v?.ref.startsWith("blob:") ? v.ref : null;
     setClip(v);
   };
   const go = async () => {
@@ -53,13 +59,13 @@ export function ViralityStudio() {
     <ToolShell title="Virality predictor" engineSwitch={false}>
       <ToolHero title="Will your first 3 seconds hold?" subtitle="An honest check of your video's hook — movement, a cut, faces, on-screen text and sound in the opening seconds, measured right here in your browser. Nothing is generated or charged." />
       <div className="mx-auto mt-8 grid max-w-[880px] gap-3">
-        <MediaDrop kind="video" value={clip} onChange={change} title="Add your video" hint="MP4 (H.264) or WebM · the opening 3 seconds are what's checked" compact />
+        <MediaDrop kind="video" value={clip} onChange={change} title="Add your video" hint="MP4 (H.264) or WebM · the opening 3 seconds are what's checked" compact local />
         <div className="flex flex-wrap items-center gap-2">
           <Button size="lg" className={cn("rounded-full", (!clip || clip.uploading) && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={current?.status === "running"}>
             {current?.status === "running" ? <Loader2 className="size-4 animate-spin" /> : current?.status === "done" ? <RefreshCw className="size-4" /> : <TrendingUp className="size-4" />}
             {current?.status === "done" ? "Check again" : "Check the hook"}
           </Button>
-          <p className="text-[12px] text-muted-foreground">Runs in your browser · works on both engines and in demo mode</p>
+          <p className="text-[12px] text-muted-foreground">Runs in your browser · nothing is uploaded</p>
         </div>
         {current?.status === "running" && (
           <div className="rounded-2xl border bg-background p-3 shadow-soft" role="status" aria-live="polite">
@@ -93,12 +99,13 @@ function ParityNote() {
           <p id="virality-parity" className="font-medium">
             {VIRALITY_PARITY.title}
           </p>
-          <p className="text-pretty text-muted-foreground">{VIRALITY_PARITY.body}</p>
-          <p className="text-pretty text-muted-foreground">{VIRALITY_PARITY.cloud}</p>
-          <p className="text-pretty text-muted-foreground">{VIRALITY_PARITY.open}</p>
+          <p className="text-pretty text-muted-foreground">{VIRALITY_PARITY.lead}</p>
           <details className="group pt-1">
             <summary className="cursor-pointer text-[12px] font-medium text-foreground marker:text-muted-foreground">Run TRIBE v2 yourself (non-commercial)</summary>
             <div className="mt-2 space-y-2 text-[12px] text-muted-foreground">
+              <p className="text-pretty">{VIRALITY_PARITY.body}</p>
+              <p className="text-pretty">{VIRALITY_PARITY.cloud}</p>
+              <p className="text-pretty">{VIRALITY_PARITY.open}</p>
               <p>
                 <span className="font-medium text-foreground">Worker:</span> <span className="font-mono break-words">{TRIBE_WORKER.endpoint}</span>
               </p>
@@ -250,12 +257,13 @@ function NextSteps({ clip, measure, byId }: { clip: SlotValue; measure: HookMeas
       const asset = await uploadFile(new File([blob], `${(clip.name ?? "video").replace(/\.[^.]+$/, "")} opening frame.jpg`, { type: "image/jpeg" }));
       router.push(`${HOOK_FRAME_APP}?${new URLSearchParams({ image: asset.url })}`);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
       setBusy(false);
     }
   };
   const weak = (id: SignalId) => byId[id]?.verdict === "weak";
-  const video = new URLSearchParams({ video: clip.ref }).toString();
+  // A clip read in this browser only (blob:) can't go to another studio: that studio asks for it again.
+  const video = clip.ref.startsWith("blob:") ? "" : new URLSearchParams({ video: clip.ref }).toString();
   return (
     <Panel title="Next steps">
       <div className="flex flex-wrap gap-2">
@@ -273,14 +281,14 @@ function NextSteps({ clip, measure, byId }: { clip: SlotValue; measure: HookMeas
         )}
         {weak("sound") && (
           <Button asChild variant="outline" className="rounded-full">
-            <Link href={`/audio/video?${video}`} prefetch={false}>
+            <Link href={video ? `/audio/video?${video}` : "/audio/video"} prefetch={false}>
               <Volume2 className="size-4" /> Add sound
             </Link>
           </Button>
         )}
         {measure.input.height > 0 && measure.input.width / measure.input.height > 0.66 && (
           <Button asChild variant="outline" className="rounded-full">
-            <Link href={`/reframe?${video}`} prefetch={false}>
+            <Link href={video ? `/reframe?${video}` : "/reframe"} prefetch={false}>
               <Crop className="size-4" /> Reframe to 9:16
             </Link>
           </Button>

@@ -81,7 +81,7 @@ describe("canvas API", () => {
     res = await one.PATCH(req("PATCH", { graph: { ...board, edges: [...board.edges, { id: "bad", source: "p", target: "vid", targetHandle: "audio" }] } }), ctx(id));
     expect(((await res.json()) as Canvas).pages[0].graph.edges.map((e) => e.id)).toEqual(["e1", "e2", "e3"]);
 
-    res = await list.GET(new Request("http://localhost/"));
+    res = await list.GET();
     const items = ((await res.json()) as { items: CanvasSummary[] }).items;
     expect(items[0]).toMatchObject({ id, name: "Fox film", nodeCount: 4, preview: null });
     expect(items[0].outline.boxes).toHaveLength(4);
@@ -115,7 +115,7 @@ describe("canvas API", () => {
     res = await one.GET(req("GET"), ctx(id));
     const view = (await res.json()) as { canvas: Canvas; generations: Generation[] };
     expect(view.generations.map((g) => g.status).sort()).toEqual(["succeeded", "succeeded"]);
-    const listed = ((await (await list.GET(new Request("http://localhost/"))).json()) as { items: CanvasSummary[] }).items.find((c) => c.id === id)!;
+    const listed = ((await (await list.GET()).json()) as { items: CanvasSummary[] }).items.find((c) => c.id === id)!;
     // Cards prefer a still over a clip.
     expect(listed.preview).toEqual({ url: gens.getGeneration(img.id)!.outputs[0].url, kind: "image" });
 
@@ -154,7 +154,7 @@ describe("canvas API", () => {
     view = (await (await one.GET(req("GET"), ctx(id))).json()) as typeof view;
     expect(view.generations.map((g) => g.id)).not.toContain(imgId);
     // The card's preview no longer shows the trashed image.
-    const card = ((await (await list.GET(new Request("http://localhost/"))).json()) as { items: CanvasSummary[] }).items.find((c) => c.id === id)!;
+    const card = ((await (await list.GET()).json()) as { items: CanvasSummary[] }).items.find((c) => c.id === id)!;
     expect(card.preview?.url).not.toBe(gens.getGeneration(imgId, { includeDeleted: true })!.outputs[0].url);
 
     res = await run.POST(req("POST", {}), ctx(id));
@@ -215,7 +215,7 @@ describe("canvas API", () => {
       let res = await list.POST(req("POST", { templateId: "image-animate", engine: "cloud" }));
       const c = (await res.json()) as Canvas;
       expect(c.name).toBe("Image → Animate");
-      expect(c.pages[0].graph.nodes.filter((n) => n.data.modelId).map((n) => n.data.modelId)).toEqual(["oss-z-image-turbo", "oss-wan22-14b-fast"]);
+      expect(c.pages[0].graph.nodes.filter((n) => n.data.modelId).map((n) => n.data.modelId)).toEqual(["oss-qwen-image-21", "oss-minimax-h3"]);
       // Cloud nodes are refused with a reason.
       res = await run.POST(req("POST", { graph: board }), ctx(id));
       expect(res.status).toBe(422);

@@ -14,6 +14,7 @@ import {
   coverTone,
   customPack,
   FASHION,
+  FASHION_MODELS,
   FASHION_START,
   fashionBaseRequest,
   fashionBlocker,
@@ -22,6 +23,7 @@ import {
   fashionReducer,
   getPack,
   PACKS,
+  PHOTODUMP_MODELS,
   photodumpModel,
   planPhotodump,
   randomCast,
@@ -136,7 +138,7 @@ describe("palettes: k-means extraction", () => {
     expect(normalizeHex("12345g")).toBeNull();
     expect(paletteError({ name: "x", colors: [] })).toMatch(/at least one/);
     expect(paletteError({ name: "x", colors: Array(13).fill("#FFFFFF") })).toMatch(/up to 12/);
-    expect(paletteError({ name: "x", colors: ["#GG0000"] })).toMatch(/isn't a colour/);
+    expect(paletteError({ name: "x", colors: ["#GG0000"] })).toMatch(/isn't a color/);
     expect(paletteError({ name: "ok", colors: ["#FFFFFF"], background: "#000000" })).toBeNull();
     expect(cardStrip({ colors: ["#111111", "#222222", "#111111"], background: "#222222" })).toEqual(["#222222", "#111111"]);
     expect(paletteColors({ colors: ["#111111"], background: "#333333" })).toEqual(["#111111", "#333333"]);
@@ -169,10 +171,10 @@ describe("palettes: routing per model", () => {
     const listed = slice.models.map((m) => m.id);
     const known = new Set([...listed, ...(slice.lookup ?? []).map((m) => m.id)]);
     for (const id of Object.values(SIGNATURE_MODELS)) expect(known.has(id), id).toBe(true);
-    // Edit-only and hidden routing targets stay out of the picker list (Qwen-Image-Edit Style Reference is a
-    // text-to-image model, listed already); their field maps stay on the server.
+    // Edit-only and hidden routing targets stay out of the picker list (Krea 2 Style Reference is a text-to-image
+    // model, listed already); their field maps stay on the server.
     for (const id of ["recraft-4-style", "recraft-4-style-saved", "oss-palette-image"]) expect(listed, id).not.toContain(id);
-    expect(listed).toContain("oss-style-qwen-edit");
+    expect(listed).toContain("oss-style-krea2");
     expect((slice.lookup ?? []).every((m) => m.routes.every((r) => !r.map))).toBe(true);
   });
 
@@ -190,7 +192,7 @@ describe("palettes: routing per model", () => {
     const twelve = { ...PAL, colors: Array.from({ length: 12 }, (_, i) => `#0000${(i * 16).toString(16).padStart(2, "0").toUpperCase()}`) };
     const trimmed = applySignature(req("recraft-4-1"), { palette: twelve }, ctx);
     expect(trimmed.request.params?.palette).toHaveLength(10);
-    expect(trimmed.notes.join()).toMatch(/takes 10 colours/);
+    expect(trimmed.notes.join()).toMatch(/takes 10 colors/);
 
     const ideo = applySignature(req("ideogram-3"), { palette: PAL }, ctx);
     expect(ideo.request.params?.palette).toEqual(PAL.colors);
@@ -229,7 +231,12 @@ describe("palettes: routing per model", () => {
     expect(said(free)).toMatch(/Color palette/);
     const locked = applySignature(req("oss-qwen-image"), { palette: { ...PAL, lock: true } }, ctx);
     expect(locked.lock?.colors).toEqual([...PAL.colors, "#264653"]);
-    expect(locked.notes).toEqual(["Then recoloured to “Teal Dusk” by a palette-transfer step"]);
+    expect(locked.notes).toEqual(["Then kept to the colors of “Teal Dusk” after it's made"]);
+    // A guest or a free account never gets the lock (a run on the studio's own ComfyUI): the colors stay in the prompt.
+    const visitor = applySignature(req("oss-qwen-image"), { palette: { ...PAL, lock: true } }, { ...ctx, visitor: true });
+    expect(visitor.lock).toBeUndefined();
+    expect(visitor.notes).toEqual([]);
+    expect(said(visitor)).toMatch(/Color palette/);
   });
 
   it("leaves requests alone without a signature or an unknown model", () => {
@@ -288,11 +295,13 @@ describe("moodboards: routing per model", () => {
     expect(plan(fresh.request).op).toBe("edit");
   });
 
-  it("open engine: collages on Qwen-Image-Edit Style Reference, single refs on FLUX.2 klein, the trained LoRA on Z-Image Turbo", () => {
+  it("open engine: collages on Krea 2 Style Reference, single refs on FLUX.2 klein, the trained LoRA on Z-Image Turbo", () => {
     const def = applySignature(req("oss-z-image-turbo"), { moodboard: board }, ctx);
-    expect(def.modelId).toBe("oss-style-qwen-edit");
+    expect(def.modelId).toBe("oss-style-krea2");
     expect(def.request.inputs?.images).toEqual(board.collages);
     expect(() => plan(def.request)).not.toThrow();
+    // The 2511 style graph still runs a board when it is picked.
+    expect(applySignature(req("oss-style-qwen-edit"), { moodboard: board }, ctx).modelId).toBe("oss-style-qwen-edit");
 
     const klein = applySignature(req("oss-style-flux2-klein"), { moodboard: board }, ctx);
     expect(klein.modelId).toBe("oss-style-flux2-klein");
@@ -367,7 +376,7 @@ describe("moodboards: routing per model", () => {
     expect(applySignature(req("nano-banana-pro"), { moodboard: { ...board, status: "running" } }, ctx).blocker).toBe("This moodboard is still training. Try again once it is ready.");
     const both = applySignature(req("oss-z-image-turbo"), { moodboard: board, palette: PAL }, ctx);
     // The moodboard moves it to the style model, which then gets the palette in words (not the palette model).
-    expect(both.modelId).toBe("oss-style-qwen-edit");
+    expect(both.modelId).toBe("oss-style-krea2");
     expect(said(both)).toMatch(/Color palette/);
   });
 });
@@ -499,7 +508,7 @@ describe("Photodump packs and planning", () => {
     // A GPU-only LoRA (no copy Fuobe can send) stays off the cloud: reference photos there.
     expect(planPhotodump({ pack, subject: loraMaya, engine: "cloud" }, {}).modelId).toBe("qwen-image-edit-2511-cloud");
     const qwen = planPhotodump({ pack, subject: selfie, engine: "open", aspectRatio: "auto" }, {});
-    expect(qwen.modelId).toBe("oss-qwen-edit");
+    expect(qwen.modelId).toBe("oss-qwen-image-21");
     expect(qwen.requests[0].inputs?.images).toEqual([selfie.url]);
     expect(qwen.requests[0].params?.aspectRatio).toBeUndefined();
 
@@ -509,6 +518,28 @@ describe("Photodump packs and planning", () => {
       [selfie.url, "/api/files/uploads/a.png"],
       [selfie.url, "/api/files/uploads/b.png"],
     ]);
+    expect(custom.requests[0].prompt).toMatch(/^The person in image 1 recreated in image 2: .*Replace the person in image 2 with them/);
+    // Krea 2 Identity Edit reads the scene first and the person last (its likeness boost is on the last picture).
+    const krea = planPhotodump({ pack: mine, subject: selfie, engine: "open", modelId: "oss-krea2-identity-edit" }, {});
+    expect(krea.modelId).toBe("oss-krea2-identity-edit");
+    expect(krea.requests.map((r) => r.inputs?.images)).toEqual([
+      ["/api/files/uploads/a.png", selfie.url],
+      ["/api/files/uploads/b.png", selfie.url],
+    ]);
+    expect(krea.requests[0].prompt).toMatch(/^The person in image 2 recreated in image 1: .*Replace the person in image 1 with them/);
+    // A pack of Fuobe's own has only the selfie: image 1 on every model.
+    const kreaOwn = planPhotodump({ pack, subject: selfie, engine: "open", modelId: "oss-krea2-identity-edit" }, {});
+    expect(kreaOwn.requests[0].inputs?.images).toEqual([selfie.url]);
+    expect(kreaOwn.requests[0].prompt).toContain("the person in image 1");
+    // A saved character goes in as one photo of theirs (two pictures would read as two people), after a pack's reference.
+    const kreaMaya = planPhotodump({ pack, subject: maya, engine: "open", modelId: "oss-krea2-identity-edit" }, {});
+    expect(kreaMaya.requests[0].inputs?.images).toEqual(["/api/files/uploads/m1.png"]);
+    expect(kreaMaya.requests[0].prompt).not.toContain("@Maya");
+    const kreaMayaMine = planPhotodump({ pack: mine, subject: maya, engine: "open", modelId: "oss-krea2-identity-edit" }, {});
+    expect(kreaMayaMine.requests[0].inputs?.images).toEqual(["/api/files/uploads/a.png", "/api/files/uploads/m1.png"]);
+    expect(kreaMayaMine.requests[0].prompt).toMatch(/^The person in image 2 recreated in image 1: /);
+    // Other models still @mention the character (the server attaches their photos or Soul ID).
+    expect(planPhotodump({ pack, subject: maya, engine: "open" }, {}).requests[0].prompt).toContain("@Maya");
     expect(() => planPhotodump({ pack, subject: { ...maya, references: [] }, engine: "cloud" }, {})).toThrow(/Add a photo of Maya/);
   });
 
@@ -543,7 +574,16 @@ describe("Photodump: model choice and retries", () => {
   const selfie: PhotoSubject = { kind: "selfie", url: "/api/files/uploads/me.png" };
 
   it("says why a pick that can't run ends up on another model", () => {
-    expect(photodumpModel(selfie, "open", {}, "fuobe-soul")).toEqual({ modelId: "oss-qwen-edit", note: "Fuobe Soul needs a character with a trained Soul ID — Qwen-Image-Edit 2511 works from your photo" });
+    expect(photodumpModel(selfie, "open", {}, "fuobe-soul")).toEqual({ modelId: "oss-qwen-image-21", note: "Fuobe Soul needs a character with a trained Soul ID — Qwen-Image 2.1 works from your photo" });
+    // Your GPU's choices after Fuobe Soul: Qwen-Image 2.1, Krea 2 Identity Edit and Qwen-Image 2.1 Turbo.
+    expect(PHOTODUMP_MODELS.open).toEqual(["fuobe-soul", "oss-qwen-image-21", "oss-krea2-identity-edit", "oss-qwen-image-21-turbo"]);
+    expect(PHOTODUMP_MODELS.cloud).toEqual(["fuobe-soul", "qwen-image-edit-2511-cloud", "nano-banana-pro", "nano-banana-2-1", "seedream-5-pro"]);
+    expect(photodumpModel(selfie, "open", {}, "oss-krea2-identity-edit").modelId).toBe("oss-krea2-identity-edit");
+    expect(photodumpModel(selfie, "open", {}, "oss-qwen-image-21-turbo").modelId).toBe("oss-qwen-image-21-turbo");
+    expect(photodumpModel(selfie, "cloud", {}, "nano-banana-2-1").modelId).toBe("nano-banana-2-1");
+    // A pick of Qwen-Image-Edit 2511 saved before runs on Qwen-Image 2.1.
+    expect(photodumpModel(selfie, "open", {}, "oss-qwen-edit").modelId).toBe("oss-qwen-image-21");
+    expect(photodumpModel(selfie, "open", {}, "fuobe-soul", true).note).toBe("Your own packs recreate each reference photo — Qwen-Image 2.1 runs them");
     expect(photodumpModel(selfie, "cloud", {}, "fuobe-soul")).toEqual({ modelId: "qwen-image-edit-2511-cloud", note: "Fuobe Soul needs a character with a trained Soul ID — Qwen-Image-Edit 2511 works from your photo" });
     expect(photodumpModel(selfie, "cloud", {}, "nano-banana-pro").modelId).toBe("nano-banana-pro");
     expect(photodumpModel(selfie, "cloud", {}).modelId).toBe("qwen-image-edit-2511-cloud");
@@ -551,7 +591,7 @@ describe("Photodump: model choice and retries", () => {
     expect(photodumpModel(selfie, "open", {}).note).toBeUndefined();
     // A demo training's stand-in isn't a Soul ID.
     const demo: PhotoSubject = { kind: "element", handle: "Maya", name: "Maya", references: ["/a.png"], loras: [{ engine: "cloud", modelId: "fuobe-soul", family: "z-image-turbo", file: "fuobe/x.safetensors", trigger: "t", demo: true }] };
-    expect(photodumpModel(demo, "open", {}).modelId).toBe("oss-qwen-edit");
+    expect(photodumpModel(demo, "open", {}).modelId).toBe("oss-qwen-image-21");
   });
 
   it("a retried base shot or outfit takes the failed one's place in the wizard", () => {
@@ -578,7 +618,7 @@ describe("Fashion Factory", () => {
     // No Soul ID yet: Qwen-Image-Edit 2511 from the character's photos (with one, Fuobe Soul and the LoRA).
     expect(base).toMatchObject({ modelId: "qwen-image-edit-2511-cloud", params: { aspectRatio: "3:4", numOutputs: 4 } });
     expect(base.prompt).toMatch(/@Maya in a bold, saturated colour-blocked studio set/);
-    expect(fashionBaseRequest(t, maya, "open", {}).modelId).toBe("oss-qwen-edit");
+    expect(fashionBaseRequest(t, maya, "open", {}).modelId).toBe("oss-qwen-image-21");
 
     // Fuobe Try-On on both engines (FLUX.2 [klein] 4B + the try-on LoRA); FASHN and Nano Banana Pro stay cloud choices.
     const outfit = fashionOutfitRequest(t, "/api/files/base.png", "/api/files/shirt.png", "cloud");
@@ -601,7 +641,19 @@ describe("Fashion Factory", () => {
     expect(set).toHaveLength(t.shots);
     expect(set[0]).toMatchObject({ modelId: "qwen-image-edit-2511-cloud", inputs: { images: ["/api/files/dressed.png"] }, step: { label: `Photoset 1 of ${t.shots}` } });
     expect(fashionPhotosetRequests(t, "/api/files/dressed.png", "cloud", "nano-banana-pro")[0].modelId).toBe("nano-banana-pro");
-    expect(fashionPhotosetRequests(t, "/api/files/dressed.png", "open")[0].modelId).toBe("oss-qwen-edit");
+    expect(fashionPhotosetRequests(t, "/api/files/dressed.png", "open")[0].modelId).toBe("oss-qwen-image-21");
+    expect(fashionPhotosetRequests(t, "/api/files/dressed.png", "open", "oss-krea2-identity-edit")[0].modelId).toBe("oss-krea2-identity-edit");
+    // A pick the step no longer lists falls back to its first model.
+    expect(fashionPhotosetRequests(t, "/api/files/dressed.png", "open", "oss-qwen-edit")[0].modelId).toBe("oss-qwen-image-21");
+    // When the try-on can't run on your GPU: Qwen-Image 2.1 Turbo, then Qwen-Image 2.1, both dressing from image 2. Krea 2
+    // Identity Edit makes the photoset only: it takes a second picture as a person, and the outfit step's is a garment.
+    expect(FASHION_MODELS.outfit.open).toEqual(["fuobe-tryon", "oss-qwen-image-21-turbo", "oss-qwen-image-21"]);
+    expect(FASHION_MODELS.photoset.open).toEqual(["oss-qwen-image-21", "oss-krea2-identity-edit"]);
+    expect(fashionOutfitRequest(t, "/api/files/base.png", "/api/files/shirt.png", "open", undefined, { has: (id) => id !== "fuobe-tryon" }).modelId).toBe("oss-qwen-image-21-turbo");
+    const dressed = fashionOutfitRequest(t, "/api/files/base.png", "/api/files/shirt.png", "open", "oss-qwen-image-21");
+    expect(dressed).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit", inputs: { images: ["/api/files/base.png", "/api/files/shirt.png"] } });
+    expect(() => plan(dressed)).not.toThrow();
+    expect(fashionOutfitRequest(t, "b", "g", "open", "oss-krea2-identity-edit").modelId).toBe("fuobe-tryon");
   });
 
   it("walks the wizard with Higgsfield's validation messages", () => {
@@ -640,8 +692,21 @@ describe("Fashion Factory", () => {
   });
 });
 
+describe("apps on the newer tools", () => {
+  it("Upscale on SeedVR2 (image) on your GPU, the avatar apps on Kling Avatar 2.0, and the sound note says which clips are silent", () => {
+    expect(getPreset("app-upscale")!.open).toMatchObject({ modelId: "oss-seedvr2-image", op: "upscale-image" });
+    for (const id of ["app-talking-photo", "app-asmr-host", "app-asmr-promo"]) {
+      expect(getPreset(id)!.cloud, id).toMatchObject({ modelId: "kling-avatar-2", op: "avatar" });
+    }
+    // Kling Avatar 2.0 takes what Kling AI Avatar took: the portrait and the voice.
+    const map = (id: string) => getModel(id)!.routes.find((r) => r.op === "avatar")!.map;
+    expect(map("kling-avatar-2")).toEqual(map("kling-avatar"));
+    expect(getPreset("app-asmr-classic")!.parity).toBe("This makes a silent clip. Add sound with Video to audio.");
+  });
+});
+
 describe("Character Sheet", () => {
-  it("From Reference takes 1–5 photos (3 on the open route)", () => {
+  it("From Reference takes 1–5 photos (4 on the open route, Qwen-Image 2.1)", () => {
     const imgs = Array.from({ length: 5 }, (_, i) => `/api/files/uploads/p${i}.png`);
     expect(() => sheetFromReference([], "cloud")).toThrow("Upload at least 1 image");
     expect(() => sheetFromReference([...imgs, "x"], "cloud")).toThrow("Maximum 5 images");
@@ -649,9 +714,15 @@ describe("Character Sheet", () => {
     expect(cloud.request).toMatchObject({ modelId: "nano-banana-pro", op: "edit", inputs: { images: imgs } });
     expect(cloud.request.prompt).toMatch(/turnaround sheet.*freckles\.$/);
     const open = sheetFromReference(imgs, "open");
-    expect(open.request.inputs?.images).toHaveLength(3);
-    expect(open.notes[0]).toMatch(/first 3/);
-    expect(() => plan(open.request)).not.toThrow();
+    // Qwen-Image 2.1 at 25 steps: a sheet is camera turns, which its Turbo misses.
+    expect(open.request).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit" });
+    expect(open.request.inputs?.images).toEqual(imgs.slice(0, 4));
+    expect(open.notes[0]).toBe("Qwen-Image 2.1 takes 4 photos — the first 4 are used");
+    expect(open.notes[1]).toMatch(/^Qwen-Image 2.1 keeps the shape of your first photo/);
+    expect(sheetFromReference(imgs.slice(0, 4), "open").notes).toHaveLength(1);
+    const planned = plan(open.request);
+    expect(planned.op).toBe("edit");
+    expect(planned.model.routes.find((r) => r.op === "edit")!.endpoint).toBe("qwen-image-21-edit");
   });
 
   it("Build from scratch runs on Fuobe Soul (Nano Banana Pro when it is switched off) or the Soul Cast sheet workflow", () => {

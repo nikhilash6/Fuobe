@@ -2,11 +2,15 @@
 
 import { AudioLines, FileVideo, ImagePlus, Library, Loader2, Upload, X } from "lucide-react";
 import { nanoid } from "nanoid";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAssets, type Asset } from "@/lib/api";
+import { signInHref, useAskBeforeUpload, useAssets, useIsGuest, type Asset } from "@/lib/api";
+import { toastError } from "@/lib/refusals";
+import { postFile } from "@/lib/upload";
 import type { MediaKind } from "@/lib/catalog/types";
 import { slotCaption } from "@/lib/composer";
 import { cn } from "@/lib/utils";
@@ -33,7 +37,8 @@ export const ACCEPT: Record<MediaKind, string> = {
   model3d: ".glb,.gltf,model/gltf-binary",
 };
 
-const MAX_MB = 200;
+/** The largest file a studio takes, as the server does (src/app/api/uploads). */
+export const MAX_MB = 200;
 
 const EXT_KIND: [RegExp, MediaKind][] = [
   [/\.(mp4|webm|mov|m4v)$/i, "video"],
@@ -55,14 +60,8 @@ export const kindOfFile = (f: File): MediaKind => {
 export const wrongKindMessage = (kind: MediaKind) =>
   ({ image: "Image only — drop a photo here", video: "Video only — drop a clip here", audio: "Audio only — drop a sound file here", text: "Text only — drop a .txt or .srt file here", model3d: "3D only — drop a .glb file here" })[kind];
 
-async function upload(file: File, signal?: AbortSignal): Promise<Asset> {
-  const form = new FormData();
-  form.append("file", file);
-  const res = await fetch("/api/uploads", { method: "POST", body: form, signal });
-  const body = (await res.json().catch(() => ({}))) as Asset & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Upload failed (${res.status})`);
-  return body;
-}
+/** The file as it is: the server streams it (src/lib/upload.ts), and its error is the toast. */
+const upload = (file: File, signal?: AbortSignal): Promise<Asset> => postFile(file, signal);
 
 /**
  * Upload a File and stream state changes back: a local preview first (`uploading: true`), then
@@ -92,7 +91,8 @@ export async function fileToSlot(file: File, onChange: (v: SlotValue | null) => 
   } catch (e) {
     if (opts.signal?.aborted || (e as Error).name === "AbortError") return;
     onChange(null);
-    toast.error((e as Error).message || "Upload failed. Please try again.");
+    // Refused with its own card ("Create a free account", "Connect your GPU"): nothing on top of it.
+    toastError(e, "Upload failed. Please try again.");
   } finally {
     revoke();
   }
@@ -140,10 +140,12 @@ export function SlotPreview({ value, className }: { value: Pick<SlotValue, "kind
   return <img src={value.preview} alt={value.name ?? ""} className={cn("size-full object-cover", className)} />;
 }
 
-/** Grid of your uploads and results of one kind (or several). */
+/** Grid of your uploads and results of one kind (or several). A guest's is empty, and says how to fill it. */
 export function LibraryGrid({ kinds, onPick }: { kinds: MediaKind[]; onPick: (v: SlotValue) => void }) {
   const [kind, setKind] = useState<MediaKind>(kinds[0] ?? "image");
   const assets = useAssets(undefined, kind);
+  const guest = useIsGuest();
+  const here = usePathname();
   return (
     <div className="space-y-2">
       {kinds.length > 1 && (
@@ -178,6 +180,13 @@ export function LibraryGrid({ kinds, onPick }: { kinds: MediaKind[]; onPick: (v:
             </button>
           ))}
         </div>
+      ) : guest ? (
+        <p className="px-1 py-6 text-center text-sm text-muted-foreground">
+          <Link href={signInHref("signup", here)} className="text-brand-text underline underline-offset-2">
+            Sign up free
+          </Link>{" "}
+          to keep your uploads and results here.
+        </p>
       ) : (
         <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nothing here yet. Uploads and results show up here.</p>
       )}
@@ -214,7 +223,11 @@ function LibraryPicker({ kind, onPick }: { kind: MediaKind; onPick: (v: SlotValu
   );
 }
 
-/** A compact attachment tile: empty (dashed, click/drop to upload) or filled (thumbnail + remove). */
+/**
+ * A compact attachment tile: empty (dashed, click/drop to upload) or filled (thumbnail + remove). Someone whose upload
+ * would be refused (a guest, an account with neither its own GPU nor its own key) is asked first instead of getting the
+ * file chooser, unless the tile keeps the file in the browser (`local`).
+ */
 export function MediaSlot({
   label,
   kind,
@@ -223,6 +236,7 @@ export function MediaSlot({
   required,
   size = "md",
   onFile,
+  local,
   slotKey,
   caption,
 }: {
@@ -234,6 +248,8 @@ export function MediaSlot({
   size?: "md" | "lg";
   /** Take over file handling (e.g. to append to a list with a stable id). */
   onFile?: (f: File) => void;
+  /** `onFile` keeps the file in this browser and uploads nothing (Color grading): anyone may pick one. */
+  local?: boolean;
   /** Marks the tile so the composer can point at it ("Add a start frame"). */
   slotKey?: string;
   /** Filled, keep the slot's role on the thumbnail ("Target", "Face"), so two photos can be told apart. */
@@ -245,6 +261,9 @@ export function MediaSlot({
     if (onFile) onFile(f);
     else void fileToSlot(f, onChange, kind);
   };
+  const askFirst = useAskBeforeUpload();
+  /** True when the upload would be refused and its card opened instead. */
+  const refused = () => !local && askFirst();
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const dim = size === "lg" ? "size-20" : "size-14";
@@ -266,7 +285,7 @@ export function MediaSlot({
             e.stopPropagation();
             setOver(false);
             const f = e.dataTransfer.files?.[0];
-            if (f) handleFile(f);
+            if (f && !refused()) handleFile(f);
           }}
         >
           {value ? (
@@ -293,7 +312,7 @@ export function MediaSlot({
           ) : (
             <button
               type="button"
-              onClick={() => input.current?.click()}
+              onClick={() => refused() || input.current?.click()}
               aria-label={`${label}${required ? " (required)" : ""}: upload`}
               className={cn(
                 "flex size-full flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:bg-brand-faint hover:text-brand-text",

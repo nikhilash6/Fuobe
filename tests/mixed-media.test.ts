@@ -70,7 +70,11 @@ describe("Mixed Media presets", () => {
     for (const id of [...MIXED_MODELS.cloud, ...MIXED_MODELS.open, ...MIXED_FRAME_MODELS, ...Object.values(MIXED_TOOLS.cloud), ...Object.values(MIXED_TOOLS.open)]) expect(getModel(id), id).toBeDefined();
     // Per frame redraws each frame with an image editor; the helpers are fal's FFmpeg tools.
     for (const id of MIXED_FRAME_MODELS) expect(getModel(id)!.routes.some((r) => r.op === "edit")).toBe(true);
-    expect(getModel("nano-banana-2")!.pricing?.byResolution).toMatchObject({ "1K": 0.08, "2K": 0.12, "4K": 0.16 });
+    expect(getModel("nano-banana-2-1")!.routes.find((r) => r.op === "edit")!.map).toMatchObject({ seed: "seed", aspectRatio: "aspect_ratio", resolution: "resolution" });
+    expect(getModel("nano-banana-2-1")!.options.resolutions).toEqual(expect.arrayContaining([...MIXED.resolutions]));
+    // Nano Banana 2.1 is the partner frame editor (it takes a seed, so every frame starts from the same one).
+    expect(MIXED_FRAME_MODELS).toEqual(["fuobe-mixed-media", "nano-banana-2-1", "seedream-5-flash"]);
+    expect(MIXED_TOOLS.cloud.preview).toBe("nano-banana-2-1");
     expect(getModel("seedream-5-flash")!.pricing?.usd).toBe(0.027);
   });
 
@@ -193,14 +197,14 @@ describe("Mixed Media pipeline shape", () => {
     const open = planMixedPreview(input());
     expect(open.request).toMatchObject({ feature: "mixed-media-preview", modelId: "oss-mixed-media", params: { startTime: 2, fps: 8, extra: { frames: 1 } } });
     const cloud = planMixedPreview({ ...input({ engine: "cloud", mode: "fast", modelId: "ltx-2-3-restyle" }), frameUrl: "/api/files/uploads/frame.png" });
-    expect(cloud.request).toMatchObject({ modelId: "nano-banana-2", op: "edit", inputs: { images: ["/api/files/uploads/frame.png"] } });
+    expect(cloud.request).toMatchObject({ modelId: "nano-banana-2-1", op: "edit", inputs: { images: ["/api/files/uploads/frame.png"] } });
     expect(cloud.request.prompt).toMatch(/^Redraw this image as hand-drawn/);
   });
 });
 
 describe("Mixed Media per frame on the cloud", () => {
   const frames = (over: Partial<MixedPlanInput> = {}) =>
-    input({ engine: "cloud", modelId: "nano-banana-2", sourceFps: 24, range: { start: 2, end: 7 }, fps: 8, ...over });
+    input({ engine: "cloud", modelId: "nano-banana-2-1", sourceFps: 24, range: { start: 2, end: 7 }, fps: 8, ...over });
 
   it("takes every Nth frame of the clip, the N closest to the rate asked for", () => {
     expect(frameSampling(5, 8, 24)).toEqual({ interval: 3, fps: 8, frames: 40 });
@@ -229,7 +233,7 @@ describe("Mixed Media per frame on the cloud", () => {
 
   it("asks each editor for the frame's own shape, with a fixed seed where it takes one", () => {
     // JPEG back: every frame is downloaded and sent on twice (a 4K PNG is ten times the bytes).
-    expect(frameEditParams("nano-banana-2", "2K", 9)).toEqual({ aspectRatio: "auto", resolution: "2K", seed: 9, extra: { output_format: "jpeg" } });
+    expect(frameEditParams("nano-banana-2-1", "2K", 9)).toEqual({ aspectRatio: "auto", resolution: "2K", seed: 9, extra: { output_format: "jpeg" } });
     expect(frameEditParams("seedream-5-flash", "1K", 9)).toEqual({ extra: { image_size: "auto_1K" } });
     expect(frameEditParams("seedream-5-flash", "4K", 9)).toEqual({ extra: { image_size: "auto_2K" } });
   });
@@ -247,7 +251,7 @@ describe("Mixed Media per frame on the cloud", () => {
     // Each knows how many frames were planned (a list far short of it fails before anything is paid).
     expect(by.f0.chain).toEqual([{ slot: "images", index: 0, of: 40, position: "first" }]);
     expect(by.f0).toMatchObject({ after: ["frames1"] });
-    expect(by.f0.request).toMatchObject({ feature: "mixed-media-frame-step", modelId: "nano-banana-2", op: "edit", params: { aspectRatio: "auto", resolution: "1K", seed: FRAME_SEED, numOutputs: 1 } });
+    expect(by.f0.request).toMatchObject({ feature: "mixed-media-frame-step", modelId: "nano-banana-2-1", op: "edit", params: { aspectRatio: "auto", resolution: "1K", seed: FRAME_SEED, numOutputs: 1 } });
     expect(by.f0.request.prompt).toMatch(/^Redraw this image as hand-drawn/);
     expect(by.f1).toMatchObject({ after: ["frames1", "f0"], chain: [{ slot: "images", index: 1, position: "first" }, { slot: "images" }] });
     expect(by.f1.request.prompt).toMatch(/^Redraw the first image as .*The second image is an earlier frame of the same clip already redrawn/);

@@ -38,7 +38,9 @@ import { finishedUrl } from "@/lib/soul-post";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useCinemaGenerate, useCinemaItems } from "./hooks";
+import { placeholdersOn } from "@/lib/demo-mode";
 
 interface BuilderProps {
   open: boolean;
@@ -194,10 +196,10 @@ function useBuilderRun(projectId: string) {
   return { generate, results, setIds, current };
 }
 
-function CostLabel({ plan, demoModel }: { plan: { costUsd: number | null }; demoModel: { routes: { provider: string }[] } }) {
+function CostLabel({ plan }: { plan: { costUsd: number | null } }) {
   const status = useStatus().data;
-  const demo = !!status && status.demoMode !== "off" && !demoModel.routes.some((r) => status.providers[r.provider]?.configured);
-  return <span className="font-mono text-[12px] whitespace-nowrap text-muted-foreground">{demo ? "Demo · free" : plan.costUsd === 0 ? "Free" : plan.costUsd != null ? `≈ ${formatCost(plan.costUsd)}` : ""}</span>;
+  const demo = placeholdersOn(status?.demoMode);
+  return <span className="font-mono text-[12px] whitespace-nowrap text-muted-foreground">{demo ? "Placeholder · free" : plan.costUsd === 0 ? "Free" : plan.costUsd != null ? `≈ ${formatCost(plan.costUsd)}` : ""}</span>;
 }
 
 function SaveElement({ kind, defaultName, picked, description, onSaved }: { kind: "character" | "location"; defaultName: string; picked: string[]; description: string; onSaved: () => void }) {
@@ -218,7 +220,7 @@ function SaveElement({ kind, defaultName, picked, description, onSaved }: { kind
                 toast.success(`Saved as @${el.handle}`, { action: { label: "Open", onClick: () => router.push(`/elements/${el.id}`) } });
                 onSaved();
               },
-              onError: (e) => toast.error((e as Error).message),
+              onError: (e) => toastError(e),
             },
           )
         }
@@ -260,7 +262,7 @@ function SoulCast({ projectId, folderId, engine, context, brief, onOpenChange }:
           setIds(r.items.map((g) => g.id));
           setPicked([]);
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
   return (
@@ -325,7 +327,7 @@ function SoulCast({ projectId, folderId, engine, context, brief, onOpenChange }:
               </button>
             ))}
           </div>
-          <CostLabel plan={plan} demoModel={plan.model} />
+          <CostLabel plan={plan} />
           <Button onClick={run} disabled={generate.isPending}>
             {generate.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate character
           </Button>
@@ -406,7 +408,7 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
           setIds((ids) => (extra ? [...ids, ...r.items.map((g) => g.id)] : r.items.map((g) => g.id)));
           if (!extra) setPicked([]);
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
   return (
@@ -445,7 +447,7 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
             </button>
           ))}
         </div>
-        <CostLabel plan={plan} demoModel={plan.model} />
+        <CostLabel plan={plan} />
         <Button onClick={() => run()} disabled={generate.isPending || !prompt.trim()}>
           {generate.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate location
         </Button>

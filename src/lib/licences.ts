@@ -28,6 +28,8 @@ export interface LicenceWorkflowInput {
   title: string;
   capability: string;
   license?: string;
+  /** Its model downloads: a licence with no page of its own links to their Hugging Face page (licenceInfo). */
+  models?: { url?: string; sizeGb?: number }[];
 }
 
 export interface LicenceRow {
@@ -40,6 +42,8 @@ export interface LicenceRow {
   workflows: string[];
   /** Distinct licence texts of its workflows. */
   licences: string[];
+  /** Where to read each of `licences` (same order; null when nothing is recorded), as Models & licences links it. */
+  links: (string | null)[];
   flags: LicenceFlag[];
   /** Who a territory-restricted licence leaves out ("the EU, UK and South Korea"). */
   excludes?: string;
@@ -120,12 +124,23 @@ function endpointIds(endpoint: string, workflows: LicenceWorkflowInput[]): strin
   return workflows.filter((w) => re.test(w.id)).map((w) => w.id);
 }
 
-function rowFor(base: Omit<LicenceRow, "licences" | "flags" | "excludes" | "notices">, licences: string[]): LicenceRow & { noWeights: boolean } {
+/** Where to read a licence its workflows state: its own page, else the largest download's model card (as licenceInfo). */
+function licenceLink(text: string, workflows: LicenceWorkflowInput[]): string | null {
+  const cards = workflows
+    .filter((w) => workflowLicence(w) === text)
+    .flatMap((w) => w.models ?? [])
+    .sort((a, b) => (b.sizeGb ?? 0) - (a.sizeGb ?? 0))
+    .flatMap((m) => (m.url ? [m.url] : []));
+  return licenceInfo(text, cards).url ?? null;
+}
+
+function rowFor(base: Omit<LicenceRow, "licences" | "links" | "flags" | "excludes" | "notices">, licences: string[], workflows: LicenceWorkflowInput[]): LicenceRow & { noWeights: boolean } {
   const terms = licences.map(licenceTerms);
   const flags = (["non-commercial", "territory", "conditions"] as const).filter((f) => terms.some((t) => t.flags.includes(f)));
   return {
     ...base,
     licences,
+    links: licences.map((l) => licenceLink(l, workflows)),
     // A row with a stricter catch doesn't also say "conditions".
     flags: flags.includes("conditions") && flags.length > 1 ? flags.filter((f) => f !== "conditions") : flags,
     excludes: terms.find((t) => t.excludes)?.excludes,
@@ -156,12 +171,13 @@ export function buildLicenceList(models: LicenceModelInput[], workflows: Licence
     const ids = [...new Set(m.routes.filter((r) => r.provider === "comfyui").flatMap((r) => endpointIds(r.endpoint, workflows)))];
     if (!ids.length || ids.every((id) => id.startsWith("selftest-"))) continue;
     ids.forEach((id) => used.add(id));
-    const licences = [...new Set(ids.map((id) => workflowLicence(byId.get(id) ?? { id })))];
-    add(rowFor({ id: m.id, name: m.name, by: m.vendor, kind: m.kind, workflows: ids, inCatalog: true }, licences));
+    const wfs = ids.map((id) => byId.get(id) ?? { id, title: id, capability: m.kind });
+    const licences = [...new Set(wfs.map(workflowLicence))];
+    add(rowFor({ id: m.id, name: m.name, by: m.vendor, kind: m.kind, workflows: ids, inCatalog: true }, licences, wfs));
   }
   for (const w of workflows) {
     if (used.has(w.id) || w.id.startsWith("selftest-")) continue;
-    add(rowFor({ id: w.id, name: w.title, by: "Workflow library", kind: w.capability, workflows: [w.id], inCatalog: false }, [workflowLicence(w)]));
+    add(rowFor({ id: w.id, name: w.title, by: "Workflow library", kind: w.capability, workflows: [w.id], inCatalog: false }, [workflowLicence(w)], [w]));
   }
 
   const notices = new Map<string, string[]>();
@@ -256,9 +272,11 @@ const SPDX = (id: string) => `https://spdx.org/licenses/${id}.html`;
 const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] = [
   { re: /FLUX\.1 \[dev\] Non-Commercial License|FLUX\.1 \[dev\] base is NON-COMMERCIAL/, name: "FLUX.1 [dev] Non-Commercial License", class: "non-commercial", url: "https://huggingface.co/black-forest-labs/FLUX.1-dev" },
   { re: /FLUX \[dev\] Non-Commercial License/, name: "FLUX [dev] Non-Commercial License", class: "non-commercial", url: "https://huggingface.co/black-forest-labs/FLUX.2-dev" },
+  { re: /Ideogram Non-Commercial Model Agreement/, name: "Ideogram Non-Commercial Model Agreement", class: "non-commercial", url: "https://huggingface.co/ideogram-ai/ideogram-4-fp8/blob/main/LICENSE.md" },
   { re: /inswapper/, name: "InsightFace inswapper (research only)", class: "research", url: "https://github.com/deepinsight/insightface" },
   { re: /CC-BY-NC-SA-4\.0/, name: "CC BY-NC-SA 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-SA-4.0") },
   { re: /CC[- ]BY[- ]NC(?:[- ]4\.0)?\b/, name: "CC BY-NC 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-4.0") },
+  { re: /Qwen Research License/, name: "Qwen Research License", class: "non-commercial", url: "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE" },
   { re: /Tencent Hunyuan 3D 2\.1 Community License/, name: "Tencent Hunyuan 3D 2.1 Community License", class: "regions" },
   { re: /Tencent Hunyuan Community License/, name: "Tencent Hunyuan Community License", class: "regions" },
   { re: /CogVideoX License/, name: "CogVideoX License", class: "conditions" },
@@ -336,7 +354,7 @@ export const PROVIDER_NAME: Record<string, string> = {
   fal: "fal.ai",
   replicate: "Replicate",
   comfyui: "ComfyUI (your GPU)",
-  llm: "Claude or Ollama",
+  llm: "Claude or a local model",
   local: "Your browser",
   openai: "OpenAI",
   google: "Google",
@@ -356,14 +374,17 @@ export function paidApiLicence(vendor: string, routes: { provider: string; endpo
   };
 }
 
-/** Text steps: Claude through the Anthropic key, else the Ollama model; on the open engine, Ollama only. */
-export function llmLicence(endpoint: string, ollamaModel = "qwen3:8b"): LicenceInfo {
+/**
+ * Text steps: Claude through the Anthropic key, else the local model; on the open engine, the local model only.
+ * `model` is the one the local server in use runs ("" when it picks one later), `server` names that server.
+ */
+export function llmLicence(endpoint: string, model = "qwen3:8b", server = "Ollama"): LicenceInfo {
   if (endpoint !== "ollama") {
     return {
-      name: "Paid API · Anthropic (or Ollama)",
+      name: "Paid API · Anthropic (or a local model)",
       class: "paid-api",
       url: "https://www.anthropic.com/legal/commercial-terms",
-      note: "Claude through your Anthropic key, under Anthropic's commercial terms; with no key, the Ollama model on your machine",
+      note: "Claude through your Anthropic key, under Anthropic's commercial terms; with no key, the local model on your machine (Ollama, LM Studio or Unsloth Studio)",
     };
   }
   const known: [RegExp, string, LicenceClass, string?][] = [
@@ -373,8 +394,12 @@ export function llmLicence(endpoint: string, ollamaModel = "qwen3:8b"): LicenceI
     [/^gemma/i, "Gemma Terms of Use", "conditions", "https://ai.google.dev/gemma/terms"],
     [/^llama/i, "Llama Community License", "conditions", "https://www.llama.com/"],
   ];
-  const hit = known.find(([re]) => re.test(ollamaModel));
-  const note = `The Ollama model this install uses (${ollamaModel}); another model carries its own licence: ollama show <model> --license`;
+  // LM Studio and Unsloth name a model by publisher ("google/gemma-3-12b", "unsloth/Qwen3-8B-GGUF"): the last part names the family.
+  const family = model.split("/").pop() ?? "";
+  const hit = family ? known.find(([re]) => re.test(family)) : undefined;
+  const note = model
+    ? `The model this install's text steps use on ${server} (${model}); another model carries its own licence (its model card, or ollama show <model> --license)`
+    : `${server} hasn't said which model it runs yet; that model carries its own licence (its model card)`;
   return hit ? { name: hit[1], class: hit[2], note, ...(hit[3] && { url: hit[3] }) } : { name: "Not recorded", class: "unknown", note };
 }
 
@@ -407,7 +432,6 @@ export const NODE_PACKS: NodePack[] = [
   pack("ComfyUI-WanVideoWrapper", "https://github.com/kijai/ComfyUI-WanVideoWrapper", { name: "Apache-2.0", class: "commercial", url: SPDX("Apache-2.0"), note: "Code Apache-2.0; the Wan weights it loads are Apache-2.0" }),
   pack("ComfyUI-VideoHelperSuite", "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite", { ...GPL, note: "Video loading and saving; GPL-3.0 code, like ComfyUI" }),
   pack("ComfyUI-KJNodes", "https://github.com/kijai/ComfyUI-KJNodes", { ...GPL, note: "Utility nodes (GrowMaskWithBlur, resizing); GPL-3.0 code, like ComfyUI" }),
-  pack("ComfyUI-SeedVR2_VideoUpscaler", "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler", { name: "Apache-2.0", class: "commercial", url: SPDX("Apache-2.0"), note: "SeedVR2 upscaling; code and weights Apache-2.0" }),
   pack("ComfyUI-Frame-Interpolation", "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "RIFE and FILM frame interpolation; MIT code" }),
   pack("ComfyUI-RMBG", "https://github.com/1038lab/ComfyUI-RMBG", { ...GPL, note: "Background removal; GPL-3.0 code. Fuobe uses BEN2 (MIT); RMBG-2.0 in the same pack is CC BY-NC 4.0" }),
   pack("ComfyUI-ReActor", "https://github.com/Gourieff/ComfyUI-ReActor", { name: "MIT (per the research)", class: "commercial", note: "Face swap node; the inswapper_128 weights it loads are for non-commercial research only" }),
@@ -422,6 +446,7 @@ export const NODE_PACKS: NodePack[] = [
   pack("ComfyUI-Whisper", "https://github.com/yuvraj108c/ComfyUI-Whisper", { name: "CC BY-NC-SA 4.0", class: "non-commercial", url: SPDX("CC-BY-NC-SA-4.0"), note: "Word-timed captions in one job; non-commercial code (the author asks to be contacted for commercial use). The Whisper weights are MIT" }),
   pack("ComfyUI-LatentSyncWrapper", "https://github.com/ShmuelRonen/ComfyUI-LatentSyncWrapper", NO_FILE("; the LatentSync 1.6 weights are CreativeML OpenRAIL++-M"), "isolated"),
   pack("ComfyUI-ThinkSound_Wrapper", "https://github.com/ShmuelRonen/ComfyUI-ThinkSound_Wrapper", NO_FILE("; the ThinkSound weights are Apache-2.0"), "isolated"),
+  pack("ausboss-nodes", "https://github.com/ausboss/ComfyUI-AusBoss", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "Crop For Inpaint, Stitch Inpaint and Crop + Rotate + Pad for Qwen-Image 2.1's inpaint and expand; MIT code. The Qwen-Image 2.1 weights they run are non-commercial" }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
     ...GPL,
@@ -443,6 +468,32 @@ export const NODE_PACKS: NodePack[] = [
     class: "commercial",
     url: SPDX("MIT"),
     note: "Dialogue / music / effects separation; MIT code, vendored DBS code Apache-2.0 with MIT notices; the DBS weights are Apache-2.0, trained on DnR v2 (CC BY 4.0). Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved",
+  }),
+  // Krea 2's edits (the owner's SOTA image families, 2026-10-31).
+  pack("comfyui-krea2edit", "https://github.com/lbouaraba/comfyui-krea2edit", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Krea 2 Identity Edit's nodes (Krea 2 Edit and Identity Edit); Apache-2.0 code. The V2 edit LoRAs they run are non-commercial without a licence from their author",
+  }),
+  pack("ComfyUI-Krea2-Ostris-Edit", "https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Ostris' Krea 2 edit nodes (Krea 2 Inpaint); MIT code. The inpaint LoRA it runs is under the Krea 2 Community License",
+  }),
+  // MiniMax H3 video (minimax-h3-t2v / i2v / flf2v), pinned in install-comfyui.sh.
+  pack("ComfyUI-MiniMax-H3-Turbo", "https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo/tree/77bfa67575b14e3be6214f1747732e540c68b5dd", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "larryvrh's turbo LoRA loader and sampler for MiniMax H3 (8 steps); Apache-2.0 code, and the turbo v4 LoRA is Apache-2.0. The MiniMax H3 weights it runs leave out the US, the EU, the UK and South Korea",
+  }),
+  pack("plaguekind-nodes", "https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes/tree/d58d006a4ea32c25c06499f2ff104f0852a045a6", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "PlagueKind's H3 SLA attention (needs Triton) and AdaLN LoRA fix for MiniMax H3; MIT code",
   }),
 ];
 
@@ -474,39 +525,6 @@ export const ATTRIBUTIONS: Attribution[] = [
   { for: "DBS (vendored code)", text: "BS-RoFormer, copyright (c) 2023 Phil Wang", licence: "MIT", url: "https://github.com/lucidrains/BS-RoFormer" },
   { for: "DBS (vendored code)", text: "Music-Source-Separation-Training, copyright (c) 2024 Roman Solovyev (ZFTurbo)", licence: "MIT", url: "https://github.com/ZFTurbo/Music-Source-Separation-Training" },
   { for: "DBS (vendored code)", text: "TIGER / Look2Hear, copyright (c) 2026 Kai Li", licence: "MIT", url: "https://github.com/JusperLee/TIGER" },
-];
-
-// ---------------------------------------------------------------------------
-// Libraries pinned under the accounts plan's version rule (docs/research/accounts-8.md §5.2): the newest release at
-// least 14 days old and free of OSV advisories, pinned exact in package.json (a test keeps the two in step). Each
-// package that adds one records it here with its licence.
-
-export interface PinnedLibrary {
-  name: string;
-  /** The exact version in package.json. */
-  version: string;
-  /** What Fuobe uses it for. */
-  use: string;
-  /** When the rule was applied (the 14 days count back from here). */
-  pinnedOn: string;
-  licence: LicenceInfo;
-}
-
-export const PINNED_LIBRARIES: PinnedLibrary[] = [
-  {
-    name: "better-auth",
-    version: "1.7.10",
-    use: "Sign-in behind Fuobe: passwords and sessions (later passkeys, two-step, Google/GitHub/OIDC and company sign-in)",
-    pinnedOn: "2026-10-29",
-    licence: { name: "MIT", class: "commercial", url: "https://github.com/better-auth/better-auth/blob/main/LICENSE.md", note: "MIT; every @better-auth/* package it pulls in is the same version" },
-  },
-  {
-    name: "kysely",
-    version: "0.29.6",
-    use: "The SQL layer Better Auth runs on (Fuobe hands it the connection with transactions off)",
-    pinnedOn: "2026-10-29",
-    licence: { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "MIT; already Better Auth's dependency, pinned so Fuobe and Better Auth share one copy" },
-  },
 ];
 
 /** The parts of a LoRA's licence snapshot the class needs (src/lib/catalog/types.ts LoraLicence). */

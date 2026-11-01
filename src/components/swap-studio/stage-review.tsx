@@ -13,6 +13,7 @@ import { assemblyPieces, assemblyTakes, currentSegments, DECISION_LABELS, FINISH
 import { STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
 import { downloadHref } from "@/lib/library";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { decisionsHref, useAssemble, useStopJob } from "./hooks";
 import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
 import type { StageProps } from "./workbench";
@@ -211,7 +212,7 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
             <Button
               className="h-9 rounded-full"
               disabled={"problem" in found || assemble.isPending || state.status === "queued" || state.status === "running" || (current && state.status === "succeeded")}
-              onClick={() => assemble.mutate({ clipId: clip.id }, { onSuccess: () => toast("Assembling the clip"), onError: (e) => toast.error((e as Error).message) })}
+              onClick={() => assemble.mutate({ clipId: clip.id }, { onSuccess: () => toast("Assembling the clip"), onError: (e) => toastError(e) })}
             >
               {assemble.isPending ? <Loader2 className="size-4 animate-spin" /> : <Film className="size-4" />} {a ? "Assemble again" : "Assemble clip"}
             </Button>

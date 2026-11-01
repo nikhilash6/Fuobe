@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
  * Build plan O7: Fuobe calls no Higgsfield API. This file fails when a code path names that provider again (its id,
@@ -26,7 +26,7 @@ const { SOUL_LEGACY_IDS } = await import("@/lib/catalog/soul-looks.generated");
 const { PROVIDER_SETTINGS } = await import("@/lib/connections");
 const { PROVIDERS, provider, RETIRED_PROVIDER_ERROR } = await import("@/server/providers");
 const { SETTINGS, getSetting, setSetting } = await import("@/server/settings");
-const { db, migrationIndexOf } = await import("@/server/db");
+const { db, MIGRATIONS } = await import("@/server/db");
 const { withCurrentModels } = await import("@/lib/catalog/canvas");
 const generationsRoute = await import("@/app/api/generations/route");
 const { currentRequest, ensureRunner, getGeneration, listGenerations, previewGeneration } = await import("@/server/generations");
@@ -34,6 +34,8 @@ const { planCaps, retryPhoto } = await import("@/server/photodump");
 const assistTools = await import("@/server/assist/tools");
 const { saveFile } = await import("@/server/storage");
 
+// Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
+beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 let rows = 0;
@@ -538,8 +540,8 @@ describe("stored ids resolve where they are read", () => {
 describe("the O7 migration", () => {
   it("deletes the retired key, resets the provider choice and marks the ads drawn whole as baked", () => {
     const d = db();
-    // The O7 migration by what it does (later packages append theirs after it).
-    const last = migrationIndexOf("DELETE FROM settings WHERE key = 'higgsfield.key'");
+    // The O7 migration by its content (later migrations follow it, and some of them can't run twice).
+    const last = MIGRATIONS.findIndex((m) => m.includes("DELETE FROM settings WHERE key = 'higgsfield.key'"));
     expect(last).toBeGreaterThan(0);
     // An install from before: rows the migration rewrites, then the migration runs again on the next open.
     d.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('higgsfield.key', 'id:secret'), ('cloud.provider', 'higgsfield')").run();

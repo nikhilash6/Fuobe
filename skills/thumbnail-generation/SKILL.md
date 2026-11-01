@@ -38,7 +38,7 @@ most 4 words of text.
 - Text in the image: cloud `ideogram-4-5` or `nano-banana-pro` (both render short headlines
   well), `gpt-image-2-5` for complex scenes. Open: `oss-qwen-image` (best open text rendering).
 - With the user's face: op `edit` with their photo in `images` ("use the person from the photo,
-  same face") on `nano-banana-pro` / `oss-qwen-edit`.
+  same face") on `nano-banana-pro` / `oss-qwen-image-21` (`oss-qwen-edit` after it).
 - Put the exact headline in quotes in the prompt and say "the only text in the image".
 
 ## 4. Finish

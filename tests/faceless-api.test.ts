@@ -495,7 +495,7 @@ describe("Explainer", () => {
     const v = await view(ep.id);
     expect(v.episode.status).toBe("rendering");
     const still = v.steps.find((s) => s.part === "still")!.generation!;
-    expect(still).toMatchObject({ modelId: "oss-qwen-edit", op: "edit" });
+    expect(still).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit" });
     expect(still.request.inputs?.images).toEqual([img]);
     await faceless.deleteEpisode(ep.id);
   });

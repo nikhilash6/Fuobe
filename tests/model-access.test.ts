@@ -295,7 +295,7 @@ describe("chains and Originals refuse a switched-off step before anything is que
     // Without an engine asked for, it runs on the one still on, the relight step with it.
     const [clip, relit] = createGenerations(relight);
     expect(clip).toMatchObject({ modelId: "fuobe-dop", engine: "open" });
-    expect(relit.modelId).toBe("oss-qwen-relight");
+    expect(relit.modelId).toBe("oss-qwen-image-21-turbo");
   });
 
   it("names the switch, not Engine mode, when cloud only meets an Original whose cloud half is off", () => {

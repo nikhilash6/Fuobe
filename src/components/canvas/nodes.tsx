@@ -116,6 +116,7 @@ import { DUB_LANGUAGES, supportsTarget } from "@/lib/av/languages";
 import { matchSpokenLanguage, spokenLanguageName, spokenLanguageOptions } from "@/lib/speech-languages";
 import { keyCombo } from "@/lib/keys";
 import { cn } from "@/lib/utils";
+import { responseError, toastError } from "@/lib/refusals";
 import { BOARD_NODE_TYPES, type BoardType } from "./board";
 import { NodeIcon, PORT_COLOR, useEditorActions, useEditorGlobals, useEditorSelector, useNodeResults, useNodeView, type EditorSnapshot, type NodeResults } from "./canvas-context";
 
@@ -660,7 +661,7 @@ function EngineBadge({ model }: { model?: ModelDef }) {
 
 function costLabel(isDemo: (m: ModelDef) => boolean, model: ModelDef | undefined, cost: number | null): string {
   if (!model) return "";
-  if (isDemo(model)) return "Demo · free";
+  if (isDemo(model)) return "Placeholder · free";
   if (model.engine === "open") return "Free · your GPU";
   return cost == null ? "Price unknown" : cost === 0 ? "Free" : `≈ ${formatCost(cost)}`;
 }
@@ -946,11 +947,11 @@ function OpenDub({ id, data }: { id: string; data: CanvasNodeData }) {
     try {
       const res = await fetch("/api/dub", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ engine: "open", mode: "steps", video, targets: [lang], source: "auto", title: data.label || "Canvas dub" }) });
       const body = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
-      if (!res.ok || !body.id) throw new Error(body.error ?? "Couldn't start the dub");
+      if (!res.ok || !body.id) throw responseError(res, body.error ?? "Couldn't start the dub");
       actions.update(id, { dubId: body.id });
       toast.success("Dub started", { description: "Check the translation in Translate & dub, then have it spoken. The dubbed video comes back here." });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }

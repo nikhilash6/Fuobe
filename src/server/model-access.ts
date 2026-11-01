@@ -43,8 +43,8 @@ import {
   type ModelAccess,
 } from "@/lib/model-access";
 import { db } from "./db";
+import { localModelInUse } from "./llm";
 import { loadManifest } from "./providers/comfyui";
-import { getSetting } from "./settings";
 
 /**
  * Settings → Models & licences on the server: the switches (one settings row, JSON), each route's licence and
@@ -55,13 +55,27 @@ import { getSetting } from "./settings";
 
 const KEY = "models.access";
 
-let cached: { raw: string | null; access: ModelAccess } | null = null;
+let cached: { raw: string | null; llm: string; access: ModelAccess } | null = null;
 
-/** The switches in effect (the same object while they don't change, so gated model views stay cached). */
+/** The local text model as the licence reads it ("LM Studio|google/gemma-3-12b"). */
+const llmKey = () => {
+  const m = localModelInUse();
+  return `${m.label}|${m.model}`;
+};
+
+/**
+ * The switches in effect (the same object while they don't change, so gated model views stay cached). With a
+ * licence class off, another local text model makes a new object too: its licence decides whether the class
+ * switch reaches the text model.
+ */
 export function readAccess(): ModelAccess {
   const row = db().prepare("SELECT value FROM settings WHERE key = ?").get(KEY) as { value: string } | undefined;
   const raw = row?.value ?? null;
-  if (!cached || cached.raw !== raw) cached = { raw, access: parseAccess(raw) };
+  if (!cached || cached.raw !== raw) cached = { raw, llm: "", access: parseAccess(raw) };
+  if (cached.access.classes.length) {
+    const llm = llmKey();
+    if (cached.llm !== llm) cached = { raw, llm, access: parseAccess(raw) };
+  }
   return cached.access;
 }
 
@@ -109,7 +123,10 @@ function comfyFacts(endpoint: string): { licence: LicenceInfo; packs: string[]; 
 export function routeLicence(route: ModelRoute, model: Pick<ModelDef, "vendor">): LicenceInfo {
   if (route.provider === "comfyui") return comfyFacts(route.endpoint).licence;
   if (route.provider === "local") return BROWSER_LICENCE;
-  if (route.provider === "llm") return llmLicence(route.endpoint, getSetting("ollamaModel"));
+  if (route.provider === "llm") {
+    const local = localModelInUse();
+    return llmLicence(route.endpoint, local.model, local.label);
+  }
   return paidApiLicence(model.vendor, [route]);
 }
 
@@ -198,6 +215,18 @@ export function offeredDefault(id: string | undefined, engine: Engine): string |
   if (!own) return id;
   const ops = new Set(onEngine(own, engine).routes.map((r) => r.op));
   const next = MODELS.find((m) => !m.hidden && m.id !== id && m.kind === own.kind && isOffered(m.id, engine) && onEngine(offeredModel(m)!, engine).routes.some((r) => ops.has(r.op) && providerEngine(r.provider) === engine));
+  return next?.id ?? id;
+}
+
+/**
+ * A default someone can run (`ready`: an account's own keys reach one of its providers), else the first model that is on,
+ * does the same job on this engine and is ready, else the default itself (its run then asks for the key it needs).
+ */
+export function reachableDefault(id: string | undefined, engine: Engine, ready: (m: ModelDef) => boolean): string | undefined {
+  const own = id ? MODELS.find((m) => m.id === id) : undefined;
+  if (!own || ready(own)) return id;
+  const ops = new Set(onEngine(own, engine).routes.map((r) => r.op));
+  const next = MODELS.find((m) => !m.hidden && m.id !== id && m.kind === own.kind && isOffered(m.id, engine) && ready(m) && onEngine(offeredModel(m)!, engine).routes.some((r) => ops.has(r.op) && providerEngine(r.provider) === engine));
   return next?.id ?? id;
 }
 
@@ -357,6 +386,7 @@ export function accessList(): AccessList {
       licence,
       ...(cloud && { cloud }),
       ...(weights && { weights }),
+      ...(m.engineNote && { engineNote: m.engineNote }),
       packs,
       on: !access.models.includes(m.id),
       offBy: all ? labels : [],

@@ -1,5 +1,4 @@
 import "server-only";
-import fs from "node:fs";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { Cue } from "@/lib/cues";
@@ -20,11 +19,10 @@ import {
 import { normalizeCues } from "@/lib/av/cue-edit";
 import { getModel } from "@/lib/catalog";
 import type { Engine, Generation } from "@/lib/catalog/types";
-import { probeMedia } from "@/lib/media-probe";
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { cancelGeneration, createGenerations, getGeneration, previewChained } from "./generations";
-import { absolutePath } from "./storage";
+import { storedMedia } from "./storage";
 
 /**
  * Translate & dub sessions. A session remembers the source video, the languages and which generations
@@ -97,36 +95,15 @@ export interface CreateDubInput {
 }
 
 /**
- * Lengths read from stored files, by path, size and time: a dub (or an Assist call) is checked, priced
- * and started, each asking for the length, and reading a 200 MB upload each time would block the server.
+ * The source's length: its MP4/MOV header, else what the browser measured. The dubbed voice track is this long. Only
+ * the header is read, once per file (a dub is checked, priced and started, each asking for the length), and a visitor's
+ * price check reads only its own file (storedMedia). Gone, another's, or a header Fuobe can't read (WebM): what the
+ * browser measured.
  */
-const lengths = new Map<string, number | null>();
-
-/** The source's length: its MP4/MOV header, else what the browser measured. The dubbed voice track is this long. */
 export function videoLength(ref: string, measured?: number): number | undefined {
-  try {
-    if (ref.startsWith("/api/files/")) {
-      const abs = absolutePath(decodeURIComponent(ref.slice("/api/files/".length)));
-      const st = fs.statSync(abs);
-      const key = `${abs}|${st.size}|${st.mtimeMs}`;
-      if (!lengths.has(key)) {
-        let d: number | null = null;
-        try {
-          const info = probeMedia(fs.readFileSync(abs));
-          const v = info?.videoDuration ?? info?.duration;
-          d = v && v > 0 ? v : null;
-        } catch {
-          // An unreadable header (WebM): what the browser measured.
-        }
-        lengths.set(key, d);
-        if (lengths.size > 64) lengths.delete(lengths.keys().next().value!);
-      }
-      const d = lengths.get(key);
-      if (d) return d;
-    }
-  } catch {
-    // Gone: what the browser measured.
-  }
+  const info = storedMedia(ref)?.info;
+  const v = info?.videoDuration ?? info?.duration;
+  if (v && v > 0) return v;
   return measured && measured > 0 ? measured : undefined;
 }
 

@@ -2,7 +2,6 @@
 
 import { Brush, Eraser, Loader2, Redo2, RotateCcw, Type, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
@@ -11,6 +10,7 @@ import { uploadFile } from "@/lib/api";
 import type { MotionPaths } from "@/lib/motion-paths";
 import { keyCombo, useModKey } from "@/lib/keys";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 
 /**
  * Paint on top of an image.
@@ -191,7 +191,7 @@ function SketchCanvas({
   const noteOpen = useRef(false);
 
   useEffect(() => {
-    loadImage(image).then(setImg, (e) => toast.error((e as Error).message));
+    loadImage(image).then(setImg, (e) => toastError(e));
   }, [image]);
 
   // Fit the image into the available area; strokes are stored in image pixels.
@@ -428,7 +428,7 @@ function SketchCanvas({
       onDone({ mask: maskUrl, overlay: overlay.url, preview: overlay.url, motion, strokes });
       onOpenChange(false);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setSaving(false);
     }

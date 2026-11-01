@@ -14,6 +14,7 @@ import { chainState } from "@/lib/catalog/shorts";
 import type { Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
 import { downloadHref, downloadName, userTitle } from "@/lib/library";
+import { toastError } from "@/lib/refusals";
 import { isFrameRender, renderSteps, useFramesProgress, useMixedActions } from "./hooks";
 
 /** The finished videos and their helper steps (a failed render shows the failing step's own error). */
@@ -42,7 +43,7 @@ export function MixedHistory({ onStart }: { onStart: () => void }) {
     if (actions.retry.isPending) return;
     void guard(`retry:${id}`, (requestId) => actions.retry.mutateAsync({ id, requestId }))
       .then((r) => r && toast("Rendering it again"))
-      .catch((e: Error) => toast.error(e.message));
+      .catch((e: Error) => toastError(e));
   };
   if (list.isLoading)
     return (

@@ -54,9 +54,9 @@ describe("Models & licences in listings and picks", () => {
   });
 
   it("tells the browser what is off through /api/status, and nothing while everything is on", async () => {
-    expect(((await (await status(new Request("http://localhost/"))).json()) as { access?: unknown }).access).toBeUndefined();
+    expect(((await (await status()).json()) as { access?: unknown }).access).toBeUndefined();
     changeAccess([{ kind: "provider", id: "replicate", on: false }, { kind: "class", id: "research", on: false }]);
-    const body = (await (await status(new Request("http://localhost/"))).json()) as { access: { off: string[] } };
+    const body = (await (await status()).json()) as { access: { off: string[] } };
     expect(body.access.off).toContain("oss-reactor");
     expect(body.access.off.length).toBeGreaterThan(5);
   });
@@ -92,7 +92,7 @@ describe("Models & licences in listings and picks", () => {
   });
 
   it("lists every model, LoRA and node pack with its licence, and flips switches through the settings API", async () => {
-    const list = (await (await settingsRoute.GET(new Request("http://localhost/"))).json()) as import("@/lib/model-access").AccessList;
+    const list = (await (await settingsRoute.GET()).json()) as import("@/lib/model-access").AccessList;
     expect(list.models.length).toBeGreaterThan(300);
     // The library's 118 LoRAs (Fuobe Try-On's try-on LoRA, the Storyboard's next-scene LoRA, and since O11 Fuobe Angles'
     // Multiple-angles and Fuobe Speak's FusioniX among them), the preset LoRA map's files that aren't library files, and

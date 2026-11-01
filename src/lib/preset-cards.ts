@@ -6,9 +6,12 @@
  * the browser. A preset with a real cover (a measured render, see preset-previews.generated.ts) shows
  * it; the others get a procedural preview: a camera move over a bundled layered still for motions, a
  * per-category animated treatment for effects and apps. Pure module, safe on both sides.
+ *
+ * The covers manifest is read in preset-card-data.ts (previewFor, toPresetCard), not here: client
+ * components import this module, and would carry the whole manifest into every chunk they are in.
  */
 import type { Preset } from "./catalog/types";
-import { PRESET_PREVIEWS } from "./preset-previews.generated";
+import { PRESET_PEAKS } from "./preset-peaks.generated";
 
 /** Bundled sample stills (public/samples/previews, see scripts/gen-preview-scenes.mjs). */
 export type PreviewScene = "landscape" | "portrait" | "city" | "product";
@@ -175,8 +178,14 @@ export type PreviewFx = (typeof FX)[number];
 export interface PresetPreview {
   /** Still shown before (and under) the preview. */
   poster: string;
-  /** A real example clip, once one exists: played instead of the procedural preview. */
+  /** A real cover's clip (preset-previews.generated.ts), played instead of the procedural preview. */
   video?: string;
+  /**
+   * Shown at rest instead of the poster: the clip's peak frame (preset-peaks.generated.ts, onPeak), where the clip
+   * starts (`at`, in seconds) when it plays by itself, so nothing jumps. Its loop comes back to `from`, just before
+   * the change starts, and a hover starts there. Home's cards and the preset header; the galleries keep their posters.
+   */
+  rest?: { src: string; at: number; from: number };
   scene: PreviewScene;
   move?: CameraMove;
   fx?: PreviewFx;
@@ -380,11 +389,9 @@ export function previewScene(p: Pick<Preset, "type" | "name" | "category"> & { i
   return pick(p.id, ["portrait", "landscape", "city", "portrait"] as const);
 }
 
-export function previewFor(p: Pick<Preset, "id" | "type" | "name" | "category">): PresetPreview {
+/** The procedural preview (a preset without a real cover): a camera move for motions, a treatment for effects and apps. */
+export function proceduralPreview(p: Pick<Preset, "id" | "type" | "name" | "category">): PresetPreview {
   const scene = previewScene(p);
-  // A real cover, rendered and measured by the evaluation harness (pnpm eval:covers), replaces the procedural one.
-  const real = PRESET_PREVIEWS[p.id];
-  if (real) return { poster: real.poster, ...(real.video && { video: real.video }), scene };
   return {
     poster: scenePoster(scene),
     scene,
@@ -393,12 +400,31 @@ export function previewFor(p: Pick<Preset, "id" | "type" | "name" | "category">)
 }
 
 /**
- * Whether a card shows its still mirrored, so neighbouring treatments on the same still differ.
- * Never for camera moves (a pan left must still go left). Derived from the id on the client, so it
- * costs nothing in the gallery payload.
+ * Whether a preview is a real cover (preset-previews.generated.ts) rather than a procedural one: every
+ * procedural preview carries a camera move (motions) or a treatment (effects, apps), a cover neither.
  */
-export function previewFlip(c: { id: string; preview: Pick<PresetPreview, "move"> }): boolean {
-  return !c.preview.move && ((stableHash(c.id) >>> 3) & 1) === 1;
+export const isCover = (p: Pick<PresetPreview, "move" | "fx">) => !p.move && !p.fx;
+
+/**
+ * A poster's 320 px copy: thumbs/ next to it (pnpm eval:covers makes the covers' own, gen-preset-peaks the peaks'),
+ * with the poster's version (?v=), which the generators hash from both files.
+ */
+export const thumbOf = (poster: string) => poster.replace(/\/([^/]+)$/, "/thumbs/$1");
+
+/** The card resting on its clip's peak frame (preset-peaks.generated.ts) when it has one, else as it is. */
+export function onPeak(card: PresetCardData): PresetCardData {
+  const peak = PRESET_PEAKS[card.id];
+  if (!peak) return card;
+  return { ...card, preview: { ...card.preview, rest: { src: `/previews/presets/peak/${card.id}.jpg?v=${peak.v}`, at: peak.at, from: peak.from } } };
+}
+
+/**
+ * Whether a card shows its still mirrored, so neighbouring treatments on the same still differ.
+ * Never for camera moves (a pan left must still go left), nor for a real cover (shown as rendered).
+ * Derived from the id on the client, so it costs nothing in the gallery payload.
+ */
+export function previewFlip(c: { id: string; preview: Pick<PresetPreview, "move" | "fx"> }): boolean {
+  return !!c.preview.fx && ((stableHash(c.id) >>> 3) & 1) === 1;
 }
 
 /** The hue a preset's look was built from (`oklch(L C <hue>)`), for tinting its preview. */
@@ -407,26 +433,22 @@ export function lookHue(look: Preset["look"]): number {
   return m ? Math.round(Number(m[1])) % 360 : 282;
 }
 
-/** Shorten to at most `max` characters at a word boundary (cards show two lines). */
-export function clip(s: string, max: number): string {
-  if (s.length <= max) return s;
-  const cut = s.slice(0, max - 1);
-  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max * 0.6)).replace(/[\s,;:.–—-]+$/, "")}…`;
-}
-
-/** What a gallery card needs, and nothing else. */
-export function toPresetCard(p: Preset): PresetCardData {
+/**
+ * What a gallery card needs, and nothing else, with the preview it shows (toPresetCard in preset-card-data.ts picks it).
+ * The whole description: the card clamps it to two lines, and a phone opens the rest in place (readMoreTap).
+ */
+export function presetCard(p: Preset, preview: PresetPreview): PresetCardData {
   return {
     id: p.id,
     name: p.name,
-    description: clip(p.description, 100),
+    description: p.description,
     category: p.category,
     icon: p.look.icon,
     hue: lookHue(p.look),
     ...(p.badges?.includes("top") ? { top: true as const } : {}),
     cloud: !!p.cloud,
     open: !!p.open,
-    preview: previewFor(p),
+    preview,
   };
 }
 
@@ -460,6 +482,17 @@ export function interleaveByCategory<T extends { category: string }>(items: T[])
 /** Lower-cased text a gallery search matches against. */
 export const searchText = (c: Pick<PresetCardData, "name" | "description" | "category">) => `${c.name} ${c.description} ${c.category}`.toLowerCase();
 
+/** A search word without a plain English ending (explosions → explosion, remover and removing → remov), so other forms match. */
+const stem = (w: string) => (w.length > 4 ? w.replace(/(?:ing|es|er|s)$/, "") : w);
+
+/**
+ * Whether a gallery's search text (searchText) matches what was typed: every word, in any order, in any of its simple
+ * forms ("explosions", "removing background"). The query is lower-cased already.
+ */
+export function matchesSearch(text: string, query: string): boolean {
+  return query.split(/\s+/).every((w) => !w || text.includes(stem(w)));
+}
+
 const lowerFirst = (s: string) => (/^[A-Z][a-z]/.test(s) ? s[0].toLowerCase() + s.slice(1) : s);
 const article = (s: string) => (/^(a|an|the|your|my)\s/i.test(s) ? s : `${/^[aeiou]/i.test(s) ? "an" : "a"} ${s}`);
 
@@ -468,22 +501,71 @@ function joinList(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
+/** A line of the preset header's details popover: a model an engine runs a preset on. */
+export interface PresetRouteLine {
+  engine: "cloud" | "open";
+  label: string;
+  model: string | null;
+  /** The preset's live preview was made with this model ("Used for this preview"). */
+  made?: true;
+  /** A second choice on the same engine (its own route, after the model its preview was made with). */
+  alt?: true;
+}
+
+/**
+ * The preset's note on how it runs (preset.parity) under its route lines. When it opens on the model its preview was
+ * made with, the note is about its second choice, and says so: "Fuobe DoP: Wan 2.2 with …" reads "Or Fuobe DoP: …", and
+ * "The open version …" names that model.
+ */
+export function parityNote(parity: string | undefined, lines: Pick<PresetRouteLine, "engine" | "model" | "alt">[]): string | undefined {
+  if (!parity) return undefined;
+  const alt = lines.filter((l) => l.alt);
+  if (!alt.length) return parity;
+  if (/^Fuobe DoP\b/.test(parity)) return `Or ${parity}`;
+  const openAlt = alt.find((l) => l.engine === "open")?.model;
+  if (openAlt && parity.startsWith("The open version ")) return `${openAlt}, the second choice on your GPU, ${parity.slice("The open version ".length)}`;
+  return parity;
+}
+
 /**
  * Which model each engine runs a preset on, for the preset header's details popover (the studio
- * hero no longer needs to spell out "Cloud: … · Open source: …").
+ * hero no longer needs to spell out "Cloud: … · Open source: …"): the model its preview was made
+ * with first (`recipeOf`, src/lib/catalog/preset-recipes.ts presetRecipe), then its own route.
  */
 export function presetRouteLines(
   p: Pick<Preset, "cloud" | "open" | "parity">,
   nameOf: (modelId: string) => string | undefined = () => undefined,
-): { engine: "cloud" | "open"; label: string; model: string | null }[] {
-  return (["cloud", "open"] as const).map((engine) => {
+  recipeOf: (engine: "cloud" | "open") => { route: { modelId: string }; made: boolean } | undefined = () => undefined,
+): PresetRouteLine[] {
+  return (["cloud", "open"] as const).flatMap((engine) => {
     const route = p[engine];
+    const label = engine === "cloud" ? "Cloud" : "Open source";
     const name = route ? (nameOf(route.modelId) ?? route.modelId) : null;
     // A LoRA licensed for the user's GPU only (civitai "RentCivit"): the cloud route keeps the preset's words until Fuobe
     // DoP with the LoRA is evaluated there; the licence is said, not enforced.
     const gpuOnly = engine === "cloud" && !route?.loras?.length && !!p.open?.loras?.length && p.open.loras.every((l) => l.licence?.hostedOk === false);
-    return { engine, label: engine === "cloud" ? "Cloud" : "Open source", model: name && gpuOnly ? `${name} · words only (its LoRA is licensed for your GPU only)` : name };
+    const own: PresetRouteLine = { engine, label, model: name && gpuOnly ? `${name} · words only (its LoRA is licensed for your GPU only)` : name };
+    const recipe = recipeOf(engine);
+    if (!recipe) return [own];
+    const first: PresetRouteLine = { engine, label, model: nameOf(recipe.route.modelId) ?? recipe.route.modelId, ...(recipe.made && { made: true as const }) };
+    // The recipe on the preset's own model (Zooms on Qwen-Image 2.1) is one line.
+    if (recipe.route.modelId === route?.modelId || !own.model) return [first];
+    return [first, { ...own, alt: true as const }];
   });
+}
+
+/** Where a card's text has no tooltip to show the rest of it: a phone, or a screen with no mouse. */
+export const TAP_TO_READ = "(max-width: 639px), (hover: none)";
+
+/**
+ * A tap on a card's two-line description where there is no tooltip (TAP_TO_READ): text cut short opens in place, and
+ * a second tap closes it, in place of opening the preset. Text that fits its two lines, and every click on a desktop,
+ * open the preset as before. The open state the text takes next, or null to let the click through to the card's link.
+ */
+export function readMoreTap(text: { scrollHeight: number; clientHeight: number }, open: boolean, tapToRead: boolean): boolean | null {
+  if (!tapToRead) return null;
+  if (open) return false;
+  return text.scrollHeight > text.clientHeight + 1 ? true : null;
 }
 
 /** One line telling the user what to do with a preset, e.g. "Add a target photo and a face, then Generate." */

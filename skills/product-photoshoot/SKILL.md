@@ -41,7 +41,7 @@ Ask one short question only if the use is unclear (web shop vs. social vs. print
 ## 3. Models
 - Cloud: `nano-banana-pro` (best at keeping labels intact), `seedream-5-pro` for photoreal
   lifestyle scenes, `bria-product-shot` when the user wants a scene from a reference image.
-- Open source: `oss-qwen-edit` (Qwen-Image-Edit 2511).
+- Open source: `oss-qwen-image-21` (Qwen-Image 2.1, up to 4 images), then `oss-qwen-edit` (Qwen-Image-Edit 2511).
 - Always pass the product photo in `images` (op `edit`). Run `search_models` once if the user
   names another model or asks for the cheapest option.
 

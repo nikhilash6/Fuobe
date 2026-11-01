@@ -5,7 +5,8 @@ import path from "node:path";
 
 export const DATA_DIR = path.resolve(/*turbopackIgnore: true*/ process.env.FUOBE_DATA_DIR ?? path.join(process.cwd(), "data"));
 
-const MIGRATIONS: string[] = [
+/** Run in order, once each: a migration is known by its place in this list (append only, never reorder). */
+export const MIGRATIONS: string[] = [
   `CREATE TABLE IF NOT EXISTS generations (
     id TEXT PRIMARY KEY,
     batch_id TEXT,
@@ -564,172 +565,136 @@ const MIGRATIONS: string[] = [
   UPDATE ad_batches SET route = 'baked' WHERE route = 'higgsfield';
   UPDATE ad_creatives SET meta_json = json_set(meta_json, '$.route', 'baked')
     WHERE json_valid(meta_json) AND json_extract(meta_json, '$.route') = 'higgsfield';`,
-  // originals (o/acc-1): accounts, part 1 (docs/research/accounts-8.md §7.1). Fuobe's identity tables — people
-  // (`users`: u_owner or u_<nanoid>, linked to a Better Auth user), workspaces and their members, invites, grants,
-  // per-viewer marks, API tokens (they move out of auth.json), the append-only audit log with its hash chain,
-  // per-person and per-workspace settings and step-up marks — seeded with the owner (unclaimed until the bootstrap
-  // or a first password links it), the owner's personal workspace and the install catalog. Then Better Auth's own
-  // tables, frozen exactly as `node scripts/auth-schema.mjs` printed them for better-auth 1.7.10 (the schema-guard
-  // test fails when a library upgrade would want a change). No foreign keys, and no CHECKs on roles, statuses or
-  // sources: their registries live in code, so later packages add values without rebuilding tables.
-  `CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    auth_user_id TEXT UNIQUE,
-    role TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    pending_reason TEXT,
-    dormant INTEGER NOT NULL DEFAULT 0,
-    personal_workspace_id TEXT,
-    source TEXT NOT NULL DEFAULT 'unknown',
-    external_id TEXT,
-    provisioned_email TEXT,
-    provisioned_name TEXT,
-    invited_by TEXT,
-    approved_by TEXT,
-    avatar_asset_id TEXT,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+  // GPU pre-flight (src/server/gpu): what a viewer's ComfyUI had at its last check, per target ('install', or
+  // 'acct:<id>' for an account's own GPU) and per way it was read (a browser's facts never stand in for a server
+  // check), only the facts the requirement index asks about; and an audit of every check. `fix_json` on a failed
+  // run: what it was missing ({code, workflowId, items}), so its tile offers "Fix it".
+  `CREATE TABLE IF NOT EXISTS gpu_snapshots (
+    target_key TEXT NOT NULL,
+    via TEXT NOT NULL,
+    url_hash TEXT NOT NULL,
+    checked_at INTEGER NOT NULL,
+    index_hash TEXT NOT NULL,
+    inventory_json TEXT NOT NULL,
+    report_json TEXT,
+    stale INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (target_key, via)
   );
-  CREATE UNIQUE INDEX IF NOT EXISTS users_one_owner ON users(role) WHERE role = 'owner';
-  CREATE UNIQUE INDEX IF NOT EXISTS users_provisioned_email ON users(lower(provisioned_email)) WHERE auth_user_id IS NULL AND provisioned_email IS NOT NULL;
-  CREATE TABLE IF NOT EXISTS workspaces (
-    id TEXT PRIMARY KEY,
-    kind TEXT NOT NULL,
-    name TEXT NOT NULL,
-    slug TEXT NOT NULL UNIQUE,
-    color TEXT,
-    created_by TEXT,
-    archived_at INTEGER,
-    delete_after INTEGER,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS workspace_members (
-    workspace_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    role TEXT NOT NULL,
-    source TEXT NOT NULL DEFAULT 'manual',
-    added_by TEXT,
-    created_at INTEGER NOT NULL,
-    PRIMARY KEY (workspace_id, user_id)
-  );
-  CREATE INDEX IF NOT EXISTS workspace_members_user ON workspace_members(user_id);
-  CREATE TABLE IF NOT EXISTS invites (
-    id TEXT PRIMARY KEY,
-    token_hash TEXT NOT NULL UNIQUE,
-    email TEXT,
-    role TEXT NOT NULL,
-    workspace_id TEXT,
-    inviter_id TEXT NOT NULL,
-    used_by TEXT,
-    used_at INTEGER,
-    revoked_at INTEGER,
-    expires_at INTEGER NOT NULL,
-    created_at INTEGER NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS grants (
-    id TEXT PRIMARY KEY,
-    resource_kind TEXT NOT NULL,
-    resource_id TEXT NOT NULL,
-    grantee_kind TEXT NOT NULL,
-    grantee_id TEXT NOT NULL,
-    level TEXT NOT NULL,
-    granted_by TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    UNIQUE (resource_kind, resource_id, grantee_kind, grantee_id)
-  );
-  CREATE INDEX IF NOT EXISTS grants_grantee ON grants(grantee_kind, grantee_id);
-  CREATE TABLE IF NOT EXISTS item_marks (
-    user_id TEXT NOT NULL,
-    item_kind TEXT NOT NULL,
-    item_id TEXT NOT NULL,
-    favorite INTEGER NOT NULL DEFAULT 0,
-    pinned_at INTEGER,
-    PRIMARY KEY (user_id, item_kind, item_id)
-  );
-  CREATE TABLE IF NOT EXISTS api_tokens (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    workspace_id TEXT,
-    name TEXT NOT NULL,
-    prefix TEXT NOT NULL,
-    hash TEXT NOT NULL UNIQUE,
-    scopes TEXT NOT NULL DEFAULT 'full',
-    legacy INTEGER NOT NULL DEFAULT 0,
-    expires_at INTEGER,
-    last_used_at INTEGER,
-    revoked_at INTEGER,
-    created_at INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS api_tokens_user ON api_tokens(user_id);
-  CREATE TABLE IF NOT EXISTS audit_log (
-    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  CREATE TABLE IF NOT EXISTS gpu_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     at INTEGER NOT NULL,
-    actor_id TEXT,
-    actor_via TEXT,
+    actor TEXT NOT NULL,
+    target_key TEXT NOT NULL,
+    host TEXT NOT NULL,
     action TEXT NOT NULL,
-    target_kind TEXT,
-    target_id TEXT,
-    meta_json TEXT NOT NULL DEFAULT '{}',
-    ip TEXT,
-    user_agent TEXT,
-    prev_hash TEXT NOT NULL,
-    hash TEXT NOT NULL
+    item TEXT,
+    job_id TEXT,
+    result TEXT NOT NULL,
+    detail TEXT
   );
-  CREATE INDEX IF NOT EXISTS audit_log_at ON audit_log(at);
-  CREATE TRIGGER IF NOT EXISTS audit_log_append_only BEFORE UPDATE ON audit_log
-    BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
-  CREATE TABLE IF NOT EXISTS user_settings (
-    user_id TEXT NOT NULL,
-    key TEXT NOT NULL,
-    value TEXT NOT NULL,
-    updated_at INTEGER NOT NULL,
-    PRIMARY KEY (user_id, key)
-  );
-  CREATE TABLE IF NOT EXISTS workspace_settings (
-    workspace_id TEXT NOT NULL,
-    key TEXT NOT NULL,
-    value TEXT NOT NULL,
-    updated_at INTEGER NOT NULL,
-    PRIMARY KEY (workspace_id, key)
-  );
-  CREATE TABLE IF NOT EXISTS session_step_up (
-    session_id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    confirmed_at INTEGER NOT NULL,
-    expires_at INTEGER NOT NULL
-  );
-  INSERT OR IGNORE INTO workspaces (id, kind, name, slug, created_by, created_at, updated_at) VALUES
-    ('w_owner', 'personal', 'Personal', 'personal', 'u_owner', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000),
-    ('w_install', 'install', 'Install', 'install', NULL, CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000);
-  INSERT OR IGNORE INTO users (id, role, status, personal_workspace_id, source, created_at, updated_at) VALUES
-    ('u_owner', 'owner', 'active', 'w_owner', 'setup', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000);
-  INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, role, source, created_at) VALUES
-    ('w_owner', 'u_owner', 'owner', 'manual', CAST(strftime('%s', 'now') AS INTEGER) * 1000);
-  create table "auth_user" ("id" text not null primary key, "name" text not null, "email" text not null unique, "emailVerified" integer not null, "image" text, "createdAt" date not null, "updatedAt" date not null);
-  create table "auth_session" ("id" text not null primary key, "expiresAt" date not null, "token" text not null unique, "createdAt" date not null, "updatedAt" date not null, "ipAddress" text, "userAgent" text, "userId" text not null references "auth_user" ("id") on delete cascade);
-  create table "auth_account" ("id" text not null primary key, "accountId" text not null, "providerId" text not null, "userId" text not null references "auth_user" ("id") on delete cascade, "accessToken" text, "refreshToken" text, "idToken" text, "accessTokenExpiresAt" date, "refreshTokenExpiresAt" date, "scope" text, "password" text, "createdAt" date not null, "updatedAt" date not null);
-  create table "auth_verification" ("id" text not null primary key, "identifier" text not null, "value" text not null, "expiresAt" date not null, "createdAt" date not null, "updatedAt" date not null);
-  create table "auth_rate_limit" ("id" text not null primary key, "key" text not null unique, "count" integer not null, "lastRequest" bigint not null);
-  create index "auth_session_userId_idx" on "auth_session" ("userId");
-  create index "auth_account_userId_idx" on "auth_account" ("userId");
-  create index "auth_verification_identifier_idx" on "auth_verification" ("identifier");`,
-  // originals (o/acc-2): the audit log refuses DELETE as it already refuses UPDATE (docs/research/accounts-8.md §7.14),
-  // so a row can only be added. Only the retention purge (acc-34) removes rows: it lifts this trigger inside its own
-  // transaction and writes an entry of its own.
-  `CREATE TRIGGER IF NOT EXISTS audit_log_no_delete BEFORE DELETE ON audit_log
-    BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;`,
+  CREATE INDEX IF NOT EXISTS gpu_audit_target ON gpu_audit(target_key, at DESC);
+  ALTER TABLE generations ADD COLUMN fix_json TEXT;`,
+  // Public sign-up ("Your GPU"): who owns a stored file. An account's uploads and the files of its runs carry its id; the
+  // owner's stay NULL. Files made before this go by the run that made them. Keep this entry last when rebasing: a
+  // migration is known by its place in this list.
+  `ALTER TABLE assets ADD COLUMN account_id TEXT;
+  UPDATE assets SET account_id = (
+    SELECT json_extract(g.request_json, '$.account') FROM generations g
+    WHERE g.id = assets.generation_id AND json_valid(g.request_json)
+  ) WHERE generation_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS assets_account ON assets(account_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS assets_rel ON assets(rel_path);
+  CREATE INDEX IF NOT EXISTS assets_generation ON assets(generation_id);`,
 ];
 
-/** The index of the migration whose SQL contains `fragment` (-1 when none does): tests and the bootstrap name migrations by what they do. */
-export const migrationIndexOf = (fragment: string): number => MIGRATIONS.findIndex((sql) => sql.includes(fragment));
-/** The migration that creates the identity tables: the bootstrap snapshots an existing database before it runs (src/server/identity/bootstrap.ts). */
-export const IDENTITY_MIGRATION = migrationIndexOf("CREATE TABLE IF NOT EXISTS users (");
-/** How many migrations this build has (a snapshot's manifest records it). */
-export const MIGRATION_COUNT = MIGRATIONS.length;
+/**
+ * "Use the ComfyUI on this computer" (src/server/computer/tasks.ts). relay_runners: each principal's computer (the one
+ * that runs its waiting jobs, until its lease lapses) and what its tab said about its ComfyUI. relay_tasks: one per
+ * ComfyUI job of a run on someone's computer, with the graph as the server built it and where the job is. relay_inputs:
+ * the files staged for a job, under the names ComfyUI gets. Safe to run on every start.
+ */
+export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
+    principal TEXT PRIMARY KEY,
+    device TEXT NOT NULL,
+    lease_until INTEGER NOT NULL,
+    seen_at INTEGER NOT NULL,
+    port INTEGER,
+    facts_json TEXT,
+    comfy TEXT NOT NULL DEFAULT 'ok'
+  );
+  CREATE TABLE IF NOT EXISTS relay_tasks (
+    id TEXT PRIMARY KEY,
+    principal TEXT NOT NULL,
+    generation_id TEXT NOT NULL,
+    state TEXT NOT NULL,
+    device TEXT,
+    lease_hash TEXT,
+    graph_json TEXT,
+    prompt_id TEXT NOT NULL,
+    prefix TEXT,
+    meta_batch INTEGER NOT NULL DEFAULT 0,
+    preview INTEGER NOT NULL DEFAULT 0,
+    workflow_id TEXT,
+    extra_json TEXT,
+    wanted_json TEXT,
+    received_json TEXT,
+    result_json TEXT,
+    error TEXT,
+    refusal_json TEXT,
+    stop INTEGER NOT NULL DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    down_at INTEGER,
+    down_why TEXT,
+    note TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    claimed_at INTEGER,
+    sent_at INTEGER,
+    started_at INTEGER,
+    finished_at INTEGER,
+    device_seen_at INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS relay_tasks_principal ON relay_tasks(principal, state, created_at);
+  CREATE INDEX IF NOT EXISTS relay_tasks_generation ON relay_tasks(generation_id);
+  CREATE TABLE IF NOT EXISTS relay_inputs (
+    name TEXT PRIMARY KEY,
+    principal TEXT NOT NULL,
+    task_id TEXT,
+    n INTEGER,
+    content_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    reads INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS relay_inputs_task ON relay_inputs(task_id);`;
+
+/** Columns of the relay tables that came later: [table, column, type]. */
+const RELAY_COLUMNS: [string, string, string][] = [
+  ["relay_runners", "comfy", "TEXT NOT NULL DEFAULT 'ok'"],
+  ["relay_tasks", "down_why", "TEXT"],
+];
 
 declare global {
   var __fuobeDb: Database.Database | undefined;
+}
+
+/**
+ * A data folder that ran PR #15's branch before the owner dropped the old accounts packages on 10-30
+ * (`claude/fuobe-parity-4` up to f7c6d8e, `claude/fuobe-r5-batch-7` up to c9cd489) has places 23 and 24 marked done for
+ * that branch's own migrations: acc-1's identity tables and acc-2's audit-log trigger. In this list those places are
+ * the GPU pre-flight's tables and `assets.account_id`, so such a folder would skip both without a word. A place is
+ * forgotten when this list's work is missing and the dropped package's is there, so the loop below runs it. The dropped
+ * tables stay: nothing reads them, and nothing anyone made is deleted.
+ */
+function forgetDroppedBranchMigrations(db: Database.Database): void {
+  const done = (id: number) => !!db.prepare("SELECT 1 FROM _migrations WHERE id = ?").get(id);
+  const has = (type: "table" | "trigger", name: string) => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?").get(type, name);
+  const hasColumn = (table: string, column: string) =>
+    (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
+  const forget = (id: number) => db.prepare("DELETE FROM _migrations WHERE id = ?").run(id);
+  if (done(23) && !has("table", "gpu_snapshots") && hasColumn("users", "auth_user_id")) forget(23);
+  if (done(24) && !hasColumn("assets", "account_id") && has("trigger", "audit_log_no_delete")) forget(24);
 }
 
 function open(): Database.Database {
@@ -738,6 +703,7 @@ function open(): Database.Database {
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
   db.exec(`CREATE TABLE IF NOT EXISTS _migrations (id INTEGER PRIMARY KEY)`);
+  forgetDroppedBranchMigrations(db);
   const done = new Set(
     (db.prepare("SELECT id FROM _migrations").all() as { id: number }[]).map((r) => r.id),
   );
@@ -748,6 +714,30 @@ function open(): Database.Database {
       db.prepare("INSERT INTO _migrations (id) VALUES (?)").run(i);
     })();
   });
+  // Placeholder results are opt-in (settings.ts, demoMode): a saved "auto", which made a placeholder whenever the model
+  // wasn't connected, is cleared, so the install runs with the default "off". A saved "on" stays. Safe on every start.
+  db.exec("DELETE FROM settings WHERE key = 'demo.mode' AND value NOT IN ('on', 'off')");
+  // Assist on hosted LLM providers (src/lib/catalog/llm-providers.ts): the provider of a chat's model ("openai",
+  // "openrouter"…); chats from before read agent "claude" as Anthropic. Added when it's missing rather than as a
+  // numbered migration, so branches that add migrations never clash over its place in the list.
+  if (!(db.prepare("PRAGMA table_info(assist_thread_state)").all() as { name: string }[]).some((c) => c.name === "provider")) {
+    db.exec("ALTER TABLE assist_thread_state ADD COLUMN provider TEXT");
+  }
+  // "Use the ComfyUI on this computer" (src/server/computer): its tables, made here rather than as a numbered migration,
+  // since other branches add migrations at the same time and a migration is known by its place in the list.
+  db.exec(RELAY_TABLES);
+  // Columns added after the tables were first made (a data folder that ran an earlier build of this feature).
+  for (const [table, column, type] of RELAY_COLUMNS) {
+    const has = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === column);
+    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+  // An account's own runs (its list, its active runs) are found through this index, not by reading every run. Not a
+  // numbered migration, so branches that add migrations never clash over it; a failure only leaves lists slower.
+  try {
+    db.exec("CREATE INDEX IF NOT EXISTS generations_account ON generations(json_extract(request_json, '$.account'), created_at DESC)");
+  } catch (e) {
+    console.warn(`[fuobe] Couldn't index runs by account: ${(e as Error).message}`);
+  }
   return db;
 }
 

@@ -12,6 +12,7 @@ import { WHO_INDEX_LABEL, WHO_LABELS, type SwapWho } from "@/lib/catalog/charact
 import { approvedMask, at, jobState, maskPieceAt, secondsLabel, SWAP_STUDIO, type MaskVersion } from "@/lib/catalog/swap-studio";
 import type { PixelPoint } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useMakeMask, useStopJob } from "./hooks";
 import { GenChip, grabFrame, JobError, Note, priceText } from "./parts";
 import type { StageProps } from "./workbench";
@@ -48,7 +49,7 @@ export function WhoStage({ id, project, clip, shot, gens, estimate, edit, src }:
       setFrame({ shot: shot.id, f, image });
       setPoints([]);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setLoading(false);
     }
@@ -62,7 +63,7 @@ export function WhoStage({ id, project, clip, shot, gens, estimate, edit, src }:
           setPoints([]);
           toast(kind === "track" ? `Tracking from frame ${f + 1} to the shot's end` : `Updating frame ${f + 1}`);
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
   };

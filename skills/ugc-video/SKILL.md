@@ -43,7 +43,7 @@ action. Keep sentences short and spoken. Show the script and the plan in one mes
 ## 3. Production chain (one `generate` call with `after`)
 1. **Key frame** — op `edit` with the creator photo and the product photo in `images`:
    "the creator holds the product at chest height, smartphone selfie framing, 9:16".
-   Cloud `nano-banana-pro`, open `oss-qwen-edit`.
+   Cloud `nano-banana-pro`, open `oss-qwen-image-21` (`oss-qwen-edit` after it).
 2. **Voice** — op `tts`: the script. Cloud `elevenlabs-v4` (pick a natural voice), open `oss-chatterbox`.
 3. **Talking video** — op `avatar` with the key frame (`after` step 1) and the voice as `audio`
    (or chain the voice with a second `after`, see generate's description). Cloud `kling-avatar-2`

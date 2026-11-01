@@ -26,30 +26,34 @@ const COMFY_ORG = "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/530a4c94f
 const FAST = "https://huggingface.co/Spectrallic/MOSS-Image-SFT-8step-DMD-int8-convrot/resolve/8fdeb392c6322418687fc2519a7958c954497a22/moss_image_sft_8stepdmd_int8_convrot.safetensors";
 
 describe("moss-image-t2i in the manifest", () => {
-  it("is a validated t2i graph with the contract's bindings, limits and licence", () => {
-    expect(entry).toMatchObject({ capability: "t2i", validated: true, vramGb: 16, customNodes: [], source: "hand-built (scripts/comfy/hand-built/moss-image-t2i.json)" });
+  it("is a t2i graph with the contract's bindings, limits and licence", () => {
+    // Not validated since its encoder became the int8 file: /prompt was never sent to a ComfyUI with it.
+    expect(entry).toMatchObject({ capability: "t2i", validated: false, vramGb: 16, customNodes: [], source: "hand-built (scripts/comfy/hand-built/moss-image-t2i.json)" });
     expect(Object.keys(entry.bindings).sort()).toEqual(["cfg", "filenamePrefix", "height", "negativePrompt", "prompt", "sampler", "scheduler", "seed", "steps", "unet", "width"]);
     expect(entry.limits).toEqual({ maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 16 });
     expect(entry.defaults).toEqual({ width: 1024, height: 1024, steps: 25, cfg: 2.5, sampler: "er_sde", scheduler: "simple", unet: "moss_image_sft_int8_convrot.safetensors" });
     // §4.5: every file's licence, the optional Fast file's too, and where the small decoder's bytes come from.
     expect(entry.license).toBe(
-      "Apache-2.0 (MOSS-Image SFT, Qwen3.5-9B, FLUX.2 small decoder, byte-identical to BFL's Apache-2.0 FLUX.2-small-decoder; " +
+      "Apache-2.0 (MOSS-Image SFT and Base, Qwen3.5-9B, FLUX.2 small decoder, byte-identical to BFL's Apache-2.0 FLUX.2-small-decoder; " +
         "Fast: Spectrallic's MOSS-Image SFT 8-step DMD int8 file, Apache-2.0)",
     );
     expect(entry.outputs).toEqual([{ node: "10", kind: "image" }]);
-    expect(entry.notes).toMatch(/vramGb 16 is a guess/);
+    expect(entry.notes).toMatch(/The 16 GB VRAM figure is an estimate, as MOSS-Image publishes none/);
     expect(entry.notes).toMatch(/CUDA 13 \(cu130\): comfy\/quant_ops\.py/);
   });
 
-  it("pins Comfy-Org's int8 / w4a8 set (13 GB) and lists the Fast tier's file as optional", () => {
+  it("pins Comfy-Org's int8 set (15 GB), never the w4a8 encoder, and lists the Fast and Base files as optional", () => {
     expect(entry.models).toEqual([
       { file: "moss_image_sft_int8_convrot.safetensors", folder: "diffusion_models", url: `${COMFY_ORG}/diffusion_models/moss_image_sft_int8_convrot.safetensors`, sizeGb: 5.41 },
-      { file: "qwen3.5_9b_w4a8_gptq.safetensors", folder: "text_encoders", url: `${COMFY_ORG}/text_encoders/qwen3.5_9b_w4a8_gptq.safetensors`, sizeGb: 7.34 },
+      // The int8 encoder, as FIBO 2's prompt writer loads it, never the template's w4a8 build (it faulted a GPU driver in testing).
+      { file: "qwen3.5_9b_int8_convrot.safetensors", folder: "text_encoders", url: "https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_int8_convrot.safetensors", sizeGb: 9.75 },
       { file: "flux2-vae_small.safetensors", folder: "vae", url: `${COMFY_ORG}/vae/flux2-vae_small.safetensors`, sizeGb: 0.25 },
       { file: "moss_image_sft_8stepdmd_int8_convrot.safetensors", folder: "diffusion_models", url: FAST, sizeGb: 5.41, optional: true },
+      { file: "moss_image_base_int8_convrot.safetensors", folder: "diffusion_models", url: `${COMFY_ORG}/diffusion_models/moss_image_base_int8_convrot.safetensors`, sizeGb: 5.41, optional: true },
     ]);
+    expect(JSON.stringify(graph)).not.toMatch(/w4a8/);
     const required = entry.models.filter((m) => !m.optional).reduce((n, m) => n + (m.sizeGb ?? 0), 0);
-    expect(required).toBeCloseTo(13, 0);
+    expect(required).toBeCloseTo(15.4, 1);
   });
 
   it("is core nodes only, wired as the Comfy template without its upsampler and box nodes", () => {
@@ -66,7 +70,7 @@ describe("moss-image-t2i in the manifest", () => {
       "10": "SaveImage",
     });
     for (const n of Object.values(graph)) expect(subset[n.class_type], n.class_type).toBeTruthy();
-    expect(graph["2"].inputs).toMatchObject({ clip_name: "qwen3.5_9b_w4a8_gptq.safetensors", type: "moss_image" });
+    expect(graph["2"].inputs).toMatchObject({ clip_name: "qwen3.5_9b_int8_convrot.safetensors", type: "moss_image" });
     expect(graph["5"].inputs.text).toBe("nsfw, worst quality, bad anatomy, watermark, jpeg artifact");
     expect(graph["7"].inputs).toEqual({ model: ["1", 0], double_layers: "", single_layers: "22", start_percent: 0, end_percent: 0.5 });
     expect(graph["8"].inputs).toMatchObject({ model: ["7", 0], positive: ["4", 0], negative: ["5", 0], latent_image: ["6", 0], denoise: 1 });

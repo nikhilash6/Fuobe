@@ -50,6 +50,16 @@
         "none"
       ]
     },
+    "runFirst": {
+      "type": "string",
+      "enum": [
+        "paid-keys"
+      ]
+    },
+    "decides": {
+      "type": "string",
+      "minLength": 1
+    },
     "targets": {
       "type": "object",
       "properties": {

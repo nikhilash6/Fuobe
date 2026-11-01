@@ -1,4 +1,5 @@
 import { Box, Download, EyeOff, FileText, Link2Off } from "lucide-react";
+import Link from "next/link";
 import { coverSlide, orderForLayout, pieces, type PublicItem, type PublicMedia, type PublicShare } from "@/lib/share";
 import { cn } from "@/lib/utils";
 import { Carousel, RecreateButton } from "@/components/share/share-client";
@@ -234,16 +235,20 @@ function Nothing() {
   );
 }
 
-/** A revoked, expired, wrong or emptied link: one calm screen, no way into the studio. */
+/** A revoked, expired, wrong or emptied link: one calm screen, and the studio's own front door. */
 export function ShareGone() {
   return (
-    <main className="grid min-h-svh place-items-center bg-background px-6 pb-[10vh] text-center">
-      <div className="max-w-[460px]">
+    <main className="flex min-h-svh flex-col bg-background">
+      <p className="px-4 pt-5 font-heading text-[22px] leading-none sm:px-8">Fuobe</p>
+      <div className="mx-auto flex max-w-[460px] flex-1 flex-col items-center justify-center px-6 pb-[10vh] text-center">
         <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-brand-faint text-brand-text">
           <Link2Off className="size-5" />
         </span>
         <h1 className="mt-5 font-heading text-[34px] leading-tight text-balance">This link isn&apos;t available</h1>
         <p className="mt-2 text-[15px] text-pretty text-muted-foreground">It may have expired or been turned off, or what it shared was removed. Ask the person who sent it for a new link.</p>
+        <Link href="/" prefetch={false} className="mt-7 inline-flex h-9 items-center rounded-full bg-primary px-4 text-[14px] font-medium text-primary-foreground hover:bg-primary/90">
+          Make your own with Fuobe
+        </Link>
       </div>
     </main>
   );

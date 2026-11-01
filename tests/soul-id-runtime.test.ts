@@ -108,7 +108,7 @@ describe("starting a Soul ID training", () => {
   });
 
   it("sends fal a zip of 001.png + 001.txt pairs with the trainer's fields, priced first", async () => {
-    routes["https://queue.fal.run/fal-ai/z-image-turbo-trainer-v2"] = () => json({ request_id: "req-1", status_url: "https://queue.fal.test/s/1", response_url: "https://queue.fal.test/r/1" });
+    routes["https://queue.fal.run/fal-ai/z-image-turbo-trainer-v2"] = () => json({ request_id: "req-1", status_url: "https://queue.fal.run/test/s/1", response_url: "https://queue.fal.run/test/r/1" });
     const el = character(6);
     const t = startTraining(el.id, "fal-z-image", { consent: true });
     await wait(() => listTrainings(el.id)[0].status === "running");
@@ -125,7 +125,7 @@ describe("starting a Soul ID training", () => {
   });
 
   it("trains on a non-commercial base too (licences are information): FLUX's portrait trainer gets images_data_url and the trigger", async () => {
-    routes["https://queue.fal.run/fal-ai/flux-lora-portrait-trainer"] = () => json({ request_id: "req-f", status_url: "https://queue.fal.test/s/f", response_url: "https://queue.fal.test/r/f" });
+    routes["https://queue.fal.run/fal-ai/flux-lora-portrait-trainer"] = () => json({ request_id: "req-f", status_url: "https://queue.fal.run/test/s/f", response_url: "https://queue.fal.run/test/r/f" });
     const el = character(6);
     const t = startTraining(el.id, "fal-flux1-portrait", { consent: true });
     await wait(() => listTrainings(el.id)[0].status === "running");
@@ -153,10 +153,10 @@ describe("a finished training", () => {
 
   it("keeps fal's LoRA (diffusers_lora_file) on the element for the whole family, with Fuobe's own copy", async () => {
     const LORA = Buffer.from("safetensors-bytes".repeat(100));
-    routes["https://queue.fal.test/s/2"] = () => json({ status: "COMPLETED" });
-    routes["https://queue.fal.test/r/2"] = () => json({ diffusers_lora_file: { url: "https://v3.fal.media/files/maya.safetensors" } });
+    routes["https://queue.fal.run/test/s/2"] = () => json({ status: "COMPLETED" });
+    routes["https://queue.fal.run/test/r/2"] = () => json({ diffusers_lora_file: { url: "https://v3.fal.media/files/maya.safetensors" } });
     routes["https://v3.fal.media/files/maya.safetensors"] = (c) => (c.method === "HEAD" ? new Response(null, { status: 200 }) : new Response(LORA, { headers: { "content-length": String(LORA.length) } }));
-    const { id, el } = running({ target: "fal-z-image", provider: "fal", externalId: "req-2", meta: { statusUrl: "https://queue.fal.test/s/2", responseUrl: "https://queue.fal.test/r/2", family: "z-image-turbo" } });
+    const { id, el } = running({ target: "fal-z-image", provider: "fal", externalId: "req-2", meta: { statusUrl: "https://queue.fal.run/test/s/2", responseUrl: "https://queue.fal.run/test/r/2", family: "z-image-turbo" } });
     await pollTrainings();
     expect(listTrainings(el.id).find((t) => t.id === id)).toMatchObject({ status: "succeeded", message: null });
     await trainedCopiesSettled();
@@ -172,11 +172,11 @@ describe("a finished training", () => {
 
     // A retrain on the same family replaces it; Fuobe Soul HD's LoRA would sit beside it.
     updateElement(el.id, { loras: [...after.loras, { engine: "cloud", modelId: "fuobe-soul-hd", family: "qwen-image-2512", file: "fuobe/hd.safetensors", url: "https://x/hd", trigger: "t" }] });
-    routes["https://queue.fal.test/s/3"] = () => json({ status: "COMPLETED" });
-    routes["https://queue.fal.test/r/3"] = () => json({ diffusers_lora_file: { url: "https://v3.fal.media/files/maya.safetensors" } });
+    routes["https://queue.fal.run/test/s/3"] = () => json({ status: "COMPLETED" });
+    routes["https://queue.fal.run/test/r/3"] = () => json({ diffusers_lora_file: { url: "https://v3.fal.media/files/maya.safetensors" } });
     db()
       .prepare(`INSERT INTO trainings (id, element_id, target, provider, status, external_id, meta_json, trigger_word, created_at, updated_at) VALUES ('t2xyz', ?, 'fal-z-image', 'fal', 'running', 'r3', ?, 'mayafz', ?, ?)`)
-      .run(el.id, JSON.stringify({ statusUrl: "https://queue.fal.test/s/3", responseUrl: "https://queue.fal.test/r/3" }), Date.now(), Date.now());
+      .run(el.id, JSON.stringify({ statusUrl: "https://queue.fal.run/test/s/3", responseUrl: "https://queue.fal.run/test/r/3" }), Date.now(), Date.now());
     await pollTrainings();
     expect(getElement(el.id)!.loras.map((x) => x.family)).toEqual(["qwen-image-2512", "z-image-turbo"]);
   });
@@ -184,12 +184,12 @@ describe("a finished training", () => {
   it("finishes a fal training without waiting for Fuobe's copy of the LoRA, which follows in the background", async () => {
     const LORA = Buffer.from("big-lora".repeat(64));
     let release = () => {};
-    routes["https://queue.fal.test/s/bg"] = () => json({ status: "COMPLETED" });
-    routes["https://queue.fal.test/r/bg"] = () => json({ diffusers_lora_file: { url: "https://v3.fal.media/files/bg.safetensors" } });
+    routes["https://queue.fal.run/test/s/bg"] = () => json({ status: "COMPLETED" });
+    routes["https://queue.fal.run/test/r/bg"] = () => json({ diffusers_lora_file: { url: "https://v3.fal.media/files/bg.safetensors" } });
     // The download hangs until released: the runner's poll must not wait on it.
     routes["https://v3.fal.media/files/bg.safetensors"] = (c) =>
       c.method === "HEAD" ? new Response(null, { status: 200 }) : (new Promise<Response>((resolve) => (release = () => resolve(new Response(LORA, { headers: { "content-length": String(LORA.length) } })))) as unknown as Response);
-    const { id, el } = running({ target: "fal-flux2-dev", provider: "fal", externalId: "req-bg", meta: { statusUrl: "https://queue.fal.test/s/bg", responseUrl: "https://queue.fal.test/r/bg", family: "flux2-dev" } });
+    const { id, el } = running({ target: "fal-flux2-dev", provider: "fal", externalId: "req-bg", meta: { statusUrl: "https://queue.fal.run/test/s/bg", responseUrl: "https://queue.fal.run/test/r/bg", family: "flux2-dev" } });
     await pollTrainings();
     expect(listTrainings(el.id).find((t) => t.id === id)).toMatchObject({ status: "succeeded" });
     expect(getElement(el.id)!.status).toBe("ready");
@@ -237,10 +237,10 @@ describe("a finished training", () => {
   });
 
   it("reads Krea 2's LoRA from lora_file and records it for Krea 2's hosted LoRA model", async () => {
-    routes["https://queue.fal.test/s/k"] = () => json({ status: "COMPLETED" });
-    routes["https://queue.fal.test/r/k"] = () => json({ lora_file: { url: "https://v3.fal.media/files/krea.safetensors" }, config_file: { url: "https://v3.fal.media/files/c.json" } });
+    routes["https://queue.fal.run/test/s/k"] = () => json({ status: "COMPLETED" });
+    routes["https://queue.fal.run/test/r/k"] = () => json({ lora_file: { url: "https://v3.fal.media/files/krea.safetensors" }, config_file: { url: "https://v3.fal.media/files/c.json" } });
     routes["https://v3.fal.media/files/krea.safetensors"] = () => new Response(Buffer.from("krea"), { headers: { "content-length": "4" } });
-    const { el } = running({ target: "fal-krea-2", provider: "fal", externalId: "req-k", meta: { statusUrl: "https://queue.fal.test/s/k", responseUrl: "https://queue.fal.test/r/k", family: "krea-2" } });
+    const { el } = running({ target: "fal-krea-2", provider: "fal", externalId: "req-k", meta: { statusUrl: "https://queue.fal.run/test/s/k", responseUrl: "https://queue.fal.run/test/r/k", family: "krea-2" } });
     await pollTrainings();
     const l = getElement(el.id)!.loras[0];
     expect(l).toMatchObject({ family: "krea-2", modelId: "krea-2-turbo-lora-cloud", url: "https://v3.fal.media/files/krea.safetensors" });

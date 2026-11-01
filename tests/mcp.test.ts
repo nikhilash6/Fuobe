@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-mcp-"));
 process.env.FUOBE_DATA_DIR = dir;
 process.env.COMFYUI_URL = "http://127.0.0.1:9";
 const { handleMcp } = await import("@/server/mcp");
+// Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
+beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const rpc = (method: string, params?: unknown) => handleMcp({ jsonrpc: "2.0", id: 1, method, params });

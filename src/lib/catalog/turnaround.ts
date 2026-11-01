@@ -143,10 +143,10 @@ export const TURN_ROUTES: Record<TurnRoute, TurnRouteInfo> = {
 
 export const ROUTES_ON: Record<Engine, TurnRoute[]> = { open: ["frames"], cloud: ["references", "keyframes", "camera"] };
 
-/** The Angles app's routes, which draw a missing side from the front view. */
+/** The Angles app's routes, which draw a missing side from the front view (on your GPU the Multiple-Angles LoRA's base). */
 export const FILL_MODELS: Record<Engine, string> = { cloud: "qwen-multiple-angles", open: "oss-qwen-edit" };
-/** What draws a front view from a whole sheet, when no picture shows the front alone. */
-export const SHEET_FRONT_MODELS: Record<Engine, string> = { cloud: "nano-banana-pro", open: "oss-qwen-edit" };
+/** What draws a front view from a whole sheet, when no picture shows the front alone (Qwen-Image 2.1 on your GPU). */
+export const SHEET_FRONT_MODELS: Record<Engine, string> = { cloud: "nano-banana-pro", open: "oss-qwen-image-21" };
 
 /** The camera route's paths (N7-5's moves); the turnaround's own Orbit 360° passes the right side first, as the views do. */
 export const TURN_PATHS = [
@@ -168,8 +168,9 @@ export function cameraWords(path: string, extra?: string): string {
 }
 
 const FILL_KEEP = "Keep the same person: identity, face, hair, body, outfit, lighting and plain background";
-const SHEET_FRONT_PROMPT =
-  "Image 1 is a character turnaround sheet. Show only this character's front view as one full-body picture, centred and facing the camera, on the same plain backdrop and light. Keep the face, hair, body and outfit exactly as on the sheet; no text, no other views";
+/** The edit that draws a front view from a whole sheet, when no picture shows the front alone. */
+export const SHEET_FRONT_PROMPT =
+  "Image 1 is a character turnaround sheet. Show only this character's front view as one full-body picture, centred and facing the camera, on the same plain backdrop and light. Keep the face, hair, body and outfit exactly as on the sheet; this one view alone fills the clean picture";
 
 const tidy = (p: string | undefined) => (p ?? "").trim().replace(/[.\s]+$/, "");
 const withWords = (base: string, extra: string | undefined) => (tidy(extra) ? `${base}. ${tidy(extra)}` : base);

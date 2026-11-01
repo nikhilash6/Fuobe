@@ -285,11 +285,11 @@ describe("Remove object: runs", () => {
     const out = (await res.json()) as { final: Generation; items: Generation[] };
     expect(res.status).toBe(201);
     const rows = batchOf(out.final.id);
-    expect(rows.map((r) => r.model_id)).toEqual(expect.arrayContaining(["oss-fit-clip", "oss-extract-frame", "oss-qwen-edit", "oss-h3-person-remove", "oss-trim", "oss-mux"]));
+    expect(rows.map((r) => r.model_id)).toEqual(expect.arrayContaining(["oss-fit-clip", "oss-extract-frame", "oss-qwen-image-21", "oss-h3-person-remove", "oss-trim", "oss-mux"]));
     expect(out.final).toMatchObject({ modelId: "oss-mux", feature: REMOVE.feature });
     expect((await settle(out.final.id)).status).toBe("succeeded");
     const removal = gens.getGeneration(rows.find((r) => r.model_id === "oss-h3-person-remove")!.id)!;
-    const clean = gens.getGeneration(rows.find((r) => r.model_id === "oss-qwen-edit")!.id)!;
+    const clean = gens.getGeneration(rows.find((r) => r.model_id === "oss-qwen-image-21")!.id)!;
     const fit = gens.getGeneration(rows.find((r) => r.model_id === "oss-fit-clip")!.id)!;
     // The removal read the fitted part and the clean first frame the steps before it made.
     expect(removal.request.inputs?.video).toBe(fit.outputs[0].url);

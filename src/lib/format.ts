@@ -27,6 +27,14 @@ export function elapsed(from: number, to = Date.now()): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
+/** File space in binary units, as the account limits are written (1 GB = 2^30 bytes): "0 MB", "512 KB", "340 MB", "1.3 GB", "3 GB". */
+export function storageSize(bytes: number): string {
+  if (bytes <= 0) return "0 MB";
+  if (bytes < 2 ** 20) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 2 ** 30) return `${Math.round(bytes / 2 ** 20)} MB`;
+  return `${Number((bytes / 2 ** 30).toFixed(1))} GB`;
+}
+
 /** The first of "Untitled project", "Untitled project 2", "Untitled project 3"… that isn't taken (case-insensitive). */
 export function untitledName(taken: readonly string[], base = "Untitled project"): string {
   const used = new Set(taken.map((n) => n.trim().toLowerCase()));

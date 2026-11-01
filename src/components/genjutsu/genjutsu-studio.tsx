@@ -24,7 +24,9 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SketchEditor, type Stroke } from "@/components/studio/sketch-editor";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
 import { openInStudio } from "@/components/swap-studio/hooks";
-import { useEngine, useGenerations, useModelAccess } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEdgeFade } from "@/components/studio/use-edge-fade";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterOptions, type CharacterQuality } from "@/lib/catalog/character-swap";
 import {
   chooseMaker,
@@ -36,6 +38,7 @@ import {
   makerLicence,
   makerOffered,
   makersFor,
+  qualityFor,
   MODE_TARGETS,
   OPEN_TARGET_PROBLEM,
   resolutionWords,
@@ -50,17 +53,21 @@ import {
   type Maker,
 } from "@/lib/catalog/genjutsu";
 import { chainState } from "@/lib/catalog/shorts";
+import { withoutOwnGpu } from "@/lib/catalog/engines";
 import type { Generation, PixelPoint } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
+import { refusalShown, toastError } from "@/lib/refusals";
 import { CharacterControls, CharacterFacts } from "./character-panel";
 import { useDescribeCharacter, useGenjutsuEstimate, useGenjutsuRun, useTranscribeClip, waitForGeneration, type GenjutsuBody } from "./hooks";
 import { LookPicker, type LookSource } from "./look-picker";
 import { SetupCode } from "./setup-code";
 import { useClipCuts } from "./use-cuts";
 
-const LIMITS = `MP4, MOV or WebM · ${GENJUTSU.minSeconds}–${GENJUTSU.maxSeconds} s are used · ${GENJUTSU.maxBytes / 1024 / 1024} MB`;
+/** The upload box's line: the mode's own window (Character swap: 5–15 s of one shot). */
+const limits = (character: boolean) =>
+  `MP4, MOV or WebM · ${character ? `${CHARACTER_SWAP.minSeconds}–${CHARACTER_SWAP.maxSeconds}` : `${GENJUTSU.minSeconds}–${GENJUTSU.maxSeconds}`} s are used · ${GENJUTSU.maxBytes / 1024 / 1024} MB`;
 
 interface Paint {
   mask: string;
@@ -95,6 +102,8 @@ const seedOf = (s: string): number | undefined => (s.trim() === "" ? undefined :
  */
 export function GenjutsuStudio() {
   const [engine, setEngine, engineMode] = useEngine();
+  // Genjutsu doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
+  const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const [mode, setModeState] = useState<GenjutsuMode>("motion");
   const source = useSourceClip(GENJUTSU.maxBytes);
@@ -198,7 +207,7 @@ export function GenjutsuStudio() {
       if (r.problem) toast.error(r.problem, { description: "The project is open: add the clip there." });
       router.push(`/character-swap/${encodeURIComponent(r.id)}`);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
       setOpening(false);
     }
   };
@@ -214,7 +223,7 @@ export function GenjutsuStudio() {
     describeMutation
       .mutateAsync({ engine, image })
       .then((r) => setCharacter((c) => ({ ...c, description: r.description })))
-      .catch((e: Error) => toast.error(friendly(e.message)));
+      .catch((e: Error) => !refusalShown(e) && toast.error(friendly(e.message)));
   };
   const fillClipWords = async () => {
     if (!clip?.url || !range) return;
@@ -459,28 +468,30 @@ export function GenjutsuStudio() {
         setRun({ final: r.final.id, ids: r.items.map((g) => g.id), before, start: at, ratio, body: base });
         toast("Genjutsu is on it", { description: "Follow it below — it lands in your Library too." });
       })
-      .catch((e: Error) => toast.error(friendly(e.message)));
+      .catch((e: Error) => !refusalShown(e) && toast.error(friendly(e.message)));
   };
 
   const modeInfo = getMode(mode);
   const tabs = <ModeTabsRow mode={mode} onMode={setMode} />;
 
   return (
-    <ToolShell title="Genjutsu" tabs={tabs} header={<SetupCode setup={setup} onPaste={apply} />} wide>
+    <ToolShell title="Genjutsu" tabs={tabs} header={<SetupCode setup={setup} onPaste={apply} />} wide selfHostedOnly>
       {!clip && (
-        <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint} Priced before it runs; free on your own ComfyUI.`}>
+        <ToolHero title={modeInfo.label} subtitle={`${modeInfo.hint} Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}>
           {isCharacter && (
             <Link href="/character-swap" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
               Whole clips, shot by shot? Open in Character Swap Studio
             </Link>
           )}
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">Genjutsu runs on a self-hosted Fuobe for now.</SelfHostNote>}
         </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>
         {!clip ? (
           <ClipDrop
             accept={GENJUTSU.accept}
-            limits={LIMITS}
+            limits={limits(mode === "character")}
+            disabled={visitor}
             onFile={(f) => {
               const err = source.pick(f);
               if (err) toast.error(err);
@@ -699,12 +710,12 @@ export function GenjutsuStudio() {
               )}
               {maker && options.length <= 1 && (
                 <p className="text-[12px] text-muted-foreground">
-                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {maker.note} · {makerLicence(maker)}
+                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {visitor ? withoutOwnGpu(maker.note) : maker.note} · {makerLicence(maker, !(visitor && maker.engine === "open") && !/your GPU|on fal/.test(maker.note ?? ""))}
                 </p>
               )}
 
               {maker?.pair && (
-                <Field label="Quality" hint={(maker.tier ?? tier) === "standard" ? "Lite — the cheaper, faster tier" : "The full Original"}>
+                <Field label="Quality" hint={(maker.tier ?? tier) === "standard" ? "Standard: the cheaper, faster tier" : "High: the full Original"}>
                   <Segmented
                     label="Quality"
                     value={maker.tier ?? tier}
@@ -719,7 +730,13 @@ export function GenjutsuStudio() {
 
               {(!isCharacter || !maker?.h3) && (
                 <Field label="Resolution" hint={maker ? upFirst(resolutionWords(maker, quality)) : undefined}>
-                  <Segmented label="Resolution" value={quality} onChange={setQuality} options={GENJUTSU.qualities.map((q) => ({ value: q, label: q }))} />
+                  {/* What renders is what shows as picked: a model that stops at 480p shows 480p, not the 720p asked for. */}
+                  <Segmented
+                    label="Resolution"
+                    value={(maker && GENJUTSU.qualities.find((q) => q === qualityFor(maker, quality))) || quality}
+                    onChange={setQuality}
+                    options={GENJUTSU.qualities.map((q) => ({ value: q, label: q }))}
+                  />
                 </Field>
               )}
 
@@ -731,7 +748,7 @@ export function GenjutsuStudio() {
                     ) : (
                       <>
                         <p className="flex items-center gap-1.5 text-[15px] font-semibold tabular-nums">
-                          {costText(est, engine)}
+                          {costText(est, engine, visitor)}
                           {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" aria-label="Updating the price" />}
                         </p>
                         {est && (
@@ -742,10 +759,11 @@ export function GenjutsuStudio() {
                       </>
                     )}
                   </div>
-                  <Button className="rounded-full" onClick={() => start()} disabled={!!blocker || runMutation.isPending}>
+                  <Button className="rounded-full" onClick={() => start()} disabled={!!blocker || runMutation.isPending || visitor}>
                     {runMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Wand2 className="size-4" />} Generate
                   </Button>
                 </div>
+                {visitor && <SelfHostNote>Genjutsu runs on a self-hosted Fuobe for now.</SelfHostNote>}
                 {est && est.notes.length > 0 && !blocker && (
                   <ul className="space-y-1 text-[12px] leading-snug text-muted-foreground">
                     {est.notes.map((n) => (
@@ -866,9 +884,16 @@ function frameHint(mode: GenjutsuMode, target: GenjutsuTarget | undefined, point
 
 /** The four modes as tabs under the header (the selected one is in the URL as ?mode=). */
 function ModeTabsRow({ mode, onMode }: { mode: GenjutsuMode; onMode: (m: GenjutsuMode) => void }) {
+  const [row, fade] = useEdgeFade<HTMLDivElement>();
+  // The selected tab stays in view on a phone, where the row scrolls (only the row: the page stays put).
+  useEffect(() => {
+    const r = row.current;
+    const on = r?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (r && on) r.scrollTo({ left: Math.max(0, on.offsetLeft - (r.clientWidth - on.offsetWidth) / 2) });
+  }, [mode, row]);
   return (
     <div className="border-b">
-      <div role="tablist" aria-label="Genjutsu modes" onKeyDown={tabKeys} className="scrollbar-none flex gap-1 overflow-x-auto px-3 sm:px-6">
+      <div ref={row} style={fade} role="tablist" aria-label="Genjutsu modes" onKeyDown={tabKeys} className="scrollbar-none flex gap-1 overflow-x-auto px-3 sm:px-6">
         {GENJUTSU_MODES.map((m) => {
           const on = m.id === mode;
           return (
@@ -910,6 +935,8 @@ function SourceBadge({ source }: { source: Maker["source"] }) {
 
 /** The models for this mode and engine, one line each (where it comes from, what it's good at, its limits, its licence). */
 function MakerList({ options, value, onChange }: { options: Maker[]; value: string; onChange: (id: string) => void }) {
+  // A guest or an account: open weights run on a self-hosted Fuobe only, not on their own GPU yet.
+  const visitor = useLikelyVisitor();
   return (
     <div role="radiogroup" aria-label="Model" onKeyDown={radioKeys} className="space-y-1.5">
       {options.map((m) => (
@@ -930,8 +957,8 @@ function MakerList({ options, value, onChange }: { options: Maker[]; value: stri
             <span className="flex flex-wrap items-center gap-1.5 text-[13px] font-medium">
               {m.label} <SourceBadge source={m.source} />
             </span>
-            <span className="block text-[12px] leading-snug text-muted-foreground">{m.note}</span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/90">{makerLicence(m)}</span>
+            <span className="block text-[12px] leading-snug text-muted-foreground">{visitor ? withoutOwnGpu(m.note) : m.note}</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/90">{makerLicence(m, !(visitor && m.engine === "open"))}</span>
           </span>
         </button>
       ))}

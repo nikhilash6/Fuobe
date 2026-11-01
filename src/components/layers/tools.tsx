@@ -76,6 +76,7 @@ import {
 } from "@/lib/layers";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { Field, Segmented } from "./bits";
 import { costLabel, isFailed, isRunning, latestJob, modelsFor, useEditor, type Target, type ToolId } from "./editor-context";
 import { LayerGrader } from "./grade-gl";
@@ -983,7 +984,7 @@ function InpaintTool() {
       const [image, maskUrl, sketchUrl] = await Promise.all([uploadRender(picture, `inpaint-${name}`), uploadRender(mask, `inpaint-mask-${name}`), uploadRender(sketch, `inpaint-marked-${name}`)]);
       await go({ tool: "inpaint", target, image, mask: maskUrl, sketch: sketchUrl, modelId, prompt: prompt.trim(), settings: { keepAlpha }, label: "Inpaint" });
     } catch (e) {
-      toast.error((e as Error).message || "Couldn't prepare the painted area");
+      toastError(e, "Couldn't prepare the painted area");
     } finally {
       setPreparing(false);
     }
@@ -1125,7 +1126,7 @@ function ExpandTool() {
       commit(reframeDoc(doc, f));
       toast.success(grows ? "Canvas expanded" : "Canvas cropped", { duration: 1500 });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     }
   };
 
@@ -1133,7 +1134,7 @@ function ExpandTool() {
     try {
       reframeDoc(doc, f); // the same check as Apply
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
       return;
     }
     const [fx, fy, fw, fh] = f.map(Math.round) as Box;
@@ -1215,7 +1216,7 @@ function GradeTool() {
     try {
       grader.current = new LayerGrader();
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     }
     return () => {
       grader.current?.dispose();
@@ -1266,7 +1267,7 @@ function GradeTool() {
       setPreset(null);
       toast.success("Grade applied", { duration: 1500 });
     } catch (e) {
-      toast.error((e as Error).message || "Couldn't apply the grade");
+      toastError(e, "Couldn't apply the grade");
     } finally {
       setSaving(false);
     }

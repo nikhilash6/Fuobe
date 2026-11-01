@@ -1,10 +1,8 @@
 import { AITK_FAMILIES, type TrainingFamily } from "@/lib/catalog/training";
 import { trainingKit } from "@/server/training";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 /** Dataset + AI-Toolkit config + README, to train the element's LoRA on any GPU (?family= picks the base; Z-Image Turbo by default). */
-export const GET = handler({ access: "signed-in" }, async (req: Request, ctx: RouteContext<"/api/elements/[id]/training-kit">) => {
+export async function GET(req: Request, ctx: RouteContext<"/api/elements/[id]/training-kit">) {
   const { id } = await ctx.params;
   const asked = new URL(req.url).searchParams.get("family") ?? "z-image-turbo";
   if (!AITK_FAMILIES.includes(asked as TrainingFamily)) return Response.json({ error: `AI-Toolkit kits are for ${AITK_FAMILIES.join(", ")}` }, { status: 400 });
@@ -14,7 +12,6 @@ export const GET = handler({ access: "signed-in" }, async (req: Request, ctx: Ro
       headers: { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${kit.name}"` },
     });
   } catch (e) {
-    rethrowAccess(e);
     return Response.json({ error: (e as Error).message }, { status: 422 });
   }
-});
+}

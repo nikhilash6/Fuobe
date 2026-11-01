@@ -1,22 +1,29 @@
 "use client";
 
-import { ChevronDown, Cloud, Cpu, SearchX, Server, Star } from "lucide-react";
+import { ChevronDown, Cloud, Cpu, SearchX, Server, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { KEY_ADDED_EVENT, openAddKey } from "@/components/keys/your-keys";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { RowDot } from "@/components/gpu/readiness-chip";
+import { badgeFor, useGpuBadges } from "@/hooks/use-gpu";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { type Engine, type ModelDef } from "@/lib/catalog/types";
+import { useToday } from "@/hooks/use-today";
+import type { Badge as BadgeT } from "@/lib/gpu/types";
+import { type Engine, type ModelDef, type Operation } from "@/lib/catalog/types";
 import { useEngineMode, useStatus } from "@/lib/api";
-import { bestForStudio, groupModels, toggleIn } from "@/lib/composer";
-import { formatCost } from "@/lib/format";
-import { ISOLATED_NOTE } from "@/lib/model-rows";
+import { groupModels, studioBest, toggleIn } from "@/lib/composer";
+import { readsBoxes } from "@/lib/layout-prompt";
+import { ISOLATED_NOTE, pickerPrice } from "@/lib/model-rows";
 import { cn } from "@/lib/utils";
+import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, type CloudProvider } from "@/lib/your-keys";
 import { EngineSwitch } from "./engine-switch";
 import { ResponsivePanel } from "./responsive-panel";
 import { RECENT_MODELS, STARRED_MODELS, useStoredList } from "./stored-list";
 import { VendorMark } from "./vendor-mark";
+import { placeholdersOn } from "@/lib/demo-mode";
 
 const BADGE_LABEL: Record<string, string> = {
   new: "New",
@@ -53,13 +60,6 @@ export function ModelBadges({ model, max }: { model: ModelDef; max?: number }) {
   );
 }
 
-function priceHint(m: ModelDef): string {
-  if (m.engine === "open") return "Free";
-  if (!m.pricing) return "";
-  const unit = { image: "/image", second: "/sec", video: "/video", request: "/run", megapixel: "/MP", minute: "/min" }[m.pricing.unit];
-  return `${formatCost(m.pricing.usd)}${unit}`;
-}
-
 const STAR_KEY_HINT = "Alt+S";
 
 /**
@@ -80,24 +80,53 @@ function ModelRow({
   selected,
   starred,
   showEngine,
+  boxes,
+  today,
   onStar,
+  gpu,
+  gpuName,
+  needs,
+  made,
 }: {
   m: ModelDef;
   selected: boolean;
   starred: boolean;
   showEngine: boolean;
+  /** Layout mode: a "Reads boxes" badge on the models that place boxes by their coordinates. */
+  boxes?: boolean;
+  /** The browser's day: a launch price holds through its last day (null until hydrated: no price shown for one). */
+  today: number | null;
   onStar: () => void;
+  /** Its state on the viewer's GPU (the GPU pre-flight). */
+  gpu?: BadgeT | null;
+  gpuName?: string;
+  /** An account's paid model it has no key for yet: dimmed, "Add your fal.ai key" in place of the price. */
+  needs?: CloudProvider[] | null;
+  /** The active preset's live preview was made with this model. */
+  made?: boolean;
 }) {
   return (
     <>
       <VendorMark vendor={m.vendor} engine={m.engine} />
-      <span className="min-w-0 flex-1">
+      <span className={cn("min-w-0 flex-1", needs && "opacity-60")}>
         <span className="flex items-center gap-1.5">
           <span className={cn("truncate text-[13px] font-medium", selected && "text-brand-text")}>
             {m.name}
             {starred && <span className="sr-only">, starred</span>}
           </span>
-          <ModelBadges model={m} max={2} />
+          {/* A dimmed row on a phone: the name first (its badges would cut it to "Na…"). */}
+          {boxes && readsBoxes(m) ? (
+            <Badge variant="secondary" className="h-4 shrink-0 rounded-[4px] bg-brand-faint px-1 text-[10px] font-medium text-brand-text">
+              Reads boxes
+            </Badge>
+          ) : needs ? (
+            <span className="contents max-sm:hidden">
+              <ModelBadges model={m} max={2} />
+            </span>
+          ) : (
+            <ModelBadges model={m} max={2} />
+          )}
+          {gpu && <RowDot badge={gpu} gpu={gpuName} />}
           {showEngine && (
             <span className="inline-flex shrink-0 items-center gap-0.5 rounded-[4px] bg-muted px-1 text-[10px] leading-4 font-medium text-muted-foreground">
               {m.engine === "open" ? <Cpu className="size-2.5!" /> : <Cloud className="size-2.5!" />}
@@ -108,6 +137,12 @@ function ModelRow({
         <span className="block truncate text-[12px] leading-snug text-muted-foreground">
           {m.vendor} · {m.tagline}
         </span>
+        {made && (
+          <span className="mt-0.5 flex items-center gap-1 text-[11px] leading-snug font-medium text-brand-text">
+            <Sparkles className="size-3! shrink-0" aria-hidden />
+            Used for this preview
+          </span>
+        )}
         {m.worker === "isolated" && (
           <span className="mt-0.5 flex items-center gap-1 text-[11px] leading-snug text-muted-foreground">
             <Server className="size-3! shrink-0" aria-hidden />
@@ -115,7 +150,15 @@ function ModelRow({
           </span>
         )}
       </span>
-      <span className="shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">{priceHint(m)}</span>
+      {needs ? (
+        // On a phone the short words, so the model's name keeps its room.
+        <span className="shrink-0 text-right text-[11px] font-medium text-brand-text">
+          <span className="sm:hidden">Add key</span>
+          <span className="max-sm:hidden">{addKeyLabel(needs[0])}</span>
+        </span>
+      ) : (
+        <span className="shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">{pickerPrice(m, today)}</span>
+      )}
       {/* Pointer only: inside an option it would be a nested control. Keyboard: Alt+S on the highlighted row (starKey). */}
       <button
         type="button"
@@ -145,6 +188,16 @@ interface PickerProps {
   engine: Engine;
   onEngineChange: (e: Engine) => void;
   defaultModels?: { cloud: string; open: string };
+  /** Layout mode: the models that read boxes come first, badged. */
+  boxes?: boolean;
+  /** The operations the studio offers, its main one first: "Best for this studio" ranks the models that do it. */
+  ops?: Operation[];
+  /** The model the active preset's preview was made with (its recipe): first in "Best for this studio". */
+  recipe?: string;
+  /** A short list in its own order (an app's models): one group, no Recent, Starred or Best. */
+  flat?: boolean;
+  /** The model the active preset's live preview really came from: "Used for this preview" on its row. */
+  madeWith?: string;
 }
 
 /**
@@ -153,9 +206,40 @@ interface PickerProps {
  * desktop, a bottom sheet on phones. The list is built only while the panel is open (a canvas
  * board shows dozens of closed pickers).
  */
+/**
+ * A model's name on a phone's narrow button: Qwen-Image's family name shortened ("Qwen 2.1 Turbo"), so the word that
+ * tells two models apart (Turbo) stays in view. The full name is the button's label.
+ */
+export function phoneName(name: string): string {
+  return name.replace(/^Qwen-Image(-Edit)? /, (_, edit?: string) => (edit ? "Qwen Edit " : "Qwen "));
+}
+
 export function ModelPicker(props: PickerProps) {
   const [open, setOpen] = useState(false);
-  const { value } = props;
+  const { value, models, onChange } = props;
+  const made = !!value && value.id === props.madeWith;
+  // The model a dimmed row was chosen for (by this picker only): picked once its key is saved and the studio knows it
+  // (the status has the key, so the engine switch is on Cloud and nothing swaps the model back to an open one).
+  const waiting = useRef<string | null>(null);
+  const saved = useRef<string | null>(null);
+  useEffect(() => {
+    const added = (e: Event) => {
+      const id = (e as CustomEvent<{ modelId?: string }>).detail?.modelId;
+      if (id && id === waiting.current) saved.current = id;
+      waiting.current = null;
+    };
+    window.addEventListener(KEY_ADDED_EVENT, added);
+    return () => window.removeEventListener(KEY_ADDED_EVENT, added);
+  }, []);
+  // (Saving a key refreshes the status, which runs this again.)
+  const status = useStatus().data;
+  const mode = useEngineMode();
+  useEffect(() => {
+    const m = saved.current ? models.find((x) => x.id === saved.current && !needsKey(x, status) && (x.engine === "open" || mode !== "open")) : undefined;
+    if (!m) return;
+    saved.current = null;
+    onChange(m);
+  }, [models, status, mode, onChange]);
   return (
     <ResponsivePanel
       open={open}
@@ -164,62 +248,138 @@ export function ModelPicker(props: PickerProps) {
       className="w-[min(92vw,440px)] p-0 shadow-strong"
       sheetClassName="h-[80svh]"
       trigger={
-        <Button variant="secondary" size="sm" className="h-8 shrink-0 gap-1.5 rounded-full px-3 text-[13px] font-medium" aria-label={`Model: ${value?.name ?? "none"}. Change model`}>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-8 shrink-0 gap-1.5 rounded-full px-3 text-[13px] font-medium"
+          aria-label={`Model: ${value?.name ?? "none"}${made ? ", used for this preview" : ""}. Change model`}
+          title={made ? "Used for this preview" : undefined}
+        >
           {value?.engine === "open" ? <Cpu className="size-3.5" /> : <Cloud className="size-3.5" />}
-          <span className="max-w-32 truncate sm:max-w-44">{value?.name ?? "Choose model"}</span>
+          <span className="max-w-40 truncate max-sm:hidden sm:max-w-44">{value?.name ?? "Choose model"}</span>
+          <span className="max-w-40 truncate sm:hidden">{value ? phoneName(value.name) : "Choose model"}</span>
+          {made && <Sparkles className="size-3.5 text-brand-text" aria-hidden />}
           <ChevronDown className="size-3.5 opacity-60" />
         </Button>
       }
     >
-      <PickerList {...props} onPicked={() => setOpen(false)} />
+      <PickerList
+        {...props}
+        onPicked={() => setOpen(false)}
+        onNeedsKey={(m, p) => {
+          waiting.current = m.id;
+          setOpen(false);
+          openAddKey(p, m.id);
+        }}
+      />
     </ResponsivePanel>
   );
 }
 
 /** The searchable list (mounted by the popover / sheet only while it shows). */
-function PickerList({ models, value, onChange, engine, onEngineChange, defaultModels, onPicked }: PickerProps & { onPicked: () => void }) {
+function PickerList({
+  models,
+  value,
+  onChange,
+  engine,
+  onEngineChange,
+  defaultModels,
+  boxes,
+  ops,
+  recipe,
+  flat,
+  madeWith,
+  onPicked,
+  onNeedsKey,
+}: PickerProps & { onPicked: () => void; onNeedsKey?: (m: ModelDef, p: CloudProvider) => void }) {
   const [q, setQ] = useState("");
   const status = useStatus().data;
+  const badges = useGpuBadges().data;
   const mode = useEngineMode();
   const mobile = useIsMobile();
   const [recent] = useStoredList(RECENT_MODELS);
   const [starred, setStarred] = useStoredList(STARRED_MODELS);
+  const today = useToday();
   const engines = useMemo<Engine[]>(() => (mode === "both" ? ["cloud", "open"] : [mode]), [mode]);
-  // "Best" ranks models that do what the studio's default does first (its main operation), not single-purpose tools.
+  // "Best" ranks models that do what the studio is for, not single-purpose tools.
+  // A preset's recipe leads, when it runs on this engine.
   const best = useMemo(() => {
-    const id = defaultModels?.[engine];
-    const op = models.find((m) => m.id === id)?.routes[0]?.op;
-    return bestForStudio(models, engine, id, 4, op).map((m) => m.id);
-  }, [models, engine, defaultModels]);
-  const { groups, count } = useMemo(() => groupModels({ models, engine, engines, query: q, recent, starred, best }), [models, engine, engines, q, recent, starred, best]);
-  const ready = (m: ModelDef) => m.routes.some((r) => status?.providers[r.provider]?.configured);
-  const shown = groups.flatMap((g) => g.models);
-  const demo = status && status.demoMode !== "off" && shown.some((m) => !ready(m));
+    const ranked = studioBest(models, engine, defaultModels?.[engine], ops);
+    return recipe && models.some((m) => m.id === recipe && m.engine === engine) ? [recipe, ...ranked.filter((id) => id !== recipe)] : ranked;
+  }, [models, engine, defaultModels, ops, recipe]);
+  const { groups, count } = useMemo(
+    () => groupModels({ models, engine, engines, query: q, recent, starred, best, flat, boxes }),
+    [models, engine, engines, q, recent, starred, best, flat, boxes],
+  );
+  const demo = placeholdersOn(status?.demoMode);
   const otherEngine = engine === "cloud" ? "open" : "cloud";
   const noneForEngine = !q && !models.some((m) => m.engine === engine);
 
+  // An account (public sign-up): paid models it has no key for are dimmed; choosing one asks for the key first.
+  const viewer = status?.viewer?.kind === "account" ? status.viewer : null;
+  const keys = viewer ? (viewer.keys ?? []) : null;
+  const payer = keys?.length && engine === "cloud" ? keys : null;
+  // With no key yet it is on open models only: a search lists the paid models it matches too (dimmed), so "nano
+  // banana" finds Nano Banana and the way to run it.
+  const keyless = !!viewer && !keys?.length && viewer.paidAllowed !== false;
+  const paid = useMemo(
+    () => (keyless && q.trim() && !engines.includes("cloud") ? (groupModels({ models, engine: "cloud", engines: ["cloud"], query: q, recent: [], starred: [], best: [] }).groups[0]?.models ?? []) : []),
+    [keyless, q, engines, models],
+  );
+  const listed = paid.length ? [...groups, { id: "paid" as const, label: "Paid models · with your own key", models: paid }] : groups;
   const pick = (m: ModelDef) => {
+    const needs = needsKey(m, status);
+    if (needs && onNeedsKey) return onNeedsKey(m, needs[0]);
     onChange(m);
     onPicked();
+  };
+  const addKey = () => {
+    onPicked();
+    openAddKey("fal");
   };
 
   return (
     <Command shouldFilter={false} loop label="Models" onKeyDown={(e) => starKey(e, (id) => setStarred((s) => toggleIn(s, id)))} className="rounded-none! bg-transparent p-0">
       <div className="flex items-center gap-2 p-1 sm:p-2 sm:pb-1">
         <div className="min-w-0 flex-1 [&_[data-slot=command-input-wrapper]]:p-0">
-          <CommandInput value={q} onValueChange={setQ} placeholder={mode === "both" ? "Search all models" : "Search models"} aria-label="Search models" autoFocus={!mobile} />
+          <CommandInput value={q} onValueChange={setQ} placeholder={mobile ? "Search" : mode === "both" ? "Search all models" : "Search models"} aria-label="Search models" autoFocus={!mobile} />
         </div>
         <EngineSwitch value={engine} onChange={onEngineChange} size="sm" />
       </div>
       <div className="flex items-baseline gap-x-2 px-3 pb-1.5 leading-snug text-[11px] text-muted-foreground sm:px-3.5">
-        <span className="shrink-0 whitespace-nowrap tabular-nums">{q ? `${count} result${count === 1 ? "" : "s"}` : `${count} ${engine === "open" ? "open-source" : "cloud"} model${count === 1 ? "" : "s"}`}</span>
-        {demo && (
+        <span className="shrink-0 whitespace-nowrap tabular-nums">
+          {q ? `${count + paid.length} result${count + paid.length === 1 ? "" : "s"}` : `${count} ${engine === "open" ? "open-source" : "cloud"} model${count === 1 ? "" : "s"}`}
+        </span>
+        {payer ? (
           <>
             <span aria-hidden>·</span>
             <span className="min-w-0">
-              Demo — no key connected, outputs are placeholders.{" "}
-              <Link href="/settings" className="text-brand-text underline underline-offset-2">
-                Connect
+              {`Paid models are billed to ${payer.length > 1 ? "your fal.ai and Replicate accounts" : billedTo(payer[0])} · `}
+              <Link href="/settings#your-keys" className="text-brand-text underline underline-offset-2">
+                Your keys
+              </Link>
+            </span>
+          </>
+        ) : (
+          keyless && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="min-w-0">
+                Paid models like Nano Banana and Kling need your own fal.ai or Replicate key ·{" "}
+                <button type="button" onClick={addKey} className="text-brand-text underline underline-offset-2">
+                  Add a key
+                </button>
+              </span>
+            </>
+          )
+        )}
+        {demo && !keys && (
+          <>
+            <span aria-hidden>·</span>
+            <span className="min-w-0">
+              Placeholder results are on, so outputs are stand-ins.{" "}
+              <Link href="/settings#demo" className="text-brand-text underline underline-offset-2">
+                Settings
               </Link>
             </span>
           </>
@@ -229,7 +389,7 @@ function PickerList({ models, value, onChange, engine, onEngineChange, defaultMo
         </span>
       </div>
       <CommandList className="max-h-[min(52vh,420px)] border-t sm:max-h-[min(56vh,440px)]">
-        {groups.map((g) => (
+        {listed.map((g) => (
           <CommandGroup key={g.id} heading={g.label}>
             {g.models.map((m) => (
               <CommandItem
@@ -237,14 +397,27 @@ function PickerList({ models, value, onChange, engine, onEngineChange, defaultMo
                 value={`${g.id}:${m.id}`}
                 onSelect={() => pick(m)}
                 data-checked={value?.id === m.id}
+                aria-label={needsKey(m, status) ? `${m.name} needs your ${CLOUD_KEY[needsKey(m, status)![0]].label} key` : undefined}
                 className={cn("gap-2.5 rounded-lg px-2 py-1.5 [&>svg:last-child]:hidden", value?.id === m.id && "bg-brand-faint data-selected:bg-brand-faint-hover")}
               >
-                <ModelRow m={m} selected={value?.id === m.id} starred={starred.includes(m.id)} showEngine={!!q || m.engine !== engine} onStar={() => setStarred((s) => toggleIn(s, m.id))} />
+                <ModelRow
+                  m={m}
+                  selected={value?.id === m.id}
+                  starred={starred.includes(m.id)}
+                  showEngine={g.id !== "paid" && (!!q || m.engine !== engine)}
+                  boxes={boxes}
+                  today={today}
+                  onStar={() => setStarred((s) => toggleIn(s, m.id))}
+                  gpu={m.engine === "open" ? badgeFor(badges, { modelId: m.id }) : null}
+                  gpuName={badges?.gpu}
+                  needs={needsKey(m, status)}
+                  made={m.id === madeWith}
+                />
               </CommandItem>
             ))}
           </CommandGroup>
         ))}
-        {!groups.length && (
+        {!listed.length && (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
             <SearchX className="size-5 text-subtle-foreground" />
             {noneForEngine ? (

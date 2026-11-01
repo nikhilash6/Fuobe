@@ -114,14 +114,15 @@ describe("job steps", () => {
       { label: "Layers · Layer edit · cut-out", index: 1, of: 2 },
     ]);
     const open = steps({ tool: "regenerate", engine: "open", prompt: "Make it gold", settings: { keepAlpha: true } });
-    expect(open.map((x) => x.request.modelId)).toEqual(["oss-qwen-edit", "oss-rmbg"]);
+    expect(open.map((x) => x.request.modelId)).toEqual(["oss-qwen-image-21", "oss-rmbg"]);
     expect(() => steps({ tool: "regenerate" })).toThrow(/layer edit prompt/);
   });
 
   it("generates a new transparent layer from text or a reference", () => {
     const t = steps({ tool: "generate-layer", engine: "open", image: undefined, prompt: "a red balloon" });
+    // Qwen-Image 2.1 first: Ideogram 4's safety filter answers most lone objects on a plain background with a grey card.
     expect(t.map((x) => [x.request.modelId, x.request.op])).toEqual([
-      ["oss-z-image-turbo", "t2i"],
+      ["oss-qwen-image-21", "t2i"],
       ["oss-rmbg", "bg-remove"],
     ]);
     expect(t[0].request.prompt).toMatch(/^a red balloon\. A single element, isolated/);
@@ -136,7 +137,7 @@ describe("job steps", () => {
       op: "edit",
       prompt: "Preserve the original design and change only the requested text. Change “SALE” to “OPEN”.",
     });
-    expect(steps({ tool: "text-edit", engine: "open", settings: { rows } })[0].request.modelId).toBe("oss-qwen-edit");
+    expect(steps({ tool: "text-edit", engine: "open", settings: { rows } })[0].request.modelId).toBe("oss-qwen-image-21");
     expect(() => steps({ tool: "text-edit", settings: { rows: [{ from: "SALE", to: "SALE" }] } })).toThrow(/Change a line/);
     expect(steps({ tool: "text-detect", settings: { aspect: "16:9" } })[0].request).toMatchObject({ modelId: "ideogram-3-text-layers", op: "text-layers", params: { aspectRatio: "16:9" } });
     // OCR models read the lines (no shape to send): Florence-2 on the cloud, OvisOCR3 on ComfyUI.
@@ -156,10 +157,11 @@ describe("job steps", () => {
       prompt: "a vase of tulips. Blend it into the surroundings with matching light, perspective and grain.",
       inputs: { images: ["/api/files/a.png"], mask: "/api/files/m.png", sketch: "/api/files/s.png" },
     });
-    expect(steps({ ...paint, modelId: "flux-fill-pro" })[0].request).toMatchObject({ modelId: "flux-fill-pro", op: "inpaint" });
+    expect(steps({ ...paint, modelId: "bria-fibo-2" })[0].request).toMatchObject({ modelId: "bria-fibo-2", op: "inpaint", inputs: { mask: "/api/files/m.png" } });
+    expect(steps({ ...paint, engine: "open", modelId: "oss-flux-fill" })[0].request).toMatchObject({ modelId: "oss-flux-fill", op: "inpaint", inputs: { mask: "/api/files/m.png" } });
     const open = steps({ ...paint, engine: "open", settings: { keepAlpha: true } });
     expect(open.map((x) => [x.key, x.request.modelId, x.request.op])).toEqual([
-      ["inpaint", "oss-flux-fill", "inpaint"],
+      ["inpaint", "oss-qwen-image-21", "inpaint"],
       ["cutout", "oss-rmbg", "bg-remove"],
     ]);
     // Only the painted area changes: no plain-background ask, the cut-out restores the transparency.
@@ -173,7 +175,7 @@ describe("job steps", () => {
     const skin = steps({ tool: "enhance", settings: { look: "skin" } })[0].request;
     expect(skin).toMatchObject({ modelId: "nano-banana-pro", op: "edit", inputs: { images: ["/api/files/a.png"] } });
     expect(skin.prompt).toMatch(/^Give the portrait a subtle natural retouch.*Keep the face shape, identity/);
-    expect(steps({ tool: "enhance", engine: "open", settings: { look: "sharpen" } })[0].request).toMatchObject({ modelId: "oss-qwen-edit", op: "edit" });
+    expect(steps({ tool: "enhance", engine: "open", settings: { look: "sharpen" } })[0].request).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit" });
     expect(steps({ tool: "enhance", engine: "open", settings: { look: "sharpen" } })[0].request.prompt).toMatch(/^Sharpen the image.*colours and lighting exactly the same\.$/);
     expect(steps({ tool: "enhance", prompt: "keep the freckles", settings: { look: "glow" } })[0].request.prompt).toMatch(/keep the freckles$/);
     // Detail: the Upscale tool's models (Topaz first, with its face pass), no instruction.
@@ -190,18 +192,48 @@ describe("job steps", () => {
   });
 
   it("hands layers to the existing upscale, relight, angles, background and expand models", () => {
-    expect(steps({ tool: "upscale", engine: "open" })[0].request).toMatchObject({ modelId: "oss-upscale-image", op: "upscale-image" });
+    // SeedVR2 restores detail as it enlarges (4x ESRGAN stays a choice).
+    expect(steps({ tool: "upscale", engine: "open" })[0].request).toMatchObject({ modelId: "oss-seedvr2-image", op: "upscale-image" });
+    expect(steps({ tool: "upscale", engine: "open", modelId: "oss-upscale-image" })[0].request).toMatchObject({ modelId: "oss-upscale-image", op: "upscale-image" });
     expect(steps({ tool: "bg-remove" })[0].request).toMatchObject({ modelId: "birefnet-cloud", op: "bg-remove" });
+    // Relight: Qwen-Image 2.1 Turbo in its own picture tags; the Relight LoRA graph (a choice) gets the light alone.
     const relight = steps({ tool: "relight", engine: "open", settings: { light: "Neon night", direction: "Left" } })[0].request;
-    expect(relight).toMatchObject({ modelId: "oss-qwen-relight", op: "edit", prompt: "pink and blue neon lights at night, coming from the left" });
+    expect(relight).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit" });
+    expect(relight.prompt).toMatch(/^Relight <image1> with pink and blue neon lights at night coming from the left\. Keep /);
+    const lora = steps({ tool: "relight", engine: "open", modelId: "oss-qwen-relight", settings: { light: "Neon night", direction: "Left" } })[0].request;
+    expect(lora).toMatchObject({ modelId: "oss-qwen-relight", op: "edit", prompt: "pink and blue neon lights at night, coming from the left" });
+    const krea = steps({ tool: "relight", engine: "open", modelId: "oss-krea2-edit", settings: { light: "Neon night" } })[0].request;
+    expect(krea.prompt).toMatch(/^Relight the image with pink and blue neon lights at night\. Keep the subject/);
+    expect(steps({ tool: "relight", modelId: "nano-banana-2-1", settings: { light: "Neon night" } })[0].request).toMatchObject({ modelId: "nano-banana-2-1", op: "edit" });
     const angles = steps({ tool: "angles", settings: { rotate: 90, tilt: 10, zoom: 4 } })[0].request;
     expect(angles).toMatchObject({ modelId: "qwen-multiple-angles", params: { extra: { horizontal_angle: 90, vertical_angle: 10, zoom: 4 } } });
-    expect(steps({ tool: "angles", engine: "open", settings: { angle: "Back" } })[0].request.prompt).toContain("a view from directly behind");
+    // On your GPU: Qwen-Image 2.1 (25 steps) on the same plain camera words, no LoRA.
+    const turned = steps({ tool: "angles", engine: "open", settings: { angle: "Back" } })[0].request;
+    expect(turned).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit" });
+    expect(turned.prompt).toMatch(/^Show the exact same subject from a view from directly behind, as if the camera physically moved\./);
+    expect(turned.loras).toBeUndefined();
     const expand = steps({ tool: "expand", engine: "open", settings: { pads: { left: 64, top: 0, right: 64, bottom: 8 } } })[0].request;
-    expect(expand).toMatchObject({ modelId: "oss-flux-fill", op: "outpaint", params: { extra: { padLeft: 64, padTop: 0, padRight: 64, padBottom: 8 } } });
+    expect(expand).toMatchObject({ modelId: "oss-qwen-image-21", op: "outpaint", params: { extra: { padLeft: 64, padTop: 0, padRight: 64, padBottom: 8 } } });
+    // FLUX.1 Fill grows the canvas from the same pads.
+    expect(steps({ tool: "expand", engine: "open", modelId: "oss-flux-fill", settings: { pads: { left: 64, top: 0, right: 64, bottom: 8 } } })[0].request).toMatchObject({
+      modelId: "oss-flux-fill",
+      op: "outpaint",
+      params: { extra: { padLeft: 64 } },
+    });
     expect(() => steps({ tool: "expand", engine: "open", settings: { pads: { left: 0, top: 0, right: 0, bottom: 0 } } })).toThrow(/Drag an edge/);
     expect(steps({ tool: "expand" })[0].request.prompt).toMatch(/^Fill the empty grey margins/);
+    expect(steps({ tool: "expand" })[0].request.prompt).toMatch(/fill the margins with more of the same surroundings\.$/);
     expect(steps({ tool: "regional", prompt: "add a hat" })[0].request).toMatchObject({ modelId: "seedream-5-pro", op: "edit" });
+    // Regional edit on your GPU: Qwen-Image 2.1 first, then Krea 2 Edit and FIBO 2 Edit Turbo, one picture each. Layer edit
+    // takes FIBO 2 Edit Turbo too, with its references.
+    expect(steps({ tool: "regional", engine: "open", prompt: "add a hat" })[0].request).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit" });
+    for (const modelId of ["oss-krea2-edit", "oss-fibo2-edit-turbo"]) {
+      expect(steps({ tool: "regional", engine: "open", modelId, prompt: "add a hat" })[0].request).toMatchObject({ modelId, op: "edit", inputs: { images: ["/api/files/a.png"] } });
+    }
+    expect(steps({ tool: "regenerate", engine: "open", modelId: "oss-fibo2-edit-turbo", prompt: "a red coat" })[0].request).toMatchObject({ modelId: "oss-fibo2-edit-turbo", op: "edit" });
+    expect(() => steps({ tool: "regenerate", engine: "open", modelId: "oss-krea2-edit", prompt: "a red coat" })).toThrow(/can't run this tool/);
+    expect(() => steps({ tool: "regional", engine: "open", modelId: "oss-qwen-edit", prompt: "add a hat" })).toThrow(/can't run this tool/);
+    expect(steps({ tool: "generate-layer", engine: "open", modelId: "oss-moss-image", prompt: "a lamp" })[0].request).toMatchObject({ modelId: "oss-moss-image", op: "t2i" });
   });
 
   it("only sends a shape the model accepts", () => {
@@ -228,7 +260,7 @@ describe("layers API", () => {
     expect(view.doc).toMatchObject({ width: 1920, height: 1080, decomposed: false, source });
     expect(view.jobs).toEqual([]);
 
-    res = await list.GET(new Request("http://localhost/"));
+    res = await list.GET();
     const items = ((await res.json()) as { items: LayerProject[] }).items;
     expect(items.map((p) => p.id)).toEqual([id]);
 
@@ -246,7 +278,7 @@ describe("layers API", () => {
     expect(started.generationIds).toHaveLength(1);
 
     // The card says it's processing; a second decomposition is refused while it runs.
-    res = await list.GET(new Request("http://localhost/"));
+    res = await list.GET();
     expect(((await res.json()) as { items: LayerProject[] }).items[0].status).toBe("processing");
     res = await jobs.POST(req("POST", { tool: "decompose", engine: "cloud", image: source, frame: [0, 0, 1920, 1080] }), ctx({ id }));
     expect(res.status).toBe(409);
@@ -298,7 +330,7 @@ describe("layers API", () => {
     expect(rows.length).toBeGreaterThan(1);
     expect(rows[0].box).toEqual([expect.closeTo(153.6, 1), expect.closeTo(108, 1), expect.closeTo(998.4, 1), expect.closeTo(97.2, 1)]);
 
-    // Inpaint: Nano Banana Pro is shown the painted area tinted red; FLUX Fill [pro] takes the mask itself.
+    // Inpaint: Nano Banana Pro is shown the painted area tinted red; Bria FIBO 2 takes the mask itself.
     const mask = upload();
     const sketch = upload();
     const paint = { tool: "inpaint", engine: "cloud", image: source, mask, sketch, prompt: "a vase of tulips", frame, settings: { aspect: "16:9" } };
@@ -308,9 +340,9 @@ describe("layers API", () => {
     expect(nano).toMatchObject({ modelId: "nano-banana-pro", op: "edit" });
     expect(nano.request.inputs).toMatchObject({ images: [source], sketch });
     expect(nano.prompt).toMatch(/Only change the region tinted red in image 2/);
-    res = await jobs.POST(req("POST", { ...paint, modelId: "flux-fill-pro" }), ctx({ id }));
+    res = await jobs.POST(req("POST", { ...paint, modelId: "bria-fibo-2" }), ctx({ id }));
     const fill = gens.getGeneration(((await res.json()) as LayerJob).generationIds[0])!;
-    expect(fill).toMatchObject({ modelId: "flux-fill-pro", op: "inpaint" });
+    expect(fill).toMatchObject({ modelId: "bria-fibo-2", op: "inpaint" });
     expect(fill.request.inputs).toMatchObject({ images: [source], mask });
     // Only stored files can be painted with.
     res = await jobs.POST(req("POST", { ...paint, mask: "http://evil.example/m.png" }), ctx({ id }));
@@ -458,7 +490,7 @@ describe("layers API", () => {
     // Until the editor lays the layers out, the card says they're ready to see (not “Processing…” for good).
     expect(v.project).toMatchObject({ status: "unopened", layers: 1 });
     expect(v.project.pendingLayers).toBe(v.jobs[0].result?.outputs.filter((o) => o.kind === "image").length);
-    const card = ((await (await list.GET(new Request("http://localhost/"))).json()) as { items: LayerProject[] }).items.find((p) => p.id === v.project.id);
+    const card = ((await (await list.GET()).json()) as { items: LayerProject[] }).items.find((p) => p.id === v.project.id);
     expect(card?.status).toBe("unopened");
     const bad = await list.POST(req("POST", { source, width: 512, height: 512, generationId: "nope" }));
     expect(bad.status).toBe(400);

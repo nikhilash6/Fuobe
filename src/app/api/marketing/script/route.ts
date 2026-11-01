@@ -1,7 +1,5 @@
 import { z } from "zod";
 import { clickToAdScript, failure, readBody } from "@/server/marketing";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const Body = z.object({
   engine: z.enum(["cloud", "open"]),
@@ -12,13 +10,12 @@ const Body = z.object({
 });
 
 /** Write a Click to Ad voiceover script to review (Auto, or with custom instructions). */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   const body = await readBody(request, Body, "Pick a product and a style");
   if (body instanceof Response) return body;
   try {
     return Response.json(await clickToAdScript(body));
   } catch (e) {
-    rethrowAccess(e);
     return failure(e);
   }
-});
+}

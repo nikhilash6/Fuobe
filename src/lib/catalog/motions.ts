@@ -29,8 +29,8 @@ const OPEN_MODEL = "oss-wan22-14b";
 const START: InputSlot = { key: "image", label: "Start frame", accept: "image", required: true, hint: "The shot to animate" };
 const END: InputSlot = { key: "endImage", label: "End frame", accept: "image", required: true, hint: "Where the transition lands" };
 
-/** Higgsfield applies these to an uploaded video; we generate from a still. */
-const RESTYLE = "Approximation: Higgsfield restyles an uploaded video; Fuobe animates a still image with this look";
+/** The reference applies these to an uploaded video; Fuobe animates a still in the look (Details says it plainly). */
+const RESTYLE = "Animates your still in this look.";
 
 function slug(s: string): string {
   return s
@@ -64,7 +64,8 @@ function build(type: "motion" | "effect", specs: MotionSpec[], baseHue: number):
         params: { duration: 5, resolution: "480p" },
         loras: m.loras,
       },
-      parity: m.parity ?? (m.loras?.length ? "Open version uses a dedicated LoRA" : "Open version is prompt-driven on Wan 2.2"),
+      // Fuobe DoP writes each motion's and effect's own line (dopPreset); this one is kept only where it adds to it.
+      parity: m.parity ?? (m.loras?.length ? "On your GPU it adds a LoRA trained for this look." : "On your GPU it follows the preset's description."),
     };
   });
 }
@@ -106,7 +107,7 @@ const MOTION_SPECS: MotionSpec[] = [
   { name: "Crane Over The Head", category: "Vertical", icon: "ArrowUpRight", prompt: "The camera rises and travels over the subject's head, ending looking down from behind" },
   { name: "Jib Up", category: "Vertical", icon: "ArrowUp", prompt: "A short jib move upward that reveals the background behind the subject" },
   { name: "Jib Down", category: "Vertical", icon: "ArrowDown", prompt: "A short jib move downward settling on the subject" },
-  { name: "Pedestal Down", category: "Vertical", icon: "ArrowDownToDot", prompt: "The camera lowers straight down on a pedestal without tilting, sliding from above the subject's head to their eye level" },
+  { name: "Pedestal Down", category: "Vertical", icon: "ArrowDownToDot", prompt: "The camera lowers straight down on a pedestal, its angle held perfectly level, sliding from above the subject's head to their eye level" },
   { name: "Tilt Up", category: "Vertical", icon: "ChevronUp", prompt: "The camera tilts up slowly from the subject's feet to their face" },
   { name: "Tilt Down", category: "Vertical", icon: "ChevronDown", prompt: "The camera tilts down slowly from the sky to the subject" },
   { name: "Overhead", category: "Vertical", icon: "LayoutGrid", prompt: "A top-down overhead shot that slowly rotates and descends toward the subject" },
@@ -171,7 +172,7 @@ const MOTION_SPECS: MotionSpec[] = [
   { name: "Kiss", category: "Action & Sports", icon: "Heart", prompt: "The two people lean in slowly and share a tender kiss in soft focus, the camera gently circling them" },
   { name: "Moonwalk Left", category: "Action & Sports", icon: "ArrowLeft", prompt: "The subject performs a smooth moonwalk, gliding backward to the left while facing forward, retro dance style" },
   { name: "Moonwalk Right", category: "Action & Sports", icon: "ArrowRight", prompt: "The subject performs a smooth moonwalk, gliding backward to the right while facing forward, retro dance style" },
-  { name: "Skate Cruise", category: "Action & Sports", icon: "Wind", prompt: "The subject cruises relaxed on a skateboard down a sunny street, pushing and gliding without tricks, the camera tracking alongside" },
+  { name: "Skate Cruise", category: "Action & Sports", icon: "Wind", prompt: "The subject cruises relaxed on a skateboard down a sunny street, simply pushing and gliding with all four wheels on the ground, the camera tracking alongside" },
   { name: "Skateboard Glide", category: "Action & Sports", icon: "Wind", prompt: "The subject glides smoothly on a skateboard, board rolling effortlessly, flowing and stylish" },
   { name: "Skateboard Ollie", category: "Action & Sports", icon: "ArrowUp", prompt: "The subject pops a clean ollie, rider and board lifting off the ground together and landing smoothly" },
   { name: "Ski Carving", category: "Action & Sports", icon: "MountainSnow", prompt: "A skier carves fast, clean turns down the slope, edges biting into the snow, the camera following" },
@@ -185,7 +186,7 @@ const MOTION_SPECS: MotionSpec[] = [
   { name: "Epic Scale", category: "Camera Styles", icon: "Mountain", prompt: "Epic large-scale camera work: sweeping crane and aerial moves that emphasize the vastness of the world around the subject" },
   { name: "Impossible Camera", category: "Camera Styles", icon: "Infinity", prompt: "Impossible camera move that flies through tiny gaps, passes through glass and objects and swoops around the subject in one continuous path" },
   { name: "Intimate Observer", category: "Camera Styles", icon: "Eye", prompt: "Intimate close camera that quietly observes the subject from near their shoulder, subtle breathing movement and shallow depth of field" },
-  { name: "One Take", category: "Camera Styles", icon: "Film", prompt: "Single continuous oner: a fluid Steadicam move follows the subject through the space without any cut" },
+  { name: "One Take", category: "Camera Styles", icon: "Film", prompt: "Single continuous oner: a fluid Steadicam move follows the subject through the space in one unbroken take" },
   { name: "Raw Chaos", category: "Camera Styles", icon: "Shuffle", prompt: "Chaotic, aggressive handheld camera with violent shakes, whip pans and crash zooms, raw and frantic" },
   { name: "Silent Machine", category: "Camera Styles", icon: "Cog", prompt: "Precise, mechanical camera motion: perfectly linear slow slides and pushes with symmetrical framing, cold and controlled" },
 ];
@@ -307,7 +308,7 @@ const EFFECT_SPECS: MotionSpec[] = [
   { name: "Crying", category: "Viral", icon: "Frown", prompt: "The subject's lip trembles and they burst into dramatic tears, sobbing as tears stream down their cheeks" },
   { name: "Dream Date", category: "Viral", icon: "Heart", prompt: "A romantic date unfolds: candles, string lights and a sunset table appear around the subject as a date leans in smiling" },
   { name: "Drunk Master", category: "Viral", icon: "Wine", prompt: "The subject sways and staggers in a comically drunken kung-fu style, then snaps into a flawless martial-arts pose" },
-  { name: "Explosion", category: "Viral", icon: "Bomb", prompt: "A huge explosion erupts behind the subject as they walk away from it without looking back, action-movie style" },
+  { name: "Explosion", category: "Viral", icon: "Bomb", prompt: "A huge explosion erupts behind the subject as they walk calmly away from it, eyes fixed straight ahead, action-movie style" },
   { name: "Fairies Around", category: "Viral", icon: "Sparkles", prompt: "Tiny glowing fairies flutter around the subject, leaving trails of sparkling dust" },
   { name: "Firework", category: "Viral", icon: "PartyPopper", prompt: "Colorful fireworks burst in the night sky behind the subject, lighting their face in flashes of color" },
   { name: "Flashback", category: "Viral", icon: "History", prompt: "The frame shifts into a hazy sepia flashback as younger memories of the subject flicker past, then returns to the present" },

@@ -3,13 +3,13 @@
 import { Check, Download, Film, Loader2, Maximize2, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MediaThumb, PendingTile } from "@/components/studio/feed";
 import { Viewer } from "@/components/studio/viewer";
 import { useGenerationActions } from "@/lib/api";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useRetryPhoto } from "./hooks";
 
 export interface Tile {
@@ -131,7 +131,7 @@ export function ResultsGrid({
                 onRetry={() =>
                   retry.mutate(t.g.id, {
                     onSuccess: (r) => onRetried?.(t.g.id, r.items.map((x) => x.id)),
-                    onError: (e) => toast.error((e as Error).message),
+                    onError: (e) => toastError(e),
                   })
                 }
               />

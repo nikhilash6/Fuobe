@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EMOTION_FAMILIES, type CinemaFolder } from "@/lib/catalog/cinema";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useFolderActions } from "./hooks";
 
 /** Which feed the workspace shows. */
@@ -141,11 +142,11 @@ function FolderRow({
   const group = siblings.filter((s) => s.pinned === node.pinned);
   const at = group.findIndex((s) => s.id === node.id);
   const reorder = (dir: -1 | 1) =>
-    void Promise.all(reorderFolders(siblings, node.id, dir).map((c) => actions.update(c.id, { position: c.position }))).catch((e) => toast.error((e as Error).message));
+    void Promise.all(reorderFolders(siblings, node.id, dir).map((c) => actions.update(c.id, { position: c.position }))).catch((e) => toastError(e));
   const parent = node.parentId ? folders.find((f) => f.id === node.parentId) : undefined;
   const commit = () => {
     setRenaming(false);
-    if (name.trim() && name.trim() !== node.name) void actions.update(node.id, { name: name.trim() }).catch((e) => toast.error((e as Error).message));
+    if (name.trim() && name.trim() !== node.name) void actions.update(node.id, { name: name.trim() }).catch((e) => toastError(e));
     else setName(node.name);
   };
   return (
@@ -250,7 +251,7 @@ function FolderRow({
                 <FolderInput /> Move to
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
-                <MoveToItems folders={folders} exclude={subtree(folders, node.id)} onMove={(parentId) => void actions.update(node.id, { parentId }).catch((e) => toast.error((e as Error).message))} />
+                <MoveToItems folders={folders} exclude={subtree(folders, node.id)} onMove={(parentId) => void actions.update(node.id, { parentId }).catch((e) => toastError(e))} />
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
@@ -279,7 +280,7 @@ function FolderRow({
                     if (active) setView(parent ? { kind: "folder", id: parent.id } : { kind: "home" });
                     toast(`Folder deleted — its takes moved to ${parent ? parent.name : "Home"}`);
                   })
-                  .catch((e) => toast.error((e as Error).message))
+                  .catch((e) => toastError(e))
               }
             >
               Delete folder
@@ -334,7 +335,7 @@ export function FolderSidebar({
       setOpen((s) => new Set([...s, f.id]));
       setView({ kind: "folder", id: f.id });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     }
   };
   return (

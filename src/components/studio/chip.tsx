@@ -23,21 +23,30 @@ export const Chip = forwardRef<HTMLButtonElement, React.ComponentProps<"button">
 
 /**
  * A selected chip with its own clear button next to it (a real, focusable button, so the choice
- * can be removed from the keyboard). `children` is the trigger chip.
+ * can be removed from the keyboard). `children` is the trigger chip. It stays in the same wrapper
+ * either way (laid out as if there were none until picked), so a pick doesn't remount it: Mix's
+ * popover stays open after a pick, and its grid and the clip playing in it go on.
  */
 export function ClearableChip({ active, onClear, clearLabel, children }: { active: boolean; onClear: () => void; clearLabel: string; children: React.ReactNode }) {
-  if (!active) return <>{children}</>;
   return (
-    <span className="inline-flex shrink-0 items-center rounded-full bg-brand-faint text-brand-text [&>button:first-child]:bg-transparent [&>button:first-child]:pr-1.5 [&>button:first-child:hover]:bg-brand-faint-hover">
+    <span
+      className={
+        active
+          ? "inline-flex shrink-0 items-center rounded-full bg-brand-faint text-brand-text [&>button:first-child]:bg-transparent [&>button:first-child]:pr-1.5 [&>button:first-child:hover]:bg-brand-faint-hover"
+          : "contents"
+      }
+    >
       {children}
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label={clearLabel}
-        className="mr-1 -ml-0.5 grid size-6 place-items-center rounded-full opacity-70 transition outline-none hover:bg-brand-faint-hover hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50"
-      >
-        <X className="size-3.5" />
-      </button>
+      {active && (
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label={clearLabel}
+          className="mr-1 -ml-0.5 grid size-6 place-items-center rounded-full opacity-70 transition outline-none hover:bg-brand-faint-hover hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          <X className="size-3.5" />
+        </button>
+      )}
     </span>
   );
 }

@@ -65,3 +65,24 @@ export function pickEngine(
   if (mode !== "both" && engines.includes(mode)) return mode;
   return engines.find(ready) ?? m.engine;
 }
+
+const FREE_ON_GPU = String.raw`free on your GPU(?: \([^)]*\))?`;
+
+/**
+ * A model's note as a guest or a free account reads it, in a tool that doesn't run on their own GPU yet (the page says
+ * so): without "free", "free on your GPU (24 GB)" and "on your GPU". "… · free on your GPU (24 GB) · Apache-2.0" →
+ * "… · Apache-2.0"; "Qwen-Image-Edit 2511 on your GPU" → "Qwen-Image-Edit 2511".
+ */
+export function withoutOwnGpu(note: string): string {
+  return note
+    .split(" · ")
+    .map((part) =>
+      part
+        .replace(new RegExp(`^(?:${FREE_ON_GPU}|free)(?:, (?:or )?|$)`), "")
+        .replace(/^on your GPU(?:, |$)/, "")
+        .replace(new RegExp(`,? ${FREE_ON_GPU}`, "g"), "")
+        .replace(/ on your GPU\b/g, ""),
+    )
+    .filter(Boolean)
+    .join(" · ");
+}

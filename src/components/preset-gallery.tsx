@@ -8,8 +8,10 @@ import { PRESET_ICONS } from "@/components/preset-icons";
 import { PresetPreview, usePreviewPlayback } from "@/components/preset-preview";
 import { GALLERY_GRID } from "@/components/skeletons";
 import { useProgressive } from "@/components/use-progressive";
-import { useEngineMode } from "@/lib/api";
-import { interleaveByCategory, previewFlip, searchText, type PresetCardData } from "@/lib/preset-cards";
+import { CardChip, badgeKey, parseBadgeKey } from "@/components/gpu/readiness-chip";
+import { useGpuBadges } from "@/hooks/use-gpu";
+import { useEngineMode, useViewer } from "@/lib/api";
+import { matchesSearch, previewFlip, readMoreTap, searchText, TAP_TO_READ, type PresetCardData } from "@/lib/preset-cards";
 import { cn } from "@/lib/utils";
 
 /** A tiny label shown on hover/focus (CSS only: a gallery has hundreds of these). */
@@ -33,16 +35,35 @@ export const PresetCard = memo(function PresetCard({
   preset,
   href,
   compact,
+  bare,
+  caption,
+  place,
+  sizes,
   engine,
+  gpu,
+  gpuName,
 }: {
   preset: PresetCardData;
   href: string;
   compact?: boolean;
+  /** The picture, the name and the description only: no category icon or engine chips (Home's rows). */
+  bare?: boolean;
+  /** A short line in place of the description (Home's rows); the description stays the tooltip. */
+  caption?: string;
+  /** Where in the shared cycle its clip starts when it plays by itself (PresetPreview). */
+  place?: number;
+  /** How wide its picture shows (PresetPreview). */
+  sizes?: string;
   /** Settings → Engine mode: with one engine locked in, the other's chip would suggest a route the user turned off. */
   engine?: "cloud" | "open";
+  /** Its state on the viewer's GPU (a badge as one string, badgeKey), or none. */
+  gpu?: string;
+  gpuName?: string;
 }) {
+  const badge = engine !== "cloud" ? parseBadgeKey(gpu) : null;
   const Icon = PRESET_ICONS[preset.icon] ?? Sparkles;
-  const { ref, playing, handlers } = usePreviewPlayback<HTMLAnchorElement>(preset.id);
+  const { ref, playing, asked, handlers } = usePreviewPlayback<HTMLAnchorElement>(preset.id, preset.preview);
+  const [more, setMore] = useState(false);
   return (
     // Prefetched on hover or touch, not on sight: a gallery shows hundreds of these.
     <IntentLink
@@ -52,23 +73,49 @@ export const PresetCard = memo(function PresetCard({
       className="group/card flex min-w-0 flex-col gap-2 rounded-xl p-1.5 transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
-        <PresetPreview preview={preset.preview} hue={preset.hue} playing={playing} flip={previewFlip(preset)} />
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/40 to-transparent" />
-        <span className="pointer-events-none absolute bottom-1.5 left-1.5 grid size-6 place-items-center rounded-md bg-black/30 text-white">
-          <Icon className="size-3.5" />
-        </span>
-        <span className="pointer-events-none absolute right-1.5 bottom-1.5 flex gap-1">
-          {preset.cloud && engine !== "open" && <EngineChip engine="cloud" />}
-          {preset.open && engine !== "cloud" && <EngineChip engine="open" />}
-        </span>
+        <PresetPreview preview={preset.preview} hue={preset.hue} playing={playing} asked={asked} place={place} sizes={sizes} flip={previewFlip(preset)} />
+        {!bare && (
+          <>
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/40 to-transparent" />
+            <span className="pointer-events-none absolute bottom-1.5 left-1.5 grid size-6 place-items-center rounded-md bg-black/30 text-white">
+              <Icon className="size-3.5" />
+            </span>
+            <span className="pointer-events-none absolute right-1.5 bottom-1.5 flex gap-1">
+              {preset.cloud && engine !== "open" && <EngineChip engine="cloud" />}
+              {preset.open && engine !== "cloud" && <EngineChip engine="open" />}
+            </span>
+          </>
+        )}
         {preset.top && (
           <span className="absolute top-1.5 left-1.5 rounded-[4px] bg-highlight px-1 text-[10px] font-semibold text-highlight-foreground">Popular</span>
+        )}
+        {badge && (
+          <span className="pointer-events-none absolute top-1.5 right-1.5">
+            <CardChip badge={badge} gpu={gpuName} />
+          </span>
         )}
         <CardPending />
       </div>
       <div className="min-w-0 px-0.5">
         <p className="truncate text-[13px] font-medium">{preset.name}</p>
-        {!compact && <p className="line-clamp-2 text-[12px] leading-snug text-muted-foreground">{preset.description}</p>}
+        {!compact && (
+          // Two lines hold the card's place in the grid and stay inside the card on hover (a panel over the next
+          // row read as broken); the full text is the tooltip and the preset's own page. A phone has no tooltip: a
+          // tap on the text opens it in place (readMoreTap), so the gallery stays even until someone asks.
+          <p
+            title={preset.description}
+            data-more={more || undefined}
+            onClick={(e) => {
+              const next = readMoreTap(e.currentTarget, more, window.matchMedia(TAP_TO_READ).matches);
+              if (next === null) return;
+              e.preventDefault();
+              setMore(next);
+            }}
+            className={cn("text-[12px] leading-snug text-muted-foreground", !more && "line-clamp-2")}
+          >
+            {caption ?? preset.description}
+          </p>
+        )}
       </div>
     </IntentLink>
   );
@@ -82,7 +129,14 @@ const RUNS_ON: { value: RunsOn; label: string; icon?: typeof Cloud }[] = [
 ];
 
 /** "Runs on: All · Cloud · Open source", as a radio group with arrow-key support. */
-function RunsOnControl({ value, onChange, locked }: { value: RunsOn; onChange: (v: RunsOn) => void; locked?: "cloud" | "open" }) {
+function RunsOnControl({ value, onChange, locked, owner }: { value: RunsOn; onChange: (v: RunsOn) => void; locked?: "cloud" | "open"; owner: boolean }) {
+  // Only the owner has Settings → Engine mode; a visitor reads the lock and goes nowhere.
+  if (locked && !owner)
+    return (
+      <span className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-muted px-3 text-[13px] text-muted-foreground" title="Set by the studio's owner">
+        <Lock className="size-3.5" /> {locked === "open" ? "Open source only" : "Cloud only"}
+      </span>
+    );
   if (locked)
     return (
       <Link
@@ -135,7 +189,7 @@ function RunsOnControl({ value, onChange, locked }: { value: RunsOn; onChange: (
 }
 
 /** Keeps data-fade-start / data-fade-end on a horizontal scroller in sync with its scroll position. */
-function useFadeEdges<T extends HTMLElement>() {
+export function useFadeEdges<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   useEffect(() => {
     const el = ref.current;
@@ -163,10 +217,14 @@ const GRID = GALLERY_GRID;
 
 export function PresetGallery({
   presets,
+  categories,
   href,
   noun = "presets",
 }: {
+  /** In the order the All view shows them (featuredGallery): a category or a search keeps it. */
   presets: PresetCardData[];
+  /** The category tabs, in catalog order. */
+  categories: string[];
   /** "{id}" is replaced with the preset id. */
   href: string;
   /** Plural shown in the result count, e.g. "effects". */
@@ -182,17 +240,13 @@ export function PresetGallery({
   const query = useDeferredValue(q.trim().toLowerCase());
 
   const index = useMemo(() => presets.map((p) => [p, searchText(p)] as const), [presets]);
-  // Unfiltered, the categories take turns, so the first screen shows the range of the catalog.
-  const mixed = useMemo(() => interleaveByCategory(presets), [presets]);
-  const cats = useMemo(() => ["All", ...new Set(presets.map((p) => p.category))], [presets]);
+  const cats = useMemo(() => ["All", ...categories], [categories]);
   const list = useMemo(
     () =>
-      cat === "All" && !query
-        ? mixed.filter((p) => runsOn === "all" || p[runsOn])
-        : index
-            .filter(([p, text]) => (cat === "All" || p.category === cat) && (!query || text.includes(query)) && (runsOn === "all" || p[runsOn]))
-            .map(([p]) => p),
-    [index, mixed, cat, query, runsOn],
+      index
+        .filter(([p, text]) => (cat === "All" || p.category === cat) && (!query || matchesSearch(text, query)) && (runsOn === "all" || p[runsOn]))
+        .map(([p]) => p),
+    [index, cat, query, runsOn],
   );
   // Cards render a page at a time; a new filter starts from the first page again.
   const { shown, hasMore, moreFrom, sentinel, left } = useProgressive(list.length, `${cat}|${query}|${runsOn}`, FIRST_PAGE, PAGE);
@@ -200,6 +254,10 @@ export function PresetGallery({
 
   const strip = useFadeEdges<HTMLDivElement>();
   const stale = q.trim().toLowerCase() !== query;
+  // One fetch of the viewer's chips (the GPU pre-flight); each card gets one string.
+  const badges = useGpuBadges().data;
+  const viewer = useViewer().data;
+  const visitor = !!viewer && viewer.publicSignup && !viewer.owner;
 
   return (
     <div className="space-y-4">
@@ -230,20 +288,31 @@ export function PresetGallery({
             <span className="order-last text-[12px] whitespace-nowrap text-muted-foreground tabular-nums sm:order-first sm:mr-2" aria-live="polite">
               {list.length === presets.length ? `${presets.length} ${noun}` : `${list.length} of ${presets.length}`}
             </span>
-            <RunsOnControl value={runsOn} onChange={setRunsOn} locked={locked} />
+            <RunsOnControl value={runsOn} onChange={setRunsOn} locked={locked} owner={!!viewer?.owner} />
           </div>
         </div>
+        {/* Its line is kept (unseen) until the viewer and its chips are known, so the strip and grid don't move when it comes. */}
+        {(!viewer || (visitor && (!badges || (!badges.connected && !badges.off)))) && (
+          <p className={cn("text-[13px] text-muted-foreground", !(visitor && badges) && "invisible", !viewer && "[html[data-viewer='owner']_&]:hidden")} aria-hidden={!(visitor && badges) || undefined}>
+            <Link href="/connect" tabIndex={visitor && badges ? undefined : -1} className="font-medium text-brand-text underline-offset-2 hover:underline">
+              Connect your GPU
+            </Link>{" "}
+            to see what runs on it.
+          </p>
+        )}
         <div
           ref={strip}
           role="group"
           aria-label="Categories"
-          className="fade-x scrollbar-none -mx-1 flex snap-x scroll-px-1 gap-1 overflow-x-auto px-1"
+          // From sm up every category shows (wrapped): a mouse can't scroll a row whose scrollbar is hidden.
+          className="fade-x scrollbar-none -mx-1 flex snap-x scroll-px-1 gap-1 overflow-x-auto px-1 sm:flex-wrap sm:overflow-visible"
         >
           {cats.map((c) => (
             <button
               key={c}
               type="button"
               aria-pressed={cat === c}
+              onFocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
               onClick={(e) => {
                 setCat(c);
                 e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
@@ -262,7 +331,7 @@ export function PresetGallery({
         <>
           <div ref={grid} className={cn(GRID, "transition-opacity", stale && "opacity-70")}>
             {list.slice(0, shown).map((p) => (
-              <PresetCard key={p.id} preset={p} href={href.replace("{id}", p.id)} engine={locked} />
+              <PresetCard key={p.id} preset={p} href={href.replace("{id}", p.id)} engine={locked} gpu={p.open ? badgeKey(badges?.presets[p.id]) : undefined} gpuName={badges?.gpu} />
             ))}
           </div>
           {hasMore && (

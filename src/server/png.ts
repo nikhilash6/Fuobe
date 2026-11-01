@@ -1,5 +1,6 @@
 import "server-only";
 import zlib from "node:zlib";
+import { tenant } from "./tenant";
 
 /**
  * Minimal 8-bit PNG decode/encode, enough to convert the masks Fuobe's own editor exports
@@ -12,6 +13,14 @@ export type MaskFormat = "white" | "black" | "alpha";
 const SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 4: 2, 6: 4 };
 
+/** The largest picture decodePng takes in an account's work (40 megapixels: 160 MB of RGBA). */
+export const MAX_PNG_PIXELS = 40_000_000;
+/** The owner's own pictures: far more (a 48 MP photo's mask, a large face mosaic), still a bound (2 GB of RGBA). */
+export const OWNER_MAX_PNG_PIXELS = 500_000_000;
+
+/** The pixel limit for the work in hand: an account's or a visitor's (tenant.ts), or the owner's. */
+export const pngPixelLimit = (): number => (tenant() ? MAX_PNG_PIXELS : OWNER_MAX_PNG_PIXELS);
+
 interface Decoded {
   width: number;
   height: number;
@@ -19,7 +28,7 @@ interface Decoded {
   data: Buffer;
 }
 
-export function decodePng(buf: Buffer): Decoded {
+export function decodePng(buf: Buffer, maxPixels = pngPixelLimit()): Decoded {
   if (!buf.subarray(0, 8).equals(SIG)) throw new Error("Not a PNG");
   let off = 8;
   let width = 0;
@@ -44,7 +53,10 @@ export function decodePng(buf: Buffer): Decoded {
   }
   const ch = CHANNELS[type];
   if (depth !== 8 || !ch || interlace) throw new Error("Unsupported PNG (need 8-bit, non-interlaced, no palette)");
-  const raw = zlib.inflateSync(Buffer.concat(idat));
+  // Refused before anything is inflated: a few kilobytes can claim gigabytes of pixels.
+  if (!width || !height || width * height > maxPixels) throw new Error(`That picture is over ${Math.round(maxPixels / 1e6)} megapixels`);
+  // Never more than the picture needs (a row of filter byte + pixels, per row).
+  const raw = zlib.inflateSync(Buffer.concat(idat), { maxOutputLength: height * (width * ch + 1) });
   const stride = width * ch;
   const px = Buffer.alloc(stride * height);
   for (let y = 0; y < height; y++) {

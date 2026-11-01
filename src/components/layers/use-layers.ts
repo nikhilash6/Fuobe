@@ -4,6 +4,7 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 import { useCallback, useMemo, useRef } from "react";
 import { useGenerationEvents } from "@/lib/api";
 import type { LayerDoc, LayerJob, LayerJobInput, LayerProject, LayerProjectView } from "@/lib/layers";
+import { responseError } from "@/lib/refusals";
 
 /** Client hooks for /api/layers (kept next to the Layers UI; the shapes live in src/lib/layers.ts). */
 
@@ -18,7 +19,7 @@ export class LayersRequestError extends Error {
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new LayersRequestError(body.error ?? `Request failed (${res.status})`, res.status);
+  if (!res.ok) throw responseError(res, new LayersRequestError(body.error ?? `Request failed (${res.status})`, res.status));
   return body;
 }
 
@@ -95,7 +96,7 @@ function layerActions(qc: QueryClient) {
     remove: async (id: string) => {
       qc.setQueryData<LayerProject[]>(["layers"], (old) => old?.filter((p) => p.id !== id));
       const res = await fetch(`/api/layers/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 404) throw new Error("Couldn't delete this project. Please try again.");
+      if (!res.ok && res.status !== 404) throw responseError(res, "Couldn't delete this project. Please try again.");
       qc.removeQueries({ queryKey: ["layers", id] });
       refreshList();
     },

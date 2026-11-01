@@ -122,6 +122,12 @@ export const GROUP_LIMIT: Record<PaletteKind, number> = { page: 6, setting: 4, s
 
 /** Matches far weaker than the best one are noise next to it ("lip" finds Lipsync, not "virality predictor"). */
 const KEEP_FROM_BEST = 0.35;
+/**
+ * Once something has the words themselves in it (a substring or better: 40, less a hair for a long label), letters-in-order
+ * guesses (30 at most, plus a page's 8) are noise: "tts" finds IndexTTS-2, not Settings or Tentacle Horror.
+ */
+const KEEP_FROM_REAL_MATCH = 0.6;
+const REAL_MATCH = 39;
 
 /**
  * The matches for a query, grouped by kind: each group best first and cut to its limit, the groups
@@ -132,7 +138,8 @@ const KEEP_FROM_BEST = 0.35;
 export function rankPalette(entries: PaletteEntry[], query: string, limits: Record<PaletteKind, number> = GROUP_LIMIT): PaletteGroup[] {
   if (!normalize(query)) return [];
   const scored = entries.map((e) => ({ e, s: entryScore(query, e) })).filter((x) => x.s > 0);
-  const floor = Math.max(0, ...scored.map((x) => x.s)) * KEEP_FROM_BEST;
+  const top = Math.max(0, ...scored.map((x) => x.s));
+  const floor = top * (top >= REAL_MATCH ? KEEP_FROM_REAL_MATCH : KEEP_FROM_BEST);
   const byKind = new Map<PaletteKind, { e: PaletteEntry; s: number }[]>();
   for (const x of scored) {
     if (x.s < floor) continue;

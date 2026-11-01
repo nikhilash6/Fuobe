@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useIsOwner } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ChatMenu } from "./chat-menu";
@@ -97,6 +98,8 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
   const chats = useChats(q ? { q } : { project: "none" });
   const projects = useProjects();
   const [creating, setCreating] = useState(false);
+  // A guest or an account (public sign-up): Assist's projects are the owner's.
+  const owner = useIsOwner();
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -128,14 +131,16 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
               <h2 id="rail-projects" className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                 Projects
               </h2>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-xs" onClick={() => setCreating(true)} aria-label="New project">
-                    <FolderPlus />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>New project</TooltipContent>
-              </Tooltip>
+              {owner && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon-xs" onClick={() => setCreating(true)} aria-label="New project">
+                      <FolderPlus />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>New project</TooltipContent>
+                </Tooltip>
+              )}
             </div>
             {projects.isLoading ? (
               <Skeleton className="mx-2.5 h-6" />
@@ -159,10 +164,12 @@ function Rail({ onNavigate }: { onNavigate?: () => void }) {
                   );
                 })}
               </ul>
-            ) : (
+            ) : owner ? (
               <button onClick={() => setCreating(true)} className="w-full rounded-lg px-2.5 py-1.5 text-left text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground">
                 Group chats with shared instructions and sources →
               </button>
+            ) : (
+              <p className="px-2.5 py-1.5 text-[12px] text-muted-foreground">Projects group chats with shared instructions and sources.</p>
             )}
           </section>
         )}

@@ -11,6 +11,7 @@ import { useCreateGeneration, useEngine, useGenerations } from "@/lib/api";
 import { formatCueTime, parseCueTime } from "@/lib/av/cue-edit";
 import { probeBlob, probeUrl } from "@/lib/media-probe";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { MediaDrop } from "./media-drop";
 import { useDraft } from "./use-draft";
 import { Panel, ToolHero, ToolShell } from "./tool-shell";
@@ -25,7 +26,7 @@ const MIN_LENGTH = 0.5;
  * trimmed by typed times, with its length read from the file when it says.
  */
 export function TrimTool({ tabs }: { tabs?: React.ReactNode }) {
-  const [engine] = useEngine();
+  const [engine, , engineMode] = useEngine();
   const create = useCreateGeneration();
   const results = useGenerations({ features: [TRIM_FEATURE], limit: 24 });
   const [video, setVideo] = useState<SlotValue | null>(null);
@@ -80,14 +81,14 @@ export function TrimTool({ tabs }: { tabs?: React.ReactNode }) {
         params: { startTime: Math.round(range.startTime * 100) / 100, endTime: Math.round(range.endTime * 100) / 100 },
         title: `Trim · ${formatCueTime(range.startTime)}–${formatCueTime(range.endTime)}`,
       },
-      { onSuccess: () => toast.success("Trimming"), onError: (e) => toast.error((e as Error).message) },
+      { onSuccess: () => toast.success("Trimming"), onError: (e) => toastError(e) },
     );
   };
   const typed = !!unread && unread.length == null;
   const total = unread?.length ?? length;
   return (
     <ToolShell title="Video tools" tabs={tabs}>
-      {!video && <ToolHero title="Keep just the part you need" subtitle="Pick where it starts and ends — the sound comes along. Free on your ComfyUI (CPU), fractions of a cent on the cloud." />}
+      {!video && <ToolHero title="Keep just the part you need" subtitle={`Pick where it starts and ends — the sound comes along. Free on your ComfyUI (CPU)${engineMode === "open" ? "." : ", fractions of a cent on the cloud."}`} />}
       <div className={cn("mx-auto max-w-[820px] space-y-3", video ? "pt-4" : "mt-8")}>
         <MediaDrop kind="video" value={video} onChange={pick} onFile={(f) => (dropped.current = f)} preview={false} title="Add a video to trim" hint="MP4, MOV or WebM up to 200 MB" compact />
         {video && (

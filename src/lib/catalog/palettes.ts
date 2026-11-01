@@ -17,7 +17,7 @@
  *   on every other model its words. Picks saved with Higgsfield's old style ids still find their look.
  *   Personal: cloud = the board's Recraft style id (Recraft models) or its most representative images
  *   as style references (Nano Banana Pro and other multi-reference models); open = the board's collages
- *   on Qwen-Image-Edit Style Reference (or the style-reference model picked), or its trained style LoRA
+ *   on Krea 2 Style Reference (or the style-reference model picked), or its trained style LoRA
  *   on Z-Image Turbo.
  * Sentences (the palette's hex list, a look described in words, a reference legend) never go into
  * `request.prompt`: they ride in `request.signature.words`, which the server adds when it plans the
@@ -71,11 +71,11 @@ export function normalizeHex(input: string): string | null {
 export function paletteError(p: { name: string; colors: string[]; background?: string | null }): string | null {
   if (!p.name.trim()) return "Give the palette a name";
   if (p.name.trim().length > NAME_MAX) return `Keep the name under ${NAME_MAX} characters`;
-  if (!p.colors.length) return "Add at least one colour";
-  if (p.colors.length > MAX_COLORS) return `A palette holds up to ${MAX_COLORS} colours`;
+  if (!p.colors.length) return "Add at least one color";
+  if (p.colors.length > MAX_COLORS) return `A palette holds up to ${MAX_COLORS} colors`;
   const bad = p.colors.find((c) => !HEX_RE.test(c));
-  if (bad) return `${bad} isn't a colour — use #RRGGBB`;
-  if (p.background && !HEX_RE.test(p.background)) return `${p.background} isn't a colour — use #RRGGBB`;
+  if (bad) return `${bad} isn't a color — use #RRGGBB`;
+  if (p.background && !HEX_RE.test(p.background)) return `${p.background} isn't a color — use #RRGGBB`;
   return null;
 }
 
@@ -369,6 +369,11 @@ export interface SignatureCaps {
 export interface SignatureContext {
   caps: SignatureCaps;
   getModel: (id: string) => ModelDef | undefined;
+  /**
+   * A guest or a free account: no palette lock. The lock is a second run on the studio's own ComfyUI
+   * (POST /api/palettes/lock), which only the owner starts, so a visitor's colors stay in the prompt.
+   */
+  visitor?: boolean;
 }
 
 export interface SignedRequest {
@@ -395,7 +400,8 @@ export const SIGNATURE_MODELS = {
   cloudRefs: "nano-banana-pro",
   recraftStyle: "recraft-4-style",
   recraftSaved: "recraft-4-style-saved",
-  openStyle: "oss-style-qwen-edit",
+  /** Krea 2 Style Reference: trained for style reference (1–2 images, the board's collages). */
+  openStyle: "oss-style-krea2",
   openPalette: "oss-zimage-palette",
   openTurbo: "oss-z-image-turbo",
   /** A personal moodboard trained as a style LoRA runs here, the LoRA as its look (both engines). */
@@ -577,12 +583,12 @@ export function applySignature(req: GenerationRequest, sig: Signature | undefine
     const all = paletteColors(pal);
     const native = ctx.caps.native[model.id];
     if (!native && model.engine === "open" && model.id === SIGNATURE_MODELS.openTurbo && !styled && !(r.inputs?.images?.length) && !r.loras?.length) {
-      move(SIGNATURE_MODELS.openPalette, `Runs on {model}: your colours in the prompt, then locked in with a colour transfer`);
+      move(SIGNATURE_MODELS.openPalette, `Runs on {model}: your colors go in the prompt, then a color transfer keeps the image to them`);
     }
     const nativeNow = ctx.caps.native[model.id];
     if (nativeNow) {
       const colors = cardStrip({ colors: pal.colors, background: null });
-      if (colors.length > nativeNow.max) notes.push(`${model.name} takes ${nativeNow.max} colours — the first ${nativeNow.max} are used`);
+      if (colors.length > nativeNow.max) notes.push(`${model.name} takes ${nativeNow.max} colors — the first ${nativeNow.max} are used`);
       r = { ...r, params: { ...r.params, palette: colors.slice(0, nativeNow.max) } };
       if (pal.background && nativeNow.background) r = setExtra(r, nativeNow.background, pal.background.toUpperCase());
     } else if (model.id === SIGNATURE_MODELS.openPalette) {
@@ -590,9 +596,9 @@ export function applySignature(req: GenerationRequest, sig: Signature | undefine
     } else {
       words.push(palettePrompt(pal));
       r = { ...r, params: { ...r.params, palette: all.slice(0, 16) } };
-      if (model.engine === "open" && (pal.lock ?? locksByDefault(model.id))) {
+      if (model.engine === "open" && !ctx.visitor && (pal.lock ?? locksByDefault(model.id))) {
         lock = { colors: all };
-        notes.push(`Then recoloured to “${pal.name}” by a palette-transfer step`);
+        notes.push(`Then kept to the colors of “${pal.name}” after it's made`);
       }
     }
   }

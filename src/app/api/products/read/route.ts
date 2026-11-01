@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { readProductLink } from "@/server/brand";
 import { failure, readBody } from "@/server/marketing";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const Body = z.object({
   url: z.string().trim().min(1).max(600),
@@ -14,14 +12,13 @@ const Body = z.object({
 });
 
 /** Add product(s) from a link: names, descriptions, prices and pictures read from the page. */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   const body = await readBody(request, Body, "Use a valid product link.");
   if (body instanceof Response) return body;
   try {
     const r = await readProductLink(body);
     return Response.json(r, { status: r.products.length ? 201 : 200 });
   } catch (e) {
-    rethrowAccess(e);
     return failure(e);
   }
-});
+}

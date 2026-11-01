@@ -4,7 +4,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import type { AssistThread, AssistThreadSummary, AssistThreadView } from "./assist";
-import type { TestProvider } from "./connections";
+import type { OwnerGpuView, TestProvider } from "./connections";
 import type { ElementKind, StudioElement } from "./catalog/elements";
 import type { Engine, Generation, GenerationRequest, MediaKind, ReviewStatus } from "./catalog/types";
 import {
@@ -26,8 +26,11 @@ import {
   type StreamEvent,
 } from "./generation-stream";
 import { cursorAfter, filterToSearch, type AssetUse, type FeedFilter, type Folder } from "./library";
+import { markRefusalShown, responseError } from "./refusals";
+import { postFile } from "./upload";
 import type { ShareCreated, ShareInfo, ShareListItem, SharePatch, ShareRequest } from "./share";
 import type { AccessSummary } from "./model-access";
+import { ADD_KEY_HEADER, isCloudProvider, type CloudProvider } from "./your-keys";
 
 export interface Asset {
   id: string;
@@ -42,7 +45,8 @@ export interface Asset {
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  // With its status, so a refusal or a missing thing isn't retried (src/app/providers.tsx).
+  if (!res.ok) throw responseError(res, Object.assign(new Error(body.error ?? `Request failed (${res.status})`), { status: res.status }));
   return body;
 }
 
@@ -509,15 +513,21 @@ export function useCreateGeneration() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (req: GenerationRequest) => {
-      const { items, notes } = await json<{ items: Generation[]; notes?: string[] }>(
-        await fetch("/api/generations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(req),
-        }),
-      );
+      const res = await fetch("/api/generations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+      });
+      // Stopped by the GPU pre-flight: the guided fix opens (watchGuestRefusals), so no error toast on top of it.
+      if (res.status === 409 && res.headers.get("x-fuobe-gpu-setup") === "1") {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        throw Object.assign(new Error(b.error ?? "This tool needs setting up on your GPU"), { gpuSetup: true });
+      }
+      const { items, notes, gpuWarning } = await json<{ items: Generation[]; notes?: string[]; gpuWarning?: string }>(res);
       // What the run leaves out or changes (a LoRA that runs only on your GPU, a length the API rounds) is said, not dropped silently.
       if (notes?.length) toast.warning(notes.length > 1 ? "This run changes a few things" : "This run changes one thing", { description: notes.join(". ") });
+      // The studio's own ComfyUI seems to miss something (the owner is warned, never stopped).
+      if (gpuWarning) toast.warning(gpuWarning, { action: { label: "See what", onClick: () => window.location.assign(new URL("/connect", window.location.origin).toString()) } });
       return items;
     },
     onSuccess: (items) => {
@@ -716,10 +726,9 @@ export function useShareActions() {
 // ---------------------------------------------------------------------------
 // Uploads & assets
 
+/** Upload a file as it is (streamed by the server: src/lib/upload.ts). */
 export async function uploadFile(file: File): Promise<Asset> {
-  const form = new FormData();
-  form.append("file", file);
-  return json<Asset>(await fetch("/api/uploads", { method: "POST", body: form }));
+  return postFile(file);
 }
 
 /** A stored file's uses: where it's used, in one line ("2 results and the element “Maya”"), empty when nothing uses it. */
@@ -811,24 +820,62 @@ export interface StatusInfo {
   demoMode: string;
   engineMode: EngineMode;
   cloudProvider: string;
+  /** The text LLM: Settings → AI helper, whether Claude takes text steps, and the local model server in use. */
+  llm?: {
+    helper: "auto" | "anthropic" | "local" | "none";
+    claude: boolean;
+    /** Settings' local server: "auto" or the one pinned. */
+    provider: string;
+    context: number;
+    local: { kind: string; label: string; url: string; model: string | null; loaded: boolean | null; context: number | null; warning: string | null } | null;
+    /** Why no local server can run, when one says. */
+    problem: string | null;
+    detected: { kind: string; label: string; url: string; up: boolean; auth: string; models: number; model: string | null; problem: string | null }[];
+  };
   /** The first-run guide was put away, or something the engine mode generates with was connected once. */
   onboarded?: boolean;
   /** Settings → Models & licences: what is switched off (absent while everything is on). */
   access?: AccessSummary;
+  /**
+   * Public sign-up: a guest or an account is looking. Then everything else here is its own view
+   * (its own GPU as ComfyUI, its own fal.ai and Replicate keys, no Demo mode), never the install's
+   * (src/server/account-gpu.ts). `keys`: the providers it has its own key for (src/lib/your-keys.ts).
+   */
+  viewer?: {
+    kind: "guest" | "account";
+    gpu: { connected: boolean; mode?: "computer" | "link"; online?: boolean; comfy?: "down" | "no-setting"; device?: string; vramBytes?: number };
+    keys?: CloudProvider[];
+    paidAllowed?: boolean;
+  };
+  /**
+   * The owner's ComfyUI runs on the owner's computer (Settings): what the owner's Fuobe tab there last said. Never
+   * `viewer` (that is a visitor's view of the studio).
+   */
+  ownerGpu?: OwnerGpuView;
 }
 
-/** A connection test's answer (POST /api/providers/test). */
+/** The viewer's own GPU for the status strip and the header pill: an account's, or the owner's computer. */
+export function ownGpuOf(s: StatusInfo | undefined): NonNullable<StatusInfo["viewer"]>["gpu"] | undefined {
+  if (s?.viewer) return s.viewer.gpu;
+  const g = s?.ownerGpu;
+  return g ? { connected: true, mode: "computer", online: g.online, ...(g.comfy && { comfy: g.comfy }), ...(g.device && { device: g.device }), ...(g.vramBytes && { vramBytes: g.vramBytes }) } : undefined;
+}
+
+/** A connection test's answer (POST /api/providers/test). `code` "on-your-computer": a hosted page's local address, not called. */
 export interface ConnectionTest {
   ok: boolean;
   detail: string;
+  code?: "on-your-computer";
 }
 
 /**
  * Test a provider, with unsaved values (by setting name) in place of the saved ones when given.
  * `field` is the setting being checked (the Anthropic key, Ollama's address…), so the test checks that one.
+ * `place: "hosted"`: the page isn't on the server's machine (lib/page-place.ts), so a ComfyUI address on the server's
+ * own machine or network is refused without a call.
  */
-export async function testConnection(provider: TestProvider, values?: Record<string, string>, field?: string): Promise<ConnectionTest> {
-  const res = await fetch("/api/providers/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, values, field }) });
+export async function testConnection(provider: TestProvider, values?: Record<string, string>, field?: string, o: { place?: "hosted" } = {}): Promise<ConnectionTest> {
+  const res = await fetch("/api/providers/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, values, field, ...(o.place && { place: o.place }) }) });
   const body = (await res.json().catch(() => null)) as ConnectionTest | null;
   return body && typeof body.ok === "boolean" ? body : { ok: false, detail: `The test didn't answer (${res.status})` };
 }
@@ -974,6 +1021,14 @@ export function useEngine(): [Engine, (e: Engine) => void, EngineMode] {
   return [mode === "both" ? engine : mode, set, mode];
 }
 
+/** Remember the engine the studios start on, before the mode allows it (an account that just added its own key: Cloud). */
+export function preferEngine(e: Engine): void {
+  try {
+    localStorage.setItem(ENGINE_KEY, e);
+  } catch {}
+  listeners.forEach((l) => l());
+}
+
 // ---------------------------------------------------------------------------
 // Assist
 
@@ -1033,5 +1088,278 @@ export function useAssistActions() {
       qc.removeQueries({ queryKey: ["assist", id] });
       void qc.invalidateQueries({ queryKey: ["assist"], exact: true });
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Who is looking (public sign-up: GET /api/auth/me)
+
+export interface ViewerInfo {
+  signedIn: boolean;
+  /** The install password's session or an API token (also everyone while no password is set). */
+  owner: boolean;
+  /** Guests may browse and anyone may sign up. */
+  publicSignup: boolean;
+  account?: { email: string };
+  /** Runs go to the ComfyUI on the person's own computer, which a Fuobe tab of theirs runs (components/gpu/computer-runner.tsx). */
+  computer?: boolean;
+  /** The port their computer's tab last found ComfyUI on (a browser that remembers none starts there). */
+  comfyPort?: number;
+}
+
+export function useViewer() {
+  return useQuery({
+    queryKey: ["viewer"],
+    queryFn: async () => json<ViewerInfo>(await fetch("/api/auth/me")),
+    staleTime: 60_000,
+  });
+}
+
+/** A guest browsing a public studio: signed out while sign-up is open. */
+export function useIsGuest(): boolean {
+  const v = useViewer().data;
+  return !!v && v.publicSignup && !v.signedIn;
+}
+
+/** A signed-in account (public sign-up), not the studio's owner. */
+export function useIsAccount(): boolean {
+  const v = useViewer().data;
+  return !!v?.account && !v.owner;
+}
+
+/** This browser's tabs hear on it that who is signed in changed (src/app/providers.tsx asks again). */
+export const AUTH_CHANNEL = "fuobe-auth";
+
+/** Tells this browser's other tabs that someone signed in or out, so they don't go on as the one before. */
+export function announceAuthChange(): void {
+  try {
+    const c = new BroadcastChannel(AUTH_CHANNEL);
+    c.postMessage("changed");
+    c.close();
+  } catch {}
+}
+
+/** Who used this browser last ("owner", "account" or "guest"): the sidebar's first-paint script reads it (app-sidebar.tsx). */
+export const VIEWER_KEY = "fuobe:viewer";
+
+/**
+ * Who the next page is for, said before it loads (signing in or out): the sidebar keeps the right row from its first
+ * frame, so its menu doesn't move when the viewer is known.
+ */
+export function rememberViewer(kind: "owner" | "account" | "guest"): void {
+  try {
+    localStorage.setItem(VIEWER_KEY, kind);
+  } catch {}
+}
+
+/** A word for the next page this tab loads (sessionStorage), when the change itself leaves nothing to see on it. */
+const NOTICE_KEY = "fuobe:notice";
+export type Notice = "account-deleted";
+
+/** Leaves a notice for the next page, which shows it once (src/app/providers.tsx). */
+export function leaveNotice(notice: Notice): void {
+  try {
+    sessionStorage.setItem(NOTICE_KEY, notice);
+  } catch {}
+}
+
+/** The notice the last page left, once: reading it removes it. */
+export function takeNotice(): Notice | null {
+  try {
+    const n = sessionStorage.getItem(NOTICE_KEY);
+    sessionStorage.removeItem(NOTICE_KEY);
+    return n === "account-deleted" ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Signing out: the server forgets the session, the other tabs hear of it, and the page starts again signed out. */
+export async function signOut(): Promise<void> {
+  await fetch("/api/auth/logout", { method: "POST" });
+  rememberViewer("guest");
+  announceAuthChange();
+  window.location.reload();
+}
+
+/**
+ * A guest or an account, once known: the studio's library, projects and settings are its owner's, not theirs. False
+ * until the page has hydrated: another Suspense boundary may have filled the cache first, and the first render must
+ * match the server's HTML.
+ */
+export function useIsVisitor(): boolean {
+  const v = useViewer().data;
+  const hydrated = useHydrated();
+  return hydrated && !!v && !v.owner;
+}
+
+/** Who used this browser last (VIEWER_KEY), or null. Read after hydration only: the server's HTML can't know it. */
+function lastViewer(): string | null {
+  try {
+    return localStorage.getItem(VIEWER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A guest or an account, as useIsVisitor, but from the first paint: true until the viewer is known to be the owner. For
+ * the tools that run on a self-hosted Fuobe only: a guest's first paint already has their words, the note and the
+ * buttons that are off, so nothing changes or moves when the viewer comes. The owner's page switches instead, at
+ * hydration in a browser the owner used last (VIEWER_KEY), where the note is hidden from the first paint too
+ * (src/components/self-host-note.tsx).
+ */
+export function useLikelyVisitor(): boolean {
+  const v = useViewer().data;
+  const hydrated = useHydrated();
+  if (!hydrated) return true;
+  if (v) return !v.owner;
+  return lastViewer() !== "owner";
+}
+
+/**
+ * The studio's owner, once known (and after hydration, as useIsVisitor): what only the owner can do (Assist's Create
+ * and Schedule, the Library's folders, shares and Trash) shows from then on, so a visitor never sees it flash in and out.
+ */
+export function useIsOwner(): boolean {
+  const v = useViewer().data;
+  const hydrated = useHydrated();
+  return hydrated && !!v?.owner;
+}
+
+/** "Sign up" / "Log in" with a way back here. */
+export function signInHref(mode: "signup" | "login", next?: string): string {
+  const p = new URLSearchParams();
+  if (mode === "signup") p.set("signup", "1");
+  if (next && next !== "/") p.set("next", next);
+  const q = p.toString();
+  return q ? `/login?${q}` : "/login";
+}
+
+export const GUEST_PROMPT_EVENT = "fuobe:guest-prompt";
+export const CONNECT_GPU_EVENT = "fuobe:connect-gpu";
+/**
+ * What opened "Connect your GPU": `action` a refusal (watchGuestRefusals, or a file chooser that asks first): a refused
+ * run's card keeps that run and starts it once connected; `reason` the runner's note; `look` a button that said "Use the
+ * ComfyUI on this computer". With none of them, a button that only opens the card: no run waits. `needs`: what would
+ * run the owner's refused run (Demo mode off, nothing connected): a GPU, a fal.ai or Replicate key, or either.
+ */
+export interface ConnectGpuDetail extends RefusalDetail {
+  reason?: "setting" | "find" | "browser";
+  look?: boolean;
+  needs?: ConnectNeeds;
+}
+export type ConnectNeeds = "gpu" | "key" | "any";
+const asNeeds = (v: string | null): ConnectNeeds | undefined => (v === "gpu" || v === "key" || v === "any" ? v : undefined);
+/** A run started from this tab (components/gpu/computer-runtime.ts listens). */
+export const COMPUTER_KICK_EVENT = "fuobe:computer-kick";
+/** The guided fix (src/components/gpu/guided-fix.tsx): { ref, plan? }. */
+export const GPU_SETUP_EVENT = "fuobe:gpu-setup";
+/** "Add your key" (src/components/keys/your-keys.tsx): { provider, modelId? }. */
+export const ADD_KEY_EVENT = "fuobe:add-key";
+
+/** A card GuestPrompt shows for a refusal: "Create a free account" (coming back to `here` after) or "Connect your GPU". */
+export type RefusalCard = { kind: "guest"; here: string } | { kind: "gpu" };
+
+/** What a refusal card is about, for its words: a run (or any other change), or adding a file of one's own. */
+export type RefusalAction = "run" | "upload";
+
+/** What the cards' events may say (GUEST_PROMPT_EVENT, CONNECT_GPU_EVENT). Without it, a card is about a run. */
+export interface RefusalDetail {
+  action?: RefusalAction;
+}
+
+/** The requests that add a file of the visitor's own: their refusal's card says "add your own files", not "run this". */
+const UPLOAD_PATHS = new Set(["/api/uploads", "/api/media/probe"]);
+
+/** A request's path, whichever way fetch was given it (a path, a URL or a Request). Empty when it can't be read. */
+function requestPath(input: RequestInfo | URL): string {
+  try {
+    return new URL(input instanceof Request ? input.url : String(input), window.location.href || "http://localhost").pathname;
+  } catch {
+    return "";
+  }
+}
+
+/** Opens "Create a free account" on its own (GuestPrompt), e.g. before a guest's file chooser: it could only be refused. */
+export function askToSignUp(action: RefusalAction = "upload"): void {
+  window.dispatchEvent(new CustomEvent<RefusalDetail>(GUEST_PROMPT_EVENT, { detail: { action } }));
+}
+
+/**
+ * For a file chooser, a drop or a paste: asks first whoever the upload would refuse, instead of letting them pick a file
+ * for nothing. A guest gets "Create a free account", an account with neither its own GPU nor its own key "Connect your
+ * GPU or add a key". The function returns true when it asked (the chooser stays shut, the file stays out), and false
+ * for anyone the upload takes, and while who is looking isn't known yet (the server's refusal opens the same card).
+ */
+export function useAskBeforeUpload(): () => boolean {
+  const guest = useIsGuest();
+  const seen = useStatus().data?.viewer;
+  const nowhere = seen?.kind === "account" && !seen.gpu.connected && !seen.keys?.length;
+  return useCallback(() => {
+    if (guest) askToSignUp("upload");
+    else if (nowhere) window.dispatchEvent(new CustomEvent<RefusalDetail>(CONNECT_GPU_EVENT, { detail: { action: "upload" } }));
+    else return false;
+    return true;
+  }, [guest, nowhere]);
+}
+
+/**
+ * The card a refusal opens on this page. None on the sign-in page: the visitor is signing in already,
+ * and a wrong password there is the form's own error.
+ */
+export function refusalCard(kind: RefusalCard["kind"], at: { pathname: string; search: string }): RefusalCard | null {
+  if (at.pathname === "/login") return null;
+  return kind === "guest" ? { kind, here: at.pathname + at.search } : { kind };
+}
+
+/**
+ * A guest tried to change something (the proxy answers a guest's change with a 401 marked
+ * x-fuobe-guest): open "Create a free account" (GuestPrompt). An account tried to run something
+ * (a 403 marked x-fuobe-connect-gpu): open "Connect your GPU". Watches every fetch, so the studio's
+ * own helpers (json() here, and the components' own) all get it. The response is marked
+ * (src/lib/refusals.ts): the error json() and postFile() throw for it shows no toast on top of the
+ * card. Never on the sign-in page (refusalCard). Installed once. A refused upload's card says so ("add your own
+ * files"), not "run this".
+ */
+export function watchGuestRefusals(): void {
+  const w = window as typeof window & { __fuobeGuestFetch?: boolean };
+  if (w.__fuobeGuestFetch) return;
+  w.__fuobeGuestFetch = true;
+  const original = window.fetch.bind(window);
+  const open = (res: Response, kind: RefusalCard["kind"], path: string) => {
+    if (!refusalCard(kind, window.location)) return;
+    markRefusalShown(res);
+    const needs = asNeeds(res.headers.get("x-fuobe-connect-needs"));
+    const detail: ConnectGpuDetail = { action: UPLOAD_PATHS.has(path) ? "upload" : "run", ...(needs && { needs }) };
+    window.dispatchEvent(new CustomEvent(kind === "guest" ? GUEST_PROMPT_EVENT : CONNECT_GPU_EVENT, { detail }));
+  };
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const res = await original(input, init);
+    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    if (res.status === 401 && res.headers.get("x-fuobe-guest") === "1" && method !== "GET" && method !== "HEAD") open(res, "guest", requestPath(input));
+    if (res.status === 403 && res.headers.get("x-fuobe-connect-gpu") === "1") open(res, "gpu", requestPath(input));
+    // The owner's run with nothing connected that runs it (Demo mode off): the connect card too, never an error toast.
+    // On a hosted page it offers the ComfyUI on this computer first; on the server's own machine, the server's address.
+    if (res.status === 422 && res.headers.get("x-fuobe-connect-gpu") === "1") open(res, "gpu", requestPath(input));
+    // A run started here, on the ComfyUI on this computer: the tab that runs it asks for it at once.
+    if (res.status === 201 && method === "POST" && requestPath(input) === "/api/generations") {
+      window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));
+    }
+    // An account's paid run without its own key for that provider (x-fuobe-add-key: fal | replicate): "Add your key".
+    const addKey = res.status === 403 ? res.headers.get(ADD_KEY_HEADER) : null;
+    if (isCloudProvider(addKey) && refusalCard("gpu", window.location)) {
+      markRefusalShown(res);
+      window.dispatchEvent(new CustomEvent(ADD_KEY_EVENT, { detail: { provider: addKey } }));
+    }
+    // A run the GPU pre-flight stopped (something missing on the viewer's ComfyUI): the guided fix opens with its plan.
+    if (res.status === 409 && res.headers.get("x-fuobe-gpu-setup") === "1") {
+      res
+        .clone()
+        .json()
+        .then((b: { ref?: string; plan?: unknown }) => b.ref && window.dispatchEvent(new CustomEvent(GPU_SETUP_EVENT, { detail: { ref: b.ref, plan: b.plan } })))
+        .catch(() => {});
+    }
+    return res;
   };
 }

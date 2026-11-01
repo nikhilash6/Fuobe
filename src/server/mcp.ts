@@ -3,9 +3,6 @@ import { z } from "zod";
 // The studio modules behind the studio tools (tools.ts imports them too; named here so MCP never runs without them).
 import "./assist/studio-routes";
 import { apiSchema, executeTool, getTool, planFor, TOOLS, type ToolContext } from "./assist/tools";
-import { currentActor, requestScope, withScope, type Actor } from "./access/actor";
-import { auditDenied, auditHidden } from "./access/audit";
-import { AccessError, NotFoundError } from "./access/errors";
 import { engineMode } from "./settings";
 import { recipeMarkdown } from "@/lib/recipe";
 import { enabledSkills, getSkill, skillRecipe } from "./skills";
@@ -41,17 +38,9 @@ type JsonRpcResponse = { jsonrpc: "2.0"; id: string | number | null } & ({ resul
 const ok = (id: JsonRpcRequest["id"], result: unknown): JsonRpcResponse => ({ jsonrpc: "2.0", id: id ?? null, result });
 const fail = (id: JsonRpcRequest["id"], code: number, message: string): JsonRpcResponse => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 
-/** The tools' context: the engine, and who the tool acts for (the token's or session's person, from the scope). */
-const ctx = (): ToolContext => ({ engine: engineMode() === "open" ? "open" : "cloud", actor: currentActor() });
+const ctx = (): ToolContext => ({ engine: engineMode() === "open" ? "open" : "cloud" });
 
 const READ_ONLY = new Set(["search_models", "list_elements", "list_recent", "check_generations", "estimate_cost", "estimate_job", "list_skills", "load_skill", "read_source"]);
-
-/**
- * Whether the person may run tools that make or change things: a Read-only API token gets the read tools only
- * (docs/research/accounts-8.md §7.10); a session, the local owner and Full, Generate or Admin tokens get them all.
- */
-const mayWrite = (actor: Actor) => actor.via !== "token" || actor.scopes.some((s) => s === "full" || s === "generate" || s === "admin");
-const READ_ONLY_REFUSAL = "This API token is Read only: it can look things up but not run tools that make or change things. Create a Generate or Full token in Settings → Security.";
 
 /** Gated tools other than generate and create_storyboard (priced with estimate_job). */
 const jobTools = () => TOOLS.filter((t) => t.gated && t.plan && !["generate", "create_storyboard", "remember"].includes(t.name)).map((t) => t.name);
@@ -65,9 +54,8 @@ function describe(t: (typeof TOOLS)[number]): string {
   return `${base} Spends money on paid models (or GPU time on open ones): ${how} and confirm with the user first.`;
 }
 
-function toolList(actor: Actor) {
-  const offered = mayWrite(actor) ? TOOLS : TOOLS.filter((t) => READ_ONLY.has(t.name));
-  const tools: { name: string; title: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; openWorldHint: boolean } }[] = offered.map((t) => ({
+function toolList() {
+  const tools: { name: string; title: string; description: string; inputSchema: unknown; annotations: { readOnlyHint: boolean; openWorldHint: boolean } }[] = TOOLS.map((t) => ({
     name: t.name,
     title: t.name.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()),
     description: describe(t),
@@ -121,10 +109,6 @@ async function call(params: unknown) {
   const p = CallParams.safeParse(params);
   if (!p.success) return null;
   const { name, arguments: args = {} } = p.data;
-  if (!READ_ONLY.has(name) && getTool(name) && !mayWrite(currentActor())) {
-    auditDenied("TOKEN_SCOPE", { tool: name });
-    return { content: [{ type: "text", text: READ_ONLY_REFUSAL }], isError: true };
-  }
   if (name === "estimate_cost") {
     const plan = planFor("generate", getTool("generate")!.schema.parse(args), ctx());
     return { content: [{ type: "text", text: JSON.stringify(plan) }], structuredContent: plan, isError: plan.jobs.every((j) => j.error) };
@@ -176,16 +160,8 @@ function promptGet(params: unknown) {
   };
 }
 
-/**
- * Handle one JSON-RPC message as `actor` (the person behind the bearer token or session; by default whoever the scope
- * says is acting); null for notifications (no response). Everything the message runs — tool calls and what they start —
- * acts for that person, in the request's scope (its address and browser stay on what the tools audit).
- */
-export async function handleMcp(msg: unknown, actor: Actor = currentActor()): Promise<JsonRpcResponse | null> {
-  return withScope({ ...requestScope(), actor }, () => answer(msg));
-}
-
-async function answer(msg: unknown): Promise<JsonRpcResponse | null> {
+/** Handle one JSON-RPC message; null for notifications (no response). */
+export async function handleMcp(msg: unknown): Promise<JsonRpcResponse | null> {
   const m = msg as JsonRpcRequest;
   if (!m || m.jsonrpc !== "2.0" || typeof m.method !== "string") return fail(null, -32600, "Invalid request");
   const isNotification = m.id === undefined;
@@ -203,7 +179,7 @@ async function answer(msg: unknown): Promise<JsonRpcResponse | null> {
     case "ping":
       return ok(m.id, {});
     case "tools/list":
-      return ok(m.id, { tools: toolList(currentActor()) });
+      return ok(m.id, { tools: toolList() });
     case "tools/call": {
       try {
         const r = await call(m.params);
@@ -211,9 +187,6 @@ async function answer(msg: unknown): Promise<JsonRpcResponse | null> {
         if (r === undefined) return fail(m.id, -32602, `Unknown tool ${String(m.params?.name)}`);
         return ok(m.id, r);
       } catch (e) {
-        // A refusal (no access, over a limit) is audited as handler() would, and told to the model like any tool error.
-        if (e instanceof NotFoundError && e.hidden) auditHidden();
-        if (e instanceof AccessError && e.status === 403) auditDenied(e.code ?? "forbidden", { tool: String(m.params?.name), message: e.message });
         // Bad arguments for estimate_cost and the like: a tool error the model can read.
         return ok(m.id, { content: [{ type: "text", text: (e as Error).message }], isError: true });
       }

@@ -5,18 +5,20 @@ import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import { SelfHostNote } from "@/components/self-host-note";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { fileToList, type SlotValue } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
-import { useElements, useEngine, useGenerations, useModelAccess } from "@/lib/api";
+import { useElements, useEngine, useGenerations, useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { customPack, DEFAULT_ASPECT, MAX_PACK_REFS, MAX_SELFIE_MB, PACKS, PHOTODUMP_ASPECTS, PHOTODUMP_MODELS, PHOTODUMP_SOUL, soulIdOf, type Pack } from "@/lib/catalog/packs";
 import type { Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { PackCover } from "./covers";
 import { useRun, useRunPreview, usePackActions, useUserPacks } from "./hooks";
 import { DownloadAll, ResultsGrid, runState } from "./results";
@@ -28,9 +30,12 @@ const STEPS = ["Choose a Pack", "Add your photo", "Get your photos"];
 const MODEL_NAMES: Record<string, string> = {
   "fuobe-soul": "Fuobe Soul + Soul ID",
   "nano-banana-pro": "Nano Banana Pro",
+  "nano-banana-2-1": "Nano Banana 2.1",
   "seedream-5-pro": "Seedream 5.0 Pro",
   "qwen-image-edit-2511-cloud": "Qwen-Image-Edit 2511",
-  "oss-qwen-edit": "Qwen-Image-Edit 2511",
+  "oss-qwen-image-21": "Qwen-Image 2.1",
+  "oss-qwen-image-21-turbo": "Qwen-Image 2.1 Turbo",
+  "oss-krea2-identity-edit": "Krea 2 Identity Edit",
 };
 const TABS = [
   ["all", "All"],
@@ -107,7 +112,7 @@ function CreatePack({ open, onOpenChange, onCreated }: { open: boolean; onOpenCh
                     onOpenChange(false);
                     onCreated(p.id);
                   },
-                  onError: (e) => toast.error((e as Error).message),
+                  onError: (e) => toastError(e),
                 },
               )
             }
@@ -146,6 +151,11 @@ function useRuns(feature: string) {
 /** /photodump: Photodump (trained characters) and Instadump (one selfie) — choose a pack, add your photo, get the set. */
 export function PhotodumpView() {
   const [engine, setEngine] = useEngine();
+  // A set doesn't run on an account's own GPU or key yet (only the studios' generations do), and a pack of your own is
+  // saved to the owner's library: said up front, and the upload and Generate are off. The packs stay open. Create pack
+  // shows once the owner is known (useIsOwner), so a visitor never sees it in the grid and then gone.
+  const visitor = useLikelyVisitor();
+  const isOwner = useIsOwner();
   const [step, setStep] = useState(0);
   const [reached, setReached] = useState(0);
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("all");
@@ -201,6 +211,7 @@ export function PhotodumpView() {
   const product = pack?.product === "photodump" ? "Photodump" : "Instadump";
 
   const generate = () => {
+    if (visitor) return;
     if (!body) return toast(subjectMode === "selfie" ? "Add your photo first" : "Pick a character first");
     run.mutate(body, {
       // The run line showed the model and its notes before Generate: no toast.
@@ -208,15 +219,16 @@ export function PhotodumpView() {
         setBatchId(res.batchId ?? res.items[0]?.batchId ?? undefined);
         go(2);
       },
-      onError: (e) => toast.error((e as Error).message || "Cannot start photodump generation, please try again"),
+      onError: (e) => toastError(e, "Cannot start photodump generation, please try again"),
     });
   };
 
   return (
     <PageShell wide>
       <PageHeader title="Photodump" description="A whole set of photos of you in one go — from one selfie (Instadump) or a saved character, in a pack of styles.">
-        <EngineSwitch value={engine} onChange={setEngine} />
+        <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
+      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Photodump runs on a self-hosted Fuobe for now.</SelfHostNote>}
       <div className="mb-6">
         <Steps steps={STEPS} current={step} reached={reached} onGo={go} />
       </div>
@@ -237,15 +249,18 @@ export function PhotodumpView() {
             </label>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <button
-              type="button"
-              onClick={() => setCreatingPack(true)}
-              className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <Plus className="size-6" />
-              <span className="text-[13.5px] font-medium">Create pack</span>
-              <span className="text-[12px]">From up to {MAX_PACK_REFS} reference photos</span>
-            </button>
+            {/* A pack of your own is saved to the studio's library, which is its owner's. */}
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setCreatingPack(true)}
+                className="flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Plus className="size-6" />
+                <span className="text-[13.5px] font-medium">Create pack</span>
+                <span className="text-[12px]">From up to {MAX_PACK_REFS} reference photos</span>
+              </button>
+            )}
             {shown.map((p) => {
               const sel = p.id === packId;
               return (
@@ -276,11 +291,11 @@ export function PhotodumpView() {
               );
             })}
           </div>
-          {!shown.length && <p className="py-10 text-center text-[14px] text-muted-foreground">{tab === "mine" && !needle ? "No packs of your own yet — create one from your reference photos." : `No packs match “${q}”`}</p>}
+          {!shown.length && <p className="py-10 text-center text-[14px] text-muted-foreground">{tab === "mine" && !needle ? (visitor ? "Packs of your own are saved on a self-hosted Fuobe." : "No packs of your own yet — create one from your reference photos.") : `No packs match “${q}”`}</p>}
           <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
             <p className="min-w-0 truncate text-[13px]">{pack ? <><span className="font-medium">{pack.name}</span> · {pack.count} photos</> : <span className="text-muted-foreground">Pick a pack to continue</span>}</p>
             <Button disabled={!pack} onClick={() => go(1)}>
-              Use this preset <ArrowRight />
+              Use this pack <ArrowRight />
             </Button>
           </div>
           {runs.length > 0 && (
@@ -329,7 +344,10 @@ export function PhotodumpView() {
             </div>
             {subjectMode === "selfie" ? (
               <div className="space-y-2">
-                <UploadBox value={selfie} onChange={setSelfie} title="Add your photo" hint="Use a clear, well-lit photo for best results." maxMb={MAX_SELFIE_MB} className="aspect-[4/3] max-h-[420px] w-full" />
+                {/* A guest's or an account's selfie would be uploaded for a set that can't start here. */}
+                <div inert={visitor} className={cn(visitor && "opacity-50")}>
+                  <UploadBox value={selfie} onChange={setSelfie} title="Add your photo" hint="Use a clear, well-lit photo for best results." maxMb={MAX_SELFIE_MB} className="aspect-[4/3] max-h-[420px] w-full" />
+                </div>
                 <p className="text-[12px] text-muted-foreground">Portrait-to-portrait works best: a clear, high-resolution photo with a visible face, without heavy stylization.</p>
               </div>
             ) : (
@@ -349,7 +367,7 @@ export function PhotodumpView() {
             </div>
             <div className="space-y-2">
               <p className="text-[12.5px] font-medium">Aspect ratio</p>
-              {/* A model that keeps the photo's shape (Qwen-Image-Edit) ignores the aspect ratio: the picker is off and the run line says why. */}
+              {/* A model that keeps the photo's shape (Qwen-Image 2.1's edit) ignores the aspect ratio: the picker is off and the run line says why. */}
               <div role="radiogroup" aria-label="Aspect ratio" aria-disabled={fixedAspect || undefined} onKeyDown={radioKeys} className="flex flex-wrap gap-1">
                 {PHOTODUMP_ASPECTS.map((a) => (
                   <button
@@ -401,7 +419,7 @@ export function PhotodumpView() {
               <Button variant="outline" onClick={() => go(0)}>
                 <ArrowLeft /> Back
               </Button>
-              <Button className="flex-1" disabled={!body || run.isPending || !!preview.data?.error} onClick={generate}>
+              <Button className="flex-1" disabled={!body || run.isPending || !!preview.data?.error || visitor} onClick={generate}>
                 {run.isPending && <Loader2 className="animate-spin" />} Generate {pack.count}
               </Button>
             </div>

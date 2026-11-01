@@ -2,7 +2,6 @@
 
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Info, Loader2, Plus, Trash2, Wand2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { blockId, formatLength, secondsFor, splitScript, tooLong, totalSeconds, wordCount, type EpisodeView, type ScriptBlock } from "@/lib/catalog/faceless";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { EstimateLine } from "./controls";
 import { useEpisodeAction, useEstimate, useUpdateEpisode } from "./hooks";
 
@@ -159,7 +159,7 @@ export function ScriptReview({ view }: { view: EpisodeView }) {
     edits.current++;
     deferred.current = null;
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void save().catch((e) => toast.error((e as Error).message)), SAVE_MS);
+    timer.current = setTimeout(() => void save().catch((e) => toastError(e)), SAVE_MS);
   };
 
   // Leaving with an edit not saved yet (Back, another page, closing the tab): send it now, in a request that outlives the page.
@@ -194,7 +194,7 @@ export function ScriptReview({ view }: { view: EpisodeView }) {
       if (dirty) show((await save()).episode.script.blocks);
       await action.mutateAsync("render");
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     }
   };
 
@@ -204,7 +204,7 @@ export function ScriptReview({ view }: { view: EpisodeView }) {
     timer.current = null;
     pending.current = false;
     setDirty(false);
-    action.mutate("rewrite", { onError: (e) => toast.error((e as Error).message) });
+    action.mutate("rewrite", { onError: (e) => toastError(e) });
   };
 
   const seconds = totalSeconds(blocks.map((b) => ({ seconds: secondsFor(b.narration) })));

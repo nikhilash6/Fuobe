@@ -3,10 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import type { Palette, SignatureCaps } from "@/lib/catalog/palettes";
+import { responseError } from "@/lib/refusals";
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
   return body;
 }
 

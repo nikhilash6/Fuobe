@@ -9,8 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { kmeans, samplePixels } from "@/components/cinema/color-math";
 import { chipBase, chipIdle, chipOn } from "@/components/studio/chip";
+import { useIsOwner } from "@/lib/api";
 import { BRAND_EXAMPLES, type BrandKit } from "@/lib/catalog/marketing";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useBrand, useBrandActions, useBrands, useCreateBrand } from "@/components/marketing/hooks";
 import { BrandSummary } from "./brand-kit-form";
 import { areaCls, inputCls } from "./fields";
@@ -48,12 +50,12 @@ export function BrandStart({ onDone, compact }: { onDone: (b: BrandKit) => void;
   const [images, setImages] = useState<string[]>([]);
   const submitSite = () => {
     if (!site.trim()) return void toast("Add a website or social link.");
-    create.mutate({ website: site.trim() }, { onSuccess: onDone, onError: (e) => toast.error((e as Error).message) });
+    create.mutate({ website: site.trim() }, { onSuccess: onDone, onError: (e) => toastError(e) });
   };
   const submitManual = async () => {
     if (!desc.trim() && !images.length) return void toast("Add a description or upload images");
     const colors = images.length ? await paletteFromImages(images) : undefined;
-    create.mutate({ description: desc.trim(), images, colors: colors?.length ? colors : undefined }, { onSuccess: onDone, onError: (e) => toast.error((e as Error).message) });
+    create.mutate({ description: desc.trim(), images, colors: colors?.length ? colors : undefined }, { onSuccess: onDone, onError: (e) => toastError(e) });
   };
   return mode === "site" ? (
     <div className="space-y-3">
@@ -169,6 +171,9 @@ export function BrandChip({ value, onChange }: { value: string | null; onChange:
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const brands = useBrands();
+  // A brand kit is saved to the studio's library, which is its owner's: anyone else gets no Add or Manage, whose
+  // research and save would be refused, and reads where kits are made.
+  const isOwner = useIsOwner();
   const current = brands.data?.find((b) => b.id === value);
   const ready = brands.data?.filter((b) => b.status !== "researching") ?? [];
   return (
@@ -205,38 +210,48 @@ export function BrandChip({ value, onChange }: { value: string | null; onChange:
                 {b.id === value && <Check className="size-3.5 shrink-0 text-brand-text" />}
               </button>
             ))}
-            {!ready.length && <p className="px-2 py-3 text-[13px] text-muted-foreground">No brand kit added yet — paste a link or create one manually to get started.</p>}
-          </div>
-          <div className="mt-1 flex gap-1 border-t pt-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                setAdding(true);
-              }}
-              className="flex h-8 flex-1 items-center gap-1.5 rounded-lg px-2 text-[13px] font-medium hover:bg-accent"
-            >
-              <Plus className="size-3.5" /> Add brand kit
-            </button>
-            {value && (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(null);
-                  setOpen(false);
-                }}
-                className="h-8 rounded-lg px-2 text-[13px] text-muted-foreground hover:bg-accent"
-              >
-                No brand kit
-              </button>
+            {!ready.length && (
+              <p className="px-2 py-3 text-[13px] text-muted-foreground">
+                {isOwner ? "No brand kit added yet — paste a link or create one manually to get started." : "Brand kits are saved on a self-hosted Fuobe."}
+              </p>
             )}
-            <Link href="/ads" className="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-muted-foreground hover:bg-accent" onClick={() => setOpen(false)}>
-              Manage <ArrowRight className="size-3" />
-            </Link>
           </div>
+          {(isOwner || value) && (
+            <div className="mt-1 flex gap-1 border-t pt-1.5">
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setAdding(true);
+                  }}
+                  className="flex h-8 flex-1 items-center gap-1.5 rounded-lg px-2 text-[13px] font-medium hover:bg-accent"
+                >
+                  <Plus className="size-3.5" /> Add brand kit
+                </button>
+              )}
+              {value && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(null);
+                    setOpen(false);
+                  }}
+                  className="h-8 rounded-lg px-2 text-[13px] text-muted-foreground hover:bg-accent"
+                >
+                  No brand kit
+                </button>
+              )}
+              {isOwner && (
+                <Link href="/ads" className="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-muted-foreground hover:bg-accent" onClick={() => setOpen(false)}>
+                  Manage <ArrowRight className="size-3" />
+                </Link>
+              )}
+            </div>
+          )}
         </PopoverContent>
       </Popover>
-      <BrandKitDialog open={adding} onOpenChange={setAdding} onUse={(b) => onChange(b.id, b)} />
+      <BrandKitDialog open={adding && isOwner} onOpenChange={setAdding} onUse={(b) => onChange(b.id, b)} />
     </>
   );
 }

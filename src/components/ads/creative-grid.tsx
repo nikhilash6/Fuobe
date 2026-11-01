@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { AD_ANGLES, AD_RATIOS, creativeStatusText, type AdCreative, type AdRatio, type BrandKit, type Product } from "@/lib/catalog/marketing";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useCreativeActions } from "@/components/marketing/hooks";
 import { AdCanvas } from "./ad-canvas";
 import { AdEditor, downloadFormats, renderInput } from "./ad-editor";
@@ -53,7 +54,7 @@ function CreativeCard({ c, brand, ratio, product, n, onEdit }: { c: AdCreative; 
                   {c.error && <p className="mt-1 line-clamp-3 text-[12px] text-muted-foreground">{c.error}</p>}
                   <button
                     type="button"
-                    onClick={() => retry.mutate(c.id, { onError: (e) => toast.error((e as Error).message) })}
+                    onClick={() => retry.mutate(c.id, { onError: (e) => toastError(e) })}
                     className="mt-2 inline-flex h-7 items-center gap-1.5 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent"
                     title="Retry uses credits again"
                   >
@@ -200,7 +201,7 @@ export function CreativeGrid({ brand, products, creatives }: { brand: BrandKit; 
           brand={brand}
           productName={byId.get(editing.productId ?? "")?.name}
           number={number.get(editing.id)}
-          onSaveText={(t) => update.mutate({ id: editing.id, headline: t.headline, body: t.body, cta: t.cta, layout: t.layout }, { onSuccess: () => toast("Saved", { duration: 1200 }), onError: (e) => toast.error((e as Error).message) })}
+          onSaveText={(t) => update.mutate({ id: editing.id, headline: t.headline, body: t.body, cta: t.cta, layout: t.layout }, { onSuccess: () => toast("Saved", { duration: 1200 }), onError: (e) => toastError(e) })}
           onSaveToLibrary={async (url, r) => {
             await save.mutateAsync({ id: editing.id, url, ratio: r });
           }}

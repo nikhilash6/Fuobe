@@ -1,8 +1,6 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { deleteProject, LayersError, parseDoc, projectView, updateProject } from "@/server/layers";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const Patch = z.object({
   name: z.string().max(200).optional(),
@@ -15,14 +13,14 @@ const Patch = z.object({
 });
 
 /** The project, its versions, the head document and its tools' jobs (with their results). */
-export const GET = handler({ access: "signed-in" }, async (_req: Request, ctx: RouteContext<"/api/layers/[id]">) => {
+export async function GET(_req: Request, ctx: RouteContext<"/api/layers/[id]">) {
   await connection();
   const { id } = await ctx.params;
   const view = projectView(id);
   return view ? Response.json(view) : Response.json({ error: "Not found" }, { status: 404 });
-});
+}
 
-export const PATCH = handler({ access: "signed-in" }, async (request: Request, ctx: RouteContext<"/api/layers/[id]">) => {
+export async function PATCH(request: Request, ctx: RouteContext<"/api/layers/[id]">) {
   const { id } = await ctx.params;
   const parsed = Patch.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Invalid change" }, { status: 400 });
@@ -32,13 +30,12 @@ export const PATCH = handler({ access: "signed-in" }, async (request: Request, c
     const p = updateProject(id, { name: parsed.data.name, doc, versionId: parsed.data.versionId, cover: parsed.data.cover });
     return p ? Response.json(p) : Response.json({ error: "Not found" }, { status: 404 });
   } catch (e) {
-    rethrowAccess(e);
     return Response.json({ error: (e as Error).message }, { status: e instanceof LayersError ? e.status : 422 });
   }
-});
+}
 
 /** Delete the project and all of its versions; its images stay in the library. */
-export const DELETE = handler({ access: "signed-in" }, async (_req: Request, ctx: RouteContext<"/api/layers/[id]">) => {
+export async function DELETE(_req: Request, ctx: RouteContext<"/api/layers/[id]">) {
   const { id } = await ctx.params;
   return deleteProject(id) ? new Response(null, { status: 204 }) : Response.json({ error: "Not found" }, { status: 404 });
-});
+}

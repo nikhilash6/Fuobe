@@ -12,9 +12,6 @@
  *   <scene>-<layer>.svg    one file per layer, transparent outside its shapes
  *
  * Run: node scripts/gen-preview-scenes.mjs
- *
- * public/samples/grade-sample.jpg (the photo color grading previews its looks on) is portrait.svg
- * rasterized at 960×720, JPEG quality 84, in Chromium; re-export it by hand if the portrait changes.
  */
 import fs from "node:fs";
 import path from "node:path";

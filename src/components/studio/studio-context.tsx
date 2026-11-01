@@ -1,10 +1,11 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
-import type { GenParams, InputSlot, MediaKind, Operation, Preset } from "@/lib/catalog/types";
+import type { Engine, GenParams, InputSlot, MediaKind, Operation, Preset } from "@/lib/catalog/types";
 import type { FeedFilter } from "@/lib/api";
 import type { Signature } from "@/lib/catalog/palettes";
 import type { FrameAttachment } from "@/lib/composer";
+import type { LayoutDraft } from "@/lib/layout-prompt";
 import type { SlotValue } from "./media-slot";
 
 export type SlotKey = InputSlot["key"];
@@ -32,6 +33,16 @@ export interface StudioConfig {
   presetPicker?: "motion" | "effect";
   preset?: Preset;
   defaultModels: { cloud: string; open: string };
+  /**
+   * An app's models on each engine (withRecipe, src/lib/catalog/preset-recipes.ts): the one its preview was made with
+   * first, then its own route's. With two on the engine the composer offers both in place of the model chip.
+   */
+  appModels?: Record<Engine, string[]>;
+  /**
+   * The default to open on instead where the server can't write the default's caption for this viewer (Ideogram 4 for an
+   * account, a guest, or an install with no local model answering: writesCaptions in src/lib/composer.ts).
+   */
+  uncaptioned?: Partial<{ cloud: string; open: string }>;
   suggestions?: string[];
   /** Prompt is optional (e.g. motions, upscale). */
   promptOptional?: boolean;
@@ -75,6 +86,11 @@ export interface StudioConfig {
   comfyOnly?: { note: string; alternative?: { label: string; href: string } };
   /** Frames mode (Video studio): up to 10 stills, each at its own time in the clip, instead of a start and an end frame. */
   frames?: boolean;
+  /**
+   * Layout mode (Image studio): boxes drawn on the picture, one row each (an object, a character or exact words),
+   * compiled for the model at the size it renders (src/lib/layout-prompt.ts); the prompt is the whole picture's caption.
+   */
+  layout?: boolean;
 }
 
 export interface Draft {
@@ -93,6 +109,8 @@ export interface Draft {
   signature?: Signature;
   /** Frames mode is on (studios with `frames`): the stills in order, each at its place in the clip. */
   frames?: FrameAttachment<SlotValue>[];
+  /** Layout mode is on (studios with `layout`): the boxes, as fractions of the picture (the prompt is its caption). */
+  layout?: LayoutDraft;
 }
 
 interface Actions {
@@ -172,6 +190,16 @@ export const StartRequestCtx = createContext(0);
 
 export function useStartRequest(): number {
   return useContext(StartRequestCtx);
+}
+
+/**
+ * Puts the camera motion or effect the composer shows into the address (`?preset=`, gone once cleared), so a reload or
+ * a shared link opens on it. The studio page provides it; elsewhere it does nothing.
+ */
+export const PresetUrlCtx = createContext<(id: string | undefined) => void>(() => {});
+
+export function usePresetUrl(): (id: string | undefined) => void {
+  return useContext(PresetUrlCtx);
 }
 
 /** Replace a slot value by key, updating only when it's the same upload (async upload callbacks). */

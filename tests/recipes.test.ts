@@ -377,6 +377,8 @@ describe("checking a recipe", () => {
       req.on("end", () => {
         res.setHeader("Content-Type", "application/json");
         if (req.url === "/api/show") return res.end(JSON.stringify({ capabilities: vision ? ["completion", "vision"] : ["completion"] }));
+        // The local-model layer (src/server/llm) finds a running Ollama by its model list before it calls it.
+        if (req.url === "/api/tags") return res.end(JSON.stringify({ models: [{ name: "qwen3-vl:8b" }] }));
         if (req.url === "/api/chat") {
           asked++;
           return res.end(JSON.stringify({ message: { content: "No — a grey square, no one at a wheel." } }));

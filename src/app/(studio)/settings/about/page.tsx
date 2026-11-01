@@ -5,10 +5,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LicencesView } from "@/components/licences-view";
 import { PageHeader, PageShell } from "@/components/page-shell";
-import { MODELS } from "@/lib/catalog";
+import { MODELS, modelCounts } from "@/lib/catalog";
 import type { Manifest } from "@/lib/comfy";
 import { FUOBE_REPO } from "@/lib/connections";
-import { ATTRIBUTIONS, buildLicenceList, PINNED_LIBRARIES } from "@/lib/licences";
+import { ATTRIBUTIONS, buildLicenceList } from "@/lib/licences";
 
 export const metadata: Metadata = { title: "About & licences" };
 
@@ -37,7 +37,7 @@ async function readAbout() {
     workflowCount: workflows.length,
     list: buildLicenceList(
       MODELS.map((m) => ({ id: m.id, name: m.name, vendor: m.vendor, kind: m.kind, hidden: m.hidden, routes: m.routes.map((r) => ({ provider: r.provider, endpoint: r.endpoint })) })),
-      workflows.map((w) => ({ id: w.id, title: w.title, capability: w.capability, license: w.license })),
+      workflows.map((w) => ({ id: w.id, title: w.title, capability: w.capability, license: w.license, models: w.models.map((m) => ({ url: m.url, sizeGb: m.sizeGb })) })),
     ),
   };
 }
@@ -54,6 +54,8 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 export default async function Page() {
   const about = await readAbout();
   const { list } = about;
+  const library = list.rows.filter((r) => !r.inCatalog).length;
+  const models = modelCounts();
   return (
     <PageShell>
       <Link href="/settings" className="mb-3 inline-flex items-center gap-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground">
@@ -61,14 +63,20 @@ export default async function Page() {
       </Link>
       <PageHeader
         title="About & licences"
-        description="Fuobe's code is open source. The open models it runs on your GPU each have their own licence: most allow commercial use, some don't, and a few leave out some countries. Paid models follow the terms of the provider you connect."
+        description="Fuobe's code is open source (MIT). The open models it runs on your GPU each have their own licence: most allow commercial use, some don't, and a few leave out some countries. Paid models follow the terms of the provider you connect."
       />
 
-      <dl className="grid grid-cols-1 gap-4 rounded-2xl border p-5 sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="grid grid-cols-1 gap-4 rounded-2xl border p-5 sm:grid-cols-2 lg:grid-cols-5">
         <Fact label="Fuobe">Version {about.version}</Fact>
         <Fact label="Source code">
           <a href={FUOBE_REPO} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text underline underline-offset-2">
             GitHub <ExternalLink className="size-3" aria-hidden />
+            <span className="sr-only">(opens in a new tab)</span>
+          </a>
+        </Fact>
+        <Fact label="Licence">
+          <a href={`${FUOBE_REPO}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text underline underline-offset-2">
+            MIT <ExternalLink className="size-3" aria-hidden />
             <span className="sr-only">(opens in a new tab)</span>
           </a>
         </Fact>
@@ -128,13 +136,15 @@ export default async function Page() {
           Open model licences
         </h2>
         <p className="mt-1 mb-5 max-w-2xl text-[13px] text-muted-foreground">
-          {list.counts.all} models and workflows: {list.counts.clear} allow commercial use, {list.counts.conditions} with conditions (revenue limits or use rules), {list.counts["non-commercial"]}{" "}
-          non-commercial and {list.counts.territory} not available everywhere. Read the licence itself before you sell what you make; this list is a guide, not legal advice. Which of them this
-          install offers is yours to decide in{" "}
+          Fuobe&apos;s studios offer {models.open} open-source models and tools. The list below has {list.counts.all} entries, one for each set of open weights Fuobe
+          runs: the studios&apos; models, the helper steps presets run, and {library} more workflows in the library. Tools with no weights aren&apos;t listed.
+          {" "}{list.counts.clear} allow commercial use, {list.counts.conditions} with conditions (revenue limits or use rules), {list.counts["non-commercial"]} non-commercial
+          and {list.counts.territory} not available everywhere. Read the licence itself before you sell what you make; this list is a guide, not legal advice. Which models this install offers
+          is set in{" "}
           <Link href="/settings/models" className="text-brand-text underline underline-offset-2">
             Models &amp; licences
           </Link>
-          .
+          , which counts every model in the catalog, paid ones included.
         </p>
         <LicencesView list={list} />
       </section>
@@ -145,22 +155,10 @@ export default async function Page() {
         </h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-muted-foreground">
           <li>
-            Models you pull into Ollama for Assist and prompt enhancement carry their own licences: <code className="font-mono text-[12px]">ollama show &lt;model&gt; --license</code>.
+            Models you run in Ollama, LM Studio or Unsloth Studio for Assist and prompt enhancement carry their own licences: see each model&apos;s card, or{" "}
+            <code className="font-mono text-[12px]">ollama show &lt;model&gt; --license</code> in Ollama.
           </li>
           <li>The optional TRIBE v2 worker for the Virality page isn&apos;t bundled; its weights are CC BY-NC 4.0 (non-commercial).</li>
-          <li>
-            Sign-in runs on{" "}
-            {PINNED_LIBRARIES.map((l, i) => (
-              <span key={l.name}>
-                {i ? (i === PINNED_LIBRARIES.length - 1 ? " and " : ", ") : ""}
-                <a href={l.licence.url} target="_blank" rel="noreferrer" className="text-brand-text underline underline-offset-2">
-                  {l.name} {l.version}
-                </a>{" "}
-                ({l.licence.name})
-              </span>
-            ))}
-            .
-          </li>
           <li>
             Each workflow&apos;s models, sizes and download links are on the{" "}
             <Link href="/workflows" className="text-brand-text underline underline-offset-2">

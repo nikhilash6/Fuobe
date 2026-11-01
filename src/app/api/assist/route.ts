@@ -1,9 +1,8 @@
 import { after, connection } from "next/server";
 import { z } from "zod";
+import { isGuest } from "@/lib/guest-access";
 import { addMessage, availability, createThread, listThreads, resolveAgent, resolveMode, run } from "@/server/assist/agent";
 import { AssistMessage, ModeChoice } from "@/server/assist/schemas";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const Create = AssistMessage.extend({
   engine: z.enum(["cloud", "open"]),
@@ -12,27 +11,29 @@ const Create = AssistMessage.extend({
   mode: ModeChoice.optional(),
 });
 
-/** Chats (all, `?project=<id>`, or `?project=none` for chats outside projects; `?q=` searches), with what can run. */
-export const GET = handler({ access: "signed-in" }, async (request: Request) => {
+/**
+ * Chats (all, `?project=<id>`, or `?project=none` for chats outside projects; `?q=` searches), with what can run.
+ * A guest's or an account's list (GUEST_HEADER) is empty: the chats are the owner's.
+ */
+export async function GET(request: Request) {
   await connection();
   const sp = new URL(request.url).searchParams;
   const project = sp.get("project");
-  const threads = listThreads({ project: project === "none" ? null : (project ?? undefined), q: sp.get("q") ?? undefined });
+  const threads = isGuest(request) ? [] : listThreads({ project: project === "none" ? null : (project ?? undefined), q: sp.get("q") ?? undefined });
   const [agent, can] = await Promise.all([resolveAgent(), availability()]);
   return Response.json({ threads, agent, availability: can });
-});
+}
 
 /** Start a chat with its first message; the agent replies in the background (poll the thread). */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   const parsed = Create.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Write a message" }, { status: 400 });
   const { text, attachments, engine, autoApprove, projectId, mode } = parsed.data;
   const r = await resolveMode(mode);
   let thread;
   try {
-    thread = createThread({ engine, autoApprove, agent: r.agent, projectId: projectId ?? null, mode: r.mode, model: r.model, effort: r.effort });
+    thread = createThread({ engine, autoApprove, agent: r.agent, projectId: projectId ?? null, mode: r.mode, provider: r.provider, model: r.model, effort: r.effort });
   } catch (e) {
-    rethrowAccess(e);
     return Response.json({ error: (e as Error).message }, { status: 404 });
   }
   const updated = addMessage(thread.id, text, attachments);
@@ -40,4 +41,4 @@ export const POST = handler({ access: "signed-in" }, async (request: Request) =>
   const reply = run(thread.id);
   after(() => reply);
   return Response.json({ ...updated, ...(r.note && { note: r.note }) }, { status: 201 });
-});
+}

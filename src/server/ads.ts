@@ -18,7 +18,6 @@ import {
 import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/catalog/types";
 import { getModel } from "@/lib/catalog";
 import { getBrand, getProduct, listProducts, parseJsonObject } from "./brand";
-import { currentActor, runAs } from "./access/actor";
 import { db } from "./db";
 import { llmText } from "./enhance";
 import { createGenerations, getGeneration, previewGeneration, recordLocalGeneration } from "./generations";
@@ -57,6 +56,14 @@ const COPY_SYSTEM = `You are a senior performance-marketing copywriter writing s
 Answer with ONE JSON object and nothing else:
 {"ads": [{"angle": string (one of the angle ids given), "headline": string (at most 7 words), "body": string (at most 20 words), "cta": string (1–3 words), "visual": string (one sentence describing the photo to shoot; it must contain no text, words or logos)}]}
 Write exactly the number of ads asked for. Vary the angles, headlines and pictures; never repeat a headline. Use the brand's tone and language. No hashtags, no emojis, no quotation marks in headlines.`;
+
+// The answers as JSON Schemas, for local models that decode to one; the prompts ask for the same JSON.
+const objectOf = (properties: Record<string, unknown>) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+const S = { type: "string" };
+const copySchema = (count: number) => ({
+  name: "ads",
+  schema: objectOf({ ads: { type: "array", minItems: count, maxItems: count, items: objectOf({ angle: { type: "string", enum: AD_ANGLES.map((a) => a.id) }, headline: S, body: S, cta: S, visual: S }) } }),
+});
 
 const ctaFor: Record<string, string[]> = {
   benefit: ["Shop now", "Discover more"],
@@ -142,7 +149,7 @@ export async function writeConcepts(brand: BrandKit, product: Product, count: nu
   ]
     .filter(Boolean)
     .join("\n");
-  return conceptsFrom(await llmText(COPY_SYSTEM, user), fallback);
+  return conceptsFrom(await llmText(COPY_SYSTEM, user, { json: copySchema(count) }), fallback);
 }
 
 // ---------------------------------------------------------------------------
@@ -295,8 +302,7 @@ export function createBatch(input: BatchInput, fixed: FixedCopy = {}): { batchId
     }
   })();
   running().add(batchId);
-  // Copy and pictures follow after the response (the route keeps it going with after()), for the person who asked.
-  const run = runAs(currentActor(), () => fillBatch(batchId, brand, ids, input, fixed)).finally(() => running().delete(batchId));
+  const run = fillBatch(batchId, brand, ids, input, fixed).finally(() => running().delete(batchId));
   return { batchId, creatives: listCreatives({ brandId: brand.id, batchId }), run };
 }
 
@@ -503,6 +509,11 @@ Answer with ONE JSON object and nothing else:
 {"reply": string (1–3 friendly sentences), "make": null or {"products": string[] (exact product names from the list; empty = all of them), "count": number (ads per product, 1–20), "direction": string (the creative direction in one sentence: theme, setting, offer, audience, language…)}}
 Set "make" whenever the user asks for ads, variations, versions or changes to ads; otherwise answer the question and set "make" to null.`;
 
+const CHAT_SCHEMA = {
+  name: "reply",
+  schema: objectOf({ reply: S, make: { anyOf: [{ type: "null" }, objectOf({ products: { type: "array", items: S }, count: { type: "integer" }, direction: S })] } }),
+};
+
 const mentionRe = (name: string) => new RegExp(`@${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "[\\s_]+")}`, "i");
 
 /** Products named in a message with @ ("@Night Serum" or "@Night_Serum"), longest names first. */
@@ -585,7 +596,7 @@ export async function chat(brandId: string, text: string): Promise<ChatMessage[]
   ]
     .filter(Boolean)
     .join("\n");
-  const j = parseJsonObject(await llmText(CHAT_SYSTEM, context));
+  const j = parseJsonObject(await llmText(CHAT_SYSTEM, context, { json: CHAT_SCHEMA }));
   let reply: ChatMessage;
   if (j && typeof j.reply === "string") {
     const make = j.make && typeof j.make === "object" ? (j.make as Record<string, unknown>) : null;
@@ -617,7 +628,7 @@ export async function chat(brandId: string, text: string): Promise<ChatMessage[]
             id: nanoid(8),
             role: "assistant",
             text: products.length
-              ? `I can make ads for you — try “Make 4 ads for @${products[0].name} with a holiday theme”. Connect Claude or Ollama in Settings and I can talk through ideas too.`
+              ? `I can make ads for you — try “Make 4 ads for @${products[0].name} with a holiday theme”. Connect Claude or a local model (Ollama, LM Studio or Unsloth Studio) in Settings and I can talk through ideas too.`
               : "Add a product first, then ask me for ads — e.g. “Make 4 ads with a summer theme”.",
             at: Date.now(),
             proposal: null,

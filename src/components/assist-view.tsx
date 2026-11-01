@@ -20,18 +20,21 @@ import { ScheduleDialog } from "@/components/assist/schedule-dialog";
 import { ProjectDot, RailButton } from "@/components/assist/shell";
 import { SkillIcon } from "@/components/assist/skill-icon";
 import { Transcript } from "@/components/assist/transcript";
+import { AssistVisitorNote } from "@/components/assist/visitor-note";
 import { useAssistActions, useAssistThread, useEngine } from "@/lib/api";
-import { ASSIST_SUGGESTIONS, modeLabel, type AssistAvailability, type AssistModeChoice, type AssistProject, type AssistThread, type SkillSummary } from "@/lib/assist";
+import { ASSIST_SUGGESTIONS, assistDraft, modeLabel, threadModeChoice, type AssistAvailability, type AssistModeChoice, type AssistProject, type AssistThread, type SkillSummary } from "@/lib/assist";
 import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 
 /** Skills offered as one-tap starters on the empty page (Supercomputer's suggestion cards). */
 const STARTER_SKILLS = ["product-photoshoot", "ugc-video", "thumbnail-generation", "faceless-video", "short-film", "localization"];
 
 const AGENT_HINT: Record<AssistThread["agent"], string> = {
   claude: "Claude plans the shoot, picks models and runs them with your approval.",
-  ollama: "Runs on your local model through Ollama. Smaller local models follow instructions less reliably than Claude.",
-  offline: "A simple rule-based planner. Add an Anthropic API key, or run Ollama, for the full assistant that picks models, chains steps and checks results.",
+  hosted: "Runs on a model from a provider you've connected (Settings → AI helper). It plans the shoot, picks models and runs them with your approval.",
+  local: "Runs on your local model (Ollama, LM Studio or Unsloth Studio). Smaller local models follow instructions less reliably than Claude.",
+  offline: "A simple rule-based planner. Add a key in Settings → AI helper (Anthropic, OpenAI, Google, OpenRouter…), or run a local model (Ollama, LM Studio or Unsloth Studio), for the full assistant that picks models, chains steps and checks results.",
 };
 
 export function AskFirst({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -89,9 +92,10 @@ export function AssistView() {
   const [engine, setEngine] = useEngine();
   const [askFirst, setAskFirst] = useState(true);
   const [open, setOpen] = useState<{ g: Generation; i: number } | null>(null);
-  // "Use in a new chat" on a skill opens /assist?skill=<name>: the composer starts with "/name ".
+  // "Use in a new chat" on a skill opens /assist?skill=<name>: the composer starts with "/name ". Home's examples open
+  // /assist?prompt=<text>: the composer starts with the text. Neither sends anything.
   const skillParam = params.get("skill");
-  const [draft, setDraft] = useState(() => ({ key: 0, text: skillParam && /^[a-z0-9-]+$/.test(skillParam) ? `/${skillParam} ` : "" }));
+  const [draft, setDraft] = useState(() => ({ key: 0, text: assistDraft(skillParam, params.get("prompt")) }));
   const chats = useChats({ project: "none" });
   const can = chats.data?.availability;
   const [choice, setChoice] = useModeChoice(can?.defaultMode);
@@ -186,6 +190,7 @@ export function AssistView() {
               <h2 className="font-heading text-display text-balance">What are we creating today?</h2>
               <p className="mt-2 text-[14px] text-pretty text-muted-foreground">Describe the whole job. Assist picks the models, shows you the plan and cost, then runs every step. Type / to use a skill.</p>
             </div>
+            <AssistVisitorNote className="mb-4" />
             <AssistComposer
               key={draft.key}
               initialText={draft.text}
@@ -200,7 +205,7 @@ export function AssistView() {
               {ASSIST_SUGGESTIONS.map((s) => (
                 <button
                   key={s}
-                  onClick={() => start(s).catch((e) => toast.error((e as Error).message))}
+                  onClick={() => start(s).catch((e) => toastError(e))}
                   className="max-w-full rounded-full border bg-background px-3.5 py-1.5 text-left text-[13px] text-muted-foreground transition hover:border-primary hover:text-foreground"
                 >
                   {s}
@@ -239,11 +244,11 @@ export function AssistView() {
                   thread && (
                     <>
                       <ModePicker
-                        value={{ mode: thread.mode ?? "smart", agent: thread.agent, model: thread.model, effort: thread.effort }}
+                        value={threadModeChoice(thread)}
                         availability={can}
                         disabled={thread.status === "running"}
                         applyOnClose
-                        onChange={(c) => void actions.patch(thread.id, { mode: c }).catch((e) => toast.error((e as Error).message))}
+                        onChange={(c) => void actions.patch(thread.id, { mode: c }).catch((e) => toastError(e))}
                       />
                       <AskFirst checked={!thread.autoApprove} onChange={(v) => void assist.setAutoApprove(thread.id, !v)} />
                     </>
@@ -267,7 +272,7 @@ export function AssistView() {
               attachments: first?.role === "user" ? first.attachments : undefined,
               projectId: thread.projectId ?? null,
               engine: thread.engine,
-              mode: { mode: thread.mode ?? "smart", agent: thread.agent, model: thread.model, effort: thread.effort },
+              mode: threadModeChoice(thread),
             };
           })()}
         />

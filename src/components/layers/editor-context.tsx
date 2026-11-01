@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import { pricingAt } from "@/lib/catalog/promo";
 import type { Engine } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import type { Box, LayerDoc, LayerJob, LayerJobInput, LayerModelInfo, LayerNode, LayerProject, LayerTool, LayerVersion } from "@/lib/layers";
@@ -132,12 +133,16 @@ export function useEditor(): EditorCtx {
   return c;
 }
 
-/** "Demo · free", "Free · your GPU", "≈ $0.27" or "Price unknown". */
+/**
+ * "Placeholder · free", "Free · your GPU", "≈ $0.27" or "Price unknown". A launch price is read on the browser's clock, the day
+ * the editor shows it (the editor renders once its project has loaded in the browser, never while a page prerenders).
+ */
 export function costLabel(m: LayerModelInfo | undefined, demo: boolean, usd?: number | null): string {
   if (!m) return "";
-  if (demo) return "Demo · free";
+  if (demo) return "Placeholder · free";
   if (m.engine === "open") return "Free · your GPU";
-  const v = usd !== undefined ? usd : m.pricing && ["image", "request", "megapixel"].includes(m.pricing.unit) ? m.pricing.usd : null;
+  const p = m.pricing && pricingAt(m.pricing);
+  const v = usd !== undefined ? usd : p && ["image", "request", "megapixel"].includes(p.unit) ? p.usd : null;
   return v == null ? "Price unknown" : v === 0 ? "Free" : `≈ ${formatCost(v)}`;
 }
 

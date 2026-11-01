@@ -365,17 +365,36 @@ export interface PlanCaps {
 export const PHOTODUMP_SOUL = "fuobe-soul";
 
 /**
- * Instadump's Original (build plan O10): Qwen-Image-Edit 2511 with the photos as references, one Fuobe prompt per pack
- * photo — hosted in the cloud, the 3-image graph on your GPU. It also makes a character's photos before a Soul ID.
+ * Instadump's Original (build plan O10): an edit model with the photos as references, one Fuobe prompt per pack photo.
+ * In the cloud hosted Qwen-Image-Edit 2511; on your GPU Qwen-Image 2.1 (up to 4 references). It also makes a
+ * character's photos before a Soul ID.
  */
-export const PHOTO_EDIT: Record<Engine, string> = { cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-edit" };
+export const PHOTO_EDIT: Record<Engine, string> = { cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-image-21" };
+/** The edit model your GPU runs first: Qwen-Image 2.1 (up to 4 references). */
+export const OPEN_PHOTO_EDIT = PHOTO_EDIT.open;
+/** Its 8-step Turbo (up to 4 references). */
+export const OPEN_PHOTO_EDIT_TURBO = "oss-qwen-image-21-turbo";
+/**
+ * Krea 2 Identity Edit: restages the person in one photo (a new place, pose or outfit, the same face). With two pictures
+ * it reads the scene first and the person last (its likeness boost goes to the last one).
+ */
+export const OPEN_IDENTITY_EDIT = "oss-krea2-identity-edit";
 
+/** The models a pack's photos can run on, the default first after Fuobe Soul (which needs a trained Soul ID). */
 export const PHOTODUMP_MODELS: Record<Engine, string[]> = {
-  cloud: [PHOTODUMP_SOUL, PHOTO_EDIT.cloud, "nano-banana-pro", "seedream-5-pro"],
-  open: [PHOTODUMP_SOUL, PHOTO_EDIT.open],
+  cloud: [PHOTODUMP_SOUL, PHOTO_EDIT.cloud, "nano-banana-pro", "nano-banana-2-1", "seedream-5-pro"],
+  open: [PHOTODUMP_SOUL, OPEN_PHOTO_EDIT, OPEN_IDENTITY_EDIT, OPEN_PHOTO_EDIT_TURBO],
 };
 
-const EDIT_NAMES: Record<string, string> = { "qwen-image-edit-2511-cloud": "Qwen-Image-Edit 2511", "oss-qwen-edit": "Qwen-Image-Edit 2511", "nano-banana-pro": "Nano Banana Pro", "seedream-5-pro": "Seedream 5.0 Pro" };
+const EDIT_NAMES: Record<string, string> = {
+  "qwen-image-edit-2511-cloud": "Qwen-Image-Edit 2511",
+  "oss-qwen-image-21": "Qwen-Image 2.1",
+  "oss-qwen-image-21-turbo": "Qwen-Image 2.1 Turbo",
+  "oss-krea2-identity-edit": "Krea 2 Identity Edit",
+  "nano-banana-pro": "Nano Banana Pro",
+  "nano-banana-2-1": "Nano Banana 2.1",
+  "seedream-5-pro": "Seedream 5.0 Pro",
+};
 
 /** The character's Soul ID that runs on Fuobe Soul on this engine (a demo training's stand-in doesn't count). */
 export const soulIdOf = (s: PhotoSubject, engine: Engine): ElementLora | undefined => (s.kind === "element" ? identityFor(s.loras, { id: PHOTODUMP_SOUL, engine }) : undefined);
@@ -388,9 +407,10 @@ export const soulIdOf = (s: PhotoSubject, engine: Engine): ElementLora | undefin
 export function photodumpModel(subject: PhotoSubject, engine: Engine, _caps: PlanCaps, pick?: string, custom = false): { modelId: string; note?: string } {
   const trained = soulIdOf(subject, engine);
   if (!custom && trained && (!pick || pick === PHOTODUMP_SOUL)) return { modelId: PHOTODUMP_SOUL };
-  // Say why when the pick (or a character without a Soul ID) ends up on an edit model: Qwen-Image-Edit 2511 unless a
-  // partner model is picked in the cloud.
-  const fallback = engine === "cloud" && (pick === "nano-banana-pro" || pick === "seedream-5-pro") ? pick : PHOTO_EDIT[engine];
+  // Say why when the pick (or a character without a Soul ID) ends up on an edit model: the engine's first one
+  // (Qwen-Image-Edit 2511 in the cloud, Qwen-Image 2.1 on your GPU) unless another of the list is picked.
+  const edits = PHOTODUMP_MODELS[engine].filter((id) => id !== PHOTODUMP_SOUL);
+  const fallback = pick && edits.includes(pick) ? pick : edits[0];
   const name = EDIT_NAMES[fallback] ?? fallback;
   const note =
     pick === PHOTODUMP_SOUL && custom
@@ -403,11 +423,14 @@ export function photodumpModel(subject: PhotoSubject, engine: Engine, _caps: Pla
   return { modelId: fallback, note };
 }
 
-const KEEP_FACE = "Keep their exact face, identity, skin tone and hair; a new photo, not a copy of the reference";
+const KEEP_FACE = "Keep their exact face, identity, skin tone and hair, in a freshly composed new photo";
 
-/** One photo's prompt for a subject: an @mention for saved characters, image 1 for a selfie. */
-export function shotPrompt(pack: Pick<Pack, "look" | "custom">, shot: string, subject: PhotoSubject, refIndex?: number): string {
-  const who = subject.kind === "element" ? `@${subject.handle}` : "the person in image 1";
+/**
+ * One photo's prompt for a subject: an @mention for saved characters, image 1 for a selfie (image `selfieIndex` when
+ * the model takes the person last).
+ */
+export function shotPrompt(pack: Pick<Pack, "look" | "custom">, shot: string, subject: PhotoSubject, refIndex?: number, selfieIndex = 1): string {
+  const who = subject.kind === "element" ? `@${subject.handle}` : `the person in image ${selfieIndex}`;
   const look = pack.look ? ` ${pack.look}.` : "";
   if (pack.custom && refIndex) {
     const lead = who.charAt(0).toUpperCase() + who.slice(1);
@@ -433,7 +456,8 @@ export interface PhotodumpPlan {
 /**
  * One request per photo of the pack, in order ("Photo 3 of 15"), each making one image. Saved
  * characters are @mentioned (the server turns that into their trained Soul ID LoRA or reference photos);
- * a selfie goes in as image 1. User packs add their reference photo after the subject.
+ * a selfie goes in as image 1. User packs add their reference photo after the subject; on Krea 2 Identity Edit, which
+ * reads the scene first and the person last, the reference photo goes first and a saved character is one of their photos.
  */
 export function planPhotodump(input: PhotodumpInput, caps: PlanCaps): PhotodumpPlan {
   const { pack, subject } = input;
@@ -444,18 +468,24 @@ export function planPhotodump(input: PhotodumpInput, caps: PlanCaps): PhotodumpP
   if (route.note) notes.push(route.note);
   const n = pack.shots.length;
   const aspect = input.aspectRatio && input.aspectRatio !== "auto" ? input.aspectRatio : undefined;
+  // Krea 2 Identity Edit takes the scene first and the person last, and reads two pictures as two people: a saved
+  // character goes in as one of their photos (an @mention would attach two), and a user pack's reference leads.
+  const sceneFirst = route.modelId === OPEN_IDENTITY_EDIT;
+  const onePhoto = sceneFirst && subject.kind === "element" ? subject.references[0] : undefined;
+  const person: PhotoSubject = onePhoto ? { kind: "selfie", url: onePhoto } : subject;
   const requests = pack.shots.map((shot, i): GenerationRequest => {
-    const own = subject.kind === "selfie" ? [subject.url] : [];
+    const own = person.kind === "selfie" ? [person.url] : [];
     const ref = pack.refs?.[i];
     // User packs: the reference goes after the identity images; @mention references come after those (applyMentions appends).
-    const images = ref ? [...own, ref] : own;
-    const refIndex = ref ? images.length : undefined;
+    const images = ref ? (sceneFirst ? [ref, ...own] : [...own, ref]) : own;
+    const refIndex = ref ? (sceneFirst ? 1 : own.length + 1) : undefined;
+    const selfieIndex = ref && sceneFirst ? 2 : 1;
     return {
       feature: "photodump",
       modelId: route.modelId,
       // Fuobe Soul runs on both engines: the run's engine picks its half.
       engine: input.engine,
-      prompt: shotPrompt(pack, shot, subject, refIndex),
+      prompt: shotPrompt(pack, shot, person, refIndex, selfieIndex),
       inputs: images.length ? { images } : undefined,
       params: { numOutputs: 1, ...(aspect && { aspectRatio: aspect }) },
       step: { label: `Photo ${i + 1} of ${n}`, index: i, of: n },
@@ -588,13 +618,15 @@ export const getTemplate = (id: string) => FASHION.find((t) => t.id === id);
 
 /**
  * Fashion Factory's models per step (build plan O10): Fuobe Try-On (FLUX.2 [klein] 4B + the try-on LoRA) dresses the
- * base shot on both engines, FASHN and Nano Banana Pro stay as cloud choices and Qwen-Image-Edit 2511 dresses it on your
- * GPU when the try-on can't run; Qwen-Image-Edit 2511 makes the photoset, Nano Banana Pro a cloud choice.
+ * base shot on both engines, FASHN and Nano Banana Pro stay as cloud choices, and on your GPU Qwen-Image 2.1 Turbo
+ * (then Qwen-Image 2.1 at 25 steps) dresses it when the try-on can't run: its second picture is a garment, not a person. Qwen-Image-Edit 2511 makes the photoset in the
+ * cloud, Nano Banana Pro a choice; on your GPU Qwen-Image 2.1 makes it, Krea 2 Identity Edit (a new pose and place,
+ * the same person) a choice.
  */
 export const TRYON_MODEL = "fuobe-tryon";
 export const FASHION_MODELS = {
-  outfit: { cloud: [TRYON_MODEL, "fashn-tryon", "nano-banana-pro"], open: [TRYON_MODEL, PHOTO_EDIT.open] },
-  photoset: { cloud: [PHOTO_EDIT.cloud, "nano-banana-pro"], open: [PHOTO_EDIT.open] },
+  outfit: { cloud: [TRYON_MODEL, "fashn-tryon", "nano-banana-pro"], open: [TRYON_MODEL, OPEN_PHOTO_EDIT_TURBO, OPEN_PHOTO_EDIT] },
+  photoset: { cloud: [PHOTO_EDIT.cloud, "nano-banana-pro"], open: [OPEN_PHOTO_EDIT, OPEN_IDENTITY_EDIT] },
 } as const;
 
 /**
@@ -643,7 +675,7 @@ export function fashionOutfitRequest(t: FashionTemplate, base: string, garment: 
   };
 }
 
-/** Step 5: one photo per template shot, from the dressed image (Qwen-Image-Edit 2511, or Nano Banana Pro when picked). */
+/** Step 5: one photo per template shot, from the dressed image (the step's first model, or the one picked). */
 export function fashionPhotosetRequests(t: FashionTemplate, dressed: string, engine: Engine, pick?: string, caps?: Pick<PlanCaps, "has">): GenerationRequest[] {
   const modelId = fashionModel("photoset", engine, pick, caps);
   const n = t.photoset.length;
@@ -760,22 +792,27 @@ export function fashionReducer(s: FashionState, a: FashionAction): FashionState 
 export const SHEET_MAX_REFS = 5;
 
 export const SHEET_PROMPT =
-  "A character turnaround sheet of the person in the reference images: full-body front view, three-quarter view, side profile and back view side by side, plus a close-up of the face, on a seamless light-grey studio backdrop with soft, even light. The same face, hairstyle, body and outfit in every view; photorealistic, natural skin texture, no text.";
+  "A character turnaround sheet of the person in the reference images: full-body front view, three-quarter view, side profile and back view side by side, plus a close-up of the face, on a seamless light-grey studio backdrop with soft, even light. The same face, hairstyle, body and outfit in every view; photorealistic, natural skin texture, a clean picture made only of the views.";
 
-/** From Reference: 1–5 photos → a turnaround sheet (Nano Banana Pro, or Qwen-Image-Edit with up to 3). */
+/** The sheet from reference photos on your GPU: Qwen-Image 2.1 at 25 steps (its Turbo misses big camera turns). */
+export const SHEET_OPEN_MODEL = "oss-qwen-image-21";
+/** Qwen-Image 2.1 takes up to 4 reference photos. */
+export const SHEET_OPEN_REFS = 4;
+
+/** From Reference: 1–5 photos → a turnaround sheet (Nano Banana Pro, or Qwen-Image 2.1 with up to 4). */
 export function sheetFromReference(images: string[], engine: Engine, details?: string): { request: GenerationRequest; notes: string[] } {
   if (!images.length) throw new Error("Upload at least 1 image");
   if (images.length > SHEET_MAX_REFS) throw new Error(`Maximum ${SHEET_MAX_REFS} images`);
   const notes: string[] = [];
-  const max = engine === "open" ? 3 : SHEET_MAX_REFS;
-  if (images.length > max) notes.push(`Qwen-Image-Edit takes 3 photos — the first 3 are used`);
+  const max = engine === "open" ? SHEET_OPEN_REFS : SHEET_MAX_REFS;
+  if (images.length > max) notes.push(`Qwen-Image 2.1 takes ${max} photos — the first ${max} are used`);
   // The open workflow has no size setting: the sheet comes out in the first photo's shape.
-  if (engine === "open") notes.push("Qwen-Image-Edit keeps the shape of your first photo — put a landscape photo first for a wide sheet");
+  if (engine === "open") notes.push("Qwen-Image 2.1 keeps the shape of your first photo — put a landscape photo first for a wide sheet");
   const extra = details?.trim().replace(/[.\s]+$/, "");
   return {
     request: {
       feature: "character-sheet",
-      modelId: engine === "open" ? "oss-qwen-edit" : "nano-banana-pro",
+      modelId: engine === "open" ? SHEET_OPEN_MODEL : "nano-banana-pro",
       op: "edit",
       prompt: extra ? `${SHEET_PROMPT} ${extra}.` : SHEET_PROMPT,
       inputs: { images: images.slice(0, max) },

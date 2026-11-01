@@ -43,6 +43,10 @@ next-env.d.ts
 # local data (db, uploads, outputs)
 /data/
 
+# local deploy notes: never part of this repo
+/deploy/
+/docs/deploy.md
+
 # evaluation harness (scripts/eval): your own inputs, run results and the metrics venv stay local
 /scripts/eval/local/
 /scripts/eval/results/

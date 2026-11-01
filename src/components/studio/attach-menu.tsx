@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { useAskBeforeUpload } from "@/lib/api";
 import type { MediaKind } from "@/lib/catalog/types";
 import { useModKey } from "@/lib/keys";
 import { ACCEPT, LibraryGrid, type SlotValue } from "./media-slot";
@@ -37,7 +38,15 @@ export function AttachMenu({ kinds, onFiles, onPick }: { kinds: MediaKind[]; onF
   const [open, setOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const mod = useModKey();
+  const askFirst = useAskBeforeUpload();
+  /** Someone whose upload would be refused gets its card instead of the file chooser: the panel makes way for it. */
+  const refused = () => {
+    if (!askFirst()) return false;
+    setOpen(false);
+    return true;
+  };
   const paste = async () => {
+    if (refused()) return;
     try {
       const files = await clipboardFiles();
       if (!files.length) return toast("Nothing to paste — copy an image first");
@@ -68,7 +77,7 @@ export function AttachMenu({ kinds, onFiles, onPick }: { kinds: MediaKind[]; onF
     >
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-1.5">
-          <Button variant="secondary" className="h-10 justify-start gap-2" onClick={() => input.current?.click()}>
+          <Button variant="secondary" className="h-10 justify-start gap-2" onClick={() => refused() || input.current?.click()}>
             <Upload /> Upload
           </Button>
           <Button variant="secondary" className="h-10 justify-start gap-2" onClick={paste}>

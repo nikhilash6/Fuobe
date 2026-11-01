@@ -29,7 +29,7 @@ const slim = (m: ModelDef): ModelInfo => ({
 
 /** Every model a marketing flow can name, by id. */
 export function marketingModelInfo(): Record<string, ModelInfo> {
-  const ids = new Set<string>(["text-llm", "oss-text-llm", "oss-qwen-image", "oss-infinitetalk-long", "nano-banana-pro", "oss-qwen-edit"]);
+  const ids = new Set<string>(["text-llm", "oss-text-llm", "oss-qwen-image-21", "oss-infinitetalk-long", "nano-banana-pro", "oss-qwen-image-21-turbo"]);
   for (const f of Object.keys(FORMATS) as FormatId[])
     for (const engine of ["cloud", "open"] as const)
       for (const has of [{ product: true, avatar: true }, { product: false, avatar: false }]) for (const c of formatModels(FORMATS[f], engine, has)) ids.add(c.id);

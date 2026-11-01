@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { assetUsage, useDeleteUpload } from "@/lib/api";
 import type { Generation } from "@/lib/catalog/types";
+import { toastError } from "@/lib/refusals";
 
 type Check = { state: "checking" } | { state: "free" } | { state: "used"; usedBy: string } | { state: "error"; message: string };
 
@@ -72,7 +73,7 @@ export function UploadDeleteProvider({ children }: { children: React.ReactNode }
                     if (!pending) return;
                     remove.mutate(pending.g.id, {
                       onSuccess: () => toast("Upload deleted"),
-                      onError: (e) => toast.error((e as Error).message),
+                      onError: (e) => toastError(e),
                     });
                     pending.after?.();
                   }}

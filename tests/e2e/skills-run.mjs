@@ -1,7 +1,7 @@
 // Skills W1 in a real browser (demo mode: no keys, ComfyUI unreachable). A skill with a recipe is seeded over the API;
 // its card says "Runs by itself"; /assist/skills?run=<name> opens the Run form, which asks for a free check first,
 // then runs it once from the form (a photo, a name, a shape) and three times from pasted CSV rows, each priced first
-// ("Demo" here); a switched-off skill's form says so and switches it back on; the skill's dialog says where it was
+// ("Placeholder · free" here); a switched-off skill's form says so and switches it back on; the skill's dialog says where it was
 // checked, and in amber that it needs a re-check after its route changed, and Re-check clears it. ⌘K lists
 // "Run <skill>…". At 1440 and 390 px, light and dark: nothing scrolls sideways, and on a phone the form fills the screen.
 // Usage: node tests/e2e/skills-run.mjs [appUrl] [--shots <dir>]   (app running in demo mode). Exits 1 on a failed check.
@@ -107,7 +107,7 @@ try {
         await dialog.getByLabel("Product name").fill("Arc floor lamp");
         await dialog.getByRole("radio", { name: "16:9" }).click();
         const priced = await dialog
-          .getByText(/Demo — no provider connected/)
+          .getByText(/Placeholder · free/)
           .waitFor({ timeout: 30_000 })
           .then(() => true)
           .catch(() => false);
@@ -133,7 +133,7 @@ try {
         await dialog.getByLabel("Rows to run").fill(`Product photo,Product name,Shape\n${photo},Desk lamp,1:1\n${photo},"Lamp, brass",9:16\n${photo},Floor lamp,16:9\n`);
         check(`${tag}: the rows are checked ("3 runs · all fine")`, await seen(dialog.getByText("3 runs · all fine")));
         const total = await dialog
-          .getByText(/Demo — no provider connected, free · 3 runs/)
+          .getByText(/Placeholder · free · 3 runs/)
           .waitFor({ timeout: 30_000 })
           .then(() => true)
           .catch(() => false);

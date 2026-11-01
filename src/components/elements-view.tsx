@@ -27,11 +27,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { ELEMENT_ICONS } from "@/components/studio/prompt-input";
 import { VoiceRecorder } from "@/components/studio/voice-recorder";
-import { useDeleteElement, useElements, useSaveElement } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEdgeFade } from "@/components/studio/use-edge-fade";
+import { useDeleteElement, useElements, useIsVisitor, useSaveElement } from "@/lib/api";
 import { ELEMENT_KINDS, elementKindInfo, handleFor, MAX_ELEMENT_PHOTOS, type ElementKind, type StudioElement } from "@/lib/catalog/elements";
 import { isLegacySoulId, SOUL_ID_PHOTOS } from "@/lib/catalog/training";
 import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 
 const TIPS: Record<ElementKind, string> = {
   character: `3+ clear photos of one person (${SOUL_ID_PHOTOS.recommended}+ to train a Soul ID, up to ${SOUL_ID_PHOTOS.max}): different angles, at least one full-body, no sunglasses, filters or group shots.`,
@@ -42,6 +45,15 @@ const TIPS: Record<ElementKind, string> = {
 };
 
 const MAX_PHOTOS = MAX_ELEMENT_PHOTOS;
+
+/** Each kind's own examples in the name and description fields. */
+const EXAMPLES: Record<ElementKind, { name: string; description: string }> = {
+  character: { name: "Maya", description: "woman in her 30s, short copper hair, freckles" },
+  location: { name: "Rooftop bar", description: "neon-lit rooftop bar at night, city skyline behind" },
+  prop: { name: "Red sneaker", description: "glossy red high-top sneaker with a white sole" },
+  style: { name: "Film noir", description: "high-contrast black and white, hard shadows, rain" },
+  voice: { name: "Narrator Sam", description: "warm, low male voice, calm and unhurried" },
+};
 
 function PhotoGrid({ photos, setPhotos }: { photos: SlotValue[]; setPhotos: React.Dispatch<React.SetStateAction<SlotValue[]>> }) {
   const addFiles = (files: FileList | File[]) => {
@@ -136,7 +148,7 @@ function ElementForm({ onOpenChange, element, defaultKind = "character", onSaved
           onOpenChange(false);
           onSaved?.(el);
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
 
@@ -170,15 +182,7 @@ function ElementForm({ onOpenChange, element, defaultKind = "character", onSaved
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder={
-            kind === "character"
-              ? "Name, e.g. Maya"
-              : kind === "location"
-                ? "Name, e.g. Rooftop bar"
-                : kind === "prop"
-                  ? "Name, e.g. Red sneaker"
-                  : "Name, e.g. Film noir"
-          }
+          placeholder={`Name, e.g. ${EXAMPLES[kind].name}`}
           autoFocus
         />
         <p className="flex items-center gap-1 px-1 text-[12px] text-muted-foreground">
@@ -190,7 +194,7 @@ function ElementForm({ onOpenChange, element, defaultKind = "character", onSaved
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         rows={2}
-        placeholder="Short description (optional) — used when a model can't take photos, e.g. “woman in her 30s, short copper hair, freckles”"
+        placeholder={`Short description (optional) — used when a model can't take ${kind === "voice" ? "a recording" : "photos"}, e.g. “${EXAMPLES[kind].description}”`}
         className="resize-none text-sm"
       />
       <div className="space-y-2">
@@ -248,11 +252,11 @@ function HandleCopy({ handle }: { handle: string }) {
   );
 }
 
-/** Training, Soul ID (a LoRA that runs), Retrain (only an older Soul ID kept by reference) or Demo (only a demo training's stand-in). */
+/** Training, Soul ID (a LoRA that runs), Retrain (only an older Soul ID kept by reference) or Placeholder (only a placeholder training's stand-in). */
 function TrainedBadge({ el }: { el: StudioElement }) {
   const real = el.loras.some((l) => !l.demo && !isLegacySoulId(l));
   const legacy = !real && el.loras.some(isLegacySoulId);
-  const label = el.status === "training" ? "Training" : real ? "Soul ID" : legacy ? "Retrain" : el.loras.length ? "Demo" : null;
+  const label = el.status === "training" ? "Training" : real ? "Soul ID" : legacy ? "Retrain" : el.loras.length ? "Placeholder" : null;
   if (!label) return null;
   return (
     <span
@@ -337,7 +341,7 @@ function ElementCard({ el }: { el: StudioElement }) {
               onClick={() =>
                 del.mutate(el.id, {
                   onSuccess: () => toast(`Deleted ${el.name}`),
-                  onError: (e) => toast.error((e as Error).message),
+                  onError: (e) => toastError(e),
                 })
               }
             >
@@ -356,6 +360,9 @@ function ElementsBody() {
   const els = useElements();
   const [tab, setTab] = useState<ElementKind | "all">("all");
   const [open, setOpen] = useState(sp.get("new") === "1");
+  // An element is saved to the studio's library, which is its owner's: a guest or an account is told so, not given a form.
+  const visitor = useIsVisitor();
+  const [kinds, kindsFade] = useEdgeFade<HTMLDivElement>();
   const list = useMemo(() => (els.data ?? []).filter((e) => tab === "all" || e.kind === tab), [els.data, tab]);
 
   return (
@@ -364,11 +371,15 @@ function ElementsBody() {
         title="Elements"
         description="Characters, locations, props and styles you can reuse. Save one once, then type @ in any image or video prompt — Fuobe sends its photos as references, or its trained LoRA when you've trained one."
       >
-        <Button onClick={() => setOpen(true)}>
-          <Plus /> New element
-        </Button>
+        {visitor ? (
+          <SelfHostNote className="max-w-xs">Free accounts can&apos;t save elements here yet.</SelfHostNote>
+        ) : (
+          <Button onClick={() => setOpen(true)}>
+            <Plus /> New element
+          </Button>
+        )}
       </PageHeader>
-      <div role="group" aria-label="Kinds" className="scrollbar-none -mx-1 mb-5 flex gap-1 overflow-x-auto px-1">
+      <div ref={kinds} style={kindsFade} role="group" aria-label="Kinds" className="scrollbar-none -mx-1 mb-5 flex gap-1 overflow-x-auto px-1">
         {(["all", ...ELEMENT_KINDS.map((k) => k.kind)] as const).map((k) => (
           <button
             key={k}
@@ -402,13 +413,15 @@ function ElementsBody() {
           <p className="mx-auto mt-1 max-w-md text-[14px] text-muted-foreground">
             Save a person, a place or a product from a few photos. Then write “@Maya walking into @Rooftop_bar” in any prompt.
           </p>
-          <Button className="mt-5" variant="outline" onClick={() => setOpen(true)}>
-            <Plus /> New element
-          </Button>
+          {!visitor && (
+            <Button className="mt-5" variant="outline" onClick={() => setOpen(true)}>
+              <Plus /> New element
+            </Button>
+          )}
         </div>
       )}
       <ElementDialog
-        open={open}
+        open={open && !visitor}
         onOpenChange={(o) => {
           setOpen(o);
           if (!o && sp.get("new")) router.replace("/elements");

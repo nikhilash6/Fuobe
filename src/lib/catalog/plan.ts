@@ -9,14 +9,19 @@ import type {
   Operation,
   Preset,
   PresetRoute,
-  Pricing,
 } from "./types";
-import { sourceSeconds } from "./clip-windows";
+import { billedClipSeconds, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
 import { cloudPath, fitLoras, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { askedSize, numFramesValue, sizeValue } from "./payload";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
+import { computeDimensions, fitCanvas } from "@/lib/comfy";
+import { carriesLayout, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
+import { pricingOn, type PriceClock } from "./promo";
+import { presetRoutes } from "./preset-recipe-routes";
+
+export { pricingAt } from "./promo";
 
 /** Infer the operation from what the user attached. */
 export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op" | "inputs" | "params">): Operation {
@@ -64,6 +69,15 @@ export function routesFor(model: ModelDef, op: Operation): ModelRoute[] {
   return model.routes.filter((r) => r.op === op);
 }
 
+/**
+ * The most images a run of `op` sends this model: its routes' own limit when they all have one (ModelRoute.maxImages:
+ * Qwen-Image 2.1 inpaints and expands the picture alone), else the model's options.maxImages.
+ */
+export function imageLimit(model: Pick<ModelDef, "options" | "routes">, op: Operation | undefined): number | undefined {
+  const own = op ? model.routes.filter((r) => r.op === op).map((r) => r.maxImages) : [];
+  return own.length && own.every((n) => n !== undefined) ? Math.max(...(own as number[])) : model.options.maxImages;
+}
+
 const clamp01 = (n: number) => Math.max(0, Math.min(1, Number.isFinite(n) ? n : 1));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -99,8 +113,42 @@ export function composeShots(overall: string, shots: { prompt: string; duration:
   return [overall.trim() && `${overall.trim().replace(/[.\s]+$/, "")}.`, ...parts].filter(Boolean).join(" ");
 }
 
+/** The preset's own route on an engine (its recipe, the route its preview was made with, is in presetRoutes). */
 export function presetRoute(preset: Preset, engine: Engine): PresetRoute | null {
   return engine === "open" ? preset.open : preset.cloud;
+}
+
+export { presetRoutes };
+
+/**
+ * The model apps ran on before they moved to a newer one: the edit apps left Qwen-Image-Edit 2511, Expand and Zoom Out
+ * left FLUX Fill, both for Qwen-Image 2.1 (2026-10-31); the talking apps left Kling AI Avatar for Kling Avatar 2.0 in
+ * the cloud, and Upscale left 4x ESRGAN for SeedVR2 on your GPU (2026-11-01).
+ */
+const APP_MODEL_MOVES: Readonly<Record<string, string>> = {
+  "oss-qwen-edit": "oss-qwen-image-21",
+  "oss-flux-fill": "oss-qwen-image-21",
+  "kling-avatar": "kling-avatar-2",
+  "oss-upscale-image": "oss-seedvr2-image",
+};
+
+/**
+ * Apps pin their model, so a stored app run on the model its app ran on before (a retry, Run again, Reuse, a script)
+ * would be refused: it runs on the app's model now, with the app's operation, and `note` says so. Anything else is
+ * returned as it is (an app a LoRA ties to the old model, Multiple Angles on 2511, still names it).
+ */
+export function movedAppRequest<T extends Pick<GenerationRequest, "modelId" | "op" | "presetId">>(
+  req: T,
+  getModel: (id: string) => ModelDef | undefined,
+  getPreset: (id: string) => Preset | undefined,
+): { request: T; note?: string } {
+  const was = getModel(req.modelId);
+  const preset = req.presetId ? getPreset(req.presetId) : undefined;
+  const route = was && preset?.type === "app" ? presetRoute(preset, was.engine) : null;
+  if (!was || !route || route.modelId === was.id || !Object.hasOwn(APP_MODEL_MOVES, was.id) || APP_MODEL_MOVES[was.id] !== route.modelId) return { request: req };
+  const now = getModel(route.modelId);
+  if (!now) return { request: req };
+  return { request: { ...req, modelId: now.id, ...(route.op && { op: route.op }) }, note: `${preset!.name} now runs on ${now.name}` };
 }
 
 /** Model families a Mix's LoRA may run on instead (said when it can't join the first preset's model). */
@@ -140,6 +188,11 @@ export interface Plan {
    * generation (the grade, an overlay) that the result's meta carries.
    */
   soul?: { look?: string; words: string; triggers: string[]; grade?: string; overlay?: SoulOverlay; crop?: "21:9" };
+  /**
+   * A layout run (params.extra.layout, src/lib/layout-prompt.ts): the form the model reads it in, how many boxes, and
+   * the canvas it was compiled at when the model reads pixels (MOSS-Image: the exact size it renders).
+   */
+  layout?: { format: LayoutFormat | "words"; boxes: number; width?: number; height?: number };
 }
 
 /** Operations that work from their inputs alone. */
@@ -202,17 +255,29 @@ export function planGeneration(
   let op: Operation | undefined = req.op;
 
   if (preset) {
-    const route = presetRoute(preset, model.engine);
-    if (!route) throw new Error(`${preset.name} has no ${model.engine === "open" ? "open-source" : "cloud"} version yet`);
-    if (route.modelId !== model.id && !preset.type.match(/motion|effect/)) {
-      // Apps pin their model; motions/effects let the user pick any compatible video model.
-      throw new Error(`${preset.name} runs on ${route.modelId}, not ${model.id}`);
+    // The preset's routes on this engine: the one its preview was made with (when this catalog has its model), then its own.
+    const routes = presetRoutes(preset, model.engine, (id) => !!getModel(id));
+    if (!routes.length) throw new Error(`${preset.name} has no ${model.engine === "open" ? "open-source" : "cloud"} version yet`);
+    const matched = routes.find((r) => r.modelId === model.id);
+    if (!matched && !preset.type.match(/motion|effect/)) {
+      // Apps run on their own models; motions/effects let the user pick any compatible video model.
+      throw new Error(`${preset.name} runs on ${[...new Set(routes.map((r) => r.modelId))].join(" or ")}, not ${model.id}`);
     }
-    // Preset params/LoRAs are tuned for the preset's own model; other compatible models only get the prompt (without
+    const route = matched ?? routes[0];
+    // Preset params/LoRAs are tuned for the route's own model; other compatible models only get the prompt (without
     // a LoRA's trigger word, which means nothing to them).
-    const sameModel = route.modelId === model.id;
-    prompt = composePrompt((sameModel || preset.type === "app" ? route.promptTemplate : undefined) ?? preset.promptTemplate, req.prompt, preset, req.presetOptions);
-    params = { ...model.defaults, ...(sameModel ? route.params : {}), ...req.params };
+    const sameModel = !!matched;
+    prompt = composePrompt((sameModel ? route.promptTemplate : undefined) ?? preset.promptTemplate, req.prompt, preset, req.presetOptions);
+    // The route's extra settings (H3's orbit, a camera pose) stay under what the request sets itself. A setting the composer
+    // shows as a control (H3's Quality) is the request's own: the composer starts it at the route's value, and its Auto
+    // sends none, which is the model's default.
+    const shown = new Set((model.options.controls ?? []).map((c) => c.param));
+    const routeExtra = Object.fromEntries(Object.entries(route.params?.extra ?? {}).filter(([k]) => !shown.has(k)));
+    const routePlain = { ...route.params };
+    delete routePlain.extra;
+    const hasExtra = Object.keys(routeExtra).length > 0 || !!req.params?.extra;
+    const extra = sameModel && hasExtra ? { extra: { ...routeExtra, ...req.params?.extra } } : {};
+    params = { ...model.defaults, ...(sameModel ? routePlain : {}), ...req.params, ...extra };
     // Option choices that set model settings (Angles: rotate / tilt / zoom); a value the user set wins.
     const chosen = Object.assign({}, ...(preset.options ?? []).map((o) => o.choices.find((c) => c.value === (req.presetOptions?.[o.key] ?? o.default ?? o.choices[0]?.value))?.extra ?? {}));
     if (sameModel && Object.keys(chosen).length) params = { ...params, extra: { ...chosen, ...params.extra } };
@@ -334,6 +399,22 @@ export function planGeneration(
   if (!routesFor(model, op).length) {
     throw new Error(`${model.name} can't do ${op} — try another model`);
   }
+  // A layout (the Image studio's Layout mode, Edit layout, an API caller's draft): compiled for this model at the size it
+  // renders, the prompt as its caption; nothing rewrites it afterwards (Fuobe's enhancer, the API's prompt expansion).
+  let layoutPlan: Plan["layout"];
+  if (carriesLayout(params.extra)) {
+    const drawn = readLayout(params.extra![LAYOUT_PARAM]);
+    if (!drawn) throw new Error("The layout couldn't be read: draw its boxes again");
+    const compiled = planLayout(model, op, prompt, drawn, params);
+    prompt = compiled.prompt;
+    params = compiled.params;
+    layoutPlan = compiled.layout;
+  }
+  // MiniMax H3's orbit of a still (its Orbit LoRA graph, src/lib/comfy-variants.ts) runs at the LoRA's own length, 3 s
+  // (73 frames), unless the run names a length.
+  if (model.options.promptFormat === "minimax-h3" && op === "i2v" && params.extra?.orbit === true && req.params?.duration === undefined && params.duration === model.defaults?.duration) {
+    params = { ...params, duration: 3 };
+  }
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");
@@ -377,6 +458,8 @@ export function planGeneration(
 
   const missing = missingInputs(op, req) ?? unreadInputs(model, op, req) ?? missingImages(model, req);
   if (missing) throw new Error(missing);
+  const tooMany = extraImages(model, op, req);
+  if (tooMany) throw new Error(tooMany);
 
   // Soul Cinema's 21:9 (research §4.5: a crop option): made at 16:9 on both engines, then cropped to 21:9 with
   // its grade after generation (meta.crop).
@@ -414,6 +497,83 @@ export function planGeneration(
     perJobOutputs,
     ...(notes.length && { notes }),
     ...(soulPlan && { soul: soulPlan }),
+    ...(layoutPlan && { layout: layoutPlan }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Layouts
+
+/** A layout's canvas on your GPU: the graph's 16 px grid, up to 2048 a side (moss-image-t2i's limits), fitted as the ComfyUI provider fits a canvas the request names. */
+const OPEN_CANVAS = { dimensionMultiple: LAYOUT_MULTIPLE, maxWidth: LAYOUT_MAX_SIDE, maxHeight: LAYOUT_MAX_SIDE };
+
+/** "4k" / "2K" / "1k" → the resolution tiers computeDimensions knows ("4K"); anything else as it is. */
+const tier = (res: string | undefined) => (res && /^\d(\.\d)?k$/i.test(res) ? res.toUpperCase() : res);
+
+export interface LayoutCanvas {
+  /** The size the model renders, the size a pixel layout (MOSS-Image) is compiled at. */
+  width: number;
+  height: number;
+  /** The size the aspect ratio and resolution ask for, before the model's limits (a side past 2048 is scaled down). */
+  asked: { width: number; height: number };
+  /** False when the size is a guess from the resolution's name (a cloud model that takes an aspect ratio and a tier). */
+  exact: boolean;
+}
+
+/**
+ * The canvas a layout is drawn for on this model. On your GPU: the aspect ratio and resolution on the 16 px grid
+ * (computeDimensions), up to 2048 a side (fitCanvas, as the ComfyUI provider fits it). In the cloud: the route's size
+ * field (sizeValue: fal's MOSS-Image 512–2048), else a guess from the resolution's name (FLUX.3's "4k"). The layout
+ * keeps its boxes as fractions, so it is compiled at this size whatever it was drawn on.
+ */
+export function layoutCanvas(model: ModelDef, params: GenParams, op?: Operation): LayoutCanvas {
+  const aspect = params.aspectRatio ?? model.defaults?.aspectRatio;
+  const res = params.resolution ?? model.defaults?.resolution;
+  if (model.engine !== "open") {
+    const route = op ? routesFor(model, op)[0] : model.routes[0];
+    const size = route?.map?.size ?? route?.preview?.size;
+    if (size) {
+      const sent = size.key ? askedSize(params.extra?.[size.key]) : undefined;
+      return { ...sizeValue(size, aspect, res, sent), asked: sizeValue({ ...size, min: undefined, max: undefined }, aspect, res, sent), exact: true };
+    }
+  }
+  // A "<side>sq" tier (FLUX.3's 512sq / 768sq) is that square's area in the chosen aspect: a square of that side at 1:1.
+  const sq = /^(\d+)sq$/i.exec(res ?? "");
+  const side = sq ? Number(sq[1]) : 1024;
+  const asked = computeDimensions(aspect, sq ? undefined : tier(res), { width: side, height: side }, LAYOUT_MULTIPLE);
+  const fitted = model.engine === "open" ? fitCanvas(asked.width, asked.height, OPEN_CANVAS) : asked;
+  return { ...fitted, asked, exact: model.engine === "open" };
+}
+
+/**
+ * A layout compiled for this model: the person's words (or the draft's own caption) as its caption, every box checked
+ * (a text box needs its words), the model's compiler (src/lib/layout-prompt.ts layoutCompilerFor) at the canvas it
+ * renders. A pixel layout (MOSS-Image) also names that canvas, so both engines render the size it was compiled at:
+ * params.extra.width / height on your GPU, the route's size field (fal's image_size) in the cloud. Bria FIBO 2 gets its
+ * VGL beside the words. Prompt rewriting is off for the run.
+ */
+function planLayout(model: ModelDef, op: Operation, prompt: string, drawn: LayoutDraft, params: GenParams): { prompt: string; params: GenParams; layout: NonNullable<Plan["layout"]> } {
+  const draft: LayoutDraft = { ...drawn, summary: { ...drawn.summary, caption: prompt.trim() || drawn.summary.caption.trim() } };
+  const format = model.options.layout;
+  const pixels = format === "moss";
+  const canvas = layoutCanvas(model, params, op);
+  // Only a pixel layout depends on the canvas (its sides on MOSS's 16 px grid); the others place boxes on a 0-1000 grid or in words.
+  const checkedAt = pixels ? canvas : { width: 1024, height: 1024 };
+  const problem = validateLayout(draft, checkedAt.width, checkedAt.height, format ?? "words").find((i) => i.level === "error");
+  if (problem) throw new Error(problem.message);
+  const compiled = layoutCompilerFor(model)(draft, canvas.width, canvas.height);
+  const extra: Record<string, unknown> = { ...params.extra };
+  if (pixels && draft.items.length) {
+    const route = routesFor(model, op)[0];
+    const key = (route?.map?.size ?? route?.preview?.size)?.key;
+    if (model.engine === "open") Object.assign(extra, { width: canvas.width, height: canvas.height });
+    else if (key) extra[key] = { width: canvas.width, height: canvas.height };
+  }
+  if (compiled.vgl && draft.items.length) extra.vgl = compiled.vgl;
+  return {
+    prompt: compiled.prompt,
+    params: { ...params, enhancePrompt: false, extra },
+    layout: { format: compiled.format, boxes: draft.items.length, ...(pixels && { width: canvas.width, height: canvas.height }) },
   };
 }
 
@@ -608,20 +768,26 @@ function unreadInputs(model: ModelDef, op: Operation, req: Pick<GenerationReques
   return words.length ? `${model.name} works from ${words.join(" or ")} — add one` : null;
 }
 
+/**
+ * More images than the operation's routes read (ModelRoute.maxImages): refused, never dropped without a word (a reference
+ * added in the Inpaint studio would be ignored by Qwen-Image 2.1's inpaint graph).
+ */
+function extraImages(model: ModelDef, op: Operation, req: Pick<GenerationRequest, "inputs">): string | null {
+  const routes = routesFor(model, op);
+  if (!routes.length || routes.some((r) => r.maxImages === undefined)) return null;
+  const max = imageLimit(model, op)!;
+  if ((req.inputs?.images?.length ?? 0) <= max) return null;
+  if (max === 1 && op === "inpaint") return `${model.name} paints the masked area of one picture — remove the references, or clear the mask to edit with them`;
+  if (max === 1 && op === "outpaint") return `${model.name} expands one picture at a time — remove the other images`;
+  return `${model.name} takes up to ${max} image${max === 1 ? "" : "s"} for this — remove the others`;
+}
+
 /** Models that need several images (try-on: the person, then the garment). */
 function missingImages(model: ModelDef, req: Pick<GenerationRequest, "inputs">): string | null {
   const min = model.options.minImages ?? 0;
   if ((req.inputs?.images?.length ?? 0) >= min) return null;
   const labels = model.options.imageLabels?.slice(0, min);
   return labels?.length === min ? `Add the ${labels.join(" and the ")}` : `${model.name} needs ${min} images`;
-}
-
-/** The price that holds at `now`: a launch promo to the end of its last day (UTC), then the list price. */
-export function pricingAt(p: Pricing, now = Date.now()): Pricing {
-  if (!p.promo) return p;
-  const { promo, ...list } = p;
-  if (!(now <= Date.parse(`${promo.until}T23:59:59.999Z`))) return list;
-  return { ...list, usd: promo.usd, ...(promo.byResolution ? { byResolution: promo.byResolution } : {}) };
 }
 
 /**
@@ -634,15 +800,17 @@ const CLIP_LENGTH_OPS = new Set<Operation>(["upscale-video", "interpolate", "sdr
 /**
  * The seconds a clip edit that keeps the clip's length is billed for (Happy Horse, Runway Aleph, Lucy Edit, Kling O3 4K
  * edit…: a v2v model with no length to ask for): the clip's (params.sourceDuration, when the caller knows it), up to the
- * most its window takes (./clip-windows). Undefined for a model asked for a length, or when the clip's length isn't known.
+ * most its window takes (./clip-windows), or its frames ÷ 16 on fal's Wan 2.2 Fun VACE (params.sourceFps; 30 fps when
+ * not known). Undefined for a model asked for a length, or when the clip's length isn't known.
  */
-export function clipEditSeconds(model: Pick<ModelDef, "id" | "options" | "routes">, params: Pick<GenParams, "sourceDuration">, op?: Operation): number | undefined {
+export function clipEditSeconds(model: Pick<ModelDef, "id" | "options" | "routes"> & Partial<Pick<ModelDef, "engine">>, params: Pick<GenParams, "sourceDuration" | "sourceFps">, op?: Operation): number | undefined {
   const seconds = params.sourceDuration;
   if (op !== "v2v" || !seconds || !(seconds > 0) || model.options.durations?.length) return undefined;
   const routes = model.routes.filter((r) => r.op === "v2v");
   if (!routes.length || routes.some((r) => r.map?.duration)) return undefined;
   const max = sourceSeconds(model.id).max;
-  return max !== undefined ? Math.min(seconds, max) : seconds;
+  // fal's Wan 2.2 Fun VACE bills a clip's frames ÷ 16 (a 30 fps clip about 1.9× its length): clip-windows.ts.
+  return billedClipSeconds(model.id, max !== undefined ? Math.min(seconds, max) : seconds, params.sourceFps, model.engine);
 }
 
 /**
@@ -718,17 +886,24 @@ function sentMegapixels(params: GenParams): number | undefined {
  * payload sends it. fal's megapixel is 1024 × 1024 pixels. Undefined when the route sends no size.
  */
 function routeMegapixels(model: ModelDef, params: GenParams, op?: Operation): number | undefined {
-  const size = (op ? model.routes.find((r) => r.op === op) : model.routes[0])?.map?.size;
+  const route = op ? model.routes.find((r) => r.op === op) : model.routes[0];
+  // The browser's catalog keeps the size field as route.preview (slimModel).
+  const size = route?.map?.size ?? route?.preview?.size;
   if (!size) return undefined;
   const asked = size.key ? askedSize(params.extra?.[size.key]) : undefined;
   const { width, height } = sizeValue(size, params.aspectRatio ?? model.defaults?.aspectRatio, params.resolution ?? model.defaults?.resolution, asked);
   return (width * height) / (1024 * 1024);
 }
 
-/** Rough USD estimate for a plan (BYO-key cloud runs). Open-source runs are free. */
-export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: Operation, withLoras = false): number | null {
+/**
+ * Rough USD estimate for a plan (BYO-key cloud runs). Open-source runs are free. A launch price (Pricing.promo) is read
+ * at `now` (./promo): the clock when not given (the server planning a run, the browser after it hydrates); with null (a
+ * page prerendering, the browser before it hydrates) a launch-priced model's price isn't known yet (null).
+ */
+export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: Operation, withLoras = false, now?: PriceClock): number | null {
   if (model.engine === "open" || !model.pricing) return model.engine === "open" ? 0 : null;
-  const p = model.pricing;
+  const p = pricingOn(model.pricing, now);
+  if (!p) return null;
   // A LoRA endpoint with no published price (fal's MOSS-Image /lora): unknown, never free.
   if (withLoras && p.lorasUnknown) return null;
   const n = params.numOutputs ?? 1;

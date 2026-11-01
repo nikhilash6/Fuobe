@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { useSaveElement } from "@/lib/api";
 import { bboxFromAlpha, elementDraft, LAYER_ELEMENT_KINDS, type LayerElementKind, type LayerNode } from "@/lib/layers";
+import { toastError } from "@/lib/refusals";
 import { Field, Segmented } from "./bits";
 import { LayerThumb } from "./layers-panel";
 import { renderNative, uploadRender } from "./render";
@@ -50,7 +51,7 @@ export function SaveElementDialog({ node, open, onOpenChange }: { node: LayerNod
       onOpenChange(false);
       toast.success(`Saved as @${el.handle}`, { description: `${info.label} · use it in any prompt`, action: { label: "Open", onClick: () => router.push(`/elements/${el.id}`) } });
     } catch (e) {
-      toast.error((e as Error).message || "Couldn't save the element");
+      toastError(e, "Couldn't save the element");
     } finally {
       setBusy(false);
     }

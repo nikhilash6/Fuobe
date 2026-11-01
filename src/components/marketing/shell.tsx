@@ -18,8 +18,25 @@ const TABS: { id: SuiteTab; href: string; label: string; icon: typeof Target }[]
   { id: "multiplier", href: "/ads/multiplier", label: "Ad Multiplier", icon: Copy },
 ];
 
-/** The marketing suite's sticky header: title, the four tools as tabs, and the engine switch. */
-export function MarketingHeader({ title, active, engine, onEngine, right }: { title: string; active: SuiteTab; engine?: Engine; onEngine?: (e: Engine) => void; right?: React.ReactNode }) {
+/**
+ * The marketing suite's sticky header: title, the four tools as tabs, and the engine switch. selfHostedOnly: a tool that
+ * runs on a self-hosted Fuobe only (Marketing Studio, Click to Ad), see EngineSwitch.
+ */
+export function MarketingHeader({
+  title,
+  active,
+  engine,
+  onEngine,
+  right,
+  selfHostedOnly,
+}: {
+  title: string;
+  active: SuiteTab;
+  engine?: Engine;
+  onEngine?: (e: Engine) => void;
+  right?: React.ReactNode;
+  selfHostedOnly?: boolean;
+}) {
   const nav = useRef<HTMLElement>(null);
   // On a phone the tabs scroll sideways: bring the current one into view.
   useEffect(() => {
@@ -35,7 +52,7 @@ export function MarketingHeader({ title, active, engine, onEngine, right }: { ti
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">{title}</h1>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {right}
-          {engine && onEngine && <EngineSwitch value={engine} onChange={onEngine} />}
+          {engine && onEngine && <EngineSwitch value={engine} onChange={onEngine} selfHostedOnly={selfHostedOnly} />}
         </div>
       </div>
       <nav ref={nav} aria-label="Marketing tools" className="scrollbar-none -mb-px flex gap-1 overflow-x-auto px-3 sm:px-6">

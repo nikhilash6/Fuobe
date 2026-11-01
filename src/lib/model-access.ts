@@ -234,6 +234,8 @@ export interface ModelEntry {
   cloud?: LicenceInfo;
   /** A hosted open model's weights (fal's MOSS-Image: Apache-2.0, and the host's catch), under the provider's terms. */
   weights?: LicenceInfo;
+  /** What each engine runs, when they differ (ModelDef.engineNote). */
+  engineNote?: string;
   packs: string[];
   /** Its own switch. */
   on: boolean;

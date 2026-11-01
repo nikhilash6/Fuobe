@@ -3,14 +3,16 @@
 import { AppWindow, ArrowUpRight, Brain, Captions, Check, CircleAlert, Clapperboard, Film, ImageIcon, Info, Languages, Layers, Loader2, Megaphone, Plug, Scissors, Search, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { FailedTile, MediaThumb, PendingTile, tileRatio } from "@/components/studio/feed";
 import { useCreateGeneration } from "@/lib/api";
 import { memoryCardLine, planRunnable, type AssistItem, type AssistThread, type SkillSummary } from "@/lib/assist";
 import type { Generation } from "@/lib/catalog/types";
+import { isPlaceholder, PLACEHOLDER_CHIP } from "@/lib/demo-mode";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { PlanJobs } from "./plan-jobs";
 import { SkillIcon } from "./skill-icon";
 
@@ -50,7 +52,7 @@ export function ApprovalCard({ item, live, onAnswer }: { item: Extract<AssistIte
     : !runnable && item.status === "pending"
       ? "Can't run yet — fix what's marked above, or tell Assist what to change"
       : allDemo
-      ? "Demo run — no provider connected"
+      ? "Placeholder run · free"
       : item.totalUsd === null
         ? "Some prices vary"
         : item.totalUsd === 0
@@ -61,7 +63,7 @@ export function ApprovalCard({ item, live, onAnswer }: { item: Extract<AssistIte
     try {
       await onAnswer(ok);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(null);
     }
@@ -148,32 +150,29 @@ export function GenerationCards({ ids, all, storyboard, onOpen }: { ids: string[
       return g.outputs.map((o, i) => {
         const n = stills > 1 && g.kind === "image" && o.kind === "image" ? ++take : 0;
         return (
-          <button
-            key={`${g.id}-${i}`}
-            onClick={() => onOpen(g, i)}
-            className="group relative overflow-hidden rounded-xl bg-muted"
-            style={{ aspectRatio: ratio }}
-            aria-label={`Open ${n ? `take ${n}: ` : ""}${g.request.prompt?.slice(0, 60) || "result"}`}
-          >
-            {/* A text card says "Demo" in its own header row: on a narrow tile a corner badge would cover its label. */}
-            <MediaThumb output={o} className="transition duration-300 group-hover:scale-[1.02]" tag={g.provider === "mock" && o.kind === "text" ? "Demo" : undefined} />
-            {/* Top right, next to "Demo": the other corners hold the picture's own caption on demo stills. */}
-            {(n > 0 || (g.provider === "mock" && o.kind !== "text")) && (
-              <span className="absolute top-2 right-2 flex items-center gap-1">
-                {n > 0 && (
-                  <span aria-hidden className="grid size-6 place-items-center rounded-full bg-background/85 text-[12px] font-medium tabular-nums shadow-soft">
-                    {n}
-                  </span>
-                )}
-                {g.provider === "mock" && o.kind !== "text" && <span className="rounded-full bg-background/80 px-2 py-0.5 text-[10px] font-medium">Demo</span>}
-              </span>
-            )}
-          </button>
+          <div key={`${g.id}-${i}`} className="relative">
+            <button
+              onClick={() => onOpen(g, i)}
+              className="group relative block w-full overflow-hidden rounded-xl bg-muted"
+              style={{ aspectRatio: ratio }}
+              aria-label={`Open ${n ? `take ${n}: ` : ""}${g.request.prompt?.slice(0, 60) || "result"}`}
+            >
+              {/* A text card says "Placeholder" in its own header row: on a narrow tile a corner badge would cover its label. */}
+              <MediaThumb output={o} className="transition duration-300 group-hover:scale-[1.02]" tag={isPlaceholder(g) && o.kind === "text" ? PLACEHOLDER_CHIP : undefined} />
+              {n > 0 && (
+                <span aria-hidden className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-background/85 text-[12px] font-medium tabular-nums shadow-soft">
+                  {n}
+                </span>
+              )}
+            </button>
+            {/* Beside the tile, not in it (a button can't hold the chip's own button): the ways to the real thing. */}
+            {o.kind !== "text" && <PlaceholderChip g={g} overlay className="absolute top-2" />}
+          </div>
         );
       });
     }
     if (g.status === "failed" || g.status === "canceled") {
-      return [<FailedTile key={g.id} g={g} ratio={ratio} onRetry={() => create.mutate(g.request, { onError: (e) => toast.error((e as Error).message) })} />];
+      return [<FailedTile key={g.id} g={g} ratio={ratio} onRetry={() => create.mutate(g.request, { onError: (e) => toastError(e) })} />];
     }
     return Array.from({ length: Math.max(1, g.request.params?.numOutputs ?? 1) }, (_, i) => <PendingTile key={`${g.id}-${i}`} g={g} ratio={ratio} />);
   });

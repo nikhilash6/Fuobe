@@ -19,13 +19,14 @@ import type {
   TopicIdea,
 } from "@/lib/catalog/faceless";
 import type { Engine, Generation } from "@/lib/catalog/types";
+import { responseError } from "@/lib/refusals";
 
 /** React Query hooks for /api/faceless/** and /api/explainer/** (kept next to the views that use them). */
 
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
   return body;
 }
 

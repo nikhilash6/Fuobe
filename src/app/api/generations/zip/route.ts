@@ -1,10 +1,9 @@
 import { connection } from "next/server";
 import { ZIP_MAX_BYTES, zipEntries } from "@/server/library";
 import { zipSize, zipStream } from "@/server/zip";
-import { handler } from "@/server/access/route";
 
 /** Download the finished outputs of several generations as one zip: GET ?ids=a,b,c (up to 500). */
-export const GET = handler({ access: "signed-in" }, async (request: Request) => {
+export async function GET(request: Request) {
   await connection();
   const ids = (new URL(request.url).searchParams.get("ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   if (!ids.length) return Response.json({ error: "Pick something to download" }, { status: 400 });
@@ -21,4 +20,4 @@ export const GET = handler({ access: "signed-in" }, async (request: Request) => 
       "Cache-Control": "no-store",
     },
   });
-});
+}

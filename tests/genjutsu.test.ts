@@ -25,6 +25,8 @@ import {
   type Maker,
 } from "@/lib/catalog/genjutsu";
 import { ANCHOR_FALLBACK, CLOUD_NO_LORA } from "@/lib/catalog/character-swap";
+import { withoutOwnGpu } from "@/lib/catalog/engines";
+import { MARKETING_IMAGE_NOTE } from "@/lib/catalog/marketing";
 import { buildPayload } from "@/lib/catalog/payload";
 import { estimateCost, planGeneration } from "@/lib/catalog/plan";
 import { getModel, getPreset } from "@/lib/catalog";
@@ -86,9 +88,24 @@ describe("Genjutsu: which model runs", () => {
     expect(makerLicence(maker(ORIGINALS.character, "open"))).toMatch(/nodes GPL-3\.0 · SAM License$/);
     expect(makerLicence(maker("h3-max-recast"))).toMatch(/^MiniMax's closed H3 Max through fal/);
     expect(makerLicence(maker(ORIGINALS.swap, "open"))).toBe("Wan VACE weights: Apache-2.0 · SAM 3.1: Meta's SAM License · free on your GPU");
+    // In a line whose note already says where it runs: not said twice.
+    expect(makerLicence(maker(ORIGINALS.swap, "open"), false)).toBe("Wan VACE weights: Apache-2.0 · SAM 3.1: Meta's SAM License");
     expect(makerLicence(maker("scail-2"))).toBe("SCAIL-2 weights: MIT · on fal, pay per use");
     expect(makerLicence(maker("kling-o3"))).toBe("Closed model: pay per use, under its provider's terms");
     expect(MAKERS.every((m) => makerLicence(m).length > 10)).toBe(true);
+  });
+
+  it("a guest or an account reads the open models' notes without 'free on your GPU' (Genjutsu doesn't run there)", () => {
+    for (const m of MAKERS) {
+      const note = withoutOwnGpu(m.note);
+      expect(note, m.id).not.toMatch(/your GPU|^free\b| · free\b/);
+      expect(note.length, m.id).toBeGreaterThan(10);
+      if (!/your GPU|free/.test(m.note)) expect(note, m.id).toBe(m.note);
+    }
+    expect(withoutOwnGpu("Wan Animate 2 at 480p in 4 steps · free on your GPU (24 GB) · Apache-2.0")).toBe("Wan Animate 2 at 480p in 4 steps · Apache-2.0");
+    expect(withoutOwnGpu("MiniMax H3 + the swap LoRA on your GPU: SAM 3.1 picks the person · free · 48 GB+ advised")).toBe("MiniMax H3 + the swap LoRA: SAM 3.1 picks the person · 48 GB+ advised");
+    expect(withoutOwnGpu(MARKETING_IMAGE_NOTE.open)).toBe("Fuobe Original · Qwen-Image 2.1");
+    expect(withoutOwnGpu("Lip sync · free on your GPU (24 GB), or hosted on fal")).toBe("Lip sync · hosted on fal");
   });
 
   it("refuses in words what an engine can't do", () => {
@@ -238,7 +255,9 @@ describe("Genjutsu: plans", () => {
   it("open restyle on the Original: the Shorts chain on the Original's graph; a Soul look's frame on Fuobe Soul", () => {
     const open = plan({ mode: "restyle", maker: maker(ORIGINALS.restyle, "open"), look: { kind: "custom", images: [ref, "/api/files/b.png", "/api/files/c.png"] }, references: [] });
     expect(open.steps.find((s) => s.request.modelId === "oss-segment")!.request.params?.aspectRatio).toBe("auto");
-    expect(open.steps.find((s) => s.request.modelId === "oss-qwen-edit")!.request.inputs?.images).toEqual([ref, "/api/files/b.png"]);
+    // The first frame in the look: Qwen-Image 2.1 Turbo on your GPU (hosted Qwen-Image-Edit 2511 in the cloud).
+    expect(open.steps.find((s) => s.request.modelId === "oss-qwen-image-21-turbo")!.request.inputs?.images).toEqual([ref, "/api/files/b.png"]);
+    expect(open.steps.some((s) => s.request.modelId === "oss-qwen-edit")).toBe(false);
     const look = open.steps.find((s) => s.request.modelId === ORIGINALS.restyle)!.request;
     expect(look).toMatchObject({ engine: "open", op: "v2v" });
     const soul = plan({ mode: "restyle", maker: maker(ORIGINALS.restyle, "open"), look: { kind: "soul", id: "v1-general" }, references: [], range: { start: 0, end: 5 } });
@@ -272,7 +291,7 @@ describe("Genjutsu: Character swap", () => {
     const p = ch({ maker: maker(ORIGINALS.character, "open"), prompt: "keep the glasses", character: { description: "a chrome robot", who: "leftmost", maskGrow: 80, lora: "v1", windowFrames: 158, historyFrames: 18 } });
     expect(p.steps.map((s) => s.key)).toEqual(["frame", "anchor", "swap"]);
     expect(step(p, "frame").request).toMatchObject({ modelId: "oss-extract-frame", op: "frame", inputs: { video: clip.url }, params: { startTime: 2, endTime: 2.5, extra: { frameIndex: 0 } } });
-    expect(step(p, "anchor").request).toMatchObject({ modelId: "oss-qwen-edit", op: "edit", inputs: { images: [ref] } });
+    expect(step(p, "anchor").request).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit", inputs: { images: [ref] } });
     expect(step(p, "anchor").request.prompt).toMatch(/^Image 1 is the source frame to edit\. Image 2 is character identity only: a chrome robot/);
     expect(step(p, "anchor").chain).toEqual([{ slot: "images", position: "first" }]);
     const swap = step(p, "swap");
@@ -359,8 +378,13 @@ describe("Genjutsu: Character swap", () => {
     // Through the catalog the ratio stays (no square default merged over it).
     const planned = planGeneration({ ...sunburst, inputs: { images: ["/api/files/f.png", ref] } }, getModel, getPreset);
     expect(planned.params.aspectRatio).toBe("16:9");
-    // The open first frame is Qwen-Image-Edit's own size (the graph fits it to the clip): no ratio is asked.
-    expect(step(ch({ maker: maker(ORIGINALS.character, "open") }), "anchor").request.params?.aspectRatio).toBeUndefined();
+    // On your GPU the first frame keeps the frame's own size: Qwen-Image 2.1 gets the nearest ratio, which its edit graph
+    // doesn't read (the result follows image 1), and Krea 2 Identity Edit "auto" (its canvas in image 1's shape).
+    expect(step(ch({ maker: maker(ORIGINALS.character, "open") }), "anchor").request.params?.aspectRatio).toBe("16:9");
+    const krea = step(ch({ maker: maker(ORIGINALS.character, "open"), character: { anchorModel: "oss-krea2-identity-edit" } }), "anchor").request;
+    expect(krea).toMatchObject({ modelId: "oss-krea2-identity-edit", op: "edit", params: { aspectRatio: "auto" } });
+    // A Qwen-Image-Edit 2511 pick saved before falls back to the engine's default.
+    expect(step(ch({ maker: maker(ORIGINALS.character, "open"), character: { anchorModel: "oss-qwen-edit" } }), "anchor").request.modelId).toBe("oss-qwen-image-21");
   });
 
   it("cloud: a silent clip's result is silent too (H3's own soundtrack is replaced with silence)", () => {

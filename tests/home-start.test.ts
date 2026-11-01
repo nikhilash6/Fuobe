@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { blockerFor, claimStartToken, firstMissingSlot, handoffKey, issueStartToken, startStep, withoutStart } from "@/lib/composer";
+import { blockerFor, claimStartToken, firstMissingSlot, handoffKey, issueStartToken, startStep, withoutStart, withPreset } from "@/lib/composer";
 import { startLine, type ConnectionState } from "@/lib/connections";
 import { startQuotes } from "@/lib/starter-prices";
 import { EDIT_STUDIO, IMAGE_STUDIO } from "@/lib/studios";
@@ -13,6 +13,13 @@ describe("the start flag", () => {
     expect(withoutStart("/video?go=1")).toBe("/video");
     // It isn't part of the hand-off, so dropping it never rebuilds the draft.
     expect(handoffKey("prompt=a+fox&go=1")).toBe(handoffKey("prompt=a+fox"));
+  });
+
+  it("follows the picked camera motion or effect in the address, and drops it once cleared", () => {
+    expect(withPreset("/video?preset=motion-fpv-drone", "motion-zoom-in")).toBe("/video?preset=motion-zoom-in");
+    expect(withPreset("https://fuobe.com/video?prompt=sky&preset=motion-bullet-time#x", undefined)).toBe("https://fuobe.com/video?prompt=sky#x");
+    expect(withPreset("/video", "effect-hair-style")).toBe("/video?preset=effect-hair-style");
+    expect(withPreset("/video?preset=nope", undefined)).toBe("/video");
   });
 
   it("waits while things load, runs when nothing blocks, else explains what's missing", () => {
@@ -77,26 +84,26 @@ describe("the line under Home's composer", () => {
   });
 
   it("names the paid model and its price when a key for one of its providers is set", () => {
-    expect(startLine(state(["fal"]), q.video, "cloud", "video")?.text).toMatch(/^Start runs Seedance 2\.5 · about \$[\d.]+ a 5 s clip$/);
+    expect(startLine(state(["fal"]), q.video, "cloud", "video")?.text).toMatch(/^Start runs MiniMax H3 · about \$0\.30 a 5 s clip$/);
     expect(startLine(state(["replicate"]), q.image, "cloud", "image")?.text).toMatch(/^Start runs Nano Banana Pro · about/);
     expect(startLine(state(["fal"]), q.edit, "cloud", "edit")?.text).toMatch(/^Start runs Nano Banana Pro after you add the photo · /);
   });
 
-  it("says it's a demo when the key set is for a provider that doesn't host the model", () => {
-    // Only Replicate: Seedance 2.5 is on fal.ai alone.
-    expect(startLine(state(["replicate"]), q.video, "cloud", "video")).toEqual({ text: "Seedance 2.5 needs a fal.ai key, so Start runs a free demo" });
-    // Demo mode off: it won't run at all.
-    expect(startLine(state(["replicate"], { demoMode: "off" }), q.video, "cloud", "video")?.text).toMatch(/so Start can't run it yet$/);
-    expect(startLine(state(["fal"], { demoMode: "on" }), q.image, "cloud", "image")?.text).toMatch(/Demo mode is on/);
+  it("says why Start can't run it when the key set is for a provider that doesn't host the model", () => {
+    // Only Replicate: hosted MiniMax H3 is on fal.ai alone.
+    expect(startLine(state(["replicate"]), q.video, "cloud", "video")).toEqual({ text: "MiniMax H3 needs a fal.ai key, so Start can't run it yet" });
+    // Off is the default; an install from before with no saved value is the same.
+    expect(startLine(state(["replicate"], { demoMode: undefined }), q.video, "cloud", "video")?.text).toMatch(/so Start can't run it yet$/);
+    expect(startLine(state(["fal"], { demoMode: "on" }), q.image, "cloud", "image")?.text).toMatch(/Placeholder results are on/);
   });
 
   it("offers the other engine when that one would run it for real", () => {
-    expect(startLine(state(["comfyui"]), q.image, "cloud", "image")).toEqual({ text: "No paid API is connected, so Start runs a free demo", other: "open" });
+    expect(startLine(state(["comfyui"]), q.image, "cloud", "image")).toEqual({ text: "No paid API is connected, so Start can't run it yet", other: "open" });
     expect(startLine(state(["comfyui"]), q.image, "open", "image")?.text).toMatch(/^Start runs .+ on your GPU · Free$/);
-    expect(startLine(state(["fal"]), q.image, "open", "image")).toEqual({ text: "ComfyUI isn't connected, so Start runs a free demo", other: "cloud" });
-    // A Replicate key doesn't run Seedance, so it isn't offered for Video.
-    expect(startLine(state(["replicate"]), q.video, "open", "video")).toEqual({ text: "ComfyUI isn't connected, so Start runs a free demo" });
-    // Nothing connected: Home's demo notice says it instead.
+    expect(startLine(state(["fal"]), q.image, "open", "image")).toEqual({ text: "ComfyUI isn't connected, so Start can't run it yet", other: "cloud" });
+    // A Replicate key doesn't run hosted MiniMax H3, so it isn't offered for Video.
+    expect(startLine(state(["replicate"]), q.video, "open", "video")).toEqual({ text: "ComfyUI isn't connected, so Start can't run it yet" });
+    // Nothing connected: Home's notice says it instead.
     expect(startLine(state([]), q.image, "cloud", "image")).toBeNull();
   });
 });

@@ -2,8 +2,6 @@ import { after, connection } from "next/server";
 import { z } from "zod";
 import { createBrandFromWebsite, createManualBrand, listBrands } from "@/server/brand";
 import { failure, readBody } from "@/server/marketing";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const Body = z.union([
   z.object({ website: z.string().trim().min(1).max(300) }),
@@ -16,16 +14,16 @@ const Body = z.union([
 ]);
 
 /** Brand kits, newest activity first (with product and ad counts). */
-export const GET = handler({ access: "signed-in" }, async () => {
+export async function GET() {
   await connection();
   return Response.json({ items: listBrands() });
-});
+}
 
 /**
  * New brand kit: `{website}` starts the research (poll GET /api/brands/:id while status is
  * "researching"); `{description, images?}` builds one by hand ("Describe your business").
  */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   const body = await readBody(request, Body, "Add a website, or describe your business");
   if (body instanceof Response) return body;
   try {
@@ -36,7 +34,6 @@ export const POST = handler({ access: "signed-in" }, async (request: Request) =>
     }
     return Response.json(await createManualBrand(body), { status: 201 });
   } catch (e) {
-    rethrowAccess(e);
     return failure(e);
   }
-});
+}

@@ -124,7 +124,7 @@ try {
   // Edit video: Happy Horse priced on the attached clip's seconds ($0.28 a second at 720p), a 40 s clip refused.
   {
     const before = Object.fromEntries((await (await fetch(`${app}/api/settings`)).json()).settings.map((s) => [s.name, s.value]));
-    await settings({ falKey: "e2e_key_id:e2e_key_secret", demoMode: "auto" });
+    await settings({ falKey: "e2e_key_id:e2e_key_secret", demoMode: "off" });
     const { context, page } = await contextFor();
     try {
       await page.goto(`${app}/video-edit?model=happy-horse-video-edit`, { waitUntil: "load" });
@@ -152,7 +152,7 @@ try {
       if (shots) await page.screenshot({ path: path.join(shots, "video-edit-40s-1440-light.png") });
     } finally {
       await context.close();
-      await settings({ falKey: before.falKey ?? "", demoMode: before.demoMode ?? "auto" });
+      await settings({ falKey: before.falKey ?? "", demoMode: before.demoMode ?? "off" });
     }
   }
 

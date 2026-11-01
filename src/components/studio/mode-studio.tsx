@@ -14,7 +14,13 @@ export interface ModeTab {
   href: string;
 }
 
-/** Underline tabs on their own row under the page title; they scroll sideways (with faded edges) on phones. */
+/** A tab chosen with the keyboard: the next mode's tabs (each mode's page draws its own) take the focus back. */
+let refocus = false;
+
+/**
+ * Underline tabs on their own row under the page title; they scroll sideways (with faded edges) on phones. Each mode is
+ * its own history entry, so Back returns to the mode before.
+ */
 export function ModeTabs({ tabs, current }: { tabs: ModeTab[]; current: string }) {
   const [ref, fade] = useEdgeFade<HTMLDivElement>();
   const active = useRef<HTMLAnchorElement>(null);
@@ -25,6 +31,10 @@ export function ModeTabs({ tabs, current }: { tabs: ModeTab[]; current: string }
     if (!el || !row) return;
     const left = el.offsetLeft - row.offsetLeft;
     if (left < row.scrollLeft || left + el.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left - 12;
+    if (refocus) {
+      refocus = false;
+      el.focus({ preventScroll: true });
+    }
   }, [current, ref]);
   return (
     <nav aria-label="Modes" className="border-b">
@@ -36,11 +46,12 @@ export function ModeTabs({ tabs, current }: { tabs: ModeTab[]; current: string }
               key={m.id}
               ref={on ? active : undefined}
               href={m.href}
-              replace
               scroll={false}
+              // A keyboard's Enter is a click with no pointer (detail 0).
+              onClick={(e) => (refocus = e.detail === 0)}
               aria-current={on ? "page" : undefined}
               className={cn(
-                "relative flex h-10 shrink-0 items-center px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground",
+                "relative flex h-10 shrink-0 items-center rounded-md px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 "after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full after:transition-colors focus-visible:after:bg-ring",
                 on && "text-foreground after:bg-foreground",
               )}

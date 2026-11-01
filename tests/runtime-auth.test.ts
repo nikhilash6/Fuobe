@@ -9,7 +9,6 @@ process.env.FUOBE_DATA_DIR = dir;
 delete process.env.FUOBE_PASSWORD;
 const auth = await import("@/server/auth");
 const { proxy, config } = await import("@/proxy");
-const { setOwnerPassword } = await import("./helpers/identity");
 const { safeNext } = await import("@/lib/safe-redirect");
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -18,25 +17,25 @@ const post = (url: string, headers: Record<string, string> = {}) => new NextRequ
 describe("cross-site requests (S8)", () => {
   it("blocks state changes from other websites, password or not", async () => {
     expect(auth.authEnabled()).toBe(false);
-    const evil = await proxy(post("http://localhost:3000/api/auth/password", { origin: "http://evil.example", "content-type": "text/plain" }));
+    const evil = proxy(post("http://localhost:3000/api/auth/password", { origin: "http://evil.example", "content-type": "text/plain" }));
     expect(evil.status).toBe(403);
     expect((await evil.json()).error).toMatch(/another website/);
-    expect((await proxy(post("http://localhost:3000/api/generations", { origin: "null" }))).status).toBe(403);
-    expect((await proxy(post("http://localhost:3000/api/generations", { "sec-fetch-site": "cross-site" }))).status).toBe(403);
+    expect(proxy(post("http://localhost:3000/api/generations", { origin: "null" })).status).toBe(403);
+    expect(proxy(post("http://localhost:3000/api/generations", { "sec-fetch-site": "cross-site" })).status).toBe(403);
     // Another port on localhost is another origin.
-    expect((await proxy(post("http://localhost:3000/api/generations", { origin: "http://localhost:5173" }))).status).toBe(403);
+    expect(proxy(post("http://localhost:3000/api/generations", { origin: "http://localhost:5173" })).status).toBe(403);
   });
 
-  it("lets the studio's own pages, non-browser clients and reads through", async () => {
-    const ok = async (r: Promise<Response>) => (await r).headers.get("x-middleware-next") === "1";
-    expect(await ok(proxy(post("http://localhost:3000/api/generations", { origin: "http://localhost:3000" })))).toBe(true);
-    expect(await ok(proxy(post("http://localhost:3000/api/mcp")))).toBe(true);
-    expect(await ok(proxy(new NextRequest("http://localhost:3000/api/generations", { headers: { origin: "http://evil.example" } })))).toBe(true);
+  it("lets the studio's own pages, non-browser clients and reads through", () => {
+    const ok = (r: Response) => r.headers.get("x-middleware-next") === "1";
+    expect(ok(proxy(post("http://localhost:3000/api/generations", { origin: "http://localhost:3000" })))).toBe(true);
+    expect(ok(proxy(post("http://localhost:3000/api/mcp")))).toBe(true);
+    expect(ok(proxy(new NextRequest("http://localhost:3000/api/generations", { headers: { origin: "http://evil.example" } })))).toBe(true);
     // Behind a reverse proxy that forwards the public host.
-    expect(await ok(proxy(post("http://127.0.0.1:3000/api/generations", { origin: "https://fuobe.example.com", "x-forwarded-host": "fuobe.example.com" })))).toBe(true);
+    expect(ok(proxy(post("http://127.0.0.1:3000/api/generations", { origin: "https://fuobe.example.com", "x-forwarded-host": "fuobe.example.com" })))).toBe(true);
     process.env.FUOBE_ALLOWED_ORIGINS = "https://studio.example.org";
     try {
-      expect(await ok(proxy(post("http://127.0.0.1:3000/api/generations", { origin: "https://studio.example.org" })))).toBe(true);
+      expect(ok(proxy(post("http://127.0.0.1:3000/api/generations", { origin: "https://studio.example.org" })))).toBe(true);
     } finally {
       delete process.env.FUOBE_ALLOWED_ORIGINS;
     }
@@ -44,44 +43,44 @@ describe("cross-site requests (S8)", () => {
 });
 
 describe("DNS rebinding", () => {
-  const ok = async (r: Promise<Response>) => (await r).headers.get("x-middleware-next") === "1";
+  const ok = (r: Response) => r.headers.get("x-middleware-next") === "1";
   const at = (host: string, init: { method?: string; headers?: Record<string, string> } = {}) =>
     proxy(new NextRequest(`http://${host}/api/generations`, { method: init.method ?? "GET", headers: { host, ...init.headers }, ...(init.method === "POST" && { body: "{}" }) }));
 
   it("refuses a name that was re-pointed at this machine, reads included, while no password is set", async () => {
     expect(auth.authEnabled()).toBe(false);
     // The attacker's page and its requests share one origin, so the Origin check alone lets them through.
-    const read = await at("rebind.attacker.example:3000");
+    const read = at("rebind.attacker.example:3000");
     expect(read.status).toBe(403);
     expect((await read.json()).error).toMatch(/FUOBE_ALLOWED_ORIGINS/);
-    expect((await at("rebind.attacker.example:3000", { method: "POST", headers: { origin: "http://rebind.attacker.example:3000" } })).status).toBe(403);
+    expect(at("rebind.attacker.example:3000", { method: "POST", headers: { origin: "http://rebind.attacker.example:3000" } }).status).toBe(403);
     // A forwarded host is no way around it (the page can set that header itself).
-    expect((await at("rebind.attacker.example", { headers: { "x-forwarded-host": "localhost:3000" } })).status).toBe(403);
+    expect(at("rebind.attacker.example", { headers: { "x-forwarded-host": "localhost:3000" } }).status).toBe(403);
   });
 
-  it("lets local addresses, LAN names, this machine and allow-listed names through", async () => {
+  it("lets local addresses, LAN names, this machine and allow-listed names through", () => {
     for (const host of ["localhost:3000", "127.0.0.1:3000", "[::1]:3000", "192.168.1.5:3000", "studio.localhost", "nas:3000", "studio.local", "box.lan:3000", "fuobe.home.arpa", `${os.hostname()}:3000`]) {
-      expect(await ok(at(host)), host).toBe(true);
+      expect(ok(at(host)), host).toBe(true);
     }
     process.env.FUOBE_ALLOWED_ORIGINS = "https://fuobe.example.com,studio.example.org:8443";
     try {
-      expect(await ok(at("fuobe.example.com"))).toBe(true);
-      expect(await ok(at("studio.example.org:8443"))).toBe(true);
-      expect((await at("studio.example.org:9999")).status).toBe(403);
-      expect((await at("rebind.attacker.example")).status).toBe(403);
+      expect(ok(at("fuobe.example.com"))).toBe(true);
+      expect(ok(at("studio.example.org:8443"))).toBe(true);
+      expect(at("studio.example.org:9999").status).toBe(403);
+      expect(at("rebind.attacker.example").status).toBe(403);
     } finally {
       delete process.env.FUOBE_ALLOWED_ORIGINS;
     }
     expect(auth.hostAllowed(null)).toBe(true);
   });
 
-  it("leaves it to the sign-in check once a password is set", async () => {
-    await setOwnerPassword("correct horse battery");
+  it("leaves it to the sign-in check once a password is set", () => {
+    auth.setPassword("correct horse battery");
     try {
       // Signed out: sent to sign in (the rebound page has no session cookie for its name).
-      expect((await at("fuobe.example.com")).status).toBe(401);
+      expect(at("fuobe.example.com").status).toBe(401);
     } finally {
-      await setOwnerPassword(null);
+      auth.setPassword(null);
     }
   });
 });
@@ -156,7 +155,19 @@ describe("proxy matcher (C13)", () => {
     expect(matches("/library")).toBe(true);
     expect(matches("/next.svg")).toBe(false);
     expect(matches("/samples/demo-model.glb")).toBe(false);
+    expect(matches("/vendor/meshopt_decoder.js")).toBe(false);
+    expect(matches("/previews/presets/effect-set-on-fire.jpg")).toBe(false);
+    expect(matches("/previews/presets/motion-fpv-drone.mp4")).toBe(false);
     expect(matches("/favicon.ico")).toBe(false);
+    expect(matches("/icon.svg")).toBe(false);
+    expect(matches("/apple-icon.png")).toBe(false);
     expect(matches("/_next/static/chunks/a.js")).toBe(false);
+  });
+  it("skips only a real dot: a path with 'svg', 'ico' or 'png' after another character still runs the proxy", () => {
+    expect(matches("/api/svg")).toBe(true);
+    expect(matches("/x/svg")).toBe(true);
+    expect(matches("/aXsvg")).toBe(true);
+    expect(matches("/faviconXico")).toBe(true);
+    expect(matches("/apple-iconXpng")).toBe(true);
   });
 });

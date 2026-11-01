@@ -10,7 +10,7 @@ import { buildLicenceList, FLAG_LABEL } from "@/lib/licences";
 export const metadata: Metadata = { title: "Image to 3D" };
 
 /** The open text-to-3D route draws its still with this workflow before TRELLIS.2 (src/server/chains.ts). */
-const EXTRA_WORKFLOWS: Record<string, string[]> = { "oss-text-trellis2": ["z-image-turbo-t2i"] };
+const EXTRA_WORKFLOWS: Record<string, string[]> = { "oss-text-trellis2": ["qwen-image-21-t2i"] };
 
 /** The licence the picker shows for each open model: its short name, its catches and the notices it needs. */
 async function readLicences(): Promise<Record<string, NonNullable<Model3dInfo["licence"]>>> {

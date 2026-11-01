@@ -12,7 +12,7 @@ import type { ChainSlot, Engine, GenerationRequest, Operation } from "@/lib/cata
 import { TOOL_MODELS } from "@/lib/layers";
 import { createPipeline, type PipelineStep } from "../chains";
 import { db } from "../db";
-import { chooseRoute, createGenerations, outputKind, previewChained } from "../generations";
+import { chooseRoute, ConnectComfyError, createGenerations, outputKind, previewChained } from "../generations";
 import { engineMode } from "../settings";
 import { fileUrl, saveFile } from "../storage";
 import { defineTool, type JobPlace, type ToolContext, type ToolOutcome } from "./define";
@@ -279,13 +279,17 @@ function dubSteps(i: DubToolInput, ctx: ToolContext): PipelineStep[] {
 const NEEDS_SAMPLE =
   "Add a voice sample for the narrator: open-source narration clones a voice. Attach or record 10–60 s of clear speech (or use a saved voice), then pass it as voice_sample.";
 
-/** Whether a model's operation would run as a demo right now (no provider connected). */
+/**
+ * Whether a model's operation would run as a placeholder right now. Nothing connected that runs it (placeholders off)
+ * throws the ConnectComfyError: the answer is to connect something, not to add a voice sample.
+ */
 function runsAsDemo(modelId: string, op: Operation): boolean {
   const m = getModel(modelId);
   if (!m) return false;
   try {
     return chooseRoute(routesFor(m, op)).demo;
-  } catch {
+  } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
     return false;
   }
 }
@@ -337,39 +341,29 @@ function facelessSteps(i: FacelessToolInput, ctx: ToolContext, voiceFor: VoiceFo
   if (scenes.length < 2) throw new Error("Give at least 2 scenes");
   const open = engineOf(ctx) === "open";
   const aspect = ["9:16", "16:9", "1:1"].includes(i.aspect_ratio ?? "") ? i.aspect_ratio! : "9:16";
-  const stillModel = open ? "oss-z-image-turbo" : "nano-banana-pro";
-  // Higgsfield's Faceless runs Gemini Omni Flash per block (16:9 / 9:16 only); square goes to Seedance.
-  const clipModel = open ? "oss-wan22-14b-fast" : aspect === "1:1" ? "seedance-2-5" : "gemini-omni-flash";
+  const stillModel = open ? "oss-qwen-image-21" : "nano-banana-pro";
+  // Higgsfield's Faceless runs Gemini Omni Flash per block (16:9 / 9:16 only); square goes to Seedance. On your GPU,
+  // MiniMax H3 makes 5 s clips from stills of one shape; the copy join puts them together without decoding them, and
+  // the mux lays the narration in place of their own sound.
+  const clipModel = open ? "oss-minimax-h3" : aspect === "1:1" ? "seedance-2-5" : "gemini-omni-flash";
   const steps: (PipelineStep & { label: string })[] = [];
   scenes.forEach((s, k) => {
     steps.push(
-      { key: `still${k}`, label: `Scene ${k + 1} · still`, request: req({ modelId: stillModel, op: "t2i", prompt: `${s.visual.trim()}. Style: ${i.style.trim()}. No text.`, params: { aspectRatio: aspect } }) },
+      { key: `still${k}`, label: `Scene ${k + 1} · still`, request: req({ modelId: stillModel, op: "t2i", prompt: `${s.visual.trim()}. Style: ${i.style.trim()}. A clean, full-frame picture of the scene alone.`, params: { aspectRatio: aspect } }) },
       {
         key: `clip${k}`,
         label: `Scene ${k + 1} · clip`,
-        request: req({ modelId: clipModel, op: "i2v", prompt: `${s.visual.trim()}. Gentle, slow camera push-in; subtle natural motion; same style.`, params: { aspectRatio: aspect, ...(clipModel === "seedance-2-5" && { duration: 5 }) } }),
+        request: req({ modelId: clipModel, op: "i2v", prompt: `${s.visual.trim()}. Gentle, slow camera push-in; subtle natural motion; same style.`, params: { aspectRatio: aspect, ...(clipModel !== "gemini-omni-flash" && { duration: 5 }) } }),
         after: `still${k}`,
         chain: [{ slot: "images", position: "first" }],
       },
     );
   });
-  // Joins: the open join takes up to 4 clips a step, so longer episodes join in groups first.
-  const join = open ? "oss-join-clips" : "join-clips";
+  // One join of every scene (8 at most): the copy join on your GPU, the cloud's join otherwise.
+  const join = open ? "oss-join-encoded" : "join-clips";
   const clips = scenes.map((_, k) => `clip${k}`);
-  let film: string;
-  if (clips.length <= (open ? 4 : 24)) {
-    steps.push({ key: "film", label: "Joined scenes", request: req({ modelId: join, op: "concat", prompt: i.title?.trim() || "Episode" }), after: clips, chain: clips.map(() => ({ slot: "videos" as const })) });
-    film = "film";
-  } else {
-    const groups: string[] = [];
-    for (let g = 0; g * 4 < clips.length; g++) {
-      const part = clips.slice(g * 4, g * 4 + 4);
-      steps.push({ key: `part${g}`, label: `Scenes ${g * 4 + 1}–${g * 4 + part.length} joined`, request: req({ modelId: join, op: "concat", prompt: i.title?.trim() || "Episode" }), after: part, chain: part.map(() => ({ slot: "videos" as const })) });
-      groups.push(`part${g}`);
-    }
-    steps.push({ key: "film", label: "Joined scenes", request: req({ modelId: join, op: "concat", prompt: i.title?.trim() || "Episode" }), after: groups, chain: groups.map(() => ({ slot: "videos" as const })) });
-    film = "film";
-  }
+  steps.push({ key: "film", label: "Joined scenes", request: req({ modelId: join, op: "concat", prompt: i.title?.trim() || "Episode" }), after: clips, chain: clips.map(() => ({ slot: "videos" as const })) });
+  const film = "film";
   const narrator = narratorVoice(i, ctx, voiceFor);
   const narration = scenes.map((s) => s.narration.trim()).filter(Boolean).join("\n\n");
   steps.push(
@@ -413,7 +407,8 @@ function adRequests(i: AdsToolInput, ctx: ToolContext): GenerationRequest[] {
   const n = Math.max(1, Math.min(8, i.count ?? 4));
   const ratios = (i.aspect_ratios?.length ? i.aspect_ratios : ["4:5"]).slice(0, 4);
   const open = engineOf(ctx) === "open";
-  const model = i.product_image ? (open ? "oss-qwen-edit" : "nano-banana-pro") : open ? "oss-qwen-image" : "nano-banana-pro";
+  // Qwen-Image 2.1 on your GPU: its edit with the product photo, its text-to-image without one.
+  const model = open ? "oss-qwen-image-21" : "nano-banana-pro";
   const out: GenerationRequest[] = [];
   for (let k = 0; k < n && out.length < 12; k++) {
     for (const ratio of ratios) {
@@ -424,7 +419,7 @@ function adRequests(i: AdsToolInput, ctx: ToolContext): GenerationRequest[] {
         i.headline ? `Headline exactly: “${i.headline.trim()}”.` : "A short, punchy headline of 2–6 words.",
         i.cta ? `Call-to-action button: “${i.cta.trim()}”.` : "",
         i.product_image ? "Keep the product exactly as in the photo: same shape, colours, label and logo." : "",
-        "Clean modern layout, crisp legible typography, no other text, no watermark.",
+        `Clean modern layout and crisp, legible typography: ${i.cta ? "the headline and the button are" : "the headline is"} the only added lettering, spelled exactly.`,
       ]
         .filter(Boolean)
         .join(" ");

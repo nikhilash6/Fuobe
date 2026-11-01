@@ -70,7 +70,7 @@ export function demoSvg(prompt: string, aspectRatio = "1:1", variant = 0): strin
 <g filter="url(#b)">${blobs}</g>
 <rect width="100%" height="100%" fill="url(#s)"/>
 <rect x="56" y="48" rx="18" width="176" height="40" fill="white" fill-opacity="0.18"/>
-<text x="76" y="75" font-size="20" font-family="ui-sans-serif, system-ui" font-weight="600" fill="white">DEMO OUTPUT</text>
+<text x="76" y="75" font-size="20" font-family="ui-sans-serif, system-ui" font-weight="600" fill="white">PLACEHOLDER</text>
 ${text}
 </svg>`;
 }
@@ -117,7 +117,7 @@ function demoLayers(prompt: string, aspectRatio: string, n: number): DemoOutput[
   const { w, h } = canvas(aspectRatio);
   const hue = Math.floor(rng(hash(`${prompt}#layers`))() * 360);
   const layer = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`;
-  const label = escapeXml(prompt.split(/\s+/).slice(0, 3).join(" ") || "Demo");
+  const label = escapeXml(prompt.split(/\s+/).slice(0, 3).join(" ") || "Placeholder");
   const all: { name: string; box: number[]; draw: (b: number[]) => string }[] = [
     { name: "Subject", box: [w * 0.28, h * 0.22, w * 0.44, h * 0.6], draw: (b) => `<ellipse cx="${b[0] + b[2] / 2}" cy="${b[1] + b[3] / 2}" rx="${b[2] / 2}" ry="${b[3] / 2}" fill="oklch(0.72 0.17 ${(hue + 40) % 360})"/>` },
     { name: "Prop", box: [w * 0.08, h * 0.62, w * 0.26, h * 0.3], draw: (b) => `<rect x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}" rx="28" fill="oklch(0.8 0.14 ${(hue + 150) % 360})"/>` },
@@ -131,7 +131,7 @@ function demoLayers(prompt: string, aspectRatio: string, n: number): DemoOutput[
   const background: DemoOutput = {
     url: svgUri(
       layer(
-        `<rect width="100%" height="100%" fill="oklch(0.32 0.07 ${hue})"/><rect x="40" y="${h - 76}" rx="14" width="300" height="40" fill="white" fill-opacity="0.18"/><text x="58" y="${h - 49}" font-size="20" font-family="ui-sans-serif, system-ui" font-weight="600" fill="white">DEMO OUTPUT · layers</text>`,
+        `<rect width="100%" height="100%" fill="oklch(0.32 0.07 ${hue})"/><rect x="40" y="${h - 76}" rx="14" width="300" height="40" fill="white" fill-opacity="0.18"/><text x="58" y="${h - 49}" font-size="20" font-family="ui-sans-serif, system-ui" font-weight="600" fill="white">PLACEHOLDER · layers</text>`,
       ),
     ),
     kind: "image",
@@ -198,7 +198,7 @@ function demoTranslate(source: string, language: string): DemoOutput {
         .map((l) => (l.trim() ? tag(l) : l))
         .join("\n")
     : tag("Demo translation");
-  return textOutput(`${body}\n\n(Demo translation — connect Claude or Ollama in Settings to translate for real.)`, null, { language, demo: true });
+  return textOutput(`${body}\n\n(Demo translation — connect Claude or a local model (Ollama, LM Studio or Unsloth Studio) in Settings to translate for real.)`, null, { language, demo: true });
 }
 
 function demoWrite(brief: string): DemoOutput {
@@ -213,7 +213,7 @@ function demoWrite(brief: string): DemoOutput {
       "BEAT 3 — A close-up detail that makes it feel real.",
       "CLOSE — One line call to action.",
       "",
-      "(Demo text — connect Claude or Ollama in Settings to write for real.)",
+      "(Demo text — connect Claude or a local model (Ollama, LM Studio or Unsloth Studio) in Settings to write for real.)",
     ].join("\n"),
     null,
     { demo: true },
@@ -375,7 +375,7 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
 
 export const mockProvider: ProviderAdapter = {
   id: "mock",
-  label: "Demo",
+  label: "Placeholder",
   isConfigured: () => true,
 
   async prepareFile(data, contentType) {
@@ -426,7 +426,7 @@ export const mockProvider: ProviderAdapter = {
     const elapsed = Date.now() - Number(meta.startedAt);
     const total = DURATION_MS[kind] ?? DURATION_MS.image;
     if (elapsed < 600) return { state: "queued", message: "Queued (demo)" };
-    if (elapsed < total) return { state: "running", progress: elapsed / total, message: "Generating demo output" };
+    if (elapsed < total) return { state: "running", progress: elapsed / total, message: "Making a placeholder" };
     return { state: "succeeded", outputs: demoOutputs(meta.op as Operation | undefined, kind, String(meta.prompt), String(meta.aspectRatio), meta) };
   },
 

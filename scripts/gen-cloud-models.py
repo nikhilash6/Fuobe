@@ -488,9 +488,13 @@ model("wan-2-6", "Wan 2.6", "Alibaba Wan", "wan", "video", "Multi-shot Wan with 
 model("wan-2-5", "Wan 2.5", "Alibaba Wan", "wan", "video", "Audio-driven video up to 1080p",
       [("t2v", "fal-ai/wan-25-preview/text-to-video"), ("i2v", "fal-ai/wan-25-preview/image-to-video")],
       badges=["audio"], pricing=("second", 0.15, "1080p"), defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"})
-model("minimax-h3", "MiniMax H3", "MiniMax", "hailuo", "video", "Expressive characters and dynamic action",
+# Hosted MiniMax H3 makes its own sound. fal takes a whole number of seconds from 5 to 15 and bills each second by the
+# resolution (its pricing record, docs/research/new-models-7.json): 480P $0.05, 768P $0.06, 2K $0.13, 4K $0.16. Without
+# a resolution fal renders 2K, so 768P is set as the default (H3's native size, the open model's too).
+model("minimax-h3", "MiniMax H3", "MiniMax", "hailuo", "video", "Video with its own synchronized sound, 5–15 s, from words, a start frame, start and end frames, or references",
       [("t2v", "minimax/h3/text-to-video"), ("i2v", "minimax/h3/image-to-video", "fal", "+flf2v"), ("ref2v", "minimax/h3/reference-to-video")],
-      badges=["new"], defaults={"aspectRatio": "16:9"})
+      badges=["top", "audio", "new"], defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
+      pricing=("second", 0.06, "768P; 480P $0.05, 2K $0.13, 4K $0.16", {"byResolution": {"480P": 0.05, "768P": 0.06, "2K": 0.13, "4K": 0.16}}))
 model("minimax-h3-max", "MiniMax H3 Max", "MiniMax", "hailuo", "video", "Top-tier MiniMax with extend",
       [("t2v", "minimax/h3-max/text-to-video"), ("i2v", "minimax/h3-max/image-to-video", "fal", "+flf2v"), ("ref2v", "minimax/h3-max/reference-to-video"),
        ("extend", "minimax/h3-max/extend-video")],
@@ -674,25 +678,23 @@ model("fuobe-shorts", "Fuobe Shorts", "Fuobe Original", "fuobe-shorts", "video",
       original=True, fit_values=True, pricing=("second", 0.1, f"720p; 580p $0.075, 480p $0.05 · {_FRAMES16}; the first frame's Qwen edit is priced on its own",
                                                {"byResolution": {"720p": 0.1, "580p": 0.075, "480p": 0.05}}),
       api_defaults=SHORTS_O["cloud"]["defaults"], defaults={"resolution": "720p"}, licence=SHORTS_O["licence"])
-# ----- Originals (O13): Fuobe Evolution's cloud half (research §8 evolution → studios[evolution].original): Higgsfield
-# Evolution's change intensity as LTX-2.3 22B video-to-video's video_strength (1 − the denoise the open graph uses; set by
-# src/lib/catalog/evolution.ts through params.extra), the LLM-written direction as the prompt, prompt expansion off. Silent
-# (the clip's own sound goes back on), 24 fps, at most 481 frames a call (Evolution cuts longer clips into pieces); the
-# tier's size for the clip's shape from Fuobe Cinema's table. Priced per megapixel of video like Fuobe Cinema.
+# ----- Originals (O13): Fuobe Evolution's cloud half (research §8 evolution → studios[evolution].original.cloud): fal's
+# hosted Wan 2.2 Fun VACE depth, the GPU recipe's own model (the owner's call of 2026-10-30; LTX-2.3 video-to-video until
+# 2026-11-01). The piece as video_url (preprocess on, fal derives the depth), its direction frame (hosted
+# Qwen-Image-Edit 2511, planned by src/lib/catalog/evolution.ts) as the VACE reference, ref_image_urls, the way the GPU
+# graph feeds it to WanVaceToVideo's reference_image (`image`, fal's first_frame_url, is dropped: the GPU pins no first
+# frame; research studios[evolution].original.cloud.frameRole), frames and rate matched to the piece, no aspect ratio
+# asked (the clip keeps its shape).
+# The endpoint has no strength field: the change level reaches the direction frame's instruction only. Silent: the clip's
+# own sound goes back on.
 EVOLUTION = next(s for s in ORIGINALS["studios"] if s["id"] == "evolution")["original"]["cloud"]
-EVOLUTION_MP = per_megapixel(EVOLUTION["endpoint"])
-EVOLUTION_MP_LORA = per_megapixel(EVOLUTION["loraEndpoint"])
-EVOLUTION_PER_SECOND = {t: round(s["16:9"][0] * s["16:9"][1] * EVOLUTION["fps"] / 1e6 * EVOLUTION_MP, 4) for t, s in CINEMA_SIZES.items()}
-EVOLUTION_PER_SECOND_LORA = {t: round(s["16:9"][0] * s["16:9"][1] * EVOLUTION["fps"] / 1e6 * EVOLUTION_MP_LORA, 4) for t, s in CINEMA_SIZES.items()}
 model("fuobe-evolution", "Fuobe Evolution", "Fuobe Original", "fuobe-evolution", "video",
-      "Takes your clip further in a direction an LLM writes from your references: LTX-2.3 video to video at a change intensity",
-      [("v2v", EVOLUTION["endpoint"], "fal", {"loraEndpoint": EVOLUTION["loraEndpoint"], "fixed": EVOLUTION["fixed"]})],
-      original=True, sizes=CINEMA_SIZES,
-      pricing=("second", EVOLUTION_PER_SECOND["720p"],
-               f"${EVOLUTION_MP} per megapixel of video (width × height × frames): about ${round(EVOLUTION_PER_SECOND['720p'] * 5, 2)} for 5 s at 720p; ${EVOLUTION_MP_LORA} with LoRAs",
-               {"byResolution": EVOLUTION_PER_SECOND, "withLoras": EVOLUTION_PER_SECOND_LORA["720p"], "withLorasByResolution": EVOLUTION_PER_SECOND_LORA,
-                "videoMegapixel": {"usd": EVOLUTION_MP, "withLoras": EVOLUTION_MP_LORA}}),
-      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, frame_step=8)
+      "Takes your clip further in a direction an LLM writes from your references: a direction frame per piece carried through it by depth (Wan 2.2 Fun VACE)",
+      [("v2v", EVOLUTION["endpoint"], "fal", {"drop": ["aspectRatio", "image"], "fixed": EVOLUTION["fixed"]})],
+      original=True, fit_values=True, pricing=("second", 0.1, f"720p; 580p $0.075, 480p $0.05 · {_FRAMES16}; each direction frame's Qwen edit is priced on its own",
+                                               {"byResolution": {"720p": 0.1, "580p": 0.075, "480p": 0.05}}),
+      options={"resolutions": EVOLUTION["resolutions"]}, api_defaults=EVOLUTION["defaults"], defaults={"resolution": "720p"},
+      licence={**SHORTS_O["licence"], "note": "Wan 2.2 Fun VACE A14B and Qwen-Image-Edit 2511 (the direction frames) are Apache-2.0"})
 # ----- Original (package archive-restore): Fuobe Restore's cloud half, Lightricks' Restore IC-LoRA on fal's LTX-2.3 22B
 # reference video to video (research studios[archive-restore].original.cloud). The archive clip is the reference video, the
 # LoRA (gated on Hugging Face) goes by Fuobe's mirror URL; fal's own IC-LoRAs and preprocessors stay out. One untiled pass a

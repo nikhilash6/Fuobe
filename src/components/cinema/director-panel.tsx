@@ -34,7 +34,7 @@ import {
 import type { StudioElement } from "@/lib/catalog/elements";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
-import { MoveChips, MoveList } from "./camera-moves";
+import { MoveChips, MoveList, prefetchMoves } from "./camera-moves";
 import { PaletteEditor } from "./palette-editor";
 
 type Patch = (p: Partial<DirectorSettings>) => void;
@@ -222,6 +222,8 @@ export function CameraChip({
               role="tab"
               aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
+              onPointerEnter={t.id === "movement" ? prefetchMoves : undefined}
+              onFocus={t.id === "movement" ? prefetchMoves : undefined}
               className={cn(
                 "inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-medium transition-colors",
                 tab === t.id ? "bg-background text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",

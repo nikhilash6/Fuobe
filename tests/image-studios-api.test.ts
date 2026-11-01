@@ -78,6 +78,13 @@ describe("palettes", () => {
     expect(body.caps.native["ideogram-3"]).toEqual({ max: 12 });
   });
 
+  it("gives a built-in palette its catalog name on an install seeded before the name was fixed", () => {
+    db().prepare("UPDATE palettes SET name = 'Crimson Vigi' WHERE id = 'builtin-crimson-vigi'").run();
+    globalThis.__fuobePalettesSeeded = false;
+    expect(palettes.getPalette("builtin-crimson-vigi")?.name).toBe("Crimson Vigil");
+    expect(palettes.listPalettes().filter((p) => p.source === "builtin")).toHaveLength(50);
+  });
+
   it("saves, renames and deletes your palettes; built-ins stay", async () => {
     const bad = await palettesRoute.POST(json("POST", { name: "x", colors: ["#zzzzzz"] }));
     expect(bad.status).toBe(400);
@@ -139,7 +146,7 @@ describe("moodboards", () => {
     expect((await noName.json()).error).toBe("Please enter a moodboard name");
   });
 
-  it("builds a board through its cover job (open: collages on Qwen-Image-Edit Style Reference), then it's usable", async () => {
+  it("builds a board through its cover job (open: collages on Krea 2 Style Reference), then it's usable", async () => {
     const images = Array.from({ length: 6 }, upload);
     const res = await moodboardsRoute.POST(json("POST", { name: "Neon Haze", images, collages: [upload()], engine: "open" }));
     expect(res.status).toBe(201);
@@ -147,7 +154,9 @@ describe("moodboards", () => {
     expect(["queued", "running", "cover"]).toContain(m.status);
     expect(m.refs).toEqual(images);
     const g = gens.getGeneration(m.generationId)!;
-    expect(g.modelId).toBe("oss-style-qwen-edit");
+    // Krea 2 Style Reference: trained for style reference, the same one or two collages as references.
+    expect(g.modelId).toBe("oss-style-krea2");
+    expect(g.prompt).toMatch(/^A moodboard cover for “Neon Haze”: one striking, purely visual image/);
     expect(g.feature).toBe("moodboard");
     expect(g.request.inputs?.images).toEqual(m.collages);
     await settle(m.generationId);
@@ -238,7 +247,7 @@ describe("moodboards", () => {
       expect(res.status).toBe(409);
       expect((await res.json()).error).toMatch(/cloud APIs only/);
       expect(moodboards.getMoodboard(m.id)!.lora).toBeNull();
-      const targets = (await (await trainRoute.GET(new Request("http://localhost/"))).json()).targets as { id: string; price: string; blocker: string | null; demo: boolean }[];
+      const targets = (await (await trainRoute.GET()).json()).targets as { id: string; price: string; blocker: string | null; demo: boolean }[];
       expect(targets.map((t) => [t.id, t.price])).toEqual([
         ["aitk-z-image", "Free"],
         ["fal-z-image-style", "≈ $3.39 (1,500 steps)"],
@@ -291,11 +300,18 @@ describe("photodump, fashion factory and character sheet runs", () => {
     expect((await retryRoute.POST(json("POST", { id: again[0].id }))).status).toBe(422);
   }, 45_000);
 
-  it("says on Qwen-Image-Edit that the aspect ratio doesn't apply", async () => {
+  it("says on the Qwen edit models that the aspect ratio doesn't apply", async () => {
+    // Qwen-Image 2.1 has ratios for text to image, but its edit graph takes no size: the photo's shape it is.
     const preview = await (await photodumpRoute.POST(json("POST", { packId: "winter-special", engine: "open", selfie: upload(), aspectRatio: "16:9" }, "http://x/api/photodump?preview=1"))).json();
-    expect(preview.modelId).toBe("oss-qwen-edit");
+    expect(preview.modelId).toBe("oss-qwen-image-21");
     expect(preview.fixedAspect).toBe(true);
-    expect(preview.notes.join()).toMatch(/keeps the shape of your photo/);
+    expect(preview.notes.join()).toMatch(/Qwen-Image 2.1 keeps the shape of your photo/);
+    // A Qwen-Image-Edit 2511 pick saved before runs on Qwen-Image 2.1.
+    const old = await (await photodumpRoute.POST(json("POST", { packId: "winter-special", engine: "open", selfie: upload(), aspectRatio: "16:9", modelId: "oss-qwen-edit" }, "http://x/api/photodump?preview=1"))).json();
+    expect(old).toMatchObject({ modelId: "oss-qwen-image-21", fixedAspect: true });
+    // Krea 2 Identity Edit draws on a canvas of the shape asked for.
+    const krea = await (await photodumpRoute.POST(json("POST", { packId: "winter-special", engine: "open", selfie: upload(), aspectRatio: "16:9", modelId: "oss-krea2-identity-edit" }, "http://x/api/photodump?preview=1"))).json();
+    expect(krea).toMatchObject({ modelId: "oss-krea2-identity-edit", fixedAspect: false });
     const cloud = await (await photodumpRoute.POST(json("POST", { packId: "winter-special", engine: "cloud", selfie: upload(), aspectRatio: "16:9" }, "http://x/api/photodump?preview=1"))).json();
     expect(cloud.fixedAspect).toBe(false);
     // Picking Fuobe Soul with a selfie says why it runs on Qwen-Image-Edit.
@@ -309,7 +325,7 @@ describe("photodump, fashion factory and character sheet runs", () => {
     const el = createElement({ name: "Maya", kind: "character", references: [upload()] });
     const { items } = await (await photodumpRoute.POST(json("POST", { packId: pack.id, engine: "open", elementId: el.id }))).json();
     expect(items).toHaveLength(2);
-    expect(items[0].modelId).toBe("oss-qwen-edit");
+    expect(items[0].modelId).toBe("oss-qwen-image-21");
     // The pack's photo, then Maya's reference (her @mention resolves on the server).
     expect(items[0].request.inputs.images).toEqual([pack.refs[0]]);
     expect(items[0].request.prompt).toMatch(/^@Maya recreated in image 1/);
@@ -331,7 +347,7 @@ describe("photodump, fashion factory and character sheet runs", () => {
     expect(partner.items[0].modelId).toBe("fashn-tryon");
     const set = await (await fashionRoute.POST(json("POST", { step: "photoset", templateId: "red-room", dressed: upload(), engine: "open" }))).json();
     expect(set.items).toHaveLength(9);
-    expect(set.items.every((g: { modelId: string; batchId: string }) => g.modelId === "oss-qwen-edit" && g.batchId === set.batchId)).toBe(true);
+    expect(set.items.every((g: { modelId: string; batchId: string }) => g.modelId === "oss-qwen-image-21" && g.batchId === set.batchId)).toBe(true);
     const missing = await fashionRoute.POST(json("POST", { step: "photoset", templateId: "nope", dressed: upload(), engine: "open" }));
     expect((await missing.json()).error).toBe("Template required");
   });

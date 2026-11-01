@@ -2,13 +2,28 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, KeyRound, Loader2, LogOut, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { announceAuthChange, rememberViewer } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
 import { timeAgo } from "@/lib/format";
+import { responseError, toastError } from "@/lib/refusals";
 
 interface TokenInfo {
   id: string;
@@ -19,10 +34,7 @@ interface TokenInfo {
 }
 interface AuthStatus {
   enabled: boolean;
-  /** FUOBE_PASSWORD sets the password. */
   fromEnv: boolean;
-  /** FUOBE_SIGNIN pins sign-in on or off (null when unset). */
-  signinFromEnv?: boolean | null;
   tokens: TokenInfo[];
 }
 
@@ -30,7 +42,7 @@ async function call<T>(url: string, method: string, body?: unknown): Promise<T> 
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   if (res.status === 204) return undefined as T;
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(j.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, j.error ?? `Request failed (${res.status})`);
   return j;
 }
 
@@ -50,7 +62,7 @@ function PasswordForm({ status, onDone }: { status: AuthStatus; onDone: () => vo
       setConfirm("");
       onDone();
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setBusy(false);
     }
@@ -80,7 +92,7 @@ function PasswordForm({ status, onDone }: { status: AuthStatus; onDone: () => vo
           {busy && <Loader2 className="animate-spin" />}
           {status.enabled ? "Change password" : "Require a password"}
         </Button>
-        {status.enabled && status.signinFromEnv !== true && (
+        {status.enabled && (
           <Button size="sm" variant="ghost" className="text-destructive" disabled={busy || !current} onClick={() => void run(null)}>
             Remove password
           </Button>
@@ -126,7 +138,7 @@ function Tokens({ status, onChange }: { status: AuthStatus; onChange: () => void
       setName("");
       onChange();
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     }
   };
   return (
@@ -169,7 +181,7 @@ function Tokens({ status, onChange }: { status: AuthStatus; onChange: () => void
                 className="size-8 text-muted-foreground hover:text-destructive"
                 aria-label={`Revoke ${t.name}`}
                 onClick={async () => {
-                  await call(`/api/auth/tokens?id=${t.id}`, "DELETE").catch((e) => toast.error((e as Error).message));
+                  await call(`/api/auth/tokens?id=${t.id}`, "DELETE").catch((e) => toastError(e));
                   onChange();
                 }}
               >
@@ -196,10 +208,119 @@ function Tokens({ status, onChange }: { status: AuthStatus; onChange: () => void
   );
 }
 
+/**
+ * A new session secret: every sign-in on every device ends (this browser's too, and every account's), and the owner
+ * signs in again with the same password. It works when the password is set on the server (FUOBE_PASSWORD), which
+ * Settings can't change. Optionally revokes every API token as well: offered even when the list looked empty when the
+ * page loaded, since a token made since then would otherwise stay.
+ */
+function SignOutEveryone({ tokens }: { tokens: number }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [revoke, setRevoke] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const id = useId();
+  const run = async () => {
+    setBusy(true);
+    try {
+      await call("/api/auth/sessions", "POST", { tokens: revoke });
+      // This browser is signed out too: its other tabs hear of it, and the next page starts as a guest's.
+      rememberViewer("guest");
+      announceAuthChange();
+      router.replace("/login?owner=1");
+    } catch (e) {
+      toastError(e);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-1.5 sm:w-[36rem] sm:max-w-full">
+      <div className="flex items-center gap-3">
+        <h3 className="flex-1 text-[13px] font-medium">Sign everyone out</h3>
+        <Button size="sm" variant="secondary" className="h-8" disabled={busy} onClick={() => setOpen(true)}>
+          {busy ? <Loader2 className="animate-spin" /> : <LogOut />} Sign everyone out
+        </Button>
+      </div>
+      <p className="text-[12px] text-muted-foreground">
+        Ends every sign-in on every device: yours, this browser&apos;s and every account&apos;s. Use it if you think someone else signed in as you. Your password stays the same.
+      </p>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign everyone out?</AlertDialogTitle>
+            <AlertDialogDescription>Everyone has to sign in again, you too. You go to the sign-in page next.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-start gap-2">
+            <Checkbox id={`${id}-tokens`} className="mt-0.5" checked={revoke} onCheckedChange={(v) => setRevoke(!!v)} />
+            <Label htmlFor={`${id}-tokens`} className="text-[13px] leading-snug font-normal">
+              Also revoke every API token{tokens > 0 ? ` (${tokens})` : ""}. Scripts and agents that use one stop working until you give them a new one.
+            </Label>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => void run()}>
+              Sign everyone out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+interface PublicSignupStatus {
+  setting: boolean;
+  fromEnv: boolean | null;
+  active: boolean;
+}
+
+/** Public sign-up: guests browse read-only, and anyone can make an account (that runs on its own GPU). */
+function PublicSignup() {
+  const qc = useQueryClient();
+  const id = useId();
+  const q = useQuery({ queryKey: ["auth", "public"], queryFn: () => call<PublicSignupStatus>("/api/auth/public", "GET") });
+  const [busy, setBusy] = useState(false);
+  if (!q.data) return null;
+  const p = q.data;
+  const set = async (on: boolean) => {
+    setBusy(true);
+    try {
+      qc.setQueryData(["auth", "public"], await call<PublicSignupStatus>("/api/auth/public", "PUT", { on }));
+      void qc.invalidateQueries({ queryKey: ["viewer"] });
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-1.5 sm:w-[36rem] sm:max-w-full">
+      <div className="flex items-center gap-3">
+        <Label htmlFor={`${id}-public`} className="flex-1 text-[13px] font-medium">
+          Public sign-up
+        </Label>
+        <Switch id={`${id}-public`} checked={p.fromEnv ?? p.setting} disabled={busy || p.fromEnv !== null} onCheckedChange={(on) => void set(on)} />
+      </div>
+      <p className="text-[12px] text-muted-foreground">
+        Guests can browse every page read-only (not your library), and anyone can sign up with an email and a password. Accounts never use your cloud keys or GPU, and
+        can&apos;t change settings, keys or tokens.
+        {p.fromEnv !== null && " Set by FUOBE_PUBLIC_SIGNUP on the server."}
+        {p.active && !(p.fromEnv ?? p.setting) && " On for this address (fuobe.com)."}{" "}
+        <a href="#accounts" className="text-brand-text underline underline-offset-2">
+          See who signed up and what they make
+        </a>
+        .
+      </p>
+    </div>
+  );
+}
+
 export function SecuritySettings() {
   const qc = useQueryClient();
+  const router = useRouter();
   const status = useQuery({ queryKey: ["auth"], queryFn: () => call<AuthStatus>("/api/auth/password", "GET") });
   const refresh = () => void qc.invalidateQueries({ queryKey: ["auth"] });
+  if (status.isError) return <p className="text-[13px] text-muted-foreground">{status.error.message} Only the studio&apos;s owner sees these settings.</p>;
   if (!status.data) return <Loader2 className="size-5 animate-spin text-muted-foreground" />;
   const s = status.data;
   return (
@@ -207,18 +328,17 @@ export function SecuritySettings() {
       {s.enabled ? (
         <div className="flex items-start gap-2.5 rounded-xl bg-brand-faint px-3 py-2.5 text-[13px]">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-text" />
-          <p className="flex-1">
-            Sign-in is required for every page and API call.{s.fromEnv && " The password is set by FUOBE_PASSWORD on the server."}
-            {s.signinFromEnv === true && " Set by the server (FUOBE_SIGNIN=on), so the password can be changed but not removed."}
-          </p>
+          <p className="flex-1">Sign-in is required for every page and API call.{s.fromEnv && " The password is set by FUOBE_PASSWORD on the server."}</p>
           <Button
             size="sm"
             variant="ghost"
             className="-my-1 h-7"
             onClick={async () => {
               await fetch("/api/auth/logout", { method: "POST" });
-              // A full load (the proxy sends it to sign in): nothing from the signed-in session stays in memory.
-              window.location.reload();
+              // This browser's other tabs stop going on as the owner, and the next page starts as a guest's.
+              rememberViewer("guest");
+              announceAuthChange();
+              router.replace("/login");
             }}
           >
             <LogOut /> Sign out
@@ -227,14 +347,12 @@ export function SecuritySettings() {
       ) : (
         <div className="flex items-start gap-2.5 rounded-xl bg-amber-500/10 px-3 py-2.5 text-[13px] text-amber-800 dark:text-amber-300">
           <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-          <p>
-            {s.signinFromEnv === false
-              ? "Sign-in is off: set by the server (FUOBE_SIGNIN=off). Anyone who can reach this server can use your keys and GPU. Restart without it to require a password."
-              : "No password: anyone who can reach this server can use your keys and GPU. Fine on your own computer — set a password before you open it to a network."}
-          </p>
+          <p>No password: anyone who can reach this server can use your keys and GPU. Fine on your own computer — set a password before you open it to a network.</p>
         </div>
       )}
-      {!s.fromEnv && s.signinFromEnv !== false && <PasswordForm status={s} onDone={refresh} />}
+      {!s.fromEnv && <PasswordForm status={s} onDone={refresh} />}
+      {s.enabled && <PublicSignup />}
+      {s.enabled && <SignOutEveryone tokens={s.tokens.length} />}
       <Tokens status={s} onChange={refresh} />
     </div>
   );

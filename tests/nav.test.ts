@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NAV } from "@/components/nav-items";
-import { DEFAULT_NAV_CLOSED, fullScreenStudio, groupId, navActive, parseClosed, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
+import { DEFAULT_NAV_CLOSED, fullScreenStudio, groupId, navActive, NEW_CREATION_HREF, NEW_CREATION_PARAM, parseClosed, scrollFades, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
 
 const q = (s = "") => new URLSearchParams(s);
 const LIBRARY = ["/library", "/library?tab=favorites"];
@@ -27,6 +27,17 @@ describe("sidebar active state", () => {
     // Other tabs have no link of their own, so "All creations" stays lit.
     expect(navActive("/library", "/library", q("tab=trash"), LIBRARY)).toBe(true);
   });
+
+  it("hands it to a sibling link below the plain one: Settings and About & licences", () => {
+    const engine = NAV.find((g) => g.label === "Engine")!.items.map((i) => i.href);
+    expect(engine).toContain("/settings/about");
+    const lit = (pathname: string) => engine.filter((h) => navActive(h, pathname, q(), engine));
+    expect(lit("/settings/about")).toEqual(["/settings/about"]);
+    expect(lit("/settings")).toEqual(["/settings"]);
+    // Pages below Settings with no link of their own keep Settings lit.
+    expect(lit("/settings/models")).toEqual(["/settings"]);
+    expect(lit("/models")).toEqual(["/models"]);
+  });
 });
 
 describe("remembered sidebar state", () => {
@@ -45,23 +56,24 @@ describe("remembered sidebar state", () => {
     expect(parseClosed("[]")).toEqual([]);
   });
 
-  it("folds Studios and Engine until the user chooses (nothing stored, or nothing readable)", () => {
-    expect(parseClosed(null)).toEqual(["studios", "engine"]);
-    expect(parseClosed(undefined)).toEqual(["studios", "engine"]);
-    expect(parseClosed("not json")).toEqual(["studios", "engine"]);
-    expect(parseClosed('{"a":1}')).toEqual(["studios", "engine"]);
+  it("folds Engine, and shows Studios, until the user chooses (nothing stored, or nothing readable)", () => {
+    expect(parseClosed(null)).toEqual(["engine"]);
+    expect(parseClosed(undefined)).toEqual(["engine"]);
+    expect(parseClosed("not json")).toEqual(["engine"]);
+    expect(parseClosed('{"a":1}')).toEqual(["engine"]);
     // A fresh copy each time: a caller adding to it can't change the defaults.
     parseClosed(null).push("create");
-    expect(parseClosed(null)).toEqual(["studios", "engine"]);
+    expect(parseClosed(null)).toEqual(["engine"]);
   });
 
   it("only folds groups that can fold, and keeps Create and Library in view", () => {
     const foldable = NAV.filter((g) => g.collapsible).map((g) => groupId(g.label));
     for (const id of DEFAULT_NAV_CLOSED) expect(foldable).toContain(id);
     expect(NAV.map((g) => g.label).slice(0, 2)).toEqual(["Create", "Library"]);
-    // The always-open part of the sidebar is short: Create and Library hold 15 rows, not 46.
-    const open = NAV.filter((g) => !DEFAULT_NAV_CLOSED.includes(groupId(g.label))).flatMap((g) => g.items);
-    expect(open.length).toBeLessThanOrEqual(15);
+    // The part that can't fold stays short: Create and Library hold 15 rows; Studios below them can be folded away.
+    const always = NAV.filter((g) => !g.collapsible).flatMap((g) => g.items);
+    expect(always.length).toBeLessThanOrEqual(15);
+    expect(DEFAULT_NAV_CLOSED).not.toContain("studios");
   });
 
   it("prefetches only the rows most visits go to next", () => {
@@ -145,5 +157,33 @@ describe("the remembered choice's cookie", () => {
     expect(sidebarCookie(false)).toBe("sidebar_state=false; path=/; max-age=604800");
     expect(sidebarOpenFromCookie(sidebarCookie(false).split(";")[0])).toBe(false);
     expect(sidebarOpenFromCookie(sidebarCookie(true).split(";")[0])).toBe(true);
+  });
+});
+
+describe("New creation", () => {
+  it("opens Home with its own flag, and Home stays lit while it's in the address", () => {
+    const url = new URL(NEW_CREATION_HREF, "http://localhost");
+    expect(url.pathname).toBe("/");
+    expect(url.searchParams.has(NEW_CREATION_PARAM)).toBe(true);
+    expect(navActive("/", url.pathname, url.searchParams)).toBe(true);
+  });
+});
+
+describe("the sidebar's fades", () => {
+  it("are as deep as what's hidden past each edge, up to 24px above and 40px below", () => {
+    expect(scrollFades({ scrollTop: 0, clientHeight: 637, scrollHeight: 637 })).toEqual({ above: 0, below: 0 });
+    expect(scrollFades({ scrollTop: 0, clientHeight: 500, scrollHeight: 900 })).toEqual({ above: 0, below: 40 });
+    expect(scrollFades({ scrollTop: 10, clientHeight: 500, scrollHeight: 900 })).toEqual({ above: 10, below: 40 });
+    expect(scrollFades({ scrollTop: 400, clientHeight: 500, scrollHeight: 900 })).toEqual({ above: 24, below: 0 });
+    // A row the edge cuts through fades as far as it's cut.
+    expect(scrollFades({ scrollTop: 0, clientHeight: 620, scrollHeight: 640 })).toEqual({ above: 0, below: 20 });
+  });
+
+  it("never dim the last row for a few pixels of padding past the edge", () => {
+    // fuobe.com at 1440×900: 3px of the last group's padding below the edge used to fade the last 40px.
+    expect(scrollFades({ scrollTop: 0, clientHeight: 637, scrollHeight: 640 }).below).toBe(3);
+    // Sub-pixel leftovers at either end are no fade at all.
+    expect(scrollFades({ scrollTop: 0.4, clientHeight: 500, scrollHeight: 500.9 })).toEqual({ above: 0, below: 0 });
+    expect(scrollFades({ scrollTop: 399.5, clientHeight: 500, scrollHeight: 900 }).below).toBe(0);
   });
 });

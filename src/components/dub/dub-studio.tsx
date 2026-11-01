@@ -11,17 +11,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { CueEditor, useCueEditor } from "@/components/av/cue-editor";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { SourceLanguageSelect, TargetLanguages } from "@/components/av/language-picker";
 import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
-import { useEngine, useModelAccess } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { isPlaceholder } from "@/lib/demo-mode";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cueProblems } from "@/lib/av/cue-edit";
 import { BACKGROUND_DB, crowdedLines, dubResult, languageStage, ONE_SHOT_MODELS, priceLine, reviewCues, takeLines, translateKey, voiceOnly, type DubPrice, type DubSessionView, type DubStage, type OneShotModel } from "@/lib/av/dub";
 import { languageByCode, supportsTarget, type DubRoute } from "@/lib/av/languages";
 import type { Cue } from "@/lib/cues";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { useDubActions, useDubPrice, useDubSessions, useVoicePrice } from "./hooks";
 
 const ONE_SHOT: Record<OneShotModel, { name: string; note: string }> = {
@@ -31,8 +35,8 @@ const ONE_SHOT: Record<OneShotModel, { name: string; note: string }> = {
 };
 
 const ROUTE_LINE = {
-  open: "Open source: MelBand RoFormer splits the voice from the music and Qwen3-ASR times it → your local LLM translates → you review → Chatterbox speaks each line in the cloned voice, at its time → InfiniteTalk re-syncs the lips → mixed back over the music.",
-  cloud: "Cloud: ElevenLabs isolates the voice and Demucs lifts out the music and effects → Scribe v2 times the voice → Claude (or Ollama) translates → you review → ElevenLabs speaks each line at its time and Chatterbox turns it into the speaker's voice → Sync Lipsync 3 → mixed back over the music and effects.",
+  open: "Open source: MelBand RoFormer splits the voice from the music and Qwen3-ASR times it → an AI translates each line → you review → Chatterbox speaks each line in the cloned voice, at its time → InfiniteTalk re-syncs the lips → mixed back over the music.",
+  cloud: "Cloud: ElevenLabs isolates the voice and Demucs lifts out the music and effects → Scribe v2 times the voice → Claude (or a local model) translates → you review → ElevenLabs speaks each line at its time and Chatterbox turns it into the speaker's voice → Sync Lipsync 3 → mixed back over the music and effects.",
 };
 
 const STAGE: Record<DubStage, { label: string; tone: string }> = {
@@ -70,7 +74,7 @@ export function DubStudio({ tabs }: { tabs?: React.ReactNode }) {
   // A dub removed elsewhere (another tab) just closes.
   const open = sessions.data?.find((s) => s.id === openId);
   return (
-    <ToolShell title="Audio" tabs={tabs}>
+    <ToolShell title="Audio" tabs={tabs} selfHostedOnly>
       {open ? (
         <SessionView key={open.id} s={open} onBack={() => show(null)} />
       ) : openId && sessions.isLoading ? (
@@ -89,7 +93,10 @@ export function DubStudio({ tabs }: { tabs?: React.ReactNode }) {
 }
 
 function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
-  const [engine] = useEngine();
+  const [engine, , engineMode] = useEngine();
+  // A dub doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // upload and Translate are off, instead of a run the server refuses.
+  const visitor = useLikelyVisitor();
   const { create } = useDubActions();
   const [video, setVideo] = useState<SlotValue | null>(null);
   const [duration, setDuration] = useState<number | undefined>(undefined);
@@ -111,6 +118,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   const body = video && !video.uploading && usable.length ? { engine, mode: oneShot ? ("oneshot" as const) : ("steps" as const), model: oneShot ? model : undefined, video: video.ref, source, targets: usable, duration } : null;
   const price = useDubPrice(body);
   const start = () => {
+    if (visitor) return;
     if (blocker || !body) return void toast(blocker, { id: "dub-blocker" });
     create.mutate(
       { ...body, title: video!.name?.replace(/\.[a-z0-9]+$/i, "") },
@@ -121,37 +129,45 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
           setDuration(undefined);
           onStarted(s.id);
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
   };
   return (
     <div className="pb-10">
-      <ToolHero title="Speak every language" subtitle="Translate the speech, keep the speaker's voice and re-sync the lips. Review every line before it's spoken." />
+      <ToolHero title="Speak every language" subtitle="Translate the speech, keep the speaker's voice and re-sync the lips. Review every line before it's spoken.">
+        {visitor && <SelfHostNote className="mt-3 max-w-xl">Translate &amp; dub runs on a self-hosted Fuobe for now.</SelfHostNote>}
+      </ToolHero>
       <div className="mx-auto mt-8 max-w-[760px] space-y-3">
-        <MediaDrop
-          kind="video"
-          value={video}
-          onChange={(v) => {
-            setVideo(v);
-            if (!v) setDuration(undefined);
-          }}
-          onDuration={setDuration}
-          title="Add the video to translate"
-          hint="MP4, MOV or WebM up to 200 MB · one clear speaker works best"
-          compact
-        />
+        {/* A guest's or an account's video would be uploaded for a dub that can't start here. */}
+        <div inert={visitor} className={cn(visitor && "opacity-50")}>
+          <MediaDrop
+            kind="video"
+            value={video}
+            onChange={(v) => {
+              setVideo(v);
+              if (!v) setDuration(undefined);
+            }}
+            onDuration={setDuration}
+            title="Add the video to translate"
+            hint="MP4, MOV or WebM up to 200 MB · one clear speaker works best"
+            compact
+          />
+        </div>
         <Panel title="How">
           <div role="radiogroup" aria-label="How to dub" className="grid gap-2 sm:grid-cols-2">
-            <ModeCard on={!oneShot} icon={<Languages className="size-4" />} title="Review the script first" onClick={() => setMode("steps")} note="Transcribe and translate, edit every line, then voice it. Cloud and open source." />
-            <ModeCard
-              on={oneShot}
-              disabled={engine === "open"}
-              icon={<Wand2 className="size-4" />}
-              title="One shot"
-              onClick={() => setMode("oneshot")}
-              note={engine === "open" ? "Cloud only — switch the engine to Cloud" : "HeyGen or ElevenLabs dub the whole video in one go."}
-            />
+            <ModeCard on={!oneShot} icon={<Languages className="size-4" />} title="Review the script first" onClick={() => setMode("steps")} note={engineMode === "open" ? "Transcribe and translate, edit every line, then voice it." : "Transcribe and translate, edit every line, then voice it. Cloud and open source."} />
+            {/* One shot is cloud only: an open-source-only studio doesn't offer it (nobody here can switch the engine). */}
+            {engineMode !== "open" && (
+              <ModeCard
+                on={oneShot}
+                disabled={engine === "open"}
+                icon={<Wand2 className="size-4" />}
+                title="One shot"
+                onClick={() => setMode("oneshot")}
+                note={engine === "open" ? "Cloud only — switch the engine to Cloud" : "HeyGen or ElevenLabs dub the whole video in one go."}
+              />
+            )}
           </div>
           {oneShot && (
             <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center">
@@ -202,7 +218,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
           </p>
           <div className="flex shrink-0 items-center gap-3 self-end sm:self-auto">
             <PriceNote price={price.data} loading={price.isFetching && !price.data} error={price.error as Error | null} hint={oneShot ? undefined : "Translating costs little; you'll see the voice's price before it speaks"} />
-            <Button size="lg" className={cn("shrink-0 rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={start} disabled={create.isPending} aria-describedby={blocker ? "dub-blocker" : undefined}>
+            <Button size="lg" className={cn("shrink-0 rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={start} disabled={create.isPending || visitor} aria-describedby={blocker ? "dub-blocker" : undefined}>
               {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
               {oneShot ? "Dub it" : "Translate"}
             </Button>
@@ -218,15 +234,19 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
   );
 }
 
-/** The price of the next step, next to its button: "≈ $8.13 + ElevenLabs v4", "Demo · free", "Free on your GPU". */
+/**
+ * The price of the next step, next to its button: "≈ $8.13 + ElevenLabs v4", "Placeholder · free", "Free on your GPU" ("Self-hosted
+ * only" for a guest or an account: a dub doesn't run on their own GPU yet).
+ */
 function PriceNote({ price, loading, error, hint }: { price?: DubPrice; loading?: boolean; error?: Error | null; hint?: string }) {
+  const visitor = useLikelyVisitor();
   if (loading) return <Skeleton className="h-4 w-20" aria-label="Pricing" />;
   if (error) return <span className="max-w-[16rem] text-right text-[12px] leading-snug text-muted-foreground">{error.message}</span>;
   if (!price) return null;
   const extra = price.unpriced.length ? `${price.unpriced.join(" and ")} bill${price.unpriced.length === 1 ? "s" : ""} by the provider's own rate (per character or token).` : undefined;
   return (
     <span className="text-right text-[12px] leading-snug" title={[extra, hint].filter(Boolean).join(" ") || undefined}>
-      <span className="font-medium tabular-nums">{priceLine(price)}</span>
+      <span className="font-medium tabular-nums">{visitor && (price.demo || price.engine === "open") ? "Self-hosted only" : priceLine(price)}</span>
       {price.steps > 1 && <span className="block text-muted-foreground">{price.steps} steps</span>}
     </span>
   );
@@ -363,7 +383,7 @@ function SessionView({ s, onBack }: { s: DubSessionView; onBack: () => void }) {
                       toast("Dub removed");
                       onBack();
                     },
-                    onError: (e) => toast.error((e as Error).message),
+                    onError: (e) => toastError(e),
                   })
                 }
               >
@@ -451,7 +471,12 @@ function ResultCard({ s, lang }: { s: DubSessionView; lang: string }) {
       }
     >
       <video src={out.url} controls playsInline preload="metadata" className="max-h-[42vh] w-full rounded-xl bg-media object-contain" />
-      {g.provider === "mock" && <p className="mt-2 text-[12px] text-muted-foreground">Demo result — connect a provider (or start ComfyUI) to dub for real.</p>}
+      {isPlaceholder(g) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+          <PlaceholderChip g={g} />
+          <span>A stand-in, not a real dub.</span>
+        </div>
+      )}
       {voiceOnly(s) && <p className="mt-2 text-[12px] text-muted-foreground">Voice only: no music or effects were separated from this clip, so the new voice plays alone.</p>}
     </Panel>
   );
@@ -480,7 +505,7 @@ function Review({ s, lang, time, onSeek }: { s: DubSessionView; lang: string; ti
     if (body === savedBody) return;
     const t = setTimeout(() => {
       setSavedBody(body);
-      save.current({ id: s.id, lang, cues: JSON.parse(body) as Cue[] }, { onError: (e) => toast.error((e as Error).message) });
+      save.current({ id: s.id, lang, cues: JSON.parse(body) as Cue[] }, { onError: (e) => toastError(e) });
     }, 800);
     return () => clearTimeout(t);
   }, [body, savedBody, s.id, lang]);
@@ -507,7 +532,7 @@ function Review({ s, lang, time, onSeek }: { s: DubSessionView; lang: string; ti
   const start = (c: Cue[]) =>
     voice.mutate(
       { id: s.id, lang, cues: c, lipsync },
-      { onSuccess: () => toast.success(`Voicing ${name}`), onError: (e) => toast.error((e as Error).message) },
+      { onSuccess: () => toast.success(`Voicing ${name}`), onError: (e) => toastError(e) },
     );
   return (
     <>

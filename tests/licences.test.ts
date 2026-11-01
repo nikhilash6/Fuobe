@@ -78,22 +78,22 @@ describe("licences", () => {
     const list = buildLicenceList(MODELS, manifest.workflows);
     expect(list.notices.find((n) => n.text === "Built with Llama")?.models).toEqual(["HiDream-I1 Dev"]);
     expect(list.notices.find((n) => n.text === "Built with DINOv3")?.models.length).toBeGreaterThan(0);
-    // TripoSplat and TRELLIS.2 (single and multi-view) encode with DINOv3; without them, no notice.
-    expect(list.notices.find((n) => n.text === "Built with DINOv3")?.models).toEqual(expect.arrayContaining(["TripoSplat", "TRELLIS.2", "TRELLIS.2 Multi-view"]));
-    const without = buildLicenceList(MODELS, manifest.workflows.filter((w) => !/triposplat|trellis2/.test(w.id)));
+    // TripoSplat, Pixal3D and TRELLIS.2 (single and multi-view) encode with DINOv3; without them, no notice.
+    expect(list.notices.find((n) => n.text === "Built with DINOv3")?.models).toEqual(expect.arrayContaining(["TripoSplat", "Pixal3D", "TRELLIS.2", "TRELLIS.2 Multi-view"]));
+    const without = buildLicenceList(MODELS, manifest.workflows.filter((w) => !/triposplat|trellis2|pixal3d/.test(w.id)));
     expect(without.notices.some((n) => n.text === "Built with DINOv3")).toBe(false);
   });
-});
 
-describe("pinned libraries (accounts plan §5.2)", () => {
-  it("record a licence for each, at the exact version package.json pins", async () => {
-    const { PINNED_LIBRARIES } = await import("@/lib/licences");
-    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as { dependencies: Record<string, string> };
-    expect(PINNED_LIBRARIES.map((l) => l.name)).toEqual(expect.arrayContaining(["better-auth", "kysely"]));
-    for (const l of PINNED_LIBRARIES) {
-      expect(pkg.dependencies[l.name], l.name).toBe(l.version);
-      expect(l.licence.name, l.name).toBeTruthy();
-      expect(l.licence.note, l.name).toBeTruthy();
-    }
+  it("links each licence to where it can be read, as Models & licences does", () => {
+    const list = buildLicenceList(MODELS, manifest.workflows);
+    for (const r of list.rows) expect(r.links.length, r.id).toBe(r.licences.length);
+    const linked = list.rows.flatMap((r) => r.links).filter(Boolean).length;
+    // Every licence the KNOWN table names has its own page; the rest link to the model card of their largest download.
+    expect(linked / list.rows.flatMap((r) => r.links).length).toBeGreaterThan(0.9);
+    expect(list.rows.find((r) => r.id === "oss-flux2-dev")?.links).toEqual(["https://huggingface.co/black-forest-labs/FLUX.2-dev"]);
+    expect(list.rows.find((r) => r.workflows.includes("bg-remove-birefnet"))?.links[0]).toBe("https://spdx.org/licenses/MIT.html");
+    // Without the downloads, a licence with no page of its own has no link.
+    const bare = buildLicenceList(MODELS, manifest.workflows.map((w) => ({ ...w, models: undefined })));
+    expect(bare.rows.flatMap((r) => r.links).filter(Boolean).length).toBeLessThanOrEqual(linked);
   });
 });

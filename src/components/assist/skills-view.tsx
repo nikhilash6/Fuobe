@@ -28,13 +28,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsOwner, useIsVisitor } from "@/lib/api";
 import { SKILL_LIMITS, SKILL_NAME_RE, skillSlug, type Skill, type SkillSummary } from "@/lib/assist";
 import { cn } from "@/lib/utils";
+import { refusalShown, toastError } from "@/lib/refusals";
 import { radioKeys } from "@/components/studio/radio-keys";
 import { useRecipe, useRecipeActions, useSkill, useSkillActions, useSkills, type RecipeFailure, type SkillForm } from "./hooks";
 import { RunSkillDialog } from "./run-skill-dialog";
 import { RailButton } from "./shell";
 import { SKILL_ICONS, SkillIcon } from "./skill-icon";
+import { AssistVisitorNote } from "./visitor-note";
 
 /**
  * Skills (Supercomputer's Skills page): Built-in and My skills, each switchable; create one, upload
@@ -54,9 +57,12 @@ function Skills() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const viewing = params.get("skill");
-  // ?run=<name>: the skill's Run form (a deep link, ⌘K's "Run …", the skill's Run… button).
-  const running = params.get("run");
+  // A guest or an account (public sign-up) reads the built-in skills; making, switching and running them are the owner's.
+  const visitor = useIsVisitor();
+  const owner = useIsOwner();
+  // ?run=<name>: the skill's Run form (a deep link, ⌘K's "Run …", the skill's Run… button); a visitor gets the skill itself.
+  const viewing = params.get("skill") ?? (visitor ? params.get("run") : null);
+  const running = owner ? params.get("run") : null;
   const [tab, setTab] = useState<"builtin" | "user">("builtin");
   const [query, setQuery] = useState("");
   const q = useDeferredValue(query.trim().toLowerCase());
@@ -77,6 +83,8 @@ function Skills() {
     router.replace(`${pathname}?run=${name}`, { scroll: false });
   };
 
+  const toggle = (s: SkillSummary, on: boolean) => void actions.toggle(s.name, on).catch((e) => toastError(e));
+
   const upload = async (f: File, replace = false) => {
     setUploading(true);
     try {
@@ -89,7 +97,7 @@ function Skills() {
     } catch (e) {
       const err = e as Error & { status?: number };
       if (err.status === 409 && /You already have/.test(err.message)) setConflict(f);
-      else toast.error(err.message, { duration: 8000 });
+      else if (!refusalShown(err)) toast.error(err.message, { duration: 8000 });
     } finally {
       setUploading(false);
     }
@@ -101,31 +109,34 @@ function Skills() {
         <SidebarTrigger className="md:hidden" />
         <RailButton />
         <h1 className="font-heading text-[22px] leading-none">Skills</h1>
-        <div className="ml-auto flex items-center gap-1.5">
-          <input
-            ref={file}
-            type="file"
-            accept=".zip,.skill,.md,text/markdown,application/zip"
-            hidden
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) void upload(f);
-            }}
-          />
-          <Button variant="outline" size="sm" onClick={() => file.current?.click()} disabled={uploading} aria-label="Upload a skill">
-            {uploading ? <Loader2 className="animate-spin" /> : <Upload />} <span className="hidden sm:inline">Upload</span>
-          </Button>
-          <Button size="sm" onClick={() => setEditing("new")}>
-            <Plus /> <span className="hidden sm:inline">Create skill</span>
-            <span className="sm:hidden">New</span>
-          </Button>
-        </div>
+        {owner && (
+          <div className="ml-auto flex items-center gap-1.5">
+            <input
+              ref={file}
+              type="file"
+              accept=".zip,.skill,.md,text/markdown,application/zip"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void upload(f);
+              }}
+            />
+            <Button variant="outline" size="sm" onClick={() => file.current?.click()} disabled={uploading} aria-label="Upload a skill">
+              {uploading ? <Loader2 className="animate-spin" /> : <Upload />} <span className="hidden sm:inline">Upload</span>
+            </Button>
+            <Button size="sm" onClick={() => setEditing("new")}>
+              <Plus /> <span className="hidden sm:inline">Create skill</span>
+              <span className="sm:hidden">New</span>
+            </Button>
+          </div>
+        )}
       </header>
       <div className="mx-auto w-full max-w-[1100px] min-w-0 flex-1 px-3 pt-4 pb-16 sm:px-6 md:pt-8">
         <p className="max-w-2xl text-[15px] text-pretty text-muted-foreground">
           Playbooks Assist loads for whole kinds of jobs. Type <span className="rounded bg-muted px-1 font-mono text-[13px]">/name</span> at the start of a message to use one, or let Assist pick it. Skills also reach other agents through Fuobe&apos;s MCP server.
         </p>
+        <AssistVisitorNote className="mt-4 max-w-2xl" />
         <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="mt-6 gap-4">
           <div className="flex flex-wrap items-center gap-3">
             <TabsList>
@@ -142,14 +153,14 @@ function Skills() {
             </div>
           </div>
           <TabsContent value="builtin">
-            <SkillGrid loading={skills.isLoading} list={filter(builtin)} onOpen={open} onToggle={(s, v) => void actions.toggle(s.name, v).catch((e) => toast.error((e as Error).message))} empty={<NoMatch onClear={() => setQuery("")} />} />
+            <SkillGrid loading={skills.isLoading} list={filter(builtin)} onOpen={open} onToggle={owner ? toggle : undefined} empty={<NoMatch onClear={() => setQuery("")} />} />
           </TabsContent>
           <TabsContent value="user">
             <SkillGrid
               loading={skills.isLoading}
               list={filter(own)}
               onOpen={open}
-              onToggle={(s, v) => void actions.toggle(s.name, v).catch((e) => toast.error((e as Error).message))}
+              onToggle={owner ? toggle : undefined}
               empty={
                 q ? (
                   <NoMatch onClear={() => setQuery("")} />
@@ -159,14 +170,16 @@ function Skills() {
                       <EmptyTitle className="font-heading text-[22px] font-normal">No skills of your own yet</EmptyTitle>
                       <EmptyDescription>Save a prompt or workflow you repeat as a skill, or upload one — a .zip or .skill archive, or a single SKILL.md.</EmptyDescription>
                     </EmptyHeader>
-                    <EmptyContent className="flex-row justify-center">
-                      <Button variant="outline" onClick={() => file.current?.click()}>
-                        <FileUp /> Upload
-                      </Button>
-                      <Button onClick={() => setEditing("new")}>
-                        <Plus /> Create skill
-                      </Button>
-                    </EmptyContent>
+                    {owner && (
+                      <EmptyContent className="flex-row justify-center">
+                        <Button variant="outline" onClick={() => file.current?.click()}>
+                          <FileUp /> Upload
+                        </Button>
+                        <Button onClick={() => setEditing("new")}>
+                          <Plus /> Create skill
+                        </Button>
+                      </EmptyContent>
+                    )}
                   </Empty>
                 )
               }
@@ -174,7 +187,7 @@ function Skills() {
           </TabsContent>
         </Tabs>
       </div>
-      <SkillDetail name={viewing} onClose={() => open(null)} onEdit={(s) => (open(null), setEditing(s))} onRun={(name) => run(name, name)} />
+      <SkillDetail name={viewing} owner={owner} onClose={() => open(null)} onEdit={(s) => (open(null), setEditing(s))} onRun={(name) => run(name, name)} />
       <RunSkillDialog
         name={running}
         onClose={() => {
@@ -218,7 +231,8 @@ function NoMatch({ onClear }: { onClear: () => void }) {
   );
 }
 
-function SkillGrid({ list, loading, onOpen, onToggle, empty }: { list: SkillSummary[]; loading: boolean; onOpen: (name: string) => void; onToggle: (s: SkillSummary, on: boolean) => void; empty: React.ReactNode }) {
+/** `onToggle`: each card's on/off switch (left out for a visitor, who can't switch the owner's skills). */
+function SkillGrid({ list, loading, onOpen, onToggle, empty }: { list: SkillSummary[]; loading: boolean; onOpen: (name: string) => void; onToggle?: (s: SkillSummary, on: boolean) => void; empty: React.ReactNode }) {
   if (loading)
     return (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -242,7 +256,7 @@ function SkillGrid({ list, loading, onOpen, onToggle, empty }: { list: SkillSumm
               </h2>
               <p className="truncate font-mono text-[11px] text-muted-foreground">/{s.name}</p>
             </div>
-            <Switch size="sm" checked={s.enabled} onCheckedChange={(v) => onToggle(s, v)} aria-label={`${s.enabled ? "Switch off" : "Switch on"} ${s.title}`} className="relative z-10" />
+            {onToggle && <Switch size="sm" checked={s.enabled} onCheckedChange={(v) => onToggle(s, v)} aria-label={`${s.enabled ? "Switch off" : "Switch on"} ${s.title}`} className="relative z-10" />}
           </div>
           <p className="mt-3 line-clamp-3 text-[13px] text-muted-foreground">{s.description}</p>
           {(s.recipe || s.files.length > 0) && (
@@ -284,7 +298,7 @@ function RecipeStatus({ skill }: { skill: Skill }) {
       else toast.error("The check didn't pass", { description: r.engines.flatMap((e) => [...e.plan.errors, ...(e.dryRun?.problems ?? [])])[0] });
     } catch (e) {
       const f = e as RecipeFailure;
-      toast.error(f.message, { description: f.problems?.slice(1).join("; ") || undefined });
+      if (!refusalShown(f)) toast.error(f.message, { description: f.problems?.slice(1).join("; ") || undefined });
     } finally {
       setBusy(false);
     }
@@ -303,7 +317,8 @@ function RecipeStatus({ skill }: { skill: Skill }) {
   );
 }
 
-function SkillDetail({ name, onClose, onEdit, onRun }: { name: string | null; onClose: () => void; onEdit: (s: Skill) => void; onRun: (name: string) => void }) {
+/** `owner`: the studio's owner (a visitor reads and downloads a skill; copying, editing, using and running it are the owner's). */
+function SkillDetail({ name, owner, onClose, onEdit, onRun }: { name: string | null; owner: boolean; onClose: () => void; onEdit: (s: Skill) => void; onRun: (name: string) => void }) {
   const skill = useSkill(name);
   const actions = useSkillActions();
   const router = useRouter();
@@ -315,7 +330,11 @@ function SkillDetail({ name, onClose, onEdit, onRun }: { name: string | null; on
         {!s ? (
           <div className="space-y-3 p-6">
             <DialogTitle className="sr-only">Skill</DialogTitle>
-            {skill.isError ? <p className="text-[14px] text-muted-foreground">This skill doesn&apos;t exist anymore.</p> : <Skeleton className="h-40" />}
+            {skill.isError ? (
+              <p className="text-[14px] text-muted-foreground">{(skill.error as { status?: number } | null)?.status === 404 ? "This skill doesn’t exist anymore." : skill.error?.message}</p>
+            ) : (
+              <Skeleton className="h-40" />
+            )}
           </div>
         ) : (
           <>
@@ -390,22 +409,24 @@ function SkillDetail({ name, onClose, onEdit, onRun }: { name: string | null; on
                     </a>
                   </Button>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={async () => {
-                    try {
-                      const c = await actions.duplicate(s.name);
-                      toast.success(`Copied as /${c.name}`, { duration: 2000 });
-                      onEdit(c);
-                    } catch (e) {
-                      toast.error((e as Error).message);
-                    }
-                  }}
-                >
-                  <Copy /> Duplicate
-                </Button>
-                {s.source === "user" && (
+                {owner && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const c = await actions.duplicate(s.name);
+                        toast.success(`Copied as /${c.name}`, { duration: 2000 });
+                        onEdit(c);
+                      } catch (e) {
+                        toastError(e);
+                      }
+                    }}
+                  >
+                    <Copy /> Duplicate
+                  </Button>
+                )}
+                {owner && s.source === "user" && (
                   <>
                     <Button variant="ghost" size="sm" onClick={() => onEdit(s)}>
                       <Pencil /> Edit
@@ -416,7 +437,7 @@ function SkillDetail({ name, onClose, onEdit, onRun }: { name: string | null; on
                   </>
                 )}
               </div>
-              {s.recipe ? (
+              {!owner ? null : s.recipe ? (
                 <div className="flex flex-wrap gap-1.5">
                   <Button variant="ghost" size="sm" onClick={() => router.push(`/assist?skill=${s.name}`)} disabled={!s.enabled}>
                     <MessageSquarePlus /> Use in a new chat
@@ -447,7 +468,7 @@ function SkillDetail({ name, onClose, onEdit, onRun }: { name: string | null; on
                         toast("Skill deleted", { duration: 1500 });
                         onClose();
                       } catch (e) {
-                        toast.error((e as Error).message);
+                        toastError(e);
                       }
                     }}
                   >

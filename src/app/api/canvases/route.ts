@@ -1,8 +1,7 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { createCanvas, listCanvases, parseGraph, parsePages } from "@/server/canvas";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
+import { refusedRun } from "@/server/connect-refusal";
 
 const Body = z.object({
   name: z.string().max(80).optional(),
@@ -12,12 +11,12 @@ const Body = z.object({
   pages: z.unknown().optional(),
 });
 
-export const GET = handler({ access: "signed-in" }, async () => {
+export async function GET() {
   await connection();
   return Response.json({ items: listCanvases() });
-});
+}
 
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   const parsed = Body.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return Response.json({ error: "Invalid canvas" }, { status: 400 });
   const { graph: rawGraph, pages: rawPages, ...rest } = parsed.data;
@@ -27,7 +26,6 @@ export const POST = handler({ access: "signed-in" }, async (request: Request) =>
   try {
     return Response.json(createCanvas({ ...rest, graph, pages }), { status: 201 });
   } catch (e) {
-    rethrowAccess(e);
-    return Response.json({ error: (e as Error).message }, { status: 422 });
+    return refusedRun(e, request);
   }
-});
+}

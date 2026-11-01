@@ -44,6 +44,7 @@ const creativeRoute = await import("@/app/api/ads/creatives/[id]/route");
 const saveRoute = await import("@/app/api/ads/creatives/[id]/save/route");
 const { saveFile } = await import("@/server/storage");
 const { getModel } = await import("@/lib/catalog");
+const { TEMPLATES } = await import("@/lib/catalog/marketing");
 
 const json = (method: string, body?: unknown, url = "http://x/api") =>
   new Request(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -150,7 +151,7 @@ describe("brand kits", () => {
   });
 
   it("lists, edits (cleaning values) and cancels through the routes", async () => {
-    const list = await (await brandsRoute.GET(new Request("http://localhost/"))).json();
+    const list = await (await brandsRoute.GET()).json();
     expect(list.items[0]).toMatchObject({ id: brandId, productCount: 2 });
     const res = await brandRoute.PATCH(json("PATCH", { tagline: "  Slow Sunday granola  ", colors: ["#ABCDEF", "nope", "rgb(1,2,3)"], tone: ["Warm", "Warm", ""], language: "de" }), params({ id: brandId }));
     const b = await res.json();
@@ -259,7 +260,7 @@ describe("brand kits", () => {
     const cloudAd = mk.planMarketing({ engine: "cloud", format: "ads", templateId: "ad-hero-headline" }, ctx);
     const r = cloudAd.steps[0].request;
     expect(r).toMatchObject({ modelId: "fuobe-marketing-image", engine: "cloud", op: "edit", feature: "marketing", params: { aspectRatio: "4:5", numOutputs: 1 } });
-    expect(r.prompt).toMatch(/no text, letters/);
+    expect(r.prompt).toMatch(/A clean, uncluttered picture of the scene and the subject alone, with calm, uncluttered space in the lower third for the headline/);
     expect(r.prompt).not.toContain("“Meet Maple Pecan Granola”");
     expect(r.inputs?.images).toEqual([product.images[0]]);
     expect(r.params?.extra).toBeUndefined();
@@ -272,27 +273,31 @@ describe("brand kits", () => {
     expect(g).toMatchObject({ modelId: "gpt-image-2-5", op: "edit", feature: "marketing", params: { aspectRatio: "4:5", numOutputs: 1 } });
     expect(g.prompt).toContain("“Meet Maple Pecan Granola”");
     expect(g.prompt).toContain("“Shop now”");
+    expect(g.prompt).toMatch(/the headline and the button are the only added lettering, every word spelled exactly as written/);
     expect(g.inputs?.images).toEqual([product.images[0]]); // the SVG logo isn't sent to the model
     expect(gptAd.meta.overlay).toBeNull();
 
     const openAd = mk.planMarketing({ engine: "open", format: "ads", templateId: "ad-hero-headline", headline: "Crunch, sorted" }, ctx);
     expect(openAd.steps[0].request).toMatchObject({ modelId: "fuobe-marketing-image", engine: "open", op: "edit" });
-    expect(openAd.steps[0].request.prompt).toMatch(/no text, letters/);
+    expect(openAd.steps[0].request.prompt).toMatch(/A clean, uncluttered picture of the scene and the subject alone/);
     expect(openAd.meta.overlay).toEqual({ headline: "Crunch, sorted", cta: "Shop now" });
-    expect(openAd.notes).toContain("Qwen-Image-Edit keeps your first photo's shape on your GPU");
+    expect(openAd.notes).toContain("Qwen-Image 2.1 keeps your first photo's shape on your GPU");
 
-    // A poster without a product: Qwen-Image 2512 (the Original's text-to-image) by default, Ideogram 3.0 with the palette when picked.
+    // A poster without a product: the Original's text-to-image by default; Ideogram 4.5 first among the partners.
     const poster = mk.planMarketing({ engine: "cloud", format: "poster", templateId: "po-swiss-grid", prompt: "Autumn launch" }, { ...ctx, product: null });
     expect(poster.steps[0].request).toMatchObject({ modelId: "fuobe-marketing-image", op: "t2i" });
     expect(poster.steps[0].request.params?.palette).toBeUndefined();
-    const ideogram = mk.planMarketing({ engine: "cloud", format: "poster", templateId: "po-swiss-grid", prompt: "Autumn launch", modelId: "ideogram-3" }, { ...ctx, product: null });
-    expect(ideogram.steps[0].request).toMatchObject({ modelId: "ideogram-3", op: "t2i", params: { palette: b.colors.slice(0, 5) } });
+    const ideogram = mk.planMarketing({ engine: "cloud", format: "poster", templateId: "po-swiss-grid", prompt: "Autumn launch", modelId: "ideogram-4-5" }, { ...ctx, product: null });
+    expect(ideogram.steps[0].request).toMatchObject({ modelId: "ideogram-4-5", op: "t2i" });
+    // Ideogram 3.0 is no longer offered: asking for it runs the Original.
+    expect(mk.planMarketing({ engine: "cloud", format: "poster", templateId: "po-swiss-grid", prompt: "Autumn launch", modelId: "ideogram-3" }, { ...ctx, product: null }).steps[0].request.modelId).toBe("fuobe-marketing-image");
     expect(mk.planMarketing({ engine: "open", format: "poster", prompt: "Autumn" }, { ...ctx, product: null }).steps[0].request).toMatchObject({ modelId: "fuobe-marketing-image", op: "t2i" });
 
-    // A Standalone product shot: the Original by default; on the user's GPU one product photo is cut out and relit
-    // (product-shot-qwen-edit-2509); Bria Product Shot stays a cloud choice.
+    // A Standalone product shot: on the user's GPU the Original cuts one product photo out and relights it
+    // (product-shot-qwen-edit-2509); that recipe has no hosted copy, so the cloud starts on Bria Product Shot and the
+    // Original is listed there as running on your GPU only (the owner's 10-30 rule).
     const shot = mk.planMarketing({ engine: "cloud", format: "product-standalone", templateId: "ps-ice-bath" }, ctx);
-    expect(shot.steps[0].request).toMatchObject({ modelId: "fuobe-marketing-image", op: "edit" });
+    expect(shot.steps[0].request).toMatchObject({ modelId: "bria-product-shot", op: "edit" });
     expect(shot.steps[0].request.params?.extra).toBeUndefined();
     const openShot = mk.planMarketing({ engine: "open", format: "product-standalone", templateId: "ps-ice-bath" }, ctx);
     expect(openShot.steps[0].request).toMatchObject({ modelId: "fuobe-marketing-image", op: "edit", params: { extra: { productShot: true } } });
@@ -304,11 +309,15 @@ describe("brand kits", () => {
     expect(() => mk.planMarketing({ engine: "cloud", format: "product-with-model" }, { ...ctx, product: null })).toThrow("Attach reference or product");
     expect(() => mk.planMarketing({ engine: "cloud", format: "ads", templateId: "po-swiss-grid" }, ctx)).toThrow(/another format/);
 
-    // Open motion longer than a clip: shots from the product photo, then a join.
+    // Open motion: MiniMax H3 makes up to 15 s in one clip with its own sound.
     const motion = mk.planMarketing({ engine: "open", format: "motion-hyper", templateId: "mh-orbit-hero", duration: 15 }, ctx);
-    expect(motion.steps.map((s) => s.key)).toEqual(["shot1", "shot2", "shot3", "film"]);
-    expect(motion.steps[0].request).toMatchObject({ modelId: "oss-wan22-14b-fast", op: "i2v", params: { duration: 5, aspectRatio: "9:16" }, feature: "marketing-step" });
-    expect(motion.steps[3]).toMatchObject({ after: ["shot1", "shot2", "shot3"], request: { modelId: "oss-join-clips", op: "concat", feature: "marketing" } });
+    expect(motion.steps.map((s) => s.key)).toEqual(["shot1"]);
+    expect(motion.steps[0].request).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v", params: { duration: 15, aspectRatio: "9:16", generateAudio: true }, feature: "marketing" });
+    // Wan 2.2 Lightning stays a choice: longer motion is shots from the product photo, then a join.
+    const wan = mk.planMarketing({ engine: "open", format: "motion-hyper", templateId: "mh-orbit-hero", duration: 15, modelId: "oss-wan22-14b-fast" }, ctx);
+    expect(wan.steps.map((s) => s.key)).toEqual(["shot1", "shot2", "shot3", "film"]);
+    expect(wan.steps[0].request).toMatchObject({ modelId: "oss-wan22-14b-fast", op: "i2v", params: { duration: 5, aspectRatio: "9:16" }, feature: "marketing-step" });
+    expect(wan.steps[3]).toMatchObject({ after: ["shot1", "shot2", "shot3"], request: { modelId: "oss-join-clips", op: "concat", feature: "marketing" } });
     const cloudMotion = mk.planMarketing({ engine: "cloud", format: "motion-hyper", duration: 15 }, ctx);
     expect(cloudMotion.steps).toHaveLength(1);
     expect(cloudMotion.steps[0].request).toMatchObject({ modelId: "seedance-2-5", op: "i2v", params: { duration: 12 } });
@@ -337,6 +346,39 @@ describe("brand kits", () => {
     expect(open.steps[0].request).toMatchObject({ modelId: "oss-chatterbox", inputs: { voiceAudio: expect.stringMatching(/^\/api\/files\//) } });
     expect(open.steps[2].request.modelId).toBe("oss-infinitetalk-long");
     expect(open.steps[3].request.prompt).toMatch(/^0\.00-\d+\.\d\d: Okay so I/);
+    // On your GPU the presenter is a Qwen-Image 2.1 Turbo edit of the photos (up to 4), or Qwen-Image 2.1 from the words.
+    expect(open.steps[1].request).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit", inputs: { images: [product.images[0]] } });
+    const avatar = upload("me.png");
+    const reference = upload("place.png");
+    const withAvatar = mk.planMarketing({ engine: "open", format: "ugc-talking", hookId: "product-hit", avatar, reference, voiceSample: upload("voice.png") }, { product, brand: b, script });
+    expect(withAvatar.steps.find((s) => s.key === "still")!.request.inputs?.images).toEqual([avatar, product.images[0], reference]);
+    // The hook and the close-up are 5 s MiniMax H3 clips; the join keeps the presenter's voice as the only sound.
+    expect(withAvatar.steps.find((s) => s.key === "hook")!.request).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v", params: { duration: 5 } });
+    expect(withAvatar.steps.find((s) => s.key === "broll")!.request).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v", params: { duration: 5 } });
+    expect(withAvatar.steps.find((s) => s.key === "film")).toMatchObject({ after: ["hook", "captions", "broll"], request: { modelId: "oss-join-sound2" } });
+    const words = mk.planMarketing({ engine: "open", format: "ugc-talking", hookId: null, voiceSample: upload("voice.png") }, { product: null, brand: b, script });
+    expect(words.steps.find((s) => s.key === "still")!.request).toMatchObject({ modelId: "oss-qwen-image-21", op: "t2i" });
+    expect(words.steps.find((s) => s.key === "still")!.request.inputs).toBeUndefined();
+  });
+
+  it("words every picture as what is wanted: a clean picture with room for the words, or the words as the only added lettering", () => {
+    const b = brand.getBrand(brandId)!;
+    const product = brand.listProducts(brandId)[0];
+    const NEGATION = /\b(no|not|never|without|none|nothing|avoid|don't|do not|free of)\b/i;
+    let checked = 0;
+    for (const format of ["ads", "poster", "marketplace"] as const) {
+      for (const tpl of TEMPLATES.filter((t) => t.format === format)) {
+        for (const engine of ["cloud", "open"] as const) {
+          for (const modelId of [undefined, "gpt-image-2-5"]) {
+            if (engine === "open" && modelId) continue;
+            const plan = mk.planMarketing({ engine, format, templateId: tpl.id, ...(modelId && { modelId }) }, { product, brand: b });
+            expect(plan.steps[0].request.prompt, `${tpl.id} ${engine} ${modelId ?? ""}`).not.toMatch(NEGATION);
+            checked++;
+          }
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
   });
 
   it("runs a template in demo mode and lists the run with its generations", async () => {
@@ -394,11 +436,60 @@ describe("Click to Ad", () => {
     expect(cloud.steps.find((s) => s.key === "mux")).toMatchObject({ after: ["film", "voice"], chain: [{ slot: "video" }, { slot: "audio" }], request: { modelId: "merge-audio-video" } });
     expect(() => mk.planClickToAd({ engine: "open", productId: product.id, styleId: "luxury" }, { product, script })).toThrow(/voice sample/);
     const open = mk.planClickToAd({ engine: "open", productId: product.id, styleId: "luxury", voiceSample: upload("s.png") }, { product, script });
-    expect(open.steps.filter((s) => s.key.startsWith("shot")).map((s) => s.request.params?.duration)).toEqual([5, 5]);
+    // MiniMax H3 on the GPU: two 5 s shots (two angles), joined with the picture only; the voiceover is the sound.
+    const shots = open.steps.filter((s) => s.key.startsWith("shot"));
+    expect(shots.map((s) => [s.request.modelId, s.request.params?.duration])).toEqual([
+      ["oss-minimax-h3", 5],
+      ["oss-minimax-h3", 5],
+    ]);
+    expect(open.steps.find((s) => s.key === "film")!.request.modelId).toBe("oss-join-clips");
+    expect(open.steps.find((s) => s.key === "mux")).toMatchObject({ after: ["film", "voice"], chain: [{ slot: "video" }, { slot: "audio" }], request: { modelId: "oss-mux" } });
+    expect(mk.clickToAdSeconds("open", false).voice).toBeCloseTo(9.4, 5);
     expect(open.steps.at(-1)!.request).toMatchObject({ modelId: "oss-captions-burnin", feature: "click-to-ad" });
     const presenter = mk.planClickToAd({ engine: "cloud", productId: product.id, styleId: "simple-ugc" }, { product, script });
     expect(presenter.steps.map((s) => s.key)).toEqual(["voice", "still", "talk", "captions", "broll", "film"]);
     expect(mk.clickToAdSeconds("cloud", true)).toEqual({ voice: 8, broll: 4 });
+    // On the GPU the close-up is a 5 s H3 clip, so the voice gets 7 s: the ad stays at 12 s.
+    expect(mk.clickToAdSeconds("open", true)).toEqual({ voice: 7, broll: 5 });
+    const openPresenter = mk.planClickToAd({ engine: "open", productId: product.id, styleId: "simple-ugc", voiceSample: upload("p.png") }, { product, script });
+    expect(openPresenter.steps.find((s) => s.key === "broll")!.request).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v", params: { duration: 5 } });
+    // The open join keeps the presenter's own voice as the film's only sound.
+    expect(openPresenter.steps.find((s) => s.key === "film")!.request.modelId).toBe("oss-join-sound1");
+  });
+
+  it("grows a photo of another shape to the ad's before MiniMax H3 animates it on your GPU", async () => {
+    const { encodePng } = await import("@/server/png");
+    const photo = (w: number, h: number) => saveFile({ data: encodePng({ width: w, height: h, data: Buffer.alloc(w * h * 4, 200) }), contentType: "image/png", name: `p${w}x${h}.png`, source: "upload" }).url;
+    expect(mk.padsTo({ width: 1000, height: 1000 }, "9:16")).toEqual({ padLeft: 0, padTop: 392, padRight: 0, padBottom: 392 });
+    expect(mk.padsTo({ width: 1600, height: 900 }, "9:16")).toEqual({ padLeft: 0, padTop: 976, padRight: 0, padBottom: 976 });
+    expect(mk.padsTo({ width: 720, height: 1280 }, "9:16")).toBeNull();
+    expect(mk.padsTo({ width: 900, height: 1600 }, "16:9")).toEqual({ padLeft: 976, padTop: 0, padRight: 976, padBottom: 0 });
+    const square = photo(64, 64);
+    const product = { ...brand.listProducts()[0], images: [square] };
+    // Product motion, 9:16: the square photo is grown to 9:16 on Qwen-Image 2.1, then H3 starts on that picture.
+    const motion = mk.planMarketing({ engine: "open", format: "motion-hyper", duration: 7 }, { product });
+    expect(motion.steps.map((s) => s.key)).toEqual(["fit1", "shot1"]);
+    expect(motion.steps[0].request).toMatchObject({ modelId: "oss-qwen-image-21", op: "outpaint", inputs: { images: [square] }, params: { extra: { padTop: 24, padBottom: 24, padLeft: 0, padRight: 0 } } });
+    expect(motion.steps[1]).toMatchObject({ after: ["fit1"], request: { modelId: "oss-minimax-h3", op: "i2v", chain: [{ slot: "images", position: "first" }], params: { aspectRatio: "9:16", duration: 7 } } });
+    expect(motion.steps[1].request.inputs).toBeUndefined();
+    expect(motion.finals).toEqual(["shot1"]);
+    // A photo already in the ad's shape, or Wan 2.2 (it crops to the ratio itself), starts on the photo.
+    const tall = photo(72, 128);
+    const inShape = mk.planMarketing({ engine: "open", format: "motion-hyper", duration: 7 }, { product: { ...product, images: [tall] } });
+    expect(inShape.steps.map((s) => s.key)).toEqual(["shot1"]);
+    expect(inShape.steps[0].request.inputs).toEqual({ images: [tall] });
+    const wan = mk.planMarketing({ engine: "open", format: "motion-hyper", duration: 5, modelId: "oss-wan22-14b-fast" }, { product });
+    expect(wan.steps.map((s) => s.key)).toEqual(["shot1"]);
+    // Click to Ad: each photo grown once, every shot starting on its grown picture.
+    const script = "Three reasons I keep this in my bag. It is light, it is tough, and it looks great.";
+    const ad = mk.planClickToAd({ engine: "open", productId: product.id, styleId: "luxury", voiceSample: upload("v.png") }, { product, script });
+    expect(ad.steps.filter((s) => s.key.startsWith("fit")).map((s) => s.request.inputs?.images)).toEqual([[square]]);
+    for (const s of ad.steps.filter((x) => x.key.startsWith("shot"))) expect(s).toMatchObject({ after: ["fit1"], request: { modelId: "oss-minimax-h3", chain: [{ slot: "images", position: "first" }] } });
+    // The UGC close-up of the product, too.
+    const ugc = mk.planClickToAd({ engine: "open", productId: product.id, styleId: "simple-ugc", voiceSample: upload("w.png") }, { product, script });
+    expect(ugc.steps.find((s) => s.key === "broll")).toMatchObject({ after: ["fit1"], request: { modelId: "oss-minimax-h3", op: "i2v" } });
+    // The cloud keeps the photo as it is.
+    expect(mk.planClickToAd({ engine: "cloud", productId: product.id, styleId: "luxury" }, { product, script }).steps.some((s) => s.key.startsWith("fit"))).toBe(false);
   });
 
   it("writes a script offline within the word budget", async () => {

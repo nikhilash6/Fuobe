@@ -9,6 +9,7 @@
  * Full-canvas RGBA layers (Qwen-Image-Layered) are cropped to their alpha box, so selection handles
  * hug what you see.
  */
+import type { Pricing } from "./catalog/types";
 
 export type Box = [x: number, y: number, w: number, h: number];
 
@@ -221,26 +222,39 @@ export const TOOL_LABELS: Record<LayerTool, string> = {
   enhance: "Enhance",
 };
 
-/** Models each tool offers, per engine (the first is the default). Checked against the catalog in tests. */
+/**
+ * Models each tool offers, per engine (the first is the default). Checked against the catalog in tests. On the open
+ * engine the newest image models come first: Qwen-Image 2.1 (and its 8-step Turbo) edits, inpaints, expands, turns the
+ * camera and makes a layer; Krea 2 and FIBO 2 edit after it. Ideogram 4 comes second for a layer: its safety filter
+ * answers most lone objects on a plain background with a grey card. Every list holds only models whose route takes what
+ * the tool sends (an edit of one picture, a mask, the margins to fill).
+ */
 export const TOOL_MODELS: Record<LayerTool, { cloud: string[]; open: string[] }> = {
   decompose: { cloud: ["seedream-5-layers", "seedream-5-flash-layers", "qwen-image-layered-cloud"], open: ["oss-qwen-layered"] },
   split: { cloud: ["seedream-5-layers", "seedream-5-flash-layers", "qwen-image-layered-cloud"], open: ["oss-qwen-layered", "oss-qwen-layered-control"] },
-  regenerate: { cloud: ["nano-banana-pro", "seedream-5-pro", "nano-banana-2"], open: ["oss-qwen-edit", "oss-flux-kontext"] },
-  "generate-layer": { cloud: ["nano-banana-pro", "seedream-5-pro"], open: ["oss-z-image-turbo", "oss-qwen-image"] },
+  // Layer edit sends the layer and up to 3 references: Krea 2 Edit isn't offered here, it takes 2 and reads the second as a person.
+  regenerate: { cloud: ["nano-banana-pro", "seedream-5-pro", "nano-banana-2-1"], open: ["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-fibo2-edit-turbo"] },
+  "generate-layer": { cloud: ["nano-banana-pro", "seedream-5-pro"], open: ["oss-qwen-image-21", "oss-ideogram-4", "oss-krea2-turbo", "oss-moss-image"] },
   // Ideogram ($0.09) also lifts the text off the picture, which the editor doesn't use; Florence-2 only
   // reads it (fal lists $0 per compute second, real cost unverified: the catalog's $0.001 is a placeholder).
   "text-detect": { cloud: ["ideogram-3-text-layers", "florence-2-ocr"], open: ["oss-ocr-lines"] },
-  "text-edit": { cloud: ["nano-banana-pro", "seedream-5-pro"], open: ["oss-qwen-edit"] },
+  "text-edit": { cloud: ["nano-banana-pro", "seedream-5-pro"], open: ["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit"] },
   "bg-remove": { cloud: ["birefnet-cloud", "ideogram-remove-bg"], open: ["oss-rmbg"] },
-  regional: { cloud: ["seedream-5-pro", "nano-banana-pro"], open: ["oss-qwen-edit", "oss-flux-kontext"] },
-  upscale: { cloud: ["topaz-image", "seedvr-image", "recraft-crisp"], open: ["oss-upscale-image", "oss-seedvr2-image"] },
-  relight: { cloud: ["nano-banana-pro"], open: ["oss-qwen-relight"] },
-  angles: { cloud: ["qwen-multiple-angles", "nano-banana-pro"], open: ["oss-qwen-edit"] },
-  expand: { cloud: ["nano-banana-pro"], open: ["oss-flux-fill"] },
-  // Nano Banana Pro sees the painted area tinted red (Higgsfield's nano_banana_pro_inpaint); the others take the mask itself.
-  inpaint: { cloud: ["nano-banana-pro", "flux-fill-pro", "z-image-inpaint"], open: ["oss-flux-fill"] },
+  regional: { cloud: ["seedream-5-pro", "nano-banana-pro"], open: ["oss-qwen-image-21", "oss-krea2-edit", "oss-fibo2-edit-turbo"] },
+  // SeedVR2 restores detail as it enlarges; 4x ESRGAN is the quick choice.
+  upscale: { cloud: ["topaz-image", "seedvr-image", "recraft-crisp"], open: ["oss-seedvr2-image", "oss-upscale-image"] },
+  // Qwen-Image 2.1 Turbo and Krea 2 Edit relight from plain words; the Qwen-Image-Edit 2509 graph carries its Relight LoRA.
+  relight: { cloud: ["nano-banana-pro", "nano-banana-2-1"], open: ["oss-qwen-image-21-turbo", "oss-krea2-edit", "oss-qwen-relight"] },
+  // Qwen-Image 2.1 at 25 steps on plain camera words (its Turbo misses big camera turns).
+  angles: { cloud: ["qwen-multiple-angles", "nano-banana-pro"], open: ["oss-qwen-image-21"] },
+  // Both open graphs grow the canvas themselves from the pads. Krea 2 Inpaint isn't offered here: its graph scales the
+  // picture to about 1 MP and redraws all of it, and it needs the Ostris Edit add-on.
+  expand: { cloud: ["nano-banana-pro"], open: ["oss-qwen-image-21", "oss-flux-fill"] },
+  // Nano Banana Pro sees the painted area tinted red (Higgsfield's nano_banana_pro_inpaint); the others take the mask itself
+  // (Bria FIBO 2's edit keeps a single picture's own shape).
+  inpaint: { cloud: ["nano-banana-pro", "bria-fibo-2", "z-image-inpaint"], open: ["oss-qwen-image-21", "oss-flux-fill"] },
   // The retouch looks; Detail runs on {@link ENHANCE_DETAIL_MODELS}.
-  enhance: { cloud: ["nano-banana-pro", "seedream-5-pro"], open: ["oss-qwen-edit"] },
+  enhance: { cloud: ["nano-banana-pro", "seedream-5-pro"], open: ["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit"] },
 };
 
 // ---------------------------------------------------------------------------
@@ -296,7 +310,7 @@ export function enhancePrompt(look: EnhanceLook | undefined, extra?: string): st
   const keep =
     l.id === "sharpen"
       ? "Keep the content, composition, colours and lighting exactly the same."
-      : "Make the skin look like a high-end editorial photograph shot on a sharp lens — real texture, no plastic smoothing, no makeup changes. Keep the face shape, identity, expression, hair, lighting and background exactly the same.";
+      : "Make the skin look like a high-end editorial photograph shot on a sharp lens, with real, natural skin texture and the same makeup. Keep the face shape, identity, expression, hair, lighting and background exactly the same.";
   return [l.prompt, keep, extra?.trim()].filter(Boolean).join(" ");
 }
 
@@ -321,6 +335,24 @@ export const RELIGHT_DIRECTIONS: [string, string][] = [
   ["Behind", "coming from behind the subject as a rim light"],
 ];
 
+/** The Qwen-Image-Edit 2509 relight graph: it loads the Relight LoRA and puts the LoRA's trigger before the words itself. */
+export const RELIGHT_LORA_MODEL = "oss-qwen-relight";
+/** Qwen-Image 2.1's edit models: its text encoder names the pictures <image1>, <image2>… */
+export const QWEN21_EDIT_MODELS: readonly string[] = ["oss-qwen-image-21", "oss-qwen-image-21-turbo"];
+
+/**
+ * A relight's words for an edit model: the light alone for the Relight LoRA graph, Qwen-Image 2.1's own picture tags
+ * (the wording its relit preset covers were made with), and a plain instruction for every other model.
+ */
+export function relightPrompt(modelId: string, light: string, direction = ""): string {
+  if (modelId === RELIGHT_LORA_MODEL) return `${light}${direction ? `, ${direction}` : ""}`;
+  const lit = `${light}${direction ? ` ${direction}` : ""}`;
+  if (QWEN21_EDIT_MODELS.includes(modelId)) {
+    return `Relight <image1> with ${lit}. Keep every person, face, pose, object, the setting and the framing exactly as in <image1>; only the light, shadows, reflections and colour temperature change.`;
+  }
+  return `Relight the image with ${lit}. Keep the subject, composition and all details identical; only the light, shadows, reflections and color temperature change.`;
+}
+
 /** Camera angles (the Angles app's), as [label, prompt]. */
 export const ANGLES: [string, string][] = [
   ["Left 45°", "rotated 45 degrees to the left around the subject"],
@@ -341,7 +373,8 @@ export interface LayerModelInfo {
   name: string;
   engine: "cloud" | "open";
   tagline: string;
-  pricing?: { unit: string; usd: number; note?: string };
+  /** Its price; a launch price (Pricing.promo) holds through its last day (costLabel reads the browser's clock). */
+  pricing?: { unit: string; usd: number; note?: string; promo?: Pricing["promo"] };
   /** Providers its routes run on (demo detection: none of them connected). */
   providers: string[];
 }

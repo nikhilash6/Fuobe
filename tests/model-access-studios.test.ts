@@ -91,7 +91,7 @@ describe("a studio's default on the server", () => {
     const settings = { engine: "cloud" as const, animation: "animated" } as Parameters<typeof withOfferedVideo>[0];
     expect(withOfferedVideo(settings)).toBe(settings);
     changeAccess([{ kind: "model", id: "gemini-omni-flash", on: false }]);
-    expect(withOfferedVideo(settings).videoModel).toBe("seedance-2-5");
+    expect(withOfferedVideo(settings).videoModel).toBe("minimax-h3");
     // A pick stays the pick.
     expect(withOfferedVideo({ ...settings, videoModel: "gemini-omni-flash" }).videoModel).toBe("gemini-omni-flash");
   });

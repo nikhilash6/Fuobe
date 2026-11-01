@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useGenerationEvents } from "@/lib/api";
 import type { KatanaJobView, Segment } from "@/lib/av/katana";
 import type { Engine } from "@/lib/catalog/types";
+import { responseError } from "@/lib/refusals";
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
   return body;
 }
 
@@ -70,7 +71,7 @@ export function useKatanaActions() {
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/katana/${id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 404) throw new Error("Couldn't remove it");
+      if (!res.ok && res.status !== 404) throw responseError(res, "Couldn't remove it");
       return id;
     },
     onSuccess: (id) => qc.setQueryData<KatanaJobView[]>(["katana"], (xs) => xs?.filter((j) => j.id !== id)),

@@ -41,7 +41,7 @@ import { getGeneration, previewChained } from "./generations";
 import { trashGenerations } from "./library";
 import { firstOn } from "./model-access";
 import { engineMode } from "./settings";
-import { readRef } from "./storage";
+import { readRef, RefError } from "./storage";
 import { mediaFacts, type SourceInfo } from "./media-facts";
 
 /**
@@ -78,7 +78,9 @@ export async function probeSource(url: string): Promise<SourceInfo> {
   let data: Buffer;
   try {
     data = (await readRef(url)).data;
-  } catch {
+  } catch (e) {
+    // An account's clip over an upload's size says so; another's file answers like one that is gone.
+    if (e instanceof RefError && e.status === 413) throw new ShortsError(e.message, 413);
     throw new ShortsError("That clip is gone — upload it again", 404);
   }
   return sourceInfo(data);

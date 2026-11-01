@@ -19,6 +19,8 @@ const eslintConfig = defineConfig([
     "scripts/eval/metrics/.venv/**",
     "scripts/eval/results/**",
     "scripts/eval/local/**",
+    // The build workflow's body: a fragment (top-level await and return) that docs/handoff/make-workflow.mjs completes.
+    "docs/handoff/workflow.body.js",
   ]),
 ]);
 

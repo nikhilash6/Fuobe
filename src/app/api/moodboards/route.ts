@@ -1,8 +1,7 @@
 import { connection } from "next/server";
+import { isGuest } from "@/lib/guest-access";
 import { z } from "zod";
 import { createMoodboard, curatedMoodboards, listMoodboards } from "@/server/moodboards";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
 
 const Body = z.object({
   name: z.string().max(200),
@@ -12,18 +11,18 @@ const Body = z.object({
 });
 
 /** Your moodboards (each one's status follows its cover job) and Soul 2.0's curated looks. */
-export const GET = handler({ access: "signed-in" }, async () => {
+export async function GET(request: Request) {
   await connection();
-  return Response.json({ items: listMoodboards(), curated: curatedMoodboards() });
-});
+  // A guest (public sign-up) sees the curated looks, not the owner's boards.
+  return Response.json({ items: isGuest(request) ? [] : listMoodboards(), curated: curatedMoodboards() });
+}
 
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+export async function POST(request: Request) {
   const parsed = Body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Upload at least 5 photos to continue." }, { status: 400 });
   try {
     return Response.json(createMoodboard(parsed.data), { status: 201 });
   } catch (e) {
-    rethrowAccess(e);
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }
-});
+}

@@ -17,9 +17,14 @@ export const IMAGE_STUDIO: StudioConfig = {
   feed: { kind: "image", features: ["image", "edit", "app:*", "character:*"] },
   slots: [],
   multiRef: { label: "Add ref", max: 8 },
-  defaultModels: { cloud: "nano-banana-pro", open: "oss-z-image-turbo" },
+  defaultModels: { cloud: "nano-banana-pro", open: "oss-ideogram-4" },
+  // Ideogram 4 runs on a caption the install's local model writes: an account, a guest or an install with none opens on
+  // Qwen-Image 2.1, the next pick (plain words give Ideogram's grey safety card on about half the pictures of people).
+  uncaptioned: { open: "oss-qwen-image-21" },
   // A model's own settings (MOSS-Image's Quality, Ideogram's speed) sit under "Options".
   controlsTitle: "Options",
+  // Layout mode: boxes on the picture, one row each, read in place by MOSS-Image, FLUX.3 and Ideogram 4.5.
+  layout: true,
   // Color signature + Moodboard chips, and the models they can move a request to. Fuobe Soul's PixeletedFace look runs
   // the face mosaic after the picture: its step's model is known here so the price counts it before the run.
   signature: true,
@@ -43,7 +48,7 @@ export const EDIT_STUDIO: StudioConfig = {
   slots: [{ key: "image", label: "Image", accept: "image", required: true }],
   multiRef: { label: "Add ref", max: 6 },
   sketch: ["mask", "draw"],
-  defaultModels: { cloud: "nano-banana-pro", open: "oss-qwen-edit" },
+  defaultModels: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
   suggestions: [
     "Make it golden hour",
     "Remove the people in the background",
@@ -56,7 +61,7 @@ export const INPAINT_STUDIO: StudioConfig = {
   feature: "edit",
   title: "Inpaint",
   hero: "Paint it, then say what goes there",
-  subtitle: "GPT Image, Ideogram and FLUX Fill take the mask directly; other edit models are shown the painted area.",
+  subtitle: "Paint the area to change, then say what goes there. Qwen-Image 2.1 and FLUX Fill use your mask directly.",
   placeholder: "What should fill the painted area? e.g. “a vase of white tulips”",
   kind: "image",
   ops: ["inpaint", "edit"],
@@ -65,7 +70,7 @@ export const INPAINT_STUDIO: StudioConfig = {
   multiRef: { label: "Add ref", max: 3 },
   sketch: ["mask"],
   sketchAutoOpen: "mask",
-  defaultModels: { cloud: "nano-banana-pro", open: "oss-flux-fill" },
+  defaultModels: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
   suggestions: ["Remove it and fill in the background", "A golden retriever sitting there", "Make the shirt navy linen", "Add sunglasses"],
 };
 
@@ -86,7 +91,8 @@ export const VIDEO_STUDIO: StudioConfig = {
   presetPicker: "motion",
   // Kling 4.0's Frames mode: up to 10 keyframes (FLUX 3 Max on the cloud, Wan 2.2 14B clip by clip on the open engine).
   frames: true,
-  defaultModels: { cloud: "seedance-2-5", open: "oss-wan22-14b-fast" },
+  // MiniMax H3 on both engines: hosted on fal, and on your GPU. Frames mode runs its own model (FRAMES_MODELS).
+  defaultModels: { cloud: "minimax-h3", open: "oss-minimax-h3" },
   suggestions: [
     "A paper boat drifts down a rain-soaked street gutter, macro, slow motion",
     "FPV drone dives off a sea cliff at sunrise and skims the waves",
@@ -123,7 +129,7 @@ export const UPSCALE_STUDIO: StudioConfig = {
   ops: ["upscale-image", "upscale-video"],
   feed: { features: ["upscale"] },
   slots: [{ key: "image", label: "Image", accept: "image", required: true }],
-  defaultModels: { cloud: "topaz-image", open: "oss-upscale-image" },
+  defaultModels: { cloud: "topaz-image", open: "oss-seedvr2-image" },
   promptOptional: true,
   hidePrompt: true,
   modelPrompt: "Optional: details to keep or bring out, e.g. “the lettering on the shop sign”",
@@ -208,21 +214,21 @@ export const AUDIO_STUDIO: StudioConfig = {
   feature: "audio",
   title: "Audio",
   hero: "Give it a voice",
-  subtitle: "Premade ElevenLabs voices, or clone any voice from a 10-second sample.",
-  placeholder: "What should it say? Try ElevenLabs v3 audio tags like [whispers] or [laughs]",
+  subtitle: "Clone any voice from a 10-second sample, then give it your words.",
+  placeholder: "What should it say?",
   kind: "audio",
   ops: ["tts"],
   feed: { kind: "audio", features: ["audio"] },
   slots: [],
   defaultModels: { cloud: "elevenlabs-v4", open: "oss-chatterbox" },
-  suggestions: ["Welcome to Fuobe — make anything, with any model.", "[whispers] Don't look now… but I think it's following us.", "Breaking news: the robots have learned to paint."],
+  suggestions: ["Welcome to Fuobe — make anything, with any model.", "Don't look now… but I think it's following us.", "Breaking news: the robots have learned to paint."],
 };
 
 export const DIALOGUE_STUDIO: StudioConfig = {
   feature: "audio",
   title: "Audio",
   hero: "Write a conversation",
-  subtitle: "Every line gets its own voice; the model handles timing, interruptions and tone.",
+  subtitle: "Every line gets its own voice, timed like a real conversation.",
   placeholder: "",
   kind: "audio",
   ops: ["dialogue"],
@@ -312,7 +318,7 @@ export const FOLEY_STUDIO: StudioConfig = {
   feature: "audio",
   title: "Audio",
   hero: "Add sound to a video",
-  subtitle: "Foley in sync with the picture: Mirelo SFX 2.0 on the cloud, HunyuanVideo-Foley or MMAudio on your ComfyUI.",
+  subtitle: "Foley in sync with the picture: HunyuanVideo-Foley or MMAudio on your ComfyUI.",
   placeholder: "Optional: describe the sound, e.g. “footsteps on gravel, distant birds”",
   kind: "video",
   ops: ["v2a"],
@@ -332,9 +338,9 @@ export function appStudio(preset: Preset): StudioConfig {
     feature: `app:${preset.id}`,
     title: preset.name,
     hero: preset.description,
-    // Which model runs it on each engine lives in the preset header's Details popover (U23); the
-    // hero only says when an engine has no version, plus how the two versions differ.
-    subtitle: [!preset.cloud ? "Open source only for now" : !preset.open ? "Cloud only for now" : undefined, preset.parity].filter(Boolean).join(" · "),
+    // Which model runs it on each engine, and how the two versions differ, live in the preset header's Details popover
+    // (U23); the hero only says when an engine has no version.
+    subtitle: !preset.cloud ? "Open source only for now" : !preset.open ? "Cloud only for now" : undefined,
     placeholder: preset.promptPlaceholder ?? "Add details (optional)",
     kind,
     ops,
@@ -351,6 +357,10 @@ export function appStudio(preset: Preset): StudioConfig {
 /** Apps whose job a studio does in more depth: linked under the hero. */
 const APP_RELATED: Record<string, { href: string; label: string }> = {
   "app-ai-influencer": { href: "/influencer", label: "Build one game-style: 18 categories, creatures, Shuffle" },
+  // Their clips come out silent: the sound is a second step.
+  "app-asmr-classic": { href: "/audio/video", label: "Add sound to your clip" },
+  "app-asmr-add-on": { href: "/audio/video", label: "Add sound to your clip" },
+  "app-rap-god": { href: "/audio/video", label: "Add sound to your clip" },
 };
 
 export const MOTION_CONTROL_STUDIO: StudioConfig = {
@@ -382,7 +392,9 @@ export const VIDEO_EDIT_STUDIO: StudioConfig = {
   multiRef: { label: "Add ref", max: 4 },
   // A clip edit that keeps the clip's length is priced on its seconds, and one outside the model's window is refused.
   clipFacts: true,
-  defaultModels: { cloud: "kling-o3", open: "oss-wan22-fun-control" },
+  // On your GPU: Fuobe Mixed Media, the first v2v model in the picker that runs on a clip and words alone (Genjutsu
+  // Restyle also needs the restyled first frame).
+  defaultModels: { cloud: "kling-o3", open: "fuobe-mixed-media" },
   related: { href: "/genjutsu?mode=swap", label: "Swap an object or restyle it with Genjutsu" },
 };
 
@@ -410,7 +422,8 @@ export const REFRAME_STUDIO: StudioConfig = {
   ops: ["reframe"],
   feed: { features: ["reframe"] },
   slots: [{ key: "video", label: "Video", accept: "video", required: true }],
-  defaultModels: { cloud: "luma-ray-3-2", open: "oss-wan22-vace-reframe" },
+  // MiniMax H3 Max Reframe keeps the clip's sound and timing; Luma Ray 3.2 stays in the picker.
+  defaultModels: { cloud: "minimax-h3-max-reframe", open: "oss-wan22-vace-reframe" },
   promptOptional: true,
 };
 

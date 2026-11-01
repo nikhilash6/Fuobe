@@ -32,7 +32,7 @@ describe("probeWebm", () => {
     expect(probeWebm(Buffer.concat([header, segment]))).toEqual({ hasAudio: true, hasVideo: true, width: 640, height: 360, channels: 1 });
   });
 
-  it("says how many channels the first sound track has (Split soundtrack splits each channel of a 5.1 file on its own)", () => {
+  it("says how many channels the first sound track has (Split soundtrack splits a 5.1 file in mono: ComfyUI saves at most stereo)", () => {
     const el = (id: number[], body: Buffer) => Buffer.concat([Buffer.from(id), Buffer.from([0x80 | body.length]), body]);
     const u = (n: number) => Buffer.from([n]);
     const audio = (channels: number) => el([0xae], Buffer.concat([el([0x83], u(2)), el([0xe1], Buffer.concat([el([0xb5], Buffer.from([0x40, 0xe7, 0x70, 0, 0, 0, 0, 0])), el([0x9f], u(channels))]))]));

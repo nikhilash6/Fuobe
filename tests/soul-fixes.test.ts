@@ -282,6 +282,19 @@ describe("a hand-off over the composer's engine swap", () => {
     expect(followEngineDefault(base, base, defaults, "cloud")).toBe(base);
   });
 
+  it("applies ?model= after the composer moved the open default to its stand-in (no caption writer)", () => {
+    // The Image studio's open default is Ideogram 4; where the server writes no caption the composer moves an untouched
+    // one to Qwen-Image 2.1, and a link (a paid model an account has no key for yet, a Models page row) still lands.
+    const image = { cloud: "nano-banana-pro", open: "oss-ideogram-4" };
+    const base = draft("oss-ideogram-4");
+    const standIn = draft("oss-qwen-image-21", { aspectRatio: "1:1" });
+    const next = draft("nano-banana-pro", { aspectRatio: "16:9" });
+    expect(mergeHandoff(followEngineDefault(base, standIn, image, "open"), standIn, next).modelId).toBeUndefined();
+    expect(mergeHandoff(followEngineDefault(base, standIn, image, "open", { open: "oss-qwen-image-21" }), standIn, next)).toMatchObject({ modelId: "nano-banana-pro" });
+    // Qwen-Image 2.1 picked on purpose over a draft that wasn't the default stays.
+    expect(followEngineDefault(draft("flux-2-pro"), standIn, image, "open", { open: "oss-qwen-image-21" }).modelId).toBe("flux-2-pro");
+  });
+
   it("keeps the curated eval baseline on the library's pinned commit", () => {
     const suite = JSON.parse(fs.readFileSync(path.join(process.cwd(), "scripts/eval/cases/soul-cinema.json"), "utf8")) as { variants: { recipe: { loras: { file: string; url: string }[] } } };
     const film = suite.variants.recipe.loras.find((l) => l.file === loraEntry("filmstill")!.file)!;

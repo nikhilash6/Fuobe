@@ -34,9 +34,10 @@ export function chromiumPath() {
   return exe && fs.existsSync(exe) ? exe : undefined;
 }
 
-export async function launch() {
+/** `opts`: more launch options (`args`: Chromium flags, such as a host name mapped to this machine). */
+export async function launch(opts = {}) {
   const { chromium } = loadPlaywright();
-  return chromium.launch({ executablePath: chromiumPath() });
+  return chromium.launch({ executablePath: chromiumPath(), ...opts });
 }
 
 export const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };

@@ -15,7 +15,9 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { Segmented, usd } from "@/components/faceless/controls";
 import { NarratorChip } from "@/components/faceless/narrator";
 import { StyleArt } from "@/components/faceless/style-art";
-import { uploadFile, useEngine, useHydrated } from "@/lib/api";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEdgeFade } from "@/components/studio/use-edge-fade";
+import { uploadFile, useEngine, useHydrated, useLikelyVisitor } from "@/lib/api";
 import {
   ANIMATION_STYLES,
   CF_LENGTHS,
@@ -30,6 +32,7 @@ import {
 } from "@/lib/catalog/content-factory";
 import { GENRES, type EpisodeAspect, type FacelessGenre, type NarratorVoice, type PickerData } from "@/lib/catalog/faceless";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { ApiError, discardDraft, useCreateSeries, useGenerateSeries, useRereadSeries, useSeries, useSeriesEstimate, useSeriesList, useUpdateSeries, type SeriesAsk } from "./hooks";
 import { BriefCard, ClaudeDialog, PresetGrid, ReferenceCard, SeriesPriceLine } from "./parts";
 
@@ -82,6 +85,11 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
   const [uploading, setUploading] = useState(false);
   const [claudeOpen, setClaudeOpen] = useState(false);
   const [example, setExample] = useState(0);
+  // The estimate's problem (no narrator voice yet…) is a hint until Generate is pressed.
+  const [tried, setTried] = useState(false);
+  // A series doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
+  const visitor = useLikelyVisitor();
+  const [exampleRow, exampleFade] = useEdgeFade<HTMLDivElement>();
   const file = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const ids = { prompt: useId(), link: useId(), voice: useId() };
@@ -163,7 +171,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
       const asset = await uploadFile(f);
       await startSeries({ kind: "upload", url: asset.url, title: f.name });
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       setUploading(false);
     }
@@ -180,7 +188,8 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
   // One run at a time: a second Enter (or click) before the first request has re-rendered would plan, make and bill it twice.
   const submitting = useRef(false);
   const submit = async () => {
-    if (submitting.current) return;
+    if (submitting.current || visitor) return;
+    setTried(true);
     if (blocker) {
       toast(blocker, { id: "cf-blocker" });
       if (!prompt.trim()) promptRef.current?.focus();
@@ -195,7 +204,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
       writeDraft(null);
       router.push(`/content-factory/${id}`);
     } catch (e) {
-      toast.error((e as Error).message);
+      toastError(e);
     } finally {
       submitting.current = false;
     }
@@ -210,7 +219,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
         <SidebarTrigger className="md:hidden" />
         <h1 className="truncate font-heading text-[22px] leading-none">Content Factory</h1>
         <div className="ml-auto">
-          <EngineSwitch value={engine} onChange={setEngine} />
+          <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-12 px-3 pb-16 sm:px-6">
@@ -229,7 +238,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                   { value: "claude", label: "Generate in Claude", hint: "Copy a prompt for Claude Code with Fuobe's MCP server" },
                 ]}
               />
-              <span className="text-[12px] text-muted-foreground">{mode === "claude" ? "Claude writes them and runs Fuobe over MCP" : engine === "open" ? "Makes the episodes now, on your ComfyUI" : "Makes the episodes now, with your providers"}</span>
+              <span className="text-[12px] text-muted-foreground">{mode === "claude" ? "Claude writes them and runs Fuobe over MCP" : visitor ? "Makes the episodes now" : engine === "open" ? "Makes the episodes now, on your ComfyUI" : "Makes the episodes now, with your providers"}</span>
             </div>
 
             {/* The reference: the brief every episode follows */}
@@ -240,7 +249,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                   analysis={view.analysis}
                   styleId={view.brief?.styleId ?? "colorful-3d"}
                   onClear={() => choosePreset(DEFAULT_PRESET)}
-                  onReread={() => reread.mutate({ id: view.id, engine }, { onError: (e) => toast.error((e as Error).message) })}
+                  onReread={() => reread.mutate({ id: view.id, engine }, { onError: (e) => toastError(e) })}
                   rereading={reread.isPending}
                 />
               ) : seriesId && series.isLoading ? (
@@ -249,10 +258,11 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                 <ReferenceCard reference={{ kind: "preset", presetId: preset.id, title: `Preset: ${preset.name}` }} analysis={null} styleId={preset.brief.styleId} />
               ) : null}
               <div className="flex flex-wrap items-center gap-1.5">
+                {/* A guest's or an account's clip would be uploaded and read for a series that can't start here. */}
                 <button
                   type="button"
                   onClick={() => file.current?.click()}
-                  disabled={uploading || create.isPending}
+                  disabled={uploading || create.isPending || visitor}
                   className="inline-flex h-8 items-center gap-1.5 rounded-full bg-secondary px-3 text-[13px] font-medium hover:bg-accent disabled:opacity-60"
                 >
                   {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
@@ -261,9 +271,10 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                 <button
                   type="button"
                   onClick={() => setLinkOpen((v) => !v)}
-                  aria-expanded={linkOpen}
+                  disabled={visitor}
+                  aria-expanded={linkOpen && !visitor}
                   aria-controls={ids.link}
-                  className={cn("inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium", linkOpen ? "bg-brand-faint text-brand-text" : "bg-secondary hover:bg-accent")}
+                  className={cn("inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium disabled:opacity-60", linkOpen && !visitor ? "bg-brand-faint text-brand-text" : "bg-secondary hover:bg-accent")}
                 >
                   <Link2 className="size-3.5" /> TikTok or Instagram link
                 </button>
@@ -271,11 +282,11 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                   <Sparkles className="size-3.5" /> Presets
                 </a>
                 <span className="text-[12px] text-muted-foreground">
-                  {engine === "open" ? "Reading a clip is free (Gemma 4 on your ComfyUI)" : perMinute > 0 ? `Reading a clip costs about ${usd(perMinute)} a minute` : "Reading a clip runs as a free demo"}
+                  {engine === "open" ? (visitor ? "Gemma 4 reads the clip" : "Reading a clip is free (Gemma 4 on your ComfyUI)") : perMinute > 0 ? `Reading a clip costs about ${usd(perMinute)} a minute` : "Reading a clip runs as a free demo"}
                 </span>
                 <input ref={file} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" hidden onChange={(e) => (void onFile(e.target.files?.[0]), (e.target.value = ""))} />
               </div>
-              {linkOpen && (
+              {linkOpen && !visitor && (
                 <div id={ids.link} className="space-y-1.5 rounded-2xl bg-muted/60 p-2.5">
                   <form
                     className="flex min-w-0 items-center gap-2"
@@ -341,7 +352,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
               placeholder={`${examples[example % examples.length]}…`}
               className="mt-1 w-full resize-none bg-transparent px-1 text-body leading-relaxed outline-none [field-sizing:content] placeholder:text-subtle-foreground"
             />
-            <div className="scrollbar-none -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+            <div ref={exampleRow} style={exampleFade} className="scrollbar-none -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
               {examples.slice(0, 5).map((ex) => (
                 <button key={ex} type="button" onClick={() => setPrompt(ex)} className="h-7 shrink-0 rounded-full bg-secondary px-2.5 text-[12px] text-secondary-foreground hover:bg-accent">
                   {ex}
@@ -427,15 +438,20 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                   Review scripts first
                 </label>
               )}
-              <Button onClick={() => void submit()} disabled={busy} className="ml-auto h-9 rounded-full px-4">
+              <Button onClick={() => void submit()} disabled={busy || visitor} className="ml-auto h-9 rounded-full px-4">
                 {busy ? <Loader2 className="animate-spin" /> : mode === "here" ? <ArrowRight /> : <Bot />}
                 {busy ? "Planning your episodes…" : mode === "here" ? (episodes > 1 ? `Generate ${episodes} episodes` : "Generate") : "Get the prompt"}
               </Button>
             </div>
-            {mode === "here" && est?.error && (
-              <p role="alert" className="mt-2 text-[12px] text-destructive">
-                {est.error}
-              </p>
+            {visitor ? (
+              <SelfHostNote className="mt-2">Content Factory runs on a self-hosted Fuobe for now.</SelfHostNote>
+            ) : (
+              mode === "here" &&
+              est?.error && (
+                <p role={tried ? "alert" : undefined} className={cn("mt-2 text-[12px]", tried ? "text-destructive" : "text-muted-foreground")}>
+                  {est.error}
+                </p>
+              )
             )}
             {blocker && prompt.trim() && (
               <p className="mt-2 text-[12px] text-muted-foreground" aria-live="polite">
@@ -456,7 +472,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                   const id = seriesId ?? (await startSeries({ kind: "preset", presetId })).id;
                   await updateBrief.mutateAsync({ id, brief: b });
                 } catch (e) {
-                  toast.error((e as Error).message);
+                  toastError(e);
                 }
               }}
             />

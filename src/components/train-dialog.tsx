@@ -30,6 +30,7 @@ import {
   type TrainingTarget,
 } from "@/lib/catalog/training";
 import { cn } from "@/lib/utils";
+import { responseError, toastError } from "@/lib/refusals";
 
 interface Training {
   id: string;
@@ -99,14 +100,14 @@ export function TrainDialog({ element, open, onOpenChange }: { element: StudioEl
         body: JSON.stringify({ target, consent: person ? consent : undefined }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error);
+      if (!res.ok) throw responseError(res, body.error);
       return body as { provider: string };
     },
     onSuccess: (t) => {
       toast.success(t.provider === "demo" ? `Demo training for ${element.name}: nothing real is trained` : `Training ${element.name} — you can keep working`);
       refresh();
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
   const attach = useMutation({
     mutationFn: async () => {
@@ -116,14 +117,14 @@ export function TrainDialog({ element, open, onOpenChange }: { element: StudioEl
         body: JSON.stringify({ file, trigger: triggerFor(element.handle), family: kitFamily }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error);
+      if (!res.ok) throw responseError(res, body.error);
     },
     onSuccess: () => {
       toast.success("LoRA attached");
       setFile("");
       refresh();
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => toastError(e),
   });
   const remove = async (l: ElementLora) => {
     await fetch(`/api/elements/${element.id}`, {

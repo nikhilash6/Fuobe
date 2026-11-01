@@ -5,10 +5,12 @@
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { loadSuite, suiteFiles, validateAll } from "./lib/cases.mjs";
 import { compareRuns, compareText, promote, promoteText, researchRecords } from "./lib/compare.mjs";
-import { makeCovers } from "./lib/covers.mjs";
+import { coversFromMasters, makeCovers, versionCovers } from "./lib/covers.mjs";
+import { templateCoversFromMasters, versionTemplateCovers } from "./lib/template-covers.mjs";
 import { scoreRun } from "./lib/metrics.mjs";
 import { METRICS_DIR, REPO_DIR, resultsDir } from "./lib/paths.mjs";
 import { RECIPES_FILE } from "./lib/recipes.mjs";
@@ -67,7 +69,34 @@ const HELP = {
 
   The best render of each promoted case becomes its preset's cover: encoded small into public/previews/<suite>/
   and listed in src/lib/preset-previews.generated.ts, which the gallery cards show. --variant takes that
-  variant's renders for every case instead (catalog: what ships today). Demo runs never make covers.`,
+  variant's renders for every case instead (catalog: what ships today). Demo runs never make covers.
+
+pnpm eval:covers --from-masters <dir> --run <name> [--engine comfyui] [--model <id>] [--video-model <id>] [--variant <name>]
+                 [--suite presets] [--only id,id] [--force] [--replace] [--dry-run] [--public-dir public] [--manifest …]
+
+  Rendered masters outside a run, one folder per preset id: its clip.mp4 becomes a clip cover, else its
+  start.png a still cover, in public/previews/<suite>/ (presets by default). Each records --run, --engine,
+  --model (--video-model for clips) and --variant; a folder's meta.json can name its own model and variant.
+  The manifest is merged: other entries stay, and an id whose cover another run made elsewhere (a measured
+  cover) is skipped (--replace takes it over). Run again, it encodes only new or changed masters (--force: all).
+  Clips loop without a jump: their last frames are crossfaded into their first ones.
+
+pnpm eval:covers --templates <dir> [--only group/id,group/id] [--force] [--dry-run] [--public-dir public]
+
+  Covers for the studios' template and style tiles, from rendered masters: one folder per tile,
+  <dir>/<group>/<tile id>/ (groups: marketing, fashion, photodump, shorts, mixed-media, canvas, content-factory,
+  explainer), holding clip.mp4 or still.png, then frame-2.png… for a tile with more frames (up to frame-4), and a
+  meta.json that can say { "rest": "end" } (a reveal: its last frame is the poster) or { "same": "<preset id>" }
+  (the tile shows that preset's cover). Encoded like the preset covers into public/previews/templates/<group>/ and
+  merged into src/lib/template-covers.generated.ts. Run again, it encodes only new or changed masters (--force: all).
+
+pnpm eval:covers --versions [--dry-run] [--public-dir public] [--manifest …]
+
+  Every URL in the manifests (the presets', and the template tiles') ends in its file's content version (?v=, 8 hex
+  digits of its sha256; a still's also covers its small copy in thumbs/), so a cover made again gets a new URL. The
+  commands above write them; this one versions both manifests from the files as they are (with --manifest, only
+  that presets' manifest). It encodes only a still's small copy that's missing or older than its still (one copied
+  in by hand), first; --dry-run lists those and fails until they're made.`,
   history: "pnpm eval:history [--suite soul] [--case soul/v1-general] [--limit 20]",
   validate: "pnpm eval:validate [suite files…]   checks every case file and that the generated suites match the research",
   trash: "pnpm eval:trash <runId> [--dry-run]   moves the run's generations to that Fuobe's Trash (its results here stay)",
@@ -359,14 +388,15 @@ async function validate(args, ctx) {
   let bad = results.filter((r) => !r.ok).length;
   const { generated } = await import("./gen-cases.mjs");
   const gen = generated();
-  const stale = ["soul.json", "dop.json", "dop-mix.json", "case.schema.json"].filter((name) => {
-    const file = path.join(path.dirname(new URL(import.meta.url).pathname), "cases", name);
+  const stale = ["soul.json", "dop.json", "dop-mix.json", "dop-mixed-media.json", "case.schema.json"].filter((name) => {
+    const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "cases", name);
     const want = `${JSON.stringify(gen[name], null, 2)}\n`;
-    return !fs.existsSync(file) || fs.readFileSync(file, "utf8") !== want;
+    // A Windows checkout may have CRLF line endings: the same content.
+    return !fs.existsSync(file) || fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n") !== want;
   });
   if (v.json) return ctx.print(JSON.stringify({ suites: results, stale }, null, 2)), bad || stale.length ? 1 : 0;
   for (const r of results) {
-    ctx.print(`${r.ok ? "✓" : "✗"} ${path.relative(REPO_DIR, r.file)}${r.ok ? ` · ${r.cases} cases` : ""}`);
+    ctx.print(`${r.ok ? "✓" : "✗"} ${path.relative(REPO_DIR, r.file)}${r.ok ? ` · ${r.cases} cases` : ""}${r.runFirst === "paid-keys" ? " · run it first once you have paid keys" : ""}`);
     for (const l of r.lines) ctx.print(`    ${l}`);
   }
   for (const s of stale) ctx.print(`✗ cases/${s} is out of date with the research: node scripts/eval/gen-cases.mjs`);
@@ -406,14 +436,121 @@ async function trash(args, ctx) {
 }
 
 async function covers(args, ctx) {
-  const { values: v, positionals } = parse(args, { variant: { type: "string" }, "dry-run": { type: "boolean" }, "public-dir": { type: "string" }, manifest: { type: "string" }, "commercial-only": { type: "boolean" } }, { positionals: true });
+  const { values: v, positionals } = parse(
+    args,
+    {
+      variant: { type: "string" },
+      "dry-run": { type: "boolean" },
+      "public-dir": { type: "string" },
+      manifest: { type: "string" },
+      "commercial-only": { type: "boolean" },
+      "from-masters": { type: "string" },
+      run: { type: "string" },
+      engine: { type: "string" },
+      model: { type: "string" },
+      "video-model": { type: "string" },
+      suite: { type: "string" },
+      only: { type: "string" },
+      force: { type: "boolean" },
+      replace: { type: "boolean" },
+      versions: { type: "boolean" },
+      templates: { type: "string" },
+    },
+    { positionals: true },
+  );
   if (v.help) return ctx.print(HELP.covers), 0;
+  if (v["from-masters"]) return coversFromMastersCmd(v, ctx);
+  if (v.templates) return templateCoversCmd(v, ctx);
+  if (v.versions) return versionsCmd(v, ctx);
   const { dir } = resolveRun(root(v, ctx.env), positionals[0] ?? "latest");
   const r = makeCovers(dir, { variant: v.variant, dryRun: v["dry-run"], publicDir: v["public-dir"] && path.resolve(v["public-dir"]), manifest: v.manifest && path.resolve(v.manifest), commercialOnly: v["commercial-only"] });
   if (v.json) return ctx.print(JSON.stringify(r, null, 2)), 0;
   ctx.print(`${r.covers.length} cover${r.covers.length === 1 ? "" : "s"} from ${r.runId} (${r.engine}, ${r.variant})${v["dry-run"] ? " would be made" : ""}`);
   for (const c of r.covers) ctx.print(`  ${c.key} ← ${c.job}${c.metric ? ` (best ${c.metric}${c.score != null ? ` ${Number(c.score).toFixed(3)}` : ""})` : ""}`);
   for (const sk of r.skipped.slice(0, 10)) ctx.print(`  · ${sk.caseId}: ${sk.why}`);
+  if (r.skipped.length > 10) ctx.print(`  · and ${r.skipped.length - 10} more`);
+  if (r.covers.length && !v["dry-run"]) ctx.note(`Look at the media in ${path.relative(REPO_DIR, r.folder) || r.folder} and the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest} before committing them.`);
+  return 0;
+}
+
+/**
+ * pnpm eval:covers --versions: the manifest's URLs versioned from the files as they are, encoding only the posters'
+ * missing or outdated small copies. Fails (1) when a URL is left without a version (its file is missing), or on a dry
+ * run when a small copy is due: until it's made, the versions don't match what the site would serve.
+ */
+function versionsCmd(v, ctx) {
+  const dry = v["dry-run"];
+  const publicDir = v["public-dir"] && path.resolve(v["public-dir"]);
+  const presets = versionCovers({ dryRun: dry, publicDir, manifest: v.manifest && path.resolve(v.manifest) });
+  // The template tiles' manifest is versioned with it (its own file: --manifest names the presets' alone).
+  const templates = v.manifest ? null : versionTemplateCovers({ dryRun: dry, publicDir });
+  const both = [presets, templates].filter(Boolean);
+  const status = both.some((r) => r.unversioned.length || (dry && r.thumbs.length)) ? 1 : 0;
+  if (v.json) return ctx.print(JSON.stringify(templates ? { ...presets, templates } : presets, null, 2)), status;
+  for (const r of both) versionsReport(r, r === templates ? "template tile " : "", dry, ctx);
+  return status;
+}
+
+function versionsReport(r, what, dry, ctx) {
+  ctx.print(`${r.changed} of ${r.urls} ${what}cover URLs in ${r.entries} entries ${dry ? "would get" : "got"} a new version`);
+  const list = (items, why) => {
+    for (const u of items.slice(0, 10)) ctx.print(`  · ${u}: ${why}`);
+    if (items.length > 10) ctx.print(`  · and ${items.length - 10} more`);
+  };
+  list(r.thumbs, dry ? "small copy missing or older than its poster: would be made first" : "small copy made (it was missing or older than its poster)");
+  list(r.unversioned, "no file, so no version");
+  if ((r.changed || r.thumbs.length) && !dry) ctx.note(`Look at the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest}${r.thumbs.length ? " and the small copies it made" : ""} before committing them.`);
+}
+
+/** pnpm eval:covers --templates <dir>: the template tiles' covers from rendered masters, merged into their manifest. */
+function templateCoversCmd(v, ctx) {
+  const r = templateCoversFromMasters(path.resolve(v.templates), {
+    only: v.only?.split(",").map((s) => s.trim()).filter(Boolean),
+    force: v.force,
+    dryRun: v["dry-run"],
+    publicDir: v["public-dir"] && path.resolve(v["public-dir"]),
+  });
+  if (v.json) return ctx.print(JSON.stringify(r, null, 2)), 0;
+  const n = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+  const clips = r.covers.filter((c) => c.video).length;
+  const kept = r.covers.filter((c) => c.kept).length;
+  const same = r.covers.filter((c) => c.same).length;
+  const tail = v["dry-run"] ? " would be made" : kept ? `, ${kept} already up to date` : "";
+  ctx.print(`${n(r.covers.length, "template tile cover")} (${n(clips, "clip")}, ${n(r.covers.length - clips, "still")}, ${same} showing a preset's cover)${tail}`);
+  for (const c of r.covers.slice(0, 20)) ctx.print(`  ${c.key} ← ${c.same ?? path.basename(c.from)}${c.frames ? ` + ${n(c.frames, "frame")}` : ""}${c.kept ? " · up to date" : ""}`);
+  if (r.covers.length > 20) ctx.print(`  and ${r.covers.length - 20} more`);
+  for (const sk of r.skipped.slice(0, 10)) ctx.print(`  · ${sk.key}: ${sk.why}`);
+  if (r.skipped.length > 10) ctx.print(`  · and ${r.skipped.length - 10} more`);
+  if (r.covers.length && !v["dry-run"]) ctx.note(`Look at the media in ${path.relative(REPO_DIR, r.folder) || r.folder} and the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest} before committing them.`);
+  return 0;
+}
+
+/** pnpm eval:covers --from-masters <dir>: covers from rendered masters, merged into the manifest. */
+function coversFromMastersCmd(v, ctx) {
+  if (!v.run) throw new Usage("--from-masters needs --run <name>: the provenance every cover it makes records");
+  const r = coversFromMasters(path.resolve(v["from-masters"]), {
+    run: v.run,
+    engine: v.engine,
+    model: v.model,
+    videoModel: v["video-model"],
+    variant: v.variant,
+    suite: v.suite,
+    only: v.only?.split(",").map((s) => s.trim()).filter(Boolean),
+    force: v.force,
+    replace: v.replace,
+    dryRun: v["dry-run"],
+    publicDir: v["public-dir"] && path.resolve(v["public-dir"]),
+    manifest: v.manifest && path.resolve(v.manifest),
+  });
+  if (v.json) return ctx.print(JSON.stringify(r, null, 2)), 0;
+  const n = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+  const clips = r.covers.filter((c) => c.video).length;
+  const kept = r.covers.filter((c) => c.kept).length;
+  const tail = v["dry-run"] ? " would be made" : kept ? `, ${kept} already up to date` : "";
+  ctx.print(`${n(r.covers.length, "cover")} from masters (${n(clips, "clip")}, ${n(r.covers.length - clips, "still")}) as ${r.run} (${r.engine})${tail}`);
+  for (const c of r.covers.slice(0, 20)) ctx.print(`  ${c.key} ← ${path.basename(c.from)}${c.model ? ` (${c.model})` : ""}${c.kept ? " · up to date" : ""}`);
+  if (r.covers.length > 20) ctx.print(`  and ${r.covers.length - 20} more`);
+  for (const sk of r.skipped.slice(0, 10)) ctx.print(`  · ${sk.id}: ${sk.why}`);
   if (r.skipped.length > 10) ctx.print(`  · and ${r.skipped.length - 10} more`);
   if (r.covers.length && !v["dry-run"]) ctx.note(`Look at the media in ${path.relative(REPO_DIR, r.folder) || r.folder} and the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest} before committing them.`);
   return 0;
@@ -437,6 +574,7 @@ async function setup(args, ctx) {
   return 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run directly (not imported by the tests). Compared as URLs, so a Windows script path matches too.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exitCode = await main(process.argv.slice(2));
 }

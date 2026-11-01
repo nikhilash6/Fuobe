@@ -1,22 +1,25 @@
 import { connection } from "next/server";
+import { requestViewer } from "@/server/auth";
 import { getModel, MODELS } from "@/lib/catalog";
 import { onEngine, runsOn } from "@/lib/catalog/engines";
 import { ENGINE_MODELS } from "@/lib/catalog/faceless";
 import { OPERATION_LABELS, type Engine, type MediaKind, type ModelDef, type Operation } from "@/lib/catalog/types";
 import { findModels, MODEL_KINDS, toModelInfo } from "@/lib/model-list";
+import { rowPrice } from "@/lib/model-rows";
 import { AUDIO_STUDIO, DIALOGUE_STUDIO, EDIT_STUDIO, IMAGE_STUDIO, VIDEO_STUDIO } from "@/lib/studios";
 import { provider } from "@/server/providers";
 import { llmBackends } from "@/server/providers/llm";
-import { offeredDefault, offeredModels } from "@/server/model-access";
+import { offeredDefault, offeredModels, reachableDefault } from "@/server/model-access";
+import { accountEngineMode } from "@/server/account-keys";
+import { asAccount } from "@/server/generations";
 import { engineMode, getSetting } from "@/server/settings";
-import { handler } from "@/server/access/route";
 
 /** A provider for one of its routes is set up. */
 const connected = (m: ModelDef) => m.routes.some((r) => (r.provider === "llm" ? llmBackends(r).length > 0 : provider(r.provider).isConfigured()));
 
 /**
  * How a run of the model goes today, the way chooseRoute decides: "real" on its provider, "demo"
- * (placeholder media, free: Demo mode on, or auto with no provider set up) or "refused" (Demo mode
+ * (placeholder media, free: placeholder results on, or "auto" with no provider set up) or "refused" (placeholders
  * off and no provider: the run fails with "Connect … in Settings").
  */
 function runsAs(m: ModelDef, demoMode: string): "real" | "demo" | "refused" {
@@ -51,7 +54,7 @@ const DEFAULTS: Record<string, { cloud?: string; open?: string }> = {
  * goes today (`runs`, which follows Settings → Demo mode). Models switched off in Settings → Models & licences
  * are left out, and a default that is off gives way to the next model that is on.
  */
-export const GET = handler({ access: "signed-in" }, async (request: Request) => {
+export async function GET(request: Request) {
   await connection();
   const p = new URL(request.url).searchParams;
   const kind = p.get("kind") || undefined;
@@ -60,20 +63,36 @@ export const GET = handler({ access: "signed-in" }, async (request: Request) => 
   if (engine && engine !== "open" && engine !== "cloud") return Response.json({ error: "engine is open or cloud" }, { status: 400 });
   const op = p.get("op") || undefined;
   if (op && !(op in OPERATION_LABELS)) return Response.json({ error: `Unknown operation ${op}` }, { status: 400 });
-  const mode = engineMode();
-  // A Fuobe Original runs on both engines: on a list for one engine (asked for, or the install's only one) it is
-  // that engine's model (its routes, its price), else it is listed once with both.
-  const only = (engine as Engine | undefined) ?? (mode === "both" ? undefined : mode);
-  // The install's only engine counts as asked for: an Original's operations there are that engine's.
-  // Settings → Models & licences: what is switched off isn't listed, and each model lists the routes that are on.
-  const list = findModels(offeredModels(MODELS), { kind: kind as MediaKind | undefined, engine: only, op: op as Operation | undefined, q: p.get("q") ?? undefined, hidden: p.get("hidden") === "1" })
-    .filter((m) => mode === "both" || runsOn(m, mode))
-    .map((m) => (only ? onEngine(m, only) : m));
-  // A default that is switched off gives way to the next model that is on and does the same job.
-  const pick = (id: string | undefined, e: Engine) => offeredDefault(id, e);
-  const defaults = Object.fromEntries(
-    Object.entries(DEFAULTS).map(([k, ids]) => [k, { ...(mode !== "open" && ids.cloud && { cloud: pick(ids.cloud, "cloud") }), ...(mode !== "cloud" && ids.open && { open: pick(ids.open, "open") }) }]),
-  );
-  const demoMode = getSetting("demoMode");
-  return Response.json({ engineMode: mode, demoMode, defaults, items: list.map((m) => ({ ...toModelInfo(m), connected: connected(m), runs: runsAs(m, demoMode) })) });
-});
+  // A guest runs open models on its own GPU: no cloud models, no demo. An account too, until it adds its own fal.ai or
+  // Replicate key: then it gets those providers' paid models, each `connected` by its own keys (asAccount).
+  const viewer = requestViewer(request);
+  const account = viewer.kind === "account" ? viewer.account.id : null;
+  const visitor = viewer.kind !== "owner";
+  const list = () => {
+    const mode = account ? accountEngineMode(account) : visitor ? "open" : engineMode();
+    // A Fuobe Original runs on both engines: on a list for one engine (asked for, or the install's only one) it is
+    // that engine's model (its routes, its price), else it is listed once with both.
+    const only = (engine as Engine | undefined) ?? (mode === "both" ? undefined : mode);
+    // The install's only engine counts as asked for: an Original's operations there are that engine's.
+    // Settings → Models & licences: what is switched off isn't listed, and each model lists the routes that are on.
+    const found = findModels(offeredModels(MODELS), { kind: kind as MediaKind | undefined, engine: only, op: op as Operation | undefined, q: p.get("q") ?? undefined, hidden: p.get("hidden") === "1" })
+      .filter((m) => mode === "both" || runsOn(m, mode))
+      .map((m) => (only ? onEngine(m, only) : m));
+    // A default that is switched off gives way to the next model that is on and does the same job; an account's paid
+    // default, to one its own keys can run.
+    const pick = (id: string | undefined, e: Engine) => (account && e === "cloud" ? reachableDefault(offeredDefault(id, e), e, connected) : offeredDefault(id, e));
+    const defaults = Object.fromEntries(
+      Object.entries(DEFAULTS).map(([k, ids]) => [k, { ...(mode !== "open" && ids.cloud && { cloud: pick(ids.cloud, "cloud") }), ...(mode !== "cloud" && ids.open && { open: pick(ids.open, "open") }) }]),
+    );
+    const demoMode = visitor ? "off" : getSetting("demoMode");
+    // The price of the day asked (a launch price while it lasts); the row keeps the launch price and its last day too.
+    const now = Date.now();
+    const items = found.map((m) => {
+      const info = toModelInfo(m);
+      const reach = account ? connected(m) : visitor || connected(m);
+      return { ...info, price: rowPrice(info, now), connected: reach, runs: account ? (reach ? ("real" as const) : ("refused" as const)) : visitor ? ("real" as const) : runsAs(m, demoMode) };
+    });
+    return { engineMode: mode, demoMode, defaults, items };
+  };
+  return Response.json(account ? asAccount(account, list) : list());
+}

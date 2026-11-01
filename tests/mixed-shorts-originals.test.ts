@@ -100,7 +100,7 @@ describe("Fuobe Mixed Media and Fuobe Shorts in the catalog", () => {
 
   it("are the studios' defaults, with the partners kept as choices", () => {
     expect(mm.MIXED_FRAME_MODELS[0]).toBe("fuobe-mixed-media");
-    expect(mm.MIXED_FRAME_MODELS).toContain("nano-banana-2");
+    expect(mm.MIXED_FRAME_MODELS).toContain("nano-banana-2-1");
     expect(mm.MIXED_MODELS.open).toEqual(["fuobe-mixed-media"]);
     expect(mm.MIXED_MODELS.cloud).toContain("gemini-omni-flash");
     expect(sh.SHORTS_MODELS.cloud[0]).toBe("fuobe-shorts");
@@ -372,7 +372,7 @@ describe("DoP's Mixed Media effects run on Fuobe Mixed Media", () => {
     const two = getPreset("effect-two-color")!;
     expect(two.prestep?.cloud.labels).toEqual({ step: "Start frame as Two color", clip: "Two color clip" });
     expect(getPreset("effect-noir")!.prestep?.cloud.loras?.map((l) => l.file)).toEqual(["darkroom-noir.safetensors"]);
-    expect(getPreset("effect-noir")!.parity).toMatch(/^Fuobe DoP draws your still as Noir first \(Fuobe Mixed Media: Z-Image Turbo \+ ControlNet with frankbarbs DARKROOM Noir\)/);
+    expect(getPreset("effect-noir")!.parity).toMatch(/^Fuobe Mixed Media draws your still as Noir first, then Fuobe DoP animates it/);
     // About a cent for the still in the cloud, free on your GPU.
     expect(prestepCost(two, "fuobe-dop", "cloud")).toBeCloseTo(0.01, 3);
     expect(prestepCost(two, "fuobe-dop", "open")).toBe(0);

@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { formatLength, PART_LABELS, type EstimateResult, type StepPart } from "@/lib/catalog/faceless";
 import type { Engine } from "@/lib/catalog/types";
+import { useLikelyVisitor } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /** A segmented control (Liner style: muted track, white thumb), keyboard like a radio group. */
@@ -75,11 +76,16 @@ export function Section({ title, hint, children, className }: { title: string; h
 
 export const usd = (n: number) => (n >= 10 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`);
 
-/** "≈ $7.02" / "Demo · free" / "Free · your GPU", with what it's made of in a popover. */
-export function EstimateLine({ data, loading, engine, className }: { data: EstimateResult | undefined; loading?: boolean; engine: Engine; className?: string }) {
+/**
+ * "≈ $7.02" / "Placeholder · free" / "Free · your GPU", with what it's made of in a popover. quiet: the estimate's problem (no
+ * narrator voice yet…) is a plain hint, not a warning: nothing has been asked of the visitor yet. A guest or an account
+ * reads "Self-hosted only" for the open engine: Faceless and Explainer don't run on their own GPU yet.
+ */
+export function EstimateLine({ data, loading, engine, className, quiet }: { data: EstimateResult | undefined; loading?: boolean; engine: Engine; className?: string; quiet?: boolean }) {
   const [open, setOpen] = useState(false);
+  const visitor = useLikelyVisitor();
   if (!data) return <span className={cn("inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground", className)}>{loading && <Loader2 className="size-3 animate-spin" />}Estimating…</span>;
-  const price = data.demo ? "Demo · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
+  const price = visitor && (data.demo || engine === "open") ? "Self-hosted only" : data.demo ? "Placeholder · free" : engine === "open" ? "Free · your GPU" : `≈ ${usd(data.estimate.total)}${data.estimate.unknown ? "+" : ""}`;
   const parts = Object.entries(data.estimate.parts).filter(([, v]) => (v ?? 0) > 0) as [StepPart, number][];
   const notes = !data.error ? (data.notes ?? []) : [];
   return (
@@ -119,8 +125,8 @@ export function EstimateLine({ data, loading, engine, className }: { data: Estim
         {formatLength(data.seconds)} · {data.blocks} scene{data.blocks === 1 ? "" : "s"}
       </span>
       {data.error && (
-        <span role="alert" className="inline-flex min-w-0 items-start gap-1 text-[12px] text-warning">
-          <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+        <span role={quiet ? undefined : "alert"} className={cn("inline-flex min-w-0 items-start gap-1 text-[12px]", quiet ? "text-muted-foreground" : "text-warning")}>
+          {quiet ? <Info className="mt-0.5 size-3 shrink-0" /> : <AlertTriangle className="mt-0.5 size-3 shrink-0" />}
           <span className="min-w-0">{data.error}</span>
         </span>
       )}

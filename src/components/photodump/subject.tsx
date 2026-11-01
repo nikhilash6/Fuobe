@@ -9,10 +9,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fileToList, type SlotValue } from "@/components/studio/media-slot";
-import { useElements, useSaveElement } from "@/lib/api";
+import { useElements, useLikelyVisitor, useSaveElement } from "@/lib/api";
 import type { StudioElement } from "@/lib/catalog/elements";
 import { SOUL_ID_COPY, SOUL_ID_PHOTOS } from "@/lib/catalog/training";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 
 /** What a character brings: a trained Soul ID (Fuobe Soul), an old Higgsfield one to retrain, or just photos. */
 export function identityLabel(el: StudioElement): string {
@@ -110,7 +111,7 @@ export function QuickCharacter({ open, onOpenChange, onCreated }: { open: boolea
                     setPhotos([]);
                     onOpenChange(false);
                   },
-                  onError: (e) => toast.error((e as Error).message),
+                  onError: (e) => toastError(e),
                 },
               )
             }
@@ -127,17 +128,26 @@ export function QuickCharacter({ open, onOpenChange, onCreated }: { open: boolea
 export function CharacterPicker({ value, onChange }: { value?: string; onChange: (id: string) => void }) {
   const { data, isLoading } = useElements();
   const [creating, setCreating] = useState(false);
+  // A character is saved to the studio's library, which is its owner's: a guest or an account reads where characters
+  // are made, in the same place, instead of a form whose photos and save would be refused.
+  const visitor = useLikelyVisitor();
   const characters = (data ?? []).filter((e) => e.kind === "character");
   return (
     <>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Plus className="size-5" /> New character
-        </button>
+        {visitor ? (
+          <p className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed p-3 text-center text-[12px] leading-snug text-pretty text-muted-foreground">
+            <UserRound className="size-5" /> Characters are saved on a self-hosted Fuobe
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Plus className="size-5" /> New character
+          </button>
+        )}
         {isLoading
           ? Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="aspect-[3/4] rounded-xl" />)
           : characters.map((el) => {
@@ -173,7 +183,7 @@ export function CharacterPicker({ value, onChange }: { value?: string; onChange:
               );
             })}
       </div>
-      <QuickCharacter open={creating} onOpenChange={setCreating} onCreated={(el) => onChange(el.id)} />
+      <QuickCharacter open={creating && !visitor} onOpenChange={setCreating} onCreated={(el) => onChange(el.id)} />
     </>
   );
 }

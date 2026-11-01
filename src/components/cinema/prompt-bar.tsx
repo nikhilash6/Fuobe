@@ -67,12 +67,14 @@ import type { Engine, MediaKind } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { modKey } from "@/lib/keys";
 import { cn } from "@/lib/utils";
-import { MoveChips, MovePicker } from "./camera-moves";
+import { toastError } from "@/lib/refusals";
+import { MoveChips, MovePicker, prefetchMoves } from "./camera-moves";
 import { CameraChip, EmotionChip, FilmSetupChip, LightingChip, PaletteChip } from "./director-panel";
 import { directorPicks, draftToInput, type BarAction, type CinemaDraft, type RefItem } from "./draft";
 import { useCinemaGenerate } from "./hooks";
 import { firstFrame, mediaDuration } from "./media";
 import { formatUsd } from "./money";
+import { placeholdersOn } from "@/lib/demo-mode";
 
 const chip = "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors";
 const chipIdle = "bg-secondary text-secondary-foreground hover:bg-accent";
@@ -234,7 +236,7 @@ export function useAddRefs(setDraft: (fn: (d: CinemaDraft) => Partial<CinemaDraf
         .then((a) => setDraft((d) => ({ refs: d.refs.map((r) => (r.id === id ? { ...r, ref: a.url, preview: a.url, uploading: false } : r)) })))
         .catch((e) => {
           setDraft((d) => ({ refs: d.refs.filter((r) => r.id !== id) }));
-          toast.error((e as Error).message || "Upload failed. Please try again.");
+          toastError(e, "Upload failed. Please try again.");
         });
     }
   };
@@ -362,7 +364,7 @@ export function PromptBar(props: PromptBarProps) {
     audios: draft.refs.filter((r) => r.kind === "audio").map((r) => r.duration ?? NaN),
     elements: mentions.length,
   });
-  const demo = !!status && status.demoMode !== "off" && !model.routes.some((r) => status.providers[r.provider]?.configured);
+  const demo = placeholdersOn(status?.demoMode);
   const cost = demo ? 0 : plan.costUsd;
   const overCap = costCapUsd != null && cost != null && cost > 0 && spentUsd + cost > costCapUsd + 1e-9;
   const uploading = draft.refs.some((r) => r.uploading);
@@ -405,7 +407,7 @@ export function PromptBar(props: PromptBarProps) {
           // The scene was deleted meanwhile: say where the take went.
           if (folderId && r.folderId === null) toast(r.plan.notes[0] ?? "That scene was deleted, so the take is in Home", { duration: 4000 });
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
   };
@@ -427,7 +429,9 @@ export function PromptBar(props: PromptBarProps) {
   }, []);
 
   const onPrompt = (v: string) => {
-    // Typing "#" opens the camera-move picker (the # itself doesn't stay in the prompt).
+    // Typing "#" opens the camera-move picker (the # itself doesn't stay in the prompt): its list loads while a
+    // video prompt is typed, so the search box is there for what's typed after the "#".
+    if (video) prefetchMoves();
     const el = document.activeElement as HTMLTextAreaElement | null;
     const caret = el?.tagName === "TEXTAREA" ? (el.selectionStart ?? v.length) : v.length;
     if (video && v.length === draft.prompt.length + 1 && v[caret - 1] === "#" && (caret === 1 || /\s/.test(v[caret - 2]))) {
@@ -537,8 +541,8 @@ export function PromptBar(props: PromptBarProps) {
     .filter(Boolean)
     .join(" · ");
   // The live cost sits next to Generate at every width (short on narrow bars).
-  const costShort = demo ? "Demo" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "≈ ?";
-  const costLong = demo ? "Demo · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
+  const costShort = demo ? "Placeholder" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "≈ ?";
+  const costLong = demo ? "Placeholder · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown";
 
   // The Director's Panel chips: their own row from sm up; on phones one "Director" chip opens them in a sheet.
   const directorChips = (
@@ -849,7 +853,7 @@ export function PromptBar(props: PromptBarProps) {
             </span>
           </TooltipTrigger>
           <TooltipContent>
-            {demo ? "Demo mode: no key connected for this model, so takes are free placeholders" : cost === 0 ? "Runs on your own GPU" : "Estimated cost of this run, billed by the provider to your key"}
+            {demo ? "Placeholder results are on (Settings), so takes are free stand-ins" : cost === 0 ? "Runs on your own GPU" : "Estimated cost of this run, billed by the provider to your key"}
           </TooltipContent>
         </Tooltip>
         <Tooltip>

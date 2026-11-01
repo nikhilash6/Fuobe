@@ -2,7 +2,6 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
 import type { AssistItem, PlannedJob } from "@/lib/assist";
-import type { Actor } from "../access/actor";
 
 /** Shared shape of Assist's tools (also served over MCP). */
 
@@ -10,8 +9,6 @@ export type ResultContent = Anthropic.Beta.BetaToolResultBlockParam["content"];
 
 export interface ToolContext {
   engine: "cloud" | "open";
-  /** Who the tool acts for: the MCP token's or session's person, or the chat's author (the scoping package narrows by it). */
-  actor?: Actor;
   /** The Assist chat running the tool; absent over MCP. */
   thread?: {
     id: string;

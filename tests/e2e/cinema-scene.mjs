@@ -74,13 +74,13 @@ try {
   await page.getByRole("button", { name: "Create 3D scene" }).first().click();
   const dialog = page.getByRole("dialog");
   await dialog.getByText("Cloud · Marigold V2 depth").waitFor();
-  await dialog.getByRole("button", { name: /Build 3D scene · Demo · free/ }).waitFor();
+  await dialog.getByRole("button", { name: /Build 3D scene · Placeholder · free/ }).waitFor();
   await shoot(page, "scene-create-dialog");
   await dialog.getByRole("checkbox", { name: "Don't ask again at this price" }).click();
   await dialog.getByRole("button", { name: /Build 3D scene/ }).click();
   await page.locator("[data-sonner-toast]").filter({ hasText: "Your 3D scene is ready" }).getByRole("button", { name: "Open" }).click({ timeout: 90_000 });
   await page.getByText(/Point cloud from a depth map · \d+k points/).waitFor({ timeout: 60_000 });
-  await page.getByRole("button", { name: /^Capture · Demo · free/ }).last().waitFor();
+  await page.getByRole("button", { name: /^Capture · Placeholder · free/ }).last().waitFor();
 
   step("the view flies and the frame follows the ratio");
   const canvas = page.locator("canvas[aria-roledescription='3D view']");
@@ -115,9 +115,9 @@ try {
   await page.getByRole("button", { name: "Close the 3D scene" }).click();
 
   step("Don't ask again holds at this price: the next build names it in its toast, which can turn the question back on");
-  const quick = page.getByRole("button", { name: "Create 3D scene · Demo · free" }).last();
+  const quick = page.getByRole("button", { name: "Create 3D scene · Placeholder · free" }).last();
   await quick.click({ force: true });
-  const built = page.locator("[data-sonner-toast]").filter({ hasText: "Demo · free · It appears next to the still" });
+  const built = page.locator("[data-sonner-toast]").filter({ hasText: "Placeholder · free · It appears next to the still" });
   await built.getByRole("button", { name: "Ask first" }).click({ timeout: 30_000 });
   assert.equal(await page.getByRole("dialog").count(), 0, "no question while skipped");
   await quick.click({ force: true });

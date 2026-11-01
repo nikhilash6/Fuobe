@@ -1,6 +1,8 @@
 "use client";
 
+import { CoverImg } from "@/components/template-cover";
 import { hueOf, type CoverTone } from "@/lib/catalog/packs";
+import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
 
 /** A fine noise layer (film grain) drawn by the browser, no image file. */
@@ -45,8 +47,8 @@ export function DrawnTile({ hue, tone, k = 0, className, children }: { hue: numb
 
 /**
  * A drawn pack cover (Fuobe ships no copies of Higgsfield's sample photos): a 2×2 contact sheet in the
- * pack's own hue and treatment (flash, film, gels…), its name and photo count. User packs show their
- * reference photos.
+ * pack's own hue and treatment (flash, film, gels…), its name and photo count. A built-in pack with a
+ * real cover (templateCover) shows its frames in the cells instead, and user packs their reference photos.
  */
 export function PackCover({
   id,
@@ -68,6 +70,7 @@ export function PackCover({
   tone?: CoverTone;
 }) {
   const h = hue ?? hueOf(id);
+  const cells = refs ? undefined : templateCover("photodump", id)?.frames;
   return (
     <span className={cn("relative block overflow-hidden bg-muted", className)}>
       <span className="grid size-full grid-cols-2 grid-rows-2 gap-0.5">
@@ -75,6 +78,8 @@ export function PackCover({
           refs?.[i] ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img key={i} src={refs[i]} alt="" loading="lazy" className="size-full object-cover" />
+          ) : cells?.[i] ? (
+            <CoverImg key={i} frame={cells[i]} sizes={bare ? "28px" : "(max-width: 640px) 25vw, 110px"} />
           ) : (
             <DrawnTile key={i} hue={(h + [0, 18, -16, 34][i] + 360) % 360} tone={tone} k={i} className="size-full" />
           ),

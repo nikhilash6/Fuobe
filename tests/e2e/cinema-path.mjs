@@ -87,10 +87,10 @@ try {
   const keyframe = strip.getByRole("button", { name: "Keyframe", exact: true });
   const previewBtn = strip.getByRole("button", { name: "Preview" });
   assert.equal(await previewBtn.isDisabled(), true, "Preview waits for a second keyframe");
-  const film = page.getByRole("complementary").getByRole("button", { name: /^Film this path · Demo · free$/ });
+  const film = page.getByRole("complementary").getByRole("button", { name: /^Film this path · Placeholder · free$/ });
   await film.waitFor();
   assert.equal(await film.isDisabled(), true, "Film waits for a path");
-  await page.getByRole("complementary").getByRole("button", { name: /^Capture · Demo · free/ }).waitFor();
+  await page.getByRole("complementary").getByRole("button", { name: /^Capture · Placeholder · free/ }).waitFor();
   await noSideScroll(page, "desktop viewer");
 
   step("flying and + Keyframe / K add the pose as a chip");
@@ -173,7 +173,7 @@ try {
   const p2 = await openScene(dark, "open");
   await p2.getByRole("button", { name: "Dolly in" }).click();
   await p2.getByText(/About 5\.1 s · 81 frames at 16 fps/).waitFor();
-  const openFilm = p2.getByRole("complementary").getByRole("button", { name: /^Film this path · Demo · free$/ });
+  const openFilm = p2.getByRole("complementary").getByRole("button", { name: /^Film this path · Placeholder · free$/ });
   await shoot(p2, "path-desktop-dark-open");
   await openFilm.click();
   await p2.getByRole("complementary").getByRole("button", { name: /Rendering the path… \d+%/ }).waitFor({ timeout: 10_000 });
@@ -213,7 +213,7 @@ try {
     await sheet.getByRole("button", { name: /^Keyframe 2: 5\.0 s/ }).waitFor();
     await sheet.getByRole("button", { name: "Tilted ring" }).click();
     await sheet.getByRole("button", { name: /^Keyframe 9: 5\.0 s · 360°/ }).waitFor();
-    await sheet.getByRole("button", { name: /^Film this path · Demo · free$/ }).waitFor();
+    await sheet.getByRole("button", { name: /^Film this path · Placeholder · free$/ }).waitFor();
     await noSideScroll(p3, `phone ${scheme} sheet`);
     const sheetBox = await sheet.boundingBox();
     assert.ok(sheetBox.width <= 390, "the sheet fits the phone");

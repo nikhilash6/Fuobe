@@ -2,9 +2,10 @@ import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/ca
 
 /**
  * Image to 3D / Product spin: the modes (from an image, from several images, from text, pick an object, a splat),
- * which model each runs on per engine, and what a finished job gives the viewer — the .glb (or the splat), a
- * turntable video (TRELLIS.2 and TripoSplat render one; for models that return only a mesh the page records one
- * in the browser), a poster, the source photo — and where "Animate the spin" and "Rig & animate" go next.
+ * which model each runs on per engine, and what a finished job gives the viewer — the .glb (and its lighter web
+ * GLB) or the splat, a turntable video (the server renders one for open 3D models when it can, TripoSplat renders
+ * its own orbit; otherwise the page records one in the browser), a poster, the source photo — and where
+ * "Animate the spin" and "Rig & animate" go next.
  */
 export const MODEL3D_FEATURE = "image-to-3d";
 /** The helper steps of a chain (the open text-to-3D still): kept out of the page's results and the Library. */
@@ -36,7 +37,8 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
       { id: "meshy-7-1", note: "Textured, optional rigging · ≈ $1.20" },
     ],
     open: [
-      { id: "oss-trellis2", note: "Textured GLB + turntable video · 16 GB GPU · MIT" },
+      { id: "oss-pixal3d", note: "Most faithful to the photo · textured GLB + turntable video · 16 GB GPU" },
+      { id: "oss-trellis2", note: "Fallback · textured GLB + turntable video · 16 GB GPU · MIT" },
       { id: "oss-hunyuan3d-21", note: "Shape only · 10 GB GPU" },
     ],
   },
@@ -46,7 +48,7 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
   },
   text: {
     cloud: [{ id: "tripo-h3-1-text", note: "A textured model from words · ≈ $0.20" }],
-    open: [{ id: "oss-text-trellis2", note: "Draws the object, then builds it · textured GLB + turntable · 16 GB GPU" }],
+    open: [{ id: "oss-text-trellis2", note: "Draws the object, then builds it · textured GLB + turntable · 20 GB GPU" }],
   },
   objects: {
     cloud: [{ id: "sam-3d-objects", note: "Rebuilds what you name, as it stands in the photo · ≈ $0.02" }],
@@ -169,15 +171,31 @@ export function modeOfRequest(r: Pick<GenerationRequest, "op" | "modelId" | "inp
  */
 export function stillPromptFor3d(prompt: string): string {
   const words = prompt.trim().replace(/[.\s]+$/, "");
-  return `${words}. A single object, whole and centred, seen from the front at eye level, on a plain light grey background, soft even studio light, no other objects, no text`;
+  return `${words}. The object alone, whole and centred, seen from the front at eye level, on a plain light grey background, soft even studio light`;
+}
+
+/**
+ * The GLB a viewer should load: the web GLB the server made after the job (meshopt geometry, WebP
+ * textures, pivot at the bottom; meta.web), else the original — results made before that keep working.
+ */
+export function viewerGlb(o: { url: string; meta?: Record<string, unknown> }): string {
+  const web = o.meta?.web;
+  return typeof web === "string" && web ? web : o.url;
 }
 
 export interface Model3dView {
+  /** The original GLB (the download). */
   glb?: string;
+  /** The GLB to show in a viewer: the web GLB when there is one, else `glb`. */
+  web?: string;
   /** A Gaussian splat (.ply / .spz / .ksplat), which the page doesn't draw: downloaded, with its turntable or preview shown. */
   splat?: { url: string; format: string };
-  /** A rendered turntable that came with the model (TRELLIS.2, TripoSplat on the open engine, demo). */
+  /** A rendered turntable that came with the model (the server's render for open 3D models, TripoSplat's orbit on the open engine, demo). */
   turntable?: string;
+  /** The server is still rendering the turntable (after the job finished): waiting its turn, or how far (0-1). */
+  rendering?: { queued: boolean; progress: number };
+  /** The material class the server's finish read from the textures (matte, metal, mixed, unknown). */
+  material?: string;
   poster?: string;
   /** The product photo it was made from. */
   photo?: string;
@@ -214,6 +232,8 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
   const videos = g.outputs.filter((o) => o.kind === "video");
   const video = videos.find((o) => o.meta?.role === "turntable" || o.meta?.turntable) ?? videos[0];
+  const finish = (meta.finish ?? {}) as { turntable?: unknown; turntableProgress?: unknown; material?: unknown };
+  const pending = finish.turntable === "queued" || finish.turntable === "rendering";
   const formats: Record<string, string> = {};
   const listed = meta.formats;
   if (listed && typeof listed === "object") for (const [k, v] of Object.entries(listed as Record<string, unknown>)) if (typeof v === "string") formats[k.toLowerCase()] = v;
@@ -221,8 +241,11 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   const splat = mesh && format ? { url: mesh.url, format } : undefined;
   return {
     glb: splat ? undefined : mesh?.url,
+    web: mesh && !splat ? viewerGlb(mesh) : undefined,
     splat,
     turntable: str(meta.turntable) ?? str(meta.video) ?? video?.url,
+    rendering: pending ? { queued: finish.turntable === "queued", progress: typeof finish.turntableProgress === "number" ? finish.turntableProgress : 0 } : undefined,
+    material: str(finish.material),
     poster: str(meta.preview) ?? str(meta.poster) ?? g.outputs.find((o) => o.kind === "image")?.url,
     photo: g.request.inputs?.images?.[0],
     formats,

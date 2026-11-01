@@ -54,9 +54,10 @@ describe("the map v2", () => {
     // wolfer45's Bullet Time LoRA has no licence on its card: it doesn't displace round 1's matrix-shot (Apache-2.0),
     // which the preset ran before (a candidate for the evaluation harness, not a default change).
     expect(OSS_LORAS["bullet-time"].map((l) => l.file)).toEqual(["matrix_shot.safetensors"]);
-    // BTS's licence is on hold in the research: its preset keeps running its words until it is evaluated, and says why.
+    // BTS's licence is on hold in the research: its preset keeps running its words until it is evaluated, and Details
+    // says so in plain words, without the research notes.
     expect(getPreset("motion-bts")!.open!.loras).toBeUndefined();
-    expect(getPreset("motion-bts")!.parity).toMatch(/BTS Movie Set is in Fuobe's LoRA library, but the research holds its licence/);
+    expect(getPreset("motion-bts")!.parity).toBe("On your GPU, Fuobe DoP follows the move's description. In the cloud it runs on a partner model.");
   });
 
   it("knows each LoRA's family", () => {
@@ -149,7 +150,7 @@ describe("every motion and effect on Fuobe DoP", () => {
     expect(wiggle.cloud).toMatchObject({ modelId: "kling-2-5-turbo", partner: true });
     expect(wiggle.cloud!.loras).toBeUndefined();
     expect(wiggle.cloud!.promptTemplate).toBeUndefined();
-    expect(wiggle.parity).toMatch(/licensed for your GPU only \(civitai lists no “Rent”\), so the cloud keeps the preset's partner route until Fuobe DoP with it is evaluated/);
+    expect(wiggle.parity).toBe("On your GPU, Fuobe DoP uses a LoRA trained for this move. Its LoRA is licensed for your GPU only, so in the cloud it runs on a partner model.");
     // Sent to fal (a Mix, a hand-made request), it goes and the run says what the licence says...
     const fal = getModel(DOP_MODEL)!.routes.find((r) => r.provider === "fal" && r.op === "i2v")!;
     const sent = fitLoras(wiggle.open!.loras ?? [], fal);
@@ -166,7 +167,7 @@ describe("every motion and effect on Fuobe DoP", () => {
     expect(pink.grade).toBe("candy-pink");
     expect(pink.open!.loras).toBeUndefined();
     const window = getPreset("effect-window")!;
-    expect(window.prestep?.open).toMatchObject({ modelId: "oss-qwen-relight", op: "edit" });
+    expect(window.prestep?.open).toMatchObject({ modelId: "oss-qwen-image-21-turbo", op: "edit" });
     expect(window.prestep?.cloud).toMatchObject({ modelId: "qwen-image-edit-2509-cloud", op: "edit" });
     expect(window.prestep!.cloud.prompt.startsWith("重新照明, ")).toBe(true);
     expect(window.prestep!.cloud.loras!.map((l) => l.file)).toEqual(["Qwen-Image-Edit-2509-Relight.safetensors"]);

@@ -1,8 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Clapperboard, Cpu, Film, GraduationCap, KeyRound, Layers, LayoutGrid, Loader2, Play, Plug, Plus, Scale, Server, Settings2, ShieldCheck, Sparkles, Wand2, type LucideIcon } from "lucide-react";
+import { AudioLines, Bell, Clapperboard, Code, Cpu, Film, GraduationCap, Image as ImageIcon, KeyRound, Layers, LayoutGrid, Loader2, LogIn, Play, Plug, Plus, Scale, Server, Settings2, ShieldCheck, Sparkles, SunMoon, UserPlus, UserRound, Wand2, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useSkills } from "@/components/assist/hooks";
 import { NAV } from "@/components/nav-items";
@@ -10,11 +11,13 @@ import { MediaThumb } from "@/components/studio/result-media";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Kbd } from "@/components/ui/kbd";
 import { Command as CommandPrimitive } from "cmdk";
-import { useEngineMode, useGenerations, useModelAccess } from "@/lib/api";
+import { signInHref, useEngineMode, useGenerations, useIsGuest, useModelAccess, useViewer, type ViewerInfo } from "@/lib/api";
+import { FUOBE_REPO } from "@/lib/connections";
 import type { Generation } from "@/lib/catalog/types";
 import { indexEntries, KIND_LABELS, rankPalette, skillEntries, type PaletteEntry, type PaletteIndex, type PaletteKind } from "@/lib/command-search";
 import { useModKey } from "@/lib/keys";
 import { userTitle } from "@/lib/library";
+import { NEW_CREATION_HREF } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 // The viewer is only needed once a recent creation is opened from the palette.
@@ -60,11 +63,11 @@ const SETTINGS: { id: string; label: string; icon: LucideIcon; keywords: string;
     keywords: "licence license commercial non-commercial switch off turn on admin providers node packs allow block",
     href: "/settings/models",
   },
-  { id: "text-ai", label: "Prompt enhancement", icon: Sparkles, keywords: "claude ollama enhancer llm" },
+  { id: "text-ai", label: "AI helper", icon: Sparkles, keywords: "claude ollama lm studio unsloth local llm model enhancer prompt enhancement context" },
   { id: "assist-connectors", label: "Assist connectors", icon: Plug, keywords: "mcp connector claude tools notion linear slack server token" },
   { id: "notifications", label: "Notifications", icon: Bell, keywords: "browser done alerts" },
   { id: "security", label: "Password and API tokens", icon: ShieldCheck, keywords: "security sign in mcp token" },
-  { id: "demo", label: "Demo mode", icon: Settings2, keywords: "placeholder free try" },
+  { id: "demo", label: "Placeholder results", icon: Settings2, keywords: "demo mode placeholder tour free try" },
 ];
 
 const PAGES: (PaletteEntry & { icon: LucideIcon })[] = NAV.flatMap((g) =>
@@ -79,10 +82,52 @@ const SETTING_ENTRIES: (PaletteEntry & { icon: LucideIcon })[] = SETTINGS.map((s
   keywords: s.keywords,
   icon: s.icon,
 }));
+const visitorSetting = (key: string, label: string, href: string, icon: LucideIcon, keywords: string): PaletteEntry & { icon: LucideIcon } => ({
+  key: `setting:${key}`,
+  kind: "setting",
+  label,
+  hint: "Settings",
+  href,
+  keywords,
+  icon,
+});
+const LICENCES = SETTING_ENTRIES.find((e) => e.key === "setting:models")!;
+/**
+ * The install's settings are its owner's: an account (public sign-up) gets its own GPU and account, a guest the way to
+ * connect a GPU; both get the licences, which they may read.
+ */
+const ACCOUNT_SETTINGS = [
+  visitorSetting("your-gpu", "Your GPU", "/settings#your-gpu", Cpu, "comfyui gpu connect own server open source"),
+  visitorSetting("your-keys", "Your keys", "/settings#your-keys", KeyRound, "fal fal.ai replicate api key token paid models nano banana kling veo billing"),
+  visitorSetting("account", "Account", "/settings#account", UserRound, "email sign out delete account"),
+  LICENCES,
+];
+const GUEST_SETTINGS = [visitorSetting("connect", "Connect your GPU", "/connect", Cpu, "comfyui gpu own server sign up account open source"), LICENCES];
+
+/** The settings the palette offers this viewer (none of the install's to anyone but its owner). */
+export function settingEntries(viewer: Pick<ViewerInfo, "owner" | "account"> | undefined): (PaletteEntry & { icon: LucideIcon })[] {
+  if (viewer?.owner) return SETTING_ENTRIES;
+  return viewer?.account ? ACCOUNT_SETTINGS : GUEST_SETTINGS;
+}
+
+/** Things to do rather than pages to open (Go to): the theme, the source, and for a guest, signing up or in. */
+const THEME_HREF = "action:theme";
+const ACTIONS: (PaletteEntry & { icon: LucideIcon })[] = [
+  { key: "action:theme", kind: "page", label: "Toggle dark mode", hint: "Theme", href: THEME_HREF, keywords: "dark light theme night mode appearance", icon: SunMoon },
+  { key: "action:github", kind: "page", label: "Source on GitHub", hint: "Open source", href: FUOBE_REPO, keywords: "github code repo repository open source download install self host", icon: Code },
+];
+const GUEST_ACTIONS: (PaletteEntry & { icon: LucideIcon })[] = [
+  { key: "action:signup", kind: "page", label: "Sign up free", hint: "Account", href: signInHref("signup"), keywords: "sign up register create account join", icon: UserPlus },
+  { key: "action:login", kind: "page", label: "Log in", hint: "Account", href: signInHref("login"), keywords: "log in login sign in account", icon: LogIn },
+];
 // Icons as elements made once (a component picked during render would remount on every keystroke).
 const iconEl = (Icon: LucideIcon) => <Icon className="text-muted-foreground" />;
-const ICONS = new Map<string, React.ReactNode>([...PAGES, ...SETTING_ENTRIES].map((e) => [e.key, iconEl(e.icon)]));
+const ICONS = new Map<string, React.ReactNode>([...PAGES, ...SETTING_ENTRIES, ...ACCOUNT_SETTINGS, ...GUEST_SETTINGS, ...ACTIONS, ...GUEST_ACTIONS].map((e) => [e.key, iconEl(e.icon)]));
 const KIND_ICONS: Partial<Record<PaletteKind, React.ReactNode>> = { app: iconEl(LayoutGrid), motion: iconEl(Film), effect: iconEl(Wand2), model: iconEl(Clapperboard), skill: iconEl(Play) };
+/** A model's icon by the studio it opens in: a voice or music model isn't a clapperboard. */
+const MODEL_ICONS = { audio: iconEl(AudioLines), image: iconEl(ImageIcon) };
+const modelIcon = (href: string) =>
+  /^\/audio\b/.test(href) ? MODEL_ICONS.audio : /^\/(image|edit|inpaint|outpaint|upscale\/image|image-to-3d)\b/.test(href) ? MODEL_ICONS.image : undefined;
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -97,7 +142,7 @@ function useDebounced<T>(value: T, ms: number): T {
 function Row({ entry, onPick }: { entry: PaletteEntry; onPick: (e: PaletteEntry) => void }) {
   return (
     <CommandItem value={entry.key} onSelect={() => onPick(entry)} className="h-9 gap-2.5 text-[14px]">
-      {ICONS.get(entry.key) ?? KIND_ICONS[entry.kind] ?? KIND_ICONS.app}
+      {ICONS.get(entry.key) ?? (entry.kind === "model" ? modelIcon(entry.href) : undefined) ?? KIND_ICONS[entry.kind] ?? KIND_ICONS.app}
       <span className="min-w-0 truncate">{entry.label}</span>
       {entry.hint && <span data-slot="command-shortcut" className="ml-auto shrink-0 truncate pl-2 text-[12px] text-muted-foreground max-sm:max-w-[40%]">{entry.hint}</span>}
     </CommandItem>
@@ -145,6 +190,7 @@ function PaletteBody({ onPick, onOpenRecent, onClose }: { onPick: (e: PaletteEnt
   const dq = useDebounced(q.trim(), 200);
   const mode = useEngineMode();
   const access = useModelAccess();
+  const settings = settingEntries(useViewer().data);
   // The apps, motions, effects and models load on first open (and stay for the session).
   const index = useQuery({
     queryKey: ["palette-index"],
@@ -154,9 +200,10 @@ function PaletteBody({ onPick, onOpenRecent, onClose }: { onPick: (e: PaletteEnt
   const recent = useGenerations({ q: dq || undefined, limit: 5, statuses: ["succeeded"] }, { keepPrevious: true });
   // Skills that run by themselves: "Run <skill>…" opens its Run form.
   const skills = useSkills();
+  const guest = useIsGuest();
   const entries = useMemo(
-    () => [...PAGES, ...SETTING_ENTRIES, ...skillEntries(skills.data ?? []), ...(index.data ? indexEntries(index.data, mode, access) : [])],
-    [index.data, mode, access, skills.data],
+    () => [...PAGES, ...ACTIONS, ...(guest ? GUEST_ACTIONS : []), ...settings, ...skillEntries(skills.data ?? []), ...(index.data ? indexEntries(index.data, mode, access) : [])],
+    [index.data, mode, access, skills.data, settings, guest],
   );
   const groups = useMemo(() => rankPalette(entries, query), [entries, query]);
   const recentItems = (recent.data ?? []).filter((g) => g.outputs[0]);
@@ -213,7 +260,7 @@ function PaletteBody({ onPick, onOpenRecent, onClose }: { onPick: (e: PaletteEnt
           <>
             <CommandGroup>
               {/* Enter on an empty query keeps what ⌘K always did: a new creation. */}
-              <CommandItem value="new" onSelect={() => onPick({ key: "new", kind: "page", label: "New creation", href: "/" })} className="h-9 gap-2.5 text-[14px]">
+              <CommandItem value="new" onSelect={() => onPick({ key: "new", kind: "page", label: "New creation", href: NEW_CREATION_HREF })} className="h-9 gap-2.5 text-[14px]">
                 <Plus className="text-muted-foreground" />
                 New creation
                 <span data-slot="command-shortcut" className="ml-auto text-[12px] text-muted-foreground">Home</span>
@@ -232,7 +279,7 @@ function PaletteBody({ onPick, onOpenRecent, onClose }: { onPick: (e: PaletteEnt
               ))}
             </CommandGroup>
             <CommandGroup heading={KIND_LABELS.setting}>
-              {SETTING_ENTRIES.map((e) => (
+              {settings.map((e) => (
                 <Row key={e.key} entry={e} onPick={onPick} />
               ))}
             </CommandGroup>
@@ -267,13 +314,16 @@ export function CommandPalette() {
 
   // Set when the palette closes onto something else (a page, the viewer): focus stays with that.
   const leaving = useRef(false);
+  const { resolvedTheme, setTheme } = useTheme();
   const pick = useCallback(
     (e: PaletteEntry) => {
-      leaving.current = true;
       setOpen(false);
+      if (e.href === THEME_HREF) return setTheme(resolvedTheme === "dark" ? "light" : "dark");
+      if (/^https?:/.test(e.href)) return void window.open(e.href, "_blank", "noopener,noreferrer");
+      leaving.current = true;
       router.push(e.href);
     },
-    [router, setOpen],
+    [router, setOpen, resolvedTheme, setTheme],
   );
   const openRecent = useCallback(
     (g: Generation) => {

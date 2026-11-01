@@ -22,6 +22,7 @@ import type { StudioElement } from "@/lib/catalog/elements";
 import type { OutputFile } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
+import { toastError } from "@/lib/refusals";
 import { CinemaFeed, type FeedHandlers } from "./cinema-feed";
 import { initialDraft, type CinemaDraft } from "./draft";
 import { ElementsPanel } from "./elements-panel";
@@ -182,7 +183,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
   // Director settings save per project a moment after the last change, and at once when the
   // workspace goes away (another page, a closed tab): the last pick is never dropped.
   const settingsSaver = useAutosave<DirectorSettings>(
-    (director, { keepalive }) => update.mutate({ director, keepalive }, { onError: (e) => toast.error((e as Error).message) }),
+    (director, { keepalive }) => update.mutate({ director, keepalive }, { onError: (e) => toastError(e) }),
     500,
   );
   // The last lighting the server would accept: a custom rig being edited into an invalid state isn't saved.
@@ -235,7 +236,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
             ...(asked ? {} : { action: { label: "Ask first", onClick: askSceneConfirmAgain } }),
           });
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
   };
@@ -325,7 +326,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
         { name: nameFrom(g.take?.prompt ?? g.request.prompt, kind === "character" ? "New character" : "New location"), kind, references: [url] },
         {
           onSuccess: (el) => toast.success(`Saved as @${el.handle}`, { action: { label: "Open", onClick: () => router.push(`/elements/${el.id}`) } }),
-          onError: (e) => toast.error((e as Error).message),
+          onError: (e) => toastError(e),
         },
       ),
     onCreateScene: (g, url) => (skipSceneConfirm(scenePrice) ? createScene(g, url, false) : setSceneFrom({ g, url })),

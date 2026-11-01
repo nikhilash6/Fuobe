@@ -5,6 +5,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { MediaThumb } from "@/components/studio/result-media";
 import { VideoTrimmer, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
@@ -12,7 +13,7 @@ import { LookCard } from "@/components/shorts/preset-card";
 import { useSubmitGuard } from "@/components/shorts/hooks";
 import { ClipBar, ClipDrop, costText, Field, Segmented, tabKeys } from "@/components/shorts/ui";
 import { clipDuration, clipSize, useSourceClip } from "@/components/shorts/use-source-clip";
-import { uploadFile, useEngine, useModelAccess } from "@/lib/api";
+import { uploadFile, useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import {
   clampFps,
@@ -38,6 +39,7 @@ import type { Engine, Generation } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import type { TrimRange } from "@/lib/trim-range";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { MixedHistory } from "./history";
 import { isFrameRender, renderSteps, useFramesProgress, useMixedActions, useMixedEstimate, useWatchedChain, useWatchedGeneration, type MixedBody } from "./hooks";
 import { AdvancedSettings, loadSaved } from "./settings";
@@ -55,9 +57,12 @@ const HOW = [
   { step: "Customize settings", text: "Each preset has its own colours, materials and intensity. Save them per preset; they stay in this browser." },
   {
     step: "Generate & preview",
-    text: "Make one preview frame first to check the look, then render the whole video, frame by frame at the rate you pick. Smooth draws only the first frame in the look and carries it through the clip; on the cloud, Fast restyles it in one video-to-video pass.",
+    text: "Make one preview frame first to check the look, then render the whole video, frame by frame at the rate you pick. Smooth draws only the first frame in the look and carries it through the clip.",
   },
 ];
+
+/** What the cloud adds to "How it works", said only where the install offers the cloud. */
+const HOW_CLOUD = " On the cloud, Fast restyles it in one video-to-video pass.";
 
 const MODE_OPTIONS: { value: MixedMode; label: string; title: string }[] = [
   { value: "frames", label: "Per frame", title: "Every frame drawn again in the look — the mixed-media flicker" },
@@ -68,7 +73,10 @@ const MODE_OPTIONS: { value: MixedMode; label: string; title: string }[] = [
 /** Mixed Media: pick a look, add a ≤10 s clip, tune the settings, preview one frame, render. */
 export function MixedStudio({ models, frameModels }: { models: Record<Engine, RestyleModelInfo[]>; frameModels: Record<Engine, RestyleModelInfo[]> }) {
   const [tab, setTab] = useState<Tab>("presets");
-  const [engine, setEngine] = useEngine();
+  const [engine, setEngine, engineMode] = useEngine();
+  // A render doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
+  // upload, the preview and Generate are off, instead of a run the server refuses.
+  const visitor = useLikelyVisitor();
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
     // eslint-disable-next-line react-hooks/set-state-in-effect -- read once after hydration
@@ -102,24 +110,27 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
           ))}
         </div>
         <div className="ml-auto shrink-0">
-          <EngineSwitch value={engine} onChange={setEngine} />
+          {/* A phone's header has room for the tabs, not "Add key" too. */}
+          <EngineSwitch value={engine} onChange={setEngine} wordless selfHostedOnly />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">
         {tab === "history" ? (
           <MixedHistory onStart={() => pick("presets")} />
         ) : tab === "how" ? (
-          <How onStart={() => pick("presets")} />
+          <How onStart={() => pick("presets")} cloud={engineMode !== "open"} visitor={visitor} />
         ) : (
           <>
             <div className="mx-auto max-w-[720px] pt-8 pb-6 text-center sm:pt-12">
               <p className="text-[12px] font-semibold tracking-[0.14em] text-brand-text uppercase">No prompts, just vibe</p>
               <h2 className="mt-2 font-heading text-display text-balance">Turn any video into mixed-media art</h2>
               <p className="mx-auto mt-2 max-w-[560px] text-body text-pretty text-muted-foreground">
-                33 looks, each with its own colours and materials. Preview one frame first, then render the clip frame by frame at the rate you choose — on Fuobe Mixed Media, free on your GPU.
+                33 looks, each with its own colours and materials. Preview one frame first, then render the clip frame by frame at the rate you choose — on Fuobe Mixed Media
+                {visitor ? "." : ", free on your GPU."}
               </p>
+              {visitor && <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Mixed Media runs on a self-hosted Fuobe for now.</SelfHostNote>}
             </div>
-            <Workspace engine={engine} models={models[engine]} frameModels={frameModels[engine]} />
+            <Workspace visitor={visitor} engine={engine} models={models[engine]} frameModels={frameModels[engine]} />
           </>
         )}
       </div>
@@ -127,7 +138,8 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
   );
 }
 
-function How({ onStart }: { onStart: () => void }) {
+/** visitor: a guest or an account, for whom the open engine runs only on a self-hosted Fuobe (not on their own GPU yet). */
+function How({ onStart, cloud, visitor }: { onStart: () => void; cloud: boolean; visitor: boolean }) {
   return (
     <div className="mx-auto max-w-[920px] pt-10">
       <h2 className="text-center font-heading text-[34px] leading-tight">How it works</h2>
@@ -136,7 +148,10 @@ function How({ onStart }: { onStart: () => void }) {
           <li key={h.step} className="rounded-2xl border bg-background p-5">
             <span className="grid size-7 place-items-center rounded-full bg-primary text-[13px] font-semibold text-primary-foreground">{i + 1}</span>
             <p className="mt-3 text-[15px] font-semibold">{h.step}</p>
-            <p className="mt-1 text-[14px] text-muted-foreground">{h.text}</p>
+            <p className="mt-1 text-[14px] text-muted-foreground">
+              {h.text}
+              {cloud && i === HOW.length - 1 && HOW_CLOUD}
+            </p>
           </li>
         ))}
       </ol>
@@ -144,15 +159,17 @@ function How({ onStart }: { onStart: () => void }) {
         <p className="font-medium text-foreground">Cost</p>
         <p className="mt-1">
           A render is counted in frames: seconds × frame rate, rounded down (10 s at 8 FPS = 80 frames; at most 10 s × 24 FPS = 240). Fuobe Mixed Media draws every
-          frame again in the look — Z-Image Turbo following the frame&apos;s own outlines, with the look&apos;s LoRA and one seed — free on your GPU, or on the cloud
-          at about a cent a frame. Nano Banana 2 and Seedream 5.0 Flash redraw frames too, priced per frame. Smooth draws only the first frame in the look, then Wan 2.2
-          Fun VACE carries it through the clip by depth, priced per second. Fast restyles the clip in one video-to-video pass, priced by the model. The estimate shows
-          before you generate.
+          frame again in the look — Z-Image Turbo following the frame&apos;s own outlines, with the look&apos;s LoRA and one seed — free{" "}
+          {visitor ? "when you run Fuobe yourself" : "on your GPU"}
+          {cloud ? ", or on the cloud at about a cent a frame. Nano Banana 2.1 and Seedream 5.0 Flash redraw frames too, priced per frame." : "."} Smooth draws only the
+          first frame in the look, then Wan 2.2 Fun VACE carries it through the clip by depth{cloud ? ", priced per second. Fast restyles the clip in one video-to-video pass, priced by the model" : ""}.
+          The estimate shows before you generate.
         </p>
         <p className="mt-2">
-          Over {FRAME_LIMITS.perClip} frames, the frames go back together as clips and are joined. Nano Banana 2 and Seedream redraw frames in runs of {FRAME_LIMITS.lane}{" "}
-          side by side, each frame matching the one before it and each run starting from your preview frame, so their look can shift slightly every {FRAME_LIMITS.lane}{" "}
-          frames. If a frame fails, the frames still waiting stop, and Try again redraws only the frames that didn’t finish.
+          Over {FRAME_LIMITS.perClip} frames, the frames go back together as clips and are joined.
+          {cloud &&
+            ` Nano Banana 2.1 and Seedream redraw frames in runs of ${FRAME_LIMITS.lane} side by side, each frame matching the one before it and each run starting from your preview frame, so their look can shift slightly every ${FRAME_LIMITS.lane} frames.`}{" "}
+          If a frame fails, the frames still waiting stop, and Try again redraws only the frames that didn’t finish.
         </p>
       </div>
       <div className="mt-6 text-center">
@@ -164,7 +181,7 @@ function How({ onStart }: { onStart: () => void }) {
   );
 }
 
-function Workspace({ engine, models, frameModels }: { engine: Engine; models: RestyleModelInfo[]; frameModels: RestyleModelInfo[] }) {
+function Workspace({ visitor, engine, models, frameModels }: { visitor: boolean; engine: Engine; models: RestyleModelInfo[]; frameModels: RestyleModelInfo[] }) {
   const [hasClip, setHasClip] = useState(false);
   const [presetId, setPresetId] = useState<string | null>(null);
   const preset = MIXED_PRESETS.find((p) => p.id === presetId) ?? null;
@@ -241,7 +258,7 @@ function Workspace({ engine, models, frameModels }: { engine: Engine; models: Re
         )}
       </section>
       <aside ref={panel} id="mm-editor" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-16 lg:max-h-[calc(100svh-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
-        <Editor engine={engine} models={models} frameModels={frameModels} preset={preset} values={values} setValues={setValues} onClip={setHasClip} />
+        <Editor visitor={visitor} engine={engine} models={models} frameModels={frameModels} preset={preset} values={values} setValues={setValues} onClip={setHasClip} />
       </aside>
       {preset && !panelVisible && (
         <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 lg:hidden">
@@ -266,6 +283,7 @@ const LIMITS = "MP4 or MOV · 1 to 10 s · up to 50 MB · at least 4 FPS";
 type FpsChoice = number | "manual";
 
 function Editor({
+  visitor,
   engine,
   models: restyleModels,
   frameModels,
@@ -274,6 +292,8 @@ function Editor({
   setValues,
   onClip,
 }: {
+  /** A guest or an account: the upload, the preview and Generate are off (the page says it runs on a self-hosted Fuobe). */
+  visitor: boolean;
   engine: Engine;
   models: RestyleModelInfo[];
   frameModels: RestyleModelInfo[];
@@ -316,6 +336,8 @@ function Editor({
   const [pickedModel, setModel] = useState<Record<string, string>>({});
   const modelId = (models.some((m) => m.id === pickedModel[slot]) && pickedModel[slot]) || models[0]?.id;
   const model = models.find((m) => m.id === modelId);
+  // An open model is free on a self-hosted Fuobe: a guest or an account reads that, not "your GPU".
+  const priceOf = (m?: RestyleModelInfo) => (visitor && m?.engine === "open" ? "Self-hosted only" : m?.price);
   const original = modelId === MIXED_ORIGINAL;
   const [previewId, setPreviewId] = useState<string | null>(null);
   // Every main step of the latest render (cut → frames or restyle → sound), so a failed step shows its own error.
@@ -396,7 +418,7 @@ function Editor({
     setAnchorOff(false);
   }
 
-  const blocker = !preset
+  const setupBlocker = !preset
     ? "Pick a preset first"
     : !clip
       ? "Add a clip"
@@ -415,6 +437,7 @@ function Editor({
                 : estimate.error
                   ? (estimate.error as Error).message
                   : null;
+  const blocker = visitor ? "Mixed Media runs on a self-hosted Fuobe for now" : setupBlocker;
 
   // One preview and one render per click: a second click while one is on its way does nothing,
   // and the server answers a repeated request id with what the first one started.
@@ -438,7 +461,7 @@ function Editor({
       }
       const g = await actions.preview.mutateAsync({ ...body, frameUrl, requestId });
       setPreviewId(g.id);
-    }).catch((e: Error) => toast.error(e.message));
+    }).catch((e: Error) => toastError(e));
   };
 
   const generate = () => {
@@ -451,7 +474,7 @@ function Editor({
         setRenderFrames(r.frames ?? 0);
         toast("Rendering your video", { description: "It shows up in History too." });
       })
-      .catch((e: Error) => toast.error(e.message));
+      .catch((e: Error) => toastError(e));
   };
 
   return (
@@ -472,6 +495,7 @@ function Editor({
           <ClipDrop
             accept={MIXED.accept}
             limits={LIMITS}
+            disabled={visitor}
             onFile={(f) => {
               const err = source.pick(f);
               if (err) toast.error(err);
@@ -508,7 +532,7 @@ function Editor({
 
       <Field
         label="Restyle"
-        hint={frameMode ? `Every frame drawn again · ${cloud ? "priced per frame" : "free on your GPU"}` : smooth ? `First frame, then carried through · ${cloud ? "priced per second" : "free on your GPU"}` : "One video-to-video pass · priced by the model"}
+        hint={frameMode ? `Every frame drawn again${cloud ? " · priced per frame" : visitor ? "" : " · free on your GPU"}` : smooth ? `First frame, then carried through${cloud ? " · priced per second" : visitor ? "" : " · free on your GPU"}` : "One video-to-video pass · priced by the model"}
       >
         <Segmented<MixedMode> label="Restyle" value={mode} onChange={setMode} options={MODE_OPTIONS.filter((o) => MIXED_MODES[engine].includes(o.value))} />
       </Field>
@@ -572,7 +596,7 @@ function Editor({
               <SelectValue>
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate">{model?.name}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{model?.price}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{priceOf(model)}</span>
                 </span>
               </SelectValue>
             </SelectTrigger>
@@ -584,7 +608,7 @@ function Editor({
                     <span className="flex min-w-0 flex-col">
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate">{m.name}</span>
-                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{m.price}</span>
+                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{priceOf(m)}</span>
                       </span>
                       {issue && <span className="text-[11px] text-muted-foreground">{issue}</span>}
                     </span>
@@ -595,13 +619,13 @@ function Editor({
           </Select>
         ) : (
           <div className="rounded-lg border px-3 py-2 text-[13px]">
-            <span className="font-medium">{model?.name ?? "—"}</span> <span className="text-muted-foreground">· {model?.price}</span>
+            <span className="font-medium">{model?.name ?? "—"}</span> <span className="text-muted-foreground">· {priceOf(model)}</span>
           </div>
         )}
         {model && (
           <p className="text-[12px] leading-snug text-muted-foreground">
             {smooth
-              ? `Fuobe Original · the first frame drawn in the look, then Wan 2.2 Fun VACE carries it through the clip by depth${cloud ? " at 720p" : " (480p, 16 FPS on your GPU)"}.`
+              ? `Fuobe Original · the first frame drawn in the look, then Wan 2.2 Fun VACE carries it through the clip by depth${cloud ? " at 720p" : visitor ? " (480p, 16 FPS)" : " (480p, 16 FPS on your GPU)"}.`
               : original
                 ? `Fuobe Original · every frame drawn again by Z-Image Turbo along its own outlines, with the look's LoRA and one seed${cloud ? ", hosted on fal" : ""}.`
                 : model.tagline}
@@ -612,7 +636,7 @@ function Editor({
       <div className="space-y-2 rounded-xl border p-3">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[13px] font-medium">Preview frame</span>
-          <span className="font-mono text-[12px] text-muted-foreground tabular-nums">Preview costs: {est ? costText({ costUsd: est.previewUsd, demo: est.demo }, engine) : "—"}</span>
+          <span className="font-mono text-[12px] text-muted-foreground tabular-nums">Preview costs: {est ? costText({ costUsd: est.previewUsd, demo: est.demo }, engine, visitor) : "—"}</span>
         </div>
         <p className="text-[12px] text-muted-foreground">Generate one frame with your current settings before creating the full video.</p>
         {preview && (
@@ -646,7 +670,7 @@ function Editor({
         <button
           type="button"
           onClick={makePreview}
-          disabled={previewBusy}
+          disabled={previewBusy || visitor}
           aria-disabled={!!blocker || previewBusy}
           className={cn(
             "flex h-9 w-full items-center justify-center gap-2 rounded-full border text-[13px] font-medium",
@@ -671,7 +695,7 @@ function Editor({
           </span>
           <span className="flex items-center gap-1.5 font-mono text-[13px] font-medium tabular-nums" aria-live="polite">
             {estimate.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-            {body ? costText(est, engine) : "—"}
+            {body ? costText(est, engine, visitor) : "—"}
           </span>
         </div>
         {frameMode && cloud && est && !est.demo && typeof est.perFrameUsd === "number" && (
@@ -694,7 +718,7 @@ function Editor({
         <button
           type="button"
           onClick={generate}
-          disabled={actions.render.isPending}
+          disabled={actions.render.isPending || visitor}
           aria-disabled={!!blocker || actions.render.isPending}
           aria-describedby={blocker ? "mm-blocker" : undefined}
           className={cn(

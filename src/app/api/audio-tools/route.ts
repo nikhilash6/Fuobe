@@ -1,6 +1,7 @@
 import { AudioToolBody, AudioToolError, previewAudioTool, runAudioTool } from "@/server/audio-tools";
-import { rethrowAccess } from "@/server/access/errors";
-import { handler } from "@/server/access/route";
+import { connectRefusal } from "@/server/connect-refusal";
+import { ConnectComfyError } from "@/server/generations";
+import { priceAs } from "@/server/visitor";
 
 /** What a field that doesn't check out means, in words the page shows. */
 const MESSAGES: Record<string, string> = {
@@ -12,7 +13,7 @@ const MESSAGES: Record<string, string> = {
 };
 
 /** Audio → Loop / extend, Join and Split soundtrack (and a split's mix put back on its video): start a run; `?preview=1` only plans and prices it. */
-export const POST = handler({ access: "signed-in" }, async (request: Request) => {
+async function post(request: Request) {
   const raw: unknown = await request.json().catch(() => null);
   const parsed = AudioToolBody.safeParse(raw);
   if (!parsed.success) {
@@ -21,13 +22,20 @@ export const POST = handler({ access: "signed-in" }, async (request: Request) =>
     const msg = path.startsWith("clips") ? "Add 2 to 10 audio clips to join" : remux && path === "audio" ? "Export the mix first" : (MESSAGES[path] ?? "Check the settings");
     return Response.json({ error: msg }, { status: 400 });
   }
+  const preview = new URL(request.url).searchParams.get("preview") === "1";
   try {
-    if (new URL(request.url).searchParams.get("preview") === "1") return Response.json(await previewAudioTool(parsed.data));
+    if (preview) return Response.json(await previewAudioTool(parsed.data));
     return Response.json(await runAudioTool(parsed.data), { status: 201 });
   } catch (e) {
-    rethrowAccess(e);
     if (e instanceof AudioToolError) return Response.json({ error: e.message }, { status: 422 });
+    // Nothing connected runs it: the connect card in the owner's browser (a price check just says so).
+    if (e instanceof ConnectComfyError) return connectRefusal(e, request, preview) ?? Response.json({ error: e.message }, { status: 422 });
     console.error("[audio-tools]", e);
     return Response.json({ error: (e as Error).message || "Something went wrong" }, { status: 500 });
   }
-});
+}
+
+/** A visitor (public sign-up) gets the price of its run on its own GPU, never a demo (src/server/visitor.ts). */
+export async function POST(request: Request) {
+  return priceAs(request, () => post(request));
+}

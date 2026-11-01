@@ -2,6 +2,7 @@ import "server-only";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getModel, supportsOp } from "@/lib/catalog";
+import { lengthRange, plannedDurations } from "@/lib/catalog/clip-lengths";
 import {
   AD_STYLES,
   brandLine,
@@ -23,6 +24,7 @@ import {
   multiplierResolution,
   OPEN_SOUND_JOIN,
   overlayLayout,
+  pickable,
   multiplierText,
   settingById,
   shotPlan,
@@ -46,10 +48,8 @@ import {
 } from "@/lib/catalog/marketing";
 import { dualEngine } from "@/lib/catalog/engines";
 import { routesFor } from "@/lib/catalog/plan";
-import { probeMedia } from "@/lib/media-probe";
 import { themeFrom } from "@/components/ads/layout";
 import type { ChainSlot, Engine, GenerationRequest, ModelDef, Operation } from "@/lib/catalog/types";
-import { rethrowAccess } from "./access/errors";
 import { getBrand, getProduct } from "./brand";
 import { createPipeline, type PipelineStep } from "./chains";
 import { db } from "./db";
@@ -59,7 +59,9 @@ import { isOffered } from "./model-access";
 import { keepOffered } from "@/lib/model-access";
 import { engineMode } from "./settings";
 import { encodePng } from "./png";
-import { readRef, saveFile } from "./storage";
+import { localHead, saveFile, storedMedia } from "./storage";
+import { imageSize } from "@/lib/image-size";
+import { isH3Graph } from "@/lib/h3-prompt";
 
 /**
  * Marketing Studio (templates → product shots, posters, ads, product motion, UGC presenters),
@@ -69,7 +71,7 @@ import { readRef, saveFile } from "./storage";
  * over open-engine posters). Both engines; demo mode runs every step on the mock provider.
  */
 
-const FILE = z.string().startsWith("/api/files/");
+const FILE = z.string().startsWith("/api/files/").max(500);
 
 // ---------------------------------------------------------------------------
 // Inputs
@@ -173,6 +175,55 @@ const need = (model: string): ModelDef => {
   return m;
 };
 
+/** Qwen-Image 2.1's expand graph on your GPU: it grows a photo to the ad's shape before a clip starts on it. */
+export const FIT_PHOTO_MODEL = "oss-qwen-image-21";
+const FIT_PHOTO_PROMPT = "Continue the scene naturally beyond every edge with matching perspective, lighting, textures and grain.";
+
+/** A clip model that makes its clip in the start frame's own shape: MiniMax H3 on your GPU (its i2v graph runs at "auto"). */
+const keepsFrameShape = (clip: ModelDef) => clip.engine === "open" && clip.routes.some((r) => r.op === "i2v" && isH3Graph(r.endpoint));
+
+/** Margins (multiples of 8 px) that grow a width × height picture to the aspect ratio; null when it's already that shape. */
+export function padsTo(size: { width: number; height: number }, aspect: string): { padLeft: number; padTop: number; padRight: number; padBottom: number } | null {
+  const [a, b] = aspect.split(":").map(Number);
+  if (!(a > 0 && b > 0)) return null;
+  const want = a / b;
+  const have = size.width / size.height;
+  if (Math.abs(have - want) / want < 0.02) return null;
+  const side = (total: number) => Math.round(total / 2 / 8) * 8;
+  if (have < want) {
+    const x = side(size.height * want - size.width);
+    return x > 0 ? { padLeft: x, padTop: 0, padRight: x, padBottom: 0 } : null;
+  }
+  const y = side(size.width / want - size.height);
+  return y > 0 ? { padLeft: 0, padTop: y, padRight: 0, padBottom: y } : null;
+}
+
+/**
+ * The start frame of a clip made from a photo. MiniMax H3 on your GPU keeps its start frame's shape, so a photo of
+ * another shape (a square product photo in a 9:16 ad) is first grown to the ad's shape on Qwen-Image 2.1 (a step
+ * added to `steps`, once per photo), and the clip starts on that picture. Any other clip model, a photo already in
+ * shape, or one whose size can't be read starts on the photo itself.
+ */
+function startFrame(steps: Step[], photo: string, aspect: string | undefined, clip: ModelDef, feature: string): Pick<GenerationRequest, "inputs" | "chain"> & { after?: string[] } {
+  const own = { inputs: { images: [photo] } };
+  if (!aspect || !keepsFrameShape(clip) || !getModel(FIT_PHOTO_MODEL)) return own;
+  const head = localHead(photo);
+  const size = head ? imageSize(head) : null;
+  const pads = size ? padsTo(size, aspect) : null;
+  if (!pads) return own;
+  let fit = steps.find((s) => s.request.modelId === FIT_PHOTO_MODEL && s.request.op === "outpaint" && s.request.inputs?.images?.[0] === photo);
+  if (!fit) {
+    const n = steps.filter((s) => s.key.startsWith("fit")).length + 1;
+    fit = {
+      key: `fit${n}`,
+      label: n > 1 ? `Photo ${n} in ${aspect}` : `Photo in ${aspect}`,
+      request: { feature, modelId: FIT_PHOTO_MODEL, op: "outpaint", prompt: FIT_PHOTO_PROMPT, inputs: { images: [photo] }, params: { extra: pads } },
+    };
+    steps.push(fit);
+  }
+  return { chain: [{ slot: "images", position: "first" }], after: [fit.key] };
+}
+
 /** The model's own aspect ratio closest to the wanted one ("auto" when it takes it, else by shape). */
 export function nearestAspect(want: string | undefined, allowed: string[] | undefined): string | undefined {
   if (!want || !allowed?.length || allowed.includes(want)) return want;
@@ -205,6 +256,9 @@ function productLine(p?: Product | null): string {
 
 const KEEP_PRODUCT = "Keep the product exactly as in the reference photo: its shape, proportions, label, logo, text and colours";
 
+/** The picture the browser sets the words over: the scene and the subject alone (the product keeps its own label). */
+const CLEAN_PICTURE = "A clean, uncluttered picture of the scene and the subject alone";
+
 /**
  * The exact headline/CTA in a prompt (cloud partner models render text), or room left for the browser to set it (open
  * models and Fuobe Marketing Image on either engine: wordsOnTop).
@@ -214,10 +268,11 @@ function textLine(f: FormatDef, onTop: boolean, headline?: string, cta?: string,
   // The words are set in the browser, in the layout overlayLayout() picks: the picture leaves room for them.
   if (onTop)
     return overlayLayout(f.id) === "frame"
-      ? "No text, letters, words or logos anywhere in the image; the subject well composed with a little breathing room at the edges"
-      : "Leave calm, uncluttered space in the lower third for a headline; no text, letters, words or logos anywhere in the image";
+      ? `${CLEAN_PICTURE}; the subject well composed with a little breathing room at the edges`
+      : `${CLEAN_PICTURE}, with calm, uncluttered space in the lower third for the headline`;
   const font = brand?.fonts.heading ? `set in a ${brand.fonts.heading}-style typeface` : "in bold, clean typography";
-  return [headline && `The headline reads exactly “${headline}” ${font}`, cta && `a button that says exactly “${cta}”`, "spell every word exactly as written, no other text"].filter(Boolean).join(", ");
+  const lettering = headline && cta ? "the headline and the button are the only added lettering" : headline ? "the headline is the only added lettering" : "the button is the only added lettering";
+  return [headline && `The headline reads exactly “${headline}” ${font}`, cta && `a button that says exactly “${cta}”`, (headline || cta) && `${lettering}, every word spelled exactly as written`].filter(Boolean).join(", ");
 }
 
 export interface PlanContext {
@@ -249,7 +304,11 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     }
   }
   // Models switched off in Settings → Models & licences aren't picked while another choice is on.
-  const choices = keepOffered(formatModels(f, input.engine, { product: hasProduct, avatar: !!input.avatar }), (c) => isOffered(c.id, input.engine));
+  const listed = formatModels(f, input.engine, { product: hasProduct, avatar: !!input.avatar });
+  // A choice listed only to say it runs on your GPU (the Original's Standalone shot in the cloud) is refused in its words.
+  const elsewhere = listed.find((c) => c.unavailable && c.id === input.modelId);
+  if (elsewhere) throw new PlanError(`${need(elsewhere.id).name} makes ${f.name} shots on your GPU only (${elsewhere.unavailable}): switch to your GPU, or pick another model`);
+  const choices = keepOffered(pickable(listed), (c) => isOffered(c.id, input.engine));
   const name = tpl?.name ?? f.name;
   const title = [name, product?.name ?? brand?.name].filter(Boolean).join(" · ");
   const meta: MarketingRunMeta = { format: f.id, templateId: tpl?.id, productId: product?.id ?? null, brandId: brand?.id ?? null };
@@ -310,7 +369,7 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     // On the user's GPU a Standalone shot of one product photo is cut out and relit into the scene (White_to_Scene).
     const productShot = open && modelId === MARKETING_IMAGE_MODEL && f.id === "product-standalone" && op === "edit" && images.length === 1;
     if (productShot) notes.push("Your product is cut out and relit into the scene, so it stays as it is");
-    else if (open && op === "edit") notes.push("Qwen-Image-Edit keeps your first photo's shape on your GPU");
+    else if (open && op === "edit") notes.push("Qwen-Image 2.1 keeps your first photo's shape on your GPU");
     return {
       feature,
       engine: input.engine,
@@ -348,25 +407,36 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     const motionText = (extra?: string) =>
       join(tpl ? fill(tpl.prompt, product, brand) : "A polished product commercial", extra, productLine(product), hasProduct && "The product stays exactly as in the first frame: same shape, label and colours", prompt, brandText, !hasProduct && website && `For the product at ${website}`);
     const base = { feature, modelId, params: { aspectRatio: aspect } as GenerationRequest["params"] };
-    // Open models make a few seconds per clip: longer motion is several shots from the product photo, joined.
-    const shots = open ? shotPlan(want, model.options.durations) : [snapDuration(want, model.options.durations)];
-    if (!open && shots[0] !== want) notes.push(`${model.name} makes ${shots[0]} s clips — the closest to ${want} s`);
+    // Open models make a few seconds per clip: longer motion is several shots from the product photo, joined. MiniMax H3
+    // on your GPU renders any length from 3 to 15 s in one clip.
+    const range = open ? lengthRange(model) : undefined;
+    const shots = range && want <= range[1] ? [Math.max(range[0], Math.round(want))] : open ? shotPlan(want, plannedDurations(model)) : [snapDuration(want, model.options.durations)];
+    if (shots.length === 1 && shots[0] !== want) notes.push(`${model.name} makes ${shots[0]} s clips — the closest to ${want} s`);
     const op: Operation = refs.length > 1 && supportsOp(model, "ref2v") ? "ref2v" : refs.length ? "i2v" : "t2v";
     if (op === "t2v" && !supportsOp(model, "t2v")) throw new PlanError("Attach a product to generate");
     const VARIATIONS = ["Wide establishing shot that introduces the product", "Slow push-in to a close-up of the product's details", "Graceful orbit around the product that ends on its hero angle", "Macro detail pass over the texture and label"];
-    const steps: Step[] = shots.map((d, i) => ({
-      key: `shot${i + 1}`,
-      label: shots.length > 1 ? `Shot ${i + 1} of ${shots.length}` : name,
-      request: {
-        ...base,
-        feature: shots.length > 1 ? `${feature}-step` : feature,
-        op,
-        prompt: motionText(shots.length > 1 ? VARIATIONS[i % VARIATIONS.length] : undefined).slice(0, MAX_PROMPT),
-        inputs: op === "t2v" ? undefined : { images: op === "ref2v" ? refs : refs.slice(0, 1) },
-        params: { ...base.params, duration: d, ...(model.options.audio && { generateAudio: true }) },
-        title,
-      },
-    }));
+    // MiniMax H3 on your GPU keeps the photo's shape: a photo of another shape is grown to the format's first.
+    const steps: Step[] = [];
+    const { after: frameAfter, ...frame } = op === "i2v" ? startFrame(steps, refs[0], aspect, model, `${feature}-step`) : { after: undefined };
+    if (frameAfter) notes.push(`${model.name} keeps its first frame's shape: the photo is grown to ${aspect} on Qwen-Image 2.1 first`);
+    steps.push(
+      ...shots.map(
+        (d, i): Step => ({
+          key: `shot${i + 1}`,
+          label: shots.length > 1 ? `Shot ${i + 1} of ${shots.length}` : name,
+          request: {
+            ...base,
+            feature: shots.length > 1 ? `${feature}-step` : feature,
+            op,
+            prompt: motionText(shots.length > 1 ? VARIATIONS[i % VARIATIONS.length] : undefined).slice(0, MAX_PROMPT),
+            ...(op === "i2v" ? frame : { inputs: op === "t2v" ? undefined : { images: refs } }),
+            params: { ...base.params, duration: d, ...(model.options.audio && { generateAudio: true }) },
+            title,
+          },
+          ...(frameAfter && { after: frameAfter }),
+        }),
+      ),
+    );
     if (shots.length > 1) {
       const joiner = UGC_MODELS[input.engine].join;
       steps.push({
@@ -375,7 +445,7 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
         request: { feature, modelId: joiner, op: "concat", prompt: title, params: { aspectRatio: nearestAspect(aspect, need(joiner).options.aspectRatios) }, chain: shots.map(() => ({ slot: "videos" as const })), title, batchTitle: title },
         after: shots.map((_, i) => `shot${i + 1}`),
       });
-      notes.push(`${model.name} makes up to ${Math.max(...(model.options.durations ?? [5]))} s per clip: ${shots.length} shots from your product photo, joined`);
+      notes.push(`${model.name} makes up to ${Math.max(...(plannedDurations(model) ?? [5]))} s per clip: ${shots.length} shots from your product photo, joined`);
     }
     return { feature, engine: input.engine, title, steps, finals: [steps[steps.length - 1].key], meta, notes };
   }
@@ -440,10 +510,11 @@ function planPresenter(p: PresenterPlan): RunPlan {
   const seconds = p.script.split(/\s+/).filter(Boolean).length / 2.5;
   const talkId = p.talkModel ?? (open ? (seconds > 6.5 ? "oss-infinitetalk-long" : M.talk) : M.talk);
   const talk = need(talkId);
-  const stillModel = need(M.still);
   const clip = need(M.clip);
   const aspect = nearestAspect(p.aspect, talk.options.aspectRatios) ?? p.aspect;
-  const refs = [...(p.avatar ? [p.avatar] : []), ...p.productImages.slice(0, 1), ...(p.reference ? [p.reference] : [])].slice(0, stillModel.options.maxImages ?? 3);
+  const refs = [...(p.avatar ? [p.avatar] : []), ...p.productImages.slice(0, 1), ...(p.reference ? [p.reference] : [])].slice(0, need(M.still).options.maxImages ?? 3);
+  // Reference photos go to the edit model; without any the presenter is drawn from the words.
+  const stillModel = need(refs.length ? M.still : M.stillFromWords);
   const person = p.avatar ? "the person from the first reference photo (same face, hair and skin tone)" : "a friendly, relatable creator in their twenties";
   const holding = p.productImages.length ? `holding the product from the ${p.avatar ? "second reference photo" : "reference photo"} up near their face` : "talking to the camera";
   const where = p.setting?.prompt ?? "at home in natural light";
@@ -465,7 +536,7 @@ function planPresenter(p: PresenterPlan): RunPlan {
       label: "Presenter",
       request: {
         feature: step,
-        modelId: refs.length ? M.still : open ? "oss-qwen-image" : M.still,
+        modelId: stillModel.id,
         op: refs.length ? "edit" : "t2i",
         prompt: join(
           `A vertical smartphone selfie video frame of ${person} ${holding}, ${where}`,
@@ -475,7 +546,7 @@ function planPresenter(p: PresenterPlan): RunPlan {
           p.brand && brandLine(p.brand),
         ),
         inputs: refs.length ? { images: refs } : undefined,
-        params: { aspectRatio: nearestAspect(aspect, (refs.length ? stillModel : need(open ? "oss-qwen-image" : M.still)).options.aspectRatios) ?? aspect, numOutputs: 1 },
+        params: { aspectRatio: nearestAspect(aspect, stillModel.options.aspectRatios) ?? aspect, numOutputs: 1 },
       },
     },
     {
@@ -495,7 +566,7 @@ function planPresenter(p: PresenterPlan): RunPlan {
       chain: [{ slot: "video" }],
     },
   ];
-  const clipLen = (want: number) => snapDuration(want, clip.options.durations);
+  const clipLen = (want: number) => snapDuration(want, plannedDurations(clip));
   const clips: string[] = [];
   if (p.hook) {
     steps.push({
@@ -515,7 +586,9 @@ function planPresenter(p: PresenterPlan): RunPlan {
   }
   clips.push("captions");
   if (p.broll && p.productImages.length) {
+    const { after: frameAfter, ...frame } = startFrame(steps, p.productImages[0], nearestAspect(aspect, clip.options.aspectRatios), clip, step);
     steps.push({
+      ...(frameAfter && { after: frameAfter }),
       key: "broll",
       label: "Product close-up",
       request: {
@@ -523,7 +596,7 @@ function planPresenter(p: PresenterPlan): RunPlan {
         modelId: M.clip,
         op: "i2v",
         prompt: join("Handheld close-up of the product turning slowly in soft natural light, shallow depth of field", KEEP_PRODUCT),
-        inputs: { images: p.productImages.slice(0, 1) },
+        ...frame,
         params: { aspectRatio: nearestAspect(aspect, clip.options.aspectRatios), duration: clipLen(p.brollSeconds ?? 4), ...(clip.options.audio && { generateAudio: false }), ...(p.quality && { resolution: p.quality }) },
       },
     });
@@ -665,10 +738,26 @@ export async function writeScript(s: ScriptInput): Promise<{ script: string; by:
 
 /** Seconds of voice that fit the ad: the presenter talks, then a product close-up ends it. */
 export function clickToAdSeconds(engine: Engine, presenter: boolean): { voice: number; broll: number } {
-  if (presenter) return { voice: 8, broll: 4 };
   const clip = need(UGC_MODELS[engine].clip);
-  const shots = engine === "open" ? shotPlan(9, clip.options.durations) : [4, 4, 4];
+  // The close-up is the clip model's length nearest 4 s (5 s on MiniMax H3); the voice gets the rest of the 12 s.
+  if (presenter) {
+    const broll = snapDuration(4, plannedDurations(clip));
+    return { voice: CLICK_TO_AD.maxSeconds - broll, broll };
+  }
+  const shots = engine === "open" ? adShots(clip) : [4, 4, 4];
   return { voice: Math.max(4, Math.min(CLICK_TO_AD.maxSeconds, shots.reduce((a, b) => a + b, 0)) - 0.6), broll: 0 };
+}
+
+/**
+ * A product-only ad's shots on the open engine: about 9 s, in at least two shots so two of the kit's angles show (a model
+ * whose shortest planned clip is 5 s, MiniMax H3, makes two 5 s shots rather than one 10 s clip).
+ */
+function adShots(clip: ModelDef): number[] {
+  const ds = plannedDurations(clip);
+  const plan = shotPlan(9, ds);
+  if (plan.length > 1 || !ds?.length) return plan;
+  const shortest = Math.min(...ds);
+  return 2 * shortest <= CLICK_TO_AD.maxSeconds ? [shortest, shortest] : plan;
 }
 
 /** A raster logo overlay-image can place (an SVG can't be read there), else undefined. */
@@ -761,13 +850,19 @@ function planAd(input: ClickToAdInput, ctx: { product: Product; brand?: BrandKit
   if (open && !input.voiceSample) throw new PlanError("Add a voice sample — open-source voices are cloned from a short recording");
   const M = UGC_MODELS[input.engine];
   const clip = need(M.clip);
-  const lens = open ? shotPlan(9, clip.options.durations) : [4, 4, 4];
+  const lens = open ? adShots(clip) : [4, 4, 4];
   const angles = ["Hero shot, the camera glides in", "Close-up on the details as light sweeps across", "The product in use, ending on a clean final frame"];
   const step = "click-to-ad-step";
+  const shotAspect = nearestAspect(CLICK_TO_AD.aspect, clip.options.aspectRatios);
+  // MiniMax H3 on your GPU keeps each photo's shape: a photo of another shape is grown to 9:16 first.
+  const fits: Step[] = [];
+  const frames = lens.map((_, i) => startFrame(fits, images[i % images.length], shotAspect === "auto" ? CLICK_TO_AD.aspect : shotAspect, clip, step));
   const steps: Step[] = [
     { key: "voice", label: "Voiceover", request: { feature: step, modelId: M.voice, op: "tts", prompt: ctx.script, inputs: open ? { voiceAudio: input.voiceSample } : undefined, params: !open && input.voice ? { voice: input.voice } : undefined } },
-    ...lens.map(
-      (d, i): Step => ({
+    ...fits,
+    ...lens.map((d, i): Step => {
+      const { after, ...frame } = frames[i];
+      return {
         key: `shot${i + 1}`,
         label: `Shot ${i + 1} of ${lens.length}`,
         request: {
@@ -775,11 +870,12 @@ function planAd(input: ClickToAdInput, ctx: { product: Product; brand?: BrandKit
           modelId: M.clip,
           op: "i2v",
           prompt: join(angles[i % angles.length], style.visual, `Vertical 9:16 ad for ${ctx.product.name}`, KEEP_PRODUCT, ctx.brand && brandLine(ctx.brand)),
-          inputs: { images: [images[i % images.length]] },
-          params: { aspectRatio: nearestAspect(CLICK_TO_AD.aspect, clip.options.aspectRatios), duration: d, resolution: quality, ...(clip.options.audio && { generateAudio: false }) },
+          ...frame,
+          params: { aspectRatio: shotAspect, duration: d, resolution: quality, ...(clip.options.audio && { generateAudio: false }) },
         },
-      }),
-    ),
+        ...(after && { after }),
+      };
+    }),
     {
       key: "film",
       label: "Joining the shots",
@@ -916,7 +1012,7 @@ export function planMultiplier(input: MultiplierInput, ctx: MultiplierContext): 
   const frameModel = getModel(M.frame);
   const canExtract = !!frameModel && (ctx.extractFrame ?? true);
   const clipAspect = nearestAspect(ctx.referenceAspect, clipModel.options.aspectRatios);
-  const clipParams = { duration: snapDuration(4, clipModel.options.durations), ...(clipModel.options.audio && { generateAudio: true }), resolution: nearestRes(resolution, clipModel), ...(clipAspect && { aspectRatio: clipAspect }) };
+  const clipParams = { duration: snapDuration(4, plannedDurations(clipModel)), ...(clipModel.options.audio && { generateAudio: true }), resolution: nearestRes(resolution, clipModel), ...(clipAspect && { aspectRatio: clipAspect }) };
   const order: string[] = [];
   if (input.hook != null) {
     const start = input.firstFrame ?? images[0];
@@ -1083,7 +1179,7 @@ export function presenterSeconds(input: MarketingInput, ctx: { product?: Product
   const f = FORMATS[input.format];
   const want = input.duration ?? f.durations?.default ?? 15;
   const tpl = input.templateId ? TEMPLATE_INDEX.get(input.templateId) : undefined;
-  const shot = snapDuration(4, need(UGC_MODELS[input.engine].clip).options.durations);
+  const shot = snapDuration(4, plannedDurations(need(UGC_MODELS[input.engine].clip)));
   const hook = f.hookAndSetting && hookById(input.hookId === undefined ? tpl?.hook : input.hookId);
   const broll = !!(input.productImages?.length || ctx.product?.images.length);
   return Math.max(MIN_TALK_SECONDS, want - (hook ? shot : 0) - (broll ? shot : 0));
@@ -1202,26 +1298,15 @@ export async function runClickToAd(input: ClickToAdInput): Promise<{ run: Market
   return { run: launch(plan, { ...input, script }), script };
 }
 
-declare global {
-  var __fuobeClipFacts: Map<string, { sound: boolean | null; aspect?: string }> | undefined;
-}
-const clipFacts = () => (globalThis.__fuobeClipFacts ??= new Map());
-
-/** Whether a stored clip has a soundtrack, and its shape, from the file's own header (cached per file). */
+/**
+ * Whether a stored clip has a soundtrack, and its shape, from the file's own header: only the header is read, cached by
+ * the file itself (not by the text of the request), and a visitor's price check reads only its own clip (storedMedia).
+ * Not readable here: unknown, and the plan falls back to what works without knowing.
+ */
 export async function referenceFacts(ref: string): Promise<{ sound: boolean | null; aspect?: string }> {
-  const cache = clipFacts();
-  const hit = cache.get(ref);
-  if (hit) return hit;
-  let facts: { sound: boolean | null; aspect?: string } = { sound: null };
-  try {
-    const info = probeMedia(new Uint8Array((await readRef(ref)).data));
-    if (info?.hasVideo) facts = { sound: info.hasAudio, aspect: info.width && info.height ? nearestAspect(`${info.width}:${info.height}`, ["9:16", "4:5", "3:4", "1:1", "4:3", "16:9", "21:9"]) : undefined };
-  } catch {
-    // Not readable here: the plan falls back to what works without knowing.
-  }
-  if (cache.size > 200) cache.clear();
-  cache.set(ref, facts);
-  return facts;
+  const info = storedMedia(ref)?.info;
+  if (!info?.hasVideo) return { sound: null };
+  return { sound: info.hasAudio, aspect: info.width && info.height ? nearestAspect(`${info.width}:${info.height}`, ["9:16", "4:5", "3:4", "1:1", "4:3", "16:9", "21:9"]) : undefined };
 }
 
 async function multiplierContext(input: MultiplierInput): Promise<MultiplierContext> {
@@ -1291,7 +1376,6 @@ export async function readBody<S extends z.ZodType>(request: Request, schema: S,
 
 /** A thrown error as a JSON response: 409 for duplicates, 422 for everything the user can fix. */
 export function failure(e: unknown): Response {
-  rethrowAccess(e);
   const err = e as Error;
   const status = err?.name === "DuplicateProductError" || err?.constructor?.name === "DuplicateProductError" ? 409 : 422;
   return Response.json({ error: err?.message || "Something went wrong" }, { status });

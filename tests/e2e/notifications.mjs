@@ -182,7 +182,8 @@ try {
     assert.equal(await toggle.getAttribute("aria-checked"), "false");
     await toggle.click();
     await page.waitForFunction(() => localStorage.getItem("fuobe.notifications") === "on");
-    await page.getByRole("button", { name: "Send a test" }).click();
+    // Exact: a local LLM server's "Send a test message" (AI helper · Claude or a local model) is on the same page too.
+    await page.getByRole("button", { name: "Send a test", exact: true }).click();
     assert.equal((await shown(page)).at(-1)?.title, "Notifications are on");
     await toggle.click();
     await page.waitForFunction(() => localStorage.getItem("fuobe.notifications") === "off");

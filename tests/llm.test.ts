@@ -137,10 +137,10 @@ describe("LLM provider", () => {
   it("uses Claude when a key is set (falling back to Ollama), never on the open model", async () => {
     await useOllama(true);
     setSetting("anthropicKey", "sk-ant-test");
-    expect(llm.llmBackends({ endpoint: "auto" })).toEqual(["claude", "ollama"]);
-    expect(llm.llmBackends({ endpoint: "ollama" })).toEqual(["ollama"]);
+    expect(llm.llmBackends({ endpoint: "auto" })).toEqual(["claude", "local"]);
+    expect(llm.llmBackends({ endpoint: "ollama" })).toEqual(["local"]);
     setSetting("engineMode", "open");
-    expect(llm.llmBackends({ endpoint: "auto" })).toEqual(["ollama"]);
+    expect(llm.llmBackends({ endpoint: "auto" })).toEqual(["local"]);
     expect(() => gens.createGenerations({ feature: "dub", modelId: "text-llm", op: "translate", prompt: "x", params: { targetLanguage: "Spanish" } })).toThrow(/open source only/);
     setSetting("engineMode", "");
     setSetting("enhanceProvider", "none");
@@ -185,8 +185,8 @@ describe("LLM provider", () => {
     const [w] = gens.createGenerations({ feature: "ads", modelId: "oss-text-llm", op: "write", prompt: "A tagline for a bakery" });
     expect((await settle(w.id)).outputs[0].text).toMatch(/Demo script for: A tagline for a bakery/);
     setSetting("demoMode", "off");
-    expect(() => gens.createGenerations({ feature: "dub", modelId: "text-llm", op: "translate", prompt: "x", params: { targetLanguage: "Italian" } })).toThrow(/Connect Claude or Ollama in Settings/);
-    expect(() => gens.createGenerations({ feature: "dub", modelId: "oss-text-llm", op: "write", prompt: "x" })).toThrow(/Connect Ollama in Settings/);
+    expect(() => gens.createGenerations({ feature: "dub", modelId: "text-llm", op: "translate", prompt: "x", params: { targetLanguage: "Italian" } })).toThrow(/Connect Claude or a local model \(Ollama, LM Studio or Unsloth Studio\) in Settings/);
+    expect(() => gens.createGenerations({ feature: "dub", modelId: "oss-text-llm", op: "write", prompt: "x" })).toThrow(/Connect a local model \(Ollama, LM Studio or Unsloth Studio\) in Settings/);
   });
 
   it("asks for a language before translating", () => {
@@ -373,7 +373,7 @@ describe("open translation without Ollama: Qwen3.5 on ComfyUI", () => {
     expect((await settle(a.id)).outputs[0]).toMatchObject({ kind: "text", text: "(German·qwen) Good morning, friends." });
     await useOllama(true);
     prompts.length = 0;
-    expect(llm.llmBackends({ endpoint: "ollama", op: "translate" })).toEqual(["ollama"]);
+    expect(llm.llmBackends({ endpoint: "ollama", op: "translate" })).toEqual(["local"]);
     const [b] = gens.createGenerations({ feature: "captions", modelId: "oss-text-llm", op: "translate", prompt: "Good night.", params: { targetLanguage: "German" } });
     expect((await settle(b.id)).outputs[0].text).toBe("(German) Good night.");
     expect(prompts).toHaveLength(0);
@@ -390,6 +390,6 @@ describe("open translation without Ollama: Qwen3.5 on ComfyUI", () => {
     await probeComfy(true);
     expect(llm.llmBackends({ endpoint: "ollama", op: "translate" })).toEqual([]);
     setSetting("demoMode", "off");
-    expect(() => gens.createGenerations({ feature: "dub", modelId: "oss-text-llm", op: "translate", prompt: "x", params: { targetLanguage: "French" } })).toThrow(/Connect Ollama, or start ComfyUI with Qwen3\.5 4B/);
+    expect(() => gens.createGenerations({ feature: "dub", modelId: "oss-text-llm", op: "translate", prompt: "x", params: { targetLanguage: "French" } })).toThrow(/Connect a local model \(Ollama, LM Studio or Unsloth Studio\), or start ComfyUI with Qwen3\.5 4B/);
   });
 });

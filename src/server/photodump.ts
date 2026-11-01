@@ -26,6 +26,7 @@ import { createGenerations, currentRequest, getGeneration, pickOutput, previewGe
 import { trashGenerations } from "./library";
 import { engineMode } from "./settings";
 import { isOffered } from "./model-access";
+import { loadManifest } from "./providers/comfyui";
 
 /**
  * Photodump / Instadump, Fashion Factory and Character Sheet runs: plan with the pure pack logic
@@ -131,8 +132,10 @@ export function previewRun(requests: GenerationRequest[], notes: string[] = []) 
     const previews = requests.map((r) => previewGeneration(fitted(r)));
     const first = previews[0];
     const costs = previews.map((p) => p.costUsd);
-    // No aspect ratio setting (Qwen-Image-Edit's open workflow): the result follows image 1's shape — say so.
-    const fixedAspect = !first.model.options.aspectRatios?.length;
+    // No aspect ratio setting (Qwen-Image-Edit 2511's open workflow), or a GPU graph that takes no size (Qwen-Image
+    // 2.1's edit, whose model has ratios for text to image): the result follows image 1's shape — say so.
+    const sized = first.route.provider !== "comfyui" || !!loadManifest().workflows.find((w) => w.id === first.route.endpoint)?.bindings.width;
+    const fixedAspect = !first.model.options.aspectRatios?.length || !sized;
     const asked = requests.some((r) => r.params?.aspectRatio && r.params.aspectRatio !== "auto");
     return {
       modelId: first.model.id,

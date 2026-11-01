@@ -31,16 +31,17 @@ export interface MediaInfo {
 const fourcc = (b: Uint8Array, o: number) => String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]);
 
 /**
- * The facts in `data`: a whole file, or (`size` = the whole file's length) the start of a WAV, FLAC or MP3, whose
- * header says all of it.
+ * `size`: the whole file's length when `data` is only its first bytes (a WAV's sound data and a constant-rate MP3's
+ * length are read from it). Leave it out when `data` is the whole file.
  */
 export function probeMedia(data: Uint8Array, size = data.length): MediaInfo | null {
   try {
     if (data.length < 12) return null;
-    if (fourcc(data, 0) === "RIFF" && fourcc(data, 8) === "WAVE") return probeWav(data, size);
+    const total = Math.max(size, data.length);
+    if (fourcc(data, 0) === "RIFF" && fourcc(data, 8) === "WAVE") return probeWav(data, total);
     if (fourcc(data, 0) === "fLaC") return probeFlac(data);
     if (fourcc(data, 4) === "ftyp" || ["moov", "mdat", "free", "wide", "skip"].includes(fourcc(data, 4))) return probeIsoBmff(data);
-    return probeMp3(data, size);
+    return probeMp3(data, total);
   } catch {
     return null;
   }
@@ -59,6 +60,11 @@ export type ReadRange = (start: number, end: number) => Promise<Uint8Array>;
 const HEAD_BYTES = 256 * 1024;
 const MAX_MOOV_BYTES = 64 * 1024 * 1024;
 const ISO_TOP = ["ftyp", "moov", "mdat", "free", "wide", "skip"];
+/**
+ * The most top-level boxes walked before the moov box. A real MP4 / MOV has a handful (ftyp, free, wide, mdat, uuid…;
+ * a fragmented one puts its moov first). A crafted file of millions of empty boxes would otherwise cost one read each.
+ */
+const MAX_TOP_BOXES = 64;
 
 /**
  * {@link probeMedia} without reading the whole file: an MP4 / MOV is walked box header by box header
@@ -71,7 +77,8 @@ export async function probeMediaRanges(read: ReadRange, size: number): Promise<M
     const head = await read(0, Math.min(size, HEAD_BYTES));
     if (head.length < 12) return null;
     if (!ISO_TOP.includes(fourcc(head, 4))) return size <= head.length ? probeMedia(head) : headerSays(head) ? probeMedia(head, size) : null;
-    for (let o = 0; o + 8 <= size; ) {
+    for (let o = 0, n = 0; o + 8 <= size; n++) {
+      if (n >= MAX_TOP_BOXES) return null;
       const h = o + 16 <= head.length ? head.subarray(o, o + 16) : await read(o, Math.min(size, o + 16));
       if (h.length < 8) return null;
       const d = new DataView(h.buffer, h.byteOffset, h.byteLength);
@@ -85,6 +92,44 @@ export async function probeMediaRanges(read: ReadRange, size: number): Promise<M
         if (len > MAX_MOOV_BYTES) return null;
         const end = Math.min(size, o + len);
         return probeMedia(end <= head.length ? head.subarray(o, end) : await read(o, end));
+      }
+      o += len;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Reads the bytes [start, end) of a file at once (a file on this computer's disk). */
+export type ReadRangeSync = (start: number, end: number) => Uint8Array;
+
+/**
+ * {@link probeMediaRanges} for a file read at once (on the server's own disk), never all of it: an MP4 / MOV's moov box
+ * (none over `maxMoov`), or the first `headBytes` of anything else, which is enough for a WAV, FLAC or MP3 with the
+ * file's size.
+ */
+export function probeMediaRangesSync(read: ReadRangeSync, size: number, opts: { headBytes?: number; maxMoov?: number } = {}): MediaInfo | null {
+  const maxMoov = opts.maxMoov ?? MAX_MOOV_BYTES;
+  try {
+    const head = read(0, Math.min(size, opts.headBytes ?? HEAD_BYTES));
+    if (head.length < 12) return null;
+    if (!ISO_TOP.includes(fourcc(head, 4))) return probeMedia(head, size);
+    for (let o = 0, n = 0; o + 8 <= size; n++) {
+      if (n >= MAX_TOP_BOXES) return null;
+      const h = o + 16 <= head.length ? head.subarray(o, o + 16) : read(o, Math.min(size, o + 16));
+      if (h.length < 8) return null;
+      const d = new DataView(h.buffer, h.byteOffset, h.byteLength);
+      let len = d.getUint32(0);
+      if (len === 1) {
+        if (h.length < 16) return null;
+        len = Number(d.getBigUint64(8));
+      } else if (len === 0) len = size - o;
+      if (len < 8) return null;
+      if (fourcc(h, 4) === "moov") {
+        if (len > maxMoov) return null;
+        const end = Math.min(size, o + len);
+        return probeMedia(end <= head.length ? head.subarray(o, end) : read(o, end));
       }
       o += len;
     }
@@ -277,7 +322,7 @@ function probeIsoBmff(data: Uint8Array): MediaInfo | null {
 // ---------------------------------------------------------------------------
 // WAV, FLAC, MP3
 
-function probeWav(data: Uint8Array, total: number): MediaInfo | null {
+function probeWav(data: Uint8Array, total = data.length): MediaInfo | null {
   const d = new DataView(data.buffer, data.byteOffset, data.byteLength);
   let byteRate = 0;
   let channels = 0;
@@ -313,7 +358,7 @@ const MP3_BITRATES: Record<string, number[]> = {
 };
 const MP3_RATES: Record<number, number[]> = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
 
-function probeMp3(data: Uint8Array, total: number): MediaInfo | null {
+function probeMp3(data: Uint8Array, total = data.length): MediaInfo | null {
   let o = 0;
   if (fourcc(data, 0).startsWith("ID3")) o = 10 + ((data[6] & 0x7f) << 21) + ((data[7] & 0x7f) << 14) + ((data[8] & 0x7f) << 7) + (data[9] & 0x7f);
   // The first frame header within a few KB of the tag.

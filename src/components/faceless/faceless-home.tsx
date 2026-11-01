@@ -9,9 +9,12 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
-import { useEngine } from "@/lib/api";
-import { CHANNEL_IDEAS, GENRES, MAX_IDEA, MAX_SCRIPT, wordCount, youtubeKind, YOUTUBE_ERROR, type FacelessGenre } from "@/lib/catalog/faceless";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useEdgeFade } from "@/components/studio/use-edge-fade";
+import { useEngine, useLikelyVisitor } from "@/lib/api";
+import { GENRE_IDEAS, GENRES, MAX_IDEA, MAX_SCRIPT, wordCount, youtubeKind, YOUTUBE_ERROR, type FacelessGenre } from "@/lib/catalog/faceless";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/refusals";
 import { ChannelCard, EmptyChannels } from "./cards";
 import { useChannels, useCreateChannel } from "./hooks";
 
@@ -38,6 +41,10 @@ export function FacelessHome() {
   const ideaId = useId();
   const refId = useId();
   const g = GENRES.find((x) => x.id === genre)!;
+  const [genreRow, genreFade] = useEdgeFade<HTMLDivElement>();
+  const [ideaRow, ideaFade] = useEdgeFade<HTMLDivElement>();
+  // A channel doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Next.
+  const visitor = useLikelyVisitor();
 
   const checkRef = (v: string) => {
     const bad = v.trim() && !youtubeKind(v);
@@ -46,6 +53,7 @@ export function FacelessHome() {
   };
 
   const submit = () => {
+    if (visitor) return;
     if (!idea.trim()) return void toast("Describe the channel first", { id: "faceless-blocker" });
     if (!checkRef(reference)) return;
     create.mutate(
@@ -59,7 +67,7 @@ export function FacelessHome() {
           }
           router.push(`/faceless/${c.id}/new`);
         },
-        onError: (e) => toast.error((e as Error).message),
+        onError: (e) => toastError(e),
       },
     );
   };
@@ -70,7 +78,7 @@ export function FacelessHome() {
         <SidebarTrigger className="md:hidden" />
         <h1 className="truncate font-heading text-[22px] leading-none">Faceless Studio</h1>
         <div className="ml-auto">
-          <EngineSwitch value={engine} onChange={setEngine} />
+          <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 space-y-12 px-3 pb-16 sm:px-6">
@@ -79,7 +87,7 @@ export function FacelessHome() {
           <p className="mx-auto mt-2 max-w-[560px] text-body text-muted-foreground">A narrated, illustrated show — scripts, voice-over, animation, music and subtitles — with the same look in every episode.</p>
 
           <div className="mt-7 rounded-[20px] border bg-background p-3 text-left shadow-soft transition-[border-color,box-shadow] focus-within:border-primary focus-within:ring-4 focus-within:ring-brand-faint sm:rounded-composer sm:p-4">
-            <div role="radiogroup" aria-label="Genre" onKeyDown={radioKeys} className="scrollbar-none flex gap-1 overflow-x-auto">
+            <div ref={genreRow} style={genreFade} role="radiogroup" aria-label="Genre" onKeyDown={radioKeys} className="scrollbar-none flex gap-1 overflow-x-auto">
               {GENRES.map((x) => (
                 <button
                   key={x.id}
@@ -116,8 +124,8 @@ export function FacelessHome() {
               placeholder="Channel idea, e.g. “Channel about survival in the wild”"
               className="mt-2 w-full resize-none bg-transparent px-1 text-body leading-relaxed outline-none [field-sizing:content] placeholder:text-subtle-foreground"
             />
-            <div className="scrollbar-none -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-              {CHANNEL_IDEAS.map((ex) => (
+            <div ref={ideaRow} style={ideaFade} className="scrollbar-none -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+              {GENRE_IDEAS[genre].map((ex) => (
                 <button key={ex} type="button" onClick={() => setIdea(ex)} className="h-7 shrink-0 rounded-full bg-secondary px-2.5 text-[12px] text-secondary-foreground hover:bg-accent">
                   {ex.replace(/^Channel (about|with) /, "")}
                 </button>
@@ -173,7 +181,7 @@ export function FacelessHome() {
                   setScript({ name: f.name, text });
                 }}
               />
-              <Button onClick={submit} disabled={create.isPending} className="ml-auto h-9 rounded-full px-4">
+              <Button onClick={submit} disabled={create.isPending || visitor} className="ml-auto h-9 rounded-full px-4">
                 {create.isPending ? <Loader2 className="animate-spin" /> : <ArrowRight />}
                 {create.isPending ? "Creating…" : "Next"}
               </Button>
@@ -183,6 +191,7 @@ export function FacelessHome() {
                 {refError}
               </p>
             )}
+            {visitor && <SelfHostNote className="px-1 pt-2">Faceless channels run on a self-hosted Fuobe for now.</SelfHostNote>}
           </div>
         </div>
 
