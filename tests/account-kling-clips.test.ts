@@ -38,19 +38,46 @@ afterAll(() => {
 });
 
 const CLIP = Buffer.from("not really an mp4, but a stored file");
-const asA = <T,>(fn: () => T) => runAsTenant({ kind: "account", id: a }, fn);
+const asA = <T>(fn: () => T) => runAsTenant({ kind: "account", id: a }, fn);
 const kling = getModel("kling-4")!;
-const run = (videos: string[]): Req => ({ feature: "video", modelId: "kling-4", op: "ref2v", prompt: "@Maya walks in", inputs: { videos }, params: { duration: 10 } });
+const run = (videos: string[]): Req => ({
+  feature: "video",
+  modelId: "kling-4",
+  op: "ref2v",
+  prompt: "@Maya walks in",
+  inputs: { videos },
+  params: { duration: 10 },
+});
 
 describe("an account's Kling 4.0 reference clips", () => {
   it("are its own uploads: another's clip is refused before the run and again when its header is read", async () => {
-    const mine = saveFile({ data: CLIP, contentType: "video/mp4", source: "upload", accountId: a });
-    const theirs = saveFile({ data: CLIP, contentType: "video/mp4", source: "upload", accountId: b });
-    const owners = saveFile({ data: CLIP, contentType: "video/mp4", source: "upload" });
+    const mine = saveFile({
+      data: CLIP,
+      contentType: "video/mp4",
+      source: "upload",
+      accountId: a,
+    });
+    const theirs = saveFile({
+      data: CLIP,
+      contentType: "video/mp4",
+      source: "upload",
+      accountId: b,
+    });
+    const owners = saveFile({
+      data: CLIP,
+      contentType: "video/mp4",
+      source: "upload",
+    });
     expect(accountInputProblem(run([mine.url]), a)).toBeNull();
-    expect(accountInputProblem(run([mine.url, theirs.url]), a)).toMatchObject({ code: "input-not-yours" });
-    expect(accountInputProblem(run([owners.url]), a)).toMatchObject({ code: "input-not-yours" });
-    expect(accountInputProblem(run(["https://example.com/clip.mp4"]), a)).toMatchObject({ code: "input-not-allowed" });
+    expect(accountInputProblem(run([mine.url, theirs.url]), a)).toMatchObject({
+      code: "input-not-yours",
+    });
+    expect(accountInputProblem(run([owners.url]), a)).toMatchObject({
+      code: "input-not-yours",
+    });
+    expect(
+      accountInputProblem(run(["https://example.com/clip.mp4"]), a),
+    ).toMatchObject({ code: "input-not-allowed" });
     // The read that measures a clip for the price (generations.ts prepClip) goes through readRef's guard.
     await asA(async () => {
       expect((await readRef(mine.url)).data.equals(CLIP)).toBe(true);
@@ -60,12 +87,22 @@ describe("an account's Kling 4.0 reference clips", () => {
   });
 
   it("never take the owner's Elements as Kling elements", () => {
-    const clip = saveFile({ data: CLIP, contentType: "video/mp4", source: "upload" });
+    const clip = saveFile({
+      data: CLIP,
+      contentType: "video/mp4",
+      source: "upload",
+    });
     createElement({ name: "Maya", kind: "character", references: [clip.url] });
     // The owner's run turns @Maya into a clip element; an account's sees no Elements, so its request stays as it was.
-    expect(applyMentions(run([]), kling, mentionElements()).request.params?.elements).toEqual([{ video: 0 }]);
+    expect(
+      applyMentions(run([]), kling, mentionElements()).request.params?.elements,
+    ).toEqual([{ video: 0 }]);
     asA(() => {
-      const { request, mentioned } = applyMentions(run([]), kling, mentionElements());
+      const { request, mentioned } = applyMentions(
+        run([]),
+        kling,
+        mentionElements(),
+      );
       expect(mentioned).toEqual([]);
       expect(request.inputs?.videos).toEqual([]);
       expect(request.params?.elements).toBeUndefined();
