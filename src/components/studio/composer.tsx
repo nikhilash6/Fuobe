@@ -96,6 +96,8 @@ import { MediaSlot, SlotPreview, type SlotValue } from "./media-slot";
 import { ControlsChip } from "./model-controls";
 import { ModelPicker } from "./model-picker";
 import { FinishChoices } from "./finish-choices";
+import { waitForGeneration } from "@/components/genjutsu/hooks";
+import { REGEN_DESCRIBE_MODEL, REGEN_MODEL, regenDescribeRequest, regenDescription } from "@/lib/catalog/regenerate";
 import { ELEMENT_ICONS, PromptInput, type PromptInputHandle } from "./prompt-input";
 import { radioKeys, radioTab } from "./radio-keys";
 import { SettingsChip } from "./settings-panel";
@@ -298,6 +300,12 @@ export function Composer({ docked }: { docked: boolean }) {
   // travels with the request (params.sourceDuration), with its rate for a route billed by frames (params.sourceFps);
   // a clip swapped since a Reuse never keeps the old one's.
   const facts = useClipFacts(config.clipFacts && !typed.slots.video?.uploading ? typed.slots.video?.ref : undefined).data;
+  // Regenerate · creative needs words: a clip with none (an upload) can have Fuobe's reading model on your GPU describe it,
+  // into the prompt box to edit before the run. A second instance, so the composer's own Generate state isn't touched.
+  const describeRun = useCreateGeneration();
+  const [describing, setDescribing] = useState(false);
+  const describeAlive = useRef<AbortController | null>(null);
+  useEffect(() => () => describeAlive.current?.abort(), []);
   // Lipsync: a talking avatar is as long as its voice (the voice's header prices it and goes with the request); not while a
   // video is attached (lip re-sync keeps the clip's length).
   const voiceRef = config.voiceFacts && !typed.slots.video?.ref && !typed.slots.audio?.uploading ? typed.slots.audio?.ref : undefined;
@@ -748,6 +756,29 @@ export function Composer({ docked }: { docked: boolean }) {
       toastError(e);
     } finally {
       setEnhancing(false);
+    }
+  };
+
+  const describeClip = async () => {
+    const video = draft.slots.video?.ref;
+    if (!video || describing) return;
+    describeAlive.current?.abort();
+    const ctl = new AbortController();
+    describeAlive.current = ctl;
+    setDescribing(true);
+    try {
+      const [read] = await describeRun.mutateAsync(regenDescribeRequest(video, facts?.duration));
+      const done = await waitForGeneration(read.id, { signal: ctl.signal });
+      const words = regenDescription(done.outputs.find((o) => o.kind === "text")?.text);
+      if (ctl.signal.aborted) return;
+      if (words) {
+        setDraft((d) => (d.prompt.trim() ? {} : { prompt: words }));
+        promptRef.current?.focus();
+      } else toast("Couldn't put the clip into words", { description: "Describe it in a sentence or two: what is in it, how it moves, the light." });
+    } catch (e) {
+      if (!ctl.signal.aborted && !(e as { gpuSetup?: boolean }).gpuSetup) toastError(e);
+    } finally {
+      if (describeAlive.current === ctl) setDescribing(false);
     }
   };
 
@@ -1275,6 +1306,12 @@ export function Composer({ docked }: { docked: boolean }) {
           engineMode={engineMode}
           offered={(id) => (catalog.offered(id, "open") ? catalog.getModel(id) : undefined)}
           onPick={pickModel}
+          onDescribe={
+            model?.id === REGEN_MODEL && engine === "open" && draft.slots.video?.ref && !draft.slots.video.uploading && !draft.prompt.trim() && catalog.offered(REGEN_DESCRIBE_MODEL, "open")
+              ? () => void describeClip()
+              : undefined
+          }
+          describing={describing}
         />
       )}
 

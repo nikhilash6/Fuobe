@@ -780,7 +780,7 @@ const open: ModelDef[] = [
     kind: "video",
     tagline: "Redraws a soft clip at 1080p, 2K or 4K. Details may change; motion and layout stay.",
     badges: ["new", "4k", "audio"],
-    routes: [comfy("upscale-video", REGEN_WORKFLOW, "MiniMax H3 with NVIDIA's refiner LoRA: 3 steps from the clip at 24 fps, up to 15 s a pass, its sound kept")],
+    routes: [comfy("upscale-video", REGEN_WORKFLOW, "Built on MiniMax H3: redraws the clip at 24 fps, up to 15 s a pass, keeping its sound")],
     options: {
       seed: true,
       resolutions: [...REGEN_TIERS],

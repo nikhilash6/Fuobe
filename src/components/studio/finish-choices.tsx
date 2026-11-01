@@ -1,8 +1,9 @@
 "use client";
 
-import { Cpu } from "lucide-react";
+import { Cpu, Loader2, Sparkles } from "lucide-react";
 import type { Engine, ModelDef } from "@/lib/catalog/types";
 import { REGEN_COPY, REGEN_MODEL, type FINISH_CHOICES } from "@/lib/catalog/regenerate";
+import { useIsOwner } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { radioKeys, radioTab } from "./radio-keys";
 
@@ -10,6 +11,8 @@ import { radioKeys, radioTab } from "./radio-keys";
  * Upscale → Video's two open finishing steps side by side (StudioConfig.finishChoices): SeedVR2 "Restore · faithful" and
  * Open-H3 "Regenerate · creative". On the cloud engine (both engines on) Regenerate says it runs on your GPU, with a
  * button that takes the composer there; with Engine mode "Paid APIs only" nothing shows. GPU-only: nobody hosts it.
+ * With Regenerate picked: the GPU line (the install detail for the owner only), the 16:9 / 9:16 shape, and for a clip with
+ * no words yet a button that has Fuobe's reading model describe it (`onDescribe`).
  */
 export function FinishChoices({
   choices,
@@ -18,6 +21,8 @@ export function FinishChoices({
   engineMode,
   offered,
   onPick,
+  onDescribe,
+  describing,
 }: {
   choices: typeof FINISH_CHOICES;
   model: ModelDef | undefined;
@@ -26,7 +31,11 @@ export function FinishChoices({
   /** The choices Settings → Models & licences leaves on (and this catalog has). */
   offered: (id: string) => ModelDef | undefined;
   onPick: (m: ModelDef) => void;
+  /** Writes the clip's words into the prompt box (shown while it has none). */
+  onDescribe?: () => void;
+  describing?: boolean;
 }) {
+  const owner = useIsOwner();
   if (engineMode === "cloud") return null;
   const regen = offered(REGEN_MODEL);
   if (engine === "cloud") {
@@ -74,7 +83,24 @@ export function FinishChoices({
           );
         })}
       </div>
-      {model?.id === REGEN_MODEL && <p className="mt-1.5 px-1 text-[11px] leading-snug text-pretty text-muted-foreground">Free on your GPU · {REGEN_COPY.gpu}</p>}
+      {model?.id === REGEN_MODEL && (
+        <>
+          <p className="mt-1.5 px-1 text-[11px] leading-snug text-pretty text-muted-foreground">
+            {owner ? `Free on your GPU · ${REGEN_COPY.gpu}` : REGEN_COPY.gpuVisitor} {REGEN_COPY.shape}
+          </p>
+          {(onDescribe || describing) && (
+            <button
+              type="button"
+              onClick={onDescribe}
+              disabled={describing}
+              className="mt-1.5 inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium text-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-70"
+            >
+              {describing ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Sparkles className="size-3.5" aria-hidden />}
+              {describing ? "Watching the clip…" : "Describe the clip for me"}
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }
