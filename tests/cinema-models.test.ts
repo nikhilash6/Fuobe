@@ -13,7 +13,7 @@ const refs = Array.from({ length: 6 }, (_, i) => `/api/files/uploads/r${i}.png`)
 describe("Cinema Studio's models", () => {
   it("video: Fuobe Cinema, then MiniMax H3, on both engines; the cloud adds H3 Max", () => {
     expect(CINEMA_MODELS.video.open).toEqual(["fuobe-cinema", "oss-minimax-h3", "oss-ltx25", "oss-wan22-14b"]);
-    expect(CINEMA_MODELS.video.cloud).toEqual(["fuobe-cinema", "minimax-h3", "seedance-2-5", "kling-3", "veo-3-1", "minimax-h3-max"]);
+    expect(CINEMA_MODELS.video.cloud).toEqual(["fuobe-cinema", "minimax-h3", "seedance-2-5", "kling-4", "kling-3", "veo-3-1", "minimax-h3-max"]);
     for (const engine of ["open", "cloud"] as const) for (const id of CINEMA_MODELS.video[engine]) expect(getModel(id), id).toBeTruthy();
     // The default stays Fuobe Cinema.
     expect(planCinema(input({}), ctx).model.id).toBe("fuobe-cinema");

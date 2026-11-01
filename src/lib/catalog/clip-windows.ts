@@ -20,6 +20,18 @@ export function sourceSeconds(modelId: string): { min?: number; max?: number } {
   return SOURCE_SECONDS[modelId] ?? {};
 }
 
+/** The sides a clip edit takes, in pixels (Kling 4.0's edit: 700–4553 px on each side). */
+const SOURCE_SIDES: Record<string, { min: number; max: number }> = { "kling-4": { min: 700, max: 4553 } };
+
+/** Why a clip `width`×`height` is outside the sides the model takes, in Generate's words, or null. */
+export function clipSizeProblem(model: { id: string; name: string }, width: number, height: number): string | null {
+  const s = SOURCE_SIDES[model.id];
+  if (!s || !(width > 0) || !(height > 0)) return null;
+  if (Math.min(width, height) < s.min) return `${model.name} needs a clip at least ${s.min} px on each side, and this one is ${width}×${height}: upscale it first or pick another model`;
+  if (Math.max(width, height) > s.max) return `${model.name} takes clips up to ${s.max} px on a side, and this one is ${width}×${height}: scale it down first`;
+  return null;
+}
+
 /**
  * The most seconds of clips a run takes in all, where the model says (Kling 4.0: "the source, reference and element
  * videos must total at most 30s").

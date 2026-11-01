@@ -431,6 +431,23 @@ export const MAKERS: Maker[] = [
     renders: "keeps your clip's size",
   },
   {
+    // Kling 4.0's edit (fal, nm10-kling-4): @Video1 is the piece, @Image1.. what goes in. Billed on the seconds in plus out,
+    // at least twice the output: an edit keeps the piece's length, so twice the piece (the catalog's clipInput price).
+    id: "kling-4",
+    engine: "cloud",
+    modes: ["swap", "insert"],
+    targets: ["type"],
+    label: "Kling 4.0 edit",
+    note: "Kuaishou's closed model · up to 10 references as @Image · 3–30 s a piece · billed on the seconds in and out",
+    source: "partner",
+    refs: { min: 1, max: 10 },
+    maxSeconds: 30,
+    minSeconds: 3,
+    keepsSound: false,
+    sides: { min: 700, max: 4553 },
+    qualities: ["720p", "1080p"],
+  },
+  {
     id: "p-video-replace",
     engine: "cloud",
     modes: ["swap", "character"],
@@ -820,7 +837,8 @@ export function makerPrompt(p: PromptInput): string | undefined {
     const out = [described ? `The character: ${described}.` : "", words ? `${cap(words)}.` : ""].filter(Boolean).join(" ");
     return out || undefined;
   }
-  if (m.id === "kling-o3") {
+  // Kling O3 and Kling 4.0 edit: the clip is @Video1, the references @Image1...
+  if (m.id === "kling-o3" || m.id === "kling-4") {
     const refs = imageTags(Math.max(1, p.refs));
     if (p.mode === "insert") return `Add ${refs} to @Video1${words ? `: ${words}` : ""}. Keep everything else the same: the motion, camera, framing and light.`;
     return `Replace ${what || "the main subject"} in @Video1 with ${refs}${also}${words ? `. ${cap(words)}` : ""}. Keep everything else the same: the motion, camera, framing and light.`;

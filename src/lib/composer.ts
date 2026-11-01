@@ -7,7 +7,7 @@ import { FORMAT_INFO } from "./av/formats";
 import { fpsPlan, fpsSummary } from "./av/fps";
 import { targetShortEdge, upscaledSize, upscaleFactorFor, upscaleTier } from "./av/upscale";
 import { wholeClipProblem, wholeClipTool } from "./av/video-finish";
-import { clipWindowProblem } from "./catalog/clip-windows";
+import { clipSizeProblem, clipWindowProblem } from "./catalog/clip-windows";
 import { clipBilling } from "./catalog/plan";
 import { addFrameAt, frameTimes, framesInputs, removeFrameAt, spread, type FrameSupport } from "./catalog/keyframes";
 import { FACE_MOSAIC_MODELS } from "./catalog/open-tools";
@@ -293,7 +293,10 @@ export function clipBlocker(
   model: (Pick<ModelDef, "engine" | "options" | "defaults"> & Partial<Pick<ModelDef, "id" | "name">>) | undefined,
   ramBytes: number | undefined,
 ): string | null {
-  if (op === "v2v" && model?.id && facts?.duration) return clipWindowProblem({ id: model.id, name: model.name ?? model.id }, facts.duration);
+  if (op === "v2v" && model?.id && (facts?.duration || facts?.width)) {
+    const named = { id: model.id, name: model.name ?? model.id };
+    return (facts.duration ? clipWindowProblem(named, facts.duration) : null) ?? (facts.width && facts.height ? clipSizeProblem(named, facts.width, facts.height) : null);
+  }
   if (!facts?.width || !facts.height || !model) return null;
   if (op === "upscale-video") {
     const tier = upscaleTier(params.resolution ?? model.defaults?.resolution, model.options.resolutions, { width: facts.width, height: facts.height }, params.resolution !== undefined);
