@@ -435,7 +435,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       };
       if (req.method === "OPTIONS") return reply(200, "");
       // The stand-in's own count, for a test driving it from another process (never a ComfyUI route).
-      if (url.pathname === "/__fake/stats") return reply(200, { posts, uploads: inputs.size });
+      if (url.pathname === "/__fake/stats") return reply(200, { posts, uploads: inputs.size, history: history.size, pid: process.pid });
       const p = url.pathname;
       if (p === "/system_stats" || p === "/api/system_stats") {
         const argv = ["main.py", ...(opts.cors === "off" ? [] : ["--enable-cors-header", opts.cors]), "--base-directory", "C:\\Users\\someone\\private"];
@@ -543,6 +543,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
         return reply(200, h ? { [id]: h } : {});
       }
       if (p === "/history" && req.method === "POST") {
+        // ComfyUI's own: { delete: [ids] } or { clear: true } (a worker cleans up after each job).
         const asked = JSON.parse(body.toString("utf8") || "{}") as { delete?: string[]; clear?: boolean };
         entry.body = asked;
         if (asked.clear) history.clear();
