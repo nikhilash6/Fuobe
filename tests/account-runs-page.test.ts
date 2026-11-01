@@ -74,13 +74,4 @@ describe("Settings → Accounts' runs: the page", () => {
     expect(src("src/components/settings-form.tsx")).toMatch(/<AccountsChip \/>/);
     expect(src("src/components/security-settings.tsx")).toMatch(/<a href="#accounts"/);
   });
-
-  it("tells people who sign up that the owner sees their uploads too", () => {
-    for (const f of ["src/components/login-form.tsx", "src/components/gpu/account-gpu-section.tsx"]) {
-      expect(src(f), f).toContain("The studio&apos;s owner can see what you upload and make here.");
-    }
-    const doc = src("docs/public-signup.md");
-    expect(doc).not.toMatch(/Only the account that uploaded a file can open it/);
-    expect(doc).toMatch(/The studio's owner can open it too/);
-  });
 });

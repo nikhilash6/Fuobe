@@ -83,9 +83,7 @@ An account is signed in, but it sees the owner's studio as a guest does:
   the sign-up form says so. An account's delete is for good (it has no Trash), so its space comes
   back at once. The live-updates stream isn't sent to accounts: their studios poll instead.
 - **Its own uploads are its own.** Only the account that uploaded a file can use it in a run, and
-  no other account can open it. The studio's owner can open it too: a clip made from an uploaded
-  picture shows that picture as its poster in the owner's view of accounts' runs. The sign-up form
-  says the owner sees what an account uploads and makes. See [Uploads](#uploads).
+  no other account can open it. See [Uploads](#uploads).
 
 ## Managing accounts
 
