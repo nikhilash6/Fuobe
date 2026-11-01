@@ -2093,8 +2093,9 @@ const originals: ModelDef[] = [
     // Qwen-Image 2.1's edit graph reads up to four pictures and keeps the first one's shape. Neither of its graphs takes a
     // negative prompt, so the open half has none (the hosted half keeps it).
     engineOptions: { open: { maxImages: 4, negativePrompt: false } },
-    // The Standalone recipe's graph has no hosted copy: it stays the GPU's, the cloud makes the shot as an ordinary edit.
-    engineNote: "A Standalone shot from one product photo is cut out and relit into the scene on your GPU only (Qwen-Image-Edit 2509 + the White_to_Scene LoRA); the cloud makes it as a hosted Qwen-Image-Edit 2511 edit",
+    // The Standalone recipe's graph has no hosted copy (nothing hosted puts the cut-out on white): it stays the GPU's, and
+    // in the cloud Marketing's Standalone format lists the Original as running on your GPU only (marketing.ts).
+    engineNote: "A Standalone shot from one product photo runs on your GPU only (cut out with BiRefNet, put on white, relit into the scene by Qwen-Image-Edit 2509 + the White_to_Scene LoRA); in the cloud, Marketing's Standalone format offers the partner models instead",
   },
   {
     ...original({
