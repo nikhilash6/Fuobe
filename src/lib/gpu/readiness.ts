@@ -102,11 +102,22 @@ export interface WorkflowReadiness {
   reason?: string;
 }
 
+/** Whether the ComfyUI runs on its CPU (no device, --cpu, or a device that isn't a graphics card): its "VRAM" is system RAM. */
+const onCpu = (inv: GpuInventory) => {
+  const d = inv.devices[0];
+  return !d || !!inv.comfy?.flags.cpuOnly || !(d.type === "cuda" || d.type === "mps" || d.type === "xpu");
+};
+
+/** The graphics card's memory in GB as the check reads it (rounded: vramGb), undefined on a CPU or with no reading. */
+export function gpuVramGb(inv: GpuInventory): number | undefined {
+  return onCpu(inv) ? undefined : vramGb(inv.devices[0]?.vramTotal);
+}
+
 export function vramFit(needGb: number, inv: GpuInventory): ToolReadiness["vram"] {
   const d = inv.devices[0];
-  const cpu = !d || inv.comfy?.flags.cpuOnly || !(d.type === "cuda" || d.type === "mps" || d.type === "xpu");
-  const haveGb = cpu ? 0 : (vramGb(d.vramTotal) ?? 0);
-  const apple = !cpu && d.type === "mps";
+  const cpu = onCpu(inv);
+  const haveGb = gpuVramGb(inv) ?? 0;
+  const apple = !cpu && d?.type === "mps";
   let fit: VramFit;
   if (!needGb) fit = "any";
   else if (haveGb >= needGb) fit = "fits";

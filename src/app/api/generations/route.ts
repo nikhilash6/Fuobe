@@ -188,7 +188,7 @@ export async function POST(request: Request) {
           return Response.json({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" }, { status: 403 });
         }
         const skip = (body as { gpuCheck?: unknown } | null)?.gpuCheck === "skip";
-        const gate = await gateGeneration(gpuTargetFor(request, "read"), { request: req, route: planned.route, op: planned.op, modelId: planned.model.id, skip, actor: account?.id ?? "owner" });
+        const gate = await gateGeneration(gpuTargetFor(request, "read"), { request: req, route: planned.route, op: planned.op, modelId: planned.model.id, gpu: planned.gpu, skip, actor: account?.id ?? "owner" });
         if (!gate.ok) {
           if (account) unhit(`run:${account.id}`);
           return Response.json({ error: gate.message, code: "gpu-setup", ref: gate.ref, plan: gate.plan }, { status: 409, headers: { [GPU_SETUP_HEADER]: "1" } });

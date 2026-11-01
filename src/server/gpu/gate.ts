@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { fixPlan } from "@/lib/gpu/plan";
+import { CLEAN_VAE, DECODER_PARAM, GPU_PARAM } from "@/lib/qwen21-speed";
 import { deviceLabel, needTargets, toolReadiness } from "@/lib/gpu/readiness";
 import type { FixPlan, ToolReadiness, ToolRef } from "@/lib/gpu/types";
 import type { GenerationRequest } from "@/lib/catalog/types";
@@ -26,6 +27,8 @@ export interface GateInput {
   route: { provider: string; endpoint: string };
   op: string;
   modelId: string;
+  /** Qwen-Image 2.1's Options → GPU as the run's plan decided it (previewGeneration's gpu): the graph checked is the one it runs. */
+  gpu?: string;
   skip?: boolean;
   actor: string;
 }
@@ -39,19 +42,25 @@ const blocks = (r: ToolReadiness) => r.state === "unsupported" || r.needs.some((
 
 export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateResult> {
   if (!preflightOn() || g.skip || g.route.provider !== "comfyui" || t.kind === "none") return { ok: true };
-  const idx = loadIndex();
+  let idx = loadIndex();
   const req = g.request;
   const has = (id: string) => !!idx.workflows[id];
+  const extra: Record<string, unknown> = { ...req.params?.extra, ...(g.gpu && { [GPU_PARAM]: g.gpu }) };
   const id = resolveWorkflowId(g.route.endpoint, {
     op: g.op,
     clips: req.inputs?.videos?.length ?? 0,
     images: req.inputs?.images?.length ?? 0,
     format: req.params?.format,
     audio2: !!req.inputs?.audio2 || !!req.params?.extra?.audio2,
-    extra: req.params?.extra ?? {},
+    extra,
     has,
   });
   if (!has(id)) return { ok: true };
+  // Qwen-Image 2.1's Options → Decoder "Clean" loads the Texture-Fix VAE, an optional file of the graph: this run needs it.
+  const vae = `vae/${CLEAN_VAE}`;
+  if ((extra[DECODER_PARAM] === "clean" || extra.vae === CLEAN_VAE) && idx.files[vae] && !idx.workflows[id].files.includes(vae)) {
+    idx = { ...idx, workflows: { ...idx.workflows, [id]: { ...idx.workflows[id], files: [...idx.workflows[id].files, vae] } } };
+  }
   // The preset's route on the run's model (the one its preview was made with, or its own): its LoRAs are checked too.
   const preset = req.presetId ? presetTool(req.presetId, { modelId: g.modelId }) : null;
   const model = modelTool(g.modelId, g.op);

@@ -9,6 +9,7 @@ import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
 import { resample, tracksFor } from "@/lib/motion-paths";
 import { ANGLES_FIELDS, ANGLES_ORIGINAL } from "@/lib/catalog/open-tools";
 import { H3_BEST_GRAPH } from "@/lib/comfy-variants";
+import { QWEN21_SPEED_GRAPH } from "@/lib/qwen21-speed";
 
 describe("motion paths (Wan-Move draw to video)", () => {
   it("resamples a path to evenly spaced points, one per frame", () => {
@@ -135,6 +136,8 @@ describe("round-3 open models", () => {
             // Fuobe Angles' camera fields become the Multiple-angles LoRA's words in the planner (src/lib/catalog/open-tools.ts).
             // MiniMax H3's Quality picks the graph that runs (its -hq graph: src/lib/comfy-variants.ts).
             if (p === "quality" && H3_BEST_GRAPH[wid]) continue;
+            // Qwen-Image 2.1's Speed and GPU pick the graph that runs too (src/lib/qwen21-speed.ts).
+            if ((p === "speed" || p === "gpu") && QWEN21_SPEED_GRAPH[wid]) continue;
             if (!PROVIDER_PARAMS.has(p) && p !== "cameraMotion" && !(m.id === ANGLES_ORIGINAL && (ANGLES_FIELDS as readonly string[]).includes(p))) expect(keys, `${m.id} → ${wid}: ${p}`).toContain(p);
           }
         }

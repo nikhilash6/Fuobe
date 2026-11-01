@@ -19,7 +19,7 @@ import { FailedTile, MediaThumb, PendingTile, tileRatio } from "@/components/stu
 import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { Viewer } from "@/components/studio/viewer";
 import { useCreateGeneration, useEngine, useGenerationActions, useGenerations, useHydrated, useIsVisitor, useStatus } from "@/lib/api";
-import { MAX_FRAMES, STORYBOARD_ASPECTS, STORYBOARD_PARTNER_IDS, type StoryboardPartner } from "@/lib/catalog/storyboard";
+import { MAX_FRAMES, STORYBOARD_ASPECTS, STORYBOARD_PARTNER_IDS, type StoryboardNextScene, type StoryboardPartner } from "@/lib/catalog/storyboard";
 import { lookCard } from "@/lib/catalog/soul-cards";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { timeAgo } from "@/lib/format";
@@ -103,6 +103,31 @@ function PartnerPill({ value, onChange, names }: { value?: StoryboardPartner; on
       {options.map((o) => (
         <button
           key={o.v ?? "fuobe"}
+          type="button"
+          role="radio"
+          aria-checked={value === o.v}
+          title={o.title}
+          onClick={() => onChange(o.v)}
+          className={cn("h-7 rounded-full px-2.5 text-[12px] font-medium whitespace-nowrap text-muted-foreground transition", value === o.v && "bg-background text-foreground shadow-soft")}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** What a GPU board's next frames are made on: Qwen-Image 2.1 (the default), or the classic recipe boards used before. */
+function NextScenePill({ value, onChange }: { value?: StoryboardNextScene; onChange: (v?: StoryboardNextScene) => void }) {
+  const options: { v?: StoryboardNextScene; label: string; title: string }[] = [
+    { label: "Qwen-Image 2.1", title: "Each next frame continues the last one on Qwen-Image 2.1" },
+    { v: "classic", label: "Classic", title: "Each next frame on Qwen-Image-Edit 2509, the recipe boards used before" },
+  ];
+  return (
+    <div role="radiogroup" aria-label="Next frames made on" className="flex flex-wrap gap-1 rounded-full bg-muted p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.v ?? "qwen-21"}
           type="button"
           role="radio"
           aria-checked={value === o.v}
@@ -290,6 +315,8 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
   const [lookStrength, setLookStrength] = useState(1);
   // Cloud only: a partner model for every frame instead of Fuobe's open recipe.
   const [partner, setPartner] = useState<StoryboardPartner | undefined>();
+  // Your GPU only: the next frames' model (Qwen-Image 2.1 unless the classic recipe is picked).
+  const [nextScene, setNextScene] = useState<StoryboardNextScene | undefined>();
   const [open, setOpen] = useState<Generation | null>(null);
   const feed = useGenerations({ features: ["storyboard", "storyboard-film"], limit: 240 });
   const titles = useBoardTitles();
@@ -317,11 +344,13 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
   const pos = open ? flat.findIndex((g) => g.id === open.id) : -1;
 
   const boardPartner = engine === "cloud" ? partner : undefined;
+  const boardNextScene = engine === "open" ? nextScene : undefined;
   const lookName = look ? lookCard(look)?.name : undefined;
   const filled = scenes.filter((s) => s.trim());
   const boardBody = {
     engine,
     ...(boardPartner && { partner: boardPartner }),
+    ...(boardNextScene && { nextScene: boardNextScene }),
     ...(mode === "auto" ? { story, frames: count } : { scenes: filled }),
     references: refs.filter((r) => r.ref && !r.uploading).map((r) => r.ref),
     style: style || undefined,
@@ -487,6 +516,7 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
               <LookChip value={look} strength={lookStrength} onChange={(id) => setLook(id)} onStrength={setLookStrength} none="No look" />
               <RatioPill value={aspect} onChange={setAspect} />
               {engine === "cloud" && <PartnerPill value={partner} onChange={setPartner} names={modelNames} />}
+              {engine === "open" && <NextScenePill value={nextScene} onChange={setNextScene} />}
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 <span className="text-right text-[12px] leading-tight tabular-nums text-muted-foreground" aria-live="polite">
                   {visitor ? (
