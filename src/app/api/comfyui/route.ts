@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import type { ManifestWorkflow } from "@/lib/comfy";
 import { basename } from "@/lib/gpu/requirements";
 import { requestViewer } from "@/server/auth";
 import { runnerFacts } from "@/server/computer/tasks";
@@ -46,8 +47,13 @@ export async function GET(request?: Request) {
     generatedAt: manifest.generatedAt,
     comfyuiCommit: manifest.comfyuiCommit,
     workflows: manifest.workflows.map((w) => ({
-      ...w,
+      ...(visitor ? forVisitor(w) : w),
       models: w.models.map((m) => ({ ...m, present: inventory ? present.has(m.file) : null })),
     })),
   });
+}
+
+/** A workflow as anyone but the owner gets it: `validated` only on a checked one (its mark on the Workflows page). */
+function forVisitor({ validated, ...w }: ManifestWorkflow): Omit<ManifestWorkflow, "validated"> & { validated?: true } {
+  return validated ? { ...w, validated } : w;
 }

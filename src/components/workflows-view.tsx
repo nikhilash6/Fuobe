@@ -19,7 +19,7 @@ import { modelCardOf } from "@/lib/licences";
 import { cn } from "@/lib/utils";
 import { capabilityGroup, usedByIndex, WORKFLOW_GROUPS, type ComfyRoute } from "@/lib/workflow-usage";
 
-type WF = Omit<ManifestWorkflow, "models"> & { models: (ManifestWorkflow["models"][number] & { present: boolean | null })[] };
+type WF = Omit<ManifestWorkflow, "models" | "validated"> & { validated?: boolean; models: (ManifestWorkflow["models"][number] & { present: boolean | null })[] };
 
 interface ComfyStatus {
   /** null: a visitor, who isn't told about the studio's own ComfyUI (their own is on /connect). */
@@ -118,7 +118,8 @@ async function downloadGraph(raw: string, name: string) {
   }
 }
 
-function WorkflowCard({ wf, usedBy }: { wf: WF; usedBy: string[] }) {
+/** `owner`: the studio's owner is looking (their badge names the graph's ComfyUI check either way). */
+function WorkflowCard({ wf, usedBy, owner }: { wf: WF; usedBy: string[]; owner: boolean }) {
   const missing = wf.models.filter((m) => m.present === false && !m.optional).length;
   const total = wf.models.reduce((a, m) => a + (m.optional ? 0 : (m.sizeGb ?? 0)), 0);
   const source = workflowSource(wf.file);
@@ -134,13 +135,20 @@ function WorkflowCard({ wf, usedBy }: { wf: WF; usedBy: string[] }) {
           <Badge variant="secondary" className="rounded-[4px] text-[11px]">
             {wf.capability}
           </Badge>
-          {/* Not a warning: a graph the library's own check hasn't passed yet may still run (several made the site's previews). */}
-          <Badge
-            title={wf.validated ? "Passed the library's own ComfyUI check" : "This graph hasn't passed the library's own ComfyUI check yet"}
-            className={cn("rounded-[4px] text-[11px]", wf.validated ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")}
-          >
-            {wf.validated ? "validated" : "not yet checked"}
-          </Badge>
+          {owner ? (
+            <Badge
+              title={wf.validated ? "Passed the library's own ComfyUI check" : "This graph hasn't passed the library's own ComfyUI check yet"}
+              className={cn("rounded-[4px] text-[11px]", wf.validated ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")}
+            >
+              {wf.validated ? "validated" : "not yet checked"}
+            </Badge>
+          ) : (
+            wf.validated && (
+              <Badge title="Accepted by a real ComfyUI" className="rounded-[4px] bg-success/15 text-[11px] text-success">
+                <CheckCircle2 aria-hidden /> Checked
+              </Badge>
+            )
+          )}
         </div>
       </div>
       <p className="text-[12px] break-words text-muted-foreground">
@@ -287,6 +295,8 @@ export function WorkflowsView({ routes = [] }: { routes?: ComfyRoute[] }) {
     );
 
   const data = q.data;
+  // The server answers `reachable: null` to anyone but the studio's owner (src/app/api/comfyui/route.ts).
+  const owner = data.reachable !== null;
   const validated = workflows.filter((w) => w.validated).length;
   return (
     <div className="space-y-6">
@@ -315,7 +325,8 @@ export function WorkflowsView({ routes = [] }: { routes?: ComfyRoute[] }) {
             />
           </div>
           <span className="text-[12px] text-muted-foreground tabular-nums sm:ml-auto" aria-live="polite">
-            {list.length === workflows.length ? `${workflows.length} workflows` : `${list.length} of ${workflows.length}`} · {validated} validated
+            {list.length === workflows.length ? `${workflows.length} workflows` : `${list.length} of ${workflows.length}`}
+            {owner && ` · ${validated} validated`}
           </span>
         </div>
       )}
@@ -348,7 +359,7 @@ export function WorkflowsView({ routes = [] }: { routes?: ComfyRoute[] }) {
         <>
           <div ref={grid} className="grid grid-cols-[minmax(0,1fr)] gap-3 lg:grid-cols-2">
             {list.slice(0, shown).map((wf) => (
-              <WorkflowCard key={wf.id} wf={wf} usedBy={usedBy(wf.id)} />
+              <WorkflowCard key={wf.id} wf={wf} usedBy={usedBy(wf.id)} owner={owner} />
             ))}
           </div>
           {hasMore && (
