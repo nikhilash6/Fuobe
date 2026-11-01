@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_MOTION,
   H3_AZIMUTH_SIGN,
+  H3_LIMITS,
   MAX_KEYS,
   PATH_PRESETS,
   PHOTO_KEY,
@@ -102,10 +103,14 @@ describe("editing a path", () => {
     ]);
   });
 
-  it("holds at most 12 keys", () => {
+  it("holds at most 24 keys: your GPU follows them all, the cloud's H3 Max simplifies past 12 and says so", () => {
     let path: CameraKey[] = [];
-    for (let i = 1; i <= 20; i++) path = addKey(path, { azimuth: i * 10, elevation: 0, distance: 1 });
+    for (let i = 1; i <= 30; i++) path = addKey(path, { azimuth: i * 10, elevation: 0, distance: 1 });
+    expect(MAX_KEYS).toBe(24);
     expect(path).toHaveLength(MAX_KEYS);
+    const cloud = toH3MaxTrajectory(path);
+    expect("trajectory" in cloud && cloud.trajectory).toHaveLength(H3_LIMITS.max);
+    expect(cloud.notes.join(" ")).toMatch(/H3 Max takes up to 12 keyframes: the path is simplified/);
   });
 
   it("interpolates angles in a line and distance by ratio, holding before the first key and after the last", () => {

@@ -940,7 +940,22 @@ export interface ModelChoice {
   note?: string;
   /** Its name, where the page has no model facts (Ads Studio's picture picker). */
   name?: string;
+  /** Listed with its note but not picked on this engine, and why: it runs on your GPU only (the owner's 10-30 rule). */
+  unavailable?: string;
 }
+
+/** The choices a run can pick: one listed only to say it runs on your GPU is left out. */
+export const pickable = <T extends ModelChoice>(choices: readonly T[]): T[] => choices.filter((c) => !c.unavailable);
+
+/**
+ * Why the Original makes no Standalone shot in the cloud. The GPU's recipe cuts the product out with BiRefNet, puts it on
+ * white and relights it into the scene with Qwen-Image-Edit 2509 + the White_to_Scene LoRA (product-shot-qwen-edit-2509).
+ * fal hosts BiRefNet (fal-ai/birefnet/v2) and 2509 with LoRAs by URL (fal-ai/qwen-image-edit-plus-lora), but nothing
+ * hosted puts the cut-out on white (checked 2026-11-01: neither BiRefNet nor Bria's remover takes a background colour, and
+ * the LoRA was trained on products on white), so the recipe stays on the GPU and the cloud offers the partners instead.
+ */
+export const STANDALONE_CLOUD_WHY = "the cut-out on white and the White_to_Scene relight have no hosted copy";
+export const STANDALONE_CLOUD_NOTE = `Fuobe Original · runs on your GPU only: ${STANDALONE_CLOUD_WHY}`;
 
 /**
  * Marketing Studio Image's Original (build plan O10) with Fuobe's template prompts: Qwen-Image 2.1 on the user's GPU
@@ -980,7 +995,15 @@ export function formatModels(format: FormatDef, engine: Engine, has: { product: 
   }
   switch (format.id) {
     case "product-standalone":
-      return [original, { id: "bria-product-shot", note: "Keeps the product pixel-exact" }, { id: "nano-banana-pro" }, { id: "gpt-image-2-5" }, { id: "product-photography", note: "One-tap studio shot" }];
+      // The GPU's Standalone recipe (cut out, on white, relit by a LoRA) has no hosted copy: the Original is listed last,
+      // can't be picked in the cloud, and says it runs on your GPU (no other model makes its shot under its name).
+      return [
+        { id: "bria-product-shot", note: "Keeps the product pixel-exact" },
+        { id: "nano-banana-pro" },
+        { id: "gpt-image-2-5" },
+        { id: "product-photography", note: "One-tap studio shot" },
+        { ...original, note: STANDALONE_CLOUD_NOTE, unavailable: STANDALONE_CLOUD_WHY },
+      ];
     case "product-with-model":
       return [original, { id: "nano-banana-pro", note: "Product + person references" }, { id: "gpt-image-2-5" }];
     case "ads":

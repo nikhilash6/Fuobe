@@ -386,6 +386,7 @@ export function accessList(): AccessList {
       licence,
       ...(cloud && { cloud }),
       ...(weights && { weights }),
+      ...(m.engineNote && { engineNote: m.engineNote }),
       packs,
       on: !access.models.includes(m.id),
       offBy: all ? labels : [],

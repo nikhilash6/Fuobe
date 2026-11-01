@@ -10,7 +10,7 @@ import type {
   Preset,
   PresetRoute,
 } from "./types";
-import { sourceSeconds } from "./clip-windows";
+import { billedClipSeconds, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
 import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
@@ -797,15 +797,17 @@ const CLIP_LENGTH_OPS = new Set<Operation>(["upscale-video", "interpolate", "sdr
 /**
  * The seconds a clip edit that keeps the clip's length is billed for (Happy Horse, Runway Aleph, Lucy Edit, Kling O3 4K
  * edit…: a v2v model with no length to ask for): the clip's (params.sourceDuration, when the caller knows it), up to the
- * most its window takes (./clip-windows). Undefined for a model asked for a length, or when the clip's length isn't known.
+ * most its window takes (./clip-windows), or its frames ÷ 16 on fal's Wan 2.2 Fun VACE (params.sourceFps; 30 fps when
+ * not known). Undefined for a model asked for a length, or when the clip's length isn't known.
  */
-export function clipEditSeconds(model: Pick<ModelDef, "id" | "options" | "routes">, params: Pick<GenParams, "sourceDuration">, op?: Operation): number | undefined {
+export function clipEditSeconds(model: Pick<ModelDef, "id" | "options" | "routes"> & Partial<Pick<ModelDef, "engine">>, params: Pick<GenParams, "sourceDuration" | "sourceFps">, op?: Operation): number | undefined {
   const seconds = params.sourceDuration;
   if (op !== "v2v" || !seconds || !(seconds > 0) || model.options.durations?.length) return undefined;
   const routes = model.routes.filter((r) => r.op === "v2v");
   if (!routes.length || routes.some((r) => r.map?.duration)) return undefined;
   const max = sourceSeconds(model.id).max;
-  return max !== undefined ? Math.min(seconds, max) : seconds;
+  // fal's Wan 2.2 Fun VACE bills a clip's frames ÷ 16 (a 30 fps clip about 1.9× its length): clip-windows.ts.
+  return billedClipSeconds(model.id, max !== undefined ? Math.min(seconds, max) : seconds, params.sourceFps, model.engine);
 }
 
 /**
