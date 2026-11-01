@@ -108,7 +108,7 @@ export function licenceTerms(text: string): { flags: LicenceFlag[]; excludes?: s
   const noWeights = /^(n\/a|no model)\b/i.test(text.trim());
   const nonCommercial = /NON-COMMERCIAL/.test(text) || /^CC-BY-NC/.test(text.trim());
   const excludes = /\bEXCLUDES\s+([^);]+)/.exec(text)?.[1].trim();
-  const conditional = /Community License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Terms of Use|free below|below US\$/i.test(text);
+  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Terms of Use|free below|below US\$/i.test(text);
   const flags: LicenceFlag[] = [];
   if (nonCommercial) flags.push("non-commercial");
   if (excludes) flags.push("territory");
@@ -283,6 +283,8 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /LTX-2(?:\.x)? Community License/, name: "LTX-2 Community License", class: "conditions" },
   { re: /Stability AI Community License|Stability Community License/, name: "Stability AI Community License", class: "conditions", url: "https://stability.ai/community-license-agreement" },
   { re: /Krea 2 Community License/, name: "Krea 2 Community License", class: "conditions" },
+  // FLUX 3 Image Klein (nm10-flux3-klein): non-commercial, with commercial outputs for Qualifying Users below US$5M revenue.
+  { re: /FLUX Kommunity License/, name: "FLUX Kommunity License v1.0", class: "conditions", url: "https://huggingface.co/black-forest-labs/flux-3-image-klein" },
   { re: /IndexTTS-2 Model Use License/, name: "bilibili IndexTTS-2 Model Use License", class: "conditions" },
   { re: /Llama 3\.1 Community License/, name: "Llama 3.1 Community License", class: "conditions", url: "https://www.llama.com/llama3_1/license/" },
   { re: /DINOv3 License/, name: "DINOv3 License", class: "conditions" },

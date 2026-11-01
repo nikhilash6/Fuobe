@@ -1766,7 +1766,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "BFL's open 5.6B model: text to image, edits with up to 10 references, layout boxes",
+    "tagline": "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references, layout boxes; fal writes the full caption \u00b7 FLUX Kommunity licence",
     "routes": [
       {
         "op": "t2i",
@@ -1899,7 +1899,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "The undistilled Klein your FLUX 3 Klein LoRAs are trained on: text to image and edits with them",
+    "tagline": "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them \u00b7 FLUX Kommunity licence",
     "routes": [
       {
         "op": "t2i",

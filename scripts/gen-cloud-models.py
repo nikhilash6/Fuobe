@@ -226,14 +226,14 @@ KLEIN_FAL = "blackforestlabs/flux-3/klein"
 KLEIN_REC = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == f"{KLEIN_FAL}/text-to-image")
 KLEIN_LICENCE = {"licence": KLEIN_REC["license"].split(":")[0], "commercial": None, "note": KLEIN_REC["license"], "checked": KLEIN_REC["fetched"]}
 model("flux-3-klein", "FLUX 3 Klein", "Black Forest Labs", "flux", "image",
-      "BFL's open 5.6B model: text to image, edits with up to 10 references, layout boxes",
+      "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references, layout boxes; fal writes the full caption · FLUX Kommunity licence",
       [("t2i", f"{KLEIN_FAL}/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/text-to-image/lora"}),
        ("edit", f"{KLEIN_FAL}/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/edit-image/lora"})],
       badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3"},
       pricing=("image", KLEIN_REC["pricing"]["usd"], "per image at 1K (fal's planned rates by size)", {"byResolution": KLEIN_REC["pricing"]["byResolution"]}),
       licence=KLEIN_LICENCE)
 model("flux-3-klein-base", "FLUX 3 Klein Base with LoRAs", "Black Forest Labs", "flux", "image",
-      "The undistilled Klein your FLUX 3 Klein LoRAs are trained on: text to image and edits with them",
+      "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them · FLUX Kommunity licence",
       [("t2i", f"{KLEIN_FAL}/base/text-to-image/lora"), ("edit", f"{KLEIN_FAL}/base/edit-image/lora")],
       badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3"},
       licence=KLEIN_LICENCE)
