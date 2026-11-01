@@ -16,7 +16,7 @@ const { onEngine, enginesOf } = await import("@/lib/catalog/engines");
 const { planGeneration } = await import("@/lib/catalog/plan");
 const { loraEndpointFor, loraFields, routeLoraField } = await import("@/lib/catalog/loras");
 const { LORA_LIBRARY } = await import("@/lib/catalog/lora-library.generated");
-const { AD_VISUAL_MODELS, adVisualModel, formatModels, FORMATS, MARKETING_IMAGE_MODEL, wordsOnTop } = await import("@/lib/catalog/marketing");
+const { AD_VISUAL_MODELS, adVisualModel, formatModels, FORMATS, MARKETING_IMAGE_MODEL, pickable, STANDALONE_CLOUD_NOTE, wordsOnTop } = await import("@/lib/catalog/marketing");
 const { FASHION_MODELS, PHOTODUMP_MODELS, TRYON_MODEL } = await import("@/lib/catalog/packs");
 const { CAST_LOOK } = await import("@/lib/catalog/soul-cards");
 const { setSetting } = await import("@/server/settings");
@@ -69,10 +69,21 @@ describe("Fuobe Marketing Image", () => {
   it("is the first model of every image format and of Ads Studio's pictures, partners after it", () => {
     for (const f of Object.values(FORMATS).filter((x) => x.pipeline === "image")) {
       for (const engine of ["cloud", "open"] as const) {
+        // Except the cloud's Standalone shot, whose recipe runs on your GPU only (below).
+        if (f.id === "product-standalone" && engine === "cloud") continue;
         for (const product of [true, false]) expect(formatModels(f, engine, { product, avatar: false })[0].id, `${f.id}/${engine}`).toBe(MARKETING_IMAGE_MODEL);
       }
     }
     expect(formatModels(FORMATS.ads, "cloud", { product: true, avatar: false }).map((c) => c.id)).toContain("gpt-image-2-5");
+    // The Standalone recipe has no hosted copy (nothing hosted puts the cut-out on white): in the cloud the Original is
+    // listed last, can't be picked and says it runs on your GPU; no other model makes its shot under its name (10-30 rule).
+    const standalone = formatModels(FORMATS["product-standalone"], "cloud", { product: true, avatar: false });
+    expect(standalone.at(-1)).toEqual({ id: MARKETING_IMAGE_MODEL, note: STANDALONE_CLOUD_NOTE, unavailable: expect.stringMatching(/no hosted copy/) });
+    expect(STANDALONE_CLOUD_NOTE).toBe("Fuobe Original · runs on your GPU only: the cut-out on white and the White_to_Scene relight have no hosted copy");
+    expect(pickable(standalone).map((c) => c.id)).toEqual(["bria-product-shot", "nano-banana-pro", "gpt-image-2-5", "product-photography"]);
+    expect(pickable(formatModels(FORMATS["product-standalone"], "open", { product: true, avatar: false })).map((c) => c.id)).toEqual([MARKETING_IMAGE_MODEL]);
+    expect(getModel(MARKETING_IMAGE_MODEL)?.engineNote).toMatch(/runs on your GPU only .*White_to_Scene.*offers the partner models instead/);
+    expect(formatModels(FORMATS["product-standalone"], "open", { product: true, avatar: false })[0].note).toBe("Fuobe Original · Qwen-Image 2.1 on your GPU");
     expect(AD_VISUAL_MODELS.cloud.map((c) => c.id)).toEqual([MARKETING_IMAGE_MODEL, "nano-banana-pro", "gpt-image-2-5"]);
     expect(adVisualModel("open", "nano-banana-pro")).toBe(MARKETING_IMAGE_MODEL);
     expect(adVisualModel("cloud", "gpt-image-2-5")).toBe("gpt-image-2-5");
@@ -230,6 +241,16 @@ describe("Marketing Studio runs Fuobe Marketing Image on the studio's engine", (
     } finally {
       off();
     }
+  });
+
+  it("a cloud Standalone shot starts on a partner model, and asking for the Original there is refused in plain words", () => {
+    const cloud = planMarketing({ engine: "cloud", format: "product-standalone", templateId: "ps-ice-bath" }, { product: PRODUCT });
+    expect(cloud.steps[0].request.modelId).toBe("bria-product-shot");
+    expect(() => planMarketing({ engine: "cloud", format: "product-standalone", templateId: "ps-ice-bath", modelId: MARKETING_IMAGE_MODEL }, { product: PRODUCT })).toThrow(
+      "Fuobe Marketing Image makes Standalone shots on your GPU only (the cut-out on white and the White_to_Scene relight have no hosted copy): switch to your GPU, or pick another model",
+    );
+    // On your GPU it is the Original's recipe, as before.
+    expect(planMarketing({ engine: "open", format: "product-standalone", templateId: "ps-ice-bath", modelId: MARKETING_IMAGE_MODEL }, { product: PRODUCT }).steps[0].request.modelId).toBe(MARKETING_IMAGE_MODEL);
   });
 
   it("pins every step of a plan that names no engine to the run's engine (estimates, launches, Run again, Assist)", () => {

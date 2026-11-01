@@ -4,7 +4,7 @@ import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
-import { CLOUD_SHAPES, denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, videoStrengthFor, type Intensity } from "./evolution";
+import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
 /*
@@ -1907,7 +1907,7 @@ const DOP_OPTIONS: ModelOptions = {
   requires: { images: 1, msg: "Add a start frame: Fuobe DoP moves the camera through your picture" },
 };
 
-/** Fuobe Evolution's change intensity as a composer control on one engine's own field (the GPU's denoise, fal's video_strength). */
+/** Fuobe Evolution's change intensity as a composer control on the GPU graph's own field (its denoise; fal's hosted VACE has none). */
 function intensityControl(param: string, value: (i: Intensity) => number): NonNullable<ModelOptions["controls"]>[number] {
   return {
     param,
@@ -2034,28 +2034,37 @@ const originals: ModelDef[] = [
     options: { seed: true, negativePrompt: true, resolutions: ["480p", "720p"], maxImages: 4 },
   }),
   // Fuobe Evolution (O13): Higgsfield Evolution's Original (src/lib/catalog/evolution.ts plans the segments, the direction
-  // frame and the sound; Video tools → Evolution is its studio). The change intensity is the denoise the GPU graph starts
-  // from, and LTX-2.3's video_strength (1 − denoise) in the cloud: one control, each engine's own field.
+  // frame and the sound; Video tools → Evolution is its studio). Wan 2.2 Fun VACE on both engines: the graph on your GPU,
+  // fal's hosted depth route in the cloud (since the owner's call of 2026-10-30; LTX-2.3 before). The change intensity is
+  // the denoise the GPU graph starts from; fal's route has no such field, so in the cloud the change shapes only the
+  // direction frame Evolution makes, and the composer has no Change control there.
   {
     ...original({
       id: EVOLUTION.model,
       open: [comfy("v2v", "video-evolution-wan22-fun-vace", "Wan 2.2 Fun VACE from the noised segment, depth control, image = the direction frame; ≤81 frames at 16 fps")],
-      tagline: "Takes your clip further in a creative direction · Wan 2.2 Fun VACE free on your GPU (24 GB), or LTX-2.3 on fal",
-      options: { seed: true, negativePrompt: true, aspectRatios: [...CLOUD_SHAPES], resolutions: EVOLUTION_RESOLUTIONS.cloud, maxImages: 0 },
+      tagline: "Takes your clip further in a creative direction · Wan 2.2 Fun VACE free on your GPU (24 GB), or hosted on fal (there the change level shapes the direction frame only)",
+      options: {
+        seed: true,
+        negativePrompt: true,
+        resolutions: EVOLUTION_RESOLUTIONS.cloud,
+        maxImages: 1,
+        imageLabels: ["direction frame (optional: the clip's first frame as it should look)"],
+      },
     }),
-    defaults: { aspectRatio: "16:9", duration: 5, resolution: EVOLUTION_DEFAULT_RESOLUTION.cloud },
-    engineDefaults: { open: { resolution: EVOLUTION_DEFAULT_RESOLUTION.open, aspectRatio: "auto" } },
+    // The cloud half renders the clip's own frames (match_input_num_frames) and is priced on them (clip-windows.ts):
+    // only the GPU half asks for a length.
+    defaults: { resolution: EVOLUTION_DEFAULT_RESOLUTION.cloud },
+    engineNote: "Both engines run Wan 2.2 Fun VACE with a direction frame per segment; in the cloud the change level shapes the direction frame only, and how much of the clip's own look stays is set on your GPU only",
+    engineDefaults: { open: { resolution: EVOLUTION_DEFAULT_RESOLUTION.open, aspectRatio: "auto", duration: 5 } },
     engineOptions: {
       open: {
         aspectRatios: ["auto", ...VID_AR],
         resolutions: EVOLUTION_RESOLUTIONS.open,
         durations: [3, 4, 5],
-        maxImages: 1,
         imageLabels: ["direction frame (the clip's first frame as it should look)"],
         controls: [intensityControl("denoise", denoiseFor)],
         requires: { images: 1, msg: "Add the direction frame: the clip's first frame as it should look (Video tools → Evolution makes it for you)" },
       },
-      cloud: { controls: [intensityControl("video_strength", videoStrengthFor)] },
     },
   },
   // Character swap (Openjutsu, Akatz Labs' H3 Character Swap): MiniMax H3 with the Character Swap LoRA. On your GPU the
@@ -2084,6 +2093,9 @@ const originals: ModelDef[] = [
     // Qwen-Image 2.1's edit graph reads up to four pictures and keeps the first one's shape. Neither of its graphs takes a
     // negative prompt, so the open half has none (the hosted half keeps it).
     engineOptions: { open: { maxImages: 4, negativePrompt: false } },
+    // The Standalone recipe's graph has no hosted copy (nothing hosted puts the cut-out on white): it stays the GPU's, and
+    // in the cloud Marketing's Standalone format lists the Original as running on your GPU only (marketing.ts).
+    engineNote: "A Standalone shot from one product photo runs on your GPU only (cut out with BiRefNet, put on white, relit into the scene by Qwen-Image-Edit 2509 + the White_to_Scene LoRA); in the cloud, Marketing's Standalone format offers the partner models instead",
   },
   {
     ...original({
@@ -2153,10 +2165,12 @@ const originals: ModelDef[] = [
     ...original({
       id: "fuobe-speak",
       open: [{ ...comfy("avatar", "infinitetalk-wanwrapper", "InfiniteTalk + FusioniX, 25 steps, shift 10, guidance 5 / 5, 15 motion frames"), extra: { ...SPEAK_GRAPH }, loraSlot: true }],
-      tagline: "A portrait speaks your voice track, lips, face and head in sync, long takes · InfiniteTalk + FusioniX free on your GPU (16 GB), or hosted on fal",
+      tagline: "A portrait speaks your voice track, lips, face and head in sync, long takes · InfiniteTalk + the FusioniX LoRA free on your GPU (16 GB), or fal's InfiniteTalk without the LoRA",
       options: { resolutions: ["480p", "720p"], seed: true, maxImages: 1, promptOptional: true, defaultPrompt: SPEAK_PROMPT },
     }),
     engineDefaults: { open: { aspectRatio: "auto" } },
+    // fal's InfiniteTalk endpoints (and Replicate) take no LoRA (checked 2026-11-01: research studios[speak].original.cloud).
+    engineNote: "Your GPU adds the FusioniX LoRA (with Higgsfield's Infinite Talk settings); the cloud runs fal's InfiniteTalk without it",
     // The GPU graph frames the portrait itself (its shape by default); the LoRA is the recipe's, downloaded before a run.
     engineOptions: { open: { aspectRatios: ["auto", ...VID_AR], negativePrompt: true, ...(SPEAK_LORA && { loras: [SPEAK_LORA] }) } },
   },

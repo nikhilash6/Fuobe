@@ -1,8 +1,9 @@
 // Build plan O13, browser check: Video tools → Evolution, the Storyboard's Soul looks and the Canvas picker's
 // Effects 2.0 chains, at 1440 and 390 px, light and dark, in demo mode (no keys, ComfyUI and Ollama unreachable).
 // Evolution: a clip goes in, Low / Medium / High, the direction written by the offline writer, a long direction said to
-// be cut, the price before it runs (a demo), a run that finishes with a before / after; the open engine says "on your
-// GPU". Storyboard: the cloud board runs on Fuobe's open recipe with Nano Banana Pro a partner choice, the look chip
+// be cut, the price before it runs (a demo), a run that finishes with a before / after; the cloud runs the GPU's model
+// hosted on fal (Wan 2.2 Fun VACE, no LTX-2.3), 480p / 580p / 720p, and says in one line what stays on the GPU; the open
+// engine says "on your GPU". Storyboard: the cloud board runs on Fuobe's open recipe with Nano Banana Pro a partner choice, the look chip
 // starts at "No look", a look is picked, the board's price is shown, a board in that look is made. Canvas: the
 // Effects 2.0 chains have their own section and one opens as a canvas with the edit and the effect. Nothing scrolls
 // sideways. Usage: node tests/e2e/popcorn-evolution.mjs [appUrl] [--shots <dir>]. Exits 1 on a failed check.
@@ -82,6 +83,11 @@ try {
       check(`${tag}: the offline writer wrote the direction`, /reimagined from the ground up/.test(written) && /Written by Fuobe's offline writer/.test(await text()), JSON.stringify(written.slice(0, 50)));
       await page.waitForFunction(() => /Placeholder · free|≈ \$|Free/.test(document.body.innerText), null, { timeout: 30_000 }).catch(() => {});
       check(`${tag}: the price before it runs (a demo here)`, /Placeholder · free/.test(await text()) && /Fuobe Evolution · \d+(\.\d+)? s · 720p/.test(await text()));
+      // The cloud runs the GPU's model hosted on fal, never a substitute, and says in one line what the GPU keeps.
+      check(`${tag}: cloud: Wan 2.2 Fun VACE hosted on fal, no LTX-2.3`, /runs the GPU's model hosted on fal/.test(await text()) && /Wan 2\.2 Fun VACE re-renders the piece by its depth with that frame as its reference/.test(await text()) && !/LTX/.test(await text()));
+      check(`${tag}: cloud: one line says the change level's limit`, /In the cloud the change level shapes each piece's direction frame; how much of the clip's own look stays is set on your GPU only/.test(await text()));
+      check(`${tag}: cloud: the references reach each piece's direction frame`, /In the cloud the first 3 also go into each piece's direction frame/.test(await text()));
+      check(`${tag}: cloud: 480p, 580p or 720p`, (await page.getByRole("radiogroup", { name: "Resolution" }).getByRole("radio").allInnerTexts()).join("|") === "480p|580p|720p");
       check(`${tag}: no sideways scroll (Evolution, set up)`, (await sideways()) <= 1, `${await sideways()} px`);
       await shot("evolution-setup");
       await page.getByRole("button", { name: "Evolve" }).click();
@@ -98,6 +104,7 @@ try {
       await page.getByRole("radiogroup", { name: "Engine" }).getByRole("radio", { name: "Open source" }).click();
       await page.waitForFunction(() => /segments|Needs a 24 GB GPU/.test(document.body.innerText), null, { timeout: 30_000 }).catch(() => {});
       check(`${tag}: open engine: 480p first, the GPU line`, (await page.getByRole("radiogroup", { name: "Resolution" }).getByRole("radio", { name: "480p" }).getAttribute("aria-checked")) === "true" && /Needs a 24 GB GPU/.test(await text()));
+      check(`${tag}: open engine: no cloud-only line`, !/In the cloud the change level/.test(await text()));
       check(`${tag}: no sideways scroll (Evolution, open)`, (await sideways()) <= 1, `${await sideways()} px`);
       await page.getByRole("radiogroup", { name: "Engine" }).getByRole("radio", { name: "Cloud" }).click();
 

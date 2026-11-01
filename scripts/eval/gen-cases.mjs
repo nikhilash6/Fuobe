@@ -5,6 +5,7 @@
 //   cases/soul-hex.json  Soul HEX: Fuobe's own palettes in the prompt, and the open engine's palette lock
 //   cases/dop.json   one case per DoP motion / effect that the research gives a LoRA, a camera pose or a camera LoRA
 //   cases/dop-mix.json  Fuobe DoP's Mix: a move and an effect on one run, against the move alone
+//   cases/dop-mixed-media.json  DoP's Mixed Media effects in the cloud, blind: Fuobe DoP against Kling 2.5 Turbo
 //   cases/case.schema.json  the suite format as JSON Schema (for editors)
 // The prompts are Fuobe's own (never Higgsfield's). Run: node scripts/eval/gen-cases.mjs [--check]
 import fs from "node:fs";
@@ -394,6 +395,62 @@ function dopMixSuite() {
   };
 }
 
+/**
+ * DoP's Mixed Media effects (research motionsEffects[status mixed-media-route], 32 of them) that the comparison runs: drawn,
+ * film, craft and colour looks, five with a look LoRA and three on their words (src/lib/catalog/mixed-media-looks.ts).
+ */
+const MIXED_MEDIA_PICKS = ["Sketch", "Noir", "Vintage", "Paper", "Hand Paint", "Comic", "Two Color", "Broken Mirror"];
+
+/** The rule the owner set on 2026-10-30 (docs/handoff/owner-decisions.json ownerCalls_pr14.dopMixedMediaDefault). */
+export const DOP_MIXED_MEDIA_RULE =
+  "Fuobe DoP stays the cloud default for DoP's 32 Mixed Media effects unless it clearly loses this blind comparison: in one cloud run with at least 6 blind ratings per case, Kling 2.5 Turbo takes at least two thirds of all non-tie ratings and more than half of them in at least 6 of the 8 cases. Then the default goes back to Kling 2.5 Turbo, in a reviewed code change (src/lib/catalog/dop.ts); anything less keeps Fuobe DoP.";
+
+function dopMixedMediaSuite() {
+  const catalog = catalogPresetNames();
+  const effects = research().recipes.motionsEffects.filter((m) => m.status === "mixed-media-route").flatMap((m) => m.presets);
+  if (effects.length !== 32) throw new Error(`expected DoP's 32 Mixed Media effects, found ${effects.length}`);
+  const cases = MIXED_MEDIA_PICKS.map((name) => {
+    if (!effects.includes(name) || !catalog.effect.has(name)) throw new Error(`Mixed Media effect ${name}: not in the research's 32 or not in the catalog`);
+    return {
+      id: `dop-mixed-media/${slug(name)}`,
+      title: `DoP Mixed Media · ${name}`,
+      motion: name,
+      presetId: `effect-${slug(name)}`,
+      inputs: { images: ["local/dop/start.png"] },
+      demoInputs: { images: ["fixtures/start-frame.png"] },
+      tags: ["effect", "mixed-media-route"],
+    };
+  });
+  return {
+    $schema: "./case.schema.json",
+    suite: "dop-mixed-media",
+    title: "Fuobe DoP · Mixed Media effects against Kling 2.5 Turbo (blind)",
+    description: `${HEADER} The first suite to run once you have paid keys. ${cases.length} of DoP's ${effects.length} Mixed Media effects on your start frame (local/dop/start.png, a person on a bridge), in the cloud, rated blind: the preset as it ships (Fuobe Mixed Media draws the still in the look, then Fuobe DoP animates it) against the preset's words on Kling 2.5 Turbo, its cloud default before build plan O9. The demo engine runs the Original only, to check the suite.`,
+    original: ["fuobe-dop"],
+    kind: "video",
+    recipe: "motion",
+    runFirst: "paid-keys",
+    decides: DOP_MIXED_MEDIA_RULE,
+    targets: {
+      cloud: { models: ["fuobe-dop"], params: { duration: 5 } },
+      demo: { models: ["fuobe-dop"], params: { duration: 5 } },
+    },
+    defaults: {
+      seeds: [1001, 2002],
+      prompts: [{ id: "bridge", text: "a woman in a red coat on a city bridge at golden hour" }],
+      metrics: ["temporal", "clip"],
+      variant: "original",
+      candidate: "original",
+      timeoutSeconds: 2700,
+    },
+    variants: {
+      original: { description: "The preset as it ships in the cloud: the still drawn in the look by Fuobe Mixed Media, then Fuobe DoP" },
+      partner: { description: "The preset's words on Kling 2.5 Turbo (the default before O9), on your unchanged start frame", models: { cloud: ["kling-2-5-turbo"] }, engines: ["cloud"] },
+    },
+    cases,
+  };
+}
+
 const write = (name, data, check) => {
   const file = path.join(CASES_DIR, name);
   const text = `${JSON.stringify(data, null, 2)}\n`;
@@ -409,12 +466,21 @@ const write = (name, data, check) => {
 
 export function generated() {
   const dop = dopSuite();
-  return { "soul.json": soulSuite(), "soul-cinema.json": soulCinemaSuite(), "soul-hex.json": soulHexSuite(), "dop.json": dop.suite, "dop-mix.json": dopMixSuite(), "case.schema.json": schemaJson(), later: dop.later };
+  return {
+    "soul.json": soulSuite(),
+    "soul-cinema.json": soulCinemaSuite(),
+    "soul-hex.json": soulHexSuite(),
+    "dop.json": dop.suite,
+    "dop-mix.json": dopMixSuite(),
+    "dop-mixed-media.json": dopMixedMediaSuite(),
+    "case.schema.json": schemaJson(),
+    later: dop.later,
+  };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const check = process.argv.includes("--check");
   const out = generated();
-  for (const name of ["soul.json", "soul-cinema.json", "soul-hex.json", "dop.json", "dop-mix.json", "case.schema.json"]) write(name, out[name], check);
-  console.log(`soul: ${out["soul.json"].cases.length} looks · dop: ${out["dop.json"].cases.length} presets · dop-mix: ${out["dop-mix.json"].cases.length} pairs${out.later.length ? ` (${out.later.length} research names not in the catalog yet)` : ""}`);
+  for (const name of ["soul.json", "soul-cinema.json", "soul-hex.json", "dop.json", "dop-mix.json", "dop-mixed-media.json", "case.schema.json"]) write(name, out[name], check);
+  console.log(`soul: ${out["soul.json"].cases.length} looks · dop: ${out["dop.json"].cases.length} presets · dop-mix: ${out["dop-mix.json"].cases.length} pairs · dop-mixed-media: ${out["dop-mixed-media.json"].cases.length} effects${out.later.length ? ` (${out.later.length} research names not in the catalog yet)` : ""}`);
 }

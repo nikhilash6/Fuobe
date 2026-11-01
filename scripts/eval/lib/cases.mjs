@@ -54,7 +54,7 @@ export function validateAll(files = suiteFiles()) {
   return files.map((file) => {
     try {
       const s = readSuite(file);
-      return { file, ok: true, suite: s.suite, cases: s.cases.length, lines: [] };
+      return { file, ok: true, suite: s.suite, cases: s.cases.length, ...(s.runFirst && { runFirst: s.runFirst }), lines: [] };
     } catch (e) {
       return { file, ok: false, cases: 0, lines: e instanceof SuiteError ? e.lines : [e.message] };
     }

@@ -18213,7 +18213,7 @@
    "original": {
     "model": "fuobe-evolution",
     "added": "2026-10-29 (build plan O13)",
-    "source": "Fuobe's own recipe for Higgsfield Evolution's Original, from build plan O13 (denoise by intensity, an LLM-written direction) and the LTX-2.3 22B video-to-video schema read on 2026-10-24 (§3.1). Unmeasured until the evaluation harness (O8) runs the evolution suite on a GPU and on fal.",
+    "source": "Fuobe's own recipe for Higgsfield Evolution's Original, from build plan O13 (denoise by intensity, an LLM-written direction). The cloud half moved on 2026-11-01 (package owner-calls-1, the owner's call of 2026-10-30) from LTX-2.3 22B video-to-video (a different model) to fal's hosted Wan 2.2 Fun VACE depth, the GPU recipe's model; its schema was read again that day (hostedBaseEndpoints[fal-ai/wan-22-vace-fun-a14b/depth]). Unmeasured until the evaluation harness (O8) runs the evolution suite on a GPU and on fal.",
     "intensity": {
      "low": 0.45,
      "medium": 0.65,
@@ -18225,35 +18225,42 @@
      "maxReferences": 40,
      "maxDirectionChars": 10000
     },
-    "direction": "An LLM writes the creative direction from the references (images sent to a model that can see them: Claude, or Ollama with a vision model on the open engine) and the user's few words, as a description of the finished video's scene (the LTX endpoint renders a scene, not an instruction); with no LLM, or in demo mode, Fuobe's offline writer builds it from the intensity, the words and the number of references. The user can edit it before the run; a run with none writes one first.",
+    "direction": "An LLM writes the creative direction from the references (images sent to a model that can see them: Claude, or Ollama with a vision model on the open engine) and the user's few words, as a description of the finished video's scene; with no LLM, or in demo mode, Fuobe's offline writer builds it from the intensity, the words and the number of references. The user can edit it before the run; a run with none writes one first.",
     "cloud": {
-     "endpoint": "fal-ai/ltx-2.3-22b/video-to-video",
-     "loraEndpoint": "fal-ai/ltx-2.3-22b/video-to-video/lora",
-     "strengthField": "video_strength",
-     "strength": "1 − denoise: low 0.55, medium 0.35, high 0.15 (the field's description: lower values give the model more freedom to change the video; fal's default 0.01 all but re-renders it)",
+     "endpoint": "fal-ai/wan-22-vace-fun-a14b/depth",
+     "frame": "fal-ai/qwen-image-edit-2511",
+     "replaced": "fal-ai/ltx-2.3-22b/video-to-video (video_strength 1 − denoise), the cloud route until 2026-11-01: a different model from the GPU's, and it took no images",
      "fixed": {
-      "enable_prompt_expansion": false,
-      "generate_audio": false,
-      "match_video_length": false,
-      "match_input_fps": false,
-      "fps": 24
+      "preprocess": true
      },
-     "fps": 24,
-     "maxFrames": 481,
-     "pieces": "a clip over 20 s (481 frames at 24 fps) is cut into equal pieces of at most 20 s, each evolved on its own and joined",
-     "sizes": "the tier's size for the clip's nearest shape, from Fuobe Cinema's table (studios[cinema-studio].original.cloud.sizes)",
-     "sound": "generate_audio off; the clip's own sound is put back on the joined result (merge-audio-video)",
-     "references": "the endpoint takes no images: references shape the direction only (unverified whether fal-ai/ltx-2.3-22b/reference-video-to-video/lora's IC-LoRA could carry one)"
+     "defaults": {
+      "match_input_num_frames": true,
+      "match_input_frames_per_second": true
+     },
+     "segments": "Fuobe Shorts' cloud pieces: equal pieces of at most 10 s and 241 frames as fal works them (a clip above 30 fps worked at a whole fraction of its rate with temporal_downsample_factor and brought back), each cut with fal's trim-video unless it is the whole clip",
+     "directionFrame": "per piece, its first frame (fal's extract-frame) taken toward the direction by hosted Qwen-Image-Edit 2511 with the GPU's frame instruction for the intensity and the first 3 references as images 2–4, as the GPU recipe does with its own edit step",
+     "video": "Wan 2.2 Fun VACE depth: video_url = the piece (preprocess on, so fal derives the depth itself), ref_image_urls = [the direction frame], the direction as the prompt; frames and rate match the piece; no first_frame_url",
+     "frameRole": "the direction frame goes as the VACE reference (ref_image_urls), as the GPU graph uses it (video-evolution-wan22-fun-vace node 15 WanVaceToVideo: reference_image = the direction frame, control_video = the depth); first_frame_url is not sent, so frame 0 isn't pinned to the frame, which the GPU doesn't do either (decided 2026-11-01 in package owner-calls-1's fix: the first build sent first_frame_url only, as Fuobe Shorts does; Shorts keeps it, its own recipe pins the restyled first frame). Unmeasured: the evolution eval suite can compare the two once paid keys exist",
+     "intensity": "the endpoint has no strength or denoise field (31 inputs, read 2026-11-01): in the cloud the change level reaches the direction frame's instruction only (refine gently / change / reimagine boldly; low and medium keep the people), and the clip reaches the model only as its depth, so how much of the clip's own look stays (the GPU's denoise) is set on the GPU only",
+     "references": "the first 3 go into each piece's direction frame (images 2–4); the rest, and up to 8 in all with the clip's frame, shape the written direction",
+     "resolutions": [
+      "480p",
+      "580p",
+      "720p"
+     ],
+     "sound": "the endpoint's output is silent; the clip's own sound is put back on the joined result (merge-audio-video)",
+     "price": "$0.10 per video second at 720p ($0.075 at 580p, $0.05 at 480p), video seconds counted at 16 frames per second (a 30 fps piece costs about 1.9× its length); plus each direction frame's Qwen edit (about $0.03 a megapixel) and fal's trim, extract-frame, join and merge steps"
     },
     "open": {
      "segments": "≤81 frames (4n+1) at 16 fps, back to back (video-segment-resample), 480p or 720p; the graph itself also loads any clip at 16 fps (VHS_LoadVideo, at most `frames` frames, cut to 4n+1) and runs as many frames as it loaded, so a whole clip sent from Edit video is neither slow motion nor a shape error",
-     "directionFrame": "qwen-image-edit-2511 on the segment's first frame with the direction, up to 2 references as images 2–3",
+     "directionFrame": "Qwen-Image 2.1 Turbo (oss-qwen-image-21-turbo, 8 steps) on the segment's first frame with the direction, up to 3 references as images 2–4 (corrected 2026-11-01: the first version used qwen-image-edit-2511 with 2 references; commit 244bed92 moved image edits to Qwen-Image 2.1)",
      "video": "video-evolution-wan22-fun-vace: reference latent + VAE-encoded segment, noised to denoise = the noise level it starts from (flow matching: (1 − denoise) × clip + denoise × noise). The simple scheduler with shift 5 reaches that level N − 4 steps into a schedule of N = round(4 × (5 − 4 × denoise) / denoise) steps, and the last 4 run (Lightx2v 4-step): low 0.45 → N 28 (starts at σ 0.455), medium 0.65 → N 15 (0.645), high 0.85 → N 8 (0.833). Wan 2.2's high-noise expert takes only the steps at or above its switch point (σ 0.875), so all three intensities run on the low-noise expert; full denoise is the restyle graph's 2 + 2. Depth Anything 3 depth on every frame. (Corrected 2026-10-29: the first version noised the way KSampler does, floor(4 / denoise) steps, which with 4 steps and shift 5 started every intensity at σ 0.83–1 and made high the same as full noise.)",
      "join": "video-concat-N, then the clip's own sound (video-mux-audio)"
     },
     "unverified": [
-     "nothing rendered: the denoise values, LTX-2.3's video_strength at these values, and whether fal resamples a 30 fps input to the fixed 24 fps",
-     "Lightx2v's 4-step LoRA at these start levels (it was distilled on the full-noise schedule, σ 1 → 0.94 → 0.83 → 0.63), and whether low (σ 0.45) changes enough to be seen"
+     "nothing rendered: the denoise values on the GPU, and in the cloud how far the direction frame plus depth carries each change level",
+     "Lightx2v's 4-step LoRA at these start levels (it was distilled on the full-noise schedule, σ 1 → 0.94 → 0.83 → 0.63), and whether low (σ 0.45) changes enough to be seen",
+     "fal's preprocess on the depth endpoint (that it derives depth from an RGB clip), as for Fuobe Shorts"
     ]
    }
   },
@@ -18621,7 +18628,13 @@
     "cloud": {
      "endpoint": "fal-ai/infinitalk",
      "fps": 25,
-     "note": "No motion_frame, shift, guidance or LoRA fields: the like-for-like copy runs only on the GPU. num_frames 41–721 at 25 fps follows the voice's length."
+     "note": "No motion_frame, shift, guidance or LoRA fields: the like-for-like copy runs only on the GPU. num_frames 41–721 at 25 fps follows the voice's length.",
+     "loraCheck": {
+      "checked": "2026-11-01",
+      "fal": "fal's model search lists three InfiniteTalk endpoints (fal-ai/infinitalk, fal-ai/infinitalk/video-to-video, fal-ai/infinitalk/single-text); their OpenAPI inputs (prompt, image_url or video_url, audio_url or text_input and voice, num_frames, resolution, seed, acceleration, enable_safety_checker) have no LoRA field, and fal-ai/infinitalk/lora doesn't exist (404)",
+      "replicate": "no InfiniteTalk model found at the likely slugs (zsxkib/infinite-talk, zsxkib/infinitetalk, meigen-ai/infinitetalk, lucataco/infinitetalk, fofr/infinitetalk, camenduru/infinitetalk, wan-video/infinitetalk: 404); Replicate's search needs an API token, which this machine doesn't have, so a model under another name isn't ruled out. zsxkib/multitalk exists (MultiTalk, a different model)",
+      "result": "no hosted InfiniteTalk takes a LoRA: the cloud runs fal's InfiniteTalk without FusioniX, the GPU keeps it, and the UI says so (the owner's call of 2026-10-30)"
+     }
     },
     "motion": {
      "id": "fuobe-speak-motion",
@@ -18689,7 +18702,8 @@
     "cloud": {
      "edit": "fal-ai/qwen-image-edit-2511 (fal-ai/qwen-image-edit-2511/lora with LoRAs; Replicate qwen/qwen-image-edit-2511)",
      "t2i": "fal-ai/qwen-image-2512 (fal-ai/qwen-image-2512/lora with LoRAs)",
-     "price": "$0.03 per megapixel for an edit, $0.035 with LoRAs; text to image $0.02 per megapixel"
+     "price": "$0.03 per megapixel for an edit, $0.035 with LoRAs; text to image $0.02 per megapixel",
+     "productShot": "none: the Standalone shot runs on the GPU only (the owner's 10-30 rule, package owner-calls-1's fix, 2026-11-01). fal hosts BiRefNet (fal-ai/birefnet/v2) and Qwen-Image-Edit 2509 with LoRAs by URL (fal-ai/qwen-image-edit-plus-lora, so the White_to_Scene LoRA could load), but no hosted step puts the cut-out on white: fal-ai/birefnet/v2 (output_mask, mask_only, refine_foreground) and fal-ai/bria/background/remove take no background colour (schemas read 2026-11-01), and the LoRA turns a product on white into a scene. The cloud's Standalone format lists the Original as running on your GPU only and starts on a partner; until this fix it made the shot as a plain 2511 edit"
     },
     "open": {
      "edit": "qwen-image-edit-2511-multi (up to 3 references: product, person, setting)",
@@ -22881,7 +22895,7 @@
    "price": "Your request will cost $0.10 per video second for 720p, $0.075 per video second for 580p, $0.05 per video second for 480p. Video seconds are calculated at 16 frames per second.",
    "verified": true,
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/wan-22-vace-fun-a14b/depth",
-   "checked": "2026-10-27"
+   "checked": "2026-11-01"
   },
   {
    "provider": "fal",
