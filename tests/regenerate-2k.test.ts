@@ -657,7 +657,8 @@ describe("Canvas: the Upscale node's Regenerate (creative) choice", () => {
     });
     expect(item.disabled).toBeUndefined();
     expect(canvas.paletteItems("both", "cloud").find((p) => p.id === "upscale-regenerate")!.disabled).toBe(canvas.GPU_ONLY_ENTRY);
-    expect(canvas.paletteItems("cloud").find((p) => p.id === "upscale-regenerate")!.disabled).toMatch(/^Runs on your GPU \(open source\)/);
+    expect(canvas.paletteItems("cloud").find((p) => p.id === "upscale-regenerate")!.disabled).toBe("Runs on your GPU (open source): this install uses paid APIs only");
+    expect(canvas.GPU_ONLY_ENTRY).toBe("Runs on your GPU (open source): switch the board to Open source");
     // The plain Upscale entry is untouched.
     expect(canvas.paletteItems("both", "cloud").find((p) => p.id === "upscale")!.disabled).toBeUndefined();
     const node = {

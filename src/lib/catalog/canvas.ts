@@ -301,8 +301,9 @@ function pick(type: CanvasNodeType): Omit<PaletteItem, "id"> {
 
 const paletteCache = new Map<string, PaletteItem[]>();
 
-/** Why a GPU-only entry (Regenerate) can't be added on the cloud. */
-export const GPU_ONLY_ENTRY = `${REGEN_COPY.gpuOnlyWhy}. Switch the board to open source to add it`;
+/** Why a GPU-only entry (Regenerate: nobody hosts its model) can't be added on a cloud board, or on a cloud-only install. */
+export const GPU_ONLY_ENTRY = `${REGEN_COPY.gpuOnly}: switch the board to Open source`;
+export const GPU_ONLY_INSTALL = `${REGEN_COPY.gpuOnly}: this install uses paid APIs only`;
 
 /**
  * Palette entries whose models exist in this catalog (no text models until an LLM model is
@@ -315,7 +316,7 @@ export function paletteItems(mode: "both" | "open" | "cloud" = "both", engine?: 
   if (hit) return hit;
   const items = PALETTE.filter((p) => p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)).map((p): PaletteItem => {
     const fixed = p.data?.modelId ? getModel(p.data.modelId) : undefined;
-    if (fixed && !runsOn(fixed, "cloud") && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: GPU_ONLY_ENTRY };
+    if (fixed && !runsOn(fixed, "cloud") && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? GPU_ONLY_INSTALL : GPU_ONLY_ENTRY };
     if (mode === "both" || !isGenerator(p) || defaultModelForNode({ type: p.type, data: p.data ?? {} }, mode)) return p;
     return { ...p, disabled: `No ${mode === "open" ? "open-source" : "cloud"} model for ${p.label.toLowerCase()} yet` };
   });

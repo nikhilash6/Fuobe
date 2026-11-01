@@ -91,7 +91,6 @@ export const REGEN_COPY = {
   gpu: "About 3 minutes per 5 s at 2K on a 72 GB GPU. Needs about 40 GB of new files (OPEN_H3_REGEN=1 in install-comfyui.sh).",
   missing: "Your ComfyUI is missing the Open-H3 Regenerate nodes: run scripts/comfy/install-comfyui.sh with OPEN_H3_REGEN=1.",
   gpuOnly: "Runs on your GPU (open source)",
-  gpuOnlyWhy: "Runs on your GPU (open source): nobody hosts Open-H3 Regenerate in the cloud",
   prompt: "Describe the clip: what is in it, how it moves, the light. Regenerate redraws it from these words",
 } as const;
 

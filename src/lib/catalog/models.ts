@@ -731,7 +731,7 @@ const open: ModelDef[] = [
           label: "Creativity",
           values: ["close", "balanced", "detail"],
           default: "balanced",
-          labels: { close: "Close to the clip", balanced: "Balanced", detail: "More detail" },
+          labels: { close: "Close", balanced: "Balanced", detail: "More detail" },
           // The refine's start noise: 0 is the release grid (0.909), which redraws the most.
           sets: { close: { startSigma: 0.7 }, balanced: { startSigma: 0.8 }, detail: { startSigma: 0 } },
         },
@@ -740,7 +740,7 @@ const open: ModelDef[] = [
           label: "Speed",
           values: ["standard", "faster"],
           default: "standard",
-          labels: { standard: "Standard · 3 steps", faster: "Faster · 2 steps, softer texture" },
+          labels: { standard: "3 steps", faster: "Faster · 2 steps" },
           sets: { standard: { steps: 3 }, faster: { steps: 2 } },
         },
       ],
