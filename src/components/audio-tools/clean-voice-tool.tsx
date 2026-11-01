@@ -24,9 +24,6 @@ import {
   CLOUD_ONLY_CLEAN_PROBLEM,
   CLOUD_CLEAN_PROBLEM,
   cleanDefaults,
-  DEMO_CREDIT,
-  DEMO_PAIRS,
-  DEMO_READY,
   durationWords,
   khz,
   LEVEL_LABELS,
@@ -48,15 +45,19 @@ import { downloadHref } from "@/lib/library";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { BeforeAfterAudio } from "./before-after-audio";
+import { CleanVoiceDemo } from "./clean-voice-demo";
 import { useAudioToolPreview, useAudioToolRun, useSettled, type AudioToolBody } from "./hooks";
 import { uploadSource } from "./split-tool";
 
 /**
  * Clean up voice ("kinda like an app"): one tool, at /audio/clean and as the Clean up voice app. Drop a recording or a
  * video; NVIDIA RE-USE cleans the voice on your ComfyUI (free, CPU or GPU) and the before/after player plays your own
- * before and after from one playhead. Before anything is added, the demo player (once DEMO_READY) plays NVIDIA's own
- * sample, cleaned, so everyone (guests too) hears what it does at once. There's no hosted RE-USE, so the cloud engine says so.
+ * before and after from one playhead. Until someone has cleaned a file of their own, the page opens on the demo
+ * (CleanVoiceDemo), so everyone (guests too) hears what it does at once. There's no hosted RE-USE, so the cloud engine says so.
  */
+
+const TOOL_SUBTITLE =
+  "Removes noise, echo and room sound, and fixes clipping, muffled or phone-quality audio and bad mics. Keeps the main speaker, in any language. Free, on your own computer, with NVIDIA RE-USE.";
 
 type Source = SlotValue & { kind: "audio" | "video"; duration?: number; channels?: number };
 
@@ -75,41 +76,6 @@ function useHandoff(take: (s: Source, keep?: boolean) => void) {
     // Once, on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-}
-
-/** The guest demo: NVIDIA's sample in two pairs, played from static files (no run). */
-function DemoPlayer({ onTry }: { onTry: (before: string, label: string) => void }) {
-  const [pair, setPair] = useState(DEMO_PAIRS[0].id);
-  const p = DEMO_PAIRS.find((x) => x.id === pair) ?? DEMO_PAIRS[0];
-  return (
-    <Panel
-      title={
-        <span className="inline-flex items-center gap-1.5">
-          <Sparkles className="size-3.5" /> Hear it first
-        </span>
-      }
-      aside={<Segmented label="Sample" value={pair} onChange={setPair} options={DEMO_PAIRS.map((d) => ({ value: d.id, label: d.label, hint: d.hint }))} />}
-    >
-      <p className="mb-2 text-[12px] text-muted-foreground">{p.hint}. Switch Before and After while it plays: both run from the same moment, at the same level.</p>
-      <BeforeAfterAudio key={p.id} before={p.before} after={p.after} />
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-        <span>
-          {DEMO_CREDIT.text} ·{" "}
-          <a className="underline underline-offset-2" href={DEMO_CREDIT.model} target="_blank" rel="noreferrer">
-            model
-          </a>{" "}
-          ·{" "}
-          <a className="underline underline-offset-2" href={DEMO_CREDIT.licence} target="_blank" rel="noreferrer">
-            licence
-          </a>
-        </span>
-        {/* Always there (server and client agree): for a guest it opens "create an account". */}
-        <button type="button" className="ml-auto font-medium text-foreground underline underline-offset-2" onClick={() => onTry(p.before, p.label)}>
-          Try the sample yourself
-        </button>
-      </div>
-    </Panel>
-  );
 }
 
 function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate: (next: (cur: Source | null) => Source | null) => void }) {
@@ -254,16 +220,9 @@ export function CleanVoiceTool({ tabs, app }: { tabs?: React.ReactNode; app?: { 
     setBackground(keep ? "keep" : null);
   }, []);
   useHandoff(take);
-  const askFirst = useAskBeforeUpload();
-  const tryDemo = async (url: string, label: string) => {
-    if (askFirst()) return;
-    try {
-      const blob = await (await fetch(url)).blob();
-      await uploadSource(new File([blob], `${label}.m4a`, { type: blob.type || "audio/mp4" }), "audio", take, setSource);
-    } catch (e) {
-      toastError(e, "Couldn't add the sample");
-    }
-  };
+  // Someone who has cleaned a file of their own sees their results, not the demo (the same query as Results').
+  const cleans = useGenerations({ features: [CLEAN_FEATURE], limit: 12 });
+  const demo = !source && !cleans.data?.some((g) => g.status === "succeeded");
 
   const kind = source?.kind ?? "audio";
   const d = cleanDefaults(kind);
@@ -341,14 +300,14 @@ export function CleanVoiceTool({ tabs, app }: { tabs?: React.ReactNode; app?: { 
         ) : undefined
       }
     >
-      {!source && (
-        <ToolHero
-          title={app?.name ?? "Clean up voice"}
-          subtitle="Removes noise, echo and room sound, and fixes clipping, muffled or phone-quality audio and bad mics. Keeps the main speaker, in any language. Free, on your own computer, with NVIDIA RE-USE."
-        />
-      )}
-      <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-6")}>
-        {!source && DEMO_READY && <DemoPlayer onTry={(url, label) => void tryDemo(url, label)} />}
+      {!source && !demo && <ToolHero title={app?.name ?? "Clean up voice"} subtitle={TOOL_SUBTITLE} />}
+      <div className={cn("mx-auto space-y-3", demo ? "max-w-[760px] pt-6 sm:pt-10" : "max-w-[860px]", source ? "pt-4" : !demo && "mt-6")}>
+        {demo && (
+          <>
+            <CleanVoiceDemo name={app?.name ?? "Clean up voice"} />
+            <p className="pt-7 text-[13px] text-pretty text-muted-foreground">{TOOL_SUBTITLE}</p>
+          </>
+        )}
         {!source ? (
           <AddMedia onPick={take} onUpdate={setSource} />
         ) : (

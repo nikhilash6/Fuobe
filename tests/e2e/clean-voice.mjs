@@ -2,13 +2,13 @@
 // Usage: node tests/e2e/clean-voice.mjs [appUrl] [outDir] [--guest guestAppUrl]
 //   appUrl: the app in demo mode (no keys; COMFYUI_URL pointing at nothing or a fake ComfyUI), signed in as the owner.
 //   --guest: the same build with public sign-up on, seen signed out.
-// Checks, at 1440 px and 390 px in light and dark: the empty tool with the demo player (it plays, the Before / After switch
-// and the B / A keys swap sides at the same moment, the divider moves), the cloud engine's "runs on your GPU" note, the
+// Checks, at 1440 px and 390 px in light and dark: the empty tool with the demo (one tap plays it, the noise goes by itself
+// and the photo softens, Noise on brings the room back), the cloud engine's "runs on your GPU" note, the
 // open engine's options and price, no sideways scroll; one audio run and one video run with "Put back on the video" (two
 // Library items); the app page; the Library's Clean up voice action; the Canvas node; the switch on Lipsync's voice slot;
 // and, with --guest, that a guest hears the demo and an upload asks to sign up. Screenshots go to outDir.
-// The demo player shows only once DEMO_READY is set (a person has listened to the pairs): until then the checks see that
-// it is absent. A page error (a hydration error included) fails the run.
+// The demo shows until the install has a clean of its own; after that the page opens on the tool, and the checks see that.
+// A page error (a hydration error included) fails the run.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -31,9 +31,6 @@ const ff = (a) => {
 };
 ff(["-f", "lavfi", "-i", "aevalsrc=0.25*gt(sin(2*PI*1.5*t)\\,0)*(sin(2*PI*180*t)+0.4*sin(2*PI*360*t))+0.02*(random(0)-0.5):s=44100:d=6", wav]);
 ff(["-f", "lavfi", "-i", "testsrc2=s=320x180:r=24:d=6", "-i", wav, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", mp4]);
-
-// The demo shows once a person has listened to its pairs (src/lib/av/clean-voice.ts).
-const DEMO_READY = /export const DEMO_READY = true/.test(fs.readFileSync(new URL("../../src/lib/av/clean-voice.ts", import.meta.url), "utf8"));
 
 const failures = [];
 const check = (ok, what) => {
@@ -62,35 +59,38 @@ async function setup(browser, device, theme, engine) {
   await ctx.route((u) => u.origin !== new URL(app).origin && (!guestApp || u.origin !== new URL(guestApp).origin) && /^https?:$/.test(u.protocol), (r) => r.abort());
   return ctx;
 }
-const clockOf = async (page, scope) => (await scope.locator("span.font-mono", { hasText: "/" }).first().innerText()).trim();
+/** Whether the install (as `base` sees it; a guest sees none of its runs) has a clean of its own: then there's no demo. */
+async function hasCleaned(base) {
+  try {
+    const items = (await (await fetch(`${base}/api/generations?features=voice-clean&limit=12`)).json()).items ?? [];
+    return items.some((g) => g.status === "succeeded");
+  } catch {
+    return false;
+  }
+}
 
-async function demoPlayer(page, label) {
-  if (!DEMO_READY) {
-    check((await page.getByText("Hear it first").count()) === 0, `${label}: no demo player until a person has listened to it`);
+async function demoPlayer(page, label, base = app) {
+  const stage = page.getByRole("group", { name: "Demo: a woman talking in a busy brasserie" });
+  if (await hasCleaned(base)) {
+    check((await stage.count()) === 0, `${label}: after a clean of your own, the page opens on the tool, not the demo`);
     return;
   }
-  const player = page.getByLabel(/Before and after player/).first();
-  await player.getByRole("button", { name: "Play" }).waitFor({ timeout: 20_000 });
-  await page.waitForFunction(() => !document.querySelector('[aria-label^="Before and after player"] button[disabled]'), null, { timeout: 20_000 });
-  check(await page.getByText("Sample and model: NVIDIA RE-USE (OpenMDW-1.1)", { exact: false }).isVisible(), `${label}: the demo credits NVIDIA RE-USE (OpenMDW-1.1)`);
-  await player.getByRole("button", { name: "Play" }).click();
-  await page.waitForTimeout(900);
-  const t1 = await clockOf(page, player);
-  check(!t1.startsWith("0:00 /"), `${label}: the demo plays (${t1})`);
-  // Switch to Before mid-play: the clock keeps running (one playhead), the divider shows the before whole.
-  await player.getByRole("radio", { name: /Before/ }).click();
-  await page.waitForTimeout(400);
-  const t2 = await clockOf(page, player);
-  check(t2 !== t1 && !t2.startsWith("0:00 /"), `${label}: Before keeps the same playhead (${t1} → ${t2})`);
-  check((await player.getByRole("slider", { name: "Divider between before and after" }).getAttribute("aria-valuenow")) === "100", `${label}: the divider shows the before whole`);
-  await player.focus();
-  await page.keyboard.press("a");
-  check((await player.getByRole("radio", { name: /After/ }).getAttribute("aria-checked")) === "true", `${label}: the A key switches to After`);
-  await player.getByRole("button", { name: "Pause" }).click();
-  const divider = player.getByRole("slider", { name: "Divider between before and after" });
-  await divider.focus();
-  await page.keyboard.press("ArrowRight");
-  check((await divider.getAttribute("aria-valuenow")) === "5", `${label}: the divider moves with the keys`);
+  await stage.waitFor({ timeout: 20_000 });
+  check(await page.getByRole("heading", { name: "Hear her, not the room." }).isVisible(), `${label}: the demo says what it shows`);
+  const chip = page.locator("[data-demo-state]");
+  check((await chip.innerText()) === "Busy brasserie", `${label}: the demo starts on the busy room`);
+  await page.getByRole("button", { name: "Tap to listen" }).click();
+  const quiet = await page
+    .waitForFunction(() => document.querySelector("[data-demo-state]")?.textContent === "Voice only", null, { timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+  check(quiet, `${label}: one tap plays it, and the noise goes by itself`);
+  await page.waitForTimeout(1200);
+  const shown = Number(await page.locator("[data-demo-quiet]").evaluate((el) => getComputedStyle(el).opacity));
+  check(shown > 0.95, `${label}: the photo softens with the sound (${shown})`);
+  await page.getByRole("button", { name: "Noise on" }).click();
+  check((await page.getByRole("button", { name: "Noise on" }).getAttribute("aria-pressed")) === "true", `${label}: Noise on is pressed`);
+  check((await chip.innerText()) === "Busy brasserie", `${label}: Noise on brings the room back`);
 }
 
 async function waitDone(feature, ms = 45_000) {
@@ -114,7 +114,7 @@ try {
       const ctx = await setup(browser, device, theme, "cloud");
       const page = await ctx.newPage();
       await openRoute(page, `${app}/audio/clean`);
-      check(await page.getByRole("heading", { name: "Clean up voice" }).first().isVisible(), `${label}: the empty tool says what it is`);
+      check(await page.getByRole("heading", { name: /^(Clean up voice|Hear her, not the room\.)$/ }).first().isVisible(), `${label}: the empty tool says what it is`);
       check(await page.getByText("Add a voice recording or a video to clean").isVisible(), `${label}: the drop zone`);
       await demoPlayer(page, label);
       await page.screenshot({ path: path.join(out, `clean-empty-${dname}-${theme}.png`), fullPage: true });
@@ -171,7 +171,7 @@ try {
     const ctx = await setup(browser, DESKTOP, "light", "open");
     const page = await ctx.newPage();
     await openRoute(page, `${app}/apps/app-clean-up-voice`);
-    check(await page.getByRole("heading", { name: "Clean up voice" }).first().isVisible(), "app: the app page is the tool");
+    check(await page.getByRole("heading", { name: /^(Clean up voice|Hear her, not the room\.)$/ }).first().isVisible(), "app: the app page is the tool");
     check(await page.getByRole("link", { name: "Apps" }).first().isVisible(), "app: an Apps breadcrumb");
     await page.screenshot({ path: path.join(out, "clean-app-1440.png"), fullPage: true });
     const g = await waitDone("voice-clean", 1000);
@@ -235,7 +235,7 @@ try {
     const ctx = await setup(browser, PHONE, "dark", "open");
     const page = await ctx.newPage();
     await openRoute(page, `${app}/apps/app-clean-up-voice`);
-    await page.getByRole("heading", { name: "Clean up voice" }).first().waitFor({ timeout: 20_000 });
+    await page.getByRole("heading", { name: /^(Clean up voice|Hear her, not the room\.)$/ }).first().waitFor({ timeout: 20_000 });
     await demoPlayer(page, "app 390");
     await noSideScroll(page, "app 390");
     await page.screenshot({ path: path.join(out, "clean-app-390-dark.png"), fullPage: true });
@@ -258,7 +258,7 @@ if (guestApp) {
       watchErrors(page, `guest ${dname}`);
       for (const route of ["/apps/app-clean-up-voice", "/audio/clean"]) await openRoute(page, `${guestApp}${route}`);
       await page.waitForTimeout(1500);
-      await demoPlayer(page, `guest ${dname}`);
+      await demoPlayer(page, `guest ${dname}`, guestApp);
       await page.getByRole("button", { name: "Upload" }).first().click();
       const card = page.getByText(/Create a free account/).first();
       check(await card.waitFor({ timeout: 10_000 }).then(() => true).catch(() => false), `guest ${dname}: Upload asks to create a free account`);

@@ -7,8 +7,6 @@ import {
   CLOUD_CLEAN_PROBLEM,
   CLOUD_ONLY_CLEAN_PROBLEM,
   cleanTime,
-  DEMO_PAIRS,
-  DEMO_READY,
   installedReuse,
   missingReuse,
   planClean,
@@ -238,12 +236,6 @@ describe("where Clean up voice opens", () => {
     expect(blockerFor({ model: true, uploading: false, cleaning: true, promptMissing: false })).toEqual({ message: "Waiting for the clean voice", quiet: true });
   });
 
-  it.runIf(DEMO_READY)("ships two demo pairs made from NVIDIA's sample, with the licence and notice beside them", () => {
-    const pub = path.resolve(__dirname, "..", "public");
-    for (const p of DEMO_PAIRS) for (const f of [p.before, p.after]) expect(fs.existsSync(path.join(pub, f))).toBe(true);
-    expect(fs.readFileSync(path.join(pub, "samples/clean-voice/LICENSE-OpenMDW-1.1.txt"), "utf8")).toMatch(/OpenMDW License Agreement, version 1\.1/);
-    expect(fs.readFileSync(path.join(pub, "samples/clean-voice/NOTICE.txt"), "utf8")).toMatch(/NVIDIA CORPORATION & AFFILIATES/);
-  });
 });
 
 describe("the Canvas node", () => {

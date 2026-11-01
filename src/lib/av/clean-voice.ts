@@ -321,26 +321,3 @@ function safeJson(s: string): unknown {
     return null;
   }
 }
-
-// ---------------------------------------------------------------------------
-// The guest demo: NVIDIA's own sample, cleaned (static files, no run)
-
-export interface DemoPair {
-  id: string;
-  label: string;
-  hint: string;
-  before: string;
-  after: string;
-}
-
-export const DEMO_DIR = "/samples/clean-voice";
-/**
- * The demo player shows once a person has listened to the pairs (scripts/gen-clean-voice-demo.mjs makes them into
- * public/samples/clean-voice, with the licence and notice beside them) and said yes. Until then the tool opens on Add.
- */
-export const DEMO_READY = false;
-export const DEMO_PAIRS: DemoPair[] = [
-  { id: "noisy-mic", label: "Noisy mic", hint: "Hiss, hum and a whine from a cheap mic, cleaned at the source's rate", before: `${DEMO_DIR}/noisy-mic-before.m4a`, after: `${DEMO_DIR}/noisy-mic-after.m4a` },
-  { id: "phone", label: "Phone line", hint: "The same speech squeezed into a phone line, then restored to 48 kHz", before: `${DEMO_DIR}/phone-before.m4a`, after: `${DEMO_DIR}/phone-after.m4a` },
-];
-export const DEMO_CREDIT = { text: "Sample and model: NVIDIA RE-USE (OpenMDW-1.1)", model: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE", licence: `${DEMO_DIR}/LICENSE-OpenMDW-1.1.txt` };
