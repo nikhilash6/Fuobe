@@ -269,7 +269,10 @@ async function ready(page, url) {
   check("layout: the feed says it's a layout", await tile.waitFor({ timeout: 30_000 }).then(() => true, () => false));
   const preview = await page.request.post(`${app}/api/generations?preview=1`, { data: body }).then((r) => r.json()).catch(() => ({}));
   check("layout: the run gets the compiled MOSS prompt", typeof preview.prompt === "string" && preview.prompt.includes('"bbox_coord_space":"abs_centralized"'), (preview.prompt ?? preview.error ?? "").slice(0, 80));
-  // Reuse: with Layout mode off and the prompt cleared, the run comes back as boxes with its caption.
+  // Reuse: with Layout mode off and the prompt cleared, the run comes back as boxes with its caption. The composer docks
+  // and folds its strips away after Generate: focusing the prompt opens it again.
+  const composer = page.locator("[data-composer] textarea");
+  await composer.click();
   await page.getByRole("button", { name: "Layout off" }).click();
   await page.locator("[data-composer] textarea").fill("");
   await tile.locator("header").hover();
@@ -282,15 +285,18 @@ async function ready(page, url) {
   // Edit layout from a state with no layout on screen (Reuse just put one there), twice on the same picture: the second
   // time must open it again too.
   for (const time of ["first", "second"]) {
+    await composer.click();
     await page.getByRole("button", { name: "Layout off" }).click();
-    const off = await page.locator("[data-layout-strip]").waitFor({ state: "detached", timeout: 10_000 }).then(() => true, () => false);
+    const chip = page.getByRole("button", { name: "Layout", exact: true }).first();
+    const off = await page.waitForFunction(() => !document.querySelector("[data-layout-strip]"), null, { timeout: 10_000 }).then(() => true, () => false) && (await chip.getAttribute("aria-pressed")) === "false";
     await t.hover();
     await t.getByRole("button", { name: "More actions" }).first().click();
     await page.getByRole("menuitem", { name: "Edit layout" }).click();
+    await page.waitForFunction(() => !location.search.includes("layout="), null, { timeout: 30_000 }).catch(() => {});
+    await composer.click();
     await page.locator("[data-layout-strip]").waitFor({ timeout: 30_000 }).catch(() => {});
     const strip = await page.locator("[data-layout-strip]").innerText().catch(() => "");
     check(`layout: Edit layout reopens the boxes (${time} time)`, off && /1 box/.test(strip), off ? strip.replace(/\n/g, " ") || "no strip" : "Layout off left the strip");
-    await page.waitForFunction(() => !location.search.includes("layout="), null, { timeout: 30_000 }).catch(() => {});
   }
   await page.close();
 
