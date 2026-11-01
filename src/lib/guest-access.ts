@@ -3,7 +3,7 @@
  * is on (src/server/auth.ts publicSignup). Path rules only: src/proxy.ts applies them.
  *
  * - A guest opens every page and the catalog and status reads the pages need. The owner's library
- *   comes back empty (or 401 "Sign up to see your library"), and every change is a 401 that the
+ *   comes back empty (or 401 "Sign up to see this"), and every change is a 401 that the
  *   client turns into "Create a free account" (src/components/guest-prompt.tsx).
  * - An account sees what a guest sees of the owner's studio: the owner's library and projects stay
  *   hidden (empty lists, 403) and can't be changed (403, LIBRARY_CHANGES). It never runs on the
@@ -17,7 +17,7 @@ export const GUEST_HEADER = "x-fuobe-guest";
 /** A guest's request, as the proxy marks it for GUEST_FILTERED routes (a client that sends the header itself only gets less). */
 export const isGuest = (request: Request) => request.headers.get(GUEST_HEADER) === "1";
 
-export const GUEST_LIBRARY_MESSAGE = "Sign up to see your library.";
+export const GUEST_LIBRARY_MESSAGE = "Sign up to see this.";
 export const GUEST_RUN_MESSAGE = "Create a free account to run this.";
 
 /** Catalog and status reads that hold nothing of the owner's library: a guest gets the real answer. */
@@ -239,15 +239,15 @@ export function isAssistChange(method: string, pathname: string): boolean {
  * GPU. A guest gets it too, not the 401 that offers to sign up: an account couldn't use Assist either. The Assist
  * pages say the same to both (src/components/assist/visitor-note.tsx).
  */
-export const ASSIST_OWNER_MESSAGE = "Assist runs on the studio owner's AI, so only the owner can use it here. Fuobe is open source: run it yourself for your own chats, skills, memory and schedules.";
+export const ASSIST_OWNER_MESSAGE = "Assist isn't available here. Make anything in the Image, Video and Audio studios, or with an app, effect or camera motion.";
 
 /** A change to the studio's library or projects (refused for an account with LIBRARY_MESSAGE, not "Connect your GPU"). */
 export function isLibraryChange(method: string, pathname: string): boolean {
   return LIBRARY_CHANGES.some(([methods, path]) => methods.split(" ").includes(method) && path.test(pathname));
 }
 
-export const ACCOUNT_LIBRARY_MESSAGE = "This studio's library is its owner's. Free accounts can't open or change it.";
-export const LIBRARY_MESSAGE = "Free accounts can't save to this studio's library yet.";
+export const ACCOUNT_LIBRARY_MESSAGE = "We can't find that.";
+export const LIBRARY_MESSAGE = "Saving here isn't available. Download what you make from your runs.";
 
 /**
  * Runs an account may start once it has connected its own ComfyUI ("Your GPU") or added its own fal.ai or Replicate key
@@ -262,17 +262,19 @@ export function ownGpuRun(method: string, pathname: string): boolean {
   return method === "POST" && pathname === "/api/generations";
 }
 
-export const OWN_GPU_TOOL_MESSAGE = "This tool doesn't run on your own GPU yet. Camera motions, effects, apps and the Image, Video and Audio studios do.";
+export const OWN_GPU_TOOL_MESSAGE = "This tool isn't available here. Try the Image, Video or Audio studio, or an app, effect or camera motion.";
 
 /** Set on an account's refused run: the client shows "Connect your GPU to run this". */
 export const CONNECT_GPU_HEADER = "x-fuobe-connect-gpu";
 /** Beside it on the owner's refused run (Demo mode off, nothing connected): what would run it, "gpu", "key" or "any". */
 export const CONNECT_NEEDS_HEADER = "x-fuobe-connect-needs";
-export const CONNECT_GPU_MESSAGE = "Connect your GPU to run this. Free accounts run on their own ComfyUI.";
+export const CONNECT_GPU_MESSAGE = "Connect your GPU to run this. It's free.";
 /** An account's upload with neither a GPU nor a key of its own: its files are kept for runs on its own ComfyUI or key. */
-export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU, or add your own fal.ai or Replicate key, to add your own files.";
-/** An account with neither its own GPU nor its own key (the proxy's answer to a run). */
-export const CONNECT_GPU_OR_KEY_MESSAGE = "Connect your GPU, or add your own fal.ai or Replicate key, to run this.";
+export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU, or add a fal.ai or Replicate key, to add your own files.";
+/** The same, on a studio with paid models off (no keys). */
+export const CONNECT_GPU_UPLOAD_OPEN_MESSAGE = "Connect your GPU to add your own files.";
+/** An account with neither its own GPU nor its own key (the proxy's answer to a run): the card it opens offers both. */
+export const CONNECT_GPU_OR_KEY_MESSAGE = CONNECT_GPU_MESSAGE;
 
 /** Install-wide settings, keys and tokens: changes are the owner's (403 for an account). */
 const OWNER_WRITES = new Set(["/api/settings", "/api/settings/models", "/api/loras", "/api/llm", "/api/providers/test", "/api/auth/public"]);

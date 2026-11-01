@@ -17,7 +17,7 @@ type Mode = "signup" | "login" | "owner";
 const OWNER_LINK = process.env.NODE_ENV !== "production";
 
 const COPY: Record<Mode, { title: string; lead: string; button: string }> = {
-  signup: { title: "Create your free account", lead: "An email and a password, and you're in. No verification.", button: "Sign up" },
+  signup: { title: "Create your free account", lead: "Just an email and a password. You're in within seconds.", button: "Sign up" },
   login: { title: "Welcome back", lead: "Log in with your email and password.", button: "Log in" },
   owner: { title: "Welcome back", lead: "This Fuobe studio is password protected.", button: "Sign in" },
 };
@@ -81,7 +81,7 @@ export function LoginForm() {
       window.location.assign(dest);
       return;
     }
-    setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn't sign in");
+    setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? (mode === "signup" ? "Something went wrong. Try again in a moment." : "We couldn't log you in. Try again in a moment."));
     setTaken(mode === "signup" && res.status === 409);
     setBusy(false);
   };
@@ -184,6 +184,19 @@ export function LoginForm() {
       <Button type="submit" className="mt-4 h-11 w-full" disabled={!password || (mode !== "owner" && !email) || (mode === "signup" && password.length < 8) || busy}>
         {busy && <Loader2 className="animate-spin" />} {copy.button}
       </Button>
+      {mode === "signup" && (
+        <p className="mt-3 text-center text-[12px] text-muted-foreground">
+          By signing up you agree to our{" "}
+          <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">
+            Privacy Policy
+          </Link>
+          .
+        </p>
+      )}
       {open && (
         <div className="mt-4 space-y-1.5 text-center text-[13px] text-muted-foreground">
           {mode === "signup" ? (

@@ -382,10 +382,10 @@ function ElementsBody() {
     <PageShell>
       <PageHeader
         title="Elements"
-        description="Characters, locations, props and styles you can reuse. Save one once, then type @ in any image or video prompt — Fuobe sends its photos as references, or its trained LoRA when you've trained one."
+        description="Characters, locations, props and styles you can reuse. Save one once, then type @ in any image or video prompt, and it looks the same every time."
       >
         {visitor ? (
-          <SelfHostNote className="max-w-xs">Free accounts can&apos;t save elements here yet.</SelfHostNote>
+          <SelfHostNote className="max-w-xs">Saving elements isn&apos;t available here.</SelfHostNote>
         ) : (
           <Button onClick={() => setOpen(true)}>
             <Plus /> New element

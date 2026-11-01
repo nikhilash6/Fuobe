@@ -269,7 +269,7 @@ export function HomeView({
         <p className="mt-2 text-[15px] text-pretty text-muted-foreground">
           {/* Before the status: the words a public studio's visitors get (the owner's own install corrects them in a moment). */}
           {!status || visitor || engineMode === "open"
-            ? `Pictures, video, sound and 3D on ${openModels} open models and tools, free on your own GPU through ComfyUI.`
+            ? `Pictures, video, sound and 3D on ${openModels} open models, running on your own GPU.`
             : engineMode === "cloud"
               ? "Frontier paid models through your own API keys."
               : "Frontier cloud models or fully open-source workflows — same studio, your choice."}

@@ -49,10 +49,10 @@ const OWNER_CHECKS_AT_ONCE = 2;
 
 function tooMany(waitMs: number, key: string) {
   const secs = Math.max(1, Math.ceil(waitMs / 1000));
-  // Without a trusted proxy every visitor shares one limit (the hint is for whoever runs the server).
-  const hint = key === LoginGuard.DIRECT ? " Behind a reverse proxy? Set FUOBE_TRUST_PROXY=1 so each visitor gets their own limit." : "";
+  // Without a trusted proxy every visitor shares one limit: the server log says so, for whoever runs it.
+  if (key === LoginGuard.DIRECT) console.warn("[auth] Log-ins share one limit. Behind a reverse proxy? Set FUOBE_TRUST_PROXY=1 so each visitor gets their own.");
   return Response.json(
-    { error: `Too many sign-in attempts. Try again in ${secs} second${secs === 1 ? "" : "s"}.${hint}` },
+    { error: `Too many log-in attempts. Try again in ${secs} second${secs === 1 ? "" : "s"}.` },
     { status: 429, headers: { "Retry-After": String(secs) } },
   );
 }
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       pairGuard().succeed(pair);
       emailGuard().succeed(`email:${emailKey}`);
     }
-    if (account.disabled) return Response.json({ error: "This account is switched off. Ask the studio's owner." }, { status: 403 });
+    if (account.disabled) return Response.json({ error: "This account can't log in." }, { status: 403 });
     accountId = account.id;
     recordLogin(account.id);
     accountEvent("signed-in", accountFacts(account));

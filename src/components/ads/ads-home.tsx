@@ -108,11 +108,11 @@ export function AdsHome() {
       <MarketingHeader title="Ads Studio" active="ads" engine={engine} onEngine={setEngine} />
       <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-3 pb-20 sm:px-6">
         <section className="mx-auto max-w-[720px] pt-8 text-center sm:pt-14">
-          <h2 className="font-heading text-display text-balance">Create performing static ads</h2>
+          <h2 className="font-heading text-display text-balance">Static ads that perform</h2>
           <p className="mx-auto mt-2 max-w-lg text-[15px] text-muted-foreground">Enter your website. Your logo, colours, brand voice and selling points load on their own — then on-brand ads for every product, in 1:1, 4:5 and 9:16, with headlines and CTAs.</p>
           <div className="mx-auto mt-6 max-w-[620px] rounded-[20px] border bg-background p-3 text-left shadow-soft sm:rounded-composer sm:p-4">
             {visitor ? (
-              <SelfHostNote className="p-1 text-[14px]">Brand kits aren&apos;t on free accounts yet. Free accounts can use the Image, Video and Audio studios, camera motions, effects and apps.</SelfHostNote>
+              <SelfHostNote className="p-1 text-[14px]">Brand kits aren&apos;t available here.</SelfHostNote>
             ) : (
               <BrandStart onDone={(b) => router.push(`/ads/${b.id}`)} />
             )}

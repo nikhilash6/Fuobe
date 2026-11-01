@@ -61,7 +61,7 @@ export const INPAINT_STUDIO: StudioConfig = {
   feature: "edit",
   title: "Inpaint",
   hero: "Paint it, then say what goes there",
-  subtitle: "Paint the area to change, then say what goes there. Qwen-Image 2.1 and FLUX Fill use your mask directly.",
+  subtitle: "Brush over what should change, then describe it.",
   placeholder: "What should fill the painted area? e.g. “a vase of white tulips”",
   kind: "image",
   ops: ["inpaint", "edit"],
@@ -189,7 +189,7 @@ export const VIDEO_EXPORT_STUDIO: StudioConfig = {
   feature: "export-video",
   title: "Upscale",
   hero: "Export for the edit",
-  subtitle: "ProRes 422 HQ or 4444, H.265 10-bit, lossless FFV1 or EXR frames, written by ComfyUI on your machine for free.",
+  subtitle: "ProRes 422 HQ or 4444, H.265 10-bit, lossless FFV1 or EXR frames, free on your own GPU.",
   placeholder: "",
   kind: "video",
   ops: ["export-video"],
@@ -203,7 +203,7 @@ export const VIDEO_EXPORT_STUDIO: StudioConfig = {
   controlsTitle: "Options",
   // No cloud API transcodes a finished clip, and the server runs no ffmpeg of its own.
   comfyOnly: {
-    note: "Export formats are written by ComfyUI on your own machine, for free, and no ComfyUI is connected. Connect one under Settings → Open-source engine.",
+    note: "Export formats are made on your own GPU. Connect your GPU to use them.",
     alternative: { label: "ProRes 422 HQ in the cloud: Topaz SDR to HDR (also converts it to HDR)", href: "/upscale/hdr?model=topaz-sdr-to-hdr&format=prores_422_hq" },
   },
 };
@@ -316,7 +316,7 @@ export const FOLEY_STUDIO: StudioConfig = {
   feature: "audio",
   title: "Audio",
   hero: "Add sound to a video",
-  subtitle: "Foley in sync with the picture: HunyuanVideo-Foley or MMAudio on your ComfyUI.",
+  subtitle: "Sound effects in sync with the picture.",
   placeholder: "Optional: describe the sound, e.g. “footsteps on gravel, distant birds”",
   kind: "video",
   ops: ["v2a"],
@@ -429,7 +429,7 @@ export const VIDEO_MATTE_STUDIO: StudioConfig = {
   feature: "video-tools",
   title: "Video tools",
   hero: "Cut out the subject",
-  subtitle: "Every frame matted — a transparent WebM you can drop over anything, or its black-and-white alpha mask. Pick SAM to keep just what you name.",
+  subtitle: "Cut the subject out of every frame and drop it over anything. Or name what to keep.",
   placeholder: "What to keep, e.g. “the dog” or “the woman in red”",
   kind: "video",
   ops: ["bg-remove-video"],
@@ -479,7 +479,7 @@ export const JOIN_CLIPS_STUDIO: StudioConfig = {
 export const VIDEO_COLOR_MATCH_STUDIO: StudioConfig = {
   ...VIDEO_MATTE_STUDIO,
   hero: "Match the colors of a reference",
-  subtitle: "Every frame takes on the palette of the image you add — no AI model, runs on CPU.",
+  subtitle: "Every frame takes on the palette of the image you add.",
   placeholder: "",
   ops: ["color-match"],
   slots: [

@@ -1301,7 +1301,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
             <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-highlight/20 px-4 py-2 text-[13px]">
               <TriangleAlert className="size-4 shrink-0 text-warning" />
               <span className="min-w-0 flex-1">
-                {offEngine.length} node{offEngine.length > 1 ? "s use" : " uses"} {otherEngineName} models, but this install is set to {mode === "open" ? "open source only" : "cloud only"}.
+                {offEngine.length} node{offEngine.length > 1 ? "s use" : " uses"} {otherEngineName} models, which aren&apos;t available here.
                 {stuck.length > 0 && (
                   <>
                     {" "}

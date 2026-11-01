@@ -99,8 +99,8 @@ const COMPASS =
 const behindHttps = (request: NextRequest) => request.nextUrl.protocol === "https:";
 
 /** A dead link's section: the way back to it, and what is missing when the link names a stored item. */
-const SECTIONS: { prefix: string; label: string; missing?: string }[] = [
-  { prefix: "/apps", label: "Browse apps", missing: "This app isn’t here" },
+const SECTIONS: { prefix: string; label: string; missing?: string; why?: string }[] = [
+  { prefix: "/apps", label: "Browse apps", missing: "This app isn’t here", why: "It may have a new name. Browse all apps to find it." },
   { prefix: "/canvas", label: "Back to Canvas", missing: "This canvas isn’t here" },
   { prefix: "/cinema", label: "Back to Cinema", missing: "This project isn’t here" },
   { prefix: "/shorts", label: "Back to Shorts", missing: "This session isn’t here" },
@@ -122,8 +122,8 @@ const notFound = (request: NextRequest) => {
   const s = SECTIONS.find((x) => request.nextUrl.pathname.startsWith(`${x.prefix}/`));
   const back = s && { href: s.prefix, label: s.label };
   return s?.missing
-    ? plain404(s.missing, "It’s private, or it was deleted, or it never existed.", back)
-    : plain404("Nothing here", "The page you’re looking for moved, or never existed.", back);
+    ? plain404(s.missing, s.why ?? "It may have been deleted, or the link is incomplete.", back)
+    : plain404("This page isn’t here", "It may have moved. Head back and find it from there.", back);
 };
 
 const shareGone = (request: NextRequest) =>
@@ -225,8 +225,7 @@ const notYours = () => NextResponse.json({ error: ACCOUNT_LIBRARY_MESSAGE }, { s
 function account(request: NextRequest, who: Account): NextResponse {
   const { pathname, search } = request.nextUrl;
   if (ownerOnly(request.method, pathname)) {
-    const verb = request.method === "GET" || request.method === "HEAD" ? "see" : "change";
-    return NextResponse.json({ error: `Only the studio's owner can ${verb} settings, keys and tokens.` }, { status: 403 });
+    return NextResponse.json({ error: "These settings aren't part of your account." }, { status: 403 });
   }
   // Live edit: only on its own GPU, its masters in its own files, no Library.
   const live = liveRoute(pathname);

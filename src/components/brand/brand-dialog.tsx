@@ -212,7 +212,7 @@ export function BrandChip({ value, onChange }: { value: string | null; onChange:
             ))}
             {!ready.length && (
               <p className="px-2 py-3 text-[13px] text-muted-foreground">
-                {isOwner ? "No brand kit added yet — paste a link or create one manually to get started." : "Brand kits are saved on a self-hosted Fuobe."}
+                {isOwner ? "No brand kit added yet — paste a link or create one manually to get started." : "Brand kits aren't available here."}
               </p>
             )}
           </div>

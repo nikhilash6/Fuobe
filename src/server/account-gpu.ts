@@ -25,7 +25,7 @@ export class GpuError extends Error {}
 const allowPrivate = () => process.env.FUOBE_ALLOW_PRIVATE_URLS === "1";
 
 export const LOCAL_GPU_MESSAGE =
-  "That address is on your own computer or network, and this server can't reach it. Put a tunnel in front of your ComfyUI (cloudflared tunnel --url http://localhost:8188, or ngrok http 8188) and paste the https address it prints.";
+  "That address only works on your own network. Use the ComfyUI on this computer instead, or paste the https address your tunnel prints.";
 
 /** An address as stored and compared: origin and path, no trailing slash. */
 const normal = (u: URL) => `${u.origin}${u.pathname.replace(/\/+$/, "")}`;
@@ -51,9 +51,9 @@ export async function checkGpuAddress(raw: string, o: { resolve?: (host: string)
     try {
       addrs = net.isIP(host) ? [host] : await resolve(host);
     } catch {
-      throw new GpuError(`Couldn't find ${host}. Check the address (is the tunnel running?)`);
+      throw new GpuError(`We couldn't find ${host}. Check the address, and that your tunnel is running.`);
     }
-    if (!addrs.length) throw new GpuError(`Couldn't find ${host}. Check the address (is the tunnel running?)`);
+    if (!addrs.length) throw new GpuError(`We couldn't find ${host}. Check the address, and that your tunnel is running.`);
     // Private networks, this machine's own addresses (loopback too, even with FUOBE_ALLOW_PRIVATE_URLS), wrapped IPv4.
     if (addrs.some(blockedForAccounts)) throw new GpuError(LOCAL_GPU_MESSAGE);
   }
@@ -77,12 +77,13 @@ export async function testGpu(gpu: { url: string; token?: string }, o: { resolve
   try {
     res = await fetchPublic(`${gpu.url}/system_stats`, { headers: gpu.token ? { Authorization: `Bearer ${gpu.token}` } : {} }, { timeoutMs: o.timeoutMs ?? 10_000, deadlineMs: (o.timeoutMs ?? 10_000) + 5_000, maxBytes: o.maxBytes ?? 1 * 2 ** 20, resolve: o.resolve });
   } catch (e) {
-    throw new GpuError(`Couldn't reach your ComfyUI at ${gpu.url}: ${(e as Error).message}`);
+    console.warn(`[your-gpu] ${gpu.url}: ${(e as Error).message}`);
+    throw new GpuError("Your ComfyUI didn't answer at that address. Check that ComfyUI and your tunnel are running, then try again.");
   }
-  if (res.status === 401 || res.status === 403) throw new GpuError(`Your ComfyUI refused the request (HTTP ${res.status}): check the token`);
-  if (!res.ok) throw new GpuError(`Your ComfyUI answered HTTP ${res.status}. Is the tunnel pointing at ComfyUI?`);
+  if (res.status === 401 || res.status === 403) throw new GpuError("Your ComfyUI asked for a password. Add it under Access token.");
+  if (!res.ok) throw new GpuError("That address isn't a ComfyUI. Check that your tunnel points at ComfyUI's port.");
   const s = (await res.json().catch(() => null)) as { system?: { comfyui_version?: string }; devices?: { name?: string; vram_total?: number }[] } | null;
-  if (!s?.system) throw new GpuError("That address answers, but not as ComfyUI");
+  if (!s?.system) throw new GpuError("That address isn't a ComfyUI. Check that your tunnel points at ComfyUI's port.");
   const dev = s.devices?.[0];
   return { device: dev?.name, vramBytes: typeof dev?.vram_total === "number" ? dev.vram_total : undefined, version: s.system.comfyui_version };
 }

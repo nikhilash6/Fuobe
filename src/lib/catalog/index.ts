@@ -30,7 +30,7 @@ function withOssLoras(p: Preset): Preset {
     ...p,
     open: { ...p.open, loras, promptTemplate: trigger ? `${trigger}. ${p.open.promptTemplate ?? p.promptTemplate}` : p.open.promptTemplate },
     // The LoRA files stay in the route; Details says what they do, after the app's own note.
-    parity: [p.parity, `On your GPU it adds ${loras.length > 1 ? "LoRAs" : "a LoRA"} trained for this look.`].filter(Boolean).join(" "),
+    parity: [p.parity, `On your GPU, it adds ${loras.length > 1 ? "styles" : "a style"} trained for this look.`].filter(Boolean).join(" "),
   };
 }
 
@@ -64,7 +64,7 @@ const APP_OPEN_OVERRIDES: Record<string, Preset["open"]> = {
 /** What the open version does differently, shown on the app page next to an override above. */
 const APP_OPEN_PARITY: Record<string, string> = {
   // FLUX.2 [klein] 4B with a try-on LoRA (10 GB GPU, Apache-2.0).
-  "app-virtual-try-on": "On your GPU it masks the old outfit out first, then dresses you with a try-on LoRA.",
+  "app-virtual-try-on": "On your GPU, it takes off the old outfit first, then dresses you in the new one.",
 };
 
 /** The recipe its preview was made with (./preset-recipe-book.json), which the route it opens on follows. */

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, Cloud, Cpu, SearchX, Server, Sparkles, Star } from "lucide-react";
+import { ChevronDown, Cloud, Cpu, SearchX, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KEY_ADDED_EVENT, openAddKey } from "@/components/keys/your-keys";
@@ -15,7 +15,7 @@ import type { Badge as BadgeT } from "@/lib/gpu/types";
 import { type Engine, type ModelDef, type Operation } from "@/lib/catalog/types";
 import { useEngineMode, useStatus } from "@/lib/api";
 import { groupModels, studioBest, toggleIn } from "@/lib/composer";
-import { ISOLATED_NOTE, pickerPrice } from "@/lib/model-rows";
+import { pickerPrice } from "@/lib/model-rows";
 import { cn } from "@/lib/utils";
 import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, type CloudProvider } from "@/lib/your-keys";
 import { EngineSwitch } from "./engine-switch";
@@ -23,6 +23,7 @@ import { ResponsivePanel } from "./responsive-panel";
 import { RECENT_MODELS, STARRED_MODELS, useStoredList } from "./stored-list";
 import { VendorMark } from "./vendor-mark";
 import { placeholdersOn } from "@/lib/demo-mode";
+import { plainTagline } from "@/lib/plain-tagline";
 
 const BADGE_LABEL: Record<string, string> = {
   new: "New",
@@ -127,18 +128,12 @@ function ModelRow({
           )}
         </span>
         <span className="block truncate text-[12px] leading-snug text-muted-foreground">
-          {m.vendor} · {m.tagline}
+          {m.vendor} · {plainTagline(m.tagline)}
         </span>
         {made && (
           <span className="mt-0.5 flex items-center gap-1 text-[11px] leading-snug font-medium text-brand-text">
             <Sparkles className="size-3! shrink-0" aria-hidden />
             Used for this preview
-          </span>
-        )}
-        {m.worker === "isolated" && (
-          <span className="mt-0.5 flex items-center gap-1 text-[11px] leading-snug text-muted-foreground">
-            <Server className="size-3! shrink-0" aria-hidden />
-            {ISOLATED_NOTE}
           </span>
         )}
       </span>
@@ -371,7 +366,7 @@ function PickerList({
           </>
         )}
         <span className="ml-auto shrink-0 whitespace-nowrap max-sm:hidden">
-          <kbd className="font-sans">{STAR_KEY_HINT}</kbd> stars
+          <kbd className="font-sans">{STAR_KEY_HINT}</kbd> to star
         </span>
       </div>
       <CommandList className="max-h-[min(52vh,420px)] border-t sm:max-h-[min(56vh,440px)]">

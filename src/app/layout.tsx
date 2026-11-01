@@ -14,7 +14,7 @@ const instrumentSerif = Instrument_Serif({
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
 const TITLE = "Fuobe — open-source AI image & video studio";
-const DESCRIPTION = "An open-source AI studio for images, video and sound on your own GPU: ComfyUI workflows, camera motions, effects, apps, lipsync and upscaling.";
+const DESCRIPTION = "An open-source AI studio for pictures, video and sound: camera motions, effects, apps, lipsync and upscaling, on your own GPU.";
 
 export const metadata: Metadata = {
   // A shared link's preview image needs a full address: the project's public site (the image is the same on every install).

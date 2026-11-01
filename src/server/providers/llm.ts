@@ -442,7 +442,7 @@ export const llmProvider: ProviderAdapter = {
 
   async poll({ externalId }) {
     const job = jobs().get(externalId);
-    if (!job) return { state: "failed", error: "Interrupted — the server restarted while this was being written. Try again." };
+    if (!job) return { state: "failed", error: "This stopped before it finished. Press Retry." };
     if (job.state === "running") return { state: "running", progress: job.progress, message: `Writing with ${backendLabel(job.backend ?? "claude", job)}` };
     jobs().delete(externalId);
     return job.state === "succeeded" ? { state: "succeeded", outputs: job.outputs ?? [] } : { state: "failed", error: job.error ?? "The LLM failed" };

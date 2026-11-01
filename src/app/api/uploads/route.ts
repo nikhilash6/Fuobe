@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
-import { CONNECT_GPU_HEADER, CONNECT_GPU_UPLOAD_MESSAGE } from "@/lib/guest-access";
-import { accountProviders } from "@/server/account-keys";
+import { CONNECT_GPU_HEADER, CONNECT_GPU_UPLOAD_MESSAGE, CONNECT_GPU_UPLOAD_OPEN_MESSAGE } from "@/lib/guest-access";
+import { accountProviders, paidAllowed } from "@/server/account-keys";
 import { policy as billingPolicy } from "@/server/billing";
 import { poolReady } from "@/server/hosted";
 import { imageSize } from "@/lib/image-size";
@@ -28,6 +28,7 @@ import { adoptFile, contentTypeFor, saveFile, scratchDir } from "@/server/storag
 
 const OWNER_MAX_BYTES = 200 * 1024 * 1024;
 const ALLOWED = /^(image\/(png|jpeg|webp|gif)|video\/(mp4|webm|quicktime|x-matroska|x-msvideo)|audio\/(mpeg|wav|x-wav|ogg|flac|mp4|webm))$/;
+const UNSUPPORTED = "Fuobe can't open that file. Use a JPG, PNG, WebP, GIF, MP4, MOV, WebM, MP3 or WAV.";
 /** Names browsers give AVI and Matroska files, to the one Fuobe stores them under. */
 const VIDEO_ALIASES: Record<string, string> = { "video/avi": "video/x-msvideo", "video/msvideo": "video/x-msvideo", "video/vnd.avi": "video/x-msvideo", "video/mkv": "video/x-matroska" };
 
@@ -128,30 +129,30 @@ async function ownerUpload(request: Request): Promise<Response> {
   if ((request.headers.get("content-type") ?? "").toLowerCase().startsWith("multipart/form-data")) {
     const form = await request.formData().catch(() => null);
     const file = form?.get("file");
-    if (!(file instanceof File)) return Response.json({ error: "No file" }, { status: 400 });
-    if (file.size > OWNER_MAX_BYTES) return Response.json({ error: "File too large (200 MB max)" }, { status: 413 });
+    if (!(file instanceof File)) return Response.json({ error: "Choose a file to upload." }, { status: 400 });
+    if (file.size > OWNER_MAX_BYTES) return Response.json({ error: "That file is over 200 MB. Try a smaller one." }, { status: 413 });
     // Scripts often send no type (or octet-stream): go by the file extension then.
     const type = declaredType(file.type, file.name);
-    if (!ALLOWED.test(type)) return Response.json({ error: `Unsupported file type ${type || file.type || "unknown"}` }, { status: 415 });
+    if (!ALLOWED.test(type)) return Response.json({ error: UNSUPPORTED }, { status: 415 });
     const asset = saveFile({ data: Buffer.from(await file.arrayBuffer()), contentType: type, name: displayName(file.name), source: "upload" });
     return Response.json(asset, { status: 201 });
   }
   // The file as the body.
   const name = displayName(request.headers.get("x-file-name"));
   const type = declaredType(request.headers.get("content-type"), name);
-  if (!ALLOWED.test(type)) return Response.json({ error: `Unsupported file type ${type || "unknown"}` }, { status: 415 });
-  if (Number(request.headers.get("content-length") ?? 0) > OWNER_MAX_BYTES) return Response.json({ error: "File too large (200 MB max)" }, { status: 413 });
+  if (!ALLOWED.test(type)) return Response.json({ error: UNSUPPORTED }, { status: 415 });
+  if (Number(request.headers.get("content-length") ?? 0) > OWNER_MAX_BYTES) return Response.json({ error: "That file is over 200 MB. Try a smaller one." }, { status: 413 });
   const dest = tempFile();
   let bytes: number;
   try {
     bytes = await streamTo(request.body, dest, OWNER_MAX_BYTES);
   } catch (e) {
-    if (e instanceof TooBig) return Response.json({ error: "File too large (200 MB max)" }, { status: 413 });
+    if (e instanceof TooBig) return Response.json({ error: "That file is over 200 MB. Try a smaller one." }, { status: 413 });
     throw e;
   }
   if (!bytes) {
     fs.rmSync(dest, { force: true });
-    return Response.json({ error: "No file" }, { status: 400 });
+    return Response.json({ error: "Choose a file to upload." }, { status: 400 });
   }
   return Response.json(adoptFile({ from: dest, contentType: type, name, source: "upload" }), { status: 201 });
 }
@@ -172,7 +173,7 @@ async function accountUpload(request: Request, account: Account): Promise<Respon
   // which kinds; checked again once the file's kind is known), else nothing.
   const own = !!accountGpu(account.id) || accountProviders(account.id).length > 0;
   const hosted = own ? null : await hostedUploads(account.id);
-  if (!own && !hosted) return json(403, { error: CONNECT_GPU_UPLOAD_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
+  if (!own && !hosted) return json(403, { error: paidAllowed() ? CONNECT_GPU_UPLOAD_MESSAGE : CONNECT_GPU_UPLOAD_OPEN_MESSAGE, code: "connect-gpu" }, { [CONNECT_GPU_HEADER]: "1" });
   if (!diskHasRoom()) return json(503, { error: ACCOUNT_MESSAGES.diskLow });
   // A fair share: 60 an hour, 300 a day, 2 at once.
   const hour = hit(`up:h:${account.id}`, ACCOUNT_LIMITS.uploadsPerHour, 60 * 60_000);
@@ -219,7 +220,7 @@ async function accountUploadBody(request: Request, account: Account, hosted: { i
     if (multipart) {
       const form = await request.formData().catch(() => null);
       const file = form?.get("file");
-      if (!(file instanceof File)) return json(400, { error: "No file" });
+      if (!(file instanceof File)) return json(400, { error: "Choose a file to upload." });
       if (file.size > ACCOUNT_LIMITS.multipartBytes) return json(413, { error: ACCOUNT_MESSAGES.reloadToUpload });
       name = displayName(file.name);
       declaredFull = file.type;
@@ -240,7 +241,7 @@ async function accountUploadBody(request: Request, account: Account, hosted: { i
     fs.rmSync(dest, { force: true });
     return json(status, { error });
   };
-  if (!bytes) return drop(400, "No file");
+  if (!bytes) return drop(400, "Choose a file to upload.");
   // The stored type is the one its bytes say: a page or a script never passes for a picture.
   const head = headOf(dest);
   const sniffed = sniffMedia(head, declaredType(declaredFull, name));

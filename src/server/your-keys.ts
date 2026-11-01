@@ -22,7 +22,7 @@ export async function checkKey(p: CloudProvider, key: string): Promise<{ ok: tru
   if (check.reason === "balance") return { ok: true, detail: "Key accepted", note: emptyBalanceNote(p) };
   if (check.reason === "rejected") {
     const hint = settingProblem(CLOUD_KEY[p].setting, key);
-    return { ok: false, status: 422, error: `${label} didn't accept this key. Copy it again from ${label}'s API keys page.${hint ? ` (${hint}.)` : ""}` };
+    return { ok: false, status: 422, error: `${label} didn't accept this key. ${hint ? `${hint}.` : `Copy it again from ${label}.`}` };
   }
   // 503, not 502: a proxy in front (Cloudflare) answers an origin's 502 with its own page, and these words would be lost.
   if (check.reason === "unreachable") return { ok: false, status: 503, error: `Couldn't reach ${label} to check the key, so it wasn't saved. Try again in a moment.` };

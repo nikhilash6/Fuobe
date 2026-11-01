@@ -50,6 +50,8 @@ export function EngineSwitch({
   const locked = account && "locked" in account ? account.locked : null;
   const idx = OPTIONS.findIndex((o) => o.value === value);
   if (mode !== "both" || locked) {
+    // One engine and nothing to change: only the owner (Settings) or an account that can add a key gets a badge.
+    if (!hydrated || !viewer || (!owner && !(locked?.addKey && !selfHostedOnly))) return null;
     const o = OPTIONS.find((x) => x.value === (locked ? "open" : mode))!;
     const text = locked?.text ?? (mode === "open" ? "Open source only" : "Cloud only");
     const cls = cn(
@@ -88,7 +90,7 @@ export function EngineSwitch({
         </Tooltip>
       );
     }
-    return owner ? (
+    return (
       <Tooltip>
         <TooltipTrigger asChild>
           <Link href="/settings" aria-label={`${text} — change in Settings`} className={cn(cls, "hover:text-foreground")}>
@@ -97,21 +99,6 @@ export function EngineSwitch({
           </Link>
         </TooltipTrigger>
         <TooltipContent>{text} · locked in Settings → Engine mode</TooltipContent>
-      </Tooltip>
-    ) : (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span tabIndex={0} className={cls}>
-            {body}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>
-          {selfHostedOnly
-            ? `${o.value === "open" ? "Open-source models" : "Paid cloud models"} · runs on a self-hosted Fuobe`
-            : mode === "open"
-              ? "This studio runs open-source models, free on your own GPU"
-              : "This studio runs paid cloud models"}
-        </TooltipContent>
       </Tooltip>
     );
   }

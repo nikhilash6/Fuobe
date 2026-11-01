@@ -1,5 +1,5 @@
 /*
- * The About & licences page: the licence of every open model Fuobe can run, from the ComfyUI
+ * The licence of every open model Fuobe can run (CREDITS.md, scripts/credits.mjs), from the ComfyUI
  * manifest's `license` field and the catalog's open models, with the catches a person should
  * know before using the results commercially (non-commercial, countries excluded, conditions)
  * and the notices some licences ask the app to show ("Built with DINOv3").
@@ -96,7 +96,7 @@ export const EARLIER_LICENCES: [RegExp, string][] = [
   [/^selftest-/, "n/a (no model; ComfyUI core nodes)"],
 ];
 
-export const UNKNOWN_LICENCE = "Not recorded yet: check the model card before using it commercially";
+export const UNKNOWN_LICENCE = "Not recorded: check the model card before using it commercially";
 
 /** A workflow's licence: the manifest's, else the earlier table's, else unknown. */
 export function workflowLicence(wf: Pick<LicenceWorkflowInput, "id" | "license">): string {
@@ -239,11 +239,11 @@ export const CLASS_LABEL: Record<LicenceClass, string> = {
 export const CLASS_HINT: Record<LicenceClass, string> = {
   commercial: "Open licences that let you sell what you make (Apache-2.0, MIT, BSD) and tools with no model weights.",
   conditions: "Commercial use is allowed within limits: a revenue ceiling, registration, attribution or use rules.",
-  regions: "The licence leaves out some countries or regions.",
+  regions: "Not available in every country or region.",
   "non-commercial": "The weights or code may not be used commercially without another licence.",
   research: "Released for research only.",
   "paid-api": "Closed or hosted models you pay for per run, under the provider's and the vendor's terms.",
-  unknown: "No licence is recorded yet: check the model card or repository.",
+  unknown: "No licence is recorded for these. Check the model card first.",
 };
 
 /** A model's, LoRA's or node pack's licence, as information. */
@@ -375,7 +375,7 @@ export function paidApiLicence(vendor: string, routes: { provider: string; endpo
   return {
     name: `Paid API · ${names.join(", ")}`,
     class: "paid-api",
-    note: `${vendor}'s model through ${names.join(" or ")} on your key: you pay per run, under the provider's terms and the model's own (the provider's page states both)`,
+    note: `Runs on ${names.join(" or ")} with your key. You pay per run, and their terms apply.`,
     ...(url && { url }),
   };
 }
@@ -440,7 +440,7 @@ export const NODE_PACKS: NodePack[] = [
   pack("ComfyUI-KJNodes", "https://github.com/kijai/ComfyUI-KJNodes", { ...GPL, note: "Utility nodes (GrowMaskWithBlur, resizing); GPL-3.0 code, like ComfyUI" }),
   pack("ComfyUI-Frame-Interpolation", "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "RIFE and FILM frame interpolation; MIT code" }),
   pack("ComfyUI-RMBG", "https://github.com/1038lab/ComfyUI-RMBG", { ...GPL, note: "Background removal; GPL-3.0 code. Fuobe uses BEN2 (MIT); RMBG-2.0 in the same pack is CC BY-NC 4.0" }),
-  pack("ComfyUI-ReActor", "https://github.com/Gourieff/ComfyUI-ReActor", { name: "MIT (per the research)", class: "commercial", note: "Face swap node; the inswapper_128 weights it loads are for non-commercial research only" }),
+  pack("ComfyUI-ReActor", "https://github.com/Gourieff/ComfyUI-ReActor", { name: "See its repository", class: "commercial", note: "Face swap node; the inswapper_128 weights it loads are for non-commercial research only" }),
   pack("ComfyUI-MMAudio", "https://github.com/kijai/ComfyUI-MMAudio", { name: "Not recorded", class: "unknown", note: "Code licence not recorded; the MMAudio weights it loads are CC BY-NC 4.0 (non-commercial)" }),
   pack("ComfyUI_Fill-ChatterBox", "https://github.com/filliptm/ComfyUI_Fill-ChatterBox", NO_FILE("; the Chatterbox weights are MIT")),
   pack("ComfyUI-IndexTTS2", "https://github.com/snicolast/ComfyUI-IndexTTS2", NO_FILE("; the IndexTTS-2 weights have their own Model Use License")),
@@ -468,7 +468,7 @@ export const NODE_PACKS: NodePack[] = [
     name: "MIT",
     class: "commercial",
     url: SPDX("MIT"),
-    note: "Dialogue / music / effects separation; MIT code, vendored DBS code Apache-2.0 with MIT notices; the DBS weights are Apache-2.0, trained on DnR v2 (CC BY 4.0). Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved",
+    note: "Dialogue, music and effects separation; MIT code, bundled DBS code Apache-2.0 with MIT notices. The DBS weights are Apache-2.0, trained on DnR v2 (CC BY 4.0), some of whose clips carry their own licences",
   }),
   // Krea 2's edits (the owner's SOTA image families, 2026-10-31).
   pack("comfyui-krea2edit", "https://github.com/lbouaraba/comfyui-krea2edit", {
@@ -508,7 +508,7 @@ export const NODE_PACKS: NodePack[] = [
 export const nodePack = (name: string): NodePack | undefined => NODE_PACKS.find((p) => p.name === name);
 
 /**
- * Credits About & licences shows: attributions a licence asks for (CC BY) and the notices that ship with code Fuobe
+ * Credits CREDITS.md lists: attributions a licence asks for (CC BY) and the notices that ship with code Fuobe
  * installs (the MIT notices kept in DBS's THIRD_PARTY.md). Information, like everything here.
  */
 export interface Attribution {
@@ -524,17 +524,17 @@ export interface Attribution {
 
 export const ATTRIBUTIONS: Attribution[] = [
   {
-    for: "DBS (dialogue, music, effects)",
+    for: "Dialogue, music and effects separation",
     text: "Trained on the Divide and Remaster (DnR) v2 dataset by Darius Petermann, Gordon Wichern, Zhong-Qiu Wang and Jonathan Le Roux",
     licence: "CC BY 4.0",
     url: "https://zenodo.org/records/6949108",
-    note: "Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included. Whether that reaches the DBS weights or what they make is unresolved: recorded here as information.",
+    note: "Some of its clips carry their own licences.",
   },
-  { for: "DBS (vendored code)", text: "BS-RoFormer, copyright (c) 2023 Phil Wang", licence: "MIT", url: "https://github.com/lucidrains/BS-RoFormer" },
-  { for: "DBS (vendored code)", text: "Music-Source-Separation-Training, copyright (c) 2024 Roman Solovyev (ZFTurbo)", licence: "MIT", url: "https://github.com/ZFTurbo/Music-Source-Separation-Training" },
-  { for: "DBS (vendored code)", text: "TIGER / Look2Hear, copyright (c) 2026 Kai Li", licence: "MIT", url: "https://github.com/JusperLee/TIGER" },
+  { for: "Dialogue, music and effects separation", text: "BS-RoFormer, copyright (c) 2023 Phil Wang", licence: "MIT", url: "https://github.com/lucidrains/BS-RoFormer" },
+  { for: "Dialogue, music and effects separation", text: "Music-Source-Separation-Training, copyright (c) 2024 Roman Solovyev (ZFTurbo)", licence: "MIT", url: "https://github.com/ZFTurbo/Music-Source-Separation-Training" },
+  { for: "Dialogue, music and effects separation", text: "TIGER / Look2Hear, copyright (c) 2026 Kai Li", licence: "MIT", url: "https://github.com/JusperLee/TIGER" },
   {
-    for: "RE-USE (clean up voice)",
+    for: "Clean up voice",
     text: "RE-USE speech enhancement model, copyright (c) 2026 NVIDIA Corporation",
     licence: "OpenMDW-1.1",
     url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE",

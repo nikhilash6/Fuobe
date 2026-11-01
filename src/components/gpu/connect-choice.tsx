@@ -33,7 +33,7 @@ type ComputerView = Extract<AccountGpuView, { mode: "computer" }>;
 async function gpuCall<T>(method: string, body?: unknown): Promise<T> {
   const res = await fetch("/api/account/gpu", { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(j.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw new Error(j.error ?? "Something went wrong. Please try again.");
   return j;
 }
 
@@ -49,7 +49,7 @@ export async function connectThisComputer(): Promise<void> {
 /** `disconnect`: the owner pressed Disconnect (the runs that stop say so, not "ComfyUI now runs somewhere else"). */
 async function putWhere(where: "server" | "computer", disconnect = false): Promise<void> {
   const res = await fetch(disconnect ? "/api/settings?why=disconnected" : "/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ comfyWhere: where }) });
-  if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Something went wrong. Please try again.");
 }
 
 /** The owner's: ComfyUI runs on the computer the owner uses (Settings → Where ComfyUI runs). */
@@ -450,8 +450,8 @@ function AccountChoice({ fromRun, kind, reason, onStart, onNotNow, className, lo
     <ChoiceCards
       className={className}
       instead={linked}
-      title="Run from anywhere with a link"
-      sub="For runs that go on with this tab closed. You'll need a tunnel."
+      title="Keep it running with this tab closed"
+      sub="Give your ComfyUI a web address. Takes about two minutes."
       open={link || linked}
       onToggle={() => setLink((v) => !v)}
       computer={

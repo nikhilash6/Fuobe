@@ -112,7 +112,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
             : estimate.isError
               ? (estimate.error as Error).message
               : null;
-  const blocker = visitor ? "Evolution runs on a self-hosted Fuobe for now" : setupBlocker;
+  const blocker = visitor ? "Evolution isn't available here" : setupBlocker;
 
   const reset = () => {
     source.clear();
@@ -163,9 +163,9 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
       {!clip && (
         <ToolHero
           title="Take a clip further"
-          subtitle={`Evolution keeps your clip's motion and timing and takes the rest where your references and words point. Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}
+          subtitle={`Evolution keeps your clip's motion and timing and takes the rest where your references and words point${visitor ? "." : ", free on your own ComfyUI."}`}
         >
-          {visitor && <SelfHostNote className="mt-3 max-w-xl">Evolution runs on a self-hosted Fuobe for now.</SelfHostNote>}
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">Evolution isn&apos;t available here.</SelfHostNote>}
         </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>

@@ -693,8 +693,8 @@ function prepare(original: GenerationRequest) {
     if (cloud) throw new AccountRunError(paidAllowed() ? { error: addKeyMessage(cloud), code: "add-key", provider: cloud } : { error: OPEN_ONLY_RUN, code: "open-only" });
     throw new Error(
       mode === "open"
-        ? `${plan.model.name} is a paid cloud model, but this install is set to open source only (Settings → Engine mode)`
-        : `${plan.model.name} is an open-source model, but this install is set to paid cloud APIs only (Settings → Engine mode)`,
+        ? `${plan.model.name} is a cloud model, which isn't available here. Pick an open-source model`
+        : `${plan.model.name} is an open-source model, which isn't available here. Pick a cloud model`,
     );
   }
   // Checks planGeneration can't make without knowing the model's kind or the text ops' needs.
@@ -839,13 +839,13 @@ function stampTenant(asked: GenerationRequest, opts: CreateOptions): GenerationR
   if (tenant()?.kind === "guest") throw new Error(GUEST_RUN_MESSAGE);
   const who = tenantAccount();
   if (!who) {
-    if (ownGpu()) throw new Error("A run on an account's own GPU must be that account's run.");
+    if (ownGpu()) throw new Error("We can't find that run.");
     // The owner's runs carry no place, hold or check of an account's run (run-stamp.ts).
     return withRunStamp({}, () => stamped(asked));
   }
-  if (asked.account && asked.account !== who) throw new Error("That run belongs to another account.");
+  if (asked.account && asked.account !== who) throw new Error("We can't find that run.");
   const deps = opts.dependsOn === undefined ? [] : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
-  if (deps.some((d) => generationAccount(d) !== who)) throw new Error("An earlier step of this run isn't yours.");
+  if (deps.some((d) => generationAccount(d) !== who)) throw new Error("We can't find that run.");
   // Where the run goes and its billing hold are the route's decision for this run (run-stamp.ts), never a stored request's.
   return { ...stamped(asked), account: who, engine: accountEngineMode(who) === "open" ? "open" : asked.engine };
 }
@@ -1134,7 +1134,7 @@ function chainMode(p: { demo: boolean; plan: { model: { name: string } }; route:
   }
   if (!p.demo && demoDeps > 0) {
     // A dry run (GenerationRequest.demo) stays a demo even with Settings → Demo mode off.
-    if (getSetting("demoMode") === "off" && !asked?.demo) return { error: "An earlier step ran as a demo — retry it with its provider connected" };
+    if (getSetting("demoMode") === "off" && !asked?.demo) return { error: "An earlier step made a placeholder. Retry it once a model is connected." };
     return { forceDemo: true };
   }
   return {};
@@ -1339,11 +1339,11 @@ function recordSubmission(id: string, at: number): void {
 // Public sign-up: an account's runs go to its own ComfyUI ("Your GPU") or its own fal.ai or Replicate key ("Your
 // keys"), never the install's providers
 
-export const OWN_GPU_ONLY = "Free accounts run only on their own ComfyUI: pick an open-source model.";
-export const OPEN_ONLY_RUN = "This studio runs open-source models only, so paid models don't run here. Pick an open-source model.";
-export const SWITCHED_OFF_RUN = "This account is switched off, so its runs stopped.";
+export const OWN_GPU_ONLY = "Pick an open-source model to run it on your GPU.";
+export const OPEN_ONLY_RUN = "Pick an open-source model to run this on your GPU.";
+export const SWITCHED_OFF_RUN = "This account is closed, so its runs stopped.";
 /** A run on this install's GPUs that waited past its limit (hosted runs). */
-export const POOL_WAITED = "This studio's GPUs were busy, so it didn't run. Not charged.";
+export const POOL_WAITED = "The studio's GPUs were busy, so it didn't run. Not charged.";
 
 /**
  * Everything an account's work runs inside: as the account (tenant.ts: only its own files and runs), on its own ComfyUI
@@ -1393,7 +1393,7 @@ export class AccountRunError extends Error {
  * fails here: it never falls into the owner's keys (provider-keys.ts).
  */
 export function adapterFor(providerId: ProviderId, account: string | undefined): ProviderAdapter {
-  if ((tenantAccount() ?? undefined) !== (account ?? undefined)) throw new Error("This run isn't in its account's scope");
+  if ((tenantAccount() ?? undefined) !== (account ?? undefined)) throw new Error("We can't find that run.");
   return provider(providerId);
 }
 
@@ -1800,7 +1800,7 @@ function sweepInterrupted(): void {
   const busy = submitting();
   for (const r of rows) {
     if (busy.has(r.id)) continue;
-    update(r.id, { status: "failed", error: "Interrupted before it reached the provider", completed_at: Date.now(), message: null });
+    update(r.id, { status: "failed", error: "This run stopped before it started. Press Retry.", completed_at: Date.now(), message: null });
   }
 }
 
@@ -1822,7 +1822,7 @@ async function pollGuarded(r: Row): Promise<void> {
     else if (own) await own.run(() => pollOne(r));
     else await pollOne(r);
   } catch (e) {
-    update(r.id, { message: `Poll error: ${(e as Error).message}` });
+    console.warn(`[generations] ${r.id}: ${(e as Error).message}`);
   } finally {
     polling.delete(r.id);
   }
@@ -1905,7 +1905,7 @@ async function pollOne(r: Row): Promise<void> {
   if (!model) {
     // A job on a model Fuobe retired with its provider (replaced.ts) can't be collected: Reuse runs it on the replacement.
     const retired = !!replacedBy(r.model_id) || !Object.hasOwn(PROVIDERS, r.provider);
-    update(r.id, { status: "failed", error: retired ? RETIRED_PROVIDER_ERROR : `Model ${r.model_id} no longer exists`, completed_at: Date.now(), message: null });
+    update(r.id, { status: "failed", error: retired ? RETIRED_PROVIDER_ERROR : "This model isn't available any more. Pick another.", completed_at: Date.now(), message: null });
     return;
   }
   // The clock runs from when the provider got the job (and from when it started it), not from creation:
@@ -1934,7 +1934,6 @@ async function pollOne(r: Row): Promise<void> {
   const onPool = !!account && stored.place === "pool";
   // On this install's GPUs: the wait the billing service set for the run, else FUOBE_POOL_WAIT_MIN.
   const queueMs = onPool ? poolWaitMs(stored.waitMs) : account ? ACCOUNT_LIMITS.queueMs : QUEUE_TIMEOUT_MS;
-  const where = onPool ? "this studio's GPUs" : r.provider === "comfyui" ? "your ComfyUI" : provider(r.provider).label;
   if (!res || res.state === "queued" || res.state === "running") {
     // A job on someone's own computer reached their ComfyUI later than it was handed over (it waited for their tab): its
     // queue clock starts then.
@@ -1959,8 +1958,8 @@ async function pollOne(r: Row): Promise<void> {
             : onPool
               ? POOL_WAITED
               : account
-              ? `Timed out waiting ${queueMs / 60_000} minutes in ${where}'s queue`
-            : `Timed out waiting ${QUEUE_TIMEOUT_MS / 3_600_000} hours in the provider's queue`,
+                ? `This waited over ${queueMs / 60_000} minutes to start. Press Retry.`
+              : "This took too long to start. Press Retry.",
         completed_at: now,
         message: null,
       });
@@ -2001,7 +2000,7 @@ async function pollOne(r: Row): Promise<void> {
       } catch (e) {
         if (account) {
           for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
-          const why = e instanceof AccountFilesFull ? e.message : `Couldn't save a result from ${where}: ${(e as Error).message}`;
+          const why = e instanceof AccountFilesFull ? e.message : "We couldn't save this result. Press Retry.";
           update(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null });
           return;
         }
@@ -2052,7 +2051,7 @@ async function pollOne(r: Row): Promise<void> {
     status: "succeeded",
     outputs_json: JSON.stringify(outputs),
     progress: 1,
-    message: dropped ? `Kept the first ${ACCOUNT_LIMITS.outputsPerJob} results (${where} made ${ACCOUNT_LIMITS.outputsPerJob + dropped})` : null,
+    message: dropped ? `Kept ${ACCOUNT_LIMITS.outputsPerJob} of ${ACCOUNT_LIMITS.outputsPerJob + dropped} results` : null,
     completed_at: Date.now(),
   });
 }

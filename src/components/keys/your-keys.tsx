@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ADD_KEY_EVENT, preferEngine, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { settingProblem } from "@/lib/connections";
-import { CLOUD_KEY, CLOUD_PROVIDERS, OPEN_ONLY_MESSAGE, type CloudProvider, type KeyInfo, type YourKeys } from "@/lib/your-keys";
+import { CLOUD_KEY, CLOUD_PROVIDERS, type CloudProvider, type KeyInfo, type YourKeys } from "@/lib/your-keys";
 import { cn } from "@/lib/utils";
 
 /**
@@ -42,7 +42,7 @@ class KeyError extends Error {
 async function call<T>(url: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as T & { error?: string; code?: string; count?: number };
-  if (!res.ok) throw new KeyError(j.error ?? `Request failed (${res.status})`, res.status, j);
+  if (!res.ok) throw new KeyError(j.error ?? "Something went wrong. Please try again.", res.status, j);
   return j;
 }
 
@@ -187,7 +187,7 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
       await call(`/api/account/keys/${provider}`, "DELETE", stopRuns ? { stopRuns: true } : {});
       setConfirm(null);
       changed();
-      toast.success(`Your ${p.label} key is removed from this studio.`);
+      toast.success(`Your ${p.label} key is removed.`);
     } catch (e) {
       const k = e as KeyError;
       if (k.body?.code === "runs-going") setConfirm({ going: k.message });
@@ -222,7 +222,7 @@ function KeyCard({ provider, info }: { provider: CloudProvider; info: KeyInfo | 
               </>
             ) : (
               <span className="inline-flex items-start gap-1.5 text-destructive">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> This key can&apos;t be read on this studio any more. Add it again.
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> This key can&apos;t be read any more. Add it again.
               </span>
             )}
           </p>
@@ -275,7 +275,9 @@ export function AccountKeysSection({ prices }: { prices?: string }) {
   const hydrated = useHydrated();
   const account = useViewer().data?.account;
   const q = useYourKeys(!!account);
-  if (!hydrated || !account) return null;
+  // A studio with paid models off takes no keys: the section isn't shown.
+  const paidOff = useStatus().data?.viewer?.paidAllowed === false || q.data?.paidAllowed === false;
+  if (!hydrated || !account || paidOff) return null;
   return (
     <section id="your-keys" aria-labelledby="your-keys-title" className="grid scroll-mt-28 grid-cols-[minmax(0,1fr)] gap-6 border-b py-8 md:scroll-mt-20 md:grid-cols-[260px_minmax(0,1fr)]">
       <div className="min-w-0">
@@ -283,8 +285,7 @@ export function AccountKeysSection({ prices }: { prices?: string }) {
           Your keys
         </h2>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Add your own fal.ai key or Replicate token to use paid models such as Nano Banana, Kling and Veo. Those runs are billed to your account with that provider, never
-          to this studio. Fuobe checks the key with the provider, stores it encrypted on this server and shows only its last 4 characters.
+          Add your fal.ai or Replicate key to use Nano Banana, Kling, Veo and more. You pay the provider directly. Your key is stored encrypted.
         </p>
       </div>
       <div className="grid min-w-0 gap-4">
@@ -295,10 +296,8 @@ export function AccountKeysSection({ prices }: { prices?: string }) {
               final word.
             </li>
           )}
-          <li>Runs with your key send your prompt and the files you attach to that provider.</li>
-          {q.data && <li>Account limits still apply: {q.data.limits}.</li>}
+          <li>Up to 4 runs at once and 60 an hour.</li>
         </ul>
-        {q.data && !q.data.paidAllowed && <p className="rounded-lg bg-muted px-3 py-2 text-[13px] text-muted-foreground">{OPEN_ONLY_MESSAGE}</p>}
         {q.isError ? (
           <p className="text-[13px] text-muted-foreground">{q.error.message}</p>
         ) : !q.data ? (
@@ -370,7 +369,7 @@ export function AddKeyPrompt() {
               </div>
               <DialogTitle>Add your {p.label} key</DialogTitle>
               <DialogDescription>
-                Runs on {p.label} are billed to your own {p.label} account. Fuobe checks the key with {p.label}, then stores it encrypted on this server.
+                Runs on {p.label} are billed to your own {p.label} account. Your key is stored encrypted.
                 {/* Opened for no model in particular: either provider will do. */}
                 {!ask.modelId && (
                   <>

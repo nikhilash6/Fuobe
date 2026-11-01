@@ -14,7 +14,7 @@ import { hit } from "@/server/rate";
  * browser's facts never stand in for a server check (review 18). The answer is the board, as GET /api/gpu/readiness.
  */
 export async function PUT(request: Request) {
-  if (!preflightOn()) return Response.json({ error: "The GPU pre-flight is switched off on this studio." }, { status: 404 });
+  if (!preflightOn()) return Response.json({ error: "The GPU check is off." }, { status: 404 });
   const refused = interactiveRefusal(request);
   if (refused) return Response.json({ error: refused }, { status: 403 });
   const t = gpuTargetFor(request, "read");

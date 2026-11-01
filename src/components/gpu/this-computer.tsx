@@ -103,9 +103,9 @@ function blockedSteps(): string {
 }
 
 const UNSUPPORTED: Record<"safari" | "phone" | "http", string> = {
-  phone: "Your phone can't run ComfyUI. Open Fuobe on your computer to use its ComfyUI, or run from anywhere with a link.",
-  safari: "Safari can't reach apps on this computer from a website. Open Fuobe in Chrome, Edge or Firefox to use your ComfyUI directly, or run from anywhere with a link.",
-  http: "Your browser only lets a secure page reach apps on this computer. Open the studio over https, or on the computer that runs ComfyUI, or run from anywhere with a link.",
+  phone: "Your phone can't run ComfyUI. Open Fuobe on your computer to use its ComfyUI, or give your ComfyUI a web address.",
+  safari: "Safari can't reach apps on this computer from a website. Open Fuobe in Chrome, Edge or Firefox to use your ComfyUI directly, or give your ComfyUI a web address.",
+  http: "Your browser only lets a secure page reach apps on this computer. Open Fuobe on the computer that runs ComfyUI, or give your ComfyUI a web address.",
 };
 
 /** The owner's second way is a ComfyUI at a server address (a cloud GPU, a tunnel), not an account's link. */

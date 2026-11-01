@@ -208,7 +208,7 @@ function relayPrincipal(): Principal {
  * Said when a workflow for the isolated worker (LatentSync 1.6, ThinkSound) would go to someone's computer: it needs a
  * second ComfyUI beside the first, which the tab doesn't reach yet. Refused before anything is staged or queued.
  */
-export const ISOLATED_ON_COMPUTER = "This one needs a second ComfyUI running alongside the first, which Fuobe doesn't connect from your computer yet.";
+export const ISOLATED_ON_COMPUTER = "This one needs its own ComfyUI, so it can't run from your computer next to your other add-ons.";
 
 /** Said when something would call a ComfyUI that only the person's own tab may reach. */
 export const ON_COMPUTER_ONLY = "This ComfyUI is on your own computer: only your Fuobe tab there talks to it.";
@@ -1868,7 +1868,7 @@ export function planRelayOutputs(t: Pick<TaskRow, "id" | "workflow_id" | "meta_b
     outputs = collectOutputs(e, manifest, `relay:${t.id}`);
     if (outputs.length) break;
   }
-  if (!outputs.length) return t.meta_batch && !passes && t.prefix ? { follow: t.prefix } : { error: "Workflow finished without saving any output" };
+  if (!outputs.length) return t.meta_batch && !passes && t.prefix ? { follow: t.prefix } : { error: "This run finished without a result. Press Retry." };
   const account = tenantAccount();
   let budget = Infinity;
   if (account) {
@@ -1957,7 +1957,7 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
         const type = o.url.startsWith("relay:") ? types.get(n) : undefined;
         return type ? { ...o, contentType: type } : o;
       });
-      if (!outputs.length) return { state: "failed", error: "Workflow finished without saving any output" };
+      if (!outputs.length) return { state: "failed", error: "This run finished without a result. Press Retry." };
       try {
         outputs = await bundleFrames(outputs, String(meta.generationId ?? ""));
       } catch (e) {
@@ -2048,13 +2048,13 @@ export const comfyProvider: ProviderAdapter = {
     }
     if (!PROMPT_ID.test(body.prompt_id)) {
       // Stop it there: an id Fuobe can't use would never be collected.
-      throw new ProviderError(ownGpu() ? "Your ComfyUI answered with a job id Fuobe can't use." : "ComfyUI answered with a job id Fuobe can't use.");
+      throw new ProviderError(ownGpu() ? "Your ComfyUI couldn't take this run. Press Retry." : "ComfyUI couldn't take this run. Press Retry.");
     }
     return { externalId: body.prompt_id, meta: { ...meta, generationId, ...(worker === "isolated" && { worker }) }, payload: wf };
   },
 
   async poll({ externalId, meta, model, ...rest }) {
-    if (!PROMPT_ID.test(externalId)) return { state: "failed", error: "ComfyUI answered with a job id Fuobe can't use." };
+    if (!PROMPT_ID.test(externalId)) return { state: "failed", error: "ComfyUI couldn't take this run. Press Retry." };
     const worker: ComfyWorker = meta.worker === "isolated" ? "isolated" : "main";
     let manifest: ManifestWorkflow | undefined;
     try {
@@ -2083,7 +2083,7 @@ export const comfyProvider: ProviderAdapter = {
         outputs = next ?? [];
       }
       forget(externalId);
-      if (!outputs.length) return { state: "failed" as const, error: "Workflow finished without saving any output" };
+      if (!outputs.length) return { state: "failed" as const, error: "This run finished without a result. Press Retry." };
       try {
         outputs = await bundleFrames(outputs, String(meta.generationId ?? String(meta.prefix ?? "").replace(/^fuobe\//, "")));
       } catch (e) {
@@ -2111,10 +2111,10 @@ export const comfyProvider: ProviderAdapter = {
       misses.set(externalId, n);
       if (n < 3) return { state: "running", message: "Checking on ComfyUI" };
       forget(externalId);
-      return { state: "failed", error: "Prompt disappeared from the ComfyUI queue (server restarted or job was cleared)" };
+      return { state: "failed", error: "ComfyUI restarted and lost this run. Press Retry." };
     }
     globalThis.__fuobeComfyMisses?.delete(externalId);
-    if (pendingIdx >= 0) return { state: "queued", message: `In ComfyUI queue · position ${pendingIdx + 1}` };
+    if (pendingIdx >= 0) return { state: "queued", message: pendingIdx === 0 ? "Next in ComfyUI's queue" : `In ComfyUI's queue · ${pendingIdx} ahead` };
     const total = Number(meta.nodeCount ?? 0);
     const stepFrac = p && p.max ? p.value / p.max : 0;
     const progressValue = total ? Math.min(0.99, ((p?.nodesDone ?? 0) - 1 + stepFrac) / total) : stepFrac || undefined;

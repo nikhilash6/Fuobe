@@ -31,7 +31,7 @@ export type AudioToolBody =
 async function post<T>(url: string, body: AudioToolBody): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw responseError(res, j.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, j.error ?? "Something went wrong. Please try again.");
   return j;
 }
 

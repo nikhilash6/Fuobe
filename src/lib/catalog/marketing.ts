@@ -1051,7 +1051,7 @@ export const MULTIPLIER_MODELS: Record<Engine, ModelChoice[]> = {
     { id: "happy-horse-video-edit", note: "Happy Horse video edit, up to 4 @images, keeps the sound · 15 s at most" },
     { id: "gemini-omni-flash", note: "Gemini Omni Flash edit, prompt only" },
   ],
-  open: [{ id: "fuobe-genjutsu-motion", note: "Fuobe Genjutsu · Motion (Wan Animate 2): your @image_1 takes over the performance" }],
+  open: [{ id: "fuobe-genjutsu-motion", note: "Fuobe Genjutsu: your first @image takes over the performance" }],
 };
 
 /**

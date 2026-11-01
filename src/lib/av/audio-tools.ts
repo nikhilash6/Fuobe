@@ -170,7 +170,7 @@ export function planLoop(i: LoopInput): ToolPlan {
     summary: `Plays it ${plural(plays, "time")} back to back${passes.length > 1 ? ` (${passes.length} calls of up to ${CLOUD_PER_CALL})` : ""}: ${clock(length)}.`,
     notes: [
       ...(length - duration > 0.05 ? [`The cloud repeats the whole clip, so this comes out ${clock(length)}, not ${clock(duration)}.`] : []),
-      "No crossfade on the cloud: switch to the open engine for smooth seams and an exact length.",
+      "For smooth seams and an exact length, switch to Open source.",
     ],
   };
 }
@@ -228,6 +228,6 @@ export function planJoin(i: JoinInput): ToolPlan {
     steps,
     length: known ? joinedLength(lengths as number[], 0) : null,
     summary: `Joins ${plural(clips.length, "clip")} end to end${steps.length > 1 ? ` (${steps.length} calls of up to ${CLOUD_PER_CALL})` : ""}.`,
-    notes: ["No crossfade on the cloud: the clips meet with a hard cut. Switch to the open engine for crossfades."],
+    notes: ["The clips meet with a hard cut here. For crossfades, switch to Open source."],
   };
 }

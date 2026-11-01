@@ -156,8 +156,8 @@ function noEngine(recipe: Recipe): string {
   const sides = ENGINES.filter((e) => recipe.steps.every((s) => stepEngines(s).includes(e)));
   if (!sides.length) return "Its steps need both engines at once (a cloud model and a model on your GPU): run them as two skills";
   return sides[0] === "open"
-    ? "It runs on your GPU (open source), but this install is set to paid cloud APIs only (Settings → Engine mode)"
-    : "It runs on paid cloud APIs, but this install is set to open source only (Settings → Engine mode)";
+    ? "It runs on open-source models, which aren't available here"
+    : "It runs on cloud models, which aren't available here";
 }
 
 // ---------------------------------------------------------------------------

@@ -24,8 +24,8 @@ export const REMUX_MODELS: Record<Engine, string> = {
 
 /** Why the cloud engine has no Split soundtrack (and what Engine mode "Paid APIs only" says). */
 export const CLOUD_SPLIT_PROBLEM =
-  "Split soundtrack runs on your GPU (open source): DBS isn't hosted on fal or Replicate, so the cloud engine can't split dialogue, music and effects. Switch to the open engine.";
-export const CLOUD_ONLY_PROBLEM = "Split soundtrack runs on your GPU (open source), but this install is set to paid cloud APIs only (Settings → Engine mode)";
+  "Split soundtrack works with open-source models. Switch to Open source to use it.";
+export const CLOUD_ONLY_PROBLEM = "Split soundtrack works with open-source models, which aren't available here";
 
 // ---------------------------------------------------------------------------
 // The DBS models and how a host picks one
@@ -70,7 +70,7 @@ export function hostPick(deviceType?: string | null, installed?: readonly DbsMod
 export function missingDbs(model: DbsModel, installed: readonly DbsModel[]): string {
   const q = qualityOf(model);
   const other = installed.find((m) => m !== model);
-  return `${QUALITY_LABELS[q]} isn't installed on your ComfyUI (models/dbs/${model}). Copy the install commands from Workflows → "Split a soundtrack"${other ? `, or pick ${QUALITY_LABELS[qualityOf(other)]}` : ""}.`;
+  return `${QUALITY_LABELS[q]} isn't installed on your ComfyUI (models/dbs/${model}). Copy the install commands from the Connect your GPU page${other ? `, or pick ${QUALITY_LABELS[qualityOf(other)]}` : ""}.`;
 }
 
 /**

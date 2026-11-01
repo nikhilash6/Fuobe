@@ -135,7 +135,7 @@ export function CreateMoodboardDialog({ open, onOpenChange, onCreated }: { open:
     <Popover open={libraryOpen} onOpenChange={setLibraryOpen}>
       <PopoverTrigger asChild>
         <Button size="sm" variant="outline">
-          <Library /> Upload from assets
+          <Library /> From your library
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-2" collisionPadding={12}>
@@ -204,7 +204,7 @@ export function CreateMoodboardDialog({ open, onOpenChange, onCreated }: { open:
                 </Button>
                 {assets}
               </div>
-              <p className="text-[12px] text-muted-foreground">PNG, JPG or Paste from clipboard</p>
+              <p className="text-[12px] text-muted-foreground">PNG or JPG, or paste from your clipboard</p>
             </div>
           ) : (
             <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">

@@ -81,8 +81,9 @@ export const PresetCard = memo(function PresetCard({
               <Icon className="size-3.5" />
             </span>
             <span className="pointer-events-none absolute right-1.5 bottom-1.5 flex gap-1">
-              {preset.cloud && engine !== "open" && <EngineChip engine="cloud" />}
-              {preset.open && engine !== "cloud" && <EngineChip engine="open" />}
+              {/* With one engine every card runs on it: a chip only where cards differ. */}
+              {!engine && preset.cloud && <EngineChip engine="cloud" />}
+              {!engine && preset.open && <EngineChip engine="open" />}
             </span>
           </>
         )}
@@ -130,13 +131,8 @@ const RUNS_ON: { value: RunsOn; label: string; icon?: typeof Cloud }[] = [
 
 /** "Runs on: All · Cloud · Open source", as a radio group with arrow-key support. */
 function RunsOnControl({ value, onChange, locked, owner }: { value: RunsOn; onChange: (v: RunsOn) => void; locked?: "cloud" | "open"; owner: boolean }) {
-  // Only the owner has Settings → Engine mode; a visitor reads the lock and goes nowhere.
-  if (locked && !owner)
-    return (
-      <span className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-muted px-3 text-[13px] text-muted-foreground" title="Set by the studio's owner">
-        <Lock className="size-3.5" /> {locked === "open" ? "Open source only" : "Cloud only"}
-      </span>
-    );
+  // Only the owner has Settings → Engine mode; with one engine there is nothing for a visitor to pick.
+  if (locked && !owner) return null;
   if (locked)
     return (
       <Link
@@ -388,7 +384,7 @@ export function PresetGallery({
         <div className="py-16 text-center">
           <p className="font-heading text-[22px]">{query ? `No matches for “${q.trim()}”` : `No ${noun} here`}</p>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            {runsOn !== "all" && !locked ? "Try another engine, or clear the filters." : "Try another word or category."}
+            {runsOn !== "all" && !locked ? "Show all, or clear the filters." : "Try another word or category."}
           </p>
           <button
             type="button"

@@ -20,7 +20,8 @@ import { GetStarted } from "@/components/get-started";
 import { LlmProviderSettings } from "@/components/llm-provider-settings";
 import { LoraSettings } from "@/components/lora-settings";
 import { useStatus, type StatusInfo } from "@/lib/api";
-import { AI_TOOLKIT_REPO, connectionSummary, DEFAULT_AI_TOOLKIT_URL, ENGINE_MODE_LABEL, FAL_KEYS_URL, showFirstRun } from "@/lib/connections";
+import { WORKFLOWS_ON_GITHUB } from "@/lib/comfy-install";
+import { AI_TOOLKIT_REPO, connectionSummary, DEFAULT_AI_TOOLKIT_URL, ENGINE_MODE_LABEL, FAL_KEYS_URL, FUOBE_CREDITS, showFirstRun } from "@/lib/connections";
 import { cn } from "@/lib/utils";
 import { ConnectorSettings } from "@/components/assist/connectors-settings";
 import { NotificationSettings } from "@/components/notification-settings";
@@ -616,17 +617,17 @@ export function SettingsForm({ prices }: { prices?: string }) {
           hosted ? (
             <>
               Run every open-source workflow on your own graphics card. See{" "}
-              <Link href="/workflows" className="text-brand-text underline-offset-2 hover:underline">
-                ComfyUI workflows
-              </Link>{" "}
+              <a href={WORKFLOWS_ON_GITHUB} target="_blank" rel="noopener" className="text-brand-text underline-offset-2 hover:underline">
+                the ComfyUI workflows
+              </a>{" "}
               for the models each one needs.
             </>
           ) : (
             <>
               Run every open-source workflow on your own GPU (or a rented one). Fuobe talks to ComfyUI&apos;s HTTP API and uploads inputs for you. See{" "}
-              <Link href="/workflows" className="text-brand-text underline-offset-2 hover:underline">
-                ComfyUI workflows
-              </Link>{" "}
+              <a href={WORKFLOWS_ON_GITHUB} target="_blank" rel="noopener" className="text-brand-text underline-offset-2 hover:underline">
+                the ComfyUI workflows
+              </a>{" "}
               for the models each one needs.
             </>
           )
@@ -764,10 +765,15 @@ export function SettingsForm({ prices }: { prices?: string }) {
         </Link>
       </Section>
 
-      <Section id="about" title="About & licences" description="Fuobe's version, and the licence of every open model it can run — some are non-commercial or exclude some countries.">
-        <Link href="/settings/about" className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors hover:bg-accent">
-          <Info className="size-4 text-muted-foreground" /> Open About & licences
-        </Link>
+      <Section id="about" title="Credits" description="The licence notices and credits of the open models and code Fuobe runs.">
+        <a
+          href={FUOBE_CREDITS}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors hover:bg-accent"
+        >
+          <Info className="size-4 text-muted-foreground" /> Credits on GitHub
+        </a>
       </Section>
     </div>
   );

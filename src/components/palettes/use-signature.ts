@@ -34,7 +34,7 @@ export function useSignature(enabled: boolean, signature: Signature | undefined)
     mutationFn: async (b: { request: GenerationRequest; colors: string[] }) => {
       const res = await fetch("/api/palettes/lock", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
       const body = (await res.json().catch(() => ({}))) as { items?: Generation[]; error?: string };
-      if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
+      if (!res.ok) throw responseError(res, body.error ?? "Something went wrong. Please try again.");
       return body.items ?? [];
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["generations"] }),

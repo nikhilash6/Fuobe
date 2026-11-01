@@ -1350,15 +1350,6 @@ export function studioHandOff(o: HandOffInput): {
   };
 }
 
-// ---------------------------------------------------------------------------
-// The Finish stage (Akatz's refinement) — not runnable from the public release
-
-export const FINISH_UNAVAILABLE = {
-  title: "Finish: clean backplate and alpha compositing",
-  reason:
-    "Not available yet. Akatz Labs' Finish stage rebuilds a clean background plate with H3 Relay's Person Remover and the removal-continuation LoRA (h3-removal-continuation/B-step2000), then composites alpha mattes of the source and the character. The public release can't run it: the removal-continuation LoRA isn't published, templates/alpha.json is missing from the repository, and Akatz's own app says “Raw assembly migration is pending”.",
-  source: "docs/research/openjutsu-6.md §4.2",
-} as const;
 
 /** Where Akatz's GPU workers went: Fuobe's ComfyUI connection (and its isolated worker); no SSH workers. */
-export const WORKERS_NOTE = "Runs on your ComfyUI (Settings → ComfyUI). Akatz Labs' local and SSH GPU workers map to that connection and the isolated worker; Fuobe doesn't open SSH sessions.";
+export const WORKERS_NOTE = "Runs on your ComfyUI (Settings → ComfyUI).";

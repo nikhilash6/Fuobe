@@ -17,7 +17,7 @@ import { hit } from "@/server/rate";
  */
 const account = async (request: Request) => requestAccount(request);
 
-const notAccount = () => Response.json({ error: "Your GPU is for accounts. The studio's own ComfyUI is in Settings → Open-source engine." }, { status: 400 });
+const notAccount = () => Response.json({ error: "Log in to connect your GPU." }, { status: 400 });
 
 /** What a computer's tab last said: its GPU, memory, ComfyUI version and port, and whether it is open now. */
 const accountComputer = (id: string) => computerView(`acct:${id}`);

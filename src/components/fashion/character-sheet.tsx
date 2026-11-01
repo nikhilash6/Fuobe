@@ -205,7 +205,7 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
       <PageHeader title="Character Sheet" description="Build your AI avatar: a consistent character for your videos, from a reference or defined from scratch.">
         <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
-      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Character Sheet runs on a self-hosted Fuobe for now.</SelfHostNote>}
+      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Character Sheet isn&apos;t available here.</SelfHostNote>}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section className="min-w-0 space-y-4">
           <div role="tablist" aria-label="How to build it" className="scrollbar-none inline-flex max-w-full overflow-x-auto rounded-full bg-muted p-0.5">
@@ -282,8 +282,7 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
           {mode === "describe" && (
             <div className="space-y-2">
               <Textarea value={brief} onChange={(e) => setBrief(e.target.value)} rows={5} placeholder="Who are they? e.g. “a 26-year-old surfer and photographer from Lisbon, freckles, sun-bleached curls”" aria-label="Describe your character" />
-              <p className="text-[12px] text-muted-foreground">Runs the AI Influencer app: Nano Banana Pro in the cloud, the Soul Cast sheet (Z-Image Turbo){visitor ? " with open weights" : " free on your GPU"}.</p>
-            </div>
+                          </div>
           )}
 
           {mode !== "reference" && (

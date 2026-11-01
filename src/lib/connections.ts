@@ -89,6 +89,8 @@ export const FAL_KEYS_URL = "https://fal.ai/dashboard/keys";
 export const DEFAULT_COMFY_URL = "http://127.0.0.1:8188";
 /** Fuobe's source, for the install scripts and licences. */
 export const FUOBE_REPO = "https://github.com/workingprototype/fuobe";
+/** The credits and licence notices of the open models and code Fuobe runs (scripts/credits.mjs writes it). */
+export const FUOBE_CREDITS = `${FUOBE_REPO}/blob/main/CREDITS.md`;
 /** How to install ComfyUI with every node pack Fuobe's workflows use. */
 export const COMFY_INSTALL_DOCS = `${FUOBE_REPO}/blob/main/scripts/comfy/README.md`;
 export const COMFY_INSTALL_COMMAND = "bash scripts/comfy/install-comfyui.sh";

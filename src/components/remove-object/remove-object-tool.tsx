@@ -214,7 +214,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
               : estimate.isError
                 ? (estimate.error as Error).message
                 : null;
-  const blocker = visitor ? "Remove object runs on a self-hosted Fuobe for now" : setupBlocker;
+  const blocker = visitor ? "Remove object isn't available here" : setupBlocker;
 
   const start = () => {
     if (blocker || !body) return void toast(blocker ?? "Not ready yet", { id: "remove-blocker" });
@@ -243,9 +243,9 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
       {!clip && (
         <ToolHero
           title="Remove anything from a video"
-          subtitle={`Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays. Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}
+          subtitle={`Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays${visitor ? "." : ", free on your own ComfyUI."}`}
         >
-          {visitor && <SelfHostNote className="mt-3 max-w-xl">Remove object runs on a self-hosted Fuobe for now.</SelfHostNote>}
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">Remove object isn&apos;t available here.</SelfHostNote>}
         </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>
@@ -449,7 +449,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
                       {actions.preview.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Eye className="size-3.5" />} Preview the mask
                     </Button>
                     <span className="min-w-0 text-[12px] leading-snug text-muted-foreground">
-                      first {REMOVE.previewSeconds} s · {est.demo ? "demo" : engine === "open" ? (visitor ? "self-hosted only" : "free") : costText({ costUsd: est.previewUsd, demo: false }, "cloud")}
+                      first {REMOVE.previewSeconds} s · {est.demo ? "demo" : engine === "open" ? (visitor ? "not available here" : "free") : costText({ costUsd: est.previewUsd, demo: false }, "cloud")}
                       {!est.previewExact && ` · how SAM 3.1 reads it — ${est.modelName} finds the object itself`}
                     </span>
                   </div>

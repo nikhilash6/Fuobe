@@ -44,7 +44,7 @@ function StateIcon({ state }: { state: Readiness }) {
   );
 }
 
-const STATE_WORD: Record<Readiness, string> = { ready: "Ready", almost: "One step away", setup: "Needs setup", gpu: "Needs a bigger GPU", unsupported: "Not on your GPU yet", unknown: "Not checked" };
+const STATE_WORD: Record<Readiness, string> = { ready: "Ready", almost: "One step away", setup: "Needs setup", gpu: "Needs a bigger GPU", unsupported: "Not on your GPU", unknown: "Not checked" };
 
 function Row({ row, owner }: { row: StudioRow; owner: boolean }) {
   const [, setEngine] = useEngine();

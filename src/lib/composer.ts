@@ -124,15 +124,15 @@ export function videoToolNote(model: Pick<ModelDef, "name" | "engine" | "options
     if (outs.length > 1) return null;
     if (outs[0] === "cutout") return `${model.name} makes the cut-out only — BiRefNet and SAM also make the alpha mask.`;
     return model.engine === "cloud"
-      ? "The cloud gives the alpha mask of what you name — cut it out by words with SAM 3 on your ComfyUI, or cut out the whole subject with BiRefNet or Bria."
+      ? "Name what to keep and get its mask, or cut out the whole subject."
       : `${model.name} makes the alpha mask only.`;
   }
   const maps = o.colormaps ?? ["grayscale"];
   if (maps.length >= COLORMAPS.length) return null;
   if (model.engine === "open") {
     return maps.length > 1
-      ? `The open engine draws ${maps.map(colormapLabel).join(" and ")} — Turbo, Magma and Viridis need the cloud engine.`
-      : `${model.name} draws grayscale only — Video Depth Anything adds Inferno; Turbo, Magma and Viridis need the cloud engine.`;
+      ? `${maps.map(colormapLabel).join(" and ")} work with open-source models. Turbo, Magma and Viridis need Cloud.`
+      : `${model.name} draws grayscale only. Video Depth Anything adds Inferno; Turbo, Magma and Viridis need Cloud.`;
   }
   return `${model.name} draws ${maps.map(colormapLabel).join(", ")}.`;
 }

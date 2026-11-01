@@ -132,8 +132,8 @@ export function workflowReadiness(id: string, inv: GpuInventory, idx: Requiremen
   const base: WorkflowReadiness = { state: "unknown", needs: [], have: [], vram: { needGb: 0, fit: "any" }, firstRun: [], unvalidated: false, unobservable: [] };
   if (!w || !inv.reachable) return base;
   const out: WorkflowReadiness = { ...base, state: "ready", firstRun: w.firstRun, unvalidated: !w.validated, vram: vramFit(w.vramGb, inv) };
-  if (w.isolated && ctx.computer) return { ...out, state: "unsupported", reason: "This one needs a second ComfyUI running alongside the first, which Fuobe doesn't connect from your computer yet." };
-  if (w.isolated && ctx.account) return { ...out, state: "unsupported", reason: "This one needs a second ComfyUI running alongside the first, which Your GPU doesn't connect yet." };
+  if (w.isolated && ctx.computer) return { ...out, state: "unsupported", reason: "This one needs its own ComfyUI, so it can't run next to your other add-ons." };
+  if (w.isolated && ctx.account) return { ...out, state: "unsupported", reason: "This one needs its own ComfyUI, so it can't run next to your other add-ons." };
   if (w.isolated && !ctx.isolatedUrl) {
     out.needs.push({ key: "isolated-worker", kind: "isolated-worker", label: "A second ComfyUI (the isolated worker)", detail: "Some add-ons change process-wide settings, so they run on a separate ComfyUI." });
   }

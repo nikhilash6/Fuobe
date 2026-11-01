@@ -35,6 +35,7 @@ import { CreateCard, CustomCard, LookCard } from "./preset-card";
 import { ShortsHistory } from "./history";
 import { ClipBar, ClipDrop, costText, Field, Segmented, Steps, tabKeys } from "./ui";
 import { clipDuration, clipSize, useSourceClip } from "./use-source-clip";
+import { plainTagline } from "@/lib/plain-tagline";
 
 export type ModelChoice = RestyleModelInfo;
 
@@ -112,9 +113,9 @@ export function ShortsStudio({ models }: { models: Record<Engine, ModelChoice[]>
               <p className="text-[12px] font-semibold tracking-[0.14em] text-brand-text uppercase">Restyle your own footage</p>
               <h2 className="mt-2 font-heading text-display text-balance">Give your footage the spotlight</h2>
               <p className="mx-auto mt-2 max-w-[560px] text-body text-pretty text-muted-foreground">
-                Upload a clip, pick a look, get a finished short. Motion stays yours — up to 2 minutes in, cut into segments and stitched back under your sound.
+                Upload a clip up to 2 minutes, pick a look, and get a finished short. Your motion and sound stay.
               </p>
-              {visitor && <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Shorts Studio runs on a self-hosted Fuobe for now.</SelfHostNote>}
+              {visitor && <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Shorts Studio isn&apos;t available here.</SelfHostNote>}
               <Steps steps={STEPS} current={!presetId ? 0 : !clip?.url ? 1 : 1} className="mt-5" />
             </div>
             <Workspace
@@ -341,7 +342,7 @@ function SetupPanel({
   const modelId = pickedOn || (customRefs > 0 && engine === "cloud" && refModel ? refModel : models[0]?.id);
   const model = models.find((m) => m.id === modelId);
   // An open model is free on a self-hosted Fuobe: a guest or an account reads that, not "your GPU".
-  const priceOf = (m?: ModelChoice) => (visitor && m?.engine === "open" ? "Self-hosted only" : m?.price);
+  const priceOf = (m?: ModelChoice) => (visitor && m?.engine === "open" ? "Not available here" : m?.price);
   const duration = clipDuration(clip);
   const actions = useShortsActions();
   const presetType = SHORTS_PRESETS.find((p) => p.id === presetId)?.type;
@@ -389,7 +390,7 @@ function SetupPanel({
                 : estimate.error
                   ? (estimate.error as Error).message
                   : null;
-  const blocker = visitor ? "Shorts Studio runs on a self-hosted Fuobe for now" : setupBlocker;
+  const blocker = visitor ? "Shorts Studio isn't available here" : setupBlocker;
 
   const guard = useSubmitGuard();
   const [leaving, setLeaving] = useState(false);
@@ -518,10 +519,10 @@ function SetupPanel({
         {model && (
           <p className="text-[12px] leading-snug text-muted-foreground">
             {engine === "open"
-              ? "Each ≤5 s segment: its first frame is restyled with Qwen-Image 2.1 Turbo, then Wan 2.2 Fun VACE follows it and the clip's depth."
+              ? "Each part of up to 5 s takes the look on its first frame, then every frame follows it."
               : model.id === SHORTS_ORIGINAL
-                ? "Fuobe Original · each segment's first frame is drawn in the look (Qwen-Image-Edit 2511), then Wan 2.2 Fun VACE carries it through every frame by depth, on open weights hosted by fal."
-                : model.tagline}
+                ? "Fuobe Original: the look is painted on, then carried through every frame."
+                : plainTagline(model.tagline)}
           </p>
         )}
         {customRefs > 0 && engine === "cloud" && model && !model.refs && (

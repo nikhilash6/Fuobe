@@ -43,6 +43,7 @@ import { toastError } from "@/lib/refusals";
 import { MixedHistory } from "./history";
 import { isFrameRender, renderSteps, useFramesProgress, useMixedActions, useMixedEstimate, useWatchedChain, useWatchedGeneration, type MixedBody } from "./hooks";
 import { AdvancedSettings, loadSaved } from "./settings";
+import { plainTagline } from "@/lib/plain-tagline";
 
 type Tab = "presets" | "history" | "how";
 const TABS: { id: Tab; label: string }[] = [
@@ -65,7 +66,7 @@ const HOW = [
 const HOW_CLOUD = " On the cloud, Fast restyles it in one video-to-video pass.";
 
 const MODE_OPTIONS: { value: MixedMode; label: string; title: string }[] = [
-  { value: "frames", label: "Per frame", title: "Every frame drawn again in the look — the mixed-media flicker" },
+  { value: "frames", label: "Per frame", title: "Every frame drawn again in the look, with a hand-made flicker" },
   { value: "smooth", label: "Smooth", title: "The first frame in the look, then carried through the clip by depth — no flicker" },
   { value: "fast", label: "Fast", title: "A partner video model restyles the whole clip in one pass" },
 ];
@@ -118,17 +119,17 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
         {tab === "history" ? (
           <MixedHistory onStart={() => pick("presets")} />
         ) : tab === "how" ? (
-          <How onStart={() => pick("presets")} cloud={engineMode !== "open"} visitor={visitor} />
+          <How onStart={() => pick("presets")} cloud={engineMode !== "open"} />
         ) : (
           <>
             <div className="mx-auto max-w-[720px] pt-8 pb-6 text-center sm:pt-12">
               <p className="text-[12px] font-semibold tracking-[0.14em] text-brand-text uppercase">No prompts, just vibe</p>
               <h2 className="mt-2 font-heading text-display text-balance">Turn any video into mixed-media art</h2>
               <p className="mx-auto mt-2 max-w-[560px] text-body text-pretty text-muted-foreground">
-                33 looks, each with its own colours and materials. Preview one frame first, then render the clip frame by frame at the rate you choose — on Fuobe Mixed Media
+                33 looks, each with its own colours and materials. Preview one frame, then make the whole clip
                 {visitor ? "." : ", free on your GPU."}
               </p>
-              {visitor && <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Mixed Media runs on a self-hosted Fuobe for now.</SelfHostNote>}
+              {visitor && <SelfHostNote className="mx-auto mt-3 max-w-[560px]">Mixed Media isn&apos;t available here.</SelfHostNote>}
             </div>
             <Workspace visitor={visitor} engine={engine} models={models[engine]} frameModels={frameModels[engine]} />
           </>
@@ -138,8 +139,7 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
   );
 }
 
-/** visitor: a guest or an account, for whom the open engine runs only on a self-hosted Fuobe (not on their own GPU yet). */
-function How({ onStart, cloud, visitor }: { onStart: () => void; cloud: boolean; visitor: boolean }) {
+function How({ onStart, cloud }: { onStart: () => void; cloud: boolean }) {
   return (
     <div className="mx-auto max-w-[920px] pt-10">
       <h2 className="text-center font-heading text-[34px] leading-tight">How it works</h2>
@@ -158,12 +158,11 @@ function How({ onStart, cloud, visitor }: { onStart: () => void; cloud: boolean;
       <div className="mt-6 rounded-2xl bg-muted/60 p-5 text-[13px] text-muted-foreground">
         <p className="font-medium text-foreground">Cost</p>
         <p className="mt-1">
-          A render is counted in frames: seconds × frame rate, rounded down (10 s at 8 FPS = 80 frames; at most 10 s × 24 FPS = 240). Fuobe Mixed Media draws every
-          frame again in the look — Z-Image Turbo following the frame&apos;s own outlines, with the look&apos;s LoRA and one seed — free{" "}
-          {visitor ? "when you run Fuobe yourself" : "on your GPU"}
-          {cloud ? ", or on the cloud at about a cent a frame. Nano Banana 2.1 and Seedream 5.0 Flash redraw frames too, priced per frame." : "."} Smooth draws only the
-          first frame in the look, then Wan 2.2 Fun VACE carries it through the clip by depth{cloud ? ", priced per second. Fast restyles the clip in one video-to-video pass, priced by the model" : ""}.
-          The estimate shows before you generate.
+          A render is counted in frames: seconds × frame rate (10 s at 8 fps = 80 frames; at most 240). Fuobe Mixed Media draws every frame again in the
+          look, free on your GPU
+          {cloud ? ", or in the cloud at about a cent a frame. Nano Banana 2.1 and Seedream 5.0 Flash redraw frames too, priced per frame." : "."} Smooth draws only the
+          first frame in the look, then every frame follows it{cloud ? ", priced per second. Fast restyles the clip in one pass, priced by the model" : ""}. You see
+          the estimate before you generate.
         </p>
         <p className="mt-2">
           Over {FRAME_LIMITS.perClip} frames, the frames go back together as clips and are joined.
@@ -337,7 +336,7 @@ function Editor({
   const modelId = (models.some((m) => m.id === pickedModel[slot]) && pickedModel[slot]) || models[0]?.id;
   const model = models.find((m) => m.id === modelId);
   // An open model is free on a self-hosted Fuobe: a guest or an account reads that, not "your GPU".
-  const priceOf = (m?: RestyleModelInfo) => (visitor && m?.engine === "open" ? "Self-hosted only" : m?.price);
+  const priceOf = (m?: RestyleModelInfo) => (visitor && m?.engine === "open" ? "Not available here" : m?.price);
   const original = modelId === MIXED_ORIGINAL;
   const [previewId, setPreviewId] = useState<string | null>(null);
   // Every main step of the latest render (cut → frames or restyle → sound), so a failed step shows its own error.
@@ -437,7 +436,7 @@ function Editor({
                 : estimate.error
                   ? (estimate.error as Error).message
                   : null;
-  const blocker = visitor ? "Mixed Media runs on a self-hosted Fuobe for now" : setupBlocker;
+  const blocker = visitor ? "Mixed Media isn't available here" : setupBlocker;
 
   // One preview and one render per click: a second click while one is on its way does nothing,
   // and the server answers a repeated request id with what the first one started.
@@ -625,10 +624,10 @@ function Editor({
         {model && (
           <p className="text-[12px] leading-snug text-muted-foreground">
             {smooth
-              ? `Fuobe Original · the first frame drawn in the look, then Wan 2.2 Fun VACE carries it through the clip by depth${cloud ? " at 720p" : visitor ? " (480p, 16 FPS)" : " (480p, 16 FPS on your GPU)"}.`
+              ? `Fuobe Original: the first frame takes the look, then every frame follows it${cloud ? ", at 720p" : visitor ? " (480p, 16 fps)" : " (480p, 16 fps on your GPU)"}.`
               : original
-                ? `Fuobe Original · every frame drawn again by Z-Image Turbo along its own outlines, with the look's LoRA and one seed${cloud ? ", hosted on fal" : ""}.`
-                : model.tagline}
+                ? "Fuobe Original: every frame drawn again in the look, along its own outlines."
+                : plainTagline(model.tagline)}
           </p>
         )}
       </Field>
@@ -656,7 +655,7 @@ function Editor({
             itself (a one-frame clip), but Smooth's first frame on another (Z-Image's image-to-image), so it says nothing there. */}
         {original && (cloud ? !!previewImage : frameMode && preview?.status === "succeeded") && (
           <p className="flex items-center gap-1.5 text-[12px] text-brand-text">
-            <Wand2 className="size-3.5 shrink-0" /> {smooth ? "The first frame is drawn just like this, then carried through the clip" : "Every frame is drawn like this one: same look, LoRA and seed"}
+            <Wand2 className="size-3.5 shrink-0" /> {smooth ? "The first frame is drawn just like this, then carried through the clip" : "Every frame is drawn just like this one"}
           </p>
         )}
         {anchor && (

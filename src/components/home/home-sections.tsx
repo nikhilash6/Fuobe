@@ -22,10 +22,12 @@ import { LiveDemo } from "@/components/live/live-demo";
 import { NAV } from "@/components/nav-items";
 import { PresetCard } from "@/components/preset-gallery";
 import { ASSIST_SUGGESTIONS } from "@/lib/assist";
-import { FUOBE_REPO } from "@/lib/connections";
+import { WORKFLOWS_ON_GITHUB } from "@/lib/comfy-install";
+import { FUOBE_CREDITS, FUOBE_REPO } from "@/lib/connections";
 import { HOME_LIVE, presetHref, type HomeShowcase } from "@/lib/home-showcase";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
+import { plainTagline } from "@/lib/plain-tagline";
 
 /*
  * Home's sections under the wall. Server components: their words, numbers and links ship as HTML, and only the
@@ -288,13 +290,13 @@ export function StudiosSection({ facts, studios, audioTools, pills }: Pick<HomeS
  * else reads it as what they get on their own install, with the way to run one (AssistTag, AssistAction,
  * AssistExamples). Until the viewer is known, that's what shows.
  */
-export function AssistSection({ facts, runsOn, skills }: Pick<HomeShowcase, "facts" | "runsOn" | "skills">) {
+export function AssistSection({ facts, skills }: Pick<HomeShowcase, "facts" | "skills">) {
   const points: [LucideIcon, string][] = [
     [ListChecks, "Plans every step and prices it first"],
     [ScanEye, "Checks each result before the next step"],
     [Sparkles, `${facts.skills} built-in skills, projects and memory`],
     [CalendarClock, "Scheduled tasks, with a cost cap"],
-    [Plug, "MCP connectors, a CLI and its own MCP server"],
+    [Plug, "Works with your other tools"],
   ];
   return (
     <section aria-labelledby="home-assist" className={cn(SECTION, "[--cv:912px] sm:[--cv:831px] md:[--cv:911px] lg:[--cv:562px] xl:[--cv:480px]")}>
@@ -315,10 +317,7 @@ export function AssistSection({ facts, runsOn, skills }: Pick<HomeShowcase, "fac
               </li>
             ))}
           </ul>
-          <p className="mt-5 text-[12px] text-pretty text-muted-foreground">
-            Plans with the LLM you pick: {runsOn.named.join(", ")}
-            {runsOn.more > 0 && `, and ${runsOn.more} more`}, a local LLM ({runsOn.local.join(", ")}), or an offline planner with no LLM at all.
-          </p>
+          <p className="mt-5 text-[12px] text-pretty text-muted-foreground">Plans with the AI you choose, online or on your own computer.</p>
           <AssistAction />
         </div>
         <AssistExamples prompts={[...ASSIST_SUGGESTIONS]} skills={skills} />
@@ -331,11 +330,10 @@ const KIND_ICON: Record<string, LucideIcon> = { image: ImageIcon, video: Video, 
 
 export function OpenSourceSection({ facts, newModels }: Pick<HomeShowcase, "facts" | "newModels">) {
   const numbers = [
-    { value: facts.openModels, label: "open-source models and tools, free on your own GPU", href: "/settings/about" },
-    { value: facts.workflows, label: "ComfyUI workflows to read, run and change", href: "/workflows" },
-    { value: facts.originals, label: "Fuobe Originals, free on your GPU", href: "/models?q=Fuobe" },
+    { value: facts.openModels, label: "open-source models and tools", href: "/image" },
+    { value: facts.workflows, label: "ComfyUI workflows to read, run and change", href: WORKFLOWS_ON_GITHUB, external: true },
+    { value: facts.originals, label: "Fuobe Originals", href: "/apps" },
     { value: facts.presets, label: "presets: apps, camera motions and effects", href: "/effects" },
-    { value: facts.partners, label: "partner models in the cloud", href: "/models" },
   ];
   return (
     <section aria-labelledby="home-open" className={cn(SECTION, "[--cv:528px] sm:[--cv:494px] md:[--cv:571px] lg:[--cv:494px] xl:[--cv:363px]")}>
@@ -345,15 +343,29 @@ export function OpenSourceSection({ facts, newModels }: Pick<HomeShowcase, "fact
       <p className={cn(LINE, "max-w-[62ch]")}>
         The code is MIT-licensed. Every open model comes with its ComfyUI workflow, its files and its licence, and runs on your own GPU.
       </p>
-      <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 rounded-2xl bg-muted/50 p-6 sm:grid-cols-3 xl:grid-cols-5">
-        {numbers.map((n, i) => (
-          <li key={n.href} className={cn("min-w-0", i === numbers.length - 1 && "max-sm:col-span-2")}>
-            <IntentLink href={n.href} className="group block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <ul className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 rounded-2xl bg-muted/50 p-6 lg:grid-cols-4">
+        {numbers.map((n) => {
+          const inner = (
+            <>
               <span className="block font-heading text-[34px] leading-none tabular-nums transition-colors group-hover:text-brand-text">{n.value}</span>
               <span className="mt-1.5 block text-[12px] leading-snug text-muted-foreground">{n.label}</span>
-            </IntentLink>
-          </li>
-        ))}
+            </>
+          );
+          const cls = "group block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring";
+          return (
+            <li key={n.label} className="min-w-0">
+              {n.external ? (
+                <a href={n.href} target="_blank" rel="noopener" className={cls}>
+                  {inner}
+                </a>
+              ) : (
+                <IntentLink href={n.href} className={cls}>
+                  {inner}
+                </IntentLink>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {newModels.length > 0 && (
         <>
@@ -366,7 +378,7 @@ export function OpenSourceSection({ facts, newModels }: Pick<HomeShowcase, "fact
                   <li key={m.id}>
                     <IntentLink
                       href={m.href}
-                      title={m.tagline}
+                      title={plainTagline(m.tagline)}
                       className="group inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors hover:bg-accent"
                     >
                       <Icon className="size-3.5 text-muted-foreground transition-colors group-hover:text-brand-text" />
@@ -401,7 +413,7 @@ export function StartSection() {
         <div className="min-w-0 rounded-2xl bg-media p-5 text-white ring-1 ring-white/10 lg:col-span-7">
           <p className="text-[15px] font-medium">Or run all of Fuobe yourself</p>
           <p className="mt-1 text-[13px] text-white/70">
-            MIT licence. Keys, settings and results stay on your machine.
+            MIT licence. Your keys, settings and work stay on your machine.
           </p>
           <div className="mt-4 min-w-0 overflow-hidden rounded-xl bg-white/[0.04] ring-1 ring-white/10">
             <div className="flex items-center justify-between py-2 pr-2 pl-4">
@@ -430,12 +442,14 @@ export function StartSection() {
             >
               <GitHubMark className="size-3.5" /> View on GitHub
             </a>
-            <IntentLink
-              href="/workflows"
+            <a
+              href={WORKFLOWS_ON_GITHUB}
+              target="_blank"
+              rel="noopener"
               className="inline-flex h-9 items-center rounded-full px-4 text-[13px] font-medium text-white ring-1 ring-white/20 transition-colors hover:bg-white/10"
             >
               ComfyUI workflows
-            </IntentLink>
+            </a>
           </div>
         </div>
       </div>
@@ -443,8 +457,13 @@ export function StartSection() {
   );
 }
 
+/** The footer's own pages; the credits and the code are on GitHub. */
+const FOOTER_PAGES = [
+  { href: "/privacy", label: "Privacy" },
+  { href: "/terms", label: "Terms" },
+];
+
 export function HomeFooter() {
-  const engine = NAV.find((g) => g.label === "Engine")?.items.filter((i) => i.href !== "/settings") ?? [];
   const link = "transition-colors hover:text-foreground";
   return (
     <footer className="mt-12 flex flex-wrap items-end justify-between gap-4 border-t pt-8 pb-4">
@@ -453,11 +472,14 @@ export function HomeFooter() {
         <p className="mt-1.5 text-[12px] text-muted-foreground">Open source under the MIT licence.</p>
       </div>
       <nav aria-label="About Fuobe" className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
-        {engine.map((i) => (
+        {FOOTER_PAGES.map((i) => (
           <Link key={i.href} href={i.href} prefetch={false} className={link}>
             {i.label}
           </Link>
         ))}
+        <a href={FUOBE_CREDITS} target="_blank" rel="noopener" className={link}>
+          Credits
+        </a>
         <a href={FUOBE_REPO} target="_blank" rel="noopener" className={link}>
           GitHub
         </a>

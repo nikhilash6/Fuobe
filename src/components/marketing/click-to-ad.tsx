@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Clapperboard, Loader2, MousePointerClick, PenLine, RefreshCw, Sparkles, Wand2 } from "lucide-react";
+import { Check, Clapperboard, Loader2, MousePointerClick, PenLine, RefreshCw, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,7 @@ import { AddFromLink, priceText, ProductThumb, UploadProductButton } from "@/com
 import { SelfHostNote } from "@/components/self-host-note";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { uploadFile, useLikelyVisitor } from "@/lib/api";
-import { getModel } from "@/lib/catalog";
-import { AD_STYLES, END_CARD, KIT_LABELS, UGC_MODELS, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
+import { AD_STYLES, END_CARD, KIT_LABELS, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -134,7 +133,7 @@ function KitBrand({ brand }: { brand: BrandKit }) {
 /** Click to Ad: product link → product kit → style → a 9:16 ad of up to 12 s with voiceover and captions. */
 export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   const qc = useQueryClient();
-  const { engine, setEngine, mode: engineMode } = useMarketingEngine();
+  const { engine, setEngine } = useMarketingEngine();
   const products = useProducts();
   const { update } = useProductActions();
   // The link is read by AddFromLink's own mutation: follow it by its key.
@@ -223,7 +222,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   );
   const est = useEstimate<RunEstimate>("/api/marketing/click-to-ad/estimate", body);
   const blocker = !product ? "Select a product or enter a product URL" : !product.images.length ? `${product.name} has no images` : !desc.trim() ? "Add a description" : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Not available here" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   const writeScript = async () => {
     if (!productId) return;
@@ -263,7 +262,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
         <div className="pb-2 text-center">
           <h2 className="font-heading text-display text-balance">Make a video ad in one click</h2>
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">Drop a product link, get a 9:16 ad with voiceover and captions — ready for TikTok, Reels and Shorts. No filming, no editing, no brief.</p>
-          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Click to Ad runs on a self-hosted Fuobe for now.</SelfHostNote>}
+          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Click to Ad isn&apos;t available here.</SelfHostNote>}
         </div>
 
         <Step n={1} title="Your product" hint="Paste the product's own page, or pick one you saved." done={!!product}>
@@ -460,9 +459,6 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
             }
           />
         </div>
-        <p className="flex items-center justify-center gap-1.5 pt-4 text-[12px] text-muted-foreground">
-          <Sparkles className="size-3" /> {engineMode === "open" ? "" : "Cloud: Seedance 2.5 shots or an OmniHuman presenter, ElevenLabs voice, Auto Subtitle · "}Open source: {getModel(UGC_MODELS.open.clip)?.name}, InfiniteTalk, Chatterbox (your voice sample), caption burn-in
-        </p>
       </div>
     </div>
   );

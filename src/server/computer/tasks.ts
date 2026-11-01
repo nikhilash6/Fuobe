@@ -571,7 +571,7 @@ function reportOnce(t: TaskRow, e: ReportEvent, plan: (entries: HistoryEntryLike
       const p = plan(entries, e.event === "passes");
       if ("follow" in p) {
         if (!t.meta_batch) {
-          endTask(t.id, "failed", { error: "Workflow finished without saving any output" });
+          endTask(t.id, "failed", { error: "This run finished without a result. Press Retry." });
           return { ok: true };
         }
         setTask(t.id, { ...seen, state: "running" });

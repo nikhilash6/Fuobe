@@ -142,7 +142,7 @@ export function FashionView() {
 
   return (
     <PageShell wide>
-      <PageHeader title="Fashion Factory" description="Next generation ultra-realistic fashion visuals: your product on a consistent character, in a full photoshoot.">
+      <PageHeader title="Fashion Factory" description="Your product on one consistent model, across a full photoshoot.">
         <div className="flex items-center gap-2">
           {at > 0 && (
             <Button variant="ghost" size="sm" onClick={() => (dispatch({ type: "reset" }), setGarment(null))}>
@@ -152,14 +152,13 @@ export function FashionView() {
           <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
         </div>
       </PageHeader>
-      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Fashion Factory runs on a self-hosted Fuobe for now.</SelfHostNote>}
+      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Fashion Factory isn&apos;t available here.</SelfHostNote>}
 
       {!bannerSeen && at === 0 && (
         <div className="relative mb-6 overflow-hidden rounded-2xl border bg-gradient-to-br from-brand-faint to-background p-5">
           <button type="button" onClick={hideBanner} aria-label="Hide" className="absolute top-3 right-3 grid size-7 place-items-center rounded-full hover:bg-accent">
             <X className="size-4" />
           </button>
-          <p className="max-w-xl pr-8 text-[14px] text-muted-foreground">Easily create branded photoshoots by combining your product with a consistent character, delivering unique and professional visuals every time.</p>
           <Button className="mt-3" size="sm" onClick={hideBanner}>
             Select template
           </Button>
@@ -194,7 +193,7 @@ export function FashionView() {
                     onClick={() => dispatch({ type: "template", id: x.id })}
                     className="mt-1.5 block w-full rounded px-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                   >
-                    <span className="block text-[13px] font-semibold tracking-wide uppercase">{x.name}</span>
+                    <span className="block text-[13px] font-semibold">{x.name.replace(/(^|[\s-])(\p{Ll})/gu, (_, a: string, c: string) => a + c.toUpperCase())}</span>
                     <span className="block text-[12px] text-muted-foreground">
                       {x.shots} shots · {x.description}
                     </span>

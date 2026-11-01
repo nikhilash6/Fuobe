@@ -13,7 +13,7 @@ import { gpuTargetFor, installExposed } from "@/server/gpu/target";
  * check that is already running.
  */
 export async function POST(request: Request) {
-  if (!preflightOn()) return Response.json({ error: "The GPU pre-flight is switched off on this studio." }, { status: 404 });
+  if (!preflightOn()) return Response.json({ error: "The GPU check is off." }, { status: 404 });
   const refused = interactiveRefusal(request);
   if (refused) return Response.json({ error: refused }, { status: 403 });
   const t = gpuTargetFor(request, "read");

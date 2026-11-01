@@ -75,6 +75,7 @@ import { useCinemaGenerate } from "./hooks";
 import { firstFrame, mediaDuration } from "./media";
 import { formatUsd } from "./money";
 import { placeholdersOn } from "@/lib/demo-mode";
+import { plainTagline } from "@/lib/plain-tagline";
 
 const chip = "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors";
 const chipIdle = "bg-secondary text-secondary-foreground hover:bg-accent";
@@ -782,7 +783,7 @@ export function PromptBar(props: PromptBarProps) {
                         {m.name}
                         {ORIGINAL_LINES[id] && <span className="rounded-full bg-brand-faint px-1.5 py-px text-[10.5px] font-medium text-brand-text">Original</span>}
                       </span>
-                      <span className="block text-[11.5px] leading-snug text-muted-foreground">{modelLine(m, engine)}</span>
+                      <span className="block text-[11.5px] leading-snug text-muted-foreground">{plainTagline(modelLine(m, engine))}</span>
                     </span>
                   </DropdownMenuItem>
                 );

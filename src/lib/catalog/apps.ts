@@ -320,7 +320,6 @@ export const APPS: Preset[] = [
       loras: [ANGLES_2511_LORA],
       promptTemplate: "<sks> {option:angle} {option:height} {option:distance}. {prompt}",
     },
-    parity: "Both engines run the same Multiple-Angles LoRA: hosted by fal on the cloud, added to Qwen-Image-Edit 2511 on the open engine (0.3 GB).",
   }),
   app({
     name: "Fuobe Angles",
@@ -364,14 +363,14 @@ export const APPS: Preset[] = [
       },
     ],
     userPrompt: "optional",
-    placeholder: "Anything to keep in mind (used on your GPU)",
+    placeholder: "Anything to keep in mind (optional)",
     prompt: "{prompt}",
     cloud: { modelId: "fuobe-angles", op: "edit" },
     open: { modelId: "fuobe-angles", op: "edit" },
     // The reference's recipe (Qwen-Image-Edit 2509 + the Multiple-angles LoRA), hosted on fal or with Qwen-Image-Lightning
     // on the GPU. Not yet measured: the Angles app stays the default until the angles evaluation suite promotes it.
     parity:
-      "Both engines run the same recipe: Qwen-Image-Edit 2509 with a multiple-angles LoRA, in the cloud or on your GPU (24 GB). In the cloud it follows the camera settings alone, without your words.",
+      "Follows your camera settings. Your words add detail when it runs on your GPU.",
   }),
   app({
     name: "Shots",
@@ -501,7 +500,7 @@ export const APPS: Preset[] = [
       promptTemplate: "An original character: {prompt}. The same face, hairstyle and outfit in every view, photorealistic, high detail.",
     },
     parity:
-      "Save the sheet as a character (tile menu) to use it in any prompt with @. From your own photos or a Soul Cast build, use Character Sheet. Fuobe Soul draws it in the Realistic look; the open version draws the turnaround in the same look on Z-Image Turbo and cuts it into the four views.",
+      "Save the sheet as a character (tile menu) to use it in any prompt with @. From your own photos or a Soul Cast build, use Character Sheet.",
   }),
   app({
     name: "Match Lighting",
@@ -524,7 +523,7 @@ export const APPS: Preset[] = [
     prompt:
       "Recolor image 1 to match the color palette and grade of image 2: the same hues, saturation, contrast and tone in the shadows and highlights. Keep the content, composition and details of image 1 unchanged.",
     open: { modelId: "oss-palette-image", op: "color-match" },
-    parity: "The open version transfers the palette directly (no AI model, runs on CPU); the cloud version re-grades with Nano Banana Pro.",
+    parity: "Copies the reference's palette onto your photo.",
   }),
   app({
     name: "Expand Image",
@@ -544,7 +543,7 @@ export const APPS: Preset[] = [
     prompt:
       "Expand this image outward into {option:ratio}, continuing the scene naturally beyond every edge with matching perspective, lighting, textures and grain. Keep the original content untouched, and fill the new area with more of the same surroundings.",
     open: OUTPAINT_OPEN,
-    parity: "Set the matching aspect ratio in settings for an exact canvas size.",
+    parity: "Pick the shape you want before you expand.",
   }),
   app({
     name: "Zoom Out",
@@ -710,7 +709,7 @@ export const APPS: Preset[] = [
     prompt: "",
     cloud: { modelId: "hunyuan-3d-3-1-pro", op: "image-to-3d" },
     open: { modelId: "oss-pixal3d", op: "image-to-3d" },
-    parity: "The open version (Pixal3D) also gets a turntable video rendered on the server; for cloud models the 3D page records one in your browser.",
+    parity: "Comes with a turntable video of your model.",
   }),
   videoApp({
     name: "Billboard Ad",
@@ -819,9 +818,10 @@ export const APPS: Preset[] = [
       "Wide cinematic shot of a city skyline: a colossal version of the product from the image stands among the skyscrapers, taller than the buildings; the camera flies toward it as clouds drift past and tiny cars move below. Photoreal scale, product details exact.",
   }),
   videoApp({
-    name: "Kick Ad",
+    id: "app-kick-ad",
+    name: "Keep Calm",
     category: "Product",
-    description: "Your product wins, the rival gets kicked out",
+    description: "Unbothered, coffee in hand, as the room burns",
     icon: "Footprints",
     hue: 0,
     inputs: [product],
@@ -1173,7 +1173,6 @@ export const APPS: Preset[] = [
     prompt: "The character from the image performs exactly the motion, expressions and timing of the source video.",
     cloud: null,
     open: ANIMATE_OPEN,
-    parity: "Runs on open-source models only, on your own GPU.",
   }),
   app({
     name: "Video Face Swap",
@@ -1188,7 +1187,7 @@ export const APPS: Preset[] = [
     prompt: "The person from the image performs exactly the motion, expressions and timing of the target video.",
     cloud: null,
     open: ANIMATE_OPEN,
-    parity: "Draws the whole person again from your photo, not only the face. Runs on open-source models only.",
+    parity: "Draws the whole person again from your photo, not only the face.",
   }),
   app({
     name: "Transitions",
@@ -1477,9 +1476,10 @@ export const APPS: Preset[] = [
       "The person from the image sits calmly at a small table holding a coffee mug in a room that is slowly filling with flames and smoke; they sip, smile and nod reassuringly at the camera as everything burns around them. Deadpan comedy.",
   }),
   videoApp({
-    name: "Skibidi",
+    id: "app-skibidi",
+    name: "Idol Stage",
     category: "Fun",
-    description: "The viral toilet meme, starring you",
+    description: "Your own K-pop concert moment",
     icon: "Bath",
     hue: 190,
     prompt:
@@ -1513,9 +1513,10 @@ export const APPS: Preset[] = [
       "The person becomes a K-pop idol performing on a dazzling concert stage in a sparkling stage outfit: sharp choreography, a confident wink to the camera, colorful light beams, confetti and a cheering crowd with lightsticks.",
   }),
   videoApp({
-    name: "Yes Kiss",
+    id: "app-yes-kiss",
+    name: "Mugshot",
     category: "Fun",
-    description: "The humorous viral kiss meme",
+    description: "A playful police booking shot",
     icon: "HeartHandshake",
     hue: 350,
     prompt:
@@ -1685,9 +1686,10 @@ export const APPS: Preset[] = [
       "Police booking scene: the person stands against a height chart wall holding a placard with a booking number; a camera flash fires, they turn to the side for the profile shot, then back to the front with a smirk. Gritty fluorescent lighting.",
   }),
   videoApp({
-    name: "Banana Eating",
+    id: "app-banana-eating",
+    name: "Still Life Snack",
     category: "Fun",
-    description: "A calm, minimalist banana snack",
+    description: "A calm, minimalist banana moment",
     icon: "Banana",
     hue: 55,
     prompt:
@@ -1714,7 +1716,7 @@ export const APPS: Preset[] = [
     prompt: "Remove the background",
     cloud: { modelId: "birefnet-video", op: "bg-remove-video" },
     open: { modelId: "oss-video-matte-birefnet", op: "bg-remove-video" },
-    parity: "Cuts the subject out of every frame into a transparent video. To keep one object you name, use Video tools → Remove background with SAM 3.",
+    parity: "Cuts the subject out of every frame into a transparent video. To keep only one object, use Remove background in Video tools.",
   }),
   // Clean up voice (NVIDIA RE-USE): an app that is the Audio tool itself (src/components/audio-tools/clean-voice-tool.tsx).
   app({
@@ -1774,7 +1776,7 @@ export const APPS: Preset[] = [
     prompt: "Vectorize",
     cloud: { modelId: "recraft-vectorize", op: "vectorize" },
     open: { modelId: "oss-vtracer", op: "vectorize" },
-    parity: "The open version traces the colours with VTracer (no AI): crisp on logos and flat art, many small shapes on photos. Recraft redraws the shapes.",
+    parity: "Sharpest on logos, icons and flat art.",
   }),
   app({
     name: "Text Edit",

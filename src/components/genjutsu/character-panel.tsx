@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, Cpu, Drama, Loader2, Scale, Sparkles, TriangleAlert } from "lucide-react";
+import { AudioLines, Cpu, Drama, Loader2, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -217,8 +217,8 @@ export function CharacterControls({
                 )}
               </Field>
             )}
-            <Field label="Swap LoRA" hint={open ? "Akatz Labs' Character Swap LoRA" : "Akatz Labs' Character Swap LoRA (fal's route needs one)"}>
-              <Segmented label="Swap LoRA" value={value.lora ?? "v1.5"} onChange={(l: SwapLora) => set({ lora: l === "v1.5" ? undefined : l })} options={loraChoices} />
+            <Field label="Swap style" hint="How the swap is drawn">
+              <Segmented label="Swap style" value={value.lora ?? "v1.5"} onChange={(l: SwapLora) => set({ lora: l === "v1.5" ? undefined : l })} options={loraChoices} />
             </Field>
             {open && (
               <>
@@ -333,10 +333,6 @@ export function CharacterFacts({
           </span>
         </p>
       )}
-      <p className="flex gap-1.5">
-        <Scale className="mt-0.5 size-3.5 shrink-0" />
-        <span>Licences are information: each model&apos;s is under its name above, and your admin decides what runs (Settings → Models &amp; licences).</span>
-      </p>
       {/* Whole clips, shot by shot, with masks, anchors, segments and takes: the studio built on the same H3 recipe. */}
       {onOpenStudio ? (
         <button type="button" onClick={onOpenStudio} disabled={opening || !!waiting} className="inline-flex items-center gap-1 rounded-sm text-left font-medium text-brand-text outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60">

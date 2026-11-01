@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, CheckCircle2, CircleHelp, CreditCard, ExternalLink, FlaskConical, Globe, Info, RotateCcw, Search } from "lucide-react";
-import Link from "next/link";
+import { FUOBE_CREDITS } from "@/lib/connections";
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -203,15 +203,14 @@ export function ModelAccessIntro() {
   const known = hydrated && v;
   return (
     <>
-      Every model, LoRA and node pack Fuobe can run, with its licence: paid and open, commercial or not.{" "}
-      {known &&
-        (v.owner
-          ? "Licences are information here; you decide what this install offers. Everything is on until you switch it off, and what is off leaves every picker and is refused on the server. "
-          : "What is switched off leaves every picker. ")}
-      <Link href="/settings/about" className="text-brand-text underline-offset-2 hover:underline">
-        About &amp; licences
-      </Link>{" "}
-      has the notices and a link to each open model&apos;s licence.
+      {known && v.owner
+        ? "Every model, LoRA and node pack Fuobe can run, with its licence: paid and open, commercial or not. Licences are information here; you decide what this install offers. Everything is on until you switch it off, and what is off leaves every picker and is refused on the server. "
+        : "Every model and style Fuobe runs, with its licence. "}
+      Credits and notices are{" "}
+      <a href={FUOBE_CREDITS} target="_blank" rel="noopener" className="text-brand-text underline-offset-2 hover:underline">
+        on GitHub
+      </a>
+      .
     </>
   );
 }
@@ -332,7 +331,6 @@ export function ModelAccessView() {
             {data.models.length - offModels} of {data.models.length} models offered
           </p>
           <p className="mt-0.5 text-[13px] text-muted-foreground">{summary}</p>
-          {!owner && <p className="mt-0.5 text-[13px] text-muted-foreground">The studio&apos;s owner chooses what this install offers.</p>}
         </div>
         {owner && !allOn(access) && (
           <Button variant="secondary" size="sm" className="h-9 shrink-0 self-start sm:self-center" onClick={() => flip({ kind: "reset" })} disabled={change.isPending}>
@@ -347,10 +345,10 @@ export function ModelAccessView() {
         </h2>
         <p className="mt-1 text-[13px] text-muted-foreground">
           {owner && "Switch off a whole kind of licence at once: the models and LoRAs under it. A model whose cloud and GPU halves differ keeps the half that is on. Node packs have their own switches below. "}
-          The counts are the {data.models.length} models in Fuobe&apos;s catalog, open and paid: one that runs both on a GPU and in the cloud counts under each of its licences.
+          A model offered both on your GPU and in the cloud counts under each licence.
         </p>
         <ul className="mt-1 divide-y">
-          {data.classes.map((c) => (
+          {data.classes.filter((c) => owner || c.models || c.loras).map((c) => (
             <SwitchRow
               key={c.id}
               id={`class-${c.id}`}
@@ -365,6 +363,7 @@ export function ModelAccessView() {
         </ul>
       </section>
 
+      {owner && (
       <section aria-labelledby="by-provider">
         <h2 id="by-provider" className="text-[15px] font-semibold">
           By provider
@@ -385,6 +384,9 @@ export function ModelAccessView() {
         </ul>
       </section>
 
+      )}
+
+      {owner && (
       <section aria-labelledby="lora-rule">
         <h2 id="lora-rule" className="text-[15px] font-semibold">
           LoRAs licensed for your GPU only
@@ -400,6 +402,7 @@ export function ModelAccessView() {
           />
         </ul>
       </section>
+      )}
 
       <section aria-labelledby="everything" className="space-y-4">
         <h2 id="everything" className="text-[15px] font-semibold">
@@ -470,7 +473,7 @@ export function ModelAccessView() {
           </button>
         )}
         <p className="border-t pt-4 text-[12px] leading-relaxed text-muted-foreground">
-          Licences are recorded from each model&apos;s card, the workflow library and the providers&apos; pages; read the licence itself before you sell what you make. This list is a guide, not legal advice.
+          Check a model&apos;s licence before you sell what you make with it. This list is a guide, not legal advice.
         </p>
       </section>
     </div>

@@ -654,16 +654,16 @@ export const CINEMA_MAX_SECONDS = 20;
 /** What an Original runs on each engine, for the model menus (its own tagline covers both). */
 export const ORIGINAL_LINES: Record<string, Record<Engine, string>> = {
   [CINEMA_MODEL]: {
-    open: "Wan 2.2 Lightning on your GPU, with camera LoRAs and Fun Camera moves · 3 or 5 s · free",
-    cloud: "LTX-2.3 on fal, with its camera LoRAs and sound · up to 30 s",
+    open: "Camera moves on your GPU · 3 or 5 s · free",
+    cloud: "Camera moves with sound · up to 30 s",
   },
   [CINEMA_STILL_MODEL]: {
-    open: "Z-Image Turbo with two film-still LoRAs on your GPU · free",
-    cloud: "Z-Image Turbo with two film-still LoRAs, hosted on fal",
+    open: "Film stills on your GPU · free",
+    cloud: "Film stills in the cloud",
   },
   [SOUL_BUILDER_MODEL]: {
-    open: "Z-Image Turbo with a Soul look's LoRAs on your GPU · free",
-    cloud: "Z-Image Turbo with a Soul look's LoRAs, hosted on fal",
+    open: "Fuobe Soul looks on your GPU · free",
+    cloud: "Fuobe Soul looks in the cloud",
   },
 };
 

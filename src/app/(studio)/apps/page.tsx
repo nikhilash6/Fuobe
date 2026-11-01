@@ -8,7 +8,7 @@ import { featuredGallery } from "@/lib/preset-featured";
 
 export const metadata: Metadata = {
   title: "Apps",
-  description: "One-click AI tools for faces, products, styles and fun, running on open-source ComfyUI workflows.",
+  description: "One-click AI tools for faces, products, styles and fun.",
 };
 
 /** Tools of their own, first in the gallery. */
@@ -28,7 +28,7 @@ export default function Page() {
     <PageShell>
       <PageHeader
         title="Apps"
-        description="One-click tools for faces, products, styles and fun, each on an open-source ComfyUI workflow (and a cloud model where the studio has one)."
+        description="One-click tools for faces, products, styles and fun."
       />
       {/* Slim card data only: no prompt templates, routes or LoRA URLs in the page payload. */}
       <PresetGallery {...featuredGallery(APPS.map(toPresetCard))} href="/apps/{id}" noun="apps" leading={LEADING} />

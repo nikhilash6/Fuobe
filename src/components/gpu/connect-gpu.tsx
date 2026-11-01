@@ -81,7 +81,7 @@ export function ConnectGpu() {
     }
   }, [view, check, url, ownerSetup, owner, steer]);
 
-  const title = welcome ? "Welcome! Connect your GPU" : "Connect your GPU";
+  const title = welcome && !guest ? "Welcome! Connect your GPU" : "Connect your GPU";
   const lead = "Make things on your own graphics card with ComfyUI. It's free, private and has no run limit. Fuobe checks what your ComfyUI has, and shows what each studio still needs.";
   // One way on, to where the person was going: "Not now" while nothing runs their work, "Start creating" once a GPU is
   // connected or a fal.ai or Replicate key is saved.
@@ -108,7 +108,7 @@ export function ConnectGpu() {
         <span className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
           <Cpu aria-hidden className="size-5" />
         </span>
-        <Step n={step} done={finished} />
+        {!guest && <Step n={step} done={finished} />}
       </div>
       <h1 className="font-heading text-[30px] leading-tight">{title}</h1>
       <p className="max-w-2xl text-[15px] text-muted-foreground">{lead}</p>
@@ -154,10 +154,10 @@ export function ConnectGpu() {
           <div className="flex items-start gap-3">
             <Sparkles aria-hidden className="mt-0.5 size-5 shrink-0 text-brand-text" />
             <div className="min-w-0 space-y-3">
-              <p className="text-[14px] font-medium">Connect your GPU to see what runs on it.</p>
+              <p className="text-[14px] font-medium">Run every studio on your own graphics card.</p>
               <p className="text-[13px] text-muted-foreground">
-                Create a free account, then connect the ComfyUI on your computer. Fuobe checks your graphics card, your models and your add-ons, and gives every studio a
-                state: ready, one step away, or needs a bigger GPU.
+                Create a free account, then connect the ComfyUI on your computer. Fuobe checks your graphics card, models and add-ons, and shows which studios are ready,
+                which need one more step, and which need a bigger GPU.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button asChild className="h-11 sm:h-9">

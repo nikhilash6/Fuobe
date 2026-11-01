@@ -17,7 +17,7 @@ export function useGeneration(id: string | null | undefined) {
     enabled: !!id,
     queryFn: async () => {
       const res = await fetch(`/api/generations/${id}`);
-      if (!res.ok) throw new Error(res.status === 404 ? "That result is gone" : `Request failed (${res.status})`);
+      if (!res.ok) throw new Error(res.status === 404 ? "That result is gone" : "Something went wrong. Please try again.");
       return (await res.json()) as Generation;
     },
     retry: (n, e) => n < 2 && (e as Error).message !== "That result is gone",
