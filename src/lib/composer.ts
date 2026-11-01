@@ -981,8 +981,10 @@ export function matchScore(m: Pick<ModelDef, "name" | "vendor" | "tagline" | "fa
 
 /**
  * The picker's sections. Without a query: Recent (last 3 used), Starred, Best for this studio
- * and All, for the selected engine; a model sits in the first section it belongs to (All lists
- * everything). With a query: one list across every allowed engine, best matches first.
+ * and All models, for the selected engine. Every model shows once: it sits in the first section
+ * it belongs to, so All models lists only the ones the sections above it leave out. `count` is
+ * still every model of the engine. With a query: one list across every allowed engine, best
+ * matches first.
  */
 export function groupModels(input: {
   models: ModelDef[];
@@ -1022,7 +1024,7 @@ export function groupModels(input: {
     { id: "recent", label: "Recent", models: take(recent, 3) },
     { id: "starred", label: "Starred", models: take(starred, 50) },
     { id: "best", label: "Best for this studio", models: take(best, 4) },
-    { id: "all", label: "All models", models: pool },
+    { id: "all", label: "All models", models: pool.filter((m) => !used.has(m.id)) },
   ];
   return { groups: groups.filter((g) => g.models.length), count: pool.length };
 }

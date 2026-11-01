@@ -235,7 +235,7 @@ describe("model picker groups", () => {
     expect(models.map((m) => m.id)).toEqual(modelsFor({ kind: IMAGE_STUDIO.kind, ops: IMAGE_STUDIO.ops }).map((m) => m.id));
   });
 
-  it("puts Recent, Starred and Best above All, each model once among them", () => {
+  it("puts Recent, Starred and Best above All models, and shows every model once", () => {
     const best = bestForStudio(models, "cloud", IMAGE_STUDIO.defaultModels.cloud).map((m) => m.id);
     expect(best[0]).toBe("nano-banana-pro");
     expect(best.length).toBeLessThanOrEqual(4);
@@ -249,8 +249,18 @@ describe("model picker groups", () => {
     expect(groups[1].models.map((m) => m.id)).toEqual([cloud[6].id]);
     const top = new Set([...groups[0].models, ...groups[1].models, ...groups[2].models].map((m) => m.id));
     expect(top.size).toBe(groups[0].models.length + groups[1].models.length + groups[2].models.length);
-    expect(groups[3].models).toHaveLength(cloud.length);
+    // All models leaves out what the sections above already show; the count is still every model.
+    expect(groups[3].models.some((m) => top.has(m.id))).toBe(false);
+    expect(groups[3].models).toHaveLength(cloud.length - top.size);
+    expect(groups.flatMap((g) => g.models.map((m) => m.id)).sort()).toEqual(cloud.map((m) => m.id).sort());
     expect(count).toBe(cloud.length);
+  });
+
+  it("drops All models when the sections above already show every model", () => {
+    const few = cloud.slice(0, 3);
+    const { groups, count } = groupModels({ models: few, engine: "cloud", engines: ["cloud"], query: "", recent: [few[0].id], starred: [few[1].id], best: [few[2].id] });
+    expect(groups.map((g) => g.id)).toEqual(["recent", "starred", "best"]);
+    expect(count).toBe(3);
   });
 
   it("searches both engines (best match first) and respects a locked engine", () => {
