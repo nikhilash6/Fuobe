@@ -1,0 +1,128 @@
+{
+ "key": "dbs-d3",
+ "impl": {
+  "branch": "o/dbs-d3",
+  "summary": "DBS D3, open engine only. Owner rule: samAudioCloud is false (docs/handoff/owner-decisions.json), so the brief's cloud SAM Audio pass, the 'Background split: SAM Audio / Demucs' setting and the SAM prices were left out. The cloud dub is unchanged: extract + Demucs, three beds, the voice-only fallback (OPTIONAL_PREPARE) and ElevenLabs isolation. On the open engine, Translate & dub has a new 'Voice split' setting. MelBand RoFormer stays the default until D4 reports. The other choice is DBS, which keeps the music, effects and singing in the background and does its split on a CPU. DBS runs through the new graph B dub-prepare-dbs-transcribe and the ModelDef oss-dbs-voice-separate 'DBS + Qwen3-ASR'. Graph B was validated on the live CPU ComfyUI and run for real on a 12 s clip.",
+  "built": [
+   "Graph B scripts/comfy/hand-built/dub-prepare-dbs-transcribe.json, with its spec entry next to dub-prepare-separate-transcribe. Nodes: LoadAudio, DBSLoader (separationModel), DBSSeparate (mono, input rate), and AudioMerge subtract to make the background. Voice and background are saved as FLAC. Node 7 is the MelBand graph's Qwen3-ASR node with its settings and bindings (sourceLanguage, asrModel, hints, maxChars). Same outputs as the MelBand graph: voice, background, cues, transcript, language. vramGb 8, the existing autoDownloads note and the licence text from the brief. Both DBS models are required, as in graph A. Built with npm run build, then manifest header restored and the BSRNN config size set to 0 like graph A. requirements.json rebuilt with both packs and the four DBS files. Both packs were already pinned in packs.json and the DBS files in model-pins.json, so neither file changed. validate-workflows --shared passed and set validated: true. object_info.subset.json restored because it already had every class.",
+   "Provider (src/server/providers/comfyui.ts): a DBS graph with no channels binding still gets the surround rule. A source with more than 2 channels has node 4 rewired to music + effects (dbsSurroundBed). The host pick of DBS model and the refusal of a model that isn't installed apply to graph B as they do to graph A.",
+   "Catalog: oss-dbs-voice-separate 'DBS + Qwen3-ASR' next to oss-voice-separate. Its licence row comes from the workflow licence.",
+   "src/lib/av/dub.ts: VOICE_SPLITS (melband/dbs with model id, name and note), DEFAULT_VOICE_SPLIT 'melband', voiceSplitModel() and MUSIC_MODEL_NOTE. PrepareInput.voiceSplit picks the open first step's model; DUB_STEP_MODELS.open.stems stays the default. DubSession.voiceSplit is stored for open step dubs only.",
+   "Server and API: CreateDubInput.voiceSplit goes through createDubSession and previewDub. The POST /api/dub schema takes voiceSplit (melband|dbs); anything else gets 400 'Check the dub settings'. No new route, and the public sign-up rules are unchanged: /api/dub was already in EMPTY_LISTS and PREVIEWS, and a visitor's run is still refused own-gpu-tool. The dub studio already showed visitors the SelfHostNote, 'Self-hosted only' in place of the price and an inert upload, the same pattern D2 used.",
+   "Assist: dub_video takes voice_split (melband|dbs, open source only, described in the schema). Both the studio route (dubJob/prepareProblem) and the fallback pipeline (dubSteps) use it. Recipes keep a dub's voice_split (recipe-builder liftStudio).",
+   "UI (src/components/dub/dub-studio.tsx): on the open engine in step mode, a 'Voice split' Select offers 'DBS: keeps music and effects, CPU-friendly' and 'MelBand RoFormer'. A choice switched off in Settings → Models & licences is left out. Under it is the note: DBS 'Keeps the music and sound effects of the original.', MelBand 'Music model: some sound effects may be lowered, and singing may be replaced.' The route line follows the choice. On the cloud: 'Music and effects: Demucs. Music model: some sound effects may be lowered, and singing may be replaced.' The price line is unchanged (Free on your GPU / Placeholder · free on the open engine).",
+   "Docs: scripts/comfy/README.md has a graph B section; docs/research/dbs-separation-7.md has 'As built (D3)' notes in §4.4 graph B and §9 D3 (a research correction)."
+  ],
+  "tests": "New tests/comfy-dbs-dub.test.ts (9 tests): graph B's manifest outputs and bindings match dub-prepare-separate-transcribe's, plus separationModel; packs, models and licence; the requirement-index row; the graph matches graph A's split and keeps node 7's settings unchanged; the provider fills the host pick, the ASR model, the filename prefixes and the surround rewire, and refuses a missing model; output order. Extended tests/av-dub.test.ts: prepareSteps per engine and voice split; the cloud is unchanged with voiceSplit (Demucs, three loudnorm beds, OPTIONAL_PREPARE, no sam-audio-separate model); a demo DBS dub where the mock returns voice, background and cues, then reaches review and mixes over the bed; open prices are free with either split. Also extended: assist-context (fallback with voice_split), assist-studio-routes (dub_video with voice_split dbs; the /api/dub price check accepts dbs and refuses 'sam'), recipe-builder (voice_split kept). Typecheck clean. ESLint clean on the changed files apart from one existing warning in library.spec.mjs. Full Vitest (--maxWorkers=2): 283 files, 4517 passed, 3 skipped, 1 failed. The failure is tests/gpu-api.test.ts '409 gpu-setup', which got 503 because the shared disk had 17-18 GB free against the 20 GB account guard (FUOBE_ACCOUNT_DISK_FREE_GB). With FUOBE_ACCOUNT_DISK_FREE_GB=1 that file passes 12/12; this is the environment, not this change. Live ComfyUI: graph B validated with validate-workflows --shared, then run for real through Fuobe (pnpm dev, COMFYUI_URL=127.0.0.1:8188, POST /api/generations on oss-dbs-voice-separate, asrModel Qwen3-ASR 0.6B) on a 12 s H.264+AAC clip of LibriSpeech speech over sine chords and pink-noise bursts. It succeeded in 133 s on the CPU, including the ASR load. Voice + background equal the decoded source within 3.0e-5, the voice stem is about 17.9 dB SNR against the true speech, the bed about 11.2 dB, and the transcript and cues were right ('He hoped there would be stew for dinner, …'). Browser: new tests/e2e/dub-voice-split.mjs, demo mode, 1440 and 390 px, light and dark, all 41 checks passed. It covers the Voice split and its default, both notes, the route line, the price line, the cloud's Demucs note with no Voice split, no sideways scroll, and a DBS dub's first step running on 'DBS + Qwen3-ASR'. Dev server stopped and .next deleted.",
+  "left": [
+   "Cloud half (one SAM Audio 'speech' pass in place of extract + Demucs, the Background split setting, SAM prices): not built because samAudioCloud is false. It waits on the owner.",
+   "Not run here: the 1.7B ASR default (only 0.6B, as the brief allowed); a whole open dub with DBS (local LLM translation, Chatterbox, InfiniteTalk); GPU timing; listening tests of dub quality.",
+   "The default stays MelBand until D4's A/B; flipping it is a one-line change to DEFAULT_VOICE_SPLIT.",
+   "No /connect board row for Translate & dub: no row existed before, and dubs don't run on an account's GPU (own-gpu-tool). Graph B is in requirements.json."
+  ],
+  "docsNotes": "Already there from earlier packages (D1/D2): ComfyUI-DBS pinned and the four DBS weight files on the ComfyUI; the mock already returned voice, background and cues for any separate-audio endpoint containing 'transcribe'; the dub studio's visitor pattern (SelfHostNote, 'Self-hosted only', inert upload). Brief out of date on line numbers: the spec entry is at library.spec.mjs about L2944 (not L2239-2262), oss-voice-separate at models.ts about L1396 (not L1113), Assist's open dub at studio-tools.ts about L234, which still holds. For the docs pass: ARCHITECTURE could say Translate & dub's open first step has a Voice split (MelBand default, DBS via dub-prepare-dbs-transcribe on oss-dbs-voice-separate) and that the provider's surround bed rule covers graph B. STATUS could count one more hand-built graph (182 workflows in the manifest; graph B validated). FEATURES/README could mention 'Keeps the music and sound effects of the original' on the open engine. In demo mode, e2e scripts must use http://localhost:<port>, not 127.0.0.1: Next 16 dev blocks /_next resources and the HMR socket from 127.0.0.1, so the page never hydrates.",
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "low",
+    "title": "On the cloud engine, the studio never says that keeping the music and effects (DBS) runs on your GPU (open source)",
+    "where": "src/components/dub/dub-studio.tsx (the cloud note, around L251: 'Music and effects: Demucs. Music model: ...'); tests/e2e/dub-voice-split.mjs L70-77",
+    "detail": "The brief says that with samAudioCloud=false, 'the feature says it runs on your GPU, open source'. The owner's rule (10-30) also asks the UI to say plainly what each engine does. With the cloud picked, the dub studio shows only the Demucs caveat and no Voice split. Nothing tells the user that 'Keeps the music and sound effects of the original' (DBS) is offered on the open engine. Leaving out the cloud SAM route is correct. This is only a missing line of copy.",
+    "verified": "Traced the JSX: the cloud branch renders only MUSIC_MODEL_NOTE. The e2e cloud checks assert the Demucs note and that no combobox is shown, nothing more.",
+    "fix": "Add a short line under the cloud note, such as 'Keeping the music and sound effects of the original (DBS) runs on your GPU (open source).', and assert it in the e2e script."
+   },
+   {
+    "severity": "low",
+    "title": "The server's default voice split ignores Settings → Models & licences, unlike the studio",
+    "where": "src/lib/av/dub.ts voiceSplitModel(); src/server/assist/studio-routes.ts dubJob/prepareProblem; src/server/assist/studio-tools.ts dubSteps",
+    "detail": "The studio drops a split that is switched off with keepOffered/offered, so with MelBand RoFormer off it sends voiceSplit 'dbs'. On the server, voiceSplitModel() always falls back to DEFAULT_VOICE_SPLIT. So an Assist dub_video call without voice_split, or POST /api/dub without voiceSplit, plans oss-voice-separate even when it is off and DBS is on. prepareProblem only checks routes (chooseRoute), not access. The plan card looks fine, then generations.prepare refuses the run as switched off. This is not unsafe and not a regression (before D3 there was no alternative), but the two defaults now disagree.",
+    "verified": "Read voiceSplitModel, dubJob/prepareProblem (route check only), keepOffered/offered in src/lib/model-access.ts, and the switched-off refusal in src/server/generations.ts prepare() at L646.",
+    "fix": "Choose the server default with firstOffered/isOffered over [DEFAULT_VOICE_SPLIT, ...rest] for the open engine, in prepareSteps' callers or in voiceSplitModel with an access callback."
+   },
+   {
+    "severity": "nit",
+    "title": "VOICE_SPLITS' doc comment is stranded above MUSIC_MODEL_NOTE's",
+    "where": "src/lib/av/dub.ts L63-72",
+    "detail": "The /** The open engine's voice split ... */ block is followed straight away by a second /** */ block for MUSIC_MODEL_NOTE. Editors and TSDoc attach only the second one, so VOICE_SPLITS has no doc.",
+    "verified": "Read the diff hunk.",
+    "fix": "Move the VOICE_SPLITS comment down to the line above `export const VOICE_SPLITS`."
+   },
+   {
+    "severity": "nit",
+    "title": "The Voice split label points at a <p> when only one split is offered",
+    "where": "src/components/dub/dub-studio.tsx L224-241",
+    "detail": "When one split is switched off, <Label htmlFor=\"dub-split\"> points at a <p id=\"dub-split\">, which is not a labelable element. It does no harm and keyboard use is unaffected, but screen readers don't associate the two.",
+    "verified": "Read the JSX.",
+    "fix": "Drop htmlFor in the single-choice case, or use aria-labelledby."
+   },
+   {
+    "severity": "info",
+    "title": "No /connect pre-flight row for Translate & dub (already missing before this package)",
+    "where": "src/server/gpu/tools.ts STUDIO_ROWS",
+    "detail": "Graph B is in workflows/comfyui/requirements.json, so the requirement index sees it. The board still has no Translate & dub row for either split. This is not a new studio, and accounts can't run dubs (own-gpu-tool), so it is not a D3 regression. The implementer reported it.",
+    "verified": "grep in src/server/gpu/tools.ts: only Split soundtrack and Remove dialogue rows use separate-audio.",
+    "fix": "Optional follow-up: a Translate & dub row whose steps include the chosen split's model."
+   }
+  ],
+  "checks": [
+   "Owner rule: git show claude/fuobe-parity-4:docs/handoff/owner-decisions.json gives samAudioCloud=false. The cloud prepareSteps is unchanged (extract + Demucs, three loudnorm beds, OPTIONAL_PREPARE ['sound','background']). There is no sam-audio-separate model, no Background split setting and no SAM price. That is correct, not a gap.",
+   "Graph B (workflows/comfyui/dub-prepare-dbs-transcribe.json) diffed against the MelBand graph and graph A. Nodes 2-4 are identical to separate-soundtrack-dbs. Node 7 Qwen3-ASR has the same settings as the MelBand graph's, with audio rewired to DBSSeparate speech [3,2]. Nodes 8/9/10 read 7:1, 7:0 and 7:2 as before. Stems 5 (voice, speech) and 6 (background = source minus speech) are saved as FLAC.",
+   "Manifest bindings: audio, separationModel(2.model), sourceLanguage/asrModel/hints/maxChars on node 7, filenamePrefix on 5/6/8/9. Outputs voice, background, cues, transcript, language, identical to dub-prepare-separate-transcribe. Licence string as the brief gives it. Both packs are listed in customNodes, ComfyUI-DBS pinned at f656e53. All four DBS files are pinned by HF revision. The validation-state sha256 matches the built workflow file (bbb7b31a…).",
+   "Live CPU ComfyUI at 127.0.0.1:8188: /object_info has DBSLoader (model options TIGER/BSRNN, device auto/cpu), DBSSeparate (channels mono, output_sample_rate input; outputs AUDIO×3 + STRING), AudioMerge subtract, SaveAudioAdvanced format flac, and AILab_Qwen3ASRSubtitle (1.7B/0.6B). Every input value in graph B is a valid option. I did not re-run a full CPU separation plus ASR on the shared server; the implementer reports a 12 s run.",
+   "requirements.json gains a dub-prepare-dbs-transcribe row (core AudioMerge/LoadAudio/PreviewAny/SaveAudioAdvanced/SaveText; packs ComfyUI-DBS and ComfyUI-QwenASR; the four dbs/ files; vramGb 8; validated). The hash was updated.",
+   "Provider: the surround rule now applies when b.channels || b.separationModel. Only separate-soundtrack-dbs and dub-prepare-dbs-transcribe have those bindings (checked against the manifest), so no other graph changes. dbsSurroundBed rewires the subtract merge to music+sfx add. The host model pick and the refusal of a model that isn't installed apply to graph B. The test covers this.",
+   "Catalog: oss-dbs-voice-separate 'DBS + Qwen3-ASR' routes comfy separate-audio to dub-prepare-dbs-transcribe. Its licence row comes from the workflow licence. Its family 'dbs' matches oss-dbs-separate.",
+   "API and sign-up: POST /api/dub adds only an optional enum voiceSplit (melband|dbs). Any other value gets 400 'Check the dub settings'. Price checks still go through priceAs, and the route was already in the public sign-up rules. No new route, body size, file read or chain. The input is unchanged (the dub video), so tenant and account-inputs coverage is as before. Accounts still get own-gpu-tool.",
+   "createDubSession stores voiceSplit only for open steps dubs. previewDub and createDubSession pass it to prepareSteps. Assist dubJob passes it only on open, and dubSteps uses voiceSplitModel. recipe-builder keeps voice_split, which the DubInput schema accepts on replay. A replay on the cloud ignores it.",
+   "Demo mock: endpoint.includes('transcribe') returns voice, background and cues for graph B. The av-dub test drives a DBS dub to review and mixes over its background.",
+   "FLAC stems downstream: the Chatterbox voice reference and the mux background read FLAC. storage, sniff, media-probe, the comfyui MEDIA_EXT and the uploads allowlist all accept audio/flac.",
+   "UI: keepOffered keeps both choices when both are off, so there is no undefined split crash. The Select is Radix (works from the keyboard) and is w-full at 390 px. voiceSplit is sent only on the open engine.",
+   "Typecheck: npx tsc --noEmit is clean. ESLint on the changed files: 0 errors and 1 warning (WAN_NEG_EN in library.spec.mjs, there before this package).",
+   "Targeted Vitest (comfy-dbs-dub, av-dub, assist-context, assist-studio-routes, recipe-builder, open-engine, comfy-provider, public-signup): 8 files, 264 passed.",
+   "Full Vitest (--maxWorkers=2, FUOBE_ACCOUNT_DISK_FREE_GB=1): 283 files passed, 4518 tests passed, 3 skipped, 0 failed.",
+   "No Higgsfield API or media, no LoRA files, and no new download URLs (the weights are pinned HF revisions from D1). /home/user/Fuobe was not touched, and no edits or commits were made.",
+   "Not re-run here: the browser e2e (tests/e2e/dub-voice-split.mjs, 41 checks reported) and a whole open dub with DBS."
+  ],
+  "verdict": "pass-with-notes: D3's open half is correct and well tested. Graph B matches the MelBand graph's output and binding contract, is valid against the live ComfyUI's node schemas, and is in the requirement index with its licence recorded. Leaving out the cloud SAM route follows the owner's samAudioCloud=false. Typecheck, lint and the full Vitest run are clean. The remaining notes are minor: copy telling cloud users the DBS option runs on their GPU, the server's default split ignoring Settings → Models & licences, and two nits. None of them blocks merging."
+ },
+ "fix": {
+  "applied": [
+   "Merge: merged the latest claude/fuobe-parity-4 (f31680b6, archive-restore and the 11-01 handoff) into o/dbs-d3. The only conflict was the hash in workflows/comfyui/requirements.json. I took the base's version and rebuilt it with node scripts/comfy/build-requirements.mjs: 183 workflows, and the dub-prepare-dbs-transcribe row is kept. Commit 57cd912d.",
+   "Low 1 (confirmed), the cloud now says DBS runs on your GPU. New DBS_OPEN_ONLY_NOTE in src/lib/av/dub.ts. When the cloud engine is picked in step mode, src/components/dub/dub-studio.tsx shows 'Keeping the music and sound effects of the original (DBS) runs on your GPU (open source).' under the Demucs note. tests/e2e/dub-voice-split.mjs checks the line at 1440 and 390 px, light and dark. A unit test pins the wording.",
+   "Low 2 (confirmed), the server's default split follows Settings → Models & licences. New pickVoiceSplit(split, on) in src/lib/av/dub.ts: a split named in the request is kept. Otherwise it takes the default if it is on, then the next split that is on, then the default (whose run refuses and names the switch). This matches keepOffered in the studio. voiceSplitModel takes the same callback. src/server/dub.ts dubVoiceSplit() works this out with isOffered(id, 'open') for open step dubs only, and createDubSession (which stores it), previewDub and Assist's prepareProblem all use it. Assist's fallback dubSteps passes isOffered. Tests: a pickVoiceSplit unit test, and a test in av-dub where MelBand is switched off and no split is named, so dubVoiceSplit, previewDub and createDubSession run DBS (oss-dbs-voice-separate) and the cloud gets none. assist-studio-routes: dub_video with no voice_split and MelBand off plans and runs DBS. assist-context: the fallback plan uses DBS when MelBand is off.",
+   "Nit 1: the VOICE_SPLITS doc comment now sits directly above export const VOICE_SPLITS. MUSIC_MODEL_NOTE keeps its own comment above it.",
+   "Nit 2: the Voice split Label uses htmlFor='dub-split' only when the Select is shown. When only one split is offered, the name is plain text with no id, so the label no longer points at a <p>.",
+   "Info (optional, done because it was small): /connect now has a 'Translate & dub' row (href /audio/translate, group Audio, STUDIO_ROWS in src/server/gpu/tools.ts). Its steps are the default voice split (DUB_STEP_MODELS.open.stems, dub-prepare-separate-transcribe), then Chatterbox tts, the audio timeline, InfiniteTalk lipsync and the mux. The translation runs on the local text model, not ComfyUI, so it has no step on the board. Test in av-dub: the row's workflows are all in the requirement index, graph B is indexed, and toolFor('studio:/audio/translate') matches."
+  ],
+  "rejected": [],
+  "checks": [
+   "Branch check: before the merge, claude/fuobe-parity-4..o/dbs-d3 listed only D3's own two commits, so the branch was not cut from an old base.",
+   "npx next typegen: exit 0. pnpm typecheck: exit 0.",
+   "pnpm lint: exit 0. 0 errors, 1 warning: WAN_NEG_EN in scripts/comfy/library.spec.mjs, which is already on the base.",
+   "Targeted Vitest (av-dub, assist-studio-routes, assist-context, recipe-builder, comfy-dbs-dub): 5 files, 124 passed. Board-row tests in av-dub, public-signup-tools and remove-dialogue: passed.",
+   "Full Vitest, FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: exit 0. 287 files passed; 4583 tests passed, 3 skipped, 0 failed.",
+   "Browser: node tests/e2e/dub-voice-split.mjs against next dev in demo mode (FUOBE_DEMO_MODE=on, ComfyUI and Ollama on closed ports, a throwaway FUOBE_DATA_DIR, http://localhost:3417). Exit 0, 45/45 checks passed, including the new 'the cloud says DBS runs on your GPU' at 1440 and 390 px, light and dark, and no sideways scroll. I looked at the 390 px dark cloud screenshot. The dev server is stopped, and .next and the temp data folder are deleted.",
+   "git status is clean. Pushed o/dbs-d3 (749afc8b..aa4099f8). /home/user/Fuobe's checkout was not touched."
+  ],
+  "finalSummary": "D3 is finished with the review fixes. Open engine (ComfyUI): Translate & dub has a Voice split. MelBand RoFormer is the default. DBS keeps the music, effects and singing, and its split runs on a CPU. DBS runs through graph B (dub-prepare-dbs-transcribe, model oss-dbs-voice-separate). Graph B was validated on the live CPU ComfyUI and run for real on a 12 s clip in the implement stage. A whole open dub with DBS (local LLM, Chatterbox, InfiniteTalk) needs a GPU and was not run. The server now picks its default split the way Settings → Models & licences and the studio do: with MelBand switched off, POST /api/dub, Assist's dub_video and its fallback plan run DBS. /connect has a Translate & dub row for the default split's chain. Cloud engine: unchanged, because the owner set samAudioCloud=false. It still uses extract + Demucs, three beds, the voice-only fallback and ElevenLabs isolation, and it needs fal and ElevenLabs keys, so it was not run for real here. Its note now says plainly that keeping the music and sound effects of the original (DBS) runs on your GPU (open source). Public sign-up: nothing changed. Guests browse read-only and the studio shows them 'Self-hosted only' with an inert upload. Accounts' dub runs answer own-gpu-tool as before. /api/dub was already in the sign-up rules. No new route, file read or chain was added.",
+  "left": [
+   "Cloud SAM Audio route (the Background split setting and SAM prices): waits on the owner's samAudioCloud decision.",
+   "Not verified here: a whole open dub with DBS on a GPU, the Qwen3-ASR 1.7B default, GPU timing, and listening tests.",
+   "The default stays MelBand until D4's A/B. Changing it means editing DEFAULT_VOICE_SPLIT. The /connect row follows DUB_STEP_MODELS.open.stems, so it lists the MelBand graph. DBS's pack and weights show readiness on the Split soundtrack row.",
+   "For the docs pass: ARCHITECTURE could say the server's default voice split follows Settings → Models & licences, and that /connect has a Translate & dub row. The implement stage's docs notes still apply."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/dbs-d3"
+  ],
+  "notMerged": [],
+  "conflicts": "none",
+  "checks": "typecheck 0, lint 0; merged tree identical to origin/o/dbs-d3 aa4099f8, whose full vitest on this base passed (287 files / 4583 passed, 3 skipped)",
+  "pushed": true,
+  "head": "48900f7e"
+ }
+}

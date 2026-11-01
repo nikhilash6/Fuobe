@@ -401,10 +401,12 @@ function ViewerRowPlaceholder() {
  */
 function ViewerRow() {
   const viewer = useViewer().data;
+  // This boundary can hydrate after the viewer query resolved: its first render keeps the server's placeholder.
+  const hydrated = useHydrated();
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const here = search ? `${pathname}?${search}` : pathname;
-  const kind = !viewer ? undefined : viewer.owner ? "owner" : viewer.account ? "account" : viewer.publicSignup ? "guest" : "owner";
+  const kind = !viewer || !hydrated ? undefined : viewer.owner ? "owner" : viewer.account ? "account" : viewer.publicSignup ? "guest" : "owner";
   useEffect(() => {
     if (!kind) return;
     try {
