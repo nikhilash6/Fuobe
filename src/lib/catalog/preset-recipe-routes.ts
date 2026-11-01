@@ -49,6 +49,7 @@ export type RecipeKind = "h3" | "orbit" | "qwen";
  * - Clean up voice: a tool of its own (RE-USE), with nothing to recast.
  * - Any Angle: a tool of its own (a 3D view of the photo, then each angle from it on the GPU).
  * - Tap to Recolor: a tool of its own, whose taps make the mask its graph repaints.
+ * - Steam It: its own graph finds the clothes and repaints only them, so every other pixel stays the upload's.
  */
 export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-fuobe-angles",
@@ -67,6 +68,7 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-clean-up-voice",
   "app-any-angle",
   "app-tap-to-recolor",
+  "app-steam-it",
 ]);
 
 /**

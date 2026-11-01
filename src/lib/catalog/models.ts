@@ -2280,6 +2280,18 @@ const open: ModelDef[] = [
     routes: [comfy("edit", "product-shot-qwen-edit-2509", "BiRefNet cut-out on white → Qwen-Image-Edit 2509 + White_to_Scene LoRA")],
     options: { seed: true, negativePrompt: true, maxImages: 1, requires: { prompt: true, msg: "Describe the scene to put the product in, e.g. “on a marble counter, morning light”" } },
   }),
+  // Steam It (the open route of the Steam It app): the clothes found and pressed, every other pixel kept.
+  o({
+    id: "oss-steam-it",
+    name: "Qwen-Image 2.1 Steam It",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Finds the clothes and presses them smooth; the person, pose and background stay exactly as they were · 20 GB GPU · non-commercial weights",
+    routes: [{ ...comfy("edit", "steam-it-qwen-image-21", "SAM 3.1 finds the clothes; Qwen-Image 2.1 repaints only them, 25 steps, pasted back"), unsized: true, maxImages: 1 }],
+    options: { seed: true, maxImages: 1, requires: { images: 1, msg: "Add a photo of the outfit" } },
+    hidden: true,
+  }),
   // Cinema Studio grid and Soul Cast (used by those studios)
   o({
     id: "oss-zimage-grid",

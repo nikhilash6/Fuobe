@@ -15,7 +15,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       app-video-face-swap app-video-background-remover app-clean-up-voice app-breakdown
     `,
     `
-      app-hairstyle-try-on app-fuobe-angles app-any-angle app-product-placement app-link-to-video-ad app-style-snap app-urban-cuts
+      app-hairstyle-try-on app-fuobe-angles app-any-angle app-product-placement app-link-to-video-ad app-style-snap app-steam-it app-urban-cuts
       app-signboard app-j-poster app-giallo-horror app-face-swap app-character-swap app-headshot-generator
       app-skin-enhancer app-zooms app-what-s-next app-packshot app-billboard-ad app-macro-scene app-asmr-promo
       app-ai-stylist app-colorize app-bring-to-life app-dance app-clipcut app-sticker-match-cut app-latex app-sand-worm

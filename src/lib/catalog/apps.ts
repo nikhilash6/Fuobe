@@ -1076,6 +1076,31 @@ export const APPS: Preset[] = [
     open: { modelId: RECOLOR.modelId, op: "edit" },
     parity: "Runs on your own GPU. Only the piece you tap changes.",
   }),
+  app({
+    name: "Steam It",
+    category: "Fashion",
+    description: "A creased outfit, pressed and crisp",
+    icon: "Shirt",
+    hue: 200,
+    badges: ["new"],
+    inputs: [{ key: "image", label: "Outfit", hint: "A photo of the outfit, worn, laid flat or on a hanger", accept: "image", required: true }],
+    options: [
+      {
+        ...opt("finish", "Finish", [
+          ["Steamed", "smooth and freshly steamed, falling in soft, clean drapes"],
+          ["Pressed", "crisp and freshly pressed, smooth and flat with sharp, clean seams"],
+          ["Tailored", "crisp and tailor-pressed, with knife-sharp trouser creases, a crisp collar and cuffs, and smooth, taut panels"],
+        ]),
+        default: "pressed",
+      },
+    ],
+    // Only the finished state is named. On your GPU only the clothes are repainted (SAM 3.1 finds them) and every
+    // other pixel is the upload's own.
+    prompt:
+      "Steam and press the clothing so the fabric is {option:finish}. Keep the same garments with their exact colour, print, weave, seams, buttons and fit, and keep the person, pose, face, hair, background and light exactly as in the picture.",
+    open: { modelId: "oss-steam-it", op: "edit" },
+    parity: "Presses only the clothes. The person, the pose and the background stay as they were.",
+  }),
   // ---------------- Style & art
   app({
     name: "Sketch to Real",

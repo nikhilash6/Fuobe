@@ -3295,6 +3295,25 @@ export const SPEC = [
       'The small-GPU edit, as zen-image-edit-comfyui\'s edit_api.json: ZenImage21TextEncode with the VAE linked (the DiT splices the references in as latents), resolution 1024 (references resized to about 1 MP on the 32 grid, the geometry adapter v12 was tuned at), ' +
       'image_1 the picture to change (the canvas follows it), image_2-4 optional references (left out when not given). Same sampler as qwen-image-21-t2i-small. English prompts only.' + QWEN21_CLEAN_NOTE,
   },
+  // ---- Apps: Steam It (a creased outfit, pressed; nothing else changes) ---------------------------
+  {
+    id: 'steam-it-qwen-image-21',
+    title: 'Steam It: the clothes pressed, everything else kept (SAM 3.1 clothing mask + Qwen-Image 2.1 inpaint)',
+    capability: 'edit',
+    handBuilt: 'hand-built/steam-it-qwen-image-21.json',
+    bindings: { prompt: [b('23', 'prompt')], image: [b('10', 'image')], seed: [b('27', 'seed')], steps: [b('27', 'steps')] },
+    outputs: [{ node: '90', kind: 'image' }],
+    vramGb: 20,
+    license:
+      'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; SAM 3.1 under Meta\'s SAM License (commercial use allowed under its terms); AusBoss nodes MIT',
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    notes:
+      'The Steam It app\'s graph: qwen-image-21-inpaint with the mask found instead of painted. SAM3_Detect with the word "clothing" (threshold 0.4, 2 refine passes, every garment in one mask; works on a worn outfit ' +
+      'and on a flat-lay or a hanger) -> GrowMask 16 px on the full picture, so a hem or a sleeve can settle past its old outline and the paste-back follows the same mask -> Crop For Inpaint (context 1.3, ' +
+      'blend 8 px, multiple 32, 2 MP, bicubic) -> TextEncodeQwenImage21 with the crop as image 1 (resolution 0) and the app\'s instruction as the prompt -> VAEEncode of the crop + SetLatentNoiseMask -> ' +
+      'QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> SplitImageWithAlpha -> Stitch Inpaint (classic, no colour match): every pixel outside the grown mask and its 8 px blend is the upload\'s own. ' +
+      'No clothing found: the empty mask selects the whole picture and the stitch gives it back unchanged. The prompt names only the finished state (smooth, pressed fabric) and what stays the same.',
+  },
   // ---- Owner's SOTA image families: Ideogram 4 -------------------------------------------
   {
     id: 'ideogram4-t2i',
