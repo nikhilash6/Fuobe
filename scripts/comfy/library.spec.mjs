@@ -392,6 +392,9 @@ export const KNOWN_MODELS = {
   'Qwen-Image-2.1-Lightning-4steps.safetensors': { folder: 'loras', url: 'https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/6b0a1176327c01522a44276c5da67331a025b6fc/pytorch_lora_weights.safetensors' },
   'p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/PrunaAI/P-Q-Image-2.1-Comfy/resolve/aa7dcecb1767e220e31a55706e33fd057c9a3fca/p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors' },
   'Qwen-Image-2.1-Next-Scene-step2500.safetensors': { folder: 'loras', url: 'https://huggingface.co/akhaliq/Qwen-Image-2.1-Next-Scene-LoRA/resolve/67ce88cd413fe177758af5d91e25eb3a334aa06f/next_scene_step2500.safetensors' },
+  // Zen Image Edit's fusion adapter (nm10-qwen21-fast): a GitHub release asset of recoilme/zen-image-edit-comfyui (release v2,
+  // sha256 and size in model-pins.json), kept in models/text_encoders; the loader is given its full path at run time.
+  'adapter_v12.safetensors': { folder: 'text_encoders', url: 'https://github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors' },
   'texture_fix_vae_for_qwen_image_2.1_bf16.safetensors': { folder: 'vae', url: 'https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors' },
 
   // owner's SOTA families (2026-10-31): Ideogram 4 (Comfy-Org/Ideogram-4; its flux2-vae is the flux2-dev row above). `variants`:
@@ -565,7 +568,13 @@ function wanI2V(variant) {
 // nm10-qwen21-fast: Options → Decoder "Clean" on every Qwen-Image 2.1 graph picks madebyollin's Texture-Fix VAE (the vae binding).
 const QWEN21_CLEAN_VAE = 'texture_fix_vae_for_qwen_image_2.1_bf16.safetensors';
 const QWEN21_LICENCE = 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only';
-const QWEN21_CLEAN_NOTE = ' Options → Decoder "Clean" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file).';
+const QWEN21_CLEAN_NOTE = ' Options → Decoder "Clean" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked).';
+const QWEN21_CLEAN_LICENCE = '; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)';
+// Zen Image Edit (the 16 GB route): its adapter, encoder and nodes, each with its licence and pin.
+const ZEN_LICENCE = '; Zen Image Edit fusion adapter adapter_v12 (AiArtLab / recoilme, release v2 of zen-image-edit-comfyui, sha256 85578cd0): Qwen Research License; Qwen3.5-0.8B (Qwen @ 2fc06364): Apache-2.0; zen-image-edit-comfyui nodes @ 7a29e58c: Apache-2.0';
+const ZEN_FIRST_RUN = [
+  'Qwen3.5-0.8B (1.7 GB, Apache-2.0), the text encoder: Fuobe uses the pinned copy in models/text_encoders/qwen3.5_0.8b when it is there (hf download Qwen/Qwen3.5-0.8B --revision 2fc06364715b967f1860aea9cf38778875588b17 --local-dir models/text_encoders/qwen3.5_0.8b); otherwise the loader downloads it from Hugging Face on first run',
+];
 // The speed tiers' LoRAs (nm10-qwen21-fast, cards read 2026-11-01): file, licence, what the card says.
 const QWEN21_TIERS = {
   draft: {
@@ -577,13 +586,13 @@ const QWEN21_TIERS = {
     title: '4 steps, LightX2V Lightning LoRA',
     license: 'LightX2V Lightning LoRA: no licence in the repository (no LICENSE file, empty card tag; comfyui-wiki says Apache-2.0); a Qwen-Image 2.1 adapter, so the base\'s Qwen Research License applies to what it runs on',
     notes: 'lightx2v/Qwen-Image-2.1-Lightning @ 6b0a1176 (DMD, trained on 16 Ascend 910B NPUs): 4 steps at CFG 1 on the card\'s training schedule [1.0, 0.75, 0.5, 0.25] with exponential dynamic shifting (base_shift 0.5, max_shift 0.9, 256-8192 tokens of 16 px). ' +
-      'ManualSigmas holds that schedule shifted for the canvas (1 MP: 1.0, 0.857192, 0.666756, 0.400096, 0); Fuobe binds sigmas for the run\'s own size with the same shift. Chosen over the official Fun Acc 4-step LoRA, which needs VideoX-Fun\'s parallel-decoding output head and norm overrides (not a plain LoRA in ComfyUI).',
+      'ManualSigmas holds that schedule shifted for the canvas (text to image: 1 MP, 1.0, 0.857192, 0.666756, 0.400096, 0; edits: a 2048 square, 1.0, 0.917701, 0.787999, 0.553369, 0, since ImageScaleToMaxDimension scales image 1 to 2048 on its long side); Fuobe binds sigmas for the run\'s own canvas with the same shift. Chosen over the official Fun Acc 4-step LoRA, which needs VideoX-Fun\'s parallel-decoding output head and norm overrides (not a plain LoRA in ComfyUI).',
   },
   details: {
     title: '6 steps, P-Q-Image v0.2 upsampled LoRA (writes the details)',
     license: "PrunaAI's P-Q-Image-2.1 v0.2, a derivative of Qwen-Image 2.1 under the Qwen Research License (LICENSE and NOTICE in the repository)",
     notes: "PrunaAI/P-Q-Image-2.1-Comfy @ aa7dcecb, the 6-steps-upsampled v0.2 adapter (Pruna's distillation of the prompt upsampler into the LoRA, so short prompts come out detailed with no separate upsampling call) at strength 1, euler, CFG 1, the v0.2 ManualSigmas \"1.0, 0.961054, 0.918949, 0.769302, 0.545554, 0.222292, 0\" (not interchangeable with v0.1's). " +
-      'As Pruna\'s official workflows: LoraLoaderModelOnly on the base int8 model, QwenImage21Cache, CFGGuider, SamplerCustomAdvanced. Trained at 1K only; Pruna recommends at most 3 reference images for edits.',
+      'As Pruna\'s official workflows: LoraLoaderModelOnly on the base int8 model, QwenImage21Cache, CFGGuider, SamplerCustomAdvanced. Trained at 1K only; Pruna recommends at most 3 reference images for edits, so Fuobe refuses a fourth at this speed.',
   },
 };
 const qwen21Tier = (op, tier, base, extra) => ({
@@ -597,7 +606,7 @@ const qwen21Tier = (op, tier, base, extra) => ({
   ...(base.packs && { packs: base.packs }),
   vramGb: 20,
   optionalModels: [QWEN21_CLEAN_VAE],
-  license: `${QWEN21_LICENCE}; ${QWEN21_TIERS[tier].license}${extra?.license ?? ''}`,
+  license: `${QWEN21_LICENCE}; ${QWEN21_TIERS[tier].license}${extra?.license ?? ''}${QWEN21_CLEAN_LICENCE}`,
   notes:
     `Options → Speed "${tier}" on qwen-image-21-${op}: the same graph with a LoraLoaderModelOnly after the UNETLoader${extra?.after ?? ''} and its KSampler replaced by ` +
     `RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. ${QWEN21_TIERS[tier].notes}${extra?.notes ?? ''}${QWEN21_CLEAN_NOTE}`,
@@ -2606,7 +2615,7 @@ export const SPEC = [
     limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 32 },
     vramGb: 20,
     optionalModels: [QWEN21_CLEAN_VAE],
-    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only',
+    license: `Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only${QWEN21_CLEAN_LICENCE}`,
     notes:
       'The Qwen-Image 2.1 text-to-image workflow, its subgraph flattened: int8 model, Qwen3-VL 8B int8 text encoder (type qwen_image), ' +
       'TextEncodeQwenImage21 (no negative, resolution 1024, no images), EmptyLatentImage, KSampler 25 steps, cfg 1, euler, simple, denoise 1. ' +
@@ -2626,7 +2635,7 @@ export const SPEC = [
     limits: { maxWidth: 2048, maxHeight: 2048 },
     vramGb: 20,
     optionalModels: [QWEN21_CLEAN_VAE],
-    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only',
+    license: `Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only${QWEN21_CLEAN_LICENCE}`,
     notes:
       'The 25-step Qwen-Image 2.1 edit behind the site\'s preview pictures, with the references wired as in the Qwen-Image 2.1 image-edit workflow: ' +
       'each image scaled to 2048 on its long side (lanczos), all of them on one TextEncodeQwenImage21 (images.image_1..4, resolution 0 = each at its own size on the 32 grid, vae linked, no negative), ' +
@@ -2646,7 +2655,7 @@ export const SPEC = [
     limits: { maxWidth: 2048, maxHeight: 2048 },
     vramGb: 20,
     optionalModels: [QWEN21_CLEAN_VAE],
-    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only',
+    license: `Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only${QWEN21_CLEAN_LICENCE}`,
     notes:
       'The Qwen-Image 2.1 turbo image-edit workflow, as the site\'s fast preview edits run it: turbo int8 model, the fixed 8-step ManualSigmas ' +
       'schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder\'s latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). ' +
@@ -2686,7 +2695,7 @@ export const SPEC = [
     outputs: [{ node: '90', kind: 'image' }],
     vramGb: 20,
     optionalModels: [QWEN21_CLEAN_VAE],
-    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; AusBoss nodes MIT',
+    license: `Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; AusBoss nodes MIT${QWEN21_CLEAN_LICENCE}`,
     notes:
       'The AusBoss pack\'s example "Qwen Image 2.1 Inpaint (AusBoss)", its two subgraphs flattened: ' +
       'Crop For Inpaint (context 1.6, blend 8 px, multiple 32, 1.5 MP, bicubic) -> GrowMask 8 on the crop\'s mask -> StringFormat "{a} Keep everything else exactly the same." -> ' +
@@ -2711,7 +2720,7 @@ export const SPEC = [
     limits: { padMultiple: 8 },
     vramGb: 20,
     optionalModels: [QWEN21_CLEAN_VAE],
-    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; outpaint LoRA by AusBoss under the same licence; AusBoss nodes MIT',
+    license: `Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; outpaint LoRA by AusBoss under the same licence; AusBoss nodes MIT${QWEN21_CLEAN_LICENCE}`,
     notes:
       'The Qwen-Image 2.1 outpaint workflow (v12) as the site\'s Expand previews run it: Crop + Rotate + Pad puts the photo on a gray (#808080) canvas grown by the pads ' +
       '(feather 12, scaled to 1 MP on the 32 grid) -> outpaint-v2 LoRA at 1 -> Qwen3-VL 8B (the same text encoder, TextGenerate, the workflow\'s instruction, seed fixed) describes the picture, ' +
@@ -2748,7 +2757,7 @@ export const SPEC = [
     limits: { maxWidth: 2048, maxHeight: 2048 },
     vramGb: 20,
     optionalModels: [QWEN21_CLEAN_VAE],
-    license: `${QWEN21_LICENCE}; Next-Scene LoRA by akhaliq: Apache-2.0 on its card (license tag; no LICENSE file), trained on Qwen-Image 2.1, whose Qwen Research License covers the base`,
+    license: `${QWEN21_LICENCE}; Next-Scene LoRA by akhaliq @ 67ce88cd: an apache-2.0 tag on its card only (no LICENSE file), an adapter of Qwen-Image 2.1, so non-commercial through its base${QWEN21_CLEAN_LICENCE}`,
     notes:
       'Storyboard\'s next frame on your GPU: the qwen-image-21-edit graph with akhaliq/Qwen-Image-2.1-Next-Scene-LoRA @ 67ce88cd (next_scene_step2500, the card\'s recommended diffusers/ComfyUI conversion) at 0.7, ' +
       'the card\'s clean-chain recipe: strength 0.7 or less and a 0.5 px Gaussian blur on each chained input (ImageBlur radius 1, sigma 0.5 on the previous panel), 28 steps (the card\'s usage), cfg 1, euler, simple. ' +
@@ -2769,14 +2778,12 @@ export const SPEC = [
     limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 32 },
     vramGb: 16,
     optionalModels: [QWEN21_CLEAN_VAE],
-    autoDownloads: [
-      'adapter_v12.safetensors (0.64 GB, the Zen fusion adapter) goes into ComfyUI/models/: github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors',
-      'ZenImage21AdapterLoader downloads Qwen/Qwen3.5-0.8B (1.7 GB, Apache-2.0) from Hugging Face on first run',
-    ],
-    license: `${QWEN21_LICENCE}; Zen Image Edit fusion adapter (AiArtLab / recoilme): Qwen Research License; Qwen3.5-0.8B: Apache-2.0; zen-image-edit-comfyui nodes: Apache-2.0`,
+    requiredModels: ['adapter_v12.safetensors'],
+    autoDownloads: ZEN_FIRST_RUN,
+    license: `${QWEN21_LICENCE}${ZEN_LICENCE}${QWEN21_CLEAN_LICENCE}`,
     notes:
-      'The small-GPU route (Options → GPU "Small", or Auto when the GPU has less than 24 GB): recoilme/zen-image-edit-comfyui @ 7a29e58c (release v2) as its example graph t2i_api.json, ' +
-      'ZenImage21AdapterLoader (adapter_file models/adapter_v12.safetensors, a path from ComfyUI\'s working folder; text_encoder Qwen/Qwen3.5-0.8B by id; bf16) -> ZenImage21TextEncode (resolution 1024; width / height the canvas) in place of the 17.5 GB Qwen3-VL 8B, ' +
+      'The small-GPU route (Options → GPU "Small", or Auto on a card under 20 GB when this route is ready there): recoilme/zen-image-edit-comfyui @ 7a29e58c (release v2) as its example graph t2i_api.json, ' +
+      'ZenImage21AdapterLoader (adapter_file: adapter_v12.safetensors, a required file in models/text_encoders whose full path Fuobe binds from GET /experiment/models, else models/text_encoders/adapter_v12.safetensors from ComfyUI\'s folder; text_encoder: the pinned Qwen3.5-0.8B folder models/text_encoders/qwen3.5_0.8b when the server has it, else Qwen/Qwen3.5-0.8B by id; bf16) -> ZenImage21TextEncode (resolution 1024; width / height the canvas) in place of the 17.5 GB Qwen3-VL 8B, ' +
       'the stock Qwen-Image 2.1 DiT (here the int8 file, 7.3 GB, where the example loads bf16) -> ModelSamplingAuraFlow shift 5 (the model author\'s static shift) -> KSampler 30 steps, cfg 1, euler, simple. ' +
       'Conditioning cosine 0.95 (text) against the native encoder (AiArtLab/zen-image-edit @ 3d571755). English prompts only; numerals on signs can come out wrong. About 17.5 GB resident at 1024 px with the bf16 DiT (card): the int8 DiT is what brings it to 16 GB (the example graphs load bf16). Needs transformers >= 5.17.' + QWEN21_CLEAN_NOTE,
   },
@@ -2794,11 +2801,9 @@ export const SPEC = [
     limits: { maxWidth: 2048, maxHeight: 2048 },
     vramGb: 16,
     optionalModels: [QWEN21_CLEAN_VAE],
-    autoDownloads: [
-      'adapter_v12.safetensors (0.64 GB, the Zen fusion adapter) goes into ComfyUI/models/: github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors',
-      'ZenImage21AdapterLoader downloads Qwen/Qwen3.5-0.8B (1.7 GB, Apache-2.0) from Hugging Face on first run',
-    ],
-    license: `${QWEN21_LICENCE}; Zen Image Edit fusion adapter (AiArtLab / recoilme): Qwen Research License; Qwen3.5-0.8B: Apache-2.0; zen-image-edit-comfyui nodes: Apache-2.0`,
+    requiredModels: ['adapter_v12.safetensors'],
+    autoDownloads: ZEN_FIRST_RUN,
+    license: `${QWEN21_LICENCE}${ZEN_LICENCE}${QWEN21_CLEAN_LICENCE}`,
     notes:
       'The small-GPU edit, as zen-image-edit-comfyui\'s edit_api.json: ZenImage21TextEncode with the VAE linked (the DiT splices the references in as latents), resolution 1024 (references resized to about 1 MP on the 32 grid, the geometry adapter v12 was tuned at), ' +
       'image_1 the picture to change (the canvas follows it), image_2-4 optional references (left out when not given). Same sampler as qwen-image-21-t2i-small. English prompts only.' + QWEN21_CLEAN_NOTE,

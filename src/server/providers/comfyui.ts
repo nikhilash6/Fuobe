@@ -42,7 +42,7 @@ import {
 } from "@/lib/comfy";
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
-import { DECODER_PARAM, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, QWEN21_SMALL_GPU_GRAPH, SPEED_PARAM } from "@/lib/qwen21-speed";
+import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -739,30 +739,52 @@ export async function comfyDevice(worker: ComfyWorker = "main"): Promise<string 
   });
 }
 
+/** A ComfyUI's model folders (GET /experiment/models) and the files of the ones asked about, and when. */
+type ModelRoots = { roots?: Record<string, string[]>; files: Map<string, { name: string; pathIndex: number }[] | undefined>; at: number };
+
 declare global {
-  /** The graphics memory each ComfyUI address reported last (GET /system_stats devices[0].vram_total, bytes), and when. */
-  var __fuobeComfyVram: Map<string, { bytes?: number; at: number }> | undefined;
+  /** Each ComfyUI address's model folders and files (comfyModelPath). */
+  var __fuobeComfyRoots: Map<string, ModelRoots> | undefined;
 }
 
 /**
- * The connected ComfyUI's first device's graphics memory in GB (GET /system_stats devices[0].vram_total, as Settings' test
- * reads it), kept for a minute; on someone's computer what its Fuobe tab last said; undefined when nothing says.
+ * Where a file under one of the connected ComfyUI's model folders is on its disk (GET /experiment/models for the folders,
+ * /experiment/models/{folder} for the file and which folder holds it), kept for a minute: undefined when it isn't there or
+ * the server can't say (an older ComfyUI, someone's computer, which the server never reads). `name` may be in a subfolder.
  */
-export async function comfyVramGb(worker: ComfyWorker = "main"): Promise<number | undefined> {
-  const gb = (bytes: number | undefined) => (typeof bytes === "number" && bytes > 0 ? bytes / 2 ** 30 : undefined);
-  const computer = computerScope();
-  if (computer) return gb(runnerFacts(computer)?.vramBytes);
+export async function comfyModelPath(folder: string, name: string, worker: ComfyWorker = "main"): Promise<string | undefined> {
+  if (computerScope()) return undefined;
   const url = baseUrl(worker);
   if (!url) return undefined;
-  const cache = (globalThis.__fuobeComfyVram ??= new Map());
-  const hit = cache.get(url);
-  if (hit && Date.now() - hit.at < 60_000) return gb(hit.bytes);
-  return oneAsk(`/system_stats vram ${url}`, async () => {
-    const st = await comfyJson<{ devices?: { vram_total?: unknown }[] }>("/system_stats", worker).catch(() => undefined);
-    const bytes = typeof st?.devices?.[0]?.vram_total === "number" ? (st.devices[0].vram_total as number) : undefined;
-    if (st) cache.set(url, { bytes, at: Date.now() });
-    return gb(bytes);
-  });
+  const cache = (globalThis.__fuobeComfyRoots ??= new Map());
+  let hit: ModelRoots | undefined = cache.get(url);
+  if (!hit || Date.now() - hit.at > 60_000) {
+    const list = await comfyJson<unknown>("/experiment/models", worker).catch(() => undefined);
+    const roots: Record<string, string[]> = {};
+    for (const x of Array.isArray(list) ? list : []) {
+      const f = x as { name?: unknown; folders?: unknown };
+      if (typeof f?.name === "string" && Array.isArray(f.folders)) roots[f.name] = f.folders.filter((d): d is string => typeof d === "string");
+    }
+    hit = { roots: Array.isArray(list) ? roots : undefined, files: new Map<string, { name: string; pathIndex: number }[] | undefined>(), at: Date.now() };
+    cache.set(url, hit);
+  }
+  const dirs = hit.roots?.[folder];
+  if (!dirs?.length) return undefined;
+  if (!hit.files.has(folder)) {
+    const items = await comfyJson<unknown>(`/experiment/models/${encodeURIComponent(folder)}`, worker).catch(() => undefined);
+    hit.files.set(
+      folder,
+      Array.isArray(items)
+        ? items.flatMap((x: { name?: unknown; pathIndex?: unknown }) => (typeof x?.name === "string" && typeof x.pathIndex === "number" ? [{ name: x.name, pathIndex: x.pathIndex }] : []))
+        : undefined,
+    );
+  }
+  const want = name.replace(/\\/g, "/");
+  const found = hit.files.get(folder)?.find((f) => f.name.replace(/\\/g, "/") === want);
+  const root = found && dirs[found.pathIndex];
+  if (!root) return undefined;
+  const sep = root.includes("\\") && !root.includes("/") ? "\\" : "/";
+  return `${root.replace(/[\\/]+$/, "")}${sep}${found.name}`;
 }
 
 declare global {
@@ -1004,8 +1026,8 @@ export interface PrepareContext {
   serverRam?: () => Promise<number | undefined>;
   /** The server's first torch device type ("cuda", "cpu", "mps"…; GET /system_stats devices[0].type): DBS picks its model by it. */
   device?: () => Promise<string | undefined>;
-  /** The server's first device's graphics memory in GB (GET /system_stats devices[0].vram_total): Qwen-Image 2.1's GPU Auto reads it. */
-  vramGb?: () => Promise<number | undefined>;
+  /** Where a model file is on the server's disk (comfyModelPath), undefined when it can't say: Zen Image Edit's loader reads paths. */
+  modelPath?: (folder: string, name: string) => Promise<string | undefined>;
   /** The DBS models on the server's disk (GET /models/dbs), undefined when it can't say: a run never gets one that isn't there. */
   dbsModels?: () => Promise<DbsModel[] | undefined>;
   /** The RE-USE files on the server's disk (GET /models/reuse): null without ComfyUI-RE-USE, undefined when it can't say. */
@@ -1025,7 +1047,7 @@ export interface PreparedPrompt {
 
 /**
  * The canvas a Qwen-Image 2.1 Lightning run samples (its sigmas follow the size): text to image's width × height; an edit's
- * image 1 at its own size, at most 2048 on the long side (the graph's scaling); inpaint's 1.5 MP crop and expand's 1 MP canvas.
+ * image 1 scaled to 2048 on its long side (the graph's scaling, up or down); inpaint's 1.5 MP crop and expand's 1 MP canvas.
  */
 function lightningCanvas(capability: string, values: Partial<Record<BindingKey, unknown>>, image: MediaInfo | undefined): { width: number; height: number } | undefined {
   if (capability === "t2i") {
@@ -1035,9 +1057,9 @@ function lightningCanvas(capability: string, values: Partial<Record<BindingKey, 
   // Only the area counts (tokens of 16 × 16 px): 1.5 MP and 1 MP squares.
   if (capability === "inpaint") return { width: 1254, height: 1254 };
   if (capability === "outpaint") return { width: 1024, height: 1024 };
-  if (!image?.width || !image.height) return undefined;
-  const k = Math.min(1, 2048 / Math.max(image.width, image.height));
-  return { width: image.width * k, height: image.height * k };
+  // An edit: image 1 scaled to 2048 on its long side, larger or smaller (the graph's ImageScaleToMaxDimension). Without its
+  // size the graph keeps its own schedule, made for a 2048 square.
+  return image?.width && image.height ? editCanvas(image.width, image.height) : undefined;
 }
 
 /** Caption cues for the burn-in: params.extra.cues, or the prompt's "start-end: text" / SRT lines. */
@@ -1171,8 +1193,6 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // The variant this request runs (one graph per clip count, the single-track soundtrack, EXR frames, a Fun Camera pose,
   // the product shot): src/lib/comfy-variants.ts, which the GPU pre-flight's gate reads too. A LoRA mixed into a pose is
   // injected on its experts as on the plain image-to-video graph.
-  // Qwen-Image 2.1 on Auto GPU at Full speed: the graphics memory decides the encoder (only then is the server asked).
-  const vramGb = QWEN21_SMALL_GPU_GRAPH[endpointTemplate] && !extra[GPU_PARAM] && (extra[SPEED_PARAM] ?? "full") === "full" ? await ctx.vramGb?.().catch(() => undefined) : undefined;
   const endpoint = resolveWorkflowId(endpointTemplate, {
     op: ctx.op,
     clips: clips.length,
@@ -1181,7 +1201,6 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     audio2: !!audio2 || !!extra.audio2,
     extra,
     has: (id) => loadManifest().workflows.some((w) => w.id === id),
-    vramGb,
   });
   delete extra.productShot;
   delete extra[SPEED_PARAM];
@@ -1734,6 +1753,15 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     if (id) wf = bypassNode(wf, id, "images", outputIds);
   }
   if (surroundSource(sourceChannels)) wf = dbsSurroundBed(wf);
+  // Zen Image Edit's loader (Qwen-Image 2.1 on a small GPU) reads paths, not names: the adapter where the server keeps it
+  // in models/text_encoders, and Qwen3.5-0.8B's pinned folder there when it has one (else the loader fetches it by id).
+  for (const n of Object.values(wf)) {
+    if (n.class_type !== "ZenImage21AdapterLoader") continue;
+    const adapter = await ctx.modelPath?.(ZEN_ADAPTER.folder, ZEN_ADAPTER.file).catch(() => undefined);
+    n.inputs.adapter_file = adapter ?? `models/${ZEN_ADAPTER.folder}/${ZEN_ADAPTER.file}`;
+    const weights = await ctx.modelPath?.(ZEN_ADAPTER.folder, `${ZEN_ENCODER.dir}/${ZEN_ENCODER.weights}`).catch(() => undefined);
+    n.inputs.text_encoder = weights ? weights.replace(/[\\/][^\\/]+$/, "") : ZEN_ENCODER.id;
+  }
   // Slow motion: the sound would no longer match the picture.
   if (finish.dropSound) for (const n of Object.values(wf)) if (n.class_type === "CreateVideo") delete n.inputs.audio;
   // VHS meta-batch: a manager of its own per job (a stale one loses frames), and no sound link for a silent clip.
@@ -2132,7 +2160,7 @@ export const comfyProvider: ProviderAdapter = {
         return (await comfyJson<{ system?: { ram_total?: number } }>("/system_stats", worker).catch(() => undefined))?.system?.ram_total;
       },
       device: () => comfyDevice(worker),
-      vramGb: () => comfyVramGb(worker),
+      modelPath: (folder, name) => comfyModelPath(folder, name, worker),
       // Fresh: a model installed a moment ago runs. (On someone's computer, nothing to ask: its ComfyUI has the last word.)
       dbsModels: () => comfyDbsModels(worker, 0),
       reuseModels: () => comfyReuseModels(worker, 0),

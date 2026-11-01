@@ -3321,10 +3321,10 @@ export const LORA_LIBRARY: LoraEntry[] = [
     "sha256": "55482093e8b8a80183810037df12f804196cee58e9e85311dc4f3bacf27a60b0",
     "sizeBytes": 335605648,
     "licence": {
-      "commercial": true,
-      "hostedOk": true,
+      "commercial": false,
+      "hostedOk": false,
       "snapshotDate": "2026-11-01",
-      "name": "Apache-2.0"
+      "name": "Apache-2.0 as a tag on its card only, without a LICENSE file in the repository; an adapter of Qwen-Image 2.1 (Qwen Research License), so non-commercial through its base"
     },
     "released": "2026-10-07",
     "notes": "The card's licence tag is apache-2.0 (no LICENSE file); the base, Qwen-Image 2.1, is Qwen Research (non-commercial). The step-2500 checkpoint in diffusers / ComfyUI key layout, at 0.7 with a 0.5 px blur on each chained panel (the card's clean-chain recipe). Trained at 512 px on Sintel and Tears of Steel frame pairs. Qwen-Image 2.1 isn't hosted on fal or Replicate, so the cloud keeps the 2509 next-scene LoRA."

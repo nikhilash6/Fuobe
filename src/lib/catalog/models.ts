@@ -137,7 +137,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-image",
     kind: "image",
-    tagline: "Native 2K images with clean lettering; edits with up to 4 references, inpaint and expand; Draft to Full speed · 16–20 GB GPU · non-commercial weights",
+    tagline: "Native 2K images with clean lettering; edits with up to 4 references, inpaint and expand; Draft to Full speed · English prompts only on a 16 GB GPU, any language on a 20 GB GPU · non-commercial weights",
     badges: ["new", "top"],
     // Aspect ratio and size are for text to image: an edit or inpaint follows image 1, an expand the canvas its pads grow.
     // The inpaint and expand graphs read the picture alone.
@@ -163,7 +163,7 @@ const open: ModelDef[] = [
     options: { maxImages: 4, seed: true, controls: [QWEN21_DECODER] },
   }),
   // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): Zen Image Edit's 0.8B encoder, which Qwen-Image 2.1's GPU option picks
-  // (Auto under 24 GB). Listed for its licence, its node pack and its switch, and for the pre-flight board's row; never in a picker.
+  // (Small, or Auto under 20 GB when the route is ready: src/server/qwen21-gpu.ts). Listed for its licence, its node pack and its switch, and for the pre-flight board's row; never in a picker.
   o({
     id: "oss-qwen-image-21-small",
     name: "Qwen-Image 2.1 · Small GPU",

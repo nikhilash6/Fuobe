@@ -9,8 +9,9 @@ import type { ModelOptions } from "@/lib/catalog/types";
  *   the details" (6 steps, Pruna's P-Q-Image v0.2 upsampled LoRA), Turbo (the official 8-step Turbo checkpoint, edits
  *   only) and Full (the owner's 25-step graphs, the default). Each tier is its own graph: the base graph with one LoRA and
  *   a ManualSigmas schedule (scripts/comfy/library.spec.mjs, qwen21Tier).
- * - Options → GPU: Zen Image Edit's 0.8B encoder in place of the 17.5 GB Qwen3-VL 8B for text to image and edits on a
- *   card under 24 GB (Auto), or always (Small).
+ * - Options → GPU: Zen Image Edit's 0.8B encoder in place of the 17.5 GB Qwen3-VL 8B for text to image and edits at Full
+ *   speed: when asked (Small), or on Auto when the GPU check reads a graphics card under 20 GB and the small route is ready
+ *   there (src/server/qwen21-gpu.ts decides once per run, so the pre-flight and the run take the same graph).
  * - Options → Decoder: the Texture-Fix VAE ("Clean") in place of the stock decoder; off until tested.
  *
  * Qwen-Image 2.1 isn't hosted on fal or Replicate, so all of this is the open engine's.
@@ -32,12 +33,28 @@ export const QWEN21_SMALL_GPU_GRAPH: Record<string, string> = {
   "qwen-image-21-edit": "qwen-image-21-edit-small",
 };
 
-/** Below this much graphics memory, Auto runs the small encoder (Qwen3-VL 8B int8 9.4 GB + the int8 model 7.3 GB need ~20 GB). */
-export const SMALL_GPU_BELOW_GB = 24;
+/**
+ * Below this much graphics memory (GB, rounded as the GPU check reads it: src/lib/gpu/requirements.ts vramGb), Auto runs the
+ * small encoder: the full graph needs about 20 GB (Qwen3-VL 8B int8 9.4 GB + the int8 model 7.3 GB + activations). A 24 GB card
+ * (an RTX 4090 reads 23.65 GiB, which rounds to 24) keeps the full encoder.
+ */
+export const SMALL_GPU_BELOW_GB = 20;
 
 export const SPEED_PARAM = "speed";
 export const GPU_PARAM = "gpu";
 export const DECODER_PARAM = "decoder";
+
+/** The most pictures "Fast · writes the details" edits with (Pruna's card: at most 3 references). */
+export const DETAILS_MAX_IMAGES = 3;
+
+/** Zen Image Edit's fusion adapter (release v2 of recoilme/zen-image-edit-comfyui), a tracked download in models/text_encoders. */
+export const ZEN_ADAPTER = { folder: "text_encoders", file: "adapter_v12.safetensors" } as const;
+
+/**
+ * Zen Image Edit's text encoder, Qwen3.5-0.8B (Apache-2.0), at the revision its setup command pins, in its own folder under
+ * models/text_encoders (the folder the pack's README downloads it to). Without that folder the loader fetches it by id.
+ */
+export const ZEN_ENCODER = { id: "Qwen/Qwen3.5-0.8B", revision: "2fc06364715b967f1860aea9cf38778875588b17", dir: "qwen3.5_0.8b", weights: "model.safetensors-00001-of-00001.safetensors" } as const;
 
 /** The Texture-Fix VAE (madebyollin), an optional file every Qwen-Image 2.1 graph lists. */
 export const CLEAN_VAE = "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors";
@@ -69,14 +86,20 @@ export const QWEN21_SPEED: Control = {
   ops: SPEED_OPS,
 };
 
-/** Options → GPU: Auto picks Small under 24 GB of graphics memory (text to image and edits). */
+/** Options → GPU: Auto picks Small on a card under 20 GB when the small route is ready (text to image and edits, Full speed). */
 export const QWEN21_GPU: Control = {
   param: GPU_PARAM,
   label: "GPU",
   values: ["large", "small"],
-  labels: { large: "24 GB or more", small: "Small GPU (16 GB) · English prompts only" },
+  labels: { large: "20 GB or more", small: "Small GPU (16 GB) · Full speed, English prompts only" },
   ops: { large: ["t2i", "edit", "inpaint", "outpaint"], small: ["t2i", "edit"] },
 };
+
+/** What the small encoder can't do, as the composer and a run's notes say it. */
+export const SMALL_GPU_NOTE = "Small GPU: English prompts only, and numbers on signs can come out wrong";
+
+/** Small with a speed that has its own graph: the speed wins. */
+export const SMALL_GPU_AT_FULL = "Small GPU applies at Full speed only: this speed needs a 20 GB GPU";
 
 /** Options → Decoder: Clean is the Texture-Fix VAE (cleaner fine texture, no checkerboard), off by default. */
 export const QWEN21_DECODER: Control = {
@@ -88,24 +111,50 @@ export const QWEN21_DECODER: Control = {
   sets: { standard: {}, clean: { vae: CLEAN_VAE } },
 };
 
-/** Whether a GPU of this size (GB, as the GPU check reads it) runs the small encoder when the choice is Auto. */
+/** Whether a graphics card of this size (GB, rounded as the GPU check reads it; undefined for a CPU or no reading) is small. */
 export function smallGpu(vramGb: number | undefined): boolean {
   return typeof vramGb === "number" && vramGb > 0 && vramGb < SMALL_GPU_BELOW_GB;
 }
 
-/**
- * The graph a Qwen-Image 2.1 run takes: the speed's graph when it has one for this operation; at Full speed the small
- * encoder's graph when Options → GPU says Small, or says nothing on a GPU under 24 GB. Anything else keeps `endpoint`.
- */
-export function qwen21Graph(endpoint: string, extra: Record<string, unknown>, vramGb: number | undefined, has: (id: string) => boolean): string {
-  const speed = typeof extra[SPEED_PARAM] === "string" ? (extra[SPEED_PARAM] as Qwen21Speed) : "full";
+/** The speed asked for (Full when none). */
+const speedOf = (extra: Record<string, unknown>): Qwen21Speed => (typeof extra[SPEED_PARAM] === "string" ? (extra[SPEED_PARAM] as Qwen21Speed) : "full");
+
+/** The speed tier's graph this run takes, when the speed has one for this operation's graph. */
+function tierGraph(endpoint: string, extra: Record<string, unknown>, has: (id: string) => boolean): string | undefined {
+  const speed = speedOf(extra);
   const tier = speed !== "full" ? QWEN21_SPEED_GRAPH[endpoint]?.[speed] : undefined;
-  if (tier && has(tier)) return tier;
-  // Full speed (or a speed this operation doesn't have): the full graph, or the small encoder's.
+  return tier && has(tier) ? tier : undefined;
+}
+
+/**
+ * The small encoder's graph a run on `endpoint` would take with Options → GPU on Small: text to image and edits with no
+ * speed tier (Full, or a speed this operation doesn't have). A speed's graph wins over Small (it loads the full encoder).
+ */
+export function smallGraphFor(endpoint: string, extra: Record<string, unknown>, has: (id: string) => boolean): string | undefined {
+  if (tierGraph(endpoint, extra, has)) return undefined;
   const small = QWEN21_SMALL_GPU_GRAPH[endpoint];
-  const gpu = extra[GPU_PARAM];
-  if (small && has(small) && (gpu === "small" || (gpu !== "large" && smallGpu(vramGb)))) return small;
-  return endpoint;
+  return small && has(small) ? small : undefined;
+}
+
+/**
+ * The graph a Qwen-Image 2.1 run takes: the speed's graph when it has one for this operation; else the small encoder's when
+ * Options → GPU says Small (a run on Auto has had it decided already: src/server/qwen21-gpu.ts). Anything else keeps `endpoint`.
+ */
+export function qwen21Graph(endpoint: string, extra: Record<string, unknown>, has: (id: string) => boolean): string {
+  const tier = tierGraph(endpoint, extra, has);
+  if (tier) return tier;
+  const small = extra[GPU_PARAM] === "small" ? smallGraphFor(endpoint, extra, has) : undefined;
+  return small ?? endpoint;
+}
+
+/**
+ * The composer's note under Qwen-Image 2.1's options: what Small can't do when it is picked for an operation that has it, and
+ * that Small runs at Full speed only when a speed with its own graph is picked with it.
+ */
+export function qwen21Note(controls: readonly { param: string }[] | undefined, extra: Record<string, unknown> | undefined, op: string | undefined): string | undefined {
+  if (!controls?.some((c) => c.param === GPU_PARAM) || extra?.[GPU_PARAM] !== "small" || !op || !QWEN21_GPU.ops?.small.includes(op)) return undefined;
+  const speed = speedOf(extra);
+  return speed !== "full" && SPEED_OPS[speed]?.includes(op) ? SMALL_GPU_AT_FULL : SMALL_GPU_NOTE;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +175,19 @@ export function lightningSigmas(width: number, height: number): string {
   const e = Math.exp(mu);
   const shifted = LIGHTNING_SIGMAS.map((s) => e / (e + (1 / s - 1)));
   return [...shifted.map((s) => String(Math.round(s * 1e6) / 1e6)), "0"].join(", ");
+}
+
+/** The long side every Qwen-Image 2.1 edit samples at: ImageScaleToMaxDimension (largest_size 2048) scales image 1 up or down to it. */
+export const EDIT_LONG_SIDE = 2048;
+
+/**
+ * The canvas an edit samples: image 1 scaled so its long side is 2048 (larger or smaller), on the 32 px grid
+ * TextEncodeQwenImage21 rounds the latent to.
+ */
+export function editCanvas(width: number, height: number): { width: number; height: number } {
+  const k = EDIT_LONG_SIDE / Math.max(width, height);
+  const on32 = (x: number) => Math.max(32, Math.round((x * k) / 32) * 32);
+  return { width: on32(width), height: on32(height) };
 }
 
 /** The graphs whose sigmas follow the canvas (the Lightning tier). */

@@ -164,7 +164,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/edit", label: "Edit", group: "Images", config: S.EDIT_STUDIO },
   { href: "/inpaint", label: "Inpaint", group: "Images", config: S.INPAINT_STUDIO },
   // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): text to image and edits on Zen Image Edit's small encoder, which the
-  // Image and Edit studios pick by themselves under 24 GB (Options → GPU on Auto). The row's page opens the Image studio.
+  // Image and Edit studios pick by themselves under 20 GB once it is ready (Options → GPU on Auto). The row's page opens the Image
+  // studio on Qwen-Image 2.1.
   {
     href: "/image/small-gpu",
     label: "Image on a 16 GB GPU",

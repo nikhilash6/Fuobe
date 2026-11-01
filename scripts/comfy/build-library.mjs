@@ -80,7 +80,7 @@ export const LOADER_FOLDERS = {
   REUSELoader: { model: 'reuse' },
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
-// Zen Image Edit's adapter loader reads a path and fetches Qwen3.5-0.8B by id (nm10-qwen21-fast): its autoDownloads say both.
+// Zen Image Edit's adapter loader reads paths (nm10-qwen21-fast): its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
 const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader']);
 // Binding keys whose input is a user-supplied model file (not part of "models").
 const USER_MODEL_KEYS = new Set(['lora', 'loraHigh', 'loraLow', 'upscaleModel']);
@@ -192,6 +192,8 @@ async function hfSize(url, cache) {
     // follow that one. The download's own redirect, to the CDN, carries the size and isn't followed.
     const moved = res.headers.get('location');
     if ([301, 302, 307, 308].includes(res.status) && moved?.startsWith('/')) res = await fetch(new URL(moved, url), { method: 'HEAD', redirect: 'manual' });
+    // A GitHub release asset (Zen Image Edit's adapter) redirects to its storage, which answers with the size.
+    else if ([301, 302, 307, 308].includes(res.status) && /^https:\/\/github\.com\/[^/]+\/[^/]+\/releases\/download\//.test(url)) res = await fetch(url, { method: 'HEAD' });
     const linked = res.headers.get('x-linked-size');
     const len = linked || (res.status === 200 ? res.headers.get('content-length') : null);
     if (res.status === 401 || res.status === 403) {

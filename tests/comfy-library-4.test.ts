@@ -106,12 +106,19 @@ describe("round-4 ComfyUI workflows", () => {
       "qwen-image-21-live-edit",
       "qwen-image-21-inpaint",
       "qwen-image-21-outpaint",
-      // Qwen-Image 2.1's inpaint and expand speeds (AusBoss's pack) and its 16 GB route (Zen Image Edit's pack), nm10-qwen21-fast:
-      // packs this server doesn't have (tests/qwen21-fast.test.ts).
+      // Qwen-Image 2.1's speeds, its next scene and its 16 GB route (nm10-qwen21-fast): unvalidated like their base graphs until
+      // they run on a GPU (tests/qwen21-fast.test.ts).
+      "qwen-image-21-t2i-draft",
+      "qwen-image-21-t2i-fast",
+      "qwen-image-21-t2i-details",
+      "qwen-image-21-edit-draft",
+      "qwen-image-21-edit-fast",
+      "qwen-image-21-edit-details",
       "qwen-image-21-inpaint-draft",
       "qwen-image-21-inpaint-fast",
       "qwen-image-21-outpaint-draft",
       "qwen-image-21-outpaint-fast",
+      "qwen-image-21-next-scene",
       "qwen-image-21-t2i-small",
       "qwen-image-21-edit-small",
       "ideogram4-t2i",

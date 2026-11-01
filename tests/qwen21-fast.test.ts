@@ -15,6 +15,8 @@ const { prepareWorkflow } = await import("@/server/providers/comfyui");
 const { getModel, getPreset } = await import("@/lib/catalog");
 const { controlSets, planGeneration } = await import("@/lib/catalog/plan");
 const { libraryEntry } = await import("@/lib/catalog/loras");
+const { loraLicenceInfo } = await import("@/lib/licences");
+const { commandsFor } = await import("@/lib/gpu/commands");
 const { planStoryboard, storyboardModels, STORYBOARD_MODELS } = await import("@/lib/catalog/storyboard");
 const { resolveWorkflowId } = await import("@/lib/comfy-variants");
 const { controlsFor } = await import("@/lib/composer");
@@ -23,6 +25,9 @@ const { STUDIO_ROWS, studioTool, toolFor } = await import("@/server/gpu/tools");
 const { previewGeneration } = await import("@/server/generations");
 const { changeAccess, modelLicence } = await import("@/server/model-access");
 const { setSetting } = await import("@/server/settings");
+const { qwen21Gpu } = await import("@/server/qwen21-gpu");
+const { writeSnapshot, dropSnapshots } = await import("@/server/gpu/snapshots");
+const { gateGeneration } = await import("@/server/gpu/gate");
 const { EDIT_STUDIO, INPAINT_STUDIO } = await import("@/lib/studios");
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
@@ -35,18 +40,54 @@ const pins = read("model-pins.json") as Record<string, { revision: string; sizeB
 const index = read("requirements.json") as { workflows: Record<string, { files: string[]; optional: string[]; packs: Record<string, string[]>; vramGb: number; firstRun: string[]; validated?: boolean }>; files: Record<string, { pinnedUrl: string; sizeBytes: number }>; packs: Record<string, { commit: string; classes: string[] }> };
 const ofClass = (wf: ComfyWorkflow, cls: string) => Object.entries(wf).filter(([, n]) => n.class_type === cls);
 const has = (id: string) => manifest.workflows.some((w) => w.id === id);
-const variant = (endpoint: string, op: string, extra: Record<string, unknown>, vramGb?: number, images = 0) =>
-  resolveWorkflowId(endpoint, { op, clips: 0, images, audio2: false, extra, has, vramGb });
+const variant = (endpoint: string, op: string, extra: Record<string, unknown>, images = 0) => resolveWorkflowId(endpoint, { op, clips: 0, images, audio2: false, extra, has });
 
-async function prepare(id: string, input: GenInput, op: Operation, media: Record<string, { width: number; height: number }> = {}, vramGb?: number) {
+async function prepare(id: string, input: GenInput, op: Operation, media: Record<string, { width: number; height: number }> = {}, paths: Record<string, string> = {}) {
   return prepareWorkflow(id, { seed: 7, ...input }, {
     generationId: "g-q21",
     op,
     upload: async (_d, _t, name) => `up_${name}`,
     media: (name) => media[name] as never,
     serverRam: async () => undefined,
-    vramGb: async () => vramGb,
+    modelPath: async (folder, name) => paths[`${folder}/${name}`],
   });
+}
+
+/** Model folders as a check lists them: the full and small graphs' files, less the adapter or with only `vae` in vae/. */
+function listed(o: { adapter?: boolean; vae?: string[] }) {
+  const out: Record<string, { have: Record<string, number | null>; total: number }> = {};
+  for (const key of [...index.workflows["qwen-image-21-t2i"].files, ...index.workflows["qwen-image-21-t2i-small"].files]) {
+    const [folder, file] = key.split("/");
+    if (file === "adapter_v12.safetensors" && o.adapter === false) continue;
+    if (folder === "vae" && o.vae) continue;
+    (out[folder] ??= { have: {}, total: 0 }).have[file] = null;
+  }
+  if (o.vae) out.vae = { have: Object.fromEntries(o.vae.map((f) => [f, null])), total: o.vae.length };
+  out.text_encoders ??= { have: {}, total: 0 };
+  for (const x of Object.values(out)) x.total = Object.keys(x.have).length;
+  return out;
+}
+
+/** The install's last GPU check: a device of this many bytes (or a CPU), with or without Zen Image Edit's add-on and adapter. */
+const INSTALL = { kind: "install", key: "install", via: "server" } as const;
+function checked(o: { bytes?: number; type?: string; zen?: boolean; adapter?: boolean; vae?: string[] }) {
+  const at = Date.now();
+  writeSnapshot(INSTALL, {
+    v: 1,
+    via: "server",
+    checkedAt: at,
+    tookMs: 5,
+    reachable: true,
+    devices: o.bytes === undefined ? [] : [{ name: "GPU", type: o.type ?? "cuda", index: 0, vramTotal: o.bytes, vramFree: o.bytes }],
+    manager: { api: "none" },
+    nodes: { have: [], missing: o.zen === false ? ["ZenImage21AdapterLoader", "ZenImage21TextEncode"] : [], total: 1, readAt: at, how: "object_info" },
+    combos: {},
+    packs: {},
+    models: listed(o),
+    loras: {},
+    fingerprint: "x",
+    errors: [],
+  } as never);
 }
 
 /** Each speed's LoRA, its pinned download and its schedule (the cards, read 2026-11-01). */
@@ -71,6 +112,8 @@ const TIERS = {
   },
 } as const;
 const sigmasOf = (s: unknown) => String(s).split(",").map(Number);
+/** Lightning's schedule for a 2048 square: an edit's canvas (ImageScaleToMaxDimension 2048), the edit graph's default. */
+const EDIT_2K = [1, 0.917701, 0.787999, 0.553369, 0];
 
 describe("Qwen-Image 2.1's speed graphs", () => {
   const tiers = Object.entries(Q.QWEN21_SPEED_GRAPH).flatMap(([base, t]) => Object.entries(t).filter(([s]) => s !== "turbo").map(([speed, id]) => ({ base, speed: speed as keyof typeof TIERS, id: id! })));
@@ -89,7 +132,7 @@ describe("Qwen-Image 2.1's speed graphs", () => {
       const loras = ofClass(wf, "LoraLoaderModelOnly").filter(([, n]) => n.inputs.lora_name === TIERS[t.speed].file);
       expect(loras, t.id).toHaveLength(1);
       expect(loras[0][1].inputs.strength_model).toBe(1);
-      expect(sigmasOf(ofClass(wf, "ManualSigmas")[0][1].inputs.sigmas), t.id).toEqual(TIERS[t.speed].sigmas);
+      expect(sigmasOf(ofClass(wf, "ManualSigmas")[0][1].inputs.sigmas), t.id).toEqual(t.id === "qwen-image-21-edit-fast" ? EDIT_2K : TIERS[t.speed].sigmas);
       expect(ofClass(wf, "KSampler"), t.id).toHaveLength(0);
       expect(ofClass(wf, "CFGGuider")[0][1].inputs.cfg).toBe(1);
       expect(ofClass(wf, "KSamplerSelect")[0][1].inputs.sampler_name).toBe("euler");
@@ -116,20 +159,28 @@ describe("Qwen-Image 2.1's speed graphs", () => {
       expect(e.bindings.seed).toEqual([{ node: "70", input: "noise_seed" }]);
       expect(e.bindings.steps).toBeUndefined();
       expect(e.license).toMatch(/Qwen Research License/);
-      // The graph check on the CPU ComfyUI: text to image and edits (inpaint and expand need AusBoss's pack, which it lacks).
-      if (/-(t2i|edit)-/.test(t.id)) expect(e.validated, t.id).toBe(true);
-      else expect(e.customNodes.map((c) => c.name)).toEqual(["ausboss-nodes"]);
+      // Unvalidated like the owner's Qwen-Image 2.1 graphs until it runs on a GPU (the CPU server's graph check isn't that bar).
+      expect(e.validated, t.id).toBe(false);
+      if (/-(inpaint|outpaint)-/.test(t.id)) expect(e.customNodes.map((c) => c.name)).toEqual(["ausboss-nodes"]);
+      // The licence names the optional clean decoder's own.
+      expect(e.license).toMatch(/Texture-Fix VAE .*Qwen Research License/);
     }
     expect(index.files[`vae/${Q.CLEAN_VAE}`]).toMatchObject({ sizeBytes: 675509688 });
     expect(index.files[`vae/${Q.CLEAN_VAE}`].pinnedUrl).toContain("/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/");
   });
 
-  it("shifts the Lightning schedule for the canvas as its card does, and keeps 1 MP's in the graph", () => {
+  it("shifts the Lightning schedule for the canvas as its card does: 1 MP's in the text to image graphs, a 2048 square's in the edit's", () => {
     expect(sigmasOf(Q.lightningSigmas(1024, 1024))).toEqual(TIERS.fast.sigmas);
     const big = sigmasOf(Q.lightningSigmas(2048, 2048));
-    expect(big[1]).toBeCloseTo(0.917701, 5);
-    expect(big[3]).toBeCloseTo(0.553369, 5);
+    expect(big).toEqual(EDIT_2K);
     expect(big.at(-1)).toBe(0);
+    expect(sigmasOf(ofClass(graph("qwen-image-21-t2i-fast"), "ManualSigmas")[0][1].inputs.sigmas)).toEqual(TIERS.fast.sigmas);
+    expect(sigmasOf(ofClass(graph("qwen-image-21-edit-fast"), "ManualSigmas")[0][1].inputs.sigmas)).toEqual(EDIT_2K);
+    // An edit's canvas: image 1 scaled to 2048 on its long side, up or down, on the 32 px grid.
+    expect(Q.editCanvas(1024, 1024)).toEqual({ width: 2048, height: 2048 });
+    expect(Q.editCanvas(1536, 1024)).toEqual({ width: 2048, height: 1376 });
+    expect(Q.editCanvas(800, 600)).toEqual({ width: 2048, height: 1536 });
+    expect(Q.editCanvas(4000, 3000)).toEqual({ width: 2048, height: 1536 });
     expect([...Q.LIGHTNING_GRAPHS].sort()).toEqual(tiers.filter((t) => t.speed === "fast").map((t) => t.id).sort());
   });
 });
@@ -139,7 +190,7 @@ describe("Options → Speed, GPU and Decoder", () => {
     expect(variant("qwen-image-21-t2i", "t2i", {})).toBe("qwen-image-21-t2i");
     expect(variant("qwen-image-21-t2i", "t2i", { speed: "full" })).toBe("qwen-image-21-t2i");
     expect(variant("qwen-image-21-t2i", "t2i", { speed: "draft" })).toBe("qwen-image-21-t2i-draft");
-    expect(variant("qwen-image-21-edit", "edit", { speed: "fast" }, undefined, 2)).toBe("qwen-image-21-edit-fast");
+    expect(variant("qwen-image-21-edit", "edit", { speed: "fast" }, 2)).toBe("qwen-image-21-edit-fast");
     expect(variant("qwen-image-21-edit", "edit", { speed: "turbo" })).toBe("qwen-image-21-turbo-edit");
     expect(variant("qwen-image-21-inpaint", "inpaint", { speed: "fast" })).toBe("qwen-image-21-inpaint-fast");
     expect(variant("qwen-image-21-outpaint", "outpaint", { speed: "draft" })).toBe("qwen-image-21-outpaint-draft");
@@ -147,25 +198,122 @@ describe("Options → Speed, GPU and Decoder", () => {
     expect(variant("qwen-image-21-t2i", "t2i", { speed: "turbo" })).toBe("qwen-image-21-t2i");
     expect(variant("qwen-image-21-inpaint", "inpaint", { speed: "details" })).toBe("qwen-image-21-inpaint");
     // Other models' graphs never move; Marketing Image's product shot still wins on the edit graph.
-    expect(variant("flux3-klein-t2i", "t2i", { speed: "draft" }, 16)).toBe("flux3-klein-t2i");
-    expect(variant("qwen-image-21-edit", "edit", { productShot: true, speed: "draft" }, undefined, 1)).toBe("product-shot-qwen-edit-2509");
+    expect(variant("flux3-klein-t2i", "t2i", { speed: "draft", gpu: "small" })).toBe("flux3-klein-t2i");
+    expect(variant("qwen-image-21-edit", "edit", { productShot: true, speed: "draft" }, 1)).toBe("product-shot-qwen-edit-2509");
   });
 
-  it("runs the small encoder under 24 GB on Auto, as asked otherwise, and never at another speed", () => {
+  it("takes the small encoder's graph when the run says Small, and a speed's graph over it", () => {
+    expect(variant("qwen-image-21-t2i", "t2i", { gpu: "small" })).toBe("qwen-image-21-t2i-small");
+    expect(variant("qwen-image-21-edit", "edit", { gpu: "small" })).toBe("qwen-image-21-edit-small");
+    expect(variant("qwen-image-21-t2i", "t2i", {})).toBe("qwen-image-21-t2i");
+    expect(variant("qwen-image-21-t2i", "t2i", { gpu: "large" })).toBe("qwen-image-21-t2i");
+    expect(variant("qwen-image-21-t2i", "t2i", { gpu: "small", speed: "fast" })).toBe("qwen-image-21-t2i-fast");
+    // A speed this operation has no graph for (Turbo on a new picture) runs at Full, so Small applies.
+    expect(variant("qwen-image-21-t2i", "t2i", { gpu: "small", speed: "turbo" })).toBe("qwen-image-21-t2i-small");
+    expect(Q.smallGraphFor("qwen-image-21-t2i", { speed: "turbo" }, has)).toBe("qwen-image-21-t2i-small");
+    expect(Q.smallGraphFor("qwen-image-21-edit", { speed: "turbo" }, has)).toBeUndefined();
+    // Inpaint and expand have no small-encoder graph.
+    expect(variant("qwen-image-21-inpaint", "inpaint", { gpu: "small" })).toBe("qwen-image-21-inpaint");
+  });
+
+  it("counts a card under 20 GB as small, as the GPU check rounds it", () => {
     expect(Q.smallGpu(16)).toBe(true);
-    expect(Q.smallGpu(23.6)).toBe(true);
+    expect(Q.smallGpu(19.9)).toBe(true);
+    expect(Q.smallGpu(20)).toBe(false);
     expect(Q.smallGpu(24)).toBe(false);
     expect(Q.smallGpu(undefined)).toBe(false);
     expect(Q.smallGpu(0)).toBe(false);
-    expect(variant("qwen-image-21-t2i", "t2i", {}, 16)).toBe("qwen-image-21-t2i-small");
-    expect(variant("qwen-image-21-edit", "edit", {}, 12)).toBe("qwen-image-21-edit-small");
-    expect(variant("qwen-image-21-t2i", "t2i", {}, 24)).toBe("qwen-image-21-t2i");
-    expect(variant("qwen-image-21-t2i", "t2i", {}, undefined)).toBe("qwen-image-21-t2i");
-    expect(variant("qwen-image-21-t2i", "t2i", { gpu: "large" }, 16)).toBe("qwen-image-21-t2i");
-    expect(variant("qwen-image-21-t2i", "t2i", { gpu: "small" }, 48)).toBe("qwen-image-21-t2i-small");
-    expect(variant("qwen-image-21-t2i", "t2i", { speed: "fast" }, 16)).toBe("qwen-image-21-t2i-fast");
-    // Inpaint and expand have no small-encoder graph.
-    expect(variant("qwen-image-21-inpaint", "inpaint", {}, 16)).toBe("qwen-image-21-inpaint");
+  });
+
+  it("puts Auto on the small encoder only on a card under 20 GB where the small route is ready", () => {
+    const auto = (extra: Record<string, unknown> = {}, endpoint = "qwen-image-21-t2i") => qwen21Gpu(endpoint, extra, has)?.gpu;
+    try {
+      // No check yet: the full graph.
+      dropSnapshots("install");
+      expect(auto()).toBe("large");
+      // A 16 GB card with the add-on and the adapter: small, and the run says what it can't do.
+      checked({ bytes: 16 * 2 ** 30 });
+      expect(qwen21Gpu("qwen-image-21-t2i", {}, has)).toEqual({ gpu: "small", note: Q.SMALL_GPU_NOTE });
+      expect(auto({}, "qwen-image-21-edit")).toBe("small");
+      // 24 GB cards read under 24 GiB (an RTX 4090: 23.65), a 20 GB card 19.7: both keep the full encoder.
+      checked({ bytes: 25_393_692_672 });
+      expect(auto()).toBe("large");
+      checked({ bytes: 21_150_000_000 });
+      expect(auto()).toBe("large");
+      // A CPU-only ComfyUI reports system RAM as its device's memory: the full graph.
+      checked({ bytes: 14_341_885_952, type: "cpu" });
+      expect(auto()).toBe("large");
+      // Not ready on the small card (no add-on, or no adapter): the full graph.
+      checked({ bytes: 16 * 2 ** 30, zen: false });
+      expect(auto()).toBe("large");
+      checked({ bytes: 16 * 2 ** 30, adapter: false });
+      expect(auto()).toBe("large");
+      // Ready, but the speed has its own graph, or the run asked for 20 GB or more: no choice to make, or large.
+      checked({ bytes: 16 * 2 ** 30 });
+      expect(qwen21Gpu("qwen-image-21-t2i", { speed: "fast" }, has)).toBeUndefined();
+      expect(qwen21Gpu("qwen-image-21-inpaint", {}, has)).toBeUndefined();
+      expect(auto({ gpu: "large" })).toBe("large");
+      // Asked for, Small runs whatever the card (the pre-flight then shows what it needs).
+      dropSnapshots("install");
+      expect(auto({ gpu: "small" })).toBe("small");
+    } finally {
+      dropSnapshots("install");
+    }
+  });
+
+  it("decides once as the run is planned: the run carries the choice and says Small's limit", () => {
+    const g = globalThis as unknown as { __fuobeComfyReach?: { ok: boolean; at: number; url: string } };
+    const before = g.__fuobeComfyReach;
+    g.__fuobeComfyReach = { ok: true, at: Date.now(), url: "http://comfy.test:8188" };
+    setSetting("demoMode", "off");
+    try {
+      const run = (extra: Record<string, unknown> = {}) => previewGeneration({ feature: "image", modelId: "oss-qwen-image-21", prompt: "a koi pond", params: { extra } });
+      checked({ bytes: 16 * 2 ** 30 });
+      const small = run();
+      expect(small).toMatchObject({ demo: false, gpu: "small", route: { provider: "comfyui", endpoint: "qwen-image-21-t2i" } });
+      expect(small.notes).toContain(Q.SMALL_GPU_NOTE);
+      checked({ bytes: 24 * 2 ** 30 });
+      const large = run();
+      expect(large.gpu).toBe("large");
+      expect(large.notes ?? []).not.toContain(Q.SMALL_GPU_NOTE);
+      expect(run({ speed: "draft" }).gpu).toBeUndefined();
+    } finally {
+      g.__fuobeComfyReach = before;
+      setSetting("demoMode", "auto");
+      dropSnapshots("install");
+    }
+  });
+
+  it("holds the small route when its model or Zen Image Edit's add-on is switched off in Models & licences", () => {
+    checked({ bytes: 16 * 2 ** 30 });
+    try {
+      for (const change of [{ kind: "model", id: "oss-qwen-image-21-small", on: false }, { kind: "pack", id: "zen-image-edit-comfyui", on: false }] as const) {
+        changeAccess([change]);
+        try {
+          expect(qwen21Gpu("qwen-image-21-t2i", {}, has)?.gpu, change.kind).toBe("large");
+          expect(() => qwen21Gpu("qwen-image-21-t2i", { gpu: "small" }, has), change.kind).toThrow(/Small GPU.*(turned|switched) off in Settings → Models & licences/);
+        } finally {
+          changeAccess([{ kind: "reset" }]);
+        }
+      }
+      expect(qwen21Gpu("qwen-image-21-t2i", { gpu: "small" }, has)?.gpu).toBe("small");
+    } finally {
+      dropSnapshots("install");
+    }
+  });
+
+  it("says in the composer what Small can't do, and that a speed with its own graph wins", () => {
+    const controls = getModel("oss-qwen-image-21")!.options.controls;
+    expect(Q.qwen21Note(controls, { gpu: "small" }, "t2i")).toBe(Q.SMALL_GPU_NOTE);
+    expect(Q.qwen21Note(controls, { gpu: "small", speed: "full" }, "edit")).toBe(Q.SMALL_GPU_NOTE);
+    expect(Q.qwen21Note(controls, { gpu: "small", speed: "draft" }, "edit")).toBe(Q.SMALL_GPU_AT_FULL);
+    expect(Q.qwen21Note(controls, { gpu: "small", speed: "turbo" }, "edit")).toBe(Q.SMALL_GPU_AT_FULL);
+    expect(Q.qwen21Note(controls, { gpu: "small", speed: "turbo" }, "t2i")).toBe(Q.SMALL_GPU_NOTE);
+    expect(Q.qwen21Note(controls, { gpu: "small" }, "inpaint")).toBeUndefined();
+    expect(Q.qwen21Note(controls, {}, "t2i")).toBeUndefined();
+    expect(Q.qwen21Note(getModel("oss-qwen-image-21-turbo")!.options.controls, { gpu: "small" }, "edit")).toBeUndefined();
+    expect(Q.QWEN21_GPU.labels?.small).toMatch(/Full speed, English prompts only/);
+    expect(getModel("oss-qwen-image-21")!.tagline).toMatch(/English prompts only on a 16 GB GPU/);
   });
 
   it("puts the three controls on Qwen-Image 2.1 under Options, each value on the operations that have it", () => {
@@ -205,26 +353,39 @@ describe("a Qwen-Image 2.1 run on your GPU", () => {
     expect(JSON.stringify(wf)).not.toMatch(/"(speed|gpu|decoder)"/);
   });
 
-  it("follows image 1's size for an edit's Lightning schedule", async () => {
-    const { manifest: m, workflow: wf } = await prepare("qwen-image-21-edit", { prompt: "make it night", images: ["/api/files/a.png"], extra: { speed: "fast" } }, "edit", {});
-    expect(m.id).toBe("qwen-image-21-edit-fast");
-    // Without the picture's header the graph keeps its 1 MP schedule.
-    expect(sigmasOf(wf["73"].inputs.sigmas)).toEqual(TIERS.fast.sigmas);
+  it("follows image 1 scaled to 2048 on its long side for an edit's Lightning schedule", async () => {
+    // A 1024 square samples at 2048 × 2048 (the graph scales it up).
+    const square = await prepare("qwen-image-21-edit", { prompt: "make it night", images: ["/api/files/a.png"], extra: { speed: "fast" } }, "edit", { "/api/files/a.png": { width: 1024, height: 1024 } });
+    expect(square.manifest.id).toBe("qwen-image-21-edit-fast");
+    expect(sigmasOf(square.workflow["73"].inputs.sigmas)).toEqual(EDIT_2K);
+    // A 3:2 photo samples at 2048 × 1376.
+    const wide = await prepare("qwen-image-21-edit", { prompt: "make it night", images: ["/api/files/w.png"], extra: { speed: "fast" } }, "edit", { "/api/files/w.png": { width: 1536, height: 1024 } });
+    expect(sigmasOf(wide.workflow["73"].inputs.sigmas)).toEqual(sigmasOf(Q.lightningSigmas(2048, 1376)));
+    expect(sigmasOf(wide.workflow["73"].inputs.sigmas)[1]).toBeCloseTo(0.895, 3);
+    // Without the picture's header the graph keeps its own schedule, made for a 2048 square.
+    const unknown = await prepare("qwen-image-21-edit", { prompt: "make it night", images: ["/api/files/u.png"], extra: { speed: "fast" } }, "edit", {});
+    expect(sigmasOf(unknown.workflow["73"].inputs.sigmas)).toEqual(EDIT_2K);
   });
 
-  it("runs the small encoder by the GPU's memory, with the references it was given", async () => {
-    const small = await prepare("qwen-image-21-edit", { prompt: "the cat on the beach", images: ["/api/files/a.png", "/api/files/b.png"] }, "edit", {}, 16);
+  it("runs the small encoder when the run says Small, with the references it was given and the server's own paths", async () => {
+    const paths = { "text_encoders/adapter_v12.safetensors": "/srv/comfy/models/text_encoders/adapter_v12.safetensors", "text_encoders/qwen3.5_0.8b/model.safetensors-00001-of-00001.safetensors": "/srv/comfy/models/text_encoders/qwen3.5_0.8b/model.safetensors-00001-of-00001.safetensors" };
+    const small = await prepare("qwen-image-21-edit", { prompt: "the cat on the beach", images: ["/api/files/a.png", "/api/files/b.png"], extra: { gpu: "small" } }, "edit", {}, paths);
     expect(small.manifest.id).toBe("qwen-image-21-edit-small");
+    // Zen Image Edit's loader gets the adapter's full path and the pinned encoder folder.
+    expect(small.workflow["1"].inputs).toMatchObject({ adapter_file: "/srv/comfy/models/text_encoders/adapter_v12.safetensors", text_encoder: "/srv/comfy/models/text_encoders/qwen3.5_0.8b" });
     const enc = small.workflow["5"];
     expect(enc.class_type).toBe("ZenImage21TextEncode");
     expect(Object.keys(enc.inputs).filter((k) => k.startsWith("image_")).sort()).toEqual(["image_1", "image_2"]);
     expect(small.workflow["12"]).toBeUndefined();
     expect(small.workflow["4"].inputs.shift).toBe(5);
-    const large = await prepare("qwen-image-21-edit", { prompt: "the cat", images: ["/api/files/a.png"] }, "edit", {}, 32);
+    // On Auto (no choice made for the run) the full graph.
+    const large = await prepare("qwen-image-21-edit", { prompt: "the cat", images: ["/api/files/a.png"] }, "edit");
     expect(large.manifest.id).toBe("qwen-image-21-edit");
-    const asked = await prepare("qwen-image-21-t2i", { prompt: "a fox", extra: { gpu: "small" } }, "t2i", {}, 80);
+    // A server that can't say where its files are: the adapter from ComfyUI's folder, the encoder by id.
+    const asked = await prepare("qwen-image-21-t2i", { prompt: "a fox", extra: { gpu: "small" } }, "t2i");
     expect(asked.manifest.id).toBe("qwen-image-21-t2i-small");
     expect(asked.workflow["5"].inputs).toMatchObject({ prompt: "a fox", width: 1024, height: 1024 });
+    expect(asked.workflow["1"].inputs).toMatchObject({ adapter_file: "models/text_encoders/adapter_v12.safetensors", text_encoder: "Qwen/Qwen3.5-0.8B" });
   });
 
   it("holds a speed whose LoRA is switched off in Models & licences", () => {
@@ -247,14 +408,25 @@ describe("the small-GPU route", () => {
     for (const id of ["qwen-image-21-t2i-small", "qwen-image-21-edit-small"]) {
       const wf = graph(id);
       expect(ofClass(wf, "CLIPLoader"), id).toHaveLength(0);
-      expect(ofClass(wf, "ZenImage21AdapterLoader")[0][1].inputs).toMatchObject({ adapter_file: "models/adapter_v12.safetensors", text_encoder: "Qwen/Qwen3.5-0.8B" });
+      expect(ofClass(wf, "ZenImage21AdapterLoader")[0][1].inputs).toMatchObject({ adapter_file: "models/text_encoders/adapter_v12.safetensors", text_encoder: "Qwen/Qwen3.5-0.8B" });
       expect(ofClass(wf, "UNETLoader")[0][1].inputs.unet_name).toBe("qwen_image_2.1_int8_convrot.safetensors");
       const w = index.workflows[id];
       expect(w.vramGb).toBe(16);
       expect(Object.keys(w.packs)).toEqual(["zen-image-edit-comfyui"]);
-      expect(w.firstRun.join(" ")).toMatch(/adapter_v12\.safetensors.*Qwen3\.5-0\.8B/s);
+      // The adapter is a tracked, pinned download the pre-flight asks for; Qwen3.5-0.8B's setup command is pinned too.
+      expect(w.files).toContain("text_encoders/adapter_v12.safetensors");
+      expect(w.firstRun.join(" ")).toMatch(/Qwen3\.5-0\.8B .*--revision 2fc06364715b967f1860aea9cf38778875588b17 --local-dir models\/text_encoders\/qwen3\.5_0\.8b/);
+      expect(w.firstRun.join(" ")).not.toMatch(/adapter_v12/);
       expect(entry(id).validated).toBe(false);
     }
+    const adapter = "https://github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors";
+    expect(index.files["text_encoders/adapter_v12.safetensors"]).toMatchObject({ pinnedUrl: adapter, sizeBytes: 638987136, presence: "list" });
+    expect(pins[adapter]).toEqual({ revision: "v2", sizeBytes: 638987136, sha256: "85578cd0b41dfac3fad1845be2755971367deee5348a692feb589a09d120ea8c" });
+    // The fix plan's commands download it into models/text_encoders and check its hash (a release asset can be replaced).
+    const cmd = commandsFor([{ kind: "model", file: "text_encoders/adapter_v12.safetensors" }], { inv: null, idx: index as never });
+    expect(cmd.bash).toContain(`-o "$COMFY/models/text_encoders/adapter_v12.safetensors" "${adapter}"`);
+    expect(cmd.bash).toContain(`echo "85578cd0b41dfac3fad1845be2755971367deee5348a692feb589a09d120ea8c  ""$COMFY/models/text_encoders/adapter_v12.safetensors" | (sha256sum -c -`);
+    expect(cmd.powershell).toContain(`(Get-FileHash "$env:COMFY\\models\\text_encoders\\adapter_v12.safetensors" -Algorithm SHA256).Hash -ne "85578CD0B41DFAC3FAD1845BE2755971367DEEE5348A692FEB589A09D120EA8C"`);
     expect(index.packs["zen-image-edit-comfyui"]).toMatchObject({ commit: "7a29e58c973b84798df926e3251727884fdacc2d", classes: ["ZenImage21AdapterLoader", "ZenImage21TextEncode"] });
     const m = getModel("oss-qwen-image-21-small")!;
     expect(m.hidden).toBe(true);
@@ -265,7 +437,7 @@ describe("the small-GPU route", () => {
     ]);
   });
 
-  it("has its row on the GPU pre-flight board, whose page opens the Image studio", () => {
+  it("has its row on the GPU pre-flight board, whose page opens the Image studio on Qwen-Image 2.1", () => {
     const row = STUDIO_ROWS.find((r) => r.href === "/image/small-gpu")!;
     expect(row).toMatchObject({ label: "Image on a 16 GB GPU", group: "Images" });
     const t = studioTool(row)!;
@@ -273,7 +445,7 @@ describe("the small-GPU route", () => {
     expect(t.kind).toBe("image");
     expect(toolFor("studio:/image/small-gpu")?.workflows).toEqual(t.workflows);
     const page = fs.readFileSync(path.join(process.cwd(), "src/app/(studio)/image/small-gpu/page.tsx"), "utf8");
-    expect(page).toMatch(/redirect\("\/image"\)/);
+    expect(page).toMatch(/redirect\("\/image\?model=oss-qwen-image-21"\)/);
   });
 });
 
@@ -307,7 +479,7 @@ describe("Storyboard's next scene on Qwen-Image 2.1", () => {
     expect(wf["11"]).toBeUndefined();
     expect(wf["30"].inputs["images.image_2"]).toBeUndefined();
     expect(wf["32"].inputs).toMatchObject({ steps: 28, cfg: 1 });
-    expect(entry("qwen-image-21-next-scene").validated).toBe(true);
+    expect(entry("qwen-image-21-next-scene").validated).toBe(false);
     expect(index.workflows["qwen-image-21-next-scene"].files).toContain("loras/Qwen-Image-2.1-Next-Scene-step2500.safetensors");
   });
 });
@@ -318,7 +490,8 @@ describe("licences, recorded and switched on", () => {
       [TIERS.draft.file]: "Qwen Research",
       [TIERS.fast.file]: "Not stated in the repository",
       [TIERS.details.file]: "Qwen Research",
-      "Qwen-Image-2.1-Next-Scene-step2500.safetensors": "Apache-2.0",
+      // An apache-2.0 tag on its card only: non-commercial through its base.
+      "Qwen-Image-2.1-Next-Scene-step2500.safetensors": "Qwen Research",
     };
     for (const [file, licence] of Object.entries(want)) {
       const e = libraryEntry({ file })!;
@@ -328,6 +501,9 @@ describe("licences, recorded and switched on", () => {
       expect(e.sha256).toMatch(/^[0-9a-f]{64}$/);
       expect(e.url).toMatch(/\/resolve\/[0-9a-f]{40}\//);
     }
+    const next = libraryEntry({ file: "Qwen-Image-2.1-Next-Scene-step2500.safetensors" })!;
+    expect(next.licence).toMatchObject({ commercial: false, hostedOk: false });
+    expect(loraLicenceInfo(next.licence).class).toBe("non-commercial");
   });
 
   it("gives the small-GPU and next-scene models a licence row each", () => {
@@ -336,5 +512,53 @@ describe("licences, recorded and switched on", () => {
       expect(l.licence.name, id).toMatch(/Qwen Research/);
     }
     expect(modelLicence(getModel("oss-qwen-image-21-small")!).packs).toEqual(["zen-image-edit-comfyui"]);
+    // The small route's adapter and encoder, and the clean decoder, each named with its licence on the rows that use them.
+    const small = modelLicence(getModel("oss-qwen-image-21-small")!).licence;
+    expect(small.class).toBe("non-commercial");
+    expect(small.note).toMatch(/adapter_v12 .*Qwen Research License; Qwen3\.5-0\.8B \(Qwen @ 2fc06364\): Apache-2\.0/);
+    expect(modelLicence(getModel("oss-qwen-image-21")!).licence.note).toMatch(/Texture-Fix VAE .*Qwen Research License/);
+    expect(modelLicence(getModel("oss-qwen-image-21-next-scene")!).licence.note).toMatch(/apache-2\.0 tag on its card only .*non-commercial through its base/);
+  });
+});
+
+describe("the GPU pre-flight on a Qwen-Image 2.1 run", () => {
+  const gate = (extra: Record<string, unknown>, gpu?: string) =>
+    gateGeneration(INSTALL, { request: { feature: "image", modelId: "oss-qwen-image-21", prompt: "a fox", params: { extra } }, route: { provider: "comfyui", endpoint: "qwen-image-21-t2i" }, op: "t2i", modelId: "oss-qwen-image-21", gpu, actor: "owner" });
+
+  it("checks the graph the run's GPU choice takes", async () => {
+    checked({ bytes: 16 * 2 ** 30, zen: false });
+    try {
+      // The run decided Small: the pre-flight sees the add-on it lacks (the owner gets a warning).
+      expect(await gate({}, "small")).toMatchObject({ ok: true, warning: expect.stringMatching(/more thing/) });
+      expect(await gate({}, "large")).toEqual({ ok: true });
+    } finally {
+      dropSnapshots("install");
+    }
+  });
+
+  it("asks for the clean decoder's file when Options → Decoder says Clean", async () => {
+    checked({ bytes: 32 * 2 ** 30, vae: ["qwen_image_2.1_vae_bf16.safetensors"] });
+    try {
+      expect(await gate({})).toEqual({ ok: true });
+      expect(await gate({ decoder: "clean" })).toMatchObject({ ok: true, warning: expect.stringMatching(/needs 1 more thing/) });
+      checked({ bytes: 32 * 2 ** 30, vae: ["qwen_image_2.1_vae_bf16.safetensors", Q.CLEAN_VAE] });
+      expect(await gate({ decoder: "clean" })).toEqual({ ok: true });
+    } finally {
+      dropSnapshots("install");
+    }
+  });
+});
+
+describe("Fast · writes the details on edits", () => {
+  it("takes up to 3 pictures, as Pruna's card says", () => {
+    setSetting("demoMode", "on");
+    try {
+      const req = (n: number) => ({ feature: "edit", modelId: "oss-qwen-image-21", prompt: "the cat on the beach", inputs: { images: Array.from({ length: n }, (_, i) => `/api/files/${i}.png`) }, params: { extra: { speed: "details" } } });
+      expect(() => previewGeneration(req(3))).not.toThrow();
+      expect(() => previewGeneration(req(4))).toThrow(/writes the details.* up to 3 pictures/);
+      expect(() => previewGeneration({ ...req(4), params: { extra: { speed: "fast" } } })).not.toThrow();
+    } finally {
+      setSetting("demoMode", "off");
+    }
   });
 });

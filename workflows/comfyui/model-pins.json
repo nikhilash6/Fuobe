@@ -1,4 +1,9 @@
 {
+ "https://github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors": {
+  "revision": "v2",
+  "sizeBytes": 638987136,
+  "sha256": "85578cd0b41dfac3fad1845be2755971367deee5348a692feb589a09d120ea8c"
+ },
  "https://huggingface.co/ATH-MaaS/OvisOCR3/resolve/main/model.safetensors": {
   "revision": "4833d5d2afa6e769ee933f024504d67ace80a24c",
   "sizeBytes": 1706030528,
