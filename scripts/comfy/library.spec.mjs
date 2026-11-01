@@ -117,6 +117,13 @@
 // Entry field requiredModels: files a loader reads by a name with no extension (DBSLoader's model folder), listed in the
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
+// Keys added with Clean up voice (NVIDIA RE-USE, ComfyUI-RE-USE). * = the provider fills it:
+//   reuseModel*                           (REUSELoader model: the file for params.extra.reuseModel voice | laughter, refused in words when
+//                                          GET /models/reuse doesn't list it)
+//   rate*                                 (REUSEEnhance rate: source | source up to 24000 | source up to 16000 | 8000-48000; params.extra.rate,
+//                                          "auto" = the host's pick: the source's rate on CUDA, at most 24 kHz on a CPU, 16 kHz past 2 minutes)
+//   roomToneDb, level, bedDb              (REUSEEnhance room_tone_db (-60 = off), level match input | -16 LUFS | off, bed_db)
+//   channels*                             (REUSEEnhance channels, and DBSSeparate's in the bed graph: the DBS rules)
 // Keys added with the owner's SOTA image families (2026-10-31), model controls (params.extra):
 //   preset                                (Ideogram 4's sampling preset by name: Quality | Default | Turbo, the graph's own table)
 
@@ -163,6 +170,9 @@ export const CUSTOM_NODE_REPOS = {
   // PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel needs Triton). Pinned in install-comfyui.sh.
   'ComfyUI-MiniMax-H3-Turbo': 'https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo/tree/77bfa67575b14e3be6214f1747732e540c68b5dd',
   'plaguekind-nodes': 'https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes/tree/d58d006a4ea32c25c06499f2ff104f0852a045a6',
+  // Clean up voice (NVIDIA RE-USE): Fuobe's own pack, in this repository (comfy-nodes/ComfyUI-RE-USE), pinned at the commit
+  // that last changed it (tests/reuse-pack-pin.test.ts checks it). install-comfyui.sh copies it from the checkout.
+  'ComfyUI-RE-USE': 'https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -179,6 +189,7 @@ export const PACK_CLASSES = {
   // MiniMax H3 video. The turbo classes need naming here: a ComfyUI with comfyui-workflow-encrypt reports that pack as their module.
   'ComfyUI-MiniMax-H3-Turbo': /^MiniMaxH3Turbo(LoRA|Sampler)$/,
   'plaguekind-nodes': /^H3(SLAAttention|AdaLNLoRAFix)$/,
+  'ComfyUI-RE-USE': /^REUSE(Loader|Enhance)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -326,6 +337,10 @@ export const KNOWN_MODELS = {
   'DBS-BSRNN-DnR/config.json': { folder: 'dbs', url: 'https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/config.json' },
   'DBS-TIGER-DnR/model.safetensors': { folder: 'dbs', url: 'https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/model.safetensors' },
   'DBS-TIGER-DnR/config.json': { folder: 'dbs', url: 'https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/config.json' },
+  // RE-USE (Clean up voice): the NemotronLabs repositories only (OpenMDW-1.1; the older nvidia/RE-USE is non-commercial), at
+  // pinned revisions, named so both fit in models/reuse. install-comfyui.sh checks the SHA-256.
+  'NemotronLabs-RE-USE.safetensors': { folder: 'reuse', url: 'https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/resolve/31f82f2efad1095034492f236e8dac9239ba713b/model.safetensors' },
+  'NemotronLabs-RE-USE-laughter.safetensors': { folder: 'reuse', url: 'https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE-laughter/resolve/1b1521dd659608e1e063ada83e0acfe1da473a8b/model.safetensors' },
   // owner's SOTA families (2026-10-31): Qwen-Image 2.1. `variants`: the same weights in another precision in the same repo.
   'qwen_image_2.1_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors', variants: ['qwen_image_2.1_bf16.safetensors'] },
   'qwen_image_2.1_turbo_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors', variants: ['qwen_image_2.1_turbo_bf16.safetensors'] },
@@ -3001,6 +3016,64 @@ export const SPEC = [
       'Voice + background add up to the source, except on a loud master where AudioMerge had to lower the background to fit under full scale (FLAC holds no more). ' +
       'Voice is first, so a chain without a stem takes the dialogue. Trained on synthetic English mixes (DnR v2): dialogue separates well (15-16 dB), music against effects less so (5.7-7.8 dB). ' +
       'Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved (recorded as information).',
+  },
+  // Clean up voice (NVIDIA NemotronLabs RE-USE, universal speech enhancement): Fuobe's own ComfyUI-RE-USE pack (no mamba-ssm).
+  // Not on the validation server: checked statically there (core nodes) and run through the pack's own tests.
+  {
+    id: 'voice-clean-reuse',
+    title: 'Clean up voice: noise, echo, clipping and codec damage removed from speech (NVIDIA RE-USE, ComfyUI-RE-USE)',
+    capability: 'enhance-voice',
+    handBuilt: 'hand-built/voice-clean-reuse.json',
+    packs: ['ComfyUI-RE-USE'],
+    optionalModels: ['NemotronLabs-RE-USE-laughter.safetensors'],
+    bindings: { audio: [b('1', 'audio')], reuseModel: [b('2', 'model')], rate: [b('3', 'rate')], channels: [b('3', 'channels')], roomToneDb: [b('3', 'room_tone_db')], level: [b('3', 'level')] },
+    outputs: [
+      { node: '4', kind: 'audio', stem: 'voice' },
+      { node: '5', kind: 'text', role: 'report' },
+    ],
+    defaults: { reuseModel: 'NemotronLabs-RE-USE.safetensors', rate: 'source', channels: 'mono', roomToneDb: -60, level: 'match input' },
+    vramGb: 0,
+    license: "RE-USE weights OpenMDW-1.1 (NVIDIA; 'ready for commercial use' on the card; the card's safety section points to the NVIDIA Open Model License for use-case limits); ComfyUI-RE-USE code MIT with adapted RE-USE code OpenMDW-1.1",
+    notes:
+      'CPU OK; about 1 GB VRAM with chunking. audio = an audio file or a video (LoadAudio reads a video\'s soundtrack without decoding frames). ' +
+      'REUSELoader model NemotronLabs-RE-USE (voice only) or NemotronLabs-RE-USE-laughter (keeps laughs and breaths a little more), 39 MB each; device auto. ' +
+      'REUSEEnhance rate: the model\'s STFT scales with the rate (a 40 ms window at any rate), so work grows about linearly with it; above the source rate it fills the empty high band (bandwidth extension). ' +
+      'Chunks from the free memory (2-20 s on CUDA, 5-10 s on a CPU) joined with 1 s raised-cosine crossfades; Cancel works between chunks. ' +
+      'room_tone_db mixes the original back under the clean voice (Strength: Full -60 = off, Natural -24, Light -14); level match input brings the speech level back (the model is about 3 dB quieter), peak at most -1 dBFS. ' +
+      'Measured under a busy RTX 5090 (worst cases): 0.26 s of work per second of audio at 16 kHz, 1.4 at 48 kHz with Triton (about 6x slower without); i9 CPU with numba: 4 at 16 kHz, 15 at 48 kHz. ' +
+      'It keeps the main speaker and removes everything else (other voices, music, effects): voice-clean-bed-reuse keeps the music and effects. ' +
+      'The Mamba layer is a plain-PyTorch rewrite (no mamba-ssm): it matches the reference maths numerically, but it is not NVIDIA\'s code path.',
+  },
+  {
+    id: 'voice-clean-bed-reuse',
+    title: 'Clean the dialogue of a soundtrack and keep its music and effects (DBS + NVIDIA RE-USE)',
+    capability: 'enhance-voice',
+    handBuilt: 'hand-built/voice-clean-bed-reuse.json',
+    packs: ['ComfyUI-RE-USE', 'ComfyUI-DBS'],
+    requiredModels: ['DBS-BSRNN-DnR/model.safetensors', 'DBS-BSRNN-DnR/config.json', 'DBS-TIGER-DnR/model.safetensors', 'DBS-TIGER-DnR/config.json'],
+    optionalModels: ['NemotronLabs-RE-USE-laughter.safetensors'],
+    bindings: {
+      audio: [b('1', 'audio')],
+      reuseModel: [b('2', 'model')],
+      separationModel: [b('3', 'model')],
+      channels: [b('4', 'channels'), b('6', 'channels')],
+      rate: [b('6', 'rate')],
+      roomToneDb: [b('6', 'room_tone_db')],
+      level: [b('6', 'level')],
+      bedDb: [b('6', 'bed_db')],
+    },
+    outputs: [
+      { node: '7', kind: 'audio', stem: 'voice' },
+      { node: '8', kind: 'text', role: 'report' },
+    ],
+    defaults: { reuseModel: 'NemotronLabs-RE-USE.safetensors', separationModel: 'DBS-BSRNN-DnR', rate: 'source', channels: 'mono', roomToneDb: -24, level: 'match input', bedDb: 0 },
+    vramGb: 0,
+    license: "RE-USE weights OpenMDW-1.1 (NVIDIA; 'ready for commercial use' on the card; the card's safety section points to the NVIDIA Open Model License for use-case limits); ComfyUI-RE-USE code MIT with adapted RE-USE code OpenMDW-1.1; DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)",
+    notes:
+      'CPU OK. The video soundtrack variant of voice-clean-reuse (the provider runs it for params.extra.background "keep"): DBS splits the soundtrack (graph A\'s nodes), ' +
+      'RE-USE cleans only the dialogue, and REUSEEnhance mixes the original music & effects (the original minus the speech, AudioMerge subtract) back under it at bed_db, at the higher of the two rates, peak at most -1 dBFS. ' +
+      'A source with more than 2 channels runs in mono with music + effects as the bed (node 5 rewired, as graph A). The result has the input\'s length, starting at 0, so it goes back on the picture with video-mux-audio-replace. ' +
+      'DBS was trained on English mixes; the dialogue split is its strong part (15-16 dB).',
   },
   {
     id: 'captions-qwen3-asr',

@@ -1,0 +1,70 @@
+{
+  "1": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "input.wav"
+    },
+    "_meta": {
+      "title": "Voice to clean (audio, or a video with sound)"
+    }
+  },
+  "2": {
+    "class_type": "REUSELoader",
+    "inputs": {
+      "model": "NemotronLabs-RE-USE.safetensors",
+      "device": "auto"
+    },
+    "_meta": {
+      "title": "Load RE-USE"
+    }
+  },
+  "3": {
+    "class_type": "REUSEEnhance",
+    "inputs": {
+      "reuse_model": [
+        "2",
+        0
+      ],
+      "audio": [
+        "1",
+        0
+      ],
+      "rate": "source",
+      "pre_lowpass": "off",
+      "channels": "mono",
+      "chunk_seconds": 0,
+      "overlap_seconds": 1,
+      "room_tone_db": -60,
+      "level": "match input"
+    },
+    "_meta": {
+      "title": "Clean up voice (RE-USE)"
+    }
+  },
+  "4": {
+    "class_type": "SaveAudioAdvanced",
+    "inputs": {
+      "audio": [
+        "3",
+        0
+      ],
+      "filename_prefix": "fuobe/voice-clean-reuse",
+      "format": "flac"
+    },
+    "_meta": {
+      "title": "Clean voice"
+    }
+  },
+  "5": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "3",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "RE-USE report"
+    }
+  }
+}

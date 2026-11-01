@@ -1,4 +1,6 @@
 import "server-only";
+import fs from "node:fs";
+import path from "node:path";
 import { nanoid } from "nanoid";
 import { cueText, parseCues, type Cue } from "@/lib/cues";
 import { HAND_OFF } from "@/lib/catalog/remove-object";
@@ -284,6 +286,12 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
       return [demoTranslate(brief, String(meta.targetLanguage ?? "Spanish"))];
     case "write":
       return [demoWrite(brief)];
+    case "enhance-voice": {
+      // Clean up voice: the bundled demo "after" (NVIDIA's sample, cleaned), else a tone.
+      const file = path.join(process.cwd(), "public", "samples", "clean-voice", "noisy-mic-after.m4a");
+      const after = fs.existsSync(file) ? toDataUri(fs.readFileSync(file), "audio/mp4") : null;
+      return [after ? { url: after, kind: "audio", contentType: "audio/mp4", meta: { stem: "voice", demo: true } } : { url: toDataUri(demoWav(3, [220, 330], 3), "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { stem: "voice", demo: true } }];
+    }
     case "separate-audio": {
       const stem = (name: string, wav: Buffer): DemoOutput => ({ url: toDataUri(wav, "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { stem: name, demo: true } });
       // A dialogue / music / effects split (DBS) returns those three and the music-and-effects bed, voice first.

@@ -193,7 +193,7 @@ const PROMPTLESS = new Set<Operation>([
   "concat", "frame", "color-match", "finalize", "reframe", "dialogue", "voice-change", "dub", "bg-remove-video", "depth-video", "upscale-image", "upscale-video", "bg-remove",
   "interpolate", "v2a", "face-swap", "motion-transfer", "lipsync", "avatar",
   // round 3: tools that work from their inputs (open caption burn-in takes timed lines as its prompt and says so when they're missing)
-  "trim", "transcribe", "mux", "separate-audio", "layers", "image-to-3d", "captions", "text-layers", "vectorize", "level",
+  "trim", "transcribe", "mux", "separate-audio", "enhance-voice", "layers", "image-to-3d", "captions", "text-layers", "vectorize", "level",
   // av-tools: the dub voice track (clips placed on the video's timeline)
   "timeline",
   // round 4: tools that work from their inputs (removing an object needs a prompt only on models that read one)
@@ -594,6 +594,7 @@ const NEEDS: Partial<
   vectorize: { images: 1, msg: "Add the image to turn into an SVG" },
   transcribe: { oneOf: ["audio", "video"], msg: "Add the audio or video to transcribe" },
   "separate-audio": { oneOf: ["audio", "video"], msg: "Add the audio or video to split" },
+  "enhance-voice": { oneOf: ["audio", "video"], msg: "Add the audio or video to clean" },
   level: { audio: true, msg: "Add the audio to level" },
   // round 4
   "remove-object": { video: true, msg: "Add the video to remove something from" },

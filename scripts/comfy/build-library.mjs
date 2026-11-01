@@ -70,6 +70,8 @@ export const LOADER_FOLDERS = {
   LoadMoGeModel: { model_name: 'geometry_estimation' },
   // MiniMax H3 video: larryvrh's turbo LoRA loader (ComfyUI-MiniMax-H3-Turbo) reads models/loras.
   MiniMaxH3TurboLoRA: { lora_name: 'loras' },
+  // Clean up voice: ComfyUI-RE-USE's loader reads models/reuse.
+  REUSELoader: { model: 'reuse' },
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
 const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode']);
@@ -139,6 +141,8 @@ export const BINDING_KEYS = new Set([
   'sampler', 'unet',
   // The owner's SOTA image families (2026-10-31): Ideogram 4's sampling preset
   'preset',
+  // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
+  'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

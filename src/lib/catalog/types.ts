@@ -58,6 +58,7 @@ export type Operation =
   | "mux" // video + audio → the video with that soundtrack
   | "image-to-3d" // image → a 3D model (.glb), optionally a turntable video
   | "separate-audio" // audio or video → stems (meta.stem): voice and background; DBS also music and effects
+  | "enhance-voice" // audio or video → the main speaker's voice, cleaned (meta.stem voice): noise, echo, clipping and codec damage removed
   | "translate" // text → the same text in params.targetLanguage (LLM)
   | "write" // brief → text (LLM: scripts, ad copy, shot lists)
   | "vectorize" // image → the same picture as an SVG
@@ -129,6 +130,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   mux: "Add soundtrack",
   "image-to-3d": "Image to 3D",
   "separate-audio": "Separate voice",
+  "enhance-voice": "Clean up voice",
   translate: "Translate",
   write: "Write",
   vectorize: "Vectorize",
@@ -198,6 +200,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   mux: "video",
   "image-to-3d": "model3d",
   "separate-audio": "audio",
+  "enhance-voice": "audio",
   translate: "text",
   write: "text",
   vectorize: "image",
@@ -1159,6 +1162,8 @@ export interface InputSlot {
   hint?: string;
   accept: MediaKind;
   required?: boolean;
+  /** A voice slot: offers "Clean up voice" (RE-USE on the open engine) under it, which cleans the file as it lands. */
+  cleanVoice?: boolean;
 }
 
 export interface PresetChoice {
@@ -1222,6 +1227,8 @@ export interface Preset {
   grade?: string;
   /** Fuobe DoP's relight effects: a step that makes the start frame first, on each engine (src/lib/catalog/dop.ts). */
   prestep?: PresetPrestep;
+  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice). */
+  tool?: "clean-voice";
 }
 
 /**

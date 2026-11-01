@@ -14524,6 +14524,213 @@
     "experimental": true,
     "search_aliases": []
   },
+  "REUSEEnhance": {
+    "input": {
+      "required": {
+        "reuse_model": [
+          "REUSE_MODEL",
+          {}
+        ],
+        "audio": [
+          "AUDIO",
+          {}
+        ],
+        "rate": [
+          "COMBO",
+          {
+            "default": "source",
+            "tooltip": "The rate the model runs at. Lower is faster and band-limited; higher than the source fills the empty high band (bandwidth extension).",
+            "multiselect": false,
+            "options": [
+              "source",
+              "source up to 24000",
+              "source up to 16000",
+              "8000",
+              "16000",
+              "22050",
+              "24000",
+              "32000",
+              "44100",
+              "48000"
+            ]
+          }
+        ],
+        "pre_lowpass": [
+          "COMBO",
+          {
+            "default": "off",
+            "tooltip": "Resample down to this rate first (before bandwidth extension)",
+            "multiselect": false,
+            "options": [
+              "off",
+              "8000",
+              "16000",
+              "22050",
+              "24000"
+            ]
+          }
+        ],
+        "channels": [
+          "COMBO",
+          {
+            "default": "mono",
+            "tooltip": "Mono is the mean of the channels; more than 2 channels always run in mono",
+            "multiselect": false,
+            "options": [
+              "mono",
+              "each channel"
+            ]
+          }
+        ],
+        "chunk_seconds": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 30,
+            "step": 0.5,
+            "tooltip": "0 = from the free memory"
+          }
+        ],
+        "overlap_seconds": [
+          "FLOAT",
+          {
+            "default": 1,
+            "min": 0.25,
+            "max": 5,
+            "step": 0.25
+          }
+        ],
+        "room_tone_db": [
+          "FLOAT",
+          {
+            "default": -60,
+            "min": -60,
+            "max": -6,
+            "step": 1,
+            "tooltip": "Mix the original in under the clean voice at this level (-60 = off): no dead silence between words"
+          }
+        ],
+        "level": [
+          "COMBO",
+          {
+            "default": "match input",
+            "multiselect": false,
+            "options": [
+              "match input",
+              "-16 LUFS",
+              "off"
+            ]
+          }
+        ]
+      },
+      "optional": {
+        "bed": [
+          "AUDIO",
+          {
+            "tooltip": "Music and effects to mix back under the clean voice"
+          }
+        ],
+        "bed_db": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": -30,
+            "max": 6,
+            "step": 0.5
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "reuse_model",
+        "audio",
+        "rate",
+        "pre_lowpass",
+        "channels",
+        "chunk_seconds",
+        "overlap_seconds",
+        "room_tone_db",
+        "level"
+      ],
+      "optional": [
+        "bed",
+        "bed_db"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "AUDIO",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "audio",
+      "report"
+    ],
+    "name": "REUSEEnhance",
+    "display_name": "Clean up voice (RE-USE)",
+    "description": "Clean up voice: removes noise, echo, clipping and codec damage from speech and keeps the main speaker.",
+    "python_module": "custom_nodes.ComfyUI-RE-USE",
+    "category": "audio/RE-USE",
+    "output_node": false
+  },
+  "REUSELoader": {
+    "input": {
+      "required": {
+        "model": [
+          "COMBO",
+          {
+            "default": "NemotronLabs-RE-USE.safetensors",
+            "tooltip": "A RE-USE model in models/reuse",
+            "multiselect": false,
+            "options": [
+              "NemotronLabs-RE-USE-laughter.safetensors",
+              "NemotronLabs-RE-USE.safetensors"
+            ]
+          }
+        ],
+        "device": [
+          "COMBO",
+          {
+            "default": "auto",
+            "multiselect": false,
+            "options": [
+              "auto",
+              "cuda",
+              "cpu"
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "device"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "REUSE_MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "REUSE_MODEL"
+    ],
+    "name": "REUSELoader",
+    "display_name": "Load RE-USE (speech enhancement)",
+    "description": "Loads NVIDIA RE-USE (speech enhancement, 9.6M parameters) from models/reuse.",
+    "python_module": "custom_nodes.ComfyUI-RE-USE",
+    "category": "audio/RE-USE",
+    "output_node": false
+  },
   "RIFE VFI": {
     "input": {
       "required": {

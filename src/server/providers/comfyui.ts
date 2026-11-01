@@ -44,6 +44,7 @@ import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
 import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
 import { dbsChannelsFor, dbsModelFor, dbsSurroundBed, installedDbs, surroundSource, type DbsModel } from "@/lib/av/split";
+import { installedReuse, NO_REUSE_PACK, rateFor, reuseFileFor, STRENGTH_DB, type ReuseModel } from "@/lib/av/clean-voice";
 import { expandAudioJoinWorkflow, expandVideoJoinWorkflow } from "@/lib/av/joins";
 import { expandTimelineWorkflow, readTimeline } from "@/lib/av/timeline";
 import { exportValues, framesPerPass, hdrColorSpace, upscaleShortSide, wholeClipProblem, wholeClipTool } from "@/lib/av/video-finish";
@@ -728,6 +729,36 @@ export async function comfyDbsModels(worker: ComfyWorker = "main", maxAgeMs = 10
   });
 }
 
+declare global {
+  /** The RE-USE files each ComfyUI address listed last (GET /models/reuse; null: no reuse folder, so no ComfyUI-RE-USE), and when. */
+  var __fuobeComfyReuse: Map<string, { models?: ReuseModel[] | null; at: number }> | undefined;
+}
+
+/**
+ * The RE-USE models the connected ComfyUI has on disk (GET /models/reuse, which ComfyUI-RE-USE registers), at most
+ * `maxAgeMs` old: null when the server answers but has no reuse folder (the pack isn't installed), undefined when it can't
+ * say (unreachable).
+ */
+export async function comfyReuseModels(worker: ComfyWorker = "main", maxAgeMs = 10_000): Promise<ReuseModel[] | null | undefined> {
+  const url = baseUrl(worker);
+  if (!url) return undefined;
+  const cache = (globalThis.__fuobeComfyReuse ??= new Map());
+  const hit = cache.get(url);
+  if (hit && Date.now() - hit.at < maxAgeMs) return hit.models;
+  return oneAsk(`/models/reuse ${url}`, async () => {
+    let models: ReuseModel[] | null | undefined;
+    try {
+      const files = await comfyJson<unknown>("/models/reuse", worker);
+      models = Array.isArray(files) ? installedReuse(files.filter((f): f is string => typeof f === "string")) : undefined;
+    } catch (e) {
+      // ComfyUI answers 404 for a model folder nobody registered: no ComfyUI-RE-USE.
+      models = e instanceof ProviderError && e.status === 404 ? null : undefined;
+    }
+    cache.set(url, { models, at: Date.now() });
+    return models;
+  });
+}
+
 /** The connected ComfyUI's RAM in bytes, as the last reachability check read it (whole-clip tools' budget). */
 export function comfyRam(): number | undefined {
   const computer = computerScope();
@@ -897,6 +928,8 @@ export interface PrepareContext {
   device?: () => Promise<string | undefined>;
   /** The DBS models on the server's disk (GET /models/dbs), undefined when it can't say: a run never gets one that isn't there. */
   dbsModels?: () => Promise<DbsModel[] | undefined>;
+  /** The RE-USE files on the server's disk (GET /models/reuse): null without ComfyUI-RE-USE, undefined when it can't say. */
+  reuseModels?: () => Promise<ReuseModel[] | null | undefined>;
   /**
    * The route puts the run's one LoRA in the graph's own LoRA slot (ModelRoute.loraSlot: Fuobe Speak's FusioniX on kijai's
    * InfiniteTalk graph, with the settings it goes with). Without it a graph with no model loader refuses a LoRA.
@@ -1094,7 +1127,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // A voice track on the video's timeline: the clips are the spoken lines (the template binds the first).
   if (ctx.op === "timeline") values.audio = input.audios?.[0] ?? input.audio;
   // Speech workflows read the soundtrack with LoadAudio, which also takes a video upload.
-  if ((ctx.op === "transcribe" || ctx.op === "separate-audio" || ctx.op === "translate") && b.audio && !b.video) values.audio = input.audio ?? input.video ?? clips[0];
+  if ((ctx.op === "transcribe" || ctx.op === "separate-audio" || ctx.op === "enhance-voice" || ctx.op === "translate") && b.audio && !b.video) values.audio = input.audio ?? input.video ?? clips[0];
   if (b.language && input.targetLanguage) values.language = input.targetLanguage;
   if (b.sourceLanguage && input.sourceLanguage) {
     const whisper = b.sourceLanguage.some((t) => workflow[t.node]?.class_type === "Apply Whisper");
@@ -1435,6 +1468,28 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       throw new ProviderError((e as Error).message, 400);
     }
   }
+  // RE-USE (voice-clean-reuse, voice-clean-bed-reuse): the file for voice / laughter (refused in words when the host's
+  // list doesn't have it, or has no ComfyUI-RE-USE at all), the rate (Auto: the source's on a CUDA GPU, capped on a CPU),
+  // Strength as room tone, and the level in the node's words.
+  if (b.reuseModel) {
+    const installed = await ctx.reuseModels?.().catch(() => undefined);
+    if (installed === null) throw new ProviderError(NO_REUSE_PACK, 400);
+    try {
+      values.reuseModel = reuseFileFor(extra.reuseModel, installed);
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
+    }
+    if (b.rate) {
+      const auto = extra.rate === undefined || extra.rate === "auto";
+      const device = auto ? await ctx.device?.().catch(() => undefined) : undefined;
+      values.rate = rateFor(extra.rate ?? "auto", device, input.sourceDuration ?? ctx.media?.(String(values.audio ?? ""))?.duration);
+    }
+    const strength = extra.strength as keyof typeof STRENGTH_DB | undefined;
+    if (b.roomToneDb && extra.roomToneDb === undefined && strength && strength in STRENGTH_DB) values.roomToneDb = STRENGTH_DB[strength];
+    if (b.level && (extra.level === "match" || extra.level === "voice")) values.level = extra.level === "voice" ? "-16 LUFS" : "match input";
+    for (const k of ["reuseModel", "rate", "strength", "background", ...(values.level !== undefined ? ["level"] : [])]) delete extra[k];
+  }
+  delete extra.background;
   const sourceChannels = b.channels ? (ctx.media?.(String(values.audio ?? ""))?.channels ?? (Number(extra.sourceChannels) || undefined)) : undefined;
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
@@ -1918,6 +1973,7 @@ export const comfyProvider: ProviderAdapter = {
       device: () => comfyDevice(worker),
       // Fresh: a model installed a moment ago runs. (On someone's computer, nothing to ask: its ComfyUI has the last word.)
       dbsModels: () => comfyDbsModels(worker, 0),
+      reuseModels: () => comfyReuseModels(worker, 0),
     });
     // On someone's computer: the job waits for their Fuobe tab, which sends exactly this graph under the prompt id minted
     // here. A refusal comes back in its report, and the poll explains it as below.

@@ -175,4 +175,38 @@ SHA
 fi
 # --- end DBS weights
 
+# --- ComfyUI-RE-USE (Clean up voice: NVIDIA RE-USE speech enhancement). Fuobe's own pack, kept in this repository at
+# comfy-nodes/ComfyUI-RE-USE (MIT; the network code adapted from NVIDIA's repository keeps its OpenMDW-1.1 notices). It is
+# copied from the checkout this script runs in, so it always matches this install. It needs no Python package beyond
+# ComfyUI's own (no mamba-ssm). REUSE_PACK=0 leaves it out.
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+if [ "${REUSE_PACK:-1}" = "1" ] && [ -d "$REPO_ROOT/comfy-nodes/ComfyUI-RE-USE" ]; then
+  rm -rf "$COMFYUI_DIR/custom_nodes/ComfyUI-RE-USE"
+  cp -r "$REPO_ROOT/comfy-nodes/ComfyUI-RE-USE" "$COMFYUI_DIR/custom_nodes/"
+  rm -rf "$COMFYUI_DIR/custom_nodes/ComfyUI-RE-USE/tests"
+fi
+# RE-USE weights (voice-clean-reuse, voice-clean-bed-reuse): 2 files, 39 MB each, from the NemotronLabs repositories
+# (OpenMDW-1.1) at pinned revisions, into models/reuse/, each checked with sha256sum -c. Never nvidia/RE-USE: that older
+# release is non-commercial. The laughter model is the optional "Keep laughter". REUSE_WEIGHTS=0 skips them.
+if [ "${REUSE_WEIGHTS:-1}" = "1" ]; then
+  REUSE_DIR="$COMFYUI_DIR/models/reuse"
+  mkdir -p "$REUSE_DIR"
+  for spec in "NemotronLabs-RE-USE 31f82f2efad1095034492f236e8dac9239ba713b" "NemotronLabs-RE-USE-laughter 1b1521dd659608e1e063ada83e0acfe1da473a8b"; do
+    read -r name rev <<<"$spec"
+    [ -s "$REUSE_DIR/$name.safetensors" ] && continue
+    if curl -fsSL --retry 3 -o "$REUSE_DIR/$name.safetensors.part" "https://huggingface.co/nvidia/NVIDIA-$name/resolve/$rev/model.safetensors"; then
+      mv "$REUSE_DIR/$name.safetensors.part" "$REUSE_DIR/$name.safetensors"
+    else
+      rm -f "$REUSE_DIR/$name.safetensors.part"
+      echo "warn: could not download nvidia/NVIDIA-$name at $rev"
+    fi
+  done
+  (cd "$REUSE_DIR" && sha256sum -c --quiet <<'SHA'
+06badaf4029b297f97f7fe48d62990b48d5482608210df577354e0d4e0ed70e1  NemotronLabs-RE-USE.safetensors
+35c2a4e284515275d2e49a8e8cb5cd392ae67a1f1d345de1c12a0202c7b6b610  NemotronLabs-RE-USE-laughter.safetensors
+SHA
+  ) || echo "warn: a RE-USE weight file is missing or failed its SHA-256 check (delete it from models/reuse and re-run)"
+fi
+# --- end ComfyUI-RE-USE
+
 echo "ComfyUI installed in $COMFYUI_DIR. Start it with: $SCRIPT_DIR/start-comfyui.sh"

@@ -108,9 +108,10 @@ describe("requirements.json", () => {
     expect(index.packs["ComfyUI-ThinkSound_Wrapper"].isolated).toBe(true);
   });
 
-  it("stays within its size budget (200 KB, 25 KB gzipped)", () => {
+  // 26 KB gzipped since Clean up voice (its pack, two weight files and two graphs: about 0.5 KB).
+  it("stays within its size budget (200 KB, 26 KB gzipped)", () => {
     expect(Buffer.byteLength(text)).toBeLessThanOrEqual(200 * 1024);
-    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(25 * 1024);
+    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(26 * 1024);
   });
 });
 

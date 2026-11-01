@@ -115,6 +115,9 @@ describe("round-4 ComfyUI workflows", () => {
       "fibo2-dev-t2i",
       "fibo2-dev-edit",
       "fibo2-edit-turbo-edit",
+      // Clean up voice: ComfyUI-RE-USE isn't on the validation server; the pack's own tests run it (comfy-nodes/ComfyUI-RE-USE/tests).
+      "voice-clean-reuse",
+      "voice-clean-bed-reuse",
       "video-character-swap-h3",
       "video-character-swap-h3-relay",
       "video-person-remove-h3-relay",

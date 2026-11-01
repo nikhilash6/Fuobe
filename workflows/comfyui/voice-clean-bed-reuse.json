@@ -1,0 +1,120 @@
+{
+  "1": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "input.wav"
+    },
+    "_meta": {
+      "title": "Soundtrack to clean (audio, or a video with sound)"
+    }
+  },
+  "2": {
+    "class_type": "REUSELoader",
+    "inputs": {
+      "model": "NemotronLabs-RE-USE.safetensors",
+      "device": "auto"
+    },
+    "_meta": {
+      "title": "Load RE-USE"
+    }
+  },
+  "3": {
+    "class_type": "DBSLoader",
+    "inputs": {
+      "model": "DBS-BSRNN-DnR",
+      "device": "auto"
+    },
+    "_meta": {
+      "title": "DBS Loader"
+    }
+  },
+  "4": {
+    "class_type": "DBSSeparate",
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "audio": [
+        "1",
+        0
+      ],
+      "channels": "mono",
+      "output_sample_rate": "input"
+    },
+    "_meta": {
+      "title": "DBS Separate (music / sfx / speech)"
+    }
+  },
+  "5": {
+    "class_type": "AudioMerge",
+    "inputs": {
+      "audio1": [
+        "1",
+        0
+      ],
+      "audio2": [
+        "4",
+        2
+      ],
+      "merge_method": "subtract"
+    },
+    "_meta": {
+      "title": "Music & effects: the original minus the speech"
+    }
+  },
+  "6": {
+    "class_type": "REUSEEnhance",
+    "inputs": {
+      "reuse_model": [
+        "2",
+        0
+      ],
+      "audio": [
+        "4",
+        2
+      ],
+      "rate": "source",
+      "pre_lowpass": "off",
+      "channels": "mono",
+      "chunk_seconds": 0,
+      "overlap_seconds": 1,
+      "room_tone_db": -60,
+      "level": "match input",
+      "bed": [
+        "5",
+        0
+      ],
+      "bed_db": 0
+    },
+    "_meta": {
+      "title": "Clean up voice (RE-USE)"
+    }
+  },
+  "7": {
+    "class_type": "SaveAudioAdvanced",
+    "inputs": {
+      "audio": [
+        "6",
+        0
+      ],
+      "filename_prefix": "fuobe/voice-clean-bed-reuse",
+      "format": "flac"
+    },
+    "_meta": {
+      "title": "Clean dialogue over the music & effects"
+    }
+  },
+  "8": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "6",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "RE-USE report"
+    }
+  }
+}

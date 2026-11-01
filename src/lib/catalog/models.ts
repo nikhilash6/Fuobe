@@ -1425,6 +1425,43 @@ const open: ModelDef[] = [
       ],
     },
   }),
+  // NVIDIA NemotronLabs RE-USE (universal speech enhancement) on Fuobe's own ComfyUI-RE-USE pack (comfy-nodes/, no mamba-ssm):
+  // noise, echo, clipping, codec damage and phone-band audio fixed, the main speaker kept. Open engine only: nothing like it is
+  // hosted on fal or Replicate. params.extra.background "keep" runs voice-clean-bed-reuse (DBS keeps the music and effects;
+  // src/lib/comfy-variants.ts). Clean up voice (src/lib/av/clean-voice.ts) runs on it.
+  o({
+    id: "oss-reuse-voice",
+    name: "RE-USE (clean up voice)",
+    vendor: "NVIDIA",
+    family: "reuse",
+    kind: "audio",
+    tagline: "Removes noise, echo, clipping and codec damage from speech, restores muffled or phone audio to full band · 39 MB · CPU or GPU · OpenMDW-1.1",
+    badges: ["new"],
+    routes: [comfy("enhance-voice", "voice-clean-reuse", "the clean voice (FLAC) + a speed report; ComfyUI-RE-USE. Keep music & effects: voice-clean-bed-reuse (+ ComfyUI-DBS)")],
+    options: {
+      promptless: true,
+      controls: [
+        // Strength is how much of the original stays under the clean voice (room tone).
+        {
+          param: "strength",
+          label: "Strength",
+          values: ["full", "natural", "light"],
+          default: "full",
+          labels: { full: "Full", natural: "Natural (a little room tone)", light: "Light" },
+          sets: { full: { roomToneDb: -60 }, natural: { roomToneDb: -24 }, light: { roomToneDb: -14 } },
+        },
+        {
+          param: "reuseModel",
+          label: "Model",
+          values: ["NemotronLabs-RE-USE.safetensors", "NemotronLabs-RE-USE-laughter.safetensors"],
+          default: "NemotronLabs-RE-USE.safetensors",
+          labels: { "NemotronLabs-RE-USE.safetensors": "Voice only", "NemotronLabs-RE-USE-laughter.safetensors": "Keep laughter" },
+        },
+        // No default: the host decides (the source's rate on a GPU, capped on a CPU), as the composer's own Auto.
+        { param: "rate", label: "Quality", values: ["48000", "16000"], labels: { "48000": "Full band 48 kHz", "16000": "Fast 16 kHz" } },
+      ],
+    },
+  }),
   o({
     id: "oss-qwen3-asr",
     name: "Qwen3-ASR",

@@ -951,5 +951,15 @@
   "revision": "5e590220c687190a3d8dc66d173570f9de097984",
   "sizeBytes": 92426760,
   "sha256": "e251c836b4792910cb322317f58a91063f73bef7255031912886af840dc7dd43"
+ },
+ "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/resolve/31f82f2efad1095034492f236e8dac9239ba713b/model.safetensors": {
+  "revision": "31f82f2efad1095034492f236e8dac9239ba713b",
+  "sizeBytes": 38592940,
+  "sha256": "06badaf4029b297f97f7fe48d62990b48d5482608210df577354e0d4e0ed70e1"
+ },
+ "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE-laughter/resolve/1b1521dd659608e1e063ada83e0acfe1da473a8b/model.safetensors": {
+  "revision": "1b1521dd659608e1e063ada83e0acfe1da473a8b",
+  "sizeBytes": 38592940,
+  "sha256": "35c2a4e284515275d2e49a8e8cb5cd392ae67a1f1d345de1c12a0202c7b6b610"
  }
 }

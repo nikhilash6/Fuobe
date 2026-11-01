@@ -103,6 +103,9 @@ export function workflowLicence(wf: Pick<LicenceWorkflowInput, "id" | "license">
   return wf.license?.trim() || EARLIER_LICENCES.find(([re]) => re.test(wf.id))?.[1] || UNKNOWN_LICENCE;
 }
 
+/** OpenMDW-1.1 (NVIDIA's RE-USE) asks for its text and the notices of origin with every copy of the weights (not of what they make). */
+export const OPENMDW_NOTICE = "Keep the licence text and NVIDIA's notices when you share the weights";
+
 /** What a licence text means for using the results: its flags, the countries it leaves out, its notices. */
 export function licenceTerms(text: string): { flags: LicenceFlag[]; excludes?: string; notices: string[]; noWeights: boolean } {
   const noWeights = /^(n\/a|no model)\b/i.test(text.trim());
@@ -114,6 +117,7 @@ export function licenceTerms(text: string): { flags: LicenceFlag[]; excludes?: s
   if (excludes) flags.push("territory");
   if (conditional && !nonCommercial && !excludes) flags.push("conditions");
   const notices = [...text.matchAll(/show (?:a |the )?"([^"]+)"/g)].map((m) => m[1]);
+  if (/OpenMDW-1\.1/.test(text)) notices.push(OPENMDW_NOTICE);
   return { flags, excludes, notices, noWeights };
 }
 
@@ -292,6 +296,8 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /OpenRAIL\+\+-M/, name: "CreativeML OpenRAIL++-M", class: "conditions" },
   { re: /OpenRAIL-M/, name: "CreativeML OpenRAIL-M", class: "conditions", url: SPDX("CreativeML-OpenRAIL-M") },
   { re: /Gemma Terms of Use/, name: "Gemma Terms of Use", class: "conditions", url: "https://ai.google.dev/gemma/terms" },
+  // NVIDIA's open model licence (RE-USE): commercial use; the licence and NVIDIA's notices go with any copy of the weights.
+  { re: /OpenMDW-1\.1/, name: "OpenMDW-1.1", class: "commercial", url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/blob/31f82f2efad1095034492f236e8dac9239ba713b/LICENSE" },
   { re: /Apache[- ]2\.0/, name: "Apache-2.0", class: "commercial", url: SPDX("Apache-2.0") },
   { re: /\bMIT\b/, name: "MIT", class: "commercial", url: SPDX("MIT") },
   { re: /BSD-3-Clause/, name: "BSD-3-Clause", class: "commercial", url: SPDX("BSD-3-Clause") },
@@ -489,6 +495,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "PlagueKind's H3 SLA attention (needs Triton) and AdaLN LoRA fix for MiniMax H3; MIT code",
   }),
+  // Clean up voice: Fuobe's own pack, in this repository at its pinned commit (comfy-nodes/ComfyUI-RE-USE).
+  pack("ComfyUI-RE-USE", "https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Fuobe's own pack. The network code is adapted from NVIDIA's RE-USE repository (OpenMDW-1.1, notices kept), and the Mamba layer is a plain-PyTorch rewrite (no mamba-ssm). It matches the reference maths numerically, but it is not NVIDIA's code path",
+  }),
 ];
 
 export const nodePack = (name: string): NodePack | undefined => NODE_PACKS.find((p) => p.name === name);
@@ -519,6 +532,19 @@ export const ATTRIBUTIONS: Attribution[] = [
   { for: "DBS (vendored code)", text: "BS-RoFormer, copyright (c) 2023 Phil Wang", licence: "MIT", url: "https://github.com/lucidrains/BS-RoFormer" },
   { for: "DBS (vendored code)", text: "Music-Source-Separation-Training, copyright (c) 2024 Roman Solovyev (ZFTurbo)", licence: "MIT", url: "https://github.com/ZFTurbo/Music-Source-Separation-Training" },
   { for: "DBS (vendored code)", text: "TIGER / Look2Hear, copyright (c) 2026 Kai Li", licence: "MIT", url: "https://github.com/JusperLee/TIGER" },
+  {
+    for: "RE-USE (clean up voice)",
+    text: "RE-USE speech enhancement model, copyright (c) 2026 NVIDIA Corporation",
+    licence: "OpenMDW-1.1",
+    url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE",
+    note: "Trained in part on WSJ (LDC) and an internal NVIDIA set (model card). The older nvidia/RE-USE repository is non-commercial (NSCLv1); Fuobe uses only the NemotronLabs repositories.",
+  },
+  {
+    for: "Clean up voice demo",
+    text: "Sample recording mic_test2.wav from NVIDIA's RE-USE repository, and its cleaned copy",
+    licence: "OpenMDW-1.1",
+    url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE",
+  },
 ];
 
 /** The parts of a LoRA's licence snapshot the class needs (src/lib/catalog/types.ts LoraLicence). */
