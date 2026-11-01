@@ -2,6 +2,7 @@
 
 import { AudioLines, Clapperboard, Cpu, Download, FileVideo, Headphones, Library, Loader2, Pause, Play, Save, SlidersVertical, Upload, Volume2, VolumeX, X } from "lucide-react";
 import { nanoid } from "nanoid";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -641,6 +642,11 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
             {busy === "remux" ? <Loader2 className="size-4 animate-spin" /> : <Clapperboard className="size-4" />} Put back on the video{remuxCost ? ` · ${remuxCost}` : ""}
           </Button>
         )}
+        <Button variant="ghost" className="rounded-full" asChild>
+          <Link href={`/audio/clean?${source.kind}=${encodeURIComponent(source.ref)}&background=keep`}>
+            <AudioLines className="size-4" /> Clean the dialogue
+          </Link>
+        </Button>
         <span className="text-[12px] text-muted-foreground">{mixName(mix)}</span>
       </div>
     </section>

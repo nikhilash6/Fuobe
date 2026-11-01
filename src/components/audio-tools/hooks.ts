@@ -10,6 +10,22 @@ export type AudioToolBody =
   | { tool: "loop"; engine: Engine; audio: string; name?: string; duration: number; sourceDuration?: number; crossfade?: number; curve?: "equal-power" | "linear" }
   | { tool: "join"; engine: Engine; clips: { url: string; name?: string; duration?: number }[]; crossfade?: number; curve?: "equal-power" | "linear" }
   | { tool: "split"; engine: Engine; media: string; kind: "audio" | "video"; name?: string; quality?: "fast" | "best"; stereo?: boolean; channels?: number; sourceDuration?: number }
+  | {
+      tool: "clean";
+      engine: Engine;
+      media: string;
+      kind: "audio" | "video";
+      name?: string;
+      model?: "voice" | "laughter";
+      quality?: "auto" | "full" | "fast";
+      strength?: "full" | "natural" | "light";
+      background?: "remove" | "keep";
+      level?: "match" | "voice";
+      remux?: boolean;
+      stereo?: boolean;
+      channels?: number;
+      sourceDuration?: number;
+    }
   | { tool: "remux"; engine: Engine; video: string; audio: string; name?: string };
 
 async function post<T>(url: string, body: AudioToolBody): Promise<T> {

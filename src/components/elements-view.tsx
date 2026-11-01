@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fileToSlot, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { ELEMENT_ICONS } from "@/components/studio/prompt-input";
 import { VoiceRecorder } from "@/components/studio/voice-recorder";
+import { useMaybeClean } from "@/components/audio-tools/clean-voice-switch";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { useDeleteElement, useElements, useIsVisitor, useSaveElement } from "@/lib/api";
@@ -219,6 +220,8 @@ function ElementForm({ onOpenChange, element, defaultKind = "character", onSaved
 
 /** One voice recording: record it here or upload a file, then listen back. */
 function VoiceSample({ value, onChange }: { value?: SlotValue; onChange: (v: SlotValue | null) => void }) {
+  // "Clean up voice": the saved voice keeps the clean file (references[0]), so every clone made from it is cleaner.
+  const clean = useMaybeClean();
   return value?.ref ? (
     <div className="flex items-center gap-2 rounded-xl border bg-muted/40 p-2">
       <audio src={value.preview} controls className="h-9 flex-1" />
@@ -227,9 +230,19 @@ function VoiceSample({ value, onChange }: { value?: SlotValue; onChange: (v: Slo
       </Button>
     </div>
   ) : (
-    <div className="flex items-center gap-2">
-      <VoiceRecorder onRecorded={onChange} />
-      <MediaSlot label="Upload" kind="audio" value={null} onChange={(v) => v && !v.uploading && onChange(v)} />
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <VoiceRecorder onRecorded={onChange} clean />
+        <MediaSlot label="Upload" kind="audio" value={null} onChange={(v) => v && !v.uploading && void clean.run(v, onChange)} />
+      </div>
+      {clean.busy && (
+        <p className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground" role="status">
+          <Loader2 className="size-3 animate-spin" /> Cleaning the voice…
+          <button type="button" className="font-medium text-foreground underline underline-offset-2" onClick={clean.skip}>
+            Use the original
+          </button>
+        </p>
+      )}
     </div>
   );
 }

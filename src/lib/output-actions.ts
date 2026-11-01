@@ -10,6 +10,7 @@ import { cueText, type Cue } from "./cues";
 import { downloadHref, downloadName, extensionOf } from "./library";
 import { PRESETS as GRADE_PRESETS } from "./grade";
 import { storedPath } from "./share";
+import { CLEAN_FEATURE } from "./av/clean-voice";
 
 export type OutputActionId =
   | "animate"
@@ -27,6 +28,7 @@ export type OutputActionId =
   | "voice-change"
   | "loop-audio"
   | "split-soundtrack"
+  | "clean-voice"
   | "copy-text"
   | "view-3d"
   | "download"
@@ -121,6 +123,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("upscale", "Upscale", `/upscale/video?video=${q(o.url)}`);
       link("add-sound", "Add sound", `/audio/video?video=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?video=${q(o.url)}`);
+      // Clean up voice on a video's soundtrack: results that carry sound, and uploads (a clip from a phone or a call).
+      if (g.feature === "upload" || (g.op && SOUNDED_VIDEO_OPS.has(g.op))) link("clean-voice", "Clean up voice", `/audio/clean?video=${q(o.url)}`);
       // A Fuobe DoP colour-grade effect: the clip opens in Color grading with its grade picked (one click to export).
       const dopGrade = gradeOf(o);
       link("grade", dopGrade ? `Apply the ${dopGrade.name} grade` : "Color grade", `/color-grade?video=${q(o.url)}${dopGrade ? `&preset=${q(dopGrade.id)}` : ""}`);
@@ -133,6 +137,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("voice-change", "Change voice", `/audio/voice-change?audio=${q(o.url)}`);
       link("loop-audio", "Loop / extend", `/audio/loop?audio=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?audio=${q(o.url)}`);
+      // Not on music or sound effects (it keeps only a voice), nor on a voice it already cleaned.
+      if (g.op !== "music" && g.op !== "sfx" && g.feature !== CLEAN_FEATURE) link("clean-voice", "Clean up voice", `/audio/clean?audio=${q(o.url)}`);
       break;
     case "text":
       out.push({ id: "copy-text", label: "Copy", placement: "primary" }, file, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });

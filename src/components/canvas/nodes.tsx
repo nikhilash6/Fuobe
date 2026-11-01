@@ -1501,7 +1501,7 @@ const CloneVoiceNode = memo(function CloneVoiceNode({ id, data, selected }: Node
         {!readOnly && !wired && (
           <div className="flex flex-wrap gap-1">
             <div className={NO_DRAG}>
-              <VoiceRecorder onRecorded={(v) => actions.update(id, { url: v.ref, name: v.name ?? "Recording", elementId: undefined })} className={chip} />
+              <VoiceRecorder clean onRecorded={(v) => actions.update(id, { url: v.ref, name: v.name ?? "Recording", elementId: undefined })} className={chip} />
             </div>
             <button className={chip} onClick={() => file.current?.click()}>
               <Upload className="size-3" /> {data.url ? "Replace" : "Upload"}
@@ -1767,6 +1767,7 @@ export const NODE_TYPES = {
   "bg-remove": GeneratorNode,
   tts: GeneratorNode,
   "voice-change": GeneratorNode,
+  "clean-voice": GeneratorNode,
   "clone-voice": CloneVoiceNode,
   translate: GeneratorNode,
   concat: GeneratorNode,

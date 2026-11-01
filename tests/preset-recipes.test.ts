@@ -72,7 +72,7 @@ describe("which presets get a recipe", () => {
     const grades = [...MOTIONS, ...EFFECTS].filter((x) => x.grade && !x.prestep);
     expect(grades).toHaveLength(15);
     expect(new Set(none.map((x) => x.id))).toEqual(new Set([...steps.map((x) => x.id), ...grades.map((x) => x.id), ...OWN_ROUTE_APPS]));
-    expect(none).toHaveLength(68);
+    expect(none).toHaveLength(69);
     for (const x of none) for (const engine of ["open", "cloud"] as const) expect(presetRecipe(x, engine, inCatalog), x.id).toBeUndefined();
   });
 

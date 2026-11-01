@@ -156,6 +156,11 @@ export function rankPalette(entries: PaletteEntry[], query: string, limits: Reco
     .map(({ kind, label, entries }) => ({ kind, label, entries }));
 }
 
+/** Words people type for an app that its name doesn't say. */
+export const APP_KEYWORDS: Record<string, string> = {
+  "app-clean-up-voice": "clean up voice denoise noise removal remove echo reverb enhance speech podcast audio fix mic phone audio restore audio",
+};
+
 /** The slim catalog the palette loads on first open (GET /api/search-index). */
 export interface PaletteIndex {
   apps: PalettePreset[];
@@ -193,7 +198,7 @@ export interface PaletteModel {
 export function indexEntries(index: PaletteIndex, mode: "both" | "cloud" | "open", access?: AccessSummary): PaletteEntry[] {
   const runs = (p: PalettePreset) => mode === "both" || p[mode];
   const presets = (list: PalettePreset[], kind: "app" | "motion" | "effect", href: (id: string) => string) =>
-    list.filter(runs).map((p): PaletteEntry => ({ key: `${kind}:${p.id}`, kind, label: p.name, hint: p.category, href: href(p.id) }));
+    list.filter(runs).map((p): PaletteEntry => ({ key: `${kind}:${p.id}`, kind, label: p.name, hint: p.category, href: href(p.id), ...(APP_KEYWORDS[p.id] && { keywords: APP_KEYWORDS[p.id] }) }));
   return [
     ...presets(index.apps, "app", (id) => `/apps/${id}`),
     ...presets(index.motions, "motion", (id) => `/video?preset=${id}`),

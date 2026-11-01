@@ -43,7 +43,7 @@ const OUTPAINT_OPEN: PresetRoute = {
 const photo: InputSlot = { key: "image", label: "Photo", accept: "image", required: true };
 const product: InputSlot = { key: "image", label: "Product", hint: "A clear photo of the product", accept: "image", required: true };
 const portrait: InputSlot = { key: "image", label: "Portrait", hint: "A clear, front-facing photo", accept: "image", required: true };
-const voice: InputSlot = { key: "audio", label: "Voice audio", hint: "Speech or whisper track (record, upload or make one in Audio)", accept: "audio", required: true };
+const voice: InputSlot = { key: "audio", label: "Voice audio", hint: "Speech or whisper track (record, upload or make one in Audio)", accept: "audio", required: true, cleanVoice: true };
 const second = (label: string, hint?: string): InputSlot => ({ key: "image2", label, hint, accept: "image", required: true });
 const third = (label: string, hint?: string): InputSlot => ({ key: "image3", label, hint, accept: "image", required: false });
 
@@ -73,6 +73,7 @@ type AppSpec = {
   open?: Partial<PresetRoute> | null;
   badges?: Preset["badges"];
   parity?: string;
+  tool?: Preset["tool"];
 };
 
 function slug(s: string) {
@@ -101,6 +102,7 @@ function app(a: AppSpec): Preset {
     cloud: cloud as PresetRoute | null,
     open: open as PresetRoute | null,
     parity: a.parity,
+    ...(a.tool && { tool: a.tool }),
   };
 }
 
@@ -1713,6 +1715,22 @@ export const APPS: Preset[] = [
     cloud: { modelId: "birefnet-video", op: "bg-remove-video" },
     open: { modelId: "oss-video-matte-birefnet", op: "bg-remove-video" },
     parity: "Cuts the subject out of every frame into a transparent video. To keep one object you name, use Video tools → Remove background with SAM 3.",
+  }),
+  // Clean up voice (NVIDIA RE-USE): an app that is the Audio tool itself (src/components/audio-tools/clean-voice-tool.tsx).
+  app({
+    id: "app-clean-up-voice",
+    name: "Clean up voice",
+    category: "Utility",
+    description: "Remove noise, echo and room sound from any voice",
+    icon: "AudioLines",
+    hue: 195,
+    badges: ["new"],
+    tool: "clean-voice",
+    inputs: [{ key: "audio", label: "Recording", hint: "Speech in any language, or a video with sound", accept: "audio", required: true }],
+    prompt: "Clean up the voice",
+    cloud: null,
+    open: { modelId: "oss-reuse-voice", op: "enhance-voice" },
+    parity: "Runs on open-source models only, on your GPU or CPU. RE-USE isn't hosted on fal or Replicate.",
   }),
   app({
     name: "Object Remover",

@@ -45,6 +45,7 @@ export type RecipeKind = "h3" | "orbit" | "turbo" | "specialist" | "words" | "ow
  * - Recast, Video Face Swap: they carry a performance over from a clip.
  * - 3D Rotation: its Rotate LoRA turns the subject into a solid object that spins in place.
  * - Remove Background, Upscale, Vectorize, Video Background Remover, Image to 3D: tools, whose covers show the idea.
+ * - Clean up voice: a tool of its own (RE-USE), with nothing to recast.
  */
 export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-fuobe-angles",
@@ -62,6 +63,7 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-vectorize",
   "app-video-background-remover",
   "app-image-to-3d",
+  "app-clean-up-voice",
 ]);
 
 /** Presets whose clip was made on H3's 20-step graph (Quality: Best); the others on its 8-step Turbo graph (Fast). */

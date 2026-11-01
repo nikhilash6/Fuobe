@@ -1,5 +1,6 @@
 import "server-only";
 import { SPLIT_MODEL } from "@/lib/av/split";
+import { CLEAN_MODEL } from "@/lib/av/clean-voice";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
 import { graphLoras } from "@/lib/catalog/character-swap";
 import { PATH_MODELS } from "@/lib/catalog/cinema";
@@ -179,6 +180,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/audio/transcribe", label: "Transcribe", group: "Audio", config: S.TRANSCRIBE_STUDIO },
   // DBS soundtrack separation (D1): dialogue, music and effects.
   { href: "/audio/split", label: "Split soundtrack", group: "Audio", steps: [{ modelId: SPLIT_MODEL, op: "separate-audio" }] },
+  // Clean up voice (NVIDIA RE-USE on ComfyUI-RE-USE).
+  { href: "/audio/clean", label: "Clean up voice", group: "Audio", steps: [{ modelId: CLEAN_MODEL, op: "enhance-voice" }] },
   { href: "/audio/sfx", label: "Sound effects", group: "Audio", config: S.SFX_STUDIO },
   { href: "/audio/music", label: "Music", group: "Audio", config: S.MUSIC_STUDIO },
   { href: "/audio/video", label: "Sound for video", group: "Audio", config: S.FOLEY_STUDIO },

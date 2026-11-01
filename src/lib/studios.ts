@@ -110,7 +110,7 @@ export const LIPSYNC_STUDIO: StudioConfig = {
   slots: [
     { key: "image", label: "Portrait", accept: "image", hint: "For a talking avatar" },
     { key: "video", label: "Video", accept: "video", hint: "To re-sync an existing clip" },
-    { key: "audio", label: "Voice", accept: "audio", required: true },
+    { key: "audio", label: "Voice", accept: "audio", required: true, cleanVoice: true },
   ],
   anyOf: [["image", "video"]],
   defaultModels: { cloud: "kling-avatar-2", open: "oss-infinitetalk" },
@@ -244,7 +244,7 @@ export const VOICE_CHANGE_STUDIO: StudioConfig = {
   kind: "audio",
   ops: ["voice-change"],
   feed: { kind: "audio", features: ["audio"] },
-  slots: [{ key: "audio", label: "Recording", accept: "audio", required: true }],
+  slots: [{ key: "audio", label: "Recording", accept: "audio", required: true, cleanVoice: true }],
   defaultModels: { cloud: "elevenlabs-voice-changer", open: "oss-chatterbox-vc" },
   promptOptional: true,
   hidePrompt: true,

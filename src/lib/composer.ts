@@ -424,6 +424,8 @@ export function blockerFor(s: {
   /** Frames mode: the start frame to add, or a model that can't follow frames (framesBlocker in catalog/keyframes.ts). */
   frames?: Blocker | null;
   uploading: boolean;
+  /** A voice slot's "Clean up voice" is still running: the run waits for the clean file. */
+  cleaning?: boolean;
   maskMissing?: boolean;
   planError?: string | null;
   promptMissing: boolean;
@@ -434,6 +436,7 @@ export function blockerFor(s: {
   if (s.frames) return s.frames;
   if (s.missing) return { message: missingMessage(s.missing), slot: s.missing.key };
   if (s.uploading) return { message: "Uploading…", quiet: true };
+  if (s.cleaning) return { message: "Waiting for the clean voice", quiet: true };
   if (s.maskMissing) return { message: "Paint the area to change", slot: "mask" };
   // The planner says "Write a prompt first" too (an empty prompt on a model that needs one): as quiet as the composer's own.
   if (s.planError) return s.planError === WRITE_PROMPT ? { message: WRITE_PROMPT, quiet: true } : { message: s.planError };

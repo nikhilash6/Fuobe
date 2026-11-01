@@ -95,6 +95,7 @@ import { SketchTools } from "./sketch-tools";
 import { RECENT_MODELS, useStoredList } from "./stored-list";
 import { usePresetUrl, useStartRequest, useStudio, type Draft } from "./studio-context";
 import { useEdgeFade } from "./use-edge-fade";
+import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning } from "@/components/audio-tools/clean-voice-switch";
 import { useSignature } from "../palettes/use-signature";
 import { placeholdersOn } from "@/lib/demo-mode";
 
@@ -511,6 +512,7 @@ export function Composer({ docked }: { docked: boolean }) {
     [baseSlots, model?.options.imageLabels, config.multiRef?.label, draft.refs.length],
   );
   const slots = named.slots;
+  const hasCleanVoice = slots.some((s) => s.cleanVoice && s.accept === "audio");
   // Clips: ComfyUI joins 4 at a time. Images: what the model takes beyond the fixed image slots, for the operation the run
   // will be (a painted mask makes it an inpaint, which Qwen-Image 2.1 runs on the picture alone).
   const refOp = studioOp ?? (draft.slots.mask?.ref && model && routesFor(model, "inpaint").length ? "inpaint" : undefined);
@@ -560,6 +562,8 @@ export function Composer({ docked }: { docked: boolean }) {
   const askedSlots = framesOn ? framesSlots(slots) : slots;
   const missing = firstMissingSlot(askedSlots, draft.slots, anyOf);
   const uploading = Object.values(draft.slots).some((v) => v?.uploading) || draft.refs.some((r) => r.uploading) || (framesOn && framesUploading(draft.frames));
+  // A voice slot's "Clean up voice" is cleaning the file that just landed: Generate waits for the clean one.
+  const cleaningVoice = useVoiceCleaning();
   // Export without a ComfyUI to write it (none connected, or the install runs cloud APIs only): say so and offer the cloud route.
   // A cloud-only install refuses open models, and without placeholder results nothing else runs it, so Generate says why.
   const comfyMissing = !!config.comfyOnly && !!status && (engineMode === "cloud" || !status.providers.comfyui?.configured);
@@ -617,6 +621,7 @@ export function Composer({ docked }: { docked: boolean }) {
     frames: framesOn && model ? (framesBlocker(model, draft.frames!.length) ?? (framesGap ? { message: framesGap } : null)) : null,
     missing,
     uploading,
+    cleaning: cleaningVoice,
     maskMissing: needsMask(model, config.sketch, draft.slots),
     planError,
     promptMissing,
@@ -1024,19 +1029,32 @@ export function Composer({ docked }: { docked: boolean }) {
       )}
       {showAttachments && !collapsed && !framesOn && (
         <div className="scrollbar-none flex items-center gap-2 overflow-x-auto px-1 pt-1.5 pb-2">
-          {slots.map((s) => (
-            <MediaSlot
-              key={s.key}
-              slotKey={s.key}
-              label={s.label}
-              kind={s.accept}
-              required={s.required}
-              caption
-              value={draft.slots[s.key] ?? null}
-              onChange={(v) => attach.setSlotValue(s.key, v)}
-              onFile={(f) => attach.uploadToSlot(s.key, f, s.accept)}
-            />
-          ))}
+          {slots.map((s) =>
+            s.cleanVoice && s.accept === "audio" ? (
+              <CleanVoiceSlot
+                key={s.key}
+                slotKey={s.key}
+                label={s.label}
+                required={s.required}
+                value={draft.slots[s.key] ?? null}
+                onChange={(v) => attach.setSlotValue(s.key, v)}
+                onFile={(f) => attach.uploadToSlot(s.key, f, s.accept)}
+              />
+            ) : (
+              <MediaSlot
+                key={s.key}
+                slotKey={s.key}
+                label={s.label}
+                kind={s.accept}
+                required={s.required}
+                caption
+                value={draft.slots[s.key] ?? null}
+                onChange={(v) => attach.setSlotValue(s.key, v)}
+                onFile={(f) => attach.uploadToSlot(s.key, f, s.accept)}
+              />
+            ),
+          )}
+          {hasCleanVoice && <CleanVoiceSwitch status className="hidden max-w-[16rem] shrink-0 sm:flex" hint="first, free on your GPU" />}
           {config.sketch && draft.slots.image?.ref && !draft.slots.image.uploading && (
             <SketchTools modes={config.sketch} image={draft.slots.image.ref} autoOpen={config.sketchAutoOpen} />
           )}
@@ -1070,6 +1088,8 @@ export function Composer({ docked }: { docked: boolean }) {
           )}
         </div>
       )}
+      {/* On a phone the slot row scrolls sideways, so the switch gets its own line under it. */}
+      {showAttachments && !collapsed && !framesOn && hasCleanVoice && <CleanVoiceSwitch status className="px-3 pb-2 sm:hidden" hint="first, free on your GPU" />}
 
       {showPrompt && (
         <PromptInput

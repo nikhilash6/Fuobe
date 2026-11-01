@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 /**
@@ -95,7 +95,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
   it("lets guests and accounts open the tools' pages", () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     const cookie = auth.createSession(newAccount().id).value;
-    for (const p of ["/audio/split", "/character-sheet", "/cinema", "/image", "/connect"]) {
+    for (const p of ["/audio/split", "/audio/clean", "/apps/app-clean-up-voice", "/samples/clean-voice/noisy-mic-after.m4a", "/character-sheet", "/cinema", "/image", "/connect"]) {
       expect(passed(proxy(req(p))), `guest ${p}`).toBe(true);
       expect(passed(proxy(req(p, { cookie }))), `account ${p}`).toBe(true);
     }
@@ -230,6 +230,30 @@ describe("the routes: a visitor's price is its own GPU's, and the owner's charac
     const owner = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), auth.createSession().value));
     expect(await owner.json()).toMatchObject({ steps: 1, demo: true, channels: 2 });
   });
+
+  it("prices a visitor's Clean up voice on its own GPU without asking any GPU, never a demo, and only of its own file", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    const who = newAccount();
+    const cookie = auth.createSession(who.id).value;
+    const owners = wav();
+    const body = (media: string) => ({ tool: "clean", engine: "open", media, kind: "audio", name: "Take" });
+    for (const c of [undefined, cookie]) {
+      const r = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), c));
+      expect(r.status).toBe(422);
+      expect((await r.json()).error).toBe("That audio file is gone — add it again");
+    }
+    const asked = vi.spyOn(globalThis, "fetch");
+    try {
+      const account = await audioTools.POST(call("/api/audio-tools?preview=1", body(wav("mine.wav", who.id)), cookie));
+      const p = await account.json();
+      expect(p).toMatchObject({ steps: 1, costUsd: 0, demo: false, channels: 2 });
+      // No device known for it yet: a CPU's rate and estimate, and no files listed (the run checks them on its GPU).
+      expect(p.reuse).toEqual({ rate: 24000, seconds: expect.any(Number) });
+      expect(asked).not.toHaveBeenCalled();
+    } finally {
+      asked.mockRestore();
+    }
+  });
 });
 
 describe("the GPU pre-flight board lists PR #15's tools like main's studios", () => {
@@ -239,6 +263,7 @@ describe("the GPU pre-flight board lists PR #15's tools like main's studios", ()
   it("has a row for Split soundtrack, the fly path and the turnaround, each on graphs the requirement index knows", () => {
     const want: Record<string, { label: string; group: string; workflows: string[]; loras?: string[] }> = {
       "/audio/split": { label: "Split soundtrack", group: "Audio", workflows: ["separate-soundtrack-dbs"] },
+      "/audio/clean": { label: "Clean up voice", group: "Audio", workflows: ["voice-clean-reuse"] },
       "/cinema": { label: "Fly path", group: "Video", workflows: ["wan21-i2v-uni3c-path"] },
       "/character-sheet": { label: "Turnaround", group: "Video", workflows: ["wan22-flf2v-14b", "qwen-image-edit-2511-multi"], loras: ["qwen-image-edit-2511-multiple-angles-lora.safetensors"] },
     };

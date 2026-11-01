@@ -29,6 +29,7 @@ export const CLOUD_ONLY_CLEAN_PROBLEM = "Clean up voice runs on your GPU (open s
 export const CLEAN_NOTES = {
   speaker: "It keeps the main speaker. Other voices, music and effects are removed unless you keep music & effects.",
   gaps: "Gaps between words come out silent at Full strength.",
+  keepNoise: "DBS splits the soundtrack first and only the dialogue is cleaned. The music and effects go back under it, with any background noise in them.",
 };
 
 // ---------------------------------------------------------------------------
@@ -210,7 +211,9 @@ export interface CleanPlan extends ToolPlan {
 
 /** Defaults: audio is cleaned Full with nothing kept; a video keeps its music and effects at Natural strength and goes back on the picture. */
 export function cleanDefaults(kind: "audio" | "video"): { strength: CleanStrength; background: CleanBackground; remux: boolean } {
-  return kind === "video" ? { strength: "natural", background: "keep", remux: true } : { strength: "full", background: "remove", remux: false };
+  // A video too removes everything but the voice by default: "Keep music & effects" brings back the original minus the
+  // speech, and the noise with it (and it needs ComfyUI-DBS).
+  return kind === "video" ? { strength: "natural", background: "remove", remux: true } : { strength: "full", background: "remove", remux: false };
 }
 
 const titleOf = (i: { name?: string; kind: "audio" | "video" }) => `Clean voice · ${i.name?.trim() || (i.kind === "video" ? "video soundtrack" : "recording")}`;
@@ -275,9 +278,8 @@ export function planClean(i: CleanInput): CleanPlan {
       background === "keep"
         ? `Splits ${what} with DBS, cleans the dialogue with RE-USE and puts the music and effects back under it${remux ? ", then puts it back on the picture (copied as it is)" : ""}.`
         : `Cleans ${what} with RE-USE${remux ? ", then puts it back on the picture (copied as it is)" : ""}.`,
+    // The speaker and silent-gap notes show under Background and Strength, so they aren't repeated here.
     notes: [
-      ...(background === "keep" ? [] : [CLEAN_NOTES.speaker]),
-      ...(strength === "full" ? [CLEAN_NOTES.gaps] : []),
       ...(surround ? [`This file has ${i.channels} channels: it is cleaned in mono, as ComfyUI saves mono or stereo only.`] : []),
     ],
   };
@@ -332,8 +334,13 @@ export interface DemoPair {
 }
 
 export const DEMO_DIR = "/samples/clean-voice";
+/**
+ * The demo player shows once a person has listened to the pairs (scripts/gen-clean-voice-demo.mjs makes them into
+ * public/samples/clean-voice, with the licence and notice beside them) and said yes. Until then the tool opens on Add.
+ */
+export const DEMO_READY = false;
 export const DEMO_PAIRS: DemoPair[] = [
   { id: "noisy-mic", label: "Noisy mic", hint: "Hiss, hum and a whine from a cheap mic, cleaned at the source's rate", before: `${DEMO_DIR}/noisy-mic-before.m4a`, after: `${DEMO_DIR}/noisy-mic-after.m4a` },
-  { id: "phone", label: "Phone line → full band", hint: "The same speech squeezed into a phone line, then restored to 48 kHz", before: `${DEMO_DIR}/phone-before.m4a`, after: `${DEMO_DIR}/phone-after.m4a` },
+  { id: "phone", label: "Phone line", hint: "The same speech squeezed into a phone line, then restored to 48 kHz", before: `${DEMO_DIR}/phone-before.m4a`, after: `${DEMO_DIR}/phone-after.m4a` },
 ];
 export const DEMO_CREDIT = { text: "Sample and model: NVIDIA RE-USE (OpenMDW-1.1)", model: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE", licence: `${DEMO_DIR}/LICENSE-OpenMDW-1.1.txt` };

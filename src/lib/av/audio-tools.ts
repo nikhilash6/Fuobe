@@ -66,6 +66,8 @@ export interface AudioToolPreview {
   installed?: ("fast" | "best")[];
   /** The file's channel count from its header, when the server could read it (the page then needn't decode the file). */
   channels?: number;
+  /** Clean up voice: the RE-USE files the host has (when it said), the rate the model would run at, and the file's length. */
+  reuse?: { installed?: ("voice" | "laughter")[]; rate: number; seconds?: number };
 }
 
 export interface LoopInput {

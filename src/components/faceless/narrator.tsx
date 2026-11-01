@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { fileToSlot } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { VoiceRecorder } from "@/components/studio/voice-recorder";
+import { useMaybeClean } from "@/components/audio-tools/clean-voice-switch";
 import { useElements } from "@/lib/api";
 import type { NarratorVoice, PickerData } from "@/lib/catalog/faceless";
 import type { Engine } from "@/lib/catalog/types";
@@ -95,6 +96,8 @@ export function NarratorList({ engine, voices, value, onChange }: { engine: Engi
   const file = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState("");
   const [uploading, setUploading] = useState(false);
+  // "Clean up voice" on the sample: the narration is cloned from the clean file (Faceless and Explainer both).
+  const clean = useMaybeClean();
   const p = usePlayer();
   const list = voices.filter((v) => !q || `${v.name} ${v.hint ?? ""}`.toLowerCase().includes(q.toLowerCase()));
   const own = value?.kind === "sample" && !saved.some((e) => e.references[0] === value.url) ? value : null;
@@ -164,14 +167,14 @@ export function NarratorList({ engine, voices, value, onChange }: { engine: Engi
           {own && row(`own:${own.url}`, own, own.name ?? "Your recording", "Recorded or uploaded", async () => own.url)}
         </div>
         <div className="flex flex-wrap items-center gap-1.5 px-1 pt-2">
-          <VoiceRecorder onRecorded={(v) => onChange({ kind: "sample", url: v.ref, name: v.name ?? "Your recording" })} />
+          <VoiceRecorder clean onRecorded={(v) => onChange({ kind: "sample", url: v.ref, name: v.name ?? "Your recording" })} />
           <button
             type="button"
             onClick={() => file.current?.click()}
             disabled={uploading}
             className="inline-flex h-8 items-center gap-1.5 rounded-full bg-secondary px-3 text-[13px] font-medium hover:bg-accent disabled:opacity-60"
           >
-            {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />} Upload
+            {uploading || clean.busy ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />} {clean.busy ? "Cleaning…" : "Upload"}
           </button>
           <input
             ref={file}
@@ -186,7 +189,7 @@ export function NarratorList({ engine, voices, value, onChange }: { engine: Engi
                 f,
                 (v) => {
                   setUploading(!!v?.uploading);
-                  if (v && !v.uploading) onChange({ kind: "sample", url: v.ref, name: f.name.replace(/\.[^.]+$/, "") });
+                  if (v && !v.uploading) void clean.run(v, (c) => onChange({ kind: "sample", url: c.ref, name: `${f.name.replace(/\.[^.]+$/, "")}${c.original ? " · cleaned" : ""}` }));
                 },
                 "audio",
               );

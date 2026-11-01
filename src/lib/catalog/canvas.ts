@@ -54,6 +54,7 @@ export type CanvasNodeType =
   | "bg-remove"
   | "tts"
   | "voice-change"
+  | "clean-voice"
   | "clone-voice"
   | "translate"
   | "concat"
@@ -231,6 +232,8 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   "bg-remove": { type: "bg-remove", label: "Remove background", group: "Utilities", icon: "Eraser", ops: ["bg-remove", "bg-remove-video"], variants: ["image", "video"], description: "Cut out the subject of an image or video" },
   tts: { type: "tts", label: "Text to speech", group: "Utilities", icon: "Mic2", ops: ["tts"], description: "Speak a text, in a preset voice or a cloned one" },
   "voice-change": { type: "voice-change", label: "Change voice", group: "Utilities", icon: "AudioWaveform", ops: ["voice-change"], description: "Say a recording again in another voice, keeping its timing" },
+  // NVIDIA RE-USE on the open engine only (nothing like it is hosted on fal or Replicate): hidden on a cloud-only install.
+  "clean-voice": { type: "clean-voice", label: "Clean up voice", group: "Utilities", icon: "AudioLines", ops: ["enhance-voice"], description: "Remove noise, echo and room sound from speech" },
   "clone-voice": { type: "clone-voice", label: "Clone voice", group: "Inputs", icon: "UserRound", description: "A voice sample (or one of your saved voices) to speak with" },
   translate: { type: "translate", label: "Translate", group: "Utilities", icon: "Languages", ops: ["translate", "dub"], variants: ["text", "video"], description: "Translate a text, or dub a video into another language" },
   concat: { type: "concat", label: "Video concatenator", group: "Utilities", icon: "Film", ops: ["concat"], description: "Up to 50 clips in one film: trim and mute each, pick the frame" },
@@ -239,7 +242,7 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   note: { type: "note", label: "Sticky note", group: "Output", icon: "StickyNote", description: "A note on the board (not run)" },
 };
 
-export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "translate", "concat"]);
+export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "clean-voice", "translate", "concat"]);
 export const isGenerator = (n: Pick<CanvasNode, "type">) => GENERATOR_TYPES.has(n.type);
 
 /** Entries of the Add-node palette (several entries can make the same node type). */
@@ -273,6 +276,7 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("bg-remove"), id: "bg-remove", data: { mediaKind: "image" }, keywords: "cutout matte transparent" },
   { ...pick("tts"), id: "tts", keywords: "voice speech narration clone" },
   { ...pick("voice-change"), id: "voice-change", keywords: "voice changer speech to speech revoice convert" },
+  { ...pick("clean-voice"), id: "clean-voice", keywords: "denoise enhance speech noise clean up voice echo reverb podcast" },
   { ...pick("clone-voice"), id: "clone-voice", keywords: "voice sample clone my voice speaker" },
   { ...pick("translate"), id: "translate", data: { mediaKind: "text" }, keywords: "language translate dub localize subtitles" },
   { ...pick("concat"), id: "concat", keywords: "concatenate join merge stitch edit trim mute film assemble" },
@@ -295,7 +299,8 @@ const paletteCache = new Map<string, PaletteItem[]>();
 export function paletteItems(mode: "both" | "open" | "cloud" = "both"): PaletteItem[] {
   const hit = paletteCache.get(mode);
   if (hit) return hit;
-  const items = PALETTE.filter((p) => p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)).map((p): PaletteItem => {
+  // Clean up voice has no cloud route: a cloud-only install doesn't offer it at all.
+  const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice")).map((p): PaletteItem => {
     if (mode === "both" || !isGenerator(p) || defaultModelForNode({ type: p.type, data: p.data ?? {} }, mode)) return p;
     return { ...p, disabled: `No ${mode === "open" ? "open-source" : "cloud"} model for ${p.label.toLowerCase()} yet` };
   });
@@ -339,6 +344,7 @@ const PREFERRED: Partial<Record<Operation, Partial<Record<Engine, string>>>> = {
   lipsync: { cloud: "sync-lipsync-3" },
   tts: { cloud: "elevenlabs-v4", open: "oss-chatterbox" },
   "voice-change": { cloud: "elevenlabs-voice-changer", open: "oss-chatterbox-vc" },
+  "enhance-voice": { open: "oss-reuse-voice" },
   dub: { cloud: "elevenlabs-dubbing" },
   music: { cloud: "elevenlabs-music", open: "oss-ace-step" },
   sfx: { cloud: "elevenlabs-sfx" },
@@ -499,6 +505,7 @@ const OP_PORTS: Partial<Record<Operation, InputPortId[]>> = {
   mux: ["video", "audio"],
   "image-to-3d": ["images"],
   "separate-audio": ["audio", "video"],
+  "enhance-voice": ["audio", "video"],
   translate: ["prompt"],
   write: ["prompt"],
   vectorize: ["images"],

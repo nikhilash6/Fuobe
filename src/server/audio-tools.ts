@@ -2,11 +2,12 @@ import "server-only";
 import { z } from "zod";
 import { planJoin, planLoop, CROSSFADE_MAX, JOIN_MAX_CLIPS, LOOP_MAX_SECONDS, type AudioToolPreview, type ToolPlan } from "@/lib/av/audio-tools";
 import { CLOUD_ONLY_PROBLEM, DBS_MODELS, dbsChannelsFor, hostPick, missingDbs, planRemux, planSplit, splitTime } from "@/lib/av/split";
+import { CLOUD_ONLY_CLEAN_PROBLEM, missingReuse, NO_REUSE_PACK, planClean, planTime, tooLongProblem } from "@/lib/av/clean-voice";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { lastGpuDevice } from "./account-gpu";
 import { createPipeline } from "./chains";
 import { ConnectComfyError, previewChained } from "./generations";
-import { comfyDbsModels, comfyDevice, ownGpu } from "./providers/comfyui";
+import { comfyDbsModels, comfyDevice, comfyReuseModels, ownGpu } from "./providers/comfyui";
 import { engineMode } from "./settings";
 import { storedMedia } from "./storage";
 import { tenant, tenantAccount } from "./tenant";
@@ -53,6 +54,24 @@ export const AudioToolBody = z.discriminatedUnion("tool", [
     quality: z.enum(["fast", "best"]).optional(),
     stereo: z.boolean().optional(),
     /** What the browser decoded (the server reads WAV / FLAC / MP3 headers itself). */
+    channels: z.number().int().positive().max(64).optional(),
+    sourceDuration: z.number().positive().max(36_000).optional(),
+  }),
+  z.object({
+    tool: z.literal("clean"),
+    engine: Engine,
+    media: FileUrl,
+    kind: z.enum(["audio", "video"]),
+    name: z.string().max(200).optional(),
+    /** Voice only, or the laughter model. */
+    model: z.enum(["voice", "laughter"]).optional(),
+    quality: z.enum(["auto", "full", "fast"]).optional(),
+    strength: z.enum(["full", "natural", "light"]).optional(),
+    background: z.enum(["remove", "keep"]).optional(),
+    level: z.enum(["match", "voice"]).optional(),
+    /** A video: put the clean soundtrack back on the picture. */
+    remux: z.boolean().optional(),
+    stereo: z.boolean().optional(),
     channels: z.number().int().positive().max(64).optional(),
     sourceDuration: z.number().positive().max(36_000).optional(),
   }),
@@ -111,6 +130,7 @@ async function plan(body: AudioToolRequest): Promise<ToolPlan & { engine: Engine
   const mode = engineMode();
   // Split soundtrack runs on the open engine only: an install set to paid APIs only says why, whichever engine was asked for.
   if (body.tool === "split" && mode === "cloud") throw new AudioToolError(CLOUD_ONLY_PROBLEM);
+  if (body.tool === "clean" && mode === "cloud") throw new AudioToolError(CLOUD_ONLY_CLEAN_PROBLEM);
   if (mode !== "both" && body.engine !== mode) throw new AudioToolError(mode === "open" ? "This install is set to open source only (Settings → Engine mode)" : "This install is set to paid cloud APIs only (Settings → Engine mode)");
   try {
     if (body.tool === "split") {
@@ -120,6 +140,12 @@ async function plan(body: AudioToolRequest): Promise<ToolPlan & { engine: Engine
       const seconds = facts?.duration ?? body.sourceDuration;
       const channels = facts?.channels ?? body.channels;
       return { engine: body.engine, ...planSplit({ ...body, seconds, channels }), split: { duration: seconds, channels }, headerChannels: facts?.channels };
+    }
+    if (body.tool === "clean") {
+      const facts = factsOf(body.media);
+      const seconds = facts?.duration ?? body.sourceDuration;
+      const channels = facts?.channels ?? body.channels;
+      return { engine: body.engine, ...planClean({ ...body, seconds, channels, silent: facts?.hasAudio === false }), split: { duration: seconds, channels }, headerChannels: facts?.channels };
     }
     if (body.tool === "remux") {
       present(body.audio, "That mix is gone — export it again");
@@ -174,6 +200,35 @@ export async function previewAudioTool(body: AudioToolRequest): Promise<AudioToo
     const { duration: seconds, channels } = p.split ?? {};
     Object.assign(out, { hostPick: pick, ...(device && { device }), ...(installed && { installed: installed.map((m) => (m === DBS_MODELS.best ? "best" : "fast")) }), ...(p.headerChannels && { channels: p.headerChannels }) });
     if (seconds) out.estimate = splitTime({ seconds, quality, mode: dbsChannelsFor(body.stereo ? "each channel" : "mono", channels), channels, device });
+  }
+  if (body.tool === "clean") {
+    // As Split: the host's device and its RE-USE files (and DBS's, to keep music & effects), asked live for the owner;
+    // a visitor's price check never calls a GPU (an account's device is its last status check; the run checks the files).
+    const visitor = !!tenant() || !!ownGpu();
+    const account = tenantAccount();
+    const keep = (p.steps[0]?.request.params?.extra as { background?: string } | undefined)?.background === "keep";
+    const [device, installed, dbs] = demo
+      ? [undefined, undefined, undefined]
+      : visitor
+        ? [account ? lastGpuDevice(account) : undefined, undefined, undefined]
+        : await Promise.all([comfyDevice().catch(() => undefined), comfyReuseModels().catch(() => undefined), keep ? comfyDbsModels().catch(() => undefined) : undefined]);
+    if (installed === null) throw new AudioToolError(NO_REUSE_PACK);
+    const model = body.model ?? "voice";
+    if (installed && !installed.includes(model)) throw new AudioToolError(missingReuse(model, installed));
+    // No DBS file, or (the server answered for RE-USE) no DBS pack at all: refused here, not at the run's validation.
+    if (keep && (dbs ? !dbs.length : Array.isArray(installed))) throw new AudioToolError('"Keep music & effects" also needs DBS on your ComfyUI (models/dbs). Copy the install commands from Workflows → "Split a soundtrack", or pick Remove everything but the voice.');
+    const { duration: seconds, channels } = p.split ?? {};
+    const t = seconds ? planTime({ seconds, quality: body.quality, device, stereo: body.stereo, channels, background: keep ? "keep" : "remove" }) : undefined;
+    if (t && !demo) {
+      const problem = tooLongProblem(t, device);
+      if (problem) throw new AudioToolError(problem);
+    }
+    Object.assign(out, {
+      ...(device && { device }),
+      ...(p.headerChannels && { channels: p.headerChannels }),
+      reuse: { ...(installed && { installed }), rate: t?.rate ?? planTime({ seconds: 1, quality: body.quality, device }).rate, ...(seconds && { seconds }) },
+      ...(t && { estimate: { low: t.low, high: t.high } }),
+    });
   }
   return out;
 }
