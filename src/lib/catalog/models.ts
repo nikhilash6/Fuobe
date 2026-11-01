@@ -2294,6 +2294,26 @@ const open: ModelDef[] = [
     // The graph loads the try-on LoRA itself; carrying it here lets Settings → Models & licences switch it off (as Fuobe Try-On's).
     options: { maxImages: 3, seed: true, requires: { images: 2, msg: "Add a photo of the person, then the garment" }, ...(TRYON_LORA && { loras: [loraRef(TRYON_LORA)] }) },
   }),
+  // Outfit Swap (the open route of the Outfit Swap app): AusBoss's Outfit Swap LoRA on Qwen-Image 2.1 keeps the person
+  // picture in place, so only the clothes change. With an outfit photo Qwen3-VL describes it first; without one the words
+  // are the outfit (src/lib/comfy-variants.ts picks the graph by the pictures given).
+  o({
+    id: "oss-outfit-swap",
+    name: "Qwen-Image 2.1 Outfit Swap",
+    vendor: "Alibaba Qwen × AusBoss",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Only the clothes change: from a photo of the outfit, or from words · 20 GB GPU · non-commercial weights",
+    badges: ["new"],
+    routes: [{ ...comfy("edit", "outfit-swap-qwen-image-21", "Outfit Swap LoRA, 25 steps; the outfit photo described first"), unsized: true }],
+    options: {
+      maxImages: 2,
+      seed: true,
+      promptOptional: true,
+      requires: { images: 2, promptInstead: true, msg: "Add your photo and the outfit's, or describe the outfit" },
+    },
+    hidden: true,
+  }),
   // Product shot (the open route of the Product shot app): cut out, on white, relit into the scene you describe.
   o({
     id: "oss-product-shot",

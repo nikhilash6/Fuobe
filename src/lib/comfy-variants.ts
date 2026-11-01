@@ -48,6 +48,12 @@ export const OPENJUTSU_VARIANTS: Record<string, { key: string; value: unknown; g
 /** YuE2 with a song attached (Audio → Music's "Song to cover"): the cover graph sings its melody with the new style and lyrics. */
 export const YUE2_COVER_GRAPH: Record<string, string> = { "music-yue2-song": "music-yue2-cover" };
 
+/**
+ * Outfit Swap with no photo of the outfit (one picture, the outfit in words): the same LoRA graph without image 2 and the
+ * describer.
+ */
+export const OUTFIT_WORDS_GRAPH: Record<string, string> = { "outfit-swap-qwen-image-21": "outfit-swap-qwen-image-21-text" };
+
 export interface VariantRequest {
   op: string;
   /** Clips a join takes ("video-concat-{n}"). */
@@ -96,6 +102,8 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   if (oj && ojSettings?.[oj.key] === oj.value && r.has(oj.graph)) endpoint = oj.graph;
   const cover = YUE2_COVER_GRAPH[endpoint];
   if (cover && r.audio && r.has(cover)) endpoint = cover;
+  const words = OUTFIT_WORDS_GRAPH[endpoint];
+  if (words && r.images < 2 && r.has(words)) endpoint = words;
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
   return endpoint;

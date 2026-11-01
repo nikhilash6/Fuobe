@@ -946,6 +946,8 @@ const SLOT_RULES: Record<string, { reuse?: boolean; required?: string[]; hints?:
   "qwen-image-edit-2511-multi": { reuse: true },
   "storyboard-qwen-edit-2509-next-scene": { reuse: true },
   "tryon-flux2-klein-4b": { required: ["image2"], hints: { image: "Add a photo of the person", image2: "Add the garment to try on" } },
+  // Its describer reads the outfit photo; the words graph (outfit-swap-qwen-image-21-text) runs when there is none.
+  "outfit-swap-qwen-image-21": { required: ["image2"], hints: { image: "Add your photo", image2: "Add the outfit photo, or describe the outfit" } },
   "palette-transfer-image": { hints: { image2: "Pick a palette or add a reference image" } },
   "palette-transfer-video": { hints: { image: "Pick a palette or add a reference image" } },
   "relight-qwen-edit-2509-reference": { hints: { image2: "Add the photo whose light to copy" } },

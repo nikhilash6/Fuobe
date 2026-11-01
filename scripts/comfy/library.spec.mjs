@@ -153,6 +153,8 @@
 // Keys added with Head Swap, model controls (params.extra):
 //   maskBlur                              (GrowMaskWithBlur blur radius of a paste-back edge, px)
 //   pasteBack                             (true: only the masked area comes from the edit, the rest is the input's pixels)
+// Keys added with the Outfit Swap app. Model settings (params.extra; the app's Shoes choice writes it):
+//   request                               (the sentence after the swap: "Replace everything they wear." | "Keep their own shoes and legwear.")
 
 import fs from 'node:fs';
 
@@ -500,6 +502,8 @@ export const KNOWN_MODELS = {
   // SHA-256 in model-pins.json), and the SeedVR2 7B int8 its hand-built graph enlarges with (the same file as the template's).
   'qwen-image-2.1-restore.safetensors': { folder: 'loras', url: 'https://huggingface.co/ausboss/Qwen-Image-2.1-Restore-LoRA/resolve/main/qwen-image-2.1-restore.safetensors' },
   'seedvr2_7b_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_7b_int8_convrot.safetensors' },
+  // Outfit Swap (the card's main file, step 1,000): holds the person picture in place, so only the clothes change.
+  'qwen-image-2.1-outfit-swap.safetensors': { folder: 'loras', url: 'https://huggingface.co/ausboss/Qwen-Image-2.1-Outfit-Swap-Consistency-LoRA/resolve/main/qwen-image-2.1-outfit-swap.safetensors' },
 
   // owner's SOTA families (2026-10-31): Ideogram 4 (Comfy-Org/Ideogram-4; its flux2-vae is the flux2-dev row above). `variants`:
   // the same weights in another precision in the same repository, which a ComfyUI may list instead of the pinned file.
@@ -3345,6 +3349,46 @@ export const SPEC = [
       'QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> SplitImageWithAlpha -> Stitch Inpaint (classic, no colour match): every pixel outside the grown mask and its 8 px blend is the upload\'s own. ' +
       'No clothing found: the empty mask selects the whole picture and the stitch gives it back unchanged. The prompt names only the finished state (smooth, pressed fabric) and what stays the same. ' +
       'RTX 5090: about 75 s a photo at 2048x1536 (25 steps), peak 26.5 GB.',
+  },
+  // Outfit Swap: AusBoss's Outfit Swap LoRA keeps the person picture in place (0.1 px against 3.6 px without it, on its card).
+  {
+    id: 'outfit-swap-qwen-image-21',
+    title: 'Qwen-Image 2.1 Outfit Swap (outfit photo; Outfit Swap LoRA, Qwen3-VL describes the outfit)',
+    capability: 'edit',
+    handBuilt: 'hand-built/outfit-swap-qwen-image-21.json',
+    bindings: {
+      prompt: [b('53', 'values.d')], request: [b('53', 'values.c')], image: [b('10', 'image')], image2: [b('11', 'image')],
+      seed: [b('32', 'seed')], steps: [b('32', 'steps')], loraStrength: [b('4', 'strength_model')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1 and the Outfit Swap LoRA by AusBoss, a derivative): NON-COMMERCIAL, research and evaluation only',
+    notes:
+      'AusBoss\'s "Qwen Image 2.1 Outfit Swap" workflow (the LoRA card\'s workflows/qwen-image-2.1-outfit-swap.json), its two subgraphs flattened onto core nodes: ' +
+      'the Outfit Swap LoRA (step 1,000, the card\'s main file) at 1 on the int8 model, the person to about 2 MP and the outfit to about 1 MP on the 32 grid (ImageScaleToTotalPixels, lanczos, ' +
+      'for the pack\'s Image Resize in megapixels mode), TextEncodeQwenImage21 with the person as image 1 and the outfit as image 2 (resolution 0, no negative), QwenImage21Cache, KSampler 25 steps, cfg 1, euler, simple, ' +
+      'SplitImageWithAlpha. The words: Qwen3-VL (the same text encoder, TextGenerate, thinking on) answers two yes/no checks on the person picture (feet, legs) and describes the outfit in one phrase, ' +
+      'leaving out shoes when the feet are not in the picture and everything below the waist when the legs are not; StringFormat writes "Dress the person in image 1 in <phrase>. Keep their face, hair, hands, pose and the background exactly the same. <request> <prompt>". ' +
+      'request = "Replace everything they wear." (the card\'s default: clears the old outfit) or "Keep their own shoes and legwear."; prompt = the person\'s own words, added at the end. ' +
+      'Changed from the card: the no-feet phrase ends "shown in image 2" (the card adds "without the shoes"; Fuobe\'s requests name only what is wanted). ' +
+      'Removed: the outfit picture\'s crop node (Fuobe sends the photo as it is), the typed/described switch (outfit-swap-qwen-image-21-text is the words route), the turbo LoRA row (off on the card), compare, timer, notes. Output follows the person picture at about 2 MP.',
+  },
+  {
+    id: 'outfit-swap-qwen-image-21-text',
+    title: 'Qwen-Image 2.1 Outfit Swap (outfit in words; Outfit Swap LoRA)',
+    capability: 'edit',
+    handBuilt: 'hand-built/outfit-swap-qwen-image-21-text.json',
+    bindings: {
+      prompt: [b('53', 'values.b')], request: [b('53', 'values.c')], image: [b('10', 'image')],
+      seed: [b('32', 'seed')], steps: [b('32', 'steps')], loraStrength: [b('4', 'strength_model')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1 and the Outfit Swap LoRA by AusBoss, a derivative): NON-COMMERCIAL, research and evaluation only',
+    notes:
+      'Outfit Swap with no outfit photo (Fuobe runs it when the request has one picture): outfit-swap-qwen-image-21 without image 2 and the describer. ' +
+      'prompt = the outfit in words ("a black velvet tuxedo with satin lapels"), set into "Dress the person in image 1 in <prompt>. Keep their face, hair, hands, pose and the background exactly the same. <request>". ' +
+      'The LoRA was trained with an outfit picture as image 2: with one picture, compare loraStrength 1 with 0 (the plain 25-step edit) before relying on it.',
   },
   // ---- Owner's SOTA image families: Ideogram 4 -------------------------------------------
   {

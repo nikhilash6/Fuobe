@@ -52,6 +52,7 @@ export type RecipeKind = "h3" | "orbit" | "qwen";
  * - Steam It: its own graph finds the clothes and repaints only them, so every other pixel stays the upload's.
  * - Restore Photo: its Restore LoRA keeps every face and the framing, where a plain edit redraws them.
  * - Head Swap: the whole head, hair included, comes from its own head LoRA; a plain edit keeps the first hair.
+ * - Outfit Swap: its Outfit Swap LoRA keeps everything but the clothes in place, where a plain edit moves the picture.
  */
 export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-fuobe-angles",
@@ -73,6 +74,7 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-steam-it",
   "app-restore-photo",
   "app-head-swap",
+  "app-outfit-swap",
 ]);
 
 /**

@@ -862,6 +862,11 @@
   "sizeBytes": 3101572408,
   "sha256": "86c085c0d7853f12ce5183499934b54d08371c60f549c5a6b20615cd23989388"
  },
+ "https://huggingface.co/ausboss/Qwen-Image-2.1-Outfit-Swap-Consistency-LoRA/resolve/main/qwen-image-2.1-outfit-swap.safetensors": {
+  "revision": "f0e0fc4e4c65527963d875536aa4e77fe1e9b165",
+  "sizeBytes": 159436488,
+  "sha256": "4ddfeac5695adaed1f0f78b23fda40919fd2ed6a4af790ced6c1e043dc4ae1f0"
+ },
  "https://huggingface.co/ausboss/Qwen-Image-2.1-Outpaint-LoRA/resolve/main/qwen-image-2.1-outpaint-v2.safetensors": {
   "revision": "dca5bdc7eb328f6021f330140f64b00a820ae5cd",
   "sizeBytes": 159436576,

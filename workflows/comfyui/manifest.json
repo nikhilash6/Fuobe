@@ -14421,6 +14421,184 @@
       ]
     },
     {
+      "id": "outfit-swap-qwen-image-21",
+      "title": "Qwen-Image 2.1 Outfit Swap (outfit photo; Outfit Swap LoRA, Qwen3-VL describes the outfit)",
+      "capability": "edit",
+      "file": "outfit-swap-qwen-image-21.json",
+      "source": "hand-built (scripts/comfy/hand-built/outfit-swap-qwen-image-21.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "53",
+            "input": "values.d"
+          }
+        ],
+        "request": [
+          {
+            "node": "53",
+            "input": "values.c"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "32",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "32",
+            "input": "steps"
+          }
+        ],
+        "loraStrength": [
+          {
+            "node": "4",
+            "input": "strength_model"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 25,
+        "loraStrength": 1
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "qwen-image-2.1-outfit-swap.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/ausboss/Qwen-Image-2.1-Outfit-Swap-Consistency-LoRA/resolve/main/qwen-image-2.1-outfit-swap.safetensors",
+          "sizeGb": 0.16
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1 and the Outfit Swap LoRA by AusBoss, a derivative): NON-COMMERCIAL, research and evaluation only",
+      "validated": false,
+      "notes": "AusBoss's \"Qwen Image 2.1 Outfit Swap\" workflow (the LoRA card's workflows/qwen-image-2.1-outfit-swap.json), its two subgraphs flattened onto core nodes: the Outfit Swap LoRA (step 1,000, the card's main file) at 1 on the int8 model, the person to about 2 MP and the outfit to about 1 MP on the 32 grid (ImageScaleToTotalPixels, lanczos, for the pack's Image Resize in megapixels mode), TextEncodeQwenImage21 with the person as image 1 and the outfit as image 2 (resolution 0, no negative), QwenImage21Cache, KSampler 25 steps, cfg 1, euler, simple, SplitImageWithAlpha. The words: Qwen3-VL (the same text encoder, TextGenerate, thinking on) answers two yes/no checks on the person picture (feet, legs) and describes the outfit in one phrase, leaving out shoes when the feet are not in the picture and everything below the waist when the legs are not; StringFormat writes \"Dress the person in image 1 in <phrase>. Keep their face, hair, hands, pose and the background exactly the same. <request> <prompt>\". request = \"Replace everything they wear.\" (the card's default: clears the old outfit) or \"Keep their own shoes and legwear.\"; prompt = the person's own words, added at the end. Changed from the card: the no-feet phrase ends \"shown in image 2\" (the card adds \"without the shoes\"; Fuobe's requests name only what is wanted). Removed: the outfit picture's crop node (Fuobe sends the photo as it is), the typed/described switch (outfit-swap-qwen-image-21-text is the words route), the turbo LoRA row (off on the card), compare, timer, notes. Output follows the person picture at about 2 MP."
+    },
+    {
+      "id": "outfit-swap-qwen-image-21-text",
+      "title": "Qwen-Image 2.1 Outfit Swap (outfit in words; Outfit Swap LoRA)",
+      "capability": "edit",
+      "file": "outfit-swap-qwen-image-21-text.json",
+      "source": "hand-built (scripts/comfy/hand-built/outfit-swap-qwen-image-21-text.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "53",
+            "input": "values.b"
+          }
+        ],
+        "request": [
+          {
+            "node": "53",
+            "input": "values.c"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "32",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "32",
+            "input": "steps"
+          }
+        ],
+        "loraStrength": [
+          {
+            "node": "4",
+            "input": "strength_model"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 25,
+        "loraStrength": 1
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "qwen-image-2.1-outfit-swap.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/ausboss/Qwen-Image-2.1-Outfit-Swap-Consistency-LoRA/resolve/main/qwen-image-2.1-outfit-swap.safetensors",
+          "sizeGb": 0.16
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1 and the Outfit Swap LoRA by AusBoss, a derivative): NON-COMMERCIAL, research and evaluation only",
+      "validated": false,
+      "notes": "Outfit Swap with no outfit photo (Fuobe runs it when the request has one picture): outfit-swap-qwen-image-21 without image 2 and the describer. prompt = the outfit in words (\"a black velvet tuxedo with satin lapels\"), set into \"Dress the person in image 1 in <prompt>. Keep their face, hair, hands, pose and the background exactly the same. <request>\". The LoRA was trained with an outfit picture as image 2: with one picture, compare loraStrength 1 with 0 (the plain 25-step edit) before relying on it."
+    },
+    {
       "id": "steam-it-qwen-image-21",
       "title": "Steam It: the clothes pressed, everything else kept (SAM 3.1 clothing mask + Qwen-Image 2.1 inpaint)",
       "capability": "edit",

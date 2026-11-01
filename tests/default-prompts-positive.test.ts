@@ -30,7 +30,7 @@ describe("default prompts name only what is wanted", () => {
     }
     expect(getPreset("app-transitions")!.promptTemplate).toMatch(/One continuous shot/);
     expect(getPreset("app-expand-image")!.promptTemplate).toMatch(/fill the new area with more of the same surroundings/);
-    expect(getPreset("app-outfit-swap")!.promptTemplate).toMatch(/only the clothing comes from the second image/);
+    expect(getPreset("app-outfit-swap")!.promptTemplate).toMatch(/Keep their face, hair, hands, body, pose, lighting and background exactly the same/);
   });
 
   it("the motions and effects: Pedestal Down, Skate Cruise, One Take, Explosion", () => {

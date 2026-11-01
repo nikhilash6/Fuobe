@@ -133,6 +133,21 @@ const opt = (key: string, label: string, choices: [string, string][]): PresetOpt
 });
 
 /**
+ * Outfit Swap's shoes: the sentence after the swap, in the cloud's words and as the open graph's `request`. "New shoes
+ * too" is the LoRA card's default (it clears the old outfit); "Keep mine" keeps the shoes and legwear.
+ */
+const SHOES = "Replace everything they wear.";
+const KEEP_SHOES = "Keep their own shoes and legwear.";
+const outfitShoes: PresetOption = {
+  key: "shoes",
+  label: "Shoes",
+  choices: [
+    { value: "new-shoes-too", label: "New shoes too", prompt: SHOES, openExtra: { request: SHOES } },
+    { value: "keep-mine", label: "Keep mine", prompt: KEEP_SHOES, openExtra: { request: KEEP_SHOES } },
+  ],
+};
+
+/**
  * Old app ids still stored on generations (their Reuse / Retry look the preset up by id): the app they
  * became. The Virality Predictor app is the Hook Frame app since /virality took its name and URL.
  */
@@ -976,18 +991,26 @@ export const APPS: Preset[] = [
     // FASHN Try-On 1.6 was built for exactly this (Garment / Quality settings); it takes no prompt.
     cloud: { modelId: "fashn-tryon", op: "edit" },
   }),
+  // Only the clothes change. On your GPU it runs AusBoss's Outfit Swap LoRA (oss-outfit-swap), which holds the picture in
+  // place: from a photo of the outfit (described first by Qwen3-VL) or from words alone (src/lib/comfy-variants.ts). With
+  // a photo, words of the person's own are added after the swap; in the cloud they describe the outfit.
   app({
     name: "Outfit Swap",
     category: "Fashion",
-    description: "Copy the outfit someone else is wearing onto you",
+    description: "Wear any outfit. Only the clothes change",
     icon: "ArrowLeftRight",
     hue: 280,
     inputs: [
       { key: "image", label: "Your photo", accept: "image", required: true },
-      second("Outfit reference", "A photo of someone wearing the outfit you want"),
+      { key: "image2", label: "Outfit", hint: "A photo of the outfit: worn, laid flat or on a hanger. Or describe it", accept: "image", required: false },
     ],
+    options: [outfitShoes],
+    userPrompt: "optional",
+    placeholder: "No outfit photo? Describe one: a black velvet tuxedo",
     prompt:
-      "Take the complete outfit worn in the second image — every garment, shoes and accessories, with their exact colors, fabrics, prints and fit — and put it on the person in the first image. Keep the first person's face, hair, body shape, pose, lighting and background unchanged; only the clothing comes from the second image.",
+      "Dress the person in the first image in {prompt|the complete outfit from the second image, with its exact colours, fabrics, prints and fit}. Keep their face, hair, hands, body, pose, lighting and background exactly the same. {option:shoes}",
+    open: { modelId: "oss-outfit-swap", promptTemplate: "{prompt}" },
+    parity: "Only the clothes change: your face, hair, pose and background stay as they are. Add a photo of the outfit, or describe it.",
   }),
   app({
     name: "AI Stylist",

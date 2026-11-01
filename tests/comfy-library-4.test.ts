@@ -136,6 +136,8 @@ describe("round-4 ComfyUI workflows", () => {
       "qwen-image-21-next-scene",
       "qwen-image-21-t2i-small",
       "qwen-image-21-edit-small",
+      "outfit-swap-qwen-image-21",
+      "outfit-swap-qwen-image-21-text",
       "ideogram4-t2i",
       "krea2-realism-t2i",
       "krea2-turbo-t2i",
