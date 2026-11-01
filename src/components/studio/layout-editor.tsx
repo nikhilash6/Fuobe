@@ -413,7 +413,7 @@ function LayoutBoard({
                 <ClipboardCopy /> Copy the layout (JSON)
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => downloadJson(draft)}>
-                <ArrowDownToLine /> Download the layout (.json)
+                <ArrowDownToLine /> Download the layout
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

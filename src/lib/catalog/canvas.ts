@@ -238,7 +238,7 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   "clone-voice": { type: "clone-voice", label: "Clone voice", group: "Inputs", icon: "UserRound", description: "A voice sample (or one of your saved voices) to speak with" },
   translate: { type: "translate", label: "Translate", group: "Utilities", icon: "Languages", ops: ["translate", "dub"], variants: ["text", "video"], description: "Translate a text, or dub a video into another language" },
   concat: { type: "concat", label: "Assemble film", group: "Utilities", icon: "Film", ops: ["concat"], description: "Up to 50 clips in one film: trim and mute each, pick the frame" },
-  restore: { type: "restore", label: "Restore & colourise", group: "Utilities", icon: "Palette", ops: ["restore-video"], description: "Old or black-and-white footage, cleaned and in colour (Lightricks' Restore IC-LoRA)" },
+  restore: { type: "restore", label: "Restore & colourise", group: "Utilities", icon: "Palette", ops: ["restore-video"], description: "Old or black-and-white footage, cleaned and in colour" },
   table: { type: "table", label: "Table", group: "Inputs", icon: "Table", description: "Rows of words: what it feeds runs once per row" },
   output: { type: "output", label: "Output", group: "Output", icon: "MonitorPlay", description: "Preview what's connected, side by side" },
   note: { type: "note", label: "Sticky note", group: "Output", icon: "StickyNote", description: "A note on the board (not run)" },

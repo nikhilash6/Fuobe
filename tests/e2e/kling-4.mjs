@@ -149,7 +149,7 @@ try {
         .catch(() => "");
       check(
         `${tag}: the @ menu says Kling elements take no voices yet`,
-        /voices: not yet/.test(menu),
+        /voices aren't used/.test(menu),
         menu.replace(/\n/g, " | ").slice(0, 160),
       );
       await shot("video-mention");

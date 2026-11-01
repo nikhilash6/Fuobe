@@ -281,12 +281,12 @@ describe("Remove dialogue (DBS D2) on /api/audio-tools", () => {
 
 describe("Split soundtrack's and Remove dialogue's pages tell a visitor up front (their runs are own-gpu-tool)", () => {
   const src = (f: string) => fs.readFileSync(path.join(__dirname, "..", f), "utf8");
-  it("read 'Self-hosted only', not 'Free · runs on your ComfyUI', to a guest or an account", async () => {
+  it("read 'Not available here', not 'Free', to a guest or an account", async () => {
     const { openToolPrice } = await import("@/lib/av/split");
-    expect(openToolPrice({ demo: false })).toBe("Free · runs on your ComfyUI");
+    expect(openToolPrice({ demo: false })).toBe("Free");
     expect(openToolPrice({ demo: true })).toBe("Placeholder · free");
     expect(openToolPrice(undefined)).toBe("…");
-    for (const p of [{ demo: false }, { demo: true }, undefined]) expect(openToolPrice(p, true)).toBe("Self-hosted only");
+    for (const p of [{ demo: false }, { demo: true }, undefined]) expect(openToolPrice(p, true)).toBe("Not available here");
   });
 
   it("say it runs on a self-hosted Fuobe, and turn off the upload, the library pick and the run (as Remove object does)", () => {
@@ -296,7 +296,7 @@ describe("Split soundtrack's and Remove dialogue's pages tell a visitor up front
     ] as const) {
       const page = src(file).replace(/\s+/g, " ");
       expect(page).toContain("const visitor = useLikelyVisitor();");
-      expect(page).toContain(`const SELF_HOSTED = "${tool} runs on a self-hosted Fuobe for now";`);
+      expect(page).toContain(`const SELF_HOSTED = "${tool} isn't available here";`);
       expect(page).toMatch(/blocker = visitor \? SELF_HOSTED/);
       expect(page).toMatch(/\{visitor && (\( ?)?<SelfHostNote className="mt-3 max-w-xl">\{SELF_HOSTED\}\.<\/SelfHostNote> ?\)?\}/);
       expect(page).toMatch(/<ToolShell title="[^"]+" tabs=\{tabs\} selfHostedOnly>/);

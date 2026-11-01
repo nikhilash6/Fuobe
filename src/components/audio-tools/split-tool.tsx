@@ -664,7 +664,7 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
  * Why a guest or an account can't split: POST /api/audio-tools answers them own-gpu-tool (docs/public-signup.md), so the
  * page says so up front and its upload and run are off, instead of a run the server refuses.
  */
-const SELF_HOSTED = "Split soundtrack runs on a self-hosted Fuobe for now";
+const SELF_HOSTED = "Split soundtrack isn't available here";
 /** Where the time estimate is for: the host's device when it said; else a CPU's, the figures the estimate then uses. */
 const onDevice = (device?: string) => (device === "cuda" ? "on your GPU" : device ? "on your CPU" : "on a CPU");
 
@@ -830,7 +830,6 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
                 {visitor && engine !== "cloud" ? (
                   <>
                     <span className="font-mono text-foreground">{openToolPrice(p, true)}</span>
-                    {` · ${SELF_HOSTED}`}
                   </>
                 ) : blocker && engine !== "cloud" ? (
                   blocker

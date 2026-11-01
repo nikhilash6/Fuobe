@@ -2212,7 +2212,7 @@ const originals: ModelDef[] = [
     engineOptions: { open: { maxImages: 4, negativePrompt: false } },
     // The Standalone recipe's graph has no hosted copy (nothing hosted puts the cut-out on white): it stays the GPU's, and
     // in the cloud Marketing's Standalone format lists the Original as running on your GPU only (marketing.ts).
-    engineNote: "A Standalone shot from one product photo runs on your GPU only (cut out with BiRefNet, put on white, relit into the scene by Qwen-Image-Edit 2509 + the White_to_Scene LoRA); in the cloud, Marketing's Standalone format offers the partner models instead",
+    engineNote: "A Standalone shot from one product photo runs on your GPU only (cut out, put on white and relit into the scene); in the cloud, the Standalone format offers partner models instead",
   },
   {
     ...original({
@@ -2287,7 +2287,7 @@ const originals: ModelDef[] = [
     }),
     engineDefaults: { open: { aspectRatio: "auto" } },
     // fal's InfiniteTalk endpoints (and Replicate) take no LoRA (checked 2026-11-01: research studios[speak].original.cloud).
-    engineNote: "Your GPU adds the FusioniX LoRA (with Higgsfield's Infinite Talk settings); the cloud runs fal's InfiniteTalk without it",
+    engineNote: "Your GPU adds FusioniX to InfiniteTalk; the cloud runs InfiniteTalk without it",
     // The GPU graph frames the portrait itself (its shape by default); the LoRA is the recipe's, downloaded before a run.
     engineOptions: { open: { aspectRatios: ["auto", ...VID_AR], negativePrompt: true, ...(SPEAK_LORA && { loras: [SPEAK_LORA] }) } },
   },

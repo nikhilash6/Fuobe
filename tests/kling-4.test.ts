@@ -563,7 +563,7 @@ describe("@mentions become Kling elements", () => {
   });
 
   it("says voices aren't sent yet", () => {
-    expect(elementsNote(kling)).toMatch(/voices: not yet/);
+    expect(elementsNote(kling)).toMatch(/voices aren't used/);
     expect(elementsNote(getModel("kling-3"))).toBeUndefined();
   });
 });

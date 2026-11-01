@@ -80,7 +80,7 @@ try {
     if (engine === "open") check("open: Marketing Studio's first model is Fuobe Marketing Image", models[first] === "Fuobe Marketing Image", models[first]);
     else {
       check("cloud: Standalone's first model is a partner, not the Original", models[first] !== "Fuobe Marketing Image", models[first]);
-      check("cloud: Standalone lists the Original as running on your GPU only", models.includes("Fuobe Original · runs on your GPU only: the cut-out on white and the White_to_Scene relight have no hosted copy") && (await panel.locator('[aria-disabled="true"]').count()) === 1);
+      check("cloud: Standalone lists the Original as running on your GPU only", models.includes("Fuobe Original · runs on your GPU only: its cut-out and studio relight aren't offered in the cloud") && (await panel.locator('[aria-disabled="true"]').count()) === 1);
     }
     check(`${engine}: partner models ${engine === "cloud" ? "stay" : "aren't"} in the menu`, engine === "cloud" ? models.some((l) => /GPT Image 2\.5/.test(l)) : !models.some((l) => /GPT Image/.test(l)));
     await page.keyboard.press("Escape");

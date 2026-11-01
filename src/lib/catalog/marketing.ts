@@ -954,7 +954,7 @@ export const pickable = <T extends ModelChoice>(choices: readonly T[]): T[] => c
  * hosted puts the cut-out on white (checked 2026-11-01: neither BiRefNet nor Bria's remover takes a background colour, and
  * the LoRA was trained on products on white), so the recipe stays on the GPU and the cloud offers the partners instead.
  */
-export const STANDALONE_CLOUD_WHY = "the cut-out on white and the White_to_Scene relight have no hosted copy";
+export const STANDALONE_CLOUD_WHY = "its cut-out and studio relight aren't offered in the cloud";
 export const STANDALONE_CLOUD_NOTE = `Fuobe Original · runs on your GPU only: ${STANDALONE_CLOUD_WHY}`;
 
 /**

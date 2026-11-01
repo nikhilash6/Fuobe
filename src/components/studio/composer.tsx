@@ -937,7 +937,7 @@ export function Composer({ docked }: { docked: boolean }) {
   const layoutSummary = !model
     ? ""
     : laid?.width
-      ? `Compiled for ${model.name} at ${laid.width} × ${laid.height}, the size it renders`
+      ? `Laid out for ${model.name} at ${laid.width} × ${laid.height}, the size it renders`
       : laid?.format === "flux3" || laid?.format === "ideogram"
         ? `${model.name} reads the boxes in place (its own layout form)`
         : laid
