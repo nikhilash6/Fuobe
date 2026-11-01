@@ -8,6 +8,7 @@
  * the server (POST /api/canvases/:id/run) plan a graph exactly the same way.
  */
 import type { CanvasComment, CanvasGroup, CanvasPage, CanvasShape } from "./canvas-board";
+import { EXAMPLE_SCENE, EXAMPLE_WORDS, beatsFrom, blockoutFramePrompt, compileBlockoutPrompt, type BlockoutRef } from "@/lib/blockout";
 import { getModel, getPreset, MODELS, supportsOp } from "./index";
 import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
@@ -548,6 +549,8 @@ export function inputPorts(n: Pick<CanvasNode, "type" | "data">): PortDef[] {
   const ids = new Set(ops.flatMap((op) => OP_PORTS[op] ?? []));
   // Start & end frames: shown on image-to-video models that can take an end frame.
   if (ops.includes("i2v") && (model?.options.endFrame || (model && supportsOp(model, "flf2v")))) ids.add("endImage");
+  // Reference clips: on reference-to-video models that take them (Seedance 2.5's @Video1, as Cinema's Blockout sends it).
+  if (ops.includes("ref2v") && (model?.options.maxVideos ?? 0) > 0) ids.add("videos");
   // A cloned voice only where the model clones voices (Text to speech and Change voice always show it, and say
   // which models clone when a voice is connected to one that doesn't).
   if (ids.has("voice") && model && !model.options.voiceClone && n.type !== "tts" && n.type !== "voice-change") ids.delete("voice");
@@ -1782,6 +1785,71 @@ const ROW = 500;
 /** A video node with its clip is taller (four inputs, prompt, settings, result). */
 const FILM_ROW = 620;
 
+/**
+ * "Blockout → film" (package blockout-film), as Cinema's Blockout runs a one-shot blockout: in the cloud the grey box goes
+ * to Seedance 2.5 as its reference clip (@Video1) with three stills and the compiled prompt (the corridor example's
+ * beats); on your GPU the grey box's first frame is drawn from the stills, then the blockout's depth (near = bright)
+ * drives Wan 2.2 Fun VACE for one 81-frame window. Cinema's Blockout builds blockouts and chains longer ones.
+ */
+const BLOCKOUT_REFS: Pick<BlockoutRef, "role" | "name">[] = [{ role: "interior" }, { role: "character" }, { role: "exterior" }];
+const BLOCKOUT_BEATS = () => beatsFrom(EXAMPLE_SCENE.markers, EXAMPLE_SCENE.duration, EXAMPLE_WORDS);
+const BLOCKOUT_STYLE = "Low-key horror, cold torchlight, 35 mm film grain";
+const BLOCKOUT_CLOUD = tpl(
+  [
+    { id: "blockout", type: "video-input", x: 0, y: 0, data: { label: "Blockout (grey-box render)" } },
+    { id: "interior", type: "image-input", x: 0, y: 340, data: { label: "Interior" } },
+    { id: "character", type: "image-input", x: 0, y: 640, data: { label: "Character" } },
+    { id: "exterior", type: "image-input", x: 0, y: 940, data: { label: "Exterior" } },
+    {
+      id: "beats",
+      type: "prompt",
+      x: COL,
+      y: 0,
+      width: 420,
+      data: {
+        label: "Beats (Subject · Action · Camera · Style · No)",
+        text: compileBlockoutPrompt({ beats: BLOCKOUT_BEATS(), refs: BLOCKOUT_REFS, target: "seedance", style: BLOCKOUT_STYLE, sound: true, audio: ["Footsteps on concrete", "A long door creak", "Low room tone"], avoid: ["jump cuts", "text on screen", "extra people"] }),
+      },
+    },
+    { id: "film", type: "model", x: COL * 2 + 80, y: 280, data: { mediaKind: "video", label: "Film", op: "ref2v", params: { aspectRatio: "16:9", duration: 8, resolution: "720p", generateAudio: true } }, models: { cloud: "seedance-2-5", open: "seedance-2-5" } },
+    { id: "out", type: "output", x: COL * 3 + 120, y: 320, data: { label: "Film" } },
+  ],
+  [
+    ["blockout", "film", "videos"],
+    ["interior", "film", "images"],
+    ["character", "film", "images"],
+    ["exterior", "film", "images"],
+    ["beats", "film", "prompt"],
+    ["film", "out"],
+  ],
+);
+const BLOCKOUT_OPEN = tpl(
+  [
+    { id: "first", type: "image-input", x: 0, y: 0, data: { label: "Blockout's first frame" } },
+    { id: "interior", type: "image-input", x: 0, y: 320, data: { label: "Interior" } },
+    { id: "character", type: "image-input", x: 0, y: 620, data: { label: "Character" } },
+    { id: "depth", type: "video-input", x: COL, y: 620, data: { label: "Blockout depth (near = bright)" } },
+    { id: "look", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "First frame from the stills", op: "edit", prompt: blockoutFramePrompt(BLOCKOUT_REFS.slice(0, 2), BLOCKOUT_STYLE) }, models: { cloud: "oss-qwen-edit", open: "oss-qwen-edit" } },
+    {
+      id: "film",
+      type: "model",
+      x: COL * 2 + 40,
+      y: 260,
+      data: { mediaKind: "video", label: "Film (one 5 s window)", op: "v2v", prompt: compileBlockoutPrompt({ beats: BLOCKOUT_BEATS().filter((b) => b.start < 5), refs: BLOCKOUT_REFS, target: "open", style: BLOCKOUT_STYLE }), params: { aspectRatio: "16:9", duration: 5, resolution: "480p" } },
+      models: { cloud: "oss-wan22-vace-blockout", open: "oss-wan22-vace-blockout" },
+    },
+    { id: "out", type: "output", x: COL * 3 + 80, y: 300, data: { label: "Film" } },
+  ],
+  [
+    ["first", "look", "images"],
+    ["interior", "look", "images"],
+    ["character", "look", "images"],
+    ["look", "film", "images"],
+    ["depth", "film", "video"],
+    ["film", "out"],
+  ],
+);
+
 export const CANVAS_TEMPLATES: CanvasTemplate[] = [
   {
     id: "image-animate",
@@ -1952,6 +2020,14 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
         ["animate", "film", "videos"],
       ],
     ),
+  },
+  {
+    id: "blockout-film",
+    name: "Blockout → film",
+    description: "A grey-box blockout sets the camera and timing; reference stills and timed beats say what it becomes",
+    icon: "Box",
+    hue: 210,
+    build: (engine) => (engine === "cloud" ? BLOCKOUT_CLOUD(engine) : BLOCKOUT_OPEN(engine)),
   },
   {
     id: "clips-film",

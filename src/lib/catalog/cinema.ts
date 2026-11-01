@@ -1,4 +1,4 @@
-import { BLOCKOUT, OPEN_FPS, beatsIn, compileBlockoutPrompt, depthWindows, normalizeBeats, splitShots, windowsSeconds, type Beat, type BlockoutRef } from "@/lib/blockout";
+import { BLOCKOUT, OPEN_FPS, beatsIn, blockoutFramePrompt, compileBlockoutPrompt, depthWindows, normalizeBeats, splitShots, windowsSeconds, type Beat, type BlockoutRef } from "@/lib/blockout";
 import { DEFAULT_MOTION, PATH_FPS, PATH_FRAMES, normalizeKeys, toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { APERTURE, LENS, anglesNote, poseWords, recomposePrompt, type ScenePose } from "@/lib/scene3d";
 import { getModel, getPreset } from "./index";
@@ -2169,20 +2169,6 @@ const BLOCKOUT_TOOLS = {
 export const BLOCKOUT_FIRST = "Add a blockout first: upload a grey-box render or build one";
 
 const secs1 = (n: number) => `${Math.round(n * 10) / 10}`;
-
-/** The words that turn the grey box's first frame into the film's (Qwen-Image-Edit: picture 1 is the grey box). */
-export function blockoutFramePrompt(refs: readonly BlockoutRef[], style?: string): string {
-  const roles = refs.map((r, k) => `picture ${k + 2} is ${r.role === "character" ? "the person the mannequin becomes" : r.role === "style" ? "the look (its colour and light only)" : r.role === "prop" ? "a prop a box stands for" : `the ${r.role === "location" ? "place" : r.role}`}${r.name?.trim() ? ` (${r.name.trim()})` : ""}`);
-  return [
-    "Turn picture 1, a grey-box 3D blockout frame, into a finished photographic film frame.",
-    "Keep its exact camera, framing, perspective, layout and the figure's pose; the grey boxes become the real set and the mannequin becomes a real person.",
-    roles.length ? `${roles.join("; ")}.`.replace(/^p/, "P") : "",
-    tidy(style) ? `${tidy(style)}.` : "",
-    "No grey geometry, no mannequin, no text.",
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
 
 /**
  * Film a blockout. Cloud: one call when it fits the model (Seedance 2.5: 30 s, H3 Max 3D: 15 s), else shots cut at the

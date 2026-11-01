@@ -531,6 +531,20 @@ function cap(text: string, max: number): string {
   return (at > max * 0.6 ? cut.slice(0, at + 1) : cut.slice(0, max - 1) + "…").trim();
 }
 
+/** The words that turn the grey box's first frame into the film's (Qwen-Image-Edit: picture 1 is the grey box). */
+export function blockoutFramePrompt(refs: readonly Pick<BlockoutRef, "role" | "name">[], style?: string): string {
+  const roles = refs.map((r, k) => `picture ${k + 2} is ${r.role === "character" ? "the person the mannequin becomes" : r.role === "style" ? "the look (its colour and light only)" : r.role === "prop" ? "a prop a box stands for" : `the ${r.role === "location" ? "place" : r.role}`}${r.name?.trim() ? ` (${r.name.trim()})` : ""}`);
+  return [
+    "Turn picture 1, a grey-box 3D blockout frame, into a finished photographic film frame.",
+    "Keep its exact camera, framing, perspective, layout and the figure's pose; the grey boxes become the real set and the mannequin becomes a real person.",
+    roles.length ? `${roles.join("; ")}.`.replace(/^p/, "P") : "",
+    sentence(style ?? ""),
+    "No grey geometry, no mannequin, no text.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** The beats inside a stretch of the blockout, clipped to it and timed from its start (a shot's own clock). */
 export function beatsIn(beats: readonly Beat[], start: number, end: number): Beat[] {
   return beats

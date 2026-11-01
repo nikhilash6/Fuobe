@@ -21,7 +21,7 @@ const { getModel } = await import("@/lib/catalog");
 const { buildPayload } = await import("@/lib/catalog/payload");
 const { estimateCost } = await import("@/lib/catalog/plan");
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-const { BLOCKOUT_FIRST, BLOCKOUT_MODELS, blockoutFramePrompt, blockoutPrompt, planCinema } = await import("@/lib/catalog/cinema");
+const { BLOCKOUT_FIRST, BLOCKOUT_MODELS, blockoutPrompt, planCinema } = await import("@/lib/catalog/cinema");
 const B = await import("@/lib/blockout");
 
 beforeAll(() => {
@@ -157,7 +157,7 @@ describe("beats and the prompt", () => {
     expect(B.roleFor({ category: "prop" })).toBe("prop");
     expect(B.roleFor(undefined)).toBe("location");
     for (const r of B.REF_ROLES) expect(B.roleSentence({ role: r.id }, "@Image1")).toMatch(/^@Image1 is /);
-    expect(blockoutFramePrompt(REFS.slice(0, 2), "Cold light")).toContain("Picture 2 is the interior; picture 3 is the person the mannequin becomes (Mara). Cold light.");
+    expect(B.blockoutFramePrompt(REFS.slice(0, 2), "Cold light")).toContain("Picture 2 is the interior; picture 3 is the person the mannequin becomes (Mara). Cold light.");
   });
 
   it("clips beats to a shot and times them from its start", () => {
@@ -380,5 +380,50 @@ describe("Cinema API: a blockout in demo mode", () => {
       const res = await generateRoute.POST(json({ input: film("cloud", bad as never) }), params(p.id));
       expect(res.status, JSON.stringify(bad)).toBe(400);
     }
+  });
+});
+
+describe("Canvas, the GPU board, Assist and MCP", () => {
+  it("Canvas's Blockout → film template: Seedance 2.5 with the blockout as a clip in the cloud, the depth graph on your GPU", async () => {
+    const { getTemplate, planCanvas, inputPorts } = await import("@/lib/catalog/canvas");
+    const t = getTemplate("blockout-film")!;
+    const cloud = t.build("cloud");
+    const film = cloud.nodes.find((n) => n.id === "film")!;
+    expect(film.data).toMatchObject({ modelId: "seedance-2-5", op: "ref2v" });
+    expect(inputPorts(film).map((p) => p.id)).toContain("videos");
+    expect(String(cloud.nodes.find((n) => n.id === "beats")!.data.text)).toContain("@Video1 is a grey-box 3D blockout");
+    const open = t.build("open");
+    expect(open.nodes.find((n) => n.id === "film")!.data).toMatchObject({ modelId: "oss-wan22-vace-blockout", op: "v2v" });
+    const plan = planCanvas(open, { engineMode: "open" });
+    expect(plan.costUsd).toBe(0);
+    for (const e of plan.errors) expect(e.message).toMatch(/^(Add (an image|a video) to|Waiting on)/);
+  });
+
+  it("the GPU board has a Blockout to film row on graphs the requirement index knows", async () => {
+    const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
+    const row = STUDIO_ROWS.find((r) => r.href === "/cinema?blockout=1")!;
+    expect(row).toMatchObject({ label: "Blockout to film", group: "Video" });
+    const tool = studioTool(row)!;
+    expect(tool.workflows).toEqual(expect.arrayContaining(["video-blockout-wan22-fun-vace", "video-segment-resample", "frame-extract", "video-concat-encoded"]));
+    const req = JSON.parse(fs.readFileSync("workflows/comfyui/requirements.json", "utf8")) as { workflows: Record<string, { packs: Record<string, unknown> }> };
+    expect(req.workflows["video-blockout-wan22-fun-vace"].packs).toEqual({});
+  });
+
+  it("Assist and MCP's blockout_film plans Cinema's steps and runs them as a pipeline in demo mode", async () => {
+    const tools = await import("@/server/assist/tools");
+    const video = upload("blockout.png");
+    const args = { video, seconds: 8, beats: [{ start: 0, label: "Arrival", words: "She walks in." }, { start: 4.5, label: "The door opens" }] };
+    const cloud = tools.planFor("blockout_film", args, { engine: "cloud" });
+    expect(cloud.jobs).toMatchObject([{ tool: "blockout_film", modelId: "seedance-2-5", op: "ref2v" }]);
+    const open = tools.planFor("blockout_film", args, { engine: "open" });
+    expect(open.jobs.map((j) => j.modelId)).toEqual(["oss-extract-frame", "oss-qwen-edit", "oss-segment", "oss-wan22-vace-restyle", "oss-extract-frame", "oss-segment", "oss-wan22-vace-restyle", "oss-join-encoded"]);
+    expect(open.jobs.every((j) => j.costUsd === 0)).toBe(true);
+    const out = await tools.executeTool("blockout_film", args, { engine: "cloud" });
+    expect(out.isError).toBeFalsy();
+    const body = JSON.parse(String(out.content)) as { results: string[] };
+    expect(gens.getGeneration(body.results[0])!.feature).toBe("cinema-blockout");
+    const bad = await tools.executeTool("blockout_film", { video: "/api/files/uploads/nowhere.mp4", beats: [] }, { engine: "cloud" });
+    expect(bad.isError).toBe(true);
+    expect(String(bad.content)).toMatch(/pass seconds/);
   });
 });

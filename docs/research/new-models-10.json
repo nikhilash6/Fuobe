@@ -391,8 +391,9 @@
    "comfy": "no",
    "released": "2026-09-16",
    "url": "https://fal.ai/models/minimax/h3-max/3d-to-video",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "notes": "Re-read 2026-11-01 (fal OpenAPI): video_url (a Blender / previs render, up to 15 s and 32 shots), prompt (scene intent, at most 2000 characters), reference_image_urls (up to 8), max_generated_reference_images (1-8, default 2, only without references), resolution 480P / 768P / 1080P (default 768P), enable_safety_checker. Output as long as the input; no audio. $0.05 / $0.08 / $0.16 a second by resolution, at least 5 s a shot, + $0.50 processing a request. In Fuobe since package blockout-film: Cinema's Blockout, Canvas, Assist (hidden helper minimax-h3-max-3d)."
   },
   {
    "name": "SolarRenderer (H3 structure-to-video LoRAs)",
@@ -404,7 +405,8 @@
    "released": "2026-10-13",
    "url": "https://huggingface.co/Enderfga/SolarRenderer",
    "inFuobe": false,
-   "confirmed": true
+   "confirmed": true,
+   "notes": "Re-read 2026-11-01 at the primary sources. Model card (huggingface.co/Enderfga/SolarRenderer): LoRAs for MiniMax-H3's Ref2VA transformer that render a structure video (grey box, semantic map, skeleton, depth, body mesh, sketch) with an optional first frame and a prompt: solarrenderer_control_lora, solarrenderer_4step_lora and block-causal twins of both (rank 384), 4 steps, 1344x768 or 768x1344 at 24 fps, 158 frames (about 3.5 min on one GPU); weights under the MiniMax H3 Community License (excludes the EU, the UK, Korea and the US), code Apache-2.0; the card itself ships Python scripts, no ComfyUI graph. ComfyUI: smthemex/ComfyUI-SolarRenderer (Apache-2.0, 3 commits, git clone only, not in the Manager; nodes SolarRendererConditioning and SolarRendererSampler; LoRA mirror huggingface.co/smthem/SolarRenderer) on core MiniMax H3. The comfyui-wiki line 'custom nodes + 3 workflows' is the community pack, not Enderfga's release. Not built yet (blockout-film): it needs the pack and the H3 Ref2VA base on a GPU; the open engine's Blockout runs Wan 2.2 Fun VACE on the blockout's depth meanwhile. Next: install the pack on a GPU box, pin it in packs.json and the LoRAs in model-pins.json, and A/B it against the VACE windows."
   },
   {
    "name": "MiniMax H3 Fun ControlNet Union 2.0",
