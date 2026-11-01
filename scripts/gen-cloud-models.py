@@ -415,7 +415,9 @@ model("kling-4", "Kling 4.0", "Kuaishou", "kling", "video",
        ("video-swap", _K4_EDIT, "fal", {"drop": ["duration"]}), ("video-insert", _K4_EDIT, "fal", {"drop": ["duration"]}),
        ("t2v", "kwaivgi/kling-v4.0", "replicate", {"drop": ["image", "endImage", "images", "video"]}),
        ("i2v", "kwaivgi/kling-v4.0", "replicate", {"drop": ["images", "video", "aspectRatio"], "flf2v": True})],
-      badges=["top", "30s", "new"], ranged_durations=True,
+      # Only reference-to-video takes "auto": each route lists the shapes it takes (fit_values), so a text or Replicate
+      # run leaves "auto" out (the API's own 16:9) rather than sending a value it refuses.
+      badges=["top", "30s", "new"], ranged_durations=True, fit_values=True,
       pricing=("second", 0.235, "1080p; 720p $0.157. An edit, reference clips or video elements bill $0.141/s at 1080p ($0.094 at 720p) on the seconds in plus the seconds out, at least twice the output",
                {"byResolution": {"720p": 0.157, "1080p": 0.235}, "clipInput": {"usd": 0.141, "byResolution": {"720p": 0.094, "1080p": 0.141}}}),
       defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"})

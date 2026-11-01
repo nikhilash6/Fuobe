@@ -4126,8 +4126,22 @@ export const CLOUD_MODELS: ModelDef[] = [
             "maxPrompt": 512,
             "integer": true
           },
-          "aspectRatio": "aspect_ratio",
-          "resolution": "resolution",
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "21:9"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
@@ -4147,7 +4161,13 @@ export const CLOUD_MODELS: ModelDef[] = [
             "maxPrompt": 512,
             "integer": true
           },
-          "resolution": "resolution",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
@@ -4167,7 +4187,13 @@ export const CLOUD_MODELS: ModelDef[] = [
             "maxPrompt": 512,
             "integer": true
           },
-          "resolution": "resolution",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
@@ -4196,8 +4222,23 @@ export const CLOUD_MODELS: ModelDef[] = [
             "video": "video_url",
             "maxVideos": 3
           },
-          "aspectRatio": "aspect_ratio",
-          "resolution": "resolution",
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "auto",
+              "16:9",
+              "9:16",
+              "1:1",
+              "21:9"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
@@ -4221,7 +4262,13 @@ export const CLOUD_MODELS: ModelDef[] = [
             "video": "video_url",
             "maxVideos": 3
           },
-          "resolution": "resolution"
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          }
         }
       },
       {
@@ -4241,7 +4288,13 @@ export const CLOUD_MODELS: ModelDef[] = [
             "video": "video_url",
             "maxVideos": 3
           },
-          "resolution": "resolution"
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          }
         }
       },
       {
@@ -4261,7 +4314,13 @@ export const CLOUD_MODELS: ModelDef[] = [
             "video": "video_url",
             "maxVideos": 3
           },
-          "resolution": "resolution"
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          }
         }
       },
       {
@@ -4269,8 +4328,22 @@ export const CLOUD_MODELS: ModelDef[] = [
         "provider": "replicate",
         "endpoint": "kwaivgi/kling-v4.0",
         "map": {
-          "aspectRatio": "aspect_ratio",
-          "resolution": "resolution",
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "21:9"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
@@ -4284,7 +4357,13 @@ export const CLOUD_MODELS: ModelDef[] = [
         "map": {
           "image": "start_image",
           "endImage": "end_image",
-          "resolution": "resolution",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"
@@ -4298,7 +4377,13 @@ export const CLOUD_MODELS: ModelDef[] = [
         "map": {
           "image": "start_image",
           "endImage": "end_image",
-          "resolution": "resolution",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
           "duration": {
             "key": "duration",
             "type": "number"

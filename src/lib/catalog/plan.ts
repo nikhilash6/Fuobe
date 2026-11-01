@@ -10,11 +10,11 @@ import type {
   Preset,
   PresetRoute,
 } from "./types";
-import { sourceSeconds } from "./clip-windows";
+import { editClipsProblem, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
 import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
-import { askedSize, numFramesValue, sizeValue } from "./payload";
+import { askedSize, clipWords, numFramesValue, sizeValue } from "./payload";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
 import { pricingOn, type PriceClock } from "./promo";
 import { presetRoutes } from "./preset-recipe-routes";
@@ -65,6 +65,35 @@ export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op
 
 export function routesFor(model: ModelDef, op: Operation): ModelRoute[] {
   return model.routes.filter((r) => r.op === op);
+}
+
+/** Fewer characters than this of the overall prompt in front of a capped shot prompt say too little: it is left out. */
+const MIN_SHOT_LEAD = 40;
+
+/**
+ * Shots in whole seconds (each at least 1) that keep the take's rounded total: each is floored, and the seconds left go
+ * to the shots with the largest remainders, so 2.4 + 2.4 becomes 3 + 2 (5 s), not 2 + 2.
+ */
+export function wholeShots<S extends { duration: number }>(shots: S[]): S[] {
+  const total = Math.max(shots.length, Math.round(shots.reduce((n, s) => n + s.duration, 0)));
+  const secs = shots.map((s) => Math.max(1, Math.floor(s.duration)));
+  let left = total - secs.reduce((n, v) => n + v, 0);
+  const rem = (i: number) => shots[i].duration - Math.floor(shots[i].duration);
+  const byRem = shots.map((_, i) => i).sort((a, b) => rem(b) - rem(a) || a - b);
+  // Seconds to add go to the largest remainders (at most one each: they add up to less than one per shot); seconds to
+  // take back (shots raised to 1 s) come off the longest shots.
+  for (const i of byRem) {
+    if (left <= 0) break;
+    secs[i]++;
+    left--;
+  }
+  while (left < 0) {
+    const i = byRem.reduce((best, j) => (secs[j] > 1 && (best < 0 || secs[j] > secs[best]) ? j : best), -1);
+    if (i < 0) break;
+    secs[i]--;
+    left++;
+  }
+  return shots.map((s, i) => (secs[i] === s.duration ? s : { ...s, duration: secs[i] }));
 }
 
 /**
@@ -368,20 +397,37 @@ export function planGeneration(
   loras = kept;
 
   // Multi-shot: the clip is as long as its shots, and models without per-shot prompts get them written out.
-  const shots = params.shots?.filter((s) => s.prompt.trim());
+  let shots = params.shots?.filter((s) => s.prompt.trim());
   if (shots?.length) {
     if (!model.options.multiShot) throw new Error(`${model.name} can't do multi-shot — try Kling 3.0, Seedance 2.5 or Wan 2.6`);
     if (shots.length > model.options.multiShot.maxShots) throw new Error(`${model.name} takes up to ${model.options.multiShot.maxShots} shots`);
+    // A model whose shots are whole seconds (Kling 4.0) gets them rounded here, keeping the total, so the price, the
+    // per-shot lengths and every route's duration (Replicate's too) are the same whole seconds.
+    const shotMaps = model.routes.flatMap((r) => (r.map?.multiShot ? [r.map.multiShot] : []));
+    const whole = shotMaps.some((m) => m.integer);
+    if (whole) shots = wholeShots(shots);
     const total = shots.reduce((n, s) => n + s.duration, 0);
     const max = Math.max(...(model.options.durations ?? [total]));
+    const min = Math.min(...(model.options.durations ?? [total]));
     // Joined films (open models) render each shot as its own clip: only each shot has to fit.
     const concat = model.options.multiShot.mode === "concat";
     if (concat && shots.some((s) => s.duration > max)) throw new Error(`${model.name} makes clips up to ${max}s per shot`);
     if (!concat && total > max) throw new Error(`The shots add up to ${total}s — ${model.name} makes up to ${max}s`);
-    // Per-shot prompts carry the overall description (and @element legend) with them.
+    if (whole && total < min) throw new Error(`The shots add up to ${total}s — ${model.name} makes ${min}s or more`);
+    // Per-shot prompts carry the overall description (and @element legend) with them. Where a shot's prompt has a
+    // length cap (Kling 4.0: 512 characters), the shot's own words come first: the overall part is cut to the room left,
+    // and left out when hardly any is left.
     const overall = prompt.trim().replace(/[.\s]+$/, "");
     const native = model.options.multiShot.mode === "native";
-    params = { ...params, shots: native && overall ? shots.map((s) => ({ ...s, prompt: `${overall}. ${s.prompt.trim()}` })) : shots, duration: total };
+    const caps = shotMaps.flatMap((m) => (m.maxPrompt ? [m.maxPrompt] : []));
+    const cap = caps.length ? Math.min(...caps) : undefined;
+    const lead = (own: string) => {
+      if (cap === undefined || overall.length + own.length + 2 <= cap) return `${overall}. ${own}`;
+      const room = cap - own.length - 2;
+      const cut = room >= MIN_SHOT_LEAD ? clipWords(overall, room) : "";
+      return cut ? `${cut}. ${own}` : own;
+    };
+    params = { ...params, shots: native && overall ? shots.map((s) => ({ ...s, prompt: lead(s.prompt.trim()) })) : shots, duration: total };
     prompt = composeShots(prompt, shots);
   } else if (params.multiShot === "auto" && model.options.multiShot?.mode === "prompt") {
     prompt = `${prompt.replace(/[.\s]+$/, "")}. Multi-shot sequence: tell it in several distinct shots with clean cuts between them.`;
@@ -390,6 +436,12 @@ export function planGeneration(
   // Reference clips and video elements on a model that bills them with the output (Kling 4.0, Pricing.clipInput): priced
   // at the least they bill (twice the output) until the server reads their length (params.clipSeconds).
   if (model.pricing?.clipInput && req.inputs?.videos?.length && params.clipSeconds === undefined) params = { ...params, clipSeconds: 0 };
+  // An edit's reference clips (beside the clip it edits; clip elements are counted on their own): Kling 4.0 takes 4.
+  if (op === "v2v" || op === "video-swap" || op === "video-insert") {
+    const asElements = params.elements?.filter((g) => g.video !== undefined).length ?? 0;
+    const problem = editClipsProblem(model, (req.inputs?.videos?.length ?? 0) - asElements);
+    if (problem) throw new Error(problem);
+  }
   if (!routesFor(model, op).length) {
     throw new Error(`${model.name} can't do ${op} — try another model`);
   }

@@ -316,7 +316,7 @@ function zoomValue(z: NonNullable<FieldMap["zoom"]>, input: GenInput): Record<st
 }
 
 /** `text` cut to `max` characters, at a word where one is near the end (a shot's prompt: Kling 4.0 takes 512). */
-function clipWords(text: string, max: number): string {
+export function clipWords(text: string, max: number): string {
   if (text.length <= max) return text;
   const cut = text.slice(0, max);
   const space = cut.lastIndexOf(" ");

@@ -17,12 +17,18 @@ afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 const { getModel, getPreset, MODELS, modelsFor } =
   await import("@/lib/catalog");
 const { buildPayload } = await import("@/lib/catalog/payload");
-const { clipBilling, estimateCost, planGeneration, routesFor } =
+const { clipBilling, estimateCost, planGeneration, routesFor, wholeShots } =
   await import("@/lib/catalog/plan");
 const { applyMentions, elementsNote } = await import("@/lib/catalog/elements");
 const { planCinema } = await import("@/lib/catalog/cinema");
-const { clipSizeProblem, clipTotalProblem, clipWindowProblem } =
-  await import("@/lib/catalog/clip-windows");
+const {
+  clipFpsProblem,
+  clipSizeProblem,
+  clipTotalProblem,
+  clipWindowProblem,
+  editClipsProblem,
+  elementClipProblem,
+} = await import("@/lib/catalog/clip-windows");
 const { frameSupport } = await import("@/lib/catalog/keyframes");
 const { genjutsuProblem, getMaker, makerPrompt } =
   await import("@/lib/catalog/genjutsu");
@@ -260,6 +266,116 @@ describe("payloads against the stored schemas", () => {
       512,
     );
     checkAgainstSchema(r, payload);
+  });
+
+  it("a long overall prompt never pushes a shot's own words out of its 512 characters", () => {
+    const overall = `${"A slow, rain-soaked harbour at night with sodium lights. ".repeat(11)}End.`;
+    expect(overall.length).toBeGreaterThan(600);
+    const shots = [
+      { prompt: "SHOT-ONE: wide on the pier", duration: 4 },
+      { prompt: "SHOT-TWO: her hands on the rail", duration: 3 },
+      { prompt: "SHOT-THREE: the ship's horn", duration: 3 },
+    ];
+    const { route: r, payload } = payloadFor({ prompt: overall, params: { shots } });
+    const sent = payload.multi_prompt as { prompt: string }[];
+    sent.forEach((s, i) => {
+      expect(s.prompt.length).toBeLessThanOrEqual(512);
+      // The shot's words whole, after as much of the overall description as fits.
+      expect(s.prompt.endsWith(shots[i].prompt)).toBe(true);
+      expect(s.prompt.startsWith("A slow, rain-soaked harbour")).toBe(true);
+    });
+    expect(new Set(sent.map((s) => s.prompt)).size).toBe(3);
+    checkAgainstSchema(r, payload);
+    // A shot that fills the 512 characters itself goes alone (cut at a word), with no overall part in front.
+    const long = payloadFor({
+      prompt: overall,
+      params: {
+        shots: [
+          { prompt: `SHOT-LONG ${"word ".repeat(110)}`, duration: 5 },
+          { prompt: "SHOT-SHORT", duration: 5 },
+        ],
+      },
+    }).payload.multi_prompt as { prompt: string }[];
+    expect(long[0].prompt.startsWith("SHOT-LONG")).toBe(true);
+    expect(long[0].prompt.length).toBeLessThanOrEqual(512);
+    expect(long[1].prompt.endsWith("SHOT-SHORT")).toBe(true);
+    // A short overall prompt still leads each shot whole.
+    const short = payloadFor({ prompt: "Night harbour", params: { shots } })
+      .payload.multi_prompt as { prompt: string }[];
+    expect(short[0].prompt).toBe("Night harbour. SHOT-ONE: wide on the pier");
+  });
+
+  it("shots in whole seconds, the total kept: priced as sent, on fal and Replicate", () => {
+    expect(wholeShots([{ duration: 2.4 }, { duration: 2.4 }])).toEqual([
+      { duration: 3 },
+      { duration: 2 },
+    ]);
+    expect(
+      wholeShots([{ duration: 0.2 }, { duration: 0.2 }, { duration: 5 }]),
+    ).toEqual([{ duration: 1 }, { duration: 1 }, { duration: 3 }]);
+    const shots = [
+      { prompt: "Wide", duration: 2.4 },
+      { prompt: "Close", duration: 2.4 },
+    ];
+    const fal = payloadFor({ params: { shots, resolution: "720p" } });
+    expect(fal.plan.params.duration).toBe(5);
+    expect(
+      estimateCost(fal.plan.model, fal.plan.params, 1, fal.plan.op),
+    ).toBeCloseTo(5 * 0.157, 5);
+    const sent = fal.payload.multi_prompt as { duration: number }[];
+    expect(sent.map((s) => s.duration)).toEqual([3, 2]);
+    expect(fal.payload.duration).toBe(5);
+    checkAgainstSchema(fal.route, fal.payload);
+    // Replicate has no shots: they're written out, and the length is the same whole seconds.
+    const rep = payloadFor({ params: { shots, resolution: "720p" } }, "replicate");
+    expect(rep.payload.duration).toBe(5);
+    expect(rep.payload.multi_prompt).toBeUndefined();
+    checkAgainstSchema(rep.route, rep.payload);
+    // Under 3 s in all is refused before the call (fal answers 422).
+    expect(() =>
+      payloadFor({
+        params: {
+          shots: [
+            { prompt: "One", duration: 1 },
+            { prompt: "Two", duration: 1 },
+          ],
+        },
+      }),
+    ).toThrow(/add up to 2s — Kling 4.0 makes 3s or more/);
+    // Rounding up past 30 s is refused, not sent.
+    expect(() =>
+      payloadFor({
+        params: {
+          shots: [
+            { prompt: "One", duration: 15.4 },
+            { prompt: "Two", duration: 15.3 },
+          ],
+        },
+      }),
+    ).toThrow(/add up to 31s/);
+  });
+
+  it("'auto' shape goes only to reference-to-video; text runs leave it to the API's own 16:9", () => {
+    const t2v = payloadFor({ params: { aspectRatio: "auto" } });
+    expect(t2v.route.endpoint).toBe("kling/v4/text-to-video");
+    expect(t2v.payload.aspect_ratio).toBeUndefined();
+    checkAgainstSchema(t2v.route, t2v.payload);
+    const rep = payloadFor({ params: { aspectRatio: "auto" } }, "replicate");
+    expect(rep.payload.aspect_ratio).toBeUndefined();
+    checkAgainstSchema(rep.route, rep.payload);
+    // Shapes each route takes still go as they are.
+    expect(
+      payloadFor({ params: { aspectRatio: "9:16" } }, "replicate").payload
+        .aspect_ratio,
+    ).toBe("9:16");
+    const ref = payloadFor({
+      op: "ref2v",
+      params: { aspectRatio: "auto" },
+      inputs: { images: ["https://x/a.png"] },
+    });
+    expect(ref.route.endpoint).toBe("kling/v4/reference-to-video");
+    expect(ref.payload.aspect_ratio).toBe("auto");
+    checkAgainstSchema(ref.route, ref.payload);
   });
 
   it("start and end frames", () => {
@@ -550,6 +666,56 @@ describe("limits checked before a paid call", () => {
     ).toMatch(/700 px/);
     expect(clipTotalProblem(kling, 34)).toMatch(/30 s of clips in all/);
     expect(clipTotalProblem(kling, 30)).toBeNull();
+  });
+});
+
+describe("the hosted API's other limits, in Fuobe's words before the call", () => {
+  it("an edit's clip: shape 0.40–2.50 and 24–60 fps", () => {
+    expect(clipSizeProblem(kling, 3000, 700)).toMatch(/crop it first/);
+    expect(clipSizeProblem(kling, 720, 1920)).toMatch(/crop it first/);
+    expect(clipSizeProblem(kling, 1080, 1920)).toBeNull();
+    expect(clipSizeProblem(kling, 2500, 1000)).toBeNull();
+    expect(clipFpsProblem(kling, 15)).toMatch(/24–60 fps.*save it at 24 fps/);
+    expect(clipFpsProblem(kling, 120)).toMatch(/save it at 60 fps/);
+    expect(clipFpsProblem(kling, 23.976)).toBeNull();
+    expect(clipFpsProblem(kling, 60)).toBeNull();
+    expect(
+      clipBlocker(
+        "v2v",
+        { duration: 12, width: 1920, height: 1080, fps: 120 },
+        {},
+        kling,
+        undefined,
+      ),
+    ).toMatch(/fps/);
+    // Other models aren't held to Kling's limits.
+    const o3 = getModel("kling-o3-4k-edit") ?? { id: "x", name: "X" };
+    expect(clipFpsProblem(o3, 120)).toBeNull();
+  });
+
+  it("a clip element is 3–8 s", () => {
+    expect(elementClipProblem(kling, 10, "Maya")).toMatch(
+      /3–8 s clips as elements, and Maya's is 10 s/,
+    );
+    expect(elementClipProblem(kling, 2)).toMatch(/3–8 s/);
+    expect(elementClipProblem(kling, 5)).toBeNull();
+  });
+
+  it("an edit takes up to 4 reference clips beside the clip it edits (clip elements apart)", () => {
+    expect(editClipsProblem(kling, 5)).toMatch(/up to 4 reference clips/);
+    expect(editClipsProblem(kling, 4)).toBeNull();
+    const five = Array.from({ length: 5 }, (_, i) => `https://x/r${i}.mp4`);
+    const edit = (params?: Req["params"]) =>
+      payloadFor({
+        feature: "video-edit",
+        op: "v2v",
+        prompt: "Make it snow",
+        inputs: { video: "https://x/src.mp4", videos: five },
+        params,
+      });
+    expect(() => edit()).toThrow(/up to 4 reference clips.*has 5: remove 1/);
+    // One of the five is a clip element: four references left.
+    expect(() => edit({ elements: [{ video: 4 }] })).not.toThrow();
   });
 });
 

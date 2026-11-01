@@ -12,7 +12,7 @@ import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
 import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
-import { clipSizeProblem, clipTotalProblem, clipWindowProblem } from "@/lib/catalog/clip-windows";
+import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, withoutTriggers } from "@/lib/catalog/plan";
 import { framedLength, keepMatte } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
@@ -1500,14 +1500,15 @@ async function submitNow(
       });
     };
     // Reference clips and clip elements a model bills with the output (Kling 4.0, Pricing.clipInput): their headers' lengths.
-    const clipLengths: number[] = [];
+    // By the clip's place in inputs.videos, so a clip element (params.elements' video) finds its own length.
+    const clipLengths: (number | undefined)[] = [];
     const billsClips = !!plan.model.pricing?.clipInput;
-    const prepClip = async (ref?: string) => {
+    const prepClip = async (ref: string | undefined, i: number) => {
       if (!ref || !billsClips) return prep(ref);
       return gate(async () => {
         const f = await readRef(ref);
         const facts = mediaFacts(f.data);
-        if (facts.duration) clipLengths.push(facts.duration);
+        if (facts.duration) clipLengths[i] = facts.duration;
         return adapter.prepareFile(f.data, f.contentType, f.name, route);
       });
     };
@@ -1565,7 +1566,7 @@ async function submitNow(
       audio2: await prep(req.inputs?.audio2),
       voiceAudio: await prep(req.inputs?.voiceAudio),
       voiceAudio2: await prep(req.inputs?.voiceAudio2),
-      videos: (await Promise.all((req.inputs?.videos ?? []).map(prepClip))).filter(Boolean) as string[],
+      videos: (await Promise.all((req.inputs?.videos ?? []).map((ref, i) => prepClip(ref, i)))).filter(Boolean) as string[],
       audios: (await Promise.all((req.inputs?.audios ?? []).map(prep))).filter(Boolean) as string[],
       model3d: await prep(req.inputs?.model3d),
       loras: plan.loras,
@@ -1588,17 +1589,33 @@ async function submitNow(
         update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });
       }
     }
-    // Reference clips (and clip elements) billed with the output: refused past the most the model takes in all (with the
-    // clip edited), before it's paid for, and priced on their seconds once read (the plan priced the least they bill).
-    // An edit of a clip whose length the caller didn't say is priced on it (in and out) once its header is read.
     const edits = plan.op === "v2v" || plan.op === "video-swap" || plan.op === "video-insert";
+    // An edit whose route sends no length keeps the clip's own (Kling 4.0's edit, swap and insert), whatever the request
+    // said: the clip is held to the model's window, sides, shape and frame rate before it's paid for.
+    if (edits && !route.map?.duration && !req.chain?.length && providerId !== "mock" && plan.model.engine !== "open") {
+      const problem =
+        (input.sourceDuration ? clipWindowProblem(plan.model, input.sourceDuration) : null) ??
+        (input.sourceSize ? clipSizeProblem(plan.model, input.sourceSize.width, input.sourceSize.height) : null) ??
+        (input.sourceFps ? clipFpsProblem(plan.model, input.sourceFps) : null);
+      if (problem) throw new Error(problem);
+    }
+    // Reference clips (and clip elements) billed with the output: refused past the most the model takes in all (with the
+    // clip edited), or a clip element outside its own window, before it's paid for, and priced on their seconds once read
+    // (the plan priced the least they bill). An edit of a clip whose length the caller didn't say is priced on it (in and
+    // out) once its header is read.
+    const read = clipLengths.filter((n): n is number => n !== undefined);
     const unpricedEdit = edits && !!input.sourceDuration && plan.params.sourceDuration === undefined;
-    if (billsClips && (clipLengths.length || unpricedEdit) && providerId !== "mock" && plan.model.engine !== "open") {
-      const seconds = clipLengths.reduce((a, b) => a + b, 0);
+    if (billsClips && (read.length || unpricedEdit) && providerId !== "mock" && plan.model.engine !== "open") {
+      for (const g of plan.params.elements ?? []) {
+        const seconds = g.video !== undefined ? clipLengths[g.video] : undefined;
+        const problem = seconds !== undefined ? elementClipProblem(plan.model, seconds) : null;
+        if (problem) throw new Error(problem);
+      }
+      const seconds = read.reduce((a, b) => a + b, 0);
       const problem = clipTotalProblem(plan.model, (edits ? (input.sourceDuration ?? 0) : 0) + seconds);
       if (problem) throw new Error(problem);
-      if (clipLengths.length) input.clipSeconds = seconds;
-      const priced = { ...plan.params, ...(input.sourceDuration !== undefined && { sourceDuration: input.sourceDuration }), ...(clipLengths.length && { clipSeconds: seconds }) };
+      if (read.length) input.clipSeconds = seconds;
+      const priced = { ...plan.params, ...(input.sourceDuration !== undefined && { sourceDuration: input.sourceDuration }), ...(read.length && { clipSeconds: seconds }) };
       update(id, { cost_usd: estimateCost(plan.model, priced, 1, plan.op) });
     }
     // An upscale that wouldn't enlarge the clip (a 1080p clip at a default 1080p; a 4K clip would even shrink):
