@@ -1787,11 +1787,10 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-helicopter-escape": {
-    "poster": "/previews/presets/effect-helicopter-escape.jpg?v=f9c70e26",
-    "video": "/previews/presets/effect-helicopter-escape.mp4?v=27c5a6bf",
+    "poster": "/previews/presets/effect-helicopter-escape.jpg?v=52296246",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "minimax-h3",
+    "model": "ideogram4",
     "variant": "lean-json"
   },
   "effect-hero-flight": {
@@ -3383,11 +3382,10 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-moonwalk-right": {
-    "poster": "/previews/presets/motion-moonwalk-right.jpg?v=1be905f5",
-    "video": "/previews/presets/motion-moonwalk-right.mp4?v=ea1ee679",
+    "poster": "/previews/presets/motion-moonwalk-right.jpg?v=6f2ead4e",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "minimax-h3",
+    "model": "ideogram4",
     "variant": "lean-json"
   },
   "motion-mouth-in": {
@@ -3486,11 +3484,10 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-raw-chaos": {
-    "poster": "/previews/presets/motion-raw-chaos.jpg?v=b2e2b761",
-    "video": "/previews/presets/motion-raw-chaos.mp4?v=0e529fcc",
+    "poster": "/previews/presets/motion-raw-chaos.jpg?v=44607860",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "minimax-h3",
+    "model": "ideogram4",
     "variant": "lean-json"
   },
   "motion-road-rush": {
