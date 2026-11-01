@@ -1,4 +1,5 @@
 import { exrWorkflow } from "@/lib/av/video-finish";
+import { qwen21Graph } from "@/lib/qwen21-speed";
 
 /**
  * Which workflow a ComfyUI route runs for a request: the route's endpoint, or a variant picked by an option.
@@ -47,6 +48,8 @@ export interface VariantRequest {
   extra: Record<string, unknown>;
   /** Is this workflow in the library. */
   has: (id: string) => boolean;
+  /** The GPU's graphics memory in GB when known (Qwen-Image 2.1 runs its small encoder under 24 GB unless told otherwise). */
+  vramGb?: number;
 }
 
 /** The workflow id a route's endpoint runs as, for this request. */
@@ -65,6 +68,8 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   if (posed && typeof r.extra.cameraMotion === "string" && r.extra.cameraMotion) endpoint = posed;
   const shot = PRODUCT_SHOT_GRAPH[endpoint];
   if (shot && r.extra.productShot === true && r.images === 1 && r.has(shot)) endpoint = shot;
+  // Qwen-Image 2.1: Options → Speed's graph, or the small encoder's on a small GPU (src/lib/qwen21-speed.ts).
+  endpoint = qwen21Graph(endpoint, r.extra, r.vramGb, r.has);
   // MiniMax H3: an orbit runs the Orbit LoRA graph (whatever the quality), else Best runs the 20-step graph.
   const orbit = H3_ORBIT_GRAPH[endpoint];
   const best = H3_BEST_GRAPH[endpoint];

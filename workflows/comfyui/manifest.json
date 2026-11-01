@@ -10702,7 +10702,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only",
-      "validated": true,
+      "validated": false,
       "notes": "The Qwen-Image 2.1 text-to-image workflow, its subgraph flattened: int8 model, Qwen3-VL 8B int8 text encoder (type qwen_image), TextEncodeQwenImage21 (no negative, resolution 1024, no images), EmptyLatentImage, KSampler 25 steps, cfg 1, euler, simple, denoise 1. Removed: the ResolutionSelector (width/height bind the latent, multiples of 32, native up to 2048x2048) and the SaveImageAdvanced (SaveImage after SplitImageWithAlpha, as the Qwen 2.1 VAE decodes four channels). cfg 1: no negative prompt. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file)."
     },
     {
@@ -10810,7 +10810,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only",
-      "validated": true,
+      "validated": false,
       "notes": "The 25-step Qwen-Image 2.1 edit behind the site's preview pictures, with the references wired as in the Qwen-Image 2.1 image-edit workflow: each image scaled to 2048 on its long side (lanczos), all of them on one TextEncodeQwenImage21 (images.image_1..4, resolution 0 = each at its own size on the 32 grid, vae linked, no negative), its latent (image 1's size: no custom-size latent, which shifts the edit), QwenImage21Cache auto, KSampler 25 steps, cfg 1, euler, simple. Output follows image 1 (2048 on the long side). Images 2-4 are optional: Fuobe leaves out the branch of a reference not given. Prompt: one plain instruction, then one keep clause pointing at the picture (\"Keep ... exactly as in image 1\"); refer to references as image 1/2/3/4. Removed: the ComfySwitchNode custom size, compare and note nodes. It and qwen-image-21-turbo-edit made 133 of the site's preview edits. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file)."
     },
     {
@@ -10910,7 +10910,7 @@
       "customNodes": [],
       "vramGb": 20,
       "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only",
-      "validated": true,
+      "validated": false,
       "notes": "The Qwen-Image 2.1 turbo image-edit workflow, as the site's fast preview edits run it: turbo int8 model, the fixed 8-step ManualSigmas schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder's latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file)."
     },
     {

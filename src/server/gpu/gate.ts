@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { fixPlan } from "@/lib/gpu/plan";
+import { vramGb } from "@/lib/gpu/requirements";
 import { deviceLabel, needTargets, toolReadiness } from "@/lib/gpu/readiness";
 import type { FixPlan, ToolReadiness, ToolRef } from "@/lib/gpu/types";
 import type { GenerationRequest } from "@/lib/catalog/types";
@@ -42,6 +43,8 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
   const idx = loadIndex();
   const req = g.request;
   const has = (id: string) => !!idx.workflows[id];
+  // The graph the run takes can depend on the GPU's memory (Qwen-Image 2.1's small encoder): the last check's reading.
+  const memory = vramGb(readSnapshot(t)?.inventory.devices[0]?.vramTotal);
   const id = resolveWorkflowId(g.route.endpoint, {
     op: g.op,
     clips: req.inputs?.videos?.length ?? 0,
@@ -50,6 +53,7 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
     audio2: !!req.inputs?.audio2 || !!req.params?.extra?.audio2,
     extra: req.params?.extra ?? {},
     has,
+    vramGb: memory,
   });
   if (!has(id)) return { ok: true };
   // The preset's route on the run's model (the one its preview was made with, or its own): its LoRAs are checked too.

@@ -1257,3 +1257,16 @@ export function costLabel(s: { demo: boolean; cost: number | null; compact?: boo
 
 /** Prompts with an @mention: spellcheck would underline every handle. */
 export const hasMention = (text: string) => /(^|\s)@[\p{L}\p{N}_-]+/u.test(text);
+
+/**
+ * The controls as an operation offers them: each control's values for `op` (ModelOptions.controls[].ops), and only the
+ * controls left with a choice to make.
+ */
+export function controlsFor(controls: NonNullable<ModelDef["options"]["controls"]>, op?: string): NonNullable<ModelDef["options"]["controls"]> {
+  if (!op) return controls;
+  return controls.flatMap((c) => {
+    if (!c.ops) return [c];
+    const values = c.values.filter((v) => c.ops?.[String(v)]?.includes(op) ?? true);
+    return values.length > 1 ? [{ ...c, values }] : [];
+  });
+}

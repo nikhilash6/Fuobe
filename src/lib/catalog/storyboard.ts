@@ -9,9 +9,10 @@
  * look's grade and overlay after it is made (each next frame is made from the previous one as it
  * came out, so the grade is applied once).
  *
- * The board is Fuobe's open recipe on both engines: Qwen-Image-Edit 2509 + the next-scene LoRA makes each next frame
- * on your GPU (a graph that loads it) and on fal's hosted Qwen-Image-Edit 2509 (the LoRA sent as a URL). Nano Banana
- * Pro stays a separate choice in the cloud (`partner`), every frame on it as boards ran before.
+ * The board is Fuobe's open recipe on both engines: on your GPU each next frame is Qwen-Image 2.1 with akhaliq's 2.1
+ * Next-Scene LoRA (nm10-qwen21-fast), or the classic Qwen-Image-Edit 2509 + next-scene LoRA when the board asks for it
+ * (`nextScene`); in the cloud fal's hosted Qwen-Image-Edit 2509 with the 2509 LoRA (sent as a URL), as Qwen-Image 2.1 isn't
+ * hosted. Nano Banana Pro stays a separate choice in the cloud (`partner`), every frame on it as boards ran before.
  */
 import { loraEntry, loraRef } from "./loras";
 import type { ChainSlot, Engine, GenerationRequest, LoraRef } from "./types";
@@ -34,10 +35,18 @@ const NEXT_SCENE = loraEntry("next-scene-qwen-edit-2509");
 export const STORYBOARD_MODELS: Record<Engine, StoryboardModels> = {
   // Hosted open weights: Z-Image Turbo, Qwen-Image-Edit 2511 with references, then Qwen-Image-Edit 2509 + next-scene.
   cloud: { first: "z-image-turbo-cloud", firstWithRefs: "qwen-image-edit-2511-cloud", next: "qwen-image-edit-2509-cloud", chainFrom: "first", ...(NEXT_SCENE && { nextLoras: [loraRef(NEXT_SCENE)] }) },
-  // Frame 1 on Qwen-Image 2.1 (text to image, or an edit of up to 4 references); then Qwen-Image-Edit 2509 + the
-  // next-scene LoRA takes the previous panel as image 1 and the character as image 2.
-  open: { first: "oss-qwen-image-21", firstWithRefs: "oss-qwen-image-21", next: "oss-qwen-next-scene", chainFrom: "first" },
+  // Frame 1 on Qwen-Image 2.1 (text to image, or an edit of up to 4 references); then Qwen-Image 2.1 + the 2.1 Next-Scene
+  // LoRA takes the previous panel as image 1 and the character as image 2.
+  open: { first: "oss-qwen-image-21", firstWithRefs: "oss-qwen-image-21", next: "oss-qwen-image-21-next-scene", chainFrom: "first" },
 };
+
+/**
+ * The model each next frame runs on your GPU: Qwen-Image 2.1's Next-Scene LoRA (the default), or the classic
+ * Qwen-Image-Edit 2509 + next-scene LoRA (the graph boards used before, and the cloud's recipe).
+ */
+export const STORYBOARD_NEXT_SCENE = { "qwen-21": "oss-qwen-image-21-next-scene", classic: "oss-qwen-next-scene" } as const;
+export type StoryboardNextScene = keyof typeof STORYBOARD_NEXT_SCENE;
+export const STORYBOARD_NEXT_SCENE_IDS = Object.keys(STORYBOARD_NEXT_SCENE) as [StoryboardNextScene, ...StoryboardNextScene[]];
 
 /** Partner models a cloud board can run on instead (a separate choice): every frame on it, each from the last one. */
 export const STORYBOARD_PARTNERS = {
@@ -46,9 +55,13 @@ export const STORYBOARD_PARTNERS = {
 export type StoryboardPartner = keyof typeof STORYBOARD_PARTNERS;
 export const STORYBOARD_PARTNER_IDS = Object.keys(STORYBOARD_PARTNERS) as [StoryboardPartner, ...StoryboardPartner[]];
 
-/** The models a board runs on: the partner when one is picked in the cloud, else Fuobe's recipe for the engine. */
-export function storyboardModels(engine: Engine, partner?: StoryboardPartner): StoryboardModels {
-  return engine === "cloud" && partner ? STORYBOARD_PARTNERS[partner] : STORYBOARD_MODELS[engine];
+/**
+ * The models a board runs on: the partner when one is picked in the cloud, else Fuobe's recipe for the engine, whose next
+ * frames on your GPU take the next-scene model asked for.
+ */
+export function storyboardModels(engine: Engine, partner?: StoryboardPartner, nextScene?: StoryboardNextScene): StoryboardModels {
+  if (engine === "cloud") return partner ? STORYBOARD_PARTNERS[partner] : STORYBOARD_MODELS.cloud;
+  return nextScene ? { ...STORYBOARD_MODELS.open, next: STORYBOARD_NEXT_SCENE[nextScene] } : STORYBOARD_MODELS.open;
 }
 
 /** The model a board with a Soul look makes its first frame on (no references): the look's LoRAs, words and grade. */
@@ -123,6 +136,8 @@ export interface StoryboardPlanInput {
   engine: Engine;
   /** A partner model for the whole board (cloud only). */
   partner?: StoryboardPartner;
+  /** The next frames' model on your GPU (open only): Qwen-Image 2.1's Next-Scene LoRA unless "classic". */
+  nextScene?: StoryboardNextScene;
   scenes: string[];
   references?: string[];
   style?: string;
@@ -139,7 +154,7 @@ export type FrameRequest = GenerationRequest & { batchTitle?: string };
  * picture as it came out (`raw`: before a look's grade, which every frame gets on its own).
  */
 export function planStoryboard(input: StoryboardPlanInput): FrameRequest[] {
-  const m = storyboardModels(input.engine, input.partner);
+  const m = storyboardModels(input.engine, input.partner, input.nextScene);
   const refs = (input.references ?? []).slice(0, 4);
   const look = input.look;
   const cropped = !!look && input.aspectRatio === LOOK_CROPPED;

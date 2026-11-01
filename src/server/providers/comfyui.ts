@@ -42,6 +42,7 @@ import {
 } from "@/lib/comfy";
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
+import { DECODER_PARAM, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, QWEN21_SMALL_GPU_GRAPH, SPEED_PARAM } from "@/lib/qwen21-speed";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
@@ -738,6 +739,32 @@ export async function comfyDevice(worker: ComfyWorker = "main"): Promise<string 
 }
 
 declare global {
+  /** The graphics memory each ComfyUI address reported last (GET /system_stats devices[0].vram_total, bytes), and when. */
+  var __fuobeComfyVram: Map<string, { bytes?: number; at: number }> | undefined;
+}
+
+/**
+ * The connected ComfyUI's first device's graphics memory in GB (GET /system_stats devices[0].vram_total, as Settings' test
+ * reads it), kept for a minute; on someone's computer what its Fuobe tab last said; undefined when nothing says.
+ */
+export async function comfyVramGb(worker: ComfyWorker = "main"): Promise<number | undefined> {
+  const gb = (bytes: number | undefined) => (typeof bytes === "number" && bytes > 0 ? bytes / 2 ** 30 : undefined);
+  const computer = computerScope();
+  if (computer) return gb(runnerFacts(computer)?.vramBytes);
+  const url = baseUrl(worker);
+  if (!url) return undefined;
+  const cache = (globalThis.__fuobeComfyVram ??= new Map());
+  const hit = cache.get(url);
+  if (hit && Date.now() - hit.at < 60_000) return gb(hit.bytes);
+  return oneAsk(`/system_stats vram ${url}`, async () => {
+    const st = await comfyJson<{ devices?: { vram_total?: unknown }[] }>("/system_stats", worker).catch(() => undefined);
+    const bytes = typeof st?.devices?.[0]?.vram_total === "number" ? (st.devices[0].vram_total as number) : undefined;
+    if (st) cache.set(url, { bytes, at: Date.now() });
+    return gb(bytes);
+  });
+}
+
+declare global {
   /** The DBS models each ComfyUI address listed last (GET /models/dbs), and when. */
   var __fuobeComfyDbs: Map<string, { models?: DbsModel[]; at: number }> | undefined;
 }
@@ -903,6 +930,8 @@ const OPTIONAL_REFERENCE_INPUTS: ReadonlySet<string> = new Set([
   // FLUX 3 Image Klein's edit: its references on one ReferenceMultiLatent, and the batch its prompt helper looks at.
   "ReferenceMultiLatent",
   "BatchImagesNode",
+  // Qwen-Image 2.1 on a small GPU: Zen Image Edit's encoder takes image_2-4 the same way.
+  "ZenImage21TextEncode",
 ]);
 
 /** Uploads that are sides of one object (image = the first side, image2 the second…), and the node they all go into. */
@@ -974,6 +1003,8 @@ export interface PrepareContext {
   serverRam?: () => Promise<number | undefined>;
   /** The server's first torch device type ("cuda", "cpu", "mps"…; GET /system_stats devices[0].type): DBS picks its model by it. */
   device?: () => Promise<string | undefined>;
+  /** The server's first device's graphics memory in GB (GET /system_stats devices[0].vram_total): Qwen-Image 2.1's GPU Auto reads it. */
+  vramGb?: () => Promise<number | undefined>;
   /** The DBS models on the server's disk (GET /models/dbs), undefined when it can't say: a run never gets one that isn't there. */
   dbsModels?: () => Promise<DbsModel[] | undefined>;
   /** The RE-USE files on the server's disk (GET /models/reuse): null without ComfyUI-RE-USE, undefined when it can't say. */
@@ -989,6 +1020,23 @@ export interface PreparedPrompt {
   manifest: ManifestWorkflow;
   workflow: ComfyWorkflow;
   meta: Record<string, unknown>;
+}
+
+/**
+ * The canvas a Qwen-Image 2.1 Lightning run samples (its sigmas follow the size): text to image's width × height; an edit's
+ * image 1 at its own size, at most 2048 on the long side (the graph's scaling); inpaint's 1.5 MP crop and expand's 1 MP canvas.
+ */
+function lightningCanvas(capability: string, values: Partial<Record<BindingKey, unknown>>, image: MediaInfo | undefined): { width: number; height: number } | undefined {
+  if (capability === "t2i") {
+    const [w, h] = [Number(values.width), Number(values.height)];
+    return w > 0 && h > 0 ? { width: w, height: h } : undefined;
+  }
+  // Only the area counts (tokens of 16 × 16 px): 1.5 MP and 1 MP squares.
+  if (capability === "inpaint") return { width: 1254, height: 1254 };
+  if (capability === "outpaint") return { width: 1024, height: 1024 };
+  if (!image?.width || !image.height) return undefined;
+  const k = Math.min(1, 2048 / Math.max(image.width, image.height));
+  return { width: image.width * k, height: image.height * k };
 }
 
 /** Caption cues for the burn-in: params.extra.cues, or the prompt's "start-end: text" / SRT lines. */
@@ -1122,6 +1170,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // The variant this request runs (one graph per clip count, the single-track soundtrack, EXR frames, a Fun Camera pose,
   // the product shot): src/lib/comfy-variants.ts, which the GPU pre-flight's gate reads too. A LoRA mixed into a pose is
   // injected on its experts as on the plain image-to-video graph.
+  // Qwen-Image 2.1 on Auto GPU at Full speed: the graphics memory decides the encoder (only then is the server asked).
+  const vramGb = QWEN21_SMALL_GPU_GRAPH[endpointTemplate] && !extra[GPU_PARAM] && (extra[SPEED_PARAM] ?? "full") === "full" ? await ctx.vramGb?.().catch(() => undefined) : undefined;
   const endpoint = resolveWorkflowId(endpointTemplate, {
     op: ctx.op,
     clips: clips.length,
@@ -1130,8 +1180,12 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     audio2: !!audio2 || !!extra.audio2,
     extra,
     has: (id) => loadManifest().workflows.some((w) => w.id === id),
+    vramGb,
   });
   delete extra.productShot;
+  delete extra[SPEED_PARAM];
+  delete extra[GPU_PARAM];
+  delete extra[DECODER_PARAM];
 
   const { manifest, workflow } = getWorkflow(endpoint);
   const d = manifest.defaults;
@@ -1564,6 +1618,11 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   const laidOut = carriesBoxes(extra);
   delete extra[PROMPT_HELPER_PARAM];
   delete extra[LAYOUT_PARAM];
+  // The Lightning tier's schedule shifted for this canvas (its card's dynamic shift): text to image's size, else image 1's.
+  if (b.sigmas && LIGHTNING_GRAPHS.has(manifest.id) && extra.sigmas === undefined) {
+    const canvas = lightningCanvas(manifest.capability, values, ctx.media?.(String(values.image ?? "")));
+    if (canvas) values.sigmas = lightningSigmas(canvas.width, canvas.height);
+  }
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
   // SeedVR2's `scale` multiplies the picture before one diffusion pass over all of it, and its graph is made for up to
   // limits.maxWidth × maxHeight: the multiplier comes down to fit the picture (a 3000 × 2000 photo at the template's 4x
@@ -2054,6 +2113,7 @@ export const comfyProvider: ProviderAdapter = {
         return (await comfyJson<{ system?: { ram_total?: number } }>("/system_stats", worker).catch(() => undefined))?.system?.ram_total;
       },
       device: () => comfyDevice(worker),
+      vramGb: () => comfyVramGb(worker),
       // Fresh: a model installed a moment ago runs. (On someone's computer, nothing to ask: its ComfyUI has the last word.)
       dbsModels: () => comfyDbsModels(worker, 0),
       reuseModels: () => comfyReuseModels(worker, 0),

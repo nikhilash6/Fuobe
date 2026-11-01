@@ -1062,7 +1062,7 @@ export function Composer({ docked }: { docked: boolean }) {
           onStrength={(v) => setDraft({ presetStrength: v })}
         />
       )}
-      {opts.controls && <ControlsChip controls={opts.controls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} />}
+      {opts.controls && <ControlsChip controls={opts.controls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} op={effectiveOp} />}
     </>
   );
   const hasSecondary =

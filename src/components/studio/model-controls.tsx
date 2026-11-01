@@ -4,6 +4,7 @@ import { Check, Clapperboard, Settings2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ModelOptions } from "@/lib/catalog/types";
+import { controlsFor } from "@/lib/composer";
 import { Chip } from "./chip";
 
 const label = (v: string | number) =>
@@ -19,18 +20,23 @@ const label = (v: string | number) =>
  * its Quality (MiniMax H3's Fast / Best, MOSS-Image's tiers) shows them under "Quality".
  */
 export function ControlsChip({
-  controls,
+  controls: all,
   values,
   onChange,
   title: named,
+  op,
 }: {
   controls: NonNullable<ModelOptions["controls"]>;
   values: Record<string, unknown>;
   onChange: (param: string, v?: string | number) => void;
   /** The chip's name: "Director" (Cinema's genre, lens, light…), "Options" for a tool's model settings (Upscale). */
   title?: string;
+  /** The run's operation: values offered on other operations only (Qwen-Image 2.1's Turbo speed: edits) are left out. */
+  op?: string;
 }) {
+  const controls = controlsFor(all, op);
   const title = named ?? (controls.length && controls.every((c) => c.param === "quality") ? "Quality" : "Director");
+  if (!controls.length) return null;
   const set = controls.filter((c) => values[c.param] !== undefined);
   return (
     <Popover>
@@ -47,7 +53,7 @@ export function ControlsChip({
             // A control alone on its row (MOSS-Image's one Quality) takes both columns, so its value reads in full.
             <label key={c.param} className="space-y-1 odd:last:col-span-2">
               <span className="text-[12px] text-muted-foreground">{c.label}</span>
-              <Select value={values[c.param] === undefined ? "__auto" : String(values[c.param])} onValueChange={(v) => onChange(c.param, v === "__auto" ? undefined : typeof c.values[0] === "number" ? Number(v) : v)}>
+              <Select value={values[c.param] === undefined || !c.values.map(String).includes(String(values[c.param])) ? "__auto" : String(values[c.param])} onValueChange={(v) => onChange(c.param, v === "__auto" ? undefined : typeof c.values[0] === "number" ? Number(v) : v)}>
                 <SelectTrigger size="sm" className="w-full" aria-label={c.label}>
                   <SelectValue />
                 </SelectTrigger>
