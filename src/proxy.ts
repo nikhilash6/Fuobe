@@ -38,7 +38,14 @@ import { hostedRunsOn } from "@/server/hosted-switch";
  * Paths that work signed out: the login page and its API (and share links: openShare). Sign-up and
  * "who am I" answer for themselves whether public sign-up is on.
  */
-const OPEN = new Set(["/login", "/api/auth/login", "/api/auth/signup", "/api/auth/me"]);
+const OPEN = new Set(["/login", "/api/auth/login", "/api/auth/signup", "/api/auth/me", "/api/gpu/pair/start", "/api/gpu/pair/poll"]);
+
+/**
+ * A worker's token (src/server/computer/workers.ts) works only on the routes a computer runs jobs through; the route
+ * checks the token itself. Anywhere else it is refused, whatever else the request carries.
+ */
+const WORKER_BEARER = /^Bearer\s+fuobe_wkr_/i;
+const workerRoute = (pathname: string) => pathname.startsWith("/api/gpu/computer/");
 
 const APP_IDS = new Set(APPS.map((a) => a.id));
 
@@ -336,6 +343,9 @@ export function proxy(request: NextRequest) {
   }
   const hub = read && hubModeLink(request);
   if (hub) return NextResponse.redirect(hub);
+  if (WORKER_BEARER.test(request.headers.get("authorization") ?? "")) {
+    return workerRoute(pathname) ? NextResponse.next() : NextResponse.json({ error: "A worker's token only runs jobs." }, { status: 403, headers: { "Cache-Control": "no-store" } });
+  }
   if (!authEnabled()) return pass(request);
   if (OPEN.has(pathname)) return NextResponse.next();
   const open = publicSignup(request.headers.get("host") ?? request.nextUrl.host);

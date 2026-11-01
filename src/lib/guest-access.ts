@@ -165,7 +165,7 @@ export function accountGeneration(method: string, pathname: string): string | un
  */
 export function accountOwnRead(pathname: string): boolean {
   if (ACCOUNT_LISTS.has(pathname)) return true;
-  return pathname === "/api/generations" || pathname === "/api/account/gpu" || pathname === "/api/account/keys" || GPU_READS.has(pathname) || COMPUTER_READ.test(pathname);
+  return pathname === "/api/generations" || pathname === "/api/account/gpu" || pathname === "/api/account/keys" || GPU_READS.has(pathname) || COMPUTER_READ.test(pathname) || PAIRING_READS.has(pathname);
 }
 
 /** The Library's counts and its Uploads (its stored files): each route answers an account with its own only. */
@@ -176,6 +176,8 @@ const ACCOUNT_LISTS = new Set(["/api/generations/facets", "/api/assets"]);
  * jobs from the session, and only that person's (src/server/computer/http.ts principalOf).
  */
 const COMPUTER_READ = /^\/api\/gpu\/computer\/tasks\/[^/]+\/(inputs|outputs)\/[^/]+$/;
+/** Pairing a ComfyUI with Fuobe Connect: the code's computer, and the person's paired ComfyUIs (src/app/api/gpu/pair). */
+const PAIRING_READS = new Set(["/api/gpu/pair", "/api/gpu/paired"]);
 const COMPUTER_CHANGES: [method: string, path: RegExp][] = [
   ["POST", /^\/api\/gpu\/computer\/(beat|claim)$/],
   ["POST", /^\/api\/gpu\/computer\/tasks\/[^/]+\/(report|release)$/],
@@ -196,8 +198,9 @@ export function accountMayChange(method: string, pathname: string, search: strin
   if ((method === "PUT" || method === "DELETE") && /^\/api\/account\/keys\/(fal|replicate)$/.test(pathname)) return true;
   // GPU pre-flight: checking its own ComfyUI (reads only; the routes check the target and the request themselves).
   if ((method === "POST" && pathname === "/api/gpu/check") || (method === "PUT" && pathname === "/api/gpu/inventory")) return true;
-  // Running its own jobs on its own computer.
+  // Running its own jobs on its own computer, and pairing (or unpairing) its own ComfyUI.
   if (COMPUTER_CHANGES.some(([m, p]) => m === method && p.test(pathname))) return true;
+  if ((method === "POST" && pathname === "/api/gpu/pair") || (method === "DELETE" && /^\/api\/gpu\/paired\/[^/]+$/.test(pathname))) return true;
   if (method === "POST" && (pathname === "/api/uploads" || pathname === "/api/media/probe")) return true;
   // "Report this result", and a click on an offer the billing service sent (each route checks the rest).
   if (method === "POST" && (pathname === "/api/reports" || pathname === "/api/billing/interest")) return true;

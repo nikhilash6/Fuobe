@@ -667,7 +667,54 @@ export const RELAY_TABLES = `CREATE TABLE IF NOT EXISTS relay_runners (
     reads INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
   );
-  CREATE INDEX IF NOT EXISTS relay_inputs_task ON relay_inputs(task_id);`;
+  CREATE INDEX IF NOT EXISTS relay_inputs_task ON relay_inputs(task_id);
+  CREATE TABLE IF NOT EXISTS relay_workers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'pool',
+    principal TEXT,
+    pool TEXT NOT NULL DEFAULT 'pool',
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER,
+    revoked_at INTEGER,
+    last_used_at INTEGER,
+    last_country TEXT,
+    device TEXT,
+    protocol INTEGER,
+    version TEXT,
+    facts_json TEXT,
+    inventory_json TEXT,
+    inventory_hash TEXT,
+    lanes_json TEXT,
+    bench_json TEXT,
+    warm_lane TEXT,
+    paused_server INTEGER NOT NULL DEFAULT 1,
+    paused_local INTEGER NOT NULL DEFAULT 1,
+    local_why TEXT,
+    local_until INTEGER,
+    drain INTEGER NOT NULL DEFAULT 0,
+    stop_now INTEGER NOT NULL DEFAULT 0,
+    hours_json TEXT,
+    allow_json TEXT,
+    claim_after_ms INTEGER NOT NULL DEFAULT 0,
+    switch_after_ms INTEGER NOT NULL DEFAULT 1800000,
+    state TEXT NOT NULL DEFAULT 'new',
+    seen_at INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS relay_workers_principal ON relay_workers(principal);
+  CREATE TABLE IF NOT EXISTS relay_pairings (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    secret_hash TEXT NOT NULL,
+    name TEXT NOT NULL,
+    facts_json TEXT,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    state TEXT NOT NULL DEFAULT 'waiting',
+    principal TEXT,
+    worker_id TEXT
+  );`;
 
 /**
  * The optional external services' tables (billing.ts, moderation.ts). billing_outbox: every settle, refund and release
@@ -723,6 +770,18 @@ const HOOK_COLUMNS: [string, string, string][] = [
 const RELAY_COLUMNS: [string, string, string][] = [
   ["relay_runners", "comfy", "TEXT NOT NULL DEFAULT 'ok'"],
   ["relay_tasks", "down_why", "TEXT"],
+  // Workers (src/server/computer/workers.ts): all NULL for a browser computer's tasks, which work as before.
+  ["relay_tasks", "account", "TEXT"],
+  ["relay_tasks", "pools", "TEXT"],
+  ["relay_tasks", "rank_at", "INTEGER"],
+  ["relay_tasks", "lane", "TEXT"],
+  ["relay_tasks", "needs_json", "TEXT"],
+  ["relay_tasks", "est_ms", "INTEGER"],
+  ["relay_tasks", "tried_json", "TEXT"],
+  ["relay_tasks", "requeues", "INTEGER NOT NULL DEFAULT 0"],
+  ["relay_tasks", "not_after", "INTEGER"],
+  ["relay_tasks", "only_worker", "TEXT"],
+  ["relay_tasks", "worker_id", "TEXT"],
 ];
 
 declare global {

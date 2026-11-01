@@ -1,5 +1,6 @@
-import { principalOf, rateOf, relayAnswer } from "@/server/computer/http";
-import { beat, type BeatInput } from "@/server/computer/tasks";
+import { principalOf, rateOf, relayAnswer, requestWorker } from "@/server/computer/http";
+import { beat, cleanFacts, type BeatInput } from "@/server/computer/tasks";
+import { noteWorkerFacts } from "@/server/computer/workers";
 
 /** What a beat may weigh: the facts, with up to 20,000 LoRA names. */
 const MAX_BYTES = 3 * 2 ** 20;
@@ -22,6 +23,13 @@ export async function POST(request: Request) {
     body = JSON.parse(text) as BeatInput;
   } catch {
     return Response.json({ error: "Send JSON" }, { status: 400 });
+  }
+  // A paired ComfyUI's facts are kept with it too (the person's list of paired ComfyUIs shows its GPU).
+  const worker = requestWorker(request);
+  if (worker && body?.facts !== undefined) {
+    const facts = cleanFacts(body.facts);
+    delete facts.loras;
+    noteWorkerFacts(worker.id, facts);
   }
   try {
     return Response.json(beat(principal, { device: String(body?.device ?? ""), port: body?.port, facts: body?.facts, running: Array.isArray(body?.running) ? body.running : [], takeover: body?.takeover === true, stopped: Array.isArray(body?.stopped) ? body.stopped : [], ready: body?.ready !== false, ...(body?.why === "setting" && { why: "setting" as const }), listen: body?.listen === true }), {

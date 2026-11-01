@@ -50,7 +50,7 @@ export function readPath(path: string): string {
     if (query) throw new LocalComfyError(`No query on ${p}`);
     return path;
   };
-  if (["/system_stats", "/api/system_stats", "/object_info", "/models", "/embeddings", "/queue", "/api/jobs", "/fuobe/guard", "/fuobe/live"].includes(p)) return noQuery();
+  if (["/system_stats", "/api/system_stats", "/object_info", "/models", "/embeddings", "/queue", "/api/jobs", "/fuobe/guard", "/fuobe/live", "/fuobe/connect"].includes(p)) return noQuery();
   if (p.startsWith("/object_info/") && NODE_CLASS.test(decodeURIComponent(p.slice(13)))) return noQuery();
   if (p.startsWith("/models/") && MODEL_FOLDER.test(p.slice(8))) return noQuery();
   if (p.startsWith("/history/") && UUID.test(p.slice(9))) return noQuery();

@@ -681,6 +681,9 @@ export function purgeComputer(principal: Principal): void {
     d.prepare("DELETE FROM relay_inputs WHERE principal = ?").run(principal);
     d.prepare("DELETE FROM relay_tasks WHERE principal = ?").run(principal);
     d.prepare("DELETE FROM relay_runners WHERE principal = ?").run(principal);
+    // Its paired ComfyUIs (Fuobe Connect) stop with it.
+    d.prepare("DELETE FROM relay_workers WHERE kind = 'personal' AND principal = ?").run(principal);
+    d.prepare("DELETE FROM relay_pairings WHERE principal = ?").run(principal);
   })();
 }
 
