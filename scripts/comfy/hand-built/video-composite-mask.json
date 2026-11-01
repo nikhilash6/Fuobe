@@ -1,0 +1,132 @@
+{
+  "source": {
+    "class_type": "LoadVideo",
+    "inputs": { "file": "source.mp4" },
+    "_meta": { "title": "The original footage (24 fps, the film's size)" }
+  },
+  "source_slice": {
+    "class_type": "Video Slice",
+    "inputs": { "video": ["source", 0], "start_time": 0.0, "duration": 0.0, "strict_duration": false },
+    "_meta": { "title": "This window of the footage" }
+  },
+  "source_parts": {
+    "class_type": "GetVideoComponents",
+    "inputs": { "video": ["source_slice", 0] },
+    "_meta": { "title": "Footage frames, sound and rate" }
+  },
+  "take": {
+    "class_type": "LoadVideo",
+    "inputs": { "file": "take.mp4" },
+    "_meta": { "title": "The 768p swap (H3's canvas)" }
+  },
+  "take_slice": {
+    "class_type": "Video Slice",
+    "inputs": { "video": ["take", 0], "start_time": 0.0, "duration": 0.0, "strict_duration": false },
+    "_meta": { "title": "This window of the swap" }
+  },
+  "take_parts": {
+    "class_type": "GetVideoComponents",
+    "inputs": { "video": ["take_slice", 0] },
+    "_meta": { "title": "Swap frames" }
+  },
+  "regen": {
+    "class_type": "LoadVideo",
+    "inputs": { "file": "regen.mp4" },
+    "_meta": { "title": "The regenerated swap (1080p / 2K / 4K, 16:9 or 9:16)" }
+  },
+  "regen_slice": {
+    "class_type": "Video Slice",
+    "inputs": { "video": ["regen", 0], "start_time": 0.0, "duration": 0.0, "strict_duration": false },
+    "_meta": { "title": "This window of the regenerate" }
+  },
+  "regen_parts": {
+    "class_type": "GetVideoComponents",
+    "inputs": { "video": ["regen_slice", 0] },
+    "_meta": { "title": "Regenerated frames" }
+  },
+  "mask": {
+    "class_type": "LoadVideo",
+    "inputs": { "file": "mask.mp4" },
+    "_meta": { "title": "Who was swapped: the approved mask (white = the person, H3's canvas)" }
+  },
+  "mask_slice": {
+    "class_type": "Video Slice",
+    "inputs": { "video": ["mask", 0], "start_time": 0.0, "duration": 0.0, "strict_duration": false },
+    "_meta": { "title": "This window of the mask" }
+  },
+  "mask_parts": {
+    "class_type": "GetVideoComponents",
+    "inputs": { "video": ["mask_slice", 0] },
+    "_meta": { "title": "Mask frames" }
+  },
+  "take_scaled": {
+    "class_type": "ImageScale",
+    "inputs": { "image": ["take_parts", 0], "upscale_method": "lanczos", "width": 320, "height": 180, "crop": "disabled" },
+    "_meta": { "title": "Swap to its place in the footage" }
+  },
+  "take_mask_img": {
+    "class_type": "ImageScale",
+    "inputs": { "image": ["mask_parts", 0], "upscale_method": "bilinear", "width": 320, "height": 180, "crop": "disabled" },
+    "_meta": { "title": "Mask to the swap's place" }
+  },
+  "take_mask": {
+    "class_type": "ImageToMask",
+    "inputs": { "image": ["take_mask_img", 0], "channel": "red" },
+    "_meta": { "title": "Mask (red channel)" }
+  },
+  "take_grow": {
+    "class_type": "GrowMask",
+    "inputs": { "mask": ["take_mask", 0], "expand": 8, "tapered_corners": true },
+    "_meta": { "title": "Grow the mask" }
+  },
+  "take_feather": {
+    "class_type": "FeatherMask",
+    "inputs": { "mask": ["take_grow", 0], "left": 12, "top": 12, "right": 12, "bottom": 12 },
+    "_meta": { "title": "Soft edge" }
+  },
+  "base": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": { "destination": ["source_parts", 0], "source": ["take_scaled", 0], "x": 0, "y": 0, "resize_source": false, "mask": ["take_feather", 0] },
+    "_meta": { "title": "Your character from the 768p swap over the footage (fills in where the regenerate's frame doesn't reach)" }
+  },
+  "regen_scaled": {
+    "class_type": "ImageScale",
+    "inputs": { "image": ["regen_parts", 0], "upscale_method": "lanczos", "width": 320, "height": 180, "crop": "disabled" },
+    "_meta": { "title": "Regenerate to its place in the footage" }
+  },
+  "regen_mask_img": {
+    "class_type": "ImageScale",
+    "inputs": { "image": ["mask_parts", 0], "upscale_method": "bilinear", "width": 320, "height": 180, "crop": "center" },
+    "_meta": { "title": "Mask to the regenerate's place (the centre the regenerate kept)" }
+  },
+  "regen_mask": {
+    "class_type": "ImageToMask",
+    "inputs": { "image": ["regen_mask_img", 0], "channel": "red" },
+    "_meta": { "title": "Mask (red channel)" }
+  },
+  "regen_grow": {
+    "class_type": "GrowMask",
+    "inputs": { "mask": ["regen_mask", 0], "expand": 8, "tapered_corners": true },
+    "_meta": { "title": "Grow the mask" }
+  },
+  "regen_feather": {
+    "class_type": "FeatherMask",
+    "inputs": { "mask": ["regen_grow", 0], "left": 12, "top": 12, "right": 12, "bottom": 12 },
+    "_meta": { "title": "Soft edge" }
+  },
+  "composite": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": { "destination": ["base", 0], "source": ["regen_scaled", 0], "x": 0, "y": 0, "resize_source": false, "mask": ["regen_feather", 0] },
+    "_meta": { "title": "Only your character from the regenerate, over the footage" }
+  },
+  "create": {
+    "class_type": "CreateVideo",
+    "inputs": { "images": ["composite", 0], "audio": ["source_parts", 1], "fps": ["source_parts", 2], "bit_depth": "auto", "color_space": "sRGB", "codec": "none" },
+    "_meta": { "title": "The footage's own sound and rate" }
+  },
+  "save": {
+    "class_type": "SaveVideo",
+    "inputs": { "video": ["create", 0], "filename_prefix": "fuobe/video-composite-mask", "format": "auto", "format.codec": "auto", "codec": "auto" },
+    "_meta": { "title": "Save video" }
+  }
+}
