@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { ModelOptions } from "@/lib/catalog/types";
 import { controlsFor } from "@/lib/composer";
 import { Chip } from "./chip";
+import { cn } from "@/lib/utils";
 
 const label = (v: string | number) =>
   String(v)
@@ -14,6 +15,17 @@ const label = (v: string | number) =>
     .replace(/[-_]/g, " ")
     .replace(/^f(\d)(\d)?/, (_, a, b) => `f/${a}${b ? `.${b}` : ""}`)
     .replace(/^\w/, (c) => c.toUpperCase());
+
+/** The longest words a control shows (its values' labels, Auto's included). */
+const longest = (c: NonNullable<ModelOptions["controls"]>[number]) =>
+  Math.max(...[...c.values, ...(c.default !== undefined ? [c.default] : [])].map((v) => (c.labels?.[String(v)] ?? label(v)).length + (v === c.default ? 7 : 0)));
+
+/** Whether a control takes a row of its own: its values read long, or it is the last of an odd number of short ones. */
+function fullRow(controls: NonNullable<ModelOptions["controls"]>, c: NonNullable<ModelOptions["controls"]>[number]): boolean {
+  if (longest(c) > 20) return true;
+  const short = controls.filter((x) => longest(x) <= 20);
+  return short.length % 2 === 1 && short.at(-1) === c;
+}
 
 /**
  * "Director" popover for enum settings such as genre, lens, light, grade and camera move. A model whose only settings are
@@ -50,8 +62,9 @@ export function ControlsChip({
         <p className="text-[12px] text-muted-foreground">Leave one on Auto and the model decides.</p>
         <div className="grid grid-cols-2 gap-2">
           {controls.map((c) => (
-            // A control alone on its row (MOSS-Image's one Quality) takes both columns, so its value reads in full.
-            <label key={c.param} className="space-y-1 odd:last:col-span-2">
+            // A control alone on its row (MOSS-Image's one Quality), or one whose values read long (Qwen-Image 2.1's Speed),
+            // takes both columns, so its value reads in full.
+            <label key={c.param} className={cn("space-y-1", fullRow(controls, c) && "col-span-2")}>
               <span className="text-[12px] text-muted-foreground">{c.label}</span>
               <Select value={values[c.param] === undefined || !c.values.map(String).includes(String(values[c.param])) ? "__auto" : String(values[c.param])} onValueChange={(v) => onChange(c.param, v === "__auto" ? undefined : typeof c.values[0] === "number" ? Number(v) : v)}>
                 <SelectTrigger size="sm" className="w-full" aria-label={c.label}>
