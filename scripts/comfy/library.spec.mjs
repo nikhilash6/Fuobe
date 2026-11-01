@@ -2398,7 +2398,7 @@ export const SPEC = [
     license: 'Apache-2.0 (Z-Image Turbo)',
     notes:
       'Fuobe Soul\'s edit route (Soul 2.0 image-to-image): the picture scaled to Soul\'s tier (megapixels 1 = 720p, 2 = 1080p) on the 16-pixel grid, VAE-encoded, then the Soul sampler ' +
-      '(8 steps, cfg 1, res_multistep, shift 3) at denoise = strength (0.6 like fal\'s z-image/turbo/image-to-image; about 0.17 would be Higgsfield\'s refiner pass, an experiment until the evaluation harness measures it). ' +
+      '(8 steps, cfg 1, res_multistep, shift 3) at denoise = strength (0.6 like fal\'s z-image/turbo/image-to-image; about 0.17 would be Higgsfield\'s refiner pass). ' +
       'The look\'s LoRAs are injected after the UNETLoader (LoraLoaderModelOnly), as on z-image-turbo-t2i. The result keeps the picture\'s shape.',
   },
 
