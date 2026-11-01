@@ -1,6 +1,7 @@
 import { CLOUD_MODELS, ORIGINAL_CLOUD } from "./cloud-models.generated";
 import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
+import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
@@ -78,6 +79,19 @@ const MOSS_QUALITY: NonNullable<ModelOptions["controls"]>[number] = {
   },
 };
 
+/**
+ * FLUX 3 Image Klein's Prompt helper on your GPU: BFL's upsampler (a 6.7 GB Qwen3.5 9B file) turns the words into the full
+ * caption Klein is made for (BFL: short prompts give generic pictures); off sends them as typed. A layout that places boxes
+ * always goes as typed, which the "on" label says. The cloud's flux-3-klein carries the same control (fal's prompt expansion).
+ */
+const KLEIN_PROMPT_HELPER: NonNullable<ModelOptions["controls"]>[number] = {
+  param: PROMPT_HELPER_PARAM,
+  label: "Prompt helper",
+  values: ["on", "off"],
+  default: "on",
+  labels: { on: "On · full caption (not with boxes)", off: "Off · your words as typed" },
+};
+
 type OpenSpec = Omit<ModelDef, "engine" | "badges"> & { badges?: ModelDef["badges"] };
 const o = (m: OpenSpec): ModelDef => ({ ...m, engine: "open", badges: ["open", ...(m.badges ?? [])] });
 
@@ -143,6 +157,40 @@ const open: ModelDef[] = [
     badges: ["new", "top", "fast"],
     routes: [comfy("edit", "qwen-image-21-turbo-edit", "8 steps, up to 4 references")],
     options: { maxImages: 4, seed: true },
+  }),
+
+  // FLUX 3 Image Klein (BFL, 2026-10-13; research #10 §6.3): text to image and edits with up to 10 references, a layout of
+  // boxes in its own table (compileFlux3), BFL's prompt helper first unless it is off. Klein Base takes your FLUX 3 Klein
+  // LoRAs. The cloud halves are flux-3-klein and flux-3-klein-base on fal. Not a default anywhere (the owner's picks stay).
+  o({
+    id: "oss-flux3-klein",
+    name: "FLUX 3 Klein",
+    vendor: "Black Forest Labs",
+    family: "flux",
+    kind: "image",
+    tagline: "BFL's open 5.6B model: images up to 4K, edits with up to 10 references, layout boxes · 16-24 GB GPU · FLUX Kommunity licence",
+    badges: ["new", "top"],
+    // The Image studio's Best list, as its brief asks; the Edit studio offers it, and its Best list stays the owner's.
+    bestOps: ["t2i"],
+    // The edit follows reference 1's shape (about 1 MP); text to image takes the aspect ratio and size.
+    routes: [
+      comfy("t2i", "flux3-klein-t2i", "16 steps; the prompt helper writes the full caption"),
+      { ...comfy("edit", "flux3-klein-edit", "16 steps, up to 10 references"), unsized: true, maxImages: 10 },
+    ],
+    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K", "4K"], maxImages: 10, seed: true, layout: "flux3", controls: [KLEIN_PROMPT_HELPER] },
+    defaults: { aspectRatio: "1:1", resolution: "1K" },
+  }),
+  o({
+    id: "oss-flux3-klein-base",
+    name: "FLUX 3 Klein Base",
+    vendor: "Black Forest Labs",
+    family: "flux",
+    kind: "image",
+    tagline: "The undistilled Klein your FLUX 3 Klein LoRAs are trained on: 50 steps with them · 16-24 GB GPU · FLUX Kommunity licence",
+    badges: ["new"],
+    routes: [comfy("t2i", "flux3-klein-base-t2i-lora", "50 steps, CFG 3.5; your LoRAs load after it")],
+    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K", "4K"], seed: true, layout: "flux3", controls: [KLEIN_PROMPT_HELPER] },
+    defaults: { aspectRatio: "1:1", resolution: "1K" },
   }),
 
   // Krea 2 text to image (its edit models come after FIBO 2's, as the owner ranks them).

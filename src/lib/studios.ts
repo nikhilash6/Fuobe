@@ -18,14 +18,15 @@ export const IMAGE_STUDIO: StudioConfig = {
   pickerOps: ["t2i"],
   feed: { kind: "image", features: ["image", "edit", "app:*", "character:*"] },
   slots: [],
-  multiRef: { label: "Add ref", max: 8 },
+  // Up to 10 references where the model takes them (FLUX 3 Klein); each model's own limit caps it (composer refMax).
+  multiRef: { label: "Add ref", max: 10 },
   defaultModels: { cloud: "nano-banana-pro", open: "oss-ideogram-4" },
   // Ideogram 4 runs on a caption the install's local model writes: an account, a guest or an install with none opens on
   // Qwen-Image 2.1, the next pick (plain words give Ideogram's grey safety card on about half the pictures of people).
   uncaptioned: { open: "oss-qwen-image-21" },
   // A model's own settings (MOSS-Image's Quality, Ideogram's speed) sit under "Options".
   controlsTitle: "Options",
-  // Layout mode: boxes on the picture, one row each, read in place by MOSS-Image, FLUX.3 and Ideogram 4.5.
+  // Layout mode: boxes on the picture, one row each, read in place by MOSS-Image, FLUX.3, FLUX 3 Klein and Ideogram 4.5.
   layout: true,
   // Color signature + Moodboard chips, and the models they can move a request to. Fuobe Soul's PixeletedFace look runs
   // the face mosaic after the picture: its step's model is known here so the price counts it before the run.
@@ -48,7 +49,8 @@ export const EDIT_STUDIO: StudioConfig = {
   ops: ["edit"],
   feed: { kind: "image", features: ["edit"] },
   slots: [{ key: "image", label: "Image", accept: "image", required: true }],
-  multiRef: { label: "Add ref", max: 6 },
+  // The image and up to 9 references (FLUX 3 Klein takes 10 in all); each model's own limit caps it.
+  multiRef: { label: "Add ref", max: 9 },
   sketch: ["mask", "draw"],
   defaultModels: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
   suggestions: [

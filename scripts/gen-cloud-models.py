@@ -2,7 +2,7 @@
 """
 Generate src/lib/catalog/cloud-models.generated.ts from docs/research/paid-model-apis.json
 (merged with parts 2, 3 and 4: paid-model-apis-2.json, paid-model-apis-3.json, paid-model-apis-4.json, and the
-endpointRecords of research #7, new-models-7.json).
+endpointRecords of research #7 and #10, new-models-7.json and new-models-10.json).
 
 The research file holds verified fal/Replicate input schemas (field names, enums, defaults,
 prices). This script turns a curated list of models (MODELS below) into ModelDef objects with
@@ -44,6 +44,12 @@ NEW_MODELS_7 = json.loads((ROOT / "docs/research/new-models-7.json").read_text(e
 for e in NEW_MODELS_7.get("endpointRecords") or []:
     prev = EPS.get((e["provider"], e["endpoint"]))
     EPS[(e["provider"], e["endpoint"])] = {**e, "keyFields": {**((prev or {}).get("keyFields") or {}), **(e.get("keyFields") or {})}}
+# Research #10 (docs/research/new-models-10.json endpointRecords, read by scripts/fetch-hosted-schemas.py --new10): FLUX 3 Image
+# Klein's fal routes, their /lora twins and Klein Base's LoRA routes (package nm10-flux3-klein). Same merge.
+NEW_MODELS_10 = json.loads((ROOT / "docs/research/new-models-10.json").read_text(encoding="utf-8"))
+for e in NEW_MODELS_10.get("endpointRecords") or []:
+    prev = EPS.get((e["provider"], e["endpoint"]))
+    EPS[(e["provider"], e["endpoint"])] = {**e, "keyFields": {**((prev or {}).get("keyFields") or {}), **(e.get("keyFields") or {})}}
 
 # Originals (docs/research/fuobe-originals-recipes-5.json): the hosted open-weight endpoints that take LoRAs
 # (hostedLoraEndpoints: the LoRA field's shape, maximum and whether it's required, plus the full inputs where
@@ -83,7 +89,7 @@ M = []
 def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=None, defaults=None, options=None, fixed=None, hidden=False,
           sliders=None, controls=None, api_defaults=None, formats=None, ranged_durations=False, fit_values=False, fps_targets=None, upscale_tiers=None,
           frame_step=None, original=False, sizes=None, keep_shape=False, licence=None, frame_fps=None, frame_multiple=None,
-          exact_size=False):
+          exact_size=False, tier_size=None):
     """sliders / controls: [(field, label)] read from each route's research inputs (dotted = nested field; a slider's
     third item is its step, when the generic one is too coarse):
     numeric fields with minimum/maximum become sliders, enums become composer controls; both travel as params.extra.
@@ -110,6 +116,9 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
     exact_size: the API takes its size as one {width, height} object and rounds it itself ("rounded to multiples of 16
     between 512 and 2048 pixels": fal's MOSS-Image): FieldMap.size from the aspect ratio with the grid and limits the field's
     description states, so a layout drawn on that canvas is the picture the API makes.
+    tier_size: the endpoint whose price names resolution tiers ("$0.009 at 1K … $0.036 at 4K": fal's FLUX 3 Klein): the size goes
+    as one {width, height} object, the aspect ratio's shape on the tier's square (FieldMap.size.bases), on a 16 px grid within
+    the limits the field's description states ("256 to 4096 pixels"); the tiers become the resolutions.
     A route's options dict may also set max_images (FieldMap.maxImages), note, loraEndpoint (the same model with LoRAs:
     FieldMap.loras comes from its research record) and pin (a Replicate model run by version: the research's version)."""
     M.append(dict(id=id, name=name, vendor=vendor, family=family, kind=kind, tagline=tagline, routes=routes,
@@ -117,7 +126,7 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
                   sliders=sliders or [], controls=controls or [], api_defaults=api_defaults or {}, formats=formats or {},
                   ranged_durations=ranged_durations, fit_values=fit_values, fps_targets=fps_targets or [], upscale_tiers=upscale_tiers or [],
                   frame_step=frame_step, original=original, sizes=sizes, keep_shape=keep_shape, licence=licence, frame_fps=frame_fps,
-                  frame_multiple=frame_multiple, exact_size=exact_size))
+                  frame_multiple=frame_multiple, exact_size=exact_size, tier_size=tier_size))
 
 
 # ----- Image
@@ -209,6 +218,33 @@ model("moss-image", "MOSS-Image", "OpenMOSS", "moss", "image",
       licence={"licence": re.match(r"[\w.-]+", MOSS_FAL["license"]).group(0), "commercial": True,
                "note": f"{MOSS_FAL['license']}. fal's safety checker returns a black image when it flags an output",
                "checked": MOSS_FAL["fetched"]})
+# FLUX 3 Image Klein (research #10 §6.3, package nm10-flux3-klein): BFL's open 5.6B model on fal, priced per image by tier
+# ($0.009 at 1K … $0.036 at 4K, fal's planned rates); a run with LoRAs goes to its /lora twin ($0.012 per megapixel, up to 3 LoRAs
+# at 0-4). FLUX 3 Klein Base (the checkpoint BFL and fal's trainer train LoRAs on, which fal recommends running them on): its plain
+# routes per image by tier ($0.027 at 1K … $0.108 at 4K, planned), a run with LoRAs on its /lora twins at $0.035 per megapixel.
+# A layout with boxes goes as bounding_boxes with prompt expansion off. Licence: information, never a gate.
+KLEIN_FAL = "blackforestlabs/flux-3/klein"
+KLEIN_REC = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == f"{KLEIN_FAL}/text-to-image")
+KLEIN_BASE_REC = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == f"{KLEIN_FAL}/base/text-to-image")
+KLEIN_LICENCE = {"licence": KLEIN_REC["license"].split(":")[0], "commercial": None, "note": KLEIN_REC["license"], "checked": KLEIN_REC["fetched"]}
+# Options → Prompt helper, as on your GPU (params.extra.promptHelper, src/lib/catalog/models.ts KLEIN_PROMPT_HELPER): "off" sends
+# enable_prompt_expansion false (payload.ts), "on" leaves fal's default; a layout that places boxes always turns it off.
+KLEIN_HELPER = {"param": "promptHelper", "label": "Prompt helper", "values": ["on", "off"], "default": "on",
+                "labels": {"on": "On · full caption (not with boxes)", "off": "Off · your words as typed"}}
+model("flux-3-klein", "FLUX 3 Klein", "Black Forest Labs", "flux", "image",
+      "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper · FLUX Kommunity licence",
+      [("t2i", f"{KLEIN_FAL}/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/text-to-image/lora"}),
+       ("edit", f"{KLEIN_FAL}/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/edit-image/lora", "followsImage": True})],
+      badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
+      pricing=("image", KLEIN_REC["pricing"]["usd"], "per image at 1K (fal's planned rates by size)", {"byResolution": KLEIN_REC["pricing"]["byResolution"]}),
+      licence=KLEIN_LICENCE)
+model("flux-3-klein-base", "FLUX 3 Klein Base", "Black Forest Labs", "flux", "image",
+      "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them · FLUX Kommunity licence",
+      [("t2i", f"{KLEIN_FAL}/base/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/text-to-image/lora"}),
+       ("edit", f"{KLEIN_FAL}/base/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/edit-image/lora", "followsImage": True})],
+      badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
+      pricing=("image", KLEIN_BASE_REC["pricing"]["usd"], "per image at 1K (fal's planned rates by size)", {"byResolution": KLEIN_BASE_REC["pricing"]["byResolution"]}),
+      licence=KLEIN_LICENCE)
 model("wan-2-7-image", "Wan 2.7 Image", "Alibaba Wan", "wan", "image",
       "Wan's image model — cinematic stills that animate well",
       [("t2i", "fal-ai/wan/v2.7/pro/text-to-image"), ("edit", "fal-ai/wan/v2.7/pro/edit")], defaults={"aspectRatio": "16:9"})
@@ -1921,6 +1957,22 @@ def build_route(op, ep, provider, m, opts, ropts=None):
             opts["aspectRatios"] = union(opts.get("aspectRatios", []), IMG_AR)
         else:
             warn(f"{m['id']}: {ep} states no size grid and limits for its {key} object")
+    elif m.get("tier_size"):
+        # Resolution tiers from the price line of the endpoint named ("$0.009 at 1K"): each tier's square, the aspect ratio's
+        # shape on it, as one {width, height} object within the limits the size field states (FieldMap.size.bases).
+        key = kf.get("aspectRatio") or "image_size"
+        spec = inputs.get(key) or {}
+        takes_object = spec.get("type") == "union" and any(isinstance(v, dict) and v.get("type") == "object" for v in spec.get("variants") or [])
+        lim = re.search(r"(\d+) to (\d+) pixels", spec.get("desc") or "")
+        tiers = re.findall(r"\$\d+(?:\.\d+)? at (\d+(?:\.\d+)?)K\b", (EPS.get((provider, m["tier_size"])) or {}).get("price") or "")
+        if takes_object and lim and tiers:
+            bases = {f"{t}K": int(float(t) * 1024) for t in tiers}
+            fmap["size"] = {"key": key, "multiple": 16, "min": int(lim.group(1)), "max": int(lim.group(2)), "bases": bases}
+            kf.pop("aspectRatio", None)
+            opts["aspectRatios"] = union(opts.get("aspectRatios", []), IMG_AR)
+            opts["resolutions"] = union(opts.get("resolutions", []), list(bases))
+        else:
+            warn(f"{m['id']}: {ep} states no size limits for its {key} object, or {m['tier_size']} no tiers")
     part4_slots(op, kf, inputs, m, opts, fmap)
     # Frame rates an upscaler (or FPS Boost) can reach: params.targetFps -> its target_fps field.
     if m.get("fps_targets") and op in ("interpolate", "upscale-video"):
@@ -2062,6 +2114,11 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         pe = kf.get("enhancePrompt") or ("enable_prompt_expansion" if "enable_prompt_expansion" in inputs else None)
         if pe and (inputs.get(pe) or {}).get("type") == "boolean":
             fmap["promptExpansion"] = pe
+        # A layout the API takes as boxes of its own (fal's FLUX 3 Klein bounding_boxes: fractions of the picture, a label the
+        # prompt names as <label>): FieldMap.boundingBoxes, filled by the plan from the draft.
+        bb = kf.get("boundingBoxes")
+        if bb and (inputs.get(bb) or {}).get("type") == "array" and {"box", "label", "description"} <= set((inputs[bb].get("itemSchema") or {})):
+            fmap["boundingBoxes"] = {"key": bb, **({"max": int(num(inputs[bb]["maxItems"]))} if num(inputs[bb].get("maxItems")) else {})}
     # LoRAs (O1): the field the route's LoRA endpoint (or the endpoint itself) takes them in, from the research.
     # Read before the required-inputs check below: an endpoint whose LoRAs are required (MiniMax H3's /lora) fills them here.
     lora_ep = ropts.get("loraEndpoint")
@@ -2097,6 +2154,11 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     route = {"op": op, "provider": provider, "endpoint": f"{ep}:{version}" if ropts.get("pin") else ep, "map": fmap}
     if ropts.get("note"):
         route["note"] = ropts["note"]
+    # The picture follows image 1's shape at the chosen tier (ModelRoute.followsImage: fal's FLUX 3 Klein edit; the server sizes it).
+    if ropts.get("followsImage"):
+        if "size" not in fmap:
+            warn(f"{m['id']}: {ep} follows image 1 but sends no size")
+        route["followsImage"] = True
     if lora_ep:
         le = EPS.get((provider, lora_ep))
         if not le:
@@ -2185,6 +2247,10 @@ for m in M:
         lp = parse_price(le)
         if lp and lp["unit"] == pricing["unit"]:
             pricing["withLoras"] = lp["usd"]
+        elif lp and lp["unit"] == "megapixel" and pricing["unit"] == "image" and m.get("tier_size"):
+            # Priced per image by tier, its /lora twin per megapixel (fal's FLUX 3 Klein): a run with LoRAs costs the twin's
+            # rate times the megapixels of the size sent. (Fuobe Try-On's hand price already counts its LoRA.)
+            pricing["withLorasPerMegapixel"] = lp["usd"]
         elif (le.get("pricing") or {}).get("unit") == "unknown":
             # No published price (fal's MOSS-Image /lora shows "$0 per compute second"): a run with LoRAs is priced as
             # unknown, never as free.

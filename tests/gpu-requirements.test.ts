@@ -70,9 +70,10 @@ describe("requirements.json", () => {
     expect([...hosts]).toEqual(["huggingface.co"]);
   });
 
-  it("marks exactly the LTX-2.5 files as gated (the model's repo, and Lightricks' Restore and Detail Refine IC-LoRAs)", () => {
+  it("marks exactly the LTX-2.5 files (the model's repo, and Lightricks' Restore and Detail Refine IC-LoRAs) and FLUX 3 Image Klein's as gated", () => {
     const gated = files.filter(([, f]) => f.gated).map(([k]) => k);
-    expect(gated.sort()).toEqual(files.filter(([, f]) => /\/Lightricks\/LTX-2\.5(\/|-22b-IC-LoRA-(Restore|Refine-Details)\/)/.test(f.url)).map(([k]) => k).sort());
+    const gatedUrl = (u: string) => /\/Lightricks\/LTX-2\.5(\/|-22b-IC-LoRA-(Restore|Refine-Details)\/)/.test(u) || u.includes("/black-forest-labs/flux-3-image-klein-comfy/");
+    expect(gated.sort()).toEqual(files.filter(([, f]) => gatedUrl(f.url)).map(([k]) => k).sort());
     expect(gated.length).toBeGreaterThan(0);
   });
 
@@ -112,6 +113,7 @@ describe("requirements.json", () => {
   // 204.4 KB (24.9 to 25.3 KB gzipped), leaving the old 200 KB / 25 KB no room. Each graph adds about 1-2.5 KB raw and
   // 0.2-0.5 KB gzipped, so 216 KB / 27 KB leaves room for the next few graphs (n7-3's among them) while still catching a
   // build that bloats it. The server parses it once per change, and /api/gpu/requirements serves it compressed.
+  // FLUX 3 Image Klein's three graphs and seven files (nm10-flux3-klein) add about 6 KB.
   it("stays within its size budget (216 KB, 27 KB gzipped)", () => {
     expect(Buffer.byteLength(text)).toBeLessThanOrEqual(216 * 1024);
     expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(27 * 1024);
