@@ -115,9 +115,11 @@ describe("requirements.json", () => {
   // build that bloats it. The server parses it once per change, and /api/gpu/requirements serves it compressed.
   // FLUX 3 Image Klein's three graphs and seven files (nm10-flux3-klein) add about 6 KB. Clean up voice (its pack, two
   // weight files and two graphs) adds about 0.5 KB gzipped, and Live edit (its node file, LoRA and graph) about 1.6 KB.
-  it("stays within its size budget (216 KB, 27 KB gzipped)", () => {
-    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(216 * 1024);
-    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(27 * 1024);
+  // Qwen-Image 2.1's speeds, next scene and small-GPU route (nm10-qwen21-fast: 13 graphs, five files, a pack) took it from
+  // 214.7 to 227.6 KB (27.4 KB gzipped): 232 KB / 29 KB leaves room for the next few graphs again.
+  it("stays within its size budget (232 KB, 29 KB gzipped)", () => {
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(232 * 1024);
+    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(29 * 1024);
   });
 });
 

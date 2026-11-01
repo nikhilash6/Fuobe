@@ -557,7 +557,7 @@ const QWEN21_TIERS = {
     title: '4 steps, LightX2V Lightning LoRA',
     license: 'LightX2V Lightning LoRA: no licence in the repository (no LICENSE file, empty card tag; comfyui-wiki says Apache-2.0); a Qwen-Image 2.1 adapter, so the base\'s Qwen Research License applies to what it runs on',
     notes: 'lightx2v/Qwen-Image-2.1-Lightning @ 6b0a1176 (DMD, trained on 16 Ascend 910B NPUs): 4 steps at CFG 1 on the card\'s training schedule [1.0, 0.75, 0.5, 0.25] with exponential dynamic shifting (base_shift 0.5, max_shift 0.9, 256-8192 tokens of 16 px). ' +
-      'ManualSigmas holds that schedule shifted for the canvas (1 MP: 1.0, 0.857192, 0.666756, 0.400096, 0); the provider binds sigmas for the run\'s own size (src/lib/qwen21-speed.ts). Chosen over the official Fun Acc 4-step LoRA, which needs VideoX-Fun\'s parallel-decoding output head and norm overrides (not a plain LoRA in ComfyUI).',
+      'ManualSigmas holds that schedule shifted for the canvas (1 MP: 1.0, 0.857192, 0.666756, 0.400096, 0); Fuobe binds sigmas for the run\'s own size with the same shift. Chosen over the official Fun Acc 4-step LoRA, which needs VideoX-Fun\'s parallel-decoding output head and norm overrides (not a plain LoRA in ComfyUI).',
   },
   details: {
     title: '6 steps, P-Q-Image v0.2 upsampled LoRA (writes the details)',
@@ -579,7 +579,7 @@ const qwen21Tier = (op, tier, base, extra) => ({
   optionalModels: [QWEN21_CLEAN_VAE],
   license: `${QWEN21_LICENCE}; ${QWEN21_TIERS[tier].license}${extra?.license ?? ''}`,
   notes:
-    `Options → Speed "${tier}" on qwen-image-21-${op} (src/lib/qwen21-speed.ts picks it): the same graph with a LoraLoaderModelOnly after the UNETLoader${extra?.after ?? ''} and its KSampler replaced by ` +
+    `Options → Speed "${tier}" on qwen-image-21-${op}: the same graph with a LoraLoaderModelOnly after the UNETLoader${extra?.after ?? ''} and its KSampler replaced by ` +
     `RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. ${QWEN21_TIERS[tier].notes}${extra?.notes ?? ''}${QWEN21_CLEAN_NOTE}`,
 });
 
@@ -2730,7 +2730,7 @@ export const SPEC = [
     optionalModels: [QWEN21_CLEAN_VAE],
     license: `${QWEN21_LICENCE}; Next-Scene LoRA by akhaliq: Apache-2.0 on its card (license tag; no LICENSE file), trained on Qwen-Image 2.1, whose Qwen Research License covers the base`,
     notes:
-      'Storyboard\'s next frame on your GPU (STORYBOARD_MODELS.open.next): the qwen-image-21-edit graph with akhaliq/Qwen-Image-2.1-Next-Scene-LoRA @ 67ce88cd (next_scene_step2500, the card\'s recommended diffusers/ComfyUI conversion) at 0.7, ' +
+      'Storyboard\'s next frame on your GPU: the qwen-image-21-edit graph with akhaliq/Qwen-Image-2.1-Next-Scene-LoRA @ 67ce88cd (next_scene_step2500, the card\'s recommended diffusers/ComfyUI conversion) at 0.7, ' +
       'the card\'s clean-chain recipe: strength 0.7 or less and a 0.5 px Gaussian blur on each chained input (ImageBlur radius 1, sigma 0.5 on the previous panel), 28 steps (the card\'s usage), cfg 1, euler, simple. ' +
       'image = the previous panel, image2 = an optional character reference (left out when not given). The prompt starts "Next Scene:" with the camera move first (promptPrefix adds it when missing). ' +
       'Trained at 512 px on Sintel and Tears of Steel frame pairs: strongest on filmic scenes and establishing shots, static portraits are out of scope (card). ' +
@@ -2755,10 +2755,10 @@ export const SPEC = [
     ],
     license: `${QWEN21_LICENCE}; Zen Image Edit fusion adapter (AiArtLab / recoilme): Qwen Research License; Qwen3.5-0.8B: Apache-2.0; zen-image-edit-comfyui nodes: Apache-2.0`,
     notes:
-      'The small-GPU route (Options → GPU "Small", or Auto when the GPU has less than 24 GB: src/lib/qwen21-speed.ts): recoilme/zen-image-edit-comfyui @ 7a29e58c (release v2) as its example graph t2i_api.json, ' +
+      'The small-GPU route (Options → GPU "Small", or Auto when the GPU has less than 24 GB): recoilme/zen-image-edit-comfyui @ 7a29e58c (release v2) as its example graph t2i_api.json, ' +
       'ZenImage21AdapterLoader (adapter_file models/adapter_v12.safetensors, a path from ComfyUI\'s working folder; text_encoder Qwen/Qwen3.5-0.8B by id; bf16) -> ZenImage21TextEncode (resolution 1024; width / height the canvas) in place of the 17.5 GB Qwen3-VL 8B, ' +
       'the stock Qwen-Image 2.1 DiT (here the int8 file, 7.3 GB, where the example loads bf16) -> ModelSamplingAuraFlow shift 5 (the model author\'s static shift) -> KSampler 30 steps, cfg 1, euler, simple. ' +
-      'Conditioning cosine 0.95 (text) against the native encoder (AiArtLab/zen-image-edit @ 3d571755). English prompts only; numerals on signs can come out wrong. About 17.5 GB resident at 1024 px with the bf16 DiT (card): the int8 DiT is what makes 16 GB, untested here. Needs transformers >= 5.17.' + QWEN21_CLEAN_NOTE,
+      'Conditioning cosine 0.95 (text) against the native encoder (AiArtLab/zen-image-edit @ 3d571755). English prompts only; numerals on signs can come out wrong. About 17.5 GB resident at 1024 px with the bf16 DiT (card): the int8 DiT is what brings it to 16 GB (the example graphs load bf16). Needs transformers >= 5.17.' + QWEN21_CLEAN_NOTE,
   },
   {
     id: 'qwen-image-21-edit-small',

@@ -456,6 +456,13 @@ export const NODE_PACKS: NodePack[] = [
   pack("ComfyUI-ThinkSound_Wrapper", "https://github.com/ShmuelRonen/ComfyUI-ThinkSound_Wrapper", NO_FILE("; the ThinkSound weights are Apache-2.0"), "isolated"),
   pack("fuobe-live", "https://github.com/workingprototype/Fuobe", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "Fuobe's own live edit nodes (fuobe_live.py, shipped with Fuobe): a loader, a cached reference encode, a crop, a paste-back and a socket save. The Qwen-Image 2.1 weights and the DMD2 LoRA they run are non-commercial" }),
   pack("ausboss-nodes", "https://github.com/ausboss/ComfyUI-AusBoss", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "Crop For Inpaint, Stitch Inpaint and Crop + Rotate + Pad for Qwen-Image 2.1's inpaint and expand; MIT code. The Qwen-Image 2.1 weights they run are non-commercial" }),
+  // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): recoilme's Zen Image Edit nodes, LICENSE Apache-2.0 at the pinned commit.
+  pack("zen-image-edit-comfyui", "https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Zen Image Edit's adapter loader and text encode: Qwen-Image 2.1 on the Qwen3.5-0.8B encoder (Apache-2.0) and a fusion adapter. The adapter and the Qwen-Image 2.1 weights are non-commercial (Qwen Research License)",
+  }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
     ...GPL,

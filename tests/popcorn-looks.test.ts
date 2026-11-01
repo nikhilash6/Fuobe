@@ -36,7 +36,7 @@ describe("Popcorn looks: the planner", () => {
       // The look's words come from Soul's recipe on frame 1, not twice.
       expect(frames[0].prompt).not.toContain(look.look.replace(/[.\s]+$/, ""));
       const next = frames[1];
-      expect(next.modelId).toBe(engine === "cloud" ? "qwen-image-edit-2509-cloud" : "oss-qwen-next-scene");
+      expect(next.modelId).toBe(engine === "cloud" ? "qwen-image-edit-2509-cloud" : "oss-qwen-image-21-next-scene");
       expect(next.prompt).toMatch(/^Next Scene: the bus arrives\./);
       expect(next.prompt).toContain(`Style: ${look.look.replace(/[.\s]+$/, "")}`);
       expect(next.chain).toEqual([{ slot: "images", position: "first", raw: true }]);
@@ -73,7 +73,7 @@ describe("Popcorn looks: the planner", () => {
     expect(frames.every((f) => !f.loras)).toBe(true);
     // With a look, frame 1 is still the look's Fuobe Soul picture; the GPU has no partner.
     expect(planStoryboard({ engine: "cloud", partner: "nano-banana-pro", scenes, look: { id: look.id, words: look.look } })[0].modelId).toBe(STORYBOARD_LOOK_MODEL);
-    expect(planStoryboard({ engine: "open", partner: "nano-banana-pro", scenes })[1].modelId).toBe("oss-qwen-next-scene");
+    expect(planStoryboard({ engine: "open", partner: "nano-banana-pro", scenes })[1].modelId).toBe("oss-qwen-image-21-next-scene");
   });
 
   it("with references, frame 1 stays on the reference model with the look's words, and still gets the look's finish", () => {
