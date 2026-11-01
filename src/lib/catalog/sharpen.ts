@@ -66,7 +66,7 @@ export const SHARPEN_COPY = {
   usingIt: (tier: string) => `The assembly uses the ${tier} version`,
   noMask: "Sharpen puts your character back through the shot's mask: approve a mask in Who to swap and make the take with it",
   small: "This clip is filmed below 1080p, so the 768p takes already match it",
-  noSize: "Couldn't read the clip's size: open the clip once in Shots so it is measured",
+  noSize: "Couldn't read this clip's size, so it can't be sharpened: save it as an MP4 (H.264) and add it again",
   none: "Choose a take for every swapped segment first",
 } as const;
 
@@ -307,7 +307,7 @@ export function sharpenSteps(s: SharpenStepsInput): { steps: PlanStep[]; final: 
         request: {
           ...s.helper,
           modelId: COMPOSITE_MODEL,
-          op: "overlay",
+          op: "composite",
           inputs: { ...(own.length ? { videos: own } : {}), ...(mk.url ? { mask: mk.url } : {}) },
           params: {
             startTime: Math.round((s.source.start + sec(from)) * 1e6) / 1e6,

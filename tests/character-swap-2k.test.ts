@@ -95,7 +95,10 @@ describe("prices", () => {
   });
 
   it("the cloud's Quality hint carries the price; your GPU's the time", async () => {
-    const { qualityHint } = await import("@/components/genjutsu/character-panel");
+    const { qualityHint, qualityShort } = await import("@/components/genjutsu/character-panel");
+    expect(qualityShort("cloud", "2K")).toBe("$0.81 for 5 s");
+    expect(qualityShort("open", "4K")).toBe("Free · your GPU");
+    expect(qualityShort("cloud", "768p")).toBe("H3's native top");
     expect(qualityHint("cloud", "2K")).toBe("2K and 4K redraw the 768p swap at the higher size. $0.81 for 5 s, $2.44 for 15 s.");
     expect(qualityHint("cloud", "4K")).toBe("2K and 4K redraw the 768p swap at the higher size. $1.00 for 5 s, $3.00 for 15 s.");
     expect(qualityHint("open", "2K")).toMatch(/^1080p, 2K and 4K redraw the 768p swap at the higher size\. Free on your GPU, about 3 min more per 5 s on a 72 GB GPU/);
@@ -210,7 +213,7 @@ describe("Genjutsu's Character swap", () => {
     expect(regen.request.prompt).toMatch(/^Replace the selected person in the clip with the character in the reference/);
     expect(regen.after).toEqual(["swap"]);
     const c1 = step(p, "sharpen-comp1");
-    expect(c1.request).toMatchObject({ modelId: "oss-composite-mask", op: "overlay", params: { startTime: 2.5, endTime: 5, extra: { windowStart: 2.5, takeStart: 2.5, maskStart: 2.5 } } });
+    expect(c1.request).toMatchObject({ modelId: "oss-composite-mask", op: "composite", params: { startTime: 2.5, endTime: 5, extra: { windowStart: 2.5, takeStart: 2.5, maskStart: 2.5 } } });
     expect(c1.after).toEqual(["sharpen-regen0", "fit", "swap", "mask"]);
     expect(c1.chain).toEqual([{ slot: "videos", at: 1 }, { slot: "videos", at: 0 }, { slot: "videos", at: 2 }, { slot: "mask" }]);
     expect(step(p, "sharpen-join").request).toMatchObject({ modelId: "oss-join-encoded", feature: "genjutsu-step" });
@@ -374,7 +377,7 @@ describe("video-composite-mask", () => {
   const { manifest } = getWorkflow(S.COMPOSITE_WORKFLOW);
 
   it("is core nodes only, validated, with the bindings the plan fills", () => {
-    expect(manifest).toMatchObject({ capability: "overlay", vramGb: 0, validated: true });
+    expect(manifest).toMatchObject({ capability: "composite", vramGb: 0, validated: true });
     expect(Object.keys(manifest.bindings).sort()).toEqual(
       ["video", "video2", "video3", "mask", "startTime", "windowStart", "takeStart", "maskStart", "duration", "canvasWidth", "canvasHeight", "takeX", "takeY", "regionWidth", "regionHeight", "regionX", "regionY", "maskGrow", "feather", "filenamePrefix"].sort(),
     );
@@ -393,7 +396,7 @@ describe("video-composite-mask", () => {
     const { workflow: wf } = await prepareWorkflow(
       S.COMPOSITE_WORKFLOW,
       { video: undefined, videos: ["src.mp4", "regen.mp4", "take.mp4"], mask: "mask.mp4", startTime: c.params!.startTime, endTime: c.params!.endTime, extra: { ...extra } } as GenInput,
-      { generationId: "g1", op: "overlay", upload: async (_d, _t, name) => `up_${name}`, media: () => undefined },
+      { generationId: "g1", op: "composite", upload: async (_d, _t, name) => `up_${name}`, media: () => undefined },
     );
     const at = (node: string, input: string) => (wf as Record<string, { inputs: Record<string, unknown> }>)[node].inputs[input];
     expect([at("source", "file"), at("regen", "file"), at("take", "file"), at("mask", "file")]).toEqual(["src.mp4", "regen.mp4", "take.mp4", "mask.mp4"]);

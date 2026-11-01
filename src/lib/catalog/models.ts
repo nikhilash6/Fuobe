@@ -1136,7 +1136,7 @@ const open: ModelDef[] = [
     family: "utility",
     kind: "video",
     tagline: "Puts only the swapped character back over the original footage, with its own sound · CPU",
-    routes: [comfy("overlay", COMPOSITE_WORKFLOW, "the swap, then its regenerate, each through the person's mask (grown, feathered); a few seconds a pass")],
+    routes: [comfy("composite", COMPOSITE_WORKFLOW, "the swap, then its regenerate, each through the person's mask (grown, feathered); a few seconds a pass")],
     options: {},
     hidden: true,
   }),

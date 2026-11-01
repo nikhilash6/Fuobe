@@ -4454,7 +4454,7 @@ export const SPEC = [
   {
     id: 'video-composite-mask',
     title: 'Put only the swapped character back over the original footage: the 768p swap, then the regenerated one, each through the approved mask (grown, feathered), with the footage\'s sound (core nodes, no model)',
-    capability: 'overlay',
+    capability: 'composite',
     handBuilt: 'hand-built/video-composite-mask.json',
     bindings: {
       video: [b('source', 'file')], video2: [b('regen', 'file')], video3: [b('take', 'file')], mask: [b('mask', 'file')],

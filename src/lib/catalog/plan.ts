@@ -238,7 +238,7 @@ const PROMPTLESS = new Set<Operation>([
   // av-tools: the dub voice track (clips placed on the video's timeline)
   "timeline",
   // round 4: tools that work from their inputs (removing an object needs a prompt only on models that read one)
-  "sdr-to-hdr", "export-video", "ocr", "still-motion", "audio-loop", "audio-join", "scene-3d", "splat", "rig-3d", "extract-frames", "images-to-video", "overlay",
+  "sdr-to-hdr", "export-video", "ocr", "still-motion", "audio-loop", "audio-join", "scene-3d", "splat", "rig-3d", "extract-frames", "images-to-video", "overlay", "composite",
   // round 5 (O11): the face mosaic names the faces itself ("face")
   "face-mosaic",
   // archive-restore: the scene's words help (period, place, light) but a run without them gets a neutral one
@@ -785,6 +785,8 @@ const NEEDS: Partial<
   "extract-frames": { video: true, msg: "Add the video to take frames from" },
   "images-to-video": { images: 1, msg: "Add the images, in order" },
   overlay: { images: 2, msg: "Add the picture and the overlay to put on it" },
+  // Character swap in 2K: the footage, the redrawn swap and the swap (the person's mask goes in inputs.mask).
+  composite: { videos: 2, msg: "Add the footage and the redrawn clip to put the character back over it" },
   // N7-5 (the open engine also needs the browser's render along the path: its model's options.requires.video)
   "camera-path": { images: 1, msg: "Add the still to film along the path" },
 };

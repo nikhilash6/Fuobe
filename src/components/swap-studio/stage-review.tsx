@@ -165,6 +165,8 @@ function FinishPanel({ id, project, clip, gens, estimate }: Pick<StageProps, "id
   const finishes = chosen.map((p) => p.take.finish).filter((f) => !!f && (!tier || f.tier === tier));
   const states = finishes.map((f) => jobState(f!.genId, f!.stepIds, gens).status);
   const busy = states.some((x) => x === "queued" || x === "running");
+  // Every chosen take has a version at this size made or on its way: nothing for Sharpen to do.
+  const allMade = chosen.length > 0 && finishes.length === chosen.length && states.every((x) => x !== "failed" && x !== "canceled" && x !== "missing");
   const ready = states.filter((x) => x === "succeeded").length;
   const est = estimate?.sharpen[clip.id];
   const seconds = est?.seconds ?? chosen.reduce((n, p) => n + (p.end - p.start) / SWAP_STUDIO.fps, 0);
@@ -199,7 +201,7 @@ function FinishPanel({ id, project, clip, gens, estimate }: Pick<StageProps, "id
           <div className="flex flex-wrap items-center gap-2">
             <Button
               className="h-9 rounded-full"
-              disabled={!!problem || !tier || sharpen.isPending || busy}
+              disabled={!!problem || !tier || sharpen.isPending || busy || allMade}
               onClick={() => tier && sharpen.mutate({ clipId: clip.id, tier }, { onSuccess: () => toast(`Sharpening the chosen takes to ${tier}`), onError: (e) => toastError(e) })}
             >
               {sharpen.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Sharpen{tier ? ` to ${tier}` : ""}

@@ -229,7 +229,7 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     group: "Video tools",
     steps: [
       { modelId: REGEN_MODEL, op: "upscale-video" },
-      { modelId: COMPOSITE_MODEL, op: "overlay" },
+      { modelId: COMPOSITE_MODEL, op: "composite" },
       { modelId: REGEN_JOIN, op: "concat" },
     ],
   },

@@ -348,7 +348,7 @@ export function nodeLabel(n: Pick<CanvasNode, "type" | "data">): string {
  * Ops the canvas can't feed (masks, browser-only tools, multi-speaker scripts, draft finishing, and
  * inputs it has no port for: a 3D model to rig, a list of audio clips to join).
  */
-const UNSUPPORTED_OPS = new Set<Operation>(["grade", "inpaint", "finalize", "dialogue", "rig-3d", "audio-join"]);
+const UNSUPPORTED_OPS = new Set<Operation>(["grade", "inpaint", "finalize", "dialogue", "rig-3d", "audio-join", "composite"]);
 
 /** Models that only run on a painted mask or clicked points (VACE inpaint, Bria's point eraser): the canvas has neither. */
 const needsMarks = (m: ModelDef) => !!(m.options.requires?.mask || m.options.requires?.points);

@@ -33,10 +33,17 @@ import type { GenjutsuTarget, Maker } from "@/lib/catalog/genjutsu";
 import { cloudSharpenUsd, SHARPEN_COPY } from "@/lib/catalog/sharpen";
 import type { Engine } from "@/lib/catalog/types";
 
+/** The Quality field's short hint: H3's own sizes in words, a finishing size's price (cloud) or "Free · your GPU". */
+export function qualityShort(engine: Engine, q: CharacterChoice): string {
+  const finish = characterFinish(q);
+  if (!finish) return q === "480p" ? "Faster and cheaper" : "H3's native top";
+  return engine === "open" ? "Free · your GPU" : `$${(cloudSharpenUsd(finish, 5) ?? 0).toFixed(2)} for 5 s`;
+}
+
 /** What a quality does, in a line: H3's own sizes, or a finishing size with its price (cloud) or GPU time (open). */
 export function qualityHint(engine: Engine, q: CharacterChoice): string {
   const finish = characterFinish(q);
-  if (!finish) return q === "480p" ? "Faster and cheaper" : "H3's native top";
+  if (!finish) return qualityShort(engine, q);
   if (engine === "open") return `${SHARPEN_COPY.hintOpen} Free on your GPU, about 3 min more per 5 s on a 72 GB GPU, never above your clip's own size.`;
   const usd = (s: number) => `$${(cloudSharpenUsd(finish, s) ?? 0).toFixed(2)}`;
   return `${SHARPEN_COPY.hint} ${usd(5)} for 5 s, ${usd(15)} for 15 s.`;
@@ -145,8 +152,9 @@ export function CharacterControls({
       )}
 
       {h3 && (
-        <Field label="Quality" hint={qualityHint(engine, shown)}>
+        <Field label="Quality" hint={qualityShort(engine, shown)}>
           <Segmented label="Quality" value={shown} onChange={onQuality} options={offered.map((q) => ({ value: q, label: q }))} />
+          {characterFinish(shown) && <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{qualityHint(engine, shown)}</p>}
         </Field>
       )}
 
