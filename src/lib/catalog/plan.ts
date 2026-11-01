@@ -8,6 +8,7 @@ import type {
   ModelRoute,
   Operation,
   Preset,
+  PresetEndStep,
   PresetRoute,
 } from "./types";
 import { sourceSeconds } from "./clip-windows";
@@ -186,6 +187,10 @@ export interface Plan {
    * generation (the grade, an overlay) that the result's meta carries.
    */
   soul?: { look?: string; words: string; triggers: string[]; grade?: string; overlay?: SoulOverlay; crop?: "21:9" };
+  /** MiniMax H3's sound lines from the preset's route (its preview's), which its layout's sound fields take. */
+  sound?: { soundscape: string; music: string };
+  /** An end-frame step: an image edit of the start frame that becomes the clip's end frame (H3 flf2v). */
+  end?: PresetEndStep;
 }
 
 /** Operations that work from their inputs alone. */
@@ -244,6 +249,8 @@ export function planGeneration(
   let params: GenParams = { ...model.defaults, ...req.params };
   let loras: LoraRef[] = [];
   let op: Operation | undefined = req.op;
+  let sound: Plan["sound"];
+  let end: Plan["end"];
 
   if (preset) {
     // The preset's routes on this engine: the one its preview was made with (when this catalog has its model), then its own.
@@ -274,6 +281,8 @@ export function planGeneration(
     if (sameModel && Object.keys(chosen).length) params = { ...params, extra: { ...chosen, ...params.extra } };
     loras = sameModel ? (route.loras ?? []) : [];
     if (sameModel) op = op ?? route.op;
+    if (sameModel && route.sound) sound = route.sound;
+    if (sameModel && route.end && !req.inputs?.endImage) end = route.end;
   }
 
   const notes: string[] = [];
@@ -477,6 +486,8 @@ export function planGeneration(
     perJobOutputs,
     ...(notes.length && { notes }),
     ...(soulPlan && { soul: soulPlan }),
+    ...(sound && { sound }),
+    ...(end && { end }),
   };
 }
 

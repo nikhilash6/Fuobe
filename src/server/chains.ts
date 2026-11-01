@@ -6,7 +6,7 @@ import { chainTiming, chainedWaitMessage, frameTimes, framesWait, planKeyframeCl
 import { faceMosaicStep } from "@/lib/catalog/open-tools";
 import { dualEngine, onEngine } from "@/lib/catalog/engines";
 import { routesFor } from "@/lib/catalog/plan";
-import type { ChainSlot, Engine, GenParams, Generation, GenerationRequest, LoraRef, ModelDef, ModelRoute, Operation } from "@/lib/catalog/types";
+import type { ChainSlot, Engine, GenParams, Generation, GenerationRequest, LoraRef, ModelDef, ModelRoute, Operation, PresetEndStep } from "@/lib/catalog/types";
 import { db } from "./db";
 import { cancelGeneration, chooseRoute, createGenerations, getGeneration, previewChained, previewGeneration } from "./generations";
 import { provider } from "./providers";
@@ -474,6 +474,52 @@ export function createRelitClip(
     return withAsked([clip, relit], original, engine);
   } catch (e) {
     void cancelGeneration(relit.id);
+    throw e;
+  }
+}
+
+/**
+ * A preset whose recipe edited the start frame into an end frame first: the Qwen-Image 2.1 edit (the end-frame step),
+ * then MiniMax H3 from the start frame to the edited end frame (flf2v). One batch of two steps. An end-frame step is
+ * only on the open engine (there is no hosted Qwen-Image 2.1). A transition that already takes an end frame from the
+ * person has no end-frame step (the plan checks `!req.inputs?.endImage`).
+ */
+export function createEndFrameClip(original: GenerationRequest, endStep: PresetEndStep): Generation[] {
+  const [image] = original.inputs?.images ?? [];
+  if (!image) throw new Error("Add a start frame");
+  assertOneMode([
+    { label: "End frame", modelId: endStep.modelId, op: endStep.op, engine: "open" },
+    { label: getModel(original.modelId)?.name ?? original.modelId, modelId: original.modelId, op: "flf2v", engine: "open" },
+  ]);
+  const batchId = nanoid(10);
+  const endFrame = createGenerations(
+    {
+      feature: original.feature,
+      engine: "open",
+      modelId: endStep.modelId,
+      op: endStep.op,
+      prompt: endStep.promptTemplate,
+      inputs: { images: [image] },
+      ...(endStep.params && { params: endStep.params }),
+      step: { label: "End frame", index: 0, of: 2 },
+    },
+    { batchId },
+  )[0];
+  try {
+    const clip = createGenerations(
+      {
+        ...original,
+        engine: "open",
+        op: "flf2v",
+        inputs: { ...original.inputs },
+        chain: [{ slot: "endImage" }],
+        step: { label: "Clip", index: 1, of: 2 },
+      },
+      { batchId, dependsOn: endFrame.id },
+    )[0];
+    return withAsked([clip, endFrame], original, "open");
+  } catch (e) {
+    void cancelGeneration(endFrame.id);
     throw e;
   }
 }

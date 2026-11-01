@@ -1220,6 +1220,59 @@ export interface PresetRoute {
    * harness promotes Fuobe DoP's words). Picking the preset doesn't move the composer to it; an engine switch does.
    */
   partner?: boolean;
+  /** MiniMax H3's sound lines for this route's words (its overall_soundscape and non_diegetic_music fields). */
+  sound?: { soundscape: string; music: string };
+  /**
+   * A step that makes the clip's end frame from the person's picture first, as the preset's preview made its own: the
+   * clip then runs from the picture to that frame (start and end frames). Only when no end frame is given.
+   */
+  end?: PresetEndStep;
+}
+
+/** The end-frame step of a route (PresetRoute.end): an image edit of the start frame. */
+export interface PresetEndStep {
+  modelId: string;
+  op: Operation;
+  /** Its words: "{prompt}" and "{option:key}" fill as in the preset's own template. */
+  promptTemplate: string;
+  params?: GenParams;
+}
+
+/**
+ * The recipe that made a preset's preview (src/lib/catalog/preset-recipe-book.json), written for any picture: the
+ * preview's own subject and setting became "the subject" and "the scene", and the effect's words stayed.
+ */
+export interface PresetRecipeBook {
+  /** A MiniMax H3 clip. */
+  clip?: {
+    /** fast: the 8-step Turbo graph; best: the 20-step graph; orbit: the Orbit LoRA (its training caption's words). */
+    quality: "fast" | "best" | "orbit";
+    /** The clip's length on H3's frame grid at 24 fps (3 s = 73 frames, 5 s = 124). */
+    seconds: number;
+    /** H3's [Shot 1] description (an orbit has none: ORBIT_WORDS). */
+    words?: string;
+    /** H3's overall_soundscape and non_diegetic_music. */
+    sound?: string;
+    music?: string;
+    /** The end frame the clip runs to, made from the start frame first. */
+    end?: PresetRecipeEdit;
+  };
+  /** An image app's result: the Qwen-Image 2.1 edit that made its preview. */
+  edit?: PresetRecipeEdit;
+}
+
+/** A Qwen-Image 2.1 step of a recipe. */
+export interface PresetRecipeEdit {
+  /** turbo: its 8-step Turbo edit; full: its 25-step edit; expand: its outpaint (grey margins, filled). */
+  graph: "turbo" | "full" | "expand";
+  /** The instruction (expand: the words for the new margins). */
+  prompt: string;
+  /** The long side the pictures are scaled to first (the graphs' default is 2048). */
+  maxDimension?: number;
+  /** expand: the pixels added on the left, top, right and bottom. */
+  pads?: [number, number, number, number];
+  /** A crop of the picture first, as fractions of its width and height (x, y, width, height), scaled back to its size. */
+  crop?: [number, number, number, number];
 }
 
 export type PresetType = "app" | "motion" | "effect";
@@ -1249,6 +1302,8 @@ export interface Preset {
   prestep?: PresetPrestep;
   /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice). */
   tool?: "clean-voice";
+  /** The recipe its preview was made with (src/lib/catalog/preset-recipe-book.json): the route it opens on follows it. */
+  recipe?: PresetRecipeBook;
 }
 
 /**

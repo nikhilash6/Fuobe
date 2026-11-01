@@ -10332,6 +10332,24 @@
             "node": "90",
             "input": "filename_prefix"
           }
+        ],
+        "maxDimension": [
+          {
+            "node": "20",
+            "input": "largest_size"
+          },
+          {
+            "node": "21",
+            "input": "largest_size"
+          },
+          {
+            "node": "22",
+            "input": "largest_size"
+          },
+          {
+            "node": "23",
+            "input": "largest_size"
+          }
         ]
       },
       "outputs": [
@@ -10420,6 +10438,24 @@
           {
             "node": "90",
             "input": "filename_prefix"
+          }
+        ],
+        "maxDimension": [
+          {
+            "node": "20",
+            "input": "largest_size"
+          },
+          {
+            "node": "21",
+            "input": "largest_size"
+          },
+          {
+            "node": "22",
+            "input": "largest_size"
+          },
+          {
+            "node": "23",
+            "input": "largest_size"
           }
         ]
       },

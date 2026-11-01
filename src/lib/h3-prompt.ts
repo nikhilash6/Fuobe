@@ -31,9 +31,10 @@ const LEADING_ALIGN = /^(?:For the target video, at [\d.]+ seconds into the targ
  * The person's words in MiniMax H3's layout (its prompting guide): the alignment line for the reference frames (image to
  * video: the start frame at 0.00 s; start and end frames: the end frame at the clip's length, `frames` on H3's grid over
  * 24 fps, 5.17 s for a 5 s clip), then the shot, the soundscape and the music fields. Words already in the layout keep
- * their fields, and get the alignment line of this run (its operation and length) in place of the one they had.
+ * their fields, and get the alignment line of this run (its operation and length) in place of the one they had. A preset's
+ * recipe brings its own sound and music lines (`music`); without them the sound is the scene's and there is no music.
  */
-export function h3Prompt(words: string, op: H3Op, frames: number, sound?: string): string {
+export function h3Prompt(words: string, op: H3Op, frames: number, sound?: string, music?: string): string {
   const text = words.trim();
   const align = op === "i2v" ? I2V_ALIGN : op === "flf2v" ? flf2vAlign((alignFrames(frames) / H3_FPS).toFixed(2)) : "";
   if (inH3Layout(text)) {
@@ -43,7 +44,7 @@ export function h3Prompt(words: string, op: H3Op, frames: number, sound?: string
   const body = [
     `integrated_multimodal_description: [Shot 1] ${text}`,
     `overall_soundscape: ${sound?.trim() || H3_DEFAULT_SOUND}`,
-    "non_diegetic_music: N/A",
+    `non_diegetic_music: ${music?.trim() || "N/A"}`,
   ].join("\n\n");
   return align ? `${align}\n\n${body}` : body;
 }

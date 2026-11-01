@@ -1578,7 +1578,9 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   }
 
   const bound = applyBindings(graph, b, Object.fromEntries(Object.entries(values).filter(([k]) => !left.includes(k))));
-  if (bound.missing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${bound.missing.join(", ")}`);
+  // maxDimension targets for removed reference branches are expected: their scale nodes go with the loader.
+  const realMissing = bound.missing.filter((m) => !/^maxDimension\b/.test(m));
+  if (realMissing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${realMissing.join(", ")}`);
   let wf = bound.workflow;
   const outputIds = manifest.outputs.map((o) => o.node);
   if (dropAnchor) wf = withoutAnchor(wf, b.image2![0].node);

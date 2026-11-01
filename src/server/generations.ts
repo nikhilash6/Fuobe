@@ -51,7 +51,7 @@ import { listElements } from "./elements";
 import { markStale } from "./gpu/snapshots";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
-import { createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d } from "./chains";
+import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d } from "./chains";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
@@ -75,6 +75,7 @@ import { llmBackends, llmLabel, llmMissing, llmUsesClaude, probeLocal } from "./
 import type { PollContext, PollResult, ProviderAdapter, RemoteOutput } from "./providers/types";
 import { mediaFacts } from "./media-facts";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
+import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
 import { engineMode, getSetting, withCandidates, withoutCandidates } from "./settings";
 import { blockedForAccounts, discardBody, fetchRemoteToFile, RemoteFetchError } from "./remote-fetch";
@@ -791,6 +792,7 @@ export function previewGeneration(asked: GenerationRequest) {
     prompt: plan.prompt,
     loras,
     ...(notes.length && { notes }),
+    plan: { end: plan.end },
   };
 }
 
@@ -883,6 +885,8 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   // A dependent job can't be planned until its inputs exist; it's validated with placeholders, then launched by the runner.
   const p = waits ? prepare(withChainInputs(original, slotsFor(original, deps.length).map(placeholderFor))) : prepare(original);
   const { req, plan, route, demo, providerId, cost } = p;
+  // A preset whose recipe edited the start frame into an end frame first: two steps (the edit, then the clip).
+  if (!opts.dependsOn && plan.end) return createEndFrameClip(original, plan.end);
   const notes = moved.note ? [moved.note, ...p.notes] : p.notes;
   // A chained route is built from its inputs when it's created; it can't wait for another step's output.
   if (waits && route.chained) throw new Error(chainedWaitMessage(plan.model.name, plan.op));
@@ -1418,6 +1422,25 @@ export async function accountLoraFix(req: GenerationRequest): Promise<MissingFil
       // The step says what's wrong when it is created.
     }
   }
+  // An end-frame step (Qwen-Image 2.1 edit that makes the clip's end frame) runs on the GPU too.
+  if (p.plan.end) {
+    try {
+      const step = p.plan.end;
+      const s = previewGeneration({
+        feature: req.feature,
+        account: req.account,
+        engine: "open",
+        modelId: step.modelId,
+        op: step.op,
+        prompt: step.promptTemplate,
+        inputs: { images: (req.inputs?.images ?? []).slice(0, 1) },
+        ...(step.params && { params: step.params }),
+      });
+      if (s.route.provider === "comfyui") asks.push({ loras: [...s.loras.applied, ...graphLoras(s.route.endpoint, step.params?.extra)], endpoint: s.route.endpoint });
+    } catch {
+      // The step says what's wrong when it is created.
+    }
+  }
   const items: MissingFiles["items"] = [];
   let workflowId: string | undefined;
   for (const a of asks) {
@@ -1523,6 +1546,16 @@ async function submitNow(
         return adapter.prepareFile(f.data, f.contentType, f.name, route);
       });
     };
+    // An end-frame step crops the start frame before the edit (the recipe's crop of the subject).
+    const cropWindow = isCropWindow(plan.params.extra?.crop) ? plan.params.extra.crop : undefined;
+    const prepCropped = async (ref?: string) => {
+      if (!ref || !cropWindow) return prep(ref);
+      return gate(async () => {
+        const f = await readRef(ref);
+        const data = cropPicture(f.data, cropWindow);
+        return adapter.prepareFile(data, "image/png", f.name.replace(/\.[^.]+$/, ".png"), route);
+      });
+    };
     // The input clip's header (size, frame rate, length): upscalers that take a factor and frame-count routes read it.
     let source: Pick<GenInput, "sourceSize" | "sourceFps" | "sourceDuration"> = {};
     const prepVideo = async (ref?: string) => {
@@ -1584,7 +1617,7 @@ async function submitNow(
     const h3Op = plan.op === "t2v" || plan.op === "i2v" || plan.op === "flf2v" ? plan.op : undefined;
     const orbit = h3Op === "i2v" && plan.params.extra?.orbit === true;
     if (plan.model.options.promptFormat === "minimax-h3" && h3Op && prompt && !orbit) {
-      const wrapped = h3Prompt(prompt, h3Op, h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5));
+      const wrapped = h3Prompt(prompt, h3Op, h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5), plan.sound?.soundscape, plan.sound?.music);
       if (wrapped !== prompt) {
         prompt = wrapped;
         update(id, { prompt });
@@ -1594,7 +1627,7 @@ async function submitNow(
       ...plan.params,
       prompt,
       negativePrompt: req.negativePrompt,
-      images: (await Promise.all((req.inputs?.images ?? []).map(prep))).filter(Boolean) as string[],
+      images: (await Promise.all((req.inputs?.images ?? []).map((ref, i) => (i === 0 ? prepCropped(ref) : prep(ref))))).filter(Boolean) as string[],
       endImage: await prep(req.inputs?.endImage),
       mask: await prepMask(req.inputs?.mask),
       video: await prepVideo(req.inputs?.video),

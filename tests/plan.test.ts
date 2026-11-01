@@ -77,8 +77,8 @@ describe("a preset on the model its preview was made with, or on its own", () =>
     // A two-image app's words name its pictures as the encoder does, on the Turbo only.
     expect(run("app-character-swap", "oss-qwen-image-21-turbo").prompt).toMatch(/<image1>.*<image2>|<image2>.*<image1>/);
     expect(run("app-character-swap", "oss-qwen-image-21").prompt).toMatch(/the first image/);
-    // Specialist options fill in.
-    expect(run("app-relight", "oss-qwen-image-21-turbo", { presetOptions: { light: "neon-night", dir: "left" } }).prompt).toMatch(/^Relight <image1> with pink and blue neon lights at night coming from the left:/);
+    // Specialist options fill in; the recipe's full words replace the old prefix.
+    expect(run("app-relight", "oss-qwen-image-21-turbo", { presetOptions: { light: "neon-night", dir: "left" } }).prompt).toMatch(/^Relight <image1> with pink and blue neon lights at night coming from the left/);
   });
 
   it("gives an H3 run its Quality, orbit and length", () => {

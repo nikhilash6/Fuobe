@@ -113,9 +113,11 @@ export function presetTool(presetId: string, pick: { own?: boolean; modelId?: st
   const has = (id: string) => !!loadIndex().workflows[id];
   const graphs = extra ? main.workflows.map((w) => resolveWorkflowId(w, { op: route.op, clips: 0, images: 0, audio2: false, extra, has })) : main.workflows;
   const pre = p.prestep?.open ? modelTool(p.prestep.open.modelId, p.prestep.open.op) : null;
+  // An end-frame step (Qwen-Image 2.1 edit that makes the clip's end frame before H3 runs start-to-end).
+  const end = route.end ? modelTool(route.end.modelId, route.end.op) : null;
   const loras = new Map<string, LoraNeed>();
   for (const l of [...(route.loras ?? []), ...(p.prestep?.open.loras ?? [])]) loras.set(basename(l.file), loraNeed(l));
-  for (const l of [...main.loras, ...(pre?.loras ?? [])]) loras.set(l.file, l);
+  for (const l of [...main.loras, ...(pre?.loras ?? []), ...(end?.loras ?? [])]) loras.set(l.file, l);
   // A route after the first is named by its model too ("preset:motion-jib-up@fuobe-dop"), so its guided fix plans it.
   const first = (routes[0] ?? p.open).modelId === route.modelId;
   // Its cloud alternative: on the route its preview was made with, that recipe hosted (MiniMax H3 on fal) when the
@@ -126,7 +128,7 @@ export function presetTool(presetId: string, pick: { own?: boolean; modelId?: st
     ref: first ? `preset:${p.id}` : `preset:${p.id}@${route.modelId}`,
     name: p.name,
     kind: main.kind,
-    workflows: [...new Set([...graphs, ...(pre?.workflows ?? [])])],
+    workflows: [...new Set([...graphs, ...(pre?.workflows ?? []), ...(end?.workflows ?? [])])],
     loras: [...loras.values()],
     ...(cloud && { cloud: { modelId: cloud } }),
     ...(main.local && !pre && { local: true }),
