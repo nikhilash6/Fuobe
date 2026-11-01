@@ -21,10 +21,11 @@ export interface PresetPreviewMedia {
 
 export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
   "app-3d-figure": {
-    "poster": "/previews/presets/app-3d-figure.jpg?v=860d05bb",
+    "poster": "/previews/presets/app-3d-figure.jpg?v=2a823887",
+    "video": "/previews/presets/app-3d-figure.mp4?v=dd9265f9",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-3d-render": {
@@ -44,10 +45,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-60s-cafe": {
-    "poster": "/previews/presets/app-60s-cafe.jpg?v=f86c405e",
+    "poster": "/previews/presets/app-60s-cafe.jpg?v=8ed4dd7a",
+    "video": "/previews/presets/app-60s-cafe.mp4?v=6f86681f",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-ad-creative": {
@@ -122,10 +124,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-banana-eating": {
-    "poster": "/previews/presets/app-banana-eating.jpg?v=2a384f15",
+    "poster": "/previews/presets/app-banana-eating.jpg?v=cbd4a4be",
+    "video": "/previews/presets/app-banana-eating.mp4?v=80441baf",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-behind-the-scenes": {
@@ -261,10 +264,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-comic-book": {
-    "poster": "/previews/presets/app-comic-book.jpg?v=43c0ff65",
+    "poster": "/previews/presets/app-comic-book.jpg?v=867c44f9",
+    "video": "/previews/presets/app-comic-book.mp4?v=e075411a",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-commercial-faces": {
@@ -454,10 +458,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-kick-ad": {
-    "poster": "/previews/presets/app-kick-ad.jpg?v=a7577eba",
+    "poster": "/previews/presets/app-kick-ad.jpg?v=827df4be",
+    "video": "/previews/presets/app-kick-ad.mp4?v=926152bb",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-latex": {
@@ -563,10 +568,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-mukbang": {
-    "poster": "/previews/presets/app-mukbang.jpg?v=c0311551",
+    "poster": "/previews/presets/app-mukbang.jpg?v=e330c376",
+    "video": "/previews/presets/app-mukbang.mp4?v=8bac8cdf",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-nano-strike": {
@@ -727,10 +733,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-roller-coaster": {
-    "poster": "/previews/presets/app-roller-coaster.jpg?v=7917defd",
+    "poster": "/previews/presets/app-roller-coaster.jpg?v=2b16ae65",
+    "video": "/previews/presets/app-roller-coaster.mp4?v=0302f5ca",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-sand-worm": {
@@ -765,10 +772,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-simlife": {
-    "poster": "/previews/presets/app-simlife.jpg?v=2e649ba9",
+    "poster": "/previews/presets/app-simlife.jpg?v=ccfdff95",
+    "video": "/previews/presets/app-simlife.mp4?v=2a104bb0",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-sketch-to-real": {
@@ -919,10 +927,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-victory-card": {
-    "poster": "/previews/presets/app-victory-card.jpg?v=9dff87f6",
+    "poster": "/previews/presets/app-victory-card.jpg?v=e1ab175e",
+    "video": "/previews/presets/app-victory-card.mp4?v=b0abd8dd",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-video-background-remover": {
@@ -3740,10 +3749,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-tilt-down": {
-    "poster": "/previews/presets/motion-tilt-down.jpg?v=7615650a",
+    "poster": "/previews/presets/motion-tilt-down.jpg?v=5377d4e2",
+    "video": "/previews/presets/motion-tilt-down.mp4?v=f6e07cdd",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-tilt-up": {
