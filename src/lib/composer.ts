@@ -15,6 +15,7 @@ import { soulPostStep } from "./catalog/soul";
 import { appModels, ownRoute, presetRoutes, type HasModel, type RecipePreset } from "./catalog/preset-recipe-routes";
 import { COLORMAPS, type Engine, type GenParams, type InputSlot, type MatteOutput, type MediaKind, type ModelDef, type Operation, type Preset, type PresetRoute, type VideoFormat } from "./catalog/types";
 import { spokenLanguageName } from "./speech-languages";
+import { LAYOUT_MAX_PIXELS, LAYOUT_MAX_SIDE, LAYOUT_PARAM, readLayout, readsBoxes, type LayoutDraft } from "./layout-prompt";
 
 // ---------------------------------------------------------------------------
 // Settings summary ("16:9 · 720p · 5s · ×1")
@@ -108,6 +109,11 @@ export function settingsShape(
  */
 export function framesShape(shape: SettingsShape, chained: boolean): SettingsShape {
   return { ...shape, duration: null, multiShot: false, count: shape.count && !chained };
+}
+
+/** Layout mode's settings: the boxes are compiled as drawn, so nothing rewrites the prompt (no Enhance). */
+export function layoutShape(shape: SettingsShape): SettingsShape {
+  return { ...shape, enhance: false };
 }
 
 export const MATTE_OUTPUT_LABELS: Record<MatteOutput, string> = { cutout: "Cutout video", matte: "Alpha mask" };
@@ -593,6 +599,94 @@ export function leaveFrames<T extends Attachment>(frames: FrameAttachment<T>[], 
   return { slots: { ...slots, image: frames[0]?.value ?? null, endImage: end, mask: null, sketch: null }, dropped: Math.max(0, frames.length - 2) };
 }
 
+// ---------------------------------------------------------------------------
+// Layout mode (Image studio): boxes on the picture, one row per box (src/lib/layout-prompt.ts)
+
+/**
+ * Layout mode on: an empty layout on the picture's shape (the aspect ratio picked, else the model's). The prompt stays
+ * as it is: in Layout mode it is the whole picture's caption.
+ */
+export function enterLayout(params: GenParams, model?: Pick<ModelDef, "defaults">): LayoutDraft {
+  const aspect = params.aspectRatio ?? model?.defaults?.aspectRatio;
+  return { summary: { caption: "", meta: [], canvas: "single" }, items: [], ...(aspect && aspect !== "auto" && { aspect }) };
+}
+
+/**
+ * What Layout mode sends: the prompt as written, and the layout as params.extra.layout with the prompt as its caption,
+ * on the shape it is drawn on. The plan compiles it for the model at the size it renders (src/lib/catalog/plan.ts
+ * planLayout) and turns prompt rewriting off; the request keeps the draft for Reuse and Edit layout.
+ */
+export function layoutRequest(layout: LayoutDraft, prompt: string, params: GenParams): { prompt: string; params: GenParams } {
+  const aspect = params.aspectRatio && params.aspectRatio !== "auto" ? params.aspectRatio : layout.aspect;
+  const draft: LayoutDraft = { ...layout, summary: { ...layout.summary, caption: prompt.trim() }, ...(aspect && { aspect }) };
+  return { prompt, params: { ...params, extra: { ...params.extra, [LAYOUT_PARAM]: draft } } };
+}
+
+/**
+ * Layout mode off: the boxes go (`dropped` counts them, so the composer offers Undo) and any layout the params still
+ * carry with them; the prompt stays as written.
+ */
+export function leaveLayout(layout: LayoutDraft | undefined, params: GenParams): { params: GenParams; dropped: number } {
+  return { params: withoutLayout(params).params, dropped: layout?.items.length ?? 0 };
+}
+
+/**
+ * A request's params with its layout taken out (Reuse, Edit layout): the layout goes back to Layout mode, the rest to
+ * the settings. `layout` is undefined when there was none (or it can't be read).
+ */
+export function withoutLayout(params: GenParams): { params: GenParams; layout?: LayoutDraft } {
+  if (!params.extra || !(LAYOUT_PARAM in params.extra)) return { params };
+  const extra = { ...params.extra };
+  const layout = readLayout(extra[LAYOUT_PARAM]) ?? undefined;
+  delete extra[LAYOUT_PARAM];
+  return { params: { ...params, extra: Object.keys(extra).length ? extra : undefined }, ...(layout && { layout }) };
+}
+
+/** The one line under the boxes for a model that doesn't place them by their coordinates (none for one that does). */
+export function layoutModelNote(model: Pick<ModelDef, "options"> | undefined): string | null {
+  return !model || readsBoxes(model) ? null : "This model reads the layout as words, not exact positions.";
+}
+
+/**
+ * The warning when the picture asked for is past what box-reading models were made for (2048 px a side, 4 MP): said
+ * with the size the model renders instead, when it scales it down (the boxes keep their places), else that the boxes
+ * may drift. Null when the size is within range.
+ */
+export function layoutSizeWarning(canvas: { width: number; height: number; asked: { width: number; height: number }; exact: boolean }, modelName: string): string | null {
+  const { asked } = canvas;
+  if (Math.max(asked.width, asked.height) <= LAYOUT_MAX_SIDE && asked.width * asked.height <= LAYOUT_MAX_PIXELS) return null;
+  const size = `${canvas.exact ? "" : "about "}${asked.width} × ${asked.height}`;
+  const scaled = canvas.width !== asked.width || canvas.height !== asked.height;
+  return scaled
+    ? `${size} is past ${LAYOUT_MAX_SIDE} px a side, so ${modelName} renders ${canvas.width} × ${canvas.height}; the boxes keep their places`
+    : `${size} is past ${LAYOUT_MAX_SIDE} px a side or 4 megapixels: ${modelName} may place the boxes less exactly`;
+}
+
+/**
+ * The lines under the Layout strip: a model that reads the layout as words says so (its boxes are never placed by
+ * position, so it gets no size warning); a box reader past its range gets the size warning.
+ */
+export function layoutNotes(
+  model: Pick<ModelDef, "options" | "name"> | undefined,
+  canvas: Parameters<typeof layoutSizeWarning>[0] | undefined,
+): { text: string; tone: "info" | "warn" }[] {
+  if (!model) return [];
+  const words = layoutModelNote(model);
+  if (words) return [{ text: words, tone: "info" }];
+  const big = canvas && layoutSizeWarning(canvas, model.name);
+  return big ? [{ text: big, tone: "warn" }] : [];
+}
+
+/** The box reader the words-model line offers instead ("Use MOSS-Image"): only when Settings → Models & licences offers it. */
+export function layoutBoxModel(
+  model: Pick<ModelDef, "id" | "options" | "engine"> | undefined,
+  pick: { id: string; getModel: (id: string) => ModelDef | undefined; offered: (id: string, engine?: Engine) => boolean },
+): ModelDef | undefined {
+  if (!model || !layoutModelNote(model) || !pick.offered(pick.id, model.engine)) return undefined;
+  const m = pick.getModel(pick.id);
+  return m && m.id !== model.id ? m : undefined;
+}
+
 /**
  * Where a batch of files would land, before any of them uploads: each file's index goes to
  * `placed` (it gets a slot or a reference tile) or `rejected` (no room: the references are full or
@@ -1039,7 +1133,7 @@ export function studioBest(models: ModelDef[], engine: Engine, defaultId: string
 }
 
 export interface ModelGroup {
-  id: "recent" | "starred" | "best" | "all" | "results" | "paid";
+  id: "boxes" | "recent" | "starred" | "best" | "all" | "results" | "paid";
   label: string;
   models: ModelDef[];
 }
@@ -1075,17 +1169,19 @@ export function groupModels(input: {
   recent: string[];
   starred: string[];
   best: string[];
+  /** Layout mode: the models that place boxes by their coordinates come first ("Reads your boxes"). */
+  boxes?: boolean;
   /** A short list in its own order (an app's models): one group. */
   flat?: boolean;
 }): { groups: ModelGroup[]; count: number } {
-  const { models, engine, engines, query, recent, starred, best } = input;
+  const { models, engine, engines, query, recent, starred, best, boxes } = input;
   const q = query.trim();
   if (q) {
     const hits = models
       .filter((m) => engines.includes(m.engine))
       .map((m, i) => ({ m, s: matchScore(m, q), i }))
       .filter((x) => x.s >= 0)
-      .sort((a, b) => a.s - b.s || Number(a.m.engine !== engine) - Number(b.m.engine !== engine) || a.i - b.i)
+      .sort((a, b) => a.s - b.s || (boxes ? Number(!readsBoxes(a.m)) - Number(!readsBoxes(b.m)) : 0) || Number(a.m.engine !== engine) - Number(b.m.engine !== engine) || a.i - b.i)
       .map((x) => x.m);
     return { groups: hits.length ? [{ id: "results", label: "Results", models: hits }] : [], count: hits.length };
   }
@@ -1105,6 +1201,7 @@ export function groupModels(input: {
   };
   const top = (
     [
+      ...(boxes ? [{ id: "boxes" as const, label: "Reads your boxes", models: take(pool.filter((m) => readsBoxes(m)).map((m) => m.id), 50) }] : []),
       { id: "recent", label: "Recent", models: take(recent, 3) },
       { id: "starred", label: "Starred", models: take(starred, 50) },
       { id: "best", label: "Best for this studio", models: take(best, 4) },

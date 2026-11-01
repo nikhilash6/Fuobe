@@ -16,6 +16,8 @@ import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeL
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { askedSize, numFramesValue, sizeValue } from "./payload";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
+import { computeDimensions, fitCanvas } from "@/lib/comfy";
+import { carriesLayout, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
 import { pricingOn, type PriceClock } from "./promo";
 import { presetRoutes } from "./preset-recipe-routes";
 
@@ -186,6 +188,11 @@ export interface Plan {
    * generation (the grade, an overlay) that the result's meta carries.
    */
   soul?: { look?: string; words: string; triggers: string[]; grade?: string; overlay?: SoulOverlay; crop?: "21:9" };
+  /**
+   * A layout run (params.extra.layout, src/lib/layout-prompt.ts): the form the model reads it in, how many boxes, and
+   * the canvas it was compiled at when the model reads pixels (MOSS-Image: the exact size it renders).
+   */
+  layout?: { format: LayoutFormat | "words"; boxes: number; width?: number; height?: number };
 }
 
 /** Operations that work from their inputs alone. */
@@ -390,6 +397,17 @@ export function planGeneration(
   if (!routesFor(model, op).length) {
     throw new Error(`${model.name} can't do ${op} — try another model`);
   }
+  // A layout (the Image studio's Layout mode, Edit layout, an API caller's draft): compiled for this model at the size it
+  // renders, the prompt as its caption; nothing rewrites it afterwards (Fuobe's enhancer, the API's prompt expansion).
+  let layoutPlan: Plan["layout"];
+  if (carriesLayout(params.extra)) {
+    const drawn = readLayout(params.extra![LAYOUT_PARAM]);
+    if (!drawn) throw new Error("The layout couldn't be read: draw its boxes again");
+    const compiled = planLayout(model, op, prompt, drawn, params);
+    prompt = compiled.prompt;
+    params = compiled.params;
+    layoutPlan = compiled.layout;
+  }
   // MiniMax H3's orbit of a still (its Orbit LoRA graph, src/lib/comfy-variants.ts) runs at the LoRA's own length, 3 s
   // (73 frames), unless the run names a length.
   if (model.options.promptFormat === "minimax-h3" && op === "i2v" && params.extra?.orbit === true && req.params?.duration === undefined && params.duration === model.defaults?.duration) {
@@ -477,6 +495,83 @@ export function planGeneration(
     perJobOutputs,
     ...(notes.length && { notes }),
     ...(soulPlan && { soul: soulPlan }),
+    ...(layoutPlan && { layout: layoutPlan }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Layouts
+
+/** A layout's canvas on your GPU: the graph's 16 px grid, up to 2048 a side (moss-image-t2i's limits), fitted as the ComfyUI provider fits a canvas the request names. */
+const OPEN_CANVAS = { dimensionMultiple: LAYOUT_MULTIPLE, maxWidth: LAYOUT_MAX_SIDE, maxHeight: LAYOUT_MAX_SIDE };
+
+/** "4k" / "2K" / "1k" → the resolution tiers computeDimensions knows ("4K"); anything else as it is. */
+const tier = (res: string | undefined) => (res && /^\d(\.\d)?k$/i.test(res) ? res.toUpperCase() : res);
+
+export interface LayoutCanvas {
+  /** The size the model renders, the size a pixel layout (MOSS-Image) is compiled at. */
+  width: number;
+  height: number;
+  /** The size the aspect ratio and resolution ask for, before the model's limits (a side past 2048 is scaled down). */
+  asked: { width: number; height: number };
+  /** False when the size is a guess from the resolution's name (a cloud model that takes an aspect ratio and a tier). */
+  exact: boolean;
+}
+
+/**
+ * The canvas a layout is drawn for on this model. On your GPU: the aspect ratio and resolution on the 16 px grid
+ * (computeDimensions), up to 2048 a side (fitCanvas, as the ComfyUI provider fits it). In the cloud: the route's size
+ * field (sizeValue: fal's MOSS-Image 512–2048), else a guess from the resolution's name (FLUX.3's "4k"). The layout
+ * keeps its boxes as fractions, so it is compiled at this size whatever it was drawn on.
+ */
+export function layoutCanvas(model: ModelDef, params: GenParams, op?: Operation): LayoutCanvas {
+  const aspect = params.aspectRatio ?? model.defaults?.aspectRatio;
+  const res = params.resolution ?? model.defaults?.resolution;
+  if (model.engine !== "open") {
+    const route = op ? routesFor(model, op)[0] : model.routes[0];
+    const size = route?.map?.size ?? route?.preview?.size;
+    if (size) {
+      const sent = size.key ? askedSize(params.extra?.[size.key]) : undefined;
+      return { ...sizeValue(size, aspect, res, sent), asked: sizeValue({ ...size, min: undefined, max: undefined }, aspect, res, sent), exact: true };
+    }
+  }
+  // A "<side>sq" tier (FLUX.3's 512sq / 768sq) is that square's area in the chosen aspect: a square of that side at 1:1.
+  const sq = /^(\d+)sq$/i.exec(res ?? "");
+  const side = sq ? Number(sq[1]) : 1024;
+  const asked = computeDimensions(aspect, sq ? undefined : tier(res), { width: side, height: side }, LAYOUT_MULTIPLE);
+  const fitted = model.engine === "open" ? fitCanvas(asked.width, asked.height, OPEN_CANVAS) : asked;
+  return { ...fitted, asked, exact: model.engine === "open" };
+}
+
+/**
+ * A layout compiled for this model: the person's words (or the draft's own caption) as its caption, every box checked
+ * (a text box needs its words), the model's compiler (src/lib/layout-prompt.ts layoutCompilerFor) at the canvas it
+ * renders. A pixel layout (MOSS-Image) also names that canvas, so both engines render the size it was compiled at:
+ * params.extra.width / height on your GPU, the route's size field (fal's image_size) in the cloud. Bria FIBO 2 gets its
+ * VGL beside the words. Prompt rewriting is off for the run.
+ */
+function planLayout(model: ModelDef, op: Operation, prompt: string, drawn: LayoutDraft, params: GenParams): { prompt: string; params: GenParams; layout: NonNullable<Plan["layout"]> } {
+  const draft: LayoutDraft = { ...drawn, summary: { ...drawn.summary, caption: prompt.trim() || drawn.summary.caption.trim() } };
+  const format = model.options.layout;
+  const pixels = format === "moss";
+  const canvas = layoutCanvas(model, params, op);
+  // Only a pixel layout depends on the canvas (its sides on MOSS's 16 px grid); the others place boxes on a 0-1000 grid or in words.
+  const checkedAt = pixels ? canvas : { width: 1024, height: 1024 };
+  const problem = validateLayout(draft, checkedAt.width, checkedAt.height, format ?? "words").find((i) => i.level === "error");
+  if (problem) throw new Error(problem.message);
+  const compiled = layoutCompilerFor(model)(draft, canvas.width, canvas.height);
+  const extra: Record<string, unknown> = { ...params.extra };
+  if (pixels && draft.items.length) {
+    const route = routesFor(model, op)[0];
+    const key = (route?.map?.size ?? route?.preview?.size)?.key;
+    if (model.engine === "open") Object.assign(extra, { width: canvas.width, height: canvas.height });
+    else if (key) extra[key] = { width: canvas.width, height: canvas.height };
+  }
+  if (compiled.vgl && draft.items.length) extra.vgl = compiled.vgl;
+  return {
+    prompt: compiled.prompt,
+    params: { ...params, enhancePrompt: false, extra },
+    layout: { format: compiled.format, boxes: draft.items.length, ...(pixels && { width: canvas.width, height: canvas.height }) },
   };
 }
 
@@ -789,7 +884,9 @@ function sentMegapixels(params: GenParams): number | undefined {
  * payload sends it. fal's megapixel is 1024 × 1024 pixels. Undefined when the route sends no size.
  */
 function routeMegapixels(model: ModelDef, params: GenParams, op?: Operation): number | undefined {
-  const size = (op ? model.routes.find((r) => r.op === op) : model.routes[0])?.map?.size;
+  const route = op ? model.routes.find((r) => r.op === op) : model.routes[0];
+  // The browser's catalog keeps the size field as route.preview (slimModel).
+  const size = route?.map?.size ?? route?.preview?.size;
   if (!size) return undefined;
   const asked = size.key ? askedSize(params.extra?.[size.key]) : undefined;
   const { width, height } = sizeValue(size, params.aspectRatio ?? model.defaults?.aspectRatio, params.resolution ?? model.defaults?.resolution, asked);

@@ -10,6 +10,7 @@ import { cueText, type Cue } from "./cues";
 import { downloadHref, downloadName, extensionOf } from "./library";
 import { PRESETS as GRADE_PRESETS } from "./grade";
 import { storedPath } from "./share";
+import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout-prompt";
 
 export type OutputActionId =
   | "animate"
@@ -18,6 +19,7 @@ export type OutputActionId =
   | "reference"
   | "grade"
   | "layers"
+  | "edit-layout"
   | "save-character"
   | "extend"
   | "reframe"
@@ -101,6 +103,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("reference", "Use as reference", `/image?ref=${q(o.url)}`);
       link("grade", "Color grade", `/color-grade?image=${q(o.url)}`);
       link("layers", "Open in Layers", layersHref(g, o.url));
+      // A picture drawn from a layout (or one fal's MOSS-Image planned itself) reopens as boxes in the Image studio.
+      if (editableLayout(g, index)) link("edit-layout", "Edit layout", editLayoutHref(g, index));
       link("genjutsu", "Animate with Genjutsu", `/genjutsu?mode=motion&image=${q(o.url)}`);
       out.push({ id: "save-character", label: "Save as character", placement: "menu" });
       break;
@@ -206,6 +210,52 @@ export function isVector(g: Pick<Generation, "provider" | "op">, o: Pick<OutputF
   if (o.kind !== "image") return false;
   const svg = /^image\/svg\+xml\b/i.test(o.contentType ?? "") || o.url.startsWith("data:image/svg+xml") || extensionOf(o) === "svg";
   return svg && (g.provider !== "mock" || g.op === "vectorize");
+}
+
+// ---------------------------------------------------------------------------
+// Edit layout: a picture's boxes, back in the Image studio's Layout mode
+
+/** The query param that opens the Image studio on a result's layout: `<generation id>` or `<id>.<output index>`. */
+export const EDIT_LAYOUT_PARAM = "layout";
+
+export const editLayoutHref = (g: Pick<Generation, "id">, index: number) => `/image?${EDIT_LAYOUT_PARAM}=${q(index ? `${g.id}.${index}` : g.id)}`;
+
+/** `<id>` or `<id>.<index>` → the generation and output it names (null for anything else). */
+export function readEditLayoutParam(v: string | null | undefined): { id: string; index: number } | null {
+  const m = /^([A-Za-z0-9_-]{4,64})(?:\.(\d{1,2}))?$/.exec(v ?? "");
+  return m ? { id: m[1], index: Number(m[2] ?? 0) } : null;
+}
+
+export interface EditableLayout {
+  draft: LayoutDraft;
+  /** The words for the whole picture (the composer's prompt in Layout mode). */
+  caption: string;
+  /** The seed this picture was drawn with, when it is known: the one its provider reported (meta.seed), else the request's. */
+  seed?: number;
+  /** Where the boxes came from: the layout the request carried, or the one fal's prompt expansion planned. */
+  from: "request" | "expansion";
+}
+
+/**
+ * The layout a picture can be reopened as (Edit layout): the request's own (params.extra.layout), else, for a picture
+ * fal's MOSS-Image planned itself (its actual_prompt), that plan decoded at the picture's own size, so even a plain
+ * prompt's render opens as boxes. Null when there is none to open (no layout, or a plan with no boxes).
+ */
+export function editableLayout(g: Pick<Generation, "status" | "request" | "outputs">, index: number): EditableLayout | null {
+  const o = g.outputs[index];
+  if (g.status !== "succeeded" || o?.kind !== "image") return null;
+  const params = g.request.params ?? {};
+  const reported = typeof o.meta?.seed === "number" ? o.meta.seed : undefined;
+  const seed = reported ?? (params.seed !== undefined && params.seed >= 0 ? params.seed : undefined);
+  const own = readLayout(params.extra?.[LAYOUT_PARAM]);
+  if (own?.items.length) return { draft: own, caption: g.request.prompt?.trim() || own.summary.caption, ...(seed !== undefined && { seed }), from: "request" };
+  const planned = typeof o.meta?.actualPrompt === "string" ? o.meta.actualPrompt : undefined;
+  const width = Number(o.meta?.width ?? o.width);
+  const height = Number(o.meta?.height ?? o.height);
+  if (!planned || !(width > 0 && height > 0)) return null;
+  const draft = decodeMoss(planned, width, height);
+  if (!draft?.items.length) return null;
+  return { draft, caption: draft.summary.caption.trim() || g.request.prompt?.trim() || "", ...(seed !== undefined && { seed }), from: "expansion" };
 }
 
 /**

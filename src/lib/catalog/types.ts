@@ -489,10 +489,10 @@ export interface ModelRoute {
   endpoint: string;
   map?: FieldMap;
   /**
-   * The parts of `map` the composer previews a result with ("1920×1080 → 2880×1620", an EXR frame count),
-   * kept by slimModel when it drops the field maps for the browser. The server reads `map`.
+   * The parts of `map` the composer previews a result with ("1920×1080 → 2880×1620", an EXR frame count, the canvas a
+   * layout is compiled at), kept by slimModel when it drops the field maps for the browser. The server reads `map`.
    */
-  preview?: Pick<FieldMap, "upscaleFactor" | "numFrames">;
+  preview?: Pick<FieldMap, "upscaleFactor" | "numFrames" | "size">;
   /** Optional note shown in the UI (e.g. "uses Lightx2v 4-step LoRA"). */
   note?: string;
   /**

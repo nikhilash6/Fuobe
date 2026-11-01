@@ -15,6 +15,7 @@ import type { Badge as BadgeT } from "@/lib/gpu/types";
 import { type Engine, type ModelDef, type Operation } from "@/lib/catalog/types";
 import { useEngineMode, useStatus } from "@/lib/api";
 import { groupModels, studioBest, toggleIn } from "@/lib/composer";
+import { readsBoxes } from "@/lib/layout-prompt";
 import { ISOLATED_NOTE, pickerPrice } from "@/lib/model-rows";
 import { cn } from "@/lib/utils";
 import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, type CloudProvider } from "@/lib/your-keys";
@@ -79,6 +80,7 @@ function ModelRow({
   selected,
   starred,
   showEngine,
+  boxes,
   today,
   onStar,
   gpu,
@@ -90,6 +92,8 @@ function ModelRow({
   selected: boolean;
   starred: boolean;
   showEngine: boolean;
+  /** Layout mode: a "Reads boxes" badge on the models that place boxes by their coordinates. */
+  boxes?: boolean;
   /** The browser's day: a launch price holds through its last day (null until hydrated: no price shown for one). */
   today: number | null;
   onStar: () => void;
@@ -111,7 +115,11 @@ function ModelRow({
             {starred && <span className="sr-only">, starred</span>}
           </span>
           {/* A dimmed row on a phone: the name first (its badges would cut it to "Na…"). */}
-          {needs ? (
+          {boxes && readsBoxes(m) ? (
+            <Badge variant="secondary" className="h-4 shrink-0 rounded-[4px] bg-brand-faint px-1 text-[10px] font-medium text-brand-text">
+              Reads boxes
+            </Badge>
+          ) : needs ? (
             <span className="contents max-sm:hidden">
               <ModelBadges model={m} max={2} />
             </span>
@@ -180,6 +188,8 @@ interface PickerProps {
   engine: Engine;
   onEngineChange: (e: Engine) => void;
   defaultModels?: { cloud: string; open: string };
+  /** Layout mode: the models that read boxes come first, badged. */
+  boxes?: boolean;
   /** The operations the studio offers, its main one first: "Best for this studio" ranks the models that do it. */
   ops?: Operation[];
   /** The model the active preset's preview was made with (its recipe): first in "Best for this studio". */
@@ -274,6 +284,7 @@ function PickerList({
   engine,
   onEngineChange,
   defaultModels,
+  boxes,
   ops,
   recipe,
   flat,
@@ -296,7 +307,10 @@ function PickerList({
     const ranked = studioBest(models, engine, defaultModels?.[engine], ops);
     return recipe && models.some((m) => m.id === recipe && m.engine === engine) ? [recipe, ...ranked.filter((id) => id !== recipe)] : ranked;
   }, [models, engine, defaultModels, ops, recipe]);
-  const { groups, count } = useMemo(() => groupModels({ models, engine, engines, query: q, recent, starred, best, flat }), [models, engine, engines, q, recent, starred, best, flat]);
+  const { groups, count } = useMemo(
+    () => groupModels({ models, engine, engines, query: q, recent, starred, best, flat, boxes }),
+    [models, engine, engines, q, recent, starred, best, flat, boxes],
+  );
   const demo = placeholdersOn(status?.demoMode);
   const otherEngine = engine === "cloud" ? "open" : "cloud";
   const noneForEngine = !q && !models.some((m) => m.engine === engine);
@@ -391,6 +405,7 @@ function PickerList({
                   selected={value?.id === m.id}
                   starred={starred.includes(m.id)}
                   showEngine={g.id !== "paid" && (!!q || m.engine !== engine)}
+                  boxes={boxes}
                   today={today}
                   onStar={() => setStarred((s) => toggleIn(s, m.id))}
                   gpu={m.engine === "open" ? badgeFor(badges, { modelId: m.id }) : null}

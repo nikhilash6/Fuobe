@@ -23,6 +23,8 @@ export const IMAGE_STUDIO: StudioConfig = {
   uncaptioned: { open: "oss-qwen-image-21" },
   // A model's own settings (MOSS-Image's Quality, Ideogram's speed) sit under "Options".
   controlsTitle: "Options",
+  // Layout mode: boxes on the picture, one row each, read in place by MOSS-Image, FLUX.3 and Ideogram 4.5.
+  layout: true,
   // Color signature + Moodboard chips, and the models they can move a request to. Fuobe Soul's PixeletedFace look runs
   // the face mosaic after the picture: its step's model is known here so the price counts it before the run.
   signature: true,
