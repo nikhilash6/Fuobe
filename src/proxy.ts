@@ -6,6 +6,9 @@ import { countsAsView, SHARE_VIEW_HEADER, shareRoute } from "@/lib/share";
 import {
   ACCOUNT_LIBRARY_MESSAGE,
   accountGeneration,
+  accountLive,
+  CONNECT_GPU_MESSAGE,
+  liveRoute,
   accountMayChange,
   accountOwnRead,
   ASSIST_OWNER_MESSAGE,
@@ -162,6 +165,9 @@ function priceCheck(request: NextRequest, who: string): NextResponse {
 function guest(request: NextRequest): NextResponse {
   const { pathname, search } = request.nextUrl;
   const { method } = request;
+  // Live edit runs on a GPU of one's own: signing up is the next step (the node file's download is open).
+  const live = liveRoute(pathname);
+  if (live && live !== "nodes") return NextResponse.json({ error: GUEST_RUN_MESSAGE }, { status: 401, headers: guestHeaders });
   if (method === "GET" || method === "HEAD") return readAsGuest(request, false);
   if (isPriceCheck(method, pathname, search)) return priceCheck(request, `guest:${LoginGuard.clientKey(request.headers)}`);
   if (isAssistChange(method, pathname)) return assistOwner();
@@ -211,6 +217,14 @@ function account(request: NextRequest, who: Account): NextResponse {
   if (ownerOnly(request.method, pathname)) {
     const verb = request.method === "GET" || request.method === "HEAD" ? "see" : "change";
     return NextResponse.json({ error: `Only the studio's owner can ${verb} settings, keys and tokens.` }, { status: 403 });
+  }
+  // Live edit: only on its own GPU, its masters in its own files, no Library.
+  const live = liveRoute(pathname);
+  if (live) {
+    const may = accountLive(live, who.gpu ? (who.gpu.mode === "computer" ? "computer" : "link") : null);
+    if (may === "library") return NextResponse.json({ error: LIBRARY_MESSAGE, code: "library" }, { status: 403 });
+    if (may === "connect-gpu") return NextResponse.json({ error: CONNECT_GPU_MESSAGE, code: "connect-gpu" }, { status: 403, headers: { [CONNECT_GPU_HEADER]: "1" } });
+    return pass(request);
   }
   // Its own runs and their files: only what it made.
   const gen = accountGeneration(request.method, pathname);
@@ -339,8 +353,8 @@ export const config = {
   // (/api/uploads, a Soul finish, a Layers render, a skill upload, an Assist source, an explainer document), and Split
   // soundtrack's mix export (a WAV in parts of 16 MB), make the same checks themselves (src/server/direct-gate.ts): the
   // proxy would hold the whole file in memory first. So do a computer's report of a finished job and its results
-  // (src/app/api/gpu/computer/tasks).
+  // (src/app/api/gpu/computer/tasks), and live edit's kept master from a tab on its own computer (src/app/api/live/masters).
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico$|apple-icon\\.png$|samples/|previews/|vendor/|api/uploads$|api/generations/[^/]+/finish$|api/layers/renders$|api/assist/skills/upload$|api/assist/projects/[^/]+/sources$|api/explainer/document$|api/audio-tools/export$|api/gpu/computer/tasks/[^/]+/(?:report|outputs/[^/]+)$|[^/]+\\.svg$).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico$|apple-icon\\.png$|samples/|previews/|vendor/|api/uploads$|api/generations/[^/]+/finish$|api/layers/renders$|api/assist/skills/upload$|api/assist/projects/[^/]+/sources$|api/explainer/document$|api/audio-tools/export$|api/gpu/computer/tasks/[^/]+/(?:report|outputs/[^/]+)$|api/live/masters$|[^/]+\\.svg$).*)",
   ],
 };

@@ -21,7 +21,7 @@ export const GUEST_LIBRARY_MESSAGE = "Sign up to see your library.";
 export const GUEST_RUN_MESSAGE = "Create a free account to run this.";
 
 /** Catalog and status reads that hold nothing of the owner's library: a guest gets the real answer. */
-const GUEST_READS = new Set(["/api/status", "/api/models", "/api/search-index", "/api/comfyui", "/api/settings/models", "/api/gpu/requirements"]);
+const GUEST_READS = new Set(["/api/status", "/api/models", "/api/search-index", "/api/comfyui", "/api/settings/models", "/api/gpu/requirements", "/api/live/nodes"]);
 
 /** Catalogs mixed with the owner's own items: the route leaves the owner's part out for a guest (GUEST_HEADER). */
 const GUEST_FILTERED = new Set(["/api/moodboards", "/api/palettes", "/api/assist", "/api/assist/skills"]);
@@ -202,6 +202,25 @@ export function accountMayChange(method: string, pathname: string, search: strin
   // Like, pin or review many of its own runs at once (the route checks each is its own, and refuses the rest).
   if (method === "POST" && pathname === "/api/generations/bulk") return true;
   return isPriceCheck(method, pathname, search);
+}
+
+/**
+ * Live edit (src/app/api/live): the route a path names, or null. "nodes" is the node file's download (open to anyone);
+ * every other route runs or stores live edits.
+ */
+export type LiveRoute = "session" | "inputs" | "render" | "cancel" | "events" | "masters" | "save" | "nodes";
+const LIVE_ROUTE = /^\/api\/live\/(session|inputs|render|cancel|events|masters|save|nodes)$/;
+export const liveRoute = (pathname: string): LiveRoute | null => (LIVE_ROUTE.exec(pathname)?.[1] as LiveRoute | undefined) ?? null;
+
+/**
+ * What an account gets on a live edit route, by its own GPU: it renders only there (a linked GPU through the server, or
+ * its own computer from its tab), keeps its masters in its own files, and has no Library to save to. A guest gets
+ * GUEST_RUN_MESSAGE on all of them but the node download.
+ */
+export function accountLive(route: LiveRoute, gpu: "link" | "computer" | null): "pass" | "connect-gpu" | "library" {
+  if (route === "nodes") return "pass";
+  if (route === "save") return "library";
+  return gpu ? "pass" : "connect-gpu";
 }
 
 /** Assist (chats, skills, memory, projects, schedules): any change to it, which only the owner may make on a public studio. */

@@ -2338,6 +2338,57 @@ export function finishOutput(id: string, index: number, png: Buffer): Generation
 // ---------------------------------------------------------------------------
 // Results made in the browser (colour grading): stored as finished generations.
 
+/**
+ * A live edit saved to the Library (the owner's): the kept master as the result, the steps that made it in
+ * params.liveSteps, the joined step texts as the prompt. It ran on the owner's GPU already, so nothing is queued.
+ */
+export function recordLiveEdit(input: { master: string; original?: string; steps: { text: string; seed: number }[]; from?: string }): Generation {
+  const model = getModel("oss-qwen-image-21-live");
+  if (!model) throw new Error("Live edit's model is missing");
+  const now = Date.now();
+  const prompt = input.steps.map((s) => s.text).filter(Boolean).join(" · ").slice(0, 2000) || "Live edit";
+  const op: Generation["op"] = input.original ? "edit" : "t2i";
+  const req: GenerationRequest = {
+    feature: "live-edit",
+    modelId: model.id,
+    op,
+    prompt,
+    inputs: input.original ? { images: [input.original] } : {},
+    params: { extra: { liveSteps: input.steps, ...(input.from && { from: input.from }) } },
+  };
+  const row: Row = {
+    id: nanoid(12),
+    batch_id: null,
+    feature: "live-edit",
+    preset_id: null,
+    model_id: model.id,
+    engine: model.engine,
+    provider: "comfyui",
+    op,
+    kind: "image",
+    status: "succeeded",
+    progress: 1,
+    message: null,
+    prompt,
+    request_json: JSON.stringify(req),
+    provider_input_json: null,
+    external_id: "live",
+    external_meta_json: null,
+    outputs_json: JSON.stringify([{ url: input.master, kind: "image", contentType: "image/png" }]),
+    error: null,
+    cost_usd: 0,
+    favorite: 0,
+    created_at: now,
+    updated_at: now,
+    completed_at: now,
+    depends_on: null,
+  };
+  db()
+    .prepare(`INSERT INTO generations (${Object.keys(row).join(", ")}) VALUES (${Object.keys(row).map((k) => `@${k}`).join(", ")})`)
+    .run(row);
+  return toGeneration(row);
+}
+
 export function recordLocalGeneration(input: {
   feature: string;
   modelId: string;
