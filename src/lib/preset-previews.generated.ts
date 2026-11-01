@@ -1075,10 +1075,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-black-gloss": {
-    "poster": "/previews/presets/effect-black-gloss.jpg?v=280312e9",
+    "poster": "/previews/presets/effect-black-gloss.jpg?v=b7d5c8c8",
+    "video": "/previews/presets/effect-black-gloss.mp4?v=4a76f25d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-black-tears": {
@@ -1089,17 +1090,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-bleach-bypass": {
-    "poster": "/previews/presets/effect-bleach-bypass.jpg?v=f923d44c",
+    "poster": "/previews/presets/effect-bleach-bypass.jpg?v=f245b447",
+    "video": "/previews/presets/effect-bleach-bypass.mp4?v=1aa3b84c",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-bleached-warm": {
-    "poster": "/previews/presets/effect-bleached-warm.jpg?v=ad1e6409",
+    "poster": "/previews/presets/effect-bleached-warm.jpg?v=e798423a",
+    "video": "/previews/presets/effect-bleached-warm.mp4?v=97cd80c0",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-bloom-mouth": {
@@ -1177,10 +1180,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-candy-pink": {
-    "poster": "/previews/presets/effect-candy-pink.jpg?v=61dab6b6",
+    "poster": "/previews/presets/effect-candy-pink.jpg?v=5432d3a6",
+    "video": "/previews/presets/effect-candy-pink.mp4?v=fbfdcfa3",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-cannabis": {
@@ -1222,10 +1226,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-classic-bw": {
-    "poster": "/previews/presets/effect-classic-bw.jpg?v=36a983fa",
+    "poster": "/previews/presets/effect-classic-bw.jpg?v=382520c6",
+    "video": "/previews/presets/effect-classic-bw.mp4?v=e55e108d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-clone-explosion": {
@@ -1253,10 +1258,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-cold-steel": {
-    "poster": "/previews/presets/effect-cold-steel.jpg?v=95b303ea",
+    "poster": "/previews/presets/effect-cold-steel.jpg?v=30574f2d",
+    "video": "/previews/presets/effect-cold-steel.mp4?v=f51366a3",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-cold-vision": {
@@ -1304,10 +1310,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-crimson-vigil": {
-    "poster": "/previews/presets/effect-crimson-vigil.jpg?v=ed421a85",
+    "poster": "/previews/presets/effect-crimson-vigil.jpg?v=d371c416",
+    "video": "/previews/presets/effect-crimson-vigil.mp4?v=49ffb055",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-crush": {
@@ -1818,10 +1825,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-hyper-neon": {
-    "poster": "/previews/presets/effect-hyper-neon.jpg?v=1e7dbbb8",
+    "poster": "/previews/presets/effect-hyper-neon.jpg?v=8118de7c",
+    "video": "/previews/presets/effect-hyper-neon.mp4?v=1ba6137b",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-i-can-fly": {
@@ -1941,10 +1949,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-lime-jam": {
-    "poster": "/previews/presets/effect-lime-jam.jpg?v=6a96e0c5",
+    "poster": "/previews/presets/effect-lime-jam.jpg?v=2a1791b6",
+    "video": "/previews/presets/effect-lime-jam.mp4?v=bc6f0e06",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-live-concert": {
@@ -2145,10 +2154,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-nostalgic-blue": {
-    "poster": "/previews/presets/effect-nostalgic-blue.jpg?v=78109e69",
+    "poster": "/previews/presets/effect-nostalgic-blue.jpg?v=94f2ba43",
+    "video": "/previews/presets/effect-nostalgic-blue.mp4?v=c112c29e",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-objects-around": {
@@ -2212,10 +2222,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-overtime": {
-    "poster": "/previews/presets/effect-overtime.jpg?v=ba6d91b3",
+    "poster": "/previews/presets/effect-overtime.jpg?v=62cdc52a",
+    "video": "/previews/presets/effect-overtime.mp4?v=4d998a6c",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-paint-splash": {
@@ -2535,10 +2546,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-sodium-decay": {
-    "poster": "/previews/presets/effect-sodium-decay.jpg?v=0423c8bb",
+    "poster": "/previews/presets/effect-sodium-decay.jpg?v=ee89debe",
+    "video": "/previews/presets/effect-sodium-decay.mp4?v=f53a8f10",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-soft-cross": {
@@ -2549,10 +2561,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-soft-palette": {
-    "poster": "/previews/presets/effect-soft-palette.jpg?v=237ad317",
+    "poster": "/previews/presets/effect-soft-palette.jpg?v=244b9a33",
+    "video": "/previews/presets/effect-soft-palette.mp4?v=4511c2b5",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-soul-jump": {
