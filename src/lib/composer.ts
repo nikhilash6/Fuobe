@@ -282,7 +282,7 @@ export function clipOutcome(
   // An edit billed on the seconds in and out (Kling 4.0): what's billed, before the total.
   const billing = duration && model.engine === "cloud" ? clipBilling(model, { ...params, sourceDuration: duration }, op, now) : undefined;
   if (billing) {
-    const twice = billing.input < billing.output ? " (at least twice the output)" : "";
+    const twice = billing.billed > billing.input + billing.output + 1e-9 ? " (at least twice the output)" : "";
     return `${clipSeconds(billing.input)} in + ${clipSeconds(billing.output)} out: billed on ${clipSeconds(billing.billed)}${twice} at ${formatCost(billing.rate)}/s`;
   }
   return null;

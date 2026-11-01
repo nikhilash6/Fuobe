@@ -5,7 +5,7 @@ import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { CLEAN_MODEL } from "@/lib/av/clean-voice";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
 import { graphLoras } from "@/lib/catalog/character-swap";
-import { PATH_MODELS } from "@/lib/catalog/cinema";
+import { BLOCKOUT_MODELS, PATH_MODELS } from "@/lib/catalog/cinema";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
@@ -170,6 +170,23 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/character-swap", label: "Character swap", group: "Video", workflows: [STUDIO_WORKFLOWS.mask, STUDIO_WORKFLOWS.segment] },
   // Cinema's 3D scene films a still along a keyframed camera path (N7-5).
   { href: "/cinema", label: "Fly path", group: "Video", steps: [{ modelId: PATH_MODELS.open, op: "camera-path" }] },
+  // Cinema's Blockout to film on your GPU: the first frame from the references, the depth cut into windows, each window
+  // rendered by the blockout graph and handed over on its last frame, then joined. An upload without a depth pass (the
+  // usual Blender render) runs the restyle graph instead, which reads the depth with Depth Anything 3. The projects list
+  // takes ?blockout=1 on to the project picked, which opens Blockout to film.
+  {
+    href: "/cinema?blockout=1",
+    label: "Blockout to film",
+    group: "Video",
+    steps: [
+      { modelId: BLOCKOUT_MODELS.open, op: "v2v" },
+      { modelId: BLOCKOUT_MODELS.openNoDepth, op: "v2v" },
+      { modelId: BLOCKOUT_MODELS.firstFrame, op: "edit" },
+      { modelId: "oss-segment", op: "trim" },
+      { modelId: "oss-extract-frame", op: "frame" },
+      { modelId: "oss-join-encoded", op: "concat" },
+    ],
+  },
   // The turnaround (N7-6): Frames mode's start/end-frame clips joined into one film, with the sides it has no picture of
   // drawn first by the Angles app (src/lib/catalog/turnaround.ts).
   {

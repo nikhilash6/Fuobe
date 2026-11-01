@@ -727,9 +727,20 @@ export interface Pricing {
   /**
    * A run with a clip going in (an edit's source, reference clips, video elements: Kling 4.0) bills this rate per second
    * of input plus output, at least twice the output (fal and Replicate: "2x output if input is shorter than output,
-   * otherwise input + output"), in place of `usd` / `byResolution`.
+   * otherwise input + output"), in place of `usd` / `byResolution`. `plain`: billed on input + output with no floor
+   * (fal's Seedance 2.5 reference-to-video: every second of a reference clip is billed with the output, at 0.6 times the
+   * rate of a run without clips).
    */
-  clipInput?: { usd: number; byResolution?: Record<string, number> };
+  clipInput?: { usd: number; byResolution?: Record<string, number>; plain?: true };
+  /** A fixed fee each request adds on top of its seconds (fal's H3 Max 3D to video: $0.50 processing). */
+  perRequest?: number;
+  /** The fewest seconds a per-second request bills (fal's H3 Max 3D to video: 5 s a shot). */
+  minSeconds?: number;
+  /**
+   * A run sent no reference images draws up to `count` of its own, at `usd` each (fal's H3 Max 3D to video: up to 2 at
+   * $0.10): priced at the most, through params.drawnRefs (set when the plan sees no images going in).
+   */
+  generatedRefs?: { usd: number; count: number };
 }
 
 /** A model's weights licence, as read in the research: information, never a gate (the owner's decision of 2026-10-27). */
@@ -822,6 +833,8 @@ export interface GenParams {
   elements?: { images?: number[]; video?: number }[];
   /** Seconds of the reference clips that go in (Kling 4.0 bills them with the output: Pricing.clipInput). */
   clipSeconds?: number;
+  /** References the provider draws itself because the run sends none (Pricing.generatedRefs); set by the plan. */
+  drawnRefs?: number;
   multiShot?: "auto";
   /** Render a cheap draft first (Seedance 2.5 draft mode). */
   draft?: boolean;
