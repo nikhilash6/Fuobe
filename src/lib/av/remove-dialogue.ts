@@ -137,6 +137,19 @@ const MUX_LABEL: Record<DialogueOutcome, string> = {
   "lower-music": "Dialogue over the lowered music · picture copied",
 };
 
+/**
+ * What an earlier run was asked for, read back from its mux step's request (its chain says which stems, its extra the
+ * level): Compare puts these back in the controls, so the button runs that again, not what was on screen before.
+ */
+export function requestedOutcome(r: Pick<GenerationRequest, "chain" | "params">): { outcome: DialogueOutcome; musicDb: number } {
+  const chain = r.chain ?? [];
+  if (chain.some((c) => c.slot === "audio2")) {
+    const db = r.params?.extra?.backgroundVolumeDb;
+    return { outcome: "lower-music", musicDb: clampLowerDb(typeof db === "number" ? db : undefined) };
+  }
+  return { outcome: chain[0]?.stem === KEPT_STEM["dialogue-only"] ? "dialogue-only" : "no-dialogue", musicDb: LOWER_DEFAULT_DB };
+}
+
 /** Two steps on the open engine (split, then the stream-copy mux); throws what's in the way (in words the page shows). */
 export function planRemoveDialogue(i: RemoveDialogueInput): RemoveDialoguePlan {
   const problem = removeDialogueProblem(i);

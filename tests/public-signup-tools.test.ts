@@ -255,6 +255,40 @@ describe("Remove dialogue (DBS D2) on /api/audio-tools", () => {
   });
 });
 
+describe("Split soundtrack's and Remove dialogue's pages tell a visitor up front (their runs are own-gpu-tool)", () => {
+  const src = (f: string) => fs.readFileSync(path.join(__dirname, "..", f), "utf8");
+  it("read 'Self-hosted only', not 'Free · runs on your ComfyUI', to a guest or an account", async () => {
+    const { openToolPrice } = await import("@/lib/av/split");
+    expect(openToolPrice({ demo: false })).toBe("Free · runs on your ComfyUI");
+    expect(openToolPrice({ demo: true })).toBe("Placeholder · free");
+    expect(openToolPrice(undefined)).toBe("…");
+    for (const p of [{ demo: false }, { demo: true }, undefined]) expect(openToolPrice(p, true)).toBe("Self-hosted only");
+  });
+
+  it("say it runs on a self-hosted Fuobe, and turn off the upload, the library pick and the run (as Remove object does)", () => {
+    for (const [file, tool] of [
+      ["src/components/audio-tools/split-tool.tsx", "Split soundtrack"],
+      ["src/components/audio-tools/remove-dialogue-tool.tsx", "Remove dialogue"],
+    ] as const) {
+      const page = src(file).replace(/\s+/g, " ");
+      expect(page).toContain("const visitor = useLikelyVisitor();");
+      expect(page).toContain(`const SELF_HOSTED = "${tool} runs on a self-hosted Fuobe for now";`);
+      expect(page).toMatch(/blocker = visitor \? SELF_HOSTED/);
+      expect(page).toMatch(/\{visitor && (\( ?)?<SelfHostNote className="mt-3 max-w-xl">\{SELF_HOSTED\}\.<\/SelfHostNote> ?\)?\}/);
+      expect(page).toMatch(/<ToolShell title="[^"]+" tabs=\{tabs\} selfHostedOnly>/);
+      expect(page).toMatch(/onUpdate=\{setSource\} disabled=\{visitor\}/);
+      // The upload button, From library, the hidden file input and the drop all honour it.
+      expect(page.match(/disabled=\{disabled\}/g)?.length).toBe(3);
+      expect(page).toMatch(/if \(!f \|\| disabled \|\| askFirst\(\)\) return;/);
+      expect(page).toMatch(/open=\{picking && !disabled\}/);
+      expect(page).toMatch(/disabled=\{(busy \|\| visitor|visitor \|\| run\.isPending)/);
+      expect(page).toContain("openToolPrice(p, true)");
+      // The owner's words only for the owner: "on your ComfyUI … free" leaves the hero for a visitor.
+      expect(page).toMatch(/visitor \? "?`?[^:]*Runs with DBS \(open source, 23 MB, CPU or GPU\)\.`?"? :/);
+    }
+  });
+});
+
 describe("the GPU pre-flight board lists PR #15's tools like main's studios", () => {
   const idx = loadIndex();
   const row = (href: string) => STUDIO_ROWS.find((r) => r.href === href)!;

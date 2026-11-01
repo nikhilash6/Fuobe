@@ -16,6 +16,7 @@ import {
   REMOVE_DIALOGUE_MAX_SECONDS,
   REMOVED_STEM,
   removeDialogueProblem,
+  requestedOutcome,
   removeDialogueTime,
 } from "@/lib/av/remove-dialogue";
 import { splitTime } from "@/lib/av/split";
@@ -226,6 +227,39 @@ describe("the plan per outcome (open engine)", () => {
           (c) => c.stem === "voice" || c.stem === "background",
         ),
       ).toBe(true);
+  });
+
+  it("reads an earlier run's outcome and level back from its mux step's request (Compare puts them in the controls)", () => {
+    for (const o of OUTCOMES) {
+      const mux = planRemoveDialogue({
+        engine: "open",
+        video: VIDEO,
+        outcome: o.id,
+        musicDb: -20,
+      }).steps[1];
+      expect(
+        requestedOutcome({ chain: mux.chain, params: mux.request.params }),
+      ).toEqual({
+        outcome: o.id,
+        musicDb: o.id === "lower-music" ? -20 : LOWER_DEFAULT_DB,
+      });
+    }
+    // A level missing or out of range reads as the slider would show it.
+    const lower = muxChain("lower-music");
+    expect(requestedOutcome({ chain: lower })).toEqual({
+      outcome: "lower-music",
+      musicDb: LOWER_DEFAULT_DB,
+    });
+    expect(
+      requestedOutcome({
+        chain: lower,
+        params: { extra: { backgroundVolumeDb: -45 } },
+      }).musicDb,
+    ).toBe(-30);
+    expect(requestedOutcome({})).toEqual({
+      outcome: "no-dialogue",
+      musicDb: LOWER_DEFAULT_DB,
+    });
   });
 
   it("passes the model asked for and the channel count; a surround file is split in mono", () => {
@@ -466,13 +500,13 @@ describe("Remove dialogue in Video tools", () => {
   });
 
   it("is a hand-off from any video, and a next step under a clip that has its sound", () => {
-    const gen = (op: Generation["op"]): Generation =>
+    const gen = (op: Generation["op"], feature = "video"): Generation =>
       ({
         id: "g1",
         status: "succeeded",
         kind: "video",
         op,
-        feature: "video",
+        feature,
         outputs: [{ kind: "video", url: "/api/files/clip.mp4" }],
         request: { modelId: "x" },
         createdAt: 1,
@@ -485,11 +519,31 @@ describe("Remove dialogue in Video tools", () => {
       placement: "menu",
       href: "/video-tools/remove-dialogue?video=%2Fapi%2Ffiles%2Fclip.mp4",
     });
-    expect(nextSteps(gen("lipsync"), 0).map((a) => a.id)).toEqual([
+    // A clip likely to carry speech keeps Upscale and adds Remove dialogue (Split soundtrack follows, in the menu).
+    for (const [op, feature] of [
+      ["lipsync", "lipsync"],
+      ["mux", "dub"],
+      ["trim", "video"],
+      ["captions", "video"],
+    ] as const)
+      expect(nextSteps(gen(op, feature), 0).map((a) => a.id)).toEqual([
+        "extend",
+        "upscale",
+        "remove-dialogue",
+      ]);
+    expect(nextSteps(gen("lipsync"), 0, 4).map((a) => a.id)).toEqual([
       "extend",
+      "upscale",
       "remove-dialogue",
       "split-soundtrack",
     ]);
+    // Sound for video (generated effects) and a Remove dialogue result itself don't offer it.
+    for (const g of [gen("v2a"), gen("mux", REMOVE_DIALOGUE_FEATURE)])
+      expect(nextSteps(g, 0).map((a) => a.id)).toEqual([
+        "extend",
+        "upscale",
+        "split-soundtrack",
+      ]);
     expect(nextSteps(gen("t2v"), 0).map((a) => a.id)).toEqual([
       "extend",
       "upscale",
@@ -569,6 +623,11 @@ describe("POST /api/audio-tools remove-dialogue (demo mode)", () => {
     });
     expect(run.result.request.params.extra).toEqual({
       backgroundVolumeDb: -15,
+    });
+    // The stored request reads back as what was asked (Compare).
+    expect(requestedOutcome(run.result.request)).toEqual({
+      outcome: "lower-music",
+      musicDb: -15,
     });
     const g = await finished(run.result.id);
     expect(g.status).toBe("succeeded");

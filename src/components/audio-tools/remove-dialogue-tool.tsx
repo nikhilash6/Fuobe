@@ -37,23 +37,29 @@ import {
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { useAskBeforeUpload, useEngine, useGenerations } from "@/lib/api";
-import type { AudioToolPreview } from "@/lib/av/audio-tools";
+import { SelfHostNote } from "@/components/self-host-note";
+import {
+  useAskBeforeUpload,
+  useEngine,
+  useGenerations,
+  useLikelyVisitor,
+} from "@/lib/api";
 import {
   CLOUD_ONLY_REMOVE_PROBLEM,
   CLOUD_REMOVE_PROBLEM,
-  KEPT_STEM,
   LOWER_DEFAULT_DB,
   LOWER_MAX_DB,
   LOWER_MIN_DB,
   OUTCOMES,
   REMOVE_DIALOGUE_FEATURE,
   REMOVED_STEM,
+  requestedOutcome,
   type DialogueOutcome,
 } from "@/lib/av/remove-dialogue";
 import {
   clock,
   durationWords,
+  openToolPrice,
   QUALITY_LABELS,
   stemLabel,
   type SplitQuality,
@@ -98,6 +104,12 @@ const RUN_LABEL: Record<DialogueOutcome, string> = {
 const COPY =
   "Takes the talking out and keeps the music and sound effects. The picture is not re-encoded.";
 
+/**
+ * Why a guest or an account can't run it: POST /api/audio-tools answers them own-gpu-tool (docs/public-signup.md), so
+ * the page says so up front and its upload and run are off, instead of a run the server refuses.
+ */
+const SELF_HOSTED = "Remove dialogue runs on a self-hosted Fuobe for now";
+
 /** ?video= from a result's "Remove dialogue", read once after hydration. */
 function useHandoff(take: (s: Source) => void) {
   useEffect(() => {
@@ -117,9 +129,12 @@ function useHandoff(take: (s: Source) => void) {
 function AddVideo({
   onPick,
   onUpdate,
+  disabled,
 }: {
   onPick: (s: Source) => void;
   onUpdate: (next: (cur: Source | null) => Source | null) => void;
+  /** A visitor (the tool doesn't run here for them): nothing is uploaded or picked only to be refused. */
+  disabled?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -127,7 +142,7 @@ function AddVideo({
   // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
   const askFirst = useAskBeforeUpload();
   const take = (f: File | undefined) => {
-    if (!f || askFirst()) return;
+    if (!f || disabled || askFirst()) return;
     if (kindOfFile(f) !== "video")
       return void toast("Video only — drop a clip here (MP4, MOV or WebM)");
     // Shown at once with its local preview, then given its address, or taken away when the upload is refused or fails
@@ -151,13 +166,14 @@ function AddVideo({
   };
   return (
     <div
+      aria-disabled={disabled || undefined}
       className={cn(
         "flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-strong bg-background px-4 py-10 text-center transition-colors sm:py-14",
         over && "border-primary bg-brand-faint",
       )}
       onDragOver={(e) => {
         e.preventDefault();
-        setOver(true);
+        if (!disabled) setOver(true);
       }}
       onDragLeave={() => setOver(false)}
       onDrop={(e) => {
@@ -181,13 +197,19 @@ function AddVideo({
         <Button
           size="sm"
           className="rounded-full"
+          disabled={disabled}
           onClick={() => askFirst() || input.current?.click()}
         >
           <Upload className="size-3.5" /> Upload a video
         </Button>
-        <Popover open={picking} onOpenChange={setPicking}>
+        <Popover open={picking && !disabled} onOpenChange={setPicking}>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="rounded-full">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+              disabled={disabled}
+            >
               <Library className="size-3.5" /> From library
             </Button>
           </PopoverTrigger>
@@ -220,6 +242,7 @@ function AddVideo({
         type="file"
         accept={ACCEPT.video}
         hidden
+        disabled={disabled}
         aria-label="Upload a video"
         onChange={(e) => {
           take(e.target.files?.[0]);
@@ -230,8 +253,6 @@ function AddVideo({
   );
 }
 
-const money = (p: AudioToolPreview) =>
-  p.demo ? "Placeholder · free" : "Free · runs on your ComfyUI";
 const onDevice = (device?: string) =>
   device === "cuda" ? "on your GPU" : device ? "on your CPU" : "on a CPU";
 
@@ -354,17 +375,10 @@ function ResultPanel({
   );
 }
 
-/** What a run of the tool was asked for, from its result's request (the mux step: its chain says which stems). */
-function outcomeOf(g: Generation): DialogueOutcome {
-  const chain = g.request.chain ?? [];
-  if (chain.some((c) => c.slot === "audio2")) return "lower-music";
-  return chain[0]?.stem === KEPT_STEM["dialogue-only"]
-    ? "dialogue-only"
-    : "no-dialogue";
-}
-
 export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
   const [engine, setEngine, mode] = useEngine();
+  // A guest or an account: the run answers own-gpu-tool, so the page says so and the upload and run are off.
+  const visitor = useLikelyVisitor();
   const run = useAudioToolRun();
   const [source, setSource] = useState<Source | null>(null);
   const [outcome, setOutcome] = useState<DialogueOutcome>("no-dialogue");
@@ -409,19 +423,22 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
   const picked: SplitQuality = quality ?? p?.hostPick ?? "fast";
   const cloudProblem =
     mode === "cloud" ? CLOUD_ONLY_REMOVE_PROBLEM : CLOUD_REMOVE_PROBLEM;
-  const blocker = !source
-    ? "Add a video"
-    : source.uploading
-      ? "Uploading…"
-      : engine === "cloud"
-        ? cloudProblem
-        : null;
+  const blocker = visitor
+    ? SELF_HOSTED
+    : !source
+      ? "Add a video"
+      : source.uploading
+        ? "Uploading…"
+        : engine === "cloud"
+          ? cloudProblem
+          : null;
   const error = preview.error ? (preview.error as Error).message : null;
   const g = result.data;
   const busy =
     run.isPending || g?.status === "queued" || g?.status === "running";
   const go = () => {
     if (blocker) return void toast(blocker);
+    if (!body) return;
     if (error) return void toast.error(error);
     run.mutate(body!, {
       onSuccess: (r) => {
@@ -450,12 +467,20 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
         : null;
 
   return (
-    <ToolShell title="Video tools" tabs={tabs}>
+    <ToolShell title="Video tools" tabs={tabs} selfHostedOnly>
       {!source && (
         <ToolHero
           title="Remove dialogue"
-          subtitle={`${COPY} Runs on your ComfyUI with DBS (open source, 23 MB, CPU or GPU): free.`}
-        />
+          subtitle={
+            visitor
+              ? `${COPY} Runs with DBS (open source, 23 MB, CPU or GPU).`
+              : `${COPY} Runs on your ComfyUI with DBS (open source, 23 MB, CPU or GPU): free.`
+          }
+        >
+          {visitor && (
+            <SelfHostNote className="mt-3 max-w-xl">{SELF_HOSTED}.</SelfHostNote>
+          )}
+        </ToolHero>
       )}
       <div
         className={cn(
@@ -464,7 +489,7 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
         )}
       >
         {!source ? (
-          <AddVideo onPick={take} onUpdate={setSource} />
+          <AddVideo onPick={take} onUpdate={setSource} disabled={visitor} />
         ) : (
           <Panel
             title={
@@ -626,7 +651,14 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
                 )}
                 aria-live="polite"
               >
-                {blocker && engine !== "cloud" ? (
+                {visitor && engine !== "cloud" ? (
+                  <>
+                    <span className="font-mono text-foreground">
+                      {openToolPrice(p, true)}
+                    </span>
+                    {` · ${SELF_HOSTED}`}
+                  </>
+                ) : blocker && engine !== "cloud" ? (
                   blocker
                 ) : engine === "cloud" ? (
                   mode === "cloud" ? (
@@ -639,7 +671,7 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
                 ) : p ? (
                   <>
                     <span className="font-mono text-foreground">
-                      {money(p)}
+                      {openToolPrice(p)}
                     </span>
                     {p.estimate && !p.demo
                       ? ` · ${durationWords(p.estimate)} ${onDevice(p.device)}`
@@ -657,7 +689,7 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
                     "bg-muted text-subtle-foreground hover:bg-muted",
                 )}
                 onClick={go}
-                disabled={busy}
+                disabled={busy || visitor}
               >
                 {busy ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -702,10 +734,14 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
           if (!video) return;
           const name = r.request.title?.replace(/^.* · /, "") || "Video";
           setSource({ ref: video, preview: video, id: r.id, name });
+          // The controls show what that run was asked for, so the button runs it again, not what was on screen.
+          const was = requestedOutcome(r.request);
+          setOutcome(was.outcome);
+          if (was.outcome === "lower-music") setMusicDb(was.musicDb);
           setRan({
             result: r.id,
             split: splitStep?.id,
-            outcome: outcomeOf(r),
+            outcome: was.outcome,
             before: video,
             name,
           });
