@@ -25,6 +25,7 @@ import { hostedRunsOn } from "./hosted-switch";
 import { checkRun, moderationConfigured } from "./moderation";
 import type { RunStamp } from "./run-stamp";
 import { readRef } from "./storage";
+import { ACCOUNT_LIMITS } from "./account-files";
 import { runAsTenant } from "./tenant";
 
 /**
@@ -184,8 +185,12 @@ export async function reservePool(account: Account, req: GenerationRequest, plan
  * A price check on this install's GPUs (hosted runs on): the plan there and the billing service's quote (no service:
  * free, and Run keeps its own words). Null when the run wouldn't go there (its own GPU, its own key, today's answer).
  */
-export async function poolQuote(account: Account | null, req: GenerationRequest, wish: PlaceWish): Promise<{ planned: Planned; quote: Quote } | null> {
+export async function poolQuote(account: Account | null, asked: GenerationRequest, wish: PlaceWish): Promise<{ planned: Planned; quote: Quote } | null> {
   if (!hostedRunsOn() || wish === "own" || !poolReady()) return null;
+  const p = account ? await billingPolicy(account.id) : null;
+  // Priced for the outputs it would make: the studio's cap per run, and the billing service's when lower.
+  const cap = Math.min(ACCOUNT_LIMITS.outputsPerRun, ...(billingConfigured() && p && p.limits.outputsPerRun > 0 ? [p.limits.outputsPerRun] : []));
+  const req = (asked.params?.numOutputs ?? 1) > cap ? { ...asked, params: { ...asked.params, numOutputs: cap } } : asked;
   let planned: Planned;
   try {
     planned = runOnPool(account?.id ?? null, () => previewGeneration(req));
@@ -194,10 +199,7 @@ export async function poolQuote(account: Account | null, req: GenerationRequest,
   }
   if (planned.route.provider !== "comfyui") return null;
   if (account && wish !== "pool" && accountGpu(account.id) && (await ownGpuOnline(account.id))) return null;
-  if (account) {
-    const p = await billingPolicy(account.id);
-    if (p && (!p.hosted || !poolAllows(p, planned.model.id, req.presetId))) return null;
-  }
+  if (p && (!p.hosted || !poolAllows(p, planned.model.id, req.presetId))) return null;
   const kind = outputKind(planned.op, planned.model);
   const q = await billingQuote(account ? accountFacts(account) : null, runFacts(req, planned, kind), queueFacts(account?.id ?? null));
   return { planned, quote: q };

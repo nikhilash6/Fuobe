@@ -161,6 +161,16 @@ describe("the billing hook with a service", () => {
     expect(items.every((g) => statusOf(g.id).status === "succeeded")).toBe(true);
   });
 
+  it("prices and sets aside only what runs: the service's outputs-per-run limit applies before the quote and the reserve", async () => {
+    const p = await post(run({ params: { numOutputs: 4 } }), cookie, "?preview=1");
+    expect(((await p.json()) as { outputs: number }).outputs).toBe(2);
+    expect((fake.calls_of("/v1/quote").at(-1)!.body as { run: { jobs: number } }).run.jobs).toBe(2);
+    const r = await post({ ...run({ params: { numOutputs: 4 } }), shown: { amount: 7, priceVersion: "v7" } });
+    expect(r.status).toBe(201);
+    expect(((await r.json()) as { items: unknown[] }).items).toHaveLength(2);
+    expect((fake.calls_of("/v1/reserve").at(-1)!.body as { run: { jobs: number } }).run.jobs).toBe(2);
+  });
+
   it("never takes the hold, the account or the place's stamp from the client", async () => {
     const other = auth.createAccount("other@example.com", "long enough").id;
     const r = await post({ ...run(), hold: "h_evil", account: other, charge: "free", checkOutputs: false, waitMs: 1, shown: { amount: 7, priceVersion: "v7" } });

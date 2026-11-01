@@ -140,7 +140,7 @@ export async function POST(request: Request) {
       decision = await decidePlace(account, req, wish);
       if (decision.kind === "refuse") return refusedBy(decision.refusal);
     }
-    const onPool = decision.kind === "pool" ? decision : null;
+    let onPool = decision.kind === "pool" ? decision : null;
     if (account && onPool && billingConfigured()) {
       // The billing service's limits for runs on this install's GPUs (never above the studio's own).
       const lim = onPool.policy.limits;
@@ -151,6 +151,9 @@ export async function POST(request: Request) {
       if (lim.outputsPerRun > 0 && (req.params?.numOutputs ?? 1) > lim.outputsPerRun) {
         req = { ...req, params: { ...req.params, numOutputs: lim.outputsPerRun } };
         notes.push(ACCOUNT_MESSAGES.outputsCapped);
+        // Priced and set aside for what runs.
+        const capped = req;
+        onPool = { ...onPool, planned: runOnPool(account.id, () => previewGeneration(capped)) };
       }
     }
     // GPU pre-flight: a ComfyUI run that is sure to fail for something missing stops here with the plan that fixes it
