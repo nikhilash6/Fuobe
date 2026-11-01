@@ -313,8 +313,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-game-dump": {
-    "poster": "/previews/presets/app-game-dump.jpg?v=9736b258",
-    "video": "/previews/presets/app-game-dump.mp4?v=00f34e76",
+    "poster": "/previews/presets/app-game-dump.jpg?v=ac39c93c",
+    "video": "/previews/presets/app-game-dump.mp4?v=547049b4",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "ideogram4+qwen-image-2.1-edit",
@@ -958,10 +958,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-agamemnon": {
-    "poster": "/previews/presets/effect-agamemnon.jpg?v=8fbb442e",
+    "poster": "/previews/presets/effect-agamemnon.jpg?v=097a985a",
+    "video": "/previews/presets/effect-agamemnon.mp4?v=54eb9b67",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-agent-reveal": {
@@ -1786,10 +1787,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-helicopter-escape": {
-    "poster": "/previews/presets/effect-helicopter-escape.jpg?v=52296246",
+    "poster": "/previews/presets/effect-helicopter-escape.jpg?v=f9c70e26",
+    "video": "/previews/presets/effect-helicopter-escape.mp4?v=27c5a6bf",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-hero-flight": {
@@ -3020,8 +3022,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-catwalk": {
-    "poster": "/previews/presets/motion-catwalk.jpg?v=2d64cc09",
-    "video": "/previews/presets/motion-catwalk.mp4?v=c5e1a3f1",
+    "poster": "/previews/presets/motion-catwalk.jpg?v=57f553e7",
+    "video": "/previews/presets/motion-catwalk.mp4?v=2b71fd01",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "minimax-h3",
@@ -3169,10 +3171,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-earth-zoom-out": {
-    "poster": "/previews/presets/motion-earth-zoom-out.jpg?v=ef069265",
+    "poster": "/previews/presets/motion-earth-zoom-out.jpg?v=47988031",
+    "video": "/previews/presets/motion-earth-zoom-out.mp4?v=fde8a23f",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-eating-zoom": {
@@ -3380,10 +3383,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-moonwalk-right": {
-    "poster": "/previews/presets/motion-moonwalk-right.jpg?v=6f2ead4e",
+    "poster": "/previews/presets/motion-moonwalk-right.jpg?v=1be905f5",
+    "video": "/previews/presets/motion-moonwalk-right.mp4?v=ea1ee679",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-mouth-in": {
@@ -3482,10 +3486,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-raw-chaos": {
-    "poster": "/previews/presets/motion-raw-chaos.jpg?v=44607860",
+    "poster": "/previews/presets/motion-raw-chaos.jpg?v=b2e2b761",
+    "video": "/previews/presets/motion-raw-chaos.mp4?v=0e529fcc",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-road-rush": {
@@ -3525,8 +3530,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-skate-cruise": {
-    "poster": "/previews/presets/motion-skate-cruise.jpg?v=e46dcc7e",
-    "video": "/previews/presets/motion-skate-cruise.mp4?v=b2cdc06e",
+    "poster": "/previews/presets/motion-skate-cruise.jpg?v=cea477da",
+    "video": "/previews/presets/motion-skate-cruise.mp4?v=f3a0ef90",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "minimax-h3",
@@ -3649,8 +3654,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-timelapse": {
-    "poster": "/previews/presets/motion-timelapse.jpg?v=b16f671b",
-    "video": "/previews/presets/motion-timelapse.mp4?v=e24cc90a",
+    "poster": "/previews/presets/motion-timelapse.jpg?v=5cc63fd9",
+    "video": "/previews/presets/motion-timelapse.mp4?v=5bc04a19",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "minimax-h3",
