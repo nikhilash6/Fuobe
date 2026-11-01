@@ -22299,6 +22299,88 @@
    },
    "license": "commercial",
    "capability": "frontier"
+  },
+  {
+   "family": "minimax-h3",
+   "model": "MiniMax H3 Max 3D to Video",
+   "title": "H3 Max 3D to Video",
+   "vendor": "MiniMax",
+   "operation": "v2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/3d-to-video",
+   "falCategory": "video-to-video",
+   "status": "active",
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Blender video, up to 15 seconds and 32 shots, at a public HTTPS URL."
+    },
+    "prompt": {
+     "type": "string",
+     "required": false,
+     "nullable": true,
+     "maxLength": 2000,
+     "desc": "Optional clarification of what your proxies represent or how they move, for example: 'The moving block represents a running person.' Camera, trajectories, timing and object count remain defined by the video."
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "required": false,
+     "items": "string",
+     "maxItems": 8,
+     "desc": "Optional environment, subject, interior or detail references. When supplied, uses these images directly without visual planning or generating new images; Scene Intent is optional. Without references, automatically creates appearance references within your new-image limit. Camera and movement always come from the video."
+    },
+    "max_generated_reference_images": {
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 8,
+     "default": 2,
+     "desc": "Maximum NEW images to generate when no reference images are supplied. Ignored when reference images are supplied. Uses fewer when enough views are covered. Uncovered shots stay in the video."
+    },
+    "resolution": {
+     "type": "enum",
+     "required": false,
+     "values": [
+      "480P",
+      "768P",
+      "1080P"
+     ],
+     "valueType": "string",
+     "default": "768P",
+     "desc": "Output quality. Duration is taken automatically from the video."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "keyFields": {
+    "video": "video_url",
+    "images": "reference_image_urls",
+    "prompt": "prompt",
+    "resolution": "resolution"
+   },
+   "output": "video.url",
+   "outputShape": {
+    "video": "object{file_name,url,content_type,file_size}"
+   },
+   "price": "For every second of video you generate you will be charged $0.05 at 480p, $0.08 at 768p or $0.16 at 1080p (minimum 5 seconds). Each shot is rounded up to a whole second, with a minimum of 5 billed seconds per shot; a $0.50 processing fee per request; input tokens beyond the 4,096 included per shot are extra; automatically generated references are billed at $0.10 per image (the page's header says about $0.02-$0.04 each).",
+   "pricing": {
+    "usd": 0.08,
+    "unit": "second",
+    "note": "768P; 480P $0.05, 1080P $0.16; minimum 5 s a shot; + $0.50 processing a request"
+   },
+   "replicateEquivalent": null,
+   "license": "commercial",
+   "notes": "Blockout to film (package blockout-film; research new-models-10.md section 5). A grey-box / previs animation (up to 15 s, up to 32 shots) plus up to 8 reference stills -> a finished video as long as the input; camera, trajectories, timing and object count come from the video, the prompt (scene intent, at most 2000 characters) says what the proxies are. No audio field and no audio in the description: the result is treated as silent. Read from fal's OpenAPI and model page on 2026-11-01.",
+   "verified": true,
+   "checked": "2026-11-01",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/3d-to-video/api",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/3d-to-video",
+   "capability": "video"
   }
  ]
 }

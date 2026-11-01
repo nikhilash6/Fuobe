@@ -3052,6 +3052,30 @@ export const SPEC = [
       'Control: Depth Anything 3 depth on every frame (no kept frame, no masks); the direction frame is the VACE reference. Same weights as the restyle graph.',
   },
   {
+    // Blockout to film (package blockout-film): the open engine's render of a grey-box blockout.
+    id: 'video-blockout-wan22-fun-vace',
+    title: 'Blockout to film: Wan 2.2 Fun VACE driven by the blockout\'s own depth + a first frame drawn from the references',
+    capability: 'v2v',
+    handBuilt: 'hand-built/video-blockout-wan22-fun-vace.json',
+    bindings: {
+      video: [b('1', 'file')], image: [b('4', 'image')], prompt: [b('12', 'text')], negativePrompt: [b('13', 'text')],
+      width: [b('3', 'width'), b('5', 'width'), b('34', 'width'), b('35', 'width'), b('15', 'width')],
+      height: [b('3', 'height'), b('5', 'height'), b('34', 'height'), b('35', 'height'), b('15', 'height')],
+      frames: [b('30', 'value')], fps: [b('26', 'fps')], seed: [b('22', 'noise_seed'), b('23', 'noise_seed')], steps: [b('22', 'steps'), b('23', 'steps')],
+      cfg: [b('22', 'cfg'), b('23', 'cfg')], shift: [b('20', 'shift'), b('21', 'shift')], controlStrength: [b('15', 'strength')],
+      invertDepth: [b('41', 'value')],
+    },
+    outputs: [{ node: '27', kind: 'video' }],
+    limits: { maxWidth: 1280, maxHeight: 1280, dimensionMultiple: 16, maxFrames: 81, frameStep: 4 },
+    vramGb: 24,
+    license: 'Apache-2.0 (Wan 2.2 Fun VACE, lightx2v)',
+    notes:
+      'Cinema\'s Blockout on your GPU: the browser renders the grey box and its depth (near = bright, as Depth Anything draws it) at 16 fps; video-segment-resample cuts the depth into 81-frame windows that overlap by one frame; ' +
+      'qwen-image-edit-2511 draws the first frame from the grey box\'s first frame and up to two references; each window runs this graph with the first frame (window 1) or the last frame of the window before (frame-extract), then video-concat-encoded joins them. ' +
+      'The same graph as video-restyle-wan22-fun-vace without Depth Anything 3: control frame 0 = the first frame (kept), frames 1..N-1 = the depth video, near = bright (invertDepth: true runs it through ImageInvert first, for a near = dark pass such as Blender\'s mist; ComfySwitchNode picks); the first frame is also the VACE reference. Lightx2v 4 steps. Silent (no audio input): sound comes afterwards (Sound for video). ' +
+      'A blockout uploaded without a depth pass runs video-restyle-wan22-fun-vace instead (Depth Anything 3 on the grey box).',
+  },
+  {
     id: 'mixed-media-zimage-frames',
     title: 'Mixed Media: per-frame stylisation at 4-24 fps (Z-Image Turbo img2img + Fun Union ControlNet canny)',
     capability: 'v2v',

@@ -454,6 +454,12 @@ export function planGeneration(
   // Reference clips and video elements on a model that bills them with the output (Kling 4.0, Pricing.clipInput): priced
   // at the least they bill (twice the output) until the server reads their length (params.clipSeconds).
   if (model.pricing?.clipInput && req.inputs?.videos?.length && params.clipSeconds === undefined) params = { ...params, clipSeconds: 0 };
+  // A run with no reference images on a model that then draws its own (H3 Max 3D to video): priced at the most it draws.
+  // A chained still (a hand-over frame) counts as one going in.
+  const gen = model.pricing?.generatedRefs;
+  const stills = !!req.inputs?.images?.length || !!req.chain?.some((c) => c.slot === "images");
+  params = { ...params, drawnRefs: gen && !stills ? gen.count : undefined };
+  if (params.drawnRefs === undefined) delete params.drawnRefs;
   // An edit's reference clips (beside the clip it edits; clip elements are counted on their own): Kling 4.0 takes 4.
   if (op === "v2v" || op === "video-swap" || op === "video-insert") {
     const asElements = params.elements?.filter((g) => g.video !== undefined).length ?? 0;
@@ -920,10 +926,12 @@ export function clipBilling(model: Pick<ModelDef, "pricing" | "defaults">, param
   const rate = (res && (c.byResolution?.[res] ?? c.byResolution?.[res.toLowerCase()])) || c.usd;
   const source = params.sourceDuration && params.sourceDuration > 0 ? params.sourceDuration : undefined;
   const output = edit ? (source ?? params.duration ?? model.defaults?.duration ?? 5) : (params.duration ?? model.defaults?.duration ?? 5);
-  const refs = Math.max(0, params.clipSeconds ?? 0);
-  const guessed = edit ? !source : !refs;
+  // Clips not read yet: on a model that bills them with no floor (Seedance 2.5), taken as long as the output until the
+  // server reads their headers, rather than as nothing.
+  const refs = Math.max(0, params.clipSeconds ?? 0) || (c.plain && !edit ? output : 0);
+  const guessed = edit ? !source : !params.clipSeconds;
   const input = (edit ? (source ?? output) : 0) + refs;
-  return { input, output, billed: Math.max(input + output, 2 * output), rate, guessed };
+  return { input, output, billed: c.plain ? input + output : Math.max(input + output, 2 * output), rate, guessed };
 }
 
 /**
@@ -1045,7 +1053,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   if (clipped) per = clipped.rate * clipped.billed;
   else if (p.unit === "second") {
     // A length the caller set wins (Shorts, Mixed Media and Genjutsu say the seconds they bill); then a clip edit's clip.
-    const seconds = clip ?? voice ?? params.duration ?? clipEditSeconds(model, params, op) ?? model.defaults?.duration ?? 5;
+    const asked = clip ?? voice ?? params.duration ?? clipEditSeconds(model, params, op) ?? model.defaults?.duration ?? 5;
+    const seconds = p.minSeconds ? Math.max(p.minSeconds, Math.ceil(asked - 1e-9)) : asked;
     const mp = p.videoMegapixel ? videoMegapixels(model, params, seconds) : undefined;
     const rate = p.videoMegapixel && (withLoras && p.videoMegapixel.withLoras !== undefined ? p.videoMegapixel.withLoras : p.videoMegapixel.usd);
     per = mp !== undefined && rate ? Math.ceil(mp - 1e-9) * rate : usd * seconds;
@@ -1059,5 +1068,7 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   }
   if (params.generateAudio === false && model.options.audio === true && p.note?.includes("audio-off-half")) per /= 2;
   if (p.animationUsd && params.animation !== undefined && params.animation !== "") per += p.animationUsd;
+  if (p.perRequest) per += p.perRequest;
+  if (p.generatedRefs && params.drawnRefs) per += p.generatedRefs.usd * Math.min(params.drawnRefs, p.generatedRefs.count);
   return Math.round(per * jobs * 1000) / 1000;
 }

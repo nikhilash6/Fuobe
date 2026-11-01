@@ -115,9 +115,11 @@ describe("requirements.json", () => {
   // build that bloats it. The server parses it once per change, and /api/gpu/requirements serves it compressed.
   // FLUX 3 Image Klein's three graphs and seven files (nm10-flux3-klein) add about 6 KB. Clean up voice (its pack, two
   // weight files and two graphs) adds about 0.5 KB gzipped, and Live edit (its node file, LoRA and graph) about 1.6 KB.
-  it("stays within its size budget (216 KB, 27 KB gzipped)", () => {
-    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(216 * 1024);
-    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(27 * 1024);
+  // Open-H3 Regenerate (its graph, two packs and three files) and Blockout to film's depth graph took it to 214 KB /
+  // 27.1 KB gzipped, so the budget moves to 256 KB / 32 KB: room for about fifteen more graphs before it is looked at again.
+  it("stays within its size budget (256 KB, 32 KB gzipped)", () => {
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(256 * 1024);
+    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(32 * 1024);
   });
 });
 

@@ -158,10 +158,10 @@ function dayLabel(ts: number): string {
   return d.toLocaleDateString(undefined, { weekday: diff < 7 ? "long" : undefined, month: "short", day: "numeric", year: d.getFullYear() === today.getFullYear() ? undefined : "numeric" });
 }
 
-const FEATURE_TITLES: Record<string, string> = { "cinema-scene": "3D scene", "cinema-recompose": "Recomposed view", "cinema-path": "Fly path", "cinema-turnaround": "Turnaround" };
+const FEATURE_TITLES: Record<string, string> = { "cinema-scene": "3D scene", "cinema-recompose": "Recomposed view", "cinema-path": "Fly path", "cinema-turnaround": "Turnaround", "cinema-blockout": "Blockout film" };
 const promptOf = (g: CinemaGeneration) => g.take?.prompt?.trim() || FEATURE_TITLES[g.feature] || g.request.prompt?.trim() || g.prompt || "Untitled";
 
-const STEP_HINT: Record<string, string> = { "cinema-cast": "Cast", "cinema-location": "Location", "cinema-grid": "Grid", "cinema-scene": "3D scene", "cinema-recompose": "Recomposed", "cinema-path": "Fly path", "cinema-turnaround": "Turnaround" };
+const STEP_HINT: Record<string, string> = { "cinema-cast": "Cast", "cinema-location": "Location", "cinema-grid": "Grid", "cinema-scene": "3D scene", "cinema-recompose": "Recomposed", "cinema-path": "Fly path", "cinema-turnaround": "Turnaround", "cinema-blockout": "Blockout film" };
 
 function Badge({ children, className }: { children: React.ReactNode; className?: string }) {
   return <span className={cn("inline-flex h-5 items-center rounded-full bg-black/50 px-1.5 text-[10.5px] font-medium text-white backdrop-blur", className)}>{children}</span>;

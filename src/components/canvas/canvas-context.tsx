@@ -34,6 +34,7 @@ import {
   Waves,
   ZoomIn,
   type LucideIcon,
+  Box,
 } from "lucide-react";
 import { createContext, useContext, useMemo, useSyncExternalStore } from "react";
 import {
@@ -77,6 +78,8 @@ export const ICONS: Record<string, LucideIcon> = {
   UserRound,
   Languages,
   Table,
+  // Blockout to film
+  Box,
   // Effects 2.0 chains (src/lib/catalog/canvas.ts EFFECT_CHAINS)
   Swords,
   Feather,

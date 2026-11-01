@@ -159,6 +159,8 @@ export const BINDING_KEYS = new Set([
   'takeStart', 'maskStart', 'takeX', 'takeY', 'regionWidth', 'regionHeight', 'regionX', 'regionY', 'feather',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
+  // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
+  'invertDepth',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

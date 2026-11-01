@@ -4412,8 +4412,22 @@ export const CLOUD_MODELS: ModelDef[] = [
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.473,
-      "note": "720p"
+      "usd": 0.46224,
+      "note": "720p; 480p $0.21494, 1080p $1.13724. Reference clips bill their own seconds with the output, at 0.6 times the rate",
+      "byResolution": {
+        "480p": 0.21494,
+        "720p": 0.46224,
+        "1080p": 1.13724
+      },
+      "clipInput": {
+        "usd": 0.27734,
+        "byResolution": {
+          "480p": 0.12897,
+          "720p": 0.27734,
+          "1080p": 0.68234
+        },
+        "plain": true
+      }
     }
   },
   {
@@ -7202,6 +7216,55 @@ export const CLOUD_MODELS: ModelDef[] = [
           "768P": 0.052,
           "1080P": 0.104
         }
+      }
+    },
+    "hidden": true
+  },
+  {
+    "id": "minimax-h3-max-3d",
+    "name": "MiniMax H3 Max 3D to video",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A grey-box blockout from Blender or the browser, rendered as a finished shot from your reference stills",
+    "routes": [
+      {
+        "op": "v2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/3d-to-video",
+        "map": {
+          "images": "reference_image_urls",
+          "video": "video_url",
+          "resolution": "resolution"
+        }
+      }
+    ],
+    "options": {
+      "resolutions": [
+        "480P",
+        "768P",
+        "1080P"
+      ],
+      "maxImages": 8
+    },
+    "defaults": {
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request; + $0.10 for each reference it draws when given none (up to 2)",
+      "byResolution": {
+        "480P": 0.05,
+        "768P": 0.08,
+        "1080P": 0.16
+      },
+      "minSeconds": 5,
+      "perRequest": 0.5,
+      "generatedRefs": {
+        "usd": 0.1,
+        "count": 2
       }
     },
     "hidden": true

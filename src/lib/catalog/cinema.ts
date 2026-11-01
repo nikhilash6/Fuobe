@@ -1,3 +1,4 @@
+import { BLOCKOUT, H3_INTENT_MAX, OPEN_FPS, beatsIn, blockoutFramePrompt, compileBlockoutPrompt, depthWindows, normalizeBeats, splitShots, windowsSeconds, type Beat, type BlockoutRef } from "@/lib/blockout";
 import { DEFAULT_MOTION, PATH_FPS, PATH_FRAMES, normalizeKeys, toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { APERTURE, LENS, anglesNote, poseWords, recomposePrompt, type ScenePose } from "@/lib/scene3d";
 import { getModel, getPreset } from "./index";
@@ -166,6 +167,8 @@ export interface CinemaTakeInfo {
   camera?: { lens: number; aperture: number; pose: ScenePose };
   /** A filmed path: its keyframes, length and the move it started from. */
   path?: { keys: CameraKey[]; duration: number; preset?: string };
+  /** A filmed blockout: its length, how many shots or windows it was filmed in, and its beats. */
+  blockout?: { seconds: number; parts: number; beats: string[] };
 }
 
 /** A generation's membership in a project (and its folder = scene). */
@@ -200,7 +203,7 @@ export interface DirectorMessage {
 }
 
 export type CinemaMode = "video" | "image";
-export type CinemaAction = "generate" | "extend-forward" | "extend-backward" | "edit" | "grid" | "cast" | "location" | "location-view" | "scene" | "recompose" | "path" | "turnaround";
+export type CinemaAction = "generate" | "extend-forward" | "extend-backward" | "edit" | "grid" | "cast" | "location" | "location-view" | "scene" | "recompose" | "path" | "turnaround" | "blockout";
 export type GridSize = "2x2" | "3x3" | "4x4";
 export type GridType = "freeform" | "zooms" | "shots" | "next_shots" | "prev_shots";
 export type CastValues = Record<string, string | number | string[] | undefined>;
@@ -238,6 +241,37 @@ export interface CinemaGenerateInput {
   path?: ScenePath;
   /** "turnaround": a 360° turnaround of a Soul Cast result (build plan N7-6: src/lib/catalog/turnaround.ts). */
   turnaround?: Omit<TurnaroundInput, "engine" | "feature" | "stepFeature">;
+  /** "blockout": a grey-box blockout filmed with references and beats (package blockout-film: src/lib/blockout.ts). */
+  blockout?: BlockoutRun;
+}
+
+/** A blockout to film: the grey box (and its depth), its beats and references, and the words around them. */
+export interface BlockoutRun {
+  /** The grey-box render (uploaded from any 3D app, or rendered by Cinema's builder). */
+  video: string;
+  /**
+   * Its depth pass, near = bright (the builder renders one at 16 fps). Blender's mist pass is near = dark: invert it in
+   * the compositor, or set depthInvert (the composer's "Near is dark") and the graph inverts it. A raw Z pass isn't
+   * normalised to 0–1: map it to a mist-like range first.
+   */
+  depth?: string;
+  /** The depth pass is near = dark (a Blender mist pass as it renders): the open engine inverts it before VACE reads it. */
+  depthInvert?: boolean;
+  /** Its first frame as a picture (the builder saves one): the open engine draws the film's first frame from it. */
+  firstFrame?: string;
+  /** Seconds (the server reads them from the stored file's header where it can). */
+  seconds: number;
+  /** The blockout is WebM (a browser's fallback render): Seedance 2.5 takes MP4 or MOV only. The server reads it from the header. */
+  webm?: boolean;
+  /** Each beat's start (seconds), name and words; it runs to the next one (normalizeBeats). */
+  beats: (Pick<Beat, "start" | "label"> & Partial<Beat>)[];
+  refs: BlockoutRef[];
+  style?: string;
+  constraints?: string;
+  /** What is heard, one sound per item. */
+  sounds?: string[];
+  /** What must not happen or be seen. */
+  avoid?: string[];
 }
 
 export interface ScenePath {
@@ -1411,6 +1445,7 @@ const FEATURES: Partial<Record<CinemaAction, string>> = {
   recompose: "cinema-recompose",
   path: "cinema-path",
   turnaround: "cinema-turnaround",
+  blockout: "cinema-blockout",
 };
 const feature = (action: CinemaAction, mode: CinemaMode) => FEATURES[action] ?? (mode === "image" ? "cinema-image" : "cinema");
 
@@ -2105,6 +2140,242 @@ function planTurnaroundTake(input: CinemaGenerateInput, ctx: CinemaContext): Cin
   return finish(plan.model, plan.steps, plan.notes, plan.blocker);
 }
 
+// ---------------------------------------------------------------------------
+// Blockout to film (package blockout-film; new-models-10.md §5): a grey-box blockout sets the camera, blocking and timing,
+// references and a timecoded beat prompt say what it becomes
+
+/**
+ * What films a blockout. Cloud: Seedance 2.5 reference mode (the blockout as @Video1, the stills as @Image1…, sound on)
+ * or MiniMax H3 Max 3D to video (fal's own blockout model, under its name: up to 8 stills, no sound). Open: Wan 2.2 Fun
+ * VACE driven by the blockout's depth from a first frame drawn from the references; an upload with no depth pass runs the
+ * restyle graph, which reads the depth from the grey box with Depth Anything 3.
+ */
+export const BLOCKOUT_MODELS = {
+  cloud: ["seedance-2-5", "minimax-h3-max-3d"],
+  open: "oss-wan22-vace-blockout",
+  openNoDepth: "oss-wan22-vace-restyle",
+  /** The open engine's first frame: Qwen-Image-Edit 2511 (the grey box's first frame + up to 2 references). */
+  firstFrame: "oss-qwen-edit",
+} as const;
+
+/**
+ * Each cloud model's shot: the longest and shortest (seconds) and the stills it takes. Seedance 2.5 reads reference
+ * clips of 1.8–30.2 s and makes 4–30 s (fal, read 2026-11-01; Cinema sends it 4 stills with clips); H3 Max 3D to video
+ * reads up to 15 s and 8 stills and bills at least 5 s a shot.
+ */
+export const BLOCKOUT_SHOTS: Record<string, { max: number; min: number; refs: number; tag: "seedance" | "h3"; prompt?: number }> = {
+  "seedance-2-5": { max: 30, min: 4, refs: 4, tag: "seedance" },
+  // H3 bills at least 5 s a shot, so no shot is cut shorter; its prompt (Scene Intent) takes up to 2000 characters.
+  "minimax-h3-max-3d": { max: 15, min: 5, refs: 8, tag: "h3", prompt: H3_INTENT_MAX },
+};
+
+/** The utilities a blockout's steps use, per engine. */
+const BLOCKOUT_TOOLS = {
+  cloud: { cut: "trim-video", frame: "extract-frame", join: "join-clips" },
+  open: { cut: "oss-segment", frame: "oss-extract-frame", join: "oss-join-encoded" },
+} as const;
+
+export const BLOCKOUT_FIRST = "Add a blockout first: upload a grey-box render or build one";
+
+const secs1 = (n: number) => `${Math.round(n * 10) / 10}`;
+
+/**
+ * Film a blockout. Cloud: one call when it fits the model (Seedance 2.5: 30 s, H3 Max 3D: 15 s), else shots cut at the
+ * beat markers, each with its own stretch of the blockout (a trim), its beats timed from its start and the last frame of
+ * the shot before as one more still (continuity), then joined. Open: the first frame drawn from the references, then
+ * 81-frame windows of the depth at 16 fps, each starting from the last frame of the one before, then joined.
+ */
+function planBlockout(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
+  const b = input.blockout;
+  const notes: string[] = [];
+  const open = input.engine === "open";
+  const seconds = Math.max(0, Math.min(BLOCKOUT.maxSeconds, b?.seconds ?? 0));
+  const beats = normalizeBeats(b?.beats ?? [], seconds);
+  const refs = (b?.refs ?? []).slice(0, BLOCKOUT.maxRefs);
+  const words = { style: b?.style, constraints: b?.constraints, audio: b?.sounds, avoid: b?.avoid };
+  let blocker = !b?.video ? BLOCKOUT_FIRST : seconds < BLOCKOUT.minSeconds ? `A blockout needs at least ${BLOCKOUT.minSeconds} s` : undefined;
+  const feature = "cinema-blockout";
+  const video = b?.video ?? PLACEHOLDER.video;
+  const steps: CinemaStep[] = [];
+  const labels: Record<string, string> = {};
+
+  if (open) {
+    const has = ctx.has ?? ((id: string) => !!getModel(id));
+    const depth = !!b?.depth;
+    const modelId = depth ? BLOCKOUT_MODELS.open : BLOCKOUT_MODELS.openNoDepth;
+    const model = getModel(modelId);
+    if (!model || !has(modelId)) return finish(getModel(BLOCKOUT_MODELS.open) ?? getModel(BLOCKOUT_MODELS.openNoDepth)!, [], notes, blocker ?? "Blockout on your GPU needs the Wan 2.2 Fun VACE workflows — switch to Cloud for this one");
+    const t = BLOCKOUT_TOOLS.open;
+    const windows = depthWindows(seconds);
+    const made = windowsSeconds(windows);
+    const aspectRatio = input.aspectRatio && model.options.aspectRatios?.includes(input.aspectRatio) ? input.aspectRatio : "16:9";
+    const resolution = input.resolution === "720p" ? "720p" : "480p";
+    notes.push(
+      `On your GPU: the blockout's ${depth ? "depth" : "grey box (Depth Anything 3 reads its depth)"} drives Wan 2.2 Fun VACE from a first frame drawn from your references, in ${windows.length} window${windows.length === 1 ? "" : "s"} of up to ${OPEN_FPS * 5 + 1} frames at ${OPEN_FPS} fps${windows.length > 1 ? ", each starting from the last frame of the one before, then joined" : ""} — about 24 GB of VRAM`,
+      "It follows the blockout's depth and timing, not the dialogue or sound: add sound afterwards with Sound for video",
+    );
+    if (seconds - made > 0.6) notes.push(`The open engine renders up to ${Math.round(made)} s of this blockout (${Math.round(seconds)} s)`);
+    if (input.prompt.trim()) notes.push("Your edited prompt is for the cloud models: on your GPU each window gets its own beats as words");
+    // The first frame: the builder's still of the grey box, or the upload's first frame cut out.
+    const frameRefs = refs.slice(0, 2);
+    if (refs.length > frameRefs.length) notes.push(`Qwen-Image-Edit draws the first frame from the grey box and your first ${frameRefs.length} references`);
+    if (!b?.firstFrame) {
+      steps.push({ key: "grab", request: { feature, modelId: t.frame, op: "frame", inputs: { video }, params: { startTime: 0, endTime: 0.5, extra: { frameIndex: 0 } } } });
+      labels.grab = "Blockout's first frame";
+    }
+    steps.push({
+      key: "look",
+      ...(b?.firstFrame ? {} : { after: ["grab"] }),
+      request: {
+        feature,
+        modelId: BLOCKOUT_MODELS.firstFrame,
+        op: "edit",
+        prompt: blockoutFramePrompt(frameRefs, b?.style),
+        inputs: { images: [...(b?.firstFrame ? [b.firstFrame] : []), ...frameRefs.map((r) => r.url)] },
+        params: { numOutputs: 1 },
+        ...(b?.firstFrame ? {} : { chain: [{ slot: "images" as const, position: "first" as const }] }),
+      },
+    });
+    labels.look = "First frame from your references";
+    windows.forEach((w, k) => {
+      const part = windows.length > 1 ? ` ${k + 1}/${windows.length}` : "";
+      steps.push({
+        key: `seg${k}`,
+        request: { feature, modelId: t.cut, op: "trim", inputs: { video: b?.depth ?? video }, params: { startTime: w.start, endTime: w.end, fps: OPEN_FPS, aspectRatio, resolution } },
+      });
+      labels[`seg${k}`] = `Blockout${part}`;
+      steps.push({
+        key: `win${k}`,
+        after: [`seg${k}`, k === 0 ? "look" : `last${k - 1}`],
+        request: {
+          feature,
+          modelId,
+          op: "v2v",
+          prompt: compileBlockoutPrompt({ beats: beatsIn(beats, w.start, w.end), refs, target: "open", ...words }),
+          // A near = dark depth pass (Blender's mist) is inverted in the graph before VACE reads it.
+          params: { aspectRatio, resolution, duration: w.frames / OPEN_FPS, numOutputs: 1, ...(depth && b?.depthInvert ? { extra: { invertDepth: true } } : {}) },
+          chain: [{ slot: "video" }, { slot: "images", position: "first" }],
+        },
+      });
+      labels[`win${k}`] = windows.length > 1 ? `Film${part}` : "Film";
+      if (k < windows.length - 1) {
+        steps.push({ key: `last${k}`, after: [`win${k}`], request: { feature, modelId: t.frame, op: "frame", chain: [{ slot: "video" }] } });
+        labels[`last${k}`] = `Hand-over frame${part}`;
+      }
+    });
+    if (windows.length > 1) {
+      steps.push({ key: "join", after: windows.map((_, k) => `win${k}`), request: { feature, modelId: t.join, op: "concat", prompt: "Blockout film", chain: windows.map(() => ({ slot: "videos" as const })) } });
+      labels.join = "Blockout film";
+    }
+    if (!windows.length) blocker ??= `A blockout needs at least ${BLOCKOUT.minSeconds} s`;
+    return { ...finish(model, label(steps, labels), notes, undefined, windows.length > 1 ? "join" : "win0"), ...(blocker ? { blocker } : {}) };
+  }
+
+  const modelId = input.modelId && BLOCKOUT_MODELS.cloud.includes(input.modelId as (typeof BLOCKOUT_MODELS.cloud)[number]) ? input.modelId : BLOCKOUT_MODELS.cloud[0];
+  const model = modelOn(modelId, "cloud") ?? getModel(modelId)!;
+  const lim = BLOCKOUT_SHOTS[model.id];
+  const t = BLOCKOUT_TOOLS.cloud;
+  const shots = splitShots(seconds, beats.map((x) => x.start), lim.max, lim.min);
+  const many = shots.length > 1;
+  const seedance = lim.tag === "seedance";
+  const offered = model.options.resolutions ?? [];
+  const resolution = offered.find((r) => r.toLowerCase() === input.resolution?.toLowerCase()) ?? model.defaults?.resolution;
+  const aspectRatio = seedance ? (input.aspectRatio && model.options.aspectRatios?.includes(input.aspectRatio) ? input.aspectRatio : "auto") : undefined;
+  const sound = seedance && input.audio !== false;
+  const edited = input.prompt.trim();
+  if (!many && lim.prompt && edited.length > lim.prompt) blocker ??= `${model.name} takes a prompt of up to ${lim.prompt} characters, and yours has ${edited.length}: shorten it, or go back to the compiled one`;
+  if (seedance && b?.webm) blocker ??= `${model.name} takes MP4 or MOV blockouts, and this one is WebM: render it in Chrome or Edge, export an MP4 from your 3D app, or film it on your GPU`;
+  // A later shot carries the last frame of the one before as one more still.
+  const keep = many ? lim.refs - 1 : lim.refs;
+  const used = refs.slice(0, keep);
+  if (refs.length > used.length) notes.push(`${model.name} takes ${keep} reference still${keep === 1 ? "" : "s"}${many ? " beside the hand-over frame" : ""}: the first ${keep} go`);
+  notes.push(
+    seedance
+      ? `${model.name} follows the blockout as its reference video (@Video1)${used.length ? ` with your still${used.length > 1 ? `s as @Image1–@Image${used.length}` : " as @Image1"}` : ""}${sound ? ", sound on" : ""}`
+      : `${model.name} renders the blockout from your stills; camera, blocking and timing come from the video. It makes no sound: add it afterwards with Sound for video`,
+  );
+  if (seedance) notes.push(`${model.name} bills the blockout's seconds with the film's, at 0.6 times its rate: the price counts both`);
+  else {
+    const gen = model.pricing?.generatedRefs;
+    if (gen && !used.length) notes.push(`With no stills, ${model.name} draws up to ${gen.count} references of its own ($${gen.usd.toFixed(2)} each, in the price)${many ? " for the first shot" : ""}`);
+    notes.push(`${model.name} bills each shot at least ${model.pricing?.minSeconds ?? lim.min} s, and counts every camera cut inside an uploaded render as a shot: a render with cuts costs more than shown`);
+  }
+  if (many) {
+    notes.push(
+      `The blockout is ${secs1(seconds)} s, longer than ${model.name}'s ${lim.max} s, so it is filmed as ${shots.length} shots cut at your markers (${shots.map((s) => `${secs1(s.start)}–${secs1(s.end)} s`).join(", ")}); each starts from the last frame of the one before, then they're joined`,
+    );
+    if (input.prompt.trim()) notes.push("Your edited prompt is for a one-shot film: each shot gets its own beats, timed from its start");
+  }
+  shots.forEach((shot, k) => {
+    const part = many ? ` ${k + 1}/${shots.length}` : "";
+    const len = shot.end - shot.start;
+    const duration = seedance ? Math.max(lim.min, Math.min(lim.max, Math.ceil(len - 1e-6))) : Math.round(len * 100) / 100;
+    if (seedance && duration - len > 0.6) notes.push(`${model.name} makes at least ${lim.min} s, so shot${part || " 1"} runs ${secs1(duration - len)} s past the blockout`);
+    const prev = k > 0 ? used.length + 1 : undefined;
+    const compiled = compileBlockoutPrompt({ beats: beatsIn(beats, shot.start, shot.end), refs: used, target: lim.tag, previousFrame: prev, sound, ...words });
+    const prompt = !many && edited ? edited : compiled;
+    const after: string[] = [];
+    const chain: GenerationRequest["chain"] = [];
+    let inputs: GenerationRequest["inputs"] = used.length ? { images: used.map((r) => r.url) } : undefined;
+    if (many) {
+      steps.push({ key: `cut${k}`, request: { feature, modelId: t.cut, engine: "cloud", op: "trim", inputs: { video }, params: { startTime: shot.start, endTime: shot.end } } });
+      labels[`cut${k}`] = `Blockout${part}`;
+      after.push(`cut${k}`);
+      chain.push({ slot: seedance ? "videos" : "video", position: "first" });
+      if (k > 0) {
+        after.push(`last${k - 1}`);
+        chain.push({ slot: "images", position: "last" });
+      }
+    } else inputs = { ...inputs, ...(seedance ? { videos: [video] } : { video }) };
+    const params: GenParams = {
+      numOutputs: 1,
+      duration,
+      ...(resolution ? { resolution } : {}),
+      ...(aspectRatio ? { aspectRatio } : {}),
+      // Seedance bills the reference clip's seconds with the film's (Pricing.clipInput): the blockout, or this shot's cut.
+      ...(seedance ? { generateAudio: sound, clipSeconds: Math.round(len * 100) / 100 } : {}),
+    };
+    steps.push({
+      key: `shot${k}`,
+      ...(after.length ? { after } : {}),
+      request: { feature, modelId: model.id, engine: "cloud", op: seedance ? "ref2v" : "v2v", prompt, inputs, params, ...(chain.length ? { chain } : {}) },
+    });
+    labels[`shot${k}`] = many ? `Shot${part}` : "Film";
+    if (many && k < shots.length - 1) {
+      steps.push({ key: `last${k}`, after: [`shot${k}`], request: { feature, modelId: t.frame, engine: "cloud", op: "frame", chain: [{ slot: "video" }] } });
+      labels[`last${k}`] = `Hand-over frame${part}`;
+    }
+  });
+  if (many) {
+    steps.push({ key: "join", after: shots.map((_, k) => `shot${k}`), request: { feature, modelId: t.join, engine: "cloud", op: "concat", prompt: "Blockout film", chain: shots.map(() => ({ slot: "videos" as const })) } });
+    labels.join = "Blockout film";
+  }
+  if (!shots.length) blocker ??= `A blockout needs at least ${BLOCKOUT.minSeconds} s`;
+  // Priced before it can run (with a stand-in for the blockout while there is none), so the button shows the cost early.
+  return { ...finish(model, label(steps, labels), notes, undefined, many ? "join" : "shot0"), ...(blocker ? { blocker } : {}) };
+}
+
+/** The prompt a blockout's one-shot cloud film starts from (the composer shows it, editable), or the open engine's first window's. */
+export function blockoutPrompt(input: Pick<CinemaGenerateInput, "engine" | "modelId" | "audio" | "blockout">): string {
+  const b = input.blockout;
+  if (!b) return "";
+  const seconds = Math.max(0, Math.min(BLOCKOUT.maxSeconds, b.seconds));
+  const beats = normalizeBeats(b.beats, seconds);
+  const words = { style: b.style, constraints: b.constraints, audio: b.sounds, avoid: b.avoid };
+  if (input.engine === "open") return compileBlockoutPrompt({ beats: beatsIn(beats, 0, depthWindows(seconds)[0]?.end ?? seconds), refs: b.refs, target: "open", ...words });
+  const lim = BLOCKOUT_SHOTS[input.modelId ?? ""] ?? BLOCKOUT_SHOTS[BLOCKOUT_MODELS.cloud[0]];
+  const refs = b.refs.slice(0, lim.refs);
+  return compileBlockoutPrompt({ beats, refs, target: lim.tag, sound: lim.tag === "seedance" && input.audio !== false, ...words });
+}
+
+/** What a filmed blockout's take remembers. */
+export function blockoutTake(input: Pick<CinemaGenerateInput, "blockout">, plan: CinemaPlan): CinemaTakeInfo["blockout"] {
+  const b = input.blockout;
+  if (!b) return undefined;
+  const parts = plan.steps.filter((s) => /^(shot|win)\d+$/.test(s.key)).length;
+  return { seconds: Math.round(b.seconds * 100) / 100, parts, beats: normalizeBeats(b.beats, b.seconds).map((x) => x.label).slice(0, BLOCKOUT.maxMarkers) };
+}
+
 /** Everything a Generate press would run, priced, without running it (the browser shows it live). */
 export function planCinema(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
   const i = { ...input, settings: input.settings ?? {}, prompt: input.prompt ?? "" };
@@ -2129,6 +2400,8 @@ export function planCinema(input: CinemaGenerateInput, ctx: CinemaContext): Cine
       return planPath(i);
     case "turnaround":
       return planTurnaroundTake(i, ctx);
+    case "blockout":
+      return planBlockout(i, ctx);
     default:
       return i.mode === "image" ? planStill(i) : planVideo(i, ctx);
   }

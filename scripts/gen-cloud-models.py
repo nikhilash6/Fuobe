@@ -431,7 +431,15 @@ model("seedance-2-5", "Seedance 2.5", "ByteDance", "seedance", "video",
        ("ref2v", "bytedance/seedance-2.5/reference-to-video"),
        ("extend", "bytedance/seedance-2.5/reference-to-video", "fal", {"fixed": {"task": "extension"}, "videoArray": True}),
        ("finalize", "bytedance/seedance-2.5/draft/complete")],
-      badges=["top", "audio", "new"], pricing=("second", 0.473, "720p"), defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"},
+      # fal bills tokens: height × width × (seconds of input video + seconds out) × 24 / 1024, at $0.0214 per 1K tokens
+      # (480p, 720p) or $0.0234 (1080p), times 0.6 when reference clips go in (fal's reference-to-video page, re-read
+      # 2026-11-01; its sidebar's $0.473/s divides by 1000 where the formula says 1024). Per second of 16:9: 480p
+      # 864×496, 720p 1280×720, 1080p 1920×1080; with clips, on the seconds in plus out (Pricing.clipInput, no floor).
+      badges=["top", "audio", "new"],
+      pricing=("second", 0.46224, "720p; 480p $0.21494, 1080p $1.13724. Reference clips bill their own seconds with the output, at 0.6 times the rate",
+               {"byResolution": {"480p": 0.21494, "720p": 0.46224, "1080p": 1.13724},
+                "clipInput": {"usd": 0.27734, "byResolution": {"480p": 0.12897, "720p": 0.27734, "1080p": 0.68234}, "plain": True}}),
+      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"},
       # fal's schema gives no count for 2.5's reference clips; Replicate's 2.5 schema says up to 10 (30 s in all), as the research found.
       options={"multiShot": {"mode": "prompt", "maxShots": 6}, "maxVideos": 10, "maxAudios": 10})
 # Kling 4.0 (research part 4, re-read 2026-11-01 when fal opened its API; build package nm10-kling-4): 3-30 s at 720p or
@@ -577,6 +585,16 @@ model("minimax-h3-max-camera", "MiniMax H3 Max camera controls", "MiniMax", "hai
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16 — launch price $0.052 (480P $0.0325, 1080P $0.104) until 2026-10-31",
                {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16},
                 "promo": {"until": "2026-10-31", "usd": 0.052, "byResolution": {"480P": 0.0325, "768P": 0.052, "1080P": 0.104}}}))
+# Blockout to film (package blockout-film; new-models-10.md §5): H3 Max renders a grey-box / previs animation (≤ 15 s,
+# ≤ 32 shots) with up to 8 reference stills; camera, blocking and timing come from the video. A hidden helper Cinema's
+# Blockout offers under its own name beside Seedance 2.5. Billed per second by resolution, at least 5 s a shot, plus a
+# $0.50 processing fee a request (fal's page, read 2026-11-01). No sound. Without reference stills it draws up to 2 of its
+# own (max_generated_reference_images, default 2), billed $0.10 each (generatedRefs).
+model("minimax-h3-max-3d", "MiniMax H3 Max 3D to video", "MiniMax", "hailuo", "video",
+      "A grey-box blockout from Blender or the browser, rendered as a finished shot from your reference stills",
+      [("v2v", "minimax/h3-max/3d-to-video")], hidden=True, defaults={"resolution": "768P"},
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request; + $0.10 for each reference it draws when given none (up to 2)",
+               {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16}, "minSeconds": 5, "perRequest": 0.5, "generatedRefs": {"usd": 0.1, "count": 2}}))
 model("hailuo-2-3", "MiniMax Hailuo 2.3", "MiniMax", "hailuo", "video", "Expressive characters and dynamic action",
       [("t2v", "fal-ai/minimax/hailuo-2.3/pro/text-to-video"), ("i2v", "fal-ai/minimax/hailuo-2.3/pro/image-to-video")],
       pricing=("video", 0.49), defaults={"duration": 6}, fixed={"prompt_optimizer": True})

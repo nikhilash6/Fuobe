@@ -374,6 +374,10 @@ describe("studio tools", () => {
     create_ads: [{ brief: "oat milk for runners" }, { brief: "oat milk", product_image: image, count: 2, aspect_ratios: ["1:1", "9:16"] }],
     add_captions: [{ video }, { video, translate_to: "Spanish" }],
     restore_video: [{ video }, { video, prompt: "a harbour in the 1930s, natural colour", reference: image }],
+    blockout_film: [
+      { video, seconds: 8, beats: [{ start: 0, label: "Arrival", words: "She walks in." }] },
+      { video, seconds: 40, beats: [{ start: 0, label: "Arrival" }, { start: 20, label: "Lights out" }], references: [{ url: image, role: "character", name: "Mara" }], model: "minimax-h3-max-3d", sounds: ["Footsteps"] },
+    ],
   };
 
   it("every studio tool plans without errors on both engines in demo mode", () => {
