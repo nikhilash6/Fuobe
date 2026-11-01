@@ -68,6 +68,7 @@ import { RESTORE_EXTRA_KEYS, restoreGraph, restoreJob, type RestoreJob } from "@
 import { getMaker, makerPrompt, OPEN_TARGET_PROBLEM, ORIGINALS, swapTarget } from "@/lib/catalog/genjutsu";
 import { CLICK_OPEN_PROBLEM, HAND_OFF, REMOVE_SCENE, REVIEW_EXTRA, reuseOf, reviewOfRun, targetPhrase, type RemovalReview } from "@/lib/catalog/remove-object";
 import { H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
+import { RECOLOR_TAP_FIRST, recolorCoords, tapFrame } from "@/lib/catalog/recolor";
 import type { GenInput, MediaKind, ModelRoute, Operation } from "@/lib/catalog/types";
 import { imageSize } from "@/lib/image-size";
 import { probeMedia, type MediaInfo } from "@/lib/media-probe";
@@ -1596,6 +1597,16 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     Object.assign(values, restore.values, { video2: restore.prefix ? prefixVideo : undefined, image: restore.reference ? images[0] : undefined });
     if (!restore.prefix) studioLeft.push("video2");
     if (!restore.reference) studioLeft.push("image");
+  }
+  // Tap to Recolor: the taps (params.points, in the pixels of the picture they were placed on, params.extra.frameWidth /
+  // frameHeight) become SAM 3.1's point lists in the photo's own pixels. Only the taps say what changes.
+  if (manifest.capability === "recolor") {
+    const photo = ctx.media?.(String(values.image ?? ""));
+    const [pos, neg] = recolorCoords(input.points, photo?.width && photo.height ? { width: photo.width, height: photo.height } : undefined, tapFrame(extra));
+    if (!pos) throw new ProviderError(RECOLOR_TAP_FIRST);
+    values.positiveCoords = pos;
+    values.negativeCoords = neg;
+    for (const k of ["frameWidth", "frameHeight", "positiveCoords", "negativeCoords"]) delete extra[k];
   }
   // Genjutsu's Object swap: SAM 3.1 follows what goes (params.extra.maskPrompt, or the "replace … with" part of the prompt,
   // as Genjutsu sends it), the reference comes in, the prompt describes the result. Insert: the painted spot and the

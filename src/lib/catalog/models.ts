@@ -8,6 +8,7 @@ import { H3_DECODER, H3_FAST_DECODE_OFFERED, H3_GPU_TIER } from "@/lib/gpu/h3-ti
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, ANY_ANGLE_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { ANY_ANGLE } from "./any-angle";
+import { RECOLOR_TAP_FIRST } from "./recolor";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
 import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_OFFERED, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
@@ -198,6 +199,19 @@ const open: ModelDef[] = [
     tagline: "Live edits as you type with the 2-step DMD2 LoRA · 20 GB GPU",
     routes: [{ ...comfy("edit", "qwen-image-21-live-edit", "2 steps, live"), unsized: true }],
     options: { maxImages: 4, seed: true },
+    hidden: true,
+  }),
+  // Tap to Recolor's model (the app's own page runs it): SAM 3.1 makes the mask from the taps (params.points), and
+  // Qwen-Image 2.1 repaints only that piece in the new colour. Listed for its licence and switch, never in a picker.
+  o({
+    id: "oss-recolor",
+    name: "Tap to Recolor",
+    vendor: "Alibaba Qwen + Meta SAM 3.1",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Only the tapped piece takes the new colour; its fabric, folds and shine stay · 20 GB GPU · non-commercial weights",
+    routes: [{ ...comfy("edit", "qwen-image-21-recolor", "SAM 3.1 mask from the taps, 25 steps, pasted back"), unsized: true, maxImages: 1 }],
+    options: { maxImages: 1, seed: true, requires: { images: 1, points: true, msg: RECOLOR_TAP_FIRST } },
     hidden: true,
   }),
 

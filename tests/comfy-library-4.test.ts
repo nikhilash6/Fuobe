@@ -120,6 +120,7 @@ describe("round-4 ComfyUI workflows", () => {
       "relight-scene-read",
       "qwen-image-21-live-edit",
       "qwen-image-21-inpaint",
+      "qwen-image-21-recolor",
       "qwen-image-21-outpaint",
       // Qwen-Image 2.1's speeds, its next scene and its 16 GB route: unvalidated like their base graphs until
       // they run on a GPU (tests/qwen21-fast.test.ts).

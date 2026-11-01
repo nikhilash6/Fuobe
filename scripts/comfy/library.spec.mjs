@@ -3144,6 +3144,28 @@ export const SPEC = [
       'Prompt: say what goes in the painted area like asking a person ("Replace the cup with a glass of orange juice").' + QWEN21_CLEAN_NOTE,
   },
   {
+    id: 'qwen-image-21-recolor',
+    title: 'Qwen-Image 2.1 Recolor (SAM 3.1 tap mask, crop, repaint, paste back)',
+    capability: 'recolor',
+    handBuilt: 'hand-built/qwen-image-21-recolor.json',
+    bindings: {
+      image: [b('10', 'image')], positiveCoords: [b('12', 'value')], negativeCoords: [b('13', 'value')], maskGrow: [b('15', 'expand')],
+      prompt: [b('22', 'values.a')], seed: [b('27', 'seed')], steps: [b('27', 'steps')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Meta SAM License (SAM 3.1); AusBoss nodes MIT',
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    notes:
+      'Tap to Recolor: qwen-image-21-inpaint with the mask made in the graph from the taps (the AusBoss example\'s Mask by Touch, on core SAM 3.1). ' +
+      'positiveCoords / negativeCoords = JSON point lists [{"x":int,"y":int}] in the photo\'s pixels (PrimitiveStringMultiline -> SAM3_Detect point path, threshold 0.5, refine 2, one merged mask; ' +
+      'negativeCoords may be empty) -> GrowMask maskGrow (4) so the anti-aliased edge changes too -> Crop For Inpaint (context 1.4, blend 8 px, multiple 32, 1.5 MP, bicubic) -> ' +
+      'GrowMask 8 on the crop\'s mask -> StringFormat "{a} Keep everything else in the picture exactly the same." -> TextEncodeQwenImage21 with the crop as image 1 (resolution 0) -> ' +
+      'VAEEncode + SetLatentNoiseMask -> QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> SplitImageWithAlpha -> Stitch Inpaint (classic, colour match 0: a tone match ' +
+      'would pull the new colour back). Only the tapped piece is sampled and pasted, so the rest of the photo stays as it was; a tap that finds nothing gives the photo back unchanged. ' +
+      'Prompt: "Change the colour of <the piece> to <colour words (#hex)>. Keep its fabric, weave, folds, seams, stitching, sheen, print and shadows exactly as they are, so only the colour is new."',
+  },
+  {
     id: 'qwen-image-21-outpaint',
     title: 'Qwen-Image 2.1 Expand (outpaint-v2 LoRA, Qwen3-VL scene description)',
     capability: 'outpaint',

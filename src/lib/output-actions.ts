@@ -24,6 +24,7 @@ export type OutputActionId =
   | "edit"
   | "live-edit"
   | "relight"
+  | "recolor"
   | "upscale"
   | "reference"
   | "grade"
@@ -137,6 +138,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("edit", "Edit", `/edit?image=${q(o.url)}`);
       link("relight", "Relight", `/apps/app-relight?image=${q(o.url)}&gen=${q(g.id)}`);
       link("live-edit", "Change it as you type", `/live-edit?image=${q(o.url)}&gen=${q(g.id)}&from=library`);
+      link("recolor", "Recolor", `/apps/app-tap-to-recolor?image=${q(o.url)}`);
       link("upscale", "Upscale", `/upscale?image=${q(o.url)}`);
       // Any Angle: the same photo from another camera (its 3D view is built once per photo).
       link("new-angle", "New angle", anyAngleHref(o.url));

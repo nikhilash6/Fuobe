@@ -1530,8 +1530,8 @@ export interface Preset {
   grade?: string;
   /** Fuobe DoP's relight effects: a step that makes the start frame first, on each engine (src/lib/catalog/dop.ts). */
   prestep?: PresetPrestep;
-  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice, Relight, Any Angle). */
-  tool?: "clean-voice" | "relight" | "any-angle";
+  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice, Relight, Any Angle, Tap to Recolor). */
+  tool?: "clean-voice" | "relight" | "any-angle" | "recolor";
   /** The recipe its preview was made with (src/lib/catalog/preset-recipe-book.json): the route it opens on follows it. */
   recipe?: PresetRecipeBook;
 }

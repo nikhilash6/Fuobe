@@ -72,6 +72,7 @@ describe("outputActions", () => {
       "menu:edit",
       "menu:relight",
       "menu:live-edit",
+      "menu:recolor",
       "menu:upscale",
       "menu:new-angle",
       "menu:reference",

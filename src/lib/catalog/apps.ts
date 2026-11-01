@@ -1,5 +1,6 @@
 import { QMA_MODEL } from "@/lib/qma";
 import { ANGLES_2511_LORA } from "./open-tools";
+import { CUSTOM_COLOUR, ITEMS, RECOLOR, RECOLOR_TEMPLATE, SWATCHES } from "./recolor";
 import { CAST_LOOK } from "./soul-cards";
 import type { InputSlot, Preset, PresetOption, PresetRoute } from "./types";
 
@@ -1049,6 +1050,31 @@ export const APPS: Preset[] = [
     prompt:
       "Create a professional fashion campaign photo of a stylish model wearing all the clothing items from the images together as one outfit, reproducing each item's exact color, fabric, print and logo. {prompt}. Full-body editorial pose, natural light, high-end lookbook photography.",
     parity: "Makes the photoshoot as a still. Animate it with Bring to Life.",
+  }),
+  // Tap to Recolor: an app that is a tool of its own (src/components/recolor/recolor-tool.tsx): the taps (params.points)
+  // pick the piece, the swatch or a custom colour (the prompt) names its new colour; only that piece is repainted.
+  app({
+    id: RECOLOR.appId,
+    name: "Tap to Recolor",
+    category: "Fashion",
+    description: "Tap a piece, pick a colour; the fabric stays",
+    icon: "Palette",
+    hue: 330,
+    badges: ["new"],
+    tool: "recolor",
+    options: [
+      { key: "item", label: "What is it?", choices: ITEMS.map((i) => ({ value: i.value, label: i.label, prompt: i.words })) },
+      {
+        key: "colour",
+        label: "Colour",
+        choices: [...SWATCHES.map((s) => ({ value: s.value, label: s.label, prompt: `${s.words} (${s.hex})` })), { value: CUSTOM_COLOUR, label: "Custom", prompt: "" }],
+      },
+    ],
+    userPrompt: "optional",
+    prompt: RECOLOR_TEMPLATE,
+    cloud: null,
+    open: { modelId: RECOLOR.modelId, op: "edit" },
+    parity: "Runs on your own GPU. Only the piece you tap changes.",
   }),
   // ---------------- Style & art
   app({
