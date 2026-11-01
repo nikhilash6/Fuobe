@@ -10461,6 +10461,120 @@
       "notes": "The Qwen-Image 2.1 turbo image-edit workflow, as the site's fast preview edits run it: turbo int8 model, the fixed 8-step ManualSigmas schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder's latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there)."
     },
     {
+      "id": "qwen-image-21-live-edit",
+      "title": "Qwen-Image 2.1 Live Edit (2-step DMD2 LoRA, as you type)",
+      "capability": "edit",
+      "file": "qwen-image-21-live-edit.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-live-edit.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "image3": [
+          {
+            "node": "12",
+            "input": "image"
+          }
+        ],
+        "image4": [
+          {
+            "node": "13",
+            "input": "image"
+          }
+        ],
+        "mask": [
+          {
+            "node": "14",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "width": [
+          {
+            "node": "30",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "30",
+            "input": "height"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "width": 512,
+        "height": 512
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-DMD2-2steps.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights.safetensors",
+          "sizeGb": 0.07
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "fuobe-live",
+          "repo": "https://github.com/workingprototype/Fuobe"
+        }
+      ],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1 and the DMD2 2-step LoRA by linoyts, a derivative): NON-COMMERCIAL, research and evaluation only; Fuobe live nodes MIT",
+      "validated": false,
+      "notes": "Live editing as you type (Fuobe builds this graph in code; this file is its canonical form): the int8 Qwen-Image 2.1 model with the DMD2 2-step LoRA at 1, BasicGuider (CFG 1, positive only), euler, ManualSigmas \"1.0, 0.5, 0.0\" (the LoRA card's schedule, no shift), on Fuobe's live nodes (fuobe_live.py): a loader that skips the input-folder listing, the references resized and VAE-encoded in their own node (cached while only the text changes), a positive-only encode, a crop around a painted region, a paste-back of unchanged pixels with colour matching, and a save node that sends the picture over the socket. Live frames at 384-768, kept steps at 1024-2048 composited onto a full-size lossless master. References 2-4 and the mask are optional."
+    },
+    {
       "id": "qwen-image-21-inpaint",
       "title": "Qwen-Image 2.1 Inpaint (crop around the mask, paste back)",
       "capability": "inpaint",

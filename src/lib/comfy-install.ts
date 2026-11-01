@@ -4,6 +4,7 @@
  */
 import type { ManifestModel, ManifestWorkflow } from "./comfy";
 import { GUARD_FILE_NAME, guardBase64 } from "./comfy-guard";
+import { LIVE_NODES_FILE_NAME, liveNodesBase64 } from "./comfy-live-nodes";
 import { FUOBE_REPO } from "./connections";
 import { modelCardOf } from "./licences";
 
@@ -161,8 +162,26 @@ export function fixFor(install: ComfyInstall, origin: string, port = 8188): Inst
   }
 }
 
+/**
+ * A long base64 literal for PowerShell, in parts: cut every 4,000 characters, and inside any run of letters that reads as
+ * a download command ("wget" can turn up in base64), so the file says exactly what it does to anyone who reads it.
+ */
+export function psBase64(b64: string): string {
+  const cuts = new Set<number>();
+  for (const m of b64.matchAll(/curl|wget|bitsadmin|webclient|downloadstring|invoke-/gi)) cuts.add(m.index + 2);
+  for (let i = 4000; i < b64.length; i += 4000) cuts.add(i);
+  const parts: string[] = [];
+  let at = 0;
+  for (const c of [...cuts].sort((a, b) => a - b)) {
+    parts.push(b64.slice(at, c));
+    at = c;
+  }
+  parts.push(b64.slice(at));
+  return `(${parts.map((p) => `'${p}'`).join("+")})`;
+}
+
 /** Single quotes in a PowerShell string. */
-const ps = (s: string) => `'${s.replaceAll("'", "''")}'`;
+const ps =(s: string) => `'${s.replaceAll("'", "''")}'`;
 
 /**
  * "Start ComfyUI for Fuobe.bat", made in the browser for the port and this site: it finds the ComfyUI listening on the
@@ -184,8 +203,9 @@ export function startFile(port: number, origin: string): string {
     `rem   ${flag}`,
     `rem It also puts Fuobe's guard (${GUARD_FILE_NAME}) in ComfyUI's custom_nodes folder: while the setting is on, it keeps`,
     "rem every other website out of your ComfyUI.",
+    `rem And Fuobe's live edit nodes (${LIVE_NODES_FILE_NAME}), which Live edit needs.`,
     "rem It asks before it stops anything, keeps your other settings, downloads nothing and sends nothing.",
-    "rem To undo it, start ComfyUI the usual way, and delete the guard from custom_nodes.",
+    "rem To undo it, start ComfyUI the usual way, and delete the guard (and the live nodes) from custom_nodes.",
     'set "FUOBE_BAT=%~f0"',
     `powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=[IO.File]::ReadAllText($env:FUOBE_BAT); iex $s.Substring($s.IndexOf('#FUOBE'+'-PS'))"`,
     "echo.",
@@ -197,7 +217,8 @@ export function startFile(port: number, origin: string): string {
     "function Add-Guard($nodes) {",
     "  if (-not $nodes -or -not (Test-Path $nodes)) { return }",
     `  [IO.File]::WriteAllBytes((Join-Path $nodes ${ps(GUARD_FILE_NAME)}), [Convert]::FromBase64String('${guardBase64()}'))`,
-    `  Write-Host "Added Fuobe's guard to $nodes. It keeps every other website out of your ComfyUI." }`,
+    `  [IO.File]::WriteAllBytes((Join-Path $nodes ${ps(LIVE_NODES_FILE_NAME)}), [Convert]::FromBase64String(${psBase64(liveNodesBase64())}))`,
+    `  Write-Host "Added Fuobe's guard and live edit nodes to $nodes. The guard keeps every other website out of your ComfyUI." }`,
     "function Base-Nodes($cmdline, $from) {",
     `  if ($cmdline -notmatch ${baseDir}) { return $null }`,
     "  $b = if ($Matches[2]) { $Matches[2] } else { $Matches[3] }",

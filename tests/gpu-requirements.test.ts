@@ -109,8 +109,9 @@ describe("requirements.json", () => {
   });
 
   // 26 KB gzipped since Clean up voice (its pack, two weight files and two graphs: about 0.5 KB).
-  it("stays within its size budget (200 KB, 26 KB gzipped)", () => {
-    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(200 * 1024);
+  // 210 KB since Live edit (its node file, LoRA and graph: about 1.6 KB).
+  it("stays within its size budget (210 KB, 26 KB gzipped)", () => {
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(210 * 1024);
     expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(26 * 1024);
   });
 });

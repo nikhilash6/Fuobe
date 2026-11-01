@@ -102,6 +102,7 @@ describe("round-4 ComfyUI workflows", () => {
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",
+      "qwen-image-21-live-edit",
       "qwen-image-21-inpaint",
       "qwen-image-21-outpaint",
       "ideogram4-t2i",

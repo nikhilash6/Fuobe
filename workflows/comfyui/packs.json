@@ -232,5 +232,15 @@
     "isolated": false,
     "subdir": null,
     "folders": []
+  },
+  "fuobe-live": {
+    "bundled": "fuobe_live.py",
+    "repo": "https://github.com/workingprototype/Fuobe",
+    "commit": "",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
   }
 }

@@ -137,6 +137,19 @@ const open: ModelDef[] = [
     routes: [comfy("edit", "qwen-image-21-turbo-edit", "8 steps, up to 4 references")],
     options: { maxImages: 4, seed: true },
   }),
+  // Live edit's model (the Live edit page runs it, as you type): listed for its licence, its model page and its switch in
+  // Models & licences, never in a picker.
+  o({
+    id: "oss-qwen-image-21-live",
+    name: "Qwen-Image 2.1 Live",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Live edits as you type with the 2-step DMD2 LoRA · 20 GB GPU · non-commercial weights",
+    routes: [{ ...comfy("edit", "qwen-image-21-live-edit", "2 steps, live"), unsized: true }],
+    options: { maxImages: 4, seed: true },
+    hidden: true,
+  }),
 
   // Krea 2 text to image (its edit models come after FIBO 2's, as the owner ranks them).
   o({

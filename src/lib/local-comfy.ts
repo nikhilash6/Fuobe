@@ -50,7 +50,7 @@ export function readPath(path: string): string {
     if (query) throw new LocalComfyError(`No query on ${p}`);
     return path;
   };
-  if (["/system_stats", "/api/system_stats", "/object_info", "/models", "/embeddings", "/queue", "/api/jobs", "/fuobe/guard"].includes(p)) return noQuery();
+  if (["/system_stats", "/api/system_stats", "/object_info", "/models", "/embeddings", "/queue", "/api/jobs", "/fuobe/guard", "/fuobe/live"].includes(p)) return noQuery();
   if (p.startsWith("/object_info/") && NODE_CLASS.test(decodeURIComponent(p.slice(13)))) return noQuery();
   if (p.startsWith("/models/") && MODEL_FOLDER.test(p.slice(8))) return noQuery();
   if (p.startsWith("/history/") && UUID.test(p.slice(9))) return noQuery();
@@ -72,7 +72,10 @@ export function readPath(path: string): string {
 /** The /view path of a wanted file. */
 export const viewPath = (f: Pick<WantedFile, "filename" | "subfolder" | "type">) => `/view?${new URLSearchParams({ filename: f.filename, subfolder: f.subfolder, type: f.type })}`;
 
-/** A POST the tab may send: an input under a name the server chose, the prompt, and taking its own prompts off. */
+/**
+ * A POST the tab may send: an input under a name the server chose (or, for live edit, the tab named by its content),
+ * the prompt, taking its own prompts off, and taking its own finished prompts out of the history.
+ */
 export function writePath(path: string, body: unknown, own: { promptIds: string[]; names?: string[] }): string {
   const ownId = (id: unknown) => typeof id === "string" && UUID.test(id) && own.promptIds.includes(id);
   if (path === "/upload/image") {
@@ -92,6 +95,12 @@ export function writePath(path: string, body: unknown, own: { promptIds: string[
     if (!Array.isArray(del) || !del.length || !del.every(ownId) || Object.keys(body as object).length !== 1) throw new LocalComfyError("Only the run's own prompts");
     return path;
   }
+  // Live edit takes its own finished prompts out of the history (hundreds of live renders would pile up there).
+  if (path === "/history") {
+    const del = (body as { delete?: unknown })?.delete;
+    if (!Array.isArray(del) || !del.length || !del.every(ownId) || Object.keys(body as object).length !== 1) throw new LocalComfyError("Only the run's own prompts");
+    return path;
+  }
   if (path === "/interrupt") {
     if (!ownId((body as { prompt_id?: unknown })?.prompt_id)) throw new LocalComfyError("Only the run's own prompt");
     return path;
@@ -106,6 +115,8 @@ const FILE_LOADERS: Record<string, string[]> = {
   LoadImage: ["image"],
   LoadImageMask: ["image"],
   LoadImageOutput: ["image"],
+  // Live edit's loader (fuobe_live.py): one Fuobe-named picture in the input folder.
+  LoadImageFuobeLive: ["image"],
   LoadVideo: ["file"],
   LoadAudio: ["audio"],
   VHS_LoadVideo: ["video"],

@@ -103,6 +103,14 @@ if [ "${H3_RELAY:-0}" = "1" ]; then
   fi
 fi
 
+# Fuobe's live edit nodes (fuobe_live.py, one file Fuobe ships, MIT): Live edit's loader, cached reference encode,
+# crop, paste-back and socket save. Written from the copy in this checkout (src/lib/comfy-live-nodes.ts).
+if command -v node >/dev/null 2>&1; then
+  node "$SCRIPT_DIR/write-live-nodes.mjs" "$COMFYUI_DIR/custom_nodes" || echo "warn: could not write Fuobe's live nodes"
+else
+  echo "warn: node not found: download fuobe_live.py from Fuobe (Live edit's setup card) into $COMFYUI_DIR/custom_nodes"
+fi
+
 # Union of the packs' requirements, minus GPU-only / unbuildable extras
 # (onnxruntime-gpu, cupy, groundingdino-py). triton + decord + pycocotools are needed only so
 # ComfyUI-RMBG's SAM3 module imports (otherwise the whole RMBG pack fails to load).

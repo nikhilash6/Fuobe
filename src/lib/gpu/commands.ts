@@ -115,6 +115,12 @@ function restartLine(inv: GpuInventory | null): string {
 }
 
 function packLines(shell: Shell, l: Layout, name: string, p: IndexPack, kind: StepKind): string[] {
+  // A node file Fuobe ships itself: nothing to clone. Live edit's setup card and Settings → Your GPU download it.
+  if (p.bundled) {
+    if (!plain(p.bundled)) return [];
+    const dest = l.under(shell, "custom_nodes");
+    return [comment(shell, `Download ${p.bundled} from Fuobe (the setup card on Live edit, or Settings, Your GPU) into ${dest}, then restart ComfyUI`)];
+  }
   if (!plain(name) || !plain(p.repo) || !/^[0-9a-f]{7,40}$/.test(p.commit)) return [comment(shell, `Install ${name} by hand: ${p.repo}`)];
   const dest = l.under(shell, "custom_nodes", name);
   const py = l.python(shell);

@@ -2,7 +2,8 @@
  * ComfyUI's live socket (/ws?clientId=…), as the Fuobe tab reads it: JSON events (status, execution_start, progress,
  * executing, execution_success / error / interrupted, execution_cached) and binary preview frames. A binary frame is a
  * 4-byte big-endian event type, then: type 1, a 4-byte image type (1 JPEG, 2 PNG) and the image; type 4, a 4-byte
- * metadata length, its JSON (prompt_id, node_id, image_type) and the image. Anything else, or anything malformed, is
+ * metadata length, its JSON (prompt_id, node_id, image_type; Fuobe's live save node adds width, height and fuobe_live)
+ * and the image. Anything else, or anything malformed, is
  * ignored. Pure.
  */
 
@@ -60,11 +61,17 @@ export function parseComfyText(text: string): ComfyEvent | null {
 }
 
 export interface ComfyPreview {
-  /** image/jpeg or image/png. */
+  /** image/jpeg, image/png, or (type 4) image/webp. */
   type: string;
   data: Uint8Array;
   /** Set on type-4 frames (a newer ComfyUI): whose preview it is. */
   promptId?: string;
+  /** Type 4: the node that sent it, and the picture's size when the node says. */
+  node?: string;
+  width?: number;
+  height?: number;
+  /** Sent by Fuobe's live save node (a finished picture, not a sampling preview). */
+  live?: boolean;
 }
 
 /** The longest preview metadata read (a few hundred bytes in practice). */
@@ -84,15 +91,22 @@ export function parseComfyBinary(buf: ArrayBuffer | Uint8Array): ComfyPreview | 
   if (event === 4) {
     const len = view.getUint32(4);
     if (len > MAX_META || 8 + len >= b.length) return null;
-    let meta: { prompt_id?: unknown; image_type?: unknown };
+    let meta: { prompt_id?: unknown; image_type?: unknown; node_id?: unknown; width?: unknown; height?: unknown; fuobe_live?: unknown };
     try {
       meta = JSON.parse(new TextDecoder().decode(b.subarray(8, 8 + len))) as typeof meta;
     } catch {
       return null;
     }
-    const type = meta.image_type === "image/png" ? "image/png" : meta.image_type === "image/jpeg" ? "image/jpeg" : null;
+    const type = meta.image_type === "image/png" || meta.image_type === "image/jpeg" || meta.image_type === "image/webp" ? meta.image_type : null;
     if (!type) return null;
-    return { type, data: b.subarray(8 + len), ...(typeof meta.prompt_id === "string" && { promptId: meta.prompt_id }) };
+    return {
+      type,
+      data: b.subarray(8 + len),
+      ...(typeof meta.prompt_id === "string" && { promptId: meta.prompt_id }),
+      ...(typeof meta.node_id === "string" && { node: meta.node_id }),
+      ...(typeof meta.width === "number" && typeof meta.height === "number" && { width: meta.width, height: meta.height }),
+      ...(meta.fuobe_live !== undefined && { live: true }),
+    };
   }
   return null;
 }

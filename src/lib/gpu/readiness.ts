@@ -78,7 +78,7 @@ export function fileLabel(folder: string, kind?: string): string {
 }
 
 /** "ComfyUI-KJNodes" → "KJNodes". */
-export const packLabel = (name: string) => name.replace(/^ComfyUI[-_]/i, "").replace(/[-_]/g, " ");
+export const packLabel = (name: string) => (name === "fuobe-live" ? "Fuobe live nodes" : name.replace(/^ComfyUI[-_]/i, "").replace(/[-_]/g, " "));
 
 export interface ReadinessContext {
   /** An account's own GPU (isolated workflows aren't supported there yet). */
@@ -168,6 +168,7 @@ export function workflowReadiness(id: string, inv: GpuInventory, idx: Requiremen
     if (gone.length < classes.length) need = { key: `pack:${name}`, kind: "pack-update", label: `Update add-on: ${packLabel(name)}`, detail: `${name} is an older version. Missing: ${gone.join(", ")}`, pack: name };
     else if (listed?.importError) need = { key: `pack:${name}`, kind: "pack-repair", label: `Repair add-on: ${packLabel(name)}`, detail: `${name} is installed but didn't start.`, pack: name, remote: listed.importError };
     else if (listed && listed.enabled) need = { key: `restart:${name}`, kind: "restart", label: "Restart ComfyUI", detail: `${name} was installed since ComfyUI last started.`, pack: name };
+    else if (idx.packs[name]?.bundled) need = { key: `pack:${name}`, kind: "pack-install", label, detail: `${idx.packs[name].bundled}, a file Fuobe ships: download it into ComfyUI's custom_nodes folder.`, pack: name };
     else need = { key: `pack:${name}`, kind: "pack-install", label, detail: `${name} (${idx.packs[name]?.repo ?? "custom node pack"})`, pack: name };
     out.needs.push(need);
     if (need.kind !== "restart") packNeeds.add(name);

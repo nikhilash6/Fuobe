@@ -10,6 +10,7 @@ import { useNow } from "@/components/studio/use-now";
 import type { ReadinessView } from "@/hooks/use-gpu";
 import { copyWithToast } from "@/lib/clipboard";
 import { GUARD_FILE_NAME, GUARD_SOURCE, isGuard } from "@/lib/comfy-guard";
+import { LIVE_NODES_FILE_NAME, LIVE_NODES_SOURCE } from "@/lib/comfy-live-nodes";
 import { corsFlag, fixFor, guessInstall, installFromStats, platformOf, startFile, START_FILE_NAME, type ComfyInstall } from "@/lib/comfy-install";
 import { checkThisComputer, loopbackFetch, sendCheck } from "@/lib/gpu/browser-check";
 import { deviceLabel } from "@/lib/gpu/readiness";
@@ -141,10 +142,15 @@ export function GuardFix({ port, install = installOf(port) }: { port: number; in
   }
   return (
     <div className="space-y-1.5">
-      <Button size="sm" variant="secondary" onClick={() => save(GUARD_FILE_NAME, GUARD_SOURCE)}>
-        <Download /> Download Fuobe&apos;s guard
-      </Button>
-      <p className="text-[12px] text-muted-foreground">{fix.guard} Then restart ComfyUI.</p>
+      <div className="flex flex-wrap gap-1.5">
+        <Button size="sm" variant="secondary" onClick={() => save(GUARD_FILE_NAME, GUARD_SOURCE)}>
+          <Download /> Download Fuobe&apos;s guard
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => save(LIVE_NODES_FILE_NAME, LIVE_NODES_SOURCE)} title="For Live edit: change a picture as you type">
+          <Download /> Fuobe&apos;s live nodes
+        </Button>
+      </div>
+      <p className="text-[12px] text-muted-foreground">{fix.guard} The live nodes go there too, for Live edit. Then restart ComfyUI.</p>
     </div>
   );
 }
