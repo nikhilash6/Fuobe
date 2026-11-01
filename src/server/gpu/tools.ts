@@ -1,4 +1,5 @@
 import "server-only";
+import { DUB_STEP_MODELS } from "@/lib/av/dub";
 import { SPLIT_MODEL } from "@/lib/av/split";
 import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
@@ -182,6 +183,21 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/audio/transcribe", label: "Transcribe", group: "Audio", config: S.TRANSCRIBE_STUDIO },
   // DBS soundtrack separation (D1): dialogue, music and effects.
   { href: "/audio/split", label: "Split soundtrack", group: "Audio", steps: [{ modelId: SPLIT_MODEL, op: "separate-audio" }] },
+  // Translate & dub on the open engine: the voice split with its transcript (the default split, MelBand RoFormer; DBS
+  // needs Split soundtrack's pack and weights), the cloned voice, its timeline, lip sync and the mux. The translation
+  // runs on the local text model, not a ComfyUI graph.
+  {
+    href: "/audio/translate",
+    label: "Translate & dub",
+    group: "Audio",
+    steps: [
+      { modelId: DUB_STEP_MODELS.open.stems, op: "separate-audio" },
+      { modelId: DUB_STEP_MODELS.open.speech, op: "tts" },
+      { modelId: DUB_STEP_MODELS.open.timeline, op: "timeline" },
+      { modelId: DUB_STEP_MODELS.open.lips, op: "lipsync" },
+      { modelId: DUB_STEP_MODELS.open.mux, op: "mux" },
+    ],
+  },
   { href: "/audio/sfx", label: "Sound effects", group: "Audio", config: S.SFX_STUDIO },
   { href: "/audio/music", label: "Music", group: "Audio", config: S.MUSIC_STUDIO },
   { href: "/audio/video", label: "Sound for video", group: "Audio", config: S.FOLEY_STUDIO },

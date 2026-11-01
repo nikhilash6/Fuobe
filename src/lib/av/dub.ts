@@ -17,8 +17,10 @@ import { timelineFor } from "./timeline";
  * start on a silent track exactly as long as the source (the "timeline" step), so pauses are kept, the
  * lip re-sync covers the whole clip and the dubbed video is as long as the original.
  *
- * Open engine: MelBand RoFormer splits voice and background and Qwen3-ASR 1.7B times the voice stem, in
- * one job (oss-voice-separate); the local LLM translates the cues (oss-text-llm); Chatterbox Multilingual
+ * Open engine: one job splits voice and background and Qwen3-ASR 1.7B times the voice stem: MelBand RoFormer
+ * (oss-voice-separate, the default) or DBS (oss-dbs-voice-separate: the background keeps the music, the sound effects
+ * and any singing, and the split runs on a CPU), picked by the "Voice split" setting (VOICE_SPLITS); the local LLM
+ * translates the cues (oss-text-llm); Chatterbox Multilingual
  * speaks each phrase in the cloned voice; the audio-timeline workflow lays them out; InfiniteTalk
  * re-syncs the lips and the mux mixes the voice over the background stem.
  * Cloud: ElevenLabs Voice Isolation (the clean voice to clone), Scribe v2 on it (transcript), Claude or
@@ -54,9 +56,46 @@ export const DUB_STEP_MODELS = {
     lips: "sync-lipsync-3",
     mux: "merge-audio-video",
   },
-  // The stems step also times the voice (Qwen3-ASR 1.7B + forced aligner inside the same workflow).
+  // The stems step also times the voice (Qwen3-ASR 1.7B + forced aligner inside the same workflow). Its model is the
+  // default voice split's: the "Voice split" setting picks another (VOICE_SPLITS, voiceSplitModel).
   open: { stems: "oss-voice-separate", translate: "oss-text-llm", speech: "oss-chatterbox", timeline: "oss-audio-timeline", lips: "oss-infinitetalk-v2v", mux: "oss-mux" },
 } as const;
+
+/** What a music separation model (MelBand RoFormer, Demucs) does to a film's soundtrack, said beside it. */
+export const MUSIC_MODEL_NOTE = "Music model: some sound effects may be lowered, and singing may be replaced";
+
+/** The cloud dub's line about keeping the whole soundtrack: DBS isn't hosted, so it runs on your GPU only. */
+export const DBS_OPEN_ONLY_NOTE = "Keeping the music and sound effects of the original (DBS) runs on your GPU (open source)";
+
+/**
+ * The open engine's voice split (the dub's first step), the "Voice split" setting. DBS was trained for film-style
+ * dialogue, music and effects, so the background keeps the score, the sound effects and any singing; MelBand RoFormer
+ * is a vocals model (singing goes with the voice and is replaced). MelBand stays the default until the separation
+ * evaluation (DBS D4) says otherwise. Both return the same stems and cues, so nothing after the split changes.
+ */
+export const VOICE_SPLITS = {
+  melband: { modelId: "oss-voice-separate", name: "MelBand RoFormer", note: MUSIC_MODEL_NOTE },
+  dbs: { modelId: "oss-dbs-voice-separate", name: "DBS", note: "Keeps the music and sound effects of the original" },
+} as const;
+export type VoiceSplit = keyof typeof VOICE_SPLITS;
+export const VOICE_SPLIT_IDS = Object.keys(VOICE_SPLITS) as VoiceSplit[];
+export const DEFAULT_VOICE_SPLIT: VoiceSplit = "melband";
+
+/**
+ * The voice split a dub runs: the one named, else the default when its model is offered (`on`, Settings → Models &
+ * licences), else the next split that is, else the default (its run then refuses, naming the switch). The studio's
+ * picker drops a split that is off the same way, so the server's default and the studio's agree.
+ */
+export function pickVoiceSplit(split?: string, on?: (modelId: string) => boolean): VoiceSplit {
+  if (split && split in VOICE_SPLITS) return split as VoiceSplit;
+  const order = [DEFAULT_VOICE_SPLIT, ...VOICE_SPLIT_IDS.filter((k) => k !== DEFAULT_VOICE_SPLIT)];
+  return (on && order.find((k) => on(VOICE_SPLITS[k].modelId))) || DEFAULT_VOICE_SPLIT;
+}
+
+/** The open dub's first-step model for a voice split (pickVoiceSplit's when none or an unknown one is named). */
+export function voiceSplitModel(split?: string, on?: (modelId: string) => boolean): string {
+  return VOICE_SPLITS[pickVoiceSplit(split, on)].modelId;
+}
 
 /** How far the background (music and effects) sits under its original level once the new voice is on, both engines. */
 export const BACKGROUND_DB = -3;
@@ -110,6 +149,8 @@ export interface PrepareInput {
   source?: string;
   targets: string[];
   title?: string;
+  /** Open engine: the voice split (default DEFAULT_VOICE_SPLIT). The cloud ignores it. */
+  voiceSplit?: VoiceSplit;
 }
 
 /** Step 1 (both engines): the voice to clone, the timed transcript and one translation per target language. */
@@ -137,7 +178,7 @@ export function prepareSteps(o: PrepareInput): DubStep[] {
     // One job splits the stems and times the voice stem (Qwen3-ASR 1.7B); the translations read its cues.
     const m = targets.length + 1;
     return [
-      { key: "stems", request: { ...base, modelId: DUB_STEP_MODELS.open.stems, op: "separate-audio", inputs: { video: o.video }, ...lang, step: step("Voice, background and transcript", 0, m) } },
+      { key: "stems", request: { ...base, modelId: voiceSplitModel(o.voiceSplit), op: "separate-audio", inputs: { video: o.video }, ...lang, step: step("Voice, background and transcript", 0, m) } },
       ...targets.map((l, i) => translate(l, i + 1, "stems", m)),
     ];
   }
@@ -378,6 +419,8 @@ export interface DubSession {
   model?: OneShotModel;
   /** Length of the source video (seconds), when known: the dubbed voice track is made this long. */
   duration?: number;
+  /** Open engine, step mode: the voice split its first step ran (none on dubs made before the setting: MelBand). */
+  voiceSplit?: VoiceSplit;
   batchId: string;
   /** Step mode: the prepare pipeline's generation ids by step key. */
   prepare?: Record<string, string>;

@@ -2,6 +2,7 @@ import "server-only";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { PlannedJob } from "@/lib/assist";
+import { VOICE_SPLIT_IDS, voiceSplitModel, type VoiceSplit } from "@/lib/av/dub";
 import { getModel } from "@/lib/catalog";
 import { routesFor } from "@/lib/catalog/plan";
 import { FACELESS_STYLE_IDS, STYLES } from "@/lib/catalog/faceless";
@@ -13,6 +14,7 @@ import { TOOL_MODELS } from "@/lib/layers";
 import { createPipeline, type PipelineStep } from "../chains";
 import { db } from "../db";
 import { chooseRoute, ConnectComfyError, createGenerations, outputKind, previewChained } from "../generations";
+import { isOffered } from "../model-access";
 import { engineMode } from "../settings";
 import { fileUrl, saveFile } from "../storage";
 import { defineTool, type JobPlace, type ToolContext, type ToolOutcome } from "./define";
@@ -81,6 +83,12 @@ const DubInput = z.object({
   languages: z.array(z.string()).describe("1–4 languages to dub into, e.g. ['Spanish', 'German']."),
   lipsync: z.boolean().optional().describe("Re-sync the lips to the new speech (default true)."),
   source_language: z.string().optional().describe("The language spoken in the video, if known."),
+  voice_split: z
+    .enum(VOICE_SPLIT_IDS as [VoiceSplit, ...VoiceSplit[]])
+    .optional()
+    .describe(
+      "Open source only: how the voice is split from the rest. melband (default): MelBand RoFormer, a music model (some sound effects may be lowered, and singing may be replaced). dbs: DBS keeps the music and sound effects of the original, and its split runs on a CPU. The cloud splits with ElevenLabs and Demucs either way.",
+    ),
   review: z
     .boolean()
     .optional()
@@ -248,7 +256,7 @@ function dubSteps(i: DubToolInput, ctx: ToolContext): PipelineStep[] {
     return labelled(langs.map((l, k) => ({ key: `dub${k}`, label: `Dub · ${l}`, request: req({ modelId: "heygen-translate", op: "dub", inputs: { video: i.video }, params: { targetLanguage: l, sourceLanguage: i.source_language } }) })));
   }
   const steps: (PipelineStep & { label: string })[] = [
-    { key: "stems", label: "Voice and background", request: req({ modelId: "oss-voice-separate", op: "separate-audio", inputs: { video: i.video } }) },
+    { key: "stems", label: "Voice and background", request: req({ modelId: voiceSplitModel(i.voice_split, (id) => isOffered(id, "open")), op: "separate-audio", inputs: { video: i.video } }) },
     { key: "words", label: "Transcript", request: req({ modelId: "oss-qwen3-asr", op: "transcribe", params: { sourceLanguage: i.source_language } }), after: "stems", chain: [{ slot: "audio", stem: "voice" }] },
   ];
   langs.forEach((l, k) => {

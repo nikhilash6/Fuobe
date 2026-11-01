@@ -17,7 +17,7 @@ import { clampLayers, decomposeCost, defaultLayers, TOOL_MODELS, TOOL_LABELS, ty
 import { createBatch, estimateBatch, listCreatives, type BatchInput } from "../ads";
 import { createManualBrand, createProduct, DuplicateProductError, getBrand, getProduct, heuristicManualKit, listProducts, updateProduct } from "../brand";
 import { createPipeline, providerNames, type PipelineStep } from "../chains";
-import { createDubSession, previewDub, videoLength, type CreateDubInput } from "../dub";
+import { createDubSession, dubVoiceSplit, previewDub, videoLength, type CreateDubInput } from "../dub";
 import { createChannel, createEpisode, estimateEpisode, listChannels } from "../faceless";
 import { chooseRoute } from "../generations";
 import { createProject, deleteProject, FileUrl, jobSteps, startJob } from "../layers";
@@ -250,9 +250,10 @@ const ONE_SHOT_NAMES: Record<OneShotModel, string> = { "heygen-translate": "HeyG
  * null: a step no provider can run, or a demo step among real ones, which createPipeline refuses (a
  * fal key without Claude or a local model: the translation would be a demo while the rest runs for real).
  */
-function prepareProblem(input: Pick<CreateDubInput, "engine" | "video" | "source" | "targets">): string | null {
+function prepareProblem(input: Pick<CreateDubInput, "engine" | "video" | "source" | "targets" | "voiceSplit">): string | null {
   const modes: { label: string; needs: string; demo: boolean }[] = [];
-  for (const s of prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: input.targets })) {
+  const voiceSplit = dubVoiceSplit({ engine: input.engine, mode: "steps", voiceSplit: input.voiceSplit });
+  for (const s of prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: input.targets, voiceSplit })) {
     const m = getModel(s.request.modelId);
     if (!m || !s.request.op) continue;
     const label = s.request.step?.label ?? s.key;
@@ -284,6 +285,8 @@ function dubJob(i: DubToolInput, ctx: ToolContext): Checked<{ input: CreateDubIn
     title: fileTitle(i.video),
     source: (i.source_language && dubLanguageFor(i.source_language)?.code) || "auto",
     targets: [...new Set(langs.map((l) => l.lang!.code))],
+    // The open engine's voice split (the cloud's step mode ignores it).
+    ...(engine === "open" && i.voice_split && { voiceSplit: i.voice_split }),
   };
   const steps: CreateDubInput = { ...base, mode: "steps" };
   const once: CreateDubInput = { ...base, mode: "oneshot", model: oneShot };

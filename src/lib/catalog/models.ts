@@ -1410,6 +1410,19 @@ const open: ModelDef[] = [
     routes: [comfy("separate-audio", "dub-prepare-separate-transcribe", "voice stem, background stem, timed cues, transcript")],
     options: {},
   }),
+  // DBS D3: the open dub's first step with DBS for the split (graph B, docs/research/dbs-separation-7.md §4.4): the
+  // background keeps the score, the sound effects and any singing. Translate & dub's "Voice split" picks it.
+  o({
+    id: "oss-dbs-voice-separate",
+    name: "DBS + Qwen3-ASR",
+    vendor: "Open source",
+    family: "dbs",
+    kind: "audio",
+    tagline: "Splits the dialogue from the music and effects (the split runs on a CPU) and transcribes it with timings · 8 GB GPU for the transcript · Apache-2.0",
+    badges: ["new"],
+    routes: [comfy("separate-audio", "dub-prepare-dbs-transcribe", "voice stem, background stem (FLAC), timed cues, transcript; ComfyUI-DBS + ComfyUI-QwenASR")],
+    options: {},
+  }),
   // DBS (docs/research/dbs-separation-7.md): dialogue, music and effects from any soundtrack, small enough for a CPU. The
   // provider picks the model by the host (DBS-TIGER on CUDA, DBS-BSRNN otherwise) unless one is asked for, and separates
   // a file with more than 2 channels in mono (ComfyUI saves mono or stereo only). Split soundtrack (src/lib/av/split.ts) runs on it.

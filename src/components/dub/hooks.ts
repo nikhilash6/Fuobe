@@ -3,7 +3,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useGenerationEvents } from "@/lib/api";
-import type { DubPrice, DubSessionView, OneShotModel } from "@/lib/av/dub";
+import type { DubPrice, DubSessionView, OneShotModel, VoiceSplit } from "@/lib/av/dub";
 import type { Cue } from "@/lib/cues";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { responseError } from "@/lib/refusals";
@@ -39,6 +39,8 @@ export interface NewDub {
   model?: OneShotModel;
   /** The video's length as the browser measured it (seconds). */
   duration?: number;
+  /** Open engine: the voice split (MelBand RoFormer or DBS). */
+  voiceSplit?: VoiceSplit;
 }
 
 /** A value that settles `ms` after it last changed (so prices aren't asked for on every keystroke). */

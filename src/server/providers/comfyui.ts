@@ -1439,10 +1439,11 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // A Video concatenator clip muted in the canvas (video-fit-clip): its sound becomes silence below.
   const muted = manifest.id === "video-fit-clip" && extra.mute === true;
   delete extra.mute;
-  // DBS (separate-soundtrack-dbs): the model asked for, else the host's pick (DBS-TIGER on a CUDA GPU, DBS-BSRNN on a
-  // CPU, the other one when the pick isn't on disk; a model that isn't there is refused in words); "each channel" for
-  // stereo stems. A source with more than 2 channels (the header's count, else the browser's) is split in mono with a
-  // mono Music & effects (dbsSurroundBed below): ComfyUI can't save more than 2 channels.
+  // DBS (separate-soundtrack-dbs, and the dub's dub-prepare-dbs-transcribe): the model asked for, else the host's pick
+  // (DBS-TIGER on a CUDA GPU, DBS-BSRNN on a CPU, the other one when the pick isn't on disk; a model that isn't there is
+  // refused in words); "each channel" for stereo stems. A source with more than 2 channels (the header's count, else the
+  // browser's) is split in mono with a mono Music & effects (dbsSurroundBed below): ComfyUI can't save more than 2
+  // channels. The dub's graph always splits in mono (no channels binding), so only its bed changes.
   if (b.separationModel) {
     const [device, installed] = await Promise.all([extra.separationModel ? undefined : ctx.device?.().catch(() => undefined), ctx.dbsModels?.().catch(() => undefined)]);
     try {
@@ -1451,7 +1452,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       throw new ProviderError((e as Error).message, 400);
     }
   }
-  const sourceChannels = b.channels ? (ctx.media?.(String(values.audio ?? ""))?.channels ?? (Number(extra.sourceChannels) || undefined)) : undefined;
+  const sourceChannels = b.channels || b.separationModel ? (ctx.media?.(String(values.audio ?? ""))?.channels ?? (Number(extra.sourceChannels) || undefined)) : undefined;
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
