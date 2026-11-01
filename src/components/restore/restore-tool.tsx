@@ -56,7 +56,8 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
   const [refine, setRefine] = useState(false);
   const [deinterlace, setDeinterlace] = useState(false);
   // Upscale → "Restore archive footage first" arrives with ?then=upscale: the upscale runs after, as one job.
-  const [upscale, setUpscale] = useState(false);
+  // (Read once: the switch shows only once a clip is in, after the first render, so server and browser agree.)
+  const [upscale, setUpscale] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("then") === THEN_UPSCALE);
   const [reference, setReference] = useState<SlotValue | null>(null);
   const [resolution, setResolution] = useState<string>(RESTORE.cloudResolution);
   const [run, setRun] = useState<Run | null>(null);
@@ -67,10 +68,8 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
 
   // Hand-off: /video-tools/restore?video=/api/files/… (a result, a Library clip, Upscale's link).
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
-    const video = q.get("video");
+    const video = new URLSearchParams(window.location.search).get("video");
     if (video?.startsWith("/api/files/")) source.adopt(video, video.split("/").pop());
-    if (q.get("then") === THEN_UPSCALE) setUpscale(true);
     // Once, on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
