@@ -25,11 +25,12 @@ import { ACCESS_PLACE } from "@/lib/model-access";
 import { createPipeline } from "./chains";
 import { llmText, llmTextBackend } from "./enhance";
 import { previewChained } from "./generations";
-import { gatedHint, hasHfToken } from "./loras";
+import { gatedFileReady, gatedHint } from "./loras";
 import { isOffered, offeredModel } from "./model-access";
 import { localLabel, localWhat, probeLocal } from "./llm";
 import { engineMode, getSetting } from "./settings";
 import { probeSource, ShortsError } from "./shorts";
+import { tenant } from "./tenant";
 
 /**
  * Video tools → Restore & colourise (Fuobe Restore, package archive-restore): plans, prices and starts a run
@@ -146,6 +147,15 @@ export async function writeRestorePrompt(body: z.infer<typeof PromptSchema>): Pr
 // ---------------------------------------------------------------------------
 // Plan, price, run
 
+/**
+ * Whether the gated LoRAs this run uses are within reach: a Hugging Face token, or what Fuobe already holds (a live
+ * copy on fal for the cloud; the files in ComfyUI's LoRA folder on the GPU, the Detail Refine one too for Restore to 4K).
+ */
+function gatedReady(engine: Engine, refine?: boolean): boolean {
+  if (engine === "cloud") return gatedFileReady(RESTORE.loras.restore.file, "fal");
+  return gatedFileReady(RESTORE.loras.restore.file, "comfyui") && (!refine || gatedFileReady(RESTORE.loras.refine.file, "comfyui"));
+}
+
 function planInput(body: z.infer<typeof RestoreBodySchema>, info: Awaited<ReturnType<typeof probeSource>> | Record<string, never>, prompt: string, probed: boolean): { input: RestorePlanInput; notes: string[] } {
   const engine = body.engine;
   const src = {
@@ -173,7 +183,9 @@ function planInput(body: z.infer<typeof RestoreBodySchema>, info: Awaited<Return
     if (body.upscale) notes.push(`Then upscaled with ${RESTORE_UPSCALE.cloud.label}, priced in`);
   }
   if (body.reference) notes.push(engine === "open" ? "Your reference picture goes to every window at frame_idx −1 (true colours, faces, signs)" : "In the cloud your picture is the first frame: give the clip's first frame already in colour");
-  if (!hasHfToken()) notes.push(GATED_NOTE);
+  // The token and the copies are the owner's: a visitor (priced as on its own GPU) is never told about them, and
+  // Fuobe never downloads onto a visitor's ComfyUI.
+  if (!tenant() && !gatedReady(engine, engine === "open" && body.refine)) notes.push(GATED_NOTE);
   if (src.hasAudio) notes.push("Your clip's own sound is put back on the result");
   return {
     notes,
@@ -225,8 +237,11 @@ export interface RestoreEstimate {
   dropped: number;
   steps: number;
   resolution?: string;
-  /** A Hugging Face token is set (the gated LoRA downloads with it). */
-  hfToken: boolean;
+  /**
+   * The gated Restore IC-LoRA is within reach: a Hugging Face token is set, or Fuobe already holds a copy the run can
+   * use. Left out for a visitor: the owner's token and copies are none of its business.
+   */
+  loraReady?: boolean;
   notes: string[];
 }
 
@@ -247,7 +262,7 @@ export function estimateRestore(body: z.infer<typeof RestoreEstimateSchema>): Re
     dropped: plan.dropped,
     steps: plan.steps.length,
     ...(input.resolution ? { resolution: input.resolution } : {}),
-    hfToken: hasHfToken(),
+    ...(tenant() ? {} : { loraReady: gatedReady(body.engine, body.engine === "open" && body.refine) }),
     notes,
   };
 }
@@ -270,9 +285,10 @@ export async function createRestore(body: z.infer<typeof RestoreBodySchema>): Pr
   }
   const { input } = planInput({ ...body, negative }, info, prompt, true);
   const plan = planRestore(input);
-  // The cloud carries the gated Restore IC-LoRA as Fuobe's copy, made with the Hugging Face token: without one, every piece
-  // would fail at submit, so the run is refused before anything starts (a placeholder run needs no file).
-  if (body.engine === "cloud" && !hasHfToken() && !price(plan.steps).demo) {
+  // The cloud carries the gated Restore IC-LoRA as Fuobe's copy, made with the Hugging Face token: with neither a token nor
+  // a copy to send (a live one on fal, or the file on this machine), every piece would fail at submit, so the run is
+  // refused before anything starts (a placeholder run needs no file).
+  if (body.engine === "cloud" && !gatedReady("cloud") && !price(plan.steps).demo) {
     throw new ShortsError(`${gatedHint("Lightricks' Restore IC-LoRA", RESTORE.loras.restore.page)}. A cloud run gets Fuobe's copy of the file, never your token`, 422);
   }
   let p: ReturnType<typeof createPipeline>;

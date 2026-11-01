@@ -6,6 +6,19 @@ import type { Generation } from "@/lib/catalog/types";
 
 vi.setConfig({ testTimeout: 120_000 });
 
+// A switch that stops a run at the pipeline, so a paid cloud run's guard can be passed without submitting anything.
+const pipelineStop = vi.hoisted(() => ({ on: false }));
+vi.mock("@/server/chains", async (original) => {
+  const m = await original<typeof import("@/server/chains")>();
+  return {
+    ...m,
+    createPipeline: (...a: Parameters<typeof m.createPipeline>) => {
+      if (pipelineStop.on) throw new Error("stopped before the pipeline");
+      return m.createPipeline(...a);
+    },
+  };
+});
+
 // /api/restore end to end in demo mode (no keys, no ComfyUI, no LLM): a run on either engine becomes one pipeline of
 // ordinary generations the mock provider runs through; estimates with a fal key price the real LTX-2.3 route.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-restore-"));
@@ -17,6 +30,8 @@ const { setSetting } = await import("@/server/settings");
 const gens = await import("@/server/generations");
 const { saveFile } = await import("@/server/storage");
 const { db } = await import("@/server/db");
+const { RESTORE } = await import("@/lib/catalog/restore");
+const { loraByFile } = await import("@/lib/catalog/loras");
 const createRoute = await import("@/app/api/restore/route");
 const estimateRoute = await import("@/app/api/restore/estimate/route");
 const promptRoute = await import("@/app/api/restore/prompt/route");
@@ -52,9 +67,9 @@ const src = { duration: 12, fps: 16, width: 72, height: 128, hasAudio: true };
 const body = (over: Record<string, unknown> = {}) => ({ engine: "open", source: { url: clip, name: "reel.mp4", ...src }, prompt: "a harbour in the 1930s, natural colour", ...over });
 
 describe("Restore: estimates", () => {
-  it("the GPU is free: three windows, the canvas, the tiles, the gated download said while no HF token is set", async () => {
+  it("the GPU is free: three windows, the canvas, the tiles, the gated download said while no HF token or file is there", async () => {
     const e = await (await estimateRoute.POST(json(body()))).json();
-    expect(e).toMatchObject({ engine: "open", pieces: 3, costUsd: 0, canvas: { width: 1088, height: 1920 }, hfToken: false, dropped: 7 });
+    expect(e).toMatchObject({ engine: "open", pieces: 3, costUsd: 0, canvas: { width: 1088, height: 1920 }, loraReady: false, dropped: 7 });
     expect(e.notes.join(" ")).toMatch(/LTX-2.5 22B distilled with tiled latent fusion/);
     expect(e.notes.join(" ")).toMatch(/gated on Hugging Face/);
     const four = await (await estimateRoute.POST(json(body({ refine: true })))).json();
@@ -98,6 +113,56 @@ describe("Restore: estimates", () => {
       expect(r.status).toBe(422);
       expect((await r.json()).error).toMatch(/gated Hugging Face repo: accept its licence on https:\/\/huggingface\.co\/Lightricks\/LTX-2\.5-22b-IC-LoRA-Restore .*Settings → LoRAs.*never your token/);
       expect((db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n).toBe(before);
+      expect((await (await estimateRoute.POST(json(body({ engine: "cloud" })))).json()).loraReady).toBe(false);
+    });
+
+    it("with no token, a copy Fuobe already holds is enough: a live one on fal, or the file on this machine at its pinned size", async () => {
+      setSetting("huggingfaceDownloadToken", "");
+      const file = RESTORE.loras.restore.file;
+      const count = () => (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;
+      // A live copy on fal: the run starts, and nothing asks for a token.
+      db().prepare("INSERT INTO lora_mirrors (file, target, source_url, version, hosted_url, sha256, size_bytes, licence_json, created_at) VALUES (?, 'fal', ?, NULL, ?, NULL, NULL, NULL, ?)")
+        .run(file, RESTORE.loras.restore.page, "https://v3.fal.media/files/restore.safetensors", Date.now());
+      try {
+        const e = await (await estimateRoute.POST(json(body({ engine: "cloud" })))).json();
+        expect(e.loraReady).toBe(true);
+        expect(e.notes.join(" ")).not.toMatch(/gated on Hugging Face/);
+        // The run is let through to the pipeline, which stops it here (a real submit would reach fal with the test key).
+        pipelineStop.on = true;
+        const before = count();
+        const r = await createRoute.POST(json(body({ engine: "cloud" })));
+        expect((await r.json()).error).toBe("stopped before the pipeline");
+        expect(count()).toBe(before);
+      } finally {
+        pipelineStop.on = false;
+        db().prepare("DELETE FROM lora_mirrors WHERE file = ?").run(file);
+      }
+      // An expired copy is no copy.
+      db().prepare("INSERT INTO lora_mirrors (file, target, source_url, version, hosted_url, sha256, size_bytes, licence_json, created_at) VALUES (?, 'fal', ?, NULL, ?, NULL, NULL, NULL, ?)")
+        .run(file, RESTORE.loras.restore.page, "https://v3.fal.media/files/restore.safetensors", Date.now() - 8 * 86_400_000);
+      try {
+        expect((await (await estimateRoute.POST(json(body({ engine: "cloud" })))).json()).loraReady).toBe(false);
+      } finally {
+        db().prepare("DELETE FROM lora_mirrors WHERE file = ?").run(file);
+      }
+      // The file in ComfyUI's LoRA folder at its pinned size (sparse, so nothing is written): ready on both engines;
+      // a file of another size isn't.
+      const loras = fs.mkdtempSync(path.join(dir, "loras-"));
+      setSetting("comfyLorasDir", loras);
+      try {
+        const size = loraByFile(file)!.sizeBytes!;
+        const fd = fs.openSync(path.join(loras, file), "w");
+        fs.ftruncateSync(fd, size);
+        fs.closeSync(fd);
+        expect((await (await estimateRoute.POST(json(body({ engine: "cloud" })))).json()).loraReady).toBe(true);
+        expect((await (await estimateRoute.POST(json(body()))).json()).loraReady).toBe(true);
+        // Restore to 4K needs the Detail Refine file too.
+        expect((await (await estimateRoute.POST(json(body({ refine: true })))).json()).loraReady).toBe(false);
+        fs.truncateSync(path.join(loras, file), 1024);
+        expect((await (await estimateRoute.POST(json(body()))).json()).loraReady).toBe(false);
+      } finally {
+        setSetting("comfyLorasDir", "");
+      }
     });
   });
 

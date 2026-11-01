@@ -2820,7 +2820,7 @@ export const SPEC = [
       'first window (the provider removes that branch). image = an optional reference picture at frame_idx -1 (a second IC-LoRA guide; removed without one). deinterlace keeps one field ' +
       '(fieldWidth x fieldHeight, nearest rows: no blending; ComfyUI has no fieldmatch/yadif/decimate node), removed when off. Stage 2 (Restore to 4K): the same graph on the restored clip ' +
       'with the Detail Refine IC-LoRA, a 2x canvas and 1024x576 tiles. A single generation of a whole clip past 97 frames streams: streaming on the guide and tileFrames 97 on the sampler ' +
-      '(the card\'s other long-clip path; no reference picture there). Needs the ComfyUI-LTXVideo pack. Not validated here: the pack is not installed on this server.',
+      '(the card\'s other long-clip path; no reference picture there). Needs the ComfyUI-LTXVideo pack.',
   },
 
   // ---- Shorts Studio / Mixed Media: trim, segment, restyle ------------------------

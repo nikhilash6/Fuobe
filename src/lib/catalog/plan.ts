@@ -12,7 +12,7 @@ import type {
 } from "./types";
 import { billedClipSeconds, editClipsProblem, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
-import { cloudPath, fitLoras, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
+import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { askedSize, clipWords, numFramesValue, sizeValue } from "./payload";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
@@ -942,6 +942,8 @@ export function routeLoras(route: Pick<ModelRoute, "provider" | "map" | "loraEnd
   const field = routeLoraField(route);
   const why = (l: LoraRef) => {
     if (localOnly(l)) return "it is licensed for your GPU only, and Settings → Models & licences keeps such LoRAs off the cloud";
+    // An optional gated LoRA (Relight, DoP's Slow motion); only a model's own gated adapter goes to the cloud, as Fuobe's copy.
+    if (gated(l) && !l.hostedUrl && !l.adapter) return "it is in a gated Hugging Face repo, so it runs only on your GPU";
     if (!cloudPath(l) && !needsToken(l.url) && !l.own) return "no URL to send to the LoRA endpoint";
     if (!field) return "this route takes no LoRAs";
     return field.shape === "experts" ? "this API takes one LoRA per expert" : `this API takes up to ${loraCapacity(field)} LoRAs`;

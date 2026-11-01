@@ -25,6 +25,7 @@ const access = await import("@/lib/guest-access");
 const { setSetting } = await import("@/server/settings");
 const estimate = await import("@/app/api/restore/estimate/route");
 const { PromptSchema } = await import("@/server/restore");
+const { planRestore } = await import("@/lib/catalog/restore");
 const { STUDIO_ROWS, studioTool, toolFor } = await import("@/server/gpu/tools");
 const { loadIndex } = await import("@/server/gpu/index-file");
 afterAll(() => {
@@ -118,6 +119,24 @@ describe("the estimate route: a visitor's price is its own GPU's", () => {
     const owner = await estimate.POST(call("/api/restore/estimate", { engine: "open", source }, auth.createSession().value));
     expect(await owner.json()).toMatchObject({ demo: true, costUsd: 0 });
   });
+
+  it("never tells a visitor whether the owner set a Hugging Face token, nor asks it to add one", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    setSetting("huggingfaceDownloadToken", "");
+    const account = auth.createSession(newAccount().id).value;
+    for (const [who, cookie] of [
+      ["guest", undefined],
+      ["account", account],
+    ] as const) {
+      const e = await (await estimate.POST(call("/api/restore/estimate", { engine: "open", source, refine: true }, cookie))).json();
+      expect(e, who).not.toHaveProperty("loraReady");
+      expect(e.notes.join(" "), who).not.toMatch(/gated on Hugging Face|Settings → LoRAs/);
+    }
+    // The owner, with no token and no copy, is told what to set up.
+    const owner = await (await estimate.POST(call("/api/restore/estimate", { engine: "open", source }, auth.createSession().value))).json();
+    expect(owner.loraReady).toBe(false);
+    expect(owner.notes.join(" ")).toMatch(/gated on Hugging Face/);
+  });
 });
 
 describe("the prompt writer's body stays under the sign-in proxy's 4 MB", () => {
@@ -142,6 +161,13 @@ describe("the GPU pre-flight board", () => {
     for (const wf of t.workflows) expect(idx.workflows[wf], wf).toBeDefined();
     expect(t.loras).toEqual([expect.objectContaining({ file: "ltx-2.5-22b-ic-lora-restore-1.0.safetensors", download: "hf-gated" })]);
     expect(toolFor("studio:/video-tools/restore")?.workflows).toEqual(t.workflows);
+    // The row checks the graphs a run uses: a multi-window GPU plan with its sound (windows, join, sound back).
+    const plan = planRestore({ engine: "open", title: "R", prompt: "p", negative: "n", source: { url: "/api/files/a.mp4", duration: 12, frames: 192, fps: 16, width: 640, height: 480, hasAudio: true } });
+    const used = new Map(plan.steps.map((s) => [`${s.request.modelId}|${s.request.op}`, { modelId: s.request.modelId, op: s.request.op! }]));
+    expect(used.size).toBe(3);
+    const planned = studioTool({ href: "/video-tools/restore", label: "x", group: "Video tools", steps: [...used.values()] })!;
+    expect(new Set(t.workflows)).toEqual(new Set(planned.workflows));
+    expect(t.workflows).toContain("video-concat-encoded");
     // The graph's node pack is pinned, so the board can say what to install.
     expect(Object.keys(idx.workflows["video-restore-ltx25-tiled"].packs)).toContain("ComfyUI-LTXVideo");
     expect(idx.packs["ComfyUI-LTXVideo"]).toMatchObject({ commit: "220e1d45aa0469f518e982102fca4dca92a61862" });

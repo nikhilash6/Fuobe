@@ -450,7 +450,7 @@ export function planRestore(input: RestorePlanInput): RestorePlan {
   }
 
   // Cloud: frame-exact pieces, each restored in one untiled pass; a piece after the first starts from the last restored
-  // frame of the one before (fal's image_url, the first frame of the video).
+  // frame of the one before (fal's image_url, the first frame of the video), and the first from the reference picture.
   const resolution = input.resolution && (RESTORE.cloudResolutions as readonly string[]).includes(input.resolution) ? input.resolution : RESTORE.cloudResolution;
   const shape = cloudShape(source.width, source.height);
   const [cw, ch] = CLOUD_SIZES[resolution][shape];
@@ -483,13 +483,15 @@ export function planRestore(input: RestorePlanInput): RestorePlan {
     }
     const seconds = r6((p.frames ?? Math.round((p.end - p.start) * fps)) / fps);
     const lone = n === 1;
+    // The reference picture is the first piece's first frame (fal's image_url); later pieces start from the hand-off.
+    const first = i === 0 && input.reference ? { images: [input.reference] } : undefined;
     const request: GenerationRequest = {
       ...own(lone),
       modelId: RESTORE.model,
       engine: "cloud",
       op: "restore-video",
       ...words,
-      ...(whole ? { inputs: { video: source.url } } : {}),
+      ...(whole || first ? { inputs: { ...(whole ? { video: source.url } : {}), ...first } } : {}),
       params: { aspectRatio: shape, resolution, fps, duration: seconds, sourceDuration: seconds, ...seed },
       step: label(i, n, "restore"),
     };
@@ -534,11 +536,13 @@ function thenUpscale(steps: PlanStep[], final: string, input: RestorePlanInput):
 }
 
 /** The open join: the windows share one size and frame rate, so they're joined packet by packet (no decode, no resize). */
+export const RESTORE_OPEN_JOIN = "oss-join-encoded";
+
 function joinEncoded(steps: PlanStep[], keys: string[], key: string, who: Pick<GenerationRequest, "feature" | "batchTitle" | "title">, what: string): string {
   if (keys.length === 1) return keys[0];
   steps.push({
     key,
-    request: { ...who, modelId: "oss-join-encoded", op: "concat", step: { label: what, index: 1000, of: 1000 } },
+    request: { ...who, modelId: RESTORE_OPEN_JOIN, op: "concat", step: { label: what, index: 1000, of: 1000 } },
     after: keys,
     chain: keys.map(() => ({ slot: "videos" as const })),
   });

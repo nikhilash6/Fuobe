@@ -36,7 +36,8 @@ export interface RestoreEstimate {
   dropped: number;
   steps: number;
   resolution?: string;
-  hfToken: boolean;
+  /** The gated Restore IC-LoRA is within reach (a token, or a copy Fuobe holds); left out for a visitor. */
+  loraReady?: boolean;
   notes: string[];
 }
 

@@ -27,6 +27,7 @@ import { THEN_UPSCALE, UPSCALE_FIRST_STEPS } from "@/lib/catalog/upscale-first";
 import { VIDEO_UPSCALE_STUDIO } from "@/lib/studios";
 import type { ComfyWorkflow } from "@/lib/comfy";
 import { getModel, getPreset } from "@/lib/catalog";
+import { withChainInputs } from "@/server/generations";
 import { onEngine } from "@/lib/catalog/engines";
 import { estimateCost, planGeneration } from "@/lib/catalog/plan";
 import { convertEngine, defaultModelForNode, describeNode, inputPorts, nodeEngine, outputType, paletteItems, type CanvasGraph, type CanvasNode } from "@/lib/catalog/canvas";
@@ -229,6 +230,22 @@ describe("Restore & colourise: the pipeline", () => {
     expect(cut.startTime).toBe(0);
     expect(cut.endTime).toBeCloseTo(235 / 24, 5);
     expect(plan.steps.find((s) => s.key === "final")!.request.modelId).toBe("merge-audio-video");
+  });
+
+  it("cloud: the reference picture is the first piece's first frame (fal's image_url); later pieces start from the hand-off", () => {
+    const ref = "/api/files/ref.png";
+    const plan = planRestore({ engine: "cloud", title: "Restored", source: { ...source, frames: 240, duration: 10 }, ...words, reference: ref });
+    const r0 = plan.steps.find((s) => s.key === "restore0")!;
+    expect(r0.request.inputs).toEqual({ images: [ref] });
+    // The cut piece arrives through the chain, beside the picture.
+    expect(withChainInputs({ ...r0.request, chain: r0.chain }, ["/api/files/cut0.mp4"]).inputs).toEqual({ images: [ref], video: "/api/files/cut0.mp4" });
+    for (const k of ["restore1", "restore2"]) expect(plan.steps.find((s) => s.key === k)!.request.inputs, k).toBeUndefined();
+    // A clip of one whole piece: the clip and the picture together.
+    const whole = planRestore({ engine: "cloud", title: "R", source: { url: "/api/files/a.mp4", duration: 97 / 24, frames: 97, fps: 24, width: 1280, height: 720, hasAudio: false }, ...words, reference: ref });
+    expect(whole.steps[0].request.inputs).toEqual({ video: "/api/files/a.mp4", images: [ref] });
+    // Without one, nothing is added.
+    const none = planRestore({ engine: "cloud", title: "Restored", source: { ...source, frames: 240, duration: 10 }, ...words });
+    expect(none.steps.find((s) => s.key === "restore0")!.request.inputs).toBeUndefined();
   });
 
   it("cloud: a clip of one whole piece runs as it is; its shape picks the tier's size", () => {

@@ -8,20 +8,20 @@ import type { LoraRef } from "@/lib/catalog/types";
 
 // The route's GET opts out of prerendering with connection(), which needs a request scope.
 vi.mock("next/server", () => ({ connection: async () => {} }));
-// The library pins each file's SHA256: two entries are pinned to the small stand-in files these tests serve.
+// The library pins each file's SHA256: three entries are pinned to the small stand-in files these tests serve.
 vi.mock("@/lib/catalog/lora-library.generated", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/catalog/lora-library.generated")>();
   const { createHash } = await import("node:crypto");
   const body = (s: string) => Buffer.from(s.repeat(64));
   const pin = (s: string) => ({ sha256: createHash("sha256").update(body(s)).digest("hex"), sizeBytes: body(s).length });
-  const fake: Record<string, ReturnType<typeof pin>> = { awportrait: pin("awportrait"), y2k: pin("y2k-style") };
+  const fake: Record<string, ReturnType<typeof pin>> = { awportrait: pin("awportrait"), y2k: pin("y2k-style"), "ltx-2-5-22b-ic-lora-refine-details-1-0": pin("refine-details") };
   return { ...real, LORA_LIBRARY: real.LORA_LIBRARY.map((e) => (fake[e.key] ? { ...e, ...fake[e.key] } : e)) };
 });
 
 // The downloader reads the civitai key and the LoRA folder from the settings table: a throwaway data folder.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-lora-fetch-"));
 process.env.FUOBE_DATA_DIR = dir;
-const { downloadLora, ensureLorasOnComfy, prepareCloudLoras, listLoraCopies, lorasPath, redact, LORA_CACHE_DIR } = await import("@/server/loras");
+const { downloadLora, ensureLorasOnComfy, gatedFileReady, prepareCloudLoras, listLoraCopies, lorasPath, redact, LORA_CACHE_DIR } = await import("@/server/loras");
 const { setSetting } = await import("@/server/settings");
 const { db } = await import("@/server/db");
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -343,6 +343,43 @@ describe("Before a cloud run", () => {
     expect(up.sent).toEqual([]);
     expect(redact(`failed with ${HF}`)).toBe("failed with •••");
     setSetting("huggingfaceDownloadToken", "");
+  });
+
+  it("with the token, a gated adapter whose bytes match the pin is copied to fal once, recorded with its licence, and reused without the token", async () => {
+    // The Detail Refine IC-LoRA stands in (the mock pins it to a small file); sent as a model's own adapter.
+    const refine = { ...loraRef(loraEntry("ltx-2-5-22b-ic-lora-refine-details-1-0")!), adapter: true as const };
+    const body = bytes("refine-details");
+    const HF = "hf_secret0123456789abcdef";
+    setSetting("huggingfaceDownloadToken", HF);
+    expect(gatedFileReady(refine.file, "fal")).toBe(true);
+    net = network({
+      [refine.url!]: (c) =>
+        c.method === "HEAD"
+          ? new Response(null, { status: 302, headers: { "x-linked-etag": `"${sha(body)}"`, "x-linked-size": String(body.length), "x-repo-commit": "4912c478" } })
+          : new Response(new Uint8Array(body), { status: 200, headers: { "content-length": String(body.length) } }),
+    });
+    const up = upload();
+    const [sent] = (await prepareCloudLoras([refine], "fal", up.fn))!;
+    expect(sent.hostedUrl).toBe(`https://v3.fal.media/files/${refine.file}`);
+    expect(up.sent).toEqual([{ name: refine.file, size: body.length }]);
+    for (const c of net.calls) expect(c.url).not.toContain(HF);
+    const copy = listLoraCopies().find((c) => c.file === refine.file && c.target === "fal")!;
+    expect(copy).toMatchObject({ sourceUrl: refine.url, hostedUrl: sent.hostedUrl, sha256: sha(body), sizeBytes: body.length });
+    expect(copy.licence?.hosting).toBe("a gated Hugging Face file, downloaded once with your token; its licence allows hosted use (the research's snapshot)");
+    expect(JSON.stringify(copy)).not.toContain(HF);
+    // The next run, token removed: the live copy is used, nothing is fetched or sent again, and it counts as ready.
+    setSetting("huggingfaceDownloadToken", "");
+    net.restore();
+    net = network({});
+    const [again] = (await prepareCloudLoras([refine], "fal", up.fn))!;
+    expect(again.hostedUrl).toBe(sent.hostedUrl);
+    expect(up.sent).toHaveLength(1);
+    expect(net.calls).toEqual([]);
+    expect(gatedFileReady(refine.file, "fal")).toBe(true);
+    // Replicate has no copy, but the file downloaded for fal sits in Fuobe's cache at its pinned size; without it, nothing.
+    expect(gatedFileReady(refine.file, "replicate")).toBe(true);
+    fs.rmSync(LORA_CACHE_DIR, { recursive: true, force: true });
+    expect(gatedFileReady(refine.file, "replicate")).toBe(false);
   });
 
   it("mirrors the pinned bytes, not a same-named file of other bytes in the LoRA folder", async () => {

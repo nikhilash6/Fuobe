@@ -114,6 +114,31 @@ const hfToken = () => getSetting("huggingfaceDownloadToken");
 /** Whether a Hugging Face token is set (gated downloads need one). */
 export const hasHfToken = (): boolean => !!hfToken();
 
+/**
+ * Whether a gated Hugging Face LoRA is within reach for a run on `target`: with the token always; without it, when
+ * Fuobe already holds what the run uses: a live copy on the provider (cloud), or the file on this machine (ComfyUI's
+ * LoRA folder; for the cloud also Fuobe's own cache, which mirrorCivitai copies from). A file on disk counts at its
+ * pinned size: hashing 1.7 GB for every estimate is too slow, and the copy itself is still checked against the hash.
+ */
+export function gatedFileReady(file: string, target: MirrorTarget): boolean {
+  if (hfToken()) return true;
+  if (target !== "comfyui") {
+    const cached = getCopy(file, target);
+    if (cached?.hostedUrl && Date.now() - cached.createdAt < MIRROR_TTL_MS[target]) return true;
+  }
+  const size = loraByFile(file)?.sizeBytes;
+  const dirs = target === "comfyui" ? [getSetting("comfyLorasDir")] : [getSetting("comfyLorasDir"), LORA_CACHE_DIR];
+  return dirs.some((d) => {
+    if (!d) return false;
+    try {
+      const p = lorasPath(d, file);
+      return fs.existsSync(p) && (!size || fs.statSync(p).size === size);
+    } catch {
+      return false;
+    }
+  });
+}
+
 /** A URL as it may be shown or stored: never with a token in it (the civitai key or the Hugging Face token). */
 export function redact(text: string, token = civitaiKey()): string {
   let out = text.replace(/([?&]token=)[^&\s"']+/gi, "$1•••");

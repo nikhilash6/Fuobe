@@ -7,7 +7,7 @@ import { PATH_MODELS } from "@/lib/catalog/cinema";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
-import { RESTORE } from "@/lib/catalog/restore";
+import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
 import { libraryEntry, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
 import { ANGLES_2511_LORA } from "@/lib/catalog/open-tools";
 import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
@@ -205,14 +205,14 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/video-tools/join", label: "Join clips", group: "Video tools", config: S.JOIN_CLIPS_STUDIO },
   { href: "/video-tools/colors", label: "Match colors", group: "Video tools", config: S.VIDEO_COLOR_MATCH_STUDIO },
   // Restore & colourise (archive-restore): the tiled-fusion graph with the gated Restore IC-LoRA (the graph loads it
-  // itself), then the windows joined and the sound put back. "Restore to 4K"'s Detail Refine LoRA is an option, not listed.
+  // itself), then the windows joined packet by packet (the join planRestore runs) and the sound put back. "Restore to 4K"'s Detail Refine LoRA is an option, not listed.
   {
     href: "/video-tools/restore",
     label: "Restore & colourise",
     group: "Video tools",
     steps: [
       { modelId: RESTORE.model, op: "restore-video", loras: [loraRef(loraEntry(RESTORE.loras.restore.key)!)] },
-      { modelId: REMOVE_TOOLS.open.join, op: "concat" },
+      { modelId: RESTORE_OPEN_JOIN, op: "concat" },
       { modelId: REMOVE_TOOLS.open.mux, op: "mux" },
     ],
   },

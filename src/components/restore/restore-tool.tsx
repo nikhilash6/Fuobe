@@ -197,7 +197,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
                   )}
                 </div>
               </Panel>
-              {est && !est.hfToken && (
+              {est?.loraReady === false && (
                 <Panel>
                   <div className="flex gap-3">
                     <KeyRound className="mt-0.5 size-4 shrink-0 text-brand-text" aria-hidden />
