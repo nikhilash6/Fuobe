@@ -20,18 +20,7 @@
    "n7-8-layouts-everywhere",
    "dbs-d4",
    "n7-10-regenerate-more",
-   "n7-11-moss-sheets-control",
-   "nm10-kling-4",
-   "nm10-flux3-klein",
-   "nm10-h3-any-gpu",
-   "nm10-music3",
-   "nm10-qwen21-fast",
-   "nm10-speech-edit",
-   "nm10-voice-design",
-   "nm10-keying",
-   "nm10-rtx-video",
-   "nm10-hosted-catchup",
-   "nm10-kandinsky6"
+   "n7-11-moss-sheets-control"
   ],
   "O": [
    "owner-calls-1",
@@ -54,8 +43,21 @@
    "o12-training-kit",
    "w2s-w5",
    "w2s-w6",
-   "w2s-w7",
+   "w2s-w7"
+  ],
+  "N": [
+   "nm10-kling-4",
+   "nm10-flux3-klein",
+   "nm10-qwen21-fast",
+   "nm10-music3",
+   "nm10-h3-any-gpu",
    "nm10-pika-flex",
+   "nm10-speech-edit",
+   "nm10-hosted-catchup",
+   "nm10-voice-design",
+   "nm10-rtx-video",
+   "nm10-keying",
+   "nm10-kandinsky6",
    "nm10-hy-nomas-world"
   ]
  },
