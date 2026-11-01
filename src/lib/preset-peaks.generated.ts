@@ -60,6 +60,7 @@ export const PRESET_PEAKS: Record<string, { at: number; from: number; v: string 
   "effect-raven-transition": { "at": 3.5625, "from": 0.4375, "v": "7cb40e27" },
   "effect-sand-storm": { "at": 2.8125, "from": 0.4792, "v": "25e87ea3" },
   "effect-scrapbook-collage": { "at": 3.5625, "from": 0.0208, "v": "487fcbe8" },
+  "effect-seamless-transition": { "at": 3.7708, "from": 0.0208, "v": "70ff44b1" },
   "effect-shadow-smoke": { "at": 3.5625, "from": 0.8542, "v": "04d19a93" },
   "effect-sodium-decay": { "at": 2.8958, "from": 0.4375, "v": "57d33068" },
   "effect-soft-palette": { "at": 2.8958, "from": 0.3542, "v": "69be20ec" },
