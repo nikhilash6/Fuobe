@@ -10,6 +10,7 @@
  * Pure module: limits, prompts, the H3 window plan, who to swap, the anchor's prompt and models, licences as data.
  * The prompts follow Openjutsu's (MIT, Comfy Org 2026) and Akatz Labs' anchor brief (MIT, Akatz Labs 2026).
  */
+import { isSharpenTier, type SharpenTier } from "./sharpen";
 import type { Engine, LoraRef, PixelPoint } from "./types";
 
 export const CHARACTER_SWAP = {
@@ -24,8 +25,11 @@ export const CHARACTER_SWAP = {
   maxDescriptionChars: 500,
   /** Seeds Openjutsu takes (uint32); blank is random. */
   maxSeed: 2 ** 32 - 1,
+  /** H3's two sizes: every swap is made at one of them. */
   qualities: ["480p", "768p"] as const,
   defaultQuality: "768p" as const,
+  /** The sizes a 768p swap is finished at (sharpen.ts): regenerated on your GPU, made at 2K / 4K by fal in the cloud. */
+  finishes: ["1080p", "2K", "4K"] as const,
   /** H3's frame rate: every part is normalised to 24 fps before it is swapped. */
   fps: 24,
   window: 124,
@@ -38,6 +42,8 @@ export const CHARACTER_SWAP = {
 } as const;
 
 export type CharacterQuality = (typeof CHARACTER_SWAP.qualities)[number];
+/** A quality the page offers: H3's own two, or a finishing size of the 768p swap. */
+export type CharacterChoice = CharacterQuality | (typeof CHARACTER_SWAP.finishes)[number];
 
 /** Who to swap when several people are on screen (the pack's SelectSubject). */
 export type SwapWho = "largest" | "leftmost" | "rightmost" | "index";
@@ -157,10 +163,21 @@ export interface CharacterOptions {
 // ---------------------------------------------------------------------------
 // Quality, sizes and windows
 
-/** Genjutsu's qualities to H3's two: 480p stays, anything higher is 768p (H3's native top). */
+/** Genjutsu's qualities to H3's two: 480p stays, anything higher is swapped at 768p (H3's native top). */
 export function characterQuality(q: string | undefined): CharacterQuality {
   return q === "480p" ? "480p" : "768p";
 }
+
+/** The finishing size a quality asks for (1080p, 2K, 4K), or null for H3's own 480p / 768p. */
+export function characterFinish(q: string | undefined): SharpenTier | null {
+  return isSharpenTier(q) ? q : null;
+}
+
+/** The qualities each engine offers: your GPU regenerates 1080p, 2K and 4K; fal's H3 makes 2K and 4K (no 1080P). */
+export const CHARACTER_QUALITIES: Record<Engine, CharacterChoice[]> = {
+  open: ["480p", "768p", "1080p", "2K", "4K"],
+  cloud: ["480p", "768p", "2K", "4K"],
+};
 
 /** What the unpatched h3_character_swap pack's PrepareVideo takes: the strings "480" / "768" (the patched one: integers). */
 export const packResolution = (q: string | undefined, patched = false): string | number => {
@@ -168,8 +185,11 @@ export const packResolution = (q: string | undefined, patched = false): string |
   return patched ? Number(v) : v;
 };
 
-/** fal's H3 resolution enum for a quality. */
-export const falResolution = (q: string | undefined) => (characterQuality(q) === "480p" ? "480P" : "768P");
+/**
+ * fal's H3 resolution enum for a quality: 480P and 768P are made natively, 2K and 4K from a 768P base. fal has no 1080P:
+ * 1080p goes to the largest it makes below it (768P), as Genjutsu's other models do (qualityFor).
+ */
+export const falResolution = (q: string | undefined): "480P" | "768P" | "2K" | "4K" => (q === "2K" || q === "4K" ? q : characterQuality(q) === "480p" ? "480P" : "768P");
 
 /** H3's frame grid: the first count of the form 17n + 5 at or above n (ComfyUI's align_frame_count). */
 export function alignFrames(n: number): number {

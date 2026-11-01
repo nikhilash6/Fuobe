@@ -15,6 +15,7 @@
  */
 import { CHARACTER_SWAP, h3Canvas, HISTORY_CHOICES, WINDOW_CHOICES, whoWords, type SwapLora, type SwapWho } from "./character-swap";
 import { STUDIO_FPS } from "@/lib/av/scene-cuts";
+import type { SharpenTier } from "./sharpen";
 import { wholeClipBudget } from "@/lib/av/video-finish";
 import type { Engine, PixelPoint } from "./types";
 
@@ -219,6 +220,25 @@ export interface SwapTake {
   frozen?: FrozenTake;
   /** The studio has looked at its finished result (selected it, or left the selection alone). */
   settled?: boolean;
+  /** Its sharper version (Assemble → Finish → Sharpen), shown beside it until it is picked. */
+  finish?: TakeFinish | null;
+}
+
+/**
+ * A take made sharper (sharpen.ts). Your GPU: the take regenerated and only the character composited over the footage.
+ * The cloud: the same segment made again on fal's H3 at 2K or 4K. The assembly uses it once it is picked (`use`).
+ */
+export interface TakeFinish {
+  id: string;
+  createdAt: number;
+  engine: Engine;
+  /** The size asked for, and the size made (your GPU: never above the footage's). */
+  asked: SharpenTier;
+  tier: SharpenTier;
+  genId?: string;
+  stepIds?: string[];
+  /** Picked after comparing: the assembly uses it instead of the take. */
+  use: boolean;
 }
 
 export interface SwapSegment {
@@ -1130,6 +1150,11 @@ export interface StudioEstimate {
   transcribe: Record<string, number | null>;
   /** Tracking a whole shot's mask. */
   mask: Record<string, number | null>;
+  /**
+   * Sharpen for each clip: its chosen takes, their seconds, and what each size costs for all of them (null: unknown or
+   * not offered; your GPU: 0).
+   */
+  sharpen: Record<string, { takes: number; seconds: number; costUsd: Partial<Record<SharpenTier, number | null>>; problem?: string }>;
   /** One anchor with each model on this engine. */
   anchors: { id: string; label: string; note: string; costUsd: number | null; offered: boolean }[];
   notes: string[];
@@ -1306,8 +1331,26 @@ export function assemblyPieces(project: SwapProject, clip: SwapClip): { pieces: 
   return { pieces, stale };
 }
 
-/** The takes an assembly is made of (its identity: the same takes need no new assembly). */
-export const assemblyTakes = (pieces: AssemblyPiece[]) => pieces.flatMap((p) => (p.kind === "take" ? [p.take.id] : []));
+/** The sharper version a take is assembled with, when one is picked. */
+export const usedFinish = (take: Pick<SwapTake, "finish">) => (take.finish?.use ? take.finish : null);
+
+/** The takes an assembly is made of (its identity: the same takes, and the same sharper versions, need no new assembly). */
+export const assemblyTakes = (pieces: AssemblyPiece[]) => pieces.flatMap((p) => (p.kind === "take" ? [usedFinish(p.take) ? `${p.take.id}@${usedFinish(p.take)!.id}` : p.take.id] : []));
+
+/** The chosen takes Sharpen works on: every swapped segment's, in the assembly's order. */
+export const chosenTakes = (pieces: AssemblyPiece[]) => pieces.flatMap((p) => (p.kind === "take" ? [p] : []));
+
+// ---------------------------------------------------------------------------
+// Assemble → Finish
+
+/**
+ * Akatz Labs' other Finish (a clean background plate and alpha mattes of the source and the character): their public
+ * release can't run it (docs/research/openjutsu-6.md §4.2), so it stays on the page as not available.
+ */
+export const FINISH_UNAVAILABLE = {
+  title: "Clean backplate + alpha",
+  reason: "Rebuilds the background without the person and gives your character as a layer of its own, for compositing in an editor. Not available yet.",
+} as const;
 
 // ---------------------------------------------------------------------------
 // From Genjutsu

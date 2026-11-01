@@ -3,6 +3,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { studioHandOff, type HandOffInput, type QueueMode, type StudioEstimate, type SwapProject, type SwapProjectCard, type SwapProjectView } from "@/lib/catalog/swap-studio";
 import type { SwapEdit } from "@/lib/catalog/swap-studio-edit";
+import type { SharpenTier } from "@/lib/catalog/sharpen";
 import type { Engine, PixelPoint } from "@/lib/catalog/types";
 import { responseError } from "@/lib/refusals";
 
@@ -124,8 +125,9 @@ export const useMakeAnchor = (id: string) => useAction<{ clipId: string; shotId:
 export const useQueue = (id: string) => useAction<{ clipId: string; shotId: string; segmentId: string; mode: QueueMode }, QueueAnswer>(id, "queue");
 export const useStopTake = (id: string) => useAction<{ clipId: string; shotId: string; segmentId: string; takeId: string }>(id, "takes/stop");
 export const useStopJob = (id: string) =>
-  useAction<{ kind: "mask" | "anchor" | "assembly" | "normalize" | "transcribe"; clipId: string; shotId?: string; segmentId?: string; jobId?: string }>(id, "stop");
+  useAction<{ kind: "mask" | "anchor" | "assembly" | "normalize" | "transcribe" | "finish"; clipId: string; shotId?: string; segmentId?: string; jobId?: string }>(id, "stop");
 export const useAssemble = (id: string) => useAction<{ clipId: string }>(id, "assemble");
+export const useSharpen = (id: string) => useAction<{ clipId: string; tier: SharpenTier }>(id, "sharpen");
 
 /**
  * Genjutsu's "Open in Character Swap Studio": a new project with the character, and the clip added (the clip's

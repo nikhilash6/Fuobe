@@ -77,7 +77,7 @@ export type SwapEdit =
   | { type: "layout"; clipId: string; shotId: string; op: LayoutOp }
   | { type: "segment"; clipId: string; shotId: string; segmentId: string; patch: SegmentPatch }
   | { type: "update-prompt"; clipId: string; shotId: string; segmentId: string }
-  | { type: "take"; clipId: string; shotId: string; segmentId: string; takeId: string; select?: boolean; favourite?: boolean; decision?: Decision; notes?: string; remove?: boolean }
+  | { type: "take"; clipId: string; shotId: string; segmentId: string; takeId: string; select?: boolean; favourite?: boolean; decision?: Decision; notes?: string; remove?: boolean; finishUse?: boolean }
   | { type: "anchor-import"; clipId: string; shotId: string; segmentId?: string; url: string; id: string; at: number }
   | { type: "remove-anchor"; clipId: string; shotId: string; segmentId?: string; anchorId: string }
   | { type: "remove-mask"; clipId: string; shotId: string; maskId: string };
@@ -318,6 +318,12 @@ export function applyEdit(project: SwapProject, edit: SwapEdit, o: { active: (ge
             return removeTake(next, edit.takeId);
           }
           if (edit.select) next = selectTake(next, edit.takeId);
+          // Its sharper version in the assembly (picked after comparing), or the take itself again.
+          if (edit.finishUse !== undefined) {
+            const t = next.takes.find((k) => k.id === edit.takeId);
+            if (!t?.finish) throw new Error("This take has no sharper version — use Sharpen in Assemble");
+            next = { ...next, takes: next.takes.map((k) => (k.id === edit.takeId ? { ...k, finish: { ...t.finish!, use: edit.finishUse! } } : k)) };
+          }
           const patch = { ...(edit.favourite !== undefined ? { favourite: edit.favourite } : {}), ...(edit.decision ? { decision: edit.decision } : {}), ...(edit.notes !== undefined ? { notes: edit.notes } : {}) };
           return Object.keys(patch).length ? updateTake(next, edit.takeId, patch) : next;
         } catch (e) {

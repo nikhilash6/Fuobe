@@ -20,14 +20,27 @@ import {
   WHO_INDEX_LABEL,
   WHO_LABELS,
   WINDOW_CHOICES,
+  CHARACTER_QUALITIES,
+  characterFinish,
+  characterQuality,
+  type CharacterChoice,
   type CharacterOptions,
-  type CharacterQuality,
   type SwapLora,
   type SwapSpeech,
   type SwapWho,
 } from "@/lib/catalog/character-swap";
 import type { GenjutsuTarget, Maker } from "@/lib/catalog/genjutsu";
+import { cloudSharpenUsd, SHARPEN_COPY } from "@/lib/catalog/sharpen";
 import type { Engine } from "@/lib/catalog/types";
+
+/** What a quality does, in a line: H3's own sizes, or a finishing size with its price (cloud) or GPU time (open). */
+export function qualityHint(engine: Engine, q: CharacterChoice): string {
+  const finish = characterFinish(q);
+  if (!finish) return q === "480p" ? "Faster and cheaper" : "H3's native top";
+  if (engine === "open") return `${SHARPEN_COPY.hintOpen} Free on your GPU, about 3 min more per 5 s on a 72 GB GPU, never above your clip's own size.`;
+  const usd = (s: number) => `$${(cloudSharpenUsd(finish, s) ?? 0).toFixed(2)}`;
+  return `${SHARPEN_COPY.hint} ${usd(5)} for 5 s, ${usd(15)} for 15 s.`;
+}
 
 /** A helper the panel offers (Describe my character, the clip's words): its action, whether it's running or can run. */
 export interface PanelHelper {
@@ -62,8 +75,8 @@ export function CharacterControls({
   target?: GenjutsuTarget;
   value: CharacterOptions;
   onChange: (v: CharacterOptions) => void;
-  quality: CharacterQuality;
-  onQuality: (q: CharacterQuality) => void;
+  quality: CharacterChoice;
+  onQuality: (q: CharacterChoice) => void;
   seed: string;
   onSeed: (s: string) => void;
   seedProblem?: string | null;
@@ -74,6 +87,9 @@ export function CharacterControls({
 }) {
   const set = (patch: Partial<CharacterOptions>) => onChange({ ...value, ...patch });
   const h3 = !!maker?.h3;
+  // Each engine's sizes (the cloud has no 1080p); a size the other engine offered shows as the swap's own.
+  const offered = (maker?.qualities as CharacterChoice[] | undefined) ?? CHARACTER_QUALITIES[engine];
+  const shown: CharacterChoice = offered.includes(quality) ? quality : characterQuality(quality);
   const open = engine === "open";
   const anchors = ANCHOR_MODELS[engine];
   const who: SwapWho = value.who ?? "largest";
@@ -129,8 +145,8 @@ export function CharacterControls({
       )}
 
       {h3 && (
-        <Field label="Quality" hint={quality === "480p" ? "Faster and cheaper" : "H3's native top"}>
-          <Segmented label="Quality" value={quality} onChange={onQuality} options={CHARACTER_SWAP.qualities.map((q) => ({ value: q, label: q }))} />
+        <Field label="Quality" hint={qualityHint(engine, shown)}>
+          <Segmented label="Quality" value={shown} onChange={onQuality} options={offered.map((q) => ({ value: q, label: q }))} />
         </Field>
       )}
 

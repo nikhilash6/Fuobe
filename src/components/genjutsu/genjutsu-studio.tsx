@@ -27,7 +27,7 @@ import { openInStudio } from "@/components/swap-studio/hooks";
 import { SelfHostNote } from "@/components/self-host-note";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
-import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterOptions, type CharacterQuality } from "@/lib/catalog/character-swap";
+import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterChoice, type CharacterOptions } from "@/lib/catalog/character-swap";
 import {
   chooseMaker,
   decodeSetup,
@@ -124,8 +124,8 @@ export function GenjutsuStudio() {
   const [points, setPoints] = useState<PixelPoint[]>([]);
   const [pointLabel, setPointLabel] = useState<"positive" | "negative">("positive");
   const [paint, setPaint] = useState<Paint | null>(null);
-  // Character swap: its quality (H3's 480p / 768p), its settings, the seed, and a part longer than 15 s.
-  const [charQuality, setCharQuality] = useState<CharacterQuality>(CHARACTER_SWAP.defaultQuality);
+  // Character swap: its quality (H3's 480p / 768p, or 1080p / 2K / 4K from the 768p swap), its settings, the seed.
+  const [charQuality, setCharQuality] = useState<CharacterChoice>(CHARACTER_SWAP.defaultQuality);
   const [character, setCharacter] = useState<CharacterOptions>({});
   const [seed, setSeed] = useState("");
   const [longPart, setLongPart] = useState(false);
@@ -293,7 +293,7 @@ export function GenjutsuStudio() {
     if (s.engine && engineMode === "both") setEngine(s.engine);
     if (s.tier) setTier(s.tier);
     if (s.mode === "character") {
-      if (s.quality === "480p" || s.quality === "768p") setCharQuality(s.quality);
+      if (s.quality && ([...CHARACTER_SWAP.qualities, ...CHARACTER_SWAP.finishes] as string[]).includes(s.quality)) setCharQuality(s.quality as CharacterChoice);
       if (s.quality && (GENJUTSU.qualities as string[]).includes(s.quality)) setQuality(s.quality);
       setCharacter(s.character ?? {});
     } else if (s.quality) setQuality(s.quality);

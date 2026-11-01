@@ -8,6 +8,7 @@ import {
   CHARACTER_GPU,
   CHARACTER_LIMITS,
   CHARACTER_SWAP,
+  characterFinish,
   characterLicenceLine,
   cutWarning,
   h3Windows,
@@ -18,6 +19,7 @@ import {
   type CharacterOptions,
 } from "@/lib/catalog/character-swap";
 import { ACCESS_PLACE } from "@/lib/model-access";
+import { filmSize, sharpenTierFor } from "@/lib/catalog/sharpen";
 import {
   chooseMaker,
   cutsInPart,
@@ -124,7 +126,7 @@ export const GenjutsuBodySchema = z.object({
   mode: z.enum(["motion", "character", "swap", "restyle", "insert"]),
   modelId: z.string().max(80).optional(),
   tier: z.enum(["standard", "high"]).optional(),
-  quality: z.enum(["480p", "720p", "768p", "1080p"]).optional(),
+  quality: z.enum(["480p", "720p", "768p", "1080p", "2K", "4K"]).optional(),
   target: z.enum(["type", "click", "paint"]).optional(),
   subject: z.string().max(300).optional(),
   prompt: z.string().max(GENJUTSU.maxPromptChars).optional(),
@@ -294,6 +296,15 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
       notes.push(`${am.label} first puts your character into the part's first frame${m.engine === "cloud" && n > 1 ? " (one per piece)" : ""}; if that fails the swap runs without it`);
     } else if (!m.h3.anchor) notes.push(`${name} runs without an anchor frame`);
     if (m.engine === "cloud") notes.push("On fal, H3 has no mask: who to swap is said in words, and the whole frame is regenerated around them");
+    // 1080p / 2K / 4K (sharpen.ts): what each engine does with the 768p swap.
+    const finish = characterFinish(qualityFor(m, body.quality ?? CHARACTER_SWAP.defaultQuality));
+    if (finish && m.engine === "cloud") notes.push(`fal's H3 makes ${finish} from a 768P base: the whole frame is drawn at the higher size`);
+    if (finish && m.engine === "open") {
+      const film = filmSize(source.width, source.height);
+      const made = sharpenTierFor("open", finish, film);
+      notes.push("The 768p swap is redrawn by Open-H3 Regenerate and only your character is put back over your clip: the background and the sound stay as filmed. Faces can change slightly");
+      if (made && made !== finish && film) notes.push(`Your clip is ${film.width}×${film.height}, so it is sharpened at ${made} (never above the clip's own size)`);
+    }
     if (m.engine === "open" && c.who === "index" && !body.points?.length) notes.push("Person numbers follow SAM 3.1's detections, the one it is surest of first — not left to right");
     if (m.engine === "open" && !m.h3.maskSwitch && c.useMask === false) notes.push(`${name} always regenerates only the person: its graph has no switch for the whole frame`);
     const warn = cutWarning(cutsInPart(body.cuts, range));
