@@ -91,14 +91,19 @@ export interface JoinOptions {
   step?: GenerationRequest["step"];
   /** A recipe's free dry run (GenerationRequest.demo): the join runs on the demo provider too. */
   demo?: boolean;
+  /**
+   * The clips share one canvas and frame rate (COPY_JOIN_VIDEOS from stills of one shape): on your GPU they are joined
+   * packet by packet (oss-join-encoded, up to 24 at once), each with its own sound, in flat memory.
+   */
+  copy?: boolean;
 }
 
-const joinModelId = (engine: Engine) => (engine === "open" ? "oss-join-clips" : "join-clips");
+const joinModelId = (engine: Engine, copy = false) => (engine === "open" ? (copy ? "oss-join-encoded" : "oss-join-clips") : "join-clips");
 
 /** Join generations' clips, in order. ComfyUI joins 4 at a time, so longer films are joined in steps. */
 export function joinClips(ids: string[], o: JoinOptions): Generation {
-  const modelId = joinModelId(o.engine);
-  const max = o.engine === "open" ? 4 : 24;
+  const modelId = joinModelId(o.engine, o.copy);
+  const max = o.engine === "open" && !o.copy ? 4 : 24;
   // The clips run for real: the join must too (S9). Clips still waiting are canceled rather than paid for.
   const real = ids.some((id) => {
     const g = getGeneration(id);
@@ -535,7 +540,8 @@ export function createMosaicRun(original: GenerationRequest, model: ModelDef, op
 
 /**
  * The model a storyboard film is animated with: MiniMax H3 on your GPU (5 s shots, its default), Seedance 2.5 in the
- * cloud. A clip's own sound stays out of the film: the open join (video-concat-{n}) keeps the picture only.
+ * cloud. MiniMax H3's shots, made from frames of one shape, are joined packet by packet (copy join), each shot with its
+ * own sound; other open shots go through the decode join (video-concat-{n}), which keeps the picture only.
  */
 export function filmModel(engine: Engine, modelId?: string): ModelDef {
   const m = getModel(modelId ?? (engine === "open" ? "oss-minimax-h3" : "seedance-2-5"));

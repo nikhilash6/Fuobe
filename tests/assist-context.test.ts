@@ -287,11 +287,12 @@ describe("studio tools", () => {
     expect(jobs.studio).toBeUndefined();
   });
 
-  it("a faceless episode joins its clips in groups of four on the open engine", () => {
+  it("a faceless episode joins all its clips at once on both engines (the copy join on your GPU)", () => {
     const scenes = Array.from({ length: 6 }, (_, i) => ({ narration: `Line ${i}`, visual: `Scene ${i}` }));
     const steps = studio.fallbackSteps.faceless({ scenes, style: "flat 2D", aspect_ratio: "9:16" }, { engine: "open" });
     expect(steps.filter((s) => s.request.op === "t2i")).toHaveLength(6);
-    expect(steps.filter((s) => s.request.op === "concat").map((s) => s.key)).toEqual(["part0", "part1", "film"]);
+    expect(steps.filter((s) => s.request.op === "concat").map((s) => [s.key, s.request.modelId])).toEqual([["film", "oss-join-encoded"]]);
+    expect(steps.find((s) => s.key === "film")!.after).toEqual(scenes.map((_, k) => `clip${k}`));
     expect(steps.find((s) => s.key === "episode")).toMatchObject({ after: ["film", "voice"], request: { op: "mux", modelId: "oss-mux" } });
     expect(steps.find((s) => s.key === "voice")!.request.prompt).toBe(scenes.map((s) => s.narration).join("\n\n"));
     const cloud = studio.fallbackSteps.faceless({ scenes, style: "flat 2D" }, { engine: "cloud" });
@@ -325,8 +326,8 @@ describe("studio tools", () => {
     expect(still.request).toMatchObject({ modelId: "oss-qwen-image-21", op: "t2i", params: { aspectRatio: "9:16" } });
     const clip = steps.find((s) => s.key === "clip0")!;
     expect(clip.request).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v", params: { aspectRatio: "9:16", duration: 5 } });
-    // The clips are joined with the picture only, and the mux lays the narration on as the film's sound.
-    expect(steps.find((s) => s.key === "film")!.request.modelId).toBe("oss-join-clips");
+    // The clips are joined by copy (one canvas, no decode), and the mux lays the narration on in place of their sound.
+    expect(steps.find((s) => s.key === "film")!.request.modelId).toBe("oss-join-encoded");
     expect(steps.find((s) => s.key === "episode")).toMatchObject({ after: ["film", "voice"], chain: [{ slot: "video" }, { slot: "audio" }], request: { modelId: "oss-mux" } });
     for (const s of steps.filter((x) => x.key.startsWith("still") || x.key.startsWith("clip"))) expect(s.request.prompt, s.key).not.toMatch(NEGATION);
   });

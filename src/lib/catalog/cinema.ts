@@ -602,7 +602,7 @@ export const CAST_SHEET_MODEL = "oss-zimage-soul-cast";
  */
 export const CINEMA_MODELS: Record<CinemaMode, Record<Engine, string[]>> = {
   video: {
-    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-3", "veo-3-1", "minimax-h3-max", "wan-3"],
+    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-3", "veo-3-1", "minimax-h3-max"],
     open: [CINEMA_MODEL, "oss-minimax-h3", "oss-ltx25", "oss-wan22-14b"],
   },
   image: { cloud: [CINEMA_STILL_MODEL, "nano-banana-pro", "seedream-5-pro"], open: [CINEMA_STILL_MODEL, "oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism", "oss-moss-image"] },
@@ -1294,6 +1294,27 @@ function nearest<T extends number>(values: T[], want: number): T {
 /** Cinema's image tiers on a model whose tiers are 720p / 1080p (Fuobe Soul: about 1 and 2 megapixels). */
 const IMAGE_TIER: Record<string, string> = { "1K": "720p", "2K": "1080p", "4K": "1080p" };
 
+/** A video tier's height in pixels: "720p" and "768P" name theirs, "2K" and "4K" are 1440 and 2160. */
+function tierHeight(label: string): number | undefined {
+  const p = /^(\d{3,4})p$/i.exec(label);
+  if (p) return Number(p[1]);
+  return ({ "2k": 1440, "4k": 2160 } as Record<string, number>)[label.toLowerCase()];
+}
+
+/**
+ * The model's video tier for a Cinema tier: the same one in any case ("1080p" is "1080P"), else the nearest in height,
+ * the higher one on a tie. On MiniMax H3, 720p and 1080p are both its 768P (its 2K is further from 1080p).
+ */
+function videoTier(options: string[], want: string): string | undefined {
+  const h = tierHeight(want);
+  if (h === undefined) return undefined;
+  const sized = options.flatMap((o) => {
+    const oh = tierHeight(o);
+    return oh === undefined ? [] : [{ o, d: Math.abs(oh - h), oh }];
+  });
+  return sized.sort((a, b) => a.d - b.d || b.oh - a.oh)[0]?.o;
+}
+
 /** Fit ratio, resolution, duration and batch to what the model takes, saying what changed. */
 function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[], kind: CinemaMode): GenParams {
   const o = model.options;
@@ -1309,6 +1330,12 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
     else if (IMAGE_TIER[res] && o.resolutions.includes(IMAGE_TIER[res])) {
       params.resolution = IMAGE_TIER[res];
       if (res === "4K") notes.push(`${model.name} makes up to about 2 megapixels (its ${params.resolution} size)`);
+    } else if (kind === "video" && videoTier(o.resolutions, res)) {
+      const tier = videoTier(o.resolutions, res)!;
+      params.resolution = tier;
+      if (tier.toLowerCase() !== res.toLowerCase()) {
+        notes.push(tierHeight(tier)! < tierHeight(res)! ? `${model.name} renders up to ${tier} here` : `${model.name} renders at ${tier} here`);
+      }
     } else {
       const order = kind === "video" ? VIDEO_RESOLUTIONS : [...IMAGE_RESOLUTIONS, "0.5K", "1.5K", "720p", "1080p"];
       const below = o.resolutions.filter((r) => order.indexOf(r) <= order.indexOf(res) && order.indexOf(r) >= 0);

@@ -456,6 +456,41 @@ describe("Click to Ad", () => {
     expect(openPresenter.steps.find((s) => s.key === "film")!.request.modelId).toBe("oss-join-sound1");
   });
 
+  it("grows a photo of another shape to the ad's before MiniMax H3 animates it on your GPU", async () => {
+    const { encodePng } = await import("@/server/png");
+    const photo = (w: number, h: number) => saveFile({ data: encodePng({ width: w, height: h, data: Buffer.alloc(w * h * 4, 200) }), contentType: "image/png", name: `p${w}x${h}.png`, source: "upload" }).url;
+    expect(mk.padsTo({ width: 1000, height: 1000 }, "9:16")).toEqual({ padLeft: 0, padTop: 392, padRight: 0, padBottom: 392 });
+    expect(mk.padsTo({ width: 1600, height: 900 }, "9:16")).toEqual({ padLeft: 0, padTop: 976, padRight: 0, padBottom: 976 });
+    expect(mk.padsTo({ width: 720, height: 1280 }, "9:16")).toBeNull();
+    expect(mk.padsTo({ width: 900, height: 1600 }, "16:9")).toEqual({ padLeft: 976, padTop: 0, padRight: 976, padBottom: 0 });
+    const square = photo(64, 64);
+    const product = { ...brand.listProducts()[0], images: [square] };
+    // Product motion, 9:16: the square photo is grown to 9:16 on Qwen-Image 2.1, then H3 starts on that picture.
+    const motion = mk.planMarketing({ engine: "open", format: "motion-hyper", duration: 7 }, { product });
+    expect(motion.steps.map((s) => s.key)).toEqual(["fit1", "shot1"]);
+    expect(motion.steps[0].request).toMatchObject({ modelId: "oss-qwen-image-21", op: "outpaint", inputs: { images: [square] }, params: { extra: { padTop: 24, padBottom: 24, padLeft: 0, padRight: 0 } } });
+    expect(motion.steps[1]).toMatchObject({ after: ["fit1"], request: { modelId: "oss-minimax-h3", op: "i2v", chain: [{ slot: "images", position: "first" }], params: { aspectRatio: "9:16", duration: 7 } } });
+    expect(motion.steps[1].request.inputs).toBeUndefined();
+    expect(motion.finals).toEqual(["shot1"]);
+    // A photo already in the ad's shape, or Wan 2.2 (it crops to the ratio itself), starts on the photo.
+    const tall = photo(72, 128);
+    const inShape = mk.planMarketing({ engine: "open", format: "motion-hyper", duration: 7 }, { product: { ...product, images: [tall] } });
+    expect(inShape.steps.map((s) => s.key)).toEqual(["shot1"]);
+    expect(inShape.steps[0].request.inputs).toEqual({ images: [tall] });
+    const wan = mk.planMarketing({ engine: "open", format: "motion-hyper", duration: 5, modelId: "oss-wan22-14b-fast" }, { product });
+    expect(wan.steps.map((s) => s.key)).toEqual(["shot1"]);
+    // Click to Ad: each photo grown once, every shot starting on its grown picture.
+    const script = "Three reasons I keep this in my bag. It is light, it is tough, and it looks great.";
+    const ad = mk.planClickToAd({ engine: "open", productId: product.id, styleId: "luxury", voiceSample: upload("v.png") }, { product, script });
+    expect(ad.steps.filter((s) => s.key.startsWith("fit")).map((s) => s.request.inputs?.images)).toEqual([[square]]);
+    for (const s of ad.steps.filter((x) => x.key.startsWith("shot"))) expect(s).toMatchObject({ after: ["fit1"], request: { modelId: "oss-minimax-h3", chain: [{ slot: "images", position: "first" }] } });
+    // The UGC close-up of the product, too.
+    const ugc = mk.planClickToAd({ engine: "open", productId: product.id, styleId: "simple-ugc", voiceSample: upload("w.png") }, { product, script });
+    expect(ugc.steps.find((s) => s.key === "broll")).toMatchObject({ after: ["fit1"], request: { modelId: "oss-minimax-h3", op: "i2v" } });
+    // The cloud keeps the photo as it is.
+    expect(mk.planClickToAd({ engine: "cloud", productId: product.id, styleId: "luxury" }, { product, script }).steps.some((s) => s.key.startsWith("fit"))).toBe(false);
+  });
+
   it("writes a script offline within the word budget", async () => {
     const product = brand.listProducts()[0];
     const s = await mk.clickToAdScript({ engine: "cloud", productId: product.id, styleId: "simple-ugc" });

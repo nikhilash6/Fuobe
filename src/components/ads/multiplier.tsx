@@ -12,7 +12,8 @@ import { areaCls } from "@/components/brand/fields";
 import { uploadImages } from "@/components/brand/image-list";
 import { fileToSlot, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
-import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
+import { getModel } from "@/lib/catalog";
+import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, UGC_MODELS, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { probeBlob, probeUrl } from "@/lib/media-probe";
 import { useAskBeforeUpload, useModelAccess } from "@/lib/api";
@@ -499,7 +500,7 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
           />
         </div>
         <p className="flex flex-wrap items-center justify-center gap-1.5 pt-6 text-center text-[12px] text-muted-foreground">
-          <Sparkles className="size-3" /> {engineMode === "open" ? "" : "Cloud: Kling O3 edit, Happy Horse edit, Gemini Omni Flash · "}Open source: Fuobe Genjutsu (Wan Animate), Wan 2.2 clips joined around your ad
+          <Sparkles className="size-3" /> {engineMode === "open" ? "" : "Cloud: Kling O3 edit, Happy Horse edit, Gemini Omni Flash · "}Open source: Fuobe Genjutsu (Wan Animate), {getModel(UGC_MODELS.open.clip)?.name} clips joined around your ad
         </p>
       </div>
     </div>

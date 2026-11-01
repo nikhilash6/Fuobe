@@ -11,9 +11,9 @@ const input = (over: Partial<CinemaGenerateInput>): CinemaGenerateInput => ({ en
 const refs = Array.from({ length: 6 }, (_, i) => `/api/files/uploads/r${i}.png`);
 
 describe("Cinema Studio's models", () => {
-  it("video: Fuobe Cinema, then MiniMax H3, on both engines; the cloud adds H3 Max and Wan 3.0", () => {
+  it("video: Fuobe Cinema, then MiniMax H3, on both engines; the cloud adds H3 Max", () => {
     expect(CINEMA_MODELS.video.open).toEqual(["fuobe-cinema", "oss-minimax-h3", "oss-ltx25", "oss-wan22-14b"]);
-    expect(CINEMA_MODELS.video.cloud).toEqual(["fuobe-cinema", "minimax-h3", "seedance-2-5", "kling-3", "veo-3-1", "minimax-h3-max", "wan-3"]);
+    expect(CINEMA_MODELS.video.cloud).toEqual(["fuobe-cinema", "minimax-h3", "seedance-2-5", "kling-3", "veo-3-1", "minimax-h3-max"]);
     for (const engine of ["open", "cloud"] as const) for (const id of CINEMA_MODELS.video[engine]) expect(getModel(id), id).toBeTruthy();
     // The default stays Fuobe Cinema.
     expect(planCinema(input({}), ctx).model.id).toBe("fuobe-cinema");
@@ -29,6 +29,29 @@ describe("Cinema Studio's models", () => {
     expect(planCinema(input({ modelId: "oss-minimax-h3", duration: 12 }), ctx).steps[0].request.params?.duration).toBe(10);
     expect(planCinema(input({ modelId: "oss-minimax-h3", duration: 14 }), ctx).steps[0].request.params?.duration).toBe(15);
     expect(planCinema(input({ engine: "cloud", modelId: "minimax-h3" }), ctx).model.id).toBe("minimax-h3");
+  });
+
+  it("MiniMax H3 and H3 Max render at their own tier nearest to the one picked", () => {
+    const res = (over: Partial<CinemaGenerateInput>) => planCinema(input({ engine: "cloud", ...over }), ctx);
+    // fal names H3's tiers 480P, 768P and 2K; H3 Max adds 1080P.
+    expect(res({ modelId: "minimax-h3", resolution: "720p" }).steps[0].request.params?.resolution).toBe("768P");
+    expect(res({ modelId: "minimax-h3", resolution: "1080p" }).steps[0].request.params?.resolution).toBe("768P");
+    expect(res({ modelId: "minimax-h3", resolution: "480p" }).steps[0].request.params?.resolution).toBe("480P");
+    expect(res({ modelId: "minimax-h3-max", resolution: "720p" }).steps[0].request.params?.resolution).toBe("768P");
+    expect(res({ modelId: "minimax-h3-max", resolution: "1080p" }).steps[0].request.params?.resolution).toBe("1080P");
+    const h3 = res({ modelId: "minimax-h3", resolution: "720p" });
+    expect(h3.notes.join(" ")).not.toMatch(/renders up to/);
+    expect(h3.costUsd).toBeGreaterThan(0);
+    // A take with reference clips on the cloud default moves to H3 at its 768P.
+    const clips = res({ resolution: "720p", videos: ["/api/files/ref.mp4"], audios: ["/api/files/ref.mp3"] });
+    expect(clips.model.id).toBe("minimax-h3");
+    expect(clips.steps[0].request.params?.resolution).toBe("768P");
+    // On the GPU, H3 renders 768p.
+    const open = planCinema(input({ modelId: "oss-minimax-h3", resolution: "720p" }), ctx);
+    expect(open.steps[0].request.params?.resolution).toBe("768p");
+    expect(open.notes.join(" ")).toMatch(/MiniMax H3 renders at 768p here/);
+    // Every cloud choice has a price.
+    for (const id of CINEMA_MODELS.video.cloud) expect(res({ modelId: id, resolution: "720p" }).costUsd, id).not.toBeNull();
   });
 
   it("stills: the open menu is Soul Cinema, Ideogram 4, Qwen-Image 2.1, Krea 2 Realism and MOSS-Image", () => {

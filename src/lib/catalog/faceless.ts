@@ -1,5 +1,5 @@
 import { describeMove, KEN_BURNS_FPS, sceneMoves } from "@/lib/av/ken-burns";
-import { plannedDurations } from "./clip-lengths";
+import { COPY_JOIN_VIDEOS, lengthRange, plannedDurations } from "./clip-lengths";
 import { estimateCost } from "./plan";
 import { pricingAt } from "./promo";
 import type { ChainSlot, Engine, Generation, GenerationRequest, ModelDef } from "./types";
@@ -204,7 +204,7 @@ export const STYLES: VisualStyle[] = [
   style(
     "Pastel Flat 2D",
     "Soft pastel colours and simple flat illustrations",
-    "soft pastel flat 2D illustration: simple rounded shapes without outlines, gentle gradients, calm friendly characters, lots of breathing room",
+    "soft pastel flat 2D illustration: simple rounded shapes in flat fills of colour, edges defined by colour alone, gentle gradients, calm friendly characters, lots of breathing room",
     "soft eased motion, elements float gently, calm pacing",
     330,
   ),
@@ -612,7 +612,7 @@ export interface EngineModels {
   join: string;
   /** Joins at most this many clips at once (longer films are folded). */
   joinMax: number;
-  /** Frame by frame's join (open: packet copy of the Ken Burns clips, flat memory) and its fold size. */
+  /** The join of clips on one canvas (Frame by frame, MiniMax H3 on your GPU; open: packet copy, flat memory) and its fold size. */
   framesJoin: string;
   framesJoinMax: number;
   /** Puts the voice on the film (no music). */
@@ -691,8 +691,8 @@ export const ENGINE_MODELS: Record<Engine, EngineModels> = {
 /**
  * Clip lengths each block video model can make. Gemini Omni Flash takes any whole number of seconds
  * from 3 to 10 (research: duration 3–10), hosted MiniMax H3 any from 5 to 15 (fal's schema); the Ken Burns
- * moves 1–30 s (fal) and 1–10 s per job (ComfyUI, longer scenes split); the others list their durations in the
- * catalog, MiniMax H3 on your GPU the 5, 10 and 15 s it is trained for (plannedDurations).
+ * moves 1–30 s (fal) and 1–10 s per job (ComfyUI, longer scenes split); MiniMax H3 on your GPU any from 3 to 15
+ * (lengthRange), so each scene is cut to where its lines are spoken; the others list their durations in the catalog.
  */
 export const DURATION_RANGES: Record<string, [number, number]> = { "gemini-omni-flash": [3, 10], "minimax-h3": [5, 15], "ken-burns": [1, 30], "oss-ken-burns": [1, 10] };
 
@@ -760,10 +760,10 @@ export function shotsFor(seconds: number, durations: number[] | undefined, range
   return best ?? Array.from({ length: n }, () => max);
 }
 
-/** The block video model's shots for a block (MiniMax H3 on your GPU: 5, 10 or 15 s each). */
+/** The block video model's shots for a block (MiniMax H3 on your GPU: any 3 to 15 s each). */
 export function blockShots(seconds: number, model: ModelDef | undefined): number[] {
   if (!model) return [Math.round(seconds)];
-  return shotsFor(seconds, plannedDurations(model), DURATION_RANGES[model.id]);
+  return shotsFor(seconds, plannedDurations(model), DURATION_RANGES[model.id] ?? lengthRange(model));
 }
 
 // ---------------------------------------------------------------------------
@@ -858,6 +858,9 @@ export function resolveModels(settings: EpisodeSettings, narrationChars: number,
   const narration = settings.engine === "open" ? m.narration : sample ? m.cloneNarration : narrationChars > m.narrationMaxChars ? m.longNarration : m.narration;
   // Style references win; attached source images otherwise go to a model that reads them.
   const fromSources = !settings.styleRefs.length && !!settings.sourceImages?.length && !!m.sourceStill;
+  // Clips that share one canvas and frame rate are joined packet by packet, in flat memory however long the film: the
+  // Ken Burns moves, and MiniMax H3 on your GPU from stills drawn in the episode's shape (an edit keeps its source's).
+  const copyJoin = frames || (COPY_JOIN_VIDEOS.has(video) && !fromSources);
   return {
     still: settings.styleRefs.length ? m.styleStill : fromSources ? m.sourceStill! : m.still,
     ...(fromSources && { stillOp: "edit" as const }),
@@ -868,8 +871,8 @@ export function resolveModels(settings: EpisodeSettings, narrationChars: number,
     loop: settings.music ? m.loop : null,
     level: settings.music ? (m.levelMusic ?? null) : null,
     mux: settings.music ? m.mixMusic : m.mux,
-    join: frames ? m.framesJoin : m.join,
-    joinMax: frames ? m.framesJoinMax : m.joinMax,
+    join: copyJoin ? m.framesJoin : m.join,
+    joinMax: copyJoin ? m.framesJoinMax : m.joinMax,
     captions: settings.subtitles ? m.captions : null,
     align: m.align,
     captionsUseWords: m.captionsUseWords,

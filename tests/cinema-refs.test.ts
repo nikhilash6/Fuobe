@@ -44,7 +44,7 @@ describe("reference clips", () => {
     const plan = planCinema({ ...VIDEO, ...CLIPS, modelId: "kling-3" }, ctx);
     expect(plan.model.id).toBe("kling-3");
     expect(plan.steps[0].request.inputs).toBeUndefined();
-    expect(plan.notes.join(" ")).toMatch(/Kling 3\.0 doesn't take reference videos and reference audio — MiniMax H3 or Seedance 2\.5 or MiniMax H3 Max or Wan 3\.0 do/);
+    expect(plan.notes.join(" ")).toMatch(/Kling 3\.0 doesn't take reference videos and reference audio — MiniMax H3 or Seedance 2\.5 or MiniMax H3 Max do/);
     // Fuobe Cinema picked from the menu takes none yet: the partners that do are named.
     const original = planCinema({ ...VIDEO, ...CLIPS, modelId: "fuobe-cinema" }, ctx);
     expect(original.model.id).toBe("fuobe-cinema");

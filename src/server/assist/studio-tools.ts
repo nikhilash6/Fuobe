@@ -322,7 +322,8 @@ function facelessSteps(i: FacelessToolInput, ctx: ToolContext, voiceFor: VoiceFo
   const aspect = ["9:16", "16:9", "1:1"].includes(i.aspect_ratio ?? "") ? i.aspect_ratio! : "9:16";
   const stillModel = open ? "oss-qwen-image-21" : "nano-banana-pro";
   // Higgsfield's Faceless runs Gemini Omni Flash per block (16:9 / 9:16 only); square goes to Seedance. On your GPU,
-  // MiniMax H3 makes 5 s clips; its own sound is left out by the join, and the narration goes on in its place.
+  // MiniMax H3 makes 5 s clips from stills of one shape; the copy join puts them together without decoding them, and
+  // the mux lays the narration in place of their own sound.
   const clipModel = open ? "oss-minimax-h3" : aspect === "1:1" ? "seedance-2-5" : "gemini-omni-flash";
   const steps: (PipelineStep & { label: string })[] = [];
   scenes.forEach((s, k) => {
@@ -337,23 +338,11 @@ function facelessSteps(i: FacelessToolInput, ctx: ToolContext, voiceFor: VoiceFo
       },
     );
   });
-  // Joins: the open join takes up to 4 clips a step, so longer episodes join in groups first.
-  const join = open ? "oss-join-clips" : "join-clips";
+  // One join of every scene (8 at most): the copy join on your GPU, the cloud's join otherwise.
+  const join = open ? "oss-join-encoded" : "join-clips";
   const clips = scenes.map((_, k) => `clip${k}`);
-  let film: string;
-  if (clips.length <= (open ? 4 : 24)) {
-    steps.push({ key: "film", label: "Joined scenes", request: req({ modelId: join, op: "concat", prompt: i.title?.trim() || "Episode" }), after: clips, chain: clips.map(() => ({ slot: "videos" as const })) });
-    film = "film";
-  } else {
-    const groups: string[] = [];
-    for (let g = 0; g * 4 < clips.length; g++) {
-      const part = clips.slice(g * 4, g * 4 + 4);
-      steps.push({ key: `part${g}`, label: `Scenes ${g * 4 + 1}–${g * 4 + part.length} joined`, request: req({ modelId: join, op: "concat", prompt: i.title?.trim() || "Episode" }), after: part, chain: part.map(() => ({ slot: "videos" as const })) });
-      groups.push(`part${g}`);
-    }
-    steps.push({ key: "film", label: "Joined scenes", request: req({ modelId: join, op: "concat", prompt: i.title?.trim() || "Episode" }), after: groups, chain: groups.map(() => ({ slot: "videos" as const })) });
-    film = "film";
-  }
+  steps.push({ key: "film", label: "Joined scenes", request: req({ modelId: join, op: "concat", prompt: i.title?.trim() || "Episode" }), after: clips, chain: clips.map(() => ({ slot: "videos" as const })) });
+  const film = "film";
   const narrator = narratorVoice(i, ctx, voiceFor);
   const narration = scenes.map((s) => s.narration.trim()).filter(Boolean).join("\n\n");
   steps.push(

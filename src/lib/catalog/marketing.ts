@@ -969,7 +969,7 @@ export function formatModels(format: FormatDef, engine: Engine, has: { product: 
     switch (format.pipeline) {
       case "motion":
         return [
-          { id: "oss-minimax-h3", note: "MiniMax H3, 5–15 s clips with sound" },
+          { id: "oss-minimax-h3", note: "One 5–15 s clip with sound" },
           { id: "oss-wan22-14b-fast", note: "Wan 2.2 14B, shot by shot" },
         ];
       case "ugc":
@@ -989,7 +989,7 @@ export function formatModels(format: FormatDef, engine: Engine, has: { product: 
     case "poster":
       return has.product
         ? [original, { id: "gpt-image-2-5", note: "Draws the exact text" }, { id: "nano-banana-pro" }, { id: "ideogram-4-5" }]
-        : [original, { id: "ideogram-4-5", note: "Exact text in your brand colours" }, { id: "recraft-4-1" }, { id: "gpt-image-2-5" }];
+        : [original, { id: "ideogram-4-5", note: "Draws the exact text" }, { id: "recraft-4-1" }, { id: "gpt-image-2-5" }];
     case "ugc-talking":
     case "tiktok":
       return [{ id: "omnihuman-2", note: "Full-body presenter" }, { id: "kling-avatar-2" }];

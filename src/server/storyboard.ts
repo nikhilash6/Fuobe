@@ -6,6 +6,7 @@ import { soulLook } from "@/lib/catalog/soul";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { storyboardName } from "@/lib/storyboard-board";
 import { supportsOp } from "@/lib/catalog";
+import { COPY_JOIN_VIDEOS } from "@/lib/catalog/clip-lengths";
 import { filmModel, joinClips } from "./chains";
 import { llmText } from "./enhance";
 import { createGenerations, listGenerations, previewChained } from "./generations";
@@ -138,6 +139,7 @@ export function createStoryboardFilm(batchId: string, opts: { modelId?: string }
       title: batchTitle,
       aspectRatio,
       resolution: model.defaults?.resolution,
+      copy: COPY_JOIN_VIDEOS.has(model.id),
       step: { label: `Film · ${n} shots`, index: n, of: n + 1 },
     },
   );

@@ -143,16 +143,17 @@ describe("blocks", () => {
     expect(blockShots(10, getModel("gemini-omni-flash"))).toEqual([10]);
   });
 
-  it("lands MiniMax H3's shots on the 5, 10 and 15 s it is trained for (on your GPU), any 5–15 s hosted", () => {
+  it("cuts MiniMax H3's shots to the block, any 3–15 s on your GPU, any 5–15 s hosted", () => {
     const h3 = getModel("oss-minimax-h3")!;
-    // The catalog also lists 3 s (the presets made at that length); a planned block never asks for it.
-    expect(h3.options.durations).toContain(3);
-    for (let s = 1; s <= 40; s++) for (const shot of blockShots(s, h3)) expect([5, 10, 15]).toContain(shot);
-    expect(blockShots(3, h3)).toEqual([5]);
-    expect(blockShots(7, h3)).toEqual([10]);
-    expect(blockShots(12, h3)).toEqual([15]);
+    // The open graph renders any length on its 17n + 5 frame grid.
+    for (let s = 1; s <= 40; s++) for (const shot of blockShots(s, h3)) expect(shot >= 3 && shot <= 15, `${s}: ${shot}`).toBe(true);
+    expect(blockShots(2, h3)).toEqual([3]);
+    expect(blockShots(4, h3)).toEqual([4]);
+    expect(blockShots(7, h3)).toEqual([7]);
+    expect(blockShots(12, h3)).toEqual([12]);
     expect(blockShots(20, h3)).toEqual([10, 10]);
-    expect(filmSeconds(9, h3)).toBe(10);
+    expect(blockShots(40, h3)).toEqual([14, 13, 13]);
+    expect(filmSeconds(9, h3)).toBe(9);
     // Hosted H3 takes any whole second from 5 to 15 (fal's schema).
     expect(blockShots(7, getModel("minimax-h3"))).toEqual([7]);
     expect(blockShots(3, getModel("minimax-h3"))).toEqual([5]);
@@ -245,25 +246,25 @@ describe("render graph", () => {
     expect(long.filter((s) => s.part === "join").map((j) => j.after!.length)).toEqual([24, 24, 12, 3]);
   });
 
-  it("open: MiniMax H3 in 5, 10 or 15 s shots, joins folded 4 at a time, Chatterbox, music under the voice, Qwen3-ASR timed burn-in", () => {
+  it("open: MiniMax H3 shots as long as the block, one copy join, Chatterbox, music under the voice, Qwen3-ASR timed burn-in", () => {
     const g = graphFor({ engine: "open", animation: "animated", music: true, voice: null }, six);
     const stills = g.filter((s) => s.part === "still");
     expect(stills[0].request).toMatchObject({ modelId: "oss-qwen-image-21", params: { aspectRatio: "16:9", numOutputs: 1 } });
     expect(stills[0].request.op).toBeUndefined();
     expect(stills[0].request.inputs).toBeUndefined();
     const clips = g.filter((s) => s.part === "clip");
-    // Each 9 s block is one 10 s H3 clip at 768p; H3 always makes sound, so no audio switch is sent.
+    // Each 9 s block is one 9 s H3 clip at 768p; H3 always makes sound, so no audio switch is sent.
     expect(clips).toHaveLength(6);
-    expect(clips[0].request).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v", params: { duration: 10, resolution: "768p" } });
+    expect(clips[0].request).toMatchObject({ modelId: "oss-minimax-h3", op: "i2v", params: { duration: 9, resolution: "768p" } });
     expect(clips.every((c) => c.request.params?.generateAudio === undefined)).toBe(true);
     const joins = g.filter((s) => s.part === "join");
-    // 6 clips → joins of 4 and 2 → the final join of both.
-    expect(joins.map((j) => j.after!.length)).toEqual([4, 2, 2]);
-    expect(joins.every((j) => j.request.modelId === "oss-join-clips")).toBe(true);
+    // The clips share one canvas and 24 fps: one copy join of all 6, which never decodes them (flat memory).
+    expect(joins.map((j) => j.after!.length)).toEqual([6]);
+    expect(joins.every((j) => j.request.modelId === "oss-join-encoded")).toBe(true);
     const narration = g.find((s) => s.key === "narration")!;
     expect(narration.request).toMatchObject({ modelId: "oss-chatterbox", inputs: { voiceAudio: "/api/files/uploads/demo-voice.wav" } });
-    // The bed is as long as the film (six 10 s shots) plus a second.
-    expect(g.find((s) => s.key === "music")!.request).toMatchObject({ modelId: "oss-ace-step", op: "music", params: { duration: 61, extra: { lyrics: "[Instrumental]" } } });
+    // The bed is as long as the film (six 9 s shots) plus a second.
+    expect(g.find((s) => s.key === "music")!.request).toMatchObject({ modelId: "oss-ace-step", op: "music", params: { duration: 55, extra: { lyrics: "[Instrumental]" } } });
     const mix = g.find((s) => s.key === "mix")!;
     expect(mix).toMatchObject({ after: ["join", "narration", "music"], chain: [{ slot: "video" }, { slot: "audio" }, { slot: "audio2" }] });
     expect(mix.request).toMatchObject({ modelId: "oss-mux", params: { extra: { backgroundVolumeDb: -14 } } });
@@ -592,8 +593,27 @@ describe("timing: every scene cut to its spoken lines", () => {
     expect(plannedTiming(six, wan)).toEqual(Object.fromEntries(six.map((b) => [b.id, 10])));
   });
 
+  it("keeps each scene on its lines with MiniMax H3 on your GPU, short lines too", () => {
+    const h3 = getModel("oss-minimax-h3")!;
+    // Eight short lines of 9 words, about 3.6 s each when spoken.
+    const eight = Array.from({ length: 8 }, (_, i) => block(i, 9));
+    const t = spokenTimes(eight, aligned(eight, 0.36))!;
+    const timing = sceneTiming(eight, t, h3);
+    let film = 0;
+    eight.forEach((b, i) => {
+      if (i > 0) expect(Math.abs(film - t.starts[i]!), `scene ${i + 1}`).toBeLessThan(1);
+      film += timing[b.id];
+    });
+    expect(film).toBeGreaterThanOrEqual(t.end);
+    expect(film).toBeLessThan(t.end + 2);
+    // The graph makes those lengths, each scene one H3 clip.
+    const g = graphFor({ engine: "open", music: false, voice: null }, withTiming(eight, timing));
+    expect(sceneSpans(g, 8).map((s) => s.seconds)).toEqual(eight.map((b) => timing[b.id]));
+    expect(g.filter((s) => s.part === "clip")).toHaveLength(8);
+  });
+
   it("gives a block the same shots planned or timed (the graph derives them from its length)", () => {
-    for (const m of [gemini, wan, getModel("seedance-2-5")]) {
+    for (const m of [gemini, wan, getModel("seedance-2-5"), getModel("oss-minimax-h3")]) {
       for (let s = 3; s <= 25; s++) expect(blockShots(filmSeconds(s, m), m)).toEqual(blockShots(s, m));
     }
   });

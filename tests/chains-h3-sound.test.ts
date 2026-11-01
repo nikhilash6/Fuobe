@@ -6,8 +6,8 @@ import { buildEpisodeGraph, defaultSettings, genreInfo, secondsFor, type Episode
 
 // MiniMax H3 makes every clip with its own sound. Where a pipeline lays a voice or music on the film (Faceless, the
 // Explainer, Content Factory, Assist's faceless episode, Click to Ad), that soundtrack takes the clips' place: the open
-// joins build the film from the pictures, and the open mux replaces the film's sound. A Storyboard film has no
-// soundtrack of its own: its open join keeps the picture only, as it did for silent clips.
+// mux replaces the film's sound, whichever join built it. H3's clips share one canvas and frame rate, so Faceless and
+// the Explainer join them with the copy join (no decode, flat memory); the decode joins build a film from the pictures.
 
 type Graph = Record<string, { class_type: string; inputs: Record<string, unknown> }>;
 const workflow = (id: string): Graph => JSON.parse(fs.readFileSync(path.join(__dirname, "../workflows/comfyui", `${id}.json`), "utf8"));
@@ -87,14 +87,15 @@ describe("Faceless and the Explainer on MiniMax H3: the narration and the music 
       getModel,
     );
 
-  it.each(["faceless", "explainer"] as const)("%s: clips with sound, joined as pictures, the voice and the bed mixed on", (feature) => {
+  it.each(["faceless", "explainer"] as const)("%s: clips with sound, joined by copy, the voice and the bed mixed on in place of their sound", (feature) => {
     expect(getModel("oss-minimax-h3")!.options.audio).toBe("always");
     for (const music of [true, false]) {
       const g = graph(feature, { music });
       const clips = g.filter((s) => s.part === "clip");
       expect(clips.every((c) => c.request.modelId === "oss-minimax-h3")).toBe(true);
       const joins = g.filter((s) => s.part === "join");
-      expect(joins.every((j) => j.request.modelId === "oss-join-clips" && j.chain!.every((c) => c.slot === "videos"))).toBe(true);
+      expect(joins.length).toBeGreaterThan(0);
+      expect(joins.every((j) => j.request.modelId === "oss-join-encoded" && j.chain!.every((c) => c.slot === "videos"))).toBe(true);
       const mix = g.find((s) => s.key === "mix")!;
       expect(mix.request.modelId).toBe("oss-mux");
       expect(mix.after).toEqual(music ? ["join", "narration", "music"] : ["join", "narration"]);
@@ -115,10 +116,24 @@ describe("Faceless and the Explainer on MiniMax H3: the narration and the music 
     expect(route.note).toMatch(/one track: video-mux-audio-replace/);
   });
 
-  it("each H3 block lands on 5, 10 or 15 s", () => {
+  it("each H3 block is one clip of 3 to 15 s, as long as the block", () => {
     const g = graph("faceless", { music: false });
-    const lengths = g.filter((s) => s.part === "clip").map((c) => c.request.params?.duration);
-    expect(lengths.length).toBeGreaterThan(0);
-    for (const d of lengths) expect([5, 10, 15]).toContain(d);
+    const clips = g.filter((s) => s.part === "clip");
+    expect(clips).toHaveLength(blocks.length);
+    clips.forEach((c, i) => expect(c.request.params?.duration).toBe(blocks[i].seconds));
+    for (const c of clips) expect(Number(c.request.params?.duration)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("source pictures (an edit keeps each source's shape) go through the decode join, which fits every clip to the film", () => {
+    const g = graph("faceless", { music: false, sourceImages: ["/api/files/uploads/a.png", "/api/files/uploads/b.png"] });
+    const joins = g.filter((s) => s.part === "join");
+    expect(joins.length).toBeGreaterThan(0);
+    expect(joins.every((j) => j.request.modelId === "oss-join-clips")).toBe(true);
+  });
+
+  it("the copy join is a graph that never decodes a frame", () => {
+    const g = workflow("video-concat-encoded");
+    const classes = Object.values(g).map((v) => v.class_type).sort();
+    expect(classes).toEqual(["ConcatenateVideo", "LoadVideo", "LoadVideo", "SaveVideo"]);
   });
 });

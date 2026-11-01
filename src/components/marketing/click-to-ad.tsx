@@ -14,7 +14,8 @@ import { AddFromLink, priceText, ProductThumb, UploadProductButton } from "@/com
 import { SelfHostNote } from "@/components/self-host-note";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { uploadFile, useLikelyVisitor } from "@/lib/api";
-import { AD_STYLES, END_CARD, KIT_LABELS, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
+import { getModel } from "@/lib/catalog";
+import { AD_STYLES, END_CARD, KIT_LABELS, UGC_MODELS, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -460,7 +461,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
           />
         </div>
         <p className="flex items-center justify-center gap-1.5 pt-4 text-[12px] text-muted-foreground">
-          <Sparkles className="size-3" /> {engineMode === "open" ? "" : "Cloud: Seedance 2.5 shots or an OmniHuman presenter, ElevenLabs voice, Auto Subtitle · "}Open source: Wan 2.2, InfiniteTalk, Chatterbox (your voice sample), caption burn-in
+          <Sparkles className="size-3" /> {engineMode === "open" ? "" : "Cloud: Seedance 2.5 shots or an OmniHuman presenter, ElevenLabs voice, Auto Subtitle · "}Open source: {getModel(UGC_MODELS.open.clip)?.name}, InfiniteTalk, Chatterbox (your voice sample), caption burn-in
         </p>
       </div>
     </div>

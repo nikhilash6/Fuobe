@@ -2,7 +2,7 @@ import "server-only";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { getModel, supportsOp } from "@/lib/catalog";
-import { plannedDurations } from "@/lib/catalog/clip-lengths";
+import { lengthRange, plannedDurations } from "@/lib/catalog/clip-lengths";
 import {
   AD_STYLES,
   brandLine,
@@ -58,7 +58,9 @@ import { isOffered } from "./model-access";
 import { keepOffered } from "@/lib/model-access";
 import { engineMode } from "./settings";
 import { encodePng } from "./png";
-import { saveFile, storedMedia } from "./storage";
+import { localHead, saveFile, storedMedia } from "./storage";
+import { imageSize } from "@/lib/image-size";
+import { isH3Graph } from "@/lib/h3-prompt";
 
 /**
  * Marketing Studio (templates → product shots, posters, ads, product motion, UGC presenters),
@@ -171,6 +173,55 @@ const need = (model: string): ModelDef => {
   if (!m) throw new PlanError(`Unknown model ${model}`);
   return m;
 };
+
+/** Qwen-Image 2.1's expand graph on your GPU: it grows a photo to the ad's shape before a clip starts on it. */
+export const FIT_PHOTO_MODEL = "oss-qwen-image-21";
+const FIT_PHOTO_PROMPT = "Continue the scene naturally beyond every edge with matching perspective, lighting, textures and grain.";
+
+/** A clip model that makes its clip in the start frame's own shape: MiniMax H3 on your GPU (its i2v graph runs at "auto"). */
+const keepsFrameShape = (clip: ModelDef) => clip.engine === "open" && clip.routes.some((r) => r.op === "i2v" && isH3Graph(r.endpoint));
+
+/** Margins (multiples of 8 px) that grow a width × height picture to the aspect ratio; null when it's already that shape. */
+export function padsTo(size: { width: number; height: number }, aspect: string): { padLeft: number; padTop: number; padRight: number; padBottom: number } | null {
+  const [a, b] = aspect.split(":").map(Number);
+  if (!(a > 0 && b > 0)) return null;
+  const want = a / b;
+  const have = size.width / size.height;
+  if (Math.abs(have - want) / want < 0.02) return null;
+  const side = (total: number) => Math.round(total / 2 / 8) * 8;
+  if (have < want) {
+    const x = side(size.height * want - size.width);
+    return x > 0 ? { padLeft: x, padTop: 0, padRight: x, padBottom: 0 } : null;
+  }
+  const y = side(size.width / want - size.height);
+  return y > 0 ? { padLeft: 0, padTop: y, padRight: 0, padBottom: y } : null;
+}
+
+/**
+ * The start frame of a clip made from a photo. MiniMax H3 on your GPU keeps its start frame's shape, so a photo of
+ * another shape (a square product photo in a 9:16 ad) is first grown to the ad's shape on Qwen-Image 2.1 (a step
+ * added to `steps`, once per photo), and the clip starts on that picture. Any other clip model, a photo already in
+ * shape, or one whose size can't be read starts on the photo itself.
+ */
+function startFrame(steps: Step[], photo: string, aspect: string | undefined, clip: ModelDef, feature: string): Pick<GenerationRequest, "inputs" | "chain"> & { after?: string[] } {
+  const own = { inputs: { images: [photo] } };
+  if (!aspect || !keepsFrameShape(clip) || !getModel(FIT_PHOTO_MODEL)) return own;
+  const head = localHead(photo);
+  const size = head ? imageSize(head) : null;
+  const pads = size ? padsTo(size, aspect) : null;
+  if (!pads) return own;
+  let fit = steps.find((s) => s.request.modelId === FIT_PHOTO_MODEL && s.request.op === "outpaint" && s.request.inputs?.images?.[0] === photo);
+  if (!fit) {
+    const n = steps.filter((s) => s.key.startsWith("fit")).length + 1;
+    fit = {
+      key: `fit${n}`,
+      label: n > 1 ? `Photo ${n} in ${aspect}` : `Photo in ${aspect}`,
+      request: { feature, modelId: FIT_PHOTO_MODEL, op: "outpaint", prompt: FIT_PHOTO_PROMPT, inputs: { images: [photo] }, params: { extra: pads } },
+    };
+    steps.push(fit);
+  }
+  return { chain: [{ slot: "images", position: "first" }], after: [fit.key] };
+}
 
 /** The model's own aspect ratio closest to the wanted one ("auto" when it takes it, else by shape). */
 export function nearestAspect(want: string | undefined, allowed: string[] | undefined): string | undefined {
@@ -351,25 +402,36 @@ export function planMarketing(input: MarketingInput, ctx: PlanContext): RunPlan 
     const motionText = (extra?: string) =>
       join(tpl ? fill(tpl.prompt, product, brand) : "A polished product commercial", extra, productLine(product), hasProduct && "The product stays exactly as in the first frame: same shape, label and colours", prompt, brandText, !hasProduct && website && `For the product at ${website}`);
     const base = { feature, modelId, params: { aspectRatio: aspect } as GenerationRequest["params"] };
-    // Open models make a few seconds per clip: longer motion is several shots from the product photo, joined.
-    const shots = open ? shotPlan(want, plannedDurations(model)) : [snapDuration(want, model.options.durations)];
-    if (!open && shots[0] !== want) notes.push(`${model.name} makes ${shots[0]} s clips — the closest to ${want} s`);
+    // Open models make a few seconds per clip: longer motion is several shots from the product photo, joined. MiniMax H3
+    // on your GPU renders any length from 3 to 15 s in one clip.
+    const range = open ? lengthRange(model) : undefined;
+    const shots = range && want <= range[1] ? [Math.max(range[0], Math.round(want))] : open ? shotPlan(want, plannedDurations(model)) : [snapDuration(want, model.options.durations)];
+    if (shots.length === 1 && shots[0] !== want) notes.push(`${model.name} makes ${shots[0]} s clips — the closest to ${want} s`);
     const op: Operation = refs.length > 1 && supportsOp(model, "ref2v") ? "ref2v" : refs.length ? "i2v" : "t2v";
     if (op === "t2v" && !supportsOp(model, "t2v")) throw new PlanError("Attach a product to generate");
     const VARIATIONS = ["Wide establishing shot that introduces the product", "Slow push-in to a close-up of the product's details", "Graceful orbit around the product that ends on its hero angle", "Macro detail pass over the texture and label"];
-    const steps: Step[] = shots.map((d, i) => ({
-      key: `shot${i + 1}`,
-      label: shots.length > 1 ? `Shot ${i + 1} of ${shots.length}` : name,
-      request: {
-        ...base,
-        feature: shots.length > 1 ? `${feature}-step` : feature,
-        op,
-        prompt: motionText(shots.length > 1 ? VARIATIONS[i % VARIATIONS.length] : undefined).slice(0, MAX_PROMPT),
-        inputs: op === "t2v" ? undefined : { images: op === "ref2v" ? refs : refs.slice(0, 1) },
-        params: { ...base.params, duration: d, ...(model.options.audio && { generateAudio: true }) },
-        title,
-      },
-    }));
+    // MiniMax H3 on your GPU keeps the photo's shape: a photo of another shape is grown to the format's first.
+    const steps: Step[] = [];
+    const { after: frameAfter, ...frame } = op === "i2v" ? startFrame(steps, refs[0], aspect, model, `${feature}-step`) : { after: undefined };
+    if (frameAfter) notes.push(`${model.name} keeps its first frame's shape: the photo is grown to ${aspect} on Qwen-Image 2.1 first`);
+    steps.push(
+      ...shots.map(
+        (d, i): Step => ({
+          key: `shot${i + 1}`,
+          label: shots.length > 1 ? `Shot ${i + 1} of ${shots.length}` : name,
+          request: {
+            ...base,
+            feature: shots.length > 1 ? `${feature}-step` : feature,
+            op,
+            prompt: motionText(shots.length > 1 ? VARIATIONS[i % VARIATIONS.length] : undefined).slice(0, MAX_PROMPT),
+            ...(op === "i2v" ? frame : { inputs: op === "t2v" ? undefined : { images: refs } }),
+            params: { ...base.params, duration: d, ...(model.options.audio && { generateAudio: true }) },
+            title,
+          },
+          ...(frameAfter && { after: frameAfter }),
+        }),
+      ),
+    );
     if (shots.length > 1) {
       const joiner = UGC_MODELS[input.engine].join;
       steps.push({
@@ -519,7 +581,9 @@ function planPresenter(p: PresenterPlan): RunPlan {
   }
   clips.push("captions");
   if (p.broll && p.productImages.length) {
+    const { after: frameAfter, ...frame } = startFrame(steps, p.productImages[0], nearestAspect(aspect, clip.options.aspectRatios), clip, step);
     steps.push({
+      ...(frameAfter && { after: frameAfter }),
       key: "broll",
       label: "Product close-up",
       request: {
@@ -527,7 +591,7 @@ function planPresenter(p: PresenterPlan): RunPlan {
         modelId: M.clip,
         op: "i2v",
         prompt: join("Handheld close-up of the product turning slowly in soft natural light, shallow depth of field", KEEP_PRODUCT),
-        inputs: { images: p.productImages.slice(0, 1) },
+        ...frame,
         params: { aspectRatio: nearestAspect(aspect, clip.options.aspectRatios), duration: clipLen(p.brollSeconds ?? 4), ...(clip.options.audio && { generateAudio: false }), ...(p.quality && { resolution: p.quality }) },
       },
     });
@@ -784,10 +848,16 @@ function planAd(input: ClickToAdInput, ctx: { product: Product; brand?: BrandKit
   const lens = open ? adShots(clip) : [4, 4, 4];
   const angles = ["Hero shot, the camera glides in", "Close-up on the details as light sweeps across", "The product in use, ending on a clean final frame"];
   const step = "click-to-ad-step";
+  const shotAspect = nearestAspect(CLICK_TO_AD.aspect, clip.options.aspectRatios);
+  // MiniMax H3 on your GPU keeps each photo's shape: a photo of another shape is grown to 9:16 first.
+  const fits: Step[] = [];
+  const frames = lens.map((_, i) => startFrame(fits, images[i % images.length], shotAspect === "auto" ? CLICK_TO_AD.aspect : shotAspect, clip, step));
   const steps: Step[] = [
     { key: "voice", label: "Voiceover", request: { feature: step, modelId: M.voice, op: "tts", prompt: ctx.script, inputs: open ? { voiceAudio: input.voiceSample } : undefined, params: !open && input.voice ? { voice: input.voice } : undefined } },
-    ...lens.map(
-      (d, i): Step => ({
+    ...fits,
+    ...lens.map((d, i): Step => {
+      const { after, ...frame } = frames[i];
+      return {
         key: `shot${i + 1}`,
         label: `Shot ${i + 1} of ${lens.length}`,
         request: {
@@ -795,11 +865,12 @@ function planAd(input: ClickToAdInput, ctx: { product: Product; brand?: BrandKit
           modelId: M.clip,
           op: "i2v",
           prompt: join(angles[i % angles.length], style.visual, `Vertical 9:16 ad for ${ctx.product.name}`, KEEP_PRODUCT, ctx.brand && brandLine(ctx.brand)),
-          inputs: { images: [images[i % images.length]] },
-          params: { aspectRatio: nearestAspect(CLICK_TO_AD.aspect, clip.options.aspectRatios), duration: d, resolution: quality, ...(clip.options.audio && { generateAudio: false }) },
+          ...frame,
+          params: { aspectRatio: shotAspect, duration: d, resolution: quality, ...(clip.options.audio && { generateAudio: false }) },
         },
-      }),
-    ),
+        ...(after && { after }),
+      };
+    }),
     {
       key: "film",
       label: "Joining the shots",
