@@ -1022,7 +1022,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   if (clipped) per = clipped.rate * clipped.billed;
   else if (p.unit === "second") {
     // A length the caller set wins (Shorts, Mixed Media and Genjutsu say the seconds they bill); then a clip edit's clip.
-    const seconds = clip ?? voice ?? params.duration ?? clipEditSeconds(model, params, op) ?? model.defaults?.duration ?? 5;
+    const asked = clip ?? voice ?? params.duration ?? clipEditSeconds(model, params, op) ?? model.defaults?.duration ?? 5;
+    const seconds = p.minSeconds ? Math.max(p.minSeconds, Math.ceil(asked - 1e-9)) : asked;
     const mp = p.videoMegapixel ? videoMegapixels(model, params, seconds) : undefined;
     const rate = p.videoMegapixel && (withLoras && p.videoMegapixel.withLoras !== undefined ? p.videoMegapixel.withLoras : p.videoMegapixel.usd);
     per = mp !== undefined && rate ? Math.ceil(mp - 1e-9) * rate : usd * seconds;
@@ -1036,5 +1037,6 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   }
   if (params.generateAudio === false && model.options.audio === true && p.note?.includes("audio-off-half")) per /= 2;
   if (p.animationUsd && params.animation !== undefined && params.animation !== "") per += p.animationUsd;
+  if (p.perRequest) per += p.perRequest;
   return Math.round(per * jobs * 1000) / 1000;
 }

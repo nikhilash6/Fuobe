@@ -706,6 +706,10 @@ export interface Pricing {
    * otherwise input + output"), in place of `usd` / `byResolution`.
    */
   clipInput?: { usd: number; byResolution?: Record<string, number> };
+  /** A fixed fee each request adds on top of its seconds (fal's H3 Max 3D to video: $0.50 processing). */
+  perRequest?: number;
+  /** The fewest seconds a per-second request bills (fal's H3 Max 3D to video: 5 s a shot). */
+  minSeconds?: number;
 }
 
 /** A model's weights licence, as read in the research: information, never a gate (the owner's decision of 2026-10-27). */

@@ -1308,6 +1308,25 @@ const open: ModelDef[] = [
     defaults: { aspectRatio: "16:9", resolution: "480p", duration: 5 },
     hidden: true,
   }),
+  // Blockout to film (package blockout-film): the grey box's own depth drives Wan 2.2 Fun VACE from a first frame drawn
+  // from the references, one 81-frame window per job (Cinema's Blockout chains the windows). Ref2v: Canvas's "Blockout →
+  // film" template hands it the depth clip and the first frame as references.
+  o({
+    id: "oss-wan22-vace-blockout",
+    name: "Wan 2.2 Fun VACE Blockout",
+    vendor: "Alibaba Wan",
+    family: "wan",
+    kind: "video",
+    tagline: "Renders a grey-box blockout from its depth and a first frame: camera, blocking and timing kept · 24 GB GPU · Apache-2.0",
+    badges: ["new"],
+    routes: [
+      comfy("v2v", "video-blockout-wan22-fun-vace", "video = the blockout's depth (near = bright); image = the first frame; Lightx2v 4-step"),
+      comfy("ref2v", "video-blockout-wan22-fun-vace", "the depth clip and the first frame as references"),
+    ],
+    options: { aspectRatios: VID_AR, resolutions: ["480p", "720p"], durations: [3, 4, 5], seed: true, negativePrompt: true, maxImages: 1, maxVideos: 1 },
+    defaults: { aspectRatio: "16:9", resolution: "480p", duration: 5 },
+    hidden: true,
+  }),
   o({
     id: "oss-mixed-media",
     name: "Z-Image Mixed Media",

@@ -541,6 +541,15 @@ model("minimax-h3-max-camera", "MiniMax H3 Max camera controls", "MiniMax", "hai
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16 — launch price $0.052 (480P $0.0325, 1080P $0.104) until 2026-10-31",
                {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16},
                 "promo": {"until": "2026-10-31", "usd": 0.052, "byResolution": {"480P": 0.0325, "768P": 0.052, "1080P": 0.104}}}))
+# Blockout to film (package blockout-film; new-models-10.md §5): H3 Max renders a grey-box / previs animation (≤ 15 s,
+# ≤ 32 shots) with up to 8 reference stills; camera, blocking and timing come from the video. A hidden helper Cinema's
+# Blockout offers under its own name beside Seedance 2.5. Billed per second by resolution, at least 5 s a shot, plus a
+# $0.50 processing fee a request (fal's page, read 2026-11-01). No sound.
+model("minimax-h3-max-3d", "MiniMax H3 Max 3D to video", "MiniMax", "hailuo", "video",
+      "A grey-box blockout from Blender or the browser, rendered as a finished shot from your reference stills",
+      [("v2v", "minimax/h3-max/3d-to-video")], hidden=True, defaults={"resolution": "768P"},
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request",
+               {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16}, "minSeconds": 5, "perRequest": 0.5}))
 model("hailuo-2-3", "MiniMax Hailuo 2.3", "MiniMax", "hailuo", "video", "Expressive characters and dynamic action",
       [("t2v", "fal-ai/minimax/hailuo-2.3/pro/text-to-video"), ("i2v", "fal-ai/minimax/hailuo-2.3/pro/image-to-video")],
       pricing=("video", 0.49), defaults={"duration": 6}, fixed={"prompt_optimizer": True})

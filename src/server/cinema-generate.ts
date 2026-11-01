@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { getModel } from "@/lib/catalog";
 import {
   SWATCH_PLACEHOLDER,
+  blockoutTake,
   pathTake,
   planCinema,
   withPlaceholders,
@@ -143,6 +144,7 @@ export function generateInProject(projectId: string, input: CinemaRequest, folde
     ...(input.action === "grid" && input.grid ? { grid: input.grid } : {}),
     ...(input.action === "recompose" && input.capture ? { camera: { lens: input.capture.lens, aperture: input.capture.aperture, pose: input.capture.pose } } : {}),
     ...(input.action === "path" && input.path ? { path: pathTake(input, plan) } : {}),
+    ...(input.action === "blockout" && input.blockout ? { blockout: blockoutTake(input, plan) } : {}),
   };
   const batchId = nanoid(10);
   const made: Record<string, Generation[]> = {};

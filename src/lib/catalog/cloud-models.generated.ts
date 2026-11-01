@@ -6897,6 +6897,51 @@ export const CLOUD_MODELS: ModelDef[] = [
     "hidden": true
   },
   {
+    "id": "minimax-h3-max-3d",
+    "name": "MiniMax H3 Max 3D to video",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A grey-box blockout from Blender or the browser, rendered as a finished shot from your reference stills",
+    "routes": [
+      {
+        "op": "v2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/3d-to-video",
+        "map": {
+          "images": "reference_image_urls",
+          "video": "video_url",
+          "resolution": "resolution"
+        }
+      }
+    ],
+    "options": {
+      "resolutions": [
+        "480P",
+        "768P",
+        "1080P"
+      ],
+      "maxImages": 8
+    },
+    "defaults": {
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request",
+      "byResolution": {
+        "480P": 0.05,
+        "768P": 0.08,
+        "1080P": 0.16
+      },
+      "minSeconds": 5,
+      "perRequest": 0.5
+    },
+    "hidden": true
+  },
+  {
     "id": "hailuo-2-3",
     "name": "MiniMax Hailuo 2.3",
     "vendor": "MiniMax",
