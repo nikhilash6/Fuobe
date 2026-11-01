@@ -39,6 +39,7 @@ export const PRESET_PEAKS: Record<string, { at: number; from: number; v: string 
   "effect-diamond": { "at": 3.5625, "from": 1.1458, "v": "8b6ffd0a" },
   "effect-dirty-lens": { "at": 3.5625, "from": 0.1042, "v": "9a4758ba" },
   "effect-fallen-angel": { "at": 3.5625, "from": 0.6458, "v": "aad72a3a" },
+  "effect-film-colors": { "at": 2.8958, "from": 0.7708, "v": "355cdc96" },
   "effect-fire-element": { "at": 3.5625, "from": 0.6042, "v": "575a1aac" },
   "effect-flame-on": { "at": 3.5625, "from": 0.6458, "v": "71f81645" },
   "effect-flood": { "at": 3.5625, "from": 0.4375, "v": "bdc90be5" },

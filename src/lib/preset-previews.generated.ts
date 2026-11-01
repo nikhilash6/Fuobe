@@ -383,10 +383,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-graffiti-ad": {
-    "poster": "/previews/presets/app-graffiti-ad.jpg?v=f4fc354a",
+    "poster": "/previews/presets/app-graffiti-ad.jpg?v=a3b5d3a5",
+    "video": "/previews/presets/app-graffiti-ad.mp4?v=50248ef9",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-gtai": {
@@ -1339,10 +1340,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-cold-vision": {
-    "poster": "/previews/presets/effect-cold-vision.jpg?v=57bf9f6d",
+    "poster": "/previews/presets/effect-cold-vision.jpg?v=d9e76ede",
+    "video": "/previews/presets/effect-cold-vision.mp4?v=a3ef4bc8",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-color-rain": {
@@ -1583,10 +1585,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-film-colors": {
-    "poster": "/previews/presets/effect-film-colors.jpg?v=5ad61d59",
+    "poster": "/previews/presets/effect-film-colors.jpg?v=2d8248bd",
+    "video": "/previews/presets/effect-film-colors.mp4?v=af83d11d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-fire-breath": {
@@ -3679,10 +3682,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-ski-powder": {
-    "poster": "/previews/presets/motion-ski-powder.jpg?v=8468233c",
+    "poster": "/previews/presets/motion-ski-powder.jpg?v=1c7926d3",
+    "video": "/previews/presets/motion-ski-powder.mp4?v=6c7949a4",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-slow-motion": {
