@@ -430,7 +430,7 @@ export const PALETTES: CinemaPalette[] = [
   { name: "Favela Gold", slug: "favela-gold", hex: ["#0a0807", "#563322", "#464969", "#57594d", "#765636", "#586f93", "#867b7e", "#aca389", "#85b1f7", "#acb4b5", "#f3f7f3", "#d3ac74"] },
   { name: "A Hotel for One", slug: "a-hotel-for-one", hex: ["#07070c", "#1f1414", "#362e25", "#094b27", "#494b4b", "#2c5354", "#584e3c", "#686664", "#423b30", "#314041", "#4f3a2f", "#101821"] },
   { name: "After Dark", slug: "after-dark", hex: ["#0a090c", "#651113", "#1d2d6c", "#794f3d", "#575a67", "#118d65", "#5b8aa0", "#a99a93", "#ba9569", "#919faf", "#cfcbc6", "#1d1885"] },
-  { name: "Crimson Vigi", slug: "crimson-vigi", hex: ["#0b080a", "#483125", "#98261c", "#654f46", "#4870ca", "#926b51", "#e95531", "#bf9982", "#f0854a", "#fec17b", "#dbd6d4", "#c72f1f"] },
+  { name: "Crimson Vigil", slug: "crimson-vigi", hex: ["#0b080a", "#483125", "#98261c", "#654f46", "#4870ca", "#926b51", "#e95531", "#bf9982", "#f0854a", "#fec17b", "#dbd6d4", "#c72f1f"] },
   { name: "The Neighbors Saw Everything", slug: "the-neighbors-saw-everything", hex: ["#0f1116", "#2e1c11", "#644727", "#76554a", "#3b6084", "#646058", "#948676", "#9d9fa4", "#778082", "#6293b2", "#b7bcc9", "#5b3b29"] },
   { name: "The Grey Channel", slug: "the-grey-channel", hex: ["#081214", "#164942", "#494d3e", "#6b533b", "#30706c", "#787b61", "#5b8f82", "#9aa491", "#b1b898", "#a4c8b0", "#e7ddb3", "#cecfa5"] },
   { name: "Mirage at Noon", slug: "mirage-at-noon", hex: ["#0c0b0c", "#403733", "#5d463b", "#7f503e", "#695d5a", "#707e9b", "#a47e70", "#b2a3a1", "#a5b9b3", "#d5ced3", "#f4ddaf", "#954924"] },
