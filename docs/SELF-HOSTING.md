@@ -88,6 +88,10 @@ Public sign-up, guest browsing and connecting your own GPU to a shared install a
 | `FUOBE_ENGINE_MODE`, `FUOBE_CLOUD_PROVIDER`, `FUOBE_ENHANCE_PROVIDER`, `FUOBE_LLM_PROVIDER` | The Settings choices above |
 | `FUOBE_LLM_CONTEXT` | Tokens of context for the local model (default `16384`): Ollama's `num_ctx`, and the context LM Studio loads a model with. `0` leaves it to the server |
 | `OPENAI_API_KEY`, `GEMINI_API_KEY` | Read into Settings; no feature uses them yet |
+| `FUOBE_HOSTED_RUNS=1` | With public sign-up: accounts with no GPU of their own may run on this install's ComfyUI ([Hosted runs](public-signup.md#hosted-runs)). Off by default |
+| `FUOBE_POOL_WAIT_MIN` | How long a hosted run may wait in line, in minutes (default `30`) |
+| `FUOBE_BILLING_URL`, `FUOBE_BILLING_TOKEN` | An optional external billing service for hosted runs ([billing-hook.md](billing-hook.md)). None: hosted runs are free |
+| `FUOBE_MODERATION_URL`, `FUOBE_MODERATION_TOKEN`, `FUOBE_MODERATION_MAX_WAIT_H` | An optional external moderation service ([moderation-hook.md](moderation-hook.md)). None: nothing is checked |
 
 Uploads up to 200 MB work with sign-in on; Split soundtrack's Export mix sends its WAV in 16 MB parts, up to 2 GiB. Inputs given as URLs are fetched only from public addresses unless `FUOBE_ALLOW_PRIVATE_URLS=1`.
 
