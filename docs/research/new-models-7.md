@@ -855,7 +855,7 @@ Where it lands (exact spots).
 - `src/lib/catalog/character-swap.ts`: qualities (L27), `characterQuality` (L160), `falResolution` (L172), prices; `src/lib/catalog/genjutsu.ts`: the plan steps.
 
 Open engine.
-- Per chosen take: its 16-bit FFV1 master (already kept by `video-character-swap-h3-segment`) -> `video-regenerate-h3` (N7-3) with draftSize 'keep (snap to 32)' (H3's own canvas, any shape), the take's prompt, start_sigma 0.8 (rdh: "stays closer to the draft"), the take's seed, and a resolution capped at the source clip's size (never above the source).
+- Per chosen take: its 16-bit FFV1 master (already kept by `video-character-swap-h3-segment`) -> `video-regenerate-h3` (N7-3) with draftSize 'keep (snap to 32)' (H3's own canvas, any shape; n7-3 found the pinned pack's upscale always targets 16:9 or 9:16, so 'keep' stretches other shapes: use the preset, which cover-crops), the take's prompt, start_sigma 0.8 (rdh: "stays closer to the draft"), the take's seed, and a resolution capped at the source clip's size (never above the source).
 - Then a mask composite, so only the character comes from the regenerate: a new core-node graph `video-composite-mask` (LoadVideo source + LoadVideo regenerated scaled to the source size with ImageScale + the approved whole-shot mask from `video-mask-h3-relay` -> ImageToMask (red) -> GrowMask -> FeatherMask -> ImageCompositeMasked -> CreateVideo with the source audio -> SaveVideo). Validate it on the library's CPU ComfyUI (core nodes only).
 - Then the existing assembly. Takes over 15 s run in 15 s windows.
 - Genjutsu Character swap: keep the 768p swap and add steps to the plan: swap -> regenerate (σ 0.8) -> mask composite -> mux.

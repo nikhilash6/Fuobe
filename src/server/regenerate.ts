@@ -1,10 +1,24 @@
 import "server-only";
 import path from "node:path";
 import { nanoid } from "nanoid";
-import { isH3Source, REGEN_SEAM_NOTE, regenWindows } from "@/lib/catalog/regenerate";
+import {
+  isH3Source,
+  REGEN_COPY,
+  REGEN_FILES,
+  REGEN_LORA,
+  REGEN_MAX_PARTS,
+  REGEN_ONE_PASS_NOTE,
+  REGEN_SEAM_NOTE,
+  regenCropNote,
+  regenCrops,
+  regenTooLong,
+  regenWindows,
+} from "@/lib/catalog/regenerate";
+import { ACCESS_PLACE } from "@/lib/model-access";
 import type { Generation, GenerationRequest, ModelDef } from "@/lib/catalog/types";
 import { fileAccount } from "./account-library";
 import { db } from "./db";
+import { offeredLoras } from "./model-access";
 import { filesRel, storedMedia } from "./storage";
 import { tenant, tenantAccount } from "./tenant";
 
@@ -30,11 +44,24 @@ export function clipMaker(ref: string | undefined): string | undefined {
   return row?.model;
 }
 
-/** A stored clip's length from its header (none for a link or another's file). */
-function clipSeconds(ref: string | undefined): number | undefined {
+/** A stored clip's length and size from its header (none for a link or another's file). */
+function clipHeader(ref: string | undefined): { seconds?: number; width?: number; height?: number } {
   const info = ref ? storedMedia(ref)?.info : undefined;
-  return info ? (info.videoDuration ?? info.duration) : undefined;
+  return info ? { seconds: info.videoDuration ?? info.duration, width: info.width, height: info.height } : {};
 }
+
+const positive = (n: number | undefined) => (typeof n === "number" && n > 0 ? n : undefined);
+
+/**
+ * Why a Regenerate run can't start because Settings → Models & licences has the refiner LoRA switched off (the graph loads
+ * it itself, so the run can't leave it out): the owner is told where the switch is; a visitor gets plain words.
+ */
+export function regenSwitchedOff(): string | undefined {
+  if (!offeredLoras([REGEN_LORA]).dropped.length) return undefined;
+  return tenant() ? REGEN_COPY.off : `Open-H3 Regenerate runs with the ${REGEN_FILES[0].item}, which is switched off in ${ACCESS_PLACE}. Turn it back on there, or pick Restore · faithful`;
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Whether a request was already planned here (its draft preset is set): a retry, or one of a split run's windows. */
 const planned = (r: GenerationRequest) => typeof r.params?.extra?.draftFrom === "string";
@@ -52,15 +79,30 @@ export function createRegenerateRun(
   join: (ids: string[], o: { engine: "open"; feature: string; batchId: string; title: string; copy: true; demo?: boolean; step: GenerationRequest["step"] }) => Generation,
   cancel: (id: string) => void,
 ): Generation[] | null {
+  const off = regenSwitchedOff();
+  if (off) throw new Error(off);
   if (planned(original)) return null;
   const deps = opts.dependsOn === undefined ? [] : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
   const video = original.inputs?.video;
   const maker = deps.length ? (db().prepare("SELECT model_id AS model FROM generations WHERE id = ?").get(deps[0]) as { model: string } | undefined)?.model : clipMaker(video);
-  // The preset's source half; the provider adds the shape from the header ComfyUI is sent (draftSizeFor).
+  // The preset's source half (every shape takes the preset: Prepare Draft cover-crops to 16:9 or 9:16).
   const extra = { ...original.params?.extra, draftFrom: isH3Source(maker) ? "h3" : "other" };
-  const seconds = original.params?.sourceDuration ?? (deps.length ? undefined : clipSeconds(video));
-  const windows = deps.length || original.params?.startTime !== undefined || original.params?.endTime !== undefined ? [] : regenWindows(seconds);
-  if (windows.length <= 1) return create({ ...original, params: { ...original.params, extra } }, opts);
+  // The clip's length: the stored file's own header (tenant-safe) first; a client's sourceDuration only for a link, which
+  // has no header here. A run that waits for an earlier step learns its length when it starts (the provider refuses a
+  // single pass over 15 s rather than cutting it).
+  const header = deps.length ? {} : clipHeader(video);
+  const total = deps.length ? undefined : (positive(header.seconds) ?? positive(original.params?.sourceDuration));
+  const from = Math.max(0, original.params?.startTime ?? 0);
+  const to = original.params?.endTime ?? total;
+  const span = to !== undefined ? Math.max(0, to - from) : undefined;
+  const windows = span === undefined ? [] : regenWindows(span);
+  if (windows.length > REGEN_MAX_PARTS) throw new Error(regenTooLong(span!));
+  const notes = [
+    ...(header.width && header.height && regenCrops(header.width, header.height) ? [regenCropNote(header.width, header.height)] : []),
+    ...(span === undefined ? [REGEN_ONE_PASS_NOTE] : []),
+  ];
+  const noted = (g: Generation) => (notes.length ? { ...g, notes: [...(g.notes ?? []), ...notes] } : g);
+  if (windows.length <= 1) return create({ ...original, params: { ...original.params, extra } }, opts).map(noted);
   const batchId = opts.batchId ?? nanoid(10);
   const parts: Generation[] = [];
   try {
@@ -69,7 +111,7 @@ export function createRegenerateRun(
         create(
           {
             ...original,
-            params: { ...original.params, startTime: w.start, endTime: Math.round((w.start + w.duration) * 1000) / 1000, numOutputs: 1, extra },
+            params: { ...original.params, startTime: round3(from + w.start), endTime: round3(from + w.start + w.duration), numOutputs: 1, extra },
             step: { label: `Part ${i + 1} of ${windows.length}`, index: i, of: windows.length + 1 },
           },
           { batchId },
@@ -88,7 +130,7 @@ export function createRegenerateRun(
         step: { label: `Regenerated · ${windows.length} parts joined`, index: windows.length, of: windows.length + 1 },
       },
     );
-    return [{ ...film, notes: [...(film.notes ?? []), REGEN_SEAM_NOTE] }, ...parts];
+    return [noted({ ...film, notes: [...(film.notes ?? []), REGEN_SEAM_NOTE] }), ...parts];
   } catch (e) {
     for (const p of parts) cancel(p.id);
     throw e;

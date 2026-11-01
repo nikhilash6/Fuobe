@@ -132,7 +132,7 @@
 //   resolution*                           (OpenH3RegenUpscale's output size as the pack's string: params.resolution 1080p / 1440p / 2160p
 //                                          -> "1080p (1920x1080)" | "2k (2560x1440)" | "4k (3840x2160)")
 //   draftSize*                            (OpenH3RegenPrepareDraft's size: "768p (1344x768)" for H3 drafts, "576p (1024x576)" for other
-//                                          models, "keep (snap to 32)" for odd shapes; src/lib/catalog/regenerate.ts draftSizeFor)
+//                                          models, whatever the shape: the pack upscales to 16:9 or 9:16 only; regenerate.ts draftSizeFor)
 //   startSigma                            (OpenH3RegenSigmas start noise: the Creativity control, 0 = the release 0.909 grid)
 
 import fs from 'node:fs';
@@ -4441,7 +4441,7 @@ export const SPEC = [
       'rdh9616\'s "Open-H3 Regenerate 2K - Draft Video" example (ComfyUI-Open-H3-Regenerate at 9b686c5) without the note, the three PreviewAny nodes and OpenH3VideoToPrompt: the prompt goes straight into ' +
       'CLIPTextEncode 16, so nothing calls a server from inside the graph. curve_name "none" (the tensors of the Sharp curve branches are zero in the blocks checked), so the curve table is never read ' +
       '("(model\'s own table)": no 21 GB ref2va file needed). A Video Slice (29) in front cuts the 15 s window a longer clip is regenerated in (startTime, duration; 0 = the whole clip). ' +
-      'Prepare Draft (11) resamples to 24 fps, cover-crops to draftSize (768p for H3 drafts, 576p for other models, "keep (snap to 32)" for odd shapes; a portrait clip gets the preset turned) and ' +
+      'Prepare Draft (11) resamples to 24 fps, cover-crops to draftSize (768p for H3 drafts, 576p for other models; a portrait clip gets the preset turned, and any other shape is cropped to 16:9, since the upscale always targets 16:9 or 9:16) and ' +
       'cuts frames (round(seconds x 24), at most 360 = 15 s per pass); Save Refined Latent (24) and Finish (26) read its frame count. The LBH upscaler puts the latent on the target grid ' +
       '(resolution: 1080p (1920x1080) | 2k (2560x1440) | 4k (3840x2160), 4K via 2K), the refine re-noises it to startSigma (0 = the release 0.909 grid; Close 0.7, Balanced 0.8) and runs steps (3, or 2 = ' +
       'Faster) Euler steps at CFG 1 with Sol-Attn sparse attention and the audio held as encoded silence; the refined latent is saved before decoding (output/open_h3_latents/, redo a failed decode with ' +

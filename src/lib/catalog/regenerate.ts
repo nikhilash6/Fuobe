@@ -41,17 +41,23 @@ export function isH3Source(modelId: string | undefined): boolean {
 }
 
 /**
- * The draft preset (NVIDIA's reference: 768p for H3 drafts, 576p for other models). The pack turns a preset for a
- * portrait clip itself (768 x 1344), so 16:9 and 9:16 take the preset; any other shape (square, 4:3, 21:9) keeps its
- * own on the 32-pixel grid rather than being cropped to 16:9. An unknown shape takes the preset.
+ * The draft preset (NVIDIA's reference: 768p for H3 drafts, 576p for other models), for every shape. Prepare Draft
+ * cover-scales and centre-crops the clip to it (turned for a tall clip: 768 x 1344), and the pack's upscale always
+ * targets 16:9 or 9:16, so a square, 4:3 or 21:9 clip is cropped to that shape rather than stretched (REGEN_COPY.shape).
  */
-export function draftSizeFor(o: { fromH3: boolean; width?: number; height?: number }): string {
-  const { width, height } = o;
-  if (width && height) {
-    const r = Math.max(width, height) / Math.min(width, height);
-    if (Math.abs(r - 16 / 9) > 0.06) return REGEN_DRAFT.keep;
-  }
+export function draftSizeFor(o: { fromH3: boolean }): string {
   return o.fromH3 ? REGEN_DRAFT.h3 : REGEN_DRAFT.other;
+}
+
+/** The shape a result comes out in: 9:16 for a tall clip, else 16:9 (the pack's own rule: height > width). */
+export function regenShape(width?: number, height?: number): "16:9" | "9:16" {
+  return width && height && height > width ? "9:16" : "16:9";
+}
+
+/** Whether a clip of this size is cropped to fit (more than a few pixels off 16:9 or 9:16). */
+export function regenCrops(width?: number, height?: number): boolean {
+  if (!width || !height) return false;
+  return Math.abs(Math.max(width, height) / Math.min(width, height) - 16 / 9) > 0.06;
 }
 
 /** The refine runs at 24 fps, up to 360 frames (15 s) a pass. */
@@ -82,14 +88,48 @@ export function regenWindows(seconds: number | undefined): { start: number; dura
 export const REGEN_SEAM_NOTE =
   "Open-H3 Regenerate redraws up to 15 s at a time, so this clip is redrawn in parts and joined: the parts don't share history, so a seam or a small jump in detail can show where they meet";
 
+/** The longest clip one Regenerate run takes: 40 parts of 15 s. */
+export const REGEN_MAX_PARTS = 40;
+export const REGEN_MAX_SECONDS = REGEN_MAX_PARTS * REGEN_WINDOW_SECONDS;
+
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+
+/** The refusal for a clip (or span) longer than one run takes. */
+export function regenTooLong(seconds: number): string {
+  return `Regenerate takes up to ${REGEN_MAX_SECONDS / 60} minutes of video in one run, and this clip runs ${mmss(seconds)}. Trim it, or regenerate it in shorter pieces`;
+}
+
+/** A run whose length isn't known when it is created (it waits for an earlier step, or reads a link). */
+export const REGEN_ONE_PASS_NOTE = "This run redraws up to 15 s in one pass. If the clip turns out longer, it stops and says how to redraw it in parts";
+
+/** The refusal when a single pass would get a clip longer than 15 s (it would come back cut short). */
+export function regenOnePassRefusal(seconds: number): string {
+  return `Regenerate redraws up to 15 s in one pass, and this clip runs ${Math.round(seconds * 10) / 10} s. Open the finished clip and pick Regenerate in 2K: it is redrawn in 15 s parts and joined`;
+}
+
+/** The note for a clip that isn't 16:9 or 9:16. */
+export function regenCropNote(width: number, height: number): string {
+  return `Regenerate makes ${regenShape(width, height)} video, so this ${width}×${height} clip is cropped to ${regenShape(width, height)} at the centre`;
+}
+
 // ---------------------------------------------------------------------------
 // Copy
 
 export const REGEN_COPY = {
   creative: "Regenerate · creative: redraws your clip at 2K. Details may change; motion and layout stay.",
   faithful: "Restore · faithful: keeps every detail and sharpens it.",
+  /** The owner's GPU line (the install detail is theirs to act on). */
   gpu: "About 3 minutes per 5 s at 2K on a 72 GB GPU. Needs about 40 GB of new files (OPEN_H3_REGEN=1 in install-comfyui.sh).",
+  /** The same line for guests and accounts. */
+  gpuVisitor: "Runs on your own GPU · about 3 minutes per 5 s at 2K",
+  /** Results are 16:9 or 9:16 whatever the clip's shape. */
+  shape: "Comes out 16:9, or 9:16 for a tall clip: other shapes are cropped to fit.",
+  /** The owner's refusal when the server's ComfyUI lacks the nodes. */
   missing: "Your ComfyUI is missing the Open-H3 Regenerate nodes: run scripts/comfy/install-comfyui.sh with OPEN_H3_REGEN=1.",
+  /** The same refusal on an account's own ComfyUI. */
+  missingVisitor: "Your ComfyUI doesn't have Open-H3 Regenerate yet. Add it with Fuobe's ComfyUI setup, then run this again.",
+  /** The refusal when Settings → Models & licences has the refiner switched off. */
+  off: "Regenerate isn't available right now. Pick Restore · faithful to sharpen the clip instead.",
   gpuOnly: "Runs on your GPU (open source)",
   prompt: "Describe the clip: what is in it, how it moves, the light. Regenerate redraws it from these words",
 } as const;
@@ -161,6 +201,39 @@ export function regenerateHref(video: string, prompt?: string | null): string {
 }
 
 /**
+ * The words for a clip that has none (an upload): Fuobe's reading model on your GPU (oss-reference-brief, Gemma 4 watching
+ * the frames and hearing the sound) writes one paragraph, which fills the prompt box to edit before the run.
+ */
+export const REGEN_DESCRIBE_MODEL = "oss-reference-brief";
+export const REGEN_DESCRIBE_FEATURE = "regenerate-describe";
+export const REGEN_DESCRIBE_INSTRUCTION =
+  "You are given a short video clip (frames at 1 fps plus its soundtrack). Write one paragraph of 60 to 120 words that describes it for a video model that will redraw it in more detail: who or what is in it and what they look like, the setting, how things and the camera move, the light and colours, and the look (live action, animation, 3D render). Describe only what is visible. Plain prose: no lists, headings, labels or quotes.";
+
+/** The request that reads a clip for its words (its first 15 s, what one Regenerate pass redraws). */
+export function regenDescribeRequest(video: string, seconds?: number): GenerationRequest {
+  const span = seconds && seconds > 0 ? Math.min(REGEN_WINDOW_SECONDS, seconds) : REGEN_WINDOW_SECONDS;
+  return {
+    feature: REGEN_DESCRIBE_FEATURE,
+    modelId: REGEN_DESCRIBE_MODEL,
+    op: "write",
+    inputs: { video },
+    params: { duration: Math.round(span * 100) / 100, numOutputs: 1, extra: { instruction: REGEN_DESCRIBE_INSTRUCTION } },
+  };
+}
+
+/** The paragraph from the reading model's answer: no surrounding quotes, fences or label, one line, at most 1500 characters. */
+export function regenDescription(text: string | undefined): string {
+  return (text ?? "")
+    .replace(/^```[a-z]*\s*|\s*```$/gi, "")
+    .replace(/^\s*(description|prompt)\s*:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^["“'](.*)["”']$/s, "$1")
+    .trim()
+    .slice(0, HANDOFF_PROMPT);
+}
+
+/**
  * fal's hosted MiniMax H3 results the cloud can render again at 2K or 4K: the same endpoint, inputs and seed with a size
  * it offers. A new render (fal makes 2K and 4K from a 768P base), not a sharpened copy, and priced per second.
  */
@@ -169,8 +242,17 @@ export const RERENDER: Record<string, { label: string; perSecond: Record<"2K" | 
   "fuobe-character-swap": { label: "the Character swap (MiniMax H3 with LoRAs)", perSecond: { "2K": 0.1625, "4K": 0.2 } },
 };
 
-/** A cloud result that can be re-rendered at 2K: a finished fal H3 run whose inputs are in its request. */
-export function canRerender(g: Pick<Generation, "engine" | "provider" | "modelId" | "status" | "request" | "kind">): boolean {
+/** Sizes a fal H3 result can already be at that a 2K re-render wouldn't improve. */
+const AT_2K_OR_MORE = /^(2k|4k|1440p|2160p)$/i;
+
+/**
+ * A cloud result that can be re-rendered at 2K: a finished fal H3 run whose inputs are in its request, made below 2K, and
+ * not hidden by Engine mode "Open source only" (a paid run the server would refuse).
+ */
+export function canRerender(g: Pick<Generation, "engine" | "provider" | "modelId" | "status" | "request" | "kind">, engineMode?: "both" | "open" | "cloud"): boolean {
+  if (engineMode === "open") return false;
+  const made = g.request.params?.resolution;
+  if (typeof made === "string" && AT_2K_OR_MORE.test(made)) return false;
   return g.kind === "video" && g.status === "succeeded" && g.engine === "cloud" && g.provider === "fal" && !!RERENDER[g.modelId] && !g.request.chain?.length;
 }
 
