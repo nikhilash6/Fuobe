@@ -112,6 +112,7 @@ describe("outputActions", () => {
       "menu:upscale",
       "menu:add-sound",
       "menu:split-soundtrack",
+      "menu:remove-dialogue",
       "menu:grade",
       "menu:genjutsu",
       "menu:finalize",

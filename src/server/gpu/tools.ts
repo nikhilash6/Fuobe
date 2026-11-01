@@ -1,5 +1,6 @@
 import "server-only";
 import { SPLIT_MODEL } from "@/lib/av/split";
+import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
 import { graphLoras } from "@/lib/catalog/character-swap";
 import { PATH_MODELS } from "@/lib/catalog/cinema";
@@ -187,6 +188,16 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/upscale/hdr", label: "SDR to HDR", group: "Video tools", config: S.SDR_TO_HDR_STUDIO },
   { href: "/upscale/export", label: "Export", group: "Video tools", config: S.VIDEO_EXPORT_STUDIO },
   { href: "/video-tools", label: "Remove background", group: "Video tools", config: S.VIDEO_MATTE_STUDIO },
+  // DBS D2: the split, then the stream-copy mux (one stem in place of the sound, or the voice over the lowered bed).
+  {
+    href: "/video-tools/remove-dialogue",
+    label: "Remove dialogue",
+    group: "Video tools",
+    steps: [
+      { modelId: REMOVE_DIALOGUE_MODELS.split, op: "separate-audio" },
+      { modelId: REMOVE_DIALOGUE_MODELS.mux, op: "mux" },
+    ],
+  },
   { href: "/video-tools/relight", label: "Relight", group: "Video tools", config: S.VIDEO_RELIGHT_STUDIO },
   { href: "/video-tools/depth", label: "Depth map", group: "Video tools", config: S.VIDEO_DEPTH_STUDIO },
   { href: "/video-tools/join", label: "Join clips", group: "Video tools", config: S.JOIN_CLIPS_STUDIO },

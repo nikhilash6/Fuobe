@@ -61,11 +61,12 @@ describe("next steps under a fresh result", () => {
     const vid = nextSteps(gen([{ kind: "video", url: "/api/files/clip.mp4" }], { kind: "video", op: "t2v" }), 0);
     expect(vid.map((a) => a.label)).toEqual(["Extend", "Upscale", "Add sound"]);
     expect(nextSteps(gen([{ kind: "audio", url: "/api/files/a.mp3" }], { kind: "audio", op: "tts" }), 0).map((a) => a.id)).toEqual(["lipsync", "voice-change", "split-soundtrack"]);
-    // A clip that has its sound (Sound for video, a soundtrack mux) offers Split soundtrack in place of Add sound.
+    // A clip that has its sound (Sound for video, a soundtrack mux) offers Remove dialogue and Split soundtrack in place
+    // of Upscale and Add sound.
     const sounded = nextSteps(gen([{ kind: "video", url: "/api/files/clip.mp4" }], { kind: "video", op: "v2a" }), 0);
     expect(sounded.map((a) => [a.label, a.href])).toEqual([
       ["Extend", "/extend?video=%2Fapi%2Ffiles%2Fclip.mp4"],
-      ["Upscale", "/upscale/video?video=%2Fapi%2Ffiles%2Fclip.mp4"],
+      ["Remove dialogue", "/video-tools/remove-dialogue?video=%2Fapi%2Ffiles%2Fclip.mp4"],
       ["Split soundtrack", "/audio/split?video=%2Fapi%2Ffiles%2Fclip.mp4"],
     ]);
   });

@@ -95,7 +95,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
   it("lets guests and accounts open the tools' pages", () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     const cookie = auth.createSession(newAccount().id).value;
-    for (const p of ["/audio/split", "/character-sheet", "/cinema", "/image", "/connect"]) {
+    for (const p of ["/audio/split", "/video-tools/remove-dialogue", "/character-sheet", "/cinema", "/image", "/connect"]) {
       expect(passed(proxy(req(p))), `guest ${p}`).toBe(true);
       expect(passed(proxy(req(p, { cookie }))), `account ${p}`).toBe(true);
     }
@@ -232,6 +232,29 @@ describe("the routes: a visitor's price is its own GPU's, and the owner's charac
   });
 });
 
+describe("Remove dialogue (DBS D2) on /api/audio-tools", () => {
+  it("prices a visitor's run on its own GPU, never a demo, and only of its own video; the run is own-gpu-tool at the proxy", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    const who = newAccount();
+    const cookie = auth.createSession(who.id).value;
+    const clip = (accountId?: string) => saveFile({ data: Buffer.from("a clip the header reader doesn't know"), contentType: "video/mp4", name: "talk.mp4", source: "upload", ...(accountId && { accountId }) }).url;
+    const owners = clip();
+    const body = (video: string) => ({ tool: "remove-dialogue", engine: "open", video, name: "Talk", sourceDuration: 12 });
+    for (const c of [undefined, cookie]) {
+      const r = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), c));
+      expect(r.status).toBe(422);
+      expect((await r.json()).error).toBe("That video is gone — add it again");
+    }
+    const account = await audioTools.POST(call("/api/audio-tools?preview=1", body(clip(who.id)), cookie));
+    expect(await account.json()).toMatchObject({ steps: 2, costUsd: 0, demo: false, length: 12 });
+    const owner = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), auth.createSession().value));
+    expect(await owner.json()).toMatchObject({ steps: 2, demo: true });
+    const run = proxy(req("/api/audio-tools", { method: "POST", cookie }));
+    expect(run.status).toBe(403);
+    expect((await run.json()).code).toBe("own-gpu-tool");
+  });
+});
+
 describe("the GPU pre-flight board lists PR #15's tools like main's studios", () => {
   const idx = loadIndex();
   const row = (href: string) => STUDIO_ROWS.find((r) => r.href === href)!;
@@ -239,6 +262,7 @@ describe("the GPU pre-flight board lists PR #15's tools like main's studios", ()
   it("has a row for Split soundtrack, the fly path and the turnaround, each on graphs the requirement index knows", () => {
     const want: Record<string, { label: string; group: string; workflows: string[]; loras?: string[] }> = {
       "/audio/split": { label: "Split soundtrack", group: "Audio", workflows: ["separate-soundtrack-dbs"] },
+      "/video-tools/remove-dialogue": { label: "Remove dialogue", group: "Video tools", workflows: ["separate-soundtrack-dbs", "video-mux-audio"] },
       "/cinema": { label: "Fly path", group: "Video", workflows: ["wan21-i2v-uni3c-path"] },
       "/character-sheet": { label: "Turnaround", group: "Video", workflows: ["wan22-flf2v-14b", "qwen-image-edit-2511-multi"], loras: ["qwen-image-edit-2511-multiple-angles-lora.safetensors"] },
     };

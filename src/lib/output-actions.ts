@@ -29,6 +29,7 @@ export type OutputActionId =
   | "voice-change"
   | "loop-audio"
   | "split-soundtrack"
+  | "remove-dialogue"
   | "copy-text"
   | "view-3d"
   | "download"
@@ -125,6 +126,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("upscale", "Upscale", `/upscale/video?video=${q(o.url)}`);
       link("add-sound", "Add sound", `/audio/video?video=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?video=${q(o.url)}`);
+      link("remove-dialogue", "Remove dialogue", `/video-tools/remove-dialogue?video=${q(o.url)}`);
       // A Fuobe DoP colour-grade effect: the clip opens in Color grading with its grade picked (one click to export).
       const dopGrade = gradeOf(o);
       link("grade", dopGrade ? `Apply the ${dopGrade.name} grade` : "Color grade", `/color-grade?video=${q(o.url)}${dopGrade ? `&preset=${q(dopGrade.id)}` : ""}`);
@@ -175,7 +177,7 @@ const NEXT_STEPS: Partial<Record<OutputFile["kind"], OutputActionId[]>> = {
   video: ["extend", "upscale", "add-sound"],
   audio: ["lipsync", "voice-change", "split-soundtrack"],
 };
-/** Clips made with their sound (or keeping the source's): Split soundtrack instead of Add sound. */
+/** Clips made with their sound (or keeping the source's): Remove dialogue and Split soundtrack instead of Upscale and Add sound. */
 const SOUNDED_VIDEO_OPS = new Set<Generation["op"]>(["v2a", "mux", "lipsync", "trim", "captions"]);
 
 /**
@@ -187,7 +189,7 @@ export function nextSteps(g: Generation, index: number, max = 3): OutputAction[]
   if (!o || g.status !== "succeeded") return [];
   const all = outputActions(g, index);
   // A clip with a grade still to apply (a Fuobe DoP colour-grade effect) offers it first.
-  const video = o.kind === "video" && g.op && SOUNDED_VIDEO_OPS.has(g.op) ? (NEXT_STEPS.video ?? []).map((id) => (id === "add-sound" ? "split-soundtrack" : id)) : NEXT_STEPS.video;
+  const video: OutputActionId[] | undefined = o.kind === "video" && g.op && SOUNDED_VIDEO_OPS.has(g.op) ? ["extend", "remove-dialogue", "split-soundtrack"] : NEXT_STEPS.video;
   const order: OutputActionId[] = o.kind === "video" ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(video ?? [])] : (NEXT_STEPS[o.kind] ?? []);
   return order
     .map((id) => all.find((a) => a.id === id && a.href))

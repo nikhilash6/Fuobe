@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { planJoin, planLoop, CROSSFADE_MAX, JOIN_MAX_CLIPS, LOOP_MAX_SECONDS, type AudioToolPreview, type ToolPlan } from "@/lib/av/audio-tools";
 import { CLOUD_ONLY_PROBLEM, DBS_MODELS, dbsChannelsFor, hostPick, missingDbs, planRemux, planSplit, splitTime } from "@/lib/av/split";
+import { CLOUD_ONLY_REMOVE_PROBLEM, LOWER_MAX_DB, LOWER_MIN_DB, NO_SOUND_PROBLEM, planRemoveDialogue, removeDialogueTime } from "@/lib/av/remove-dialogue";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { lastGpuDevice } from "./account-gpu";
 import { createPipeline } from "./chains";
@@ -12,11 +13,12 @@ import { storedMedia } from "./storage";
 import { tenant, tenantAccount } from "./tenant";
 
 /**
- * The Audio hub's Loop / extend, Join and Split soundtrack tools on the server: each clip's length is read from its own
- * header (the browser's figure is the fallback for containers the probe doesn't read), the plan from
- * src/lib/av/audio-tools.ts or src/lib/av/split.ts is priced step by step, and a run is one createPipeline batch, so its
- * results land in the Library like any generation. Split soundtrack runs on the open engine only (DBS isn't hosted);
- * its mix goes back on the video with a "remux" run on either engine.
+ * The Audio hub's Loop / extend, Join and Split soundtrack tools, and Video tools → Remove dialogue, on the server: each
+ * clip's length is read from its own header (the browser's figure is the fallback for containers the probe doesn't read),
+ * the plan from src/lib/av/audio-tools.ts, src/lib/av/split.ts or src/lib/av/remove-dialogue.ts is priced step by step,
+ * and a run is one createPipeline batch, so its results land in the Library like any generation. Split soundtrack and
+ * Remove dialogue run on the open engine only (DBS isn't hosted); a split's mix goes back on the video with a "remux" run
+ * on either engine.
  */
 
 const FileUrl = z.string().startsWith("/api/files/").max(500);
@@ -53,6 +55,18 @@ export const AudioToolBody = z.discriminatedUnion("tool", [
     quality: z.enum(["fast", "best"]).optional(),
     stereo: z.boolean().optional(),
     /** What the browser decoded (the server reads WAV / FLAC / MP3 headers itself). */
+    channels: z.number().int().positive().max(64).optional(),
+    sourceDuration: z.number().positive().max(36_000).optional(),
+  }),
+  z.object({
+    tool: z.literal("remove-dialogue"),
+    engine: Engine,
+    video: FileUrl,
+    name: z.string().max(200).optional(),
+    outcome: z.enum(["no-dialogue", "dialogue-only", "lower-music"]).optional(),
+    /** Lower the music: the music and effects' level in dB. */
+    musicDb: z.number().min(LOWER_MIN_DB).max(LOWER_MAX_DB).optional(),
+    quality: z.enum(["fast", "best"]).optional(),
     channels: z.number().int().positive().max(64).optional(),
     sourceDuration: z.number().positive().max(36_000).optional(),
   }),
@@ -98,9 +112,9 @@ function present(url: string, gone: string): void {
  * storedMedia: only the asker's own files, header only, cached; a WebM or AVI header too: screen and browser recordings
  * are WebM), or null when no reader knows the file.
  */
-function factsOf(url: string): ClipFacts | null {
+function factsOf(url: string, gone = "That audio file is gone — add it again"): ClipFacts | null {
   const found = storedMedia(url, { allContainers: true });
-  if (!found) throw new AudioToolError("That audio file is gone — add it again");
+  if (!found) throw new AudioToolError(gone);
   const info = found.info;
   if (!info) return null;
   const duration = info.duration && info.duration > 0 ? Math.round(info.duration * 1000) / 1000 : undefined;
@@ -109,8 +123,10 @@ function factsOf(url: string): ClipFacts | null {
 
 async function plan(body: AudioToolRequest): Promise<ToolPlan & { engine: Engine; split?: ClipFacts; headerChannels?: number }> {
   const mode = engineMode();
-  // Split soundtrack runs on the open engine only: an install set to paid APIs only says why, whichever engine was asked for.
+  // Split soundtrack and Remove dialogue run on the open engine only: an install set to paid APIs only says why, whichever
+  // engine was asked for.
   if (body.tool === "split" && mode === "cloud") throw new AudioToolError(CLOUD_ONLY_PROBLEM);
+  if (body.tool === "remove-dialogue" && mode === "cloud") throw new AudioToolError(CLOUD_ONLY_REMOVE_PROBLEM);
   if (mode !== "both" && body.engine !== mode) throw new AudioToolError(mode === "open" ? "This install is set to open source only (Settings → Engine mode)" : "This install is set to paid cloud APIs only (Settings → Engine mode)");
   try {
     if (body.tool === "split") {
@@ -120,6 +136,14 @@ async function plan(body: AudioToolRequest): Promise<ToolPlan & { engine: Engine
       const seconds = facts?.duration ?? body.sourceDuration;
       const channels = facts?.channels ?? body.channels;
       return { engine: body.engine, ...planSplit({ ...body, seconds, channels }), split: { duration: seconds, channels }, headerChannels: facts?.channels };
+    }
+    if (body.tool === "remove-dialogue") {
+      const facts = factsOf(body.video, "That video is gone — add it again");
+      // A clip made without sound (a silent text-to-video take): nothing to take out, said before anything is queued.
+      if (facts?.hasAudio === false) throw new AudioToolError(NO_SOUND_PROBLEM);
+      const seconds = facts?.duration ?? body.sourceDuration;
+      const channels = facts?.channels ?? body.channels;
+      return { engine: body.engine, ...planRemoveDialogue({ ...body, seconds, channels, hasAudio: facts?.hasAudio }), split: { duration: seconds, channels }, headerChannels: facts?.channels };
     }
     if (body.tool === "remux") {
       present(body.audio, "That mix is gone — export it again");
@@ -154,7 +178,7 @@ export async function previewAudioTool(body: AudioToolRequest): Promise<AudioToo
     cost = cost === null || r.costUsd === null ? null : cost + r.costUsd;
   }
   const out: AudioToolPreview = { summary: p.summary, notes: p.notes, length: p.length, steps: p.steps.length, costUsd: cost === null ? null : Math.round(cost * 1000) / 1000, demo };
-  if (body.tool === "split") {
+  if (body.tool === "split" || body.tool === "remove-dialogue") {
     // How long it takes on this host: its device (asked once a minute), the model it would use (one it has on disk) and
     // how many passes. A model the host doesn't have is refused here, before the run, with how to install it.
     // A visitor's price check (a guest's, or an account's on its own GPU) never calls a GPU, as main's price checks
@@ -173,7 +197,8 @@ export async function previewAudioTool(body: AudioToolRequest): Promise<AudioToo
     if (installed && !installed.includes(DBS_MODELS[quality])) throw new AudioToolError(missingDbs(DBS_MODELS[quality], installed));
     const { duration: seconds, channels } = p.split ?? {};
     Object.assign(out, { hostPick: pick, ...(device && { device }), ...(installed && { installed: installed.map((m) => (m === DBS_MODELS.best ? "best" : "fast")) }), ...(p.headerChannels && { channels: p.headerChannels }) });
-    if (seconds) out.estimate = splitTime({ seconds, quality, mode: dbsChannelsFor(body.stereo ? "each channel" : "mono", channels), channels, device });
+    const mode = dbsChannelsFor(body.tool === "split" && body.stereo ? "each channel" : "mono", channels);
+    if (seconds) out.estimate = (body.tool === "split" ? splitTime : removeDialogueTime)({ seconds, quality, mode, channels, device });
   }
   return out;
 }
