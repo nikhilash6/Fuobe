@@ -122,7 +122,7 @@ describe("apps and tools pick the new models first", () => {
   });
 
   it("Layers: Qwen-Image 2.1 edits, inpaints, expands and makes a layer first; Ideogram 4 is the next pick for a layer", () => {
-    expect(TOOL_MODELS.regenerate.open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit", "oss-fibo2-edit-turbo"]);
+    expect(TOOL_MODELS.regenerate.open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-fibo2-edit-turbo"]);
     // A lone object on a plain background is what Ideogram 4's safety filter answers with a grey card most often.
     expect(TOOL_MODELS["generate-layer"].open).toEqual(["oss-qwen-image-21", "oss-ideogram-4", "oss-krea2-turbo", "oss-moss-image"]);
     for (const tool of ["text-edit", "regional", "expand", "inpaint", "enhance"] as const) expect(TOOL_MODELS[tool].open[0], tool).toBe("oss-qwen-image-21");
@@ -150,12 +150,12 @@ describe("apps and tools pick the new models first", () => {
     expect(EFFECT_CHAIN_MODELS.edit).toEqual({ cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-image-21-turbo" });
   });
 
-  it("Photodump, Fashion Factory and Character swap offer Qwen-Image 2.1 first, then Krea 2 Identity Edit", () => {
+  it("Photodump, Fashion Factory's photoset and Character swap offer Qwen-Image 2.1 first, then Krea 2 Identity Edit", () => {
     const selfie: PhotoSubject = { kind: "selfie", url: "/api/files/uploads/me.png" };
     expect(PHOTODUMP_MODELS.open).toEqual(["fuobe-soul", "oss-qwen-image-21", "oss-krea2-identity-edit", "oss-qwen-image-21-turbo"]);
     expect(photodumpModel(selfie, "open", {}).modelId).toBe("oss-qwen-image-21");
     expect(photodumpModel(selfie, "open", {}, "oss-krea2-identity-edit").modelId).toBe("oss-krea2-identity-edit");
-    expect(FASHION_MODELS.outfit.open).toEqual(["fuobe-tryon", "oss-qwen-image-21-turbo", "oss-krea2-identity-edit"]);
+    expect(FASHION_MODELS.outfit.open).toEqual(["fuobe-tryon", "oss-qwen-image-21-turbo", "oss-qwen-image-21"]);
     expect(fashionModel("photoset", "open")).toBe("oss-qwen-image-21");
     expect(ANCHOR_MODELS.open.map((m) => m.id)).toEqual(["oss-qwen-image-21", "oss-krea2-identity-edit"]);
     expect(anchorModel("open").id).toBe("oss-qwen-image-21");
@@ -165,7 +165,7 @@ describe("apps and tools pick the new models first", () => {
   });
 });
 
-describe("app runs stored before the apps moved to Qwen-Image 2.1", () => {
+describe("app runs stored before the apps moved to newer models", () => {
   const stored = (modelId: string, presetId: string, op?: GenerationRequest["op"]): GenerationRequest => ({
     feature: "app",
     modelId,
@@ -187,6 +187,21 @@ describe("app runs stored before the apps moved to Qwen-Image 2.1", () => {
       expect(moved.request, id).toMatchObject({ modelId: "oss-qwen-image-21", op: "outpaint" });
       expect(planGeneration(moved.request, getModel, getPreset).op).toBe("outpaint");
     }
+  });
+
+  it("a talking app's run on Kling AI Avatar and an Upscale run on 4x ESRGAN run on the app's model now", () => {
+    const talk = (presetId: string) => ({ ...stored("kling-avatar", presetId, "avatar"), inputs: { images: ["/api/files/uploads/me.png"], audio: "/api/files/uploads/voice.mp3" } });
+    expect(() => planGeneration(talk("app-talking-photo"), getModel, getPreset)).toThrow(/runs on kling-avatar-2/);
+    for (const id of ["app-talking-photo", "app-asmr-host", "app-asmr-promo"]) {
+      const moved = movedAppRequest(talk(id), getModel, getPreset);
+      expect(moved.request, id).toMatchObject({ modelId: "kling-avatar-2", op: "avatar", presetId: id });
+      expect(moved.note, id).toMatch(/now runs on Kling Avatar 2\.0$/);
+      expect(planGeneration(moved.request, getModel, getPreset), id).toMatchObject({ op: "avatar", model: { id: "kling-avatar-2" } });
+    }
+    const up = movedAppRequest(stored("oss-upscale-image", "app-upscale", "upscale-image"), getModel, getPreset);
+    expect(up.request).toMatchObject({ modelId: "oss-seedvr2-image", op: "upscale-image" });
+    expect(up.note).toBe("Upscale now runs on SeedVR2 (image)");
+    expect(planGeneration(up.request, getModel, getPreset)).toMatchObject({ op: "upscale-image", model: { id: "oss-seedvr2-image" } });
   });
 
   it("leaves alone an app a LoRA ties to the old model, a model the app never ran on, and a request without an app", () => {

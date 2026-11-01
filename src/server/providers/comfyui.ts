@@ -1439,6 +1439,19 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
+  // SeedVR2's `scale` multiplies the picture before one diffusion pass over all of it, and its graph is made for up to
+  // limits.maxWidth × maxHeight: the multiplier comes down to fit the picture (a 3000 × 2000 photo at the template's 4x
+  // would ask for 12000 × 8000), to the resize node's 0.01 step.
+  if (manifest.id === "upscale-image-seedvr2" && b.scale) {
+    const src = ctx.media?.(String(values.image ?? ""));
+    if (src?.width && src.height) {
+      const [maxW, maxH] = [Number(manifest.limits?.maxWidth ?? Infinity), Number(manifest.limits?.maxHeight ?? Infinity)];
+      const room = Math.min(maxW / src.width, maxH / src.height);
+      const asked = Number(values.scale ?? d.scale ?? 1);
+      if (room < 1) throw new ProviderError(`SeedVR2 makes pictures up to ${maxW} × ${maxH} px on your GPU, and this one is already ${src.width} × ${src.height}: pick 4x ESRGAN for it`, 400);
+      if (asked > room) values.scale = Math.floor(room * 100) / 100;
+    }
+  }
   // A canvas the request names (a layout's, Soul's exact sizes) stays on the graph's grid and inside its limits, as the
   // cloud fits the same canvas (FieldMap.size): both engines render one size, the size a layout is compiled at.
   if (b.width && b.height && (extra.width !== undefined || extra.height !== undefined)) {

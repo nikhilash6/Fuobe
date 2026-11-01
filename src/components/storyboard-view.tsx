@@ -319,6 +319,9 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
   const boardPartner = engine === "cloud" ? partner : undefined;
   const m = storyboardModels(engine as Engine, boardPartner);
   const nextName = `${modelNames[m.next] ?? m.next}${m.nextLoras?.length ? " with the next-scene LoRA" : ""}`;
+  // Frame 1's model (with references: the edit that takes them), named when it isn't the one that makes the rest.
+  const firstId = refs.length ? m.firstWithRefs : m.first;
+  const runsOn = firstId === m.next ? ` Runs on ${nextName}.` : ` Frame 1 on ${modelNames[firstId] ?? firstId}, then ${nextName}.`;
   const lookName = look ? lookCard(look)?.name : undefined;
   const filled = scenes.filter((s) => s.trim());
   const boardBody = {
@@ -393,7 +396,7 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
           <h2 className="font-heading text-display text-balance">Tell it frame by frame</h2>
           <p className="mt-2 text-[13px] text-muted-foreground">
             Up to {MAX_FRAMES} consistent frames — each one is made from the previous frame, so faces, wardrobe and light carry through.
-            {lookName && !refs.length ? ` Frame 1 on ${modelNames[STORYBOARD_LOOK_MODEL] ?? "Fuobe Soul"} in the ${lookName} look, then ${nextName}.` : ` Runs on ${nextName}.`}
+            {lookName && !refs.length ? ` Frame 1 on ${modelNames[STORYBOARD_LOOK_MODEL] ?? "Fuobe Soul"} in the ${lookName} look, then ${nextName}.` : runsOn}
           </p>
           <div className="mt-6 rounded-[20px] border bg-background p-3 text-left shadow-soft focus-within:border-primary focus-within:ring-4 focus-within:ring-brand-faint sm:rounded-composer">
             <div role="radiogroup" aria-label="How to write it" className="mb-2 flex items-center gap-1 rounded-full bg-muted p-0.5 text-[13px] font-medium sm:w-fit">

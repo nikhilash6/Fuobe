@@ -119,10 +119,16 @@ export function presetRoute(preset: Preset, engine: Engine): PresetRoute | null 
 export { presetRoutes };
 
 /**
- * The model apps ran on before they moved to a newer one (2026-10-31, the owner's newest image models): the edit apps
- * left Qwen-Image-Edit 2511, Expand and Zoom Out left FLUX Fill, both for Qwen-Image 2.1.
+ * The model apps ran on before they moved to a newer one: the edit apps left Qwen-Image-Edit 2511, Expand and Zoom Out
+ * left FLUX Fill, both for Qwen-Image 2.1 (2026-10-31); the talking apps left Kling AI Avatar for Kling Avatar 2.0 in
+ * the cloud, and Upscale left 4x ESRGAN for SeedVR2 on your GPU (2026-11-01).
  */
-const APP_MODEL_MOVES: Readonly<Record<string, string>> = { "oss-qwen-edit": "oss-qwen-image-21", "oss-flux-fill": "oss-qwen-image-21" };
+const APP_MODEL_MOVES: Readonly<Record<string, string>> = {
+  "oss-qwen-edit": "oss-qwen-image-21",
+  "oss-flux-fill": "oss-qwen-image-21",
+  "kling-avatar": "kling-avatar-2",
+  "oss-upscale-image": "oss-seedvr2-image",
+};
 
 /**
  * Apps pin their model, so a stored app run on the model its app ran on before (a retry, Run again, Reuse, a script)

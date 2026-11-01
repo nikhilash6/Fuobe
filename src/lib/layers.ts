@@ -232,7 +232,8 @@ export const TOOL_LABELS: Record<LayerTool, string> = {
 export const TOOL_MODELS: Record<LayerTool, { cloud: string[]; open: string[] }> = {
   decompose: { cloud: ["seedream-5-layers", "seedream-5-flash-layers", "qwen-image-layered-cloud"], open: ["oss-qwen-layered"] },
   split: { cloud: ["seedream-5-layers", "seedream-5-flash-layers", "qwen-image-layered-cloud"], open: ["oss-qwen-layered", "oss-qwen-layered-control"] },
-  regenerate: { cloud: ["nano-banana-pro", "seedream-5-pro", "nano-banana-2-1"], open: ["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit", "oss-fibo2-edit-turbo"] },
+  // Layer edit sends the layer and up to 3 references: Krea 2 Edit isn't offered here, it takes 2 and reads the second as a person.
+  regenerate: { cloud: ["nano-banana-pro", "seedream-5-pro", "nano-banana-2-1"], open: ["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-fibo2-edit-turbo"] },
   "generate-layer": { cloud: ["nano-banana-pro", "seedream-5-pro"], open: ["oss-qwen-image-21", "oss-ideogram-4", "oss-krea2-turbo", "oss-moss-image"] },
   // Ideogram ($0.09) also lifts the text off the picture, which the editor doesn't use; Florence-2 only
   // reads it (fal lists $0 per compute second, real cost unverified: the catalog's $0.001 is a placeholder).
@@ -246,11 +247,12 @@ export const TOOL_MODELS: Record<LayerTool, { cloud: string[]; open: string[] }>
   relight: { cloud: ["nano-banana-pro", "nano-banana-2-1"], open: ["oss-qwen-image-21-turbo", "oss-krea2-edit", "oss-qwen-relight"] },
   // Qwen-Image 2.1 at 25 steps on plain camera words (its Turbo misses big camera turns).
   angles: { cloud: ["qwen-multiple-angles", "nano-banana-pro"], open: ["oss-qwen-image-21"] },
-  // Both open graphs grow the canvas themselves from the pads; Krea 2 Inpaint needs its add-on (Ostris Edit).
-  expand: { cloud: ["nano-banana-pro"], open: ["oss-qwen-image-21", "oss-krea2-inpaint"] },
+  // Both open graphs grow the canvas themselves from the pads. Krea 2 Inpaint isn't offered here: its graph scales the
+  // picture to about 1 MP and redraws all of it, and it needs the Ostris Edit add-on.
+  expand: { cloud: ["nano-banana-pro"], open: ["oss-qwen-image-21", "oss-flux-fill"] },
   // Nano Banana Pro sees the painted area tinted red (Higgsfield's nano_banana_pro_inpaint); the others take the mask itself
   // (Bria FIBO 2's edit keeps a single picture's own shape).
-  inpaint: { cloud: ["nano-banana-pro", "bria-fibo-2", "z-image-inpaint"], open: ["oss-qwen-image-21", "oss-krea2-inpaint"] },
+  inpaint: { cloud: ["nano-banana-pro", "bria-fibo-2", "z-image-inpaint"], open: ["oss-qwen-image-21", "oss-flux-fill"] },
   // The retouch looks; Detail runs on {@link ENHANCE_DETAIL_MODELS}.
   enhance: { cloud: ["nano-banana-pro", "seedream-5-pro"], open: ["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit"] },
 };

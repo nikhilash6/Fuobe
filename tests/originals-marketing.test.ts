@@ -303,8 +303,8 @@ describe("Fuobe Try-On's LoRA is never left out of a run", () => {
 describe("Fashion Factory moves on when a model can't run", () => {
   const t = getTemplate("red-room")!;
 
-  it("offers Qwen-Image 2.1 Turbo and Krea 2 Identity Edit after Fuobe Try-On on your GPU and takes the photoset's pick", () => {
-    expect(FASHION_MODELS.outfit.open).toEqual([TRYON_MODEL, "oss-qwen-image-21-turbo", "oss-krea2-identity-edit"]);
+  it("offers Qwen-Image 2.1 Turbo and Qwen-Image 2.1 after Fuobe Try-On on your GPU and takes the photoset's pick", () => {
+    expect(FASHION_MODELS.outfit.open).toEqual([TRYON_MODEL, "oss-qwen-image-21-turbo", "oss-qwen-image-21"]);
     const qwen = fashionOutfitRequest(t, "/b.png", "/g.png", "open", "oss-qwen-image-21-turbo");
     expect(qwen).toMatchObject({ modelId: "oss-qwen-image-21-turbo", params: { aspectRatio: "3:4" } });
     expect(qwen.prompt).toMatch(/^Dress the person in image 1/);

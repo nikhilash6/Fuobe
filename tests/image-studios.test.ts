@@ -518,6 +518,28 @@ describe("Photodump packs and planning", () => {
       [selfie.url, "/api/files/uploads/a.png"],
       [selfie.url, "/api/files/uploads/b.png"],
     ]);
+    expect(custom.requests[0].prompt).toMatch(/^The person in image 1 recreated in image 2: .*Replace the person in image 2 with them/);
+    // Krea 2 Identity Edit reads the scene first and the person last (its likeness boost is on the last picture).
+    const krea = planPhotodump({ pack: mine, subject: selfie, engine: "open", modelId: "oss-krea2-identity-edit" }, {});
+    expect(krea.modelId).toBe("oss-krea2-identity-edit");
+    expect(krea.requests.map((r) => r.inputs?.images)).toEqual([
+      ["/api/files/uploads/a.png", selfie.url],
+      ["/api/files/uploads/b.png", selfie.url],
+    ]);
+    expect(krea.requests[0].prompt).toMatch(/^The person in image 2 recreated in image 1: .*Replace the person in image 1 with them/);
+    // A pack of Fuobe's own has only the selfie: image 1 on every model.
+    const kreaOwn = planPhotodump({ pack, subject: selfie, engine: "open", modelId: "oss-krea2-identity-edit" }, {});
+    expect(kreaOwn.requests[0].inputs?.images).toEqual([selfie.url]);
+    expect(kreaOwn.requests[0].prompt).toContain("the person in image 1");
+    // A saved character goes in as one photo of theirs (two pictures would read as two people), after a pack's reference.
+    const kreaMaya = planPhotodump({ pack, subject: maya, engine: "open", modelId: "oss-krea2-identity-edit" }, {});
+    expect(kreaMaya.requests[0].inputs?.images).toEqual(["/api/files/uploads/m1.png"]);
+    expect(kreaMaya.requests[0].prompt).not.toContain("@Maya");
+    const kreaMayaMine = planPhotodump({ pack: mine, subject: maya, engine: "open", modelId: "oss-krea2-identity-edit" }, {});
+    expect(kreaMayaMine.requests[0].inputs?.images).toEqual(["/api/files/uploads/a.png", "/api/files/uploads/m1.png"]);
+    expect(kreaMayaMine.requests[0].prompt).toMatch(/^The person in image 2 recreated in image 1: /);
+    // Other models still @mention the character (the server attaches their photos or Soul ID).
+    expect(planPhotodump({ pack, subject: maya, engine: "open" }, {}).requests[0].prompt).toContain("@Maya");
     expect(() => planPhotodump({ pack, subject: { ...maya, references: [] }, engine: "cloud" }, {})).toThrow(/Add a photo of Maya/);
   });
 
@@ -623,13 +645,15 @@ describe("Fashion Factory", () => {
     expect(fashionPhotosetRequests(t, "/api/files/dressed.png", "open", "oss-krea2-identity-edit")[0].modelId).toBe("oss-krea2-identity-edit");
     // A pick the step no longer lists falls back to its first model.
     expect(fashionPhotosetRequests(t, "/api/files/dressed.png", "open", "oss-qwen-edit")[0].modelId).toBe("oss-qwen-image-21");
-    // When the try-on can't run on your GPU: Qwen-Image 2.1 Turbo, then Krea 2 Identity Edit, both dressing from image 2.
-    expect(FASHION_MODELS.outfit.open).toEqual(["fuobe-tryon", "oss-qwen-image-21-turbo", "oss-krea2-identity-edit"]);
+    // When the try-on can't run on your GPU: Qwen-Image 2.1 Turbo, then Qwen-Image 2.1, both dressing from image 2. Krea 2
+    // Identity Edit makes the photoset only: it takes a second picture as a person, and the outfit step's is a garment.
+    expect(FASHION_MODELS.outfit.open).toEqual(["fuobe-tryon", "oss-qwen-image-21-turbo", "oss-qwen-image-21"]);
     expect(FASHION_MODELS.photoset.open).toEqual(["oss-qwen-image-21", "oss-krea2-identity-edit"]);
     expect(fashionOutfitRequest(t, "/api/files/base.png", "/api/files/shirt.png", "open", undefined, { has: (id) => id !== "fuobe-tryon" }).modelId).toBe("oss-qwen-image-21-turbo");
-    const dressed = fashionOutfitRequest(t, "/api/files/base.png", "/api/files/shirt.png", "open", "oss-krea2-identity-edit");
-    expect(dressed).toMatchObject({ modelId: "oss-krea2-identity-edit", op: "edit", inputs: { images: ["/api/files/base.png", "/api/files/shirt.png"] } });
+    const dressed = fashionOutfitRequest(t, "/api/files/base.png", "/api/files/shirt.png", "open", "oss-qwen-image-21");
+    expect(dressed).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit", inputs: { images: ["/api/files/base.png", "/api/files/shirt.png"] } });
     expect(() => plan(dressed)).not.toThrow();
+    expect(fashionOutfitRequest(t, "b", "g", "open", "oss-krea2-identity-edit").modelId).toBe("fuobe-tryon");
   });
 
   it("walks the wizard with Higgsfield's validation messages", () => {
@@ -677,9 +701,7 @@ describe("apps on the newer tools", () => {
     // Kling Avatar 2.0 takes what Kling AI Avatar took: the portrait and the voice.
     const map = (id: string) => getModel(id)!.routes.find((r) => r.op === "avatar")!.map;
     expect(map("kling-avatar-2")).toEqual(map("kling-avatar"));
-    expect(getPreset("app-asmr-classic")!.parity).toBe(
-      "MiniMax H3 makes its own sound; Kling 2.5 Turbo and Wan 2.2 clips are silent — add sound to them with the Audio → Video to audio tool",
-    );
+    expect(getPreset("app-asmr-classic")!.parity).toBe("This makes a silent clip. Add sound with Video to audio.");
   });
 });
 

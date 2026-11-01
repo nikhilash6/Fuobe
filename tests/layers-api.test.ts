@@ -158,7 +158,7 @@ describe("job steps", () => {
       inputs: { images: ["/api/files/a.png"], mask: "/api/files/m.png", sketch: "/api/files/s.png" },
     });
     expect(steps({ ...paint, modelId: "bria-fibo-2" })[0].request).toMatchObject({ modelId: "bria-fibo-2", op: "inpaint", inputs: { mask: "/api/files/m.png" } });
-    expect(steps({ ...paint, engine: "open", modelId: "oss-krea2-inpaint" })[0].request).toMatchObject({ modelId: "oss-krea2-inpaint", op: "inpaint", inputs: { mask: "/api/files/m.png" } });
+    expect(steps({ ...paint, engine: "open", modelId: "oss-flux-fill" })[0].request).toMatchObject({ modelId: "oss-flux-fill", op: "inpaint", inputs: { mask: "/api/files/m.png" } });
     const open = steps({ ...paint, engine: "open", settings: { keepAlpha: true } });
     expect(open.map((x) => [x.key, x.request.modelId, x.request.op])).toEqual([
       ["inpaint", "oss-qwen-image-21", "inpaint"],
@@ -214,9 +214,9 @@ describe("job steps", () => {
     expect(turned.loras).toBeUndefined();
     const expand = steps({ tool: "expand", engine: "open", settings: { pads: { left: 64, top: 0, right: 64, bottom: 8 } } })[0].request;
     expect(expand).toMatchObject({ modelId: "oss-qwen-image-21", op: "outpaint", params: { extra: { padLeft: 64, padTop: 0, padRight: 64, padBottom: 8 } } });
-    // Krea 2 Inpaint grows the canvas from the same pads.
-    expect(steps({ tool: "expand", engine: "open", modelId: "oss-krea2-inpaint", settings: { pads: { left: 64, top: 0, right: 64, bottom: 8 } } })[0].request).toMatchObject({
-      modelId: "oss-krea2-inpaint",
+    // FLUX.1 Fill grows the canvas from the same pads.
+    expect(steps({ tool: "expand", engine: "open", modelId: "oss-flux-fill", settings: { pads: { left: 64, top: 0, right: 64, bottom: 8 } } })[0].request).toMatchObject({
+      modelId: "oss-flux-fill",
       op: "outpaint",
       params: { extra: { padLeft: 64 } },
     });
@@ -224,12 +224,14 @@ describe("job steps", () => {
     expect(steps({ tool: "expand" })[0].request.prompt).toMatch(/^Fill the empty grey margins/);
     expect(steps({ tool: "expand" })[0].request.prompt).toMatch(/fill the margins with more of the same surroundings\.$/);
     expect(steps({ tool: "regional", prompt: "add a hat" })[0].request).toMatchObject({ modelId: "seedream-5-pro", op: "edit" });
-    // Regional edit and Layer edit on your GPU: Qwen-Image 2.1 first, then Krea 2 Edit and FIBO 2 Edit Turbo, one picture each.
+    // Regional edit on your GPU: Qwen-Image 2.1 first, then Krea 2 Edit and FIBO 2 Edit Turbo, one picture each. Layer edit
+    // takes FIBO 2 Edit Turbo too, with its references.
     expect(steps({ tool: "regional", engine: "open", prompt: "add a hat" })[0].request).toMatchObject({ modelId: "oss-qwen-image-21", op: "edit" });
     for (const modelId of ["oss-krea2-edit", "oss-fibo2-edit-turbo"]) {
       expect(steps({ tool: "regional", engine: "open", modelId, prompt: "add a hat" })[0].request).toMatchObject({ modelId, op: "edit", inputs: { images: ["/api/files/a.png"] } });
-      expect(steps({ tool: "regenerate", engine: "open", modelId, prompt: "a red coat" })[0].request).toMatchObject({ modelId, op: "edit" });
     }
+    expect(steps({ tool: "regenerate", engine: "open", modelId: "oss-fibo2-edit-turbo", prompt: "a red coat" })[0].request).toMatchObject({ modelId: "oss-fibo2-edit-turbo", op: "edit" });
+    expect(() => steps({ tool: "regenerate", engine: "open", modelId: "oss-krea2-edit", prompt: "a red coat" })).toThrow(/can't run this tool/);
     expect(() => steps({ tool: "regional", engine: "open", modelId: "oss-qwen-edit", prompt: "add a hat" })).toThrow(/can't run this tool/);
     expect(steps({ tool: "generate-layer", engine: "open", modelId: "oss-moss-image", prompt: "a lamp" })[0].request).toMatchObject({ modelId: "oss-moss-image", op: "t2i" });
   });

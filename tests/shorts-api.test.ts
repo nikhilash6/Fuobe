@@ -486,6 +486,10 @@ describe("Mixed Media renders", () => {
       const per = getModel("nano-banana-2-1")!.pricing!.usd;
       expect(est).toMatchObject({ mode: "frames", frames: 75, fps: 7.5, perFrameUsd: per, demo: false, previewUsd: per });
       expect(est.notes).toContain("Frames are every 4th frame of this 30 FPS clip: 7.5 FPS, 75 frames");
+      // A render that names Nano Banana 2 (a saved setup, an API caller) runs on Nano Banana 2.1, not the Original.
+      const older = await mixed.estimateMixed(mm({ engine: "cloud", modelId: "nano-banana-2", source: { url: "/api/files/placeholder.mp4", duration: 12, fps: 30 }, range: { start: 0, end: 10 }, fps: 8 }) as never);
+      expect(older).toMatchObject({ mode: "frames", modelId: "nano-banana-2-1", perFrameUsd: per });
+      expect(older.notes).toContain(`${getModel("nano-banana-2")!.name} is now ${getModel("nano-banana-2-1")!.name} here`);
       // 75 frames × the frame price, plus the cut, the extraction and the assembly (fal compute, about free).
       expect(est.costUsd).toBeGreaterThanOrEqual(75 * per);
       expect(est.costUsd).toBeLessThan(75 * per + 0.01);

@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import type { ManifestWorkflow } from "@/lib/comfy";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import type { LayerJobInput } from "@/lib/layers";
+import type { MediaInfo } from "@/lib/media-probe";
 
 // The Layers tools' open-engine requests, bound into the real library graphs: extras bind by name and
 // silently fall back to defaults when a name is wrong, so check the values land where they should.
@@ -18,13 +19,15 @@ const { getModel } = await import("@/lib/catalog");
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-async function bind(req: GenerationRequest) {
+/** The request bound into its graph; `size` is what the server read of the picture it sent (its width and height). */
+async function bind(req: GenerationRequest, size?: { width: number; height: number }) {
   const route = getModel(req.modelId)!.routes.find((r) => r.op === req.op)!;
   expect(route.provider).toBe("comfyui");
+  const media = (name: unknown): MediaInfo | undefined => (size && name === req.inputs?.images?.[0] ? { container: "image", ...size, hasVideo: false, hasAudio: false } : undefined);
   const res = await prepareWorkflow(
     route.endpoint,
     { prompt: req.prompt, images: req.inputs?.images, ...(req.inputs?.mask ? { mask: req.inputs.mask } : {}), ...req.params },
-    { generationId: "gen1", op: req.op!, upload: async (_d, _t, name) => `up_${name}`, media: () => undefined, serverRam: async () => undefined },
+    { generationId: "gen1", op: req.op!, upload: async (_d, _t, name) => `up_${name}`, media, serverRam: async () => undefined },
   );
   const wf = res.workflow as Record<string, { inputs: Record<string, unknown> }>;
   const m = res.manifest as ManifestWorkflow;
@@ -66,14 +69,14 @@ describe("Layers on the open engine", () => {
     expect(at("numLayers")).toEqual([2]);
   });
 
-  it("expand: the padding reaches both of Qwen-Image 2.1's pad nodes, or Krea 2 Inpaint's when picked", async () => {
+  it("expand: the padding reaches both of Qwen-Image 2.1's pad nodes, or FLUX Fill when picked", async () => {
     const pads = { pads: { left: 64, top: 0, right: 128, bottom: 8 } };
     const at = await bind(step({ tool: "expand", settings: pads }));
     expect([at("padLeft"), at("padTop"), at("padRight"), at("padBottom")]).toEqual([[64, 64], [0, 0], [128, 128], [8, 8]]);
     // The words only say what fills the margins: the graph keeps the picture itself.
     expect(at("prompt")).toEqual(["Continue the scene naturally beyond every edge with matching perspective, lighting, textures and grain."]);
-    const krea = await bind(step({ tool: "expand", modelId: "oss-krea2-inpaint", settings: pads }));
-    expect([krea("padLeft")[0], krea("padTop")[0], krea("padRight")[0], krea("padBottom")[0]]).toEqual([64, 0, 128, 8]);
+    const fill = await bind(step({ tool: "expand", modelId: "oss-flux-fill", settings: pads }));
+    expect([fill("padLeft"), fill("padTop"), fill("padRight"), fill("padBottom")]).toEqual([[64], [0], [128], [8]]);
   });
 
   it("relight and edit text: the instruction reaches the edit graphs", async () => {
@@ -105,6 +108,22 @@ describe("Inpaint and Enhancer on the open engine", () => {
     expect(detail("scale")).toEqual([2]);
     const esrgan = await bind(step({ tool: "enhance", modelId: "oss-upscale-image", settings: { look: "detail" } }));
     expect(esrgan("scale")).toEqual([0.5]);
+  });
+
+  it("upscale: SeedVR2's multiplier keeps the picture inside its graph's 4096 px", async () => {
+    const up = step({ tool: "upscale" });
+    expect(up).toMatchObject({ modelId: "oss-seedvr2-image", op: "upscale-image" });
+    // The template's 4x while it fits: 1024 → 4096.
+    expect((await bind(up, { width: 1024, height: 768 }))("scale")).toEqual([4]);
+    // A 3000 × 2000 photo: 4096 / 3000, to the resize node's 0.01 step (4095 px), not 12000 px.
+    expect((await bind(up, { width: 3000, height: 2000 }))("scale")).toEqual([1.36]);
+    // The Enhancer's 2x on a 3000 px layer comes down the same way; a smaller ask stays as it is.
+    expect((await bind(step({ tool: "enhance", settings: { look: "detail" } }), { width: 3000, height: 1000 }))("scale")).toEqual([1.36]);
+    expect((await bind(step({ tool: "enhance", settings: { look: "detail" } }), { width: 1500, height: 1000 }))("scale")).toEqual([2]);
+    // A picture already past it has no room to grow, and says which upscaler takes it.
+    await expect(bind(up, { width: 5000, height: 3000 })).rejects.toThrow(/up to 4096 × 4096 px on your GPU, and this one is already 5000 × 3000: pick 4x ESRGAN/);
+    // 4x ESRGAN is not capped here (its scale resizes after the model's own 4x).
+    expect((await bind(step({ tool: "upscale", modelId: "oss-upscale-image" }), { width: 3000, height: 2000 }))("scale")).toEqual([1]);
   });
 });
 

@@ -113,17 +113,24 @@ describe("H3 person removal: the graph", () => {
     await expect(prepare({ prompt: "" })).rejects.toThrow(/Say what to remove/);
   });
 
-  it("the clean frame keeps the part's framing: Qwen-Image 2.1 follows image 1's shape, the relay centre-crops it back", () => {
-    const qwen = JSON.parse(fs.readFileSync(path.join(__dirname, "../workflows/comfyui/qwen-image-21-edit.json"), "utf8")) as Graph;
-    // Image 1 is scaled to 2048 px on its long side, and the latent is made on its own size (resolution 0), rounded to 32.
-    expect(qwen["20"]).toMatchObject({ class_type: "ImageScaleToMaxDimension", inputs: { image: ["10", 0], largest_size: 2048 } });
-    expect(qwen["30"]).toMatchObject({ class_type: "TextEncodeQwenImage21", inputs: { resolution: 0 } });
-    // A 16:9 part: 1344×736 → 2048×1121.5 → 2048×1120, the same shape within a pixel at the part's size.
-    const part = h3Canvas(1280, 720, "768p");
-    const long = 2048;
-    const short = Math.round(((part.height * long) / part.width) / 32) * 32;
-    expect([long, short]).toEqual([2048, 1120]);
-    expect(Math.abs(part.height - (short * part.width) / long)).toBeLessThanOrEqual(1);
+  it("the clean frame keeps the part's framing: Qwen-Image 2.1 follows image 1's shape, the relay centre-crops it back", async () => {
+    // The planned clean step, bound into its graph with the frame the plan chains in.
+    const clean = planRemoval(input()).steps.find((s) => s.key === "clean")!.request;
+    const route = getModel(clean.modelId)!.routes.find((r) => r.op === clean.op)!;
+    const bound = (await prepareWorkflow(route.endpoint, { prompt: clean.prompt, images: ["frame.png"], ...clean.params } as GenInput, {
+      generationId: "g2",
+      op: clean.op!,
+      upload: async (_d, _t, name) => `up_${name}`,
+      media: (n) => (n === "frame.png" ? { container: "image", width: 1344, height: 736, hasVideo: false, hasAudio: false } : undefined),
+    })).workflow as Graph;
+    // Image 1 is the frame, scaled to 2048 px on its long side, and the latent is made on its own shape (resolution 0):
+    // nothing in the request sets a canvas of its own.
+    expect(bound["10"]).toMatchObject({ class_type: "LoadImage", inputs: { image: "frame.png" } });
+    expect(bound["20"]).toMatchObject({ class_type: "ImageScaleToMaxDimension", inputs: { image: ["10", 0], largest_size: 2048 } });
+    expect(bound["30"]).toMatchObject({ class_type: "TextEncodeQwenImage21", inputs: { resolution: 0 } });
+    // The relay fits the clean frame back to the part's exact size from its centre.
+    const relay = await prepare({ prompt: "the man in the grey shirt" });
+    expect(relay.anchor_fit).toMatchObject({ class_type: "ImageScale", inputs: { image: ["anchor", 0], width: ["dimensions", 0], height: ["dimensions", 1], crop: "center" } });
   });
 
   it("downloads the Person Remover LoRA before it runs", () => {

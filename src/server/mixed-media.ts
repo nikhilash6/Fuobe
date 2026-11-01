@@ -10,6 +10,7 @@ import {
   MIXED_FEATURE,
   MIXED_FRAME_FEATURE,
   MIXED_FRAME_MODELS,
+  MIXED_FRAME_MOVES,
   MIXED_MODELS,
   MIXED_MODES,
   MIXED_OPEN_LEGACY,
@@ -108,12 +109,16 @@ async function planInput(body: MixedBody, opts: { probe: boolean }): Promise<{ i
   const problem = mixedRangeProblem(body.range, duration, sourceFps);
   if (problem) throw new ShortsError(problem);
   const fps = clampFps(body.fps, sourceFps);
+  // A frame model Per frame has moved on from runs on its successor, and says so.
+  const movedFrom = body.modelId && MIXED_FRAME_MOVES[body.modelId] ? body.modelId : undefined;
+  if (movedFrom) body = { ...body, modelId: MIXED_FRAME_MOVES[movedFrom] };
   const mode = renderMode(body);
   const choices = modeModels(body.engine, mode);
   const modelId = body.modelId && choices.includes(body.modelId) ? body.modelId : choices[0];
   const model = getModel(modelId);
   const len = body.range.end - body.range.start;
   const notes: string[] = [];
+  if (movedFrom && modelId === body.modelId) notes.push(`${getModel(movedFrom)?.name ?? movedFrom} is now ${model?.name ?? modelId} here`);
   let frames = mixedFrames(len, fps);
   let rate = fps;
   const size = info.width && info.height ? { width: info.width, height: info.height } : body.source.width && body.source.height ? { width: body.source.width, height: body.source.height } : undefined;

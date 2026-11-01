@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { getModel, supportsOp } from "@/lib/catalog";
+import { imageLimit } from "@/lib/catalog/plan";
 import type { Operation } from "@/lib/catalog/types";
 import { layersHref } from "@/lib/output-actions";
 import {
@@ -565,7 +566,7 @@ describe("tools and prices", () => {
   });
 
   it("puts the newest open image models first: Qwen-Image 2.1, its Turbo, Krea 2, FIBO 2, MOSS-Image and SeedVR2", () => {
-    expect(TOOL_MODELS.regenerate.open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit", "oss-fibo2-edit-turbo"]);
+    expect(TOOL_MODELS.regenerate.open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-fibo2-edit-turbo"]);
     expect(TOOL_MODELS.regenerate.cloud).toEqual(["nano-banana-pro", "seedream-5-pro", "nano-banana-2-1"]);
     expect(TOOL_MODELS["generate-layer"].open).toEqual(["oss-qwen-image-21", "oss-ideogram-4", "oss-krea2-turbo", "oss-moss-image"]);
     expect(TOOL_MODELS["text-edit"].open).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit"]);
@@ -574,24 +575,46 @@ describe("tools and prices", () => {
     expect(TOOL_MODELS.upscale.open).toEqual(["oss-seedvr2-image", "oss-upscale-image"]);
     expect(TOOL_MODELS.relight).toEqual({ cloud: ["nano-banana-pro", "nano-banana-2-1"], open: ["oss-qwen-image-21-turbo", "oss-krea2-edit", "oss-qwen-relight"] });
     expect(TOOL_MODELS.angles.open).toEqual(["oss-qwen-image-21"]);
-    expect(TOOL_MODELS.expand.open).toEqual(["oss-qwen-image-21", "oss-krea2-inpaint"]);
-    expect(TOOL_MODELS.inpaint).toEqual({ cloud: ["nano-banana-pro", "bria-fibo-2", "z-image-inpaint"], open: ["oss-qwen-image-21", "oss-krea2-inpaint"] });
-    // Qwen-Image-Edit 2511, FLUX.1 Kontext and Fill, Z-Image Turbo, Qwen-Image 2512 and Nano Banana 2 are in no tool list.
+    // FLUX.1 Fill stays the second Inpaint and Expand model on your GPU: it keeps the picture's size and its pixels outside
+    // the mask, and its graph runs on core ComfyUI.
+    expect(TOOL_MODELS.expand.open).toEqual(["oss-qwen-image-21", "oss-flux-fill"]);
+    expect(TOOL_MODELS.inpaint).toEqual({ cloud: ["nano-banana-pro", "bria-fibo-2", "z-image-inpaint"], open: ["oss-qwen-image-21", "oss-flux-fill"] });
+    // Qwen-Image-Edit 2511, FLUX.1 Kontext, FLUX.1 Fill pro, Z-Image Turbo, Qwen-Image 2512 and Nano Banana 2 are in no tool
+    // list; nor is Krea 2 Inpaint, which redraws the whole picture at about 1 MP.
     const all = Object.values(TOOL_MODELS).flatMap((t) => [...t.cloud, ...t.open]);
-    for (const id of ["oss-qwen-edit", "oss-flux-kontext", "oss-flux-fill", "flux-fill-pro", "oss-z-image-turbo", "oss-qwen-image", "nano-banana-2"]) expect(all, id).not.toContain(id);
+    for (const id of ["oss-qwen-edit", "oss-flux-kontext", "flux-fill-pro", "oss-z-image-turbo", "oss-qwen-image", "nano-banana-2", "oss-krea2-inpaint"]) expect(all, id).not.toContain(id);
     // The angle and the front of a turn need the 25-step model (its Turbo misses big camera turns).
     expect(getModel("oss-qwen-image-21")!.routes.find((r) => r.op === "edit")!.endpoint).toBe("qwen-image-21-edit");
   });
 
   it("only offers models whose route takes what the tool sends", () => {
-    // Regional edit, edit text and the Enhancer send one picture to an edit route.
-    for (const tool of ["regional", "text-edit", "enhance", "relight"] as const) {
+    // Regional edit, edit text, the Enhancer and Relight send one picture to an edit route: on your GPU its graph binds it.
+    const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/comfyui/manifest.json"), "utf8")) as { workflows: { id: string; bindings: Record<string, unknown> }[] };
+    const graph = (id: string, op: Operation) => {
+      const route = getModel(id)!.routes.find((r) => r.op === op);
+      return route?.provider === "comfyui" ? manifest.workflows.find((w) => w.id === route.endpoint) : undefined;
+    };
+    for (const tool of ["regional", "text-edit", "enhance", "relight", "regenerate"] as const) {
       for (const id of TOOL_MODELS[tool].open) {
-        const m = getModel(id)!;
-        expect(supportsOp(m, "edit"), `${tool}: ${id}`).toBe(true);
-        expect(m.options.maxImages ?? 1, `${tool}: ${id}`).toBeGreaterThanOrEqual(1);
+        expect(supportsOp(getModel(id)!, "edit"), `${tool}: ${id}`).toBe(true);
+        expect(graph(id, "edit")?.bindings.image, `${tool}: ${id}`).toBeDefined();
       }
     }
+    // Layer edit sends the layer and up to 3 references (the API's limit): every model takes all 4, on both engines.
+    for (const engine of ["cloud", "open"] as const) {
+      for (const id of TOOL_MODELS.regenerate[engine]) expect(imageLimit(getModel(id)!, "edit"), `regenerate: ${id}`).toBeGreaterThanOrEqual(4);
+    }
+    // Open Inpaint and Expand keep a choice that runs on core ComfyUI alone (FLUX.1 Fill pastes the picture back around the
+    // mask), and none needs the Krea 2 Ostris Edit add-on.
+    const nodes = (id: string, op: Operation) =>
+      (manifest.workflows.find((w) => w.id === getModel(id)!.routes.find((r) => r.op === op)?.endpoint) as { customNodes?: { name: string }[] } | undefined)?.customNodes?.map((n) => n.name) ?? [];
+    for (const [tool, op] of [["inpaint", "inpaint"], ["expand", "outpaint"]] as const) {
+      expect(TOOL_MODELS[tool].open.some((id) => !nodes(id, op).length), tool).toBe(true);
+      for (const id of TOOL_MODELS[tool].open) expect(nodes(id, op), `${tool}: ${id}`).not.toContain("ComfyUI-Krea2-Ostris-Edit");
+    }
+    // Inpaint's mask and Expand's four margins reach the open graphs.
+    for (const id of TOOL_MODELS.inpaint.open) expect(graph(id, "inpaint")?.bindings.mask, id).toBeDefined();
+    for (const id of TOOL_MODELS.expand.open) expect(Object.keys(graph(id, "outpaint")?.bindings ?? {}), id).toEqual(expect.arrayContaining(["image", "padLeft", "padTop", "padRight", "padBottom"]));
     // Inpaint sends a mask: every model past Nano Banana Pro (the red-tinted copy) has an inpaint route with one.
     for (const engine of ["cloud", "open"] as const) {
       for (const id of TOOL_MODELS.inpaint[engine].filter((x) => x !== "nano-banana-pro")) {

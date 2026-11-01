@@ -70,6 +70,8 @@ export const MIXED_MODES: Record<Engine, MixedMode[]> = { cloud: ["frames", "smo
  * Seedream 5.0 Flash, which redraw each frame looking at the one styled before it.
  */
 export const MIXED_FRAME_MODELS = [MIXED_ORIGINAL, "nano-banana-2-1", "seedream-5-flash"] as const;
+/** Frame models Per frame no longer lists, and the one a render that names them (a saved setup, an API caller) runs on now. */
+export const MIXED_FRAME_MOVES: Readonly<Record<string, string>> = { "nano-banana-2": "nano-banana-2-1" };
 
 /**
  * Cloud per-frame limits: fal's extract-nth-frame returns up to 500 frames a call and images-to-video

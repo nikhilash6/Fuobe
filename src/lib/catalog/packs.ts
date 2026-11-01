@@ -374,7 +374,10 @@ export const PHOTO_EDIT: Record<Engine, string> = { cloud: "qwen-image-edit-2511
 export const OPEN_PHOTO_EDIT = PHOTO_EDIT.open;
 /** Its 8-step Turbo (up to 4 references). */
 export const OPEN_PHOTO_EDIT_TURBO = "oss-qwen-image-21-turbo";
-/** Krea 2 Identity Edit: restages the person in one photo (a new place, pose or outfit, the same face). */
+/**
+ * Krea 2 Identity Edit: restages the person in one photo (a new place, pose or outfit, the same face). With two pictures
+ * it reads the scene first and the person last (its likeness boost goes to the last one).
+ */
 export const OPEN_IDENTITY_EDIT = "oss-krea2-identity-edit";
 
 /** The models a pack's photos can run on, the default first after Fuobe Soul (which needs a trained Soul ID). */
@@ -422,9 +425,12 @@ export function photodumpModel(subject: PhotoSubject, engine: Engine, _caps: Pla
 
 const KEEP_FACE = "Keep their exact face, identity, skin tone and hair, in a freshly composed new photo";
 
-/** One photo's prompt for a subject: an @mention for saved characters, image 1 for a selfie. */
-export function shotPrompt(pack: Pick<Pack, "look" | "custom">, shot: string, subject: PhotoSubject, refIndex?: number): string {
-  const who = subject.kind === "element" ? `@${subject.handle}` : "the person in image 1";
+/**
+ * One photo's prompt for a subject: an @mention for saved characters, image 1 for a selfie (image `selfieIndex` when
+ * the model takes the person last).
+ */
+export function shotPrompt(pack: Pick<Pack, "look" | "custom">, shot: string, subject: PhotoSubject, refIndex?: number, selfieIndex = 1): string {
+  const who = subject.kind === "element" ? `@${subject.handle}` : `the person in image ${selfieIndex}`;
   const look = pack.look ? ` ${pack.look}.` : "";
   if (pack.custom && refIndex) {
     const lead = who.charAt(0).toUpperCase() + who.slice(1);
@@ -450,7 +456,8 @@ export interface PhotodumpPlan {
 /**
  * One request per photo of the pack, in order ("Photo 3 of 15"), each making one image. Saved
  * characters are @mentioned (the server turns that into their trained Soul ID LoRA or reference photos);
- * a selfie goes in as image 1. User packs add their reference photo after the subject.
+ * a selfie goes in as image 1. User packs add their reference photo after the subject; on Krea 2 Identity Edit, which
+ * reads the scene first and the person last, the reference photo goes first and a saved character is one of their photos.
  */
 export function planPhotodump(input: PhotodumpInput, caps: PlanCaps): PhotodumpPlan {
   const { pack, subject } = input;
@@ -461,18 +468,24 @@ export function planPhotodump(input: PhotodumpInput, caps: PlanCaps): PhotodumpP
   if (route.note) notes.push(route.note);
   const n = pack.shots.length;
   const aspect = input.aspectRatio && input.aspectRatio !== "auto" ? input.aspectRatio : undefined;
+  // Krea 2 Identity Edit takes the scene first and the person last, and reads two pictures as two people: a saved
+  // character goes in as one of their photos (an @mention would attach two), and a user pack's reference leads.
+  const sceneFirst = route.modelId === OPEN_IDENTITY_EDIT;
+  const onePhoto = sceneFirst && subject.kind === "element" ? subject.references[0] : undefined;
+  const person: PhotoSubject = onePhoto ? { kind: "selfie", url: onePhoto } : subject;
   const requests = pack.shots.map((shot, i): GenerationRequest => {
-    const own = subject.kind === "selfie" ? [subject.url] : [];
+    const own = person.kind === "selfie" ? [person.url] : [];
     const ref = pack.refs?.[i];
     // User packs: the reference goes after the identity images; @mention references come after those (applyMentions appends).
-    const images = ref ? [...own, ref] : own;
-    const refIndex = ref ? images.length : undefined;
+    const images = ref ? (sceneFirst ? [ref, ...own] : [...own, ref]) : own;
+    const refIndex = ref ? (sceneFirst ? 1 : own.length + 1) : undefined;
+    const selfieIndex = ref && sceneFirst ? 2 : 1;
     return {
       feature: "photodump",
       modelId: route.modelId,
       // Fuobe Soul runs on both engines: the run's engine picks its half.
       engine: input.engine,
-      prompt: shotPrompt(pack, shot, subject, refIndex),
+      prompt: shotPrompt(pack, shot, person, refIndex, selfieIndex),
       inputs: images.length ? { images } : undefined,
       params: { numOutputs: 1, ...(aspect && { aspectRatio: aspect }) },
       step: { label: `Photo ${i + 1} of ${n}`, index: i, of: n },
@@ -606,13 +619,13 @@ export const getTemplate = (id: string) => FASHION.find((t) => t.id === id);
 /**
  * Fashion Factory's models per step (build plan O10): Fuobe Try-On (FLUX.2 [klein] 4B + the try-on LoRA) dresses the
  * base shot on both engines, FASHN and Nano Banana Pro stay as cloud choices, and on your GPU Qwen-Image 2.1 Turbo
- * (then Krea 2 Identity Edit) dresses it when the try-on can't run. Qwen-Image-Edit 2511 makes the photoset in the
+ * (then Qwen-Image 2.1 at 25 steps) dresses it when the try-on can't run: its second picture is a garment, not a person. Qwen-Image-Edit 2511 makes the photoset in the
  * cloud, Nano Banana Pro a choice; on your GPU Qwen-Image 2.1 makes it, Krea 2 Identity Edit (a new pose and place,
  * the same person) a choice.
  */
 export const TRYON_MODEL = "fuobe-tryon";
 export const FASHION_MODELS = {
-  outfit: { cloud: [TRYON_MODEL, "fashn-tryon", "nano-banana-pro"], open: [TRYON_MODEL, OPEN_PHOTO_EDIT_TURBO, OPEN_IDENTITY_EDIT] },
+  outfit: { cloud: [TRYON_MODEL, "fashn-tryon", "nano-banana-pro"], open: [TRYON_MODEL, OPEN_PHOTO_EDIT_TURBO, OPEN_PHOTO_EDIT] },
   photoset: { cloud: [PHOTO_EDIT.cloud, "nano-banana-pro"], open: [OPEN_PHOTO_EDIT, OPEN_IDENTITY_EDIT] },
 } as const;
 
