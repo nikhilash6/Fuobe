@@ -223,5 +223,6 @@ describe("licences, as information", () => {
     expect(pack?.licence).toMatchObject({ name: "MIT", class: "commercial" });
     expect(pack?.repo).toBe(`https://github.com/workingprototype/Fuobe/tree/${requirements.packs["ComfyUI-RE-USE"].commit}/comfy-nodes/ComfyUI-RE-USE`);
     expect(pack?.licence.note).toMatch(/not NVIDIA's code path/);
-    expect(ATTRIBUTIONS.find((a) => a.for === "RE-USE (clean up voice)")).toMatchObject({ licence: "OpenMDW-1.1", note: expect.stringMatching(/non-commercial \(NSCLv1\)/) });  });
+    expect(ATTRIBUTIONS.find((a) => a.for === "RE-USE (clean up voice)")).toMatchObject({ licence: "OpenMDW-1.1", note: expect.stringMatching(/non-commercial \(NSCLv1\)/) });
+  });
 });

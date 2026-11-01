@@ -8,6 +8,7 @@ import { CleanVoiceDemo } from "@/components/audio-tools/clean-voice-demo";
 import {
   AUTO_AT,
   AUTO_FADE,
+  createDemoAudio,
   DEMO_MEDIA,
   DEMO_START,
   demoReducer,
@@ -16,6 +17,8 @@ import {
   isRunning,
   playLabel,
   SWITCH_RAMP,
+  switchDue,
+  type DemoAudioContext,
   type DemoEvent,
   type DemoState,
 } from "@/lib/av/clean-voice-demo";
@@ -94,6 +97,139 @@ describe("the demo's story", () => {
     expect(failed).toMatchObject({ phase: "failed", hint: HINTS.failed });
     expect(playLabel(failed)).toBe("Tap to try again");
     expect(demoReducer(failed, tap)).toMatchObject({ phase: "loading", run: 2 });
+    expect(demoReducer(loading, { type: "failed", unsupported: true })).toMatchObject({ phase: "failed", hint: HINTS.unsupported });
+  });
+
+  it("shows Pause on the button while it plays", () => {
+    expect(playLabel(run(tap, started))).toBe("Pause");
+    expect(playLabel(DEMO_START)).toBe("Tap to listen");
+  });
+
+  it("shows a stop from outside the page as paused, so one tap resumes it", () => {
+    const stopped = run(tap, started, { type: "interrupted" });
+    expect(stopped).toMatchObject({ phase: "paused", clean: false, auto: true });
+    expect(demoReducer(stopped, tap).phase).toBe("playing");
+    for (const s of [DEMO_START, run(tap), stopped, run(tap, started, { type: "ended" })]) expect(demoReducer(s, { type: "interrupted" })).toBe(s);
+  });
+
+  it("starts over, ready to play, when the page is put away and comes back", () => {
+    const playing = run(tap, started, at(AUTO_AT));
+    for (const s of [playing, demoReducer(playing, tap), demoReducer(playing, { type: "ended" }), run(tap)]) {
+      const back = demoReducer(s, { type: "reset" });
+      expect(back).toMatchObject({ phase: "idle", clean: false, auto: true, hint: HINTS.ready, run: s.run, flash: s.flash });
+      expect(playLabel(back)).toBe("Tap to listen");
+      expect(demoReducer(back, tap)).toMatchObject({ phase: "loading", auto: true, run: s.run + 1 });
+    }
+  });
+
+  it("asks for the automatic switch only when it is due", () => {
+    const playing = run(tap, started);
+    expect(switchDue(playing, AUTO_AT - 0.01)).toBe(false);
+    expect(switchDue(playing, AUTO_AT)).toBe(true);
+    expect(switchDue(demoReducer(playing, tap), AUTO_AT)).toBe(false);
+    expect(switchDue(run(tap, started, at(AUTO_AT)), AUTO_AT + 1)).toBe(false);
+    expect(switchDue(run(tap, started, { type: "choose", clean: false }), AUTO_AT + 1)).toBe(false);
+  });
+});
+
+/** A stand-in for an AudioContext that records what the demo asks of it. */
+function fakeContext() {
+  const log: string[] = [];
+  const node = (name: string) => ({
+    connect: (to: { name?: string }) => void log.push(`${name} -> ${to.name ?? "?"}`),
+    disconnect: () => void log.push(`${name} disconnected`),
+  });
+  const gains: { name: string; gain: { value: number; ramps: [number, number][] } }[] = [];
+  const sources: { name: string; buffer: unknown; when?: number; stopped: boolean; onended: (() => void) | null }[] = [];
+  const ctx = {
+    currentTime: 10,
+    destination: { name: "out" },
+    createGain() {
+      const name = `gain${gains.length}`;
+      const g = {
+        ...node(name),
+        name,
+        gain: {
+          value: 1,
+          ramps: [] as [number, number][],
+          cancelScheduledValues() {},
+          setValueAtTime() {},
+          linearRampToValueAtTime(v: number, t: number) {
+            this.ramps.push([v, t]);
+          },
+        },
+      };
+      gains.push(g);
+      return g;
+    },
+    createBufferSource() {
+      const name = `source${sources.length}`;
+      const s = {
+        ...node(name),
+        name,
+        buffer: null as unknown,
+        when: undefined as number | undefined,
+        stopped: false,
+        onended: null as (() => void) | null,
+        start(when: number) {
+          this.when = when;
+        },
+        stop() {
+          this.stopped = true;
+        },
+      };
+      sources.push(s);
+      return s;
+    },
+  };
+  return { ctx: ctx as unknown as DemoAudioContext, raw: ctx, log, gains, sources };
+}
+const clip = (duration: number) => ({ duration }) as AudioBuffer;
+
+describe("the demo's sound", () => {
+  it("starts both clips at the same moment, each through its own gain, at the mode's gains", () => {
+    const f = fakeContext();
+    const audio = createDemoAudio(f.ctx, [clip(8), clip(8.02)]);
+    expect(audio.length).toBe(8);
+    audio.start(false, () => {});
+    expect(f.sources.map((s) => s.when)).toEqual([f.sources[0].when, f.sources[0].when]);
+    expect(f.sources[0].when).toBeGreaterThan(10);
+    expect(f.gains.map((g) => g.gain.value)).toEqual(gainsFor(false));
+    expect(f.log).toEqual(expect.arrayContaining(["gain0 -> out", "gain1 -> out", "source0 -> gain0", "source1 -> gain1"]));
+  });
+
+  it("ramps both gains together on a switch", () => {
+    const f = fakeContext();
+    const audio = createDemoAudio(f.ctx, [clip(8), clip(8)]);
+    audio.start(false, () => {});
+    audio.switchTo(true, AUTO_FADE);
+    expect(f.gains.map((g) => g.gain.ramps)).toEqual([[[0, 10 + AUTO_FADE]], [[1, 10 + AUTO_FADE]]]);
+  });
+
+  it("counts time from the start on the context's clock, and calls the end once the room's clip ends", () => {
+    const f = fakeContext();
+    const audio = createDemoAudio(f.ctx, [clip(8), clip(8)]);
+    let ended = 0;
+    audio.start(false, () => ended++);
+    expect(audio.elapsed()).toBe(0);
+    f.raw.currentTime = f.sources[0].when! + 3.5;
+    expect(audio.elapsed()).toBeCloseTo(3.5);
+    f.sources[0].onended?.();
+    expect(ended).toBe(1);
+  });
+
+  it("stops the old clips quietly and lets go of their nodes when it starts again or stops", () => {
+    const f = fakeContext();
+    const audio = createDemoAudio(f.ctx, [clip(8), clip(8)]);
+    audio.start(true, () => {});
+    const first = [...f.sources];
+    audio.start(false, () => {});
+    expect(first.every((s) => s.stopped && s.onended === null)).toBe(true);
+    expect(f.log).toEqual(expect.arrayContaining(["source0 disconnected", "source1 disconnected", "gain0 disconnected", "gain1 disconnected"]));
+    expect(f.gains.slice(2).map((g) => g.gain.value)).toEqual(gainsFor(false));
+    audio.stop();
+    expect(f.sources.slice(2).every((s) => s.stopped)).toBe(true);
+    expect(f.log).toEqual(expect.arrayContaining(["gain2 disconnected", "gain3 disconnected"]));
   });
 });
 
@@ -110,6 +246,12 @@ describe("the demo page", () => {
     expect(html).toContain(HINTS.ready);
     expect(html).toContain("min-h-11");
     expect(html).toContain("motion-reduce:transition-none");
+    expect(html).not.toContain("invisible");
+  });
+
+  it("keeps its place unseen until the page knows whether to show it", () => {
+    const html = renderToStaticMarkup(createElement(CleanVoiceDemo, { ready: false }));
+    expect(html).toMatch(/<section[^>]*class="[^"]*\binvisible\b/);
   });
 
   it("ships its pictures and two 8 s clips of the same length", () => {

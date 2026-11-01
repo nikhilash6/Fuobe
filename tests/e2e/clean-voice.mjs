@@ -62,8 +62,8 @@ async function setup(browser, device, theme, engine) {
 /** Whether the install (as `base` sees it; a guest sees none of its runs) has a clean of its own: then there's no demo. */
 async function hasCleaned(base) {
   try {
-    const items = (await (await fetch(`${base}/api/generations?features=voice-clean&limit=12`)).json()).items ?? [];
-    return items.some((g) => g.status === "succeeded");
+    const items = (await (await fetch(`${base}/api/generations?features=voice-clean&statuses=succeeded&limit=1`)).json()).items ?? [];
+    return items.length > 0;
   } catch {
     return false;
   }

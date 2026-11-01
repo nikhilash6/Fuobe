@@ -14,7 +14,7 @@ import { VoiceRecorder } from "@/components/studio/voice-recorder";
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { useAskBeforeUpload, useEngine, useGenerations } from "@/lib/api";
+import { useAskBeforeUpload, useEngine, useGenerations, useHydrated, useViewer } from "@/lib/api";
 import type { AudioToolPreview } from "@/lib/av/audio-tools";
 import {
   BACKGROUND_LABELS,
@@ -57,7 +57,7 @@ import { uploadSource } from "./split-tool";
  */
 
 const TOOL_SUBTITLE =
-  "Removes noise, echo and room sound, and fixes clipping, muffled or phone-quality audio and bad mics. Keeps the main speaker, in any language. Free, on your own computer, with NVIDIA RE-USE.";
+  "Removes noise, echo and room sound, and fixes clipping, muffled or phone-quality audio and bad mics. Keeps the main speaker, in any language. Free, on your own computer.";
 
 type Source = SlotValue & { kind: "audio" | "video"; duration?: number; channels?: number };
 
@@ -220,9 +220,14 @@ export function CleanVoiceTool({ tabs, app }: { tabs?: React.ReactNode; app?: { 
     setBackground(keep ? "keep" : null);
   }, []);
   useHandoff(take);
-  // Someone who has cleaned a file of their own sees their results, not the demo (the same query as Results').
-  const cleans = useGenerations({ features: [CLEAN_FEATURE], limit: 12 });
-  const demo = !source && !cleans.data?.some((g) => g.status === "succeeded");
+  // Someone who has cleaned a file of their own sees their results, not the demo. Until that's known the demo keeps its
+  // place unseen (a guest has none, so no need to wait): neither an account with cleans nor a guest sees the page jump.
+  // Both wait for hydration, so the first render matches the server's HTML even when the answers came in before it.
+  const hydrated = useHydrated();
+  const viewer = useViewer().data;
+  const own = useGenerations({ features: [CLEAN_FEATURE], statuses: ["succeeded"], limit: 1 });
+  const known = hydrated && (viewer?.signedIn === false || own.isFetched || own.isError);
+  const demo = !source && !(hydrated && own.data?.length);
 
   const kind = source?.kind ?? "audio";
   const d = cleanDefaults(kind);
@@ -301,11 +306,13 @@ export function CleanVoiceTool({ tabs, app }: { tabs?: React.ReactNode; app?: { 
       }
     >
       {!source && !demo && <ToolHero title={app?.name ?? "Clean up voice"} subtitle={TOOL_SUBTITLE} />}
-      <div className={cn("mx-auto space-y-3", demo ? "max-w-[760px] pt-6 sm:pt-10" : "max-w-[860px]", source ? "pt-4" : !demo && "mt-6")}>
+      {/* The demo's photo narrows on a short screen, so its play button and Noise on / off stay above the fold. */}
+      <div className={cn("mx-auto space-y-3", demo ? "max-w-[min(760px,max(480px,calc((100svh_-_356px)*4/3)))] pt-6" : "max-w-[860px]", source ? "pt-4" : !demo && "mt-6")}>
         {demo && (
           <>
-            <CleanVoiceDemo name={app?.name ?? "Clean up voice"} />
-            <p className="pt-7 text-[13px] text-pretty text-muted-foreground">{TOOL_SUBTITLE}</p>
+            <CleanVoiceDemo name={app?.name ?? "Clean up voice"} ready={known} />
+            {/* The tool's one line leads into the upload box under the demo. */}
+            <p className="pt-8 text-[13px] text-pretty text-muted-foreground">{TOOL_SUBTITLE}</p>
           </>
         )}
         {!source ? (
