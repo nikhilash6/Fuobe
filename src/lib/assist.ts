@@ -461,6 +461,13 @@ export function skillSlug(title: string): string {
 }
 
 /**
+ * The generation ids a tool result started, in order: every id of each `"started": [...]` list (on
+ * the open engine 4 takes are 4 generations of one job) and each `"id": "..."`.
+ */
+export const startedIds = (body: string): string[] =>
+  [...body.matchAll(/"started":\s*\[([^\]]*)\]|"(?:started|id)":\s*"([\w-]+)"/g)].flatMap((m) => (m[2] ? [m[2]] : [...m[1].matchAll(/"([\w-]+)"/g)].map((x) => x[1])));
+
+/**
  * Leading `/name` tokens of a message: "/product-photoshoot /thumbnail-generation a coffee ad"
  * → skills [product-photoshoot, thumbnail-generation], text "a coffee ad". Unknown names stay in the text.
  */

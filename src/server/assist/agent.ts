@@ -15,6 +15,7 @@ import {
   normalizeAgent,
   renderContext,
   slashSkills,
+  startedIds,
   threadTitle,
   type AssistAgent,
   type AssistAvailability,
@@ -31,6 +32,7 @@ import {
 import { freePick, manualGroups, smartPick, toOption, choices, type Choice, type ConnectedProvider, type World } from "@/lib/assist-models";
 import { getLlmModel, getLlmProvider, LLM_REGISTRY_CHECKED } from "@/lib/catalog/llm-providers";
 import type { Engine, Generation, MediaKind } from "@/lib/catalog/types";
+import { isMediaType, RECIPE_LIMITS, type Recipe } from "@/lib/recipe";
 import { db } from "../db";
 import { getGeneration } from "../generations";
 import { activeLocal, aiHelper, chatLocal, emptyReply, localLabel, localProblem, localSoon, pinnedKind, toChatMessages, type Ready } from "../llm";
@@ -40,7 +42,7 @@ import { toHostedMessages } from "../llm/hosted-messages";
 import type { Replay } from "../llm/types";
 import { offeredDefault } from "../model-access";
 import { engineMode, getSetting } from "../settings";
-import { getSkill } from "../skills";
+import { getSkill, skillRecipe } from "../skills";
 import { readRef } from "../storage";
 import { spendOf, withinCap } from "@/lib/assist-schedule";
 import { activeConnectors, connectorName, MCP_BETA, mcpParams, withoutMissingServers, type Connector } from "./connectors";
@@ -707,6 +709,7 @@ How you work:
 
 Skills, memory and projects (your context below lists them):
 - Skills are playbooks for whole kinds of jobs. When the request matches one under "Skills you can load", call load_skill with its name before planning, then follow it. A message that starts with /name has already loaded that skill. Follow every skill under "Skills in use".
+- A skill marked "runs by itself" is a saved recipe: when one fits the request, call run_skill with its name and values for its inputs (files from the user's attachments, words from their message) instead of planning the steps again. Ask only for a required input you can't fill.
 - Memory is what you know about the user. Follow it without mentioning it. When the user states something lasting — a preference, their style, a convention, their setup, a fix that worked — save it with remember: one short sentence, no secrets, nothing about only the current job. Correct an outdated memory with remember and its id as "replaces".
 - In a project, follow its instructions. Its sources are listed with ids: read one in full with read_source when it matters; image, video and audio sources are inputs by URL.
 - "Context update" messages from the system later in the chat replace the matching parts of your context.`;
@@ -870,6 +873,17 @@ export const offline: ModelCall = async ({ messages, ctx, skills }) => {
     if (stills.length) return reply([text(`Pick a number from 1 to ${stills.length}.`)], "end_turn");
     // No stills in this chat: read it as a new request.
   }
+  // A loaded skill that runs by itself (the last one loaded): its inputs filled from the message, one run_skill card.
+  for (const s of [...(skills ?? [])].reverse()) {
+    const recipe = (s as { recipe?: boolean }).recipe ? skillRecipe(s.name) : null;
+    if (!recipe) continue;
+    const r = offlineSkillRun(said, s.name, s.title, recipe);
+    if (!("tool" in r)) return reply([text(r.say)], "end_turn");
+    return reply(
+      [text(r.say), { type: "tool_use", id: `toolu_offline_${nanoid(10)}`, name: r.tool, input: r.input, caller: { type: "direct" } } as unknown as Anthropic.Beta.BetaToolUseBlock],
+      "tool_use",
+    );
+  }
   const hint = skills?.find((s) => s.offline)?.offline;
   const plan = offlinePlan(said, ctx.engine, hint);
   if (!plan) return reply([text("Tell me what to make — an image, a video, a voice-over or a storyboard — and attach any photos to use.")], "end_turn");
@@ -879,6 +893,57 @@ export const offline: ModelCall = async ({ messages, ctx, skills }) => {
     "tool_use",
   );
 };
+
+const TYPE_NAMES: Record<string, string> = { image: "an image", video: "a video", audio: "an audio file", text: "words", number: "a number", choice: "a choice", element: "an element" };
+
+/**
+ * A saved skill that runs by itself, from a message (no LLM): its media inputs from the attached files by kind and
+ * order, its first text input from the words, the rest from their defaults or the values it was made with. A required
+ * input still empty (a file that wasn't attached) is asked for by name instead.
+ */
+export function offlineSkillRun(message: string, name: string, title: string, recipe: Recipe): { tool: "run_skill"; input: Record<string, unknown>; say: string } | { say: string } {
+  const [body, attached = ""] = message.split(/\n\nAttached files[^\n]*\n/);
+  const files = [...attached.matchAll(/^- (image|video|audio|text|model3d) \d+: (\S+)$/gm)].map((m) => ({ kind: m[1], url: m[2] }));
+  // A lone "/name" (with files) gets words written for it: those aren't the person's.
+  const words = /^Use the .+ skills?(?: with the attached files)?\.$/.test(body.trim()) ? "" : body.trim();
+  const values: Record<string, string | number> = {};
+  const taken = new Set<number>();
+  let wordsUsed = false;
+  const filled: string[] = [];
+  for (const p of recipe.params) {
+    if (isMediaType(p.type)) {
+      const i = files.findIndex((f, k) => !taken.has(k) && f.kind === p.type);
+      if (i >= 0) {
+        taken.add(i);
+        values[p.id] = files[i].url;
+        filled.push(`your ${p.type}`);
+        continue;
+      }
+      // A file the person didn't attach is theirs to give: only a default stands in, never the one it was made with.
+      if (p.default !== undefined && p.default !== "") values[p.id] = p.default;
+      continue;
+    }
+    if (p.type === "text" && !wordsUsed && words) {
+      wordsUsed = true;
+      values[p.id] = words.slice(0, p.max ?? RECIPE_LIMITS.text);
+      filled.push(`“${words.length > 60 ? `${words.slice(0, 59).trimEnd()}…` : words}”`);
+      continue;
+    }
+    const v = p.default ?? p.example;
+    if (v !== undefined && v !== null && v !== "") values[p.id] = v;
+  }
+  const missing = recipe.params.filter((p) => p.required && values[p.id] === undefined);
+  if (missing.length) {
+    const need = missing.map((p) => `${p.label} (${TYPE_NAMES[p.type] ?? p.type})`);
+    const media = missing.some((p) => isMediaType(p.type));
+    return { say: `${title} needs ${need.length > 1 ? `${need.slice(0, -1).join(", ")} and ${need.at(-1)}` : need[0]}. ${media ? "Attach it and send /" + name + " again." : `Send /${name} with it.`}` };
+  }
+  return {
+    tool: "run_skill",
+    input: { name, values },
+    say: `I'll run your ${title} skill${filled.length ? ` with ${filled.join(" and ")}` : ""}: the same steps it was saved with, priced below.`,
+  };
+}
 
 /** Under every offline plan: the rule-based planner is a fallback, not the assistant. */
 export const OFFLINE_NOTE = "Offline planner — connect a model in Settings → AI helper (Anthropic, OpenAI, Google, OpenRouter… or a local model) for better plans.";
@@ -891,13 +956,6 @@ const FOLLOW_UP: Record<MediaKind, string> = {
   text: "Want it shorter, in another tone, or voiced?",
   model3d: "Want another take, or a model from a different photo?",
 };
-
-/**
- * The generation ids a tool result started, in order: every id of each `"started": [...]` list (on
- * the open engine 4 takes are 4 generations of one job) and each `"id": "..."`.
- */
-const startedIds = (body: string) =>
-  [...body.matchAll(/"started":\s*\[([^\]]*)\]|"(?:started|id)":\s*"([\w-]+)"/g)].flatMap((m) => (m[2] ? [m[2]] : [...m[1].matchAll(/"([\w-]+)"/g)].map((x) => x[1])));
 
 /** The kind of the last generation a tool result started (the end of a chain), image when unknown. */
 function startedKind(body: string): MediaKind {
@@ -1370,7 +1428,7 @@ async function step(s: State, model: ModelCall): Promise<"continue" | "stop"> {
       }
       if (ask) {
         // Malformed arguments (common from small local models) go straight back as an error the model can fix, not onto an approval card.
-        const invalid = validateInput(u.name, u.input);
+        const invalid = validateInput(u.name, u.input, ctx);
         if (invalid) {
           results.push({ type: "tool_result", tool_use_id: u.id, is_error: true, content: invalid });
           continue;
