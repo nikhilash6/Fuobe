@@ -67,6 +67,18 @@ def preflight(request: web.Request, origin: str) -> web.Response | None:
     return web.Response(status=204, headers=headers)
 
 
+GUARD_PATHS = ("/fuobe/guard", "/api/fuobe/guard")
+
+
+async def _pass(request: web.Request, handler):
+    """The request goes on to ComfyUI, except Fuobe's guard question: Fuobe Connect answers it (it keeps other websites
+    out, as the guard did), so a Fuobe page that asks for the guard hears yes. Answered here, never as a route, so a
+    guard file installed beside it can't clash with it."""
+    if request.method == "GET" and request.path in GUARD_PATHS:
+        return web.json_response({"guard": 1, "connect": 1})
+    return await handler(request)
+
+
 def make_middleware(trusted: Callable[[], Iterable[str]], cors_flag: str | None = None):
     """`trusted`: the trusted origins now (read on each request, so a change applies at once).
     `cors_flag`: ComfyUI's --enable-cors-header value, when it was started with one."""
@@ -89,7 +101,7 @@ def make_middleware(trusted: Callable[[], Iterable[str]], cors_flag: str | None 
                     headers.popall("Origin", None)
                     headers.popall("Sec-Fetch-Site", None)
                     headers[MARKER] = origin
-                    response = await handler(request.clone(headers=headers))
+                    response = await _pass(request.clone(headers=headers), handler)
                     if isinstance(response, web.StreamResponse) and not response.prepared:
                         response.headers.update(_cors_headers(origin))
                     return response
@@ -105,6 +117,9 @@ def make_middleware(trusted: Callable[[], Iterable[str]], cors_flag: str | None 
             headers = request.headers.copy()
             headers.popall(MARKER, None)
             request = request.clone(headers=headers)
-        return await handler(request)
+        # Another website's request meets ComfyUI's own check first, the guard question too.
+        if raw is not None and not same_host(raw, request.headers.get("Host")):
+            return await handler(request)
+        return await _pass(request, handler)
 
     return fuobe_connect

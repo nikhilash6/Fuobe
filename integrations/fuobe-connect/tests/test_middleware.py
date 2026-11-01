@@ -217,6 +217,18 @@ class DirectModeTest(unittest.TestCase):
 
         run(go())
 
+    def test_answers_the_guard_question(self):
+        async def go():
+            app, _ = with_connect()
+            async with Server(app) as s:
+                status, h, body = await s.req("GET", "/fuobe/guard", browser(FUOBE))
+                self.assertEqual((status, h.get("Access-Control-Allow-Origin")), (200, FUOBE))
+                self.assertIn(b'"guard": 1', body)
+                status, _, _ = await s.req("GET", "/fuobe/guard", browser(EVIL))
+                self.assertEqual(status, 403)
+
+        run(go())
+
     def test_status_says_less_to_a_studio(self):
         async def go():
             app, _ = with_connect()
