@@ -97,8 +97,11 @@ describe("Models & licences in listings and picks", () => {
     // The library's 118 LoRAs (Fuobe Try-On's try-on LoRA, the Storyboard's next-scene LoRA, and since O11 Fuobe Angles'
     // Multiple-angles and Fuobe Speak's FusioniX among them), the preset LoRA map's files that aren't library files, and
     // MiniMax H3's four (Akatz Labs' swap LoRA V1.5 and V1 and Person Remover V1, lightx2v's H3 Turbo), and Fuobe Restore's
-    // two gated IC-LoRAs (Lightricks' Restore and Detail Refine), each once.
-    expect(list.loras.length).toBe(176);
+    // two gated IC-LoRAs (Lightricks' Restore and Detail Refine), and Open-H3 Regenerate's merged refiner LoRA, each once.
+    expect(list.loras.length).toBe(177);
+    expect(list.loras.find((l) => l.file === "open_h3_regenerate_2k_lora.safetensors")).toMatchObject({ group: "adapter", base: "MiniMax H3", on: true, licence: { name: "MiniMax H3 Community License", class: "regions" } });
+    expect(list.packs.find((p) => p.name === "ComfyUI-Open-H3-Regenerate")).toMatchObject({ licence: { name: "Apache-2.0" }, on: true, models: 1 });
+    expect(list.packs.find((p) => p.name === "Comfyui_Minimax_h3_latent_Upscaler")).toMatchObject({ licence: { name: "MIT" }, on: true, models: 1 });
     expect(list.loras.find((l) => l.file === "next-scene_lora-v2-3000.safetensors")).toMatchObject({ group: "adapter", on: true, licence: { name: "MIT", class: "commercial" } });
     expect(list.loras.find((l) => l.file === "qwen-edit-2509-multiple-angles-dx8152.safetensors")).toMatchObject({ group: "adapter", on: true, licence: { name: "Apache-2.0", class: "commercial" } });
     expect(list.loras.find((l) => l.file === "Wan2.1_I2V_14B_FusionX_LoRA.safetensors")).toMatchObject({ group: "adapter", on: true });

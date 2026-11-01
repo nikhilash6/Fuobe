@@ -5,6 +5,7 @@ import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
+import { REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
 import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
@@ -707,6 +708,43 @@ const open: ModelDef[] = [
     routes: [comfy("upscale-video", "upscale-video-seedvr2-chunked", "33 frames per pass; each pass restored on its own")],
     options: { seed: true, resolutions: VIDEO_UPSCALE_TIERS },
     defaults: { resolution: "1080p" },
+  }),
+  // Open-H3 Regenerate 2K (docs/research/new-models-7.md §2): the creative finishing step beside SeedVR2's faithful one. It
+  // redraws the clip at 1080p / 2K / 4K from its words (src/lib/catalog/regenerate.ts); GPU-only, nobody hosts it.
+  o({
+    id: REGEN_MODEL,
+    name: "Open-H3 Regenerate",
+    vendor: "NVIDIA",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Redraws a soft clip at 1080p, 2K or 4K. Details may change; motion and layout stay.",
+    badges: ["new", "4k", "audio"],
+    routes: [comfy("upscale-video", REGEN_WORKFLOW, "MiniMax H3 with NVIDIA's refiner LoRA: 3 steps from the clip at 24 fps, up to 15 s a pass, its sound kept")],
+    options: {
+      seed: true,
+      resolutions: [...REGEN_TIERS],
+      requires: { prompt: true, msg: "Regenerate redraws the clip from words: describe what is in it" },
+      controls: [
+        {
+          param: "creativity",
+          label: "Creativity",
+          values: ["close", "balanced", "detail"],
+          default: "balanced",
+          labels: { close: "Close to the clip", balanced: "Balanced", detail: "More detail" },
+          // The refine's start noise: 0 is the release grid (0.909), which redraws the most.
+          sets: { close: { startSigma: 0.7 }, balanced: { startSigma: 0.8 }, detail: { startSigma: 0 } },
+        },
+        {
+          param: "speed",
+          label: "Speed",
+          values: ["standard", "faster"],
+          default: "standard",
+          labels: { standard: "Standard · 3 steps", faster: "Faster · 2 steps, softer texture" },
+          sets: { standard: { steps: 3 }, faster: { steps: 2 } },
+        },
+      ],
+    },
+    defaults: { resolution: REGEN_DEFAULT_TIER },
   }),
   o({
     id: "oss-upscale-video-esrgan",
