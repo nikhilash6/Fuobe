@@ -33,6 +33,8 @@ const MP4 = fs.readFileSync(path.join(import.meta.dirname, "fixtures", "shorts-1
 
 let a = "";
 let b = "";
+// Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
+beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
 beforeAll(() => {
   auth.setPassword("install password");
   a = auth.createAccount("price-a@example.com", "long enough").id;

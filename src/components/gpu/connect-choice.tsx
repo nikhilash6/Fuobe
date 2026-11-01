@@ -305,7 +305,20 @@ export function HostedRefusal({ line }: { line: string }) {
  * `onlyAddress`: the address alone (the first-run guide). On a hosted page the second ComfyUI (the isolated worker) is
  * only in Settings (`advanced`), never in the connect dialog.
  */
-export function OwnerServerComfy({ hosted, computer = false, onlyAddress = false, advanced = false }: { hosted: boolean; computer?: boolean; onlyAddress?: boolean; advanced?: boolean }) {
+export function OwnerServerComfy({
+  hosted,
+  computer = false,
+  onlyAddress = false,
+  advanced = false,
+  onConnected: then,
+}: {
+  hosted: boolean;
+  computer?: boolean;
+  onlyAddress?: boolean;
+  advanced?: boolean;
+  /** After a green test: the card a refused run opened closes, and the run starts. */
+  onConnected?: () => void;
+}) {
   const qc = useQueryClient();
   const settings = useSettings().data;
   const status = useStatus().data;
@@ -317,6 +330,7 @@ export function OwnerServerComfy({ hosted, computer = false, onlyAddress = false
   const connected = (r: { detail: string }) => {
     toast.success("ComfyUI connected", { description: r.detail });
     void qc.invalidateQueries({ queryKey: ["viewer"] });
+    then?.();
   };
   return (
     <div className="space-y-4">
@@ -512,7 +526,7 @@ function OwnerChoice({ fromRun, kind, reason, onStart, onNotNow, className, look
   // Opens by itself for a server address of the owner's: connected, or saved and one the server may call from here.
   const usable = !!address?.isSet && !(hosted && refusedOnHosted(addressKind(address.value), allowPrivate));
   const open = serverOpen ?? (serverConnected || usable);
-  const serverForm = <OwnerServerComfy hosted={hosted} computer={computer} advanced={advanced} />;
+  const serverForm = <OwnerServerComfy hosted={hosted} computer={computer} advanced={advanced} onConnected={fromRun ? onStart : undefined} />;
   const findHere = {
     label: "Use the ComfyUI on this computer",
     go: () => {

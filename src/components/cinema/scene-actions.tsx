@@ -10,6 +10,7 @@ import { IMAGE_ASPECTS, planCinema, type CinemaPlan, type DirectorSettings } fro
 import type { Engine } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import type { CinemaGeneration } from "./hooks";
+import { placeholdersOn } from "@/lib/demo-mode";
 
 /**
  * Cinema Studio's 3D scene, the light half (the viewer and three.js load only when a scene opens): which takes
@@ -41,10 +42,10 @@ export function sceneTake(g: CinemaGeneration): SceneTake | null {
   return { generation: g, still, source, aspect: ar && IMAGE_ASPECTS.includes(ar) ? ar : "16:9" };
 }
 
-/** What a plan costs here: "Demo" when demo mode is on, or answers because no provider of its model is connected. */
+/** What a plan costs here: "Demo" while placeholder results are on (Settings, for a tour). */
 export function usePlanPrice(plan: CinemaPlan): { cost: number | null; label: string; demo: boolean } {
   const status = useStatus().data;
-  const demo = !!status && (status.demoMode === "on" || (status.demoMode !== "off" && !plan.model.routes.some((r) => status.providers[r.provider]?.configured)));
+  const demo = placeholdersOn(status?.demoMode);
   const cost = demo ? 0 : plan.costUsd;
   return { cost, demo, label: demo ? "Demo · free" : cost === 0 ? "Free" : cost != null ? `≈ ${formatCost(cost)}` : "Price unknown" };
 }

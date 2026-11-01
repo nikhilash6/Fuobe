@@ -35,6 +35,8 @@ import {
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CommandPalette, CommandPaletteProvider, useCommandPalette } from "@/components/command-palette";
+import { PlaceholdersOnChip } from "@/components/demo-mode";
+import { placeholdersOn } from "@/lib/demo-mode";
 import { GitHubMark } from "@/components/github-mark";
 import { IntentLink } from "@/components/intent-link";
 import { JobNotifications } from "@/components/job-notifications";
@@ -560,7 +562,6 @@ export function AppSidebar() {
   const place = usePagePlace();
   // Not in Paid APIs only mode: ComfyUI isn't used there, wherever it runs.
   const ownerGpu = status && !status.viewer && mode !== "cloud" && (status.ownerGpu || (place === "hosted" && !comfy)) ? (ownGpuOf(status) ?? { connected: false }) : null;
-  const ready = mode === "open" ? comfy : mode === "cloud" ? cloud : cloud || comfy;
   const [closed, setClosed] = useState(readClosed);
   const toggle = useCallback((id: string) => {
     setClosed((c) => {
@@ -644,12 +645,9 @@ export function AppSidebar() {
                   </IntentLink>
                 )}
                 <YourGpuChip gpu={ownerGpu} guest={false} />
-                {(mode !== "both" || (!ready && status?.demoMode !== "off")) && (
+                {mode !== "both" && (
                   <div className="flex flex-col gap-1.5 px-2 pb-1 text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
-                    {mode !== "both" && <span>{mode === "open" ? "Open source only" : "Paid APIs only"}</span>}
-                    {!ready && status?.demoMode !== "off" && (
-                      <span className="w-fit rounded-sm bg-highlight/25 px-1.5 py-0.5 text-highlight-foreground dark:text-highlight">Demo mode · placeholder outputs</span>
-                    )}
+                    <span>{mode === "open" ? "Open source only" : "Paid APIs only"}</span>
                   </div>
                 )}
               </>
@@ -676,12 +674,14 @@ export function AppSidebar() {
                 </span>
               )}
               {mode !== "both" && <span className="text-[11px] text-muted-foreground">{mode === "open" ? "Open source only" : "Paid APIs only"}</span>}
-              {status && !ready && status.demoMode !== "off" && (
-                <span className="mt-0.5 rounded-sm bg-highlight/25 px-1.5 py-0.5 text-[11px] text-highlight-foreground dark:text-highlight">
-                  Demo mode · placeholder outputs
-                </span>
-              )}
             </IntentLink>
+            )}
+            {/* Placeholder results, only while the owner has them on (Settings, for a tour): a click turns them off. Its own
+                button beside the status link (a button never sits inside a link). */}
+            {status && !status.viewer && placeholdersOn(status.demoMode) && (
+              <div className="-mt-1 px-2 pb-1 group-data-[collapsible=icon]:hidden">
+                <PlaceholdersOnChip />
+              </div>
             )}
             <SidebarMenu className="flex-row gap-1 group-data-[collapsible=icon]:flex-col">
               <SidebarMenuItem className="min-w-0 flex-1">

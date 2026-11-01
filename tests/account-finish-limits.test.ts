@@ -22,6 +22,8 @@ const finish = await import("@/app/api/generations/[id]/finish/route");
 let a = "";
 let cookie = "";
 let owner = "";
+// Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
+beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
 beforeAll(() => {
   auth.setPassword("install password");
   a = auth.createAccount("finisher@example.com", "long enough").id;

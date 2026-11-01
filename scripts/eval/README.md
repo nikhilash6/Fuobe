@@ -47,10 +47,10 @@ The harness finds its server the way `bin/fuobe.mjs` does: `--url` / `--token`, 
 the public API (`/api/generations`, `/api/uploads`, `/api/elements`, the studio routes), so the
 harness measures what a user gets.
 
-- `--engine demo` needs **Settings → Demo mode** on Auto or On. A job that would run for real is
+- `--engine demo` needs **Settings → Placeholder results** turned on. A job that would run for real is
   skipped.
 - `--engine open` / `cloud` refuse a server whose engine mode excludes them. A job that would come
-  back as demo media is skipped and says why: Demo mode is On, no ComfyUI is connected, or there is
+  back as demo media is skipped and says why: placeholder results are on, no ComfyUI is connected, or there is
   no cloud key.
 - **The model it names.** A job the server would run on another model than the one the case names
   (a studio's default maker, or a retired model the server runs on the Original that replaced it) is

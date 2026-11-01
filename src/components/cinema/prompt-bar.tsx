@@ -74,6 +74,7 @@ import { directorPicks, draftToInput, type BarAction, type CinemaDraft, type Ref
 import { useCinemaGenerate } from "./hooks";
 import { firstFrame, mediaDuration } from "./media";
 import { formatUsd } from "./money";
+import { placeholdersOn } from "@/lib/demo-mode";
 
 const chip = "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors";
 const chipIdle = "bg-secondary text-secondary-foreground hover:bg-accent";
@@ -363,7 +364,7 @@ export function PromptBar(props: PromptBarProps) {
     audios: draft.refs.filter((r) => r.kind === "audio").map((r) => r.duration ?? NaN),
     elements: mentions.length,
   });
-  const demo = !!status && status.demoMode !== "off" && !model.routes.some((r) => status.providers[r.provider]?.configured);
+  const demo = placeholdersOn(status?.demoMode);
   const cost = demo ? 0 : plan.costUsd;
   const overCap = costCapUsd != null && cost != null && cost > 0 && spentUsd + cost > costCapUsd + 1e-9;
   const uploading = draft.refs.some((r) => r.uploading);
@@ -852,7 +853,7 @@ export function PromptBar(props: PromptBarProps) {
             </span>
           </TooltipTrigger>
           <TooltipContent>
-            {demo ? "Demo mode: no key connected for this model, so takes are free placeholders" : cost === 0 ? "Runs on your own GPU" : "Estimated cost of this run, billed by the provider to your key"}
+            {demo ? "Placeholder results are on (Settings), so takes are free stand-ins" : cost === 0 ? "Runs on your own GPU" : "Estimated cost of this run, billed by the provider to your key"}
           </TooltipContent>
         </Tooltip>
         <Tooltip>

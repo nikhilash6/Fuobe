@@ -714,6 +714,9 @@ function open(): Database.Database {
       db.prepare("INSERT INTO _migrations (id) VALUES (?)").run(i);
     })();
   });
+  // Placeholder results are opt-in (settings.ts, demoMode): a saved "auto", which made a placeholder whenever the model
+  // wasn't connected, is cleared, so the install runs with the default "off". A saved "on" stays. Safe on every start.
+  db.exec("DELETE FROM settings WHERE key = 'demo.mode' AND value NOT IN ('on', 'off')");
   // Assist on hosted LLM providers (src/lib/catalog/llm-providers.ts): the provider of a chat's model ("openai",
   // "openrouter"…); chats from before read agent "claude" as Anthropic. Added when it's missing rather than as a
   // numbered migration, so branches that add migrations never clash over its place in the list.

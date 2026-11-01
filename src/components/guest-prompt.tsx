@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { Cpu, LogIn, Sparkles } from "lucide-react";
+import { Cpu, ExternalLink, KeyRound, LogIn, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -11,7 +11,21 @@ import { takeGpuRetry } from "@/hooks/use-gpu";
 import { KeyInstead } from "@/components/keys/your-keys";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CONNECT_GPU_EVENT, GUEST_PROMPT_EVENT, refusalCard, signInHref, useStatus, useViewer, watchGuestRefusals, type ConnectGpuDetail as ConnectDetail, type RefusalAction, type RefusalCard } from "@/lib/api";
+import {
+  CONNECT_GPU_EVENT,
+  GUEST_PROMPT_EVENT,
+  refusalCard,
+  signInHref,
+  useStatus,
+  useViewer,
+  watchGuestRefusals,
+  type ConnectGpuDetail as ConnectDetail,
+  type ConnectNeeds,
+  type RefusalAction,
+  type RefusalCard,
+} from "@/lib/api";
+import { ConnectField, useSettings } from "@/components/connect-field";
+import { FAL_KEYS_URL } from "@/lib/connections";
 import { CLOUD_KEY } from "@/lib/your-keys";
 
 /**
@@ -37,6 +51,8 @@ export function GuestPrompt() {
   const [retry, setRetry] = useState<{ retry: () => void; kind?: string } | null>(null);
   // Opened by a button that said "Use the ComfyUI on this computer": the finder looks at once.
   const [look, setLook] = useState(false);
+  // The owner's refused run (Demo mode off, nothing connected): what would run it. A GPU when not said.
+  const [needs, setNeeds] = useState<ConnectNeeds>("gpu");
   const close = useCallback(() => {
     setOpen(false);
     setRetry(null);
@@ -52,6 +68,14 @@ export function GuestPrompt() {
     was.current = who?.signedIn ? (who.owner ? "owner" : "account") : null;
   }, [who]);
   const [signedOut, setSignedOut] = useState<"owner" | "account" | null>(null);
+  // The owner's own refused run (never an account's: theirs has "Add your key" of its own).
+  const ownerRun = !!who?.owner && action === "run" && !reason;
+  const keyOnly = ownerRun && needs === "key";
+  const start = () => {
+    const r = retry;
+    close();
+    r?.retry();
+  };
   useEffect(() => {
     watchGuestRefusals();
     const show = (kind: RefusalCard["kind"]) => {
@@ -86,6 +110,7 @@ export function GuestPrompt() {
       setReason(d.reason);
       setAction(d.action ?? "connect");
       setLook(!!d.look);
+      setNeeds(d.needs ?? "gpu");
     };
     window.addEventListener(GUEST_PROMPT_EVENT, guest);
     window.addEventListener(CONNECT_GPU_EVENT, gpu);
@@ -113,11 +138,15 @@ export function GuestPrompt() {
             <>
               <DialogHeader>
                 <div className="mb-1 grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
-                  <Cpu className="size-5" />
+                  {keyOnly ? <KeyRound className="size-5" /> : <Cpu className="size-5" />}
                 </div>
-                <DialogTitle>{reason ? TITLES[reason] : action === "upload" && !keysAllowed ? "Connect your GPU to add your own files" : TITLES[action]}</DialogTitle>
+                <DialogTitle>
+                  {reason ? TITLES[reason] : keyOnly ? "Add an API key to run this" : action === "upload" && !keysAllowed ? "Connect your GPU to add your own files" : TITLES[action]}
+                </DialogTitle>
                 <DialogDescription>
-                  {!reason && action === "upload" ? (
+                  {keyOnly ? (
+                    "This model runs in the cloud with your own fal.ai or Replicate key. Runs are billed to your account with them."
+                  ) : !reason && action === "upload" ? (
                     keysAllowed ? (
                       "Your files are kept for your own runs, on your own ComfyUI or with your own fal.ai or Replicate key."
                     ) : (
@@ -134,18 +163,9 @@ export function GuestPrompt() {
               </DialogHeader>
               {/* No key yet: "Add a key" opens here, over the studio (this card makes room). */}
               <KeyInstead onOpen={close} />
-              <ConnectChoice
-                fromRun={!!retry}
-                kind={retry?.kind}
-                reason={reason}
-                look={look}
-                onStart={() => {
-                  const r = retry;
-                  close();
-                  r?.retry();
-                }}
-                onNotNow={() => setRetry(null)}
-              />
+              {!keyOnly && <ConnectChoice fromRun={!!retry} kind={retry?.kind} reason={reason} look={look} onStart={start} onNotNow={() => setRetry(null)} />}
+              {/* The owner's refused run a fal.ai or Replicate key would run: the key right here, and the run starts once it's saved. */}
+              {ownerRun && needs !== "gpu" && <OwnerKey alone={keyOnly} onConnected={start} />}
             </>
           ) : signedOut ? (
             <>
@@ -215,4 +235,35 @@ function CloseOnNavigation({ close }: { close: () => void }) {
   const pathname = usePathname();
   useEffect(() => close(), [pathname, close]);
   return null;
+}
+
+/**
+ * The owner's fal.ai key, right in the card a refused run opened (Demo mode off, nothing connected): a green test saves
+ * it and the run starts. `alone`: the key is the only way (a cloud model); otherwise it is the second way, under the GPU.
+ */
+function OwnerKey({ alone, onConnected }: { alone: boolean; onConnected: () => void }) {
+  const setting = useSettings().data?.find((s) => s.name === "falKey");
+  return (
+    <div className={alone ? "space-y-2" : "space-y-2 rounded-2xl border border-dashed p-4"}>
+      {!alone && <p className="text-[13px] font-medium">Or add an API key</p>}
+      <ConnectField
+        name="falKey"
+        setting={setting}
+        provider="fal"
+        label="fal.ai API key"
+        placeholder="key_id:key_secret"
+        onConnected={onConnected}
+        hint={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <a href={FAL_KEYS_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text underline-offset-2 hover:underline">
+              Get a key at fal.ai <ExternalLink className="size-3" />
+            </a>
+            <Link href="/settings#cloud" className="text-brand-text underline-offset-2 hover:underline">
+              A Replicate token instead
+            </Link>
+          </span>
+        }
+      />
+    </div>
+  );
 }

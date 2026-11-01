@@ -50,6 +50,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { FailedTile, MediaThumb, PendingTile, downloadName, tileRatio } from "@/components/studio/feed";
 import { useSoulFinish } from "@/components/studio/soul-finish";
 import { Viewer } from "@/components/studio/viewer";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { getModel } from "@/lib/catalog";
 import type { CinemaFolder } from "@/lib/catalog/cinema";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
@@ -428,6 +429,7 @@ function TileView({
       {media}
       {overlay}
       {checkbox}
+      {g.status === "succeeded" && !selecting && <PlaceholderChip g={g} overlay className="absolute top-2 left-10" />}
       <div className="pointer-events-none absolute top-2 right-2 flex items-center gap-1">
         {g.favorite && <Heart className="size-4 fill-highlight text-highlight drop-shadow" />}
         {u.scene && (

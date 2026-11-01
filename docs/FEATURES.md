@@ -29,7 +29,7 @@ Fuobe is a complete creative studio you can run yourself: 108 camera motions, 25
 - [Elements, Soul ID and LoRAs](#elements-soul-id-and-loras)
 - [Catalog and the open-source engine](#catalog-and-the-open-source-engine)
 - [Evaluation harness](#evaluation-harness)
-- [Demo mode](#demo-mode)
+- [Placeholder results](#placeholder-results)
 - [Model licences](#model-licences)
 
 ## Assist, skills, MCP and the command line
@@ -104,9 +104,9 @@ Fuobe is a complete creative studio you can run yourself: 108 camera motions, 25
 
 More on running it: [Development → Evaluation harness](DEVELOPMENT.md#evaluation-harness).
 
-## Demo mode
+## Placeholder results
 
-- **No keys? No GPU?** Demo mode lets you click through everything with clearly-labelled placeholder outputs.
+- **Off by default.** With nothing connected, a run opens the connect card: the ComfyUI on this computer, a server address, or an API key. To give a tour without keys or a GPU, turn on **Settings → Show placeholder results (for a tour)**: every run then makes a result labelled "Placeholder", and the sidebar shows a "Placeholders on" chip that turns it off.
 
 ## Model licences
 

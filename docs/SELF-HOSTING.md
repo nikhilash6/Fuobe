@@ -14,7 +14,7 @@ How to install Fuobe, connect a GPU, cloud keys and local language models, and r
 
 ## Install and start
 
-Fuobe runs on Windows, macOS or Linux. It needs Node 22 or later and pnpm, plus a running ComfyUI for the open engine (default address `http://127.0.0.1:8188`). Without a ComfyUI or a cloud key, demo mode lets you click through everything with labelled placeholder outputs.
+Fuobe runs on Windows, macOS or Linux. It needs Node 22 or later and pnpm, plus a running ComfyUI for the open engine (default address `http://127.0.0.1:8188`). Without a ComfyUI or a cloud key, a run asks you to connect one; for a tour, **Settings → Show placeholder results (for a tour)** makes every run a labelled placeholder.
 
 ```bash
 pnpm install
@@ -83,7 +83,7 @@ Public sign-up, guest browsing and connecting your own GPU to a shared install a
 | `FUOBE_TRUST_PROXY=1` | Behind a reverse proxy: trust the last `X-Forwarded-For` hop, so wrong passwords, and too many wrong share links, lock out only that visitor (60 s). Without it, everyone shares one limit: passwords are slowed to one attempt every 4 s and never locked, and wrong share links past 100 a minute get 429 while real links still open |
 | `FUOBE_ALLOW_PRIVATE_URLS=1` | Let inputs, product links and project sources be fetched from private / LAN addresses (they are refused by default), and let Assist connectors use plain http beyond localhost (without it a connector needs https unless it is on localhost; a private https address is accepted, with a warning that Claude can only reach it through a public tunnel) |
 | `FUOBE_DATA_DIR` | Where the database, files and `auth.json` live (default `./data`). Back up `secrets.key` there with `auth.json`: it opens the fal.ai and Replicate keys accounts saved ([Your keys](public-signup.md#your-keys)), which must be added again without it |
-| `FUOBE_DEMO_MODE` | `auto` (default: demo outputs only when a model's provider isn't connected), `on` or `off` |
+| `FUOBE_DEMO_MODE` | `off` (default: a run with nothing connected asks you to connect one) or `on` (placeholder results, for a tour: every run makes a labelled placeholder). The old `auto` reads as `off`, and a saved `auto` is cleared on start |
 | `FUOBE_SKILLS_DIR` | Where Assist's built-in skills are read from (default `./skills`) |
 | `FUOBE_ENGINE_MODE`, `FUOBE_CLOUD_PROVIDER`, `FUOBE_ENHANCE_PROVIDER`, `FUOBE_LLM_PROVIDER` | The Settings choices above |
 | `FUOBE_LLM_CONTEXT` | Tokens of context for the local model (default `16384`): Ollama's `num_ctx`, and the context LM Studio loads a model with. `0` leaves it to the server |

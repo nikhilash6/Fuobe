@@ -403,7 +403,7 @@ async function models(ctx) {
     ctx.print(`No models match.${res.engineMode !== "both" ? ` This Fuobe runs ${res.engineMode === "open" ? "open-source" : "cloud"} models only (Settings → Engine mode).` : ""}`);
     return EXIT.ok;
   }
-  // How a run goes today (Settings → Demo mode decides with the providers); an older server only says `connected`.
+  // How a run goes today (Settings → placeholder results decide with the providers); an older server only says `connected`.
   const runs = (m) => m.runs ?? (m.connected ? "real" : "demo");
   const mark = { real: "", demo: " (demo)", refused: " (not set up)" };
   // A Fuobe Original runs on both engines (open+cloud); --engine lists it as that engine's model.
@@ -411,9 +411,9 @@ async function models(ctx) {
   ctx.print(table(["ID", "NAME", "ENGINE", "PRICE", "DOES"], rows, ctx.io.columns));
   const count = (r) => items.filter((m) => runs(m) === r).length;
   const notes = [`${items.length} model${items.length === 1 ? "" : "s"}${items.length < res.items.length ? ` of ${res.items.length}` : ""}.`];
-  if (res.demoMode === "on") notes.push("Demo mode is on (Settings → Demo mode): every run returns demo media, for free.");
-  else if (count("demo")) notes.push("Those marked (demo) have no provider set up here yet: they return demo media, for free.");
-  if (count("refused")) notes.push("Those marked (not set up) need their provider set up in Settings first (Demo mode is off, so they won't run as a demo).");
+  if (res.demoMode === "on") notes.push("Placeholder results are on (Settings → Placeholder results): every run returns placeholder media, for free.");
+  else if (count("demo")) notes.push("Those marked (demo) return placeholder media, for free.");
+  if (count("refused")) notes.push("Those marked (not set up) need their provider set up in Settings first.");
   ctx.note(notes.join(" "));
   return EXIT.ok;
 }

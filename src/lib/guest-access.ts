@@ -239,6 +239,8 @@ export const OWN_GPU_TOOL_MESSAGE = "This tool doesn't run on your own GPU yet. 
 
 /** Set on an account's refused run: the client shows "Connect your GPU to run this". */
 export const CONNECT_GPU_HEADER = "x-fuobe-connect-gpu";
+/** Beside it on the owner's refused run (Demo mode off, nothing connected): what would run it, "gpu", "key" or "any". */
+export const CONNECT_NEEDS_HEADER = "x-fuobe-connect-needs";
 export const CONNECT_GPU_MESSAGE = "Connect your GPU to run this. Free accounts run on their own ComfyUI.";
 /** An account's upload with neither a GPU nor a key of its own: its files are kept for runs on its own ComfyUI or key. */
 export const CONNECT_GPU_UPLOAD_MESSAGE = "Connect your GPU, or add your own fal.ai or Replicate key, to add your own files.";

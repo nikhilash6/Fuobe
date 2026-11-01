@@ -19,7 +19,7 @@ const connected = (m: ModelDef) => m.routes.some((r) => (r.provider === "llm" ? 
 
 /**
  * How a run of the model goes today, the way chooseRoute decides: "real" on its provider, "demo"
- * (placeholder media, free: Demo mode on, or auto with no provider set up) or "refused" (Demo mode
+ * (placeholder media, free: placeholder results on, or "auto" with no provider set up) or "refused" (placeholders
  * off and no provider: the run fails with "Connect … in Settings").
  */
 function runsAs(m: ModelDef, demoMode: string): "real" | "demo" | "refused" {

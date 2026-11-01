@@ -88,8 +88,14 @@ export const SETTINGS = {
   aiToolkitToken: { key: "aitk.token", env: "AI_TOOLKIT_AUTH", secret: true },
   /** Where AI-Toolkit can read datasets Fuobe writes (defaults to Fuobe's data folder — same machine). */
   aiToolkitDatasetDir: { key: "aitk.datasetDir", env: "AI_TOOLKIT_DATASET_DIR" },
-  /** "auto" = demo outputs only when the chosen provider is not configured. */
-  demoMode: { key: "demo.mode", env: "FUOBE_DEMO_MODE", default: "auto", options: ["auto", "on", "off"] },
+  /**
+   * Settings → "Show placeholder results (for a tour)": "on" makes every run a labelled placeholder, for someone giving a
+   * tour of a self-hosted studio. Off by default: a run with nothing connected opens the connect card instead.
+   * "auto" (the old default: a placeholder whenever the model wasn't connected) is no longer an install's: the Settings
+   * API refuses it (API_REFUSED), FUOBE_DEMO_MODE=auto reads as "off", and a saved one is cleared on every start
+   * (db.ts). Only code in the same process can still set it, as the test suite does to mix real and placeholder routes.
+   */
+  demoMode: { key: "demo.mode", env: "FUOBE_DEMO_MODE", default: "off", options: ["off", "on", "auto"] },
   /** Settings → AI helper: Claude, a local model, or offline. "ollama" is the old name of "local" and still means it. */
   enhanceProvider: { key: "enhance.provider", env: "FUOBE_ENHANCE_PROVIDER", default: "auto", options: ["auto", "anthropic", "local", "ollama", "none"] },
   /** Which local model server: "auto" uses the first that answers (Ollama, LM Studio, Unsloth Studio, then the custom URL). */
@@ -158,9 +164,12 @@ export function getSetting(name: SettingName): string {
   const def: SettingDef = SETTINGS[name];
   const candidate = candidates.getStore()?.[name];
   const row = candidate !== undefined ? { value: candidate.trim() } : (db().prepare("SELECT value FROM settings WHERE key = ?").get(def.key) as { value: string } | undefined);
-  const value = row && row.value !== "" ? row.value : (envValue(def) ?? def.default ?? "");
-  // An invalid env/db value falls back to the default instead of breaking routing.
+  const saved = row && row.value !== "" ? row.value : undefined;
+  const value = saved ?? envValue(def) ?? def.default ?? "";
+  // An invalid env/db value falls back to the default instead of breaking routing; so does an environment variable
+  // set to a value only this process may set (FUOBE_DEMO_MODE=auto, the old default, reads as "off").
   if (def.options && !def.options.includes(value)) return def.default ?? "";
+  if (saved === undefined && API_REFUSED[name]?.includes(value)) return def.default ?? "";
   return value;
 }
 
@@ -181,11 +190,18 @@ export function parseContext(value: string): number | null {
   return n === 0 ? 0 : n >= 2048 ? Math.min(n, 1_048_576) : null;
 }
 
-/** Throws a user-facing message if the setting value isn't allowed. */
-export function validateSetting(name: SettingName, value: string): void {
+/** Values a setting keeps for code in this process only: the Settings API (PUT /api/settings) refuses them. */
+const API_REFUSED: Partial<Record<SettingName, string[]>> = { demoMode: ["auto"] };
+
+/**
+ * Throws a user-facing message if the setting value isn't allowed. `from: "api"`: a value sent to the Settings API,
+ * which may not be one of API_REFUSED's (only off or on reach demoMode from outside).
+ */
+export function validateSetting(name: SettingName, value: string, from: "api" | "server" = "server"): void {
   const def: SettingDef = SETTINGS[name];
-  if (value !== "" && def.options && !def.options.includes(value)) {
-    throw new Error(`${name} must be one of: ${def.options.join(", ")}`);
+  const options = from === "api" ? def.options?.filter((o) => !API_REFUSED[name]?.includes(o)) : def.options;
+  if (value !== "" && options && !options.includes(value)) {
+    throw new Error(`${name} must be one of: ${options.join(", ")}`);
   }
   if (name === "llmContext" && value !== "" && parseContext(value) === null) {
     throw new Error("llmContext must be a number of tokens of at least 2048 (such as 16384 or 16k), or 0 to leave it to the server");

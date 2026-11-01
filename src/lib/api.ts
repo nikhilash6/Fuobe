@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "r
 import { toast } from "sonner";
 import type { AssistThread, AssistThreadSummary, AssistThreadView } from "./assist";
 import type { OwnerGpuView, TestProvider } from "./connections";
-import { pagePlace } from "./page-place";
 import type { ElementKind, StudioElement } from "./catalog/elements";
 import type { Engine, Generation, GenerationRequest, MediaKind, ReviewStatus } from "./catalog/types";
 import {
@@ -1242,12 +1241,16 @@ export const CONNECT_GPU_EVENT = "fuobe:connect-gpu";
 /**
  * What opened "Connect your GPU": `action` a refusal (watchGuestRefusals, or a file chooser that asks first): a refused
  * run's card keeps that run and starts it once connected; `reason` the runner's note; `look` a button that said "Use the
- * ComfyUI on this computer". With none of them, a button that only opens the card: no run waits.
+ * ComfyUI on this computer". With none of them, a button that only opens the card: no run waits. `needs`: what would
+ * run the owner's refused run (Demo mode off, nothing connected): a GPU, a fal.ai or Replicate key, or either.
  */
 export interface ConnectGpuDetail extends RefusalDetail {
   reason?: "setting" | "find" | "browser";
   look?: boolean;
+  needs?: ConnectNeeds;
 }
+export type ConnectNeeds = "gpu" | "key" | "any";
+const asNeeds = (v: string | null): ConnectNeeds | undefined => (v === "gpu" || v === "key" || v === "any" ? v : undefined);
 /** A run started from this tab (components/gpu/computer-runtime.ts listens). */
 export const COMPUTER_KICK_EVENT = "fuobe:computer-kick";
 /** The guided fix (src/components/gpu/guided-fix.tsx): { ref, plan? }. */
@@ -1327,7 +1330,8 @@ export function watchGuestRefusals(): void {
   const open = (res: Response, kind: RefusalCard["kind"], path: string) => {
     if (!refusalCard(kind, window.location)) return;
     markRefusalShown(res);
-    const detail: RefusalDetail = { action: UPLOAD_PATHS.has(path) ? "upload" : "run" };
+    const needs = asNeeds(res.headers.get("x-fuobe-connect-needs"));
+    const detail: ConnectGpuDetail = { action: UPLOAD_PATHS.has(path) ? "upload" : "run", ...(needs && { needs }) };
     window.dispatchEvent(new CustomEvent(kind === "guest" ? GUEST_PROMPT_EVENT : CONNECT_GPU_EVENT, { detail }));
   };
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1335,9 +1339,9 @@ export function watchGuestRefusals(): void {
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
     if (res.status === 401 && res.headers.get("x-fuobe-guest") === "1" && method !== "GET" && method !== "HEAD") open(res, "guest", requestPath(input));
     if (res.status === 403 && res.headers.get("x-fuobe-connect-gpu") === "1") open(res, "gpu", requestPath(input));
-    // The owner's run with nothing connected that runs it, on a hosted studio: "Connect your GPU" too (a page on the
-    // server's own machine keeps its toast: its ComfyUI is in Settings).
-    if (res.status === 422 && res.headers.get("x-fuobe-connect-gpu") === "1" && pagePlace(window.location.hostname) === "hosted") open(res, "gpu", requestPath(input));
+    // The owner's run with nothing connected that runs it (Demo mode off): the connect card too, never an error toast.
+    // On a hosted page it offers the ComfyUI on this computer first; on the server's own machine, the server's address.
+    if (res.status === 422 && res.headers.get("x-fuobe-connect-gpu") === "1") open(res, "gpu", requestPath(input));
     // A run started here, on the ComfyUI on this computer: the tab that runs it asks for it at once.
     if (res.status === 201 && method === "POST" && requestPath(input) === "/api/generations") {
       window.dispatchEvent(new Event(COMPUTER_KICK_EVENT));

@@ -22,6 +22,7 @@ import { EngineSwitch } from "./engine-switch";
 import { ResponsivePanel } from "./responsive-panel";
 import { RECENT_MODELS, STARRED_MODELS, useStoredList } from "./stored-list";
 import { VendorMark } from "./vendor-mark";
+import { placeholdersOn } from "@/lib/demo-mode";
 
 const BADGE_LABEL: Record<string, string> = {
   new: "New",
@@ -296,9 +297,7 @@ function PickerList({
     return recipe && models.some((m) => m.id === recipe && m.engine === engine) ? [recipe, ...ranked.filter((id) => id !== recipe)] : ranked;
   }, [models, engine, defaultModels, ops, recipe]);
   const { groups, count } = useMemo(() => groupModels({ models, engine, engines, query: q, recent, starred, best, flat }), [models, engine, engines, q, recent, starred, best, flat]);
-  const ready = (m: ModelDef) => m.routes.some((r) => status?.providers[r.provider]?.configured);
-  const shown = groups.flatMap((g) => g.models);
-  const demo = status && status.demoMode !== "off" && shown.some((m) => !ready(m));
+  const demo = placeholdersOn(status?.demoMode);
   const otherEngine = engine === "cloud" ? "open" : "cloud";
   const noneForEngine = !q && !models.some((m) => m.engine === engine);
 
@@ -364,9 +363,9 @@ function PickerList({
           <>
             <span aria-hidden>·</span>
             <span className="min-w-0">
-              Demo — no key connected, outputs are placeholders.{" "}
-              <Link href="/settings" className="text-brand-text underline underline-offset-2">
-                Connect
+              Placeholder results are on, so outputs are stand-ins.{" "}
+              <Link href="/settings#demo" className="text-brand-text underline underline-offset-2">
+                Settings
               </Link>
             </span>
           </>

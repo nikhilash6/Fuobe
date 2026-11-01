@@ -89,21 +89,21 @@ describe("the line under Home's composer", () => {
     expect(startLine(state(["fal"]), q.edit, "cloud", "edit")?.text).toMatch(/^Start runs Nano Banana Pro after you add the photo · /);
   });
 
-  it("says it's a demo when the key set is for a provider that doesn't host the model", () => {
+  it("says why Start can't run it when the key set is for a provider that doesn't host the model", () => {
     // Only Replicate: hosted MiniMax H3 is on fal.ai alone.
-    expect(startLine(state(["replicate"]), q.video, "cloud", "video")).toEqual({ text: "MiniMax H3 needs a fal.ai key, so Start runs a free demo" });
-    // Demo mode off: it won't run at all.
-    expect(startLine(state(["replicate"], { demoMode: "off" }), q.video, "cloud", "video")?.text).toMatch(/so Start can't run it yet$/);
-    expect(startLine(state(["fal"], { demoMode: "on" }), q.image, "cloud", "image")?.text).toMatch(/Demo mode is on/);
+    expect(startLine(state(["replicate"]), q.video, "cloud", "video")).toEqual({ text: "MiniMax H3 needs a fal.ai key, so Start can't run it yet" });
+    // Off is the default; an install from before with no saved value is the same.
+    expect(startLine(state(["replicate"], { demoMode: undefined }), q.video, "cloud", "video")?.text).toMatch(/so Start can't run it yet$/);
+    expect(startLine(state(["fal"], { demoMode: "on" }), q.image, "cloud", "image")?.text).toMatch(/Placeholder results are on/);
   });
 
   it("offers the other engine when that one would run it for real", () => {
-    expect(startLine(state(["comfyui"]), q.image, "cloud", "image")).toEqual({ text: "No paid API is connected, so Start runs a free demo", other: "open" });
+    expect(startLine(state(["comfyui"]), q.image, "cloud", "image")).toEqual({ text: "No paid API is connected, so Start can't run it yet", other: "open" });
     expect(startLine(state(["comfyui"]), q.image, "open", "image")?.text).toMatch(/^Start runs .+ on your GPU · Free$/);
-    expect(startLine(state(["fal"]), q.image, "open", "image")).toEqual({ text: "ComfyUI isn't connected, so Start runs a free demo", other: "cloud" });
+    expect(startLine(state(["fal"]), q.image, "open", "image")).toEqual({ text: "ComfyUI isn't connected, so Start can't run it yet", other: "cloud" });
     // A Replicate key doesn't run hosted MiniMax H3, so it isn't offered for Video.
-    expect(startLine(state(["replicate"]), q.video, "open", "video")).toEqual({ text: "ComfyUI isn't connected, so Start runs a free demo" });
-    // Nothing connected: Home's demo notice says it instead.
+    expect(startLine(state(["replicate"]), q.video, "open", "video")).toEqual({ text: "ComfyUI isn't connected, so Start can't run it yet" });
+    // Nothing connected: Home's notice says it instead.
     expect(startLine(state([]), q.image, "cloud", "image")).toBeNull();
   });
 });

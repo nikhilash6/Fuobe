@@ -26,6 +26,8 @@ const { resetRates } = await import("@/server/rate");
 let fake: FakeComfy;
 let a = "";
 let cookie = "";
+// Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
+beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
 beforeAll(async () => {
   fake = await startFakeComfy({ loras: [], delayMs: 0 });
   globalThis.__fuobeTestGpuPort = fake.port;

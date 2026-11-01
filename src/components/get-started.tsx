@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Bot, ChevronDown, Clapperboard, Cloud, Copy, Cpu, ExternalLink, ImageIcon, Megaphone, Mic2, Sparkles, Video, Wand2, X } from "lucide-react";
+import { AudioLines, Bot, ChevronDown, Clapperboard, Cloud, Copy, Cpu, ExternalLink, ImageIcon, Megaphone, Mic2, Video, Wand2, X } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
 import { toast } from "sonner";
@@ -123,15 +123,15 @@ function GuideCard({ icon: Icon, title, cost, children }: { icon: typeof Cloud; 
 }
 
 /**
- * The first-run guide: three ways to make things for real (a paid API key, your own GPU, or the
- * demo), each finished without leaving the page, then Liner's "What do you want to do?" chips.
+ * The first-run guide: the ways to make things for real (a paid API key, or your own GPU), each
+ * finished without leaving the page, then Liner's "What do you want to do?" chips. There is no
+ * demo card: placeholder results are only for a tour, and only turned on in Settings.
  * It shows while nothing is connected and it wasn't dismissed (showFirstRun); connecting something
  * or "Hide" remembers that on the server, so it doesn't come back in another browser.
  */
 export function GetStarted({
   status,
   prices,
-  onDemo,
   onHide,
   onMode,
   intents = true,
@@ -141,9 +141,7 @@ export function GetStarted({
   status?: StatusInfo;
   /** What a first image and clip cost on the paid route (starterPriceLine on the server). */
   prices?: string;
-  /** "Just try it": after the guide is put away (Home focuses its composer). */
-  onDemo?: () => void;
-  /** After Hide or "Try the demo" put it away (Settings closes a guide it reopened). */
+  /** After Hide put it away (Settings closes a guide it reopened). */
   onHide?: () => void;
   /** An image / video / edit chip: Home switches its composer instead of leaving the page. */
   onMode?: (mode: IntentMode) => void;
@@ -162,10 +160,6 @@ export function GetStarted({
   const mode = status?.engineMode ?? cachedMode;
   // Where this page is: unknown in the server's HTML (Home's static shell), so the GPU card waits for it there.
   const place = usePagePlace();
-  // "Just try it": the owner's demo, never a visitor's, and not when the demo is off (a run then asks for a GPU instead).
-  // Unknown (undefined) in Home's static shell.
-  const demo = status ? !status.viewer && status.demoMode !== "off" : undefined;
-
   const hide = async () => {
     setHiding(true);
     try {
@@ -191,10 +185,8 @@ export function GetStarted({
           </h2>
           <p className="mt-1 text-[13px] text-muted-foreground">
             {status && nothingConnected(status)
-              ? status.demoMode === "off"
-                ? "Nothing is connected yet. Connect a model to make the real thing:"
-                : "Nothing is connected yet, so every run is a free demo with placeholder results. Connect a model to make the real thing:"
-              : "Three ways to make things with Fuobe. Connect another one, or check one you set up:"}
+              ? "Nothing is connected yet. Connect a model to make the real thing:"
+              : "The ways to make things with Fuobe. Connect another one, or check one you set up:"}
           </p>
         </div>
         <Button variant="ghost" size="sm" className="-mt-1 -mr-2 shrink-0 text-muted-foreground" disabled={hiding} onClick={() => void hide()} aria-label="Hide the setup guide">
@@ -202,7 +194,7 @@ export function GetStarted({
         </Button>
       </div>
 
-      <div className={cn("mt-4 grid gap-3", mode === "both" && demo !== false ? "lg:grid-cols-3" : "md:grid-cols-2")}>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
         {mode !== "open" && (
           <GuideCard icon={Cloud} title="Use paid models" cost={prices ? `Pay per run with your own key: ${prices}` : "Pay per run with your own key"}>
             <p className="text-[13px] leading-relaxed text-muted-foreground">The Fuobe Originals hosted on open weights, plus Nano Banana, Seedance, Kling, Veo and many more, through one fal.ai key. A Replicate token works too (Settings).</p>
@@ -258,22 +250,6 @@ export function GetStarted({
               }
             />
           </GuideCard>
-        )}
-        {/* The owner's demo: not in the first paint (a visitor of a public studio never sees it). */}
-        {demo && (
-        <GuideCard icon={Sparkles} title="Just try it" cost="Free: no keys, no GPU">
-          <p className="text-[13px] leading-relaxed text-muted-foreground">Click through every studio with clearly labelled placeholder results. You can connect a model later in Settings.</p>
-          <Button
-            variant="outline"
-            className="mt-auto w-full sm:w-fit"
-            disabled={hiding}
-            onClick={async () => {
-              if (await hide()) onDemo?.();
-            }}
-          >
-            Try the demo
-          </Button>
-        </GuideCard>
         )}
       </div>
 

@@ -406,10 +406,10 @@ describe("the runner on the demo provider", () => {
     const dry = await cli(["run", "--suite", "soul", "--engine", "cloud", "--looks", "v1-general", "--dry-run"]);
     expect(dry.code, dry.stderr).toBe(0);
     expect(dry.stdout).toMatch(/would run as a demo: Z-Image Turbo \(hosted\) has no cloud provider connected/);
-    // With Demo mode On, that is the reason given (a connected engine wouldn't help).
+    // With placeholder results on, that is the reason given (a connected engine wouldn't help).
     setSetting("demoMode", "on");
     try {
-      expect((await cli(["run", "--suite", "soul", "--engine", "open", "--looks", "v1-general", "--dry-run"])).stdout).toMatch(/Demo mode is On on that Fuobe/);
+      expect((await cli(["run", "--suite", "soul", "--engine", "open", "--looks", "v1-general", "--dry-run"])).stdout).toMatch(/placeholder results are on on that Fuobe/);
     } finally {
       setSetting("demoMode", "auto");
     }

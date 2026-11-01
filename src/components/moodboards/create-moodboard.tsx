@@ -16,6 +16,7 @@ import { toastError } from "@/lib/refusals";
 import { useMoodboardActions } from "./hooks";
 import { loadImage, pixelsOf, renderCollages } from "./images";
 import { colorFeature, COPY, imageProblem, moodboardError, MOODBOARD_LIMITS, representativeOrder, suggestMoodboardName, type Moodboard } from "./logic";
+import { placeholdersOn } from "@/lib/demo-mode";
 
 interface Item {
   id: string;
@@ -147,7 +148,7 @@ export function CreateMoodboardDialog({ open, onOpenChange, onCreated }: { open:
   const n = Math.min(items.length, MOODBOARD_LIMITS.refs);
   const st = status.data;
   const fal = !!st?.providers.fal?.configured;
-  const demo = st?.demoMode === "on" || (!fal && st?.demoMode !== "off");
+  const demo = placeholdersOn(st?.demoMode);
   const how =
     engine === "open"
       ? `Open source: collages for Qwen-Image-Edit from the ${n} most representative images`

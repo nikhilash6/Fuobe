@@ -3,7 +3,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Cloud, Cpu, ExternalLink, Info, Layers, Link2, Loader2, RefreshCw, Scale } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,8 @@ import { usePagePlace } from "@/components/gpu/use-local-comfy";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { PLACEHOLDER_SETTING, placeholdersOn } from "@/lib/demo-mode";
 import { AccountsChip } from "@/components/accounts-admin";
 import { ConnectField, useSettings, type PublicSetting } from "@/components/connect-field";
 import { GetStarted } from "@/components/get-started";
@@ -491,7 +492,6 @@ function LocalComfy({ get, onWhere }: { get: (n: string) => PublicSetting | unde
 
 export function SettingsForm({ prices }: { prices?: string }) {
   const qc = useQueryClient();
-  const router = useRouter();
   const settings = useSettings();
   const status = useStatus().data;
   const place = usePagePlace();
@@ -544,7 +544,6 @@ export function SettingsForm({ prices }: { prices?: string }) {
             status={status}
             prices={prices}
             intents={false}
-            onDemo={() => router.push("/")}
             onHide={() => {
               setGuide(false);
               if (window.location.hash === "#get-started") history.replaceState(null, "", window.location.pathname);
@@ -729,18 +728,27 @@ export function SettingsForm({ prices }: { prices?: string }) {
         <SecuritySettings />
       </Section>
 
-      <Section id="demo" title="Demo mode" description="Lets you click through everything without keys or a GPU. Demo runs return clearly-labelled placeholder media and cost nothing.">
-        <ChoiceField
-          id="setting-demo"
-          label="Demo mode"
-          value={get("demoMode")?.value || "auto"}
-          onChange={set("demoMode")}
-          options={[
-            { value: "auto", label: "Automatic", hint: "A demo only when the model you picked isn't connected." },
-            { value: "on", label: "Always demo", hint: "Every run is a free placeholder, even with keys or ComfyUI connected." },
-            { value: "off", label: "Never", hint: "A model that isn't connected shows an error instead of a demo." },
-          ]}
-        />
+      <Section
+        id="demo"
+        title="Placeholder results"
+        description="Off unless you turn it on. For giving a tour of this studio without keys or a GPU: runs cost nothing and make stand-in media instead of the real thing."
+      >
+        <label htmlFor="setting-demo" className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border bg-background p-4">
+          <span className="min-w-0 space-y-1">
+            <span className="block text-[14px] font-medium">{PLACEHOLDER_SETTING}</span>
+            <span className="block text-[13px] leading-relaxed text-muted-foreground">
+              While it&rsquo;s on, every run makes a placeholder labelled &ldquo;Placeholder&rdquo;, even with keys or ComfyUI connected, and the sidebar says
+              &ldquo;Placeholders on&rdquo;. While it&rsquo;s off, a run with nothing connected asks you to connect ComfyUI or add a key.
+            </span>
+          </span>
+          <Switch
+            id="setting-demo"
+            className="mt-0.5"
+            checked={placeholdersOn(get("demoMode")?.value)}
+            disabled={save.isPending}
+            onCheckedChange={(on) => set("demoMode")(on ? "on" : "off")}
+          />
+        </label>
       </Section>
 
       <Section

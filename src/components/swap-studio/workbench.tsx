@@ -242,7 +242,7 @@ function ProjectPanel({ project, estimate, edit }: { project: SwapProject; estim
           <dd className="mt-0.5 font-medium">{project.engine === "open" ? "Your GPU (ComfyUI)" : "Cloud (fal)"}</dd>
         </div>
       </dl>
-      {estimate?.demo && <Note className="mt-2">Demo mode: nothing is paid for and the takes are sample clips. Connect {project.engine === "open" ? "ComfyUI" : "fal"} in Settings to run it for real.</Note>}
+      {estimate?.demo && <Note className="mt-2">Placeholder results: nothing is paid for and the takes are sample clips. Connect {project.engine === "open" ? "ComfyUI" : "fal"} in Settings to run it for real.</Note>}
       <Button asChild variant="outline" size="sm" className="mt-3 w-full rounded-full sm:hidden">
         <a href={decisionsHref(project.id)} download>
           <Download className="size-4" /> Export decisions

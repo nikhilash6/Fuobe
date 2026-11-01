@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { CONNECT_GPU_HEADER, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
+import { CONNECT_GPU_HEADER, CONNECT_NEEDS_HEADER, GUEST_RUN_MESSAGE, OWN_GPU_TOOL_MESSAGE } from "@/lib/guest-access";
 import { missingFilesMessage } from "@/lib/missing-files";
 import { ADD_KEY_HEADER } from "@/lib/your-keys";
 import { requestViewer, validToken } from "@/server/auth";
@@ -180,12 +180,17 @@ export async function POST(request: Request) {
     // A price check of a paid model the account has no key for says so, without opening "Add your key".
     if (refusal && !preview) return refused(refusal);
     if (account && !preview) unhit(`run:${account.id}`);
-    // Nothing connected runs this, and ComfyUI could: the owner's own browser (never a script's token) opens "Connect
-    // your GPU" for it, and the run starts once it is connected.
-    const connect = e instanceof ConnectComfyError && viewer.kind === "owner" && !preview && !token;
+    // Nothing connected runs this, and ComfyUI or a key could (Demo mode off): the owner's own browser (never a
+    // script's token) opens the connect card for it, with the ways that would run it, and the run starts once one is
+    // connected.
+    const connect = e instanceof ConnectComfyError && viewer.kind === "owner" && !preview && !token ? e.needs : null;
     return Response.json(
-      { error: (e as Error).message, ...(refusal && { code: refusal.code, ...(refusal.provider && { provider: refusal.provider }) }), ...(connect && { code: "connect-gpu" }) },
-      { status: 422, ...(connect && { headers: { [CONNECT_GPU_HEADER]: "1" } }) },
+      {
+        error: (e as Error).message,
+        ...(refusal && { code: refusal.code, ...(refusal.provider && { provider: refusal.provider }) }),
+        ...(connect && { code: "connect-gpu", needs: connect }),
+      },
+      { status: 422, ...(connect && { headers: { [CONNECT_GPU_HEADER]: "1", [CONNECT_NEEDS_HEADER]: connect } }) },
     );
   }
 }

@@ -158,7 +158,7 @@ export interface ConnectionState {
   engineMode: EngineModeName;
   /** The first-run guide was put away, or something this engine mode uses was connected once (Settings → `onboarded`). */
   onboarded?: boolean;
-  /** Settings → Demo mode: auto (a demo when no provider hosts the model), on (always a demo), off (never). */
+  /** Settings → "Show placeholder results (for a tour)": "on" makes every run a placeholder; "off" (the default) never. */
   demoMode?: string;
   /** The owner's ComfyUI runs on the owner's computer: what its Fuobe tab last said (GET /api/status). */
   ownerGpu?: OwnerGpuView;
@@ -189,7 +189,7 @@ export function connectedEngines(s: ConnectionState): { cloud: boolean; open: bo
   return { cloud: CLOUD_PROVIDERS.some((p) => s.providers[p]?.configured), open: !!s.providers.comfyui?.configured };
 }
 
-/** Nothing this install's engine mode uses is connected, so every run is a demo. */
+/** Nothing this install's engine mode uses is connected, so a run asks to connect one (or makes a placeholder, for a tour). */
 export function nothingConnected(s: ConnectionState): boolean {
   const c = connectedEngines(s);
   return s.engineMode === "open" ? !c.open : s.engineMode === "cloud" ? !c.cloud : !c.cloud && !c.open;
@@ -210,13 +210,13 @@ const PROVIDER_LABEL: Record<string, string> = { fal: "fal.ai", replicate: "Repl
 
 /**
  * The line under Home's composer, before Start is pressed: the model it runs and its price, or why
- * it runs a free demo (no key for a provider that hosts that model, the same rule the composer's
- * "Demo" label follows), plus the other engine when that one would run it for real. Null when
- * nothing is connected: Home's demo notice says so instead.
+ * why it can't run yet (no key for a provider that hosts that model, the same rule the composer's
+ * label follows), plus the other engine when that one would run it for real. Null when
+ * nothing is connected: Home's notice says so instead.
  */
 export function startLine(s: ConnectionState, quote: StartQuote | undefined, engine: "cloud" | "open", mode: "image" | "video" | "edit"): { text: string; other?: "cloud" | "open" } | null {
   if (!quote || nothingConnected(s)) return null;
-  if (s.demoMode === "on") return { text: "Demo mode is on (Settings), so Start runs a free demo" };
+  if (s.demoMode === "on") return { text: "Placeholder results are on (Settings), so Start makes a stand-in" };
   const hosted = (q: { providers: string[] } | null) => !!q && q.providers.some((p) => s.providers[p]?.configured);
   const otherEngine = engine === "open" ? "cloud" : "open";
   const other = s.engineMode === "both" && hosted(quote[otherEngine]) ? otherEngine : undefined;
@@ -229,7 +229,7 @@ export function startLine(s: ConnectionState, quote: StartQuote | undefined, eng
   let why: string;
   if (!connected) why = engine === "open" ? "ComfyUI isn't connected" : "No paid API is connected";
   else why = q ? `${q.name} needs ${engine === "open" ? hosts : `a ${hosts} key`}` : "No model is set for this";
-  return { text: `${why}, so Start ${s.demoMode === "off" ? "can't run it yet" : "runs a free demo"}`, ...(other && { other }) };
+  return { text: `${why}, so Start can't run it yet`, ...(other && { other }) };
 }
 
 /**

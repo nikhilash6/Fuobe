@@ -477,7 +477,8 @@ export function deleteGeneration(id: string): void {
 // Routing
 
 /**
- * Pick the provider for a run: a configured real provider, else the demo provider (unless demo is off).
+ * Pick the provider for a run: a configured real provider, or the demo provider when placeholder results are on
+ * (Settings, demoMode "on") or the request asks for one. With neither and nothing connected, the run is refused.
  * `images` is how many images the run sends: a route whose list takes fewer (FieldMap.maxImages: Grok
  * Imagine Image takes 5 on fal) gives way to one that takes them all, or says so.
  * `loras` and `seconds` (the clip length asked for) prefer a route that carries every LoRA and makes that
@@ -503,21 +504,34 @@ export function chooseRoute(candidates: ModelRoute[], images = 0, loras: LoraRef
     const others = [...new Set(routes.filter((r) => takes(r) && r.provider !== short.provider).map((r) => provider(r.provider).label))];
     throw new Error(`This model takes up to ${short.map!.maxImages} images on ${provider(short.provider).label} — remove some${others.length ? `, or connect ${others.join(" or ")} for more` : ""}`);
   }
-  if (demo === "off") {
-    // An account's paid model with no key of its own for any of the model's providers: "Add your key" (fal.ai first).
-    const cloud = tenantAccount() ? routes.map((r) => r.provider).find(isCloudProvider) : undefined;
-    if (cloud) throw new AccountRunError(paidAllowed() ? { error: addKeyMessage(cloud), code: "add-key", provider: cloud } : { error: OPEN_ONLY_RUN, code: "open-only" });
-    if (routes.every((r) => r.provider === "llm")) throw new Error(llmMissing(routes[0]));
-    const names = [...new Set(routes.map((r) => provider(r.provider).label))].join(" or ");
-    const message = `Connect ${names} in Settings to run this model`;
-    // ComfyUI could run it: the owner's own browser opens "Connect your GPU" for it (generations/route.ts).
-    throw routes.some((r) => r.provider === "comfyui") ? new ConnectComfyError(message) : new Error(message);
-  }
-  return { route: routes[0], demo: true };
+  // "auto", which only code in this process sets (settings.ts): a placeholder where nothing connected runs the model.
+  if (demo === "auto") return { route: routes[0], demo: true };
+  // Nothing connected runs it, and placeholders are off (the default): never a silent placeholder.
+  // An account's paid model with no key of its own for any of the model's providers: "Add your key" (fal.ai first).
+  const cloud = tenantAccount() ? routes.map((r) => r.provider).find(isCloudProvider) : undefined;
+  if (cloud) throw new AccountRunError(paidAllowed() ? { error: addKeyMessage(cloud), code: "add-key", provider: cloud } : { error: OPEN_ONLY_RUN, code: "open-only" });
+  if (routes.every((r) => r.provider === "llm")) throw new Error(llmMissing(routes[0]));
+  const names = [...new Set(routes.map((r) => provider(r.provider).label))].join(" or ");
+  const message = `Connect ${names} in Settings to run this model`;
+  // ComfyUI, or a fal.ai or Replicate key, could run it: the owner's own browser opens the connect card for it
+  // (generations/route.ts), with the way or ways that would.
+  const gpu = routes.some((r) => r.provider === "comfyui");
+  const key = !tenantAccount() && routes.some((r) => isCloudProvider(r.provider));
+  throw gpu || key ? new ConnectComfyError(message, gpu && key ? "any" : gpu ? "gpu" : "key") : new Error(message);
 }
 
-/** A run nothing connected can make, and ComfyUI could: connecting a GPU is the way (same words as before). */
-export class ConnectComfyError extends Error {}
+/** What would run a refused model: a GPU (ComfyUI), a fal.ai or Replicate key, or either. */
+export type ConnectNeeds = "gpu" | "key" | "any";
+
+/** A run nothing connected can make, and ComfyUI or a key could: connecting one is the way (same words as before). */
+export class ConnectComfyError extends Error {
+  constructor(
+    message: string,
+    readonly needs: ConnectNeeds = "gpu",
+  ) {
+    super(message);
+  }
+}
 
 /** Text steps depend on which LLM the route may use (the open model never calls Claude). */
 const routeReady = (r: ModelRoute) => (r.provider === "llm" ? llmBackends(r).length > 0 : provider(r.provider).isConfigured());

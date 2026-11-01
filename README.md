@@ -84,7 +84,7 @@ pnpm install
 pnpm dev          # http://localhost:3000  (production: pnpm build && pnpm start)
 ```
 
-Open **Settings → Engine mode** and connect what you have: a ComfyUI server, a fal.ai or Replicate key, or nothing at all. Demo mode lets you click through every tool with labelled placeholder outputs.
+Open **Settings → Engine mode** and connect what you have: a ComfyUI server, a fal.ai or Replicate key, or nothing at all. With nothing connected, a run asks you to connect one. To give a tour without keys or a GPU, turn on **Settings → Show placeholder results (for a tour)**: every run then makes a labelled placeholder.
 
 **Requirements:** Windows, macOS or Linux · Node 22+ · pnpm · for the open engine, a GPU running ComfyUI (24 GB of VRAM covers almost every workflow). On Windows, `start.bat` installs and starts everything for you.
 

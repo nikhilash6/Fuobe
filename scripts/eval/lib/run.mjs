@@ -181,7 +181,7 @@ export async function runEval(opts, io) {
       const t = targets.find((x) => x.id === j.train.target);
       const usd = trainingPrice(t);
       let why = null;
-      if (t?.demo) why = `training on ${j.train.target} would run as a demo on that Fuobe (${facts.demoMode === "on" ? "Demo mode is On" : `no ${t.provider === "fal" ? "fal.ai key" : "AI-Toolkit"} connected`}), so nothing would be trained`;
+      if (t?.demo) why = `training on ${j.train.target} would run as a demo on that Fuobe (${facts.demoMode === "on" ? "placeholder results are on" : `no ${t.provider === "fal" ? "fal.ai key" : "AI-Toolkit"} connected`}), so nothing would be trained`;
       else if (t?.blocker) why = `training on ${j.train.target} can't start there: ${t.blocker}`;
       else if (engine === "cloud" && usd == null && !opts.allowUnpriced) why = `training on ${j.train.target} has no price${t ? ` (the server says “${t.price}”)` : ""}, so the spend cap can't cover it: --allow-unpriced runs it anyway`;
       if (why) for (const x of jobs.filter((y) => y.caseId === j.caseId && !y.skip)) x.skip = why;
@@ -198,11 +198,11 @@ export async function runEval(opts, io) {
       const inputs = job.train ? {} : await up.inputs(job.inputs);
       const p = await price(client, job, inputs, { engine, runId: runId ?? "dry-run" });
       job.preview = p;
-      if (engine === "demo" && !p.demo) job.skip = `would run for real on ${p.providerId}: turn on Settings → Demo mode for a free self-test`;
+      if (engine === "demo" && !p.demo) job.skip = `would run for real on ${p.providerId}: turn on Settings → Placeholder results for a free self-test`;
       else if (engine !== "demo" && p.demo) {
         job.skip =
           facts.demoMode === "on"
-            ? "would run as a demo: Demo mode is On on that Fuobe (set Settings → Demo mode to Auto or Off to measure real models)"
+            ? "would run as a demo: placeholder results are on on that Fuobe (turn off Settings → Placeholder results to measure real models)"
             : `would run as a demo: ${p.modelName ?? job.model.id} has no ${engine === "open" ? "ComfyUI" : "cloud provider"} connected on that Fuobe`;
       }
       else if (engine !== "demo" && p.engine && p.engine !== engine) job.skip = `${p.modelName ?? job.model.id} is ${p.engine === "open" ? "an open-source" : "a cloud"} model, not ${engine}`;

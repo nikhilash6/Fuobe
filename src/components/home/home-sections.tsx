@@ -363,7 +363,7 @@ export function StartSection() {
         <div className="min-w-0 rounded-2xl bg-media p-5 text-white ring-1 ring-white/10 lg:col-span-7">
           <p className="text-[15px] font-medium">Or run all of Fuobe yourself</p>
           <p className="mt-1 text-[13px] text-white/70">
-            MIT licence. Keys, settings and results stay on your machine. Demo mode works with nothing connected.
+            MIT licence. Keys, settings and results stay on your machine.
           </p>
           <div className="mt-4 min-w-0 overflow-hidden rounded-xl bg-white/[0.04] ring-1 ring-white/10">
             <div className="flex items-center justify-between py-2 pr-2 pl-4">

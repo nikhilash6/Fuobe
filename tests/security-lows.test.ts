@@ -21,6 +21,8 @@ const remote = await import("@/server/remote-fetch");
 const { gpuState } = await import("@/server/account-gpu");
 const nextConfig = (await import("../next.config")).default;
 
+// Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
+beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
 beforeAll(() => auth.setPassword("install password"));
 afterEach(() => {
   delete process.env.FUOBE_ALLOW_PRIVATE_URLS;

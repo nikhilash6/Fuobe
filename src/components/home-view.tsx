@@ -18,6 +18,7 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import type { Generation } from "@/lib/catalog/types";
 import { issueStartToken, START_PARAM } from "@/lib/composer";
 import { FIRST_RUN_KEY, FIRST_RUN_SCRIPT, FUOBE_REPO, nothingConnected as noConnection, showFirstRun, startLine, type StartQuote } from "@/lib/connections";
+import { placeholdersOn } from "@/lib/demo-mode";
 import { userTitle } from "@/lib/library";
 import { NEW_CREATION_PARAM } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -393,7 +394,6 @@ export function HomeView({
               className={cn("mt-6 max-w-[960px]", !status && "hidden [html[data-first-run='1']_&]:block")}
               status={status}
               prices={prices}
-              onDemo={focusComposer}
               onMode={(id) => {
                 setMode(MODES.find((m) => m.id === id) ?? MODES[0]);
                 focusComposer();
@@ -402,13 +402,13 @@ export function HomeView({
           </>
         ) : nothingConnected && !status?.viewer && (
           <p className="mt-4 text-[13px] text-muted-foreground">
-            {/* With the demo off, a run asks for a GPU or a key: no promise of placeholders. */}
-            {status?.demoMode === "off" ? (
-              "Nothing is connected yet. "
-            ) : (
+            {/* Placeholders on (Settings, for a tour): say so; otherwise a run asks for a GPU or a key. */}
+            {placeholdersOn(status?.demoMode) ? (
               <>
-                You’re in <span className="font-medium text-foreground">demo mode</span> — outputs are placeholders.{" "}
+                <span className="font-medium text-foreground">Placeholder results are on</span>, so runs make stand-ins.{" "}
               </>
+            ) : (
+              "Nothing is connected yet. "
             )}
             {hostedPage && engineMode !== "cloud" ? (
               <button type="button" onClick={() => window.dispatchEvent(new Event(CONNECT_GPU_EVENT))} className="text-brand-text underline underline-offset-2">
@@ -419,7 +419,7 @@ export function HomeView({
                 {engineMode === "open" ? "Connect ComfyUI" : engineMode === "cloud" ? "Add a fal.ai or Replicate key" : "Add a fal.ai key or connect ComfyUI"}
               </Link>
             )}{" "}
-            {status?.demoMode === "off" ? "to make the real thing." : "to generate for real."}
+            to make the real thing.
           </p>
         )}
       </div>

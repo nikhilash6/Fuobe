@@ -70,7 +70,7 @@ export function demoSvg(prompt: string, aspectRatio = "1:1", variant = 0): strin
 <g filter="url(#b)">${blobs}</g>
 <rect width="100%" height="100%" fill="url(#s)"/>
 <rect x="56" y="48" rx="18" width="176" height="40" fill="white" fill-opacity="0.18"/>
-<text x="76" y="75" font-size="20" font-family="ui-sans-serif, system-ui" font-weight="600" fill="white">DEMO OUTPUT</text>
+<text x="76" y="75" font-size="20" font-family="ui-sans-serif, system-ui" font-weight="600" fill="white">PLACEHOLDER</text>
 ${text}
 </svg>`;
 }
@@ -131,7 +131,7 @@ function demoLayers(prompt: string, aspectRatio: string, n: number): DemoOutput[
   const background: DemoOutput = {
     url: svgUri(
       layer(
-        `<rect width="100%" height="100%" fill="oklch(0.32 0.07 ${hue})"/><rect x="40" y="${h - 76}" rx="14" width="300" height="40" fill="white" fill-opacity="0.18"/><text x="58" y="${h - 49}" font-size="20" font-family="ui-sans-serif, system-ui" font-weight="600" fill="white">DEMO OUTPUT · layers</text>`,
+        `<rect width="100%" height="100%" fill="oklch(0.32 0.07 ${hue})"/><rect x="40" y="${h - 76}" rx="14" width="300" height="40" fill="white" fill-opacity="0.18"/><text x="58" y="${h - 49}" font-size="20" font-family="ui-sans-serif, system-ui" font-weight="600" fill="white">PLACEHOLDER · layers</text>`,
       ),
     ),
     kind: "image",
@@ -374,7 +374,7 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
 
 export const mockProvider: ProviderAdapter = {
   id: "mock",
-  label: "Demo",
+  label: "Placeholder",
   isConfigured: () => true,
 
   async prepareFile(data, contentType) {
@@ -425,7 +425,7 @@ export const mockProvider: ProviderAdapter = {
     const elapsed = Date.now() - Number(meta.startedAt);
     const total = DURATION_MS[kind] ?? DURATION_MS.image;
     if (elapsed < 600) return { state: "queued", message: "Queued (demo)" };
-    if (elapsed < total) return { state: "running", progress: elapsed / total, message: "Generating demo output" };
+    if (elapsed < total) return { state: "running", progress: elapsed / total, message: "Making a placeholder" };
     return { state: "succeeded", outputs: demoOutputs(meta.op as Operation | undefined, kind, String(meta.prompt), String(meta.aspectRatio), meta) };
   },
 

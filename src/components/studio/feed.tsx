@@ -27,6 +27,7 @@ import { toastError } from "@/lib/refusals";
 import { ACTION_ICONS, TileActions, useCanHover, type RunnerOptions } from "./result-actions";
 import { LayersStack, MediaThumb } from "./result-media";
 import { useNow } from "./use-now";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { Viewer } from "./viewer";
 
 export { MediaThumb } from "./result-media";
@@ -228,6 +229,12 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
         className="pointer-events-none absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       />
       {o.draftId && <DraftButton g={g} draftId={o.draftId} />}
+      {/* A placeholder says so on the picture itself, with the ways out (a text card keeps its header clear: the chip goes at the bottom). */}
+      <PlaceholderChip
+        g={g}
+        overlay
+        className={cn("absolute", o.kind === "text" ? "bottom-2" : o.draftId ? "top-11" : "top-2", audio && canHover && "group-focus-within/tile:opacity-0 group-hover/tile:opacity-0")}
+      />
       {g.favorite && <Heart className={cn("absolute top-2 right-2 size-4 fill-highlight text-highlight drop-shadow", audio && canHover && "group-focus-within/tile:opacity-0 group-hover/tile:opacity-0")} />}
       {canHover && hot === "bar" && (
         <TileActions

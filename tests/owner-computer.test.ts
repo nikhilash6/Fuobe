@@ -50,7 +50,7 @@ const { writeSnapshot } = await import("@/server/gpu/snapshots");
 const { relayFile, ISOLATED_ON_COMPUTER } = await import("@/server/providers/comfyui");
 const { asAccount, getGeneration } = await import("@/server/generations");
 const { RELAY_WORDS, RUNS_ON_COMPUTER_NOTE } = await import("@/lib/relay");
-const { CONNECT_GPU_HEADER } = await import("@/lib/guest-access");
+const { CONNECT_GPU_HEADER, CONNECT_NEEDS_HEADER } = await import("@/lib/guest-access");
 
 let fake: LocalComfy;
 let routes: ComputerRoutes;
@@ -283,15 +283,19 @@ describe("runs", () => {
   });
 
   it("nothing connected runs it: the owner's own page gets the Connect your GPU marker, a script's token never does", async () => {
+    // The default (placeholder results off), not only a saved "off".
+    setSetting("demoMode", "");
     const page = await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse" });
     expect(page.status).toBe(422);
     expect(page.headers.get(CONNECT_GPU_HEADER)).toBe("1");
+    expect(page.headers.get(CONNECT_NEEDS_HEADER)).toBe("gpu");
     expect(await page.json()).toMatchObject({ code: "connect-gpu", error: "Connect ComfyUI in Settings to run this model" });
 
     const { token } = auth.createToken("script");
     const script = await run({ feature: "image", modelId: "oss-z-image-turbo", prompt: "a lighthouse" }, { cookie: null as never, headers: { authorization: `Bearer ${token}` } });
     expect(script.status).toBe(422);
     expect(script.headers.get(CONNECT_GPU_HEADER)).toBeNull();
+    expect(script.headers.get(CONNECT_NEEDS_HEADER)).toBeNull();
     expect((await script.json()).code).toBeUndefined();
 
     // An account's refusal is its own (403), as before.

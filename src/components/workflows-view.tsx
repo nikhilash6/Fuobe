@@ -90,7 +90,7 @@ function OwnerBanner({ data }: { data: ComfyStatus }) {
     <div className={cls(false)}>
       <CircleAlert className="size-4 shrink-0 text-warning" />
       <span className="min-w-0 flex-1 basis-56">
-        {status?.demoMode === "off" ? "ComfyUI is not reachable, so open-source runs can’t start." : "ComfyUI is not reachable, so open-source runs fall back to demo output."}
+        {status?.demoMode === "on" ? "ComfyUI is not reachable. Placeholder results are on, so runs make stand-ins." : "ComfyUI is not reachable, so open-source runs can’t start."}
       </span>
       <Link href="/settings#comfyui" className={link}>
         Server settings

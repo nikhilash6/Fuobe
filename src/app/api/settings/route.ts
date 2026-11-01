@@ -12,7 +12,7 @@ export async function PUT(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const entries = Object.entries(body).filter(([name, value]) => name in SETTINGS && typeof value === "string") as [SettingName, string][];
   try {
-    entries.forEach(([name, value]) => validateSetting(name, value.trim()));
+    entries.forEach(([name, value]) => validateSetting(name, value.trim(), "api"));
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });
   }

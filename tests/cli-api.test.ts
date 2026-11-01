@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { MODELS } from "@/lib/catalog";
 import { findModels, toModelInfo } from "@/lib/model-list";
 
@@ -18,6 +18,8 @@ const { GET: listModels } = await import("@/app/api/models/route");
 const { POST: postGeneration } = await import("@/app/api/generations/route");
 const { listGenerations } = await import("@/server/generations");
 const { setSetting } = await import("@/server/settings");
+// Placeholders where nothing is connected, as the studio once did by default ("auto": code in this process only).
+beforeAll(() => setSetting("demoMode", "auto"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 type ModelsBody = {
@@ -89,20 +91,24 @@ describe("GET /api/models", () => {
     expect(byId.get("elevenlabs-v4")).not.toHaveProperty("voiceClone");
   });
 
-  it("says how a run goes today, following Settings → Demo mode the way routing does", async () => {
+  it("says how a run goes today, following Settings → Placeholder results the way routing does", async () => {
     const runs = async () => {
       const { body } = await models("?q=nano-banana-pro");
       const m = body.items.find((x) => x.id === "nano-banana-pro")!;
       return { demoMode: body.demoMode, connected: m.connected, runs: m.runs };
     };
-    // auto, no key: a free demo.
+    // The default (placeholders off), no key: refused, the connect card's case.
+    setSetting("demoMode", "");
+    expect(await runs()).toEqual({ demoMode: "off", connected: false, runs: "refused" });
+    // auto (code in this process only), no key: a free demo.
+    setSetting("demoMode", "auto");
     expect(await runs()).toEqual({ demoMode: "auto", connected: false, runs: "demo" });
     try {
       setSetting("demoMode", "off");
       expect(await runs()).toEqual({ demoMode: "off", connected: false, runs: "refused" });
       setSetting("falKey", "fal-test-key");
       expect(await runs()).toEqual({ demoMode: "off", connected: true, runs: "real" });
-      // Demo mode on sends every run to the demo provider, key or not.
+      // Placeholder results on send every run to the demo provider, key or not.
       setSetting("demoMode", "on");
       expect(await runs()).toEqual({ demoMode: "on", connected: true, runs: "demo" });
     } finally {

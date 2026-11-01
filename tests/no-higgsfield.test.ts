@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /**
  * Build plan O7: Fuobe calls no Higgsfield API. This file fails when a code path names that provider again (its id,
@@ -34,6 +34,8 @@ const { planCaps, retryPhoto } = await import("@/server/photodump");
 const assistTools = await import("@/server/assist/tools");
 const { saveFile } = await import("@/server/storage");
 
+// Placeholders where nothing is connected, as these runs were written for ("auto": code in this process only).
+beforeAll(async () => (await import("@/server/settings")).setSetting("demoMode", "auto"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 let rows = 0;

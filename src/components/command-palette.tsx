@@ -67,7 +67,7 @@ const SETTINGS: { id: string; label: string; icon: LucideIcon; keywords: string;
   { id: "assist-connectors", label: "Assist connectors", icon: Plug, keywords: "mcp connector claude tools notion linear slack server token" },
   { id: "notifications", label: "Notifications", icon: Bell, keywords: "browser done alerts" },
   { id: "security", label: "Password and API tokens", icon: ShieldCheck, keywords: "security sign in mcp token" },
-  { id: "demo", label: "Demo mode", icon: Settings2, keywords: "placeholder free try" },
+  { id: "demo", label: "Placeholder results", icon: Settings2, keywords: "demo mode placeholder tour free try" },
 ];
 
 const PAGES: (PaletteEntry & { icon: LucideIcon })[] = NAV.flatMap((g) =>

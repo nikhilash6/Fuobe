@@ -422,7 +422,7 @@ async function hosted() {
   await stopFake(SERVER_COMFY_PORT);
 
   // A run that went through (a demo), then "Your GPU · Connect": the card never starts that run again.
-  check("demo on for a moment", (await send(page, "/api/settings", { demoMode: "auto" }, "PUT")).status === 200);
+  check("placeholders on for a moment", (await send(page, "/api/settings", { demoMode: "on" }, "PUT")).status === 200);
   await until(async () => !(await api(page, "/api/status")).body?.providers?.comfyui?.configured, 30_000, 1000);
   await studio(page, "/image?model=oss-z-image-turbo");
   const demoRun = await generate(page, "a demo first");
@@ -581,8 +581,8 @@ async function local() {
   await sleep(12_000);
   await studio(page, "/image?model=oss-z-image-turbo");
   await generate(page, "another one");
-  const toast = await until(() => page.locator("[data-sonner-toast]").filter({ hasText: "Connect ComfyUI in Settings" }).first().isVisible(), 20_000);
-  check("local: ComfyUI gone, Generate shows today's toast, no dialog", !!toast && !(await page.getByRole("dialog").isVisible().catch(() => false)));
+  const card = await until(() => page.getByRole("dialog").filter({ hasText: "Connect your GPU to run this" }).isVisible(), 20_000);
+  check("local: ComfyUI gone, Generate opens the connect card, no error toast", !!card && !(await page.locator("[data-sonner-toast]").filter({ hasText: "Connect ComfyUI in Settings" }).first().isVisible().catch(() => false)));
   check("the browser reached nothing on this computer but the studio", ctx.loopback.length === 0, ctx.loopback.join(", "));
   await ctx.close();
 }

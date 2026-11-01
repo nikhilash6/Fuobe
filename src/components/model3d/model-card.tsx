@@ -13,6 +13,7 @@ import { toastError } from "@/lib/refusals";
 import { loadModelViewer, TURNTABLE_BACKDROP, useViewerSrc, viewerLook } from "./model-viewer";
 import type { Model3dInfo } from "./model3d-studio";
 import { RigDialog } from "./rig-dialog";
+import { PlaceholderChip } from "@/components/demo-mode";
 import { recordableType, recordTurntable } from "./turntable";
 
 /** Downloads besides the main file, by the name the provider gave them. */
@@ -240,7 +241,7 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
             Recording the turntable… {Math.round(recording * 100)}%
           </div>
         )}
-        {g.provider === "mock" && <span className="absolute top-3 left-3 rounded-full bg-highlight/40 px-2 py-0.5 text-[11px] font-medium">Demo</span>}
+        <PlaceholderChip g={g} className="absolute top-3 left-3 bg-highlight/40 text-foreground dark:text-foreground" />
         {choices.length > 1 && recording === null && (
           <div role="radiogroup" aria-label="Show" className="absolute top-3 right-3 inline-flex max-w-[calc(100%-1.5rem)] flex-wrap justify-end rounded-full bg-background/85 p-0.5 shadow-soft backdrop-blur">
             {choices.map((c) => (

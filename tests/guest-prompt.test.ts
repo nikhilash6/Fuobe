@@ -33,7 +33,7 @@ import { fileToSlot, type SlotValue } from "@/components/studio/media-slot";
 import { useCreateSwapProject } from "@/components/swap-studio/hooks";
 import { runGpuCheck } from "@/hooks/use-gpu";
 import { askToSignUp, assetUsage, CONNECT_GPU_EVENT, enhance, GUEST_PROMPT_EVENT, refusalCard, signInHref, watchGuestRefusals } from "@/lib/api";
-import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, CONNECT_GPU_UPLOAD_MESSAGE, GUEST_HEADER, GUEST_LIBRARY_MESSAGE, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
+import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, CONNECT_GPU_UPLOAD_MESSAGE, CONNECT_NEEDS_HEADER, GUEST_HEADER, GUEST_LIBRARY_MESSAGE, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
 import { refusalShown, toastError } from "@/lib/refusals";
 
 const answer = (status: number, body: Record<string, unknown>, headers: Record<string, string> = {}) =>
@@ -213,6 +213,20 @@ describe("each studio's own fetch helper", () => {
     expect(events).toEqual([CONNECT_GPU_EVENT]);
     expect(details).toEqual([{ action: "run" }]);
     expect(refusalShown(e)).toBe(true);
+  });
+
+  it("the owner's run with nothing connected (placeholders off): the connect card on any page, with what would run it, no toast", async () => {
+    page("/canvas/abc");
+    server = () =>
+      answer(422, { error: "Connect fal.ai or Replicate in Settings to run this model", code: "connect-gpu", needs: "key" }, { [CONNECT_GPU_HEADER]: "1", [CONNECT_NEEDS_HEADER]: "key" });
+    const e = await useCanvasActions()
+      .create({ name: "Untitled canvas" })
+      .catch((err: unknown) => err);
+    expect(events).toEqual([CONNECT_GPU_EVENT]);
+    expect(details).toEqual([{ action: "run", needs: "key" }]);
+    expect(refusalShown(e)).toBe(true);
+    toastError(e);
+    expect(toasts.error).toEqual([]);
   });
 
   it("keeps each helper's own error: its class, status and body", async () => {

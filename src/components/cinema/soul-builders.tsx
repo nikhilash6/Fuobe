@@ -40,6 +40,7 @@ import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useCinemaGenerate, useCinemaItems } from "./hooks";
+import { placeholdersOn } from "@/lib/demo-mode";
 
 interface BuilderProps {
   open: boolean;
@@ -195,9 +196,9 @@ function useBuilderRun(projectId: string) {
   return { generate, results, setIds, current };
 }
 
-function CostLabel({ plan, demoModel }: { plan: { costUsd: number | null }; demoModel: { routes: { provider: string }[] } }) {
+function CostLabel({ plan }: { plan: { costUsd: number | null } }) {
   const status = useStatus().data;
-  const demo = !!status && status.demoMode !== "off" && !demoModel.routes.some((r) => status.providers[r.provider]?.configured);
+  const demo = placeholdersOn(status?.demoMode);
   return <span className="font-mono text-[12px] whitespace-nowrap text-muted-foreground">{demo ? "Demo · free" : plan.costUsd === 0 ? "Free" : plan.costUsd != null ? `≈ ${formatCost(plan.costUsd)}` : ""}</span>;
 }
 
@@ -326,7 +327,7 @@ function SoulCast({ projectId, folderId, engine, context, brief, onOpenChange }:
               </button>
             ))}
           </div>
-          <CostLabel plan={plan} demoModel={plan.model} />
+          <CostLabel plan={plan} />
           <Button onClick={run} disabled={generate.isPending}>
             {generate.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate character
           </Button>
@@ -446,7 +447,7 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
             </button>
           ))}
         </div>
-        <CostLabel plan={plan} demoModel={plan.model} />
+        <CostLabel plan={plan} />
         <Button onClick={() => run()} disabled={generate.isPending || !prompt.trim()}>
           {generate.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Generate location
         </Button>

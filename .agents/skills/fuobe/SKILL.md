@@ -38,7 +38,7 @@ Open models cost nothing but GPU time; cloud models are billed by the user's pro
 - CLI: `fuobe estimate "<prompt>" --model <id> …`, then
   `fuobe generate "<prompt>" --model <id> --image ./photo.png --aspect 16:9 --duration 5 --out ./renders --json`
   (`--out` waits and saves the files; `--wait` waits and prints the URLs).
-- A result marked demo means no provider is connected for that model, or Demo mode is on: say it's
+- A result marked demo means Settings → Placeholder results is on (for a tour): say it's
   placeholder media.
 
 ## 4. Files

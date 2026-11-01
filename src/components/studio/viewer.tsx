@@ -19,6 +19,7 @@ import { CompareSlider } from "./compare-slider";
 import { ACTION_ICONS, downloadUrl, SaveElementForm, useActionRunner } from "./result-actions";
 import { LayersStack, ModelViewer, TextReader, VideoFileCard } from "./result-media";
 import { ReviewSelect } from "@/components/library/review";
+import { PlaceholderChip } from "@/components/demo-mode";
 
 
 /** One line of the details; `center` lines the label up with a control (the Review picker) instead of a text value's first line. */
@@ -313,6 +314,8 @@ export function Viewer({
         <div className="relative flex min-w-0 flex-1 flex-col bg-media">
           <div className="relative flex min-h-0 flex-1 items-center justify-center p-0 md:p-2" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
             {media}
+            {/* A placeholder says so here too, with the ways out (clear of the phone's close button on the right). */}
+            <PlaceholderChip g={g} overlay className="absolute top-3 left-3 right-16 md:right-3" />
             {source && (
               <button
                 onClick={() => setComparing((v) => !v)}
