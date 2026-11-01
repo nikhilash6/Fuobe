@@ -1173,11 +1173,45 @@ export const APPS: Preset[] = [
   app({
     name: "Restore Photo",
     category: "Style",
-    description: "Fix scratches, blur and damage",
+    description: "An old print back sharp and clean, with the same faces",
     icon: "Sparkles",
     hue: 160,
-    prompt:
-      "Restore this old photograph: remove scratches, dust, stains and blur, recover sharp detail and natural skin texture. Keep the people and composition identical.",
+    options: [
+      {
+        key: "photo",
+        label: "Your photo",
+        // The two instructions AusBoss's Restore LoRA was trained on, word for word (the open route); its strength per
+        // kind of photo is the card's: 0.5 for a blurry one, 1.0 for a worn print or a small, grainy picture.
+        choices: [
+          {
+            value: "old-print",
+            label: "Old print",
+            prompt:
+              "Restore the old photo: remove scratches, dust, fading and grain and recover sharp, natural detail and color, keeping the same composition and people.",
+            openExtra: { loraStrength: 1 },
+          },
+          {
+            value: "soft-or-blurry",
+            label: "Soft or blurry",
+            prompt:
+              "Restore the photo: remove blur, noise and compression artifacts and recover sharp, natural detail, keeping the same composition, people and colors.",
+            openExtra: { loraStrength: 0.5 },
+          },
+          {
+            value: "small-or-grainy",
+            label: "Small or grainy",
+            prompt:
+              "Restore the photo: remove blur, noise and compression artifacts and recover sharp, natural detail, keeping the same composition, people and colors.",
+            openExtra: { loraStrength: 1 },
+          },
+        ],
+      },
+    ],
+    prompt: "{option:photo}",
+    // Your GPU: the Restore LoRA holds the picture on its own frame, so every face stays the person it was; SeedVR2 then
+    // enlarges it 2x. The cloud runs the same words on its edit model.
+    open: { modelId: "oss-qwen-image-21-restore", op: "edit" },
+    parity: "Takes away scratches, dust, fading and blur, and keeps every face and the framing as they were.",
   }),
   app({
     name: "Figurine",

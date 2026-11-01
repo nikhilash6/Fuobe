@@ -50,6 +50,7 @@ export type RecipeKind = "h3" | "orbit" | "qwen";
  * - Any Angle: a tool of its own (a 3D view of the photo, then each angle from it on the GPU).
  * - Tap to Recolor: a tool of its own, whose taps make the mask its graph repaints.
  * - Steam It: its own graph finds the clothes and repaints only them, so every other pixel stays the upload's.
+ * - Restore Photo: its Restore LoRA keeps every face and the framing, where a plain edit redraws them.
  */
 export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-fuobe-angles",
@@ -69,6 +70,7 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-any-angle",
   "app-tap-to-recolor",
   "app-steam-it",
+  "app-restore-photo",
 ]);
 
 /**

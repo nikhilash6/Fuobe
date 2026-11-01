@@ -1,0 +1,327 @@
+{
+  "1": {
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "2": {
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP (Qwen3-VL 8B)"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "4": {
+    "inputs": {
+      "lora_name": "qwen-image-2.1-restore.safetensors",
+      "strength_model": 1,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Restore LoRA (1.0; 0.5 for a blurry photo)"
+    }
+  },
+  "10": {
+    "inputs": {
+      "image": "image.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image (the photo)"
+    }
+  },
+  "20": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "megapixels": 2,
+      "resolution_steps": 32,
+      "image": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "To about 2 MP on the 32 grid"
+    }
+  },
+  "30": {
+    "inputs": {
+      "prompt": "",
+      "negative_prompt": "",
+      "resolution": 0,
+      "clip": [
+        "2",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "images.image_1": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImage21",
+    "_meta": {
+      "title": "Text Encode Qwen Image 2.1 (the photo as image 1)"
+    }
+  },
+  "31": {
+    "inputs": {
+      "device": "auto",
+      "dtype": "default",
+      "model": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "QwenImage21Cache",
+    "_meta": {
+      "title": "Qwen Image 2.1 Cache"
+    }
+  },
+  "32": {
+    "inputs": {
+      "seed": 0,
+      "steps": 25,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "31",
+        0
+      ],
+      "positive": [
+        "30",
+        0
+      ],
+      "negative": [
+        "30",
+        1
+      ],
+      "latent_image": [
+        "30",
+        2
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler (one pass, 25 steps)"
+    }
+  },
+  "33": {
+    "inputs": {
+      "samples": [
+        "32",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "34": {
+    "inputs": {
+      "image": [
+        "33",
+        0
+      ]
+    },
+    "class_type": "SplitImageWithAlpha",
+    "_meta": {
+      "title": "Drop the alpha"
+    }
+  },
+  "50": {
+    "inputs": {
+      "unet_name": "seedvr2_7b_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load SeedVR2 7B"
+    }
+  },
+  "51": {
+    "inputs": {
+      "vae_name": "seedvr2_ema_vae_fp16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load SeedVR2 VAE"
+    }
+  },
+  "52": {
+    "inputs": {
+      "resize_type": "scale by multiplier",
+      "resize_type.multiplier": 2,
+      "scale_method": "lanczos",
+      "input": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "ResizeImageMaskNode",
+    "_meta": {
+      "title": "Enlarge the restored photo (2x)"
+    }
+  },
+  "53": {
+    "inputs": {
+      "resized_images": [
+        "52",
+        0
+      ]
+    },
+    "class_type": "SeedVR2Preprocess",
+    "_meta": {
+      "title": "Pre-Process SeedVR2 Input"
+    }
+  },
+  "54": {
+    "inputs": {
+      "tile_size": 512,
+      "overlap": 128,
+      "temporal_size": 4096,
+      "temporal_overlap": 8,
+      "pixels": [
+        "53",
+        0
+      ],
+      "vae": [
+        "51",
+        0
+      ]
+    },
+    "class_type": "VAEEncodeTiled",
+    "_meta": {
+      "title": "VAE Encode (Tiled)"
+    }
+  },
+  "55": {
+    "inputs": {
+      "model": [
+        "50",
+        0
+      ],
+      "vae_conditioning": [
+        "54",
+        0
+      ]
+    },
+    "class_type": "SeedVR2Conditioning",
+    "_meta": {
+      "title": "SeedVR2 Conditioning"
+    }
+  },
+  "56": {
+    "inputs": {
+      "seed": 0,
+      "steps": 1,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "50",
+        0
+      ],
+      "positive": [
+        "55",
+        0
+      ],
+      "negative": [
+        "55",
+        1
+      ],
+      "latent_image": [
+        "54",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler (SeedVR2, one step)"
+    }
+  },
+  "57": {
+    "inputs": {
+      "tile_size": 512,
+      "overlap": 128,
+      "temporal_size": 4096,
+      "temporal_overlap": 8,
+      "samples": [
+        "56",
+        0
+      ],
+      "vae": [
+        "51",
+        0
+      ]
+    },
+    "class_type": "VAEDecodeTiled",
+    "_meta": {
+      "title": "VAE Decode (Tiled)"
+    }
+  },
+  "58": {
+    "inputs": {
+      "color_correction_method": "lab",
+      "images": [
+        "57",
+        0
+      ],
+      "original_resized_images": [
+        "52",
+        0
+      ]
+    },
+    "class_type": "SeedVR2PostProcessing",
+    "_meta": {
+      "title": "Post-Process SeedVR2 Output (colour from the restored photo)"
+    }
+  },
+  "90": {
+    "inputs": {
+      "filename_prefix": "fuobe/restore-qwen-image-21",
+      "images": [
+        "58",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

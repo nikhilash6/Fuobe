@@ -321,8 +321,10 @@ export function planGeneration(
     const hasExtra = Object.keys(routeExtra).length > 0 || !!req.params?.extra;
     const extra = sameModel && hasExtra ? { extra: { ...routeExtra, ...req.params?.extra } } : {};
     params = { ...model.defaults, ...(sameModel ? routePlain : {}), ...req.params, ...extra };
-    // Option choices that set model settings (Angles: rotate / tilt / zoom); a value the user set wins.
-    const chosen = Object.assign({}, ...(preset.options ?? []).map((o) => o.choices.find((c) => c.value === (req.presetOptions?.[o.key] ?? o.default ?? o.choices[0]?.value))?.extra ?? {}));
+    // Option choices that set model settings (Angles: rotate / tilt / zoom; Restore: its LoRA's strength, on the open
+    // engine only); a value the user set wins.
+    const picks = (preset.options ?? []).map((o) => o.choices.find((c) => c.value === (req.presetOptions?.[o.key] ?? o.default ?? o.choices[0]?.value)));
+    const chosen = Object.assign({}, ...picks.map((c) => ({ ...c?.extra, ...(model.engine === "open" && c?.openExtra) })));
     if (sameModel && Object.keys(chosen).length) params = { ...params, extra: { ...chosen, ...params.extra } };
     loras = sameModel ? (route.loras ?? []) : [];
     if (sameModel) op = op ?? route.op;

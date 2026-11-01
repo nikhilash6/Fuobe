@@ -2456,6 +2456,116 @@
       "notes": "Native SeedVR2 nodes (core ComfyUI >= 0.28), one-step diffusion restoration. scale = output multiplier (template 4). The numz/ComfyUI-SeedVR2_VideoUpscaler pack is NOT used (it cannot register on CPU-only hosts and is superseded by core nodes)."
     },
     {
+      "id": "restore-qwen-image-21",
+      "title": "Restore an old or damaged photo, same faces and framing (Qwen-Image 2.1 + AusBoss Restore LoRA, then SeedVR2 2x)",
+      "capability": "edit",
+      "file": "restore-qwen-image-21.json",
+      "source": "hand-built (scripts/comfy/hand-built/restore-qwen-image-21.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "32",
+            "input": "seed"
+          },
+          {
+            "node": "56",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "32",
+            "input": "steps"
+          }
+        ],
+        "loraStrength": [
+          {
+            "node": "4",
+            "input": "strength_model"
+          }
+        ],
+        "scale": [
+          {
+            "node": "52",
+            "input": "resize_type.multiplier"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 25,
+        "scale": 2,
+        "loraStrength": 1
+      },
+      "limits": {},
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "qwen-image-2.1-restore.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/ausboss/Qwen-Image-2.1-Restore-LoRA/resolve/main/qwen-image-2.1-restore.safetensors",
+          "sizeGb": 0.16
+        },
+        {
+          "file": "seedvr2_7b_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_7b_int8_convrot.safetensors",
+          "sizeGb": 8.33
+        },
+        {
+          "file": "seedvr2_ema_vae_fp16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/vae/seedvr2_ema_vae_fp16.safetensors",
+          "sizeGb": 0.5
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Restore LoRA by AusBoss under the same licence; SeedVR2 Apache-2.0",
+      "validated": false,
+      "notes": "One restore pass as the Restore LoRA card sets it up, then a SeedVR2 enlargement. The photo is scaled to about 2 MP on the 32 grid (ImageScaleToTotalPixels, lanczos: small prints grow to it, big noisy ones shrink to it, as the card asks) -> UNETLoader -> LoraLoaderModelOnly (qwen-image-2.1-restore, step 1,500; loraStrength 1.0, 0.5 for a blurry photo) -> QwenImage21Cache -> TextEncodeQwenImage21 (the photo as image 1, resolution 0, no negative) -> KSampler on its latent, 25 steps, cfg 1, euler, simple, denoise 1 -> VAEDecode -> SplitImageWithAlpha. Then SeedVR2 7B int8 one step (the nodes of the upscale-image-seedvr2 template): ResizeImageMaskNode x scale (2) lanczos -> Preprocess -> VAEEncodeTiled 512/128 -> Conditioning -> KSampler 1 step -> VAEDecodeTiled -> PostProcessing (lab colour from the restored photo). About 8 MP out. Prompt: one of the two instructions the LoRA was trained on, alone (a wrong \"Scene:\" description painted features that were not there). No turbo LoRA (25 steps sat closer: 0.15 px, face 0.90). One pass only (a second came back crunchy); never with the Consistency or Outfit-Swap LoRA. Faces under about 100 px can come back as a slightly different person. The open route of the Restore Photo app."
+    },
+    {
       "id": "bg-remove-birefnet",
       "title": "Remove Background (BiRefNet, native)",
       "capability": "bg-remove",

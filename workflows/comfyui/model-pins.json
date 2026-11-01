@@ -862,6 +862,11 @@
   "sizeBytes": 159436576,
   "sha256": "3611a5ccae5f790405eeacf1dfb2c89285c1e4f2987b9abc88cd0161a60eca28"
  },
+ "https://huggingface.co/ausboss/Qwen-Image-2.1-Restore-LoRA/resolve/main/qwen-image-2.1-restore.safetensors": {
+  "revision": "a223f1255f4738b89b36d79c44d61740d3b3546f",
+  "sizeBytes": 159436584,
+  "sha256": "65de4f6c2468071d5aa6ffbd82c76bfee7cc8ac28fe960e91bbca4a58f43c08c"
+ },
  "https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/resolve/main/flux-2-klein-4b-fp8.safetensors": {
   "revision": "5b4408e59397a4a37ccb46afe426d8ed86379441",
   "sizeBytes": 4070624520,

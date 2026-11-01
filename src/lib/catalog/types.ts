@@ -1418,6 +1418,8 @@ export interface PresetChoice {
   prompt: string;
   /** Model settings this choice sets (params.extra), e.g. the camera angle sliders of Qwen Multiple Angles; what the user set wins. */
   extra?: Record<string, number | string | boolean>;
+  /** Settings only the open engine's graph reads (the Restore LoRA's strength), left out of a cloud run. */
+  openExtra?: Record<string, number | string | boolean>;
 }
 
 export interface PresetOption {

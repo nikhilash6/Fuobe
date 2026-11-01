@@ -95,6 +95,7 @@ describe("round-4 ComfyUI workflows", () => {
     // encoder became the int8 file (the w4a8 one faulted the driver). MiniMax H3's video graphs wait for their first run.
     expect(manifest.workflows.filter((w) => !w.validated).map((w) => w.id)).toEqual([
       "moss-image-t2i",
+      "restore-qwen-image-21",
       "minimax-h3-t2v",
       "minimax-h3-i2v",
       "minimax-h3-flf2v",

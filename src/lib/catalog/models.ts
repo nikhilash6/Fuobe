@@ -1413,6 +1413,20 @@ const open: ModelDef[] = [
     options: { seed: true, negativePrompt: true, maxImages: 2 },
     hidden: true,
   }),
+  // The Restore Photo app's engine: AusBoss's Restore LoRA keeps the picture on its own frame (0.2 px off, the same
+  // faces) where a plain edit redraws it, then SeedVR2 enlarges it 2x. Its strength (params.extra.loraStrength) comes
+  // from the app's choice: 0.5 for a blurry photo, 1.0 otherwise.
+  o({
+    id: "oss-qwen-image-21-restore",
+    name: "Qwen-Image 2.1 Restore",
+    vendor: "Alibaba Qwen × AusBoss",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Old, worn or small photos back sharp on the same frame, then enlarged 2x (Restore LoRA + SeedVR2) · 20 GB GPU · non-commercial weights",
+    routes: [{ ...comfy("edit", "restore-qwen-image-21", "Restore LoRA, 25 steps at about 2 MP, then SeedVR2 2x"), unsized: true, maxImages: 1 }],
+    options: { seed: true, maxImages: 1 },
+    hidden: true,
+  }),
 
   // ---------------- Audio
   o({
