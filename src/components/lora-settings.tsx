@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { ConnectField, type PublicSetting } from "@/components/connect-field";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { saveSettings } from "@/lib/api";
-import { CIVITAI_KEYS_URL } from "@/lib/connections";
+import { CIVITAI_KEYS_URL, HF_TOKENS_URL } from "@/lib/connections";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
 
@@ -38,6 +38,8 @@ interface Library {
   /** Why the folder setting can't be read (a file, no permission). */
   folderProblem?: string;
   civitaiKey: boolean;
+  /** A Hugging Face token is set: gated files download with it. */
+  hfToken?: boolean;
   loras: LibraryLora[];
 }
 
@@ -61,6 +63,7 @@ function baseName(base: string): string {
     [/^qwen-image-edit/, "Qwen-Image-Edit"],
     [/^flux2-klein-4b/, "FLUX.2 [klein] 4B"],
     [/^flux2-klein-9b/, "FLUX.2 [klein] 9B"],
+    [/^flux3-klein/, "FLUX 3 Klein"],
   ];
   return known.find(([re]) => re.test(base))?.[1] ?? base;
 }
@@ -68,7 +71,7 @@ function baseName(base: string): string {
 const SOURCE: Record<LibraryLora["download"], string> = {
   direct: "Hugging Face",
   "civitai-token": "civitai · needs your key",
-  "hf-gated": "Hugging Face · accept its licence first",
+  "hf-gated": "Hugging Face · gated: accept its licence, then your token downloads it",
 };
 
 /** The LoRA folder: a plain path field (no connection to test), saved with its own button. */
@@ -124,7 +127,7 @@ function FolderField({ setting }: { setting?: PublicSetting }) {
   );
 }
 
-function LoraRow({ l, folder, onDownload, busy }: { l: LibraryLora; folder: boolean; onDownload: () => void; busy: boolean }) {
+function LoraRow({ l, folder, onDownload, busy, hfToken }: { l: LibraryLora; folder: boolean; onDownload: () => void; busy: boolean; hfToken: boolean }) {
   return (
     <li className="flex items-center gap-3 py-2.5">
       <div className="min-w-0 flex-1">
@@ -153,10 +156,14 @@ function LoraRow({ l, folder, onDownload, busy }: { l: LibraryLora; folder: bool
         <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-success">
           <CheckCircle2 className="size-3.5" /> In folder
         </span>
-      ) : l.download === "hf-gated" ? (
-        <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground" title="Accept the licence on Hugging Face, then put the file in the folder">
-          <Lock className="size-3.5" /> By hand
-        </span>
+      ) : l.download === "hf-gated" && !hfToken ? (
+        <a
+          href="#huggingface"
+          className="inline-flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground"
+          title="Accept the licence on its Hugging Face page, then add your Hugging Face token below"
+        >
+          <Lock className="size-3.5" /> Needs token
+        </a>
       ) : (
         <Button
           size="sm"
@@ -176,7 +183,7 @@ function LoraRow({ l, folder, onDownload, busy }: { l: LibraryLora; folder: bool
 }
 
 /** Settings → LoRAs: where LoRA files live, the civitai key, and the library with each file's licence. */
-export function LoraSettings({ folder, civitaiKey }: { folder?: PublicSetting; civitaiKey?: PublicSetting }) {
+export function LoraSettings({ folder, civitaiKey, hfToken }: { folder?: PublicSetting; civitaiKey?: PublicSetting; hfToken?: PublicSetting }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [group, setGroup] = useState<LibraryLora["group"]>("look");
@@ -235,6 +242,23 @@ export function LoraSettings({ folder, civitaiKey }: { folder?: PublicSetting; c
           </span>
         }
       />
+      <ConnectField
+        id="huggingface"
+        name="huggingfaceDownloadToken"
+        setting={hfToken}
+        provider="huggingface"
+        label="Hugging Face token for downloads"
+        placeholder="hf_…"
+        hint={
+          <span>
+            Only for downloading gated LoRAs (Lightricks&apos; Restore and Detail Refine IC-LoRAs; Assist&apos;s Hugging Face key is separate): accept each one&apos;s licence on its Hugging Face page with your account, then a
+            “Read” token lets Fuobe download it. It stays on this server: a cloud run gets Fuobe&apos;s copy of the file, never your token.{" "}
+            <a href={HF_TOKENS_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-text hover:underline">
+              Make a token <ExternalLink className="size-3" />
+            </a>
+          </span>
+        }
+      />
       <div className="rounded-xl border">
         <button
           type="button"
@@ -285,7 +309,7 @@ export function LoraSettings({ folder, civitaiKey }: { folder?: PublicSetting; c
             )}
             <ul className="max-h-96 divide-y overflow-y-auto">
               {shown.map((l) => (
-                <LoraRow key={l.key} l={l} folder={canDownload} busy={pending === l.file} onDownload={() => download.mutate(l)} />
+                <LoraRow key={l.key} l={l} folder={canDownload} busy={pending === l.file} hfToken={!!data?.hfToken} onDownload={() => download.mutate(l)} />
               ))}
             </ul>
           </div>

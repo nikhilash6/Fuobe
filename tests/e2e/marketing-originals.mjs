@@ -75,7 +75,13 @@ try {
     await panel.getByText("Fuobe Marketing Image").first().waitFor();
     const models = (await panel.innerText()).split("\n");
     const first = models.findIndex((l) => /Fuobe Marketing Image|GPT Image|Nano Banana|Bria|Ideogram|Recraft|Product Photography/.test(l));
-    check(`${engine}: Marketing Studio's first model is Fuobe Marketing Image`, models[first] === "Fuobe Marketing Image", models[first]);
+    // The page opens on Standalone: in the cloud its recipe runs on your GPU only, so the Original is listed last, greyed,
+    // with that line, and a partner is the first pick (the owner's 10-30 rule).
+    if (engine === "open") check("open: Marketing Studio's first model is Fuobe Marketing Image", models[first] === "Fuobe Marketing Image", models[first]);
+    else {
+      check("cloud: Standalone's first model is a partner, not the Original", models[first] !== "Fuobe Marketing Image", models[first]);
+      check("cloud: Standalone lists the Original as running on your GPU only", models.includes("Fuobe Original · runs on your GPU only: its cut-out and studio relight aren't offered in the cloud") && (await panel.locator('[aria-disabled="true"]').count()) === 1);
+    }
     check(`${engine}: partner models ${engine === "cloud" ? "stay" : "aren't"} in the menu`, engine === "cloud" ? models.some((l) => /GPT Image 2\.5/.test(l)) : !models.some((l) => /GPT Image/.test(l)));
     await page.keyboard.press("Escape");
 

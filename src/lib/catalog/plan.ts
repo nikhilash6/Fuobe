@@ -11,12 +11,14 @@ import type {
   PresetEndStep,
   PresetRoute,
 } from "./types";
-import { sourceSeconds } from "./clip-windows";
+import { billedClipSeconds, editClipsProblem, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
 import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
-import { askedSize, numFramesValue, sizeValue } from "./payload";
+import { askedSize, clipWords, numFramesValue, sizeValue } from "./payload";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
+import { computeDimensions, fitCanvas } from "@/lib/comfy";
+import { carriesLayout, flux3Boxes, flux3Caption, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
 import { pricingOn, type PriceClock } from "./promo";
 import { presetRoutes } from "./preset-recipe-routes";
 
@@ -66,6 +68,35 @@ export function inferOperation(model: ModelDef, req: Pick<GenerationRequest, "op
 
 export function routesFor(model: ModelDef, op: Operation): ModelRoute[] {
   return model.routes.filter((r) => r.op === op);
+}
+
+/** Fewer characters than this of the overall prompt in front of a capped shot prompt say too little: it is left out. */
+const MIN_SHOT_LEAD = 40;
+
+/**
+ * Shots in whole seconds (each at least 1) that keep the take's rounded total: each is floored, and the seconds left go
+ * to the shots with the largest remainders, so 2.4 + 2.4 becomes 3 + 2 (5 s), not 2 + 2.
+ */
+export function wholeShots<S extends { duration: number }>(shots: S[]): S[] {
+  const total = Math.max(shots.length, Math.round(shots.reduce((n, s) => n + s.duration, 0)));
+  const secs = shots.map((s) => Math.max(1, Math.floor(s.duration)));
+  let left = total - secs.reduce((n, v) => n + v, 0);
+  const rem = (i: number) => shots[i].duration - Math.floor(shots[i].duration);
+  const byRem = shots.map((_, i) => i).sort((a, b) => rem(b) - rem(a) || a - b);
+  // Seconds to add go to the largest remainders (at most one each: they add up to less than one per shot); seconds to
+  // take back (shots raised to 1 s) come off the longest shots.
+  for (const i of byRem) {
+    if (left <= 0) break;
+    secs[i]++;
+    left--;
+  }
+  while (left < 0) {
+    const i = byRem.reduce((best, j) => (secs[j] > 1 && (best < 0 || secs[j] > secs[best]) ? j : best), -1);
+    if (i < 0) break;
+    secs[i]--;
+    left++;
+  }
+  return shots.map((s, i) => (secs[i] === s.duration ? s : { ...s, duration: secs[i] }));
 }
 
 /**
@@ -187,6 +218,11 @@ export interface Plan {
    * generation (the grade, an overlay) that the result's meta carries.
    */
   soul?: { look?: string; words: string; triggers: string[]; grade?: string; overlay?: SoulOverlay; crop?: "21:9" };
+  /**
+   * A layout run (params.extra.layout, src/lib/layout-prompt.ts): the form the model reads it in, how many boxes, and
+   * the canvas it was compiled at when the model reads pixels (MOSS-Image: the exact size it renders).
+   */
+  layout?: { format: LayoutFormat | "words"; boxes: number; width?: number; height?: number };
   /** MiniMax H3's sound lines from the preset's route (its preview's), which its layout's sound fields take. */
   sound?: { soundscape: string; music: string };
   /** An end-frame step: an image edit of the start frame that becomes the clip's end frame (H3 flf2v). */
@@ -205,6 +241,8 @@ const PROMPTLESS = new Set<Operation>([
   "sdr-to-hdr", "export-video", "ocr", "still-motion", "audio-loop", "audio-join", "scene-3d", "splat", "rig-3d", "extract-frames", "images-to-video", "overlay",
   // round 5 (O11): the face mosaic names the faces itself ("face")
   "face-mosaic",
+  // archive-restore: the scene's words help (period, place, light) but a run without them gets a neutral one
+  "restore-video",
 ]);
 
 /**
@@ -377,27 +415,70 @@ export function planGeneration(
   loras = kept;
 
   // Multi-shot: the clip is as long as its shots, and models without per-shot prompts get them written out.
-  const shots = params.shots?.filter((s) => s.prompt.trim());
+  let shots = params.shots?.filter((s) => s.prompt.trim());
   if (shots?.length) {
     if (!model.options.multiShot) throw new Error(`${model.name} can't do multi-shot — try Kling 3.0, Seedance 2.5 or Wan 2.6`);
     if (shots.length > model.options.multiShot.maxShots) throw new Error(`${model.name} takes up to ${model.options.multiShot.maxShots} shots`);
+    // A model whose shots are whole seconds (Kling 4.0) gets them rounded here, keeping the total, so the price, the
+    // per-shot lengths and every route's duration (Replicate's too) are the same whole seconds.
+    const shotMaps = model.routes.flatMap((r) => (r.map?.multiShot ? [r.map.multiShot] : []));
+    const whole = shotMaps.some((m) => m.integer);
+    if (whole) shots = wholeShots(shots);
     const total = shots.reduce((n, s) => n + s.duration, 0);
     const max = Math.max(...(model.options.durations ?? [total]));
+    const min = Math.min(...(model.options.durations ?? [total]));
     // Joined films (open models) render each shot as its own clip: only each shot has to fit.
     const concat = model.options.multiShot.mode === "concat";
     if (concat && shots.some((s) => s.duration > max)) throw new Error(`${model.name} makes clips up to ${max}s per shot`);
     if (!concat && total > max) throw new Error(`The shots add up to ${total}s — ${model.name} makes up to ${max}s`);
-    // Per-shot prompts carry the overall description (and @element legend) with them.
+    if (whole && total < min) throw new Error(`The shots add up to ${total}s — ${model.name} makes ${min}s or more`);
+    // Per-shot prompts carry the overall description (and @element legend) with them. Where a shot's prompt has a
+    // length cap (Kling 4.0: 512 characters), the shot's own words come first: the overall part is cut to the room left,
+    // and left out when hardly any is left.
     const overall = prompt.trim().replace(/[.\s]+$/, "");
     const native = model.options.multiShot.mode === "native";
-    params = { ...params, shots: native && overall ? shots.map((s) => ({ ...s, prompt: `${overall}. ${s.prompt.trim()}` })) : shots, duration: total };
+    const caps = shotMaps.flatMap((m) => (m.maxPrompt ? [m.maxPrompt] : []));
+    const cap = caps.length ? Math.min(...caps) : undefined;
+    const lead = (own: string) => {
+      if (cap === undefined || overall.length + own.length + 2 <= cap) return `${overall}. ${own}`;
+      const room = cap - own.length - 2;
+      const cut = room >= MIN_SHOT_LEAD ? clipWords(overall, room) : "";
+      return cut ? `${cut}. ${own}` : own;
+    };
+    params = { ...params, shots: native && overall ? shots.map((s) => ({ ...s, prompt: lead(s.prompt.trim()) })) : shots, duration: total };
     prompt = composeShots(prompt, shots);
   } else if (params.multiShot === "auto" && model.options.multiShot?.mode === "prompt") {
     prompt = `${prompt.replace(/[.\s]+$/, "")}. Multi-shot sequence: tell it in several distinct shots with clean cuts between them.`;
   }
   op = op ?? inferOperation(model, req);
+  // Reference clips and video elements on a model that bills them with the output (Kling 4.0, Pricing.clipInput): priced
+  // at the least they bill (twice the output) until the server reads their length (params.clipSeconds).
+  if (model.pricing?.clipInput && req.inputs?.videos?.length && params.clipSeconds === undefined) params = { ...params, clipSeconds: 0 };
+  // A run with no reference images on a model that then draws its own (H3 Max 3D to video): priced at the most it draws.
+  // A chained still (a hand-over frame) counts as one going in.
+  const gen = model.pricing?.generatedRefs;
+  const stills = !!req.inputs?.images?.length || !!req.chain?.some((c) => c.slot === "images");
+  params = { ...params, drawnRefs: gen && !stills ? gen.count : undefined };
+  if (params.drawnRefs === undefined) delete params.drawnRefs;
+  // An edit's reference clips (beside the clip it edits; clip elements are counted on their own): Kling 4.0 takes 4.
+  if (op === "v2v" || op === "video-swap" || op === "video-insert") {
+    const asElements = params.elements?.filter((g) => g.video !== undefined).length ?? 0;
+    const problem = editClipsProblem(model, (req.inputs?.videos?.length ?? 0) - asElements);
+    if (problem) throw new Error(problem);
+  }
   if (!routesFor(model, op).length) {
     throw new Error(`${model.name} can't do ${op} — try another model`);
+  }
+  // A layout (the Image studio's Layout mode, Edit layout, an API caller's draft): compiled for this model at the size it
+  // renders, the prompt as its caption; nothing rewrites it afterwards (Fuobe's enhancer, the API's prompt expansion).
+  let layoutPlan: Plan["layout"];
+  if (carriesLayout(params.extra)) {
+    const drawn = readLayout(params.extra![LAYOUT_PARAM]);
+    if (!drawn) throw new Error("The layout couldn't be read: draw its boxes again");
+    const compiled = planLayout(model, op, prompt, drawn, params);
+    prompt = compiled.prompt;
+    params = compiled.params;
+    layoutPlan = compiled.layout;
   }
   // MiniMax H3's orbit of a still (its Orbit LoRA graph, src/lib/comfy-variants.ts) runs at the LoRA's own length, 3 s
   // (73 frames), unless the run names a length.
@@ -486,8 +567,92 @@ export function planGeneration(
     perJobOutputs,
     ...(notes.length && { notes }),
     ...(soulPlan && { soul: soulPlan }),
+    ...(layoutPlan && { layout: layoutPlan }),
     ...(sound && { sound }),
     ...(end && { end }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Layouts
+
+/** A layout's canvas on your GPU: the graph's 16 px grid, up to 2048 a side (moss-image-t2i's limits), fitted as the ComfyUI provider fits a canvas the request names. */
+const OPEN_CANVAS = { dimensionMultiple: LAYOUT_MULTIPLE, maxWidth: LAYOUT_MAX_SIDE, maxHeight: LAYOUT_MAX_SIDE };
+
+/** "4k" / "2K" / "1k" → the resolution tiers computeDimensions knows ("4K"); anything else as it is. */
+const tier = (res: string | undefined) => (res && /^\d(\.\d)?k$/i.test(res) ? res.toUpperCase() : res);
+
+export interface LayoutCanvas {
+  /** The size the model renders, the size a pixel layout (MOSS-Image) is compiled at. */
+  width: number;
+  height: number;
+  /** The size the aspect ratio and resolution ask for, before the model's limits (a side past 2048 is scaled down). */
+  asked: { width: number; height: number };
+  /** False when the size is a guess from the resolution's name (a cloud model that takes an aspect ratio and a tier). */
+  exact: boolean;
+}
+
+/**
+ * The canvas a layout is drawn for on this model. On your GPU: the aspect ratio and resolution on the 16 px grid
+ * (computeDimensions), up to 2048 a side (fitCanvas, as the ComfyUI provider fits it). In the cloud: the route's size
+ * field (sizeValue: fal's MOSS-Image 512–2048), else a guess from the resolution's name (FLUX.3's "4k"). The layout
+ * keeps its boxes as fractions, so it is compiled at this size whatever it was drawn on.
+ */
+export function layoutCanvas(model: ModelDef, params: GenParams, op?: Operation): LayoutCanvas {
+  const aspect = params.aspectRatio ?? model.defaults?.aspectRatio;
+  const res = params.resolution ?? model.defaults?.resolution;
+  if (model.engine !== "open") {
+    const route = op ? routesFor(model, op)[0] : model.routes[0];
+    const size = route?.map?.size ?? route?.preview?.size;
+    if (size) {
+      const sent = size.key ? askedSize(params.extra?.[size.key]) : undefined;
+      return { ...sizeValue(size, aspect, res, sent), asked: sizeValue({ ...size, min: undefined, max: undefined }, aspect, res, sent), exact: true };
+    }
+  }
+  // A "<side>sq" tier (FLUX.3's 512sq / 768sq) is that square's area in the chosen aspect: a square of that side at 1:1.
+  const sq = /^(\d+)sq$/i.exec(res ?? "");
+  const side = sq ? Number(sq[1]) : 1024;
+  const asked = computeDimensions(aspect, sq ? undefined : tier(res), { width: side, height: side }, LAYOUT_MULTIPLE);
+  const fitted = model.engine === "open" ? fitCanvas(asked.width, asked.height, OPEN_CANVAS) : asked;
+  return { ...fitted, asked, exact: model.engine === "open" };
+}
+
+/**
+ * A layout compiled for this model: the person's words (or the draft's own caption) as its caption, every box checked
+ * (a text box needs its words), the model's compiler (src/lib/layout-prompt.ts layoutCompilerFor) at the canvas it
+ * renders. A pixel layout (MOSS-Image) also names that canvas, so both engines render the size it was compiled at:
+ * params.extra.width / height on your GPU, the route's size field (fal's image_size) in the cloud. Bria FIBO 2 gets its
+ * VGL beside the words. Prompt rewriting is off for the run.
+ */
+function planLayout(model: ModelDef, op: Operation, prompt: string, drawn: LayoutDraft, params: GenParams): { prompt: string; params: GenParams; layout: NonNullable<Plan["layout"]> } {
+  const draft: LayoutDraft = { ...drawn, summary: { ...drawn.summary, caption: prompt.trim() || drawn.summary.caption.trim() } };
+  const format = model.options.layout;
+  const pixels = format === "moss";
+  const canvas = layoutCanvas(model, params, op);
+  // Only a pixel layout depends on the canvas (its sides on MOSS's 16 px grid); the others place boxes on a 0-1000 grid or in words.
+  const checkedAt = pixels ? canvas : { width: 1024, height: 1024 };
+  // A route that takes the boxes as a field of their own (fal's FLUX 3 Klein bounding_boxes) gets them there, and the
+  // caption that names them as its prompt; everything else reads the boxes in its prompt.
+  const boxes = routesFor(model, op)[0]?.map?.boundingBoxes;
+  const problem = validateLayout(draft, checkedAt.width, checkedAt.height, boxes ? "flux3-boxes" : (format ?? "words")).find((i) => i.level === "error");
+  if (problem) throw new Error(problem.message);
+  const compiled = boxes && draft.items.length ? { format: "flux3" as const, prompt: flux3Caption(draft) } : layoutCompilerFor(model)(draft, canvas.width, canvas.height);
+  const extra: Record<string, unknown> = { ...params.extra };
+  if (boxes) {
+    if (draft.items.length) extra[boxes.key] = flux3Boxes(draft).slice(0, boxes.max);
+    else delete extra[boxes.key];
+  }
+  if (pixels && draft.items.length) {
+    const route = routesFor(model, op)[0];
+    const key = (route?.map?.size ?? route?.preview?.size)?.key;
+    if (model.engine === "open") Object.assign(extra, { width: canvas.width, height: canvas.height });
+    else if (key) extra[key] = { width: canvas.width, height: canvas.height };
+  }
+  if (compiled.vgl && draft.items.length) extra.vgl = compiled.vgl;
+  return {
+    prompt: compiled.prompt,
+    params: { ...params, enhancePrompt: false, extra },
+    layout: { format: compiled.format, boxes: draft.items.length, ...(pixels && { width: canvas.width, height: canvas.height }) },
   };
 }
 
@@ -614,6 +779,7 @@ const NEEDS: Partial<
   keyframes: { images: 1, msg: "Add the keyframes, in order" },
   "sdr-to-hdr": { video: true, msg: "Add the video to convert" },
   "face-mosaic": { images: 1, msg: "Add the picture whose faces to pixelate" },
+  "restore-video": { video: true, msg: "Add the archive clip to restore" },
   "export-video": { video: true, msg: "Add the video to export" },
   ocr: { images: 1, msg: "Add the image to read" },
   "still-motion": { images: 1, msg: "Add the still to move over" },
@@ -709,20 +875,61 @@ function missingImages(model: ModelDef, req: Pick<GenerationRequest, "inputs">):
  * price counts the clip's seconds (params.sourceDuration) when the caller knows them, and slow motion bills
  * the whole stretched result.
  */
-const CLIP_LENGTH_OPS = new Set<Operation>(["upscale-video", "interpolate", "sdr-to-hdr", "export-video"]);
+const CLIP_LENGTH_OPS = new Set<Operation>(["upscale-video", "interpolate", "sdr-to-hdr", "export-video", "restore-video"]);
 
 /**
  * The seconds a clip edit that keeps the clip's length is billed for (Happy Horse, Runway Aleph, Lucy Edit, Kling O3 4K
  * edit…: a v2v model with no length to ask for): the clip's (params.sourceDuration, when the caller knows it), up to the
- * most its window takes (./clip-windows). Undefined for a model asked for a length, or when the clip's length isn't known.
+ * most its window takes (./clip-windows), or its frames ÷ 16 on fal's Wan 2.2 Fun VACE (params.sourceFps; 30 fps when
+ * not known). Undefined for a model asked for a length, or when the clip's length isn't known.
  */
-export function clipEditSeconds(model: Pick<ModelDef, "id" | "options" | "routes">, params: Pick<GenParams, "sourceDuration">, op?: Operation): number | undefined {
+export function clipEditSeconds(model: Pick<ModelDef, "id" | "options" | "routes"> & Partial<Pick<ModelDef, "engine">>, params: Pick<GenParams, "sourceDuration" | "sourceFps">, op?: Operation): number | undefined {
   const seconds = params.sourceDuration;
   if (op !== "v2v" || !seconds || !(seconds > 0) || model.options.durations?.length) return undefined;
   const routes = model.routes.filter((r) => r.op === "v2v");
   if (!routes.length || routes.some((r) => r.map?.duration)) return undefined;
   const max = sourceSeconds(model.id).max;
-  return max !== undefined ? Math.min(seconds, max) : seconds;
+  // fal's Wan 2.2 Fun VACE bills a clip's frames ÷ 16 (a 30 fps clip about 1.9× its length): clip-windows.ts.
+  return billedClipSeconds(model.id, max !== undefined ? Math.min(seconds, max) : seconds, params.sourceFps, model.engine);
+}
+
+/** The edits of a clip that keep its length: the clip goes in whole, and the result is as long (Kling 4.0's edit). */
+const CLIP_EDIT_OPS = new Set<Operation>(["v2v", "video-swap", "video-insert", "remove-object"]);
+
+export interface ClipBilling {
+  /** Seconds of clips going in: the edited clip's and the reference clips'. */
+  input: number;
+  output: number;
+  /** What's billed: input plus output, at least twice the output. */
+  billed: number;
+  /** Per billed second. */
+  rate: number;
+  /** The input's length isn't known yet (no clip header read): priced at the least it bills, twice the output. */
+  guessed: boolean;
+}
+
+/**
+ * How a run with a clip going in is billed, on a model that bills those runs on input plus output (Pricing.clipInput,
+ * Kling 4.0): an edit of a clip (its length, params.sourceDuration, in and out: the edit keeps it), or a run with
+ * reference clips or video elements (params.clipSeconds: their seconds; 0 while they aren't read yet). Undefined for
+ * a run with no clip, or a model that bills them as any other.
+ */
+export function clipBilling(model: Pick<ModelDef, "pricing" | "defaults">, params: GenParams, op?: Operation, now?: PriceClock): ClipBilling | undefined {
+  const p = model.pricing && pricingOn(model.pricing, now);
+  const c = p?.clipInput;
+  if (!c || p.unit !== "second") return undefined;
+  const edit = !!op && CLIP_EDIT_OPS.has(op);
+  if (!edit && params.clipSeconds === undefined) return undefined;
+  const res = params.resolution ?? model.defaults?.resolution;
+  const rate = (res && (c.byResolution?.[res] ?? c.byResolution?.[res.toLowerCase()])) || c.usd;
+  const source = params.sourceDuration && params.sourceDuration > 0 ? params.sourceDuration : undefined;
+  const output = edit ? (source ?? params.duration ?? model.defaults?.duration ?? 5) : (params.duration ?? model.defaults?.duration ?? 5);
+  // Clips not read yet: on a model that bills them with no floor (Seedance 2.5), taken as long as the output until the
+  // server reads their headers, rather than as nothing.
+  const refs = Math.max(0, params.clipSeconds ?? 0) || (c.plain && !edit ? output : 0);
+  const guessed = edit ? !source : !params.clipSeconds;
+  const input = (edit ? (source ?? output) : 0) + refs;
+  return { input, output, billed: c.plain ? input + output : Math.max(input + output, 2 * output), rate, guessed };
 }
 
 /**
@@ -762,7 +969,8 @@ export function routeLoras(route: Pick<ModelRoute, "provider" | "map" | "loraEnd
   const field = routeLoraField(route);
   const why = (l: LoraRef) => {
     if (localOnly(l)) return "it is licensed for your GPU only, and Settings → Models & licences keeps such LoRAs off the cloud";
-    if (gated(l) && !l.hostedUrl) return "it is in a gated Hugging Face repo, so it runs only on your GPU";
+    // An optional gated LoRA (Relight, DoP's Slow motion); only a model's own gated adapter goes to the cloud, as Fuobe's copy.
+    if (gated(l) && !l.hostedUrl && !l.adapter) return "it is in a gated Hugging Face repo, so it runs only on your GPU";
     if (!cloudPath(l) && !needsToken(l.url) && !l.own) return "no URL to send to the LoRA endpoint";
     if (!field) return "this route takes no LoRAs";
     return field.shape === "experts" ? "this API takes one LoRA per expert" : `this API takes up to ${loraCapacity(field)} LoRAs`;
@@ -799,7 +1007,9 @@ function sentMegapixels(params: GenParams): number | undefined {
  * payload sends it. fal's megapixel is 1024 × 1024 pixels. Undefined when the route sends no size.
  */
 function routeMegapixels(model: ModelDef, params: GenParams, op?: Operation): number | undefined {
-  const size = (op ? model.routes.find((r) => r.op === op) : model.routes[0])?.map?.size;
+  const route = op ? model.routes.find((r) => r.op === op) : model.routes[0];
+  // The browser's catalog keeps the size field as route.preview (slimModel).
+  const size = route?.map?.size ?? route?.preview?.size;
   if (!size) return undefined;
   const asked = size.key ? askedSize(params.extra?.[size.key]) : undefined;
   const { width, height } = sizeValue(size, params.aspectRatio ?? model.defaults?.aspectRatio, params.resolution ?? model.defaults?.resolution, asked);
@@ -827,6 +1037,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   // A talking avatar is as long as its voice (params.sourceDuration: the voice's header, read by the studio or the server).
   const voice = op === "avatar" && params.sourceDuration && params.sourceDuration > 0 ? avatarSeconds(model, params.sourceDuration, params.fps) : undefined;
   if (p.unit === "image") per = usd * n;
+  // Per image by tier, but per megapixel with LoRAs (fal's FLUX 3 Klein /lora): the route's size in megapixels.
+  if (withLoras && p.withLorasPerMegapixel !== undefined) per = p.withLorasPerMegapixel * (routeMegapixels(model, params, op) ?? sentMegapixels(params) ?? 1) * n;
   // Per megapixel of every image made: Soul's sizes are known (about 1 or 2 MP), so is a size sent as fal's image_size
   // {width, height} (Fuobe Mixed Media's frames); other models are taken as 1 MP.
   if (p.unit === "megapixel") {
@@ -835,9 +1047,12 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
       : (routeMegapixels(model, params, op) ?? sentMegapixels(params) ?? 1);
     per = usd * (p.roundUp ? Math.ceil(mp - 1e-9) : mp) * n;
   }
-  if (p.unit === "second") {
+  const clipped = p.unit === "second" ? clipBilling(model, params, op, now) : undefined;
+  if (clipped) per = clipped.rate * clipped.billed;
+  else if (p.unit === "second") {
     // A length the caller set wins (Shorts, Mixed Media and Genjutsu say the seconds they bill); then a clip edit's clip.
-    const seconds = clip ?? voice ?? params.duration ?? clipEditSeconds(model, params, op) ?? model.defaults?.duration ?? 5;
+    const asked = clip ?? voice ?? params.duration ?? clipEditSeconds(model, params, op) ?? model.defaults?.duration ?? 5;
+    const seconds = p.minSeconds ? Math.max(p.minSeconds, Math.ceil(asked - 1e-9)) : asked;
     const mp = p.videoMegapixel ? videoMegapixels(model, params, seconds) : undefined;
     const rate = p.videoMegapixel && (withLoras && p.videoMegapixel.withLoras !== undefined ? p.videoMegapixel.withLoras : p.videoMegapixel.usd);
     per = mp !== undefined && rate ? Math.ceil(mp - 1e-9) * rate : usd * seconds;
@@ -851,5 +1066,7 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   }
   if (params.generateAudio === false && model.options.audio === true && p.note?.includes("audio-off-half")) per /= 2;
   if (p.animationUsd && params.animation !== undefined && params.animation !== "") per += p.animationUsd;
+  if (p.perRequest) per += p.perRequest;
+  if (p.generatedRefs && params.drawnRefs) per += p.generatedRefs.usd * Math.min(params.drawnRefs, p.generatedRefs.count);
   return Math.round(per * jobs * 1000) / 1000;
 }

@@ -9,6 +9,9 @@
 //   6. A blocked Generate says why in a line under the composer on a phone; a tap opens the missing tile's file
 //      picker (focus inside the composer), and the line moves on to the next input. A desktop composer shows the
 //      line only while its tiles are folded away.
+//   7. Layout mode (Image studio, MOSS-Image in the cloud, demo mode): draw one box by mouse and one by touch at
+//      390 px, a Text box asks for its words, Generate sends the layout (compiled at the size fal renders, prompt
+//      expansion off) and the feed says "Layout · 1 box"; Reuse and Edit layout from the tile reopen the boxes.
 //
 // Playwright: the `playwright` (or `playwright-core`) package if it resolves, else the global install at
 // /opt/node22/lib/node_modules. Chromium: $CHROMIUM_PATH, else the newest /opt/pw-browsers/chromium-*.
@@ -233,6 +236,91 @@ async function ready(page, url) {
   });
   check("desktop: the line shows only while the tiles are folded away", m.line === !m.tiles, `tiles shown: ${m.tiles}, line shown: ${m.line}`);
   await desk.close();
+}
+
+// 7. Layout mode.
+{
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await ready(page, "/image?model=moss-image");
+  await page.waitForTimeout(800);
+  await page.getByRole("button", { name: "Layout", exact: true }).first().click();
+  const canvas = page.locator("[data-layout-canvas]");
+  await canvas.waitFor({ timeout: 30_000 });
+  const c = await canvas.boundingBox();
+  await page.mouse.move(c.x + c.width * 0.1, c.y + c.height * 0.08);
+  await page.mouse.down();
+  await page.mouse.move(c.x + c.width * 0.9, c.y + c.height * 0.24, { steps: 8 });
+  await page.mouse.up();
+  check("layout: a drag draws a box", (await page.locator("[data-layout-box]").count()) === 1);
+  const row = page.locator('[data-layout-row="1"]');
+  await row.getByRole("radio", { name: "Text" }).click();
+  check("layout: a Text box asks for its words", await row.getByText("Type the words for box 1").isVisible());
+  await row.getByLabel("Box 1: exact words").fill("30% OFF");
+  await page.locator("#layout-caption").fill("A candle sale poster");
+  await page.getByRole("button", { name: "Done" }).click();
+  const strip = await page.locator("[data-layout-strip]").innerText();
+  check("layout: the strip says the size it's laid out at", /Laid out for MOSS-Image at \d+ × \d+/.test(strip), strip.replace(/\n/g, " "));
+  const sent = page.waitForRequest((r) => r.url().endsWith("/api/generations") && r.method() === "POST", { timeout: 30_000 });
+  await page.getByRole("button", { name: /^Generate/ }).click();
+  const body = JSON.parse((await sent).postData() ?? "{}");
+  const layout = body.params?.extra?.layout;
+  check("layout: Generate sends the draft with the prompt as its caption", layout?.items?.length === 1 && layout.items[0].text === "30% OFF" && layout.summary?.caption === "A candle sale poster");
+  const tile = page.locator("[data-gen-id]", { has: page.locator("header", { hasText: "Layout · 1 box" }) }).first();
+  check("layout: the feed says it's a layout", await tile.waitFor({ timeout: 30_000 }).then(() => true, () => false));
+  const preview = await page.request.post(`${app}/api/generations?preview=1`, { data: body }).then((r) => r.json()).catch(() => ({}));
+  check("layout: the run gets the compiled MOSS prompt", typeof preview.prompt === "string" && preview.prompt.includes('"bbox_coord_space":"abs_centralized"'), (preview.prompt ?? preview.error ?? "").slice(0, 80));
+  // Reuse: with Layout mode off and the prompt cleared, the run comes back as boxes with its caption. The composer docks
+  // and folds its strips away after Generate: focusing the prompt opens it again.
+  const composer = page.locator("[data-composer] textarea");
+  await composer.click();
+  await page.getByRole("button", { name: "Layout off" }).click();
+  await page.locator("[data-composer] textarea").fill("");
+  await tile.locator("header").hover();
+  await tile.getByRole("button", { name: "Reuse" }).click();
+  await page.locator("[data-layout-strip]").waitFor({ timeout: 10_000 }).catch(() => {});
+  const reused = await page.locator("[data-layout-strip]").innerText().catch(() => "");
+  check("layout: Reuse brings the boxes and the caption back", /1 box/.test(reused) && (await page.locator("[data-composer] textarea").inputValue()) === "A candle sale poster");
+  await page.waitForFunction(() => document.querySelector("[data-gen-id] img, [data-gen-id] video"), null, { timeout: 60_000 }).catch(() => {});
+  const t = tile.locator(".group\\/tile").first();
+  // Edit layout from a state with no layout on screen (Reuse just put one there), twice on the same picture: the second
+  // time must open it again too.
+  for (const time of ["first", "second"]) {
+    await composer.click();
+    await page.getByRole("button", { name: "Layout off" }).click();
+    const chip = page.getByRole("button", { name: "Layout", exact: true }).first();
+    const off = await page.waitForFunction(() => !document.querySelector("[data-layout-strip]"), null, { timeout: 10_000 }).then(() => true, () => false) && (await chip.getAttribute("aria-pressed")) === "false";
+    await t.hover();
+    await t.getByRole("button", { name: "More actions" }).first().click();
+    await page.getByRole("menuitem", { name: "Edit layout" }).click();
+    await page.waitForFunction(() => !location.search.includes("layout="), null, { timeout: 30_000 }).catch(() => {});
+    await composer.click();
+    await page.locator("[data-layout-strip]").waitFor({ timeout: 30_000 }).catch(() => {});
+    const strip = await page.locator("[data-layout-strip]").innerText().catch(() => "");
+    check(`layout: Edit layout reopens the boxes (${time} time)`, off && /1 box/.test(strip), off ? strip.replace(/\n/g, " ") || "no strip" : "Layout off left the strip");
+  }
+  await page.close();
+
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const phone = await ctx.newPage();
+  await ready(phone, "/image?model=moss-image");
+  await phone.waitForTimeout(800);
+  await phone.getByRole("button", { name: /^Settings/ }).first().tap();
+  await phone.getByRole("button", { name: "Layout", exact: true }).first().tap();
+  await phone.locator("[data-layout-canvas]").waitFor({ timeout: 30_000 });
+  const pc = await phone.locator("[data-layout-canvas]").boundingBox();
+  const cdp = await ctx.newCDPSession(phone);
+  const pt = (x, y) => [{ x: pc.x + pc.width * x, y: pc.y + pc.height * y }];
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pt(0.2, 0.3) });
+  for (let i = 1; i <= 8; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pt(0.2 + 0.06 * i, 0.3 + 0.05 * i) });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await phone.waitForTimeout(300);
+  check("layout (390 px): a touch drag draws a box", (await phone.locator("[data-layout-box]").count()) === 1);
+  const sheet = await phone.locator('aside[aria-label="Boxes"]').boundingBox();
+  const board = await phone.locator("[data-layout-canvas]").boundingBox();
+  check("layout (390 px): the rows sit in a sheet under the canvas", !!sheet && !!board && sheet.y >= board.y + board.height, `canvas ends at ${Math.round(board?.y + board?.height)}, sheet starts at ${Math.round(sheet?.y)}`);
+  const wide = await phone.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  check("layout (390 px): nothing scrolls sideways", wide <= 0, `${wide}px`);
+  await ctx.close();
 }
 
 await browser.close();

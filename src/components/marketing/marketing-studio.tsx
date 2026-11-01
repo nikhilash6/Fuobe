@@ -12,7 +12,7 @@ import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { BrandChip } from "@/components/brand/brand-dialog";
 import { inputCls } from "@/components/brand/fields";
 import { withoutOwnGpu } from "@/lib/catalog/engines";
-import { FORMATS, formatModels, looksLikeWebsite, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
+import { FORMATS, formatModels, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
 import { SelfHostNote } from "@/components/self-host-note";
 import { formatCost } from "@/lib/format";
 import { useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
@@ -111,7 +111,10 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
   const access = useModelAccess();
   // A guest or an account: Marketing Studio runs on a self-hosted Fuobe only, so no model reads "on your GPU".
   const visitor = useLikelyVisitor();
-  const choices = keepOffered(formatModels(f, engine, { product: !!draft.product, avatar: !!draft.avatar }), (c) => offered(access, c.id, engine));
+  const listed = formatModels(f, engine, { product: !!draft.product, avatar: !!draft.avatar });
+  // One listed only to say it runs on your GPU (the Original's Standalone shot in the cloud) is shown, never picked.
+  const choices = keepOffered(pickable(listed), (c) => offered(access, c.id, engine));
+  const elsewhere = listed.filter((c) => c.unavailable);
   const model = choices.find((c) => c.id === draft.modelId) ?? choices[0];
   const summary = [draft.aspectRatio, f.durations && `${draft.duration}s`, draft.batch > 1 && `×${draft.batch}`].filter(Boolean).join(" · ");
   const seg = (active: boolean) => cn("h-7 rounded-full px-2.5 text-[12px] font-medium text-muted-foreground", active && "bg-background text-foreground shadow-soft");
@@ -170,6 +173,12 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
                 <span className={cn("block text-[13px] font-medium", model.id === c.id && "text-brand-text")}>{models[c.id]?.name ?? c.id}</span>
                 <span className="block text-[11px] text-muted-foreground">{visitor ? withoutOwnGpu(c.note ?? plainTagline(models[c.id]?.tagline ?? "")) : (c.note ?? plainTagline(models[c.id]?.tagline ?? ""))}</span>
               </button>
+            ))}
+            {elsewhere.map((c) => (
+              <div key={c.id} aria-disabled="true" className="w-full rounded-lg px-2.5 py-1.5 text-left opacity-60">
+                <span className="block text-[13px] font-medium">{models[c.id]?.name ?? c.id}</span>
+                <span className="block text-[11px] text-muted-foreground">{c.note}</span>
+              </div>
             ))}
           </div>
         </div>
@@ -317,7 +326,8 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       engine,
       format: draft.format,
       templateId: draft.templateId ?? undefined,
-      modelId: draft.modelId,
+      // A pick that runs on your GPU only (the Original's Standalone shot) isn't sent to the cloud: its default runs.
+      modelId: draft.modelId && !formatModels(f, engine, { product: true, avatar: true }).some((c) => c.unavailable && c.id === draft.modelId) ? draft.modelId : undefined,
       productId: draft.product?.productId,
       productImages: draft.product && !draft.product.productId ? draft.product.images : undefined,
       avatar: f.avatar !== "none" ? draft.avatar?.ref : undefined,

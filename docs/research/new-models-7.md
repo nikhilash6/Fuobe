@@ -228,6 +228,8 @@ The merged LoRA's RAM copy takes 6.2 GB (bf16) or 12.4 GB (fp32). A saved refine
 | **Cinema and Video studio H3 shots**: "Finish in 2K" on a keeper, and a 2K tier (`cinema.ts` L559) | Drafts at 768p cheaply, then finishes only the take that made the cut | needs a plain open H3 graph first: rdh's "Prompt to 2K" shape (FL2VA int8 + Turbo 4-step v1.2, 6 steps `er_sde`), handing the latent to the regenerate chain, or saving it for later (`OpenH3SaveRefinedLatent` / NVIDIA's `--save-latents` ladder) | fal `minimax/h3/*` at 2K for the final take ($0.13/s; LoRA route $0.1625/s); drafts at 768P ($0.06/s on fal) | P2 · N7-10 |
 | **Settings → Models & licences, About, Workflows page, `install-comfyui.sh`, manifest** | The owner sees the new files and packs with their licences and switches, and one install line | rows for each file and pack (§2.5) | rows for the fal 2K / 4K tiers, Replicate 2K and, if added, MiniMax regeneration and the Comfy partner node | inside each package |
 
+**Owner's rule of 2026-10-30 (overrules this table's cloud column).** The cloud uses only models that are hosted, with no substitute model. Nobody hosts Open-H3-Regenerate-2K, so "Regenerate · creative" is GPU-only: on the cloud engine it says "Runs on your GPU (open source)", and Engine mode "Paid APIs only" hides it. `topaz-starlight` is not the cloud "Regenerate" (Upscale → Video keeps it and Topaz Astra 2 under their own names), and the Canvas Upscale node's Regenerate choice is disabled on the cloud rather than mapped to Starlight. The one cloud action kept is a fal H3 result re-rendered at 2K or 4K on the same hosted model ("Re-render at 2K · a new render"), which is the same model asked for a size it offers, not a stand-in. (Built in package n7-3-regenerate-2k.)
+
 ### 2.11 Risks and unknowns
 
 **Risks**
@@ -839,6 +841,8 @@ Browser checks: at 1440 px and 390 px wide, in light and in dark theme: the new 
 
 What can't be verified here: any GPU run; whether the rdh pack loads on Fuobe's pinned ComfyUI 0.41.0-7 (tested on 0.42.0); whether Fuobe's ref2va base would do instead of FL2VA; VRAM below 72 GB; any fal call. Validate on a disposable GPU ComfyUI with the packs installed (`node validate-workflows.mjs video-regenerate-h3`).
 
+_Note (owner's rule of 2026-10-30, which overrules this brief's cloud half): the cloud has no Regenerate · creative and no stand-in for it (not `topaz-starlight`, not Astra 2); Regenerate is GPU-only, says so on the cloud engine and is hidden in "Paid APIs only"; the Canvas choice is disabled on the cloud. Only the fal H3 re-render at 2K / 4K stays. Topaz Astra 2 may be added under its own name. The package's brief in docs/handoff/queue.json says the same._
+
 ### 5.5 N7-4 · Character swap in 2K: Swap Studio's Finish and Genjutsu's Quality
 
 _Priority P0 · effort medium · depends on N7-3 · key `n7-4-character-swap-2k` · research §2.1, §2.6, §2.7, §2.9, §2.10, §2.11_
@@ -851,7 +855,7 @@ Where it lands (exact spots).
 - `src/lib/catalog/character-swap.ts`: qualities (L27), `characterQuality` (L160), `falResolution` (L172), prices; `src/lib/catalog/genjutsu.ts`: the plan steps.
 
 Open engine.
-- Per chosen take: its 16-bit FFV1 master (already kept by `video-character-swap-h3-segment`) -> `video-regenerate-h3` (N7-3) with draftSize 'keep (snap to 32)' (H3's own canvas, any shape), the take's prompt, start_sigma 0.8 (rdh: "stays closer to the draft"), the take's seed, and a resolution capped at the source clip's size (never above the source).
+- Per chosen take: its 16-bit FFV1 master (already kept by `video-character-swap-h3-segment`) -> `video-regenerate-h3` (N7-3) with draftSize 'keep (snap to 32)' (H3's own canvas, any shape; n7-3 found the pinned pack's upscale always targets 16:9 or 9:16, so 'keep' stretches other shapes: use the preset, which cover-crops), the take's prompt, start_sigma 0.8 (rdh: "stays closer to the draft"), the take's seed, and a resolution capped at the source clip's size (never above the source).
 - Then a mask composite, so only the character comes from the regenerate: a new core-node graph `video-composite-mask` (LoadVideo source + LoadVideo regenerated scaled to the source size with ImageScale + the approved whole-shot mask from `video-mask-h3-relay` -> ImageToMask (red) -> GrowMask -> FeatherMask -> ImageCompositeMasked -> CreateVideo with the source audio -> SaveVideo). Validate it on the library's CPU ComfyUI (core nodes only).
 - Then the existing assembly. Takes over 15 s run in 15 s windows.
 - Genjutsu Character swap: keep the 768p swap and add steps to the plan: swap -> regenerate (σ 0.8) -> mask composite -> mux.

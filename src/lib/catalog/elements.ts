@@ -4,7 +4,8 @@
  * server (authoritative), the composer (live preview + cost) and the agent share it.
  */
 import { identityFor, type TrainingFamily } from "./training";
-import type { Engine, GenerationRequest, LoraRef, ModelDef, Operation } from "./types";
+import { imageLimit } from "./plan";
+import type { Engine, GenParams, GenerationRequest, LoraRef, ModelDef, Operation } from "./types";
 
 export type ElementKind = "character" | "location" | "prop" | "style" | "voice";
 
@@ -61,6 +62,16 @@ export interface StudioElement {
   createdAt: number;
 }
 
+/**
+ * What a model does with @mentioned Elements, for the mention menu, when it has elements of its own (Kling 4.0): how many,
+ * which kinds, and that voices aren't sent (they need the provider's voice ids, which Fuobe can't make).
+ */
+export function elementsNote(model: Pick<ModelDef, "name" | "options"> | undefined): string | undefined {
+  const e = model?.options.elements;
+  if (!e) return undefined;
+  return `${model!.name}: characters and props go as its elements, up to ${e.max} (a photo and ${e.views} more angles, or a clip) · voices aren't used`;
+}
+
 /** `Maya Lopez` → `Maya_Lopez`. Letters, digits, `_` and `-` only. */
 export function handleFor(name: string): string {
   return (
@@ -103,6 +114,30 @@ export interface MentionResolution {
 
 const ops = (m: ModelDef) => new Set(m.routes.map((r) => r.op));
 
+/** A reference that is a clip (a video element), by its file's extension. */
+const isClipRef = (ref: string) => /\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(ref);
+
+/** Element kinds a model's own elements stand for (Kling 4.0: "characters/objects"). */
+const ELEMENT_KINDS_AS_ELEMENTS = new Set<ElementKind>(["character", "prop"]);
+
+/**
+ * Which mentioned Elements go as the model's own elements (ModelOptions.elements), and on which route: the run's own
+ * operation when it takes elements (an edit), else reference-to-video for a clip from words alone (as references do,
+ * never in place of a start or end frame). Null when the model has none, or nothing mentioned fits.
+ */
+function elementPlan(req: GenerationRequest, model: ModelDef, mentioned: StudioElement[], op: Operation | undefined) {
+  const spec = model.options.elements;
+  if (!spec) return null;
+  const takes = new Set(spec.ops);
+  const existing = req.inputs?.images?.length ?? 0;
+  const target: Operation | undefined =
+    op && takes.has(op) ? op : takes.has("ref2v") && model.kind === "video" && (!op || op === "t2v") && !existing && !req.inputs?.endImage ? "ref2v" : undefined;
+  if (!target) return null;
+  const fit = mentioned.filter((e) => ELEMENT_KINDS_AS_ELEMENTS.has(e.kind) && e.references.length);
+  if (!fit.length) return null;
+  return { op: target, elements: fit.slice(0, spec.max), left: fit.slice(spec.max) };
+}
+
 /**
  * Turn `@handle` mentions into reference images (or a trained LoRA + trigger word) and a
  * prompt that tells the model which image is which. Leaves the request alone when nothing
@@ -142,8 +177,15 @@ export function applyMentions(req: GenerationRequest, model: ModelDef, elements:
     viaLora.add(el.id);
   }
 
+  // Kling 4.0 takes characters and props as its own elements (@Element1..: a frontal photo and up to 3 more angles, or a
+  // short clip), on the routes that have them; locations and styles stay reference images.
+  const asElement = elementPlan(req, model, mentioned.filter((e) => !viaLora.has(e.id)), op);
+  if (asElement) op = asElement.op;
+  const elementNo = new Map<string, number>((asElement?.elements ?? []).map((e, i) => [e.id, i + 1]));
+  if (asElement) budget = Math.max(0, (imageLimit(model, asElement.op) ?? model.options.maxImages ?? 4) - existing.length);
+
   // Share the reference budget: one image each first, then fill up to each kind's ideal count.
-  const wanted = mentioned.filter((e) => !viaLora.has(e.id) && e.references.length);
+  const wanted = mentioned.filter((e) => !viaLora.has(e.id) && !elementNo.has(e.id) && e.references.length);
   const take = new Map<string, number>(wanted.map((e) => [e.id, 0]));
   let left = budget;
   for (let round = 0; left > 0; round++) {
@@ -170,13 +212,29 @@ export function applyMentions(req: GenerationRequest, model: ModelDef, elements:
     }
     positions.set(e.id, pos);
   }
-  if (model.kind === "video" && images.length > existing.length) op = "ref2v";
+  if (model.kind === "video" && images.length > existing.length && !asElement) op = "ref2v";
+  // The elements' files go after every reference image, so the references keep the numbers the legend gives them.
+  const groups: NonNullable<GenParams["elements"]> = [];
+  const videos = [...(req.inputs?.videos ?? [])];
+  for (const el of asElement?.elements ?? []) {
+    const clip = el.references.find(isClipRef);
+    if (clip && groups.filter((g) => g.video !== undefined).length < (model.options.elements?.videos ?? 0)) {
+      videos.push(clip);
+      groups.push({ video: videos.length - 1 });
+      continue;
+    }
+    const photos = el.references.filter((r) => !isClipRef(r)).slice(0, 1 + (model.options.elements?.views ?? 3));
+    const at = photos.map((r) => images.push(r) - 1);
+    groups.push({ images: at });
+  }
 
   // Rewrite the prompt: "@Maya" → "Maya", plus who/what each image is.
   const seen = new Set<string>();
   const rewrite = (text: string) => text.replace(MENTION, (whole, h: string) => {
     const el = mentioned.find((e) => e.handle.toLowerCase() === h.toLowerCase());
     if (!el) return whole;
+    // An element is named as the model names it.
+    if (elementNo.has(el.id)) return `@Element${elementNo.get(el.id)}`;
     const first = !seen.has(el.id);
     seen.add(el.id);
     const lora = loras.find((l) => viaLora.has(el.id) && el.loras.some((x) => x.file === l.file));
@@ -202,8 +260,9 @@ export function applyMentions(req: GenerationRequest, model: ModelDef, elements:
     .filter(Boolean);
   if (legend.length) prompt = `${prompt.trim().replace(/[.\s]+$/, "")}${prompt.trim() ? ". " : ""}${legend.join(". ")}.`;
 
+  for (const e of asElement?.left ?? []) notes.push(`${e.name} is described in words — ${model.name} takes up to ${model.options.elements?.max} elements`);
   for (const e of mentioned) {
-    if (viaLora.has(e.id)) continue;
+    if (viaLora.has(e.id) || elementNo.has(e.id)) continue;
     if (!positions.get(e.id)?.length) {
       notes.push(
         budget === 0
@@ -218,9 +277,9 @@ export function applyMentions(req: GenerationRequest, model: ModelDef, elements:
       ...req,
       op,
       prompt,
-      inputs: { ...req.inputs, images: images.length ? images : undefined },
+      inputs: { ...req.inputs, images: images.length ? images : undefined, ...(videos.length > (req.inputs?.videos?.length ?? 0) && { videos }) },
       loras: loras.length ? loras : undefined,
-      params: newShots ? { ...req.params, shots: newShots } : req.params,
+      params: { ...req.params, ...(newShots && { shots: newShots }), ...(groups.length && { elements: groups }) },
     },
     mentioned,
     notes,

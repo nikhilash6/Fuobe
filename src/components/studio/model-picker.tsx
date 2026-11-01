@@ -15,6 +15,7 @@ import type { Badge as BadgeT } from "@/lib/gpu/types";
 import { type Engine, type ModelDef, type Operation } from "@/lib/catalog/types";
 import { useEngineMode, useStatus } from "@/lib/api";
 import { groupModels, studioBest, toggleIn } from "@/lib/composer";
+import { readsBoxes } from "@/lib/layout-prompt";
 import { pickerPrice } from "@/lib/model-rows";
 import { cn } from "@/lib/utils";
 import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, type CloudProvider } from "@/lib/your-keys";
@@ -36,6 +37,7 @@ const BADGE_LABEL: Record<string, string> = {
   open: "Open",
   uncensored: "Uncensored",
   beta: "Beta",
+  "30s": "30 s",
 };
 
 export function ModelBadges({ model, max }: { model: ModelDef; max?: number }) {
@@ -80,17 +82,21 @@ function ModelRow({
   selected,
   starred,
   showEngine,
+  boxes,
   today,
   onStar,
   gpu,
   gpuName,
   needs,
   made,
+  edits,
 }: {
   m: ModelDef;
   selected: boolean;
   starred: boolean;
   showEngine: boolean;
+  /** Layout mode: a "Reads boxes" badge on the models that place boxes by their coordinates. */
+  boxes?: boolean;
   /** The browser's day: a launch price holds through its last day (null until hydrated: no price shown for one). */
   today: number | null;
   onStar: () => void;
@@ -101,6 +107,8 @@ function ModelRow({
   needs?: CloudProvider[] | null;
   /** The active preset's live preview was made with this model. */
   made?: boolean;
+  /** The studio edits clips (Edit video): the price is an edit's, on the seconds in and out (Kling 4.0). */
+  edits?: boolean;
 }) {
   return (
     <>
@@ -112,7 +120,11 @@ function ModelRow({
             {starred && <span className="sr-only">, starred</span>}
           </span>
           {/* A dimmed row on a phone: the name first (its badges would cut it to "Na…"). */}
-          {needs ? (
+          {boxes && readsBoxes(m) ? (
+            <Badge variant="secondary" className="h-4 shrink-0 rounded-[4px] bg-brand-faint px-1 text-[10px] font-medium text-brand-text">
+              Reads boxes
+            </Badge>
+          ) : needs ? (
             <span className="contents max-sm:hidden">
               <ModelBadges model={m} max={2} />
             </span>
@@ -144,7 +156,7 @@ function ModelRow({
           <span className="max-sm:hidden">{addKeyLabel(needs[0])}</span>
         </span>
       ) : (
-        <span className="shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">{pickerPrice(m, today)}</span>
+        <span className="shrink-0 text-right text-[11px] text-muted-foreground tabular-nums">{pickerPrice(m, today, edits)}</span>
       )}
       {/* Pointer only: inside an option it would be a nested control. Keyboard: Alt+S on the highlighted row (starKey). */}
       <button
@@ -175,6 +187,8 @@ interface PickerProps {
   engine: Engine;
   onEngineChange: (e: Engine) => void;
   defaultModels?: { cloud: string; open: string };
+  /** Layout mode: the models that read boxes come first, badged. */
+  boxes?: boolean;
   /** The operations the studio offers, its main one first: "Best for this studio" ranks the models that do it. */
   ops?: Operation[];
   /** The model the active preset's preview was made with (its recipe): first in "Best for this studio". */
@@ -269,6 +283,7 @@ function PickerList({
   engine,
   onEngineChange,
   defaultModels,
+  boxes,
   ops,
   recipe,
   flat,
@@ -284,6 +299,8 @@ function PickerList({
   const [recent] = useStoredList(RECENT_MODELS);
   const [starred, setStarred] = useStoredList(STARRED_MODELS);
   const today = useToday();
+  // A studio for clip edits (Edit video: its first operation edits a clip) prices models as an edit bills.
+  const editsClips = ops?.[0] === "v2v" || ops?.[0] === "video-swap" || ops?.[0] === "video-insert";
   const engines = useMemo<Engine[]>(() => (mode === "both" ? ["cloud", "open"] : [mode]), [mode]);
   // "Best" ranks models that do what the studio is for, not single-purpose tools.
   // A preset's recipe leads, when it runs on this engine.
@@ -291,7 +308,10 @@ function PickerList({
     const ranked = studioBest(models, engine, defaultModels?.[engine], ops);
     return recipe && models.some((m) => m.id === recipe && m.engine === engine) ? [recipe, ...ranked.filter((id) => id !== recipe)] : ranked;
   }, [models, engine, defaultModels, ops, recipe]);
-  const { groups, count } = useMemo(() => groupModels({ models, engine, engines, query: q, recent, starred, best, flat }), [models, engine, engines, q, recent, starred, best, flat]);
+  const { groups, count } = useMemo(
+    () => groupModels({ models, engine, engines, query: q, recent, starred, best, flat, boxes }),
+    [models, engine, engines, q, recent, starred, best, flat, boxes],
+  );
   const demo = placeholdersOn(status?.demoMode);
   const otherEngine = engine === "cloud" ? "open" : "cloud";
   const noneForEngine = !q && !models.some((m) => m.engine === engine);
@@ -386,12 +406,14 @@ function PickerList({
                   selected={value?.id === m.id}
                   starred={starred.includes(m.id)}
                   showEngine={g.id !== "paid" && (!!q || m.engine !== engine)}
+                  boxes={boxes}
                   today={today}
                   onStar={() => setStarred((s) => toggleIn(s, m.id))}
                   gpu={m.engine === "open" ? badgeFor(badges, { modelId: m.id }) : null}
                   gpuName={badges?.gpu}
                   needs={needsKey(m, status)}
                   made={m.id === madeWith}
+                  edits={editsClips}
                 />
               </CommandItem>
             ))}

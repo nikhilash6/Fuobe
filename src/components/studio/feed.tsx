@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
-import { useCreateGeneration, useGenerationActions } from "@/lib/api";
+import { useCreateGeneration, useEngineMode, useGenerationActions } from "@/lib/api";
 import { useSoulFinish } from "./soul-finish";
 import { elapsed, formatCost, leftLabel, notePace, ratioValue, timeAgo, timeLeft } from "@/lib/format";
 import { downloadHref, downloadName, userTitle } from "@/lib/library";
@@ -272,7 +272,8 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
  * group with several takes has none: which one to animate is picked on its tile.
  */
 function NextSteps({ g, index }: { g: Generation; index: number }) {
-  const steps = nextSteps(g, index);
+  const engineMode = useEngineMode();
+  const steps = nextSteps(g, index, 3, { engineMode });
   if (!steps.length) return null;
   return (
     <nav aria-label="Next steps" className="flex flex-wrap gap-1.5">
@@ -305,8 +306,11 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g:
   const single = g.status === "succeeded" && shown.length === 1 ? g.outputs[shown[0]] : null;
   const singleName = single ? downloadName(g, single, shown[0]) : "";
   const p = g.request.params ?? {};
+  // A layout run says so, with its box count (Edit layout reopens them).
+  const boxes = (p.extra?.layout as { items?: unknown[] } | undefined)?.items?.length;
   const meta = [
     g.request.step?.label,
+    boxes ? `Layout · ${boxes} box${boxes === 1 ? "" : "es"}` : undefined,
     g.presetName,
     g.modelName ?? g.modelId,
     OPERATION_LABELS[g.op],

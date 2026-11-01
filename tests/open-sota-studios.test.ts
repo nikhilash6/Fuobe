@@ -40,12 +40,15 @@ describe("studio defaults on your GPU", () => {
 });
 
 describe('"Best for this studio" on your GPU', () => {
-  it("Image: Ideogram 4, then Qwen-Image 2.1, Krea 2 Realism and MOSS-Image (FIBO 2 Dev is next)", () => {
-    expect(best(IMAGE_STUDIO, "open")).toEqual(["oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism", "oss-moss-image"]);
+  // FLUX 3 Image Klein (nm10-flux3-klein) sits beside Ideogram 4 and Qwen-Image 2.1, as its brief asks; MOSS-Image moves to
+  // More models.
+  it("Image: Ideogram 4, then Qwen-Image 2.1, FLUX 3 Klein and Krea 2 Realism (MOSS-Image, then FIBO 2 Dev, are next)", () => {
+    expect(best(IMAGE_STUDIO, "open")).toEqual(["oss-ideogram-4", "oss-qwen-image-21", "oss-flux3-klein", "oss-krea2-realism"]);
     const t2i = MODELS.filter((m) => m.engine === "open" && m.badges?.includes("top") && m.routes.some((r) => r.op === "t2i")).map((m) => m.id);
-    expect(t2i.indexOf("oss-fibo2-dev")).toBe(4);
+    expect(t2i.indexOf("oss-fibo2-dev")).toBe(5);
   });
 
+  // FLUX 3 Klein is offered in the Edit studio, but ranks only in the Image studio's list (ModelDef.bestOps).
   it("Edit: the new edit models, Qwen-Image 2.1 first, not the text-to-image models its first route would rank", () => {
     expect(best(EDIT_STUDIO, "open")).toEqual(["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-fibo2-dev", "oss-fibo2-edit-turbo"]);
   });
@@ -279,7 +282,7 @@ describe("Ideogram 4 as the Image studio's default", () => {
     expect(viewerDefaults(d, IMAGE_STUDIO.uncaptioned, undefined)).toBe(d);
     expect(viewerDefaults(EDIT_STUDIO.defaultModels, EDIT_STUDIO.uncaptioned, false)).toBe(EDIT_STUDIO.defaultModels);
     const studio = { ...IMAGE_STUDIO, defaultModels: viewerDefaults(d, IMAGE_STUDIO.uncaptioned, false) };
-    expect(best(studio, "open")).toEqual(["oss-qwen-image-21", "oss-ideogram-4", "oss-krea2-realism", "oss-moss-image"]);
+    expect(best(studio, "open")).toEqual(["oss-qwen-image-21", "oss-ideogram-4", "oss-flux3-klein", "oss-krea2-realism"]);
   });
 });
 

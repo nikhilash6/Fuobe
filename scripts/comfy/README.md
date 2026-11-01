@@ -392,6 +392,30 @@ node validate-workflows.mjs qwen-image-edit-2509-angles image-face-mosaic-sam3 v
   colour correction as `reinhard`, and not the Evolution intensities. `tests/open-tools.test.ts` and
   `tests/evolution-comfy.test.ts` check the provider's bindings on the library files.
 
+### Restore & colourise (o/archive-restore, 2026-10-30)
+
+One hand-built entry for Video tools → Restore & colourise and the Canvas Restore node: Lightricks' Restore IC-LoRA on
+LTX-2.5 22B distilled with tiled latent fusion (docs/research/fuobe-originals-recipes-5.json, studio `archive-restore`):
+
+```bash
+npm run build -- video-restore-ltx25-tiled
+node validate-workflows.mjs video-restore-ltx25-tiled --shared
+```
+
+| id | capability | what | validated here |
+|---|---|---|---|
+| `video-restore-ltx25-tiled` | restore-video | One window of up to 97 frames (`windowStart`, `windowFrames`) scaled with lanczos to the card's canvas (1440x1088 for 4:3, 1920x1088 for 16:9), restored by `LTXVTiledFusionSampler` in 960x544 tiles at 50% overlap with the card's 8-step sigmas (euler, cfg 1). A later window takes the last 17 restored frames of the one before through `LTXVAddGuide` at frame 0 (`video2`, `prefixFrom`, `prefixFrames`) and drops them from its output; a reference picture goes in at `frame_idx` -1; deinterlacing keeps one field (`fieldWidth`, `fieldHeight`). Stage 2 (Restore to 4K) is the same graph with the Detail Refine IC-LoRA and 1024x576 tiles at twice the canvas. A whole clip in one run streams past 97 frames up to 481. The provider removes the unused branches (`src/lib/restore-graph.ts`); the pipeline joins the windows packet by packet and puts the sound back. 24 GB | no: `missing_node_type` (the ComfyUI-LTXVideo classes) |
+
+- **Node pack**: ComfyUI-LTXVideo (LTX-2 Community License, free below US$10M annual revenue: information, not a gate),
+  pinned in `install-comfyui.sh` at `220e1d45`. It is not installed on the
+  CPU validation server, so the build records its classes as unknown and the entry stays unvalidated.
+- **Weights**: the LTX-2.5 22B distilled transformer (int8), its VAE and the Gemma text encoder, plus the Restore IC-LoRA
+  (1.7 GB) and, for stage 2, the Detail Refine IC-LoRA (1.3 GB). Both LoRAs are gated on Hugging Face: accept the licence
+  there, add a token in Settings → LoRAs, and the provider downloads the one a run loads before it submits. LoRA files
+  are never committed.
+- **Not run**: the graph has not loaded in a ComfyUI with ComfyUI-LTXVideo, and nothing has run on a GPU.
+  `tests/restore-comfy.test.ts` checks the bindings and branch removal on the library file.
+
 ## DBS soundtrack separation (DBS D1)
 
 PR #15 adds three hand-built graphs: this one, the fly path's and MOSS-Image's (below), all `validated: true` (the
@@ -427,6 +451,46 @@ COMFYUI_URL=http://127.0.0.1:<port> COMFYUI_MODELS_DIR=<that ComfyUI>/models nod
 - **Validation**: the shared validation server doesn't have ComfyUI-DBS, so validate this graph on a ComfyUI that has it
   (the command above). A run of every id against the shared server records it as `missing_node_type`, not validated,
   like the H3 entries.
+
+DBS D3 adds graph B, the open dub's first step with DBS for the split (Translate & dub's "Voice split"):
+
+```bash
+npm run build -- dub-prepare-dbs-transcribe
+COMFYUI_URL=http://127.0.0.1:<port> COMFYUI_MODELS_DIR=<that ComfyUI>/models node validate-workflows.mjs dub-prepare-dbs-transcribe --shared
+```
+
+| id | capability | what | validated here |
+|---|---|---|---|
+| `dub-prepare-dbs-transcribe` | separate-audio | `LoadAudio` → `DBSLoader` (`separationModel`) → `DBSSeparate` (mono, input rate) → stems `voice` (speech) and `background` (the original minus the speech) as FLAC, plus `dub-prepare-separate-transcribe`'s Qwen3-ASR node 7 on the speech (bindings `sourceLanguage`, `asrModel`, `hints`, `maxChars`) → `cues`, `transcript`, `language`: the same outputs as the MelBand graph | yes, on the CPU ComfyUI with ComfyUI-DBS and the weights; a real CPU run of a 12 s clip (LibriSpeech speech + chords + noise bursts, Qwen3-ASR 0.6B) took 133 s with the ASR load, gave voice + background equal to the source within 3.0e-5 and a correct transcript |
+
+The provider fills it like graph A (host pick, a model that isn't there refused in words, a surround source's background
+from music + effects); it has no `channels` binding: the dub's split is always mono.
+
+## Open-H3 Regenerate 2K (n7-3)
+
+One hand-built graph for Upscale → Video's "Regenerate · creative", the "Regenerate in 2K" result action and the Canvas
+Upscale node's "Regenerate (creative)" choice (docs/research/new-models-7.md §2.6):
+
+```bash
+npm run build -- video-regenerate-h3
+node validate-workflows.mjs --subset-only video-regenerate-h3   # GET /object_info only; then node build-requirements.mjs
+```
+
+| id | capability | what | validated here |
+|---|---|---|---|
+| `video-regenerate-h3` | upscale-video | rdh9616's "Draft Video" example without the note, the PreviewAny nodes and `OpenH3VideoToPrompt` (the prompt goes straight into `CLIPTextEncode` 16), `curve_name` "none" (so the curve table is never read: `(model's own table)`), and `OpenH3SaveRefinedLatent` (24) kept so a failed decode can be redone from the saved latent. A `Video Slice` (29) in front cuts a 15 s window (`startTime`, `duration`). Bindings: `video`, `prompt`, `resolution` (the pack's strings: `1080p (1920x1080)`, `2k (2560x1440)`, `4k (3840x2160)`), `draftSize` (`768p (1344x768)` for H3 drafts, `576p (1024x576)` for the rest; `keep (snap to 32)` is never sent, since the pack's upscale always targets 16:9 or 9:16 and would stretch any other shape), `frames` (node 11's `max_frames`; 24 and 26 read 11's frame count), `startSigma`, `steps`, `seed`, `filenamePrefix`. 48 GB | no: `missing_node_type` (the packs are not on the CPU validation server) |
+
+- **Node packs** (opt-in, `OPEN_H3_REGEN=1` in `install-comfyui.sh`): rdh9616/ComfyUI-Open-H3-Regenerate at `9b686c5`
+  (Apache-2.0) and LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler at `40316cf` (MIT): `OpenH3RegenUpscale` looks up LBH's
+  `MinimaxH3LatentUpscaler3D` class by name. ComfyUI core master merged its own H3 latent upscaler and a Sol-H3-VAE loader
+  on 2026-10-28 (PRs #17411 / #17412); the pinned 0.41.0-7 and the CPU server here have neither, and the rdh pack would
+  still need LBH's class, so the LBH pack stays.
+- **Weights** (19.6 GB new, plus the 20.97 GB FL2VA base the H3 video graphs already pin): NVIDIA's merged refiner LoRA
+  (12.45 GB), the fast H3 VAE decoder (6.47 GB) and the LBH latent upscaler (0.69 GB), pinned to the model card's revision
+  `5809c33` with their SHA-256 in `workflows/comfyui/model-pins.json`. The Qwen3-VL encoder and the H3 video and audio VAEs
+  are the ones already pinned. `sharp_curve_branches.safetensors` is left out (its tensors are zero in the blocks checked).
+- **Not run**: nothing has run on a GPU, and the pack was tested by its author on ComfyUI 0.42.0. Validate on a disposable
+  GPU ComfyUI with the packs: `node validate-workflows.mjs video-regenerate-h3`.
 
 ## Fly path (N7-5)
 

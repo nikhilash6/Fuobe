@@ -35,6 +35,10 @@ declare -A NODES=(
   # reason; the code was read at this commit (no network, exec or download paths in the nodes). It needs einops and
   # safetensors only, both already installed below. Weights: the DBS_WEIGHTS block at the end of this script.
   [ComfyUI-DBS]="https://github.com/hiroki-abe-58/ComfyUI-DBS f656e53434b5485c148a2866fbd6ddc6b6152ed6"
+  # Lightricks' LTX nodes for Restore & colourise (package archive-restore): LTXICLoRALoaderModelOnly, LTXAddVideoICLoRAGuide
+  # and LTXVTiledFusionSampler (per-step tiled latent fusion). LTX-2 Community License (the repository's LICENSE: free below
+  # US$10M annual revenue). Read at this commit (2026-10-20); its requirements are installed below.
+  [ComfyUI-LTXVideo]="https://github.com/Lightricks/ComfyUI-LTXVideo 220e1d45aa0469f518e982102fca4dca92a61862"
   # MiniMax H3 video (minimax-h3-t2v / i2v / flf2v): larryvrh's turbo LoRA loader and sampler (Apache-2.0, v1.2.3, no
   # dependencies) and PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel imports triton, installed below).
   [ComfyUI-MiniMax-H3-Turbo]="https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo 77bfa67575b14e3be6214f1747732e540c68b5dd"
@@ -102,6 +106,26 @@ if [ "${H3_RELAY:-0}" = "1" ]; then
     echo "warn: could not fetch h3-relay"
   fi
 fi
+# Open-H3 Regenerate 2K (Upscale → Video's "Regenerate · creative", docs/research/new-models-7.md §2.6): rdh9616's pack
+# (Apache-2.0) runs NVIDIA's refine recipe, and its upscale node calls LBH-123-AI's H3 latent upscaler (MIT), so both go
+# in. Opt-in, since the graph needs about 40 GB of new files and a 48 GB+ GPU: OPEN_H3_REGEN=1. The rdh pack needs av and
+# safetensors, which ComfyUI's own requirements.txt already installs; the LBH pack has no requirements. (ComfyUI core
+# master merged its own H3 latent upscaler on 2026-10-28, but the rdh pack looks up LBH's class by name.)
+OPEN_H3_REGEN_REF="${OPEN_H3_REGEN_REF:-9b686c5ffd380e9d1351f9b8beef6d20d703ca3e}"   # v1.0.0, 2026-10-28
+H3_LATENT_UPSCALER_REF="${H3_LATENT_UPSCALER_REF:-40316cf008b2fd8663263270669eb4da23f89d2c}"   # 2026-09-17
+if [ "${OPEN_H3_REGEN:-0}" = "1" ]; then
+  for pack in "ComfyUI-Open-H3-Regenerate https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate $OPEN_H3_REGEN_REF" \
+              "Comfyui_Minimax_h3_latent_Upscaler https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler $H3_LATENT_UPSCALER_REF"; do
+    read -r name url ref <<<"$pack"
+    dest="$COMFYUI_DIR/custom_nodes/$name"
+    if [ -d "$dest/.git" ] || git clone -q "$url" "$dest"; then
+      git -C "$dest" fetch -q --depth 1 origin "$ref" 2>/dev/null || true
+      git -C "$dest" checkout -q "$ref" 2>/dev/null || echo "warn: could not pin $name to $ref"
+    else
+      echo "warn: could not fetch $name"
+    fi
+  done
+fi
 
 # Fuobe's live edit nodes (fuobe_live.py, one file Fuobe ships, MIT): Live edit's loader, cached reference encode,
 # crop, paste-back and socket save. Written from the copy in this checkout (src/lib/comfy-live-nodes.ts).
@@ -140,6 +164,9 @@ fi
 uv pip install --python "$PY" loguru
 # ComfyUI-ToSVG imports vtracer (MIT), potracer and PyMuPDF (AGPL-3.0, used only by its SVG-to-image node) at load time.
 uv pip install --python "$PY" "vtracer==0.6.15" "potracer==0.0.4" "PyMuPDF==1.26.5"
+# ComfyUI-LTXVideo (Restore & colourise): its requirements.txt at the pinned commit. colour-science, diffusers, einops,
+# huggingface_hub, kornia and transformers are already in the union above; OpenImageIO is for its HDR EXR nodes.
+uv pip install --python "$PY" "ninja~=1.11.1.4" openimageio || echo "warn: ComfyUI-LTXVideo's extra requirements failed to install"
 if [ "${NC_PACKS:-1}" = "1" ]; then uv pip install --python "$PY" "openai-whisper==20250625"; fi
 
 # Optional isolated worker (never in this install or its venv): LatentSync 1.6 lipsync and ThinkSound SFX change

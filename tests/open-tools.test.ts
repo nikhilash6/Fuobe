@@ -360,6 +360,25 @@ describe("Fuobe Speak", () => {
     expect(list.models.find((m) => m.id === "oss-video-depth-vda-large")).toMatchObject({ on: true, licence: { class: "non-commercial" } });
     expect(list.models.find((m) => m.id === "fuobe-speak")).toBeTruthy();
   });
+
+  it("says what each engine runs (the owner's call of 2026-10-30): the GPU adds FusioniX, the cloud runs fal's InfiniteTalk without it", () => {
+    const speak = getModel("fuobe-speak")!;
+    // The model menu's line on both engines.
+    for (const e of ["open", "cloud"] as const) expect(view("fuobe-speak", e).tagline).toMatch(/InfiniteTalk \+ the FusioniX LoRA free on your GPU \(16 GB\), or fal's InfiniteTalk without the LoRA$/);
+    expect(speak.name).toBe("Fuobe Speak");
+    // Settings → Models & licences.
+    const entry = accessList().models.find((m) => m.id === "fuobe-speak")!;
+    expect(entry.engineNote).toBe("Your GPU adds FusioniX to InfiniteTalk; the cloud runs InfiniteTalk without it");
+    // No hosted InfiniteTalk takes a LoRA (fal's three endpoints, checked): the research says so, and the cloud route has no LoRA field.
+    const research = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/fuobe-originals-recipes-5.json"), "utf8"));
+    expect(research.studios.find((s: { id: string }) => s.id === "speak").original.cloud.loraCheck.result).toMatch(/no hosted InfiniteTalk takes a LoRA/);
+    expect(view("fuobe-speak", "cloud").routes[0].map?.loras).toBeUndefined();
+    expect(view("fuobe-speak", "cloud").routes[0].loraEndpoint).toBeUndefined();
+    // Evolution and Marketing Image say theirs too; a model whose engines match says nothing.
+    expect(accessList().models.find((m) => m.id === "fuobe-evolution")?.engineNote).toMatch(/^Both engines run Wan 2\.2 Fun VACE/);
+    expect(accessList().models.find((m) => m.id === "fuobe-marketing-image")?.engineNote).toMatch(/Standalone shot .* on your GPU only/);
+    expect(accessList().models.find((m) => m.id === "fuobe-speak-motion")?.engineNote).toBeUndefined();
+  });
 });
 
 describe("Depth Map and Upscale routes", () => {

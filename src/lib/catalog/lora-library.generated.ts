@@ -3194,6 +3194,51 @@ export const LORA_LIBRARY: LoraEntry[] = [
     },
     "released": "2025-06-10",
     "notes": "The LoRA Higgsfield's 'Infinite Talk' engine loads ('fusex', scale 1, rank 32; higgsfield-originals-5.md §3.13) and InfiniteTalk's README recommends. Fuobe Speak loads it on InfiniteTalk (kijai's WanVideoWrapper) on the GPU in place of the lightx2v distill LoRA. fal's InfiniteTalk takes no LoRA, so the cloud half runs without it. Check on the first live run: the licences of the LoRAs merged into it."
+  },
+  {
+    "key": "ltx-2-5-22b-ic-lora-restore-1-0",
+    "name": "Lightricks LTX Restore IC-LoRA (archive restoration and colourisation)",
+    "file": "ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
+    "url": "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore/resolve/79245e197a6cd3251e77d178dc380b0e9f2d6563/ltx-2.5-22b-ic-lora-restore-1.0.safetensors",
+    "page": "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore",
+    "strength": 1.0,
+    "base": "ltx-2.3-22b",
+    "download": "hf-gated",
+    "group": "adapter",
+    "version": "79245e197a6cd3251e77d178dc380b0e9f2d6563",
+    "sha256": "357728bc704b3f56e59c5f09cf0540ef3b3fb88a93bbd0b050dbfacd5e05c8b0",
+    "sizeBytes": 1711643914,
+    "licence": {
+      "commercial": true,
+      "hostedOk": true,
+      "snapshotDate": "2026-10-30",
+      "name": "LTX-2.x Community License (free under US$10M annual revenue)"
+    },
+    "released": "2026-09-27",
+    "hostedEndpoint": "fal-ai/ltx-2.3-22b/reference-video-to-video/lora",
+    "notes": "Rank-128 IC-LoRA (step 4000) trained on LTX-2.3 22B dev, tested unchanged on the LTX-2.5 distilled transformer (every number on its card). The archive clip, lanczos-resized to the working canvas (1440 wide for 4:3, 1920x1088 for 16:9, multiples of 32), is the frame-aligned reference at downscale factor 1; tiled latent fusion with 960x544 tiles at 50% overlap at every size; strength 1.0 is a switch (0.7 stays monochrome, 1.4 over-tints); 8 distilled steps (sigmas 1.0 … 0.0, euler), guidance 1.0; 8n+1 frames a pass (49 or 97), longer clips in 97-frame windows that start from the previous window's last 17 restored frames (LTXVAddGuide at frame 0); an optional reference image (native crops on a grey canvas) at frame_idx -1. Read 2026-10-30 from the model card (revision pinned) and the Hugging Face API (size and LFS SHA256). Gated on Hugging Face (\"Agree and Access\" on the model page, which also consents to Lightricks' offers): the file downloads only with the token of an account that accepted, so Fuobe asks for an HF token (Settings → LoRAs) and uses it only for gated downloads; a cloud run gets Fuobe's mirror of the file on fal storage, never the token."
+  },
+  {
+    "key": "ltx-2-5-22b-ic-lora-refine-details-1-0",
+    "name": "Lightricks LTX-2.5 Detail Refine IC-LoRA (restore to 4K, second pass)",
+    "file": "ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors",
+    "url": "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details/resolve/4912c478b35dd96b6cdcc5f7c7ff9d72c2c57929/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors",
+    "page": "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details",
+    "strength": 1.0,
+    "base": "ltx-2.5-22b",
+    "download": "hf-gated",
+    "group": "adapter",
+    "version": "4912c478b35dd96b6cdcc5f7c7ff9d72c2c57929",
+    "sha256": "771a84f70e143af89867fc714ebbf7bd6edcaa4974c0360cba4a2d292a99f0e6",
+    "sizeBytes": 1308787534,
+    "licence": {
+      "commercial": true,
+      "hostedOk": true,
+      "snapshotDate": "2026-10-30",
+      "name": "LTX-2.x Community License (free under US$10M annual revenue)"
+    },
+    "released": "2026-09-27",
+    "notes": "The Restore card's stage 2: the restored clip lanczos x2 (2880x2176 from 1440x1088) through the same tiled-fusion workflow with this LoRA at 1.0, tile 1024x576; restore first, refine second (refining first sharpens the damage and desaturates the colour). Trained on LTX-2.5; no host serves LTX-2.5 with LoRAs, so it runs on your GPU only. Gated on Hugging Face (\"Agree and Access\" on the model page, which also consents to Lightricks' offers): the file downloads only with the token of an account that accepted, so Fuobe asks for an HF token (Settings → LoRAs) and uses it only for gated downloads; a cloud run gets Fuobe's mirror of the file on fal storage, never the token."
   }
 ];
 

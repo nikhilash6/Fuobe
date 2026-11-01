@@ -54,6 +54,8 @@
 //   octreeResolution                      (Hunyuan3D 2.1 mesh resolution)
 //   columns, rows                         (ImageGridtoBatch: how the sheet is cut into tiles)
 //   gridPrompt, sheetPrompt               (contact-sheet / turnaround framing text placed before the prompt)
+// Keys added with the nm10-flux3-klein workflows (research #10 §6.3):
+//   image5 … image10                      (further reference images: FLUX 3 Image Klein's edit takes up to 10)
 // Keys added with the av-tools workflows (Wave B):
 //   frameIndex                            (Extract frame: which frame of the Trim Video window, -1 = its last, 0 = its first)
 // Keys added with the comfyui-oss-4 workflows (docs/research/comfyui-oss-4.md). * = the provider fills it from the
@@ -126,6 +128,12 @@
 //   channels*                             (REUSEEnhance channels, and DBSSeparate's in the bed graph: the DBS rules)
 // Keys added with the owner's SOTA image families (2026-10-31), model controls (params.extra):
 //   preset                                (Ideogram 4's sampling preset by name: Quality | Default | Turbo, the graph's own table)
+// Keys added with Open-H3 Regenerate (n7-3, docs/research/new-models-7.md §2.6). * = the provider fills it:
+//   resolution*                           (OpenH3RegenUpscale's output size as the pack's string: params.resolution 1080p / 1440p / 2160p
+//                                          -> "1080p (1920x1080)" | "2k (2560x1440)" | "4k (3840x2160)")
+//   draftSize*                            (OpenH3RegenPrepareDraft's size: "768p (1344x768)" for H3 drafts, "576p (1024x576)" for other
+//                                          models, whatever the shape: the pack upscales to 16:9 or 9:16 only; regenerate.ts draftSizeFor)
+//   startSigma                            (OpenH3RegenSigmas start noise: the Creativity control, 0 = the release 0.909 grid)
 
 import fs from 'node:fs';
 
@@ -160,6 +168,8 @@ export const CUSTOM_NODE_REPOS = {
   'h3-relay': 'https://github.com/akatz-ai/h3-relay/tree/e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220',
   // DBS soundtrack separation (docs/research/dbs-separation-7.md §4): pinned in install-comfyui.sh, not on the validation server.
   'ComfyUI-DBS': 'https://github.com/hiroki-abe-58/ComfyUI-DBS/tree/f656e53434b5485c148a2866fbd6ddc6b6152ed6',
+  // Restore & colourise (package archive-restore): Lightricks' LTX nodes, pinned in install-comfyui.sh, not on the validation server.
+  'ComfyUI-LTXVideo': 'https://github.com/Lightricks/ComfyUI-LTXVideo/tree/220e1d45aa0469f518e982102fca4dca92a61862',
   // Owner's SOTA image families (2026-10-31): AusBoss's crop, pad and stitch nodes (Qwen-Image 2.1 inpaint and expand), MIT.
   'ausboss-nodes': 'https://github.com/ausboss/ComfyUI-AusBoss',
   // Krea 2 edits (the owner's SOTA families, 2026-10-31): the Krea 2 Identity Edit nodes, and Ostris' edit nodes that
@@ -170,6 +180,11 @@ export const CUSTOM_NODE_REPOS = {
   // PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel needs Triton). Pinned in install-comfyui.sh.
   'ComfyUI-MiniMax-H3-Turbo': 'https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo/tree/77bfa67575b14e3be6214f1747732e540c68b5dd',
   'plaguekind-nodes': 'https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes/tree/d58d006a4ea32c25c06499f2ff104f0852a045a6',
+  // Open-H3 Regenerate 2K (Upscale → Video's Regenerate · creative, docs/research/new-models-7.md §2.6): rdh9616's refine
+  // nodes (Apache-2.0) and the H3 latent upscaler they call by class name (LBH-123-AI, MIT). Opt-in in install-comfyui.sh
+  // (OPEN_H3_REGEN=1); not on the validation server (video-regenerate-h3 lists both with `packs`).
+  'ComfyUI-Open-H3-Regenerate': 'https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate/tree/9b686c5ffd380e9d1351f9b8beef6d20d703ca3e',
+  Comfyui_Minimax_h3_latent_Upscaler: 'https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler/tree/40316cf008b2fd8663263270669eb4da23f89d2c',
   // Clean up voice (NVIDIA RE-USE): Fuobe's own pack, in this repository (comfy-nodes/ComfyUI-RE-USE), pinned at the commit
   // that last changed it (tests/reuse-pack-pin.test.ts checks it). install-comfyui.sh copies it from the checkout.
   'ComfyUI-RE-USE': 'https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE',
@@ -184,6 +199,7 @@ export const PACK_CLASSES = {
   h3_character_swap: /^H3CharacterSwap/,
   'h3-relay': /^(H3Relay|LabsH3)/,
   'ComfyUI-DBS': /^DBS(Loader|Separate)$/,
+  'ComfyUI-LTXVideo': /^(LTXICLoRALoaderModelOnly|LTXAddVideoICLoRAGuide|LTXVTiledFusionSampler)$/,
   'ausboss-nodes': /^AUSBOSS_NODES_/,
   // Installed on the validation server, but a ComfyUI with comfyui-workflow-encrypt names that pack as these classes' module.
   'comfyui-krea2edit': /^Krea2Edit(ModelPatch|GroundedEncode)$/,
@@ -191,6 +207,8 @@ export const PACK_CLASSES = {
   // MiniMax H3 video. The turbo classes need naming here: a ComfyUI with comfyui-workflow-encrypt reports that pack as their module.
   'ComfyUI-MiniMax-H3-Turbo': /^MiniMaxH3Turbo(LoRA|Sampler)$/,
   'plaguekind-nodes': /^H3(SLAAttention|AdaLNLoRAFix)$/,
+  'ComfyUI-Open-H3-Regenerate': /^OpenH3(Regen(Lora|Sigmas|PrepareDraft|Upscale|RefineLatent|FastVAEDecode|Finish)|SaveRefinedLatent|LoadRefinedLatent|VideoToPrompt)$/,
+  Comfyui_Minimax_h3_latent_Upscaler: /^(MinimaxH3LatentUpscaler(3D|Node2D)|MMH3(TemporalSplitParamsV10|SpatialSplitParamsV10|SplitUpscale))$/,
   'ComfyUI-RE-USE': /^REUSE(Loader|Enhance)$/,
   // Live edit's nodes (fuobe_live.py), which Fuobe writes into custom_nodes itself.
   'fuobe-live': /FuobeLive$/,
@@ -199,6 +217,8 @@ export const PACK_CLASSES = {
 // Model download locations for files that the source workflow does not annotate
 // (UI templates usually carry node.properties.models; custom-node examples do not).
 export const KNOWN_MODELS = {
+  // archive-restore: Lightricks' Detail Refine IC-LoRA (stage 2 of Restore & colourise), gated, at the researched commit.
+  'ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors': { folder: 'loras', url: 'https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details/resolve/4912c478b35dd96b6cdcc5f7c7ff9d72c2c57929/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors' },
   // Live edit: linoyts' 2-step DMD2 LoRA for Qwen-Image 2.1 (pytorch_lora_weights.safetensors upstream, kept under a
   // name of its own), pinned at the revision whose file was measured.
   'Qwen-Image-2.1-DMD2-2steps.safetensors': { folder: 'loras', url: 'https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights.safetensors' },
@@ -255,6 +275,13 @@ export const KNOWN_MODELS = {
   'h3_character_swap_v1.5.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/d06323b7c8e70e97cdab48b78a1e05f786c8cba9/h3_character_swap_v1.5.safetensors' },
   'h3_character_swap_pro4500_1000.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/a665bb7e3bb9804e487d2925f67744f554c8ad49/h3_character_swap_pro4500_1000.safetensors' },
   'H3-Person-Remover-V1.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA/resolve/fe136b3dc93aea993b9f194d48ea9859fdc2de14/H3-Person-Remover-V1.safetensors' },
+  // Open-H3 Regenerate 2K (video-regenerate-h3; docs/research/new-models-7.md §2.4, sizes and SHA-256 there and in
+  // workflows/comfyui/model-pins.json): NVIDIA's merged refiner LoRA (refiner + LightX2V Turbo v1.2 + LMS Sharp, 12.45 GB),
+  // the fast H3 VAE decoder and the LBH latent upscaler (the same bytes as LBH-123-AI/Minimax_h3_latent_Upscaler at
+  // 3f941d5d), all at the model card's revision. The curve-branch file is left out: its tensors are zero (§2.3).
+  'open_h3_regenerate_2k_lora.safetensors': { folder: 'loras', url: 'https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/lora/open_h3_regenerate_2k_lora.safetensors' },
+  'fast_h3_vae_noncausal_24l.safetensors': { folder: 'vae', url: 'https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/vae_fast/fast_h3_vae_noncausal_24l.safetensors' },
+  'minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors': { folder: 'latent_upscale_models', url: 'https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/latent_upsampler/minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors' },
   // MiniMax H3 video (minimax-h3-*): the first+last-frame model (pruned int8), Kijai's int8 video VAE (the file
   // the H3 preview clips were rendered with), larryvrh's turbo v4 LoRA (Apache-2.0) and pablodawson's 360 Orbit LoRA, each at a pinned revision.
   'minimax_h3_fl2va_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors' },
@@ -376,7 +403,26 @@ export const KNOWN_MODELS = {
   'fibo2_edit_turbo_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors', variants: ['fibo2_edit_turbo_bf16.safetensors'] },
   'qwen3vl_4b_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors' },
   'qwen3.5_9b_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_int8_convrot.safetensors', variants: ['qwen3.5_9b_bf16.safetensors'] },
+  // FLUX 3 Image Klein (research #10 §6.3, nm10-flux3-klein): BFL's ComfyUI repack, gated "auto" (accept the FLUX Kommunity
+  // License on Hugging Face, then a token downloads it), pinned to the revision read on 2026-11-01. Its Qwen3-VL-4B int8 encoder and
+  // flux2-vae are the same names and sizes as the FIBO 2 and flux2-dev rows above, which download without a token. `variants`:
+  // the same weights in another precision in the same repo (nvfp4 for Blackwell GPUs, bf16).
+  'flux3-image-klein-int8-convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-int8-convrot.safetensors', variants: ['flux3-image-klein-nvfp4.safetensors', 'flux3-image-klein-bf16.safetensors'] },
+  'flux3-image-klein-nvfp4.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-nvfp4.safetensors' },
+  'flux3-image-klein-bf16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-bf16.safetensors' },
+  'flux3-image-klein-base-int8-convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-base-int8-convrot.safetensors', variants: ['flux3-image-klein-base-nvfp4.safetensors', 'flux3-image-klein-base-bf16.safetensors'] },
+  'flux3-image-klein-base-nvfp4.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-base-nvfp4.safetensors' },
+  'flux3-image-klein-base-bf16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-base-bf16.safetensors' },
+  // BFL's prompt upsampler (Qwen3.5 9B fine-tune, Apache-2.0): the Prompt helper. The w4a8 file is the Comfy templates' (the card's
+  // download line names the int8 one, 9.75 GB).
+  'qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors', variants: ['qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors', 'qwen3.5_9b_flux3_prompt_upsampler_bf16.safetensors'] },
 };
+
+// FLUX 3 Image Klein (flux3-klein-*): every file's licence, as information (the owner's rule: never a gate).
+const KLEIN_LICENSE =
+  'FLUX Kommunity License v1.0 (FLUX 3 Image Klein and Klein Base: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross ' +
+  'annual revenue; other commercial use needs a BFL licence; not blanket permission for commercial fine-tuning or distribution); Qwen3-VL-4B-Instruct ' +
+  'encoder and the FLUX 3 prompt upsampler (Qwen3.5 9B fine-tune) Apache-2.0; FLUX.2 VAE Apache-2.0';
 
 // MiniMax H3 video (minimax-h3-*): licence and note text the seven graphs share.
 const H3_LICENSE =
@@ -788,6 +834,74 @@ export const SPEC = [
       'The text encoder is qwen3.5_9b_int8_convrot (the int8 file FIBO 2\'s prompt writer also loads), not the template\'s qwen3.5_9b_w4a8_gptq. ' +
       'The 16 GB VRAM figure is an estimate, as MOSS-Image publishes none: about 15 GB of files (DiT 5.4 + encoder 9.7 + VAE 0.25), and ComfyUI offloads. ' +
       'The int8 files run through comfy-kitchen\'s kernels, which need a PyTorch built for CUDA 13 (cu130): comfy/quant_ops.py turns its CUDA backend off otherwise and logs a warning, and the model may run slower.',
+  },
+  // ---- FLUX 3 Image Klein (research #10 §6.3, package nm10-flux3-klein) ------------------------------------------------
+  {
+    id: 'flux3-klein-t2i',
+    title: 'FLUX 3 Image Klein text to image (16 steps; BFL\'s prompt helper writes the full caption, or a layout of boxes as typed)',
+    capability: 't2i',
+    handBuilt: 'hand-built/flux3-klein-t2i.json',
+    bindings: {
+      prompt: [b('11', 'prompt')], width: [b('6', 'width')], height: [b('6', 'height')],
+      seed: [b('7', 'seed'), b('11', 'sampling_mode.seed')], steps: [b('7', 'steps')], unet: [b('1', 'unet_name')],
+    },
+    outputs: [{ node: '9', kind: 'image' }],
+    defaults: { unet: 'flux3-image-klein-int8-convrot.safetensors' },
+    limits: { maxWidth: 4096, maxHeight: 4096, dimensionMultiple: 16 },
+    optionalModels: ['flux3-image-klein-nvfp4.safetensors', 'flux3-image-klein-bf16.safetensors'],
+    vramGb: 16, // a guess (16-24 GB): see notes
+    license: KLEIN_LICENSE,
+    notes:
+      'Comfy-Org\'s image_flux3_klein_distilled_t2i (2026-10-15, minComfyUIVersion 0.41.0) without its subgraph, ResolutionSelector, box editor and notes; core nodes only. ' +
+      'The prompt goes to TextGenerate on BFL\'s FLUX 3 prompt upsampler (CLIPLoader type flux3, 3,584 tokens, top_k 1 as the card\'s greedy decoding, presence penalty 1.5, ' +
+      'the t2i system prompt of black-forest-labs/flux-3-image-klein-pup@3f3edb52), whose caption Qwen3-VL-4B encodes. Prompt helper off (params.extra.promptHelper "off"), ' +
+      'or a layout of boxes (compileFlux3: a caption citing <obj_N>, then the 0-1000 table), sends the words as typed: the provider takes the helper\'s branch out. ' +
+      'Distilled: 16 steps (the card; the template has 15), CFG 1, er_sde / simple, an empty negative. The template\'s file names (flux3_image_klein_sd_int8_convrot) are not ' +
+      'in the repository: the files are BFL\'s (flux3-image-klein-int8-convrot). VRAM about 16-24 GB, estimated: BFL\'s card gives 25-31 GB on a B200 at 1 MP with the helper off, ' +
+      'Freefield measured 17.8 GB with the int8 files; the helper adds a 6.7 GB encoder, which ComfyUI offloads after it runs.',
+  },
+  {
+    id: 'flux3-klein-edit',
+    title: 'FLUX 3 Image Klein edit with up to 10 references (16 steps; the prompt helper looks at them)',
+    capability: 'edit',
+    handBuilt: 'hand-built/flux3-klein-edit.json',
+    bindings: {
+      prompt: [b('11', 'prompt')], image: [b('20', 'image')], image2: [b('21', 'image')], image3: [b('22', 'image')], image4: [b('23', 'image')],
+      image5: [b('24', 'image')], image6: [b('25', 'image')], image7: [b('26', 'image')], image8: [b('27', 'image')], image9: [b('28', 'image')],
+      image10: [b('29', 'image')], seed: [b('7', 'seed'), b('11', 'sampling_mode.seed')], steps: [b('7', 'steps')], unet: [b('1', 'unet_name')],
+    },
+    outputs: [{ node: '9', kind: 'image' }],
+    defaults: { unet: 'flux3-image-klein-int8-convrot.safetensors' },
+    limits: { maxImages: 10 },
+    optionalModels: ['flux3-image-klein-nvfp4.safetensors', 'flux3-image-klein-bf16.safetensors'],
+    vramGb: 16, // a guess (16-24 GB): see notes
+    license: KLEIN_LICENSE,
+    notes:
+      'Comfy-Org\'s image_flux3_klein_distilled_image_edit with ten LoadImage nodes on one ReferenceMultiLatent (resize, 1 MP each; the result takes reference 1\'s shape, ' +
+      'as the template\'s empty_latent) and on the BatchImagesNode the prompt helper looks at (the i2i system prompt, presence penalty 0). References not given are left out ' +
+      '(ReferenceMultiLatent and BatchImagesNode take them as optional inputs; slots drop from the last). Prompt: the instruction, references named by order ' +
+      '(the first image, the second image… or <ref_image_0> in a typed caption). 16 steps, CFG 1, euler / simple, an empty negative (ConditioningZeroOut) with the ' +
+      'references on both sides, as the template. Prompt helper off sends the words as typed. Removed: the box editor, image compare and notes.',
+  },
+  {
+    id: 'flux3-klein-base-t2i-lora',
+    title: 'FLUX 3 Image Klein Base text to image with LoRAs (50 steps, CFG 3.5; the base LoRAs are trained on)',
+    capability: 't2i',
+    handBuilt: 'hand-built/flux3-klein-base-t2i-lora.json',
+    bindings: {
+      prompt: [b('11', 'prompt')], width: [b('6', 'width')], height: [b('6', 'height')],
+      seed: [b('7', 'seed'), b('11', 'sampling_mode.seed')], steps: [b('7', 'steps')], cfg: [b('7', 'cfg')], unet: [b('1', 'unet_name')],
+    },
+    outputs: [{ node: '9', kind: 'image' }],
+    defaults: { unet: 'flux3-image-klein-base-int8-convrot.safetensors' },
+    limits: { maxWidth: 4096, maxHeight: 4096, dimensionMultiple: 16 },
+    optionalModels: ['flux3-image-klein-base-nvfp4.safetensors', 'flux3-image-klein-base-bf16.safetensors'],
+    vramGb: 16, // a guess (16-24 GB): see notes
+    license: KLEIN_LICENSE,
+    notes:
+      'flux3-klein-t2i on Klein Base, the undistilled checkpoint BFL, fal\'s trainer and AI-Toolkit train LoRAs on: 50 steps, CFG 3.5, euler / simple (the card), ' +
+      'the empty negative now counts. The run\'s LoRAs (a trained FLUX 3 Klein Soul ID, Settings -> LoRAs) are injected after the UNETLoader as a LoraLoaderModelOnly stack. ' +
+      'Same prompt helper, Prompt helper off and layout rules as flux3-klein-t2i. About three times the distilled model\'s sampling time.',
   },
   {
     id: 'qwen-image-edit-2509',
@@ -2810,6 +2924,57 @@ export const SPEC = [
       'Suits LTX camera LoRAs when there is no start frame.',
   },
 
+  // ---- Restore & colourise (package archive-restore): Lightricks' Restore IC-LoRA, tiled latent fusion --------------
+  {
+    id: 'video-restore-ltx25-tiled',
+    title: 'Restore & colourise archive footage: LTX-2.5 22B distilled + the Restore IC-LoRA, tiled latent fusion, one 97-frame window with the 17-frame prefix hand-off (stage 2: the Detail Refine IC-LoRA) (ComfyUI-LTXVideo pack)',
+    capability: 'restore-video',
+    handBuilt: 'hand-built/video-restore-ltx25-tiled.json',
+    packs: ['ComfyUI-LTXVideo'],
+    modelUrls: {
+      // The LTX-2.5 files ltx25-i2v / ltx25-t2v load (their template's links), and the Restore IC-LoRA at the researched commit.
+      'ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors': 'https://huggingface.co/Lightricks/LTX-2.5/resolve/main/diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors',
+      'ltx-2.5-video-vae-bf16.safetensors': 'https://huggingface.co/Lightricks/LTX-2.5/resolve/main/vae/ltx-2.5-video-vae-bf16.safetensors',
+      'gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors': 'https://huggingface.co/Lightricks/LTX-2.5/resolve/main/text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors',
+      'ltx-2.5-22b-ic-lora-restore-1.0.safetensors': 'https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore/resolve/79245e197a6cd3251e77d178dc380b0e9f2d6563/ltx-2.5-22b-ic-lora-restore-1.0.safetensors',
+    },
+    optionalModels: ['ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors'],
+    bindings: {
+      video: [b('source', 'video')], video2: [b('prefix_source', 'video')], image: [b('reference', 'image')],
+      prompt: [b('positive', 'text')], negativePrompt: [b('negative', 'text')], seed: [b('sample', 'seed')], cfg: [b('sample', 'cfg')],
+      fps: [b('conditioning', 'frame_rate'), b('video', 'fps')],
+      windowStart: [b('source', 'skip_first_frames')], windowFrames: [b('source', 'frame_load_cap'), b('empty', 'length')],
+      canvasWidth: [b('canvas', 'width'), b('empty', 'width'), b('reference_fit', 'width')],
+      canvasHeight: [b('canvas', 'height'), b('empty', 'height'), b('reference_fit', 'height')],
+      fieldWidth: [b('field', 'width')], fieldHeight: [b('field', 'height')],
+      prefixFrom: [b('prefix_source', 'skip_first_frames')], prefixFrames: [b('keep', 'batch_index')],
+      lora: [b('lora', 'lora_name')], loraStrength: [b('lora', 'strength_model')],
+      tileWidth: [b('sample', 'tile_width')], tileHeight: [b('sample', 'tile_height')],
+      streaming: [b('guide', 'use_streaming')], tileFrames: [b('sample', 'tile_frames')],
+      filenamePrefix: [b('save', 'filename_prefix')],
+    },
+    outputs: [{ node: 'save', kind: 'video' }],
+    defaults: {
+      lora: 'ltx-2.5-22b-ic-lora-restore-1.0.safetensors', windowStart: 0, windowFrames: 97, prefixFrames: 0, prefixFrom: 80, canvasWidth: 1440, canvasHeight: 1088,
+      fieldWidth: 640, fieldHeight: 240, tileWidth: 960, tileHeight: 544, streaming: false, tileFrames: 0,
+    },
+    limits: { maxWidth: 3840, maxHeight: 3840, maxFrames: 481, dimensionMultiple: 32, frameStep: 8 },
+    vramGb: 24,
+    license:
+      'LTX-2.x Community License (LTX-2.5 22B distilled, its video VAE, and Lightricks\' Restore and Detail Refine IC-LoRAs, both gated on Hugging Face: free under US$10M annual revenue); ' +
+      'Gemma 4 text encoder packaged by Lightricks; ComfyUI-LTXVideo nodes under the LTX-2 Community License (its LICENSE file)',
+    notes:
+      'Built from the Restore IC-LoRA card\'s recipe (Hugging Face Lightricks/LTX-2.5-22b-IC-LoRA-Restore at 79245e1, read as data) and the node definitions of ComfyUI-LTXVideo at 220e1d4 ' +
+      '(its LTX-2.5_V2V_TiledFusion_Upscale example wires the same nodes): the window (windowStart, windowFrames: 8n+1, at most 97) read at the clip\'s own rate, lanczos to the canvas ' +
+      '(canvasWidth x canvasHeight: 1440x1088 for 4:3, 1920x1088 for 16:9), the frame-aligned IC-LoRA guide at downscale 1, LTXVTiledFusionSampler with 960x544 tiles at 50% overlap ' +
+      'and the 8 distilled sigmas (euler, cfg 1), tiled decode, silent H.264 (the pipeline puts the sound back after the join). ' +
+      'video2 = the window before\'s saved frames; its last 17 (prefixFrom) go in as LTXVAddGuide at frame 0, and prefixFrames (17) drops them from this window\'s output; absent on the ' +
+      'first window (the provider removes that branch). image = an optional reference picture at frame_idx -1 (a second IC-LoRA guide; removed without one). deinterlace keeps one field ' +
+      '(fieldWidth x fieldHeight, nearest rows: no blending; ComfyUI has no fieldmatch/yadif/decimate node), removed when off. Stage 2 (Restore to 4K): the same graph on the restored clip ' +
+      'with the Detail Refine IC-LoRA, a 2x canvas and 1024x576 tiles. A single generation of a whole clip past 97 frames streams: streaming on the guide and tileFrames 97 on the sampler ' +
+      '(the card\'s other long-clip path; no reference picture there). Needs the ComfyUI-LTXVideo pack.',
+  },
+
   // ---- Shorts Studio / Mixed Media: trim, segment, restyle ------------------------
   {
     id: 'video-trim',
@@ -2885,6 +3050,30 @@ export const SPEC = [
       'The simple scheduler with shift s reaches sigma = denoise N - steps steps into a schedule of N = round(steps x (s - (s - 1) x denoise) / denoise) steps, and the last `steps` run (Lightx2v 4-step), so the run starts within a few hundredths of any denoise from 0.02 to 1 (KSampler\'s floor(steps / denoise) could only make 1, 0.8, 0.67, 0.57 or 0.5 with 4 steps). ' +
       'Wan 2.2\'s high-noise expert takes only the steps at or above its switch point (sigma 0.875; ComfySwitchNode gives the first sampler the low-noise expert when the run starts below it, as all three intensities do). ' +
       'Control: Depth Anything 3 depth on every frame (no kept frame, no masks); the direction frame is the VACE reference. Same weights as the restyle graph.',
+  },
+  {
+    // Blockout to film (package blockout-film): the open engine's render of a grey-box blockout.
+    id: 'video-blockout-wan22-fun-vace',
+    title: 'Blockout to film: Wan 2.2 Fun VACE driven by the blockout\'s own depth + a first frame drawn from the references',
+    capability: 'v2v',
+    handBuilt: 'hand-built/video-blockout-wan22-fun-vace.json',
+    bindings: {
+      video: [b('1', 'file')], image: [b('4', 'image')], prompt: [b('12', 'text')], negativePrompt: [b('13', 'text')],
+      width: [b('3', 'width'), b('5', 'width'), b('34', 'width'), b('35', 'width'), b('15', 'width')],
+      height: [b('3', 'height'), b('5', 'height'), b('34', 'height'), b('35', 'height'), b('15', 'height')],
+      frames: [b('30', 'value')], fps: [b('26', 'fps')], seed: [b('22', 'noise_seed'), b('23', 'noise_seed')], steps: [b('22', 'steps'), b('23', 'steps')],
+      cfg: [b('22', 'cfg'), b('23', 'cfg')], shift: [b('20', 'shift'), b('21', 'shift')], controlStrength: [b('15', 'strength')],
+      invertDepth: [b('41', 'value')],
+    },
+    outputs: [{ node: '27', kind: 'video' }],
+    limits: { maxWidth: 1280, maxHeight: 1280, dimensionMultiple: 16, maxFrames: 81, frameStep: 4 },
+    vramGb: 24,
+    license: 'Apache-2.0 (Wan 2.2 Fun VACE, lightx2v)',
+    notes:
+      'Cinema\'s Blockout on your GPU: the browser renders the grey box and its depth (near = bright, as Depth Anything draws it) at 16 fps; video-segment-resample cuts the depth into 81-frame windows that overlap by one frame; ' +
+      'qwen-image-edit-2511 draws the first frame from the grey box\'s first frame and up to two references; each window runs this graph with the first frame (window 1) or the last frame of the window before (frame-extract), then video-concat-encoded joins them. ' +
+      'The same graph as video-restyle-wan22-fun-vace without Depth Anything 3: control frame 0 = the first frame (kept), frames 1..N-1 = the depth video, near = bright (invertDepth: true runs it through ImageInvert first, for a near = dark pass such as Blender\'s mist; ComfySwitchNode picks); the first frame is also the VACE reference. Lightx2v 4 steps. Silent (no audio input): sound comes afterwards (Sound for video). ' +
+      'A blockout uploaded without a depth pass runs video-restyle-wan22-fun-vace instead (Depth Anything 3 on the grey box).',
   },
   {
     id: 'mixed-media-zimage-frames',
@@ -3008,6 +3197,42 @@ export const SPEC = [
       'Dubbing step 1. Changed from the original graph: LoadAudio replaces LoadVideo + GetVideoComponents (LoadAudio decodes the soundtrack of a video upload too, without decoding frames), so it takes audio or video. ' +
       'Outputs in order: voice stem, background stem (music + effects), cue lines ("start-end: text", seconds), plain transcript, detected language (PreviewAny, folded into the text outputs\' meta). ' +
       'ASR runs on the separated vocals. 52 languages auto-detected (30 selectable).',
+  },
+  // Graph B of docs/research/dbs-separation-7.md §4.4 (DBS D3): the open dub's first step with DBS in place of MelBand
+  // RoFormer, so the background keeps the score and the sound effects (a vocals model takes singing with the voice).
+  // Same output contract as dub-prepare-separate-transcribe; node 7 is that graph's Qwen3-ASR node with its bindings.
+  {
+    id: 'dub-prepare-dbs-transcribe',
+    title: 'Separate the dialogue from the music and effects (DBS) and transcribe it with timestamps (Qwen3-ASR 1.7B)',
+    capability: 'separate-audio',
+    handBuilt: 'hand-built/dub-prepare-dbs-transcribe.json',
+    packs: ['ComfyUI-DBS'],
+    // Both DBS models, as in separate-soundtrack-dbs: a CUDA host runs DBS-TIGER unless asked otherwise.
+    requiredModels: ['DBS-BSRNN-DnR/model.safetensors', 'DBS-BSRNN-DnR/config.json', 'DBS-TIGER-DnR/model.safetensors', 'DBS-TIGER-DnR/config.json'],
+    bindings: {
+      audio: [b('1', 'audio')], separationModel: [b('2', 'model')],
+      sourceLanguage: [b('7', 'language')], asrModel: [b('7', 'model')], hints: [b('7', 'hints')], maxChars: [b('7', 'max_chars')],
+    },
+    outputs: [
+      { node: '5', kind: 'audio', stem: 'voice' },
+      { node: '6', kind: 'audio', stem: 'background' },
+      { node: '8', kind: 'text', role: 'cues' },
+      { node: '9', kind: 'text', role: 'transcript' },
+      { node: '10', kind: 'text', role: 'language' },
+    ],
+    defaults: { separationModel: 'DBS-BSRNN-DnR', sourceLanguage: 'auto', asrModel: 'Qwen/Qwen3-ASR-1.7B-hf' },
+    vramGb: 8,
+    license: 'DBS weights Apache-2.0 (trained on DnR v2, CC BY 4.0); Qwen3-ASR / ForcedAligner Apache-2.0; ComfyUI-QwenASR GPL-3.0; ComfyUI-DBS MIT',
+    autoDownloads: [
+      'AILab_Qwen3ASRSubtitle downloads Qwen/Qwen3-ASR-1.7B-hf (4.08 GB; 0.6B: 1.56 GB) and Qwen/Qwen3-ForcedAligner-0.6B-hf (1.84 GB) into models/Qwen3-ASR on first run',
+    ],
+    notes:
+      'Dubbing step 1 with DBS: the voice split runs on a CPU (23 MB of weights) and the background keeps the music and the sound effects, singing included. ' +
+      'Qwen3-ASR still needs the 8 GB listing on a GPU. audio = an audio file or a video (LoadAudio reads a video\'s soundtrack without decoding frames). ' +
+      'DBSLoader model DBS-BSRNN-DnR (fast, the CPU default) or DBS-TIGER-DnR (best, the CUDA default); DBSSeparate in mono at the input\'s rate. ' +
+      'Outputs in order: voice stem (speech), background stem = the original minus the speech (AudioMerge subtract: it keeps the stereo image), cue lines ("start-end: text", seconds), plain transcript, ' +
+      'detected language (PreviewAny, folded into the text outputs\' meta). Both stems are FLAC, so voice + background add up to the source. ' +
+      'The provider splits a file with more than 2 channels with its background from music + effects (node 4 rewired to AudioMerge add): ComfyUI saves mono or stereo only. ASR runs on the separated speech.',
   },
   // DBS soundtrack separation (docs/research/dbs-separation-7.md §4.4, graph A): the one graph behind Split soundtrack (and
   // Remove dialogue, Clean up dialogue, "Original sound" later). ComfyUI-DBS is not on the validation server: checked
@@ -4213,6 +4438,40 @@ export const SPEC = [
       'Caveat: VHS\'s ProRes "hq" profile leaves the pixel format to prores_ks, which picks yuv444p10le for the RGB frames, so "ProRes 422 HQ" is the HQ profile (apch) carrying 4:4:4 10-bit samples ' +
       '(FFmpeg decodes it; a strict 4:2:2 file needs a VHS format with -pix_fmt yuv422p10le, which would be a change to the node pack). The same holds for video-export-pro. ' +
       'Tested on CPU (3 s 320x180 25 fps clip with sound): ProRes apch / yuv444p10le / PCM and H.265 Main 10 yuv420p10le with AAC; on a silent 2 s 24 fps clip FFV1 gbrap16le .mkv, 48 of 48 frames; each ffprobe-checked.',
+  },
+  // ---- Open-H3 Regenerate 2K (package n7-3-regenerate-2k; docs/research/new-models-7.md §2.6): Upscale → Video's
+  // "Regenerate · creative", the "Regenerate in 2K" result action and the Canvas Upscale node's choice, on your GPU only.
+  {
+    id: 'video-regenerate-h3',
+    title: 'Regenerate a soft clip at 1080p, 2K or 4K: Open-H3 Regenerate 2K (MiniMax H3 FL2VA + NVIDIA\'s refiner LoRA, 3 Euler steps, the LBH latent upscaler, the fast H3 VAE decoder) (ComfyUI-Open-H3-Regenerate + LBH packs)',
+    capability: 'upscale-video',
+    handBuilt: 'hand-built/video-regenerate-h3.json',
+    packs: ['ComfyUI-Open-H3-Regenerate', 'Comfyui_Minimax_h3_latent_Upscaler'],
+    bindings: {
+      video: [b('9', 'file')], prompt: [b('16', 'text')], resolution: [b('17', 'resolution')], draftSize: [b('11', 'size')],
+      frames: [b('11', 'max_frames')], startSigma: [b('19', 'start_sigma')], steps: [b('19', 'steps')], seed: [b('20', 'noise_seed')],
+      startTime: [b('29', 'start_time')], duration: [b('29', 'duration')], filenamePrefix: [b('28', 'filename_prefix')],
+    },
+    outputs: [{ node: '28', kind: 'video' }],
+    defaults: { resolution: '2k (2560x1440)', draftSize: '768p (1344x768)', frames: 121, startSigma: 0.8, steps: 3, fps: 24 },
+    limits: { maxFrames: 360 },
+    vramGb: 48,
+    license:
+      'MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder, NVIDIA\'s Open-H3-Regenerate-2K LoRA and the fast H3 VAE decoder, a distilled ' +
+      'Model Derivative): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax\'s written authorization; show "MiniMax H3" on the ' +
+      'product\'s interface; Comfy\'s docs add that commercial use of locally made outputs needs a MiniMax licence · the LoRA\'s merged LightX2V Turbo v1.2 part Apache-2.0 (at 3ec17a3), its LMS Sharp ' +
+      'part no stated licence · LBH latent upscaler weights Apache-2.0, its node code MIT · ComfyUI-Open-H3-Regenerate Apache-2.0 · Qwen3-VL-32B base Apache-2.0',
+    notes:
+      'rdh9616\'s "Open-H3 Regenerate 2K - Draft Video" example (ComfyUI-Open-H3-Regenerate at 9b686c5) without the note, the three PreviewAny nodes and OpenH3VideoToPrompt: the prompt goes straight into ' +
+      'CLIPTextEncode 16, so nothing calls a server from inside the graph. curve_name "none" (the tensors of the Sharp curve branches are zero in the blocks checked), so the curve table is never read ' +
+      '("(model\'s own table)": no 21 GB ref2va file needed). A Video Slice (29) in front cuts the 15 s window a longer clip is regenerated in (startTime, duration; 0 = the whole clip). ' +
+      'Prepare Draft (11) resamples to 24 fps, cover-crops to draftSize (768p for H3 drafts, 576p for other models; a portrait clip gets the preset turned, and any other shape is cropped to 16:9, since the upscale always targets 16:9 or 9:16) and ' +
+      'cuts frames (round(seconds x 24), at most 360 = 15 s per pass); Save Refined Latent (24) and Finish (26) read its frame count. The LBH upscaler puts the latent on the target grid ' +
+      '(resolution: 1080p (1920x1080) | 2k (2560x1440) | 4k (3840x2160), 4K via 2K), the refine re-noises it to startSigma (0 = the release 0.909 grid; Close 0.7, Balanced 0.8) and runs steps (3, or 2 = ' +
+      'Faster) Euler steps at CFG 1 with Sol-Attn sparse attention and the audio held as encoded silence; the refined latent is saved before decoding (output/open_h3_latents/, redo a failed decode with ' +
+      'rdh\'s "Decode Saved Latent" graph) and decoded by the fast H3 VAE decoder (tiled H3 VAE fallback). Finish trims the padding, crops 1088 -> 1080 and 2176 -> 2160 and cuts the draft\'s own sound to ' +
+      'length, which CreateVideo muxes back at 24 fps. Measured by the pack\'s author: about 3 min per 5 s at 2K on a 72 GB RTX PRO 5000 (9.5 min with dense attention); 22 s on a B200 (NVIDIA); ' +
+      'a community run reached about 1080p on 32 GB with a lossy LoRA. The packs were tested by their author on ComfyUI 0.42.0.',
   },
   {
     id: 'video-sdr-to-hdr-exr',

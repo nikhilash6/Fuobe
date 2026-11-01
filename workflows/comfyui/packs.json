@@ -62,6 +62,15 @@
     "subdir": null,
     "folders": []
   },
+  "ComfyUI-LTXVideo": {
+    "repo": "https://github.com/Lightricks/ComfyUI-LTXVideo",
+    "commit": "220e1d45aa0469f518e982102fca4dca92a61862",
+    "registry": { "id": "ComfyUI-LTXVideo", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
   "ComfyUI-LatentSyncWrapper": {
     "repo": "https://github.com/ShmuelRonen/ComfyUI-LatentSyncWrapper",
     "commit": "360d5283d7276aee68b4237b1387e594e4ce640e",
@@ -94,6 +103,15 @@
     "commit": "77bfa67575b14e3be6214f1747732e540c68b5dd",
     "registry": { "id": "comfyui-minimax-h3-turbo", "version": "" },
     "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "ComfyUI-Open-H3-Regenerate": {
+    "repo": "https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate",
+    "commit": "9b686c5ffd380e9d1351f9b8beef6d20d703ca3e",
+    "registry": null,
+    "requirementsTxt": true,
     "isolated": false,
     "subdir": null,
     "folders": []
@@ -184,6 +202,15 @@
     "commit": "f7d7a16187430abcaf91a3039b9c83aa9960816a",
     "registry": { "id": "comfyui_fill-chatterbox", "version": "" },
     "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
+  },
+  "Comfyui_Minimax_h3_latent_Upscaler": {
+    "repo": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler",
+    "commit": "40316cf008b2fd8663263270669eb4da23f89d2c",
+    "registry": null,
+    "requirementsTxt": false,
     "isolated": false,
     "subdir": null,
     "folders": []

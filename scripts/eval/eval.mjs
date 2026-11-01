@@ -388,7 +388,7 @@ async function validate(args, ctx) {
   let bad = results.filter((r) => !r.ok).length;
   const { generated } = await import("./gen-cases.mjs");
   const gen = generated();
-  const stale = ["soul.json", "dop.json", "dop-mix.json", "case.schema.json"].filter((name) => {
+  const stale = ["soul.json", "dop.json", "dop-mix.json", "dop-mixed-media.json", "case.schema.json"].filter((name) => {
     const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "cases", name);
     const want = `${JSON.stringify(gen[name], null, 2)}\n`;
     // A Windows checkout may have CRLF line endings: the same content.
@@ -396,7 +396,7 @@ async function validate(args, ctx) {
   });
   if (v.json) return ctx.print(JSON.stringify({ suites: results, stale }, null, 2)), bad || stale.length ? 1 : 0;
   for (const r of results) {
-    ctx.print(`${r.ok ? "✓" : "✗"} ${path.relative(REPO_DIR, r.file)}${r.ok ? ` · ${r.cases} cases` : ""}`);
+    ctx.print(`${r.ok ? "✓" : "✗"} ${path.relative(REPO_DIR, r.file)}${r.ok ? ` · ${r.cases} cases` : ""}${r.runFirst === "paid-keys" ? " · run it first once you have paid keys" : ""}`);
     for (const l of r.lines) ctx.print(`    ${l}`);
   }
   for (const s of stale) ctx.print(`✗ cases/${s} is out of date with the research: node scripts/eval/gen-cases.mjs`);

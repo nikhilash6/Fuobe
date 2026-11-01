@@ -183,7 +183,8 @@ describe("readiness (§7)", () => {
   });
 
   it("asks for the licence of gated files", () => {
-    const gated = Object.entries(idx.files).find(([, f]) => f.gated)!;
+    // A gated file a workflow needs (FLUX 3 Klein's nvfp4 / bf16 files are gated too, but only optional).
+    const gated = Object.entries(idx.files).find(([k, f]) => f.gated && Object.values(idx.workflows).some((w) => w.files.includes(k as never)))!;
     const id = Object.keys(idx.workflows).find((k) => idx.workflows[k].files.includes(gated[0] as never))!;
     const r = workflowReadiness(id, inventory([]), idx, ctx);
     expect(r.needs.some((n) => n.kind === "hf-licence")).toBe(true);

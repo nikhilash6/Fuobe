@@ -12,8 +12,22 @@ import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import type { Generation, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
 import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest } from "@/lib/api";
-import { claimStartToken, followEngineDefault, handoffKey, mergeHandoff, presetModel, presetParams, promptShown, routeParams, START_PARAM, withoutStart, withPreset } from "@/lib/composer";
+import {
+  claimStartToken,
+  followEngineDefault,
+  handoffKey,
+  mergeHandoff,
+  presetModel,
+  presetParams,
+  promptShown,
+  routeParams,
+  START_PARAM,
+  withoutLayout,
+  withoutStart,
+  withPreset,
+} from "@/lib/composer";
 import { presetGpuKey, presetRoutes } from "@/lib/catalog/preset-recipe-routes";
+import { editableLayout, EDIT_LAYOUT_PARAM, readEditLayoutParam } from "@/lib/output-actions";
 import { positionsFrom } from "@/lib/catalog/keyframes";
 import { reuseSignature, withSignatureWords } from "@/lib/catalog/palettes";
 import { movedAppRequest } from "@/lib/catalog/plan";
@@ -125,11 +139,13 @@ function initialDraft(
   if (sp.get("voice")) slots.voiceAudio = slot(sp.get("voice"));
   // An output format handed over in the link (Export → "ProRes in the cloud"), when the model writes it.
   const format = model?.options.formats?.find((f) => f === sp.get("format"));
+  // A size handed over (Regenerate in 2K → 1440p), when the model offers it.
+  const resolution = model?.options.resolutions?.find((r) => r === sp.get("resolution"));
   return {
     prompt: sp.get("prompt") ?? "",
     negativePrompt: "",
     modelId,
-    params: { ...model?.defaults, ...routeSettings, ...(format && { format }) },
+    params: { ...model?.defaults, ...routeSettings, ...(format && { format }), ...(resolution && { resolution }) },
     slots,
     refs,
     presetId: sp.get("preset") ?? config.preset?.id,
@@ -166,11 +182,14 @@ function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id:
   // A spoken language stored as a name (Assist's "Spanish") or a locale comes back as the model's own code.
   const languages = getModel(r.modelId)?.options.sourceLanguages;
   if (languages?.length && params.sourceLanguage) params.sourceLanguage = matchSpokenLanguage(params.sourceLanguage, languages) ?? params.sourceLanguage;
+  // A layout run comes back in Layout mode (studios that have it): its boxes in the editor, the prompt as their caption.
+  const laid = config.layout ? withoutLayout(params) : { params, layout: undefined };
   return {
     prompt: r.prompt ?? "",
     negativePrompt: r.negativePrompt ?? "",
     modelId: r.modelId,
-    params,
+    params: laid.params,
+    layout: laid.layout,
     slots: frames ? {} : slots,
     refs: frames ? [] : refs,
     frames,
@@ -411,7 +430,9 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
 function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs?: React.ReactNode; examples?: StudioExampleRow }) {
   // Config and actions only: the draft lives in the composer, so typing doesn't re-render the page or the feed.
   const { config, setDraft } = useStudioActions();
-  const [engine, setEngine] = useEngine();
+  const [engine, setEngine, engineMode] = useEngine();
+  // A GPU-only step (Regenerate) isn't offered while the install runs paid APIs only.
+  const firstSteps = config.firstSteps?.filter((f) => !f.openOnly || engineMode !== "cloud");
   const feed = useGenerations(config.feed);
   const bridge = useComposerBridge();
   const [dragging, setDragging] = useState(false);
@@ -506,6 +527,25 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
                 <ArrowRight className="size-3" />
               </Link>
             )}
+            {firstSteps?.length ? (
+              <ul aria-label="Before upscaling" className="mt-3 flex max-w-xl flex-col items-center gap-2">
+                {firstSteps.map((f) => (
+                  <li key={f.id} className="flex flex-col items-center gap-1">
+                    <Link
+                      href={f.href}
+                      aria-describedby={`first-step-${f.id}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      {f.label}
+                      <ArrowRight className="size-3" />
+                    </Link>
+                    <span id={`first-step-${f.id}`} className="text-[12px] text-pretty text-muted-foreground">
+                      {f.hint}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         )}
       </div>
@@ -662,6 +702,48 @@ function HandoffSync({
 }
 
 /**
+ * Edit layout (`/image?layout=<generation>[.<picture>]`, from a result's menu anywhere): the picture's boxes open in
+ * Layout mode with its words, model and seed: the request's own layout, or the one fal's MOSS-Image planned (decoded at
+ * the picture's size). The param isn't part of the hand-off key, so the draft on screen isn't reset first; it is taken
+ * out of the address once read, so a reload doesn't open it again.
+ */
+function LayoutHandoff() {
+  const sp = useSearchParams();
+  const value = sp.get(EDIT_LAYOUT_PARAM);
+  const { config, setDraft } = useStudioActions();
+  const catalog = useCatalog();
+  const [engine, setEngine] = useEngine();
+  const opened = useRef<string | null>(null);
+  const ref = config.layout ? readEditLayoutParam(value) : null;
+  useEffect(() => {
+    // Once the address no longer holds it (read, then taken out), the same picture's Edit layout opens again next time.
+    if (!value) opened.current = null;
+    if (!ref || !value || opened.current === value || !catalog.ready) return;
+    opened.current = value;
+    void fetch(`/api/generations/${encodeURIComponent(ref.id)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("That picture isn't in your library any more");
+        const g = (await res.json()) as Generation;
+        const e = editableLayout(g, ref.index);
+        if (!e) throw new Error("This picture has no layout to open");
+        const base = draftFromGeneration(g, config, catalog.getModel, catalog.getPreset);
+        const params = { ...(base.params ?? {}), ...(e.seed !== undefined && { seed: e.seed }) };
+        setDraft({ ...base, prompt: e.caption, params, layout: { ...e.draft, summary: { ...e.draft.summary, caption: "" } } });
+        if (g.engine !== engine) setEngine(g.engine);
+        toast(e.seed !== undefined ? "Layout opened with the picture's seed: move a box or change a word, then generate" : "Layout opened: move a box or change a word, then generate", { id: "edit-layout" });
+        requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>("[data-composer] textarea")?.focus());
+      })
+      .catch((err: Error) => toast.error(err.message, { id: "edit-layout" }))
+      .finally(() => {
+        const u = new URL(window.location.href);
+        u.searchParams.delete(EDIT_LAYOUT_PARAM);
+        window.history.replaceState(null, "", `${u.pathname}${u.search}${u.hash}`);
+      });
+  }, [ref, value, catalog, config, engine, setDraft, setEngine]);
+  return null;
+}
+
+/**
  * One draft's page: the studio and its hand-off. The start request resets with the draft (a new epoch).
  *
  * A guest's Start from Home opens "Create a free account" here instead of sending a run that can only be refused. It
@@ -689,6 +771,9 @@ function StudioSession({
     <StartRequestCtx.Provider value={startRequest}>
       <StudioBody header={header} tabs={tabs} examples={examples} />
       <HandoffSync {...sync} onStart={onStart} />
+      <Suspense fallback={null}>
+        <LayoutHandoff />
+      </Suspense>
     </StartRequestCtx.Provider>
   );
 }

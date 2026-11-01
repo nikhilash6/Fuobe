@@ -15,8 +15,8 @@ import { ACCEPT, fileToSlot, kindOfFile, LibraryGrid, type SlotValue } from "@/c
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { useAskBeforeUpload, useEngine, useGenerations } from "@/lib/api";
-import type { AudioToolPreview } from "@/lib/av/audio-tools";
+import { SelfHostNote } from "@/components/self-host-note";
+import { useAskBeforeUpload, useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
 import {
   backgroundLowered,
   clock,
@@ -24,6 +24,7 @@ import {
   CLOUD_SPLIT_PROBLEM,
   dbLabel,
   durationWords,
+  openToolPrice,
   exportProblem,
   headroomGain,
   LEVEL_MAX,
@@ -137,27 +138,29 @@ export function uploadSource(f: File, kind: "audio" | "video", put: (s: Source) 
   );
 }
 
-function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate: (next: (cur: Source | null) => Source | null) => void }) {
+/** disabled: a visitor (the split doesn't run here for them), so nothing is uploaded or picked only to be refused. */
+function AddMedia({ onPick, onUpdate, disabled }: { onPick: (s: Source) => void; onUpdate: (next: (cur: Source | null) => Source | null) => void; disabled?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const [picking, setPicking] = useState(false);
   // A guest, or an account with neither its own GPU nor its own key, gets its card instead of the file chooser.
   const askFirst = useAskBeforeUpload();
   const take = (f: File | undefined) => {
-    if (!f || askFirst()) return;
+    if (!f || disabled || askFirst()) return;
     const kind = kindOfFile(f);
     if (kind !== "audio" && kind !== "video") return void toast("Audio or video only — drop a sound file or a clip here");
     void uploadSource(f, kind, onPick, onUpdate);
   };
   return (
     <div
+      aria-disabled={disabled || undefined}
       className={cn(
         "flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-strong bg-background px-4 py-10 text-center transition-colors sm:py-14",
         over && "border-primary bg-brand-faint",
       )}
       onDragOver={(e) => {
         e.preventDefault();
-        setOver(true);
+        if (!disabled) setOver(true);
       }}
       onDragLeave={() => setOver(false)}
       onDrop={(e) => {
@@ -172,12 +175,12 @@ function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate:
         <p className="mt-1 text-[13px] text-muted-foreground">A song, podcast, film clip or video, up to 200 MB</p>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
-        <Button size="sm" className="rounded-full" onClick={() => askFirst() || input.current?.click()}>
+        <Button size="sm" className="rounded-full" disabled={disabled} onClick={() => askFirst() || input.current?.click()}>
           <Upload className="size-3.5" /> Upload audio or video
         </Button>
-        <Popover open={picking} onOpenChange={setPicking}>
+        <Popover open={picking && !disabled} onOpenChange={setPicking}>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="rounded-full">
+            <Button variant="ghost" size="sm" className="rounded-full" disabled={disabled}>
               <Library className="size-3.5" /> From library
             </Button>
           </PopoverTrigger>
@@ -200,6 +203,7 @@ function AddMedia({ onPick, onUpdate }: { onPick: (s: Source) => void; onUpdate:
         type="file"
         accept={`${ACCEPT.audio},${ACCEPT.video}`}
         hidden
+        disabled={disabled}
         onChange={(e) => {
           take(e.target.files?.[0]);
           e.target.value = "";
@@ -656,7 +660,11 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
 // ---------------------------------------------------------------------------
 // The tool
 
-const money = (p: AudioToolPreview) => (p.demo ? "Placeholder · free" : "Free");
+/**
+ * Why a guest or an account can't split: POST /api/audio-tools answers them own-gpu-tool (docs/public-signup.md), so the
+ * page says so up front and its upload and run are off, instead of a run the server refuses.
+ */
+const SELF_HOSTED = "Split soundtrack isn't available here";
 /** Where the time estimate is for: the host's device when it said; else a CPU's, the figures the estimate then uses. */
 const onDevice = (device?: string) => (device === "cuda" ? "on your GPU" : device ? "on your CPU" : "on a CPU");
 
@@ -675,6 +683,7 @@ function stemsOf(outputs: OutputFile[]): Stem[] {
 
 export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
   const [engine, setEngine, mode] = useEngine();
+  const visitor = useLikelyVisitor();
   const run = useAudioToolRun();
   const [source, setSource] = useState<Source | null>(null);
   const [quality, setQuality] = useState<SplitQuality | null>(null);
@@ -722,12 +731,13 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
   const channels = p?.channels ?? source?.channels;
   const picked: SplitQuality = quality ?? p?.hostPick ?? "fast";
   const cloudProblem = mode === "cloud" ? CLOUD_ONLY_PROBLEM : CLOUD_SPLIT_PROBLEM;
-  const blocker = !source ? "Add a soundtrack to split" : source.uploading ? "Uploading…" : engine === "cloud" ? cloudProblem : null;
+  const blocker = visitor ? SELF_HOSTED : !source ? "Add a soundtrack to split" : source.uploading ? "Uploading…" : engine === "cloud" ? cloudProblem : null;
   const error = preview.error ? (preview.error as Error).message : null;
   const go = () => {
     if (blocker) return void toast(blocker);
     if (error) return void toast.error(error);
-    run.mutate(body!, {
+    if (!body) return;
+    run.mutate(body, {
       onSuccess: (r) => {
         setResultId(r.result.id);
         toast.success("Splitting…");
@@ -739,16 +749,18 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
   const stems = useMemo(() => (g?.status === "succeeded" ? stemsOf(g.outputs) : []), [g]);
 
   return (
-    <ToolShell title="Audio" tabs={tabs}>
+    <ToolShell title="Audio" tabs={tabs} selfHostedOnly>
       {!source && (
         <ToolHero
           title="Split any soundtrack"
           subtitle="Dialogue, music and effects from a song, podcast, film clip or video, with a free live mixer."
-        />
+        >
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">{SELF_HOSTED}.</SelfHostNote>}
+        </ToolHero>
       )}
       <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-8")}>
         {!source ? (
-          <AddMedia onPick={take} onUpdate={setSource} />
+          <AddMedia onPick={take} onUpdate={setSource} disabled={visitor} />
         ) : (
           <SourcePanel
             source={source}
@@ -815,7 +827,11 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
             )}
             <div className="flex flex-wrap items-center gap-3">
               <p className={cn("min-w-0 flex-1 text-[13px]", error && !blocker ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
-                {blocker && engine !== "cloud" ? (
+                {visitor && engine !== "cloud" ? (
+                  <>
+                    <span className="font-mono text-foreground">{openToolPrice(p, true)}</span>
+                  </>
+                ) : blocker && engine !== "cloud" ? (
                   blocker
                 ) : engine === "cloud" ? (
                   mode === "cloud" ? (
@@ -827,14 +843,14 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
                   error
                 ) : p ? (
                   <>
-                    <span className="font-mono text-foreground">{money(p)}</span>
+                    <span className="font-mono text-foreground">{openToolPrice(p)}</span>
                     {p.estimate && !p.demo ? ` · ${durationWords(p.estimate)} ${onDevice(p.device)}` : ""}
                   </>
                 ) : (
                   "Checking…"
                 )}
               </p>
-              <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={run.isPending || g?.status === "queued" || g?.status === "running"}>
+              <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={visitor || run.isPending || g?.status === "queued" || g?.status === "running"}>
                 {run.isPending || g?.status === "queued" || g?.status === "running" ? <Loader2 className="size-4 animate-spin" /> : <SlidersVertical className="size-4" />} Split it
               </Button>
             </div>

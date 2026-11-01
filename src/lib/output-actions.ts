@@ -10,6 +10,9 @@ import { cueText, type Cue } from "./cues";
 import { downloadHref, downloadName, extensionOf } from "./library";
 import { PRESETS as GRADE_PRESETS } from "./grade";
 import { storedPath } from "./share";
+import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout-prompt";
+import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
+import { canRerender, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
 
 export type OutputActionId =
@@ -20,6 +23,7 @@ export type OutputActionId =
   | "reference"
   | "grade"
   | "layers"
+  | "edit-layout"
   | "save-character"
   | "extend"
   | "reframe"
@@ -29,6 +33,7 @@ export type OutputActionId =
   | "voice-change"
   | "loop-audio"
   | "split-soundtrack"
+  | "remove-dialogue"
   | "clean-voice"
   | "copy-text"
   | "view-3d"
@@ -40,6 +45,8 @@ export type OutputActionId =
   | "download-exr"
   | "favorite"
   | "finalize"
+  | "regenerate"
+  | "rerender-2k"
   | "compare"
   | "reuse"
   | "make-skill"
@@ -50,6 +57,7 @@ export type OutputActionId =
   | "delete"
   | "delete-upload"
   | "restore"
+  | "restore-video"
   | "delete-forever";
 
 export interface OutputAction {
@@ -70,6 +78,11 @@ export interface ActionContext {
   compare?: boolean;
   /** Shown in the viewer: actions that only open the viewer are left out. */
   inViewer?: boolean;
+  /**
+   * The install's Engine mode: "Paid APIs only" leaves out what only runs on your GPU (Regenerate in 2K). Unknown
+   * (a server render, a share page): as "both".
+   */
+  engineMode?: "both" | "open" | "cloud";
 }
 
 const q = (url: string) => encodeURIComponent(url);
@@ -105,6 +118,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("reference", "Use as reference", `/image?ref=${q(o.url)}`);
       link("grade", "Color grade", `/color-grade?image=${q(o.url)}`);
       link("layers", "Open in Layers", layersHref(g, o.url));
+      // A picture drawn from a layout (or one fal's MOSS-Image planned itself) reopens as boxes in the Image studio.
+      if (editableLayout(g, index)) link("edit-layout", "Edit layout", editLayoutHref(g, index));
       link("genjutsu", "Animate with Genjutsu", `/genjutsu?mode=motion&image=${q(o.url)}`);
       out.push({ id: "save-character", label: "Save as character", placement: "menu" });
       break;
@@ -123,8 +138,11 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("reframe", "Reframe", `/reframe?video=${q(o.url)}`);
       link("lipsync", "Lipsync", `/lipsync?video=${q(o.url)}`);
       link("upscale", "Upscale", `/upscale/video?video=${q(o.url)}`);
+      // Old, faded or black-and-white footage (Fuobe Restore): Video tools → Restore & colourise with the clip in.
+      link("restore-video", "Restore & colourise", `/video-tools/restore?video=${q(o.url)}`);
       link("add-sound", "Add sound", `/audio/video?video=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?video=${q(o.url)}`);
+      link("remove-dialogue", "Remove dialogue", `/video-tools/remove-dialogue?video=${q(o.url)}`);
       // Clean up voice on a video's soundtrack: results that carry sound, and uploads (a clip from a phone or a call).
       if (g.feature === "upload" || (g.op && SOUNDED_VIDEO_OPS.has(g.op))) link("clean-voice", "Clean up voice", `/audio/clean?video=${q(o.url)}`);
       // A Fuobe DoP colour-grade effect: the clip opens in Color grading with its grade picked (one click to export).
@@ -157,9 +175,20 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   }
   // Uploads (the Library's Uploads tab) are files, not generations: hand-offs, download, and a
   // delete that first checks nothing uses the file.
-  if (g.feature === "upload") return [...out.filter((a) => a.id !== "favorite"), { id: "delete-upload", label: "Delete", placement: "menu", destructive: true }];
+  if (g.feature === "upload") {
+    // An upload's Regenerate (it has no words of its own) sits with its other hand-offs.
+    if (o.kind === "video" && ctx.engineMode !== "cloud") link("regenerate", "Regenerate in 2K", regenerateHref(o.url));
+    return [...out.filter((a) => a.id !== "favorite"), { id: "delete-upload", label: "Delete", placement: "menu", destructive: true }];
+  }
   if (g.outputs.length > 1) out.push({ id: "download-all", label: `Download all ${g.outputs.length} (.zip)`, placement: "menu", href: `/api/generations/zip?ids=${g.id}`, download: "" });
   if (o.draftId) out.push({ id: "finalize", label: "Render this draft in 1080p", placement: "menu" });
+  // Finishing in 2K beside it: a fal H3 result renders again at 2K on the same hosted model (a new render, priced); a clip
+  // made on your GPU (or uploaded) opens Upscale → Video on Open-H3 Regenerate, which runs on your GPU only. Other cloud
+  // results keep their upscalers in Upscale.
+  if (o.kind === "video" && g.status === "succeeded") {
+    if (canRerender(g, ctx.engineMode)) out.push({ id: "rerender-2k", label: rerenderLabel(g.modelId), placement: "menu" });
+    else if ((g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
+  }
   if (ctx.compare) out.push({ id: "compare", label: "Compare with original", placement: "menu" });
   if (ctx.reuse) out.push({ id: "reuse", label: "Reuse settings", placement: "menu" });
   // The steps behind a finished result, as a skill that runs again with new inputs (src/components/skills).
@@ -181,18 +210,35 @@ const NEXT_STEPS: Partial<Record<OutputFile["kind"], OutputActionId[]>> = {
 };
 /** Clips made with their sound (or keeping the source's): Split soundtrack instead of Add sound. */
 const SOUNDED_VIDEO_OPS = new Set<Generation["op"]>(["v2a", "mux", "lipsync", "trim", "captions"]);
+/**
+ * Sounded clips likely to carry speech also offer Remove dialogue (after Upscale, so it stays): not Sound for video
+ * (v2a: generated effects), and not a Remove dialogue result itself.
+ */
+function likelySpeech(g: Generation): boolean {
+  return g.op !== "v2a" && g.feature !== REMOVE_DIALOGUE_FEATURE;
+}
 
 /**
  * Up to `max` next steps for output `index` (Animate, Upscale, Edit for a picture), taken from
  * outputActions so they go where the tile's own actions go. Only hand-offs to another studio.
  */
-export function nextSteps(g: Generation, index: number, max = 3): OutputAction[] {
+export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<ActionContext, "engineMode"> = {}): OutputAction[] {
   const o = g.outputs[index];
   if (!o || g.status !== "succeeded") return [];
-  const all = outputActions(g, index);
+  const all = outputActions(g, index, ctx);
   // A clip with a grade still to apply (a Fuobe DoP colour-grade effect) offers it first.
-  const video = o.kind === "video" && g.op && SOUNDED_VIDEO_OPS.has(g.op) ? (NEXT_STEPS.video ?? []).map((id) => (id === "add-sound" ? "split-soundtrack" : id)) : NEXT_STEPS.video;
-  const order: OutputActionId[] = o.kind === "video" ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(video ?? [])] : (NEXT_STEPS[o.kind] ?? []);
+  const sounded = o.kind === "video" && !!g.op && SOUNDED_VIDEO_OPS.has(g.op);
+  const video: OutputActionId[] | undefined = sounded
+    ? ["extend", "upscale", ...(likelySpeech(g) ? (["remove-dialogue"] as const) : []), "split-soundtrack"]
+    : NEXT_STEPS.video;
+  // H3, LTX, Wan and SANA clips (the drafts Open-H3 Regenerate was shown on) offer Regenerate in 2K right after Upscale.
+  const regen = o.kind === "video" && regenerateFamily(g.modelId) ? (["regenerate"] as const) : [];
+  const withRegen = (ids: OutputActionId[] | undefined) => {
+    if (!ids || !regen.length) return ids;
+    const at = ids.indexOf("upscale");
+    return at < 0 ? [...regen, ...ids] : [...ids.slice(0, at + 1), ...regen, ...ids.slice(at + 1)];
+  };
+  const order: OutputActionId[] = o.kind === "video" ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(withRegen(video) ?? [])] : (NEXT_STEPS[o.kind] ?? []);
   return order
     .map((id) => all.find((a) => a.id === id && a.href))
     .filter((a): a is OutputAction => !!a)
@@ -214,6 +260,52 @@ export function isVector(g: Pick<Generation, "provider" | "op">, o: Pick<OutputF
   if (o.kind !== "image") return false;
   const svg = /^image\/svg\+xml\b/i.test(o.contentType ?? "") || o.url.startsWith("data:image/svg+xml") || extensionOf(o) === "svg";
   return svg && (g.provider !== "mock" || g.op === "vectorize");
+}
+
+// ---------------------------------------------------------------------------
+// Edit layout: a picture's boxes, back in the Image studio's Layout mode
+
+/** The query param that opens the Image studio on a result's layout: `<generation id>` or `<id>.<output index>`. */
+export const EDIT_LAYOUT_PARAM = "layout";
+
+export const editLayoutHref = (g: Pick<Generation, "id">, index: number) => `/image?${EDIT_LAYOUT_PARAM}=${q(index ? `${g.id}.${index}` : g.id)}`;
+
+/** `<id>` or `<id>.<index>` → the generation and output it names (null for anything else). */
+export function readEditLayoutParam(v: string | null | undefined): { id: string; index: number } | null {
+  const m = /^([A-Za-z0-9_-]{4,64})(?:\.(\d{1,2}))?$/.exec(v ?? "");
+  return m ? { id: m[1], index: Number(m[2] ?? 0) } : null;
+}
+
+export interface EditableLayout {
+  draft: LayoutDraft;
+  /** The words for the whole picture (the composer's prompt in Layout mode). */
+  caption: string;
+  /** The seed this picture was drawn with, when it is known: the one its provider reported (meta.seed), else the request's. */
+  seed?: number;
+  /** Where the boxes came from: the layout the request carried, or the one fal's prompt expansion planned. */
+  from: "request" | "expansion";
+}
+
+/**
+ * The layout a picture can be reopened as (Edit layout): the request's own (params.extra.layout), else, for a picture
+ * fal's MOSS-Image planned itself (its actual_prompt), that plan decoded at the picture's own size, so even a plain
+ * prompt's render opens as boxes. Null when there is none to open (no layout, or a plan with no boxes).
+ */
+export function editableLayout(g: Pick<Generation, "status" | "request" | "outputs">, index: number): EditableLayout | null {
+  const o = g.outputs[index];
+  if (g.status !== "succeeded" || o?.kind !== "image") return null;
+  const params = g.request.params ?? {};
+  const reported = typeof o.meta?.seed === "number" ? o.meta.seed : undefined;
+  const seed = reported ?? (params.seed !== undefined && params.seed >= 0 ? params.seed : undefined);
+  const own = readLayout(params.extra?.[LAYOUT_PARAM]);
+  if (own?.items.length) return { draft: own, caption: g.request.prompt?.trim() || own.summary.caption, ...(seed !== undefined && { seed }), from: "request" };
+  const planned = typeof o.meta?.actualPrompt === "string" ? o.meta.actualPrompt : undefined;
+  const width = Number(o.meta?.width ?? o.width);
+  const height = Number(o.meta?.height ?? o.height);
+  if (!planned || !(width > 0 && height > 0)) return null;
+  const draft = decodeMoss(planned, width, height);
+  if (!draft?.items.length) return null;
+  return { draft, caption: draft.summary.caption.trim() || g.request.prompt?.trim() || "", ...(seed !== undefined && { seed }), from: "expansion" };
 }
 
 /**

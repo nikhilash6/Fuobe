@@ -6,18 +6,19 @@ import {
   DIRECTION_SYSTEM,
   directionRequest,
   EVOLUTION,
+  EVOLUTION_CLOUD_NOTE,
   EVOLUTION_DEFAULT_RESOLUTION,
   EVOLUTION_RESOLUTIONS,
   evolutionProblem,
   evolutionTitle,
-  nearestShape,
   offlineDirection,
   planEvolution,
+  resolutionChoices,
   tidyDirection,
   type EvolutionPlanInput,
   type Intensity,
 } from "@/lib/catalog/evolution";
-import type { PlanStep } from "@/lib/catalog/shorts";
+import { SHORTS, vaceDownsample, type PlanStep } from "@/lib/catalog/shorts";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { createPipeline } from "./chains";
@@ -187,9 +188,15 @@ function planInput(body: z.infer<typeof EvolutionBodySchema>, info: Awaited<Retu
     if (n > EVOLUTION.openReferences) notes.push(`The other ${n - EVOLUTION.openReferences} reference${n - EVOLUTION.openReferences > 1 ? "s" : ""} shape the direction only`);
     notes.push("Needs a 24 GB GPU · Wan 2.2 Fun VACE is Apache-2.0; Qwen-Image 2.1's weights are non-commercial");
   } else {
-    notes.push(`${name} runs LTX-2.3 video to video on fal in your clip's shape (${nearestShape(source.width, source.height)}) at 24 fps`);
-    if (n) notes.push(`LTX-2.3 takes no pictures: your ${n === 1 ? "reference shapes" : `${n} references shape`} the direction`);
-    notes.push("LTX-2.x Community License: free under US$10M annual revenue (information, Settings → Models & licences)");
+    const k = Math.min(n, EVOLUTION.cloudReferences);
+    notes.push(`${name} runs the GPU's model hosted on fal: each ≤10 s piece's first frame is taken toward the direction by Qwen-Image-Edit 2511${n ? ` with your first ${k === 1 ? "reference" : `${k} references`}` : ""}, then Wan 2.2 Fun VACE re-renders the piece by its depth with that frame as its reference, in your clip's shape`);
+    if (n > EVOLUTION.cloudReferences) notes.push(`The other ${n - EVOLUTION.cloudReferences} reference${n - EVOLUTION.cloudReferences > 1 ? "s" : ""} shape the direction only`);
+    notes.push(EVOLUTION_CLOUD_NOTE);
+    // fal bills frames ÷ 16 as video seconds; a clip above 30 fps is worked at a fraction of its rate (as in Shorts).
+    const fps = source.fps;
+    if (fps && fps > SHORTS.original.billFps + 0.5) notes.push(`fal bills this clip's ${Math.round(fps)} fps as ${(fps / SHORTS.original.billFps).toFixed(1)}× its length (video seconds at ${SHORTS.original.billFps} fps)`);
+    if (vaceDownsample(fps)) notes.push(`Wan 2.2 Fun VACE works this ${Math.round(fps!)} fps clip at ${Math.round(fps! / (vaceDownsample(fps) + 1))} fps and brings it back to its own rate`);
+    notes.push("Wan 2.2 Fun VACE and Qwen-Image-Edit 2511 are Apache-2.0 (information, Settings → Models & licences)");
   }
   if (source.hasAudio) notes.push("Your clip's own sound is put back on the result");
   const title = evolutionTitle(direction, body.source.name);
@@ -265,7 +272,7 @@ export function estimateEvolution(body: z.infer<typeof EvolutionEstimateSchema>)
 export async function createEvolution(body: z.infer<typeof EvolutionBodySchema>): Promise<{ final: Generation; items: Generation[]; direction: string; by: DirectionAnswer["by"] | "you" }> {
   mustMatchMode(body.engine);
   mustBeOffered(body.engine);
-  if (body.resolution && !EVOLUTION_RESOLUTIONS[body.engine].includes(body.resolution)) throw new ShortsError(`Pick ${EVOLUTION_RESOLUTIONS[body.engine].join(" or ")}`, 422);
+  if (body.resolution && !EVOLUTION_RESOLUTIONS[body.engine].includes(body.resolution)) throw new ShortsError(`Pick ${resolutionChoices(body.engine)}`, 422);
   const info = await probeSource(body.source.url);
   let direction = body.direction?.trim() ?? "";
   let by: DirectionAnswer["by"] | "you" = "you";

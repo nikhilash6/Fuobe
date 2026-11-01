@@ -111,7 +111,7 @@ export function licenceTerms(text: string): { flags: LicenceFlag[]; excludes?: s
   const noWeights = /^(n\/a|no model)\b/i.test(text.trim());
   const nonCommercial = /NON-COMMERCIAL/.test(text) || /^CC-BY-NC/.test(text.trim());
   const excludes = /\bEXCLUDES\s+([^);]+)/.exec(text)?.[1].trim();
-  const conditional = /Community License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Terms of Use|free below|below US\$/i.test(text);
+  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Terms of Use|free below|below US\$/i.test(text);
   const flags: LicenceFlag[] = [];
   if (nonCommercial) flags.push("non-commercial");
   if (excludes) flags.push("territory");
@@ -287,6 +287,8 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /LTX-2(?:\.x)? Community License/, name: "LTX-2 Community License", class: "conditions" },
   { re: /Stability AI Community License|Stability Community License/, name: "Stability AI Community License", class: "conditions", url: "https://stability.ai/community-license-agreement" },
   { re: /Krea 2 Community License/, name: "Krea 2 Community License", class: "conditions" },
+  // FLUX 3 Image Klein (nm10-flux3-klein): non-commercial, with commercial outputs for Qualifying Users below US$5M revenue.
+  { re: /FLUX Kommunity License/, name: "FLUX Kommunity License v1.0", class: "conditions", url: "https://huggingface.co/black-forest-labs/flux-3-image-klein" },
   { re: /IndexTTS-2 Model Use License/, name: "bilibili IndexTTS-2 Model Use License", class: "conditions" },
   { re: /Llama 3\.1 Community License/, name: "Llama 3.1 Community License", class: "conditions", url: "https://www.llama.com/llama3_1/license/" },
   { re: /DINOv3 License/, name: "DINOv3 License", class: "conditions" },
@@ -463,6 +465,12 @@ export const NODE_PACKS: NodePack[] = [
     ...GPL,
     note: "H3 Relay 2.0 (Sendy Software LLC and contributors); GPL-3.0 code, vendored Context Loop and Spectrum GPL-3.0. Opt-in (H3_RELAY=1): it registers HTTP routes when it loads",
   }),
+  // Restore & colourise (package archive-restore): Lightricks' LTX nodes (IC-LoRA loader and guide, tiled fusion sampler).
+  pack("ComfyUI-LTXVideo", "https://github.com/Lightricks/ComfyUI-LTXVideo/tree/220e1d45aa0469f518e982102fca4dca92a61862", {
+    name: "LTX-2 Community License",
+    class: "conditions",
+    note: "Lightricks' LTX nodes (IC-LoRA loader and guide, per-step tiled latent fusion); the repository's LICENSE is the LTX-2 Community License: free, commercial use included, below US$10M annual revenue",
+  }),
   // DBS soundtrack separation (docs/research/dbs-separation-7.md §3.2), pinned in install-comfyui.sh.
   pack("ComfyUI-DBS", "https://github.com/hiroki-abe-58/ComfyUI-DBS/tree/f656e53434b5485c148a2866fbd6ddc6b6152ed6", {
     name: "MIT",
@@ -495,6 +503,19 @@ export const NODE_PACKS: NodePack[] = [
     class: "commercial",
     url: SPDX("MIT"),
     note: "PlagueKind's H3 SLA attention (needs Triton) and AdaLN LoRA fix for MiniMax H3; MIT code",
+  }),
+  // Open-H3 Regenerate 2K (Upscale → Video's Regenerate · creative), opt-in in install-comfyui.sh (OPEN_H3_REGEN=1).
+  pack("ComfyUI-Open-H3-Regenerate", "https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate/tree/9b686c5ffd380e9d1351f9b8beef6d20d703ca3e", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "rdh9616's Open-H3 Regenerate nodes (NVIDIA's refine recipe, with NVIDIA's fast H3 VAE decoder vendored); Apache-2.0 code with a NOTICE file. The MiniMax H3 weights and the refiner LoRA it runs leave out the US, the EU, the UK and South Korea",
+  }),
+  pack("Comfyui_Minimax_h3_latent_Upscaler", "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler/tree/40316cf008b2fd8663263270669eb4da23f89d2c", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "LBH-123-AI's H3 latent upscaler nodes (the Open-H3 Regenerate nodes call them by name); MIT code, copyright (c) 2026 LBH-123-AI. Its upscaler weights are Apache-2.0",
   }),
   // Clean up voice: Fuobe's own pack, in this repository at its pinned commit (comfy-nodes/ComfyUI-RE-USE).
   pack("ComfyUI-RE-USE", "https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE", {

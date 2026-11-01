@@ -1,7 +1,8 @@
 import { readTimeline, timelineTracks } from "@/lib/av/timeline";
 import { toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { upscaleFactorFor } from "@/lib/av/upscale";
-import { carriesLayout, LAYOUT_PARAM } from "@/lib/layout-prompt";
+import { carriesBoxes, carriesLayout, LAYOUT_PARAM } from "@/lib/layout-prompt";
+import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { loraFields } from "./loras";
 import { OPERATION_OUTPUT, type DurationField, type EnumField, type FieldMap, type GenInput, type MatteOutput, type MediaKind, type Operation, type PixelPoint } from "./types";
 
@@ -120,7 +121,8 @@ export function framedLength(f: FieldMap["numFrames"] | undefined, seconds: numb
 
 /**
  * Width and height for an aspect ratio (FieldMap.size): the table's size for the tier and shape when it has one
- * (Fuobe Soul: its first tier when the tier is unknown), else the shape on a `base`×`base` pixel budget; or the size
+ * (Fuobe Soul: its first tier when the tier is unknown), else the shape on a `base`×`base` pixel budget (the tier's own square
+ * when `bases` names it: fal's FLUX 3 Klein 2K is 2048 × 2048); or the size
  * the request asks for (`asked`: a layout's canvas) on the route's grid. Neither side above `max` (Replicate's Z-Image
  * takes 1440) nor below `min` (fal's MOSS-Image takes 512–2048): the shape is scaled to fit, then a side that still
  * can't keep it is held at the limit.
@@ -131,7 +133,7 @@ export function sizeValue(
   resolution?: string,
   asked?: { width: number; height: number },
 ): { width: number; height: number } {
-  const base = f.base ?? 1024;
+  const base = (resolution !== undefined ? f.bases?.[resolution] : undefined) ?? f.base ?? 1024;
   const ratio = (aspectRatio && ratioOf(aspectRatio)) || 1;
   const round = (v: number) => Math.max(f.multiple, Math.round(v / f.multiple) * f.multiple);
   const tier = f.table && (f.table[resolution ?? ""] ?? Object.values(f.table)[0]);
@@ -315,6 +317,39 @@ function zoomValue(z: NonNullable<FieldMap["zoom"]>, input: GenInput): Record<st
   return out;
 }
 
+/** `text` cut to `max` characters, at a word where one is near the end (a shot's prompt: Kling 4.0 takes 512). */
+export function clipWords(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return (space > max * 0.8 ? cut.slice(0, space) : cut).replace(/[\s,;:.]+$/, "");
+}
+
+/**
+ * Kling 4.0's elements (@Element1..) from params.elements: each group's images (its first the frontal view, the next
+ * ones more angles) or its clip, up to the API's limits (7 elements, 3 angles, 3 clips); the rest are left out. Returns
+ * the list and the images and clips it took, which leave the image and clip lists so the rest keep their numbers.
+ */
+function elementList(e: NonNullable<FieldMap["elements"]>, images: string[], videos: string[], groups: NonNullable<GenInput["elements"]>) {
+  const usedImages = new Set<number>();
+  const usedVideos = new Set<number>();
+  const list: Record<string, unknown>[] = [];
+  for (const g of groups) {
+    if (list.length >= e.max) break;
+    if (g.video !== undefined && e.video && videos[g.video] !== undefined && !usedVideos.has(g.video) && usedVideos.size < (e.maxVideos ?? e.max)) {
+      list.push({ [e.video]: videos[g.video] });
+      usedVideos.add(g.video);
+      continue;
+    }
+    const own = (g.images ?? []).filter((i) => images[i] !== undefined && !usedImages.has(i));
+    if (!own.length) continue;
+    const views = own.slice(1, 1 + e.maxViews);
+    list.push({ [e.frontal]: images[own[0]], ...(views.length && { [e.views]: views.map((i) => images[i]) }) });
+    for (const i of [own[0], ...views]) usedImages.add(i);
+  }
+  return { list, usedImages, usedVideos };
+}
+
 /** Build a provider payload from canonical input using a route's {@link FieldMap}. Pure + unit-tested. */
 export function buildPayload(map: FieldMap, input: GenInput): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -366,8 +401,13 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
   if (map.multiShot && (input.shots?.length || input.multiShot === "auto")) {
     const ms = map.multiShot;
     if (input.shots?.length) {
-      const shots = input.shots.map((s) => ({ prompt: s.prompt, duration: ms.durationType === "string" ? String(s.duration) : s.duration }));
+      const shots = input.shots.map((s) => {
+        // Whole seconds where the API takes them (Kling 4.0): the take is as long as its shots, so the duration follows.
+        const seconds = ms.integer ? Math.max(1, Math.round(s.duration)) : s.duration;
+        return { prompt: ms.maxPrompt ? clipWords(s.prompt, ms.maxPrompt) : s.prompt, duration: ms.durationType === "string" ? String(seconds) : seconds };
+      });
       out[ms.key] = ms.json ? JSON.stringify(shots) : shots;
+      if (ms.integer && map.duration) out[map.duration.key] = timeValue(map.duration, shots.reduce((n, s) => n + Number(s.duration), 0));
       if (map.prompt !== false) delete out[map.prompt ?? "prompt"];
       if (ms.shotType) out[ms.shotType] = "customize";
     } else if (ms.shotType) {
@@ -376,6 +416,20 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
     if (ms.flag) out[ms.flag] = true;
   }
   if (map.draft && input.draft) out[map.draft] = true;
+  if (map.elements && input.elements?.length) {
+    const { list, usedImages, usedVideos } = elementList(map.elements, images, input.videos ?? [], input.elements);
+    if (list.length) {
+      out[map.elements.key] = list;
+      const rest = (key: string | undefined, all: string[], used: Set<number>) => {
+        if (!key || !used.size) return;
+        const left = all.filter((_, i) => !used.has(i));
+        if (left.length) out[key] = left;
+        else delete out[key];
+      };
+      rest(map.images, images, usedImages);
+      rest(map.videos, input.videos ?? [], usedVideos);
+    }
+  }
   // Voices, dialogue and dubbing.
   if (map.voice && input.voice) setPath(out, map.voice, input.voice);
   if (map.voiceAudio && input.voiceAudio) out[map.voiceAudio] = input.voiceAudio;
@@ -470,10 +524,14 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
   for (const [k, r] of Object.entries(map.ranges ?? {})) if (typeof out[k] === "number") out[k] = inRange(out[k] as number, r);
 
   // A layout draft rides in params.extra for Reuse and Edit layout; the prompt already carries it, in the model's own form.
-  const ignore = new Set([...(map.ignore ?? []), LAYOUT_PARAM, ...(asked ? [map.size!.key!] : [])]);
+  // Options → Prompt helper (params.extra.promptHelper) is Fuobe's own: it goes out as the API's prompt expansion, below.
+  const ignore = new Set([...(map.ignore ?? []), LAYOUT_PARAM, PROMPT_HELPER_PARAM, ...(asked ? [map.size!.key!] : [])]);
   for (const [k, v] of Object.entries({ ...map.fixed, ...input.extra })) if (!(map.timeline && k === "timeline") && !ignore.has(k)) setPath(out, k, v);
-  // The API's prompt expansion would rewrite a layout's boxes: off whenever the request carries one.
-  if (map.promptExpansion && carriesLayout(input.extra)) out[map.promptExpansion] = false;
+  // The API's prompt expansion would rewrite a layout's boxes: off whenever the request carries one (a route that takes the
+  // boxes in a field of their own, fal's FLUX 3 Klein, only when the draft places any). Prompt helper "off" turns it off too;
+  // "on" leaves the API's default (on).
+  const laidOut = map.boundingBoxes ? carriesBoxes(input.extra) : carriesLayout(input.extra);
+  if (map.promptExpansion && (laidOut || input.extra?.[PROMPT_HELPER_PARAM] === "off")) out[map.promptExpansion] = false;
   // A background colour given as hex goes out in the palette's shape (Recraft wants {r,g,b}).
   const bg = map.palette?.background;
   if (bg && typeof out[bg] === "string") {
@@ -997,6 +1055,16 @@ export function extractOutputs(response: unknown, op?: Operation): ExtractedOutp
     // cut-out (meta.mask) instead of landing in the feed as a second result.
     const mask = fileOf(r.mask)?.url;
     if (mask && out.some((o) => o.url !== mask)) out = out.filter((o) => o.url !== mask).map((o) => ({ ...o, meta: { ...o.meta, mask } }));
+    // The seed fal drew a picture with (text to image, edits: the runs a layout is drawn for) is kept on each one, so
+    // Edit layout draws it again with the same seed: a layout run turns the API's prompt expansion off, and FLUX.3 and
+    // Ideogram never return actual_prompt, so the seed can't wait for it. fal's MOSS-Image also returns the layout its
+    // expansion planned (actual_prompt): kept with the picture's own size, so Edit layout can reopen it as boxes (decodeMoss).
+    const seed = num(r.seed);
+    const actualPrompt = str(r.actual_prompt)?.trim();
+    if (actualPrompt) {
+      const sizes = new Map((Array.isArray(r.images) ? r.images : []).filter(isObj).map((im) => [str(im.url), { width: num(im.width), height: num(im.height) }] as const));
+      out = out.map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, ...compact({ actualPrompt, seed, ...sizes.get(o.url) }) } } : o));
+    } else if (seed !== undefined && (op === "t2i" || op === "edit")) out = out.map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, seed } } : o));
   }
   return out;
 }

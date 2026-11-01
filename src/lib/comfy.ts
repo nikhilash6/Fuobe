@@ -583,6 +583,33 @@ export function bypassNode(wf: ComfyWorkflow, nodeId: string, input: string, kee
   return dropUnused(out, keep);
 }
 
+/**
+ * Graphs that run a prompt helper before the model (FLUX 3 Image Klein's: BFL's upsampler, a TextGenerate whose caption the
+ * text encoder reads). Options → Prompt helper "off" (params.extra.promptHelper) or a layout of boxes takes it out.
+ */
+export const PROMPT_HELPER_GRAPHS: ReadonlySet<string> = new Set(["flux3-klein-t2i", "flux3-klein-edit", "flux3-klein-base-t2i-lora"]);
+
+/** params.extra.promptHelper: "on" (the graph's default) or "off". */
+export const PROMPT_HELPER_PARAM = "promptHelper";
+
+/**
+ * The words as typed, without the prompt helper: every CLIPTextEncode that reads a TextGenerate's caption reads that
+ * TextGenerate's own prompt instead, and the helper's nodes (its model, system prompt, the references it looked at) go
+ * with dropUnused. Unchanged when no encoder reads a TextGenerate.
+ */
+export function skipPromptHelper(wf: ComfyWorkflow, keep: string[] = []): ComfyWorkflow {
+  const readers = Object.values(wf).filter((n) => n.class_type === "CLIPTextEncode" && isLinkValue(n.inputs.text) && wf[n.inputs.text[0]]?.class_type === "TextGenerate");
+  if (!readers.length) return wf;
+  const out = cloneWorkflow(wf);
+  for (const n of Object.values(out)) {
+    const t = n.inputs.text;
+    if (n.class_type !== "CLIPTextEncode" || !isLinkValue(t) || out[t[0]]?.class_type !== "TextGenerate") continue;
+    const words = out[t[0]].inputs.prompt;
+    n.inputs.text = isLinkValue(words) ? [...words] : String(words ?? "");
+  }
+  return dropUnused(out, keep);
+}
+
 /** Remove nodes whose outputs nothing reads, over and over, keeping the output nodes `keep`. */
 export function dropUnused(wf: ComfyWorkflow, keep: string[]): ComfyWorkflow {
   const out = cloneWorkflow(wf);

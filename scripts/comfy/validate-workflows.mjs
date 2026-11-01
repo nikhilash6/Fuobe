@@ -74,7 +74,7 @@ function sampleValue(key, entry, uploads) {
   switch (key) {
     case 'prompt': return 'Fuobe validation prompt: a red fox running through snow, cinematic lighting';
     case 'negativePrompt': return 'blurry, low quality';
-    case 'image': case 'image2': case 'image3': case 'image4': case 'endImage': case 'paletteImage': return uploads.png;
+    case 'image': case 'image2': case 'image3': case 'image4': case 'image5': case 'image6': case 'image7': case 'image8': case 'image9': case 'image10': case 'endImage': case 'paletteImage': return uploads.png;
     case 'paletteText': return 'Color palette: #E4572E, #29335C, #F3A712, #A8C686, #669BBC.';
     case 'description': return 'A heavy wooden door creaks open slowly, then slams shut with a short stone-hall reverb.';
     case 'gridPrompt': return 'A 2x2 grid contact sheet of four film stills from the same scene:';
@@ -86,6 +86,7 @@ function sampleValue(key, entry, uploads) {
     case 'fadeCurve': return uploads.wav;
     case 'skipPass2': return true; // switches: the non-default branch, so both values are known to pass
     case 'cutout': return false;
+    case 'invertDepth': return true;
     case 'video': case 'video2': case 'video3': case 'video4': return uploads.mp4;
     case 'audio': case 'audio2': return uploads.wav;
     case 'tracks': {

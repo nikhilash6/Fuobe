@@ -97,6 +97,26 @@ describe("ComfyUI poll (S5)", () => {
     expect(third).toMatchObject({ state: "failed", error: expect.stringMatching(/restarted and lost/) });
   });
 
+  it("keeps the seed the graph drew with on each picture, so Edit layout draws it again (N7-2)", async () => {
+    // prepareWorkflow records the seed it put in the graph (one Fuobe picked when none was asked).
+    const ctx = { generationId: "g-seed", op: "t2i" as const, upload: async () => "x" };
+    expect((await prepareWorkflow("moss-image-t2i", { prompt: "p", seed: 4242 }, ctx)).meta.seed).toBe(4242);
+    const picked = (await prepareWorkflow("moss-image-t2i", { prompt: "p" }, ctx)).meta.seed;
+    expect(typeof picked).toBe("number");
+    handler = (url) =>
+      url.includes("/history/p-seed")
+        ? json({ "p-seed": done({ "3": { images: [{ filename: "fuobe_00001_.png", subfolder: "fuobe", type: "output" }, { filename: "fuobe_00002_.png", subfolder: "fuobe", type: "output" }] } }) })
+        : json({ queue_running: [], queue_pending: [] });
+    const res = await comfyProvider.poll(pollCtx("p-seed", { workflowId: "selftest-image", nodeCount: 3, seed: 4242 }));
+    expect(res.state).toBe("succeeded");
+    const outputs = (res as { outputs: { kind: string; meta?: Record<string, unknown> }[] }).outputs;
+    expect(outputs).toHaveLength(2);
+    expect(outputs.every((o) => o.kind === "image" && o.meta?.seed === 4242)).toBe(true);
+    // Without a recorded seed the pictures carry none.
+    const plain = await comfyProvider.poll(pollCtx("p-seed"));
+    expect((plain as { outputs: { meta?: Record<string, unknown> }[] }).outputs.some((o) => o.meta?.seed !== undefined)).toBe(false);
+  });
+
   it("reports the queue position while pending", async () => {
     handler = (url) => (url.includes("/history/") ? json({}) : json({ queue_running: [[0, "other"]], queue_pending: [[1, "x"], [2, "p-wait"]] }));
     expect(await comfyProvider.poll(pollCtx("p-wait"))).toMatchObject({ state: "queued", message: "In ComfyUI's queue · 1 ahead" });

@@ -25,6 +25,9 @@ import {
   languageName,
   paletteSentence,
   parseCueLines,
+  PROMPT_HELPER_GRAPHS,
+  PROMPT_HELPER_PARAM,
+  skipPromptHelper,
   randomSeed,
   splitCueWords,
   swatchPixels,
@@ -40,6 +43,8 @@ import {
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
+import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
+import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
 import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
@@ -54,6 +59,7 @@ import { CHARACTER_SWAP, packResolution, samCoords, swapPrompt, SWAP_LORAS, wind
 import { maskMemoryProblem } from "@/lib/catalog/swap-studio";
 import { STUDIO_WORKFLOWS } from "@/lib/catalog/swap-studio-plan";
 import { maskGraph, segmentGraph, type MaskGraphOptions, type SegmentGraphOptions } from "@/lib/swap-studio-graphs";
+import { RESTORE_EXTRA_KEYS, restoreGraph, restoreJob, type RestoreJob } from "@/lib/restore-graph";
 import { getMaker, makerPrompt, OPEN_TARGET_PROBLEM, ORIGINALS, swapTarget } from "@/lib/catalog/genjutsu";
 import { CLICK_OPEN_PROBLEM, HAND_OFF, REMOVE_SCENE, targetPhrase } from "@/lib/catalog/remove-object";
 import type { GenInput, MediaKind, ModelRoute, Operation } from "@/lib/catalog/types";
@@ -890,7 +896,15 @@ const SLOT_RULES: Record<string, { reuse?: boolean; required?: string[]; hints?:
  * person): a reference left out goes with the nodes only it feeds, and the encoder runs on the ones it was given.
  * Slots drop from the last, so an encoder's numbered inputs never have a gap.
  */
-const OPTIONAL_REFERENCE_INPUTS: ReadonlySet<string> = new Set(["TextEncodeQwenImage21", "TextEncodeFibo2", "Krea2EditModelPatch", "Krea2EditGroundedEncode"]);
+const OPTIONAL_REFERENCE_INPUTS: ReadonlySet<string> = new Set([
+  "TextEncodeQwenImage21",
+  "TextEncodeFibo2",
+  "Krea2EditModelPatch",
+  "Krea2EditGroundedEncode",
+  // FLUX 3 Image Klein's edit: its references on one ReferenceMultiLatent, and the batch its prompt helper looks at.
+  "ReferenceMultiLatent",
+  "BatchImagesNode",
+]);
 
 /** Uploads that are sides of one object (image = the first side, image2 the second…), and the node they all go into. */
 interface ViewSlots {
@@ -899,6 +913,8 @@ interface ViewSlots {
 }
 
 const IMAGE_SLOTS = ["image", "image2", "image3", "image4"] as const;
+/** Every reference slot a graph can bind, in order (FLUX 3 Image Klein's edit takes 10). */
+const REFERENCE_SLOTS = ["image", "image2", "image3", "image4", "image5", "image6", "image7", "image8", "image9", "image10"] as const;
 
 /**
  * Which slot each photo of a multi-view 3D model goes to: params.extra.views names the side of each photo
@@ -922,6 +938,12 @@ const MEDIA_HINT: Record<string, string> = {
   image2: "Add a second image",
   image3: "Add a third image",
   image4: "Add a fourth image",
+  image5: "Add a fifth image",
+  image6: "Add a sixth image",
+  image7: "Add a seventh image",
+  image8: "Add an eighth image",
+  image9: "Add a ninth image",
+  image10: "Add a tenth image",
   endImage: "Add an end frame",
   mask: "Paint the area to change",
   video: "Add a video",
@@ -1124,6 +1146,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     image2: images[1],
     image3: images[2],
     image4: images[3],
+    // FLUX 3 Image Klein's edit binds up to ten references.
+    ...Object.fromEntries(REFERENCE_SLOTS.slice(4).map((k, i) => [k, images[i + 4]])),
     endImage: input.endImage,
     mask: input.mask,
     video: input.video ?? clips[0],
@@ -1264,6 +1288,18 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // Video finishing (Upscale hub): export formats, HDR curves, FPS Boost's m / n, chunked upscaling.
   const finish = videoFinishValues(manifest, input, clip, extra);
   Object.assign(values, finish.values);
+  // Open-H3 Regenerate (video-regenerate-h3): the output size and the draft preset as the pack's strings, and the frames
+  // this pass reads (its seconds at 24 fps, at most 15 s); the words are what it redraws from (regenerate.ts).
+  if (manifest.id === REGEN_WORKFLOW) {
+    if (!(typeof values.prompt === "string" && values.prompt.trim())) throw new ProviderError("Regenerate redraws the clip from words: describe what is in it", 400);
+    const length = span ?? (clipLength !== undefined ? Math.max(0, clipLength - start) : input.sourceDuration);
+    // One pass reads at most 15 s: a longer one (a clip from an earlier step) is refused, never cut short.
+    if (length !== undefined && length > REGEN_WINDOW_SECONDS + 0.05) throw new ProviderError(regenOnePassRefusal(length), 400);
+    values.resolution = regenResolution(input.resolution);
+    values.draftSize = draftSizeFor({ fromH3: extra.draftFrom === "h3" });
+    values.frames = regenFrames(length);
+    delete extra.draftFrom;
+  }
 
   // Drawn motion paths (normalised to the start frame) → one pixel point per output frame (Wan-Move).
   const paths = extra.motionPaths as MotionPaths | undefined;
@@ -1434,6 +1470,21 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     const tooBig = maskMemoryProblem({ width: clip?.width, height: clip?.height, quality: input.resolution, shotFrames, correcting: prev }, await ctx.serverRam?.());
     if (tooBig) throw new ProviderError(tooBig);
   }
+  // Restore & colourise (video-restore-ltx25-tiled): the window, canvas, LoRA and tiles of this pass; the prefix (the window
+  // before's restored frames, videos[0]), the reference picture (images[0]) and deinterlacing are branches it may leave out.
+  let restore: RestoreJob | null = null;
+  if (manifest.capability === "restore-video") {
+    const prefixVideo = typeof clips[0] === "string" && clips[0] && clips[0] !== values.video ? clips[0] : undefined;
+    try {
+      restore = restoreJob({ extra, clip: clip ? clipFacts(clip) : undefined, fps: input.fps, prefixVideo, reference: images[0] });
+    } catch (e) {
+      throw new ProviderError((e as Error).message);
+    }
+    for (const k of RESTORE_EXTRA_KEYS) delete extra[k];
+    Object.assign(values, restore.values, { video2: restore.prefix ? prefixVideo : undefined, image: restore.reference ? images[0] : undefined });
+    if (!restore.prefix) studioLeft.push("video2");
+    if (!restore.reference) studioLeft.push("image");
+  }
   // Genjutsu's Object swap: SAM 3.1 follows what goes (params.extra.maskPrompt, or the "replace … with" part of the prompt,
   // as Genjutsu sends it), the reference comes in, the prompt describes the result. Insert: the painted spot and the
   // reference, the prompt says what appears there. Neither graph takes clicked points.
@@ -1483,10 +1534,11 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // A Video concatenator clip muted in the canvas (video-fit-clip): its sound becomes silence below.
   const muted = manifest.id === "video-fit-clip" && extra.mute === true;
   delete extra.mute;
-  // DBS (separate-soundtrack-dbs): the model asked for, else the host's pick (DBS-TIGER on a CUDA GPU, DBS-BSRNN on a
-  // CPU, the other one when the pick isn't on disk; a model that isn't there is refused in words); "each channel" for
-  // stereo stems. A source with more than 2 channels (the header's count, else the browser's) is split in mono with a
-  // mono Music & effects (dbsSurroundBed below): ComfyUI can't save more than 2 channels.
+  // DBS (separate-soundtrack-dbs, and the dub's dub-prepare-dbs-transcribe): the model asked for, else the host's pick
+  // (DBS-TIGER on a CUDA GPU, DBS-BSRNN on a CPU, the other one when the pick isn't on disk; a model that isn't there is
+  // refused in words); "each channel" for stereo stems. A source with more than 2 channels (the header's count, else the
+  // browser's) is split in mono with a mono Music & effects (dbsSurroundBed below): ComfyUI can't save more than 2
+  // channels. The dub's graph always splits in mono (no channels binding), so only its bed changes.
   if (b.separationModel) {
     const [device, installed] = await Promise.all([extra.separationModel ? undefined : ctx.device?.().catch(() => undefined), ctx.dbsModels?.().catch(() => undefined)]);
     try {
@@ -1517,9 +1569,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     for (const k of ["reuseModel", "rate", "strength", "background", ...(values.level !== undefined ? ["level"] : [])]) delete extra[k];
   }
   delete extra.background;
-  const sourceChannels = b.channels ? (ctx.media?.(String(values.audio ?? ""))?.channels ?? (Number(extra.sourceChannels) || undefined)) : undefined;
+  const sourceChannels = b.channels || b.separationModel ? (ctx.media?.(String(values.audio ?? ""))?.channels ?? (Number(extra.sourceChannels) || undefined)) : undefined;
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
+  // Options → Prompt helper (FLUX 3 Image Klein) and a layout's draft (kept for Reuse): read here, never bound.
+  const helper = extra[PROMPT_HELPER_PARAM];
+  const laidOut = carriesBoxes(extra);
+  delete extra[PROMPT_HELPER_PARAM];
+  delete extra[LAYOUT_PARAM];
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
   // SeedVR2's `scale` multiplies the picture before one diffusion pass over all of it, and its graph is made for up to
   // limits.maxWidth × maxHeight: the multiplier comes down to fit the picture (a 3000 × 2000 photo at the template's 4x
@@ -1565,7 +1622,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   }
   // The Character swap without an anchor frame: its loader and fit are taken out after binding.
   if (dropAnchor) left.push("image2");
-  for (const [k, prev] of [["image2", "image"], ["image3", "image2"], ["image4", "image3"]] as const) {
+  for (const [k, prev] of REFERENCE_SLOTS.slice(1).map((slot, i) => [slot, REFERENCE_SLOTS[i]] as const)) {
     if (rules.views || !b[k] || values[k] !== undefined || rules.required?.includes(k) || left.includes(k)) continue;
     if (values[prev] === undefined && !left.includes(prev)) continue;
     const loader = b[k]!.length === 1 ? b[k]![0].node : undefined;
@@ -1604,11 +1661,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (realMissing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${realMissing.join(", ")}`);
   let wf = bound.workflow;
   const outputIds = manifest.outputs.map((o) => o.node);
+  // The prompt helper (FLUX 3 Image Klein's upsampler) off, or a layout with boxes it would rewrite: the words as typed.
+  if (PROMPT_HELPER_GRAPHS.has(manifest.id) && (helper === "off" || laidOut)) wf = skipPromptHelper(wf, outputIds);
   if (dropAnchor) wf = withoutAnchor(wf, b.image2![0].node);
   // LoRA "none": the swap LoRA's loader is linked out (H3 runs with the Turbo LoRA alone).
   if (dropSwapLora && b.lora?.length === 1) wf = bypassNode(wf, b.lora[0].node, "model", outputIds);
   if (studioSegment) wf = segmentGraph(wf, { ...studioSegment, outputs: outputIds });
   if (studioMask) wf = maskGraph(wf, { ...studioMask, outputs: outputIds });
+  if (restore) wf = restoreGraph(wf, restore, outputIds);
   // FPS Boost to a lower rate, or one the clip divides into: no interpolation, only every n-th frame.
   if (finish.bypassInterpolation) {
     const id = Object.keys(wf).find((k) => wf[k].class_type === "FrameInterpolate");
@@ -1667,7 +1727,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   return {
     manifest,
     workflow: wf,
-    meta: { workflowId: manifest.id, nodeCount: Object.keys(wf).length, prefix: `fuobe/${ctx.generationId}`, ...(metaBatch ? { metaBatch: true } : {}) },
+    // The seed the graph drew with (one Fuobe picked when none was asked): its pictures keep it, so Edit layout redraws the same one.
+    meta: { workflowId: manifest.id, nodeCount: Object.keys(wf).length, prefix: `fuobe/${ctx.generationId}`, ...(metaBatch ? { metaBatch: true } : {}), ...(b.seed && typeof values.seed === "number" ? { seed: values.seed } : {}) },
   };
 }
 
@@ -1715,7 +1776,13 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
   const packs = missingClass?.pack ? [missingClass.pack] : manifest.customNodes.map((c) => c.name);
   const where = worker === "isolated" ? "the isolated ComfyUI worker" : "your ComfyUI";
   const missingPack =
-    body.error?.type === "missing_node_type" && packs.length ? `This workflow needs the ${packs.join(" + ")} node pack${packs.length > 1 ? "s" : ""} on ${where} (see scripts/comfy/README.md)` : undefined;
+    body.error?.type === "missing_node_type" && manifest.id === REGEN_WORKFLOW && worker === "main"
+      ? ownGpu()
+        ? REGEN_COPY.missingVisitor
+        : REGEN_COPY.missing
+      : body.error?.type === "missing_node_type" && packs.length
+        ? `This workflow needs the ${packs.join(" + ")} node pack${packs.length > 1 ? "s" : ""} on ${where} (see scripts/comfy/README.md)`
+        : undefined;
   // A LoRA it lacks: point at its model card (a civitai download URL answers 401 without the key) and the LoRA folder setting.
   const loraModels = loras.map((l) => ({ file: l.file, folder: "loras", url: loraByFile(l.file)?.page ?? (l.url && !needsToken(l.url) ? l.url : undefined) }));
   let detail = body.node_errors && Object.keys(body.node_errors as object).length ? explainComfyError(body.node_errors, { ...manifest, models: [...manifest.models, ...loraModels] }) : (missingPack ?? (typeof body.error?.message === "string" ? body.error.message.slice(0, 1024) : undefined));
@@ -2089,6 +2156,8 @@ export const comfyProvider: ProviderAdapter = {
       } catch (e) {
         return { state: "failed" as const, error: (e as Error).message };
       }
+      const seed = typeof meta.seed === "number" ? meta.seed : undefined;
+      if (seed !== undefined) outputs = outputs.map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, seed } } : o));
       return { state: "succeeded" as const, outputs: await withLayerBoxes(outputs) };
     };
     const isDone = (e: HistoryEntry | undefined): e is HistoryEntry => !!e && (!!e.status?.completed || e.status?.status_str === "success" || e.status?.status_str === "error");

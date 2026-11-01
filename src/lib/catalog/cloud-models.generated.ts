@@ -1760,6 +1760,316 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "flux-3-klein",
+    "name": "FLUX 3 Klein",
+    "vendor": "Black Forest Labs",
+    "family": "flux",
+    "engine": "cloud",
+    "kind": "image",
+    "tagline": "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper \u00b7 FLUX Kommunity licence",
+    "routes": [
+      {
+        "op": "t2i",
+        "provider": "fal",
+        "endpoint": "blackforestlabs/flux-3/klein/text-to-image",
+        "map": {
+          "numOutputs": "num_images",
+          "seed": "seed",
+          "size": {
+            "key": "image_size",
+            "multiple": 16,
+            "min": 256,
+            "max": 4096,
+            "bases": {
+              "1K": 1024,
+              "1.5K": 1536,
+              "2K": 2048,
+              "4K": 4096
+            }
+          },
+          "promptExpansion": "enable_prompt_expansion",
+          "boundingBoxes": {
+            "key": "bounding_boxes",
+            "max": 32
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "max": 3,
+            "range": {
+              "min": 0,
+              "max": 4
+            }
+          },
+          "ignore": [
+            "promptHelper"
+          ]
+        },
+        "loraEndpoint": "blackforestlabs/flux-3/klein/text-to-image/lora"
+      },
+      {
+        "op": "edit",
+        "provider": "fal",
+        "endpoint": "blackforestlabs/flux-3/klein/edit-image",
+        "map": {
+          "images": "image_urls",
+          "numOutputs": "num_images",
+          "seed": "seed",
+          "size": {
+            "key": "image_size",
+            "multiple": 16,
+            "min": 256,
+            "max": 4096,
+            "bases": {
+              "1K": 1024,
+              "1.5K": 1536,
+              "2K": 2048,
+              "4K": 4096
+            }
+          },
+          "promptExpansion": "enable_prompt_expansion",
+          "boundingBoxes": {
+            "key": "bounding_boxes",
+            "max": 32
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "max": 3,
+            "range": {
+              "min": 0,
+              "max": 4
+            }
+          },
+          "ignore": [
+            "promptHelper"
+          ]
+        },
+        "followsImage": true,
+        "loraEndpoint": "blackforestlabs/flux-3/klein/edit-image/lora"
+      }
+    ],
+    "options": {
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9",
+        "5:4",
+        "4:5"
+      ],
+      "resolutions": [
+        "1K",
+        "1.5K",
+        "2K",
+        "4K"
+      ],
+      "seed": true,
+      "maxOutputs": 4,
+      "maxImages": 10,
+      "layout": "flux3",
+      "controls": [
+        {
+          "param": "promptHelper",
+          "label": "Prompt helper",
+          "values": [
+            "on",
+            "off"
+          ],
+          "default": "on",
+          "labels": {
+            "on": "On \u00b7 full caption (not with boxes)",
+            "off": "Off \u00b7 your words as typed"
+          }
+        }
+      ]
+    },
+    "badges": [
+      "new"
+    ],
+    "licence": {
+      "licence": "FLUX Kommunity License v1.0",
+      "commercial": null,
+      "note": "FLUX Kommunity License v1.0: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross annual revenue (affiliates included); other commercial use needs a BFL licence. Its commercial-use exception is not blanket permission for commercial fine-tuning or distribution. The Qwen3-VL-4B-Instruct text encoder is Apache-2.0",
+      "checked": "2026-11-01"
+    },
+    "defaults": {
+      "aspectRatio": "1:1",
+      "resolution": "1K"
+    },
+    "pricing": {
+      "unit": "image",
+      "usd": 0.009,
+      "note": "per image at 1K (fal's planned rates by size)",
+      "byResolution": {
+        "1K": 0.009,
+        "1.5K": 0.011,
+        "2K": 0.014,
+        "4K": 0.036
+      },
+      "withLorasPerMegapixel": 0.012
+    }
+  },
+  {
+    "id": "flux-3-klein-base",
+    "name": "FLUX 3 Klein Base",
+    "vendor": "Black Forest Labs",
+    "family": "flux",
+    "engine": "cloud",
+    "kind": "image",
+    "tagline": "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them \u00b7 FLUX Kommunity licence",
+    "routes": [
+      {
+        "op": "t2i",
+        "provider": "fal",
+        "endpoint": "blackforestlabs/flux-3/klein/base/text-to-image",
+        "map": {
+          "numOutputs": "num_images",
+          "seed": "seed",
+          "size": {
+            "key": "image_size",
+            "multiple": 16,
+            "min": 256,
+            "max": 4096,
+            "bases": {
+              "1K": 1024,
+              "1.5K": 1536,
+              "2K": 2048,
+              "4K": 4096
+            }
+          },
+          "promptExpansion": "enable_prompt_expansion",
+          "boundingBoxes": {
+            "key": "bounding_boxes",
+            "max": 32
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "max": 3,
+            "range": {
+              "min": 0,
+              "max": 4
+            }
+          },
+          "ignore": [
+            "promptHelper"
+          ]
+        },
+        "loraEndpoint": "blackforestlabs/flux-3/klein/base/text-to-image/lora"
+      },
+      {
+        "op": "edit",
+        "provider": "fal",
+        "endpoint": "blackforestlabs/flux-3/klein/base/edit-image",
+        "map": {
+          "images": "image_urls",
+          "numOutputs": "num_images",
+          "seed": "seed",
+          "size": {
+            "key": "image_size",
+            "multiple": 16,
+            "min": 256,
+            "max": 4096,
+            "bases": {
+              "1K": 1024,
+              "1.5K": 1536,
+              "2K": 2048,
+              "4K": 4096
+            }
+          },
+          "promptExpansion": "enable_prompt_expansion",
+          "boundingBoxes": {
+            "key": "bounding_boxes",
+            "max": 32
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "max": 3,
+            "range": {
+              "min": 0,
+              "max": 4
+            }
+          },
+          "ignore": [
+            "promptHelper"
+          ]
+        },
+        "followsImage": true,
+        "loraEndpoint": "blackforestlabs/flux-3/klein/base/edit-image/lora"
+      }
+    ],
+    "options": {
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9",
+        "5:4",
+        "4:5"
+      ],
+      "resolutions": [
+        "1K",
+        "1.5K",
+        "2K",
+        "4K"
+      ],
+      "seed": true,
+      "maxOutputs": 4,
+      "maxImages": 10,
+      "layout": "flux3",
+      "controls": [
+        {
+          "param": "promptHelper",
+          "label": "Prompt helper",
+          "values": [
+            "on",
+            "off"
+          ],
+          "default": "on",
+          "labels": {
+            "on": "On \u00b7 full caption (not with boxes)",
+            "off": "Off \u00b7 your words as typed"
+          }
+        }
+      ]
+    },
+    "badges": [
+      "new"
+    ],
+    "licence": {
+      "licence": "FLUX Kommunity License v1.0",
+      "commercial": null,
+      "note": "FLUX Kommunity License v1.0: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross annual revenue (affiliates included); other commercial use needs a BFL licence. Its commercial-use exception is not blanket permission for commercial fine-tuning or distribution. The Qwen3-VL-4B-Instruct text encoder is Apache-2.0",
+      "checked": "2026-11-01"
+    },
+    "defaults": {
+      "aspectRatio": "1:1",
+      "resolution": "1K"
+    },
+    "pricing": {
+      "unit": "image",
+      "usd": 0.027,
+      "note": "per image at 1K (fal's planned rates by size)",
+      "byResolution": {
+        "1K": 0.027,
+        "1.5K": 0.033,
+        "2K": 0.042,
+        "4K": 0.108
+      },
+      "withLorasPerMegapixel": 0.035
+    }
+  },
+  {
     "id": "wan-2-7-image",
     "name": "Wan 2.7 Image",
     "vendor": "Alibaba Wan",
@@ -4102,8 +4412,378 @@ export const CLOUD_MODELS: ModelDef[] = [
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.473,
-      "note": "720p"
+      "usd": 0.46224,
+      "note": "720p; 480p $0.21494, 1080p $1.13724. Reference clips bill their own seconds with the output, at 0.6 times the rate",
+      "byResolution": {
+        "480p": 0.21494,
+        "720p": 0.46224,
+        "1080p": 1.13724
+      },
+      "clipInput": {
+        "usd": 0.27734,
+        "byResolution": {
+          "480p": 0.12897,
+          "720p": 0.27734,
+          "1080p": 0.68234
+        },
+        "plain": true
+      }
+    }
+  },
+  {
+    "id": "kling-4",
+    "name": "Kling 4.0",
+    "vendor": "Kuaishou",
+    "family": "kling",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Kuaishou's newest flagship \u2014 3\u201330 s takes, multi-shot, @Elements and video edits up to 1080p",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/text-to-video",
+        "map": {
+          "multiShot": {
+            "key": "multi_prompt",
+            "durationType": "number",
+            "maxPrompt": 512,
+            "integer": true
+          },
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "21:9"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/image-to-video",
+        "map": {
+          "image": "start_image_url",
+          "endImage": "end_image_url",
+          "multiShot": {
+            "key": "multi_prompt",
+            "durationType": "number",
+            "maxPrompt": 512,
+            "integer": true
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "flf2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/image-to-video",
+        "map": {
+          "image": "start_image_url",
+          "endImage": "end_image_url",
+          "multiShot": {
+            "key": "multi_prompt",
+            "durationType": "number",
+            "maxPrompt": 512,
+            "integer": true
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "ref2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/reference-to-video",
+        "map": {
+          "images": "image_urls",
+          "videos": "video_urls",
+          "multiShot": {
+            "key": "multi_prompt",
+            "durationType": "number",
+            "maxPrompt": 512,
+            "integer": true
+          },
+          "elements": {
+            "key": "elements",
+            "frontal": "frontal_image_url",
+            "views": "reference_image_urls",
+            "max": 7,
+            "maxViews": 3,
+            "video": "video_url",
+            "maxVideos": 3
+          },
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "auto",
+              "16:9",
+              "9:16",
+              "1:1",
+              "21:9"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "v2v",
+        "provider": "fal",
+        "endpoint": "kling/v4/video-to-video/edit",
+        "map": {
+          "videos": "video_urls",
+          "images": "image_urls",
+          "video": "video_url",
+          "elements": {
+            "key": "elements",
+            "frontal": "frontal_image_url",
+            "views": "reference_image_urls",
+            "max": 7,
+            "maxViews": 3,
+            "video": "video_url",
+            "maxVideos": 3
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          }
+        }
+      },
+      {
+        "op": "video-swap",
+        "provider": "fal",
+        "endpoint": "kling/v4/video-to-video/edit",
+        "map": {
+          "videos": "video_urls",
+          "images": "image_urls",
+          "video": "video_url",
+          "elements": {
+            "key": "elements",
+            "frontal": "frontal_image_url",
+            "views": "reference_image_urls",
+            "max": 7,
+            "maxViews": 3,
+            "video": "video_url",
+            "maxVideos": 3
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          }
+        }
+      },
+      {
+        "op": "video-insert",
+        "provider": "fal",
+        "endpoint": "kling/v4/video-to-video/edit",
+        "map": {
+          "videos": "video_urls",
+          "images": "image_urls",
+          "video": "video_url",
+          "elements": {
+            "key": "elements",
+            "frontal": "frontal_image_url",
+            "views": "reference_image_urls",
+            "max": 7,
+            "maxViews": 3,
+            "video": "video_url",
+            "maxVideos": 3
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          }
+        }
+      },
+      {
+        "op": "t2v",
+        "provider": "replicate",
+        "endpoint": "kwaivgi/kling-v4.0",
+        "map": {
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "21:9"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "replicate",
+        "endpoint": "kwaivgi/kling-v4.0",
+        "map": {
+          "image": "start_image",
+          "endImage": "end_image",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "flf2v",
+        "provider": "replicate",
+        "endpoint": "kwaivgi/kling-v4.0",
+        "map": {
+          "image": "start_image",
+          "endImage": "end_image",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "720p",
+              "1080p"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "multiShot": {
+        "mode": "native",
+        "maxShots": 6
+      },
+      "aspectRatios": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "21:9",
+        "auto"
+      ],
+      "resolutions": [
+        "720p",
+        "1080p"
+      ],
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15,
+        20,
+        30
+      ],
+      "endFrame": true,
+      "maxImages": 10,
+      "maxVideos": 5,
+      "elements": {
+        "max": 7,
+        "views": 3,
+        "videos": 3,
+        "voices": false,
+        "ops": [
+          "ref2v",
+          "v2v",
+          "video-swap",
+          "video-insert"
+        ]
+      }
+    },
+    "badges": [
+      "top",
+      "30s",
+      "new"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5,
+      "resolution": "1080p"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.235,
+      "note": "1080p; 720p $0.157. An edit, reference clips or video elements bill $0.141/s at 1080p ($0.094 at 720p) on the seconds in plus the seconds out, at least twice the output",
+      "byResolution": {
+        "720p": 0.157,
+        "1080p": 0.235
+      },
+      "clipInput": {
+        "usd": 0.141,
+        "byResolution": {
+          "720p": 0.094,
+          "1080p": 0.141
+        }
+      }
     }
   },
   {
@@ -6541,6 +7221,55 @@ export const CLOUD_MODELS: ModelDef[] = [
     "hidden": true
   },
   {
+    "id": "minimax-h3-max-3d",
+    "name": "MiniMax H3 Max 3D to video",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A grey-box blockout from Blender or the browser, rendered as a finished shot from your reference stills",
+    "routes": [
+      {
+        "op": "v2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/3d-to-video",
+        "map": {
+          "images": "reference_image_urls",
+          "video": "video_url",
+          "resolution": "resolution"
+        }
+      }
+    ],
+    "options": {
+      "resolutions": [
+        "480P",
+        "768P",
+        "1080P"
+      ],
+      "maxImages": 8
+    },
+    "defaults": {
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request; + $0.10 for each reference it draws when given none (up to 2)",
+      "byResolution": {
+        "480P": 0.05,
+        "768P": 0.08,
+        "1080P": 0.16
+      },
+      "minSeconds": 5,
+      "perRequest": 0.5,
+      "generatedRefs": {
+        "usd": 0.1,
+        "count": 2
+      }
+    },
+    "hidden": true
+  },
+  {
     "id": "hailuo-2-3",
     "name": "MiniMax Hailuo 2.3",
     "vendor": "MiniMax",
@@ -8771,6 +9500,88 @@ export const CLOUD_MODELS: ModelDef[] = [
           "param": "model",
           "values": {
             "Starlight Fast 2": 0.5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "topaz-astra",
+    "name": "Topaz Astra 2",
+    "vendor": "Topaz Labs",
+    "family": "topaz",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Creative upscale that invents fine detail and texture, steered by optional words: to 1080p or 4K",
+    "routes": [
+      {
+        "op": "upscale-video",
+        "provider": "fal",
+        "endpoint": "topaz/upscale/video/creative",
+        "map": {
+          "omitEmptyPrompt": true,
+          "video": "video_url",
+          "targetFps": "target_fps",
+          "upscaleFactor": {
+            "key": "upscale_factor",
+            "min": 1,
+            "max": 4
+          },
+          "ranges": {
+            "target_fps": {
+              "min": 16,
+              "max": 60,
+              "integer": true
+            }
+          },
+          "defaults": {
+            "H264_output": true
+          }
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "creativity",
+          "label": "Creativity",
+          "min": 0,
+          "max": 1,
+          "step": 0.05,
+          "default": 0.5
+        }
+      ],
+      "fpsTargets": [
+        24,
+        30,
+        60
+      ],
+      "resolutions": [
+        "1080p",
+        "4K"
+      ],
+      "promptOptional": true
+    },
+    "badges": [
+      "new",
+      "4k"
+    ],
+    "defaults": {
+      "resolution": "4K"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.5,
+      "note": "4K at 30 fps; up to 1080p $0.30/s; 60 fps doubles",
+      "byResolution": {
+        "1080p": 0.3,
+        "4K": 0.5
+      },
+      "factors": [
+        {
+          "param": "targetFps",
+          "values": {
+            "60": 2
           }
         }
       ]
@@ -19381,10 +20192,12 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "pricing": {
       "unit": "second",
       "usd": 0.075,
-      "note": "768p; 480p $0.0625/s; whole seconds, 5\u201315 per call",
+      "note": "768p; 480p $0.0625/s; whole seconds, 5\u201315 per call; a re-render at 2K $0.1625/s, 4K $0.20/s",
       "byResolution": {
         "768p": 0.075,
-        "480p": 0.0625
+        "480p": 0.0625,
+        "2K": 0.1625,
+        "4K": 0.2
       }
     }
   },
@@ -19521,14 +20334,84 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "family": "fuobe-evolution",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Takes your clip further in a direction an LLM writes from your references: LTX-2.3 video to video at a change intensity",
+    "tagline": "Takes your clip further in a direction an LLM writes from your references: a direction frame per piece carried through it by depth (Wan 2.2 Fun VACE)",
     "routes": [
       {
         "op": "v2v",
         "provider": "fal",
-        "endpoint": "fal-ai/ltx-2.3-22b/video-to-video",
+        "endpoint": "fal-ai/wan-22-vace-fun-a14b/depth",
         "map": {
           "negativePrompt": "negative_prompt",
+          "images": "ref_image_urls",
+          "video": "video_url",
+          "seed": "seed",
+          "fps": "frames_per_second",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "auto",
+              "240p",
+              "360p",
+              "480p",
+              "580p",
+              "720p"
+            ]
+          },
+          "fixed": {
+            "preprocess": true
+          },
+          "defaults": {
+            "match_input_num_frames": true,
+            "match_input_frames_per_second": true
+          }
+        }
+      }
+    ],
+    "options": {
+      "negativePrompt": true,
+      "seed": true,
+      "resolutions": [
+        "480p",
+        "580p",
+        "720p"
+      ],
+      "maxImages": 4
+    },
+    "licence": {
+      "licence": "Apache-2.0",
+      "commercial": true,
+      "note": "Wan 2.2 Fun VACE A14B and Qwen-Image-Edit 2511 (the direction frames) are Apache-2.0"
+    },
+    "defaults": {
+      "resolution": "720p"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.1,
+      "note": "720p; 580p $0.075, 480p $0.05 \u00b7 fal bills frames \u00f7 16 as video seconds: a 30 fps clip costs about 1.9\u00d7 its length; each direction frame's Qwen edit is priced on its own",
+      "byResolution": {
+        "720p": 0.1,
+        "580p": 0.075,
+        "480p": 0.05
+      }
+    }
+  },
+  {
+    "id": "fuobe-restore",
+    "name": "Fuobe Restore",
+    "vendor": "Fuobe Original",
+    "family": "fuobe-restore",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Restore and colourise archive footage: Lightricks' Restore IC-LoRA on LTX-2.3, one untiled pass a piece",
+    "routes": [
+      {
+        "op": "restore-video",
+        "provider": "fal",
+        "endpoint": "fal-ai/ltx-2.3-22b/reference-video-to-video/lora",
+        "map": {
+          "negativePrompt": "negative_prompt",
+          "image": "image_url",
           "video": "video_url",
           "seed": "seed",
           "generateAudio": "generate_audio",
@@ -19544,32 +20427,6 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
             "key": "video_size",
             "multiple": 16,
             "table": {
-              "480p": {
-                "21:9": [
-                  1120,
-                  480
-                ],
-                "16:9": [
-                  864,
-                  480
-                ],
-                "4:3": [
-                  640,
-                  480
-                ],
-                "1:1": [
-                  480,
-                  480
-                ],
-                "3:4": [
-                  480,
-                  640
-                ],
-                "9:16": [
-                  480,
-                  864
-                ]
-              },
               "720p": {
                 "21:9": [
                   1504,
@@ -19625,11 +20482,15 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
             }
           },
           "fixed": {
+            "ic_lora_type": "none",
+            "preprocessor": "none",
             "enable_prompt_expansion": false,
             "generate_audio": false,
-            "match_video_length": false,
-            "match_input_fps": false,
-            "fps": 24
+            "match_video_length": true,
+            "match_input_fps": true
+          },
+          "defaults": {
+            "negative_prompt": "modern cars, modern buildings, shipping containers, mobile phones, logos, signage, lettering, graffiti, satellite dishes, plastic furniture, blocky compression, banding, mosquito noise, ringing, blurry, smeared, ghosting, low resolution"
           },
           "loras": {
             "shape": "items",
@@ -19641,8 +20502,7 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
             },
             "weightName": true
           }
-        },
-        "loraEndpoint": "fal-ai/ltx-2.3-22b/video-to-video/lora"
+        }
       }
     ],
     "options": {
@@ -19666,13 +20526,13 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
         "9:16"
       ],
       "resolutions": [
-        "480p",
         "720p",
         "1080p"
       ],
       "negativePrompt": true,
       "seed": true,
-      "audio": true
+      "audio": true,
+      "maxImages": 1
     },
     "licence": {
       "licence": "LTX-2 / LTX-2.x Community License",
@@ -19681,29 +20541,20 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
       "checked": "2026-10-23"
     },
     "defaults": {
-      "aspectRatio": "16:9",
-      "duration": 5,
+      "aspectRatio": "4:3",
       "resolution": "720p",
       "generateAudio": true
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.0347,
-      "note": "$0.001605 per megapixel of video (width \u00d7 height \u00d7 frames): about $0.17 for 5 s at 720p; $0.001805 with LoRAs",
+      "usd": 0.0341,
+      "note": "$0.001805 per megapixel of video (width \u00d7 height \u00d7 frames): about $0.14 for 4 s of a 4:3 clip at 720p",
       "byResolution": {
-        "480p": 0.016,
-        "720p": 0.0347,
-        "1080p": 0.0805
-      },
-      "withLoras": 0.039,
-      "withLorasByResolution": {
-        "480p": 0.018,
-        "720p": 0.039,
-        "1080p": 0.0905
+        "720p": 0.0341,
+        "1080p": 0.0679
       },
       "videoMegapixel": {
-        "usd": 0.001605,
-        "withLoras": 0.001805
+        "usd": 0.001805
       }
     }
   },

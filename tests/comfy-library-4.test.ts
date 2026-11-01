@@ -87,8 +87,9 @@ describe("round-4 ComfyUI workflows", () => {
     expect(manifest.workflows.length).toBeGreaterThanOrEqual(132);
     expect(new Set(manifest.workflows.map((w) => w.id)).size).toBe(manifest.workflows.length);
     // The owner's SOTA image families (2026-10-31) wait for a /prompt check on a ComfyUI that isn't rendering, and the
-    // MiniMax H3 graphs on node packs this server doesn't have (h3_character_swap, H3 Relay): never installed here,
-    // so their /prompt check names a missing node (tests/comfy-character-swap.test.ts). MOSS-Image's graph too, since its
+    // MiniMax H3 graphs and Restore & colourise on node packs this server doesn't have (h3_character_swap, H3 Relay,
+    // ComfyUI-LTXVideo): never installed here, so their /prompt check names a missing node (tests/comfy-character-swap.test.ts,
+    // tests/restore-comfy.test.ts). MOSS-Image's graph too, since its
     // encoder became the int8 file (the w4a8 one faulted the driver). MiniMax H3's video graphs wait for their first run.
     expect(manifest.workflows.filter((w) => !w.validated).map((w) => w.id)).toEqual([
       "moss-image-t2i",
@@ -116,6 +117,7 @@ describe("round-4 ComfyUI workflows", () => {
       "fibo2-dev-t2i",
       "fibo2-dev-edit",
       "fibo2-edit-turbo-edit",
+      "video-restore-ltx25-tiled",
       // Clean up voice: ComfyUI-RE-USE isn't on the validation server; the pack's own tests run it (comfy-nodes/ComfyUI-RE-USE/tests).
       "voice-clean-reuse",
       "voice-clean-bed-reuse",
@@ -124,6 +126,7 @@ describe("round-4 ComfyUI workflows", () => {
       "video-person-remove-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
+      "video-regenerate-h3",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);
   });

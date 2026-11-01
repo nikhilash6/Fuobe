@@ -65,6 +65,11 @@ export const GenerationRequestSchema = z.object({
       enhancePrompt: z.boolean().optional(),
       shots: z.array(z.object({ prompt: z.string().max(2000), duration: z.number().positive().max(60) })).max(12).optional(),
       multiShot: z.literal("auto").optional(),
+      // Kling 4.0's elements: groups of inputs.images (by index, the frontal view first) or one of inputs.videos.
+      elements: z
+        .array(z.object({ images: z.array(z.number().int().min(0).max(63)).max(4).optional(), video: z.number().int().min(0).max(23).optional() }))
+        .max(7)
+        .optional(),
       draft: z.boolean().optional(),
       draftId: z.string().max(8192).optional(),
       voice: z.string().max(200).optional(),
@@ -88,6 +93,7 @@ export const GenerationRequestSchema = z.object({
       easing: z.enum(["linear", "ease-in-out"]).optional(),
       crossfade: z.number().min(0).max(30).optional(),
       sourceDuration: z.number().positive().max(36_000).optional(),
+      sourceFps: z.number().positive().max(1000).optional(),
       frameInterval: z.number().int().min(1).max(10_000).optional(),
       targetFps: z.number().positive().max(240).optional(),
       slowdown: z.number().min(1).max(8).optional(),

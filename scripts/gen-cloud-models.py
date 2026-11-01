@@ -2,7 +2,7 @@
 """
 Generate src/lib/catalog/cloud-models.generated.ts from docs/research/paid-model-apis.json
 (merged with parts 2, 3 and 4: paid-model-apis-2.json, paid-model-apis-3.json, paid-model-apis-4.json, and the
-endpointRecords of research #7, new-models-7.json).
+endpointRecords of research #7 and #10, new-models-7.json and new-models-10.json).
 
 The research file holds verified fal/Replicate input schemas (field names, enums, defaults,
 prices). This script turns a curated list of models (MODELS below) into ModelDef objects with
@@ -44,6 +44,12 @@ NEW_MODELS_7 = json.loads((ROOT / "docs/research/new-models-7.json").read_text(e
 for e in NEW_MODELS_7.get("endpointRecords") or []:
     prev = EPS.get((e["provider"], e["endpoint"]))
     EPS[(e["provider"], e["endpoint"])] = {**e, "keyFields": {**((prev or {}).get("keyFields") or {}), **(e.get("keyFields") or {})}}
+# Research #10 (docs/research/new-models-10.json endpointRecords, read by scripts/fetch-hosted-schemas.py --new10): FLUX 3 Image
+# Klein's fal routes, their /lora twins and Klein Base's LoRA routes (package nm10-flux3-klein). Same merge.
+NEW_MODELS_10 = json.loads((ROOT / "docs/research/new-models-10.json").read_text(encoding="utf-8"))
+for e in NEW_MODELS_10.get("endpointRecords") or []:
+    prev = EPS.get((e["provider"], e["endpoint"]))
+    EPS[(e["provider"], e["endpoint"])] = {**e, "keyFields": {**((prev or {}).get("keyFields") or {}), **(e.get("keyFields") or {})}}
 
 # Originals (docs/research/fuobe-originals-recipes-5.json): the hosted open-weight endpoints that take LoRAs
 # (hostedLoraEndpoints: the LoRA field's shape, maximum and whether it's required, plus the full inputs where
@@ -68,6 +74,8 @@ IMAGE_SIZE_MAP = {
     "5:4": "landscape_4_3", "4:5": "portrait_4_3",
 }
 RATIO = re.compile(r"^\d+(\.\d+)?:\d+(\.\d+)?$")
+# Models whose @mentioned Elements go as the API's own elements (FieldMap.elements, ModelOptions.elements).
+ELEMENT_MODELS = {"kling-4"}
 # Duration picks for APIs that take any whole number of seconds in a range.
 NICE_DURATIONS = [3, 4, 5, 6, 8, 10, 12, 15, 20, 30]
 
@@ -81,7 +89,7 @@ M = []
 def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=None, defaults=None, options=None, fixed=None, hidden=False,
           sliders=None, controls=None, api_defaults=None, formats=None, ranged_durations=False, fit_values=False, fps_targets=None, upscale_tiers=None,
           frame_step=None, original=False, sizes=None, keep_shape=False, licence=None, frame_fps=None, frame_multiple=None,
-          exact_size=False):
+          exact_size=False, tier_size=None):
     """sliders / controls: [(field, label)] read from each route's research inputs (dotted = nested field; a slider's
     third item is its step, when the generic one is too coarse):
     numeric fields with minimum/maximum become sliders, enums become composer controls; both travel as params.extra.
@@ -108,6 +116,9 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
     exact_size: the API takes its size as one {width, height} object and rounds it itself ("rounded to multiples of 16
     between 512 and 2048 pixels": fal's MOSS-Image): FieldMap.size from the aspect ratio with the grid and limits the field's
     description states, so a layout drawn on that canvas is the picture the API makes.
+    tier_size: the endpoint whose price names resolution tiers ("$0.009 at 1K … $0.036 at 4K": fal's FLUX 3 Klein): the size goes
+    as one {width, height} object, the aspect ratio's shape on the tier's square (FieldMap.size.bases), on a 16 px grid within
+    the limits the field's description states ("256 to 4096 pixels"); the tiers become the resolutions.
     A route's options dict may also set max_images (FieldMap.maxImages), note, loraEndpoint (the same model with LoRAs:
     FieldMap.loras comes from its research record) and pin (a Replicate model run by version: the research's version)."""
     M.append(dict(id=id, name=name, vendor=vendor, family=family, kind=kind, tagline=tagline, routes=routes,
@@ -115,7 +126,7 @@ def model(id, name, vendor, family, kind, tagline, routes, badges=None, pricing=
                   sliders=sliders or [], controls=controls or [], api_defaults=api_defaults or {}, formats=formats or {},
                   ranged_durations=ranged_durations, fit_values=fit_values, fps_targets=fps_targets or [], upscale_tiers=upscale_tiers or [],
                   frame_step=frame_step, original=original, sizes=sizes, keep_shape=keep_shape, licence=licence, frame_fps=frame_fps,
-                  frame_multiple=frame_multiple, exact_size=exact_size))
+                  frame_multiple=frame_multiple, exact_size=exact_size, tier_size=tier_size))
 
 
 # ----- Image
@@ -207,6 +218,33 @@ model("moss-image", "MOSS-Image", "OpenMOSS", "moss", "image",
       licence={"licence": re.match(r"[\w.-]+", MOSS_FAL["license"]).group(0), "commercial": True,
                "note": f"{MOSS_FAL['license']}. fal's safety checker returns a black image when it flags an output",
                "checked": MOSS_FAL["fetched"]})
+# FLUX 3 Image Klein (research #10 §6.3, package nm10-flux3-klein): BFL's open 5.6B model on fal, priced per image by tier
+# ($0.009 at 1K … $0.036 at 4K, fal's planned rates); a run with LoRAs goes to its /lora twin ($0.012 per megapixel, up to 3 LoRAs
+# at 0-4). FLUX 3 Klein Base (the checkpoint BFL and fal's trainer train LoRAs on, which fal recommends running them on): its plain
+# routes per image by tier ($0.027 at 1K … $0.108 at 4K, planned), a run with LoRAs on its /lora twins at $0.035 per megapixel.
+# A layout with boxes goes as bounding_boxes with prompt expansion off. Licence: information, never a gate.
+KLEIN_FAL = "blackforestlabs/flux-3/klein"
+KLEIN_REC = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == f"{KLEIN_FAL}/text-to-image")
+KLEIN_BASE_REC = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == f"{KLEIN_FAL}/base/text-to-image")
+KLEIN_LICENCE = {"licence": KLEIN_REC["license"].split(":")[0], "commercial": None, "note": KLEIN_REC["license"], "checked": KLEIN_REC["fetched"]}
+# Options → Prompt helper, as on your GPU (params.extra.promptHelper, src/lib/catalog/models.ts KLEIN_PROMPT_HELPER): "off" sends
+# enable_prompt_expansion false (payload.ts), "on" leaves fal's default; a layout that places boxes always turns it off.
+KLEIN_HELPER = {"param": "promptHelper", "label": "Prompt helper", "values": ["on", "off"], "default": "on",
+                "labels": {"on": "On · full caption (not with boxes)", "off": "Off · your words as typed"}}
+model("flux-3-klein", "FLUX 3 Klein", "Black Forest Labs", "flux", "image",
+      "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper · FLUX Kommunity licence",
+      [("t2i", f"{KLEIN_FAL}/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/text-to-image/lora"}),
+       ("edit", f"{KLEIN_FAL}/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/edit-image/lora", "followsImage": True})],
+      badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
+      pricing=("image", KLEIN_REC["pricing"]["usd"], "per image at 1K (fal's planned rates by size)", {"byResolution": KLEIN_REC["pricing"]["byResolution"]}),
+      licence=KLEIN_LICENCE)
+model("flux-3-klein-base", "FLUX 3 Klein Base", "Black Forest Labs", "flux", "image",
+      "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them · FLUX Kommunity licence",
+      [("t2i", f"{KLEIN_FAL}/base/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/text-to-image/lora"}),
+       ("edit", f"{KLEIN_FAL}/base/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/edit-image/lora", "followsImage": True})],
+      badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
+      pricing=("image", KLEIN_BASE_REC["pricing"]["usd"], "per image at 1K (fal's planned rates by size)", {"byResolution": KLEIN_BASE_REC["pricing"]["byResolution"]}),
+      licence=KLEIN_LICENCE)
 model("wan-2-7-image", "Wan 2.7 Image", "Alibaba Wan", "wan", "image",
       "Wan's image model — cinematic stills that animate well",
       [("t2i", "fal-ai/wan/v2.7/pro/text-to-image"), ("edit", "fal-ai/wan/v2.7/pro/edit")], defaults={"aspectRatio": "16:9"})
@@ -393,9 +431,40 @@ model("seedance-2-5", "Seedance 2.5", "ByteDance", "seedance", "video",
        ("ref2v", "bytedance/seedance-2.5/reference-to-video"),
        ("extend", "bytedance/seedance-2.5/reference-to-video", "fal", {"fixed": {"task": "extension"}, "videoArray": True}),
        ("finalize", "bytedance/seedance-2.5/draft/complete")],
-      badges=["top", "audio", "new"], pricing=("second", 0.473, "720p"), defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"},
+      # fal bills tokens: height × width × (seconds of input video + seconds out) × 24 / 1024, at $0.0214 per 1K tokens
+      # (480p, 720p) or $0.0234 (1080p), times 0.6 when reference clips go in (fal's reference-to-video page, re-read
+      # 2026-11-01; its sidebar's $0.473/s divides by 1000 where the formula says 1024). Per second of 16:9: 480p
+      # 864×496, 720p 1280×720, 1080p 1920×1080; with clips, on the seconds in plus out (Pricing.clipInput, no floor).
+      badges=["top", "audio", "new"],
+      pricing=("second", 0.46224, "720p; 480p $0.21494, 1080p $1.13724. Reference clips bill their own seconds with the output, at 0.6 times the rate",
+               {"byResolution": {"480p": 0.21494, "720p": 0.46224, "1080p": 1.13724},
+                "clipInput": {"usd": 0.27734, "byResolution": {"480p": 0.12897, "720p": 0.27734, "1080p": 0.68234}, "plain": True}}),
+      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"},
       # fal's schema gives no count for 2.5's reference clips; Replicate's 2.5 schema says up to 10 (30 s in all), as the research found.
       options={"multiShot": {"mode": "prompt", "maxShots": 6}, "maxVideos": 10, "maxAudios": 10})
+# Kling 4.0 (research part 4, re-read 2026-11-01 when fal opened its API; build package nm10-kling-4): 3-30 s at 720p or
+# 1080p, per-shot prompts (multi_prompt) and @Element1.. elements on fal; Replicate's official model takes the text and
+# start/end-frame runs as a second provider (its @image_1 numbering, and no shots or elements, keep references and edits
+# on fal). The reference route's start_image_url is left out: Fuobe's references are references, not a first frame.
+# Edits keep the clip's length (duration defaults to the source's), so their routes send none. An edit, reference clips
+# and video elements bill per second of input plus output, at least twice the output (Pricing.clipInput). fal's
+# middle_image_urls (8 ordered keyframes, no times) and voice_ids aren't mapped: Frames mode stays on FLUX 3 Max, and
+# Fuobe can't make fal voice ids yet.
+_K4_EDIT = "kling/v4/video-to-video/edit"
+model("kling-4", "Kling 4.0", "Kuaishou", "kling", "video",
+      "Kuaishou's newest flagship — 3–30 s takes, multi-shot, @Elements and video edits up to 1080p",
+      [("t2v", "kling/v4/text-to-video"), ("i2v", "kling/v4/image-to-video", "fal", "+flf2v"),
+       ("ref2v", "kling/v4/reference-to-video", "fal", {"drop": ["image"]}),
+       ("v2v", _K4_EDIT, "fal", {"drop": ["duration"]}),
+       ("video-swap", _K4_EDIT, "fal", {"drop": ["duration"]}), ("video-insert", _K4_EDIT, "fal", {"drop": ["duration"]}),
+       ("t2v", "kwaivgi/kling-v4.0", "replicate", {"drop": ["image", "endImage", "images", "video"]}),
+       ("i2v", "kwaivgi/kling-v4.0", "replicate", {"drop": ["images", "video", "aspectRatio"], "flf2v": True})],
+      # Only reference-to-video takes "auto": each route lists the shapes it takes (fit_values), so a text or Replicate
+      # run leaves "auto" out (the API's own 16:9) rather than sending a value it refuses.
+      badges=["top", "30s", "new"], ranged_durations=True, fit_values=True,
+      pricing=("second", 0.235, "1080p; 720p $0.157. An edit, reference clips or video elements bill $0.141/s at 1080p ($0.094 at 720p) on the seconds in plus the seconds out, at least twice the output",
+               {"byResolution": {"720p": 0.157, "1080p": 0.235}, "clipInput": {"usd": 0.141, "byResolution": {"720p": 0.094, "1080p": 0.141}}}),
+      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "1080p"})
 model("seedance-2-0", "Seedance 2.0", "ByteDance", "seedance", "video",
       "Smooth multi-shot motion with audio",
       [("t2v", "bytedance/seedance-2.0/text-to-video"), ("i2v", "bytedance/seedance-2.0/image-to-video", "fal", "+flf2v"),
@@ -516,6 +585,16 @@ model("minimax-h3-max-camera", "MiniMax H3 Max camera controls", "MiniMax", "hai
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16 — launch price $0.052 (480P $0.0325, 1080P $0.104) until 2026-10-31",
                {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16},
                 "promo": {"until": "2026-10-31", "usd": 0.052, "byResolution": {"480P": 0.0325, "768P": 0.052, "1080P": 0.104}}}))
+# Blockout to film (package blockout-film; new-models-10.md §5): H3 Max renders a grey-box / previs animation (≤ 15 s,
+# ≤ 32 shots) with up to 8 reference stills; camera, blocking and timing come from the video. A hidden helper Cinema's
+# Blockout offers under its own name beside Seedance 2.5. Billed per second by resolution, at least 5 s a shot, plus a
+# $0.50 processing fee a request (fal's page, read 2026-11-01). No sound. Without reference stills it draws up to 2 of its
+# own (max_generated_reference_images, default 2), billed $0.10 each (generatedRefs).
+model("minimax-h3-max-3d", "MiniMax H3 Max 3D to video", "MiniMax", "hailuo", "video",
+      "A grey-box blockout from Blender or the browser, rendered as a finished shot from your reference stills",
+      [("v2v", "minimax/h3-max/3d-to-video")], hidden=True, defaults={"resolution": "768P"},
+      pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request; + $0.10 for each reference it draws when given none (up to 2)",
+               {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16}, "minSeconds": 5, "perRequest": 0.5, "generatedRefs": {"usd": 0.1, "count": 2}}))
 model("hailuo-2-3", "MiniMax Hailuo 2.3", "MiniMax", "hailuo", "video", "Expressive characters and dynamic action",
       [("t2v", "fal-ai/minimax/hailuo-2.3/pro/text-to-video"), ("i2v", "fal-ai/minimax/hailuo-2.3/pro/image-to-video")],
       pricing=("video", 0.49), defaults={"duration": 6}, fixed={"prompt_optimizer": True})
@@ -656,7 +735,8 @@ model("fuobe-character-swap", "Fuobe Character swap", "Fuobe Original", "fuobe-c
       "The person in your clip becomes your character, same performance, scene and sound: MiniMax H3 with Akatz Labs' swap LoRA",
       [("video-swap", "minimax/h3/reference-to-video/lora", "fal", {"videoArray": True, "fixed": {"prompt_expansion_mode": "disabled", "aspect_ratio": "adaptive"}})],
       original=True, fit_values=True, badges=["audio"],
-      pricing=("second", 0.075, "768p; 480p $0.0625/s; whole seconds, 5–15 per call", {"byResolution": {"768p": 0.075, "480p": 0.0625}}),
+      # 2K / 4K: the same route asked for a size it offers (the result's "Re-render at 2K", n7-3); Genjutsu's Quality stays 480p / 768p.
+      pricing=("second", 0.075, "768p; 480p $0.0625/s; whole seconds, 5–15 per call; a re-render at 2K $0.1625/s, 4K $0.20/s", {"byResolution": {"768p": 0.075, "480p": 0.0625, "2K": 0.1625, "4K": 0.2}}),
       options={"resolutions": ["480p", "768p"]}, defaults={"resolution": "768p"})
 # ----- Originals (O9): Fuobe Mixed Media and Fuobe Shorts on hosted open weights (research §8 mixed-media →
 # studios[mixed-media].original, studios[shorts].original). Mixed Media's cloud half draws one frame: Z-Image Turbo
@@ -678,25 +758,40 @@ model("fuobe-shorts", "Fuobe Shorts", "Fuobe Original", "fuobe-shorts", "video",
       original=True, fit_values=True, pricing=("second", 0.1, f"720p; 580p $0.075, 480p $0.05 · {_FRAMES16}; the first frame's Qwen edit is priced on its own",
                                                {"byResolution": {"720p": 0.1, "580p": 0.075, "480p": 0.05}}),
       api_defaults=SHORTS_O["cloud"]["defaults"], defaults={"resolution": "720p"}, licence=SHORTS_O["licence"])
-# ----- Originals (O13): Fuobe Evolution's cloud half (research §8 evolution → studios[evolution].original): Higgsfield
-# Evolution's change intensity as LTX-2.3 22B video-to-video's video_strength (1 − the denoise the open graph uses; set by
-# src/lib/catalog/evolution.ts through params.extra), the LLM-written direction as the prompt, prompt expansion off. Silent
-# (the clip's own sound goes back on), 24 fps, at most 481 frames a call (Evolution cuts longer clips into pieces); the
-# tier's size for the clip's shape from Fuobe Cinema's table. Priced per megapixel of video like Fuobe Cinema.
+# ----- Originals (O13): Fuobe Evolution's cloud half (research §8 evolution → studios[evolution].original.cloud): fal's
+# hosted Wan 2.2 Fun VACE depth, the GPU recipe's own model (the owner's call of 2026-10-30; LTX-2.3 video-to-video until
+# 2026-11-01). The piece as video_url (preprocess on, fal derives the depth), its direction frame (hosted
+# Qwen-Image-Edit 2511, planned by src/lib/catalog/evolution.ts) as the VACE reference, ref_image_urls, the way the GPU
+# graph feeds it to WanVaceToVideo's reference_image (`image`, fal's first_frame_url, is dropped: the GPU pins no first
+# frame; research studios[evolution].original.cloud.frameRole), frames and rate matched to the piece, no aspect ratio
+# asked (the clip keeps its shape).
+# The endpoint has no strength field: the change level reaches the direction frame's instruction only. Silent: the clip's
+# own sound goes back on.
 EVOLUTION = next(s for s in ORIGINALS["studios"] if s["id"] == "evolution")["original"]["cloud"]
-EVOLUTION_MP = per_megapixel(EVOLUTION["endpoint"])
-EVOLUTION_MP_LORA = per_megapixel(EVOLUTION["loraEndpoint"])
-EVOLUTION_PER_SECOND = {t: round(s["16:9"][0] * s["16:9"][1] * EVOLUTION["fps"] / 1e6 * EVOLUTION_MP, 4) for t, s in CINEMA_SIZES.items()}
-EVOLUTION_PER_SECOND_LORA = {t: round(s["16:9"][0] * s["16:9"][1] * EVOLUTION["fps"] / 1e6 * EVOLUTION_MP_LORA, 4) for t, s in CINEMA_SIZES.items()}
 model("fuobe-evolution", "Fuobe Evolution", "Fuobe Original", "fuobe-evolution", "video",
-      "Takes your clip further in a direction an LLM writes from your references: LTX-2.3 video to video at a change intensity",
-      [("v2v", EVOLUTION["endpoint"], "fal", {"loraEndpoint": EVOLUTION["loraEndpoint"], "fixed": EVOLUTION["fixed"]})],
-      original=True, sizes=CINEMA_SIZES,
-      pricing=("second", EVOLUTION_PER_SECOND["720p"],
-               f"${EVOLUTION_MP} per megapixel of video (width × height × frames): about ${round(EVOLUTION_PER_SECOND['720p'] * 5, 2)} for 5 s at 720p; ${EVOLUTION_MP_LORA} with LoRAs",
-               {"byResolution": EVOLUTION_PER_SECOND, "withLoras": EVOLUTION_PER_SECOND_LORA["720p"], "withLorasByResolution": EVOLUTION_PER_SECOND_LORA,
-                "videoMegapixel": {"usd": EVOLUTION_MP, "withLoras": EVOLUTION_MP_LORA}}),
-      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, frame_step=8)
+      "Takes your clip further in a direction an LLM writes from your references: a direction frame per piece carried through it by depth (Wan 2.2 Fun VACE)",
+      [("v2v", EVOLUTION["endpoint"], "fal", {"drop": ["aspectRatio", "image"], "fixed": EVOLUTION["fixed"]})],
+      original=True, fit_values=True, pricing=("second", 0.1, f"720p; 580p $0.075, 480p $0.05 · {_FRAMES16}; each direction frame's Qwen edit is priced on its own",
+                                               {"byResolution": {"720p": 0.1, "580p": 0.075, "480p": 0.05}}),
+      options={"resolutions": EVOLUTION["resolutions"]}, api_defaults=EVOLUTION["defaults"], defaults={"resolution": "720p"},
+      licence={**SHORTS_O["licence"], "note": "Wan 2.2 Fun VACE A14B and Qwen-Image-Edit 2511 (the direction frames) are Apache-2.0"})
+# ----- Original (package archive-restore): Fuobe Restore's cloud half, Lightricks' Restore IC-LoRA on fal's LTX-2.3 22B
+# reference video to video (research studios[archive-restore].original.cloud). The archive clip is the reference video, the
+# LoRA (gated on Hugging Face) goes by Fuobe's mirror URL; fal's own IC-LoRAs and preprocessors stay out. One untiled pass a
+# call at the tier's size for the clip's nearest shape (Fuobe Cinema's table: the card's 1440x1088 / 1920x1088 at 1080p), as
+# many frames as the piece (src/lib/catalog/restore.ts cuts 97-frame pieces), at the clip's own frame rate. Priced per
+# megapixel of video like Fuobe Cinema; the endpoint is the /lora one, so its price is the LoRA price.
+RESTORE_O = next(s for s in ORIGINALS["studios"] if s["id"] == "archive-restore")["original"]["cloud"]
+RESTORE_MP = per_megapixel(RESTORE_O["endpoint"])
+RESTORE_PER_SECOND = {t: round(s["4:3"][0] * s["4:3"][1] * 24 / 1e6 * RESTORE_MP, 4) for t, s in CINEMA_SIZES.items() if t != "480p"}
+model("fuobe-restore", "Fuobe Restore", "Fuobe Original", "fuobe-restore", "video",
+      "Restore and colourise archive footage: Lightricks' Restore IC-LoRA on LTX-2.3, one untiled pass a piece",
+      [("restore-video", RESTORE_O["endpoint"], "fal", {"fixed": RESTORE_O["fixed"], "defaults": RESTORE_O["defaults"]})],
+      original=True, sizes={t: s for t, s in CINEMA_SIZES.items() if t != "480p"},
+      pricing=("second", RESTORE_PER_SECOND["720p"],
+               f"${RESTORE_MP} per megapixel of video (width × height × frames): about ${round(RESTORE_PER_SECOND['720p'] * 4, 2)} for 4 s of a 4:3 clip at 720p",
+               {"byResolution": RESTORE_PER_SECOND, "videoMegapixel": {"usd": RESTORE_MP}}),
+      defaults={"aspectRatio": "4:3", "resolution": "720p"}, frame_step=8)
 # ----- Originals (O11): the rebranded open tools and Speak on hosted open weights (research studios[angles].original,
 # studios[speak].original). Fuobe Angles is fal's LoRA-gallery route of Qwen-Image-Edit 2509 with dx8152's Multiple-angles
 # LoRA: Higgsfield Angles' controls are its fields (rotate −90…90°, positive = left; vertical −1…1, −1 = bird's-eye;
@@ -834,6 +929,13 @@ model("topaz-starlight", "Topaz Starlight", "Topaz Labs", "topaz", "video", "Rec
       pricing=("second", 0.26, "4K at 30 fps; up to 1080p $0.12/s; 60 fps doubles; Starlight Fast 2 is half", {"byResolution": {"1080p": 0.12, "4K": 0.26}, "factors": [{"param": "targetFps", "values": {"60": 2}}, {"param": "model", "values": {"Starlight Fast 2": 0.5}}]}),
       defaults={"resolution": "4K"}, upscale_tiers=["1080p", "4K"], fps_targets=[24, 30, 60],
       api_defaults={"H264_output": True}, controls=[("model", "Model")], sliders=[("softness", "Softness")])
+# Topaz Astra 2 (n7-3; research new-models-7 §2.7): the most redraw-like hosted upscaler, under its own name. It is not
+# Open-H3 Regenerate (nobody hosts that): the cloud has no "Regenerate". 10 s at 30 fps: $3.00 up to 1080p, $5.00 at 4K.
+model("topaz-astra", "Topaz Astra 2", "Topaz Labs", "topaz", "video", "Creative upscale that invents fine detail and texture, steered by optional words: to 1080p or 4K",
+      [("upscale-video", "topaz/upscale/video/creative")], badges=["new", "4k"],
+      pricing=("second", 0.5, "4K at 30 fps; up to 1080p $0.30/s; 60 fps doubles", {"byResolution": {"1080p": 0.3, "4K": 0.5}, "factors": [{"param": "targetFps", "values": {"60": 2}}]}),
+      defaults={"resolution": "4K"}, upscale_tiers=["1080p", "4K"], fps_targets=[24, 30, 60], options={"promptOptional": True},
+      api_defaults={"H264_output": True}, sliders=[("creativity", "Creativity")])
 # ByteDance Upscale: up to 8K with scene presets ("Common" is the API's general preset).
 model("bytedance-video-upscale", "ByteDance Upscale", "ByteDance", "bytedance-upscaler", "video", "High-fidelity upscaling up to 8K with scene presets",
       [("upscale-video", "fal-ai/bytedance-upscaler/upscale/video")], badges=["new"],
@@ -1019,11 +1121,7 @@ model("meshy-7-1", "Meshy 7.1", "Meshy", "meshy", "model3d", "Textured models wi
 # ---------------------------------------------------------------------------
 # Round 4 (research part 4): video erase / swap / insert, FPS boost, SDR to HDR, FFmpeg-style tools, OCR, 3D
 # and the models released between 2026-09-15 and 2026-10-22.
-#
-# TODO(kling-4): Kling 4.0 (kling/v4/text-to-video, image-to-video, reference-to-video, video-to-video/edit) has
-# schemas in paid-model-apis-4.json but status "playground-only": fal's pages say "Kling 4.0 is available in the
-# playground and fal Agent. API access is coming soon." (re-checked 2026-10-22). Add a "kling-4" model here
-# (t2v / i2v + keyframes / ref2v / v2v + remove-object / video-swap / video-insert) once the API opens.
+
 
 # What VOID and VACE regenerate in the masked area when Fuobe's prompt names the thing to remove.
 SCENE_AFTER_REMOVAL = "The same shot with nothing there: the background continues naturally, matching the light, texture and motion around it"
@@ -1735,6 +1833,13 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # Part 3 names for clip lists (merge-videos' video_urls, Seed Audio's reference audio_urls).
     for k in ("videos", "audios"):
         if k in kf and (inputs.get(kf[k]) or {}).get("type") == "array":
+            # An edit that takes its source clip and reference clips apart (Kling 4.0: video_url as @Video1, video_urls
+            # as @Video2..): the list is the reference clips (FieldMap.videos), the source stays the clip edited.
+            if k == "videos" and "video" in kf and (inputs.get(kf["video"]) or {}).get("type") != "array":
+                fmap["videos"] = kf.pop(k)
+                spec = inputs.get(fmap["videos"]) or {}
+                opts["maxVideos"] = max(opts.get("maxVideos", 0), num(spec.get("maxItems")) or 3)
+                continue
             kf.setdefault(k[:-1], kf.pop(k))
     for k in ["negativePrompt", "image", "images", "endImage", "mask", "video", "audio", "numOutputs", "seed", "generateAudio"]:
         if k in kf:
@@ -1759,12 +1864,43 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         item = (inputs.get(kf["multiShot"]) or {}).get("itemSchema") or {}
         dtype = "string" if (item.get("duration") or {}).get("valueType") == "string" else "number"
         ms = {"key": kf["multiShot"], "durationType": dtype}
+        # Kling 4.0's shots: a prompt of up to 512 characters each, whole seconds (FieldMap.multiShot.maxPrompt / integer).
+        if num((item.get("prompt") or {}).get("maxLength")):
+            ms["maxPrompt"] = int(num(item["prompt"]["maxLength"]))
+        if (item.get("duration") or {}).get("type") == "integer":
+            ms["integer"] = True
         if (inputs.get(kf["multiShot"]) or {}).get("type") == "string":
             ms["json"] = True
         if "shotType" in kf:
             ms["shotType"] = kf["shotType"]
         fmap["multiShot"] = ms
         opts["multiShot"] = {"mode": "native", "maxShots": 6}
+    # Kling 4.0's elements (@Element1..): objects of a frontal image and more angles, or a clip (FieldMap.elements), with the
+    # limits the schema states: how many, how many angles, how many may be clips ("up to 3 may be video elements").
+    # Only for the models in ELEMENT_MODELS: Kling O1 / O3 record elements too, but their runs keep sending @mentions as
+    # reference images as before (moving them is its own change, with its own checks).
+    if "elements" in kf and m["id"] in ELEMENT_MODELS and (inputs.get(kf["elements"]) or {}).get("type") == "array":
+        spec = inputs.get(kf["elements"]) or {}
+        item = spec.get("itemSchema") or {}
+        frontal = next((k for k in item if "frontal" in k), None)
+        views = next((k for k, v in item.items() if (v or {}).get("type") == "array" and "image" in k), None)
+        clip = next((k for k, v in item.items() if (v or {}).get("type") == "string" and "video" in k), None)
+        if frontal and views:
+            most = int(num(spec.get("maxItems")) or 4)
+            angles = int(num((item[views] or {}).get("maxItems")) or 3)
+            clips = re.search(r"up to (\d+) may be video elements", spec.get("desc") or "")
+            el = {"key": kf["elements"], "frontal": frontal, "views": views, "max": most, "maxViews": angles}
+            if clip:
+                el["video"] = clip
+                el["maxVideos"] = int(clips[1]) if clips else most
+            fmap["elements"] = el
+            prev = opts.get("elements") or {}
+            # Voices need the provider's voice ids (fal's Kling create-voice), which Fuobe can't make yet: never sent.
+            opts["elements"] = {"max": max(prev.get("max", 0), most), "views": max(prev.get("views", 0), angles),
+                                "videos": max(prev.get("videos", 0), el.get("maxVideos", 0)), "voices": False,
+                                "ops": union(prev.get("ops", []), [op])}
+        else:
+            warn(f"{m['id']}: {ep} elements have no frontal image and angle list")
     if "draft" in kf and op in ("t2v", "i2v", "ref2v"):
         fmap["draft"] = kf["draft"]
         opts["draft"] = True
@@ -1789,7 +1925,7 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # becomes frames (FieldMap.numFrames, 4n+1 / 8n+1 by model), and the durations offered are the ones that fit.
     nf = kf.get("numFrames") or (kf.get("duration") if kf.get("duration") in ("num_frames", "frames") else None)
     # A talking avatar's frame count (fal's InfiniteTalk, Wan 2.2 S2V) follows the voice's length (params.sourceDuration).
-    if nf and op in ("t2v", "i2v", "flf2v", "extend", "v2v", "avatar") and (inputs.get(nf) or {}).get("type") == "integer":
+    if nf and op in ("t2v", "i2v", "flf2v", "extend", "v2v", "avatar", "restore-video") and (inputs.get(nf) or {}).get("type") == "integer":
         kf.pop("duration", None)
         kf.pop("numFrames", None)
         spec = inputs.get(nf) or {}
@@ -1839,6 +1975,22 @@ def build_route(op, ep, provider, m, opts, ropts=None):
             opts["aspectRatios"] = union(opts.get("aspectRatios", []), IMG_AR)
         else:
             warn(f"{m['id']}: {ep} states no size grid and limits for its {key} object")
+    elif m.get("tier_size"):
+        # Resolution tiers from the price line of the endpoint named ("$0.009 at 1K"): each tier's square, the aspect ratio's
+        # shape on it, as one {width, height} object within the limits the size field states (FieldMap.size.bases).
+        key = kf.get("aspectRatio") or "image_size"
+        spec = inputs.get(key) or {}
+        takes_object = spec.get("type") == "union" and any(isinstance(v, dict) and v.get("type") == "object" for v in spec.get("variants") or [])
+        lim = re.search(r"(\d+) to (\d+) pixels", spec.get("desc") or "")
+        tiers = re.findall(r"\$\d+(?:\.\d+)? at (\d+(?:\.\d+)?)K\b", (EPS.get((provider, m["tier_size"])) or {}).get("price") or "")
+        if takes_object and lim and tiers:
+            bases = {f"{t}K": int(float(t) * 1024) for t in tiers}
+            fmap["size"] = {"key": key, "multiple": 16, "min": int(lim.group(1)), "max": int(lim.group(2)), "bases": bases}
+            kf.pop("aspectRatio", None)
+            opts["aspectRatios"] = union(opts.get("aspectRatios", []), IMG_AR)
+            opts["resolutions"] = union(opts.get("resolutions", []), list(bases))
+        else:
+            warn(f"{m['id']}: {ep} states no size limits for its {key} object, or {m['tier_size']} no tiers")
     part4_slots(op, kf, inputs, m, opts, fmap)
     # Frame rates an upscaler (or FPS Boost) can reach: params.targetFps -> its target_fps field.
     if m.get("fps_targets") and op in ("interpolate", "upscale-video"):
@@ -1980,6 +2132,11 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         pe = kf.get("enhancePrompt") or ("enable_prompt_expansion" if "enable_prompt_expansion" in inputs else None)
         if pe and (inputs.get(pe) or {}).get("type") == "boolean":
             fmap["promptExpansion"] = pe
+        # A layout the API takes as boxes of its own (fal's FLUX 3 Klein bounding_boxes: fractions of the picture, a label the
+        # prompt names as <label>): FieldMap.boundingBoxes, filled by the plan from the draft.
+        bb = kf.get("boundingBoxes")
+        if bb and (inputs.get(bb) or {}).get("type") == "array" and {"box", "label", "description"} <= set((inputs[bb].get("itemSchema") or {})):
+            fmap["boundingBoxes"] = {"key": bb, **({"max": int(num(inputs[bb]["maxItems"]))} if num(inputs[bb].get("maxItems")) else {})}
     # LoRAs (O1): the field the route's LoRA endpoint (or the endpoint itself) takes them in, from the research.
     # Read before the required-inputs check below: an endpoint whose LoRAs are required (MiniMax H3's /lora) fills them here.
     lora_ep = ropts.get("loraEndpoint")
@@ -2015,6 +2172,11 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     route = {"op": op, "provider": provider, "endpoint": f"{ep}:{version}" if ropts.get("pin") else ep, "map": fmap}
     if ropts.get("note"):
         route["note"] = ropts["note"]
+    # The picture follows image 1's shape at the chosen tier (ModelRoute.followsImage: fal's FLUX 3 Klein edit; the server sizes it).
+    if ropts.get("followsImage"):
+        if "size" not in fmap:
+            warn(f"{m['id']}: {ep} follows image 1 but sends no size")
+        route["followsImage"] = True
     if lora_ep:
         le = EPS.get((provider, lora_ep))
         if not le:
@@ -2103,6 +2265,10 @@ for m in M:
         lp = parse_price(le)
         if lp and lp["unit"] == pricing["unit"]:
             pricing["withLoras"] = lp["usd"]
+        elif lp and lp["unit"] == "megapixel" and pricing["unit"] == "image" and m.get("tier_size"):
+            # Priced per image by tier, its /lora twin per megapixel (fal's FLUX 3 Klein): a run with LoRAs costs the twin's
+            # rate times the megapixels of the size sent. (Fuobe Try-On's hand price already counts its LoRA.)
+            pricing["withLorasPerMegapixel"] = lp["usd"]
         elif (le.get("pricing") or {}).get("unit") == "unknown":
             # No published price (fal's MOSS-Image /lora shows "$0 per compute second"): a run with LoRAs is priced as
             # unknown, never as free.

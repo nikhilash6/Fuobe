@@ -10,17 +10,28 @@ const MESSAGES: Record<string, string> = {
   audio: "Add the audio to loop",
   duration: "Pick a length up to 10 minutes",
   crossfade: "Keep the crossfade between 0 and 10 seconds",
+  musicDb: "Lower the music by 0 to 30 dB",
 };
 
-/** Audio → Loop / extend, Join, Split soundtrack and Clean up voice (and a split's mix put back on its video): start a run; `?preview=1` only plans and prices it. */
+/**
+ * Audio → Loop / extend, Join, Split soundtrack and Clean up voice (and a split's mix put back on its video), and Video
+ * tools → Remove dialogue: start a run; `?preview=1` only plans and prices it.
+ */
 async function post(request: Request) {
   const raw: unknown = await request.json().catch(() => null);
   const parsed = AudioToolBody.safeParse(raw);
   if (!parsed.success) {
     const path = parsed.error.issues[0]?.path.join(".") ?? "";
     const tool = (raw as { tool?: unknown } | null)?.tool;
-    const remux = tool === "remux";
-    const msg = path.startsWith("clips") ? "Add 2 to 10 audio clips to join" : remux && path === "audio" ? "Export the mix first" : tool === "clean" && path === "media" ? "Add the audio or video to clean" : (MESSAGES[path] ?? "Check the settings");
+    const msg = path.startsWith("clips")
+      ? "Add 2 to 10 audio clips to join"
+      : tool === "remux" && path === "audio"
+        ? "Export the mix first"
+        : tool === "remove-dialogue" && path === "video"
+          ? "Add the video to take the dialogue out of"
+          : tool === "clean" && path === "media"
+            ? "Add the audio or video to clean"
+            : (MESSAGES[path] ?? "Check the settings");
     return Response.json({ error: msg }, { status: 400 });
   }
   const preview = new URL(request.url).searchParams.get("preview") === "1";

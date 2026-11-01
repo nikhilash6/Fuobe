@@ -23,9 +23,12 @@ afterAll(() => {
 });
 
 /** Replace the key file's content, with a new modification time so the server reads it again. */
+// Each rewrite moves the file's time on by a whole second more than the last: two rewrites in the same millisecond
+// would otherwise get the same mtime, and the box (which caches the key by mtime) would keep the old key.
+let rewrites = 0;
 function rewrite(content: string) {
   fs.writeFileSync(keyFile, content);
-  const later = new Date(Date.now() + 5_000);
+  const later = new Date(Date.now() + 5_000 + 1_000 * ++rewrites);
   fs.utimesSync(keyFile, later, later);
 }
 

@@ -84,7 +84,8 @@ const ROUND3_MODELS: Record<string, { op: Operation; kind: MediaKind; workflow: 
 const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/comfyui/manifest.json"), "utf8")) as Manifest;
 const workflowById = new Map(manifest.workflows.map((w) => [w.id, w]));
 /** Settings the ComfyUI provider consumes itself instead of writing them into a binding. */
-const PROVIDER_PARAMS = new Set(["wordsPerCaption", "paletteWeights", "cues"]);
+// promptHelper: FLUX 3 Image Klein's Prompt helper, which the provider reads to take the helper's branch out (skipPromptHelper).
+const PROVIDER_PARAMS = new Set(["wordsPerCaption", "paletteWeights", "cues", "promptHelper"]);
 
 describe("round-3 open models", () => {
   it.each(Object.entries(ROUND3_MODELS))("%s routes to its validated workflow", (id, want) => {

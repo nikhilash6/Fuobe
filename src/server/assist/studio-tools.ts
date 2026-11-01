@@ -2,16 +2,21 @@ import "server-only";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import type { PlannedJob } from "@/lib/assist";
+import { VOICE_SPLIT_IDS, voiceSplitModel, type VoiceSplit } from "@/lib/av/dub";
 import { getModel } from "@/lib/catalog";
 import { routesFor } from "@/lib/catalog/plan";
 import { FACELESS_STYLE_IDS, STYLES } from "@/lib/catalog/faceless";
 import { FRAME_SEED, MIXED_ORIGINAL } from "@/lib/catalog/mixed-media";
+import { offlineRestorePrompt, RESTORE, restoreNegative } from "@/lib/catalog/restore";
 import { SHORTS_MODELS } from "@/lib/catalog/shorts";
 import type { ChainSlot, Engine, GenerationRequest, Operation } from "@/lib/catalog/types";
 import { TOOL_MODELS } from "@/lib/layers";
+import { planCinema } from "@/lib/catalog/cinema";
 import { createPipeline, type PipelineStep } from "../chains";
+import { blockoutFromFile, cinemaContext } from "../cinema-generate";
 import { db } from "../db";
 import { chooseRoute, ConnectComfyError, createGenerations, outputKind, previewChained } from "../generations";
+import { isOffered } from "../model-access";
 import { engineMode } from "../settings";
 import { fileUrl, saveFile } from "../storage";
 import { defineTool, type JobPlace, type ToolContext, type ToolOutcome } from "./define";
@@ -80,6 +85,12 @@ const DubInput = z.object({
   languages: z.array(z.string()).describe("1–4 languages to dub into, e.g. ['Spanish', 'German']."),
   lipsync: z.boolean().optional().describe("Re-sync the lips to the new speech (default true)."),
   source_language: z.string().optional().describe("The language spoken in the video, if known."),
+  voice_split: z
+    .enum(VOICE_SPLIT_IDS as [VoiceSplit, ...VoiceSplit[]])
+    .optional()
+    .describe(
+      "Open source only: how the voice is split from the rest. melband (default): MelBand RoFormer, a music model (some sound effects may be lowered, and singing may be replaced). dbs: DBS keeps the music and sound effects of the original, and its split runs on a CPU. The cloud splits with ElevenLabs and Demucs either way.",
+    ),
   review: z
     .boolean()
     .optional()
@@ -129,7 +140,48 @@ const CaptionsInput = z.object({
   translate_to: z.string().optional().describe("Caption in this language instead (translated subtitles)."),
 });
 
+const RestoreInput = z.object({
+  video: ref.describe("The archive clip: an old scan, tape or black-and-white film (up to 2 minutes)."),
+  prompt: z
+    .string()
+    .optional()
+    .describe("Period, place, light, materials and clothing, ending with the colour wanted, e.g. 'a harbour in the 1930s, overcast morning, wool coats, natural colour'. Left out: written for the clip."),
+  hint: z.string().optional().describe("A few words for the writer when prompt is left out, e.g. 'fishing boats, 1930s'."),
+  negative: z.string().optional().describe("What it must not invent (default: modern objects and video artefacts such as blocky compression)."),
+  restore_to_4k: z.boolean().optional().describe("Your GPU only: a detail pass at twice the size with Lightricks' Detail Refine IC-LoRA."),
+  deinterlace: z.boolean().optional().describe("Your GPU only: keep one field of interlaced tape first."),
+  reference: ref.optional().describe("A picture with the true colours (a colour photo of the place, a face). In the cloud it is the first frame: give the clip's first frame already in colour."),
+  resolution: z.enum(["720p", "1080p"]).optional().describe("Cloud size (default 720p)."),
+});
+
+const BlockoutInput = z.object({
+  video: ref.describe("The grey-box blockout: a render from Blender, Unreal, Cinema 4D… (MP4 or MOV for the cloud), 2–60 s. It sets the camera, blocking and timing."),
+  depth: ref.optional().describe("Your GPU: the blockout's depth pass (near = bright). Without it Depth Anything 3 reads the depth from the grey box."),
+  depth_invert: z.boolean().optional().describe("Your GPU: the depth pass is near = dark (Blender's mist pass as it renders): it is inverted before use."),
+  first_frame: ref.optional().describe("Your GPU: the blockout's first frame as a picture (else it is cut from the video)."),
+  seconds: z.number().min(2).max(60).optional().describe("The blockout's length (the file's own header wins where it can be read)."),
+  beats: z
+    .array(z.object({ start: z.number().min(0).max(60).describe("Seconds into the blockout where this beat starts."), label: z.string().max(80).describe("A short name: 'Arrival', 'Lights out', 'Door kicked'."), words: z.string().max(600).optional().describe("What happens: who does what, what we hear.") }))
+    .max(24)
+    .describe("The beats in order: each runs to the next one's start (the first starts at 0)."),
+  references: z
+    .array(z.object({ url: ref, role: z.enum(["interior", "exterior", "location", "character", "prop", "style"]).describe("What it is for: the room, the outside, the place, who the mannequin becomes, a prop, or only the look."), name: z.string().max(60).optional() }))
+    .max(8)
+    .optional()
+    .describe("Reference stills (Seedance 2.5 takes 4 with the clip, H3 Max 3D 8, your GPU's first frame 2)."),
+  style: z.string().max(600).optional().describe("The look: 'low-key horror, cold torchlight, 35 mm grain'."),
+  sounds: z.array(z.string().max(120)).max(12).optional().describe("What is heard, one sound each (Seedance 2.5 makes sound; the others are silent)."),
+  avoid: z.array(z.string().max(120)).max(16).optional().describe("What must not happen or be seen."),
+  constraints: z.string().max(600).optional().describe("Extra rules: 'she never looks at the camera'."),
+  model: z.enum(["seedance-2-5", "minimax-h3-max-3d"]).optional().describe("Cloud: Seedance 2.5 (default, with sound, 30 s a shot) or MiniMax H3 Max 3D to video (8 stills, silent, 15 s a shot)."),
+  resolution: z.string().max(10).optional().describe("Cloud quality: Seedance 480p / 720p / 1080p, H3 Max 480P / 768P / 1080P; your GPU 480p or 720p."),
+  audio: z.boolean().optional().describe("Seedance 2.5: make sound (default true)."),
+  prompt: z.string().max(60_000).optional().describe("Cloud, a one-shot film: the whole prompt as written, instead of the one compiled from the beats (MiniMax H3 Max 3D takes up to 2000 characters)."),
+});
+
 export type LayersToolInput = z.infer<typeof LayersInput>;
+export type BlockoutToolInput = z.infer<typeof BlockoutInput>;
+export type RestoreToolInput = z.infer<typeof RestoreInput>;
 export type RestyleToolInput = z.infer<typeof RestyleInput>;
 export type DubToolInput = z.infer<typeof DubInput>;
 export type FacelessToolInput = z.infer<typeof FacelessInput>;
@@ -144,6 +196,7 @@ export const STUDIO_ROUTES: {
   faceless_episode?: StudioRoute<FacelessToolInput>;
   create_ads?: StudioRoute<AdsToolInput>;
   add_captions?: StudioRoute<CaptionsToolInput>;
+  restore_video?: StudioRoute<RestoreToolInput>;
 } = {};
 
 // ---------------------------------------------------------------------------
@@ -231,7 +284,7 @@ function dubSteps(i: DubToolInput, ctx: ToolContext): PipelineStep[] {
     return labelled(langs.map((l, k) => ({ key: `dub${k}`, label: `Dub · ${l}`, request: req({ modelId: "heygen-translate", op: "dub", inputs: { video: i.video }, params: { targetLanguage: l, sourceLanguage: i.source_language } }) })));
   }
   const steps: (PipelineStep & { label: string })[] = [
-    { key: "stems", label: "Voice and background", request: req({ modelId: "oss-voice-separate", op: "separate-audio", inputs: { video: i.video } }) },
+    { key: "stems", label: "Voice and background", request: req({ modelId: voiceSplitModel(i.voice_split, (id) => isOffered(id, "open")), op: "separate-audio", inputs: { video: i.video } }) },
     { key: "words", label: "Transcript", request: req({ modelId: "oss-qwen3-asr", op: "transcribe", params: { sourceLanguage: i.source_language } }), after: "stems", chain: [{ slot: "audio", stem: "voice" }] },
   ];
   langs.forEach((l, k) => {
@@ -615,7 +668,110 @@ const addCaptions = defineTool({
   },
 });
 
-export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions];
+/** A clip the restore tool can't read: one generation of Fuobe Restore on the whole clip (the graph streams it up to 481 frames). */
+function restoreSteps(i: RestoreToolInput, ctx: ToolContext): PipelineStep[] {
+  const engine = engineOf(ctx);
+  return labelled([
+    {
+      key: "restore",
+      label: "Restored video",
+      request: req({
+        modelId: RESTORE.model,
+        engine,
+        op: "restore-video",
+        prompt: i.prompt?.trim() || offlineRestorePrompt(i.hint).prompt,
+        negativePrompt: i.negative?.trim() || restoreNegative(),
+        inputs: { video: i.video, ...(i.reference && { images: [i.reference] }) },
+        ...(engine === "cloud" && { params: { resolution: i.resolution ?? RESTORE.cloudResolution } }),
+      }),
+    },
+  ]);
+}
+
+const restoreVideo = defineTool({
+  name: "restore_video",
+  description:
+    "Restore and colourise archive footage (old scans, tape, black-and-white film, up to 2 minutes) with Lightricks' Restore IC-LoRA — Fuobe's Restore & colourise tool (Video tools → Restore & colourise), where the result sits beside the original with a Before/After wipe. " +
+    "On your GPU: LTX-2.5 with tiled fusion in 97-frame windows, the sound kept, optional Restore to 4K and deinterlacing (the LoRA is gated: a Hugging Face token in Settings → LoRAs downloads it). " +
+    "In the cloud: fal's LTX-2.3 reference video-to-video in pieces, priced per megapixel. Leave prompt out to have one written. Gated by the same approval card as generate.",
+  schema: RestoreInput,
+  gated: true,
+  title: () => "Restore & colourise",
+  place: (i, ctx) => placeFor(STUDIO_ROUTES.restore_video, i, ctx),
+  plan: (i, ctx) => planVia("restore_video", STUDIO_ROUTES.restore_video, i, ctx, () => planSteps("restore_video", restoreSteps(i, ctx))),
+  async run(i, ctx) {
+    return runVia(STUDIO_ROUTES.restore_video, i, ctx, "Started a restoration", () => startPipeline("Restore & colourise", restoreSteps(i, ctx), "Restore & colourise"));
+  },
+});
+
+/**
+ * Blockout to film (package blockout-film): Cinema's Blockout plan (src/lib/catalog/cinema.ts planBlockout), run as a
+ * pipeline in the Library: one call or shots cut at the beats and joined in the cloud, 81-frame depth windows on the GPU.
+ */
+function blockoutSteps(i: BlockoutToolInput, ctx: ToolContext): PipelineStep[] {
+  const engine = engineOf(ctx);
+  const read = blockoutFromFile({ video: i.video, seconds: i.seconds ?? 0 });
+  const seconds = read.seconds;
+  if (!seconds) throw new Error("Couldn't read the blockout's length: pass seconds");
+  const plan = planCinema(
+    {
+      engine,
+      mode: "video",
+      action: "blockout",
+      ...(engine === "cloud" && i.model ? { modelId: i.model } : {}),
+      prompt: engine === "cloud" ? (i.prompt ?? "") : "",
+      settings: {},
+      ...(i.resolution && { resolution: i.resolution }),
+      audio: i.audio !== false,
+      blockout: {
+        video: i.video,
+        ...(i.depth && { depth: i.depth }),
+        ...(i.depth && i.depth_invert && { depthInvert: true }),
+        ...(i.first_frame && { firstFrame: i.first_frame }),
+        seconds: Math.min(60, seconds),
+        ...(read.webm && { webm: true }),
+        beats: i.beats.map((b) => ({ start: b.start, label: b.label, words: b.words ?? "" })),
+        refs: (i.references ?? []).map((r) => ({ url: r.url, role: r.role, ...(r.name && { name: r.name }) })),
+        ...(i.style && { style: i.style }),
+        ...(i.constraints && { constraints: i.constraints }),
+        ...(i.sounds?.length && { sounds: i.sounds }),
+        ...(i.avoid?.length && { avoid: i.avoid }),
+      },
+    },
+    cinemaContext(),
+  );
+  if (plan.blocker) throw new Error(plan.blocker);
+  return plan.steps.map((s) => ({ key: s.key, request: { ...s.request, feature: "cinema-blockout" }, ...(s.after?.length && { after: s.after }) }));
+}
+
+const blockoutFilm = defineTool({
+  name: "blockout_film",
+  description:
+    "Film a grey-box 3D blockout (a render from Blender or any 3D app: boxes and mannequins that set the camera path, framing, blocking and timing) as a finished shot, from reference stills and timed beats — Fuobe's Blockout to film (Cinema Studio → Blockout). " +
+    "The prompt is compiled in sections (Subject with each still's role, Action as 'a–b s — beat: …', Camera, Style, Constraints, Audio, No). In the cloud Seedance 2.5 follows the blockout as its reference clip with sound (or MiniMax H3 Max 3D to video, silent); a blockout longer than one call is cut at the beats into shots that hand over their last frame, then joined. " +
+    "On your GPU Wan 2.2 Fun VACE follows the blockout's depth from a first frame drawn from the stills, in 5 s windows chained and joined: free, silent (add sound with Sound for video). Gated by the same approval card as generate.",
+  schema: BlockoutInput,
+  gated: true,
+  title: (i) => `Blockout to film: ${i.beats[0]?.label ?? "film"}`.slice(0, 80),
+  plan: (i, ctx) => {
+    try {
+      return planSteps("blockout_film", blockoutSteps(i, ctx));
+    } catch (e) {
+      return [{ tool: "blockout_film", modelId: "blockout", modelName: "Blockout to film", kind: "video", op: "ref2v", prompt: "Blockout to film", count: 0, costUsd: 0, demo: false, atomic: true, error: (e as Error).message }];
+    }
+  },
+  async run(i, ctx) {
+    let steps: PipelineStep[];
+    try {
+      steps = blockoutSteps(i, ctx);
+    } catch (e) {
+      return { content: JSON.stringify({ error: (e as Error).message }), isError: true };
+    }
+    return startPipeline("Blockout to film", steps, `Blockout to film: ${i.beats.map((b) => b.label).join(", ")}`.slice(0, 200));
+  },
+});
+
+export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, blockoutFilm];
 
 /** For tests: the fallback pipelines, as they would be created. */
-export const fallbackSteps = { layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests };
+export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests, blockout: blockoutSteps };

@@ -289,7 +289,8 @@ describe("the Video studio and the other studio defaults", () => {
   it("opens on MiniMax H3 on both engines, with LTX-2.5, Lightning and Seedance next in Best", () => {
     expect(VIDEO_STUDIO.defaultModels).toEqual({ cloud: "minimax-h3", open: "oss-minimax-h3" });
     expect(best("open")).toEqual(["oss-minimax-h3", "oss-ltx25", "oss-wan22-14b-fast", "fuobe-cinema"]);
-    expect(best("cloud")).toEqual(["minimax-h3", "seedance-2-5", "kling-3", "veo-3-1"]);
+    // Kling 4.0 (nm10-kling-4) sits after Seedance 2.5, so Veo 3.1 leaves the four Best picks (the owner's choice).
+    expect(best("cloud")).toEqual(["minimax-h3", "seedance-2-5", "kling-4", "kling-3"]);
     expect(studioCatalog(VIDEO_STUDIO).models.map((m) => m.id)).toEqual(expect.arrayContaining(["oss-minimax-h3", "minimax-h3", "oss-wan22-14b"]));
   });
 

@@ -647,7 +647,7 @@ export function SettingsForm({ prices }: { prices?: string }) {
             <Info aria-hidden className="mt-0.5 size-3.5 shrink-0 text-brand-text" /> Your ComfyUI is on your computer: put LoRA files in its models/loras folder. Fuobe tells you which ones a run needs.
           </p>
         )}
-        <LoraSettings folder={get("comfyLorasDir")} civitaiKey={get("civitaiKey")} />
+        <LoraSettings folder={get("comfyLorasDir")} civitaiKey={get("civitaiKey")} hfToken={get("huggingfaceDownloadToken")} />
       </Section>
 
       <Section

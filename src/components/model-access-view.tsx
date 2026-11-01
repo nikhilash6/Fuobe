@@ -144,6 +144,7 @@ function ModelRow({ m, on, onChange, disabled }: { m: ModelEntry; on: boolean; o
         <LicenceLine licence={m.licence} />
         {m.weights && <LicenceLine licence={m.weights} prefix="Weights:" full />}
         {m.cloud && <LicenceLine licence={m.cloud} prefix="In the cloud:" />}
+        {m.engineNote && <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{m.engineNote}</p>}
         {on && m.offBy.length > 0 && <p className="mt-1 text-[12px] font-medium text-warning">Not offered: {m.offBy.join(" and ")}</p>}
         {on && m.partly.length > 0 && <p className="mt-1 text-[12px] text-muted-foreground">Partly: {m.partly.join(" and ")}, so it runs on what is still on</p>}
       </div>
@@ -268,7 +269,7 @@ export function ModelAccessView() {
     if (!data) return [];
     const order = (c: LicenceClass) => LICENCE_CLASSES.indexOf(c);
     return data.models
-      .filter((m) => keep(!access!.models.includes(m.id) && !m.offBy.length) && matches(q, m.name, m.vendor, m.id, m.licence.name, m.licence.note, m.cloud?.name, m.weights?.name, m.weights?.note, CLASS_LABEL[m.licence.class]))
+      .filter((m) => keep(!access!.models.includes(m.id) && !m.offBy.length) && matches(q, m.name, m.vendor, m.id, m.licence.name, m.licence.note, m.cloud?.name, m.weights?.name, m.weights?.note, m.engineNote, CLASS_LABEL[m.licence.class]))
       .sort((a, b) => order(a.licence.class) - order(b.licence.class));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, access, q, show]);

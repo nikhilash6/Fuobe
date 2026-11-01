@@ -102,7 +102,7 @@
     "insert: Kling O3 edit 'Add @Image1 to @Video1 ...'; fal-ai/pika/v2/pikadditions (deprecated)",
     "people: replicate:prunaai/p-video-replace ($0.03/s), fal-ai/wan/v2.2-14b/animate/replace ($0.04-0.08/s), minimax/h3-max/recast (part 3)",
     "first-frame route: bria/fibo-edit/replace_object_by_text (or Nano Banana Pro edit) -> luma/agent/ray/v3.2/video-to-video start_image_url (part 2) or replicate:runwayml/aleph-2 keyframe_images",
-    "when its API opens: kling/v4/video-to-video/edit (3-30 s, 10 images, 7 elements)"
+    "kling/v4/video-to-video/edit (API open on 2026-11-01: 3-30 s, 10 images, 4 clips, 7 elements; in the catalog as kling-4)"
    ],
    "fields": "Kling O3: prompt with @Video1 and @Image1.. + video_url (3-15 s) + image_urls / elements (<=4 total) + keep_audio (true). Genjutsu Light: video_url (first 15 s used) + image_urls (1-8) + optional prompt + resolution 480p|720p|1080p; $0.05/$0.10/$0.20 per second list, 50% off on 2026-10-22."
   },
@@ -221,7 +221,7 @@
     "creatify/boreal (UGC with audio, $0.01/s 720p)",
     "pixelcut/looping-video (product loops)",
     "minimax/h3-max/reframe-video",
-    "wait: kling/v4/* (playground only, 'API access is coming soon')",
+    "kling/v4/* (playground only on 2026-10-22; API open on 2026-11-01, routed as kling-4 by nm10-kling-4)",
     "skip: fal-ai/kandinsky6-pro/* ($1.35 per 5 s 480p)"
    ],
    "fields": "See each record. Quality versus Seedance 2.5 is unverified."
@@ -247,7 +247,7 @@
   "Video erasers are short: Bria's eraser (fal and Replicate) takes clips under 5 s, VOID takes at most 197 frames, Kling O3 edit 3-15 s. Longer clips must be split into segments and joined, and seams between segments are untested.",
   "No MiniMax-Remover, DiffuEraser or ProPainter on fal (fal-ai/minimax-remover, fal-ai/minimax-remover/video, fal-ai/diffueraser, fal-ai/propainter, fal-ai/video-object-removal, fal-ai/object-removal/video, fal-ai/video-eraser: no OpenAPI). On Replicate they exist only as community models with non-commercial weights (MiniMax-Remover CC BY-NC 4.0 on Hugging Face zibojia/minimax-remover; ProPainter S-Lab License 1.0).",
   "No Vidu video-edit endpoint (fal-ai/vidu/q2/reference-to-video/edit, fal-ai/vidu/q3/video-edit, fal-ai/vidu/q4/video-edit: no OpenAPI). Pika: fal-ai/pika/v2/pikaswaps is unlisted and fal-ai/pika/v2/pikadditions deprecated; fal-ai/pika/v2.2/pikaswaps, fal-ai/pika/v2.2/pikadditions and fal-ai/pika/pikaswaps do not exist.",
-  "Kling 4.0 (kling/v4/text-to-video, image-to-video, reference-to-video, video-to-video/edit) is in fal's catalog with schemas, but every page says 'API access is coming soon' (playground and fal Agent only). Replicate has no Kling 4 (kwaivgi/kling-v4, kling-v4-video, kling-v4-omni-video: 404). Higgsfield's pricing API (its public API, checked 2026-10-22) has no Kling 4.0 either, although higgsfield-delta-4.md reports Kling 4.0 in Higgsfield's web app since 2026-10-21. So no API route reaches Kling 4.0 yet.",
+  "Kling 4.0 (kling/v4/text-to-video, image-to-video, reference-to-video, video-to-video/edit) is in fal's catalog with schemas, but every page says 'API access is coming soon' (playground and fal Agent only). Replicate has no Kling 4 (kwaivgi/kling-v4, kling-v4-video, kling-v4-omni-video: 404). Higgsfield's pricing API (its public API, checked 2026-10-22) has no Kling 4.0 either, although higgsfield-delta-4.md reports Kling 4.0 in Higgsfield's web app since 2026-10-21. So no API route reaches Kling 4.0 yet. Update 2026-11-01 (nm10-kling-4): all four fal endpoints are live (catalog status active, llms.txt with no 'coming soon') and Replicate now lists the official kwaivgi/kling-v4.0 (version f4dc4504, 2026-10-26).",
   "No general transcode, FPS change, speed, loop, fade, crop or zoompan endpoint: fal-ai/ffmpeg-api/{transcode, convert, loop-audio, loop, extend-audio, concat-audio, concat-audios, mix-audios, mix-audio, slideshow, zoompan, ken-burns, image-to-video, overlay, speed, change-speed, fps, change-fps, gif, compress, trim-audio} and fal-ai/workflow-utilities/{transcode, convert-video, change-fps, fps, speed-video, change-speed, loop-video, loop-audio, concat-audio, mix-audio, trim-audio, ken-burns, zoompan, crop-video, pad-video, fade, crossfade} have no OpenAPI. The Ken Burns piece exists as the unlisted fal-ai/workflow-utilities/image-to-video. Replicate's community utilities (fofr/toolkit, nicolascoutureau/video-utils) convert only to mp4 or GIF.",
   "ProRes output exists only as an option of other jobs: topaz/sdr-to-hdr/video (ProRes 422 HQ, HDR) and Bria's video endpoints (mov_proresks: eraser, background removal, increase-resolution). A plain SDR ProRes or EXR export needs a local ffmpeg step.",
   "Topaz frame interpolation and SDR-to-HDR are fal-only (replicate topazlabs/video-interpolate and topazlabs/sdr-to-hdr: 404). Replicate's topazlabs/video-upscale has only video, target_resolution and target_fps (15-60).",
@@ -2645,7 +2645,7 @@
    "provider": "fal",
    "endpoint": "kling/v4/video-to-video/edit",
    "falCategory": "video-to-video",
-   "status": "playground-only",
+   "status": "active",
    "inputs": {
     "prompt": {
      "type": "string",
@@ -2662,63 +2662,96 @@
      "desc": "The video to edit (3-30s), referenced as @Video1.\n\nMax file size: 300.0MB, Min width: 700px, Min height: 700px, Max width: 4553px, Max height: 4553px, Min aspect ratio: 0.40, Max aspect ratio: 2.50, Min duration: 3.0s, Max duration: 30.05s, Min FPS: 23.9, Max FPS: 60.05, Timeout: 30.0s"
     },
     "image_urls": {
+     "nullable": true,
      "type": "array",
-     "required": false,
      "items": "string",
      "maxItems": 10,
+     "required": false,
      "desc": "Reference images, referenced as @Image1, @Image2, ...",
+     "examples": [
+      null
+     ]
+    },
+    "video_urls": {
      "nullable": true,
+     "type": "array",
+     "items": "string",
+     "maxItems": 4,
+     "required": false,
+     "desc": "Reference videos, referenced as @Video2, @Video3, ... (max 4). The source, reference and element videos must total at most 30s.",
      "examples": [
       null
      ]
     },
     "elements": {
+     "nullable": true,
      "type": "array",
-     "required": false,
      "items": "object",
      "itemSchema": {
-      "frontal_image_url": {
+      "video_url": {
+       "nullable": true,
        "type": "string",
-       "desc": "The frontal image of the element (main view).\n\nMax file size: 30.0MB, Min width: 300px, Min height: 300px, Min aspect ratio: 0.40, Max aspect ratio: 2.50, Timeout: 20.0s"
+       "required": false,
+       "desc": "A video of the element, used instead of images (3-8s)."
+      },
+      "voice_id": {
+       "nullable": true,
+       "type": "string",
+       "required": false,
+       "desc": "Voice bound to this element. Create one with https://fal.ai/models/fal-ai/kling-video/create-voice"
       },
       "reference_image_urls": {
+       "nullable": true,
        "type": "array",
        "items": "string",
-       "minItems": 1,
        "maxItems": 3,
+       "required": false,
        "desc": "Additional views of the element from different angles (1-3)."
+      },
+      "frontal_image_url": {
+       "nullable": true,
+       "type": "string",
+       "required": false,
+       "desc": "The frontal image of the element (main view)."
       }
      },
-     "itemRequired": [
-      "frontal_image_url",
-      "reference_image_urls"
-     ],
      "maxItems": 7,
-     "desc": "Characters/objects, referenced as @Element1, @Element2, ...",
+     "required": false,
+     "desc": "Characters/objects, referenced as @Element1, @Element2, ... (max 7). Up to 3 elements may carry a voice_id and up to 3 may be video elements.",
+     "examples": [
+      null
+     ]
+    },
+    "voice_ids": {
      "nullable": true,
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false,
+     "desc": "Voices referenced in the prompt as @Voice1, @Voice2, ... (max 3, including voices bound to elements). Create one with https://fal.ai/models/fal-ai/kling-video/create-voice",
      "examples": [
       null
      ]
     },
     "duration": {
+     "nullable": true,
      "type": "integer",
      "required": false,
      "minimum": 3,
      "maximum": 30,
      "desc": "Output duration in seconds (3-30). Defaults to the source video's length.",
-     "nullable": true,
      "examples": [
       null
      ]
     },
     "resolution": {
      "type": "enum",
-     "required": false,
      "values": [
       "720p",
       "1080p"
      ],
      "valueType": "string",
+     "required": false,
      "default": "1080p",
      "desc": "Output resolution."
     }
@@ -2727,6 +2760,7 @@
     "prompt": "prompt",
     "video": "video_url",
     "images": "image_urls",
+    "videos": "video_urls",
     "elements": "elements",
     "duration": "duration",
     "resolution": "resolution"
@@ -2790,11 +2824,12 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Kling 4.0 (catalog date 2026-10-16). fal's page says: 'Kling 4.0 is available in the playground and fal Agent. API access is coming soon.' So the schema is served but API calls are not open yet: do not add a route until the page changes. 3-30 s, 720p/1080p, multi_prompt per-shot prompts. Edit: source 3-30 s (<=300 MB, 700-4553 px, aspect 0.40-2.50, 23.9-60 fps) as @Video1, up to 10 image_urls (@Image1..) and 7 elements (@Element1..: frontal_image_url + reference_image_urls). $0.094/s at 720p, $0.141/s at 1080p, billed on input plus output length (at least 2x the output). Critic re-check 2026-10-22: still playground-only; video_url also needs 700-4553 px on each side and aspect 0.40-2.50.",
+   "notes": "Kling 4.0 (catalog date 2026-10-16). Re-checked 2026-11-01 (build package nm10-kling-4): fal's catalog lists it as active, its llms.txt documents the fal.run endpoint with Key auth and no longer says 'API access is coming soon', so the 2026-10-22 hold is lifted and Fuobe routes it. Source 3-30.05 s (<=300 MB, 700-4553 px a side, aspect 0.40-2.50, 23.9-60.05 fps) as @Video1; up to 10 image_urls (@Image1..), and since round 4 up to 4 video_urls (@Video2..; source, reference and element videos 30 s in all), elements as in reference-to-video (frontal_image_url and reference_image_urls are no longer required: a 3-8 s video_url may stand in) and voice_ids (up to 3). duration defaults to the source's length. Billed $0.094/s (720p) or $0.141/s (1080p) on input plus output seconds, at least 2x the output.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/kling/v4/video-to-video/edit/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=kling/v4/video-to-video/edit",
-   "capability": "swap"
+   "capability": "swap",
+   "checked": "2026-11-01"
   },
   {
    "family": "kling",
@@ -2805,34 +2840,36 @@
    "provider": "fal",
    "endpoint": "kling/v4/reference-to-video",
    "falCategory": "video-to-video",
-   "status": "playground-only",
+   "status": "active",
    "inputs": {
     "prompt": {
+     "nullable": true,
      "type": "string",
      "required": false,
      "maxLength": 26000,
      "desc": "Text prompt. Reference inputs as @Image1, @Video1, @Element1, etc. Either prompt or multi_prompt must be provided.",
-     "nullable": true,
      "examples": [
       "@Element1 and @Element2 are having dinner at the table in @Image1"
      ]
     },
     "multi_prompt": {
+     "nullable": true,
      "type": "array",
-     "required": false,
      "items": "object",
      "itemSchema": {
       "prompt": {
        "type": "string",
+       "required": false,
        "minLength": 1,
        "maxLength": 512,
        "desc": "The prompt for this shot."
       },
       "duration": {
        "type": "integer",
+       "required": false,
+       "default": 5,
        "minimum": 1,
        "maximum": 30,
-       "default": 5,
        "desc": "Shot duration in seconds."
       }
      },
@@ -2840,8 +2877,8 @@
       "prompt"
      ],
      "minItems": 1,
+     "required": false,
      "desc": "Per-shot prompts for multi-shot generation. The video duration is the sum of the shot durations.",
-     "nullable": true,
      "examples": [
       null
      ]
@@ -2849,88 +2886,119 @@
     "duration": {
      "type": "integer",
      "required": false,
+     "default": 5,
      "minimum": 3,
      "maximum": 30,
-     "default": 5,
      "desc": "Video duration in seconds (3-30)."
     },
     "start_image_url": {
+     "nullable": true,
      "type": "string",
      "required": false,
-     "desc": "Optional image to use as the first frame. Counts toward the image reference limit.",
-     "nullable": true
+     "desc": "Optional image to use as the first frame. Counts toward the image reference limit."
+    },
+    "middle_image_urls": {
+     "nullable": true,
+     "type": "array",
+     "items": "string",
+     "maxItems": 8,
+     "required": false,
+     "desc": "Optional ordered keyframes between the first and last frames (max 8). Count toward the image reference limit.",
+     "examples": [
+      null
+     ]
+    },
+    "end_image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional image to use as the last frame. Counts toward the image reference limit."
     },
     "image_urls": {
+     "nullable": true,
      "type": "array",
-     "required": false,
      "items": "string",
      "maxItems": 10,
+     "required": false,
      "desc": "Reference images, referenced as @Image1, @Image2, ... (max 10).",
-     "nullable": true,
      "examples": [
       null
      ]
     },
     "video_urls": {
+     "nullable": true,
      "type": "array",
-     "required": false,
      "items": "string",
      "maxItems": 5,
+     "required": false,
      "desc": "Reference videos (3-30s each, 30s combined with element videos), referenced as @Video1, @Video2, ... (max 5).",
-     "nullable": true,
      "examples": [
       null
      ]
     },
     "elements": {
+     "nullable": true,
      "type": "array",
-     "required": false,
      "items": "object",
      "itemSchema": {
-      "frontal_image_url": {
+      "video_url": {
+       "nullable": true,
        "type": "string",
-       "desc": "The frontal image of the element (main view).",
-       "nullable": true
+       "required": false,
+       "desc": "A video of the element, used instead of images (3-8s)."
+      },
+      "voice_id": {
+       "nullable": true,
+       "type": "string",
+       "required": false,
+       "desc": "Voice bound to this element. Create one with https://fal.ai/models/fal-ai/kling-video/create-voice"
       },
       "reference_image_urls": {
+       "nullable": true,
        "type": "array",
        "items": "string",
        "maxItems": 3,
-       "desc": "Additional views of the element from different angles (1-3).",
-       "nullable": true
+       "required": false,
+       "desc": "Additional views of the element from different angles (1-3)."
       },
-      "video_url": {
+      "frontal_image_url": {
+       "nullable": true,
        "type": "string",
-       "desc": "A video of the element, used instead of images (3-30s).",
-       "nullable": true
-      },
-      "voice_id": {
-       "type": "string",
-       "desc": "Voice bound to this element. Create one with https://fal.ai/models/fal-ai/kling-video/create-voice",
-       "nullable": true
+       "required": false,
+       "desc": "The frontal image of the element (main view)."
       }
      },
      "maxItems": 7,
+     "required": false,
      "desc": "Characters/objects, referenced as @Element1, @Element2, ... (max 7). Up to 3 elements may carry a voice_id and up to 3 may be video elements.",
+     "examples": [
+      null
+     ]
+    },
+    "voice_ids": {
      "nullable": true,
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false,
+     "desc": "Voices referenced in the prompt as @Voice1, @Voice2, ... (max 3, including voices bound to elements). Create one with https://fal.ai/models/fal-ai/kling-video/create-voice",
      "examples": [
       null
      ]
     },
     "resolution": {
      "type": "enum",
-     "required": false,
      "values": [
       "720p",
       "1080p"
      ],
      "valueType": "string",
+     "required": false,
      "default": "1080p",
      "desc": "Output resolution."
     },
     "aspect_ratio": {
      "type": "enum",
-     "required": false,
      "values": [
       "auto",
       "16:9",
@@ -2939,6 +3007,7 @@
       "21:9"
      ],
      "valueType": "string",
+     "required": false,
      "default": "16:9",
      "desc": "Aspect ratio of the generated video. 'auto' adapts it to the references."
     }
@@ -3013,11 +3082,12 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Kling 4.0 (catalog date 2026-10-16). fal's page says: 'Kling 4.0 is available in the playground and fal Agent. API access is coming soon.' So the schema is served but API calls are not open yet: do not add a route until the page changes. 3-30 s, 720p/1080p, multi_prompt per-shot prompts. Up to 10 images, 5 reference videos and 7 elements (elements can carry a video_url and a voice_id). $0.157/s 720p, $0.235/s 1080p; with video references $0.094/$0.141 per input+output second.",
+   "notes": "Kling 4.0 (catalog date 2026-10-16). Re-checked 2026-11-01 (build package nm10-kling-4): fal's catalog lists it as active, its llms.txt documents the fal.run endpoint with Key auth and no longer says 'API access is coming soon', so the 2026-10-22 hold is lifted and Fuobe routes it. Up to 10 images (@Image1.., start, middle and end frames count toward them), 5 reference clips (@Video1.., 3-30 s each, 30 s with element videos), 7 elements (@Element1..: frontal_image_url + 1-3 reference_image_urls, or a 3-8 s video_url; up to 3 with a voice_id, up to 3 video elements) and, new since round 4, voice_ids (@Voice1.., up to 3, made with fal-ai/kling-video/create-voice), middle_image_urls (8) and end_image_url. aspect_ratio adds 'auto'. Text and image references bill $0.157/$0.235 per output second; with reference clips or video elements $0.094/$0.141 per second of input plus output (at least 2x the output).",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/kling/v4/reference-to-video/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=kling/v4/reference-to-video",
-   "capability": "swap"
+   "capability": "swap",
+   "checked": "2026-11-01"
   },
   {
    "family": "kling",
@@ -16381,34 +16451,36 @@
    "provider": "fal",
    "endpoint": "kling/v4/text-to-video",
    "falCategory": "text-to-video",
-   "status": "playground-only",
+   "status": "active",
    "inputs": {
     "prompt": {
+     "nullable": true,
      "type": "string",
      "required": false,
      "maxLength": 26000,
      "desc": "Text prompt. Either prompt or multi_prompt must be provided.",
-     "nullable": true,
      "examples": [
       "A detective in a black trench coat stands on a rooftop in the rain, looking through a telescope at the street below."
      ]
     },
     "multi_prompt": {
+     "nullable": true,
      "type": "array",
-     "required": false,
      "items": "object",
      "itemSchema": {
       "prompt": {
        "type": "string",
+       "required": false,
        "minLength": 1,
        "maxLength": 512,
        "desc": "The prompt for this shot."
       },
       "duration": {
        "type": "integer",
+       "required": false,
+       "default": 5,
        "minimum": 1,
        "maximum": 30,
-       "default": 5,
        "desc": "Shot duration in seconds."
       }
      },
@@ -16416,8 +16488,8 @@
       "prompt"
      ],
      "minItems": 1,
+     "required": false,
      "desc": "Per-shot prompts for multi-shot generation. The video duration is the sum of the shot durations.",
-     "nullable": true,
      "examples": [
       null
      ]
@@ -16425,25 +16497,24 @@
     "duration": {
      "type": "integer",
      "required": false,
+     "default": 5,
      "minimum": 3,
      "maximum": 30,
-     "default": 5,
      "desc": "Video duration in seconds (3-30)."
     },
     "resolution": {
      "type": "enum",
-     "required": false,
      "values": [
       "720p",
       "1080p"
      ],
      "valueType": "string",
+     "required": false,
      "default": "1080p",
      "desc": "Output resolution."
     },
     "aspect_ratio": {
      "type": "enum",
-     "required": false,
      "values": [
       "16:9",
       "9:16",
@@ -16451,6 +16522,7 @@
       "21:9"
      ],
      "valueType": "string",
+     "required": false,
      "default": "16:9",
      "desc": "Aspect ratio of the generated video."
     }
@@ -16521,11 +16593,12 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Kling 4.0 (catalog date 2026-10-16). fal's page says: 'Kling 4.0 is available in the playground and fal Agent. API access is coming soon.' So the schema is served but API calls are not open yet: do not add a route until the page changes. 3-30 s, 720p/1080p, multi_prompt per-shot prompts. $0.157/s 720p, $0.235/s 1080p.",
+   "notes": "Kling 4.0 (catalog date 2026-10-16). Re-checked 2026-11-01 (build package nm10-kling-4): fal's catalog lists it as active, its llms.txt documents the fal.run endpoint with Key auth and no longer says 'API access is coming soon', so the 2026-10-22 hold is lifted and Fuobe routes it. prompt or multi_prompt (per-shot prompts, 1-30 s each; the video is as long as their sum), 3-30 s, 720p | 1080p (default 1080p), 16:9 | 9:16 | 1:1 | 21:9. $0.157/s 720p, $0.235/s 1080p.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/kling/v4/text-to-video/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=kling/v4/text-to-video",
-   "capability": "frontier"
+   "capability": "frontier",
+   "checked": "2026-11-01"
   },
   {
    "family": "kling",
@@ -16536,14 +16609,14 @@
    "provider": "fal",
    "endpoint": "kling/v4/image-to-video",
    "falCategory": "image-to-video",
-   "status": "playground-only",
+   "status": "active",
    "inputs": {
     "prompt": {
+     "nullable": true,
      "type": "string",
      "required": false,
      "maxLength": 26000,
      "desc": "Text prompt. Either prompt or multi_prompt must be provided.",
-     "nullable": true,
      "examples": [
       "A detective in a black trench coat stands on a rooftop in the rain, looking through a telescope at the street below."
      ]
@@ -16556,31 +16629,44 @@
       "https://v3b.fal.media/files/b/rabbit/NaslJIC7F2WodS6DFZRRJ.png"
      ]
     },
+    "middle_image_urls": {
+     "nullable": true,
+     "type": "array",
+     "items": "string",
+     "maxItems": 8,
+     "required": false,
+     "desc": "Ordered keyframes between the first and last frames (max 8).",
+     "examples": [
+      null
+     ]
+    },
     "end_image_url": {
+     "nullable": true,
      "type": "string",
      "required": false,
      "desc": "Image to use as the last frame of the video.",
-     "nullable": true,
      "examples": [
       "https://v3b.fal.media/files/b/tiger/BwHi22qoQnqaTNMMhe533.png"
      ]
     },
     "multi_prompt": {
+     "nullable": true,
      "type": "array",
-     "required": false,
      "items": "object",
      "itemSchema": {
       "prompt": {
        "type": "string",
+       "required": false,
        "minLength": 1,
        "maxLength": 512,
        "desc": "The prompt for this shot."
       },
       "duration": {
        "type": "integer",
+       "required": false,
+       "default": 5,
        "minimum": 1,
        "maximum": 30,
-       "default": 5,
        "desc": "Shot duration in seconds."
       }
      },
@@ -16588,8 +16674,8 @@
       "prompt"
      ],
      "minItems": 1,
+     "required": false,
      "desc": "Per-shot prompts for multi-shot generation. The video duration is the sum of the shot durations.",
-     "nullable": true,
      "examples": [
       null
      ]
@@ -16597,19 +16683,19 @@
     "duration": {
      "type": "integer",
      "required": false,
+     "default": 5,
      "minimum": 3,
      "maximum": 30,
-     "default": 5,
      "desc": "Video duration in seconds (3-30)."
     },
     "resolution": {
      "type": "enum",
-     "required": false,
      "values": [
       "720p",
       "1080p"
      ],
      "valueType": "string",
+     "required": false,
      "default": "1080p",
      "desc": "Output resolution."
     }
@@ -16681,11 +16767,12 @@
    },
    "replicateEquivalent": null,
    "license": "commercial",
-   "notes": "Kling 4.0 (catalog date 2026-10-16). fal's page says: 'Kling 4.0 is available in the playground and fal Agent. API access is coming soon.' So the schema is served but API calls are not open yet: do not add a route until the page changes. 3-30 s, 720p/1080p, multi_prompt per-shot prompts. start_image_url required, end_image_url optional. Only start_image_url and end_image_url: Higgsfield's 3-10 keyframe mode has no fal equivalent here (use reference image_urls or blackforestlabs/flux-3-max/keyframes-to-video).",
+   "notes": "Kling 4.0 (catalog date 2026-10-16). Re-checked 2026-11-01 (build package nm10-kling-4): fal's catalog lists it as active, its llms.txt documents the fal.run endpoint with Key auth and no longer says 'API access is coming soon', so the 2026-10-22 hold is lifted and Fuobe routes it. start_image_url required, end_image_url optional, and since round 4 middle_image_urls: up to 8 ordered keyframes between the first and last frame (10 frames in all), with no time for each frame. No aspect_ratio field (the start frame's shape). multi_prompt as text-to-video.",
    "verified": true,
    "sourceUrl": "https://fal.ai/models/kling/v4/image-to-video/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=kling/v4/image-to-video",
-   "capability": "frontier"
+   "capability": "frontier",
+   "checked": "2026-11-01"
   },
   {
    "family": "kandinsky",
@@ -22097,6 +22184,203 @@
    "sourceUrl": "https://fal.ai/models/meshy/v7.1/multi-image-to-3d/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=meshy/v7.1/multi-image-to-3d",
    "capability": "scene3d"
+  },
+  {
+   "family": "kling",
+   "model": "kwaivgi/kling-v4.0",
+   "title": "kwaivgi/kling-v4.0",
+   "vendor": "Kuaishou",
+   "operation": "t2v+i2v+flf2v+v2v",
+   "provider": "replicate",
+   "endpoint": "kwaivgi/kling-v4.0",
+   "falCategory": null,
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "Text prompt describing the video. Refer to images as @image_1, @image_2, ... and videos as @video_1, @video_2, ... (see start_image and reference_images for numbering). Up to 26,000 English characters or 11,000 non-English characters."
+    },
+    "start_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "First frame of the video. Supports .jpg/.jpeg/.png, max 30MB, min 300px, aspect ratio between 2:5 and 5:2."
+    },
+    "middle_images": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Keyframes between the first and last frame, in order. Same format requirements as start_image."
+    },
+    "end_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "Last frame of the video. Same format requirements as start_image."
+    },
+    "reference_images": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Reference images for characters, objects, scenes or style. Images are numbered in this order: start_image, middle_images, end_image, reference_images. Up to 10 images in total across all image inputs."
+    },
+    "reference_videos": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Reference videos to take motion, camera work or style from (.mp4/.mov, 3-30 seconds each, 700-4553px per side, max 300MB). Numbered after base_video."
+    },
+    "base_video": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "Video to edit (.mp4/.mov, 3-30 seconds, 700-4553px per side, max 300MB). Referred to as @video_1. When set, the output keeps the length and aspect ratio of this video."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "720p",
+      "1080p"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "1080p",
+     "desc": "Output resolution."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "16:9",
+      "9:16",
+      "1:1",
+      "21:9"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Aspect ratio of the output video. Ignored when start_image, middle_images, end_image or base_video is set, since the aspect ratio then comes from the input."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 3,
+     "maximum": 30,
+     "desc": "Video duration in seconds. Ignored when base_video is set."
+    }
+   },
+   "version": "f4dc4504e94338dc3ccd08ae908116f62eb157ec977f472bbe1df9d56e4359c5",
+   "versionDate": "2026-10-26",
+   "output": "output",
+   "price": "720p (720p, text or image input): $0.157 per second of output video; 1080p (1080p, text or image input): $0.235 per second of output video; 720p with video input (Billed seconds: 2x output if input is shorter than output, otherwise input + output): $0.094 per second of output video; 1080p with video input (Billed seconds: 2x output if input is shorter than output, otherwise input + output): $0.141 per second of output video",
+   "verified": true,
+   "sourceUrl": "https://replicate.com/kwaivgi/kling-v4.0",
+   "apiUrl": "https://api.replicate.com/v1/models/kwaivgi/kling-v4.0/predictions",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "start_image",
+    "endImage": "end_image",
+    "images": "reference_images",
+    "video": "base_video",
+    "duration": "duration",
+    "resolution": "resolution",
+    "aspectRatio": "aspect_ratio"
+   },
+   "checked": "2026-11-01",
+   "notes": "Kling 4.0 on Replicate (official kwaivgi model, read 2026-11-01). One model for text, start/middle/end frames, reference images and clips, and edits (base_video). Images are numbered @image_1.. across start_image, middle_images, end_image and reference_images (10 in all), clips @video_1.. after base_video; no per-shot prompts, no elements, no voices. Fuobe routes text, image and start/end-frame runs here as a second provider (they map cleanly); reference and edit runs stay on fal, whose @Image/@Video/@Element numbering, shots and elements Fuobe writes. Same prices as fal: $0.157/$0.235 per output second; with a video input $0.094/$0.141 per billed second, 2x the output if the input is shorter, else input + output.",
+   "pricing": {
+    "usd": 0.157,
+    "unit": "second (720p)",
+    "note": "720p (720p, text or image input): $0.157 per second of output video; 1080p (1080p, text or image input): $0.235 per second of output video; 720p with video input (Billed seconds: 2x output if input is shorter than output, otherwise input + output): $0.094 per second of output video; 1080p with video input (Billed seconds: 2x output if input is shorter than output, otherwise input + output): $0.141 per second of output video"
+   },
+   "license": "commercial",
+   "capability": "frontier"
+  },
+  {
+   "family": "minimax-h3",
+   "model": "MiniMax H3 Max 3D to Video",
+   "title": "H3 Max 3D to Video",
+   "vendor": "MiniMax",
+   "operation": "v2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/3d-to-video",
+   "falCategory": "video-to-video",
+   "status": "active",
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Blender video, up to 15 seconds and 32 shots, at a public HTTPS URL."
+    },
+    "prompt": {
+     "type": "string",
+     "required": false,
+     "nullable": true,
+     "maxLength": 2000,
+     "desc": "Optional clarification of what your proxies represent or how they move, for example: 'The moving block represents a running person.' Camera, trajectories, timing and object count remain defined by the video."
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "required": false,
+     "items": "string",
+     "maxItems": 8,
+     "desc": "Optional environment, subject, interior or detail references. When supplied, uses these images directly without visual planning or generating new images; Scene Intent is optional. Without references, automatically creates appearance references within your new-image limit. Camera and movement always come from the video."
+    },
+    "max_generated_reference_images": {
+     "type": "integer",
+     "required": false,
+     "minimum": 1,
+     "maximum": 8,
+     "default": 2,
+     "desc": "Maximum NEW images to generate when no reference images are supplied. Ignored when reference images are supplied. Uses fewer when enough views are covered. Uncovered shots stay in the video."
+    },
+    "resolution": {
+     "type": "enum",
+     "required": false,
+     "values": [
+      "480P",
+      "768P",
+      "1080P"
+     ],
+     "valueType": "string",
+     "default": "768P",
+     "desc": "Output quality. Duration is taken automatically from the video."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "keyFields": {
+    "video": "video_url",
+    "images": "reference_image_urls",
+    "prompt": "prompt",
+    "resolution": "resolution"
+   },
+   "output": "video.url",
+   "outputShape": {
+    "video": "object{file_name,url,content_type,file_size}"
+   },
+   "price": "For every second of video you generate you will be charged $0.05 at 480p, $0.08 at 768p or $0.16 at 1080p (minimum 5 seconds). Each shot is rounded up to a whole second, with a minimum of 5 billed seconds per shot; a $0.50 processing fee per request; input tokens beyond the 4,096 included per shot are extra; automatically generated references are billed at $0.10 per image (the page's header says about $0.02-$0.04 each).",
+   "pricing": {
+    "usd": 0.08,
+    "unit": "second",
+    "note": "768P; 480P $0.05, 1080P $0.16; minimum 5 s a shot; + $0.50 processing a request"
+   },
+   "replicateEquivalent": null,
+   "license": "commercial",
+   "notes": "Blockout to film (package blockout-film; research new-models-10.md section 5). A grey-box / previs animation (up to 15 s, up to 32 shots) plus up to 8 reference stills -> a finished video as long as the input; camera, trajectories, timing and object count come from the video, the prompt (scene intent, at most 2000 characters) says what the proxies are. No audio field and no audio in the description: the result is treated as silent. Read from fal's OpenAPI and model page on 2026-11-01.",
+   "verified": true,
+   "checked": "2026-11-01",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/3d-to-video/api",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/3d-to-video",
+   "capability": "video"
   }
  ]
 }

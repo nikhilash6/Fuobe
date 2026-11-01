@@ -1,0 +1,151 @@
+{
+  "1": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "input.wav"
+    },
+    "_meta": {
+      "title": "Speech to dub (audio, or a video with sound)"
+    }
+  },
+  "2": {
+    "class_type": "DBSLoader",
+    "inputs": {
+      "model": "DBS-BSRNN-DnR",
+      "device": "auto"
+    },
+    "_meta": {
+      "title": "DBS Loader"
+    }
+  },
+  "3": {
+    "class_type": "DBSSeparate",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "audio": [
+        "1",
+        0
+      ],
+      "channels": "mono",
+      "output_sample_rate": "input"
+    },
+    "_meta": {
+      "title": "DBS Separate (music / sfx / speech)"
+    }
+  },
+  "4": {
+    "class_type": "AudioMerge",
+    "inputs": {
+      "audio1": [
+        "1",
+        0
+      ],
+      "audio2": [
+        "3",
+        2
+      ],
+      "merge_method": "subtract"
+    },
+    "_meta": {
+      "title": "Background: the original minus the speech"
+    }
+  },
+  "5": {
+    "class_type": "SaveAudioAdvanced",
+    "inputs": {
+      "audio": [
+        "3",
+        2
+      ],
+      "filename_prefix": "fuobe/dub-prepare-dbs-transcribe",
+      "format": "flac"
+    },
+    "_meta": {
+      "title": "Voice stem (the speech to clone)"
+    }
+  },
+  "6": {
+    "class_type": "SaveAudioAdvanced",
+    "inputs": {
+      "audio": [
+        "4",
+        0
+      ],
+      "filename_prefix": "fuobe/dub-prepare-dbs-transcribe",
+      "format": "flac"
+    },
+    "_meta": {
+      "title": "Background stem (music & effects)"
+    }
+  },
+  "7": {
+    "class_type": "AILab_Qwen3ASRSubtitle",
+    "inputs": {
+      "audio": [
+        "3",
+        2
+      ],
+      "model": "Qwen/Qwen3-ASR-1.7B-hf",
+      "precision": "bf16",
+      "attention": "auto",
+      "forced_aligner": "Qwen/Qwen3-ForcedAligner-0.6B-hf",
+      "language": "auto",
+      "hints": "",
+      "output_format": "none",
+      "output_path": "",
+      "split_mode": "split_by_punctuation_or_pause",
+      "max_gap_sec": 0.6,
+      "max_chars": 40,
+      "max_inference_batch_size": 32,
+      "max_new_tokens": 256,
+      "normalize_text": true,
+      "unload_models": true
+    },
+    "_meta": {
+      "title": "AILab_Qwen3ASRSubtitle"
+    }
+  },
+  "8": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": [
+        "7",
+        1
+      ],
+      "filename_prefix": "fuobe/dub-prepare-dbs-transcribe",
+      "format": "txt"
+    },
+    "_meta": {
+      "title": "SaveText"
+    }
+  },
+  "9": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": [
+        "7",
+        0
+      ],
+      "filename_prefix": "fuobe/dub-prepare-dbs-transcribe",
+      "format": "txt"
+    },
+    "_meta": {
+      "title": "SaveText"
+    }
+  },
+  "10": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "7",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "PreviewAny"
+    }
+  }
+}

@@ -6,6 +6,7 @@ import {
   ArrowUp,
   AtSign,
   AudioLines,
+  Box,
   Check,
   ChevronDown,
   Clapperboard,
@@ -338,6 +339,8 @@ export interface PromptBarProps {
   promptRef: React.RefObject<PromptInputHandle | null>;
   onCast: () => void;
   onLocation: () => void;
+  /** Blockout to film: a grey-box blockout (uploaded or built) as the take's camera, blocking and timing. */
+  onBlockout?: () => void;
 }
 
 const ACTIONS: { id: BarAction; label: string; icon: typeof Video; hint: string }[] = [
@@ -587,6 +590,19 @@ export function PromptBar(props: PromptBarProps) {
         </TooltipTrigger>
         <TooltipContent>Soul Location: keep every scene in the same world</TooltipContent>
       </Tooltip>
+      {draft.mode === "video" && props.onBlockout && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button" onClick={() => {
+                setDirectorOpen(false);
+                props.onBlockout!();
+              }} className={cn(chip, chipIdle)} aria-label="Blockout: film a grey-box blockout">
+              <Box className="size-3.5" /> Blockout
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Blockout to film: a grey box from Blender or built here sets the camera and timing</TooltipContent>
+        </Tooltip>
+      )}
     </>
   );
   const picks = directorPicks(settings, draft.mode);

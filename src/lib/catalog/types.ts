@@ -85,7 +85,9 @@ export type Operation =
   // round 5 (O11)
   | "face-mosaic" // image → the same picture with the faces (or what the prompt names) pixelated: SAM 3.1 mask + mosaic
   // N7-5
-  | "camera-path"; // image + params.cameraPath (+ inputs.video: the open engine's render along the path) → the camera following the path
+  | "camera-path" // image + params.cameraPath (+ inputs.video: the open engine's render along the path) → the camera following the path
+  // archive-restore
+  | "restore-video"; // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
 
 export const OPERATION_LABELS: Record<Operation, string> = {
   t2i: "Text to image",
@@ -155,6 +157,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   overlay: "Overlay image",
   "face-mosaic": "Pixelate faces",
   "camera-path": "Fly path",
+  "restore-video": "Restore & colourise",
 };
 
 export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
@@ -226,6 +229,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   overlay: "image",
   "face-mosaic": "image",
   "camera-path": "video",
+  "restore-video": "video",
 };
 
 /**
@@ -321,7 +325,23 @@ export interface FieldMap {
   /** Language to translate into (dubbing). */
   targetLanguage?: string;
   /** Native multi-shot: an array of {prompt, duration} (Kling's `multi_prompt`). */
-  multiShot?: { key: string; durationType: "string" | "number"; json?: boolean; shotType?: string; flag?: string };
+  multiShot?: {
+    key: string;
+    durationType: "string" | "number";
+    json?: boolean;
+    shotType?: string;
+    flag?: string;
+    /** The most characters a shot's prompt takes (Kling 4.0: 512); a longer one is cut at a word. */
+    maxPrompt?: number;
+    /** Shot lengths in whole seconds (rounded, at least 1). */
+    integer?: true;
+  };
+  /**
+   * Kling 4.0's elements (@Element1..): a list of objects, each a frontal image with up to `views` more angles, or a
+   * clip (`video`). Filled from params.elements, which groups some of inputs.images / inputs.videos into elements: those
+   * leave the image and clip lists, so the rest keep their @Image / @Video numbers.
+   */
+  elements?: { key: string; frontal: string; views: string; video?: string; max: number; maxViews: number; maxVideos?: number };
   /** Boolean draft switch (Seedance 2.5 renders a cheap 480p take and returns a draft id). */
   draft?: string;
   /** Field that takes the draft id to finish. */
@@ -451,6 +471,8 @@ export interface FieldMap {
     max?: number;
     min?: number;
     base?: number;
+    /** The square each resolution tier is (fal's FLUX 3 Klein: 1K = 1024 … 4K = 4096), over `base`. */
+    bases?: Record<string, number>;
     /** Exact sizes per resolution tier and aspect ratio (Fuobe Soul's table); the computed size where it has none. */
     table?: Record<string, Record<string, [number, number]>>;
   };
@@ -467,6 +489,12 @@ export interface FieldMap {
    * layout (params.extra.layout), which expansion would rewrite; a plain prompt leaves the API's default.
    */
   promptExpansion?: string;
+  /**
+   * A layout the API takes as boxes of its own (fal's FLUX 3 Klein bounding_boxes: {label, description, box: {x_min, y_min,
+   * x_max, y_max} as 0-1 fractions}, at most `max`): the plan writes them into params.extra[key] from the draft, and the
+   * prompt names each box as <label> (src/lib/layout-prompt.ts flux3Boxes).
+   */
+  boundingBoxes?: { key: string; max?: number };
   /**
    * A camera path (params.cameraPath, build plan N7-5) as the API's keyframes [{time, azimuth, elevation, distance}]:
    * `min`–`max` of them, the height kept inside `elevation`, at most `maxTurns` turns of travel. `free`: the API's fixed
@@ -492,10 +520,10 @@ export interface ModelRoute {
   endpoint: string;
   map?: FieldMap;
   /**
-   * The parts of `map` the composer previews a result with ("1920×1080 → 2880×1620", an EXR frame count),
-   * kept by slimModel when it drops the field maps for the browser. The server reads `map`.
+   * The parts of `map` the composer previews a result with ("1920×1080 → 2880×1620", an EXR frame count, the canvas a
+   * layout is compiled at), kept by slimModel when it drops the field maps for the browser. The server reads `map`.
    */
-  preview?: Pick<FieldMap, "upscaleFactor" | "numFrames">;
+  preview?: Pick<FieldMap, "upscaleFactor" | "numFrames" | "size">;
   /** Optional note shown in the UI (e.g. "uses Lightx2v 4-step LoRA"). */
   note?: string;
   /**
@@ -526,13 +554,20 @@ export interface ModelRoute {
    */
   unsized?: true;
   /**
+   * A cloud edit whose picture follows image 1's shape at the chosen tier (fal's FLUX 3 Klein, as its GPU edit follows reference
+   * 1): the server sends image 1's shape on the tier's square in the route's size field (src/server/generations.ts sizedEdit),
+   * so the price stays the tier's. The composer shows Resolution but no Aspect ratio for its operation.
+   */
+  followsImage?: true;
+  /**
    * The most images this route reads, when fewer than the model's options.maxImages (Qwen-Image 2.1's inpaint and expand
    * read the picture alone; its edit takes 4): the composer offers no more for its operation, and the plan refuses more.
    */
   maxImages?: number;
 }
 
-export type Badge = "new" | "top" | "fast" | "audio" | "4k" | "hd" | "pro" | "open" | "uncensored" | "beta";
+/** "30s": takes of up to 30 s in one call (Kling 4.0). */
+export type Badge = "new" | "top" | "fast" | "audio" | "4k" | "hd" | "pro" | "open" | "uncensored" | "beta" | "30s";
 
 export interface ModelOptions {
   aspectRatios?: string[];
@@ -549,6 +584,12 @@ export interface ModelOptions {
   endFrame?: boolean;
   /** Multi-shot support: "native" sends per-shot prompts, "prompt" writes the shots into one prompt. */
   multiShot?: { mode: "native" | "prompt" | "concat"; maxShots: number };
+  /**
+   * @mentioned Elements go as the model's own elements (Kling 4.0's @Element1..): up to `max`, each a frontal image and up
+   * to `views` more angles, or a clip (up to `videos` of them). `voices`: a voice can be bound to one (false: Fuobe has no
+   * way to make the provider's voice ids yet, so voices aren't sent).
+   */
+  elements?: { max: number; views: number; videos: number; voices: false; ops: Operation[] };
   /** Draft mode (cheap preview, then a full render of the take you like). */
   draft?: boolean;
   /**
@@ -589,6 +630,8 @@ export interface ModelOptions {
   promptOptional?: boolean;
   /** The words a run takes when none are given (Fuobe Try-On: its try-on LoRA's own instruction). */
   defaultPrompt?: string;
+  /** The prompt box's placeholder for this model (Open-H3 Regenerate: describe the clip it redraws). */
+  promptPlaceholder?: string;
   /**
    * The prompt the model reads, when it isn't plain words: "ideogram4" = an Ideogram 4 JSON caption. The server writes
    * one from the words before the run (src/lib/ideogram-caption.ts) and keeps it as the run's prompt.
@@ -662,6 +705,11 @@ export interface Pricing {
   factors?: { param: string; values: Record<string, number> }[];
   /** The price per unit when the run carries LoRAs and goes to the route's LoRA endpoint (fal's /lora variants cost more). */
   withLoras?: number;
+  /**
+   * The LoRA endpoint bills per megapixel of what it makes while the plain one bills per image (fal's FLUX 3 Klein: $0.012
+   * per megapixel with LoRAs): a run with LoRAs costs this times the megapixels of the size the route sends.
+   */
+  withLorasPerMegapixel?: number;
   /** The LoRA endpoint publishes no price yet (fal's MOSS-Image /lora): a run with LoRAs is priced as unknown, never as free. */
   lorasUnknown?: true;
   /** withLoras at each resolution, when it differs (Fuobe Cinema's LTX-2.3 bills per megapixel of video). */
@@ -676,6 +724,23 @@ export interface Pricing {
   roundUp?: true;
   /** What an animation preset adds to a run (params.animation: Meshy rigging +$0.12). */
   animationUsd?: number;
+  /**
+   * A run with a clip going in (an edit's source, reference clips, video elements: Kling 4.0) bills this rate per second
+   * of input plus output, at least twice the output (fal and Replicate: "2x output if input is shorter than output,
+   * otherwise input + output"), in place of `usd` / `byResolution`. `plain`: billed on input + output with no floor
+   * (fal's Seedance 2.5 reference-to-video: every second of a reference clip is billed with the output, at 0.6 times the
+   * rate of a run without clips).
+   */
+  clipInput?: { usd: number; byResolution?: Record<string, number>; plain?: true };
+  /** A fixed fee each request adds on top of its seconds (fal's H3 Max 3D to video: $0.50 processing). */
+  perRequest?: number;
+  /** The fewest seconds a per-second request bills (fal's H3 Max 3D to video: 5 s a shot). */
+  minSeconds?: number;
+  /**
+   * A run sent no reference images draws up to `count` of its own, at `usd` each (fal's H3 Max 3D to video: up to 2 at
+   * $0.10): priced at the most, through params.drawnRefs (set when the plan sees no images going in).
+   */
+  generatedRefs?: { usd: number; count: number };
 }
 
 /** A model's weights licence, as read in the research: information, never a gate (the owner's decision of 2026-10-27). */
@@ -699,6 +764,12 @@ export interface ModelDef {
   kind: MediaKind;
   tagline: string;
   badges?: Badge[];
+  /**
+   * The operations whose studios rank it in "Best for this studio" by its badges (bestForStudio), when not all of them: FLUX 3
+   * Klein is a top pick for text to image, and the Edit studio offers it without changing its Best list. A studio's default
+   * still leads its list.
+   */
+  bestOps?: Operation[];
   routes: ModelRoute[];
   options: ModelOptions;
   defaults?: Partial<Pick<GenParams, "aspectRatio" | "resolution" | "duration" | "numOutputs" | "generateAudio" | "voice" | "targetFps" | "format">>;
@@ -724,6 +795,11 @@ export interface ModelDef {
    * LTX-2.3 graphs make silent clips).
    */
   engineOptions?: Partial<Record<Engine, Partial<ModelOptions>>>;
+  /**
+   * What each engine runs when they differ, in one plain line (the owner's rule of 2026-10-30: each engine does all it
+   * can, the cloud only on hosted models, and the UI says so). Settings → Models & licences shows it under the model.
+   */
+  engineNote?: string;
   /** Hidden from pickers (used only internally by presets). */
   hidden?: boolean;
   /**
@@ -750,6 +826,15 @@ export interface GenParams {
   targetLanguage?: string;
   /** Multi-shot: shots in order (empty/undefined = one shot). "auto" lets the model cut by itself. */
   shots?: { prompt: string; duration: number }[];
+  /**
+   * @mentioned Elements as the model's elements (ModelOptions.elements, FieldMap.elements): each groups inputs.images by
+   * index (0-based; the first is its frontal view), or names one of inputs.videos (a video element).
+   */
+  elements?: { images?: number[]; video?: number }[];
+  /** Seconds of the reference clips that go in (Kling 4.0 bills them with the output: Pricing.clipInput). */
+  clipSeconds?: number;
+  /** References the provider draws itself because the run sends none (Pricing.generatedRefs); set by the plan. */
+  drawnRefs?: number;
   multiShot?: "auto";
   /** Render a cheap draft first (Seedance 2.5 draft mode). */
   draft?: boolean;
@@ -788,6 +873,11 @@ export interface GenParams {
    * many frames a frame-count route renders (LTX 2.3 clean plate / HDR, VOID; FieldMap.numFrames).
    */
   sourceDuration?: number;
+  /**
+   * The input clip's frame rate, when the caller knows it: what a clip edit billed by its frames costs (fal's Wan 2.2
+   * Fun VACE bills frames ÷ 16; src/lib/catalog/clip-windows.ts). The server's header read wins over it.
+   */
+  sourceFps?: number;
   /** Extract every Nth frame. */
   frameInterval?: number;
   /** Frame interpolation: the frame rate to reach, and a slow-motion factor (1–8; 2 = twice as long). */
@@ -856,6 +946,12 @@ export interface LoraRef {
    * off the cloud: a cloud route then leaves such a LoRA out (localOnly). Without it they are sent like any other.
    */
   keepOnGpu?: true;
+  /**
+   * The model's own adapter (Fuobe Restore's IC-LoRA): a run without it would be another model. A cloud run carries it
+   * even from a gated Hugging Face repo, as Fuobe's copy made with the user's Hugging Face token, and refuses to start
+   * without the token. Other gated LoRAs stay optional: a cloud run leaves them out with a note.
+   */
+  adapter?: true;
 }
 
 /** Scale limits of a LoRA field. */

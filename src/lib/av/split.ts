@@ -157,6 +157,17 @@ export function splitTime(o: { seconds: number; quality: SplitQuality; mode: Dbs
   };
 }
 
+/**
+ * The price line of an open-engine audio tool (Split soundtrack, Remove dialogue). A guest or an account reads
+ * "Not available here": POST /api/audio-tools answers them own-gpu-tool, so "Free" would promise a run that is
+ * refused (docs/public-signup.md).
+ */
+export function openToolPrice(p: { demo: boolean } | undefined, visitor?: boolean): string {
+  if (visitor) return "Not available here";
+  if (!p) return "…";
+  return p.demo ? "Placeholder · free" : "Free";
+}
+
 /** "about 1–2 min", "under a minute" */
 export function durationWords(r: { low: number; high: number }): string {
   if (r.high < 60) return "under a minute";

@@ -12,9 +12,9 @@ import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
 import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
-import { clipWindowProblem } from "@/lib/catalog/clip-windows";
+import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, sourceFrames } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, withoutTriggers } from "@/lib/catalog/plan";
-import { framedLength, keepMatte } from "@/lib/catalog/payload";
+import { framedLength, keepMatte, sizeValue } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
 import { dualEngine, onEngine, pickEngine } from "@/lib/catalog/engines";
 import { promptWithLoras, SOUL_MODELS, soulKind, soulLook, soulPostStep, soulPostSteps } from "@/lib/catalog/soul";
@@ -51,8 +51,11 @@ import { listElements } from "./elements";
 import { markStale } from "./gpu/snapshots";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
-import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d } from "./chains";
+import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
+import { createRegenerateRun } from "./regenerate";
+import { REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
+import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
 import { comfyLoraFiles, computerScope, onOwnGpu, outputFetch, outsideOwnGpu, OWN_OUTPUT_LIMITS, ownGpu, probeComfy, relayFile, type OwnGpu } from "./providers/comfyui";
@@ -67,7 +70,8 @@ import { checkAccountLoras } from "./account-loras";
 import { missingFilesMessage, type MissingFiles } from "@/lib/missing-files";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { graphLoras } from "@/lib/catalog/character-swap";
+import { graphLoras as h3GraphLoras } from "@/lib/catalog/character-swap";
+import { restoreGraphLoras } from "@/lib/restore-graph";
 import { ensureLorasOnComfy, prepareCloudLoras, withoutUnreachableCivitai } from "./loras";
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { offeredLoras, offeredRoutes, requireOffered } from "./model-access";
@@ -669,6 +673,24 @@ function sizedMixedFrame(plan: ReturnType<typeof planGeneration>, req: Generatio
 }
 
 /**
+ * A cloud edit that follows image 1's shape (ModelRoute.followsImage: fal's FLUX 3 Klein, whose GPU edit keeps reference 1's
+ * shape): image 1's shape on the chosen tier's square, on the route's grid and within its limits, as its size field. Without
+ * it the size would be the default aspect ratio's (a 16:9 photo back as a square). The tier, and so the price, stays the one
+ * picked. A size the request gives itself wins; a picture that isn't a file in Fuobe keeps the aspect ratio's size.
+ */
+function sizedEdit(plan: ReturnType<typeof planGeneration>, req: GenerationRequest): ReturnType<typeof planGeneration> {
+  if (plan.model.engine !== "cloud" || plan.op !== "edit") return plan;
+  const field = plan.model.routes.find((r) => r.op === "edit" && r.followsImage)?.map?.size;
+  if (!field?.key || plan.params.extra?.[field.key] !== undefined) return plan;
+  const first = req.inputs?.images?.[0];
+  const head = first ? localHead(first) : null;
+  const shape = head ? imageSize(head) : null;
+  if (!shape) return plan;
+  const fit = sizeValue(field, `${shape.width}:${shape.height}`, plan.params.resolution ?? plan.model.defaults?.resolution);
+  return { ...plan, params: { ...plan.params, extra: { ...plan.params.extra, [field.key]: fit } } };
+}
+
+/**
  * The elements "@Name" can mention: the owner's. An account's run or a visitor's price check has none, so "@Name" stays
  * words there (an owner's element photo or LoRA never reaches someone else's run).
  */
@@ -688,7 +710,7 @@ function prepare(original: GenerationRequest) {
   const model = allowed && dualEngine(allowed) ? onEngine(allowed, engineFor(allowed, onSide)) : allowed;
   const lookup = (id: string) => (model && id === model.id ? model : getModel(id));
   const req = model ? stripMotionPaths(applySketch(applyMentions(worded, model, mentionElements()).request, model).request, model) : worded;
-  let plan = sizedMixedFrame(planGeneration(req, lookup, getPreset), req);
+  let plan = sizedEdit(sizedMixedFrame(planGeneration(req, lookup, getPreset), req), req);
   if (mode !== "both" && plan.model.engine !== mode) {
     // An account on the open engine has no key of its own that opens (Your keys), or the studio is open-source only.
     const cloud = mode === "open" && tenantAccount() ? plan.model.routes.map((r) => r.provider).find(isCloudProvider) : undefined;
@@ -770,6 +792,9 @@ function prepare(original: GenerationRequest) {
   const priced = made !== undefined && plan.params.duration !== undefined ? { ...plan.params, duration: Math.round(made * 2) / 2 } : plan.params;
   return { req, plan, route, demo, providerId, notes, asked, unreachable, switchedOff: access.dropped, cost: free ? 0 : estimateCost(plan.model, priced, 1, plan.op, withLoras) };
 }
+
+/** The LoRA files a graph loads itself (not injected), so a run downloads the ones ComfyUI lacks before it starts. */
+const graphLoras = (endpoint: string, extra: Record<string, unknown> | undefined) => [...h3GraphLoras(endpoint, extra), ...restoreGraphLoras(endpoint, extra), ...regenerateGraphLoras(endpoint)];
 
 /** Operations whose clip length is the duration picked (made, or added by extend), not an input video's. */
 const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "extend", "keyframes"]);
@@ -890,6 +915,11 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   if (!original.postMade && shotModel && soulPostStep(shotModel.id, original.presetId) === "face-mosaic") {
     const waitsFor = opts.dependsOn === undefined ? undefined : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
     return createMosaicRun(original, shotModel, { batchId: opts.batchId, dependsOn: waitsFor });
+  }
+  // Open-H3 Regenerate: the draft preset from the clip's maker, and a clip over 15 s in 15 s parts joined (regenerate.ts).
+  if (shotModel?.id === REGEN_MODEL) {
+    const run = createRegenerateRun(original, shotModel, opts, createGenerations, joinClips, (id) => void cancelGeneration(id));
+    if (run) return run;
   }
   const deps = opts.dependsOn === undefined ? [] : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
   const waits = deps.length > 0;
@@ -1592,6 +1622,19 @@ async function submitNow(
         return adapter.prepareFile(f.data, f.contentType, f.name, route);
       });
     };
+    // Reference clips and clip elements a model bills with the output (Kling 4.0, Pricing.clipInput): their headers' lengths.
+    // By the clip's place in inputs.videos, so a clip element (params.elements' video) finds its own length.
+    const clipLengths: (number | undefined)[] = [];
+    const billsClips = !!plan.model.pricing?.clipInput;
+    const prepClip = async (ref: string | undefined, i: number) => {
+      if (!ref || !billsClips) return prep(ref);
+      return gate(async () => {
+        const f = await readRef(ref);
+        const facts = mediaFacts(f.data);
+        if (facts.duration) clipLengths[i] = facts.duration;
+        return adapter.prepareFile(f.data, f.contentType, f.name, route);
+      });
+    };
     const prepMask = async (ref?: string) => {
       if (!ref) return undefined;
       return gate(async () => {
@@ -1603,7 +1646,9 @@ async function submitNow(
     };
     let prompt = plan.prompt;
     const captioned = plan.model.options.promptFormat === "ideogram4";
-    if (req.params?.enhancePrompt && prompt && !captioned) {
+    // A layout's prompt is compiled boxes (plan.layout): the enhancer would rewrite them, so it never runs on one.
+    const laidOut = !!plan.layout || carriesLayout(req.params?.extra);
+    if (req.params?.enhancePrompt && prompt && !captioned && !laidOut) {
       update(id, { message: "Enhancing prompt" });
       const words = plan.soul?.words;
       const at = words ? prompt.indexOf(words) : -1;
@@ -1615,11 +1660,14 @@ async function submitNow(
       update(id, { prompt });
     }
     // Ideogram 4 reads a JSON caption (src/lib/ideogram-caption.ts): one given as the prompt (a reused run) is kept, plain
-    // words get one written. It becomes the run's prompt, as Enhance's rewrite does, so Reuse makes the same picture.
+    // words get one written. It becomes the run's prompt, as Enhance's rewrite does, so Reuse makes the same picture. A
+    // layout's words are never rewritten by the helper: they get the fixed wrapper.
     if (captioned && prompt) {
       update(id, { message: "Writing the caption" });
       const words = prompt;
-      prompt = parseCaption(words) ?? (await ideogramCaption(words, computeDimensions(plan.params.aspectRatio, plan.params.resolution, {})).catch(() => captionFromWords(words)));
+      prompt =
+        parseCaption(words) ??
+        (laidOut ? captionFromWords(words) : await ideogramCaption(words, computeDimensions(plan.params.aspectRatio, plan.params.resolution, {})).catch(() => captionFromWords(words)));
       update(id, { prompt });
     }
     // MiniMax H3 on your GPU reads its own layout (src/lib/h3-prompt.ts): the words (after any Enhance) go into it, with the
@@ -1646,7 +1694,7 @@ async function submitNow(
       audio2: await prep(req.inputs?.audio2),
       voiceAudio: await prep(req.inputs?.voiceAudio),
       voiceAudio2: await prep(req.inputs?.voiceAudio2),
-      videos: (await Promise.all((req.inputs?.videos ?? []).map(prep))).filter(Boolean) as string[],
+      videos: (await Promise.all((req.inputs?.videos ?? []).map((ref, i) => prepClip(ref, i)))).filter(Boolean) as string[],
       audios: (await Promise.all((req.inputs?.audios ?? []).map(prep))).filter(Boolean) as string[],
       model3d: await prep(req.inputs?.model3d),
       loras: plan.loras,
@@ -1661,13 +1709,45 @@ async function submitNow(
     }
     // A clip edit of a clip sent as it is (Edit video, an API call; the studios that cut clips keep to the windows
     // themselves): one outside the model's window is refused before it's paid for (Happy Horse bills 60 s and returns
-    // 15), and one that keeps the clip's length is priced for it once the header is read (a call that didn't say).
+    // 15; fal's Wan 2.2 Fun VACE takes at most 241 frames), and one that keeps the clip's length is priced for it once
+    // the header is read (a call that didn't say). A route billed by frames is priced on the header's rate as well.
     if (plan.op === "v2v" && input.sourceDuration && !req.chain?.length && req.params?.duration === undefined && providerId !== "mock" && plan.model.engine !== "open") {
-      const problem = clipWindowProblem(plan.model, input.sourceDuration);
+      const problem = clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps) ?? (input.sourceSize ? clipSizeProblem(plan.model, input.sourceSize.width, input.sourceSize.height) : null);
       if (problem) throw new Error(problem);
-      if (plan.params.sourceDuration === undefined && clipEditSeconds(plan.model, input, plan.op) !== undefined) {
-        update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });
+      const byFrames = !!sourceFrames(plan.model.id, plan.model.engine) && source.sourceFps !== undefined && source.sourceFps !== plan.params.sourceFps;
+      if ((plan.params.sourceDuration === undefined || byFrames) && clipEditSeconds(plan.model, input, plan.op) !== undefined) {
+        update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration, sourceFps: input.sourceFps }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });
       }
+    }
+    const edits = plan.op === "v2v" || plan.op === "video-swap" || plan.op === "video-insert";
+    // An edit whose route sends no length keeps the clip's own (Kling 4.0's edit, swap and insert), whatever the request
+    // said: the clip is held to the model's window, sides, shape and frame rate before it's paid for. Frame-billed routes
+    // (fal's Wan 2.2 Fun VACE) keep the rule above: their studios cut the pieces and say the length.
+    if (edits && !route.map?.duration && !req.chain?.length && providerId !== "mock" && plan.model.engine !== "open" && !sourceFrames(plan.model.id, plan.model.engine)) {
+      const problem =
+        (input.sourceDuration ? clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps) : null) ??
+        (input.sourceSize ? clipSizeProblem(plan.model, input.sourceSize.width, input.sourceSize.height) : null) ??
+        (input.sourceFps ? clipFpsProblem(plan.model, input.sourceFps) : null);
+      if (problem) throw new Error(problem);
+    }
+    // Reference clips (and clip elements) billed with the output: refused past the most the model takes in all (with the
+    // clip edited), or a clip element outside its own window, before it's paid for, and priced on their seconds once read
+    // (the plan priced the least they bill). An edit of a clip whose length the caller didn't say is priced on it (in and
+    // out) once its header is read.
+    const read = clipLengths.filter((n): n is number => n !== undefined);
+    const unpricedEdit = edits && !!input.sourceDuration && plan.params.sourceDuration === undefined;
+    if (billsClips && (read.length || unpricedEdit) && providerId !== "mock" && plan.model.engine !== "open") {
+      for (const g of plan.params.elements ?? []) {
+        const seconds = g.video !== undefined ? clipLengths[g.video] : undefined;
+        const problem = seconds !== undefined ? elementClipProblem(plan.model, seconds) : null;
+        if (problem) throw new Error(problem);
+      }
+      const seconds = read.reduce((a, b) => a + b, 0);
+      const problem = clipTotalProblem(plan.model, (edits ? (input.sourceDuration ?? 0) : 0) + seconds);
+      if (problem) throw new Error(problem);
+      if (read.length) input.clipSeconds = seconds;
+      const priced = { ...plan.params, ...(input.sourceDuration !== undefined && { sourceDuration: input.sourceDuration }), ...(read.length && { clipSeconds: seconds }) };
+      update(id, { cost_usd: estimateCost(plan.model, priced, 1, plan.op) });
     }
     // An upscale that wouldn't enlarge the clip (a 1080p clip at a default 1080p; a 4K clip would even shrink):
     // a tier the model only defaulted to moves up to the next one it offers, one the caller picked is refused.
@@ -1685,7 +1765,8 @@ async function submitNow(
       input.loras = await prepareCloudLoras(input.loras, providerId, (data, name) => adapter.prepareFile(data, "application/octet-stream", name, route), (message) => update(id, { message }));
     } else if (providerId === "comfyui" && !req.account && !computerScope() && (input.loras?.length || graphLoras(route.endpoint, input.extra).length)) {
       // (Not for an account's own ComfyUI, nor one on the owner's computer: the download writes to the install's LoRA folder.)
-      // A graph that loads its own LoRAs (Genjutsu's Character swap: the Turbo and swap LoRAs) gets them downloaded too.
+      // A graph that loads its own LoRAs (Genjutsu's Character swap: the Turbo and swap LoRAs; Restore & colourise: the
+      // gated Restore or Detail Refine IC-LoRA) gets them downloaded too.
       await ensureLorasOnComfy([...(input.loras ?? []), ...graphLoras(route.endpoint, input.extra)], await comfyLoraFiles(route), (message) => update(id, { message }));
     }
     const res = await adapter.submit({ generationId: id, model: plan.model, route, input });

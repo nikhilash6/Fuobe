@@ -1,12 +1,17 @@
 import "server-only";
+import { DUB_STEP_MODELS } from "@/lib/av/dub";
 import { SPLIT_MODEL } from "@/lib/av/split";
+import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { CLEAN_MODEL } from "@/lib/av/clean-voice";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
 import { graphLoras } from "@/lib/catalog/character-swap";
-import { PATH_MODELS } from "@/lib/catalog/cinema";
+import { BLOCKOUT_MODELS, PATH_MODELS } from "@/lib/catalog/cinema";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
-import { libraryEntry, needsToken } from "@/lib/catalog/loras";
+import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
+import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
+import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { libraryEntry, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
 import { ANGLES_2511_LORA } from "@/lib/catalog/open-tools";
 import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
@@ -83,7 +88,8 @@ export function modelTool(modelId: string, op: string): Tool | null {
   const routes = m.routes.filter((r) => r.op === op && (r.provider === "comfyui" || r.provider === "local"));
   if (!routes.length) return null;
   const workflows = [...new Set(routes.filter((r) => r.provider === "comfyui").flatMap((r) => expand(r.endpoint)))];
-  const loras = (m.options.loras ?? []).map(loraNeed);
+  // With the LoRAs a graph loads itself (Open-H3 Regenerate's refiner LoRA, which a run downloads).
+  const loras = [...(m.options.loras ?? []), ...routes.flatMap((r) => (r.provider === "comfyui" ? regenerateGraphLoras(r.endpoint) : []))].map(loraNeed);
   return {
     ref: `model:${modelId}#${op}`,
     name: m.name,
@@ -164,6 +170,23 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/character-swap", label: "Character swap", group: "Video", workflows: [STUDIO_WORKFLOWS.mask, STUDIO_WORKFLOWS.segment] },
   // Cinema's 3D scene films a still along a keyframed camera path (N7-5).
   { href: "/cinema", label: "Fly path", group: "Video", steps: [{ modelId: PATH_MODELS.open, op: "camera-path" }] },
+  // Cinema's Blockout to film on your GPU: the first frame from the references, the depth cut into windows, each window
+  // rendered by the blockout graph and handed over on its last frame, then joined. An upload without a depth pass (the
+  // usual Blender render) runs the restyle graph instead, which reads the depth with Depth Anything 3. The projects list
+  // takes ?blockout=1 on to the project picked, which opens Blockout to film.
+  {
+    href: "/cinema?blockout=1",
+    label: "Blockout to film",
+    group: "Video",
+    steps: [
+      { modelId: BLOCKOUT_MODELS.open, op: "v2v" },
+      { modelId: BLOCKOUT_MODELS.openNoDepth, op: "v2v" },
+      { modelId: BLOCKOUT_MODELS.firstFrame, op: "edit" },
+      { modelId: "oss-segment", op: "trim" },
+      { modelId: "oss-extract-frame", op: "frame" },
+      { modelId: "oss-join-encoded", op: "concat" },
+    ],
+  },
   // The turnaround (N7-6): Frames mode's start/end-frame clips joined into one film, with the sides it has no picture of
   // drawn first by the Angles app (src/lib/catalog/turnaround.ts).
   {
@@ -184,18 +207,66 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/audio/split", label: "Split soundtrack", group: "Audio", steps: [{ modelId: SPLIT_MODEL, op: "separate-audio" }] },
   // Clean up voice (NVIDIA RE-USE on ComfyUI-RE-USE).
   { href: "/audio/clean", label: "Clean up voice", group: "Audio", steps: [{ modelId: CLEAN_MODEL, op: "enhance-voice" }] },
+  // Translate & dub on the open engine: the voice split with its transcript (the default split, MelBand RoFormer; DBS
+  // needs Split soundtrack's pack and weights), the cloned voice, its timeline, lip sync and the mux. The translation
+  // runs on the local text model, not a ComfyUI graph.
+  {
+    href: "/audio/translate",
+    label: "Translate & dub",
+    group: "Audio",
+    steps: [
+      { modelId: DUB_STEP_MODELS.open.stems, op: "separate-audio" },
+      { modelId: DUB_STEP_MODELS.open.speech, op: "tts" },
+      { modelId: DUB_STEP_MODELS.open.timeline, op: "timeline" },
+      { modelId: DUB_STEP_MODELS.open.lips, op: "lipsync" },
+      { modelId: DUB_STEP_MODELS.open.mux, op: "mux" },
+    ],
+  },
   { href: "/audio/sfx", label: "Sound effects", group: "Audio", config: S.SFX_STUDIO },
   { href: "/audio/music", label: "Music", group: "Audio", config: S.MUSIC_STUDIO },
   { href: "/audio/video", label: "Sound for video", group: "Audio", config: S.FOLEY_STUDIO },
   { href: "/upscale/video", label: "Upscale video", group: "Video tools", config: S.VIDEO_UPSCALE_STUDIO },
+  // n7-3: Upscale → Video's Regenerate · creative (Open-H3 Regenerate with its refiner LoRA); a clip over 15 s is redrawn in
+  // parts joined packet by packet.
+  {
+    href: `/upscale/video?model=${REGEN_MODEL}&resolution=${REGEN_DEFAULT_TIER}`,
+    label: "Regenerate in 2K",
+    group: "Video tools",
+    steps: [
+      { modelId: REGEN_MODEL, op: "upscale-video" },
+      { modelId: REGEN_JOIN, op: "concat" },
+    ],
+  },
   { href: "/upscale/fps", label: "FPS boost", group: "Video tools", config: S.FPS_BOOST_STUDIO },
   { href: "/upscale/hdr", label: "SDR to HDR", group: "Video tools", config: S.SDR_TO_HDR_STUDIO },
   { href: "/upscale/export", label: "Export", group: "Video tools", config: S.VIDEO_EXPORT_STUDIO },
   { href: "/video-tools", label: "Remove background", group: "Video tools", config: S.VIDEO_MATTE_STUDIO },
+  // DBS D2: the split, then the stream-copy mux (one stem in place of the sound, or the voice over the lowered bed).
+  {
+    href: "/video-tools/remove-dialogue",
+    label: "Remove dialogue",
+    group: "Video tools",
+    steps: [
+      { modelId: REMOVE_DIALOGUE_MODELS.split, op: "separate-audio" },
+      { modelId: REMOVE_DIALOGUE_MODELS.mux, op: "mux" },
+    ],
+  },
   { href: "/video-tools/relight", label: "Relight", group: "Video tools", config: S.VIDEO_RELIGHT_STUDIO },
   { href: "/video-tools/depth", label: "Depth map", group: "Video tools", config: S.VIDEO_DEPTH_STUDIO },
   { href: "/video-tools/join", label: "Join clips", group: "Video tools", config: S.JOIN_CLIPS_STUDIO },
   { href: "/video-tools/colors", label: "Match colors", group: "Video tools", config: S.VIDEO_COLOR_MATCH_STUDIO },
+  // Restore & colourise (archive-restore): the tiled-fusion graph with the gated Restore IC-LoRA (the graph loads it
+  // itself), then the windows joined packet by packet (the join planRestore runs) and the sound put back. "Restore to 4K"'s Detail Refine LoRA is an option, not listed.
+  {
+    href: "/video-tools/restore",
+    label: "Restore & colourise",
+    group: "Video tools",
+    steps: [
+      { modelId: RESTORE.model, op: "restore-video", loras: [loraRef(loraEntry(RESTORE.loras.restore.key)!)] },
+      { modelId: RESTORE_OPEN_JOIN, op: "concat" },
+      { modelId: REMOVE_TOOLS.open.mux, op: "mux" },
+    ],
+  },
 ];
 
 /** A studio row's tool: its open default model on the studio's operations (or its own graphs, or its steps). */

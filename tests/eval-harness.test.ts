@@ -40,10 +40,15 @@ const shortsSessions = await import("@/app/api/shorts/sessions/route");
 const paletteLock = await import("@/app/api/palettes/lock/route");
 const evolution = await import("@/app/api/evolution/route");
 const evolutionEstimate = await import("@/app/api/evolution/estimate/route");
+const restore = await import("@/app/api/restore/route");
+const restoreEstimate = await import("@/app/api/restore/estimate/route");
 
 // The harness is plain ESM JavaScript (it runs with node, no build step).
 const evalCli = (await import("../scripts/eval/eval.mjs")) as { main: (argv: string[], io?: object) => Promise<number> };
-const cases = (await import("../scripts/eval/lib/cases.mjs")) as { loadSuite: (n: string) => Record<string, unknown>; validateAll: () => { ok: boolean; file: string; lines: string[] }[] };
+const cases = (await import("../scripts/eval/lib/cases.mjs")) as {
+  loadSuite: (n: string) => Record<string, unknown> & { cases: { presetId?: string }[]; decides?: string };
+  validateAll: () => { ok: boolean; file: string; suite?: string; runFirst?: string; lines: string[] }[];
+};
 const runner = (await import("../scripts/eval/lib/run.mjs")) as {
   runEval: (opts: object, io: object) => Promise<Record<string, unknown>>;
   routeResult: (answer: unknown, how?: string) => { id: string }[];
@@ -81,6 +86,8 @@ const ROUTES: [string, RegExp, (req: Request, m: RegExpExecArray) => Promise<Res
   ["POST", /^\/api\/palettes\/lock$/, (r) => paletteLock.POST(r)],
   ["POST", /^\/api\/evolution$/, (r) => evolution.POST(r)],
   ["POST", /^\/api\/evolution\/estimate$/, (r) => evolutionEstimate.POST(r)],
+  ["POST", /^\/api\/restore$/, (r) => restore.POST(r)],
+  ["POST", /^\/api\/restore\/estimate$/, (r) => restoreEstimate.POST(r)],
 ];
 
 let server: http.Server;
@@ -292,6 +299,21 @@ describe("the runner on the demo provider", () => {
     expect(rows.every((x) => x.outputs?.[0]?.kind === "video")).toBe(true);
   });
 
+  it("runs Fuobe Restore's suite on the demo provider: your words, and words written for the clip", async () => {
+    const r = await cli(["run", "--suite", "restore", "--engine", "demo", "--no-metrics"]);
+    expect(r.code, r.stderr).toBe(0);
+    const rows = store.latestJobs(path.join(results, runIdFrom(r.stderr)));
+    expect(rows.map((x) => [x.caseId, x.status]).sort()).toEqual([
+      ["restore/words", "succeeded"],
+      ["restore/written", "succeeded"],
+    ]);
+    const body = (id: string) => (rows.find((x) => x.caseId === id)!.request as { body: Record<string, unknown> }).body;
+    expect(body("restore/words")).toMatchObject({ engine: "open", prompt: expect.stringMatching(/natural colour$/) });
+    expect(body("restore/written")).toMatchObject({ engine: "open", hint: "a street, 1930s" });
+    expect(body("restore/written").prompt).toBeUndefined();
+    expect(rows.every((x) => x.outputs?.[0]?.kind === "video")).toBe(true);
+  });
+
   it("runs Genjutsu's Character swap on the 6 s fixture clip: the part, the character, who to swap", async () => {
     const r = await cli(["run", "--suite", "genjutsu", "--engine", "demo", "--cases", "genjutsu/character,genjutsu/character-plain", "--no-metrics"]);
     expect(r.code, r.stderr).toBe(0);
@@ -369,6 +391,17 @@ describe("the runner on the demo provider", () => {
         ["shorts/segment", "gemini-omni-flash", null],
         ["shorts/session", "gemini-omni-flash", null],
       ]);
+      // DoP's Mixed Media effects, blind: the shipped preset on Fuobe DoP against its words on Kling 2.5 Turbo (the
+      // owner's call of 2026-10-30), the first suite to run once paid keys exist, with the rule it decides by.
+      const dmm = await dry(["--suite", "dop-mixed-media", "--engine", "cloud", "--variants", "original,partner", "--seeds", "1001", "--allow-fixtures"]);
+      expect(dmm.jobs).toHaveLength(16);
+      expect(new Set(dmm.jobs.map((j) => `${j.variant}:${j.model}:${j.skip ?? ""}`))).toEqual(new Set(["original:fuobe-dop:", "partner:kling-2-5-turbo:"]));
+      const suite = cases.loadSuite("dop-mixed-media");
+      expect(suite).toMatchObject({ runFirst: "paid-keys", defaults: { candidate: "original" } });
+      expect(suite.decides).toMatch(/Kling 2\.5 Turbo takes at least two thirds .* goes back to Kling 2\.5 Turbo, in a reviewed code change/);
+      expect(cases.validateAll().filter((r) => r.runFirst === "paid-keys").map((r) => r.suite)).toEqual(["dop-mixed-media"]);
+      const { getPreset } = await import("@/lib/catalog");
+      for (const c of suite.cases) expect(getPreset(c.presetId!)?.cloud?.modelId, c.presetId).toBe("fuobe-dop");
       // A partner variant is a cloud model: on the open engine it would only repeat the Original's run.
       const open = await dry(["--suite", "genjutsu", "--engine", "open", "--variants", "partner", "--allow-fixtures"]);
       expect(open.jobs.every((j) => j.skip === "the partner variant runs on cloud only")).toBe(true);

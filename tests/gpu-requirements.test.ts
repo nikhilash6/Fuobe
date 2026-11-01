@@ -70,9 +70,10 @@ describe("requirements.json", () => {
     expect([...hosts]).toEqual(["huggingface.co"]);
   });
 
-  it("marks exactly the LTX-2.5 files as gated", () => {
+  it("marks exactly the LTX-2.5 files (the model's repo, and Lightricks' Restore and Detail Refine IC-LoRAs) and FLUX 3 Image Klein's as gated", () => {
     const gated = files.filter(([, f]) => f.gated).map(([k]) => k);
-    expect(gated.sort()).toEqual(files.filter(([, f]) => f.url.includes("/Lightricks/LTX-2.5/")).map(([k]) => k).sort());
+    const gatedUrl = (u: string) => /\/Lightricks\/LTX-2\.5(\/|-22b-IC-LoRA-(Restore|Refine-Details)\/)/.test(u) || u.includes("/black-forest-labs/flux-3-image-klein-comfy/");
+    expect(gated.sort()).toEqual(files.filter(([, f]) => gatedUrl(f.url)).map(([k]) => k).sort());
     expect(gated.length).toBeGreaterThan(0);
   });
 
@@ -108,11 +109,17 @@ describe("requirements.json", () => {
     expect(index.packs["ComfyUI-ThinkSound_Wrapper"].isolated).toBe(true);
   });
 
-  // 26 KB gzipped since Clean up voice (its pack, two weight files and two graphs: about 0.5 KB).
-  // 210 KB since Live edit (its node file, LoRA and graph: about 1.6 KB).
-  it("stays within its size budget (210 KB, 26 KB gzipped)", () => {
-    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(210 * 1024);
-    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(26 * 1024);
+  // Raised together with Restore & colourise's graph and pack (o/archive-restore), which took the index from 202.1 to
+  // 204.4 KB (24.9 to 25.3 KB gzipped), leaving the old 200 KB / 25 KB no room. Each graph adds about 1-2.5 KB raw and
+  // 0.2-0.5 KB gzipped, so 216 KB / 27 KB leaves room for the next few graphs (n7-3's among them) while still catching a
+  // build that bloats it. The server parses it once per change, and /api/gpu/requirements serves it compressed.
+  // FLUX 3 Image Klein's three graphs and seven files (nm10-flux3-klein) add about 6 KB. Clean up voice (its pack, two
+  // weight files and two graphs) adds about 0.5 KB gzipped, and Live edit (its node file, LoRA and graph) about 1.6 KB.
+  // Open-H3 Regenerate (its graph, two packs and three files) and Blockout to film's depth graph took it to 214 KB /
+  // 27.1 KB gzipped, so the budget moves to 256 KB / 32 KB: room for about fifteen more graphs before it is looked at again.
+  it("stays within its size budget (256 KB, 32 KB gzipped)", () => {
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(256 * 1024);
+    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(32 * 1024);
   });
 });
 

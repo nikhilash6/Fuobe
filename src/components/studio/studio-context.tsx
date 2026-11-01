@@ -5,6 +5,9 @@ import type { Engine, GenParams, InputSlot, MediaKind, Operation, Preset } from 
 import type { FeedFilter } from "@/lib/api";
 import type { Signature } from "@/lib/catalog/palettes";
 import type { FrameAttachment } from "@/lib/composer";
+import type { LayoutDraft } from "@/lib/layout-prompt";
+import type { UpscaleFirstStep } from "@/lib/catalog/upscale-first";
+import type { FINISH_CHOICES } from "@/lib/catalog/regenerate";
 import type { SlotValue } from "./media-slot";
 
 export type SlotKey = InputSlot["key"];
@@ -18,6 +21,10 @@ export interface StudioConfig {
   subtitle?: string;
   /** A studio that does the job in more depth, linked under the hero (Edit video → Genjutsu). */
   related?: { href: string; label: string };
+  /** Steps a tool runs before this one, then this one after it, as one job (Upscale → Restore archive footage first). */
+  firstSteps?: UpscaleFirstStep[];
+  /** Open finishing models shown side by side above the toolbar (Upscale → Video: Restore · faithful, Regenerate · creative). */
+  finishChoices?: typeof FINISH_CHOICES;
   placeholder: string;
   kind: MediaKind;
   /** Operations whose models appear in the picker. */
@@ -85,6 +92,11 @@ export interface StudioConfig {
   comfyOnly?: { note: string; alternative?: { label: string; href: string } };
   /** Frames mode (Video studio): up to 10 stills, each at its own time in the clip, instead of a start and an end frame. */
   frames?: boolean;
+  /**
+   * Layout mode (Image studio): boxes drawn on the picture, one row each (an object, a character or exact words),
+   * compiled for the model at the size it renders (src/lib/layout-prompt.ts); the prompt is the whole picture's caption.
+   */
+  layout?: boolean;
   /** A Live switch in the header (Edit): the picture changes as you type, on the viewer's own GPU (Live edit). */
   live?: boolean;
 }
@@ -105,6 +117,8 @@ export interface Draft {
   signature?: Signature;
   /** Frames mode is on (studios with `frames`): the stills in order, each at its place in the clip. */
   frames?: FrameAttachment<SlotValue>[];
+  /** Layout mode is on (studios with `layout`): the boxes, as fractions of the picture (the prompt is its caption). */
+  layout?: LayoutDraft;
 }
 
 interface Actions {

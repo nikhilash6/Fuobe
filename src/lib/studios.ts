@@ -1,6 +1,8 @@
 import { getModel } from "@/lib/catalog";
 import { SIGNATURE_MODELS } from "@/lib/catalog/palettes";
 import { FACE_MOSAIC_MODELS } from "@/lib/catalog/open-tools";
+import { UPSCALE_FIRST_STEPS } from "@/lib/catalog/upscale-first";
+import { FINISH_CHOICES } from "@/lib/catalog/regenerate";
 import type { Preset } from "@/lib/catalog/types";
 import type { StudioConfig } from "@/components/studio/studio-context";
 
@@ -16,13 +18,16 @@ export const IMAGE_STUDIO: StudioConfig = {
   pickerOps: ["t2i"],
   feed: { kind: "image", features: ["image", "edit", "app:*", "character:*"] },
   slots: [],
-  multiRef: { label: "Add ref", max: 8 },
+  // Up to 10 references where the model takes them (FLUX 3 Klein); each model's own limit caps it (composer refMax).
+  multiRef: { label: "Add ref", max: 10 },
   defaultModels: { cloud: "nano-banana-pro", open: "oss-ideogram-4" },
   // Ideogram 4 runs on a caption the install's local model writes: an account, a guest or an install with none opens on
   // Qwen-Image 2.1, the next pick (plain words give Ideogram's grey safety card on about half the pictures of people).
   uncaptioned: { open: "oss-qwen-image-21" },
   // A model's own settings (MOSS-Image's Quality, Ideogram's speed) sit under "Options".
   controlsTitle: "Options",
+  // Layout mode: boxes on the picture, one row each, read in place by MOSS-Image, FLUX.3, FLUX 3 Klein and Ideogram 4.5.
+  layout: true,
   // Color signature + Moodboard chips, and the models they can move a request to. Fuobe Soul's PixeletedFace look runs
   // the face mosaic after the picture: its step's model is known here so the price counts it before the run.
   signature: true,
@@ -45,7 +50,8 @@ export const EDIT_STUDIO: StudioConfig = {
   ops: ["edit"],
   feed: { kind: "image", features: ["edit"] },
   slots: [{ key: "image", label: "Image", accept: "image", required: true }],
-  multiRef: { label: "Add ref", max: 6 },
+  // The image and up to 9 references (FLUX 3 Klein takes 10 in all); each model's own limit caps it.
+  multiRef: { label: "Add ref", max: 9 },
   sketch: ["mask", "draw"],
   live: true,
   defaultModels: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
@@ -142,6 +148,10 @@ export const VIDEO_UPSCALE_STUDIO: StudioConfig = {
   kind: "video",
   hero: "Sharper, bigger, cleaner video",
   subtitle: "Upscale a clip to 1080p, 4K or up to 8K, and restore faces, textures and text.",
+  // Archive footage (scans, tape, black and white) is restored and colourised first: Fuobe Restore rebuilds it, then upscales.
+  firstSteps: UPSCALE_FIRST_STEPS,
+  // On your GPU: SeedVR2 "Restore · faithful" and Open-H3 "Regenerate · creative" side by side (GPU-only: nobody hosts it).
+  finishChoices: FINISH_CHOICES,
   slots: [{ key: "video", label: "Video", accept: "video", required: true }],
   defaultModels: { cloud: "topaz-video", open: "oss-seedvr2" },
   clipFacts: true,

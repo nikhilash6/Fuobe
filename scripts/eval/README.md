@@ -117,6 +117,7 @@ One JSON file per Original in `cases/`. Later Original packages add their own fi
 | `soul-id` | character and look training | your photos → train per family (Fuobe Soul, Soul Cinema, Soul HD, FLUX.1 [dev]) → scenes; a moodboard → a look | `trained`, `half-strength`, `references` | identity (style for the look), clip, aesthetic |
 | `dop` | Fuobe DoP motions and effects | the 69 the research gives a LoRA, and the 20 camera moves it gives a Fun Camera pose or an LTX camera LoRA | `catalog`, `prompt-only`, `research` (the candidate), `partner` (cloud) | temporal, clip |
 | `dop-mix` | Fuobe DoP's Mix | 5 move + effect pairs | `mix` (the candidate), `first` (the move alone) | temporal, clip |
+| `dop-mixed-media` | DoP's Mixed Media effects in the cloud, blind (**run it first once you have paid keys**: [the rule](#dops-mixed-media-effects-the-first-run-with-paid-keys)) | 8 of the 32 (Sketch, Noir, Vintage, Paper, Hand Paint with a look LoRA; Comic, Two Color, Broken Mirror on their words) on your start frame, 2 seeds | `original` (the candidate: Fuobe Mixed Media draws the still in the look, then Fuobe DoP animates it), `partner` (cloud: the preset's words on Kling 2.5 Turbo, the default before O9) | temporal, clip |
 | `genjutsu` | Genjutsu move / swap / restyle / Character swap | 7: Motion transfer and Object swap (each also on the Lite tier), Restyle, and Character swap with and without the first frame (through `/api/genjutsu`) | `original`, `partner` (cloud: each mode's own partner on fal) | temporal, clip |
 | `mixed-media` | Fuobe Mixed Media (O9) | 7 looks on one clip, 3 s at 8 fps (through `/api/mixed-media`): 3 with a look LoRA, 4 on their words | `studio` (the Original frame by frame), `smooth` (its first frame, then Wan 2.2 Fun VACE), `words` (open: the per-frame model before O9), `partner-frames` (cloud: Nano Banana 2 per frame), `fast` (cloud: LTX-2.3 Reference Restyle) | temporal, style |
 | `shorts` | Fuobe Shorts (O9) | 2: one segment from its first frame (`/api/generations`), and a 6 s session (`/api/shorts/sessions`) | `restyle` (Fuobe Shorts), `partner` (cloud: Gemini Omni Flash) | temporal, style, clip |
@@ -128,7 +129,7 @@ One JSON file per Original in `cases/`. Later Original packages add their own fi
 | `marketing` | Fuobe Marketing Image, Fuobe Try-On, the AI Influencer sheet and Instadump (O10) | 7: a Standalone product shot (the product-shot graph on your GPU; hosted Qwen-Image-Edit in the cloud), an ad's picture, a poster without a product, a try-on, the builder's sheet (through `/api/influencer`), an Instadump photo from a selfie | `original`, `partner` (cloud: GPT Image 2.5, Nano Banana Pro, Ideogram 3.0, FASHN) | clip, aesthetic, style (the product), identity (try-on, Instadump) |
 | `turnaround` | Turnaround video (N7-6) | 4 through `/api/turnaround`: four views, the front and the back (sides drawn by the Angles app), the front alone, a sheet alone (a front drawn from it) | `default` (Frames on your GPU, H3 Max references in the cloud), `keyframes` (cloud: FLUX 3 Max), `camera` (cloud: H3 Max camera controls) | identity of 8 sampled frames against the views, temporal, clip |
 
-`soul.json`, `soul-cinema.json`, `soul-hex.json`, `dop.json` and `dop-mix.json` are **generated** from the research. They come from
+`soul.json`, `soul-cinema.json`, `soul-hex.json`, `dop.json`, `dop-mix.json` and `dop-mixed-media.json` are **generated** from the research. They come from
 `docs/research/higgsfield-image-studios.json` (the look ids) and
 `docs/research/fuobe-originals-recipes-5.json` (recipes, LoRAs, Soul Cinema's recipe, the motion map).
 `soul-hex`'s palettes are Fuobe's own. Run
@@ -449,6 +450,28 @@ still lands as a diff for a person to review. Defaults stay code changes that a 
 1. Review the research JSON's diff (or edit it).
 2. Regenerate the catalog (`pnpm gen:catalog`).
 3. Measure both engines again.
+
+### DoP's Mixed Media effects: the first run with paid keys
+
+Since build plan O9, DoP's 32 Mixed Media effects run on Fuobe DoP in the cloud (Fuobe Mixed Media draws your
+still in the look, then Fuobe DoP animates it); before, they ran on their words on Kling 2.5 Turbo. The owner
+kept Fuobe DoP as the default on 2026-10-30, on one condition: the first evaluation run with paid keys compares
+the two blind. The suite says so (`"runFirst": "paid-keys"`; `pnpm eval:validate` marks it), and its `decides`
+field holds the rule:
+
+```bash
+pnpm eval:run --suite dop-mixed-media --engine cloud --variants original,partner --dry-run   # the jobs and the spend
+pnpm eval:run --suite dop-mixed-media --engine cloud --variants original,partner
+pnpm eval:review latest                                                                    # rate every pair blind
+pnpm eval:report latest                                                                    # the preference per case
+```
+
+**The rule.** Fuobe DoP stays the default unless it clearly loses: in one cloud run with at least 6 blind
+ratings per case, Kling 2.5 Turbo takes at least two thirds of all non-tie ratings, and more than half of them
+in at least 6 of the 8 cases. Then the default for all 32 effects goes back to Kling 2.5 Turbo in a reviewed code
+change (the `mixed-media-route` branch of `src/lib/catalog/dop.ts`), and `docs/STATUS.md` records the run.
+Anything less keeps Fuobe DoP. The metrics are shown beside the ratings but don't decide this one: the two
+models' clips differ in look by design (the still is redrawn first), so the people decide.
 
 ## Covers: the renders become the preview media
 

@@ -1771,6 +1771,7 @@ export const NODE_TYPES = {
   "clone-voice": CloneVoiceNode,
   translate: GeneratorNode,
   concat: GeneratorNode,
+  restore: GeneratorNode,
   table: TableNode,
   output: OutputNode,
   note: NoteNode,

@@ -706,8 +706,12 @@ export function createPipeline(steps: PipelineStep[], opts: PipelineOptions = {}
       if (a === s.key) throw new Error(`Step “${s.key}” can't wait for itself`);
       if (!keys.has(a) && !Object.hasOwn(existing, a)) throw new Error(`Step “${s.key}” waits for “${a}”, which isn't in the pipeline`);
     }
-    if (new Set(after).size !== after.length) throw new Error(`Step “${s.key}” lists the same step twice`);
     const chain = s.chain ?? s.request.chain;
+    // A step listed twice is two stems of one split (Remove dialogue's voice over its background): each slot it fills
+    // names a stem of its own. Anything else listed twice is a mistake.
+    const stemsFrom = (a: string) => after.flatMap((x, i) => (x === a ? [chain?.[i]?.stem?.toLowerCase()] : []));
+    const twice = after.filter((a, i) => after.indexOf(a) !== i);
+    if (twice.some((a) => stemsFrom(a).some((st) => !st) || new Set(stemsFrom(a)).size !== stemsFrom(a).length)) throw new Error(`Step “${s.key}” lists the same step twice`);
     if (chain && chain.length !== after.length) throw new Error(`Step “${s.key}” has ${chain.length} chain slot${chain.length === 1 ? "" : "s"} for ${after.length} earlier step${after.length === 1 ? "" : "s"}`);
     const stray = chain?.find((c) => c.stem && !AUDIO_SLOTS.has(c.slot));
     if (stray) throw new Error(`Step “${s.key}”: a stem (“${stray.stem}”) only goes into an audio slot, not “${stray.slot}”`);

@@ -44,7 +44,7 @@ import { Viewer } from "@/components/studio/viewer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useElements, useEngine, useStatus, type EngineMode } from "@/lib/api";
 import { getModel } from "@/lib/catalog";
-import { onEngine, runsOn } from "@/lib/catalog/engines";
+import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import {
   BOARD_LIMITS,
   copyPage,
@@ -589,6 +589,8 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
         // An install locked to one engine never gets a node on the other.
         const m = defaultModelForNode({ type: item.type, data }, engine) ?? (mode === "both" ? defaultModelForNode({ type: item.type, data }, engine === "open" ? "cloud" : "open") : undefined);
         if (m) data.modelId = m.id;
+        // A Fuobe Original (both engines) starts on the engine the board is on.
+        if (m && dualEngine(m) && runsOn(m, engine)) data.engine = engine;
       }
       const node: FlowNode = { id: newId(item.type), type: item.type, position: snap(at), data, selected: true };
       setNodes((ns) => [...ns.map((n) => (n.selected ? { ...n, selected: false } : n)), node]);
@@ -697,7 +699,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     [openMenuAt],
   );
 
-  const palette = useMemo(() => paletteItems(mode), [mode]);
+  const palette = useMemo(() => paletteItems(mode, engine), [mode, engine]);
   const menuItems = useMemo(() => {
     const c = menu?.connect;
     if (!c) return palette;

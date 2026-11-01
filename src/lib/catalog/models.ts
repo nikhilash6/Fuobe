@@ -1,10 +1,13 @@
 import { CLOUD_MODELS, ORIGINAL_CLOUD } from "./cloud-models.generated";
 import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
+import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
-import { CLOUD_SHAPES, denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, videoStrengthFor, type Intensity } from "./evolution";
+import { RESTORE, offlineRestorePrompt } from "./restore";
+import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
+import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
 /*
@@ -46,6 +49,11 @@ const VIDEO_UPSCALE_TIERS = ["720p", "1080p", "1440p", "2160p"];
 // ---------------------------------------------------------------------------
 // Open source · ComfyUI
 
+/** Fuobe Restore's LoRA in the cloud (research adapterLoras): Lightricks' Restore IC-LoRA, gated, sent as Fuobe's mirror. */
+const RESTORE_LORA = (() => {
+  const e = loraEntry("ltx-2-5-22b-ic-lora-restore-1-0");
+  return e ? { ...loraRef(e), adapter: true as const } : undefined;
+})();
 /** Fuobe Try-On's LoRA (research adapterLoras): xocialize's try-on LoRA for FLUX.2 [klein] 4B, Apache-2.0. */
 const TRYON_LORA = loraEntry("tryon-klein-4b");
 /** The try-on LoRA card's own instruction, for a run with no words. */
@@ -69,6 +77,19 @@ const MOSS_QUALITY: NonNullable<ModelOptions["controls"]>[number] = {
     fast: { steps: 8, cfg: 1, sampler: "euler", scheduler: "simple", unet: "moss_image_sft_8stepdmd_int8_convrot.safetensors" },
     base: { steps: 50, cfg: 3, sampler: "euler", scheduler: "simple", unet: "moss_image_base_int8_convrot.safetensors" },
   },
+};
+
+/**
+ * FLUX 3 Image Klein's Prompt helper on your GPU: BFL's upsampler (a 6.7 GB Qwen3.5 9B file) turns the words into the full
+ * caption Klein is made for (BFL: short prompts give generic pictures); off sends them as typed. A layout that places boxes
+ * always goes as typed, which the "on" label says. The cloud's flux-3-klein carries the same control (fal's prompt expansion).
+ */
+const KLEIN_PROMPT_HELPER: NonNullable<ModelOptions["controls"]>[number] = {
+  param: PROMPT_HELPER_PARAM,
+  label: "Prompt helper",
+  values: ["on", "off"],
+  default: "on",
+  labels: { on: "On · full caption (not with boxes)", off: "Off · your words as typed" },
 };
 
 type OpenSpec = Omit<ModelDef, "engine" | "badges"> & { badges?: ModelDef["badges"] };
@@ -149,6 +170,40 @@ const open: ModelDef[] = [
     routes: [{ ...comfy("edit", "qwen-image-21-live-edit", "2 steps, live"), unsized: true }],
     options: { maxImages: 4, seed: true },
     hidden: true,
+  }),
+
+  // FLUX 3 Image Klein (BFL, 2026-10-13; research #10 §6.3): text to image and edits with up to 10 references, a layout of
+  // boxes in its own table (compileFlux3), BFL's prompt helper first unless it is off. Klein Base takes your FLUX 3 Klein
+  // LoRAs. The cloud halves are flux-3-klein and flux-3-klein-base on fal. Not a default anywhere (the owner's picks stay).
+  o({
+    id: "oss-flux3-klein",
+    name: "FLUX 3 Klein",
+    vendor: "Black Forest Labs",
+    family: "flux",
+    kind: "image",
+    tagline: "BFL's open 5.6B model: images up to 4K, edits with up to 10 references, layout boxes · 16-24 GB GPU · FLUX Kommunity licence",
+    badges: ["new", "top"],
+    // The Image studio's Best list, as its brief asks; the Edit studio offers it, and its Best list stays the owner's.
+    bestOps: ["t2i"],
+    // The edit follows reference 1's shape (about 1 MP); text to image takes the aspect ratio and size.
+    routes: [
+      comfy("t2i", "flux3-klein-t2i", "16 steps; the prompt helper writes the full caption"),
+      { ...comfy("edit", "flux3-klein-edit", "16 steps, up to 10 references"), unsized: true, maxImages: 10 },
+    ],
+    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K", "4K"], maxImages: 10, seed: true, layout: "flux3", controls: [KLEIN_PROMPT_HELPER] },
+    defaults: { aspectRatio: "1:1", resolution: "1K" },
+  }),
+  o({
+    id: "oss-flux3-klein-base",
+    name: "FLUX 3 Klein Base",
+    vendor: "Black Forest Labs",
+    family: "flux",
+    kind: "image",
+    tagline: "The undistilled Klein your FLUX 3 Klein LoRAs are trained on: 50 steps with them · 16-24 GB GPU · FLUX Kommunity licence",
+    badges: ["new"],
+    routes: [comfy("t2i", "flux3-klein-base-t2i-lora", "50 steps, CFG 3.5; your LoRAs load after it")],
+    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K", "4K"], seed: true, layout: "flux3", controls: [KLEIN_PROMPT_HELPER] },
+    defaults: { aspectRatio: "1:1", resolution: "1K" },
   }),
 
   // Krea 2 text to image (its edit models come after FIBO 2's, as the owner ranks them).
@@ -714,6 +769,44 @@ const open: ModelDef[] = [
     routes: [comfy("upscale-video", "upscale-video-seedvr2-chunked", "33 frames per pass; each pass restored on its own")],
     options: { seed: true, resolutions: VIDEO_UPSCALE_TIERS },
     defaults: { resolution: "1080p" },
+  }),
+  // Open-H3 Regenerate 2K (docs/research/new-models-7.md §2): the creative finishing step beside SeedVR2's faithful one. It
+  // redraws the clip at 1080p / 2K / 4K from its words (src/lib/catalog/regenerate.ts); GPU-only, nobody hosts it.
+  o({
+    id: REGEN_MODEL,
+    name: "Open-H3 Regenerate",
+    vendor: "NVIDIA",
+    family: "minimax-h3",
+    kind: "video",
+    tagline: "Redraws a soft clip at 1080p, 2K or 4K. Details may change; motion and layout stay.",
+    badges: ["new", "4k", "audio"],
+    routes: [comfy("upscale-video", REGEN_WORKFLOW, "Built on MiniMax H3: redraws the clip at 24 fps, up to 15 s a pass, keeping its sound")],
+    options: {
+      seed: true,
+      resolutions: [...REGEN_TIERS],
+      requires: { prompt: true, msg: "Regenerate redraws the clip from words: describe what is in it" },
+      promptPlaceholder: REGEN_COPY.prompt,
+      controls: [
+        {
+          param: "creativity",
+          label: "Creativity",
+          values: ["close", "balanced", "detail"],
+          default: "balanced",
+          labels: { close: "Close", balanced: "Balanced", detail: "More detail" },
+          // The refine's start noise: 0 is the release grid (0.909), which redraws the most.
+          sets: { close: { startSigma: 0.7 }, balanced: { startSigma: 0.8 }, detail: { startSigma: 0 } },
+        },
+        {
+          param: "speed",
+          label: "Speed",
+          values: ["standard", "faster"],
+          default: "standard",
+          labels: { standard: "3 steps", faster: "Faster · 2 steps" },
+          sets: { standard: { steps: 3 }, faster: { steps: 2 } },
+        },
+      ],
+    },
+    defaults: { resolution: REGEN_DEFAULT_TIER },
   }),
   o({
     id: "oss-upscale-video-esrgan",
@@ -1315,6 +1408,25 @@ const open: ModelDef[] = [
     defaults: { aspectRatio: "16:9", resolution: "480p", duration: 5 },
     hidden: true,
   }),
+  // Blockout to film (package blockout-film): the grey box's own depth drives Wan 2.2 Fun VACE from a first frame drawn
+  // from the references, one 81-frame window per job (Cinema's Blockout chains the windows). Ref2v: Canvas's "Blockout →
+  // film" template hands it the depth clip and the first frame as references.
+  o({
+    id: "oss-wan22-vace-blockout",
+    name: "Wan 2.2 Fun VACE Blockout",
+    vendor: "Alibaba Wan",
+    family: "wan",
+    kind: "video",
+    tagline: "Renders a grey-box blockout from its depth and a first frame: camera, blocking and timing kept · 24 GB GPU · Apache-2.0",
+    badges: ["new"],
+    routes: [
+      comfy("v2v", "video-blockout-wan22-fun-vace", "video = the blockout's depth (near = bright); image = the first frame; Lightx2v 4-step"),
+      comfy("ref2v", "video-blockout-wan22-fun-vace", "the depth clip and the first frame as references"),
+    ],
+    options: { aspectRatios: VID_AR, resolutions: ["480p", "720p"], durations: [3, 4, 5], seed: true, negativePrompt: true, maxImages: 1, maxVideos: 1 },
+    defaults: { aspectRatio: "16:9", resolution: "480p", duration: 5 },
+    hidden: true,
+  }),
   o({
     id: "oss-mixed-media",
     name: "Z-Image Mixed Media",
@@ -1415,6 +1527,19 @@ const open: ModelDef[] = [
     tagline: "Splits the voice from the music and effects, and transcribes the voice with timings · 8 GB GPU · MIT / Apache-2.0",
     badges: ["new"],
     routes: [comfy("separate-audio", "dub-prepare-separate-transcribe", "voice stem, background stem, timed cues, transcript")],
+    options: {},
+  }),
+  // DBS D3: the open dub's first step with DBS for the split (graph B, docs/research/dbs-separation-7.md §4.4): the
+  // background keeps the score, the sound effects and any singing. Translate & dub's "Voice split" picks it.
+  o({
+    id: "oss-dbs-voice-separate",
+    name: "DBS + Qwen3-ASR",
+    vendor: "Open source",
+    family: "dbs",
+    kind: "audio",
+    tagline: "Splits the dialogue from the music and effects (the split runs on a CPU) and transcribes it with timings · 8 GB GPU for the transcript · Apache-2.0",
+    badges: ["new"],
+    routes: [comfy("separate-audio", "dub-prepare-dbs-transcribe", "voice stem, background stem (FLAC), timed cues, transcript; ComfyUI-DBS + ComfyUI-QwenASR")],
     options: {},
   }),
   // DBS (docs/research/dbs-separation-7.md): dialogue, music and effects from any soundtrack, small enough for a CPU. The
@@ -1957,7 +2082,7 @@ const DOP_OPTIONS: ModelOptions = {
   requires: { images: 1, msg: "Add a start frame: Fuobe DoP moves the camera through your picture" },
 };
 
-/** Fuobe Evolution's change intensity as a composer control on one engine's own field (the GPU's denoise, fal's video_strength). */
+/** Fuobe Evolution's change intensity as a composer control on the GPU graph's own field (its denoise; fal's hosted VACE has none). */
 function intensityControl(param: string, value: (i: Intensity) => number): NonNullable<ModelOptions["controls"]>[number] {
   return {
     param,
@@ -2084,28 +2209,37 @@ const originals: ModelDef[] = [
     options: { seed: true, negativePrompt: true, resolutions: ["480p", "720p"], maxImages: 4 },
   }),
   // Fuobe Evolution (O13): Higgsfield Evolution's Original (src/lib/catalog/evolution.ts plans the segments, the direction
-  // frame and the sound; Video tools → Evolution is its studio). The change intensity is the denoise the GPU graph starts
-  // from, and LTX-2.3's video_strength (1 − denoise) in the cloud: one control, each engine's own field.
+  // frame and the sound; Video tools → Evolution is its studio). Wan 2.2 Fun VACE on both engines: the graph on your GPU,
+  // fal's hosted depth route in the cloud (since the owner's call of 2026-10-30; LTX-2.3 before). The change intensity is
+  // the denoise the GPU graph starts from; fal's route has no such field, so in the cloud the change shapes only the
+  // direction frame Evolution makes, and the composer has no Change control there.
   {
     ...original({
       id: EVOLUTION.model,
       open: [comfy("v2v", "video-evolution-wan22-fun-vace", "Wan 2.2 Fun VACE from the noised segment, depth control, image = the direction frame; ≤81 frames at 16 fps")],
-      tagline: "Takes your clip further in a creative direction · Wan 2.2 Fun VACE free on your GPU (24 GB), or LTX-2.3 on fal",
-      options: { seed: true, negativePrompt: true, aspectRatios: [...CLOUD_SHAPES], resolutions: EVOLUTION_RESOLUTIONS.cloud, maxImages: 0 },
+      tagline: "Takes your clip further in a creative direction · Wan 2.2 Fun VACE free on your GPU (24 GB), or hosted on fal (there the change level shapes the direction frame only)",
+      options: {
+        seed: true,
+        negativePrompt: true,
+        resolutions: EVOLUTION_RESOLUTIONS.cloud,
+        maxImages: 1,
+        imageLabels: ["direction frame (optional: the clip's first frame as it should look)"],
+      },
     }),
-    defaults: { aspectRatio: "16:9", duration: 5, resolution: EVOLUTION_DEFAULT_RESOLUTION.cloud },
-    engineDefaults: { open: { resolution: EVOLUTION_DEFAULT_RESOLUTION.open, aspectRatio: "auto" } },
+    // The cloud half renders the clip's own frames (match_input_num_frames) and is priced on them (clip-windows.ts):
+    // only the GPU half asks for a length.
+    defaults: { resolution: EVOLUTION_DEFAULT_RESOLUTION.cloud },
+    engineNote: "Both engines run Wan 2.2 Fun VACE with a direction frame per segment; in the cloud the change level shapes the direction frame only, and how much of the clip's own look stays is set on your GPU only",
+    engineDefaults: { open: { resolution: EVOLUTION_DEFAULT_RESOLUTION.open, aspectRatio: "auto", duration: 5 } },
     engineOptions: {
       open: {
         aspectRatios: ["auto", ...VID_AR],
         resolutions: EVOLUTION_RESOLUTIONS.open,
         durations: [3, 4, 5],
-        maxImages: 1,
         imageLabels: ["direction frame (the clip's first frame as it should look)"],
         controls: [intensityControl("denoise", denoiseFor)],
         requires: { images: 1, msg: "Add the direction frame: the clip's first frame as it should look (Video tools → Evolution makes it for you)" },
       },
-      cloud: { controls: [intensityControl("video_strength", videoStrengthFor)] },
     },
   },
   // Character swap (Openjutsu, Akatz Labs' H3 Character Swap): MiniMax H3 with the Character Swap LoRA. On your GPU the
@@ -2134,6 +2268,9 @@ const originals: ModelDef[] = [
     // Qwen-Image 2.1's edit graph reads up to four pictures and keeps the first one's shape. Neither of its graphs takes a
     // negative prompt, so the open half has none (the hosted half keeps it).
     engineOptions: { open: { maxImages: 4, negativePrompt: false } },
+    // The Standalone recipe's graph has no hosted copy (nothing hosted puts the cut-out on white): it stays the GPU's, and
+    // in the cloud Marketing's Standalone format lists the Original as running on your GPU only (marketing.ts).
+    engineNote: "A Standalone shot from one product photo runs on your GPU only (cut out, put on white and relit into the scene); in the cloud, the Standalone format offers partner models instead",
   },
   {
     ...original({
@@ -2203,10 +2340,12 @@ const originals: ModelDef[] = [
     ...original({
       id: "fuobe-speak",
       open: [{ ...comfy("avatar", "infinitetalk-wanwrapper", "InfiniteTalk + FusioniX, 25 steps, shift 10, guidance 5 / 5, 15 motion frames"), extra: { ...SPEAK_GRAPH }, loraSlot: true }],
-      tagline: "A portrait speaks your voice track, lips, face and head in sync, long takes · InfiniteTalk + FusioniX free on your GPU (16 GB), or hosted on fal",
+      tagline: "A portrait speaks your voice track, lips, face and head in sync, long takes · InfiniteTalk + the FusioniX LoRA free on your GPU (16 GB), or fal's InfiniteTalk without the LoRA",
       options: { resolutions: ["480p", "720p"], seed: true, maxImages: 1, promptOptional: true, defaultPrompt: SPEAK_PROMPT },
     }),
     engineDefaults: { open: { aspectRatio: "auto" } },
+    // fal's InfiniteTalk endpoints (and Replicate) take no LoRA (checked 2026-11-01: research studios[speak].original.cloud).
+    engineNote: "Your GPU adds FusioniX to InfiniteTalk; the cloud runs InfiniteTalk without it",
     // The GPU graph frames the portrait itself (its shape by default); the LoRA is the recipe's, downloaded before a run.
     engineOptions: { open: { aspectRatios: ["auto", ...VID_AR], negativePrompt: true, ...(SPEAK_LORA && { loras: [SPEAK_LORA] }) } },
   },
@@ -2221,6 +2360,36 @@ const originals: ModelDef[] = [
     }),
     engineDefaults: { open: { aspectRatio: "9:16" } },
     engineOptions: { open: { aspectRatios: VID_AR, resolutions: ["480p", "720p"] } },
+  },
+  // Fuobe Restore (package archive-restore): Restore & colourise archive footage with Lightricks' Restore IC-LoRA. On your GPU
+  // LTX-2.5 22B distilled with per-step tiled fusion (src/lib/restore-graph.ts: a whole clip in one pass up to 20 s; Video
+  // tools → Restore runs any clip in chained 97-frame windows, src/lib/catalog/restore.ts); in the cloud fal's LTX-2.3 22B
+  // reference video to video with the same LoRA by Fuobe's mirror, one untiled pass. The GPU graph loads its LoRA itself.
+  {
+    ...original({
+      id: RESTORE.model,
+      open: [comfy("restore-video", RESTORE.workflow, "LTX-2.5 22B distilled + the Restore IC-LoRA, 960x544 tiles fused every step, 8 steps; stage 2 the Detail Refine IC-LoRA")],
+      tagline:
+        "Old, faded or black-and-white footage back in colour and sharp · Lightricks' Restore IC-LoRA on LTX-2.5, free on your GPU (24 GB class), or on LTX-2.3 hosted on fal",
+      options: {
+        promptOptional: true,
+        defaultPrompt: offlineRestorePrompt().prompt,
+        negativePrompt: true,
+        seed: true,
+        maxImages: 1,
+        imageLabels: ["reference picture: true colours, a face or a sign (optional)"],
+      },
+    }),
+    // The cloud renders at a tier's size for the clip's shape, and its image is the first frame (already in colour).
+    engineDefaults: { cloud: { aspectRatio: "4:3", resolution: RESTORE.cloudResolution } },
+    engineOptions: {
+      cloud: {
+        aspectRatios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+        resolutions: [...RESTORE.cloudResolutions],
+        imageLabels: ["first frame, already in colour (optional)"],
+        ...(RESTORE_LORA && { loras: [RESTORE_LORA] }),
+      },
+    },
   },
 ];
 

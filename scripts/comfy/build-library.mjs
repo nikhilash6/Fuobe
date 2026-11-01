@@ -68,8 +68,14 @@ export const LOADER_FOLDERS = {
   // comfyui-oss-4 additions
   OpticalFlowLoader: { model_name: 'optical_flow' },
   LoadMoGeModel: { model_name: 'geometry_estimation' },
+  // archive-restore: Lightricks' IC-LoRA loader (ComfyUI-LTXVideo)
+  LTXICLoRALoaderModelOnly: { lora_name: 'loras' },
   // MiniMax H3 video: larryvrh's turbo LoRA loader (ComfyUI-MiniMax-H3-Turbo) reads models/loras.
   MiniMaxH3TurboLoRA: { lora_name: 'loras' },
+  // Open-H3 Regenerate (rdh9616's pack): the merged refiner LoRA, LBH's latent upscaler and NVIDIA's fast H3 VAE decoder.
+  OpenH3RegenLora: { lora_name: 'loras' },
+  OpenH3RegenUpscale: { model_name: 'latent_upscale_models' },
+  OpenH3RegenFastVAEDecode: { vae_name: 'vae' },
   // Clean up voice: ComfyUI-RE-USE's loader reads models/reuse.
   REUSELoader: { model: 'reuse' },
 };
@@ -99,9 +105,13 @@ const NUMERIC_DEFAULT_KEYS = [
   'megapixels',
   // Originals O11
   'motionFrame', 'audioCfg', 'threshold', 'mosaicScale',
+  // archive-restore
+  'windowStart', 'windowFrames', 'prefixFrames', 'canvasWidth', 'canvasHeight', 'tileWidth', 'tileHeight', 'tileFrames',
 ];
 export const BINDING_KEYS = new Set([
   'prompt', 'negativePrompt', 'image', 'image2', 'image3', 'image4', 'mask', 'endImage', 'video', 'audio',
+  // nm10-flux3-klein: FLUX 3 Image Klein's edit takes up to 10 references
+  'image5', 'image6', 'image7', 'image8', 'image9', 'image10',
   'width', 'height', 'frames', 'fps', 'seed', 'steps', 'cfg', 'guidance', 'denoise', 'shift',
   'loraHigh', 'loraLow', 'lora', 'loraStrength', 'upscaleModel', 'scale', 'duration', 'lyrics', 'tags',
   // library extensions
@@ -139,10 +149,16 @@ export const BINDING_KEYS = new Set([
   'separationModel', 'channels',
   // MOSS-Image (docs/research/new-models-7.md §4.6): the KSampler's sampler and the UNET file its Quality / Fast settings pick
   'sampler', 'unet',
+  // archive-restore (Restore & colourise): the window, the canvas, the prefix hand-off, deinterlacing and the fusion tiles
+  'windowStart', 'canvasWidth', 'canvasHeight', 'fieldWidth', 'fieldHeight', 'prefixFrom', 'prefixFrames', 'tileWidth', 'tileHeight', 'streaming', 'tileFrames',
   // The owner's SOTA image families (2026-10-31): Ideogram 4's sampling preset
   'preset',
+  // Open-H3 Regenerate (n7-3): the pack's output size and draft size (its combo strings) and the refine's start noise
+  'resolution', 'draftSize', 'startSigma',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
+  // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
+  'invertDepth',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.
@@ -368,7 +384,7 @@ async function main() {
       const size = await hfSize(known.url, sizeCache);
       if (size && typeof size === 'object' && size.error) errs.push(`model ${file}: ${known.url} -> ${size.error}`);
       const bytes = typeof size === 'number' ? size : size?.size;
-      models.set(file, { file, folder: known.folder, url: known.url, sizeGb: bytes ? gb(bytes) : null, ...(optional && { optional: true }) });
+      models.set(file, { file, folder: known.folder, url: known.url, sizeGb: bytes ? gb(bytes) : null, ...(size?.gated && { gated: true }), ...(optional && { optional: true }) });
     }
 
     // ---- custom nodes

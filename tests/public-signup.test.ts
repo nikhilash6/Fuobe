@@ -237,6 +237,9 @@ describe("accounts never run on the owner's keys or GPU", () => {
       // A run route that ignores ?preview=1 isn't a price check.
       "/api/cinema/projects/p1/generate?preview=1",
       "/api/faceless/episodes/e1/estimate",
+      // Restore & colourise (o/archive-restore): its run and its prompt writer.
+      "/api/restore",
+      "/api/restore/prompt",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
@@ -249,6 +252,7 @@ describe("accounts never run on the owner's keys or GPU", () => {
     for (const [method, p] of [
       ["POST", "/api/generations?preview=1"],
       ["POST", "/api/ads/estimate"],
+      ["POST", "/api/restore/estimate"],
       ["POST", "/api/assist/skills/s1/estimate"],
       ["POST", "/api/auth/logout"],
     ]) {
