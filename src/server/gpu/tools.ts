@@ -26,6 +26,9 @@ import * as S from "@/lib/studios";
 import type { StudioConfig } from "@/components/studio/studio-context";
 import { loadIndex } from "./index-file";
 
+/** Qwen-Image 2.1 on a 16 GB card: the small encoder's model (src/lib/qwen21-speed.ts). */
+const QWEN21_SMALL_MODEL = "oss-qwen-image-21-small";
+
 /** The open engine's Join clips (a turnaround's quarter turns become one film). */
 const JOIN_CLIPS_MODEL = "oss-join-clips";
 
@@ -161,6 +164,18 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/image", label: "Image", group: "Images", config: S.IMAGE_STUDIO },
   { href: "/edit", label: "Edit", group: "Images", config: S.EDIT_STUDIO },
   { href: "/inpaint", label: "Inpaint", group: "Images", config: S.INPAINT_STUDIO },
+  // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): text to image and edits on Zen Image Edit's small encoder, which the
+  // Image and Edit studios pick by themselves under 20 GB once it is ready (Options → GPU on Auto). The row's page opens the Image
+  // studio on Qwen-Image 2.1.
+  {
+    href: "/image/small-gpu",
+    label: "Image on a 16 GB GPU",
+    group: "Images",
+    steps: [
+      { modelId: QWEN21_SMALL_MODEL, op: "t2i" },
+      { modelId: QWEN21_SMALL_MODEL, op: "edit" },
+    ],
+  },
   { href: "/upscale", label: "Upscale", group: "Images", config: S.UPSCALE_STUDIO },
   { href: "/video", label: "Video", group: "Video", config: S.VIDEO_STUDIO },
   { href: "/motion-control", label: "Motion control", group: "Video", config: S.MOTION_CONTROL_STUDIO },

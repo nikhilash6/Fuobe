@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-01T17:57:33.515Z",
-  "comfyuiCommit": "5841c187a76ffdb565c14d9565aacbdb9a54b056",
-  "comfyuiVersion": "0.42.0",
-  "workflowTemplatesVersion": "0.11.93",
-  "frontendVersion": "1.57.1",
+  "generatedAt": "2026-11-01T22:02:19.203Z",
+  "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
+  "comfyuiVersion": "0.41.0",
+  "workflowTemplatesVersion": "0.11.86",
+  "frontendVersion": "1.55.17",
   "workflows": [
     {
       "id": "flux1-dev-t2i",
@@ -10643,6 +10643,12 @@
             "input": "steps"
           }
         ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "9",
@@ -10684,13 +10690,20 @@
           "folder": "vae",
           "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
           "sizeGb": 0.68
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
         }
       ],
       "customNodes": [],
       "vramGb": 20,
-      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only",
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
       "validated": false,
-      "notes": "The Qwen-Image 2.1 text-to-image workflow, its subgraph flattened: int8 model, Qwen3-VL 8B int8 text encoder (type qwen_image), TextEncodeQwenImage21 (no negative, resolution 1024, no images), EmptyLatentImage, KSampler 25 steps, cfg 1, euler, simple, denoise 1. Removed: the ResolutionSelector (width/height bind the latent, multiples of 32, native up to 2048x2048) and the SaveImageAdvanced (SaveImage after SplitImageWithAlpha, as the Qwen 2.1 VAE decodes four channels). cfg 1: no negative prompt."
+      "notes": "The Qwen-Image 2.1 text-to-image workflow, its subgraph flattened: int8 model, Qwen3-VL 8B int8 text encoder (type qwen_image), TextEncodeQwenImage21 (no negative, resolution 1024, no images), EmptyLatentImage, KSampler 25 steps, cfg 1, euler, simple, denoise 1. Removed: the ResolutionSelector (width/height bind the latent, multiples of 32, native up to 2048x2048) and the SaveImageAdvanced (SaveImage after SplitImageWithAlpha, as the Qwen 2.1 VAE decodes four channels). cfg 1: no negative prompt. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
       "id": "qwen-image-21-edit",
@@ -10741,28 +10754,16 @@
             "input": "steps"
           }
         ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "90",
             "input": "filename_prefix"
-          }
-        ],
-        "maxDimension": [
-          {
-            "node": "20",
-            "input": "largest_size"
-          },
-          {
-            "node": "21",
-            "input": "largest_size"
-          },
-          {
-            "node": "22",
-            "input": "largest_size"
-          },
-          {
-            "node": "23",
-            "input": "largest_size"
           }
         ]
       },
@@ -10797,13 +10798,20 @@
           "folder": "vae",
           "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
           "sizeGb": 0.68
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
         }
       ],
       "customNodes": [],
       "vramGb": 20,
-      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only",
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
       "validated": false,
-      "notes": "The 25-step Qwen-Image 2.1 edit behind the site's preview pictures, with the references wired as in the Qwen-Image 2.1 image-edit workflow: each image scaled to 2048 on its long side (lanczos), all of them on one TextEncodeQwenImage21 (images.image_1..4, resolution 0 = each at its own size on the 32 grid, vae linked, no negative), its latent (image 1's size: no custom-size latent, which shifts the edit), QwenImage21Cache auto, KSampler 25 steps, cfg 1, euler, simple. Output follows image 1 (2048 on the long side). Images 2-4 are optional: Fuobe leaves out the branch of a reference not given. Prompt: one plain instruction, then one keep clause pointing at the picture (\"Keep ... exactly as in image 1\"); refer to references as image 1/2/3/4. Removed: the ComfySwitchNode custom size, compare and note nodes. It and qwen-image-21-turbo-edit made 133 of the site's preview edits."
+      "notes": "The 25-step Qwen-Image 2.1 edit behind the site's preview pictures, with the references wired as in the Qwen-Image 2.1 image-edit workflow: each image scaled to 2048 on its long side (lanczos), all of them on one TextEncodeQwenImage21 (images.image_1..4, resolution 0 = each at its own size on the 32 grid, vae linked, no negative), its latent (image 1's size: no custom-size latent, which shifts the edit), QwenImage21Cache auto, KSampler 25 steps, cfg 1, euler, simple. Output follows image 1 (2048 on the long side). Images 2-4 are optional: Fuobe leaves out the branch of a reference not given. Prompt: one plain instruction, then one keep clause pointing at the picture (\"Keep ... exactly as in image 1\"); refer to references as image 1/2/3/4. Removed: the ComfySwitchNode custom size, compare and note nodes. It and qwen-image-21-turbo-edit made 133 of the site's preview edits. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
       "id": "qwen-image-21-turbo-edit",
@@ -10848,28 +10856,16 @@
             "input": "noise_seed"
           }
         ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "90",
             "input": "filename_prefix"
-          }
-        ],
-        "maxDimension": [
-          {
-            "node": "20",
-            "input": "largest_size"
-          },
-          {
-            "node": "21",
-            "input": "largest_size"
-          },
-          {
-            "node": "22",
-            "input": "largest_size"
-          },
-          {
-            "node": "23",
-            "input": "largest_size"
           }
         ]
       },
@@ -10902,13 +10898,20 @@
           "folder": "vae",
           "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
           "sizeGb": 0.68
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
         }
       ],
       "customNodes": [],
       "vramGb": 20,
-      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only",
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
       "validated": false,
-      "notes": "The Qwen-Image 2.1 turbo image-edit workflow, as the site's fast preview edits run it: turbo int8 model, the fixed 8-step ManualSigmas schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder's latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there)."
+      "notes": "The Qwen-Image 2.1 turbo image-edit workflow, as the site's fast preview edits run it: turbo int8 model, the fixed 8-step ManualSigmas schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder's latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
       "id": "qwen-image-21-live-edit",
@@ -11061,6 +11064,12 @@
             "input": "steps"
           }
         ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "90",
@@ -11096,6 +11105,13 @@
           "folder": "vae",
           "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
           "sizeGb": 0.68
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
         }
       ],
       "customNodes": [
@@ -11105,9 +11121,9 @@
         }
       ],
       "vramGb": 20,
-      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; AusBoss nodes MIT",
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
       "validated": false,
-      "notes": "The AusBoss pack's example \"Qwen Image 2.1 Inpaint (AusBoss)\", its two subgraphs flattened: Crop For Inpaint (context 1.6, blend 8 px, multiple 32, 1.5 MP, bicubic) -> GrowMask 8 on the crop's mask -> StringFormat \"{a} Keep everything else exactly the same.\" -> TextEncodeQwenImage21 with the crop as image 1 (resolution 0) -> VAEEncode of the crop + SetLatentNoiseMask -> QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> SplitImageWithAlpha -> Stitch Inpaint (classic, no colour match) back into the full picture. mask = separate uploaded PNG, same size as image, read from the RED channel: white = change (as flux1-fill-inpaint). Removed: Mask by Touch and its SAM 3.1 model (the mask is uploaded), the speed LoRA (off in the example), the crop/pad loader (LoadImage), compare, timer and notes. Prompt: say what goes in the painted area like asking a person (\"Replace the cup with a glass of orange juice\")."
+      "notes": "The AusBoss pack's example \"Qwen Image 2.1 Inpaint (AusBoss)\", its two subgraphs flattened: Crop For Inpaint (context 1.6, blend 8 px, multiple 32, 1.5 MP, bicubic) -> GrowMask 8 on the crop's mask -> StringFormat \"{a} Keep everything else exactly the same.\" -> TextEncodeQwenImage21 with the crop as image 1 (resolution 0) -> VAEEncode of the crop + SetLatentNoiseMask -> QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> SplitImageWithAlpha -> Stitch Inpaint (classic, no colour match) back into the full picture. mask = separate uploaded PNG, same size as image, read from the RED channel: white = change (as flux1-fill-inpaint). Removed: Mask by Touch and its SAM 3.1 model (the mask is uploaded), the speed LoRA (off in the example), the crop/pad loader (LoadImage), compare, timer and notes. Prompt: say what goes in the painted area like asking a person (\"Replace the cup with a glass of orange juice\"). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
       "id": "qwen-image-21-outpaint",
@@ -11184,6 +11200,12 @@
             "input": "steps"
           }
         ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
         "filenamePrefix": [
           {
             "node": "90",
@@ -11231,6 +11253,13 @@
           "folder": "loras",
           "url": "https://huggingface.co/ausboss/Qwen-Image-2.1-Outpaint-LoRA/resolve/main/qwen-image-2.1-outpaint-v2.safetensors",
           "sizeGb": 0.16
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
         }
       ],
       "customNodes": [
@@ -11240,9 +11269,1464 @@
         }
       ],
       "vramGb": 20,
-      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; outpaint LoRA by AusBoss under the same licence; AusBoss nodes MIT",
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; outpaint LoRA by AusBoss under the same licence; AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
       "validated": false,
-      "notes": "The Qwen-Image 2.1 outpaint workflow (v12) as the site's Expand previews run it: Crop + Rotate + Pad puts the photo on a gray (#808080) canvas grown by the pads (feather 12, scaled to 1 MP on the 32 grid) -> outpaint-v2 LoRA at 1 -> Qwen3-VL 8B (the same text encoder, TextGenerate, the workflow's instruction, seed fixed) describes the picture, \"Outpaint the image: ... Scene:\" leads -> TextEncodeQwenImage21 with the canvas as image 1 -> KSampler 25 steps, cfg 1, euler, simple, no noise mask (it drew a box at the seam) -> SplitImageWithAlpha -> Stitch Inpaint (blend in, tone match 1) -> scaled to the full-size padded canvas, and the original photo composited back on top (second pad node, feather 48). Pads are the input photo's pixels (multiples of 8); defaults 384/288/384/288 = a 1.5x zoom-out of a 1536x1152 photo. Grow at most about the photo's own size per side per run. prompt = the optional \"what goes there\" hint (the lead-in \"Also include in the prompt:\" is added); it must not name the subject, which then appears again in the margin. Removed: AusBoss Seed/Text/Compare/RunTimer/ShowText/WorkflowNote and its SaveImage (SaveImage)."
+      "notes": "The Qwen-Image 2.1 outpaint workflow (v12) as the site's Expand previews run it: Crop + Rotate + Pad puts the photo on a gray (#808080) canvas grown by the pads (feather 12, scaled to 1 MP on the 32 grid) -> outpaint-v2 LoRA at 1 -> Qwen3-VL 8B (the same text encoder, TextGenerate, the workflow's instruction, seed fixed) describes the picture, \"Outpaint the image: ... Scene:\" leads -> TextEncodeQwenImage21 with the canvas as image 1 -> KSampler 25 steps, cfg 1, euler, simple, no noise mask (it drew a box at the seam) -> SplitImageWithAlpha -> Stitch Inpaint (blend in, tone match 1) -> scaled to the full-size padded canvas, and the original photo composited back on top (second pad node, feather 48). Pads are the input photo's pixels (multiples of 8); defaults 384/288/384/288 = a 1.5x zoom-out of a 1536x1152 photo. Grow at most about the photo's own size per side per run. prompt = the optional \"what goes there\" hint (the lead-in \"Also include in the prompt:\" is added); it must not name the subject, which then appears again in the margin. Removed: AusBoss Seed/Text/Compare/RunTimer/ShowText/WorkflowNote and its SaveImage (SaveImage). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-t2i-draft",
+      "title": "Qwen-Image 2.1 Text to Image · 2 steps, DMD2 LoRA v1.5",
+      "capability": "t2i",
+      "file": "qwen-image-21-t2i-draft.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-t2i-draft.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "4",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "5",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "5",
+            "input": "height"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "9",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "width": 1024,
+        "height": 1024
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-DMD2-2steps-v1.5.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights_v1_5.safetensors",
+          "sizeGb": 0.07
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; linoyts' DMD2 2-step LoRA v1.5, a derivative of Qwen-Image 2.1 under the same Qwen Research License (card and NOTICE); Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"draft\" on qwen-image-21-t2i: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. linoyts/Qwen-Image-2.1-DMD2-2steps @ 5bae2836, pytorch_lora_weights_v1_5 (2026-10-30: better prompt adherence and edit fidelity than v1, same settings): rank 32, attention only, trained on fixed sigmas [1.0, 0.5] with no shift, CFG 1. ManualSigmas \"1.0, 0.5, 0.0\" as the card says (resolution independent). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-t2i-fast",
+      "title": "Qwen-Image 2.1 Text to Image · 4 steps, LightX2V Lightning LoRA",
+      "capability": "t2i",
+      "file": "qwen-image-21-t2i-fast.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-t2i-fast.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "4",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "5",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "5",
+            "input": "height"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "sigmas": [
+          {
+            "node": "73",
+            "input": "sigmas"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "9",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "width": 1024,
+        "height": 1024
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-Lightning-4steps.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/6b0a1176327c01522a44276c5da67331a025b6fc/pytorch_lora_weights.safetensors",
+          "sizeGb": 0.07
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; LightX2V Lightning LoRA: no licence in the repository (no LICENSE file, empty card tag; comfyui-wiki says Apache-2.0); a Qwen-Image 2.1 adapter, so the base's Qwen Research License applies to what it runs on; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"fast\" on qwen-image-21-t2i: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. lightx2v/Qwen-Image-2.1-Lightning @ 6b0a1176 (DMD, trained on 16 Ascend 910B NPUs): 4 steps at CFG 1 on the card's training schedule [1.0, 0.75, 0.5, 0.25] with exponential dynamic shifting (base_shift 0.5, max_shift 0.9, 256-8192 tokens of 16 px). ManualSigmas holds that schedule shifted for the canvas (text to image: 1 MP, 1.0, 0.857192, 0.666756, 0.400096, 0; edits: a 2048 square, 1.0, 0.917701, 0.787999, 0.553369, 0, since ImageScaleToMaxDimension scales image 1 to 2048 on its long side); Fuobe binds sigmas for the run's own canvas with the same shift. Chosen over the official Fun Acc 4-step LoRA, which needs VideoX-Fun's parallel-decoding output head and norm overrides (not a plain LoRA in ComfyUI). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-t2i-details",
+      "title": "Qwen-Image 2.1 Text to Image · 6 steps, P-Q-Image v0.2 upsampled LoRA (writes the details)",
+      "capability": "t2i",
+      "file": "qwen-image-21-t2i-details.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-t2i-details.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "4",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "5",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "5",
+            "input": "height"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "9",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "width": 1024,
+        "height": 1024
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/PrunaAI/P-Q-Image-2.1-Comfy/resolve/aa7dcecb1767e220e31a55706e33fd057c9a3fca/p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; PrunaAI's P-Q-Image-2.1 v0.2, a derivative of Qwen-Image 2.1 under the Qwen Research License (LICENSE and NOTICE in the repository); Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"details\" on qwen-image-21-t2i: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. PrunaAI/P-Q-Image-2.1-Comfy @ aa7dcecb, the 6-steps-upsampled v0.2 adapter (Pruna's distillation of the prompt upsampler into the LoRA, so short prompts come out detailed with no separate upsampling call) at strength 1, euler, CFG 1, the v0.2 ManualSigmas \"1.0, 0.961054, 0.918949, 0.769302, 0.545554, 0.222292, 0\" (not interchangeable with v0.1's). As Pruna's official workflows: LoraLoaderModelOnly on the base int8 model, QwenImage21Cache, CFGGuider, SamplerCustomAdvanced. Trained at 1K only; Pruna recommends at most 3 reference images for edits, so Fuobe refuses a fourth at this speed. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-edit-draft",
+      "title": "Qwen-Image 2.1 Image Edit (up to 4 references) · 2 steps, DMD2 LoRA v1.5",
+      "capability": "edit",
+      "file": "qwen-image-21-edit-draft.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-edit-draft.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "image3": [
+          {
+            "node": "12",
+            "input": "image"
+          }
+        ],
+        "image4": [
+          {
+            "node": "13",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-DMD2-2steps-v1.5.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights_v1_5.safetensors",
+          "sizeGb": 0.07
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; linoyts' DMD2 2-step LoRA v1.5, a derivative of Qwen-Image 2.1 under the same Qwen Research License (card and NOTICE); Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"draft\" on qwen-image-21-edit: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. linoyts/Qwen-Image-2.1-DMD2-2steps @ 5bae2836, pytorch_lora_weights_v1_5 (2026-10-30: better prompt adherence and edit fidelity than v1, same settings): rank 32, attention only, trained on fixed sigmas [1.0, 0.5] with no shift, CFG 1. ManualSigmas \"1.0, 0.5, 0.0\" as the card says (resolution independent). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-edit-fast",
+      "title": "Qwen-Image 2.1 Image Edit (up to 4 references) · 4 steps, LightX2V Lightning LoRA",
+      "capability": "edit",
+      "file": "qwen-image-21-edit-fast.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-edit-fast.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "image3": [
+          {
+            "node": "12",
+            "input": "image"
+          }
+        ],
+        "image4": [
+          {
+            "node": "13",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "sigmas": [
+          {
+            "node": "73",
+            "input": "sigmas"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-Lightning-4steps.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/6b0a1176327c01522a44276c5da67331a025b6fc/pytorch_lora_weights.safetensors",
+          "sizeGb": 0.07
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; LightX2V Lightning LoRA: no licence in the repository (no LICENSE file, empty card tag; comfyui-wiki says Apache-2.0); a Qwen-Image 2.1 adapter, so the base's Qwen Research License applies to what it runs on; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"fast\" on qwen-image-21-edit: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. lightx2v/Qwen-Image-2.1-Lightning @ 6b0a1176 (DMD, trained on 16 Ascend 910B NPUs): 4 steps at CFG 1 on the card's training schedule [1.0, 0.75, 0.5, 0.25] with exponential dynamic shifting (base_shift 0.5, max_shift 0.9, 256-8192 tokens of 16 px). ManualSigmas holds that schedule shifted for the canvas (text to image: 1 MP, 1.0, 0.857192, 0.666756, 0.400096, 0; edits: a 2048 square, 1.0, 0.917701, 0.787999, 0.553369, 0, since ImageScaleToMaxDimension scales image 1 to 2048 on its long side); Fuobe binds sigmas for the run's own canvas with the same shift. Chosen over the official Fun Acc 4-step LoRA, which needs VideoX-Fun's parallel-decoding output head and norm overrides (not a plain LoRA in ComfyUI). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-edit-details",
+      "title": "Qwen-Image 2.1 Image Edit (up to 4 references) · 6 steps, P-Q-Image v0.2 upsampled LoRA (writes the details)",
+      "capability": "edit",
+      "file": "qwen-image-21-edit-details.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-edit-details.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "image3": [
+          {
+            "node": "12",
+            "input": "image"
+          }
+        ],
+        "image4": [
+          {
+            "node": "13",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/PrunaAI/P-Q-Image-2.1-Comfy/resolve/aa7dcecb1767e220e31a55706e33fd057c9a3fca/p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; PrunaAI's P-Q-Image-2.1 v0.2, a derivative of Qwen-Image 2.1 under the Qwen Research License (LICENSE and NOTICE in the repository); Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"details\" on qwen-image-21-edit: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. PrunaAI/P-Q-Image-2.1-Comfy @ aa7dcecb, the 6-steps-upsampled v0.2 adapter (Pruna's distillation of the prompt upsampler into the LoRA, so short prompts come out detailed with no separate upsampling call) at strength 1, euler, CFG 1, the v0.2 ManualSigmas \"1.0, 0.961054, 0.918949, 0.769302, 0.545554, 0.222292, 0\" (not interchangeable with v0.1's). As Pruna's official workflows: LoraLoaderModelOnly on the base int8 model, QwenImage21Cache, CFGGuider, SamplerCustomAdvanced. Trained at 1K only; Pruna recommends at most 3 reference images for edits, so Fuobe refuses a fourth at this speed. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-inpaint-draft",
+      "title": "Qwen-Image 2.1 Inpaint · 2 steps, DMD2 LoRA v1.5",
+      "capability": "inpaint",
+      "file": "qwen-image-21-inpaint-draft.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-inpaint-draft.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "22",
+            "input": "values.a"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "mask": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {},
+      "limits": {},
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-DMD2-2steps-v1.5.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights_v1_5.safetensors",
+          "sizeGb": 0.07
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ausboss-nodes",
+          "repo": "https://github.com/ausboss/ComfyUI-AusBoss"
+        }
+      ],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; linoyts' DMD2 2-step LoRA v1.5, a derivative of Qwen-Image 2.1 under the same Qwen Research License (card and NOTICE); AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"draft\" on qwen-image-21-inpaint: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. linoyts/Qwen-Image-2.1-DMD2-2steps @ 5bae2836, pytorch_lora_weights_v1_5 (2026-10-30: better prompt adherence and edit fidelity than v1, same settings): rank 32, attention only, trained on fixed sigmas [1.0, 0.5] with no shift, CFG 1. ManualSigmas \"1.0, 0.5, 0.0\" as the card says (resolution independent). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-inpaint-fast",
+      "title": "Qwen-Image 2.1 Inpaint · 4 steps, LightX2V Lightning LoRA",
+      "capability": "inpaint",
+      "file": "qwen-image-21-inpaint-fast.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-inpaint-fast.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "22",
+            "input": "values.a"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "mask": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "sigmas": [
+          {
+            "node": "73",
+            "input": "sigmas"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {},
+      "limits": {},
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-Lightning-4steps.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/6b0a1176327c01522a44276c5da67331a025b6fc/pytorch_lora_weights.safetensors",
+          "sizeGb": 0.07
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ausboss-nodes",
+          "repo": "https://github.com/ausboss/ComfyUI-AusBoss"
+        }
+      ],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; LightX2V Lightning LoRA: no licence in the repository (no LICENSE file, empty card tag; comfyui-wiki says Apache-2.0); a Qwen-Image 2.1 adapter, so the base's Qwen Research License applies to what it runs on; AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"fast\" on qwen-image-21-inpaint: the same graph with a LoraLoaderModelOnly after the UNETLoader and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. lightx2v/Qwen-Image-2.1-Lightning @ 6b0a1176 (DMD, trained on 16 Ascend 910B NPUs): 4 steps at CFG 1 on the card's training schedule [1.0, 0.75, 0.5, 0.25] with exponential dynamic shifting (base_shift 0.5, max_shift 0.9, 256-8192 tokens of 16 px). ManualSigmas holds that schedule shifted for the canvas (text to image: 1 MP, 1.0, 0.857192, 0.666756, 0.400096, 0; edits: a 2048 square, 1.0, 0.917701, 0.787999, 0.553369, 0, since ImageScaleToMaxDimension scales image 1 to 2048 on its long side); Fuobe binds sigmas for the run's own canvas with the same shift. Chosen over the official Fun Acc 4-step LoRA, which needs VideoX-Fun's parallel-decoding output head and norm overrides (not a plain LoRA in ComfyUI). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-outpaint-draft",
+      "title": "Qwen-Image 2.1 Expand · 2 steps, DMD2 LoRA v1.5",
+      "capability": "outpaint",
+      "file": "qwen-image-21-outpaint-draft.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-outpaint-draft.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "21",
+            "input": "string"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          },
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "padLeft": [
+          {
+            "node": "10",
+            "input": "pad_left"
+          },
+          {
+            "node": "11",
+            "input": "pad_left"
+          }
+        ],
+        "padTop": [
+          {
+            "node": "10",
+            "input": "pad_top"
+          },
+          {
+            "node": "11",
+            "input": "pad_top"
+          }
+        ],
+        "padRight": [
+          {
+            "node": "10",
+            "input": "pad_right"
+          },
+          {
+            "node": "11",
+            "input": "pad_right"
+          }
+        ],
+        "padBottom": [
+          {
+            "node": "10",
+            "input": "pad_bottom"
+          },
+          {
+            "node": "11",
+            "input": "pad_bottom"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "padLeft": 384,
+        "padTop": 288,
+        "padRight": 384,
+        "padBottom": 288
+      },
+      "limits": {
+        "padMultiple": 8
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "qwen-image-2.1-outpaint-v2.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/ausboss/Qwen-Image-2.1-Outpaint-LoRA/resolve/main/qwen-image-2.1-outpaint-v2.safetensors",
+          "sizeGb": 0.16
+        },
+        {
+          "file": "Qwen-Image-2.1-DMD2-2steps-v1.5.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights_v1_5.safetensors",
+          "sizeGb": 0.07
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ausboss-nodes",
+          "repo": "https://github.com/ausboss/ComfyUI-AusBoss"
+        }
+      ],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; linoyts' DMD2 2-step LoRA v1.5, a derivative of Qwen-Image 2.1 under the same Qwen Research License (card and NOTICE); outpaint LoRA by AusBoss under the same licence; AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"draft\" on qwen-image-21-outpaint: the same graph with a LoraLoaderModelOnly after the UNETLoader and the outpaint-v2 LoRA (the speed LoRA stacks on it) and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. linoyts/Qwen-Image-2.1-DMD2-2steps @ 5bae2836, pytorch_lora_weights_v1_5 (2026-10-30: better prompt adherence and edit fidelity than v1, same settings): rank 32, attention only, trained on fixed sigmas [1.0, 0.5] with no shift, CFG 1. ManualSigmas \"1.0, 0.5, 0.0\" as the card says (resolution independent). Expand keeps its Qwen3-VL scene description (TextGenerate) as it is. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-outpaint-fast",
+      "title": "Qwen-Image 2.1 Expand · 4 steps, LightX2V Lightning LoRA",
+      "capability": "outpaint",
+      "file": "qwen-image-21-outpaint-fast.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-outpaint-fast.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "21",
+            "input": "string"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          },
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "padLeft": [
+          {
+            "node": "10",
+            "input": "pad_left"
+          },
+          {
+            "node": "11",
+            "input": "pad_left"
+          }
+        ],
+        "padTop": [
+          {
+            "node": "10",
+            "input": "pad_top"
+          },
+          {
+            "node": "11",
+            "input": "pad_top"
+          }
+        ],
+        "padRight": [
+          {
+            "node": "10",
+            "input": "pad_right"
+          },
+          {
+            "node": "11",
+            "input": "pad_right"
+          }
+        ],
+        "padBottom": [
+          {
+            "node": "10",
+            "input": "pad_bottom"
+          },
+          {
+            "node": "11",
+            "input": "pad_bottom"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "sigmas": [
+          {
+            "node": "73",
+            "input": "sigmas"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "padLeft": 384,
+        "padTop": 288,
+        "padRight": 384,
+        "padBottom": 288
+      },
+      "limits": {
+        "padMultiple": 8
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "qwen-image-2.1-outpaint-v2.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/ausboss/Qwen-Image-2.1-Outpaint-LoRA/resolve/main/qwen-image-2.1-outpaint-v2.safetensors",
+          "sizeGb": 0.16
+        },
+        {
+          "file": "Qwen-Image-2.1-Lightning-4steps.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/6b0a1176327c01522a44276c5da67331a025b6fc/pytorch_lora_weights.safetensors",
+          "sizeGb": 0.07
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ausboss-nodes",
+          "repo": "https://github.com/ausboss/ComfyUI-AusBoss"
+        }
+      ],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; LightX2V Lightning LoRA: no licence in the repository (no LICENSE file, empty card tag; comfyui-wiki says Apache-2.0); a Qwen-Image 2.1 adapter, so the base's Qwen Research License applies to what it runs on; outpaint LoRA by AusBoss under the same licence; AusBoss nodes MIT; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Options → Speed \"fast\" on qwen-image-21-outpaint: the same graph with a LoraLoaderModelOnly after the UNETLoader and the outpaint-v2 LoRA (the speed LoRA stacks on it) and its KSampler replaced by RandomNoise + CFGGuider (cfg 1) + KSamplerSelect euler + ManualSigmas + SamplerCustomAdvanced on the same latent. No steps binding: the sigmas are the schedule. lightx2v/Qwen-Image-2.1-Lightning @ 6b0a1176 (DMD, trained on 16 Ascend 910B NPUs): 4 steps at CFG 1 on the card's training schedule [1.0, 0.75, 0.5, 0.25] with exponential dynamic shifting (base_shift 0.5, max_shift 0.9, 256-8192 tokens of 16 px). ManualSigmas holds that schedule shifted for the canvas (text to image: 1 MP, 1.0, 0.857192, 0.666756, 0.400096, 0; edits: a 2048 square, 1.0, 0.917701, 0.787999, 0.553369, 0, since ImageScaleToMaxDimension scales image 1 to 2048 on its long side); Fuobe binds sigmas for the run's own canvas with the same shift. Chosen over the official Fun Acc 4-step LoRA, which needs VideoX-Fun's parallel-decoding output head and norm overrides (not a plain LoRA in ComfyUI). Expand keeps its Qwen3-VL scene description (TextGenerate) as it is. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-next-scene",
+      "title": "Storyboard Next Scene (Qwen-Image 2.1 + the 2.1 Next-Scene LoRA)",
+      "capability": "edit",
+      "file": "qwen-image-21-next-scene.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-next-scene.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "32",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "32",
+            "input": "steps"
+          }
+        ],
+        "loraStrength": [
+          {
+            "node": "60",
+            "input": "strength_model"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 28,
+        "loraStrength": 0.7,
+        "promptPrefix": "Next Scene:"
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-Next-Scene-step2500.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/akhaliq/Qwen-Image-2.1-Next-Scene-LoRA/resolve/67ce88cd413fe177758af5d91e25eb3a334aa06f/next_scene_step2500.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Next-Scene LoRA by akhaliq @ 67ce88cd: an apache-2.0 tag on its card only (no LICENSE file), an adapter of Qwen-Image 2.1, so non-commercial through its base; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "Storyboard's next frame on your GPU: the qwen-image-21-edit graph with akhaliq/Qwen-Image-2.1-Next-Scene-LoRA @ 67ce88cd (next_scene_step2500, the card's recommended diffusers/ComfyUI conversion) at 0.7, the card's clean-chain recipe: strength 0.7 or less and a 0.5 px Gaussian blur on each chained input (ImageBlur radius 1, sigma 0.5 on the previous panel), 28 steps (the card's usage), cfg 1, euler, simple. image = the previous panel, image2 = an optional character reference (left out when not given). The prompt starts \"Next Scene:\" with the camera move first (promptPrefix adds it when missing). Trained at 512 px on Sintel and Tears of Steel frame pairs: strongest on filmic scenes and establishing shots, static portraits are out of scope (card). storyboard-qwen-edit-2509-next-scene stays the classic choice on your GPU, and the cloud keeps Qwen-Image-Edit 2509 + its next-scene LoRA on fal (Qwen-Image 2.1 is not hosted). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
+      "id": "qwen-image-21-t2i-small",
+      "title": "Qwen-Image 2.1 Text to Image on a 16 GB GPU (Zen Image Edit: Qwen3.5-0.8B encoder + fusion adapter)",
+      "capability": "t2i",
+      "file": "qwen-image-21-t2i-small.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-t2i-small.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "5",
+            "input": "prompt"
+          }
+        ],
+        "width": [
+          {
+            "node": "5",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "5",
+            "input": "height"
+          }
+        ],
+        "seed": [
+          {
+            "node": "6",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "6",
+            "input": "steps"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "width": 1024,
+        "height": 1024,
+        "steps": 30
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048,
+        "dimensionMultiple": 32
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "adapter_v12.safetensors",
+          "folder": "text_encoders",
+          "url": "https://github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors",
+          "sizeGb": 0.64
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "zen-image-edit-comfyui",
+          "repo": "https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d"
+        }
+      ],
+      "vramGb": 16,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Zen Image Edit fusion adapter adapter_v12 (AiArtLab / recoilme, release v2 of zen-image-edit-comfyui, sha256 85578cd0): Qwen Research License; Qwen3.5-0.8B (Qwen @ 2fc06364): Apache-2.0; zen-image-edit-comfyui nodes @ 7a29e58c: Apache-2.0; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "The small-GPU route (Options → GPU \"Small\", or Auto on a card under 20 GB when this route is ready there): recoilme/zen-image-edit-comfyui @ 7a29e58c (release v2) as its example graph t2i_api.json, ZenImage21AdapterLoader (adapter_file: adapter_v12.safetensors, a required file in models/text_encoders whose full path Fuobe binds from GET /experiment/models, else models/text_encoders/adapter_v12.safetensors from ComfyUI's folder; text_encoder: the pinned Qwen3.5-0.8B folder models/text_encoders/qwen3.5_0.8b when the server has it, else Qwen/Qwen3.5-0.8B by id; bf16) -> ZenImage21TextEncode (resolution 1024; width / height the canvas) in place of the 17.5 GB Qwen3-VL 8B, the stock Qwen-Image 2.1 DiT (here the int8 file, 7.3 GB, where the example loads bf16) -> ModelSamplingAuraFlow shift 5 (the model author's static shift) -> KSampler 30 steps, cfg 1, euler, simple. Conditioning cosine 0.95 (text) against the native encoder (AiArtLab/zen-image-edit @ 3d571755). English prompts only; numerals on signs can come out wrong. About 17.5 GB resident at 1024 px with the bf16 DiT (card): the int8 DiT is what brings it to 16 GB (the example graphs load bf16). Needs transformers >= 5.17. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked).",
+      "autoDownloads": [
+        "Qwen3.5-0.8B (1.7 GB, Apache-2.0), the text encoder: Fuobe uses the pinned copy in models/text_encoders/qwen3.5_0.8b when it is there (hf download Qwen/Qwen3.5-0.8B --revision 2fc06364715b967f1860aea9cf38778875588b17 --local-dir models/text_encoders/qwen3.5_0.8b); otherwise the loader downloads it from Hugging Face on first run"
+      ]
+    },
+    {
+      "id": "qwen-image-21-edit-small",
+      "title": "Qwen-Image 2.1 Image Edit on a 16 GB GPU (Zen Image Edit, up to 4 references)",
+      "capability": "edit",
+      "file": "qwen-image-21-edit-small.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-edit-small.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "5",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "image3": [
+          {
+            "node": "12",
+            "input": "image"
+          }
+        ],
+        "image4": [
+          {
+            "node": "13",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "6",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "6",
+            "input": "steps"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 30
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "adapter_v12.safetensors",
+          "folder": "text_encoders",
+          "url": "https://github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors",
+          "sizeGb": 0.64
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "zen-image-edit-comfyui",
+          "repo": "https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d"
+        }
+      ],
+      "vramGb": 16,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Zen Image Edit fusion adapter adapter_v12 (AiArtLab / recoilme, release v2 of zen-image-edit-comfyui, sha256 85578cd0): Qwen Research License; Qwen3.5-0.8B (Qwen @ 2fc06364): Apache-2.0; zen-image-edit-comfyui nodes @ 7a29e58c: Apache-2.0; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": false,
+      "notes": "The small-GPU edit, as zen-image-edit-comfyui's edit_api.json: ZenImage21TextEncode with the VAE linked (the DiT splices the references in as latents), resolution 1024 (references resized to about 1 MP on the 32 grid, the geometry adapter v12 was tuned at), image_1 the picture to change (the canvas follows it), image_2-4 optional references (left out when not given). Same sampler as qwen-image-21-t2i-small. English prompts only. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked).",
+      "autoDownloads": [
+        "Qwen3.5-0.8B (1.7 GB, Apache-2.0), the text encoder: Fuobe uses the pinned copy in models/text_encoders/qwen3.5_0.8b when it is there (hf download Qwen/Qwen3.5-0.8B --revision 2fc06364715b967f1860aea9cf38778875588b17 --local-dir models/text_encoders/qwen3.5_0.8b); otherwise the loader downloads it from Hugging Face on first run"
+      ]
     },
     {
       "id": "ideogram4-t2i",

@@ -49,6 +49,8 @@ export const EDIT_STUDIO: StudioConfig = {
   kind: "image",
   ops: ["edit"],
   feed: { kind: "image", features: ["edit"] },
+  // A model's own settings (Qwen-Image 2.1's Speed, GPU and Decoder) sit under "Options".
+  controlsTitle: "Options",
   slots: [{ key: "image", label: "Image", accept: "image", required: true }],
   // The image and up to 9 references (FLUX 3 Klein takes 10 in all); each model's own limit caps it.
   multiRef: { label: "Add ref", max: 9 },
@@ -72,6 +74,7 @@ export const INPAINT_STUDIO: StudioConfig = {
   kind: "image",
   ops: ["inpaint", "edit"],
   feed: { kind: "image", features: ["edit"] },
+  controlsTitle: "Options",
   slots: [{ key: "image", label: "Image", accept: "image", required: true }],
   multiRef: { label: "Add ref", max: 3 },
   sketch: ["mask"],

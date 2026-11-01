@@ -24523,6 +24523,95 @@
     "fuobe-restore (Restore to 4K)"
    ],
    "notes": "The Restore card's stage 2: the restored clip lanczos x2 (2880x2176 from 1440x1088) through the same tiled-fusion workflow with this LoRA at 1.0, tile 1024x576; restore first, refine second (refining first sharpens the damage and desaturates the colour). Trained on LTX-2.5; no host serves LTX-2.5 with LoRAs, so it runs on your GPU only. Gated on Hugging Face (\"Agree and Access\" on the model page, which also consents to Lightricks' offers): the file downloads only with the token of an account that accepted, so Fuobe asks for an HF token (Settings → LoRAs) and uses it only for gated downloads; a cloud run gets Fuobe's mirror of the file on fal storage, never the token."
+  },
+  {
+   "key": "qwen21-dmd2-2step",
+   "name": "DMD2 2-step for Qwen-Image 2.1, v1.5 (linoyts)",
+   "url": "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/main/pytorch_lora_weights_v1_5.safetensors",
+   "page": "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps",
+   "file": "Qwen-Image-2.1-DMD2-2steps-v1.5.safetensors",
+   "strength": 1.0,
+   "licence": "Qwen Research License (a derivative of Qwen-Image 2.1: card and NOTICE)",
+   "commercial": false,
+   "hostedOk": false,
+   "released": "2026-10-30",
+   "revision": "5bae28369ecea3232405c17a53c04d35d15796b8",
+   "sha256": "0cfee5d5fbb9c5f6262c82db4f59dd4e872dfaac9fb7c82c9f7191e0d31406c4",
+   "sizeBytes": 67144520,
+   "usedBy": [
+    "Qwen-Image 2.1 Options → Speed: Draft (qwen-image-21-{t2i,edit,inpaint,outpaint}-draft)"
+   ],
+   "notes": "2 steps at CFG 1 on fixed sigmas [1.0, 0.5] with no shift; rank 32, attention only. v1.5 (2026-10-30) improves prompt adherence and edit fidelity over v1 (the file Live edit loads), same settings. Pinned 2026-11-01 from the Hugging Face API (revision, LFS SHA256 and size).",
+   "base": "qwen-image-2.1",
+   "download": "direct",
+   "checked": "2026-11-01"
+  },
+  {
+   "key": "qwen21-lightning-4step",
+   "name": "Lightning 4-step for Qwen-Image 2.1 (LightX2V)",
+   "url": "https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/main/pytorch_lora_weights.safetensors",
+   "page": "https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning",
+   "file": "Qwen-Image-2.1-Lightning-4steps.safetensors",
+   "strength": 1.0,
+   "licence": "Not stated in the repository (no LICENSE file, no licence tag; comfyui-wiki says Apache-2.0); it runs on Qwen-Image 2.1 (Qwen Research License)",
+   "commercial": false,
+   "hostedOk": false,
+   "released": "2026-10-13",
+   "revision": "6b0a1176327c01522a44276c5da67331a025b6fc",
+   "sha256": "53c69320d4163da51032f90275074028cb098556039c72b45f8dce9f0f9e34a3",
+   "sizeBytes": 67144280,
+   "usedBy": [
+    "Qwen-Image 2.1 Options → Speed: Fast (qwen-image-21-{t2i,edit,inpaint,outpaint}-fast)"
+   ],
+   "notes": "DMD distillation by LightX2V for text to image and multi-reference edits: 4 steps at CFG 1 on [1.0, 0.75, 0.5, 0.25] with exponential dynamic shifting (base_shift 0.5, max_shift 0.9), which the graph's ManualSigmas holds shifted for the canvas. The repository has no licence of its own (checked 2026-11-01): recorded as not stated, non-commercial through its base.",
+   "base": "qwen-image-2.1",
+   "download": "direct",
+   "checked": "2026-11-01"
+  },
+  {
+   "key": "qwen21-pq-image-6step-upsampled",
+   "name": "P-Q-Image 6-step upsampled for Qwen-Image 2.1, v0.2 (PrunaAI)",
+   "url": "https://huggingface.co/PrunaAI/P-Q-Image-2.1-Comfy/resolve/main/p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors",
+   "page": "https://huggingface.co/PrunaAI/P-Q-Image-2.1",
+   "file": "p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors",
+   "strength": 1.0,
+   "licence": "Qwen Research License (a derivative of Qwen-Image 2.1: LICENSE and NOTICE)",
+   "commercial": false,
+   "hostedOk": false,
+   "released": "2026-10-27",
+   "revision": "aa7dcecb1767e220e31a55706e33fd057c9a3fca",
+   "sha256": "b10e6231bebc4852d921f168366fdb0f495ff867bcabd592a0626ca11dba7561",
+   "sizeBytes": 344061264,
+   "usedBy": [
+    "Qwen-Image 2.1 Options → Speed: Fast · writes the details (qwen-image-21-{t2i,edit}-details)"
+   ],
+   "notes": "Pruna's ComfyUI export of the v0.2 6-steps-upsampled adapter: the prompt upsampler distilled into the LoRA, so short prompts come out detailed with no separate upsampling call. Strength 1, euler, CFG 1, ManualSigmas 1.0, 0.961054, 0.918949, 0.769302, 0.545554, 0.222292, 0 (v0.2's own; not v0.1's). Trained at 1K; at most 3 references for edits.",
+   "base": "qwen-image-2.1",
+   "download": "direct",
+   "checked": "2026-11-01"
+  },
+  {
+   "key": "qwen21-next-scene",
+   "name": "Next Scene for Qwen-Image 2.1 (akhaliq)",
+   "url": "https://huggingface.co/akhaliq/Qwen-Image-2.1-Next-Scene-LoRA/resolve/main/next_scene_step2500.safetensors",
+   "page": "https://huggingface.co/akhaliq/Qwen-Image-2.1-Next-Scene-LoRA",
+   "file": "Qwen-Image-2.1-Next-Scene-step2500.safetensors",
+   "strength": 0.7,
+   "trigger": "Next Scene:",
+   "licence": "Apache-2.0 as a tag on its card only, without a LICENSE file in the repository; an adapter of Qwen-Image 2.1 (Qwen Research License), so non-commercial through its base",
+   "commercial": false,
+   "hostedOk": false,
+   "released": "2026-10-07",
+   "revision": "67ce88cd413fe177758af5d91e25eb3a334aa06f",
+   "sha256": "55482093e8b8a80183810037df12f804196cee58e9e85311dc4f3bacf27a60b0",
+   "sizeBytes": 335605648,
+   "usedBy": [
+    "storyboard (Popcorn) next frames on your GPU (qwen-image-21-next-scene)"
+   ],
+   "notes": "The card's licence tag is apache-2.0 (no LICENSE file); the base, Qwen-Image 2.1, is Qwen Research (non-commercial). The step-2500 checkpoint in diffusers / ComfyUI key layout, at 0.7 with a 0.5 px blur on each chained panel (the card's clean-chain recipe). Trained at 512 px on Sintel and Tears of Steel frame pairs. Qwen-Image 2.1 isn't hosted on fal or Replicate, so the cloud keeps the 2509 next-scene LoRA.",
+   "base": "qwen-image-2.1",
+   "download": "direct",
+   "checked": "2026-11-01"
   }
  ]
 }

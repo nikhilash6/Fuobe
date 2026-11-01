@@ -622,6 +622,8 @@ export interface ModelOptions {
     default?: string | number;
     labels?: Record<string, string>;
     sets?: Record<string, Record<string, string | number>>;
+    /** The operations a value is offered on, when not all (Qwen-Image 2.1's Turbo speed: edits). The chip shows the rest only. */
+    ops?: Record<string, string[]>;
   }[];
   /** Images it needs before it can run (try-on: the person and the garment). */
   minImages?: number;

@@ -2,6 +2,7 @@ import { CLOUD_MODELS, ORIGINAL_CLOUD } from "./cloud-models.generated";
 import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
+import { QWEN21_DECODER, QWEN21_GPU, QWEN21_SPEED } from "@/lib/qwen21-speed";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
@@ -57,6 +58,8 @@ const RESTORE_LORA = (() => {
 })();
 /** Fuobe Try-On's LoRA (research adapterLoras): xocialize's try-on LoRA for FLUX.2 [klein] 4B, Apache-2.0. */
 const TRYON_LORA = loraEntry("tryon-klein-4b");
+/** akhaliq's Next-Scene LoRA for Qwen-Image 2.1: the 2.1 next-scene graph loads it, and its switch in Models & licences holds the model. */
+const NEXT_SCENE_21_LORA = loraEntry("qwen21-next-scene");
 /** The try-on LoRA card's own instruction, for a run with no words. */
 export const TRYON_PROMPT = "a full-body photo of a person. Replace the outfit with the top and bottom as shown in the reference images. The final image is a full body shot.";
 
@@ -135,7 +138,7 @@ const open: ModelDef[] = [
     vendor: "Alibaba Qwen",
     family: "qwen-image",
     kind: "image",
-    tagline: "Native 2K images with clean lettering; edits with up to 4 references, inpaint and expand · 20 GB GPU · non-commercial weights",
+    tagline: "Native 2K images with clean lettering; edits with up to 4 references, inpaint and expand; Draft to Full speed · English prompts only on a 16 GB GPU, any language on a 20 GB GPU · non-commercial weights",
     badges: ["new", "top"],
     // Aspect ratio and size are for text to image: an edit or inpaint follows image 1, an expand the canvas its pads grow.
     // The inpaint and expand graphs read the picture alone.
@@ -145,7 +148,8 @@ const open: ModelDef[] = [
       { ...comfy("inpaint", "qwen-image-21-inpaint", "crops around the mask, 25 steps, pasted back"), unsized: true, maxImages: 1 },
       { ...comfy("outpaint", "qwen-image-21-outpaint", "outpaint-v2 LoRA; Qwen3-VL describes the scene"), unsized: true, maxImages: 1 },
     ],
-    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K"], maxImages: 4, seed: true },
+    // Options → Speed (2-8 steps), GPU (the small encoder on a 16 GB card) and Decoder (src/lib/qwen21-speed.ts).
+    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K"], maxImages: 4, seed: true, controls: [QWEN21_SPEED, QWEN21_GPU, QWEN21_DECODER] },
     defaults: { aspectRatio: "1:1", resolution: "1K" },
   }),
   o({
@@ -157,7 +161,24 @@ const open: ModelDef[] = [
     tagline: "8-step edits with up to 4 references, close to the full model except on big camera turns · 20 GB GPU · non-commercial weights",
     badges: ["new", "top", "fast"],
     routes: [comfy("edit", "qwen-image-21-turbo-edit", "8 steps, up to 4 references")],
-    options: { maxImages: 4, seed: true },
+    options: { maxImages: 4, seed: true, controls: [QWEN21_DECODER] },
+  }),
+  // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): Zen Image Edit's 0.8B encoder, which Qwen-Image 2.1's GPU option picks
+  // (Small, or Auto under 20 GB when the route is ready: src/server/qwen21-gpu.ts). Listed for its licence, its node pack and its switch, and for the pre-flight board's row; never in a picker.
+  o({
+    id: "oss-qwen-image-21-small",
+    name: "Qwen-Image 2.1 · Small GPU",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Qwen-Image 2.1 on a 16 GB GPU with a compact text reader: English prompts only, and numbers on signs can come out wrong · non-commercial weights",
+    routes: [
+      { ...comfy("t2i", "qwen-image-21-t2i-small", "Zen Image Edit's 0.8B encoder, 30 steps") },
+      { ...comfy("edit", "qwen-image-21-edit-small", "Zen Image Edit's 0.8B encoder, up to 4 references"), unsized: true },
+    ],
+    options: { aspectRatios: IMG_AR, resolutions: ["1K", "1.5K", "2K"], maxImages: 4, seed: true, controls: [QWEN21_DECODER] },
+    defaults: { aspectRatio: "1:1", resolution: "1K" },
+    hidden: true,
   }),
   // Live edit's model (the Live edit page runs it, as you type): listed for its licence, its model page and its switch in
   // Models & licences, never in a picker.
@@ -1160,6 +1181,19 @@ const open: ModelDef[] = [
     tagline: "Relight a photo to match a reference image's light (Relight LoRA, 4 steps)",
     routes: [comfy("edit", "relight-qwen-edit-2509-reference", "Relight LoRA + Lightning, image 2 = lighting reference")],
     options: { seed: true, negativePrompt: true, maxImages: 2 },
+    hidden: true,
+  }),
+  // Storyboard's next frame on your GPU since nm10-qwen21-fast: Qwen-Image 2.1 with akhaliq's 2.1 Next-Scene LoRA (the graph loads
+  // it; options.loras holds the model to its switch). The 2509 graph below stays the classic choice and the cloud's recipe.
+  o({
+    id: "oss-qwen-image-21-next-scene",
+    name: "Qwen-Image 2.1 Next Scene",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "The next storyboard panel from the previous one, on Qwen-Image 2.1 with its Next-Scene LoRA · 20 GB GPU · non-commercial weights",
+    routes: [{ ...comfy("edit", "qwen-image-21-next-scene", "2.1 Next-Scene LoRA at 0.7, 28 steps"), unsized: true }],
+    options: { seed: true, maxImages: 2, controls: [QWEN21_DECODER], ...(NEXT_SCENE_21_LORA && { loras: [loraRef(NEXT_SCENE_21_LORA)] }) },
     hidden: true,
   }),
   o({
