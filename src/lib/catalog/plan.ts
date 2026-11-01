@@ -535,7 +535,10 @@ export function layoutCanvas(model: ModelDef, params: GenParams, op?: Operation)
       return { ...sizeValue(size, aspect, res, sent), asked: sizeValue({ ...size, min: undefined, max: undefined }, aspect, res, sent), exact: true };
     }
   }
-  const asked = computeDimensions(aspect, tier(res), { width: 1024, height: 1024 }, LAYOUT_MULTIPLE);
+  // A "<side>sq" tier (FLUX.3's 512sq / 768sq) is that square's area in the chosen aspect: a square of that side at 1:1.
+  const sq = /^(\d+)sq$/i.exec(res ?? "");
+  const side = sq ? Number(sq[1]) : 1024;
+  const asked = computeDimensions(aspect, sq ? undefined : tier(res), { width: side, height: side }, LAYOUT_MULTIPLE);
   const fitted = model.engine === "open" ? fitCanvas(asked.width, asked.height, OPEN_CANVAS) : asked;
   return { ...fitted, asked, exact: model.engine === "open" };
 }

@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { copyWithToast } from "@/lib/clipboard";
 import type { ModelDef } from "@/lib/catalog/types";
-import { boxesAt, drawnBox, movedBox, newBox, nudgedBox, pickBox, resizedBox, type Handle } from "@/lib/layout-edit";
+import { boxesAt, drawnBox, inkOn, keyResizedBox, KIND_COLOR, movedBox, newBox, nudgedBox, pickBox, resizedBox, type Handle } from "@/lib/layout-edit";
 import { layoutCompilerFor, parseLayout, readsBoxes, type LayoutBox, type LayoutCanvas as CanvasType, type LayoutDraft, type LayoutItem, type LayoutLabel, type LayoutSource } from "@/lib/layout-prompt";
 import { cn } from "@/lib/utils";
 import { radioKeys, radioTab } from "./radio-keys";
@@ -49,7 +49,6 @@ const CANVASES: { value: CanvasType; label: string }[] = [
   { value: "collage", label: "Collage" },
 ];
 /** Box outlines by kind when a box has no colour of its own. */
-const KIND_COLOR: Record<LayoutLabel, string> = { object: "#0a84ff", character: "#34c759", text: "#ff9f0a" };
 const SOURCE_WORDS: Record<LayoutSource, string> = {
   fuobe: "a Fuobe layout",
   linxce: "a ComfyUI layout draft",
@@ -123,7 +122,7 @@ export function LayoutEditor(props: {
 }
 
 type Drag =
-  | { mode: "draw"; x0: number; y0: number; x1: number; y1: number; id: number }
+  | { mode: "draw"; x0: number; y0: number; x1: number; y1: number; id: number; min: number }
   | { mode: "move"; index: number; box: LayoutBox; sx: number; sy: number; moved: boolean; id: number; before: LayoutItem[] }
   | { mode: "resize"; index: number; box: LayoutBox; handle: Handle; sx: number; sy: number; id: number; before: LayoutItem[] };
 
@@ -224,6 +223,9 @@ function LayoutBoard({
     setSheetOpen(true);
   };
 
+  /** The smallest box a drag draws, in canvas pixels: 8 px on screen (a tap's drift on a phone isn't a box). */
+  const minDrawn = () => (8 * size.width) / (board.current?.getBoundingClientRect().width || size.width);
+
   /** Pointer position in canvas pixels. */
   const at = (e: React.PointerEvent) => {
     const r = board.current!.getBoundingClientRect();
@@ -255,7 +257,7 @@ function LayoutBoard({
     if (picked === null) {
       lastPress.current = null;
       setSelected(null);
-      setDrag({ mode: "draw", x0: p.x, y0: p.y, x1: p.x, y1: p.y, id: e.pointerId });
+      setDrag({ mode: "draw", x0: p.x, y0: p.y, x1: p.x, y1: p.y, id: e.pointerId, min: minDrawn() });
       return;
     }
     setSelected(picked);
@@ -281,7 +283,7 @@ function LayoutBoard({
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!drag || drag.id !== e.pointerId) return;
     if (drag.mode === "draw") {
-      const box = drawnBox(drag.x0, drag.y0, drag.x1, drag.y1, size.width, size.height);
+      const box = drawnBox(drag.x0, drag.y0, drag.x1, drag.y1, size.width, size.height, drag.min);
       if (box) add(box);
     }
     // A drag isn't a press on the same spot: the next press there picks the top box again.
@@ -299,18 +301,21 @@ function LayoutBoard({
     if (selected === null || !items[selected]) return;
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
-      return remove(selected);
+      remove(selected);
+      // The box's tab had focus and goes with it: the canvas keeps it, so the keys go on working.
+      board.current?.focus();
+      return;
     }
-    const box = nudgedBox(items[selected].box, e.key, e.shiftKey, size.width, size.height);
+    const box = e.altKey ? keyResizedBox(items[selected].box, e.key, e.shiftKey, size.width, size.height) : nudgedBox(items[selected].box, e.key, e.shiftKey, size.width, size.height);
     if (box) {
       e.preventDefault();
-      // Undo takes back a nudge (a held key is one step).
+      // Undo takes back a nudge or a resize (a held key is one step).
       if (!e.repeat) remember();
       patch(selected, { box });
     }
   };
 
-  const ghost = drag?.mode === "draw" ? drawnBox(drag.x0, drag.y0, drag.x1, drag.y1, size.width, size.height) : null;
+  const ghost = drag?.mode === "draw" ? drawnBox(drag.x0, drag.y0, drag.x1, drag.y1, size.width, size.height, drag.min) : null;
   const compiled = () => layoutCompilerFor(model)(draft, size.width, size.height).prompt;
   const textErrors = items.map((it) => it.label === "text" && !it.text?.trim());
   const reads = !model || readsBoxes(model);
@@ -380,11 +385,14 @@ function LayoutBoard({
               onChange={(e) => setAspect(e.target.value)}
               className="h-8 rounded-full border bg-background px-2.5 text-[13px] focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
             >
-              {aspects.filter((a) => a !== "auto").map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
+              {/* Auto is a square canvas here; it stays listed only while it is the choice, so the select shows what is drawn. */}
+              {aspects
+                .filter((a) => a !== "auto" || aspect === "auto")
+                .map((a) => (
+                  <option key={a} value={a}>
+                    {a === "auto" ? "Auto (square canvas)" : a}
+                  </option>
+                ))}
             </select>
           )}
           <DropdownMenu modal={false}>
@@ -414,7 +422,7 @@ function LayoutBoard({
           </Button>
         </div>
         <DialogDescription id="layout-editor-hint" className="w-full text-[12px] leading-snug text-muted-foreground max-sm:sr-only">
-          Drag to draw a box, then say what goes in it; hold Shift to draw over another box. Layout prompts are experimental in MOSS-Image&apos;s own guide: boxes guide the picture, they don&apos;t pin it.
+          Drag to draw a box, then say what goes in it; hold Shift to draw over another box. With a box picked, arrow keys move it, Alt+arrows resize it (Shift for bigger steps) and Delete removes it. Layout prompts are experimental in MOSS-Image&apos;s own guide: boxes guide the picture, they don&apos;t pin it.
         </DialogDescription>
       </header>
 
@@ -425,7 +433,7 @@ function LayoutBoard({
             <div
               ref={board}
               role="application"
-              aria-label={`Layout canvas, ${size.width} by ${size.height}: drag to draw a box (Shift to draw over another). With a box picked, arrow keys move it and Delete removes it.`}
+              aria-label={`Layout canvas, ${size.width} by ${size.height}: drag to draw a box (Shift to draw over another). With a box picked, arrow keys move it, Alt with arrow keys resizes it and Delete removes it.`}
               tabIndex={0}
               data-layout-canvas
               onPointerDown={onPointerDown}
@@ -450,8 +458,8 @@ function LayoutBoard({
                     onClick={() => setSelected(i)}
                     aria-label={`Box ${i + 1}: ${it.label === "text" ? `the words ${it.text || "(not typed yet)"}` : it.caption || it.label}`}
                     aria-pressed={selected === i}
-                    className="absolute bottom-full -left-0.5 flex h-5 min-w-5 items-center justify-center rounded-t-md px-1.5 text-[11px] leading-none font-semibold text-white focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [@media(pointer:coarse)]:h-6 [@media(pointer:coarse)]:min-w-7"
-                    style={{ background: colorOf(it) }}
+                    className="absolute bottom-full -left-0.5 flex h-5 min-w-5 items-center justify-center rounded-t-md px-1.5 text-[11px] leading-none font-semibold focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [@media(pointer:coarse)]:h-6 [@media(pointer:coarse)]:min-w-7"
+                    style={{ background: colorOf(it), color: inkOn(colorOf(it)) }}
                   >
                     {i + 1}
                   </button>
@@ -591,7 +599,7 @@ function BoxRow({
       className={cn("space-y-2 rounded-xl border p-3 transition-colors", selected ? "border-primary bg-brand-faint/50" : "hover:border-border-strong")}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="grid size-6 shrink-0 place-items-center rounded-md text-[12px] font-semibold text-white" style={{ background: colorOf(item) }} aria-hidden>
+        <span className="grid size-6 shrink-0 place-items-center rounded-md text-[12px] font-semibold" style={{ background: colorOf(item), color: inkOn(colorOf(item)) }} aria-hidden>
           {n}
         </span>
         <Segmented label={`Box ${n} is`} options={LABELS} value={item.label} onChange={(label) => onChange({ label, ...(label === "text" ? { text: item.text ?? "" } : {}) })} />

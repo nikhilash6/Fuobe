@@ -279,12 +279,19 @@ async function ready(page, url) {
   check("layout: Reuse brings the boxes and the caption back", /1 box/.test(reused) && (await page.locator("[data-composer] textarea").inputValue()) === "A candle sale poster");
   await page.waitForFunction(() => document.querySelector("[data-gen-id] img, [data-gen-id] video"), null, { timeout: 60_000 }).catch(() => {});
   const t = tile.locator(".group\\/tile").first();
-  await t.hover();
-  await t.getByRole("button", { name: "More actions" }).first().click();
-  await page.getByRole("menuitem", { name: "Edit layout" }).click();
-  await page.waitForFunction(() => !location.search.includes("layout="), null, { timeout: 30_000 }).catch(() => {});
-  await page.locator("[data-layout-strip]").waitFor({ timeout: 30_000 }).catch(() => {});
-  check("layout: Edit layout reopens the boxes", /1 box/.test(await page.locator("[data-layout-strip]").innerText().catch(() => "")));
+  // Edit layout from a state with no layout on screen (Reuse just put one there), twice on the same picture: the second
+  // time must open it again too.
+  for (const time of ["first", "second"]) {
+    await page.getByRole("button", { name: "Layout off" }).click();
+    const off = await page.locator("[data-layout-strip]").waitFor({ state: "detached", timeout: 10_000 }).then(() => true, () => false);
+    await t.hover();
+    await t.getByRole("button", { name: "More actions" }).first().click();
+    await page.getByRole("menuitem", { name: "Edit layout" }).click();
+    await page.locator("[data-layout-strip]").waitFor({ timeout: 30_000 }).catch(() => {});
+    const strip = await page.locator("[data-layout-strip]").innerText().catch(() => "");
+    check(`layout: Edit layout reopens the boxes (${time} time)`, off && /1 box/.test(strip), off ? strip.replace(/\n/g, " ") || "no strip" : "Layout off left the strip");
+    await page.waitForFunction(() => !location.search.includes("layout="), null, { timeout: 30_000 }).catch(() => {});
+  }
   await page.close();
 
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });

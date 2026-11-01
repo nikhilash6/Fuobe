@@ -997,14 +997,16 @@ export function extractOutputs(response: unknown, op?: Operation): ExtractedOutp
     // cut-out (meta.mask) instead of landing in the feed as a second result.
     const mask = fileOf(r.mask)?.url;
     if (mask && out.some((o) => o.url !== mask)) out = out.filter((o) => o.url !== mask).map((o) => ({ ...o, meta: { ...o.meta, mask } }));
-    // fal's MOSS-Image returns the layout its prompt expansion planned (actual_prompt) and the seed it drew with: kept on
-    // each picture with the picture's own size, so Edit layout can reopen it as boxes (decodeMoss) and draw it again.
+    // The seed fal drew the pictures with is kept on each one, so Edit layout (and a layout's Reuse) draws it again with
+    // the same seed: a layout run turns the API's prompt expansion off, and FLUX.3 and Ideogram never return
+    // actual_prompt, so the seed can't wait for it. fal's MOSS-Image also returns the layout its expansion planned
+    // (actual_prompt): kept with the picture's own size, so Edit layout can reopen it as boxes (decodeMoss).
+    const seed = num(r.seed);
     const actualPrompt = str(r.actual_prompt)?.trim();
     if (actualPrompt) {
-      const seed = num(r.seed);
       const sizes = new Map((Array.isArray(r.images) ? r.images : []).filter(isObj).map((im) => [str(im.url), { width: num(im.width), height: num(im.height) }] as const));
       out = out.map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, ...compact({ actualPrompt, seed, ...sizes.get(o.url) }) } } : o));
-    }
+    } else if (seed !== undefined) out = out.map((o) => (o.kind === "image" ? { ...o, meta: { ...o.meta, seed } } : o));
   }
   return out;
 }

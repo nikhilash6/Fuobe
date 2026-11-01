@@ -54,10 +54,10 @@ import {
   framesShape,
   framesSlots,
   framesUploading,
-  layoutModelNote,
+  layoutBoxModel,
+  layoutNotes,
   layoutRequest,
   layoutShape,
-  layoutSizeWarning,
   leaveFrames,
   leaveLayout,
   namedImageSlots,
@@ -907,14 +907,8 @@ export function Composer({ docked }: { docked: boolean }) {
   // The canvas the boxes are drawn on: the size this model renders (src/lib/catalog/plan.ts layoutCanvas).
   const canvasFor = (aspect: string | undefined) => layoutCanvas(model!, { ...draft.params, aspectRatio: aspect }, studioOp ?? "t2i");
   const layoutCanvasNow = layoutOn && model ? canvasFor(p.aspectRatio ?? model.defaults?.aspectRatio) : undefined;
-  const boxModel = layoutOn && model && layoutModelNote(model) ? catalog.getModel(BOX_MODELS[model.engine]) : undefined;
-  const layoutNotes: { text: string; tone: "info" | "warn" }[] = [];
-  if (layoutOn && model) {
-    const words = layoutModelNote(model);
-    if (words) layoutNotes.push({ text: words, tone: "info" });
-    const big = layoutCanvasNow && layoutSizeWarning(layoutCanvasNow, model.name);
-    if (big) layoutNotes.push({ text: big, tone: "warn" });
-  }
+  const boxModel = layoutOn && model ? layoutBoxModel(model, { id: BOX_MODELS[model.engine], getModel: catalog.getModel, offered: catalog.offered }) : undefined;
+  const layoutStripNotes = layoutOn ? layoutNotes(model, layoutCanvasNow) : [];
   const layoutSummary = !model
     ? ""
     : laid?.width
@@ -1104,8 +1098,8 @@ export function Composer({ docked }: { docked: boolean }) {
           layout={draft.layout}
           aspect={p.aspectRatio ?? model?.defaults?.aspectRatio}
           summary={layoutSummary}
-          notes={layoutNotes}
-          action={boxModel && boxModel.id !== model?.id ? { label: `Use ${boxModel.name}`, onClick: () => pickModel(boxModel) } : undefined}
+          notes={layoutStripNotes}
+          action={boxModel ? { label: `Use ${boxModel.name}`, onClick: () => pickModel(boxModel) } : undefined}
           onEdit={() => setLayoutEditing(true)}
           onClose={toggleLayout}
         />

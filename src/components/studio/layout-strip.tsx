@@ -2,10 +2,9 @@
 
 import { FlaskConical, PencilRuler, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { KIND_COLOR } from "@/lib/layout-edit";
 import type { LayoutDraft } from "@/lib/layout-prompt";
 import { cn } from "@/lib/utils";
-
-const KIND_COLOR = { object: "#0a84ff", character: "#34c759", text: "#ff9f0a" } as const;
 
 const ratioOf = (aspect: string | undefined) => {
   const m = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(aspect ?? "");

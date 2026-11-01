@@ -248,7 +248,7 @@ export function editableLayout(g: Pick<Generation, "status" | "request" | "outpu
   const reported = typeof o.meta?.seed === "number" ? o.meta.seed : undefined;
   const seed = reported ?? (params.seed !== undefined && params.seed >= 0 ? params.seed : undefined);
   const own = readLayout(params.extra?.[LAYOUT_PARAM]);
-  if (own) return { draft: own, caption: g.request.prompt?.trim() || own.summary.caption, ...(seed !== undefined && { seed }), from: "request" };
+  if (own?.items.length) return { draft: own, caption: g.request.prompt?.trim() || own.summary.caption, ...(seed !== undefined && { seed }), from: "request" };
   const planned = typeof o.meta?.actualPrompt === "string" ? o.meta.actualPrompt : undefined;
   const width = Number(o.meta?.width ?? o.width);
   const height = Number(o.meta?.height ?? o.height);

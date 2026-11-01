@@ -663,6 +663,31 @@ export function layoutSizeWarning(canvas: { width: number; height: number; asked
 }
 
 /**
+ * The lines under the Layout strip: a model that reads the layout as words says so (its boxes are never placed by
+ * position, so it gets no size warning); a box reader past its range gets the size warning.
+ */
+export function layoutNotes(
+  model: Pick<ModelDef, "options" | "name"> | undefined,
+  canvas: Parameters<typeof layoutSizeWarning>[0] | undefined,
+): { text: string; tone: "info" | "warn" }[] {
+  if (!model) return [];
+  const words = layoutModelNote(model);
+  if (words) return [{ text: words, tone: "info" }];
+  const big = canvas && layoutSizeWarning(canvas, model.name);
+  return big ? [{ text: big, tone: "warn" }] : [];
+}
+
+/** The box reader the words-model line offers instead ("Use MOSS-Image"): only when Settings → Models & licences offers it. */
+export function layoutBoxModel(
+  model: Pick<ModelDef, "id" | "options" | "engine"> | undefined,
+  pick: { id: string; getModel: (id: string) => ModelDef | undefined; offered: (id: string, engine?: Engine) => boolean },
+): ModelDef | undefined {
+  if (!model || !layoutModelNote(model) || !pick.offered(pick.id, model.engine)) return undefined;
+  const m = pick.getModel(pick.id);
+  return m && m.id !== model.id ? m : undefined;
+}
+
+/**
  * Where a batch of files would land, before any of them uploads: each file's index goes to
  * `placed` (it gets a slot or a reference tile) or `rejected` (no room: the references are full or
  * the model takes none). Placement is simulated in order, as `placeAttachment` does it for real.

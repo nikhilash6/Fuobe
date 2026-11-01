@@ -615,6 +615,8 @@ function LayoutHandoff() {
   const opened = useRef<string | null>(null);
   const ref = config.layout ? readEditLayoutParam(value) : null;
   useEffect(() => {
+    // Once the address no longer holds it (read, then taken out), the same picture's Edit layout opens again next time.
+    if (!value) opened.current = null;
     if (!ref || !value || opened.current === value || !catalog.ready) return;
     opened.current = value;
     void fetch(`/api/generations/${encodeURIComponent(ref.id)}`)

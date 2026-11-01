@@ -5,9 +5,9 @@ import { buildPayload, extractOutputs } from "@/lib/catalog/payload";
 import { estimateCost, layoutCanvas, planGeneration } from "@/lib/catalog/plan";
 import type { Generation, GenerationRequest, ModelDef, ModelRoute } from "@/lib/catalog/types";
 import { fitCanvas } from "@/lib/comfy";
-import { enterLayout, groupModels, layoutModelNote, layoutRequest, layoutShape, layoutSizeWarning, leaveLayout, settingsShape, withoutLayout } from "@/lib/composer";
+import { enterLayout, groupModels, layoutBoxModel, layoutModelNote, layoutNotes, layoutRequest, layoutShape, layoutSizeWarning, leaveLayout, settingsShape, withoutLayout } from "@/lib/composer";
 import { compileFlux3, compileIdeogram, compileMoss, compileWords, type LayoutDraft } from "@/lib/layout-prompt";
-import { boxesAt, drawnBox, movedBox, newBox, nudgedBox, pickBox, resizedBox } from "@/lib/layout-edit";
+import { boxesAt, contrastRatio, drawnBox, inkOn, keyResizedBox, KIND_COLOR, movedBox, newBox, nudgedBox, pickBox, resizedBox } from "@/lib/layout-edit";
 import { editableLayout, editLayoutHref, outputActions, readEditLayoutParam } from "@/lib/output-actions";
 import { slimModel } from "@/lib/studio-catalog";
 
@@ -74,6 +74,28 @@ describe("the composer's Layout mode helpers", () => {
     expect(layoutModelNote(model("nano-banana-pro"))).toBe("This model reads the layout as words, not exact positions.");
     // Bria FIBO 2 places boxes with location words, not coordinates.
     expect(layoutModelNote(model("bria-fibo-2"))).toBe("This model reads the layout as words, not exact positions.");
+  });
+
+  it("gives a words model its one line (no size warning: it never places boxes by position), a box reader its warning", () => {
+    const big = { width: 4096, height: 4096, asked: { width: 4096, height: 4096 }, exact: false };
+    expect(layoutNotes(model("nano-banana-pro"), big)).toEqual([{ text: "This model reads the layout as words, not exact positions.", tone: "info" }]);
+    expect(layoutNotes(model("flux-3"), big)).toEqual([{ text: expect.stringContaining("FLUX.3 may place the boxes less exactly"), tone: "warn" }]);
+    expect(layoutNotes(model("flux-3"), { ...big, width: 1024, height: 1024, asked: { width: 1024, height: 1024 } })).toEqual([]);
+  });
+
+  it("offers Use MOSS-Image only when Settings → Models & licences offers it", () => {
+    const pick = (offered: boolean) => ({ id: "moss-image", getModel, offered: () => offered });
+    expect(layoutBoxModel(model("nano-banana-pro"), pick(true))?.id).toBe("moss-image");
+    expect(layoutBoxModel(model("nano-banana-pro"), pick(false))).toBeUndefined();
+    // A box reader needs no fix.
+    expect(layoutBoxModel(model("flux-3"), pick(true))).toBeUndefined();
+  });
+
+  it("reads FLUX.3's 512sq / 768sq tiers as that square's area, not the 1K guess", () => {
+    expect(layoutCanvas(model("flux-3"), { aspectRatio: "1:1", resolution: "512sq" })).toMatchObject({ width: 512, height: 512 });
+    const wide = layoutCanvas(model("flux-3"), { aspectRatio: "16:9", resolution: "768sq" });
+    expect(wide.width / wide.height).toBeCloseTo(16 / 9, 1);
+    expect(Math.abs(wide.width * wide.height - 768 * 768) / (768 * 768)).toBeLessThan(0.03);
   });
 
   it("warns past 2048 px a side or 4 MP, with the size the model renders instead", () => {
@@ -235,8 +257,22 @@ describe("Edit layout", () => {
     expect(editableLayout(gen({ request: laid, outputs: [{ url: "/a.mp4", kind: "video" }] }), 0)).toBeNull();
     expect(editableLayout(gen({ outputs: [{ url: "/a.png", kind: "image", meta: { actualPrompt: "just words", width: 1024, height: 1024 } }] }), 0)).toBeNull();
     expect(editableLayout(gen({ outputs: [{ url: "/a.png", kind: "image", meta: { actualPrompt: fixture.actual_prompt } }] }), 0)).toBeNull();
-    // fal's other models' outputs never carry an actual_prompt.
-    expect(extractOutputs({ images: [{ url: "https://x/a.png", width: 1, height: 1 }], seed: 3 }, "t2i")[0]).not.toHaveProperty("meta");
+    // fal's other models' outputs never carry an actual_prompt, only the seed.
+    expect(extractOutputs({ images: [{ url: "https://x/a.png", width: 1, height: 1 }], seed: 3 }, "t2i")[0]).toMatchObject({ meta: { seed: 3 } });
+    expect(extractOutputs({ images: [{ url: "https://x/a.png", width: 1, height: 1 }] }, "t2i")[0]).not.toHaveProperty("meta");
+    // A run with Layout on but no box drawn has nothing to reopen.
+    const empty = { feature: "image", modelId: "moss-image", prompt: "A poster", params: { extra: { layout: { ...poster, items: [] } } } } as GenerationRequest;
+    expect(editableLayout(gen({ request: empty }), 0)).toBeNull();
+    expect(outputActions(gen({ request: empty }), 0).some((a) => a.id === "edit-layout")).toBe(false);
+  });
+
+  it("reopens a cloud layout run (expansion off, no actual_prompt) with the seed fal drew it with", () => {
+    for (const modelId of ["moss-image", "flux-3", "ideogram-4-5"]) {
+      const r = sent(poster, "A candle sale poster");
+      const outputs = extractOutputs({ images: [{ url: "https://fal/x.png", width: 1360, height: 768, content_type: "image/png" }], seed: 918273 }, "t2i");
+      const g = gen({ modelId, outputs, request: { feature: "image", modelId, prompt: r.prompt, params: r.params } });
+      expect(editableLayout(g, 0)).toMatchObject({ seed: 918273, from: "request" });
+    }
   });
 
   it("links to the Image studio with the generation and the picture", () => {
@@ -276,6 +312,12 @@ describe("the editor's box maths", () => {
     expect(drawnBox(500, 250, -50, -50, W, H)).toEqual([0, 0, 0.5, 0.5]);
     expect(drawnBox(100.4, 50.4, 500.4, 250.4, W, H)).toEqual([0.1, 0.1, 0.5, 0.5]);
     expect(drawnBox(100, 100, 108, 104, W, H)).toBeNull();
+    // A canvas drawn small on screen asks for more: a 20 px drift isn't a box when 8 screen px are 23 canvas px.
+    expect(drawnBox(100, 100, 120, 120, W, H)).not.toBeNull();
+    expect(drawnBox(100, 100, 120, 120, W, H, 23)).toBeNull();
+    expect(drawnBox(100, 100, 130, 130, W, H, 23)).not.toBeNull();
+    // Never below 16 px, whatever is asked.
+    expect(drawnBox(100, 100, 110, 110, W, H, 2)).toBeNull();
   });
 
   it("picks the top box, keeps a picked one under another, and cycles on the same spot", () => {
@@ -308,5 +350,29 @@ describe("the editor's box maths", () => {
     expect(nudgedBox(box, "ArrowUp", true, W, H)).toEqual([0.1, 0.08, 0.5, 0.48]);
     expect(nudgedBox(box, "Enter", false, W, H)).toBeNull();
     expect(newBox(0)).toEqual([0.333333, 0.333333, 0.666667, 0.666667]);
+  });
+
+  it("resizes from the keyboard: Alt+arrows move the right and bottom edges, Shift for ten", () => {
+    const box: [number, number, number, number] = [0.1, 0.1, 0.5, 0.5];
+    expect(keyResizedBox(box, "ArrowRight", false, W, H)).toEqual([0.1, 0.1, 0.501, 0.5]);
+    expect(keyResizedBox(box, "ArrowLeft", true, W, H)).toEqual([0.1, 0.1, 0.49, 0.5]);
+    expect(keyResizedBox(box, "ArrowDown", true, W, H)).toEqual([0.1, 0.1, 0.5, 0.52]);
+    expect(keyResizedBox(box, "ArrowUp", false, W, H)).toEqual([0.1, 0.1, 0.5, 0.498]);
+    // The same limits as a handle: held at the edge and at 16 px.
+    expect(keyResizedBox([0.1, 0.1, 0.995, 0.5], "ArrowRight", true, W, H)?.[2]).toBe(1);
+    const narrow = keyResizedBox([0.1, 0.1, 0.117, 0.5], "ArrowLeft", true, W, H)!;
+    expect(Math.round((narrow[2] - narrow[0]) * W)).toBe(16);
+    expect(keyResizedBox(box, "Enter", false, W, H)).toBeNull();
+  });
+
+  it("writes a box's number in the ink that reads on its colour (WCAG AA for the kind colours)", () => {
+    for (const c of Object.values(KIND_COLOR)) expect(contrastRatio(c, inkOn(c))).toBeGreaterThanOrEqual(4.5);
+    expect(inkOn(KIND_COLOR.object)).toBe("#ffffff");
+    expect(inkOn("#ff9f0a")).toBe("#1d1d1f");
+    expect(inkOn("#34c759")).toBe("#1d1d1f");
+    expect(inkOn("#ffff00")).toBe("#1d1d1f");
+    expect(inkOn("#ffffff")).toBe("#1d1d1f");
+    expect(inkOn("#1c1c80")).toBe("#ffffff");
+    expect(inkOn("not a colour")).toBe("#ffffff");
   });
 });
