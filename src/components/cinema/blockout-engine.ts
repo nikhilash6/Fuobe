@@ -220,6 +220,8 @@ export class BlockoutEngine {
     this.orbit = new OrbitControls(this.view, canvas);
     this.orbit.target.set(0, 1, -4);
     this.orbit.enableDamping = false;
+    // The arrow keys move the view while the canvas has focus (the Camera tab's fields frame it exactly).
+    this.orbit.listenToKeyEvents(canvas);
     this.orbit.addEventListener("change", () => (this.dirty = true));
     this.gizmo = new TransformControls(this.view, canvas);
     this.gizmo.setSize(0.8);

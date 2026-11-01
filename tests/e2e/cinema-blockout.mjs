@@ -69,9 +69,10 @@ async function open(ctx, engine, query = "") {
   await ctx.addInitScript((e) => localStorage.setItem("fuobe.engine", e), engine);
   await hideDevBadge(ctx);
   const page = await ctx.newPage();
-  // The app sidebar's hydration mismatch on the open engine at desktop width is the base branch's (it shows on /cinema
-  // with no blockout at all, 2026-11-01); everything else counts.
-  page.on("pageerror", (e) => !/^Hydration failed/.test(e.message) && errors.push(e.message));
+  // The app sidebar's hydration mismatch at desktop width (its Suspense fallback, ViewerRowPlaceholder) is the base
+  // branch's: it shows on /image and on /cinema with no blockout at all (2026-11-01). Any other mismatch counts.
+  const known = (m) => /^Hydration failed/.test(m) && /ViewerRowPlaceholder/.test(m) && !/Blockout/.test(m);
+  page.on("pageerror", (e) => !known(e.message) && errors.push(e.message));
   await page.goto(`${app}/cinema/${project.id}${query}`, { waitUntil: "load", timeout: 120_000 });
   return page;
 }
@@ -99,6 +100,13 @@ try {
     assert.ok(await builder.getByText(/Through the shot camera/).isVisible());
     await builder.getByRole("tab", { name: "Camera" }).click();
     assert.equal(await builder.getByRole("list", { name: "Camera keys" }).getByRole("listitem").count(), 3, "the example's three camera keys");
+    step("frame the camera from the keyboard: a typed value keys it at the playhead");
+    const camX = builder.getByRole("group", { name: "Camera (m)" }).getByLabel("x", { exact: true });
+    await camX.fill("0.5");
+    await camX.press("Tab");
+    assert.equal(await builder.getByRole("list", { name: "Camera keys" }).getByRole("listitem").count(), 4, "a fourth key, typed");
+    await builder.getByRole("button", { name: /^Remove the key at 1\.[23] s$/ }).click();
+    assert.equal(await builder.getByRole("list", { name: "Camera keys" }).getByRole("listitem").count(), 3);
     await builder.getByRole("tab", { name: "Build" }).click();
     await builder.getByRole("button", { name: "Box", exact: true }).click();
     await builder.getByRole("tab", { name: "Piece" }).click();
@@ -130,6 +138,12 @@ try {
     for (const h of ["Subject:", "Action:", "Camera:", "Style:", "Constraints:", "Audio:"]) assert.ok(prompt.includes(h), h);
     assert.match(prompt, /0\.0–4\.5s — Arrival: A woman walks slowly/);
     assert.match(await panel.getByText(/^≈ \$|Placeholder/).first().innerText(), /\$|Placeholder/);
+    step("MiniMax H3 Max 3D: the prompt box stops at 2000 characters");
+    await panel.getByRole("radio", { name: /MiniMax H3 Max 3D/ }).click();
+    assert.equal(await panel.getByLabel("Compiled prompt").getAttribute("maxlength"), "2000");
+    assert.match(await panel.locator("#blockout-prompt-count").innerText(), /\/ 2000 characters/);
+    await panel.getByRole("radio", { name: /Seedance 2\.5/ }).click();
+    assert.equal(await panel.locator("#blockout-prompt-count").count(), 0);
     await shoot(page, "1-panel-ready-1440-light");
     await noSideScroll(page, "the ready panel");
     await panel.getByRole("button", { name: "Film it" }).click();
@@ -160,6 +174,13 @@ try {
     await panel.locator('input[type=file][accept^="video/"]').first().setInputFiles(clip);
     await panel.getByText("greybox.mp4").waitFor({ timeout: 60_000 });
     await panel.getByText(/no depth pass: Depth Anything 3 reads it on your GPU/).waitFor();
+    step("a near = dark depth pass (Blender's mist), inverted");
+    const mist = path.join(tmp, "mist.mp4");
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "gradients=size=640x360:rate=16", "-t", "6", "-pix_fmt", "yuv420p", "-c:v", "libx264", mist]);
+    await panel.locator('input[type=file][accept^="video/"]').nth(1).setInputFiles(mist);
+    await panel.getByText(/with its depth/).waitFor({ timeout: 60_000 });
+    assert.ok(await panel.getByText(/near is bright, far is dark/).isVisible());
+    await panel.getByLabel(/Near is dark/).check();
     await panel.getByLabel("What happens in beat 1").fill("A man creeps along the wall.");
     await panel.getByRole("button", { name: "Beat", exact: true }).click();
     await panel.getByLabel("Beat 2 name").fill("Lights out");
@@ -174,7 +195,22 @@ try {
       return list.length >= 4 && list;
     }, "the open engine's steps");
     const models = runs.map((g) => g.request.modelId);
-    for (const m of ["oss-extract-frame", "oss-qwen-edit", "oss-segment", "oss-wan22-vace-restyle"]) assert.ok(models.includes(m), m);
+    for (const m of ["oss-extract-frame", "oss-qwen-edit", "oss-segment", "oss-wan22-vace-blockout"]) assert.ok(models.includes(m), m);
+    const win = runs.find((g) => g.request.modelId === "oss-wan22-vace-blockout");
+    assert.equal(win.request.params?.extra?.invertDepth, true, "the mist pass is inverted");
+    await ctx.close();
+  }
+  {
+    step("the GPU board's link: /cinema?blockout=1 asks for the project and opens Blockout to film in it");
+    const ctx = await browser.newContext({ ...DESKTOP, colorScheme: "light" });
+    await hideDevBadge(ctx);
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => !(/^Hydration failed/.test(e.message) && /ViewerRowPlaceholder/.test(e.message)) && errors.push(e.message));
+    await page.goto(`${app}/cinema?blockout=1`, { waitUntil: "load", timeout: 120_000 });
+    await page.getByText(/Blockout to film: pick the project to film it in/).waitFor({ timeout: 60_000 });
+    await page.getByRole("link", { name: /Blockout check/ }).first().click();
+    await page.getByRole("dialog", { name: "Blockout to film" }).waitFor({ timeout: 90_000 });
+    assert.match(page.url(), /\?blockout=1$/);
     await ctx.close();
   }
   for (const scheme of ["light", "dark"]) {

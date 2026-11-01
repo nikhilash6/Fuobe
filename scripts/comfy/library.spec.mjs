@@ -3000,6 +3000,7 @@ export const SPEC = [
       height: [b('3', 'height'), b('5', 'height'), b('34', 'height'), b('35', 'height'), b('15', 'height')],
       frames: [b('30', 'value')], fps: [b('26', 'fps')], seed: [b('22', 'noise_seed'), b('23', 'noise_seed')], steps: [b('22', 'steps'), b('23', 'steps')],
       cfg: [b('22', 'cfg'), b('23', 'cfg')], shift: [b('20', 'shift'), b('21', 'shift')], controlStrength: [b('15', 'strength')],
+      invertDepth: [b('41', 'value')],
     },
     outputs: [{ node: '27', kind: 'video' }],
     limits: { maxWidth: 1280, maxHeight: 1280, dimensionMultiple: 16, maxFrames: 81, frameStep: 4 },
@@ -3008,7 +3009,7 @@ export const SPEC = [
     notes:
       'Cinema\'s Blockout on your GPU: the browser renders the grey box and its depth (near = bright, as Depth Anything draws it) at 16 fps; video-segment-resample cuts the depth into 81-frame windows that overlap by one frame; ' +
       'qwen-image-edit-2511 draws the first frame from the grey box\'s first frame and up to two references; each window runs this graph with the first frame (window 1) or the last frame of the window before (frame-extract), then video-concat-encoded joins them. ' +
-      'The same graph as video-restyle-wan22-fun-vace without Depth Anything 3: control frame 0 = the first frame (kept), frames 1..N-1 = the depth video as it is; the first frame is also the VACE reference. Lightx2v 4 steps. Silent (no audio input): sound comes afterwards (Sound for video). ' +
+      'The same graph as video-restyle-wan22-fun-vace without Depth Anything 3: control frame 0 = the first frame (kept), frames 1..N-1 = the depth video, near = bright (invertDepth: true runs it through ImageInvert first, for a near = dark pass such as Blender\'s mist; ComfySwitchNode picks); the first frame is also the VACE reference. Lightx2v 4 steps. Silent (no audio input): sound comes afterwards (Sound for video). ' +
       'A blockout uploaded without a depth pass runs video-restyle-wan22-fun-vace instead (Depth Anything 3 on the grey box).',
   },
   {

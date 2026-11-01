@@ -40,6 +40,9 @@ import { SoulCastDialog, SoulLocationDialog } from "./soul-builders";
 import { BlockoutPanel, initialBlockout, withBuilt, type BlockoutDraft } from "./blockout-panel";
 import type { BlockoutScene } from "@/lib/blockout";
 
+/** What a browser that can only write WebM is told: Seedance 2.5 takes MP4 or MOV reference clips. */
+const WEBM_BLOCKOUT = "This browser saved the blockout as WebM, which Seedance 2.5 doesn't take: render it in Chrome or Edge, upload an MP4 from your 3D app, or film it on your GPU.";
+
 /** The blockout builder (three.js) loads when it opens. */
 const BlockoutBuilder = dynamic(() => import("./blockout-builder"), {
   ssr: false,
@@ -642,7 +645,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
           onUseAsBlockout={(b) => {
             setBlockout((d) => ({
               ...d,
-              source: { video: b.video, seconds: b.seconds, aspect: b.aspect, from: "scene" },
+              source: { video: b.video, seconds: b.seconds, aspect: b.aspect, from: "scene", ...(!b.type.includes("mp4") && { webm: true }) },
               scene: null,
               beats: d.source?.from === "scene" && d.beats.length ? d.beats.filter((x) => x.start < b.seconds) : [{ id: "start", start: 0, label: "Opening", words: "" }],
               refs: d.refs.some((r) => r.url === b.still) ? d.refs : [{ id: "scene-still", url: b.still, role: "location" as const }, ...d.refs].slice(0, 8),
@@ -650,6 +653,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
             }));
             setOpenScene(null);
             setBlockoutOpen(true);
+            if (!b.type.includes("mp4") && engine === "cloud") toast(WEBM_BLOCKOUT);
           }}
         />
       )}
@@ -677,7 +681,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
             setBlockout((d) => withBuilt(d, built, scene));
             setBuilder(null);
             setBlockoutOpen(true);
-            if (!built.type.includes("mp4") && engine === "cloud") toast("This browser saved the grey box as WebM. If the cloud model refuses it, render it in Chrome or Edge, or upload an MP4 from your 3D app.");
+            if (!built.type.includes("mp4") && engine === "cloud") toast(WEBM_BLOCKOUT);
           }}
         />
       )}

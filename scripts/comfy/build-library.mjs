@@ -147,6 +147,8 @@ export const BINDING_KEYS = new Set([
   'windowStart', 'canvasWidth', 'canvasHeight', 'fieldWidth', 'fieldHeight', 'prefixFrom', 'prefixFrames', 'tileWidth', 'tileHeight', 'streaming', 'tileFrames',
   // The owner's SOTA image families (2026-10-31): Ideogram 4's sampling preset
   'preset',
+  // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
+  'invertDepth',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

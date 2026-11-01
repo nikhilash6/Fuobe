@@ -1,9 +1,9 @@
 "use client";
 
-import { Clapperboard, Copy, ExternalLink, MoreHorizontal, Pin, PinOff, Plus, Settings2 } from "lucide-react";
+import { Box, Clapperboard, Copy, ExternalLink, MoreHorizontal, Pin, PinOff, Plus, Settings2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { PageShell } from "@/components/page-shell";
 import { PageHeader } from "@/components/page-shell";
 import { HadItemsScript, useHadItems } from "@/components/use-had-items";
@@ -42,9 +42,9 @@ function Cover({ project, className }: { project: CinemaProject; className?: str
   );
 }
 
-function ProjectCard({ project, onSettings }: { project: CinemaProject; onSettings: () => void }) {
+function ProjectCard({ project, onSettings, query = "" }: { project: CinemaProject; onSettings: () => void; query?: string }) {
   const update = useUpdateProject(project.id);
-  const href = `/cinema/${project.id}`;
+  const href = `/cinema/${project.id}${query}`;
   return (
     <div className="group/card relative animate-fade-up">
       <Link href={href} className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -101,6 +101,18 @@ function ProjectCard({ project, onSettings }: { project: CinemaProject; onSettin
       </DropdownMenu>
     </div>
   );
+}
+
+/**
+ * /cinema?blockout=1 (the GPU board's Blockout to film row): the list says to pick the project, and a project opened
+ * or started from it opens Blockout to film. Read in its own Suspense boundary, so the rest of the list prerenders.
+ */
+function BlockoutQuery({ onBlockout }: { onBlockout: () => void }) {
+  const on = useSearchParams().get("blockout") === "1";
+  useEffect(() => {
+    if (on) onBlockout();
+  }, [on, onBlockout]);
+  return null;
 }
 
 const GRID = "grid grid-cols-1 gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
@@ -160,6 +172,9 @@ export function CinemaProjects() {
   const visitor = useIsVisitor();
   const onCreate = visitor ? undefined : () => setCreating(true);
   useHadItems("cinema-projects", data?.length);
+  const [blockout, setBlockout] = useState(false);
+  const markBlockout = useCallback(() => setBlockout(true), []);
+  const query = blockout ? "?blockout=1" : "";
   return (
     <PageShell wide>
       <PageHeader title="Cinema Studio" description="Direct films shot by shot: genre, camera, lens, palette and light, with characters and locations that stay the same.">
@@ -169,6 +184,14 @@ export function CinemaProjects() {
           </Button>
         )}
       </PageHeader>
+      <Suspense fallback={null}>
+        <BlockoutQuery onBlockout={markBlockout} />
+      </Suspense>
+      {blockout && !!data?.length && (
+        <p className="mb-5 flex items-center gap-2 rounded-xl bg-brand-faint px-3 py-2.5 text-[13px] text-brand-text">
+          <Box className="size-4 shrink-0" /> Blockout to film: pick the project to film it in{onCreate ? ", or start a new one" : ""}.
+        </p>
+      )}
       {isLoading ? (
         // Both shapes are in the server's shell; the one this browser saw last time shows from the first paint.
         <div key="loading">
@@ -189,7 +212,7 @@ export function CinemaProjects() {
       ) : (
         <div key="cards" className={GRID}>
           {data.map((p) => (
-            <ProjectCard key={p.id} project={p} onSettings={() => setEditing(p)} />
+            <ProjectCard key={p.id} project={p} onSettings={() => setEditing(p)} query={query} />
           ))}
           <button
             onClick={() => setCreating(true)}
@@ -204,7 +227,7 @@ export function CinemaProjects() {
         onOpenChange={setCreating}
         onDone={(p) => {
           setCreating(false);
-          if (p) router.push(`/cinema/${p.id}`);
+          if (p) router.push(`/cinema/${p.id}${query}`);
         }}
       />
       <ProjectDialog

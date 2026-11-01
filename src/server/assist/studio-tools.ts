@@ -13,8 +13,7 @@ import type { ChainSlot, Engine, GenerationRequest, Operation } from "@/lib/cata
 import { TOOL_MODELS } from "@/lib/layers";
 import { planCinema } from "@/lib/catalog/cinema";
 import { createPipeline, type PipelineStep } from "../chains";
-import { cinemaContext } from "../cinema-generate";
-import { videoLength } from "../dub";
+import { blockoutFromFile, cinemaContext } from "../cinema-generate";
 import { db } from "../db";
 import { chooseRoute, ConnectComfyError, createGenerations, outputKind, previewChained } from "../generations";
 import { isOffered } from "../model-access";
@@ -158,8 +157,9 @@ const RestoreInput = z.object({
 const BlockoutInput = z.object({
   video: ref.describe("The grey-box blockout: a render from Blender, Unreal, Cinema 4D… (MP4 or MOV for the cloud), 2–60 s. It sets the camera, blocking and timing."),
   depth: ref.optional().describe("Your GPU: the blockout's depth pass (near = bright). Without it Depth Anything 3 reads the depth from the grey box."),
+  depth_invert: z.boolean().optional().describe("Your GPU: the depth pass is near = dark (Blender's mist pass as it renders): it is inverted before use."),
   first_frame: ref.optional().describe("Your GPU: the blockout's first frame as a picture (else it is cut from the video)."),
-  seconds: z.number().min(2).max(60).optional().describe("The blockout's length (read from the file when left out)."),
+  seconds: z.number().min(2).max(60).optional().describe("The blockout's length (the file's own header wins where it can be read)."),
   beats: z
     .array(z.object({ start: z.number().min(0).max(60).describe("Seconds into the blockout where this beat starts."), label: z.string().max(80).describe("A short name: 'Arrival', 'Lights out', 'Door kicked'."), words: z.string().max(600).optional().describe("What happens: who does what, what we hear.") }))
     .max(24)
@@ -176,7 +176,7 @@ const BlockoutInput = z.object({
   model: z.enum(["seedance-2-5", "minimax-h3-max-3d"]).optional().describe("Cloud: Seedance 2.5 (default, with sound, 30 s a shot) or MiniMax H3 Max 3D to video (8 stills, silent, 15 s a shot)."),
   resolution: z.string().max(10).optional().describe("Cloud quality: Seedance 480p / 720p / 1080p, H3 Max 480P / 768P / 1080P; your GPU 480p or 720p."),
   audio: z.boolean().optional().describe("Seedance 2.5: make sound (default true)."),
-  prompt: z.string().max(60_000).optional().describe("Cloud, a one-shot film: the whole prompt as written, instead of the one compiled from the beats."),
+  prompt: z.string().max(60_000).optional().describe("Cloud, a one-shot film: the whole prompt as written, instead of the one compiled from the beats (MiniMax H3 Max 3D takes up to 2000 characters)."),
 });
 
 export type LayersToolInput = z.infer<typeof LayersInput>;
@@ -710,7 +710,8 @@ const restoreVideo = defineTool({
  */
 function blockoutSteps(i: BlockoutToolInput, ctx: ToolContext): PipelineStep[] {
   const engine = engineOf(ctx);
-  const seconds = i.seconds ?? videoLength(i.video);
+  const read = blockoutFromFile({ video: i.video, seconds: i.seconds ?? 0 });
+  const seconds = read.seconds;
   if (!seconds) throw new Error("Couldn't read the blockout's length: pass seconds");
   const plan = planCinema(
     {
@@ -725,8 +726,10 @@ function blockoutSteps(i: BlockoutToolInput, ctx: ToolContext): PipelineStep[] {
       blockout: {
         video: i.video,
         ...(i.depth && { depth: i.depth }),
+        ...(i.depth && i.depth_invert && { depthInvert: true }),
         ...(i.first_frame && { firstFrame: i.first_frame }),
         seconds: Math.min(60, seconds),
+        ...(read.webm && { webm: true }),
         beats: i.beats.map((b) => ({ start: b.start, label: b.label, words: b.words ?? "" })),
         refs: (i.references ?? []).map((r) => ({ url: r.url, role: r.role, ...(r.name && { name: r.name }) })),
         ...(i.style && { style: i.style }),

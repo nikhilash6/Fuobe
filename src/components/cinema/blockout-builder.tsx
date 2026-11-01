@@ -17,9 +17,12 @@ import {
   PRIMS,
   blockoutSize,
   cameraAt,
+  cameraKeyAt,
   emptyScene,
   newId,
   newPrim,
+  primAt,
+  withCameraKey,
   type BlockoutCameraKey,
   type BlockoutPrim,
   type BlockoutScene,
@@ -80,7 +83,14 @@ function movePrim(s: BlockoutScene, id: string, position: Vec3, rotation: number
   };
 }
 
+/**
+ * A number typed in: each value in range goes in as it is typed, one out of range (a lens of "3" on the way to 35) waits
+ * for the field to lose focus, then is brought into range.
+ */
 function Field({ label, value, onChange, step = 0.1, min, max }: { label: string; value: number; onChange: (n: number) => void; step?: number; min?: number; max?: number }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const fits = (n: number) => (min === undefined || n >= min) && (max === undefined || n <= max);
+  const inRange = (n: number) => Math.max(min ?? -Infinity, Math.min(max ?? Infinity, n));
   return (
     <label className="grid gap-1 text-[11.5px] text-muted-foreground">
       {label}
@@ -90,10 +100,17 @@ function Field({ label, value, onChange, step = 0.1, min, max }: { label: string
         step={step}
         min={min}
         max={max}
-        value={Number.isFinite(value) ? r2(value) : 0}
+        value={draft ?? (Number.isFinite(value) ? r2(value) : 0)}
         onChange={(e) => {
-          const n = Number(e.target.value);
-          if (Number.isFinite(n)) onChange(min !== undefined || max !== undefined ? Math.max(min ?? -Infinity, Math.min(max ?? Infinity, n)) : n);
+          const text = e.target.value;
+          setDraft(text);
+          const n = Number(text);
+          if (text.trim() !== "" && Number.isFinite(n) && fits(n)) onChange(n);
+        }}
+        onBlur={() => {
+          const n = Number(draft);
+          if (draft !== null && draft.trim() !== "" && Number.isFinite(n) && !fits(n)) onChange(inRange(n));
+          setDraft(null);
         }}
         className="h-8 px-2 text-[13px] tabular-nums"
       />
@@ -199,6 +216,9 @@ export default function BlockoutBuilder({ initial, onClose, onDone }: BlockoutBu
 
   const patch = (fn: (s: BlockoutScene) => BlockoutScene) => setScene((s) => fn(s));
   const prim = scene.prims.find((p) => p.id === selected) ?? null;
+  const primPose = prim ? primAt(prim, t) : { position: [0, 0, 0] as Vec3, rotation: 0 };
+  const camNow = cameraKeyAt(scene.camera, t);
+  const camKeyed = scene.camera.some((k) => near(k.t, t));
   const updatePrim = (id: string, fn: (p: BlockoutPrim) => BlockoutPrim) => patch((s) => ({ ...s, prims: s.prims.map((p) => (p.id === id ? fn(p) : p)) }));
 
   const add = (kind: PrimKind, extra: Partial<BlockoutPrim> = {}) => {
@@ -315,7 +335,7 @@ export default function BlockoutBuilder({ initial, onClose, onDone }: BlockoutBu
             </button>
           </div>
           <div ref={setStageEl} className="relative min-h-[26svh] flex-1 overflow-hidden">
-            <canvas ref={setCanvasEl} tabIndex={0} aria-label="Blockout 3D view: drag to orbit, scroll to zoom, click a piece to select it" className="absolute inset-0 size-full touch-none outline-none" />
+            <canvas ref={setCanvasEl} tabIndex={0} aria-label="Blockout 3D view: drag to orbit, scroll to zoom, arrow keys to move the view, click a piece to select it" className="absolute inset-0 size-full touch-none outline-none" />
             {mode === "shot" && (
               <span className="pointer-events-none absolute top-2 left-2 rounded bg-black/55 px-1.5 py-0.5 font-mono text-[11px] text-white/90">
                 {scene.aspect} · {Math.round(shotNow.lens)} mm · {fmt(t)}
@@ -464,10 +484,16 @@ export default function BlockoutBuilder({ initial, onClose, onDone }: BlockoutBu
                         </button>
                       ))}
                     </div>
-                    {!prim.keys?.length && (
+                    {!prim.keys?.length ? (
                       <>
                         <Vec label="Position (m)" value={prim.position} onChange={(position) => updatePrim(prim.id, (p) => ({ ...p, position }))} />
                         <Field label="Turn (°)" value={prim.rotation} step={5} onChange={(rotation) => updatePrim(prim.id, (p) => ({ ...p, rotation }))} />
+                      </>
+                    ) : (
+                      // A piece that moves: the fields show it at the playhead, and a change keys it there.
+                      <>
+                        <Vec label={`Position at ${fmt(t)} (m)`} value={primPose.position} onChange={(position) => setScene((sc) => movePrim(sc, prim.id, position, primPose.rotation, t))} />
+                        <Field label={`Turn at ${fmt(t)} (°)`} value={primPose.rotation} step={5} onChange={(rotation) => setScene((sc) => movePrim(sc, prim.id, primPose.position, rotation, t))} />
                       </>
                     )}
                     <Vec label="Size (m)" value={prim.size} min={0.01} onChange={(size) => updatePrim(prim.id, (p) => ({ ...p, size }))} />
@@ -517,6 +543,16 @@ export default function BlockoutBuilder({ initial, onClose, onDone }: BlockoutBu
                 <Button size="sm" onClick={setCameraKey} className="w-full">
                   <Camera className="size-3.5" /> Key the camera at {fmt(t)}
                 </Button>
+                <fieldset className="space-y-2 rounded-lg bg-muted/60 p-2.5">
+                  <legend className="sr-only">The camera at the playhead</legend>
+                  <p className="text-[12px] text-muted-foreground">{camKeyed ? `The camera key at ${fmt(t)}: type to change it.` : `The camera at ${fmt(t)}: type a value to key it here.`}</p>
+                  <Vec label="Camera (m)" value={camNow.position} onChange={(position) => patch((s) => withCameraKey(s, t, { position }))} />
+                  <Vec label="Looks at (m)" value={camNow.target} onChange={(target) => patch((s) => withCameraKey(s, t, { target }))} />
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Field label="Lens (mm)" value={camNow.lens} step={1} min={BLOCKOUT.lens.min} max={BLOCKOUT.lens.max} onChange={(lens) => patch((s) => withCameraKey(s, t, { lens }))} />
+                    <Field label="Shake (0–1)" value={camNow.shake} step={0.05} min={0} max={1} onChange={(shake) => patch((s) => withCameraKey(s, t, { shake }))} />
+                  </div>
+                </fieldset>
                 <ul className="space-y-1" aria-label="Camera keys">
                   {scene.camera.map((k, i) => (
                     <li key={i} className="flex items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-[12.5px]">

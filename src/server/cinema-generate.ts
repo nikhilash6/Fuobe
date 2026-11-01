@@ -1,5 +1,6 @@
 import "server-only";
 import { nanoid } from "nanoid";
+import { BLOCKOUT } from "@/lib/blockout";
 import { getModel } from "@/lib/catalog";
 import {
   SWATCH_PLACEHOLDER,
@@ -11,6 +12,7 @@ import {
   type CinemaGenerateInput,
   type CinemaPlan,
   type CinemaStep,
+  type BlockoutRun,
   type CinemaTakeInfo,
   type DirectorSettings,
 } from "@/lib/catalog/cinema";
@@ -19,7 +21,7 @@ import { CinemaError, folderExists, getProject, recordTakes, spentUsd } from "./
 import { ConnectComfyError, createGenerations, previewGeneration } from "./generations";
 import { encodePng } from "./png";
 import { engineMode, getSetting } from "./settings";
-import { saveFile } from "./storage";
+import { saveFile, storedMedia } from "./storage";
 import { isOffered } from "./model-access";
 
 /**
@@ -57,11 +59,29 @@ export function swatchUrl(hex: string[]): string {
 /** A generate request from the workspace: the brief always comes from the project, the Director settings unless sent. */
 export type CinemaRequest = Omit<CinemaGenerateInput, "settings" | "brief"> & { settings?: DirectorSettings };
 
+/**
+ * A blockout as its stored file says: the length from the file's header (the browser's measure only where the header
+ * can't be read: a MOV it couldn't decode, a 40 s clip it read as 8, are filmed at their real length), and whether
+ * it is WebM (Seedance 2.5 takes MP4 or MOV). Only the header is read; a file the asker may not use is left as sent
+ * (its run is refused by the input checks).
+ */
+export function blockoutFromFile<T extends Pick<BlockoutRun, "video" | "seconds" | "webm">>(b: T): T & Pick<BlockoutRun, "webm"> {
+  const info = b.video ? storedMedia(b.video, { allContainers: true })?.info : undefined;
+  if (!info) return b;
+  const len = info.videoDuration ?? info.duration;
+  return {
+    ...b,
+    ...(len && len > 0 ? { seconds: Math.round(Math.min(BLOCKOUT.maxSeconds, len) * 100) / 100 } : {}),
+    ...(info.container === "webm" ? { webm: true } : info.container === "mp4" ? { webm: false } : {}),
+  };
+}
+
 /** The plan with this project's brief and (unless the request carries its own) Director settings. */
 export function planForProject(projectId: string, input: CinemaRequest): CinemaPlan {
   const project = getProject(projectId);
   if (!project) throw new CinemaError("Project not found", 404);
-  return planCinema({ ...input, settings: input.settings ?? project.director, brief: project.brief.body }, cinemaContext());
+  const asked = input.action === "blockout" && input.blockout ? { ...input, blockout: blockoutFromFile(input.blockout) } : input;
+  return planCinema({ ...asked, settings: input.settings ?? project.director, brief: project.brief.body }, cinemaContext());
 }
 
 type Preview = ReturnType<typeof previewGeneration>;
@@ -110,9 +130,11 @@ export interface CinemaRunResult {
  * Plan, check every step and the project's cost cap, create the chained generations and record them
  * in the project (in `folderId`, the scene the user is looking at).
  */
-export function generateInProject(projectId: string, input: CinemaRequest, folderId: string | null = null): CinemaRunResult {
+export function generateInProject(projectId: string, asked: CinemaRequest, folderId: string | null = null): CinemaRunResult {
   const project = getProject(projectId);
   if (!project) throw new CinemaError("Project not found", 404);
+  // A blockout's take remembers the length its file says, as the plan films it.
+  const input = asked.action === "blockout" && asked.blockout ? { ...asked, blockout: blockoutFromFile(asked.blockout) } : asked;
   const notes: string[] = [];
   // A scene deleted since the view loaded (the sidebar, another tab): file the takes at the root rather than lose them.
   let folder = folderId;

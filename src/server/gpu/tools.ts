@@ -166,13 +166,16 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   // Cinema's 3D scene films a still along a keyframed camera path (N7-5).
   { href: "/cinema", label: "Fly path", group: "Video", steps: [{ modelId: PATH_MODELS.open, op: "camera-path" }] },
   // Cinema's Blockout to film on your GPU: the first frame from the references, the depth cut into windows, each window
-  // rendered by the blockout graph and handed over on its last frame, then joined.
+  // rendered by the blockout graph and handed over on its last frame, then joined. An upload without a depth pass (the
+  // usual Blender render) runs the restyle graph instead, which reads the depth with Depth Anything 3. The projects list
+  // takes ?blockout=1 on to the project picked, which opens Blockout to film.
   {
     href: "/cinema?blockout=1",
     label: "Blockout to film",
     group: "Video",
     steps: [
       { modelId: BLOCKOUT_MODELS.open, op: "v2v" },
+      { modelId: BLOCKOUT_MODELS.openNoDepth, op: "v2v" },
       { modelId: BLOCKOUT_MODELS.firstFrame, op: "edit" },
       { modelId: "oss-segment", op: "trim" },
       { modelId: "oss-extract-frame", op: "frame" },

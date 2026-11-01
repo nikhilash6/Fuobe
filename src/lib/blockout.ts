@@ -181,6 +181,34 @@ export function cameraAt(keys: readonly BlockoutCameraKey[], t: number): { posit
   };
 }
 
+/**
+ * The camera key at time t as the builder's number fields read it: the key there, or the camera's pose there with no
+ * shake (between keys, eased).
+ */
+export function cameraKeyAt(keys: readonly BlockoutCameraKey[], t: number): BlockoutCameraKey {
+  const hit = keys.find((k) => Math.abs(k.t - t) < 0.05);
+  if (hit) return { ...hit, position: [...hit.position], target: [...hit.target] };
+  const { position, target, lens } = cameraAt(keys.map((k) => ({ ...k, shake: 0 })), t);
+  return { t: Math.round(t * 100) / 100, position, target, lens, shake: cameraAt(keys, t).shake };
+}
+
+/**
+ * The scene with its camera key at time t changed (the builder's number fields, so the camera can be framed from the
+ * keyboard): the key there, or a new one made from the camera's pose there. Unchanged when the keys are full.
+ */
+export function withCameraKey(s: BlockoutScene, t: number, patch: Partial<Omit<BlockoutCameraKey, "t">>): BlockoutScene {
+  const base = cameraKeyAt(s.camera, t);
+  const hit = s.camera.some((k) => Math.abs(k.t - t) < 0.05);
+  if (!hit && s.camera.length >= BLOCKOUT.maxCameraKeys) return s;
+  const key: BlockoutCameraKey = {
+    ...base,
+    ...patch,
+    lens: clamp(patch.lens ?? base.lens, BLOCKOUT.lens.min, BLOCKOUT.lens.max),
+    shake: clamp(patch.shake ?? base.shake, 0, 1),
+  };
+  return { ...s, camera: [...s.camera.filter((k) => Math.abs(k.t - t) >= 0.05), key].sort((a, b) => a.t - b.t) };
+}
+
 /** Vertical field of view (degrees) of a lens on a full-frame sensor cropped to `aspect` (width ÷ height). */
 export function lensVFov(lensMm: number, aspect: number): number {
   const h = 24;

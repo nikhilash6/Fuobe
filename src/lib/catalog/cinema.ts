@@ -1,4 +1,4 @@
-import { BLOCKOUT, OPEN_FPS, beatsIn, blockoutFramePrompt, compileBlockoutPrompt, depthWindows, normalizeBeats, splitShots, windowsSeconds, type Beat, type BlockoutRef } from "@/lib/blockout";
+import { BLOCKOUT, H3_INTENT_MAX, OPEN_FPS, beatsIn, blockoutFramePrompt, compileBlockoutPrompt, depthWindows, normalizeBeats, splitShots, windowsSeconds, type Beat, type BlockoutRef } from "@/lib/blockout";
 import { DEFAULT_MOTION, PATH_FPS, PATH_FRAMES, normalizeKeys, toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { APERTURE, LENS, anglesNote, poseWords, recomposePrompt, type ScenePose } from "@/lib/scene3d";
 import { getModel, getPreset } from "./index";
@@ -249,12 +249,20 @@ export interface CinemaGenerateInput {
 export interface BlockoutRun {
   /** The grey-box render (uploaded from any 3D app, or rendered by Cinema's builder). */
   video: string;
-  /** Its depth pass, near = bright (the builder renders one at 16 fps; Blender's mist / Z pass works too). */
+  /**
+   * Its depth pass, near = bright (the builder renders one at 16 fps). Blender's mist pass is near = dark: invert it in
+   * the compositor, or set depthInvert (the composer's "Near is dark") and the graph inverts it. A raw Z pass isn't
+   * normalised to 0–1: map it to a mist-like range first.
+   */
   depth?: string;
+  /** The depth pass is near = dark (a Blender mist pass as it renders): the open engine inverts it before VACE reads it. */
+  depthInvert?: boolean;
   /** Its first frame as a picture (the builder saves one): the open engine draws the film's first frame from it. */
   firstFrame?: string;
-  /** Seconds. */
+  /** Seconds (the server reads them from the stored file's header where it can). */
   seconds: number;
+  /** The blockout is WebM (a browser's fallback render): Seedance 2.5 takes MP4 or MOV only. The server reads it from the header. */
+  webm?: boolean;
   /** Each beat's start (seconds), name and words; it runs to the next one (normalizeBeats). */
   beats: (Pick<Beat, "start" | "label"> & Partial<Beat>)[];
   refs: BlockoutRef[];
@@ -2155,9 +2163,10 @@ export const BLOCKOUT_MODELS = {
  * clips of 1.8–30.2 s and makes 4–30 s (fal, read 2026-11-01; Cinema sends it 4 stills with clips); H3 Max 3D to video
  * reads up to 15 s and 8 stills and bills at least 5 s a shot.
  */
-export const BLOCKOUT_SHOTS: Record<string, { max: number; min: number; refs: number; tag: "seedance" | "h3" }> = {
+export const BLOCKOUT_SHOTS: Record<string, { max: number; min: number; refs: number; tag: "seedance" | "h3"; prompt?: number }> = {
   "seedance-2-5": { max: 30, min: 4, refs: 4, tag: "seedance" },
-  "minimax-h3-max-3d": { max: 15, min: 2, refs: 8, tag: "h3" },
+  // H3 bills at least 5 s a shot, so no shot is cut shorter; its prompt (Scene Intent) takes up to 2000 characters.
+  "minimax-h3-max-3d": { max: 15, min: 5, refs: 8, tag: "h3", prompt: H3_INTENT_MAX },
 };
 
 /** The utilities a blockout's steps use, per engine. */
@@ -2243,7 +2252,8 @@ function planBlockout(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPla
           modelId,
           op: "v2v",
           prompt: compileBlockoutPrompt({ beats: beatsIn(beats, w.start, w.end), refs, target: "open", ...words }),
-          params: { aspectRatio, resolution, duration: w.frames / OPEN_FPS, numOutputs: 1 },
+          // A near = dark depth pass (Blender's mist) is inverted in the graph before VACE reads it.
+          params: { aspectRatio, resolution, duration: w.frames / OPEN_FPS, numOutputs: 1, ...(depth && b?.depthInvert ? { extra: { invertDepth: true } } : {}) },
           chain: [{ slot: "video" }, { slot: "images", position: "first" }],
         },
       });
@@ -2272,6 +2282,9 @@ function planBlockout(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPla
   const resolution = offered.find((r) => r.toLowerCase() === input.resolution?.toLowerCase()) ?? model.defaults?.resolution;
   const aspectRatio = seedance ? (input.aspectRatio && model.options.aspectRatios?.includes(input.aspectRatio) ? input.aspectRatio : "auto") : undefined;
   const sound = seedance && input.audio !== false;
+  const edited = input.prompt.trim();
+  if (!many && lim.prompt && edited.length > lim.prompt) blocker ??= `${model.name} takes a prompt of up to ${lim.prompt} characters, and yours has ${edited.length}: shorten it, or go back to the compiled one`;
+  if (seedance && b?.webm) blocker ??= `${model.name} takes MP4 or MOV blockouts, and this one is WebM: render it in Chrome or Edge, export an MP4 from your 3D app, or film it on your GPU`;
   // A later shot carries the last frame of the one before as one more still.
   const keep = many ? lim.refs - 1 : lim.refs;
   const used = refs.slice(0, keep);
@@ -2281,6 +2294,12 @@ function planBlockout(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPla
       ? `${model.name} follows the blockout as its reference video (@Video1)${used.length ? ` with your still${used.length > 1 ? `s as @Image1–@Image${used.length}` : " as @Image1"}` : ""}${sound ? ", sound on" : ""}`
       : `${model.name} renders the blockout from your stills; camera, blocking and timing come from the video. It makes no sound: add it afterwards with Sound for video`,
   );
+  if (seedance) notes.push(`${model.name} bills the blockout's seconds with the film's, at 0.6 times its rate: the price counts both`);
+  else {
+    const gen = model.pricing?.generatedRefs;
+    if (gen && !used.length) notes.push(`With no stills, ${model.name} draws up to ${gen.count} references of its own ($${gen.usd.toFixed(2)} each, in the price)${many ? " for the first shot" : ""}`);
+    notes.push(`${model.name} bills each shot at least ${model.pricing?.minSeconds ?? lim.min} s, and counts every camera cut inside an uploaded render as a shot: a render with cuts costs more than shown`);
+  }
   if (many) {
     notes.push(
       `The blockout is ${secs1(seconds)} s, longer than ${model.name}'s ${lim.max} s, so it is filmed as ${shots.length} shots cut at your markers (${shots.map((s) => `${secs1(s.start)}–${secs1(s.end)} s`).join(", ")}); each starts from the last frame of the one before, then they're joined`,
@@ -2294,7 +2313,7 @@ function planBlockout(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPla
     if (seedance && duration - len > 0.6) notes.push(`${model.name} makes at least ${lim.min} s, so shot${part || " 1"} runs ${secs1(duration - len)} s past the blockout`);
     const prev = k > 0 ? used.length + 1 : undefined;
     const compiled = compileBlockoutPrompt({ beats: beatsIn(beats, shot.start, shot.end), refs: used, target: lim.tag, previousFrame: prev, sound, ...words });
-    const prompt = !many && input.prompt.trim() ? input.prompt.trim() : compiled;
+    const prompt = !many && edited ? edited : compiled;
     const after: string[] = [];
     const chain: GenerationRequest["chain"] = [];
     let inputs: GenerationRequest["inputs"] = used.length ? { images: used.map((r) => r.url) } : undefined;
@@ -2313,7 +2332,8 @@ function planBlockout(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPla
       duration,
       ...(resolution ? { resolution } : {}),
       ...(aspectRatio ? { aspectRatio } : {}),
-      ...(seedance ? { generateAudio: sound } : {}),
+      // Seedance bills the reference clip's seconds with the film's (Pricing.clipInput): the blockout, or this shot's cut.
+      ...(seedance ? { generateAudio: sound, clipSeconds: Math.round(len * 100) / 100 } : {}),
     };
     steps.push({
       key: `shot${k}`,

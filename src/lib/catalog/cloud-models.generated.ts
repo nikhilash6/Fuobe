@@ -4412,8 +4412,22 @@ export const CLOUD_MODELS: ModelDef[] = [
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.473,
-      "note": "720p"
+      "usd": 0.46224,
+      "note": "720p; 480p $0.21494, 1080p $1.13724. Reference clips bill their own seconds with the output, at 0.6 times the rate",
+      "byResolution": {
+        "480p": 0.21494,
+        "720p": 0.46224,
+        "1080p": 1.13724
+      },
+      "clipInput": {
+        "usd": 0.27734,
+        "byResolution": {
+          "480p": 0.12897,
+          "720p": 0.27734,
+          "1080p": 0.68234
+        },
+        "plain": true
+      }
     }
   },
   {
@@ -7240,14 +7254,18 @@ export const CLOUD_MODELS: ModelDef[] = [
     "pricing": {
       "unit": "second",
       "usd": 0.08,
-      "note": "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request",
+      "note": "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request; + $0.10 for each reference it draws when given none (up to 2)",
       "byResolution": {
         "480P": 0.05,
         "768P": 0.08,
         "1080P": 0.16
       },
       "minSeconds": 5,
-      "perRequest": 0.5
+      "perRequest": 0.5,
+      "generatedRefs": {
+        "usd": 0.1,
+        "count": 2
+      }
     },
     "hidden": true
   },

@@ -86,7 +86,9 @@ export const BlockoutSchema = z.object({
   video: FileRef,
   depth: FileRef.optional(),
   firstFrame: FileRef.optional(),
+  depthInvert: z.boolean().optional(),
   seconds: z.number().min(BLOCKOUT.minSeconds).max(BLOCKOUT.maxSeconds),
+  webm: z.boolean().optional(),
   beats: z
     .array(z.object({ id: z.string().max(40).optional(), start: z.number().min(0).max(BLOCKOUT.maxSeconds), end: z.number().min(0).max(BLOCKOUT.maxSeconds).optional(), label: z.string().trim().max(80), words: Words.default("") }))
     .max(BLOCKOUT.maxMarkers)

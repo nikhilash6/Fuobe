@@ -32,8 +32,14 @@ import { mediaDuration } from "./media";
 export interface BlockoutSource {
   video: string;
   depth?: string;
+  /** The depth pass is near = dark (Blender's mist pass): the graph inverts it. */
+  depthInvert?: boolean;
   firstFrame?: string;
   seconds: number;
+  /** The browser couldn't read the upload's length: the server reads it from the file when it films. */
+  unmeasured?: boolean;
+  /** A WebM render or upload (Seedance 2.5 takes MP4 or MOV). */
+  webm?: boolean;
   aspect?: string;
   from: "upload" | "build" | "scene";
   name?: string;
@@ -111,8 +117,10 @@ export function blockoutInput(d: BlockoutDraft, engine: Engine, settings: Direct
     blockout: {
       video: s?.video ?? "",
       ...(s?.depth ? { depth: s.depth } : {}),
+      ...(s?.depth && s.depthInvert ? { depthInvert: true } : {}),
       ...(s?.firstFrame ? { firstFrame: s.firstFrame } : {}),
       seconds: s?.seconds ?? 0,
+      ...(s?.webm ? { webm: true } : {}),
       beats: d.beats.map((b) => ({ id: b.id, start: b.start, label: b.label.trim() || "Beat", words: b.words })),
       refs: d.refs.filter((r) => r.url && !r.uploading).map((r) => ({ url: r.url, role: r.role, ...(r.name?.trim() ? { name: r.name.trim() } : {}) })),
       ...(d.style.trim() ? { style: d.style.trim() } : {}),
@@ -129,6 +137,9 @@ const MODEL_LINES: Record<string, string> = {
 };
 
 const fmt = (n: number) => `${Math.round(n * 10) / 10} s`;
+
+/** The longest prompt the box takes for a model with no limit of its own. */
+const PROMPT_MAX = 60_000;
 
 /** The frame shapes a blockout is filmed in: an upload takes the nearest to its own. */
 const SHAPES = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
@@ -198,6 +209,9 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
   const resolutions = engine === "cloud" ? (getModel(draft.modelId)?.options.resolutions ?? []) : ["480p", "720p"];
   const resolution = draft.resolution && resolutions.some((r) => r.toLowerCase() === draft.resolution!.toLowerCase()) ? draft.resolution : (engine === "cloud" ? getModel(draft.modelId)?.defaults?.resolution : "480p");
   const seedance = engine === "cloud" && BLOCKOUT_SHOTS[draft.modelId]?.tag === "seedance";
+  // H3 Max 3D to video takes a prompt of up to 2000 characters: the box stops there.
+  const promptMax = engine === "cloud" ? (BLOCKOUT_SHOTS[draft.modelId]?.prompt ?? PROMPT_MAX) : PROMPT_MAX;
+  const shownPrompt = engine === "cloud" ? (draft.prompt ?? compiled) : compiled;
 
   const uploadVideo = async (f: File, kind: "video" | "depth") => {
     if (f.size > 200 * 1024 * 1024) return toast.error("That file's over 200 MB. Try a smaller one.");
@@ -207,11 +221,15 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
       const [asset, length, aspect] = await Promise.all([uploadFile(f), mediaDuration(preview, "video").catch(() => NaN), clipShape(preview)]);
       URL.revokeObjectURL(preview);
       if (kind === "depth") return set({ source: draft.source ? { ...draft.source, depth: asset.url } : null });
-      const secs = Number.isFinite(length) && length > 0 ? Math.round(length * 100) / 100 : 8;
+      const measured = Number.isFinite(length) && length > 0;
+      // Not readable here (a MOV this browser can't play): a stand-in until filming, when the file's own length is used.
+      const secs = measured ? Math.round(length * 100) / 100 : 8;
       if (secs > BLOCKOUT.maxSeconds) toast(`Blockouts run up to ${BLOCKOUT.maxSeconds} s: this one is ${fmt(secs)}, so its first ${BLOCKOUT.maxSeconds} s are used`);
+      const webm = f.type === "video/webm" || /\.webm$/i.test(f.name);
+      if (webm && engine === "cloud") toast("This is a WebM file: Seedance 2.5 takes MP4 or MOV. Export an MP4 from your 3D app, or film it on your GPU.");
       setDraft((d) => ({
         ...d,
-        source: { video: asset.url, seconds: Math.min(BLOCKOUT.maxSeconds, secs), from: "upload", name: f.name, ...(aspect && { aspect }) },
+        source: { video: asset.url, seconds: Math.min(BLOCKOUT.maxSeconds, secs), from: "upload", name: f.name, ...(aspect && { aspect }), ...(!measured && { unmeasured: true }), ...(webm && { webm: true }) },
         beats: d.beats.length ? d.beats.filter((b) => b.start < secs) : [{ id: nanoid(6), start: 0, label: "Opening", words: "" }],
         prompt: null,
       }));
@@ -296,8 +314,9 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
                     {built ? "Built in your browser" : s.from === "scene" ? "From the 3D scene's fly path" : (s.name ?? "Uploaded render")}
                   </p>
                   <p className="text-[12.5px] text-muted-foreground">
-                    {fmt(seconds)}
+                    {s.unmeasured ? "Length read from the file when you film" : fmt(seconds)}
                     {s.aspect ? ` · ${s.aspect}` : ""}
+                    {s.webm ? " · WebM" : ""}
                     {s.depth ? " · with its depth" : engine === "open" ? " · no depth pass: Depth Anything 3 reads it on your GPU" : ""}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -315,6 +334,17 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
                       <RotateCcw className="size-3.5" /> Start over
                     </Button>
                   </div>
+                  {!built && (
+                    <div className="space-y-1 text-[12px] text-muted-foreground">
+                      <p>A depth pass guides your GPU: near is bright, far is dark, as wide as the render and just as long.</p>
+                      {s.depth && (
+                        <label className="flex items-center gap-1.5 text-foreground">
+                          <input type="checkbox" checked={!!s.depthInvert} onChange={(e) => set({ source: { ...s, depthInvert: e.target.checked } })} className="size-3.5 accent-primary" />
+                          Near is dark (Blender’s mist pass): invert it
+                        </label>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -534,13 +564,20 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
               )}
             </div>
             <Textarea
-              value={engine === "cloud" ? (draft.prompt ?? compiled) : compiled}
+              value={shownPrompt}
               readOnly={engine !== "cloud"}
-              onChange={(e) => set({ prompt: e.target.value.slice(0, 60_000) })}
+              onChange={(e) => set({ prompt: e.target.value.slice(0, promptMax) })}
+              maxLength={promptMax}
               rows={9}
               className="font-mono text-[12px] leading-relaxed"
               aria-label="Compiled prompt"
+              aria-describedby={promptMax < PROMPT_MAX ? "blockout-prompt-count" : undefined}
             />
+            {promptMax < PROMPT_MAX && (
+              <p id="blockout-prompt-count" className={cn("text-right text-[11.5px] tabular-nums", shownPrompt.length > promptMax ? "text-destructive" : "text-muted-foreground")}>
+                {shownPrompt.length} / {promptMax} characters
+              </p>
+            )}
             <p className="text-[12px] text-muted-foreground">
               {engine === "cloud" ? "Compiled from the beats, references and words above. Edit it freely: a film longer than one shot gets each shot's own beats instead." : "Each window gets the beats inside it, briefly: Wan follows the depth for everything else."}
             </p>
@@ -572,6 +609,6 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
 
 /** The draft after the builder hands back a render: the source, the scene, its beats (words kept). */
 export function withBuilt(d: BlockoutDraft, b: BuiltBlockout, scene: BlockoutScene): BlockoutDraft {
-  return { ...d, source: { video: b.video, depth: b.depth, firstFrame: b.firstFrame, seconds: b.seconds, aspect: b.aspect, from: "build" }, scene, beats: beatsForScene(scene, d.beats), prompt: null };
+  return { ...d, source: { video: b.video, depth: b.depth, firstFrame: b.firstFrame, seconds: b.seconds, aspect: b.aspect, from: "build", ...(!b.type.includes("mp4") && { webm: true }) }, scene, beats: beatsForScene(scene, d.beats), prompt: null };
 }
 

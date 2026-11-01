@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -38,6 +39,8 @@ const REFS: import("@/lib/blockout").BlockoutRef[] = [
   { url: "/api/files/uploads/mara.png", role: "character", name: "Mara" },
   { url: "/api/files/uploads/exterior.png", role: "exterior" },
 ];
+/** fal's Seedance 2.5 price: h × w × (input + output) × 24 / 1024 tokens at $0.0214 per 1K (1080p $0.0234), × 0.6 with a clip in. */
+const seedanceUsd = (pixels: number, input: number, output: number, perK = 0.0214) => ((pixels * (input + output) * 24) / 1024 / 1000) * perK * (input > 0 ? 0.6 : 1);
 const exampleBeats = () => B.beatsFrom(B.EXAMPLE_SCENE.markers, B.EXAMPLE_SCENE.duration, B.EXAMPLE_WORDS);
 const ctx = { cloudAllowed: true };
 const film = (engine: "cloud" | "open", over: Partial<NonNullable<CinemaGenerateInput["blockout"]>> = {}, more: Partial<CinemaGenerateInput> = {}): CinemaGenerateInput => ({
@@ -87,6 +90,26 @@ describe("the scene", () => {
     expect(B.blockoutSize("9:16", 832)).toEqual({ width: 464, height: 832 });
     expect(B.aspectOf("2.39:1")).toBeCloseTo(2.39);
     expect(B.aspectOf("nonsense")).toBeCloseTo(16 / 9);
+  });
+
+  it("frames the camera from the builder's number fields: the key at the playhead, or a new one from the pose there", () => {
+    const s = B.emptyScene();
+    s.camera = [
+      { t: 0, position: [0, 1.6, 0], target: [0, 1.6, -5], lens: 24, shake: 0.4 },
+      { t: 4, position: [0, 1.6, -4], target: [0, 1.6, -9], lens: 96, shake: 0.4 },
+    ];
+    // Between keys the fields read the eased pose with no shake in it.
+    const mid = B.cameraKeyAt(s.camera, 2);
+    expect(mid).toMatchObject({ t: 2, lens: expect.closeTo(48, 6), shake: expect.closeTo(0.4, 6) });
+    expect(mid.position).toEqual([0, 1.6, -2]);
+    const typed = B.withCameraKey(s, 2, { position: [1, 2, -2] });
+    expect(typed.camera.map((k) => k.t)).toEqual([0, 2, 4]);
+    expect(typed.camera[1]).toMatchObject({ position: [1, 2, -2], target: [0, 1.6, -7] });
+    // A key already there is changed in place; a lens is kept in range.
+    const again = B.withCameraKey(typed, 2.02, { lens: 5 });
+    expect(again.camera).toHaveLength(3);
+    expect(again.camera[1]).toMatchObject({ position: [1, 2, -2], lens: B.BLOCKOUT.lens.min });
+    expect(B.withCameraKey({ ...s, camera: Array.from({ length: B.BLOCKOUT.maxCameraKeys }, (_, i) => ({ ...B.DEFAULT_CAMERA, t: i })) }, 0.5, { lens: 50 }).camera).toHaveLength(B.BLOCKOUT.maxCameraKeys);
   });
 
   it("makes a caller's scene safe: numbers in range, lists capped, a camera always there", () => {
@@ -214,9 +237,14 @@ describe("planning a blockout", () => {
     expect(r.params).toMatchObject({ duration: 8, resolution: "720p", aspectRatio: "auto", generateAudio: true });
     expect(r.prompt).toContain("@Image2 is Mara");
     expect(r.prompt).toMatch(/Audio: Footsteps on concrete; A long door creak\./);
-    // Seedance 2.5 at 720p: 8 s × $0.473.
-    expect(plan.costUsd).toBeCloseTo(8 * 0.473, 3);
+    // Seedance 2.5 bills the 8 s blockout with the 8 s film, at 0.6 times the rate (fal's formula).
+    expect(r.params?.clipSeconds).toBe(8);
+    expect(plan.costUsd).toBeCloseTo(seedanceUsd(1280 * 720, 8, 8), 2);
     expect(plan.notes.join(" ")).toMatch(/reference video \(@Video1\).*sound on/);
+    expect(plan.notes.join(" ")).toMatch(/bills the blockout's seconds with the film's/);
+    // Per resolution: 480p is 864 × 496, 1080p 1920 × 1080 at $0.0234 per 1K tokens.
+    expect(planCinema(film("cloud", {}, { resolution: "480p" }), ctx).costUsd).toBeCloseTo(seedanceUsd(864 * 496, 8, 8), 2);
+    expect(planCinema(film("cloud", {}, { resolution: "1080p" }), ctx).costUsd).toBeCloseTo(seedanceUsd(1920 * 1080, 8, 8, 0.0234), 2);
   });
 
   it("cloud: an edited prompt is sent as written, and the prompt the composer shows is the one it would send", () => {
@@ -253,7 +281,12 @@ describe("planning a blockout", () => {
     expect(join.request).toMatchObject({ modelId: "join-clips", op: "concat" });
     expect(join.after).toEqual(["shot0", "shot1"]);
     expect(plan.notes.join(" ")).toMatch(/filmed as 2 shots cut at your markers \(0–26 s, 26–40 s\)/);
-    expect(plan.costUsd).toBeGreaterThan(40 * 0.473 - 0.01);
+    // Each shot bills its cut with its film: 26 + 26 and 14 + 14 seconds at 720p, plus a few cents of cutting and joining.
+    expect(shot0.request.params?.clipSeconds).toBe(26);
+    expect(shot1.request.params?.clipSeconds).toBe(14);
+    const films = seedanceUsd(1280 * 720, 26, 26) + seedanceUsd(1280 * 720, 14, 14);
+    expect(plan.costUsd).toBeGreaterThan(films - 0.01);
+    expect(plan.costUsd).toBeLessThan(films + 0.1);
   });
 
   it("cloud, H3 Max 3D to video: its own model, 15 s shots, up to 8 stills, no sound, and its processing fee in the price", () => {
@@ -269,10 +302,41 @@ describe("planning a blockout", () => {
     expect(planCinema(film("cloud", { seconds: 3 }, { modelId: "minimax-h3-max-3d" }), ctx).costUsd).toBeCloseTo(5 * 0.08 + 0.5, 3);
     const long = planCinema(film("cloud", { seconds: 20 }, { modelId: "minimax-h3-max-3d" }), ctx);
     expect(long.steps.filter((s) => s.key.startsWith("shot")).map((s) => s.request.params?.duration)).toEqual([6, 14]);
+    // No shot is cut under the 5 s H3 bills anyway: 16 s is 11 + 5, not 14 + 2.
+    const sixteen = planCinema(film("cloud", { seconds: 16, beats: [{ start: 0, label: "All" }] }, { modelId: "minimax-h3-max-3d" }), ctx);
+    expect(sixteen.steps.filter((s) => s.key.startsWith("shot")).map((s) => s.request.params?.duration)).toEqual([11, 5]);
+    expect(plan.notes.join(" ")).toMatch(/at least 5 s, and counts every camera cut inside an uploaded render as a shot/);
     expect(long.steps.find((s) => s.key === "shot1")!.request.chain).toEqual([
       { slot: "video", position: "first" },
       { slot: "images", position: "last" },
     ]);
+  });
+
+  it("cloud, H3 Max 3D to video: an edited prompt over 2000 characters is refused before it is sent", () => {
+    const h3 = (prompt: string) => planCinema(film("cloud", { seconds: 10 }, { modelId: "minimax-h3-max-3d", prompt }), ctx);
+    expect(h3("x".repeat(2000)).blocker).toBeUndefined();
+    expect(h3("x".repeat(2000)).steps[0].request.prompt).toHaveLength(2000);
+    expect(h3("x".repeat(5000)).blocker).toMatch(/up to 2000 characters, and yours has 5000/);
+    // Seedance has no such limit, and a many-shot H3 film compiles each shot's own prompt.
+    expect(planCinema(film("cloud", {}, { prompt: "x".repeat(5000) }), ctx).blocker).toBeUndefined();
+    expect(planCinema(film("cloud", { seconds: 20 }, { modelId: "minimax-h3-max-3d", prompt: "x".repeat(5000) }), ctx).blocker).toBeUndefined();
+  });
+
+  it("cloud, H3 Max 3D to video: with no stills it draws two references of its own, priced", () => {
+    const bare = planCinema(film("cloud", { seconds: 12, refs: [] }, { modelId: "minimax-h3-max-3d" }), ctx);
+    expect(bare.costUsd).toBeCloseTo(12 * 0.08 + 0.5 + 2 * 0.1, 3);
+    expect(bare.notes.join(" ")).toMatch(/With no stills, MiniMax H3 Max 3D to video draws up to 2 references of its own \(\$0\.10 each, in the price\)/);
+    // A later shot carries the hand-over frame, so only the first draws its own.
+    const two = planCinema(film("cloud", { seconds: 20, refs: [] }, { modelId: "minimax-h3-max-3d" }), ctx);
+    expect(two.costUsd).toBeCloseTo(6 * 0.08 + 14 * 0.08 + 2 * 0.5 + 2 * 0.1, 1);
+    const m = getModel("minimax-h3-max-3d")!;
+    expect(estimateCost(m, { resolution: "768P", duration: 10, drawnRefs: 2 }, 1, "v2v")).toBeCloseTo(10 * 0.08 + 0.5 + 0.2, 3);
+  });
+
+  it("cloud: a WebM blockout is refused on Seedance 2.5, which takes MP4 or MOV", () => {
+    expect(planCinema(film("cloud", { webm: true }), ctx).blocker).toMatch(/takes MP4 or MOV blockouts, and this one is WebM/);
+    expect(planCinema(film("cloud", { webm: true, seconds: 12 }, { modelId: "minimax-h3-max-3d" }), ctx).blocker).toBeUndefined();
+    expect(planCinema(film("open", { webm: true }), ctx).blocker).toBeUndefined();
   });
 
   it("open: the first frame from the references, then depth windows chained by their last frame and joined, free", () => {
@@ -292,6 +356,12 @@ describe("planning a blockout", () => {
     expect(step("last0").request).toMatchObject({ modelId: "oss-extract-frame", op: "frame", chain: [{ slot: "video" }] });
     expect(step("join").request).toMatchObject({ modelId: "oss-join-encoded", op: "concat" });
     expect(plan.notes.join(" ")).toMatch(/not the dialogue or sound: add sound afterwards with Sound for video/);
+    expect(step("win0").request.params?.extra).toBeUndefined();
+    // A near = dark pass (Blender's mist) is inverted by the graph in every window.
+    const mist = planCinema(film("open", { depth: DEPTH, firstFrame: FRAME, depthInvert: true }), ctx);
+    for (const k of ["win0", "win1"]) expect(mist.steps.find((s) => s.key === k)!.request.params?.extra).toEqual({ invertDepth: true });
+    // Without a depth pass there is nothing to invert.
+    expect(planCinema(film("open", { depthInvert: true }), ctx).steps.find((s) => s.key === "win0")!.request.params?.extra).toBeUndefined();
   });
 
   it("open: an upload without depth reads it with Depth Anything 3 and cuts its own first frame", () => {
@@ -350,6 +420,28 @@ describe("the hosted models and the graph", () => {
     expect(workflow["32"].inputs.image).toEqual(["3", 0]);
     expect(workflow["26"].inputs.audio).toBeUndefined();
     expect(Object.values(workflow).some((n) => /^DA3/.test(n.class_type))).toBe(false);
+    // The depth goes to VACE through a switch: as it is by default, inverted for a near = dark pass.
+    expect(workflow["33"].inputs["images.image1"]).toEqual(["43", 0]);
+    expect(workflow["43"]).toMatchObject({ class_type: "ComfySwitchNode", inputs: { switch: ["41", 0], on_false: ["32", 0], on_true: ["42", 0] } });
+    expect(workflow["42"]).toMatchObject({ class_type: "ImageInvert", inputs: { image: ["32", 0] } });
+    expect(workflow["41"].inputs.value).toBe(false);
+    const inverted = await prepareWorkflow(
+      "video-blockout-wan22-fun-vace",
+      { prompt: "She walks", images: ["first.png"], video: "mist.webm", aspectRatio: "16:9", resolution: "480p", duration: 81 / 16, extra: { invertDepth: true } },
+      { generationId: "gen-c", op: "v2v", upload: async (_d, _t, name) => name },
+    );
+    expect(inverted.workflow["41"].inputs.value).toBe(true);
+  });
+
+  it("Seedance 2.5 is priced by fal's token formula: input and output seconds, 0.6 times with reference clips, per resolution", () => {
+    const m = getModel("seedance-2-5")!;
+    // fal's own worked examples (bytedance/seedance-2.5/reference-to-video, read 2026-11-01).
+    expect(estimateCost(m, { duration: 10, resolution: "720p" }, 1, "ref2v")).toBeCloseTo(4.62, 2);
+    expect(estimateCost(m, { duration: 10, resolution: "720p", clipSeconds: 8 }, 1, "ref2v")).toBeCloseTo(4.99, 2);
+    expect(estimateCost(m, { duration: 30, resolution: "720p", clipSeconds: 10 }, 1, "ref2v")).toBeCloseTo(11.09, 2);
+    // No floor: a short clip bills its own seconds, not twice the output.
+    expect(estimateCost(m, { duration: 10, resolution: "480p", clipSeconds: 2 }, 1, "ref2v")).toBeCloseTo(seedanceUsd(864 * 496, 2, 10), 3);
+    expect(estimateCost(m, { duration: 5, resolution: "1080p" }, 1, "t2v")).toBeCloseTo((1920 * 1080 * 5 * 24) / 1024 / 1000 * 0.0234, 3);
   });
 });
 
@@ -372,6 +464,33 @@ describe("Cinema API: a blockout in demo mode", () => {
     const items = cinema.listItems(p.id);
     expect(items[0].take).toMatchObject({ action: "blockout", blockout: { seconds: 8, parts: 1, beats: ["Arrival", "The door opens", "Into the dark"] } });
     expect(gens.getGeneration(out.items[0].id)!.provider).toBe("mock");
+  });
+
+  it("films an upload at the length its file says, and refuses a WebM blockout on Seedance 2.5", async () => {
+    const p = cinema.createProject({ name: "Lengths" });
+    const clip = (ext: "mp4" | "webm", seconds: number) => {
+      const out = path.join(dir, `clip-${seconds}.${ext}`);
+      const codec = ext === "mp4" ? ["-pix_fmt", "yuv420p", "-c:v", "libx264"] : ["-c:v", "libvpx", "-b:v", "200k"];
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", `testsrc=size=320x180:rate=24`, "-t", String(seconds), ...codec, out]);
+      return saveFile({ data: fs.readFileSync(out), contentType: `video/${ext}`, name: `greybox.${ext}`, source: "upload" }).url;
+    };
+    // The browser said 8 s (a clip it couldn't read); the file is 40 s: two shots, and the take says 40.
+    const long = clip("mp4", 40);
+    const res = await generateRoute.POST(json({ input: film("cloud", { video: long, seconds: 8, beats: [{ start: 0, label: "All" }], refs: [] }) }), params(p.id));
+    expect(res.status).toBe(201);
+    const out = (await res.json()) as { items: { id: string; op: string }[] };
+    expect(out.items.filter((g) => g.op === "ref2v")).toHaveLength(2);
+    expect(cinema.listItems(p.id)[0].take?.blockout?.seconds).toBeCloseTo(40, 1);
+    // Assist reads the same header.
+    const tools = await import("@/server/assist/tools");
+    expect(tools.planFor("blockout_film", { video: long, seconds: 8, beats: [{ start: 0, label: "All" }] }, { engine: "cloud" }).jobs.filter((j) => j.op === "ref2v")).toHaveLength(2);
+    // A WebM file, whatever the browser said, is refused on Seedance 2.5 before anything runs.
+    const webm = clip("webm", 3);
+    const refused = await generateRoute.POST(json({ input: film("cloud", { video: webm, seconds: 3, refs: [] }) }), params(p.id));
+    expect(refused.status).toBe(422);
+    expect(((await refused.json()) as { error: string }).error).toMatch(/takes MP4 or MOV blockouts, and this one is WebM/);
+    const h3 = await generateRoute.POST(json({ input: film("cloud", { video: webm, seconds: 3, refs: [] }, { modelId: "minimax-h3-max-3d" }) }), params(p.id));
+    expect(h3.status).toBe(201);
   });
 
   it("refuses a blockout from outside Fuobe's files, and one past 60 s", async () => {
@@ -404,7 +523,8 @@ describe("Canvas, the GPU board, Assist and MCP", () => {
     const row = STUDIO_ROWS.find((r) => r.href === "/cinema?blockout=1")!;
     expect(row).toMatchObject({ label: "Blockout to film", group: "Video" });
     const tool = studioTool(row)!;
-    expect(tool.workflows).toEqual(expect.arrayContaining(["video-blockout-wan22-fun-vace", "video-segment-resample", "frame-extract", "video-concat-encoded"]));
+    // An upload without a depth pass runs the restyle graph (Depth Anything 3), so the row needs it too.
+    expect(tool.workflows).toEqual(expect.arrayContaining(["video-blockout-wan22-fun-vace", "video-restyle-wan22-fun-vace", "video-segment-resample", "frame-extract", "video-concat-encoded"]));
     const req = JSON.parse(fs.readFileSync("workflows/comfyui/requirements.json", "utf8")) as { workflows: Record<string, { packs: Record<string, unknown> }> };
     expect(req.workflows["video-blockout-wan22-fun-vace"].packs).toEqual({});
   });

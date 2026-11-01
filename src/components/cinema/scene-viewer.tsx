@@ -47,7 +47,8 @@ export interface SceneViewerProps {
   brief: string;
   onClose: () => void;
   /** Blockout to film: the path rendered through the scene (24 fps) handed to the composer as a blockout. */
-  onUseAsBlockout?: (b: { video: string; seconds: number; aspect: string; still: string }) => void;
+  /** `type`: the render's own type ("video/mp4", or "video/webm" where the browser can't write MP4). */
+  onUseAsBlockout?: (b: { video: string; seconds: number; aspect: string; still: string; type: string }) => void;
 }
 
 const SPEEDS = [
@@ -383,7 +384,7 @@ export default function SceneViewer({ take, projectId, engine, onEngine, setting
       const rec = await eng.recordPath(poses, { fps, mp4: true, onProgress: setProgress });
       setFilming("send");
       const asset = await uploadFile(new File([rec.render], `blockout-path.${rec.type.includes("mp4") ? "mp4" : "webm"}`, { type: rec.type }));
-      onUseAsBlockout({ video: asset.url, seconds: Math.round((frames / fps) * 100) / 100, aspect, still: take.still });
+      onUseAsBlockout({ video: asset.url, seconds: Math.round((frames / fps) * 100) / 100, aspect, still: take.still, type: rec.type });
     } catch (e) {
       if ((e as Error).name !== "AbortError") toastError(e, "Couldn't render the path as a blockout");
     } finally {

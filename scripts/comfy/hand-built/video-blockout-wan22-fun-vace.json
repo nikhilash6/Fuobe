@@ -108,7 +108,7 @@
         0
       ],
       "images.image1": [
-        "32",
+        "43",
         0
       ]
     },
@@ -495,6 +495,47 @@
     },
     "_meta": {
       "title": "SaveVideo"
+    }
+  },
+  "41": {
+    "class_type": "PrimitiveBoolean",
+    "inputs": {
+      "value": false
+    },
+    "_meta": {
+      "title": "near is dark (a Blender mist pass): invert the depth"
+    }
+  },
+  "42": {
+    "class_type": "ImageInvert",
+    "inputs": {
+      "image": [
+        "32",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "ImageInvert"
+    }
+  },
+  "43": {
+    "class_type": "ComfySwitchNode",
+    "inputs": {
+      "switch": [
+        "41",
+        0
+      ],
+      "on_false": [
+        "32",
+        0
+      ],
+      "on_true": [
+        "42",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "the depth as near = bright"
     }
   }
 }
