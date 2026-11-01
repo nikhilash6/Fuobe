@@ -270,7 +270,7 @@ export const RELAY_WORDS = {
   waitedTooLong: (ms: number) => `Fuobe couldn't reach your computer for ${duration(ms)}. Open Fuobe there, then press Retry.`,
   computerSilent: "Your computer stopped answering. If ComfyUI finished, open Fuobe there and press Retry.",
   comfyDown: "ComfyUI isn't answering. Start it again, and Fuobe goes on by itself.",
-  comfyNoSetting: "ComfyUI is running without Fuobe's setting. Fuobe goes on once it has it.",
+  comfyNoSetting: "ComfyUI is running, but Fuobe can't use it yet. Install Fuobe Connect in ComfyUI, and Fuobe goes on by itself.",
   comfyDownTooLong: "ComfyUI didn't come back within 30 minutes. Start it, then press Retry.",
   resent: "ComfyUI restarted, so Fuobe sent it again",
   lost: "ComfyUI restarted and lost this run. Press Retry.",

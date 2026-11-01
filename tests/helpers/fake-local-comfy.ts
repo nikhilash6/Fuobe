@@ -47,6 +47,11 @@ export interface LocalComfyOptions {
   /** Fuobe's guard is in its custom nodes (it answers GET /fuobe/guard). */
   guard?: boolean;
   /**
+   * Fuobe Connect is in its custom nodes, trusting this origin: that origin gets CORS (with no start setting), every
+   * other site still meets ComfyUI's own check, and GET /fuobe/connect answers.
+   */
+  connect?: string;
+  /**
    * Everything a requirement index names is installed (the studio's workflows/comfyui/requirements.json): its node
    * classes, with the loaders listing its files, and its model files. Without it, this ComfyUI has nothing.
    */
@@ -402,7 +407,10 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       const entry: LocalComfyLog = { method: req.method ?? "GET", path: url.pathname + url.search, at: Date.now(), ...(origin && { origin }) };
       log.push(entry);
       const headers: Record<string, string> = {};
-      if (opts.cors !== "off") {
+      if (opts.cors === "off" && opts.connect && origin === opts.connect) {
+        Object.assign(headers, { "Access-Control-Allow-Origin": opts.connect, Vary: "Origin", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "content-type" });
+        if (req.headers["access-control-request-private-network"] === "true") headers["Access-Control-Allow-Private-Network"] = "true";
+      } else if (opts.cors !== "off") {
         Object.assign(headers, {
           "Access-Control-Allow-Origin": opts.cors,
           "Access-Control-Allow-Methods": "POST, GET, DELETE, PUT, OPTIONS, PATCH",
@@ -439,6 +447,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
       // No list given: an older ComfyUI without the route (the run goes ahead, and ComfyUI has the last word).
       if (p === "/models/loras") return opts.loras ? reply(200, opts.loras) : reply(404, { error: "not found" });
       if (p === "/fuobe/guard") return opts.guard ? reply(200, { guard: 1 }) : reply(404, { error: "not found" });
+      if (p === "/fuobe/connect") return opts.connect ? reply(200, { connect: 1, version: "1.0.0", guard: 1 }) : reply(404, { error: "not found" });
       const has = opts.has ? installed(opts.has) : null;
       const liveNodes = !!has?.info.SaveImageFuobeLive && !opts.noLiveNodes;
       if (p === "/fuobe/live") return liveNodes ? reply(200, opts.oldLiveNodes ? { version: 1 } : { version: LIVE_NODES_VERSION, sha256: LIVE_NODES_SHA256 }) : reply(404, { error: "not found" });
@@ -691,6 +700,7 @@ export function startLocalComfy(given: LocalComfyOptions, port = 0): Promise<Loc
 
 // Run on its own: node tests/helpers/fake-local-comfy.ts --port 3371 --cors http://127.0.0.1:3370
 // [--has workflows/comfyui/requirements.json]: everything that index names is installed. [--guard 1]: Fuobe's guard answers.
+// [--connect <origin>]: Fuobe Connect is installed, trusting that origin.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const arg = (name: string) => {
     const i = process.argv.indexOf(`--${name}`);
@@ -698,6 +708,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   };
   const index = arg("has");
   const has = index ? (JSON.parse(readFileSync(index, "utf8")) as IndexLike) : undefined;
-  const fake = await startLocalComfy({ cors: arg("cors") ?? "off", steps: Number(arg("steps") ?? 8), stepMs: Number(arg("step-ms") ?? 250), portable: arg("portable") === "1", guard: arg("guard") === "1", has }, Number(arg("port") ?? 3371));
+  const fake = await startLocalComfy({ cors: arg("cors") ?? "off", steps: Number(arg("steps") ?? 8), stepMs: Number(arg("step-ms") ?? 250), portable: arg("portable") === "1", guard: arg("guard") === "1", ...(arg("connect") && { connect: arg("connect") }), has }, Number(arg("port") ?? 3371));
   console.log(`fake ComfyUI on ${fake.url} (cross-site setting: ${fake.opts.cors})`);
 }

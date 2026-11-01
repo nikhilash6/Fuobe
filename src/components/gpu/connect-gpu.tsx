@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 import { PreflightChecklist } from "@/components/gpu/preflight-checklist";
 import { ReadinessBoard } from "@/components/gpu/readiness-board";
 import { ConnectChoice } from "@/components/gpu/connect-choice";
+import { PairWithCode } from "@/components/gpu/fuobe-connect";
 import { useSettings } from "@/components/connect-field";
 import { openFinder, useComputerSupport } from "@/components/gpu/open-connect";
 import { usePagePlace } from "@/components/gpu/use-local-comfy";
@@ -34,6 +35,8 @@ function Card({ children }: { children: React.ReactNode }) {
 export function ConnectGpu() {
   const params = useSearchParams();
   const welcome = params.get("welcome") === "1";
+  // Fuobe Connect's pairing link (/connect?code=…): approve that ComfyUI first.
+  const code = params.get("code");
   const next = safeNext(params.get("next"), typeof window === "undefined" ? "http://localhost" : window.location.origin);
   const viewer = useViewer().data;
   const isAccount = !!viewer?.account;
@@ -111,6 +114,37 @@ export function ConnectGpu() {
       <p className="max-w-2xl text-[15px] text-muted-foreground">{lead}</p>
     </div>
   );
+
+  if (code)
+    return (
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <span className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
+            <Cpu aria-hidden className="size-5" />
+          </span>
+          <h1 className="font-heading text-[30px] leading-tight">Connect your ComfyUI</h1>
+          <p className="max-w-2xl text-[15px] text-muted-foreground">Fuobe Connect in your ComfyUI asked to run your Fuobe jobs. Check the computer, then approve it.</p>
+        </div>
+        <Card>
+          {guest ? (
+            <div className="space-y-3">
+              <p className="text-[14px]">Sign in to approve this ComfyUI. Its runs will be yours.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild className="h-11 sm:h-9">
+                  <Link href={signInHref("login", `/connect?code=${encodeURIComponent(code)}`)}>Log in</Link>
+                </Button>
+                <Button asChild variant="secondary" className="h-11 sm:h-9">
+                  <Link href={signInHref("signup", `/connect?code=${encodeURIComponent(code)}`)}>Sign up free</Link>
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <PairWithCode initial={code} />
+          )}
+        </Card>
+        {done(false)}
+      </div>
+    );
 
   if (guest)
     return (

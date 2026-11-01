@@ -11,6 +11,7 @@ import type { ReadinessView } from "@/hooks/use-gpu";
 import { copyWithToast } from "@/lib/clipboard";
 import { GUARD_FILE_NAME, GUARD_SOURCE, isGuard } from "@/lib/comfy-guard";
 import { LIVE_NODES_FILE_NAME, LIVE_NODES_SOURCE } from "@/lib/comfy-live-nodes";
+import { isConnectAnswer } from "@/lib/fuobe-connect";
 import { corsFlag, fixFor, guessInstall, installFromStats, platformOf, startFile, START_FILE_NAME, type ComfyInstall } from "@/lib/comfy-install";
 import { checkThisComputer, loopbackFetch, sendCheck } from "@/lib/gpu/browser-check";
 import { deviceLabel } from "@/lib/gpu/readiness";
@@ -18,6 +19,7 @@ import { localBase, statsFacts, typedPort, type SystemStats } from "@/lib/local-
 import { madeNoun } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import { computerState, rememberComfy, rememberedComfy, restartComputerRunner, store, stored } from "./computer-runtime";
+import { InstallConnect, PairInstead } from "./fuobe-connect";
 import { useLocalComfy, type Finder } from "./use-local-comfy";
 
 /**
@@ -156,33 +158,27 @@ export function GuardFix({ port, install = installOf(port) }: { port: number; in
 }
 
 /**
- * The fix for the install the person has: a start file, a setting in an app, or a command; and, before it, what the
- * setting does to other websites and the guard that keeps them out. `back`: ComfyUI restarted, still without it.
- * `again`: it had the setting before (started the usual way this time). `others`: more ports where something answers.
+ * ComfyUI answers, but this page can't use it yet: the one step is Fuobe Connect (it lets this studio in, and keeps every
+ * other website out), and Fuobe connects by itself once ComfyUI restarts with it. The start setting with Fuobe's guard
+ * (the way before Fuobe Connect) is under Advanced. `back`: ComfyUI restarted, still not usable. `again`: it was usable
+ * before (started the usual way this time). `others`: more ports where something answers.
  */
 export function SettingFix({ port, back, again, others, onChoose }: { port: number; back: boolean; again?: boolean; others?: number[]; onChoose?: (port: number) => void }) {
-  const [install, setInstall] = useState<ComfyInstall>(() => installOf(port));
-  const [choosing, setChoosing] = useState(false);
-  const [yourself, setYourself] = useState(false);
-  const fix = fixFor(install, origin(), port);
+  const [advanced, setAdvanced] = useState(false);
   // ComfyUI's usual port, or the one it was found on before, is surely ComfyUI; another app may answer on another one
   // (8000 is a common default).
   const known = port === 8188 || rememberedComfy()?.port === port;
   const heading = back
-    ? "ComfyUI is back, but without the setting yet."
+    ? "ComfyUI is back, but Fuobe can't use it yet."
     : again
-      ? "ComfyUI is running, but without Fuobe's setting this time."
+      ? "ComfyUI is running, but Fuobe can't use it this time."
       : known
-        ? "Found ComfyUI. It needs one setting to work with Fuobe."
-        : `Something answers on port ${port}. If it's ComfyUI, it needs one setting to work with Fuobe.`;
+        ? "Found ComfyUI. One step to use it here:"
+        : `Something answers on port ${port}. If it's ComfyUI, one step to use it here:`;
   return (
     <div className="space-y-3">
-      <div>
-        <p className="text-[15px] font-medium">{heading}</p>
-        <p className="mt-1 text-[13px] text-muted-foreground">{fix.lead}</p>
-        {back && <p className="mt-1 text-[12px] text-muted-foreground">The address must be exactly {origin()}, with nothing after it.</p>}
-        {again && fix.startFile && <p className="mt-1 text-[12px] text-muted-foreground">Next time, start ComfyUI with {START_FILE_NAME} (next to ComfyUI): it has the setting.</p>}
-      </div>
+      <p className="text-[15px] font-medium">{heading}</p>
+      {back && <p className="text-[12px] text-muted-foreground">Did ComfyUI restart after the install? Fuobe Connect starts with ComfyUI.</p>}
       {!!others?.length && onChoose && (
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
           Something answers on {others.length === 1 ? `port ${others[0]}` : `ports ${others.join(", ")}`} too. Is ComfyUI there?
@@ -193,6 +189,38 @@ export function SettingFix({ port, back, again, others, onChoose }: { port: numb
           ))}
         </p>
       )}
+      <InstallConnect />
+      <Watching>Fuobe connects by itself when ComfyUI is back.</Watching>
+      <div>
+        <button type="button" onClick={() => setAdvanced((v) => !v)} aria-expanded={advanced} className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground">
+          <ChevronDown className={cn("size-3.5 transition-transform", advanced && "rotate-180")} /> Advanced: a start setting instead
+        </button>
+        {advanced && (
+          <div className="mt-2 rounded-xl border p-3">
+            <FlagFix port={port} back={back} again={again} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The way before Fuobe Connect: the start setting for the install the person has (a start file, a setting in an app,
+ * or a command), with Fuobe's guard, which keeps other websites out while the setting is on.
+ */
+function FlagFix({ port, back, again }: { port: number; back: boolean; again?: boolean }) {
+  const [install, setInstall] = useState<ComfyInstall>(() => installOf(port));
+  const [choosing, setChoosing] = useState(false);
+  const [yourself, setYourself] = useState(false);
+  const fix = fixFor(install, origin(), port);
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-[13px] text-muted-foreground">{fix.lead}</p>
+        {back && <p className="mt-1 text-[12px] text-muted-foreground">The address must be exactly {origin()}, with nothing after it.</p>}
+        {again && fix.startFile && <p className="mt-1 text-[12px] text-muted-foreground">Next time, start ComfyUI with {START_FILE_NAME} (next to ComfyUI): it has the setting.</p>}
+      </div>
       <p className="flex items-start gap-1.5 rounded-lg bg-muted/60 px-2.5 py-2 text-[12px] text-muted-foreground">
         <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-brand-text" />
         {fix.startFile
@@ -201,7 +229,7 @@ export function SettingFix({ port, back, again, others, onChoose }: { port: numb
       </p>
       {fix.startFile ? (
         <>
-          <Button className="h-11 sm:h-9" onClick={() => save(START_FILE_NAME, startFile(port, origin()))}>
+          <Button size="sm" variant="secondary" onClick={() => save(START_FILE_NAME, startFile(port, origin()))}>
             <Download /> Download start file
           </Button>
           <p className="text-[12px] text-muted-foreground">
@@ -252,7 +280,6 @@ export function SettingFix({ port, back, again, others, onChoose }: { port: numb
           </div>
         )}
       </div>
-      <Watching>Fuobe connects by itself when ComfyUI is back.</Watching>
     </div>
   );
 }
@@ -280,7 +307,7 @@ function OtherPort({ onLook, missed }: { onLook: (port: number, host: string) =>
   );
 }
 
-type Connected = { port: number; stats: SystemStats; guard: boolean; board?: ReadinessView | null; checkFailed?: boolean };
+type Connected = { port: number; stats: SystemStats; guard: Guarded; board?: ReadinessView | null; checkFailed?: boolean };
 
 function readyLine(board: ReadinessView | null | undefined): string | null {
   const studios = board?.report?.studios;
@@ -292,7 +319,7 @@ function readyLine(board: ReadinessView | null | undefined): string | null {
 
 /** The connected screen: the GPU, what's ready, and the run starting (when it was opened from one). */
 function Celebration({ c, fromRun, kind, onStart, onNotNow, doneWords }: { c: Connected; fromRun?: boolean; kind?: string; onStart?: () => void; onNotNow?: () => void; doneWords?: string }) {
-  const facts = statsFacts(c.stats, origin(), c.guard);
+  const facts = statsFacts(c.stats, origin(), !!c.guard);
   const gpu = [facts.device && deviceLabel(facts.device), gib(facts.vramBytes), facts.version && `ComfyUI ${facts.version}`].filter(Boolean).join(" · ");
   const ready = readyLine(c.board);
   const checked = c.board !== undefined || c.checkFailed;
@@ -331,7 +358,7 @@ function Celebration({ c, fromRun, kind, onStart, onNotNow, doneWords }: { c: Co
         </div>
       ) : c.guard ? (
         <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <ShieldCheck className="size-3.5 text-brand-text" /> Fuobe&apos;s guard keeps other websites out of your ComfyUI.
+          <ShieldCheck className="size-3.5 text-brand-text" /> {c.guard === "connect" ? "Fuobe Connect" : "Fuobe's guard"} keeps other websites out of your ComfyUI.
         </p>
       ) : (
         <div className="space-y-1.5 text-[12px]">
@@ -411,12 +438,21 @@ export interface ThisComputerProps {
   waitForTap?: boolean;
 }
 
-/** Is Fuobe's guard in this ComfyUI (it answers at /fuobe/guard)? */
-const guardAt = (port: number, host: string) =>
-  loopbackFetch(`${localBase(port, host)}/fuobe/guard`, { credentials: "omit", cache: "no-store" }).then(
-    (r) => (r.ok ? r.json().then(isGuard, () => false) : false),
-    () => false,
-  );
+/**
+ * Does this ComfyUI keep other websites out: Fuobe Connect (it answers at /fuobe/connect, and leaves ComfyUI's own check
+ * on for every other site), or Fuobe's guard (at /fuobe/guard)?
+ */
+type Guarded = "connect" | "guard" | false;
+
+const guardAt = async (port: number, host: string): Promise<Guarded> => {
+  const read = (path: string, ok: (a: unknown) => boolean) =>
+    loopbackFetch(`${localBase(port, host)}${path}`, { credentials: "omit", cache: "no-store" }).then(
+      (r) => (r.ok ? r.json().then(ok, () => false) : false),
+      () => false,
+    );
+  if (await read("/fuobe/connect", isConnectAnswer)) return "connect";
+  return (await read("/fuobe/guard", isGuard)) ? "guard" : false;
+};
 
 /** The whole flow, from "Find my ComfyUI" to connected. */
 export function ThisComputer({ connect, fromRun, kind, onStart, onNotNow, autoLook, again, doneWords, lookNow, waitForTap }: ThisComputerProps) {
@@ -519,13 +555,17 @@ function Screen({ state, look, choose, again, asks }: { state: Finder; look: Ret
   switch (state.s) {
     case "unsupported":
       return (
-        <p className="flex items-start gap-2 text-muted-foreground">
-          <MonitorSmartphone className="mt-0.5 size-4 shrink-0" /> {UNSUPPORTED[state.why]}
-        </p>
+        <div className="space-y-3">
+          <p className="flex items-start gap-2 text-muted-foreground">
+            <MonitorSmartphone className="mt-0.5 size-4 shrink-0" /> {UNSUPPORTED[state.why]}
+          </p>
+          <PairInstead />
+        </div>
       );
     case "start":
       return (
         <div className="space-y-3">
+          <InstallConnect then="Already have it? Skip this step." />
           <Button className="h-11 sm:h-9" onClick={() => void look()}>
             <Search /> Find my ComfyUI
           </Button>
@@ -578,6 +618,7 @@ function Screen({ state, look, choose, again, asks }: { state: Finder; look: Ret
           <Button size="sm" variant="secondary" onClick={() => window.location.reload()}>
             <RefreshCw /> Reload
           </Button>
+          <PairInstead className="mt-2" />
         </div>
       );
   }

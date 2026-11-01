@@ -14,6 +14,7 @@ import type { OwnerGpuView } from "@/lib/connections";
 import { addressKind, refusedOnHosted } from "@/lib/page-place";
 import { cn } from "@/lib/utils";
 import { restartComputerRunner, rememberComfy, rememberedComfy } from "./computer-runtime";
+import { PairedComfyUIs } from "./fuobe-connect";
 import { GuardFix, SettingFix, ThisComputer, unsupportedWords } from "./this-computer";
 import { lookOn, useComputerSupport, usePagePlace } from "./use-local-comfy";
 import { openConnect, openFinder, useComputerState, type FindReason } from "./computer-runner";
@@ -654,6 +655,7 @@ export function OwnerComfyWhere({ value, onChange }: { value: string; onChange: 
         <OwnerComputerLine />
       ) : null}
       {computer && <p className="text-[12px] text-muted-foreground">Moving ComfyUI to this server stops the runs still going on your computer.</p>}
+      <PairedComfyUIs />
     </div>
   );
 }
