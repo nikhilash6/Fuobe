@@ -43,7 +43,10 @@ const evolutionEstimate = await import("@/app/api/evolution/estimate/route");
 
 // The harness is plain ESM JavaScript (it runs with node, no build step).
 const evalCli = (await import("../scripts/eval/eval.mjs")) as { main: (argv: string[], io?: object) => Promise<number> };
-const cases = (await import("../scripts/eval/lib/cases.mjs")) as { loadSuite: (n: string) => Record<string, unknown>; validateAll: () => { ok: boolean; file: string; lines: string[] }[] };
+const cases = (await import("../scripts/eval/lib/cases.mjs")) as {
+  loadSuite: (n: string) => Record<string, unknown> & { cases: { presetId?: string }[]; decides?: string };
+  validateAll: () => { ok: boolean; file: string; suite?: string; runFirst?: string; lines: string[] }[];
+};
 const runner = (await import("../scripts/eval/lib/run.mjs")) as {
   runEval: (opts: object, io: object) => Promise<Record<string, unknown>>;
   routeResult: (answer: unknown, how?: string) => { id: string }[];
@@ -369,6 +372,17 @@ describe("the runner on the demo provider", () => {
         ["shorts/segment", "gemini-omni-flash", null],
         ["shorts/session", "gemini-omni-flash", null],
       ]);
+      // DoP's Mixed Media effects, blind: the shipped preset on Fuobe DoP against its words on Kling 2.5 Turbo (the
+      // owner's call of 2026-10-30), the first suite to run once paid keys exist, with the rule it decides by.
+      const dmm = await dry(["--suite", "dop-mixed-media", "--engine", "cloud", "--variants", "original,partner", "--seeds", "1001", "--allow-fixtures"]);
+      expect(dmm.jobs).toHaveLength(16);
+      expect(new Set(dmm.jobs.map((j) => `${j.variant}:${j.model}:${j.skip ?? ""}`))).toEqual(new Set(["original:fuobe-dop:", "partner:kling-2-5-turbo:"]));
+      const suite = cases.loadSuite("dop-mixed-media");
+      expect(suite).toMatchObject({ runFirst: "paid-keys", defaults: { candidate: "original" } });
+      expect(suite.decides).toMatch(/Kling 2\.5 Turbo takes at least two thirds .* goes back to Kling 2\.5 Turbo, in a reviewed code change/);
+      expect(cases.validateAll().filter((r) => r.runFirst === "paid-keys").map((r) => r.suite)).toEqual(["dop-mixed-media"]);
+      const { getPreset } = await import("@/lib/catalog");
+      for (const c of suite.cases) expect(getPreset(c.presetId!)?.cloud?.modelId, c.presetId).toBe("fuobe-dop");
       // A partner variant is a cloud model: on the open engine it would only repeat the Original's run.
       const open = await dry(["--suite", "genjutsu", "--engine", "open", "--variants", "partner", "--allow-fixtures"]);
       expect(open.jobs.every((j) => j.skip === "the partner variant runs on cloud only")).toBe(true);
