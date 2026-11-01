@@ -134,8 +134,12 @@ function WorkflowCard({ wf, usedBy }: { wf: WF; usedBy: string[] }) {
           <Badge variant="secondary" className="rounded-[4px] text-[11px]">
             {wf.capability}
           </Badge>
-          <Badge className={cn("rounded-[4px] text-[11px]", wf.validated ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>
-            {wf.validated ? "validated" : "unverified"}
+          {/* Not a warning: a graph the library's own check hasn't passed yet may still run (several made the site's previews). */}
+          <Badge
+            title={wf.validated ? "Passed the library's own ComfyUI check" : "This graph hasn't passed the library's own ComfyUI check yet"}
+            className={cn("rounded-[4px] text-[11px]", wf.validated ? "bg-success/15 text-success" : "bg-muted text-muted-foreground")}
+          >
+            {wf.validated ? "validated" : "not yet checked"}
           </Badge>
         </div>
       </div>

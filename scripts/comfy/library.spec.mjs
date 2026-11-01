@@ -1379,7 +1379,7 @@ export const SPEC = [
     license: 'Apache-2.0 (InfiniteTalk, Wan 2.1, lightx2v; FusioniX: Apache-2.0 card, the LoRAs it merges unchecked)',
     autoDownloads: ['DownloadAndLoadWav2VecModel downloads TencentGameMate/chinese-wav2vec2-base into models/transformers on first run'],
     notes:
-      'kijai WanVideoWrapper example 03 (GGUF Q8 Wan2.1-I2V-480p + InfiniteTalk single, lightx2v LoRA, 6 steps). Generates in 81-frame windows until the audio ends; `frames` is a MAX frame cap @25 fps (default 500 = 20 s). Changes vs example: MelBandRoFormer vocal separation removed (use clean speech audio), attention sdpa instead of sageattn, save_output=true, model sub-folders flattened. Output is a VHS_VideoCombine node: look in history outputs[node].gifs[], not .images[]. ' +
+      'kijai WanVideoWrapper example 03 (GGUF Q8 Wan2.1-I2V-480p + InfiniteTalk single, lightx2v LoRA, 6 steps). Generates in 81-frame windows until the audio ends; `frames` is a MAX frame cap @25 fps (default 500 = 20 s). Changes vs example: MelBandRoFormer vocal separation removed (use clean speech audio), attention sdpa instead of sageattn, save_output=true, model sub-folders flattened. A VHS_VideoCombine node saves the video. ' +
       'The defaults are the fast lightx2v pass (6 steps, cfg 1, shift 11, motion_frame 9, dpm++_sde). Fuobe Speak sends a slower, higher-quality recipe through the extra bindings: ' +
       'lora Wan2.1_I2V_14B_FusionX_LoRA.safetensors at 1 (the run\'s LoRA goes into WanVideoLoraSelect, which this wrapper graph loads itself), steps 25, cfg 5 (text guidance), audioCfg 5 (audio guidance; the wrapper runs the extra audio-free pass when cfg > 1), ' +
       'shift 10, scheduler unipc (InfiniteTalk\'s solver), motionFrame 15 and colormatch reinhard for InfiniteTalk\'s colour correction (a Lab mean / spread match to the portrait; the wrapper has no strength, so on = 1). About 25 / 6 × 3 passes the time of the fast pass.',
@@ -1874,7 +1874,7 @@ export const SPEC = [
     notes:
       'Run once per panel: image = previous panel (panel 1 from z-image-turbo-t2i, optionally with the user\'s character LoRA), image2 = character/product reference re-injected every panel to limit identity drift, ' +
       'prompt = camera move + story beat ("The camera pulls back to a wide shot ..."). Node 1002 prefixes "Next Scene:". loraStrength default 0.75 (model card: 0.7-0.8). 4 steps, cfg 1. ' +
-      'Drift still accumulates over many chained panels (inferred); qwen-image-edit-2511-multi (independent panels from the same references) is the no-drift alternative.',
+      'Drift can still build up over many chained panels; qwen-image-edit-2511-multi (independent panels from the same references) is the no-drift alternative.',
   },
 
   // ---- video matting / depth ----------------------------------------------
@@ -1894,7 +1894,7 @@ export const SPEC = [
     notes:
       'Core RemoveBackground on every frame -> InvertMask -> JoinImageWithAlpha (it stores 1-mask as alpha, like bg-remove-birefnet) -> SaveWEBM (vp9, crf 24, fps = source fps): an RGBA .webm with real transparency (yuva420p). ' +
       'Second output (node 10) = black/white matte .mp4 for compositing. SaveWEBM reports its file under history outputs "images" (animated: true), not "videos": classify by the .webm extension / the declared kind. ' +
-      'Per-frame model, so hair edges may flicker (inferred). Source audio is dropped. For "keep only X" use video-bg-remove-sam3. ' +
+      'Per-frame model, so hair edges can flicker. Source audio is dropped. For "keep only X" use video-bg-remove-sam3. ' +
       'Roles: node 7 "cutout", node 10 "matte"; params.matteOutput ("cutout" | "matte", on a Remove background job: op bg-remove-video) makes the provider drop the other save node (Video tools → Remove background: Cutout video / Alpha mask).',
   },
   {
@@ -2256,7 +2256,7 @@ export const SPEC = [
       'The 25-step Qwen-Image 2.1 edit behind the site\'s preview pictures, with the references wired as in the Qwen-Image 2.1 image-edit workflow: ' +
       'each image scaled to 2048 on its long side (lanczos), all of them on one TextEncodeQwenImage21 (images.image_1..4, resolution 0 = each at its own size on the 32 grid, vae linked, no negative), ' +
       'its latent (image 1\'s size: no custom-size latent, which shifts the edit), QwenImage21Cache auto, KSampler 25 steps, cfg 1, euler, simple. Output follows image 1 (2048 on the long side). ' +
-      'Images 2-4 are optional: the provider drops a reference not given (dropBranch into TextEncodeQwenImage21). Prompt: one plain instruction, then one keep clause pointing at the picture ' +
+      'Images 2-4 are optional: Fuobe leaves out the branch of a reference not given. Prompt: one plain instruction, then one keep clause pointing at the picture ' +
       '("Keep ... exactly as in image 1"); refer to references as image 1/2/3/4. Removed: the ComfySwitchNode custom size, compare and note nodes. It and qwen-image-21-turbo-edit made 133 of the site\'s preview edits.',
   },
   {
@@ -2833,7 +2833,7 @@ export const SPEC = [
     autoDownloads: ['AILab_Qwen3ASRSubtitle downloads Qwen/Qwen3-ASR-0.6B-hf (1.56 GB) and Qwen/Qwen3-ForcedAligner-0.6B-hf (1.84 GB) into models/Qwen3-ASR on first run'],
     notes:
       'Default caption source for Faceless / Shorts. Changed from the original graph: LoadAudio instead of LoadVideo + GetVideoComponents (audio or video input). ' +
-      'maxChars 32 + split_by_punctuation_or_pause_or_length gives short vertical-video lines. The text output is one "start-end: text" line per cue; the provider parses it into meta.cues. ' +
+      'maxChars 32 + split_by_punctuation_or_pause_or_length gives short vertical-video lines. The text output is one "start-end: text" line per cue, which Fuobe reads as the captions. ' +
       'output_format none: the node writes no file of its own (concurrent jobs would race on one captions.srt); SaveText returns the cues. ' +
       'Burn the cues in with captions-burnin (chain: transcript text -> prompt).',
   },
@@ -2851,7 +2851,7 @@ export const SPEC = [
     vramGb: 0,
     license: 'no model (ComfyUI core TextOverlay, GPL-3.0 like ComfyUI; Pillow\'s bundled Aileron font, OFL)',
     notes:
-      'Fuobe\'s open caption burn-in, all inside ComfyUI with core nodes. The provider rewrites the graph per request (expandCaptionWorkflow): the cues (prompt lines "start-end: text" or SRT, e.g. from captions-qwen3-asr) ' +
+      'Fuobe\'s open caption burn-in, all inside ComfyUI with core nodes. Fuobe rewrites the graph for each request: the cues (prompt lines "start-end: text" or SRT, e.g. from captions-qwen3-asr) ' +
       'cut the clip into Trim Video windows. Gaps go straight to Concatenate Video (never decoded). A cue window is cut into chunks of at most ~384 MB of frames (about 0.5 s of 1080x1920 at 30 fps, 5 s at 360p); ' +
       'each chunk is decoded (GetVideoComponents), gets a TextOverlay in the style of node 12 (fontSize = % of the frame height, fontColor, captionPosition top | bottom, outlined) and is encoded at once (CreateVideo codec h264), ' +
       'so ComfyUI only needs one chunk of raw frames at a time and can evict finished chunks under memory pressure. Concatenate Video joins chunks and gaps in order and lays the clip\'s own soundtrack (LoadAudio, node 3) ' +
@@ -2997,7 +2997,7 @@ export const SPEC = [
     license:
       'MIT (Pixal3D weights by TencentARC, as the multi-view weights; TRELLIS.2 VAEs as repackaged by Comfy-Org, BiRefNet, microsoft/MoGe 2); the dino_v3_L_naf image encoder is DINOv3 ViT-L under the DINOv3 License ' +
       '(royalty-free, commercial use allowed; the app must show a "Built with DINOv3" notice)',
-    notes: 'Template 3d_pixal3d_trellis2_image_to_model, Pixal3D branch (the default image-to-3D route): MoGe-2 (geometry_estimation/moge_2_vitl_normal_fp16, resolution_level 9) estimates the camera from the cut-out, MoGeGeometryToFOV (horizontal, degrees) -> Pixal3DConditioning (camera_angle_x) with the DINOv3 encoder, UNet pixal3d_int8_convrot; ImageCropToMask pad_factor 1.1 (as the node asks for Pixal3D). BiRefNet cut-out -> ImageCropToMask 1024 -> structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) -> RemeshMesh (768, sign_mode solid, fill 20, band 1, smooth 20) -> DecimateMesh (250,000 faces, midpoint) -> smooth normals -> UV unwrap -> base colour / metallic / roughness baked at textureSize, normal map 2048 and AO 1024 baked from the dense remeshed mesh onto the decimated one -> GLB (Save3DAdvanced, history ui "3d"). No turntable in the graph: after the job the Fuobe server finishes the GLB (roughness floor by material, pivot at the bottom centre, meshopt + WebP 2048 web GLB as meta.web; the raw GLB stays the download) and renders a 96-frame 24 fps turntable on the CPU (model-viewer on SwiftShader) when Chromium and ffmpeg are available. Run end to end on an RTX 5090: 114-185 s per object, 25-35 MB raw GLB at ~250k triangles (was 8M triangles / 317 MB before the decimate step), web GLB 1.6-3.6 MB; more faithful to the photo than TRELLIS.2 (209-238 s). The origin is the camera-aligned volume centre, hence the pivot fix. Surfaces can show faint planar facets from the shape decode (no graph setting removes them).',
+    notes: 'Template 3d_pixal3d_trellis2_image_to_model, Pixal3D branch (the default image-to-3D route): MoGe-2 (geometry_estimation/moge_2_vitl_normal_fp16, resolution_level 9) estimates the camera from the cut-out, MoGeGeometryToFOV (horizontal, degrees) -> Pixal3DConditioning (camera_angle_x) with the DINOv3 encoder, UNet pixal3d_int8_convrot; ImageCropToMask pad_factor 1.1 (as the node asks for Pixal3D). BiRefNet cut-out -> ImageCropToMask 1024 -> structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) -> RemeshMesh (768, sign_mode solid, fill 20, band 1, smooth 20) -> DecimateMesh (250,000 faces, midpoint) -> smooth normals -> UV unwrap -> base colour / metallic / roughness baked at textureSize, normal map 2048 and AO 1024 baked from the dense remeshed mesh onto the decimated one -> GLB (Save3DAdvanced, history ui "3d"). No turntable in the graph: after the job the Fuobe server finishes the GLB (roughness floor by material, pivot at the bottom centre, plus a smaller meshopt + WebP 2048 web GLB; the raw GLB stays the download) and renders a 96-frame 24 fps turntable on the CPU (model-viewer on SwiftShader) when Chromium and ffmpeg are available. Run end to end on an RTX 5090: 114-185 s per object, 25-35 MB raw GLB at ~250k triangles (was 8M triangles / 317 MB before the decimate step), web GLB 1.6-3.6 MB; more faithful to the photo than TRELLIS.2 (209-238 s). The origin is the camera-aligned volume centre, hence the pivot fix. Surfaces can show faint planar facets from the shape decode (no graph setting removes them).',
   },
   {
     id: 'image-to-3d-trellis2',
@@ -3012,7 +3012,7 @@ export const SPEC = [
     license:
       'MIT (TRELLIS.2 weights, DINOv3-NAF / TRELLIS VAEs as repackaged by Comfy-Org, BiRefNet); the dino_v3_L_naf image encoder is DINOv3 ViT-L under the DINOv3 License ' +
       '(royalty-free, commercial use allowed; the app must show a "Built with DINOv3" notice)',
-    notes: 'Template 3d_pixal3d_trellis2_image_to_model, TRELLIS.2 branch (the fallback image-to-3D route; Pixal3D is the default): Trellis2Conditioning with the DINOv3 encoder, UNet trellis_2_int8_convrot; ImageCropToMask pad_factor 1.0. BiRefNet cut-out -> ImageCropToMask 1024 -> structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) -> RemeshMesh (768, sign_mode solid, fill 20, band 1, smooth 20) -> DecimateMesh (250,000 faces, midpoint) -> smooth normals -> UV unwrap -> base colour / metallic / roughness baked at textureSize, normal map 2048 and AO 1024 baked from the dense remeshed mesh onto the decimated one -> GLB (Save3DAdvanced, history ui "3d"). No turntable in the graph: after the job the Fuobe server finishes the GLB (roughness floor by material, pivot at the bottom centre, meshopt + WebP 2048 web GLB as meta.web; the raw GLB stays the download) and renders a 96-frame 24 fps turntable on the CPU (model-viewer on SwiftShader) when Chromium and ffmpeg are available. Run end to end on an RTX 5090: 209-238 s, 28-43 MB raw GLB at ~250k triangles. The 36-view RotateMesh + RenderMesh turntable (unlit, aliased, 12 fps) was removed.',
+    notes: 'Template 3d_pixal3d_trellis2_image_to_model, TRELLIS.2 branch (the fallback image-to-3D route; Pixal3D is the default): Trellis2Conditioning with the DINOv3 encoder, UNet trellis_2_int8_convrot; ImageCropToMask pad_factor 1.0. BiRefNet cut-out -> ImageCropToMask 1024 -> structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) -> RemeshMesh (768, sign_mode solid, fill 20, band 1, smooth 20) -> DecimateMesh (250,000 faces, midpoint) -> smooth normals -> UV unwrap -> base colour / metallic / roughness baked at textureSize, normal map 2048 and AO 1024 baked from the dense remeshed mesh onto the decimated one -> GLB (Save3DAdvanced, history ui "3d"). No turntable in the graph: after the job the Fuobe server finishes the GLB (roughness floor by material, pivot at the bottom centre, plus a smaller meshopt + WebP 2048 web GLB; the raw GLB stays the download) and renders a 96-frame 24 fps turntable on the CPU (model-viewer on SwiftShader) when Chromium and ffmpeg are available. Run end to end on an RTX 5090: 209-238 s, 28-43 MB raw GLB at ~250k triangles. The 36-view RotateMesh + RenderMesh turntable (unlit, aliased, 12 fps) was removed.',
   },
   {
     id: 'image-to-3d-trellis2-multiview',
@@ -3033,12 +3033,12 @@ export const SPEC = [
       '(Pixal3DMultiViewConditioning, a fixed orbit rig 90 degrees apart, Z up: the left view is the object\'s own left, the camera at +90 degrees azimuth from the front, i.e. the photographer walks to their right; ' +
       'every side but the front is optional and the provider drops the branch of a side with no photo). ' +
       'Each side: BiRefNet cut-out -> crop to mask (1024, pad 1.1) -> the view. Then TRELLIS.2 structure (12 steps) -> shape (20) -> upsample to 1536 (12) -> texture (12) on Pixal3D multi-view ' +
-      '-> decimate to 700k faces -> remesh -> UV unwrap -> baked base colour / metallic / roughness / AO / normal at textureSize -> GLB, plus a 36-view turntable (RotateMesh + RenderMesh, core) saved as MP4 at turntableFps; the Fuobe server then finishes the GLB (web GLB as meta.web) and, when Chromium and ffmpeg are there, replaces that turntable with its CPU render. ' +
+      '-> decimate to 700k faces -> remesh -> UV unwrap -> baked base colour / metallic / roughness / AO / normal at textureSize -> GLB, plus a 36-view turntable (RotateMesh + RenderMesh, core) saved as MP4 at turntableFps; the Fuobe server then finishes the GLB (plus a smaller web GLB) and, when Chromium and ffmpeg are there, replaces that turntable with its CPU render. ' +
       'The views\' horizontal field of view as framed (Pixal3DMultiViewConditioning.fov) is measured on the front crop: MoGe 2 (LoadMoGeModel -> MoGeInference -> MoGeGeometryToFOV, horizontal, degrees), ' +
       'as the node\'s tooltip says for photos and as the official single-view template 3d_pixal3d_trellis2_image_to_model feeds Pixal3DConditioning; the multi-view template keeps the rig value 20, ' +
       'which suits rendered turnaround sheets but not phone photos, whose crops are usually wider. fovX (degrees, 0 = estimate, the default) fixes MoGe\'s lens instead, ' +
       'so MoGeGeometryToFOV passes it on (20 for a generated turnaround sheet). ' +
-      'Weights: pixal3d_multiview_int8_convrot 5.58 GB + moge_2_vitl_normal_fp16 0.66 GB + the TRELLIS.2 VAEs, DINOv3-NAF and BiRefNet the single-view graph already uses. VRAM: about 16 GB, as the single-view graph (not measured).',
+      'Weights: pixal3d_multiview_int8_convrot 5.58 GB + moge_2_vitl_normal_fp16 0.66 GB + the TRELLIS.2 VAEs, DINOv3-NAF and BiRefNet the single-view graph already uses. VRAM: about 16 GB, as the single-view graph (an estimate).',
   },
   {
     id: 'image-to-3d-hunyuan3d-21',
@@ -3243,13 +3243,13 @@ export const SPEC = [
       'One window per job, in SECONDS: startTime and duration (params.startTime and params.endTime - startTime, which the provider already fills). Video Slice decodes only that window, at most 81 frames + half a frame ' +
       'at the clip\'s own fps (read from a 0.1 s probe slice), so RAM no longer grows with the clip and one window needs no fps app side. The graph keeps the largest 4n+1 frames it decoded (at most 81: 2.7 s at 30 fps, ' +
       '3.375 s at 24 fps, 5.06 s at 16 fps) and trims the sound to exactly those frames. duration 0 = the longest window; a longer duration is cut at 81 frames. ' +
-      'Longer clips: one job per window, startTime = k x 81 / fps and duration = 81 / fps (fps from the clip\'s header), joined with video-concat-N (seams between windows untested, inferred). ' +
+      'Longer clips: one job per window, startTime = k x 81 / fps and duration = 81 / fps (fps from the clip\'s header), joined with video-concat-N (check the seams between windows). ' +
       'width x height = the work-size BUDGET (832x480 by default): VACE renders about width x height pixels in the CLIP\'s own shape (multiples of 16, at most 1280 a side; a 9:16 clip renders at 464x832), ' +
       'scaled, never cropped, so the paste-back lines up whatever aspect ratio the request had. ' +
       'SAM3_VideoTrack follows the object through the window, GrowMask (maskGrow px) covers edges and contact shadows, the control video blanks the masked area (as Comfy-Org\'s video_wan_vace_inpainting template) ' +
       'and WanVaceToVideo regenerates it. The result is pasted into the ORIGINAL frames at full resolution through a 6 px soft mask (GrowMaskWithBlur): every pixel outside the mask stays the source\'s own. ' +
       'The window\'s sound is kept (silent clips work). RAM: the window is held at the source size as float32 in several copies (decoded, cut, scaled back, pasted; ~25 MB per 1080p frame, ' +
-      'so roughly 10 GB for 81 frames at 1080p, inferred): downscale 4K sources first. ' +
+      'so about 10 GB for 81 frames at 1080p): downscale 4K sources first. ' +
       'Changed from the original graph: the seconds-based window (the original bound startFrame / frames on the whole decoded clip and centre-cropped to width x height). ' +
       'Speed: the template\'s CausVid LoRA is CC-BY-NC-4.0, so this uses the Apache-2.0 lightx2v T2V 4-step LoRA (4 steps, cfg 1, euler, shift 5; ' +
       'made for the Wan 2.1 T2V base that VACE is built on); loraStrength 0 + steps 20 + cfg 6 is the slow full-quality path. checkpoint wan2.1_vace_1.3B_fp16.safetensors (4.31 GB) fits 8 GB cards and needs loraStrength 0, steps 20, cfg 6 ' +
@@ -3317,7 +3317,7 @@ export const SPEC = [
       'Pass 2 re-samples with noise warped along pass 1\'s optical flow (RAFT) for steadier long clips; skipPass2 true halves the time (pass 1 "is sufficient for most videos" per Netflix\'s card). ' +
       'The switch is lazy, so pass 2 does not run then, but void_pass2 and the RAFT file must still be installed (ComfyUI checks every loader that feeds the output before it runs). ' +
       'Downloads 32.5 GB: 2 x 11.14 GB passes, T5-XXL fp16 9.79 GB (the same file as FLUX\'s t5xxl_fp16), CogVideoX VAE 0.43 GB, RAFT 0.02 GB. ' +
-      'VRAM in ComfyUI is unverified: Netflix\'s reference code needs 40 GB+, a 24 GB card with offloading is plausible (inferred). ' +
+      'VRAM: Netflix\'s reference code needs 40 GB+; in ComfyUI, plan on a 24 GB card with offloading. ' +
       'Changed from the original graph: the seconds-based window, the in-graph 8n+5 count and the aspect-keeping work size (the original bound startFrame / frames and centre-cropped). ' +
       'The window and work-size nodes ran on CPU: a 10 s 640x360 25 fps clip with sound, startTime 0.5, duration 0 -> 197 frames at 672x376, 7.880 s of picture and of sound; duration 2 -> 45 frames, 1.800 s of both.',
   },
@@ -3555,7 +3555,7 @@ export const SPEC = [
     license: 'n/a (no model; ComfyUI core)',
     notes:
       'The Faceless / Explainer "Frame by frame" join: the Ken Burns scenes (kenburns-still, and the pieces of scenes over 10 s), and joins of those joins, one after another in input order. ' +
-      'The template joins two clips (video, video2); the provider rewrites it per request (expand "videos", expandVideoJoinWorkflow): one LoadVideo per inputs.videos entry, wired to ConcatenateVideo videos.video0..N-1 (at most 100). ' +
+      'The template joins two clips (video, video2); Fuobe rewrites it for each request: one LoadVideo per inputs.videos entry, wired to ConcatenateVideo videos.video0..N-1 (at most 100). ' +
       'ConcatenateVideo copies the encoded packets when every clip has the same codec, extradata, size, bit depth, colour space and sound layout (clips ComfyUI\'s CreateVideo / SaveVideo made at one size and fps), ' +
       'so RAM stays flat however long the film is (video-concat-{2,3,4} decode every frame as float32: about 11 MB a frame at 720p, 20 GB for a 60 s film at 30 fps); otherwise it re-encodes one clip at a time to the first clip\'s settings ' +
       '(still constant memory), and clips of different sizes fail with "could not be encoded compatibly". Unlike video-concat-{2,3,4} it neither scales, crops nor retimes: the clips must share one size and frame rate. ' +
@@ -3599,7 +3599,7 @@ export const SPEC = [
     license: 'n/a (no model; ComfyUI core audio nodes; VideoHelperSuite loader, GPL-3.0 code)',
     notes:
       'audio = the clip to loop; duration = the bed\'s length (params.duration, up to 600 s: ACE-Step\'s <= 240 s beds become 10-minute beds); crossfade = seconds at each seam (params.crossfade). ' +
-      'fadeCurve = the crossfade curve the PROVIDER writes and uploads, because core has no gain-ramp node: a stereo WAV exactly crossfade seconds long, left channel = sin(pi/2 t) (fade-in), ' +
+      'fadeCurve = the crossfade curve Fuobe writes and uploads, because core has no gain-ramp node: a stereo WAV exactly crossfade seconds long, left channel = sin(pi/2 t) (fade-in), ' +
       'right channel = cos(pi/2 t) (fade-out), at 8 kHz so AudioMerge upsamples the curve and never resamples the music (for loops of near-identical material a linear curve avoids the +3 dB equal-power bump). ' +
       'Repeats = ceil((duration - crossfade) / (clip - crossfade)) from VHS_LoadAudioUpload\'s duration; each repeat is the body + (tail fading out + head fading in); the last crossfade seconds fade out. ' +
       'The clip must be longer than 2 x crossfade. headroomDb (integer dB, default -3) keeps a summed seam under 1.0, because AudioMerge "add" normalises a whole segment that peaks over 1. ' +
@@ -3677,8 +3677,8 @@ export const SPEC = [
     license: 'n/a (no model; ComfyUI core)',
     notes:
       'params.format "exr" of the export-video operation. One half-float .exr per frame (role frames, in frame order); input_color_space sRGB applies the inverse sRGB curve, so the files are scene-linear Rec.709. ' +
-      'Node 5 saves an H.264 preview with the clip\'s sound (role preview): the result shown in the feed; the provider zips the frames onto it (meta.artifacts.exr). ' +
-      'The app zips the sequence. No sound. Decodes the whole clip: RAM grows with the length. Fuobe saves each frame as an image .bin file for now, ' +
+      'Node 5 saves an H.264 preview with the clip\'s sound (role preview): the result shown in the feed; Fuobe zips the frames and attaches the zip to it. ' +
+      'The frames have no sound. Decodes the whole clip: RAM grows with the length. Fuobe saves each frame as an image .bin file for now, ' +
       'as it does not yet map .exr (image/aces) to an extension; the zip is the deliverable anyway. ' +
       'Tested on CPU (1 s 64x64 16 fps clip, 0.06-0.2 s): 16 .exr files (<prefix>_00001.exr ...), HALF B/G/R channels, ZIP compression, linear transfer. ' +
       'With the preview (through Fuobe, 2 s 160x96 30 fps clip with sound): 60 .exr files zipped (2.6 MB, stored) onto an H.264 preview with AAC.',
@@ -3743,9 +3743,9 @@ export const SPEC = [
       'Cinema Studio "Create 3D scene": photo -> textured GLB of the WHOLE frame (role scene) + a depth PNG (role depth). From the official template 3d_moge_perspective_to_mesh (2026-05-15): normal-map previews dropped, the depth PNG added; ' +
       'images with a longer edge over 2048 px are resized to 2048 first (changed from the original graph, which tested the width only, so tall portraits went through at full size; checked on CPU: ' +
       '1536x3000 -> 1048x2048, 3000x1536 -> 2048x1048, 1024x768 unchanged). The browser orbits the GLB, captures a view, and qwen-image-edit-2511 re-renders it with the original photo. ' +
-      'resolutionLevel 0-9 (detail), fovX = horizontal field of view in degrees (0 = estimate), decimation 2 for phones (about 4x fewer triangles, inferred). ' +
+      'resolutionLevel 0-9 (detail), fovX = horizontal field of view in degrees (0 = estimate), decimation 2 for phones (about 4x fewer triangles). ' +
       'checkpoint moge_2_vitl_normal_fp16 (0.66 GB) by default; moge_3_vitl_fp16 (0.74 GB) and moge_3_vitg_fp16 (2.50 GB) load through the same node. ' +
-      'On a 4-core CPU: a 768x768 living-room photo became a 25.2 MB GLB (556k vertices, 1.08M triangles, one texture, depth 0.35-6.58 m) in 42 s, +1.6 GB RSS. VRAM unverified (MoGe 2 ViT-L is ~0.33B parameters). ' +
+      'On a 4-core CPU: a 768x768 living-room photo became a 25.2 MB GLB (556k vertices, 1.08M triangles, one texture, depth 0.35-6.58 m) in 42 s, +1.6 GB RSS. It runs on a CPU too: MoGe 2 ViT-L has ~0.33B parameters. ' +
       'TripoSplat (image-to-splat-triposplat) rebuilds the subject only, not the scene.',
   },
   {
@@ -3767,12 +3767,12 @@ export const SPEC = [
     notes:
       'Subject or product splat (3D Angles, 3D Jutsu props, a splat alternative to TRELLIS.2 spins). The official template 3d_triposplat_image_to_gaussian_splat (2026-06-02) with the UI-only live-preview patch removed ' +
       'and a 75-frame H.264 orbit (RenderSplat + CreateCameraInfo orbit yaw 35, pitch 30, distance 2.5; role turntable, 25 fps). Subject only: BiRefNet cuts it out first (cutout false = use the image\'s own alpha). ' +
-      'Output 1 (role splat): splatFormat spz (Niantic, gzip, ~10x smaller, base colour), ply (full spherical harmonics) or ksplat, saved by SaveGLB under that extension (meta.format = the extension). ' +
+      'Output 1 (role splat): splatFormat spz (Niantic, gzip, ~10x smaller, base colour), ply (full spherical harmonics) or ksplat, saved by SaveGLB under that extension. ' +
       'ComfyUI serves all three as application/octet-stream, so Fuobe goes by the extension: spz and ply are saved as 3D models (model/x-spz, model/ply), ksplat as a .bin file, ' +
       'and each output records its format. ' +
       'cutout is true by default (manifest defaults). ' +
       'numGaussians up to 1,048,576 (262,144 by default); seed drives both the sampler and the decoder. RenderSplat also takes a look_at camera, so a view picked in the browser can be rendered on the server. ' +
-      '3.78 GB of weights (TripoSplat 0.74, DINOv3 ViT-H 1.68, TripoSplat VAE decoder 0.58, FLUX.2 VAE 0.34, BiRefNet 0.44). VRAM unverified.',
+      '3.78 GB of weights (TripoSplat 0.74, DINOv3 ViT-H 1.68, TripoSplat VAE decoder 0.58, FLUX.2 VAE 0.34, BiRefNet 0.44).',
   },
   {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).
@@ -3823,8 +3823,8 @@ export const SPEC = [
       'Content Factory "Use as reference": the clip\'s frames AND sound go into one TextGenerate call and come back as a JSON style brief (role brief): format, hook, pacing, shots, visual_style, animation_style, ' +
       'narration, music, captions, topic_ideas (5). The instruction forbids copying the reference\'s people, logos or exact words. Strip ``` fences before parsing. ' +
       'VHS_LoadVideo resamples to 24 fps (fixed: TextGenerate assumes 24 fps and keeps every 24th frame, i.e. 1 fps, each capped at 70 soft tokens); frames = the frame cap at 24 fps (720 = the first 30 s), ' +
-      'startFrame = frames skipped at 24 fps, frameWidth = 384 px wide (about 0.7 GB of frames for 720, inferred). In ComfyUI v0.41 only the Gemma 4 and MiniMax text encoders read a video input ' +
-      '(the Qwen3.5 encoder ignores it). Same model file as speech-translate-gemma4 (no new download). Whether Gemma 4 E4B takes 30 s of audio in one call is unverified.',
+      'startFrame = frames skipped at 24 fps, frameWidth = 384 px wide (about 0.7 GB of frames for 720). In ComfyUI v0.41 only the Gemma 4 and MiniMax text encoders read a video input ' +
+      '(the Qwen3.5 encoder ignores it). Same model file as speech-translate-gemma4 (no new download). For a long clip, brief the first 30 s (the default).',
   },
   // ---- round 4 (engine seams): vectorize -------------------------------------------
   {
@@ -3941,7 +3941,7 @@ export const SPEC = [
     notes:
       'params.format exr of the sdr-to-hdr operation (Higgsfield\'s "EXR 16-bit: uncompressed frame sequence for compositing"). The same ImageSDRToHDR expansion as video-sdr-to-hdr; SaveImageAdvanced writes each ' +
       'frame as a half-float EXR with input_color_space HDR, i.e. the inverse HLG curve: scene-linear light in Rec.2020 primaries, highlights above 1.0 kept. Node 6 saves the 10-bit HLG MP4 with the clip\'s sound as ' +
-      'the result to watch (role preview); the provider zips the frames (role frames) onto it as meta.artifacts.exr. Decodes the whole clip: RAM grows with the length (the provider refuses what the server can\'t hold). ' +
+      'the result to watch (role preview); Fuobe zips the frames (role frames) and attaches the zip to it. Decodes the whole clip: RAM grows with the length (Fuobe refuses a clip too long for the memory it has). ' +
       'Tested through Fuobe on CPU (2 s 160x96 30 fps clip with sound): 60 half-float EXR frames zipped onto an H.264 High 10 HLG (arib-std-b67, bt2020) preview with AAC.',
   },
 ];

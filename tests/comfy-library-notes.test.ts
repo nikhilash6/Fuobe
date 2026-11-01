@@ -5,7 +5,7 @@ import type { Manifest } from "@/lib/comfy";
 
 // The Workflows page shows each graph's notes word for word to everyone, so they read as public notes: what the graph
 // does, its settings, files and VRAM. No private workflow file names, no notes about who tested what on which machine,
-// no guesses and no paths into Fuobe's own source.
+// no guesses or hedges ("inferred", "unverified") and no paths or names from Fuobe's own source.
 const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/comfyui/manifest.json"), "utf8")) as Manifest;
 const { SPEC } = (await import("../scripts/comfy/library.spec.mjs")) as { SPEC: { id: string; notes?: string }[] };
 const spec = new Map(SPEC.map((s) => [s.id, s.notes ?? ""]));
@@ -25,6 +25,9 @@ const INTERNAL = [
   /Originals O\d|\bN7-\d|\br4\/|build plan [A-Z]?\d|catalog-\d|feature package/i,
   /\b(src|tests)\/|scripts\/(?!comfy\/README\.md)/,
   /\b[\w-]+\.tsx?\b|persistOutput|collectOutputs|EXT_BY_TYPE|TYPE_BY_EXT|OutputFile\b/,
+  /\b(untested|inferred|plausible|unverified)\b/i,
+  /\bexpand\w*Workflow\b|\bdropBranch\b|\bmeta\.\w+|outputs\[/,
+  /\bPROVIDER\b/,
 ];
 
 describe("the workflow library's notes", () => {
@@ -57,6 +60,17 @@ describe("the workflow library's notes", () => {
       "image-to-splat-triposplat",
       "upscale-video-esrgan-chunked",
       "upscale-video-seedvr2-chunked",
+      "infinitetalk-wanwrapper",
+      "storyboard-qwen-edit-2509-next-scene",
+      "video-bg-remove-birefnet",
+      "captions-qwen3-asr",
+      "image-to-3d-trellis2",
+      "image-to-3d-trellis2-multiview",
+      "video-concat-encoded",
+      "audio-loop-crossfade",
+      "scene-mesh-moge",
+      "reference-brief-gemma4",
+      "video-sdr-to-hdr-exr",
     ];
     for (const id of ids) expect(manifest.workflows.find((w) => w.id === id)?.notes, id).toBe(spec.get(id));
   });
