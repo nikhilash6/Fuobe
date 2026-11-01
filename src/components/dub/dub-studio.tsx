@@ -36,7 +36,6 @@ import {
   VOICE_SPLIT_IDS,
   VOICE_SPLITS,
   voiceOnly,
-  voiceSplitOf,
   type DubPrice,
   type DubSessionView,
   type DubStage,
@@ -230,7 +229,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
               <div className="min-w-0 flex-1">
                 {splits.length > 1 ? (
                   <Select value={split} onValueChange={(v) => setSplit(v as VoiceSplit)}>
-                    <SelectTrigger id="dub-split" className="h-9 w-full rounded-full sm:w-80">
+                    <SelectTrigger id="dub-split" className="h-9 w-full rounded-full sm:w-auto sm:min-w-64">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -382,13 +381,7 @@ const PREPARE_LABEL: Record<string, string> = { stems: "Voice, background and tr
 function prepareRows(s: DubSessionView, lang: string): StepRow[] {
   // Older open dubs transcribed in a step of their own.
   const keys = Object.keys(s.prepare ?? {}).filter((k) => !k.startsWith("translate:"));
-  // An open dub's split names its model (DBS keeps the music and effects; dubs before the setting ran MelBand RoFormer).
-  const stems = s.generations[s.prepare?.stems ?? ""];
-  const split = s.engine === "open" ? (s.voiceSplit ?? voiceSplitOf(stems?.modelId) ?? DEFAULT_VOICE_SPLIT) : undefined;
-  const label = (k: string) => {
-    const base = k === "stems" && keys.includes("words") ? "Voice and background" : (PREPARE_LABEL[k] ?? k);
-    return k === "stems" && split ? `${base} · ${VOICE_SPLITS[split].name}` : base;
-  };
+  const label = (k: string) => (k === "stems" && keys.includes("words") ? "Voice and background" : (PREPARE_LABEL[k] ?? k));
   return [...keys.map((k) => ({ key: k, label: label(k), g: s.generations[s.prepare![k]] })), { key: "t", label: `Translate into ${languageByCode(lang)?.name ?? lang}`, g: s.generations[s.prepare?.[translateKey(lang)] ?? ""] }];
 }
 

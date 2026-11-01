@@ -428,6 +428,20 @@ COMFYUI_URL=http://127.0.0.1:<port> COMFYUI_MODELS_DIR=<that ComfyUI>/models nod
   (the command above). A run of every id against the shared server records it as `missing_node_type`, not validated,
   like the H3 entries.
 
+DBS D3 adds graph B, the open dub's first step with DBS for the split (Translate & dub's "Voice split"):
+
+```bash
+npm run build -- dub-prepare-dbs-transcribe
+COMFYUI_URL=http://127.0.0.1:<port> COMFYUI_MODELS_DIR=<that ComfyUI>/models node validate-workflows.mjs dub-prepare-dbs-transcribe --shared
+```
+
+| id | capability | what | validated here |
+|---|---|---|---|
+| `dub-prepare-dbs-transcribe` | separate-audio | `LoadAudio` → `DBSLoader` (`separationModel`) → `DBSSeparate` (mono, input rate) → stems `voice` (speech) and `background` (the original minus the speech) as FLAC, plus `dub-prepare-separate-transcribe`'s Qwen3-ASR node 7 on the speech (bindings `sourceLanguage`, `asrModel`, `hints`, `maxChars`) → `cues`, `transcript`, `language`: the same outputs as the MelBand graph | yes, on the CPU ComfyUI with ComfyUI-DBS and the weights; a real CPU run of a 12 s clip (LibriSpeech speech + chords + noise bursts, Qwen3-ASR 0.6B) took 133 s with the ASR load, gave voice + background equal to the source within 3.0e-5 and a correct transcript |
+
+The provider fills it like graph A (host pick, a model that isn't there refused in words, a surround source's background
+from music + effects); it has no `channels` binding: the dub's split is always mono.
+
 ## Fly path (N7-5)
 
 One hand-built graph films a still along a camera path keyframed in Cinema's 3D scene, on core nodes only

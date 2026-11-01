@@ -83,11 +83,6 @@ export function voiceSplitModel(split?: string): string {
   return VOICE_SPLITS[split && split in VOICE_SPLITS ? (split as VoiceSplit) : DEFAULT_VOICE_SPLIT].modelId;
 }
 
-/** The voice split a first-step model stands for (an older dub's, or Assist's model id). */
-export function voiceSplitOf(modelId?: string): VoiceSplit | undefined {
-  return VOICE_SPLIT_IDS.find((k) => VOICE_SPLITS[k].modelId === modelId);
-}
-
 /** How far the background (music and effects) sits under its original level once the new voice is on, both engines. */
 export const BACKGROUND_DB = -3;
 

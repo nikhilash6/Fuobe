@@ -25,7 +25,6 @@ import {
   VOICE_SPLITS,
   voiceOnly,
   voiceSplitModel,
-  voiceSplitOf,
   voiceSteps,
   type DubSessionView,
 } from "@/lib/av/dub";
@@ -139,9 +138,6 @@ describe("dub pipeline DAGs", () => {
     expect(voiceSplitModel("dbs")).toBe("oss-dbs-voice-separate");
     expect(voiceSplitModel("nope")).toBe("oss-voice-separate");
     expect(voiceSplitModel()).toBe("oss-voice-separate");
-    expect(voiceSplitOf("oss-dbs-voice-separate")).toBe("dbs");
-    expect(voiceSplitOf("oss-voice-separate")).toBe("melband");
-    expect(voiceSplitOf("demucs")).toBeUndefined();
     expect(VOICE_SPLITS.dbs.note).toBe("Keeps the music and sound effects of the original");
     expect(VOICE_SPLITS.melband.note).toBe(MUSIC_MODEL_NOTE);
   });

@@ -244,7 +244,7 @@ Why the background is "original minus speech" (node 4) and not "music plus effec
 | 7 | `AILab_Qwen3ASRSubtitle` | `audio` [3,2]; the same settings as node 7 of the existing graph (Qwen3-ASR 1.7B + ForcedAligner 0.6B; bindings `sourceLanguage`, `asrModel`, `hints`, `maxChars`) |
 | 8 / 9 / 10 | `SaveText` / `SaveText` / `PreviewAny` | cues, transcript, language |
 
-Honest expectation: the separation half becomes CPU-friendly (23 MB instead of the 0.46 GB MelBand RoFormer), but Qwen3-ASR stays in the graph, so the 8 GB listing and the ~5.9 GB first-run ASR download remain (`library.spec.mjs` L2255–2259).
+Honest expectation: the separation half becomes CPU-friendly (23 MB instead of the 0.46 GB MelBand RoFormer), but Qwen3-ASR stays in the graph, so the 8 GB listing and the ~5.9 GB first-run ASR download remain (`library.spec.mjs` L2255–2259). *As built (D3):* as in this table, with both DBS models required (as in graph A) and the provider's surround rule (a file with more than 2 channels gets its background from music + effects). Validated on the CPU ComfyUI; a real CPU run of a 12 s clip (LibriSpeech speech over chords and noise bursts, `asrModel` Qwen3-ASR 0.6B) took 133 s including the ASR load, the voice and background added back to the source within 3.0e-5, and the transcript was right. The full open dub after it (local LLM translation, Chatterbox, InfiniteTalk) was not run here.
 
 **C. `soundtrack-remix-dbs`** (capability `separate-audio`, one output). For server-side remixes (Assist, MCP, Canvas, a video Remix) where the browser mixer is not in the loop.
 
@@ -385,7 +385,7 @@ Packages in priority order. The full brief of each one (goal, exact spots, both 
 
 ### D3 · Translate & dub keeps the score and effects (P0)
 
-Open: graph B `dub-prepare-dbs-transcribe` and ModelDef `oss-dbs-voice-separate` "DBS + Qwen3-ASR"; a "Voice split" choice in Dub studio (DBS / MelBand RoFormer), default unchanged until D4 reports. Cloud: replace `sound` + `background` (extract + Demucs, three beds) in `prepareSteps` (`dub.ts` L116, cloud branch L144–158) with extract + `sam-audio-separate` prompt "speech": one bed (`residual`), one loudnorm at `BACKGROUND_DB`, one compose track; Demucs stays the fallback (`OPTIONAL_PREPARE`). Keep ElevenLabs isolation for the clone voice. Copy: "Keeps the music and sound effects of the original". Tests in the dub suites.
+Open: graph B `dub-prepare-dbs-transcribe` and ModelDef `oss-dbs-voice-separate` "DBS + Qwen3-ASR"; a "Voice split" choice in Dub studio (DBS / MelBand RoFormer), default unchanged until D4 reports. Cloud: replace `sound` + `background` (extract + Demucs, three beds) in `prepareSteps` (`dub.ts` L116, cloud branch L144–158) with extract + `sam-audio-separate` prompt "speech": one bed (`residual`), one loudnorm at `BACKGROUND_DB`, one compose track; Demucs stays the fallback (`OPTIONAL_PREPARE`). Keep ElevenLabs isolation for the clone voice. Copy: "Keeps the music and sound effects of the original". Tests in the dub suites. *As built:* the open half only. The owner has not allowed SAM Audio on the cloud (`samAudioCloud` false in `docs/handoff/owner-decisions.json`), so the cloud dub keeps extract + Demucs (three beds) unchanged and the studio says what Demucs does ("Music model: some sound effects may be lowered, and singing may be replaced"); the SAM Audio step and a Background split setting wait on that decision.
 
 ### D4 · Separation evaluation (P1)
 
