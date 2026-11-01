@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { announceAuthChange, rememberViewer, signOut, useViewer } from "@/lib/api";
+import { announceAuthChange, rememberViewer, signOut, useStatus, useViewer } from "@/lib/api";
 import { safeNext } from "@/lib/safe-redirect";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +27,7 @@ export function LoginForm() {
   const router = useRouter();
   const pathname = usePathname();
   const viewer = useViewer();
+  const status = useStatus();
   const open = !!viewer.data?.publicSignup;
   const [chosen, setChosen] = useState<Mode | null>(null);
   const mode: Mode = !open ? "owner" : (chosen ?? (params.get("owner") === "1" ? "owner" : params.get("signup") === "1" ? "signup" : "login"));
@@ -57,6 +58,8 @@ export function LoginForm() {
     router.replace(s ? `${pathname}?${s}` : pathname, { scroll: false });
   };
 
+  // Hosted runs (this studio's GPUs take an account's runs): a new account isn't sent to connect a GPU first.
+  const hosted = !!status.data?.viewer?.hosted;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -71,7 +74,8 @@ export function LoginForm() {
       // Settings' Your GPU (its Sign up free): the welcome page is that same choice.
       const q = new URLSearchParams({ welcome: "1" });
       if (after !== "/" && !after.startsWith("/connect") && !after.startsWith("/settings#your-gpu")) q.set("next", after);
-      const dest = mode === "signup" ? new URL(`/connect?${q}`, window.location.origin).toString() : after;
+      // With hosted runs on, a GPU of its own is optional: straight back to where it was.
+      const dest = mode === "signup" && !hosted ? new URL(`/connect?${q}`, window.location.origin).toString() : after;
       rememberViewer(mode === "owner" ? "owner" : "account");
       announceAuthChange();
       window.location.assign(dest);

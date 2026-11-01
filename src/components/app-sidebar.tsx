@@ -46,6 +46,7 @@ import { awayFix, openConnect, useComputerSupport } from "@/components/gpu/open-
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { ownGpuOf, signInHref, signOut, useEngineMode, useHydrated, useStatus, useViewer, VIEWER_KEY, type StatusInfo } from "@/lib/api";
 import { deviceLabel } from "@/lib/gpu/readiness";
+import { safeLink, useInterest } from "@/lib/hosted";
 import { useModKey } from "@/lib/keys";
 import { fullScreenStudio, groupId, NAV_CLOSED_KEY, navActive, NEW_CREATION_HREF, parseClosed, scrollFades, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -436,7 +437,7 @@ function ViewerRow() {
  * guest is sent to sign up first; anyone else without one opens "Connect your GPU"; a connected one says whether it
  * answers.
  */
-function YourGpuChip({ gpu, guest }: { gpu: NonNullable<StatusInfo["viewer"]>["gpu"]; guest: boolean }) {
+function YourGpuChip({ gpu, guest, hosted }: { gpu: NonNullable<StatusInfo["viewer"]>["gpu"]; guest: boolean; hosted?: boolean }) {
   const cls = "flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left text-[12px] text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden";
   const g = gpu;
   // ComfyUI on this computer is closed, or runs without Fuobe's setting: the finder, at that step (elsewhere: /connect).
@@ -467,7 +468,8 @@ function YourGpuChip({ gpu, guest }: { gpu: NonNullable<StatusInfo["viewer"]>["g
   const body = (
     <span className="flex items-center gap-2">
       <StatusDot ok={false} /> Your GPU
-      <span className="ml-auto font-medium text-brand-text">Connect</span>
+      {/* Runs go to this studio's GPUs too (hosted runs): one's own is an option. */}
+      <span className={cn("ml-auto font-medium", hosted ? "text-muted-foreground" : "text-brand-text")}>{hosted ? "Optional" : "Connect"}</span>
     </span>
   );
   return guest ? (
@@ -479,6 +481,73 @@ function YourGpuChip({ gpu, guest }: { gpu: NonNullable<StatusInfo["viewer"]>["g
       {body}
     </button>
   );
+}
+
+/**
+ * The balance chip (a studio with a billing service, src/server/billing.ts): the service's own words for what the
+ * account has left and when it refills, and a menu with its detail lines, its links, its offer, and the way to run for
+ * free on one's own GPU or keys.
+ */
+function BalanceChip({ viewer }: { viewer: NonNullable<StatusInfo["viewer"]> }) {
+  const b = viewer.balance!;
+  const interest = useInterest();
+  const cls = "flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left text-[12px] text-muted-foreground transition-colors hover:bg-accent group-data-[collapsible=icon]:hidden";
+  const refill = b.refillAt ? refillWords(b.refillAt) : null;
+  const action = safeLink(b.action?.url);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={cls} aria-label={`${b.chip}${refill ? `, ${refill}` : ""}`}>
+          <span className="flex items-center gap-2">
+            <StatusDot ok={b.amount > 0} /> <span className="truncate font-medium text-foreground">{b.chip}</span>
+            {refill && <span className="ml-auto shrink-0">{refill}</span>}
+          </span>
+          {b.sub && <span className="truncate text-[11px]">{b.sub}</span>}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-64">
+        <DropdownMenuLabel className="text-[12px] font-normal text-muted-foreground">{b.text}</DropdownMenuLabel>
+        {b.detail.map((d, i) => (
+          <div key={i} className="flex justify-between gap-3 px-2 py-1 text-[12px]">
+            <span className="text-muted-foreground">{d.label}</span>
+            <span className="text-right">{d.text}</span>
+          </div>
+        ))}
+        <DropdownMenuSeparator />
+        {action && b.action && (
+          <DropdownMenuItem asChild>
+            <a href={action} target={action.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer">
+              {b.action.label}
+            </a>
+          </DropdownMenuItem>
+        )}
+        {b.offer && <DropdownMenuItem onSelect={() => interest.mutate(b.offer!.key)}>{b.offer.label}</DropdownMenuItem>}
+        {(viewer.links ?? []).map((l, i) => {
+          const href = safeLink(l.url);
+          return href ? (
+            <DropdownMenuItem key={i} asChild>
+              <a href={href} target={href.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer">
+                {l.label}
+              </a>
+            </DropdownMenuItem>
+          ) : null;
+        })}
+        <DropdownMenuItem asChild>
+          <IntentLink href="/connect">
+            <Cpu /> Use your own GPU or keys (free)
+          </IntentLink>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** "refills in 5 h", in the visitor's own time. */
+function refillWords(at: number): string {
+  const ms = at - Date.now();
+  if (ms <= 0) return "refills soon";
+  const h = Math.round(ms / 3_600_000);
+  return h >= 1 ? `refills in ${h} h` : `refills in ${Math.max(1, Math.round(ms / 60_000))} min`;
 }
 
 /**
@@ -635,7 +704,11 @@ export function AppSidebar() {
           <SidebarFooter className="gap-1 border-t border-sidebar-border" onClick={closeOnLink}>
             {computer && <ComputerNote />}
             {status?.viewer ? (
-              <YourGpuChip gpu={status.viewer.gpu} guest={status.viewer.kind === "guest"} />
+              status.viewer.balance ? (
+                <BalanceChip viewer={status.viewer} />
+              ) : (
+                <YourGpuChip gpu={status.viewer.gpu} guest={status.viewer.kind === "guest"} hosted={!!status.viewer.hosted} />
+              )
             ) : ownerGpu ? (
               <>
                 {mode !== "open" && (

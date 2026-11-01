@@ -31,6 +31,7 @@ import { postFile } from "./upload";
 import type { ShareCreated, ShareInfo, ShareListItem, SharePatch, ShareRequest } from "./share";
 import type { AccessSummary } from "./model-access";
 import { ADD_KEY_HEADER, isCloudProvider, type CloudProvider } from "./your-keys";
+import { BILLING_EVENT, BILLING_HEADER, type BillingAction, type BillingRefusalDetail, type HostedBalance } from "./hosted";
 
 export interface Asset {
   id: string;
@@ -846,6 +847,12 @@ export interface StatusInfo {
     gpu: { connected: boolean; mode?: "computer" | "link"; online?: boolean; comfy?: "down" | "no-setting"; device?: string; vramBytes?: number };
     keys?: CloudProvider[];
     paidAllowed?: boolean;
+    /** Hosted runs (FUOBE_HOSTED_RUNS=1): runs may go to this studio's GPUs, so a GPU of one's own is optional. */
+    hosted?: boolean;
+    /** The billing service's words for the account's balance (src/server/billing.ts). */
+    balance?: HostedBalance;
+    links?: BillingAction[];
+    notice?: { id: string; text: string; url?: string };
   };
   /**
    * The owner's ComfyUI runs on the owner's computer (Settings): what the owner's Fuobe tab there last said. Never
@@ -1295,7 +1302,8 @@ export function askToSignUp(action: RefusalAction = "upload"): void {
 export function useAskBeforeUpload(): () => boolean {
   const guest = useIsGuest();
   const seen = useStatus().data?.viewer;
-  const nowhere = seen?.kind === "account" && !seen.gpu.connected && !seen.keys?.length;
+  // With hosted runs on, an account adds pictures for runs on this studio's GPUs: the upload says if a kind isn't taken.
+  const nowhere = seen?.kind === "account" && !seen.gpu.connected && !seen.keys?.length && !seen.hosted;
   return useCallback(() => {
     if (guest) askToSignUp("upload");
     else if (nowhere) window.dispatchEvent(new CustomEvent<RefusalDetail>(CONNECT_GPU_EVENT, { detail: { action: "upload" } }));
@@ -1351,6 +1359,16 @@ export function watchGuestRefusals(): void {
     if (isCloudProvider(addKey) && refusalCard("gpu", window.location)) {
       markRefusalShown(res);
       window.dispatchEvent(new CustomEvent(ADD_KEY_EVENT, { detail: { provider: addKey } }));
+    }
+    // A run the billing service refused (its own words, and a link or an offer): the billing card opens.
+    const billing = res.status >= 400 ? res.headers.get(BILLING_HEADER) : null;
+    if (billing && refusalCard("gpu", window.location)) {
+      markRefusalShown(res);
+      res
+        .clone()
+        .json()
+        .then((b: Omit<BillingRefusalDetail, "code">) => window.dispatchEvent(new CustomEvent<BillingRefusalDetail>(BILLING_EVENT, { detail: { ...b, code: billing } })))
+        .catch(() => {});
     }
     // A run the GPU pre-flight stopped (something missing on the viewer's ComfyUI): the guided fix opens with its plan.
     if (res.status === 409 && res.headers.get("x-fuobe-gpu-setup") === "1") {

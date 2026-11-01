@@ -234,7 +234,8 @@ export function StartSteps() {
     },
     {
       title: "Sign up free.",
-      text: "A free account runs open models on your own GPU, never on ours.",
+      // Hosted runs on: runs may go to this studio's GPUs too.
+      text: viewer?.hosted ? "Runs on this studio's GPUs, or on your own." : "A free account runs open models on your own GPU, never on ours.",
       action:
         viewer?.kind === "account" ? (
           done("You’re signed in")

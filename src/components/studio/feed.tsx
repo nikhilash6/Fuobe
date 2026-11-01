@@ -1,6 +1,7 @@
 "use client";
 
 import { Cloud, Copy, Cpu, Download, FolderDown, Heart, MoreHorizontal, RotateCcw, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { lineWords } from "@/lib/hosted";
 import { openGpuSetup } from "@/hooks/use-gpu";
 import { useLocalJob } from "@/components/gpu/computer-runner";
 import { jobFraction, jobWords } from "@/lib/relay";
@@ -333,7 +334,16 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g:
             ))}
             <span className="before:mr-1.5 before:content-['·']">{timeAgo(g.createdAt)}</span>
             {/* A run its provider never took (a refused key, an empty balance) cost nothing: said, not priced. */}
-            {g.costUsd && g.notBilled ? (
+            {/* On this studio's GPUs (hosted runs): the billing service's words for its charge, or that it cost nothing. */}
+            {g.queue ? <span className="before:mr-1.5 before:content-['·']">{lineWords(g.queue)}</span> : null}
+            {g.stage === "checking" ? <span className="before:mr-1.5 before:content-['·']">Checking</span> : null}
+            {g.place === "pool" ? (
+              g.notCharged ? (
+                <span className="before:mr-1.5 before:content-['·']">Not charged</span>
+              ) : g.charge ? (
+                <span className="before:mr-1.5 before:content-['·']">{g.charge}</span>
+              ) : null
+            ) : g.costUsd && g.notBilled ? (
               <span className="before:mr-1.5 before:content-['·']">Not billed</span>
             ) : g.costUsd ? (
               <span className="font-mono before:mr-1.5 before:content-['·']">{formatCost(g.costUsd)}</span>

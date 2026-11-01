@@ -66,7 +66,7 @@ const post = (body: unknown) => {
   return generationsRoute.POST(new Request("http://localhost:3000/api/generations", { method: "POST", headers: headers({ "content-type": "application/json", "content-length": String(Buffer.byteLength(text)) }), body: text }));
 };
 const upload = (bytes: Buffer, type: string, name: string) =>
-  uploadsRoute.POST(new Request("http://localhost:3000/api/uploads", { method: "POST", headers: headers({ "content-type": type, "x-file-name": name, "content-length": String(bytes.length) }), body: bytes }));
+  uploadsRoute.POST(new Request("http://localhost:3000/api/uploads", { method: "POST", headers: headers({ "content-type": type, "x-file-name": name, "content-length": String(bytes.length) }), body: new Uint8Array(bytes) }));
 
 describe("hosted runs off (the default)", () => {
   it("an account with no GPU or key: runs and uploads say Connect your GPU, and the status says nothing new", async () => {
