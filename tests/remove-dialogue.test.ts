@@ -21,7 +21,7 @@ import {
 import { splitTime } from "@/lib/av/split";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { HUB_MODES, modeHref } from "@/lib/hubs";
-import type { Generation, GenInput } from "@/lib/catalog/types";
+import type { Generation, GenInput, Operation } from "@/lib/catalog/types";
 
 // Video tools → Remove dialogue (DBS D2): the planner, the two-step chain on the open engine (graph A, then the
 // stream-copy mux), the graph the mux runs, the provider's bindings and the API in demo mode.
@@ -338,7 +338,7 @@ describe("the mux graph the provider picks", () => {
 });
 
 describe("the provider's bindings for the two steps", () => {
-  const ctx = (op: string) => ({
+  const ctx = (op: Operation) => ({
     generationId: "gen1",
     op,
     upload: async (_d: unknown, _t: unknown, name: string) => `up_${name}`,
