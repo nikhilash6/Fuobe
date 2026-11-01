@@ -183,7 +183,7 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       vramGb: Number(wf.vramGb) || 0,
       isolated: wf.worker === 'isolated',
       firstRun: wf.autoDownloads ?? [],
-      validated: !!wf.validated,
+      ...(wf.validated && { validated: true }),
     };
   }
 

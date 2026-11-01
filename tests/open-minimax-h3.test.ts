@@ -45,7 +45,7 @@ const readJson = <T,>(p: string): T => JSON.parse(fs.readFileSync(p, "utf8")) as
 const manifest = readJson<Manifest>(path.join(LIB, "manifest.json"));
 const pins = readJson<Record<string, { revision: string; sizeBytes: number; sha256?: string }>>(path.join(LIB, "model-pins.json"));
 const packs = readJson<Record<string, { repo: string; commit: string; registry: { id: string; version: string } | null }>>(path.join(LIB, "packs.json"));
-const requirements = readJson<{ packs: Record<string, unknown>; files: Record<string, { sizeBytes: number }>; workflows: Record<string, { packs: Record<string, string[]>; files: string[]; validated: boolean }> }>(
+const requirements = readJson<{ packs: Record<string, unknown>; files: Record<string, { sizeBytes: number }>; workflows: Record<string, { packs: Record<string, string[]>; files: string[]; validated?: true }> }>(
   path.join(LIB, "requirements.json"),
 );
 type Graph = Record<string, { class_type: string; inputs: Record<string, unknown> }>;
@@ -93,7 +93,7 @@ describe("MiniMax H3 on your GPU: the catalog entry", () => {
       const w = wf(id);
       expect(w, id).toBeDefined();
       expect(w.validated, id).toBe(false);
-      expect(requirements.workflows[id].validated, id).toBe(false);
+      expect(requirements.workflows[id].validated, id).toBeUndefined();
       expect(w.limits).toMatchObject({ maxFrames: 362, dimensionMultiple: 32 });
       expect(w.vramGb).toBe(32);
       expect(w.outputs).toEqual([{ node: "174", kind: "video" }]);

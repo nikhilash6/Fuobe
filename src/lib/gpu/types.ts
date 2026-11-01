@@ -78,7 +78,8 @@ export interface IndexWorkflow {
   isolated: boolean;
   /** Weights a pack downloads itself on the first run (free text from the manifest). */
   firstRun: string[];
-  validated: boolean;
+  /** On a graph a real ComfyUI accepted. */
+  validated?: true;
 }
 
 // ---------------------------------------------------------------------------
