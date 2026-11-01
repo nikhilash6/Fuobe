@@ -540,12 +540,6 @@ export const ATTRIBUTIONS: Attribution[] = [
     url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE",
     note: "Trained in part on WSJ (LDC) and an internal NVIDIA set (model card). The older nvidia/RE-USE repository is non-commercial (NSCLv1); Fuobe uses only the NemotronLabs repositories.",
   },
-  {
-    for: "Clean up voice demo",
-    text: "Sample recording mic_test2.wav from NVIDIA's RE-USE repository, and its cleaned copy",
-    licence: "OpenMDW-1.1",
-    url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE",
-  },
 ];
 
 /** The parts of a LoRA's licence snapshot the class needs (src/lib/catalog/types.ts LoraLicence). */

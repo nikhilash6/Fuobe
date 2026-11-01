@@ -95,7 +95,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
   it("lets guests and accounts open the tools' pages", () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     const cookie = auth.createSession(newAccount().id).value;
-    for (const p of ["/audio/split", "/audio/clean", "/apps/app-clean-up-voice", "/samples/clean-voice/noisy-mic-after.m4a", "/character-sheet", "/cinema", "/image", "/connect"]) {
+    for (const p of ["/audio/split", "/audio/clean", "/apps/app-clean-up-voice", "/samples/clean-voice/clean.m4a", "/character-sheet", "/cinema", "/image", "/connect"]) {
       expect(passed(proxy(req(p))), `guest ${p}`).toBe(true);
       expect(passed(proxy(req(p, { cookie }))), `account ${p}`).toBe(true);
     }

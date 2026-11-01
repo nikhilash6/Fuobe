@@ -218,12 +218,10 @@ describe("licences, as information", () => {
     expect(workflowLicence(entry("voice-clean-bed-reuse"))).toContain("DBS weights Apache-2.0");
   });
 
-  it("records the pack (MIT, adapted NVIDIA code) at its pin, the model and the demo sample", () => {
+  it("records the pack (MIT, adapted NVIDIA code) at its pin and the model", () => {
     const pack = nodePack("ComfyUI-RE-USE");
     expect(pack?.licence).toMatchObject({ name: "MIT", class: "commercial" });
     expect(pack?.repo).toBe(`https://github.com/workingprototype/Fuobe/tree/${requirements.packs["ComfyUI-RE-USE"].commit}/comfy-nodes/ComfyUI-RE-USE`);
     expect(pack?.licence.note).toMatch(/not NVIDIA's code path/);
-    expect(ATTRIBUTIONS.find((a) => a.for === "RE-USE (clean up voice)")).toMatchObject({ licence: "OpenMDW-1.1", note: expect.stringMatching(/non-commercial \(NSCLv1\)/) });
-    expect(ATTRIBUTIONS.find((a) => a.for === "Clean up voice demo")).toMatchObject({ licence: "OpenMDW-1.1", text: expect.stringContaining("mic_test2.wav") });
-  });
+    expect(ATTRIBUTIONS.find((a) => a.for === "RE-USE (clean up voice)")).toMatchObject({ licence: "OpenMDW-1.1", note: expect.stringMatching(/non-commercial \(NSCLv1\)/) });  });
 });
