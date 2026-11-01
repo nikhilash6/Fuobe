@@ -32,8 +32,8 @@ export default function Page() {
       </LegalSection>
       <LegalSection title="Cookies">
         <p>
-          One cookie keeps you signed in. Your browser also remembers small preferences, such as your theme and how the sidebar looks. There are no
-          advertising or tracking cookies.
+          One cookie keeps you signed in. Your browser also remembers small preferences, such as your theme and how the sidebar looks. Analytics
+          cookies show us which pages and tools people use, so we can make them better. There are no advertising cookies.
         </p>
       </LegalSection>
       <LegalSection title="Deleting your account">
