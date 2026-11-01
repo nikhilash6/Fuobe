@@ -129,6 +129,31 @@ const MODEL_LINES: Record<string, string> = {
 };
 
 const fmt = (n: number) => `${Math.round(n * 10) / 10} s`;
+
+/** The frame shapes a blockout is filmed in: an upload takes the nearest to its own. */
+const SHAPES = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
+
+/** An uploaded clip's shape, read from its header in the browser (undefined when it can't be read). */
+function clipShape(url: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    const done = (shape?: string) => {
+      v.removeAttribute("src");
+      resolve(shape);
+    };
+    v.preload = "metadata";
+    v.muted = true;
+    v.onloadedmetadata = () => {
+      const r = v.videoWidth / v.videoHeight;
+      if (!(r > 0)) return done();
+      const ratio = (a: string) => Number(a.split(":")[0]) / Number(a.split(":")[1]);
+      done(SHAPES.reduce((best, a) => (Math.abs(Math.log(ratio(a) / r)) < Math.abs(Math.log(ratio(best) / r)) ? a : best)));
+    };
+    v.onerror = () => done();
+    setTimeout(() => done(), 8000);
+    v.src = url;
+  });
+}
 const section = "space-y-2.5 border-t pt-4 first:border-t-0 first:pt-0";
 const h3 = "text-[12px] font-medium tracking-wide text-muted-foreground uppercase";
 
@@ -179,14 +204,14 @@ export function BlockoutPanel(props: BlockoutPanelProps) {
     setUploading(kind);
     try {
       const preview = URL.createObjectURL(f);
-      const [asset, length] = await Promise.all([uploadFile(f), mediaDuration(preview, "video").catch(() => NaN)]);
+      const [asset, length, aspect] = await Promise.all([uploadFile(f), mediaDuration(preview, "video").catch(() => NaN), clipShape(preview)]);
       URL.revokeObjectURL(preview);
       if (kind === "depth") return set({ source: draft.source ? { ...draft.source, depth: asset.url } : null });
       const secs = Number.isFinite(length) && length > 0 ? Math.round(length * 100) / 100 : 8;
       if (secs > BLOCKOUT.maxSeconds) toast(`Blockouts run up to ${BLOCKOUT.maxSeconds} s: this one is ${fmt(secs)}, so its first ${BLOCKOUT.maxSeconds} s are used`);
       setDraft((d) => ({
         ...d,
-        source: { video: asset.url, seconds: Math.min(BLOCKOUT.maxSeconds, secs), from: "upload", name: f.name },
+        source: { video: asset.url, seconds: Math.min(BLOCKOUT.maxSeconds, secs), from: "upload", name: f.name, ...(aspect && { aspect }) },
         beats: d.beats.length ? d.beats.filter((b) => b.start < secs) : [{ id: nanoid(6), start: 0, label: "Opening", words: "" }],
         prompt: null,
       }));
