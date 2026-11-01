@@ -10,7 +10,8 @@
  *   (video-evolution-wan22-fun-vace, which also loads a whole clip at 16 fps when Edit video sends one).
  * - In the cloud: the same model hosted on fal (Wan 2.2 Fun VACE depth), the way Fuobe Shorts runs it. Per piece of up to
  *   10 s (241 frames as fal works them), hosted Qwen-Image-Edit 2511 takes the piece's first frame toward the direction
- *   (the first references as images 2–4), and VACE carries that frame through the piece by its depth. The endpoint has
+ *   (the first references as images 2–4), and VACE re-renders the piece by its depth with that frame as its reference
+ *   (ref_image_urls, as the GPU graph's reference_image; no first frame pinned, as on the GPU). The endpoint has
  *   no strength field, so the change level reaches the direction frame only: how much of the clip's own look stays
  *   (the GPU's denoise) is set on your GPU only (EVOLUTION_CLOUD_NOTE).
  * - Then the pieces are joined and the clip's own sound put back.
@@ -84,6 +85,9 @@ export const EVOLUTION_CLOUD_NOTE = "In the cloud the change level shapes each p
 export const EVOLUTION_RESOLUTIONS: Record<Engine, string[]> = { open: ["480p", "720p"], cloud: ["480p", "580p", "720p"] };
 export const EVOLUTION_DEFAULT_RESOLUTION: Record<Engine, string> = { open: "480p", cloud: "720p" };
 
+/** The resolutions an engine offers, as a choice: "480p, 580p or 720p". */
+export const resolutionChoices = (engine: Engine): string => EVOLUTION_RESOLUTIONS[engine].join(", ").replace(/, ([^,]*)$/, " or $1");
+
 /** The cloud's pieces: Fuobe Shorts' (at most 10 s and 241 frames as fal's VACE works them, by the clip's rate). */
 export function cloudPieces(range: ShortsRange, fps?: number) {
   return planCloudSegments(range, originalSegmentSeconds(fps));
@@ -117,7 +121,7 @@ export function evolutionProblem(o: { engine: Engine; source: Pick<EvolutionSour
   if (r) return r;
   if (o.references > EVOLUTION.maxReferences) return `Use up to ${EVOLUTION.maxReferences} references`;
   if ((o.direction?.length ?? 0) > EVOLUTION.maxDirectionChars) return `Keep the direction under ${EVOLUTION.maxDirectionChars.toLocaleString("en")} characters`;
-  if (o.resolution && !EVOLUTION_RESOLUTIONS[o.engine].includes(o.resolution)) return `${o.resolution} isn't offered ${o.engine === "open" ? "on your GPU" : "in the cloud"} — pick ${EVOLUTION_RESOLUTIONS[o.engine].join(", ").replace(/, ([^,]*)$/, " or $1")}`;
+  if (o.resolution && !EVOLUTION_RESOLUTIONS[o.engine].includes(o.resolution)) return `${o.resolution} isn't offered ${o.engine === "open" ? "on your GPU" : "in the cloud"} — pick ${resolutionChoices(o.engine)}`;
   // fal's VACE refuses a piece under 17 frames or a clip under 5 fps: said before the cuts and frames are paid for.
   if (o.engine === "cloud") return cloudPieces(o.range, o.source.fps).map((p) => originalSegmentProblem(p.end - p.start, o.source.fps)).find(Boolean) ?? null;
   return null;
@@ -250,8 +254,8 @@ const pieceLabel = (i: number, n: number, what: string) => ({ label: n > 1 ? `Pi
 /**
  * The whole job. GPU: per segment, cut it (16 fps), take its first frame toward the direction, evolve it from itself
  * at the intensity's denoise. Cloud: per piece of up to 10 s, cut it (unless it is the whole clip), take its first frame
- * toward the direction on hosted Qwen-Image-Edit 2511, and carry that frame through the piece by depth on fal's Wan 2.2
- * Fun VACE, frames and rate kept (billed on frames ÷ 16). Then join and put the sound back.
+ * toward the direction on hosted Qwen-Image-Edit 2511, and re-render the piece by its depth on fal's Wan 2.2 Fun VACE
+ * with that frame as its reference, frames and rate kept (billed on frames ÷ 16). Then join and put the sound back.
  */
 export function planEvolution(input: EvolutionPlanInput): EvolutionPlan {
   const { engine } = input;

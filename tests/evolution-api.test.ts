@@ -60,9 +60,18 @@ describe("Evolution: estimates", () => {
     expect(cloud).toMatchObject({ modelName: "Fuobe Evolution", engine: "cloud", resolution: "720p", pieces: 2, seconds: 12, demo: true });
     expect(cloud.notes.join(" ")).toMatch(/runs the GPU's model hosted on fal: each ≤10 s piece's first frame is taken toward the direction by Qwen-Image-Edit 2511 with your first reference, then Wan 2\.2 Fun VACE/);
     expect(cloud.notes.join(" ")).not.toMatch(/LTX/);
+    // What the cloud can't do of the GPU recipe, in the estimate too; a 16 fps clip is billed for its length.
+    const { EVOLUTION_CLOUD_NOTE } = await import("@/lib/catalog/evolution");
+    expect(cloud.notes).toContain(EVOLUTION_CLOUD_NOTE);
+    expect(cloud.notes.join(" ")).toMatch(/re-renders the piece by its depth with that frame as its reference/);
+    expect(cloud.notes.join(" ")).not.toMatch(/fal bills this clip/);
+    // A 30 fps clip: fal bills its frames ÷ 16, about 1.9× its length, and the estimate says so (as Shorts' does).
+    const fast = await (await estimateRoute.POST(json(body({ source: { url: clip, name: "walk.mp4", ...src, fps: 30 } })))).json();
+    expect(fast.notes).toContain("fal bills this clip's 30 fps as 1.9× its length (video seconds at 16 fps)");
     const open = await (await estimateRoute.POST(json(body({ engine: "open" })))).json();
     expect(open).toMatchObject({ engine: "open", resolution: "480p", pieces: 3, costUsd: 0 });
     expect(open.notes.join(" ")).toMatch(/Qwen-Image 2.1 Turbo takes its first frame toward the direction with your first reference/);
+    expect(open.notes).not.toContain(EVOLUTION_CLOUD_NOTE);
   });
 
   describe("with a fal key (estimates submit nothing)", () => {
@@ -86,6 +95,9 @@ describe("Evolution: estimates", () => {
     expect(await say(body({ range: { start: 0, end: 3 } }))).toBe("Select at least 4 seconds");
     expect(await say(body({ engine: "open", resolution: "1080p" }))).toMatch(/isn't offered on your GPU/);
     expect(await say(body({ resolution: "1080p" }))).toBe("1080p isn't offered in the cloud — pick 480p, 580p or 720p");
+    // Starting a run says the list the same way.
+    const pick = await createRoute.POST(json(body({ resolution: "1080p" })));
+    expect([pick.status, (await pick.json()).error]).toEqual([422, "Pick 480p, 580p or 720p"]);
     expect(await say({ engine: "cloud" })).toBe("Add a clip and pick how much should change");
     // Past the limits, the limit is said (not the schema's generic refusal), on every route.
     expect(await say(body({ direction: "x".repeat(10_001) }))).toBe("Keep the direction under 10,000 characters");

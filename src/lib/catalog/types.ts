@@ -790,6 +790,11 @@ export interface GenParams {
    * many frames a frame-count route renders (LTX 2.3 clean plate / HDR, VOID; FieldMap.numFrames).
    */
   sourceDuration?: number;
+  /**
+   * The input clip's frame rate, when the caller knows it: what a clip edit billed by its frames costs (fal's Wan 2.2
+   * Fun VACE bills frames ÷ 16; src/lib/catalog/clip-windows.ts). The server's header read wins over it.
+   */
+  sourceFps?: number;
   /** Extract every Nth frame. */
   frameInterval?: number;
   /** Frame interpolation: the frame rate to reach, and a slow-motion factor (1–8; 2 = twice as long). */

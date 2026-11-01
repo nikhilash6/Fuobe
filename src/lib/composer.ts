@@ -284,7 +284,7 @@ export function clipBlocker(
   model: (Pick<ModelDef, "engine" | "options" | "defaults"> & Partial<Pick<ModelDef, "id" | "name">>) | undefined,
   ramBytes: number | undefined,
 ): string | null {
-  if (op === "v2v" && model?.id && facts?.duration) return clipWindowProblem({ id: model.id, name: model.name ?? model.id }, facts.duration);
+  if (op === "v2v" && model?.id && facts?.duration) return clipWindowProblem({ id: model.id, name: model.name ?? model.id, engine: model.engine }, facts.duration, facts.fps);
   if (!facts?.width || !facts.height || !model) return null;
   if (op === "upscale-video") {
     const tier = upscaleTier(params.resolution ?? model.defaults?.resolution, model.options.resolutions, { width: facts.width, height: facts.height }, params.resolution !== undefined);

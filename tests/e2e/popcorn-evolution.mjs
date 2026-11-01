@@ -84,7 +84,7 @@ try {
       await page.waitForFunction(() => /Placeholder · free|≈ \$|Free/.test(document.body.innerText), null, { timeout: 30_000 }).catch(() => {});
       check(`${tag}: the price before it runs (a demo here)`, /Placeholder · free/.test(await text()) && /Fuobe Evolution · \d+(\.\d+)? s · 720p/.test(await text()));
       // The cloud runs the GPU's model hosted on fal, never a substitute, and says in one line what the GPU keeps.
-      check(`${tag}: cloud: Wan 2.2 Fun VACE hosted on fal, no LTX-2.3`, /runs the GPU's model hosted on fal/.test(await text()) && /Wan 2\.2 Fun VACE carries it through the piece/.test(await text()) && !/LTX/.test(await text()));
+      check(`${tag}: cloud: Wan 2.2 Fun VACE hosted on fal, no LTX-2.3`, /runs the GPU's model hosted on fal/.test(await text()) && /Wan 2\.2 Fun VACE re-renders the piece by its depth with that frame as its reference/.test(await text()) && !/LTX/.test(await text()));
       check(`${tag}: cloud: one line says the change level's limit`, /In the cloud the change level shapes each piece's direction frame; how much of the clip's own look stays is set on your GPU only/.test(await text()));
       check(`${tag}: cloud: the references reach each piece's direction frame`, /In the cloud the first 3 also go into each piece's direction frame/.test(await text()));
       check(`${tag}: cloud: 480p, 580p or 720p`, (await page.getByRole("radiogroup", { name: "Resolution" }).getByRole("radio").allInnerTexts()).join("|") === "480p|580p|720p");

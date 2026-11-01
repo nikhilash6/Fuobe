@@ -12,7 +12,7 @@ import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
 import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
-import { clipWindowProblem } from "@/lib/catalog/clip-windows";
+import { clipWindowProblem, sourceFrames } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, withoutTriggers } from "@/lib/catalog/plan";
 import { framedLength, keepMatte } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
@@ -1568,12 +1568,14 @@ async function submitNow(
     }
     // A clip edit of a clip sent as it is (Edit video, an API call; the studios that cut clips keep to the windows
     // themselves): one outside the model's window is refused before it's paid for (Happy Horse bills 60 s and returns
-    // 15), and one that keeps the clip's length is priced for it once the header is read (a call that didn't say).
+    // 15; fal's Wan 2.2 Fun VACE takes at most 241 frames), and one that keeps the clip's length is priced for it once
+    // the header is read (a call that didn't say). A route billed by frames is priced on the header's rate as well.
     if (plan.op === "v2v" && input.sourceDuration && !req.chain?.length && req.params?.duration === undefined && providerId !== "mock" && plan.model.engine !== "open") {
-      const problem = clipWindowProblem(plan.model, input.sourceDuration);
+      const problem = clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps);
       if (problem) throw new Error(problem);
-      if (plan.params.sourceDuration === undefined && clipEditSeconds(plan.model, input, plan.op) !== undefined) {
-        update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });
+      const byFrames = !!sourceFrames(plan.model.id, plan.model.engine) && source.sourceFps !== undefined && source.sourceFps !== plan.params.sourceFps;
+      if ((plan.params.sourceDuration === undefined || byFrames) && clipEditSeconds(plan.model, input, plan.op) !== undefined) {
+        update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration, sourceFps: input.sourceFps }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });
       }
     }
     // An upscale that wouldn't enlarge the clip (a 1080p clip at a default 1080p; a 4K clip would even shrink):

@@ -2051,9 +2051,11 @@ const originals: ModelDef[] = [
         imageLabels: ["direction frame (optional: the clip's first frame as it should look)"],
       },
     }),
-    defaults: { duration: 5, resolution: EVOLUTION_DEFAULT_RESOLUTION.cloud },
+    // The cloud half renders the clip's own frames (match_input_num_frames) and is priced on them (clip-windows.ts):
+    // only the GPU half asks for a length.
+    defaults: { resolution: EVOLUTION_DEFAULT_RESOLUTION.cloud },
     engineNote: "Both engines run Wan 2.2 Fun VACE with a direction frame per segment; in the cloud the change level shapes the direction frame only, and how much of the clip's own look stays is set on your GPU only",
-    engineDefaults: { open: { resolution: EVOLUTION_DEFAULT_RESOLUTION.open, aspectRatio: "auto" } },
+    engineDefaults: { open: { resolution: EVOLUTION_DEFAULT_RESOLUTION.open, aspectRatio: "auto", duration: 5 } },
     engineOptions: {
       open: {
         aspectRatios: ["auto", ...VID_AR],

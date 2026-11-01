@@ -54,7 +54,10 @@ describe("Fuobe Evolution: intensities", () => {
     // The endpoint the generator reads has no strength field: the change level can't reach it (said in the cloud).
     const schema = research.hostedBaseEndpoints.find((e: { endpoint: string }) => e.endpoint === evo.cloud.endpoint);
     expect(Object.keys(schema.inputs).filter((k) => /strength|denoise/.test(k))).toEqual([]);
-    expect(Object.keys(schema.inputs)).toEqual(expect.arrayContaining(["video_url", "first_frame_url", "preprocess", "match_input_num_frames"]));
+    expect(Object.keys(schema.inputs)).toEqual(expect.arrayContaining(["video_url", "ref_image_urls", "preprocess", "match_input_num_frames"]));
+    // The direction frame's role is the GPU graph's (WanVaceToVideo's reference_image), recorded with the choice.
+    expect(evo.cloud.video).toMatch(/ref_image_urls = \[the direction frame\].*no first_frame_url/);
+    expect(evo.cloud.frameRole).toMatch(/reference_image/);
   });
 });
 
@@ -86,7 +89,7 @@ describe("Fuobe Evolution: the model on both engines", () => {
     expect(cloud.options.maxImages).toBe(1);
   });
 
-  it("the fal payload: the piece by its depth, the direction frame as the first frame, frames and rate kept; billed on frames ÷ 16", () => {
+  it("the fal payload: the piece by its depth, the direction frame as the VACE reference (as on the GPU), frames and rate kept; billed on frames ÷ 16", () => {
     const cloud = onEngine(m, "cloud");
     const p = planGeneration(
       { feature: "evolution", modelId: m.id, op: "v2v", prompt: "a night market", inputs: { video: "https://x/clip.mp4", images: ["https://x/frame.png"] }, params: { resolution: "720p", duration: 15 } },
@@ -98,19 +101,48 @@ describe("Fuobe Evolution: the model on both engines", () => {
     expect(body).toMatchObject({
       prompt: "a night market",
       video_url: "https://x/clip.mp4",
-      first_frame_url: "https://x/frame.png",
+      ref_image_urls: ["https://x/frame.png"],
       resolution: "720p",
       preprocess: true,
       match_input_num_frames: true,
       match_input_frames_per_second: true,
     });
-    expect(body).not.toHaveProperty("ref_image_urls");
+    // The GPU graph pins no first frame: the frame is VACE's reference there (video-evolution-wan22-fun-vace node 15).
+    expect(body).not.toHaveProperty("first_frame_url");
     expect(body).not.toHaveProperty("aspect_ratio");
     expect(body).not.toHaveProperty("video_strength");
     // $0.10 a video second at 720p, $0.075 at 580p, $0.05 at 480p.
     expect(estimateCost(cloud, { resolution: "720p", duration: 15 }, 1, "v2v")).toBeCloseTo(1.5, 5);
     expect(estimateCost(cloud, { resolution: "480p", duration: 15 }, 1, "v2v")).toBeCloseTo(0.75, 5);
     expect(estimateCost(onEngine(m, "open"), { resolution: "480p", duration: 5 }, 1, "v2v")).toBe(0);
+  });
+
+  it("mirrors the GPU graph: there the direction frame is WanVaceToVideo's reference image, with no first frame pinned", () => {
+    const graph = JSON.parse(fs.readFileSync(path.join(__dirname, "../workflows/comfyui/video-evolution-wan22-fun-vace.json"), "utf8"));
+    const vace = Object.values(graph as Record<string, { class_type: string; inputs: Record<string, unknown> }>).find((n) => n.class_type === "WanVaceToVideo")!;
+    const [scaled] = vace.inputs.reference_image as [string, number];
+    const [loaded] = graph[scaled].inputs.image as [string, number];
+    expect(graph[loaded]).toMatchObject({ class_type: "LoadImage", inputs: { image: "restyled_first_frame.png" } });
+    expect(vace.inputs).not.toHaveProperty("start_image");
+    const map = onEngine(m, "cloud").routes.find((r) => r.op === "v2v")!.map!;
+    expect(map.images).toBe("ref_image_urls");
+    expect(map.image).toBeUndefined();
+  });
+
+  it("a direct cloud run (Edit video, the API) asks no length: the clip's own frames are made and priced; the GPU keeps its 5 s default", () => {
+    const req = { feature: "video-edit", modelId: m.id, op: "v2v" as const, prompt: "a night market", inputs: { video: "https://x/clip.mp4" } };
+    const cloud = onEngine(m, "cloud");
+    const open = onEngine(m, "open");
+    expect(planGeneration(req, (id) => (id === m.id ? cloud : getModel(id)), getPreset).params.duration).toBeUndefined();
+    const withFrame = { ...req, inputs: { ...req.inputs, images: ["https://x/frame.png"] } };
+    expect(planGeneration(withFrame, (id) => (id === m.id ? open : getModel(id)), getPreset).params.duration).toBe(5);
+    expect(open.options.durations).toEqual([3, 4, 5]);
+    // frames ÷ 16 × $0.10 at 720p: 4 s at 30 fps = 7.5 video seconds; 8 s at 16 fps = 8; an unknown rate counts as 30 fps.
+    expect(estimateCost(cloud, { resolution: "720p", sourceDuration: 4, sourceFps: 30 }, 1, "v2v")).toBeCloseTo(0.75, 5);
+    expect(estimateCost(cloud, { resolution: "720p", sourceDuration: 8, sourceFps: 16 }, 1, "v2v")).toBeCloseTo(0.8, 5);
+    expect(estimateCost(cloud, { resolution: "480p", sourceDuration: 4 }, 1, "v2v")).toBeCloseTo(0.375, 5);
+    // The price follows the clip (it was a flat $0.50 whatever the clip).
+    expect(estimateCost(cloud, { resolution: "720p", sourceDuration: 2, sourceFps: 30 }, 1, "v2v")).not.toBe(estimateCost(cloud, { resolution: "720p", sourceDuration: 6, sourceFps: 30 }, 1, "v2v"));
   });
 });
 

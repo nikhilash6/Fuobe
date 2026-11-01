@@ -19529,7 +19529,7 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
         "endpoint": "fal-ai/wan-22-vace-fun-a14b/depth",
         "map": {
           "negativePrompt": "negative_prompt",
-          "image": "first_frame_url",
+          "images": "ref_image_urls",
           "video": "video_url",
           "seed": "seed",
           "fps": "frames_per_second",
@@ -19562,7 +19562,7 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
         "580p",
         "720p"
       ],
-      "maxImages": 1
+      "maxImages": 4
     },
     "licence": {
       "licence": "Apache-2.0",

@@ -680,15 +680,17 @@ model("fuobe-shorts", "Fuobe Shorts", "Fuobe Original", "fuobe-shorts", "video",
       api_defaults=SHORTS_O["cloud"]["defaults"], defaults={"resolution": "720p"}, licence=SHORTS_O["licence"])
 # ----- Originals (O13): Fuobe Evolution's cloud half (research §8 evolution → studios[evolution].original.cloud): fal's
 # hosted Wan 2.2 Fun VACE depth, the GPU recipe's own model (the owner's call of 2026-10-30; LTX-2.3 video-to-video until
-# 2026-11-01). Like Fuobe Shorts: the piece as video_url (preprocess on, fal derives the depth), its direction frame
-# (hosted Qwen-Image-Edit 2511, planned by src/lib/catalog/evolution.ts) as first_frame_url only (no VACE subject
-# references: `images` is dropped), frames and rate matched to the piece, no aspect ratio asked (the clip keeps its shape).
+# 2026-11-01). The piece as video_url (preprocess on, fal derives the depth), its direction frame (hosted
+# Qwen-Image-Edit 2511, planned by src/lib/catalog/evolution.ts) as the VACE reference, ref_image_urls, the way the GPU
+# graph feeds it to WanVaceToVideo's reference_image (`image`, fal's first_frame_url, is dropped: the GPU pins no first
+# frame; research studios[evolution].original.cloud.frameRole), frames and rate matched to the piece, no aspect ratio
+# asked (the clip keeps its shape).
 # The endpoint has no strength field: the change level reaches the direction frame's instruction only. Silent: the clip's
 # own sound goes back on.
 EVOLUTION = next(s for s in ORIGINALS["studios"] if s["id"] == "evolution")["original"]["cloud"]
 model("fuobe-evolution", "Fuobe Evolution", "Fuobe Original", "fuobe-evolution", "video",
       "Takes your clip further in a direction an LLM writes from your references: a direction frame per piece carried through it by depth (Wan 2.2 Fun VACE)",
-      [("v2v", EVOLUTION["endpoint"], "fal", {"drop": ["aspectRatio", "images"], "fixed": EVOLUTION["fixed"]})],
+      [("v2v", EVOLUTION["endpoint"], "fal", {"drop": ["aspectRatio", "image"], "fixed": EVOLUTION["fixed"]})],
       original=True, fit_values=True, pricing=("second", 0.1, f"720p; 580p $0.075, 480p $0.05 · {_FRAMES16}; each direction frame's Qwen edit is priced on its own",
                                                {"byResolution": {"720p": 0.1, "580p": 0.075, "480p": 0.05}}),
       options={"resolutions": EVOLUTION["resolutions"]}, api_defaults=EVOLUTION["defaults"], defaults={"resolution": "720p"},
