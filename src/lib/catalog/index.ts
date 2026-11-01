@@ -62,7 +62,8 @@ const APP_OPEN_OVERRIDES: Record<string, Preset["open"]> = {
 
 /** What the open version does differently, shown on the app page next to an override above. */
 const APP_OPEN_PARITY: Record<string, string> = {
-  "app-virtual-try-on": "The open version uses FLUX.2 [klein] 4B with a try-on LoRA and masks the old outfit out first (10 GB GPU, Apache-2.0).",
+  // FLUX.2 [klein] 4B with a try-on LoRA (10 GB GPU, Apache-2.0).
+  "app-virtual-try-on": "On your GPU it masks the old outfit out first, then dresses you with a try-on LoRA.",
 };
 
 export const APPS: Preset[] = RAW_APPS.map((a) =>

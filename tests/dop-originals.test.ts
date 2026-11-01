@@ -318,7 +318,7 @@ describe("review fixes", () => {
     const whip = getPreset("motion-whip-pan")!;
     expect(whip.open).toMatchObject({ modelId: "fuobe-dop" });
     expect(whip.cloud).toMatchObject({ modelId: "kling-2-5-turbo", partner: true });
-    expect(whip.parity).toMatch(/In the cloud: the preset's words on a partner model/);
+    expect(whip.parity).toMatch(/In the cloud it runs on a partner model\.$/);
     // The Details popover reads as plain words: no notes for us about checks still to run.
     for (const p of [...MOTIONS, ...EFFECTS]) expect(p.parity ?? "", p.id).not.toMatch(/evaluation harness|checked on a GPU run|unverified/);
     // Every cloud route on Fuobe DoP brings something of its own: a LoRA, a camera LoRA or move, a grade or a relight.

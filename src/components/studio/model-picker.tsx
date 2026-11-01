@@ -290,7 +290,7 @@ function PickerList({
     <Command shouldFilter={false} loop label="Models" onKeyDown={(e) => starKey(e, (id) => setStarred((s) => toggleIn(s, id)))} className="rounded-none! bg-transparent p-0">
       <div className="flex items-center gap-2 p-1 sm:p-2 sm:pb-1">
         <div className="min-w-0 flex-1 [&_[data-slot=command-input-wrapper]]:p-0">
-          <CommandInput value={q} onValueChange={setQ} placeholder={mode === "both" ? "Search all models" : "Search models"} aria-label="Search models" autoFocus={!mobile} />
+          <CommandInput value={q} onValueChange={setQ} placeholder={mobile ? "Search" : mode === "both" ? "Search all models" : "Search models"} aria-label="Search models" autoFocus={!mobile} />
         </div>
         <EngineSwitch value={engine} onChange={onEngineChange} size="sm" />
       </div>

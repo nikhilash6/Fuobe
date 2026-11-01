@@ -180,6 +180,9 @@ export function ModelsTable({ models }: { models: ModelRow[] }) {
   const searchable = useMemo(() => index.filter(([m]) => engine === "all" || (m.engines.includes(engine) && offered(access, m.id, engine))), [index, engine, access]);
   const list = useMemo(() => searchable.filter(([m, text]) => (kind === "all" || m.kind === kind) && (!term || text.includes(term))).map(([m]) => m), [searchable, kind, term]);
   const only = mode === "both" ? undefined : mode;
+  // The Cloud list has the Fuobe Originals too (they run on both engines), so it says how many: Home and Project
+  // status count them once, under open source.
+  const originals = engine === "cloud" ? list.filter((m) => m.vendor === "Fuobe Original").length : 0;
   // 40 rows in the page's HTML, the rest as you scroll.
   const { shown, hasMore, moreFrom, sentinel, left } = useProgressive(list.length, `${engine}|${kind}|${term}`, 40, 60);
   const rows = useRef<HTMLTableSectionElement>(null);
@@ -230,7 +233,7 @@ export function ModelsTable({ models }: { models: ModelRow[] }) {
           ))}
         </div>
         <span className="text-[13px] whitespace-nowrap text-muted-foreground tabular-nums lg:ml-auto" aria-live="polite">
-          {list.length} models
+          {list.length} models{originals > 0 && `, ${originals} of them Fuobe Originals`}
         </span>
       </div>
       {switchedOff > 0 && (

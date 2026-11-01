@@ -981,9 +981,10 @@ export function matchScore(m: Pick<ModelDef, "name" | "vendor" | "tagline" | "fa
 
 /**
  * The picker's sections. Without a query: Recent (last 3 used), Starred, Best for this studio
- * and All models, for the selected engine. Every model shows once: it sits in the first section
- * it belongs to, so All models lists only the ones the sections above it leave out. `count` is
- * still every model of the engine. With a query: one list across every allowed engine, best
+ * and the rest, for the selected engine. Every model shows once: it sits in the first section
+ * it belongs to, so the last section lists only the ones the sections above it leave out ("More
+ * models" under them, "All models" when it is the only one). `count` is still every model of
+ * the engine. With a query: one list across every allowed engine, best
  * matches first.
  */
 export function groupModels(input: {
@@ -1020,13 +1021,16 @@ export function groupModels(input: {
     }
     return out;
   };
-  const groups: ModelGroup[] = [
-    { id: "recent", label: "Recent", models: take(recent, 3) },
-    { id: "starred", label: "Starred", models: take(starred, 50) },
-    { id: "best", label: "Best for this studio", models: take(best, 4) },
-    { id: "all", label: "All models", models: pool.filter((m) => !used.has(m.id)) },
-  ];
-  return { groups: groups.filter((g) => g.models.length), count: pool.length };
+  const top = (
+    [
+      { id: "recent", label: "Recent", models: take(recent, 3) },
+      { id: "starred", label: "Starred", models: take(starred, 50) },
+      { id: "best", label: "Best for this studio", models: take(best, 4) },
+    ] satisfies ModelGroup[]
+  ).filter((g) => g.models.length);
+  const rest = pool.filter((m) => !used.has(m.id));
+  const groups: ModelGroup[] = [...top, ...(rest.length ? [{ id: "all" as const, label: top.length ? "More models" : "All models", models: rest }] : [])];
+  return { groups, count: pool.length };
 }
 
 /** Keep a most-recent-first id list without duplicates. */

@@ -142,7 +142,7 @@ export function HomeView({
   prices,
   quotes,
 }: {
-  /** "130+": the open models a visitor runs on their own GPU (About & licences' count, rounded down). */
+  /** "120+": the open models and tools a visitor runs on their own GPU (modelCounts().open, rounded down). */
   openModels: string;
   chips: readonly TryChip[];
   /** The chip that opens Assist with a job typed in: the owner's, in place of the last Try chip. */
@@ -265,7 +265,7 @@ export function HomeView({
         <p className="mt-2 text-[15px] text-pretty text-muted-foreground">
           {/* Before the status: the words a public studio's visitors get (the owner's own install corrects them in a moment). */}
           {!status || visitor || engineMode === "open"
-            ? `Pictures, video, sound and 3D on ${openModels} open models, free on your own GPU through ComfyUI.`
+            ? `Pictures, video, sound and 3D on ${openModels} open models and tools, free on your own GPU through ComfyUI.`
             : engineMode === "cloud"
               ? "Frontier paid models through your own API keys."
               : "Frontier cloud models or fully open-source workflows — same studio, your choice."}

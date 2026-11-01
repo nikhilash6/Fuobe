@@ -85,9 +85,9 @@ export default async function Page() {
         </Fact>
         <Fact label="Models">
           <Link href="/models" className={link}>
-            {models.open} open-source
+            {models.open} open-source models and tools
           </Link>
-          <span className="text-muted-foreground"> · {models.cloud} more with a fal.ai or Replicate key</span>
+          <span className="text-muted-foreground"> · {models.cloud} partner models in the cloud</span>
         </Fact>
         <Fact label="Licence">
           <a href={`${FUOBE_REPO}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className={link}>

@@ -136,8 +136,9 @@ export default async function Page() {
           Open model licences
         </h2>
         <p className="mt-1 mb-5 max-w-2xl text-[13px] text-muted-foreground">
-          Fuobe&apos;s studios offer {models.open} open-source models. Below is the licence of every set of open weights Fuobe runs: theirs, the helper steps its presets run
-          and {library} more workflows in the library, {list.counts.all} in all (tools with no weights aren&apos;t listed). {list.counts.clear} allow commercial use, {list.counts.conditions} with conditions (revenue limits or use rules), {list.counts["non-commercial"]} non-commercial
+          Fuobe&apos;s studios offer {models.open} open-source models and tools. The list below has {list.counts.all} entries, one for each set of open weights Fuobe
+          runs: the studios&apos; models, the helper steps presets run, and {library} more workflows in the library. Tools with no weights aren&apos;t listed.
+          {" "}{list.counts.clear} allow commercial use, {list.counts.conditions} with conditions (revenue limits or use rules), {list.counts["non-commercial"]} non-commercial
           and {list.counts.territory} not available everywhere. Read the licence itself before you sell what you make; this list is a guide, not legal advice. Which models this install offers
           is set in{" "}
           <Link href="/settings/models" className="text-brand-text underline underline-offset-2">

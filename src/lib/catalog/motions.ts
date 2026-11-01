@@ -30,7 +30,7 @@ const START: InputSlot = { key: "image", label: "Start frame", accept: "image", 
 const END: InputSlot = { key: "endImage", label: "End frame", accept: "image", required: true, hint: "Where the transition lands" };
 
 /** The reference applies these to an uploaded video; Fuobe animates a still in the look (Details says it plainly). */
-const RESTYLE = "Animates your still in this look";
+const RESTYLE = "Animates your still in this look.";
 
 function slug(s: string): string {
   return s
@@ -65,7 +65,7 @@ function build(type: "motion" | "effect", specs: MotionSpec[], baseHue: number):
         loras: m.loras,
       },
       // Fuobe DoP writes each motion's and effect's own line (dopPreset); this one is kept only where it adds to it.
-      parity: m.parity ?? (m.loras?.length ? "On your GPU it adds a LoRA trained for this look" : "On your GPU it follows the preset's words"),
+      parity: m.parity ?? (m.loras?.length ? "On your GPU it adds a LoRA trained for this look." : "On your GPU it follows the preset's description."),
     };
   });
 }

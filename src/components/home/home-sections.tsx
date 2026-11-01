@@ -293,11 +293,11 @@ const KIND_ICON: Record<string, LucideIcon> = { image: ImageIcon, video: Video, 
 
 export function OpenSourceSection({ facts, newModels }: Pick<HomeShowcase, "facts" | "newModels">) {
   const numbers = [
-    { value: facts.openModels, label: "open-source models, each licence listed", href: "/settings/about" },
+    { value: facts.openModels, label: "open-source models and tools, free on your own GPU", href: "/settings/about" },
     { value: facts.workflows, label: "ComfyUI workflows to read, run and change", href: "/workflows" },
     { value: facts.originals, label: "Fuobe Originals, free on your GPU", href: "/models?q=Fuobe" },
     { value: facts.presets, label: "presets: apps, camera motions and effects", href: "/effects" },
-    { value: facts.partners, label: "partner models through your own fal.ai or Replicate key", href: "/models" },
+    { value: facts.partners, label: "partner models in the cloud", href: "/models" },
   ];
   return (
     <section aria-labelledby="home-open" className={cn(SECTION, "[--cv:528px] sm:[--cv:494px] md:[--cv:571px] lg:[--cv:494px] xl:[--cv:363px]")}>

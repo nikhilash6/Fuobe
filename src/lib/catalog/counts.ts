@@ -3,11 +3,14 @@
  *
  * The rule:
  * - A model counts when a visitor can pick it: it is listed in a studio's picker, on /models and in the ⌘K palette.
- *   A hidden model is a step a preset or a tool runs for you (trim a clip, join two clips, a self-test, a relight
- *   LoRA an app uses): it is part of what it serves, never picked on its own, so it isn't counted.
+ *   That includes the tools a picker lists that have no weights of their own (Trim video, Join clips, Pro export),
+ *   so pages say "models and tools".
+ * - A hidden model is a step a preset or a tool runs for you (the join step behind a preset, a self-test, the
+ *   relight an app runs first): it is part of what it serves and never listed in a picker, so it isn't counted. The
+ *   canvas can still offer one as a step inside a tool node (a frame or a join node); that doesn't make it a pick.
  * - `open`: the models that run on the open engine (ComfyUI on your own GPU). A Fuobe Original runs on both engines
- *   and counts here, once.
- * - `cloud`: the models that run only in the cloud, through your own fal.ai or Replicate key (the partner models).
+ *   and counts here, once (the /models Cloud list shows it too, and says how many).
+ * - `cloud`: the models that run only in the cloud (the partner models, through the visitor's own key).
  * - `all`: open + cloud, so every pickable model counts exactly once.
  *
  * The licence list on About & licences is a different count (one row per set of open weights, helper steps and

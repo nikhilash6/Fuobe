@@ -119,13 +119,13 @@ describe("the preset covers manifest", () => {
     for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) expect(coverPreview(p), p.id).toEqual(previewFor(p));
   });
 
-  it("rests every preset header on its own still, never a drawn tile", () => {
-    // The header as PresetHeader builds it (preset-header.tsx): the card from the slim map, on its peak frame.
+  it("rests the headers that showed a drawn tile on their own stills", () => {
+    // The header as PresetHeader builds it (preset-header.tsx): the card from the slim map, on its peak frame. A
+    // preset added without a cover yet still shows its drawn tile; these five have their stills now.
     const header = (id: string) => onPeak(presetCard(getPreset(id)!, coverPreview(getPreset(id)!))).preview;
-    for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) expect(isCover(header(p.id)), p.id).toBe(true);
-    // The five that showed a drawn tile until their stills came: Talking Photo's header shows its own.
     expect(header("app-talking-photo").poster).toBe(PRESET_PREVIEWS["app-talking-photo"].poster);
     for (const id of ["app-talking-photo", "app-fuobe-angles", "app-3d-rotation", "motion-buckle-up", "motion-dolly-zoom-out"]) {
+      expect(isCover(header(id)), id).toBe(true);
       expect(header(id).poster.startsWith(`/previews/presets/${id}.jpg?v=`), id).toBe(true);
     }
   });

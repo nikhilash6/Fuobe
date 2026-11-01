@@ -235,7 +235,7 @@ describe("model picker groups", () => {
     expect(models.map((m) => m.id)).toEqual(modelsFor({ kind: IMAGE_STUDIO.kind, ops: IMAGE_STUDIO.ops }).map((m) => m.id));
   });
 
-  it("puts Recent, Starred and Best above All models, and shows every model once", () => {
+  it("puts Recent, Starred and Best above More models, and shows every model once", () => {
     const best = bestForStudio(models, "cloud", IMAGE_STUDIO.defaultModels.cloud).map((m) => m.id);
     expect(best[0]).toBe("nano-banana-pro");
     expect(best.length).toBeLessThanOrEqual(4);
@@ -243,24 +243,31 @@ describe("model picker groups", () => {
     const starred = [cloud[1].id, cloud[6].id];
     const { groups, count } = groupModels({ models, engine: "cloud", engines: ["cloud", "open"], query: "", recent, starred, best });
     expect(groups.map((g) => g.id)).toEqual(["recent", "starred", "best", "all"]);
+    expect(groups[3].label).toBe("More models");
     // Last 3 used of this engine; the open model is skipped.
     expect(groups[0].models.map((m) => m.id)).toEqual([cloud[3].id, cloud[1].id, cloud[2].id]);
     // cloud[1] is already in Recent.
     expect(groups[1].models.map((m) => m.id)).toEqual([cloud[6].id]);
     const top = new Set([...groups[0].models, ...groups[1].models, ...groups[2].models].map((m) => m.id));
     expect(top.size).toBe(groups[0].models.length + groups[1].models.length + groups[2].models.length);
-    // All models leaves out what the sections above already show; the count is still every model.
+    // More models leaves out what the sections above already show; the count is still every model.
     expect(groups[3].models.some((m) => top.has(m.id))).toBe(false);
     expect(groups[3].models).toHaveLength(cloud.length - top.size);
     expect(groups.flatMap((g) => g.models.map((m) => m.id)).sort()).toEqual(cloud.map((m) => m.id).sort());
     expect(count).toBe(cloud.length);
   });
 
-  it("drops All models when the sections above already show every model", () => {
+  it("drops More models when the sections above already show every model", () => {
     const few = cloud.slice(0, 3);
     const { groups, count } = groupModels({ models: few, engine: "cloud", engines: ["cloud"], query: "", recent: [few[0].id], starred: [few[1].id], best: [few[2].id] });
     expect(groups.map((g) => g.id)).toEqual(["recent", "starred", "best"]);
     expect(count).toBe(3);
+  });
+
+  it("calls the list All models when nothing shows above it", () => {
+    const { groups } = groupModels({ models: cloud, engine: "cloud", engines: ["cloud"], query: "", recent: [], starred: [], best: [] });
+    expect(groups.map((g) => [g.id, g.label])).toEqual([["all", "All models"]]);
+    expect(groups[0].models).toHaveLength(cloud.length);
   });
 
   it("searches both engines (best match first) and respects a locked engine", () => {
@@ -343,6 +350,10 @@ describe("an app page's hero", () => {
   it("Details says what Fuobe makes, naming no other product and no developer notes", () => {
     for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) {
       expect(p.parity ?? "", p.id).not.toMatch(/Higgsfield|Approximation|Not reproducible|Not yet measured|evaluation suite|\.safetensors|Kling 2\.5 \/ Wan 2\.2/i);
+      // No LoRA file names, research notes or GPU sizes and licences of a route in brackets.
+      expect(p.parity ?? "", p.id).not.toMatch(/_\d+_epochs|\[wan|already in the map|research holds|civitai|evaluated|White_to_Scene|\(\d+ GB GPU/i);
+      // Each note is whole sentences.
+      if (p.parity) expect(p.parity, p.id).toMatch(/[.!?]$/);
     }
     const note = (id: string) => getPreset(id)!.parity;
     expect(note("app-similarity-score")).toBe("Finds logos and recognizable characters and replaces them with unbranded ones of the same shape and color.");

@@ -609,7 +609,8 @@ export const APPS: Preset[] = [
     prompt: "The product {option:scene}. {prompt}",
     cloud: { modelId: "bria-product-shot", op: "edit" },
     open: { modelId: "oss-product-shot", op: "edit" },
-    parity: "The open version cuts the product out, puts it on white and relights it into the scene with Qwen-Image-Edit 2509 + the White_to_Scene LoRA.",
+    // The open version is Qwen-Image-Edit 2509 with the White_to_Scene LoRA.
+    parity: "On your GPU it cuts the product out, puts it on white and relights it into the scene.",
   }),
   app({
     name: "Product Placement",
@@ -1251,7 +1252,7 @@ export const APPS: Preset[] = [
   videoApp({
     name: "ClipCut",
     category: "Video",
-    description: "One selfie → a beat-synced multi-outfit reel",
+    description: "One selfie → an outfit-change clip",
     icon: "Film",
     hue: 330,
     options: [
@@ -1269,7 +1270,7 @@ export const APPS: Preset[] = [
   videoApp({
     name: "Urban Cuts",
     category: "Video",
-    description: "Beat-matched outfit transitions in the city",
+    description: "Outfit changes in the city, in one clip",
     icon: "Building2",
     hue: 200,
     userPrompt: "optional",

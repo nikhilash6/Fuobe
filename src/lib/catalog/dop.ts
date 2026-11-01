@@ -152,10 +152,8 @@ const withTrigger = (template: string, loras: LoraRef[]) => {
   return trigger ? `${trigger}. ${template}` : undefined;
 };
 
-const names = (loras: LoraRef[]) => {
-  const seen = [...new Set(loras.map(loraName))];
-  return seen.length < 2 ? seen.join("") : `${seen.slice(0, -1).join(", ")} and ${seen.at(-1)}`;
-};
+/** A note as a sentence, with its final period. */
+const sentence = (s: string) => (/[.!?]$/.test(s.trim()) ? s.trim() : `${s.trim()}.`);
 
 /**
  * A motion or effect preset as Fuobe DoP runs it: its open and cloud routes (model, operation, LoRAs, camera pose
@@ -180,26 +178,34 @@ export function dopPreset(p: Preset): Preset {
     return { modelId, op, params: { ...base, ...params }, ...(loras.length && { loras }), ...(promptTemplate && { promptTemplate }) };
   };
 
+  // What the Details popover says each engine does, in plain words. The route keeps the model, the LoRA files and
+  // the camera pose; the popover's route rows name the model.
+  const thing = p.type === "motion" ? "move" : "effect";
+  const withLora = `uses a LoRA trained for this ${thing}`;
+  const onWords = `follows the ${thing}'s description`;
+  const cameraControl = "uses a built-in camera control for this move";
+
   // On the user's GPU: Wan first (most LoRAs, Mix stacks there), then LTX-2.3, then LTX-2.5; else a pose; else words.
   let open: PresetRoute;
   let openSays: string;
   if (wan.length) {
     // A Wan 2.1 LoRA runs on Wan 2.2 too (its strength is checked on a GPU run); the Details popover just names it.
     open = route(DOP_MODEL, wan);
-    openSays = `Wan 2.2 with ${names(wan)}`;
+    openSays = withLora;
   } else if (ltx.length) {
     // An LTX-2 LoRA runs on LTX-2.3 too (not verified yet); the Details popover just names it.
     open = route(DOP_LTX_MODEL, ltx);
-    openSays = `LTX-2.3 with ${names(ltx)}`;
+    openSays = withLora;
   } else if (ltx25.length && op === "i2v") {
     open = { ...route(LTX25_OPEN, ltx25), params: { duration: 5, resolution: "720p" } };
-    openSays = `LTX-2.5 with ${names(ltx25)}`;
+    openSays = withLora;
   } else if (pose) {
     open = route(DOP_MODEL, [], { extra: { cameraMotion: pose } });
-    openSays = `Wan 2.2 Fun Camera's "${pose}" move`;
+    // Wan 2.2 Fun Camera's own pose.
+    openSays = cameraControl;
   } else {
     open = route(DOP_MODEL, []);
-    openSays = "Wan 2.2 on the preset's words";
+    openSays = onWords;
   }
 
   // What the effect adds around the clip: a grade the browser applies after it, or a relight of the start frame first.
@@ -225,49 +231,59 @@ export function dopPreset(p: Preset): Preset {
   const wanHosted = wan.some((l) => !gpuOnlyLicence(l)) ? wan : [];
   const ltxHosted = ltx.some((l) => !gpuOnlyLicence(l)) ? ltx : [];
   let cloud: PresetRoute;
-  let cloudSays: string;
+  let cloudSays: string | undefined;
   if (recipe?.cameraMotion) {
     // The fast endpoint at 720p in the start frame's shape, silent like every DoP clip (its defaults say so too).
     cloud = { modelId: LTX25_HOSTED, op: "i2v", params: { duration: 6, resolution: "720p", aspectRatio: "auto", generateAudio: false, extra: { camera_motion: recipe.cameraMotion } } };
-    cloudSays = `LTX-2.5's ${recipe.cameraMotion.replace(/_/g, " ")} camera move`;
+    // LTX-2.5's own camera move.
+    cloudSays = cameraControl;
   } else if (recipe?.cameraLora) {
     cloud = route(DOP_LTX_MODEL, ltxHosted, { extra: { camera_lora: recipe.cameraLora } });
-    cloudSays = `LTX-2.3's ${recipe.cameraLora.replace(/_/g, " ")} camera LoRA${ltxHosted.length ? ` with ${names(ltxHosted)}` : ""}`;
+    // LTX-2.3's camera LoRA, with the preset's LTX LoRAs when a host runs them.
+    cloudSays = withLora;
   } else if (wanHosted.length) {
     cloud = route(DOP_MODEL, wanHosted);
-    cloudSays = `Wan 2.2 with ${names(wanHosted)}`;
+    cloudSays = withLora;
   } else if (ltxHosted.length) {
     cloud = route(DOP_LTX_MODEL, ltxHosted);
-    cloudSays = `LTX-2.3 with ${names(ltxHosted)}`;
+    cloudSays = withLora;
   } else if (extras.grade || extras.prestep || !p.cloud) {
     cloud = route(DOP_MODEL, []);
-    cloudSays = "Wan 2.2 on the preset's words";
+    cloudSays = onWords;
   } else {
     // The partner route stays until the evaluation harness measures Fuobe DoP on these words (fal has no LTX-2.5 LoRA
     // endpoint, so an LTX-2.5 LoRA stays on the GPU).
     cloud = { ...p.cloud, partner: true };
-    cloudSays = "the preset's words on a partner model";
   }
 
   const local = [...wan, ...ltx].filter(gpuOnlyLicence);
   const used = [...wan, ...ltx, ...(open.modelId === LTX25_OPEN ? ltx25 : [])];
   const nonCommercial = used.filter((l) => (l.licence ?? libraryEntry(l)?.licence)?.commercial === false);
-  const held = status === "licence-hold" ? presetLoras(p.id).map((l) => l.ref) : [];
+  // "Its LoRA is", "Its LoRAs are" or "One of its LoRAs is": the LoRA files' names stay in the route, not in Details.
+  const its = (some: LoraRef[]) => {
+    const n = new Set(some.map(loraName)).size;
+    const of = new Set(used.map(loraName)).size;
+    if (n < of) return n > 1 ? "Some of its LoRAs are" : "One of its LoRAs is";
+    return n > 1 ? "Its LoRAs are" : "Its LoRA is";
+  };
   let parity: string;
-  if (grade) parity = "Fuobe DoP animates your still without a LoRA, then your browser grades the clip";
+  if (grade) parity = "Fuobe DoP animates your still, then your browser grades the clip.";
   else if (mixedLook && extras.prestep) {
-    const lora = extras.prestep.cloud.loras?.length ? ` with ${names(extras.prestep.cloud.loras)}` : "";
-    parity = `Fuobe DoP draws your still as ${mixedLook.name} first (Fuobe Mixed Media: Z-Image Turbo + ControlNet${lora}), then animates it, on your GPU and in the cloud. For a whole clip restyled frame by frame, use Mixed Media`;
-  } else if (extras.prestep) parity = "Fuobe DoP relights your still first (Qwen-Image-Edit 2509 + its Relight LoRA), then animates it";
-  else if (status === "mixed-media-route") parity = `${p.parity ?? ""}${p.parity ? ". " : ""}For a whole clip restyled frame by frame, use Mixed Media`;
-  else if (openSays === cloudSays) parity = `Fuobe DoP: ${openSays}, on your GPU and in the cloud`;
-  else parity = `Fuobe DoP on your GPU: ${openSays}. In the cloud: ${cloudSays}`;
-  if (local.length) {
-    parity += cloud.modelId === DOP_MODEL || cloud.modelId === DOP_LTX_MODEL
-      ? `. ${names(local)} is licensed for your GPU only (civitai lists no “Rent”): the cloud runs it too unless Settings → Models & licences keeps such LoRAs on your GPU`
-      : `. ${names(local)} is licensed for your GPU only (civitai lists no “Rent”), so the cloud keeps the preset's partner route until Fuobe DoP with it is evaluated`;
-  }
-  if (nonCommercial.length) parity += `. ${names(nonCommercial)} is licensed for non-commercial use`;
-  if (held.length) parity += `. ${names(held)} is in Fuobe's LoRA library, but the research holds its licence (its Hugging Face and civitai pages disagree), so the preset runs on its words until it is evaluated`;
+    // Fuobe Mixed Media is Z-Image Turbo + ControlNet, with the look's LoRA when the map has one.
+    parity = `Fuobe Mixed Media draws your still as ${mixedLook.name} first, then Fuobe DoP animates it, on your GPU and in the cloud. For a whole clip restyled frame by frame, use Mixed Media.`;
+  } else if (extras.prestep) {
+    // The relight is Qwen-Image-Edit 2509 with its Relight LoRA.
+    parity = "Fuobe DoP relights your still first, then animates it.";
+  } else if (status === "mixed-media-route") parity = `${p.parity ? `${sentence(p.parity)} ` : ""}For a whole clip restyled frame by frame, use Mixed Media.`;
+  else if (!cloudSays && local.length) parity = `On your GPU, Fuobe DoP ${openSays}. ${its(local)} licensed for your GPU only, so in the cloud it runs on a partner model.`;
+  else if (!cloudSays) parity = `On your GPU, Fuobe DoP ${openSays}. In the cloud it runs on a partner model.`;
+  else if (openSays === cloudSays) parity = `Fuobe DoP ${openSays}, on your GPU and in the cloud.`;
+  else parity = `On your GPU, Fuobe DoP ${openSays}. In the cloud, it ${cloudSays}.`;
+  // A LoRA licensed for the GPU only (civitai lists no "Rent") rides along on Fuobe DoP in the cloud unless the admin
+  // keeps such LoRAs on the GPU.
+  if (local.length && cloudSays) parity += ` ${its(local)} licensed for your GPU only. Settings → Models & licences can keep ${local.length > 1 ? "them" : "it"} off the cloud.`;
+  if (nonCommercial.length) parity += ` ${its(nonCommercial)} for non-commercial use.`;
+  // A LoRA whose licence the research holds ("licence-hold": BTS, whose Hugging Face and civitai pages disagree) stays
+  // in the library; the preset runs on its words until it is evaluated, which the line above already says.
   return { ...p, open, cloud, parity, ...extras };
 }
