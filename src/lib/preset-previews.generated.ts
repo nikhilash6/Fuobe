@@ -159,17 +159,19 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-bullet-time-scene": {
-    "poster": "/previews/presets/app-bullet-time-scene.jpg?v=aafd1aaa",
+    "poster": "/previews/presets/app-bullet-time-scene.jpg?v=aa80c324",
+    "video": "/previews/presets/app-bullet-time-scene.mp4?v=3078ea7a",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-bullet-time-splash": {
-    "poster": "/previews/presets/app-bullet-time-splash.jpg?v=4f68ca24",
+    "poster": "/previews/presets/app-bullet-time-splash.jpg?v=a1b759e0",
+    "video": "/previews/presets/app-bullet-time-splash.mp4?v=5b0334c5",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-bullet-time-white": {
@@ -187,10 +189,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-chameleon": {
-    "poster": "/previews/presets/app-chameleon.jpg?v=80448aa3",
+    "poster": "/previews/presets/app-chameleon.jpg?v=c7ce795d",
+    "video": "/previews/presets/app-chameleon.mp4?v=8ca0b29d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-change-background": {
@@ -459,10 +462,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-macroshot-product": {
-    "poster": "/previews/presets/app-macroshot-product.jpg?v=1e046572",
+    "poster": "/previews/presets/app-macroshot-product.jpg?v=19da0c6d",
+    "video": "/previews/presets/app-macroshot-product.mp4?v=91c28ab9",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-magic-button": {
@@ -707,10 +711,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-shots": {
-    "poster": "/previews/presets/app-shots.jpg?v=55407e6d",
+    "poster": "/previews/presets/app-shots.jpg?v=fed45e20",
+    "video": "/previews/presets/app-shots.mp4?v=3526620d",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-signboard": {
@@ -892,10 +897,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-video-face-swap": {
-    "poster": "/previews/presets/app-video-face-swap.jpg?v=c69e7345",
+    "poster": "/previews/presets/app-video-face-swap.jpg?v=a09a9980",
+    "video": "/previews/presets/app-video-face-swap.mp4?v=8e35beb0",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-virtual-try-on": {
@@ -1114,10 +1120,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-blue-depth": {
-    "poster": "/previews/presets/effect-blue-depth.jpg?v=ed30224a",
+    "poster": "/previews/presets/effect-blue-depth.jpg?v=650b39c4",
+    "video": "/previews/presets/effect-blue-depth.mp4?v=82a75eae",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-boarding-pass": {
@@ -2275,10 +2282,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-pearl-earring": {
-    "poster": "/previews/presets/effect-pearl-earring.jpg?v=24c73135",
+    "poster": "/previews/presets/effect-pearl-earring.jpg?v=3ad7e520",
+    "video": "/previews/presets/effect-pearl-earring.mp4?v=b73f4ae9",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "effect-pigeons": {
@@ -2935,10 +2943,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-aerial-pullback": {
-    "poster": "/previews/presets/motion-aerial-pullback.jpg?v=828fc4e0",
+    "poster": "/previews/presets/motion-aerial-pullback.jpg?v=c5095402",
+    "video": "/previews/presets/motion-aerial-pullback.mp4?v=b1bf276c",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-arc-left": {
@@ -3574,10 +3583,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-snorricam": {
-    "poster": "/previews/presets/motion-snorricam.jpg?v=bebfde90",
+    "poster": "/previews/presets/motion-snorricam.jpg?v=c5bbf95c",
+    "video": "/previews/presets/motion-snorricam.mp4?v=3778aece",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-snowboard-carving": {
