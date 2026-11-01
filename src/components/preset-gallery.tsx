@@ -11,7 +11,7 @@ import { useProgressive } from "@/components/use-progressive";
 import { CardChip, badgeKey, parseBadgeKey } from "@/components/gpu/readiness-chip";
 import { useGpuBadges } from "@/hooks/use-gpu";
 import { useEngineMode, useViewer } from "@/lib/api";
-import { matchesSearch, previewFlip, searchText, type PresetCardData } from "@/lib/preset-cards";
+import { matchesSearch, previewFlip, readMoreTap, searchText, TAP_TO_READ, type PresetCardData } from "@/lib/preset-cards";
 import { cn } from "@/lib/utils";
 
 /** A tiny label shown on hover/focus (CSS only: a gallery has hundreds of these). */
@@ -63,6 +63,7 @@ export const PresetCard = memo(function PresetCard({
   const badge = engine !== "cloud" ? parseBadgeKey(gpu) : null;
   const Icon = PRESET_ICONS[preset.icon] ?? Sparkles;
   const { ref, playing, asked, handlers } = usePreviewPlayback<HTMLAnchorElement>(preset.id, preset.preview);
+  const [more, setMore] = useState(false);
   return (
     // Prefetched on hover or touch, not on sight: a gallery shows hundreds of these.
     <IntentLink
@@ -99,8 +100,19 @@ export const PresetCard = memo(function PresetCard({
         <p className="truncate text-[13px] font-medium">{preset.name}</p>
         {!compact && (
           // Two lines hold the card's place in the grid and stay inside the card on hover (a panel over the next
-          // row read as broken); the full text is the tooltip and the preset's own page.
-          <p title={preset.description} className="line-clamp-2 text-[12px] leading-snug text-muted-foreground">
+          // row read as broken); the full text is the tooltip and the preset's own page. A phone has no tooltip: a
+          // tap on the text opens it in place (readMoreTap), so the gallery stays even until someone asks.
+          <p
+            title={preset.description}
+            data-more={more || undefined}
+            onClick={(e) => {
+              const next = readMoreTap(e.currentTarget, more, window.matchMedia(TAP_TO_READ).matches);
+              if (next === null) return;
+              e.preventDefault();
+              setMore(next);
+            }}
+            className={cn("text-[12px] leading-snug text-muted-foreground", !more && "line-clamp-2")}
+          >
             {caption ?? preset.description}
           </p>
         )}

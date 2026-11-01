@@ -433,19 +433,15 @@ export function lookHue(look: Preset["look"]): number {
   return m ? Math.round(Number(m[1])) % 360 : 282;
 }
 
-/** Shorten to at most `max` characters at a word boundary (cards show two lines). */
-export function clip(s: string, max: number): string {
-  if (s.length <= max) return s;
-  const cut = s.slice(0, max - 1);
-  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max * 0.6)).replace(/[\s,;:.–—-]+$/, "")}…`;
-}
-
-/** What a gallery card needs, and nothing else, with the preview it shows (toPresetCard in preset-card-data.ts picks it). */
+/**
+ * What a gallery card needs, and nothing else, with the preview it shows (toPresetCard in preset-card-data.ts picks it).
+ * The whole description: the card clamps it to two lines, and a phone opens the rest in place (readMoreTap).
+ */
 export function presetCard(p: Preset, preview: PresetPreview): PresetCardData {
   return {
     id: p.id,
     name: p.name,
-    description: clip(p.description, 100),
+    description: p.description,
     category: p.category,
     icon: p.look.icon,
     hue: lookHue(p.look),
@@ -521,6 +517,20 @@ export function presetRouteLines(
     const gpuOnly = engine === "cloud" && !route?.loras?.length && !!p.open?.loras?.length && p.open.loras.every((l) => l.licence?.hostedOk === false);
     return { engine, label: engine === "cloud" ? "Cloud" : "Open source", model: name && gpuOnly ? `${name} · words only (its LoRA is licensed for your GPU only)` : name };
   });
+}
+
+/** Where a card's text has no tooltip to show the rest of it: a phone, or a screen with no mouse. */
+export const TAP_TO_READ = "(max-width: 639px), (hover: none)";
+
+/**
+ * A tap on a card's two-line description where there is no tooltip (TAP_TO_READ): text cut short opens in place, and
+ * a second tap closes it, in place of opening the preset. Text that fits its two lines, and every click on a desktop,
+ * open the preset as before. The open state the text takes next, or null to let the click through to the card's link.
+ */
+export function readMoreTap(text: { scrollHeight: number; clientHeight: number }, open: boolean, tapToRead: boolean): boolean | null {
+  if (!tapToRead) return null;
+  if (open) return false;
+  return text.scrollHeight > text.clientHeight + 1 ? true : null;
 }
 
 /** One line telling the user what to do with a preset, e.g. "Add a target photo and a face, then Generate." */

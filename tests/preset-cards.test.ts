@@ -23,7 +23,9 @@ import {
   presetHowTo,
   presetRouteLines,
   previewFlip,
+  readMoreTap,
   searchText,
+  TAP_TO_READ,
   matchesSearch,
   type CameraMove,
   type MoveSpec,
@@ -229,14 +231,19 @@ describe("slim card DTOs", () => {
     expect(json).not.toMatch(/modelId|loras|https?:|promptTemplate|parity/);
   });
 
+  it("carries the whole description, which a phone opens in place of a tooltip", () => {
+    for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) expect(toPresetCard(p).description, p.id).toBe(p.description);
+    expect(Math.max(...EFFECTS.map((p) => p.description.length))).toBeGreaterThan(100);
+  });
+
   it("is a small fraction of the full preset payload", () => {
     for (const list of [APPS, MOTIONS, EFFECTS]) {
       const full = JSON.stringify(list).length;
       const slim = JSON.stringify(list.map(toPresetCard)).length;
       expect(slim / full).toBeLessThan(0.45);
     }
-    // The 255-card effects gallery ships well under 80 KB of card data.
-    expect(JSON.stringify(EFFECTS.map(toPresetCard)).length).toBeLessThan(80_000);
+    // The 255-card effects gallery ships under 85 KB of card data (2.3 KB of it the descriptions' whole text).
+    expect(JSON.stringify(EFFECTS.map(toPresetCard)).length).toBeLessThan(85_000);
   });
 
   it("reads the hue back from the preset look", () => {
@@ -280,6 +287,32 @@ describe("preset route lines (details popover)", () => {
     expect(cloud.model).toBe("Kling 2.5 Turbo · words only (its LoRA is licensed for your GPU only)");
     expect(open.model).toBe("Fuobe DoP");
     expect(presetRouteLines(getPreset("motion-overhead")!, () => "Fuobe DoP")[0].model).toBe("Fuobe DoP");
+  });
+});
+
+describe("a card's description on a phone", () => {
+  const cut = { scrollHeight: 64, clientHeight: 32 };
+  const fits = { scrollHeight: 32, clientHeight: 32 };
+
+  it("opens text cut short in place, and a second tap closes it", () => {
+    expect(readMoreTap(cut, false, true)).toBe(true);
+    expect(readMoreTap({ scrollHeight: 64, clientHeight: 64 }, true, true)).toBe(false);
+  });
+
+  it("lets a tap on text that fits through to the preset", () => {
+    expect(readMoreTap(fits, false, true)).toBeNull();
+    // Sub-pixel rounding isn't text cut short.
+    expect(readMoreTap({ scrollHeight: 33, clientHeight: 32 }, false, true)).toBeNull();
+  });
+
+  it("leaves the desktop as it is: a click opens the preset", () => {
+    expect(readMoreTap(cut, false, false)).toBeNull();
+    expect(readMoreTap(cut, true, false)).toBeNull();
+  });
+
+  it("applies on phones and on screens with no mouse", () => {
+    expect(TAP_TO_READ).toContain("(max-width: 639px)");
+    expect(TAP_TO_READ).toContain("(hover: none)");
   });
 });
 

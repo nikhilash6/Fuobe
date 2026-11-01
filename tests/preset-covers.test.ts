@@ -80,15 +80,16 @@ describe("the preset covers manifest", () => {
   });
 
   // Every one of the 255 effects is getting a hover clip (about 60 bytes of card data each, with its version), so the
-  // budget is sized for all of them, not for today's count: about 97 KB then, of which the versions are 5.6 KB.
-  it("shows each cover on its card, and keeps the effects gallery's card data under 100 KB with them", () => {
+  // budget is sized for all of them, not for today's count: about 100 KB then, of which the versions are 5.6 KB and
+  // the descriptions' whole text (a phone opens it in place of a tooltip) 2.3 KB.
+  it("shows each cover on its card, and keeps the effects gallery's card data under 105 KB with them", () => {
     for (const p of [...APPS, ...MOTIONS, ...EFFECTS]) {
       const c = toPresetCard(p);
       const e = PRESET_PREVIEWS[p.id];
       expect(isCover(c.preview), p.id).toBe(!!e);
       if (e) expect([c.preview.poster, c.preview.video], p.id).toEqual([e.poster, e.video]);
     }
-    expect(JSON.stringify(EFFECTS.map(toPresetCard)).length).toBeLessThan(100_000);
+    expect(JSON.stringify(EFFECTS.map(toPresetCard)).length).toBeLessThan(105_000);
   });
 
   it("versions every cover URL a gallery card, the preset header or a picker shows, and each small copy's", () => {
