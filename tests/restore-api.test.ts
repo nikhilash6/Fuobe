@@ -82,6 +82,15 @@ describe("Restore: estimates", () => {
       const hd = await (await estimateRoute.POST(json(body({ engine: "cloud", resolution: "1080p" })))).json();
       expect(hd.costUsd).toBeGreaterThan(e.costUsd * 1.8);
     });
+
+    it("refuses a paid cloud restoration before it starts while no Hugging Face token is set (the LoRA goes as Fuobe's copy)", async () => {
+      setSetting("huggingfaceDownloadToken", "");
+      const before = (db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n;
+      const r = await createRoute.POST(json(body({ engine: "cloud" })));
+      expect(r.status).toBe(422);
+      expect((await r.json()).error).toMatch(/gated Hugging Face repo: accept its licence on https:\/\/huggingface\.co\/Lightricks\/LTX-2\.5-22b-IC-LoRA-Restore .*Settings → LoRAs.*never your token/);
+      expect((db().prepare("SELECT COUNT(*) AS n FROM generations").get() as { n: number }).n).toBe(before);
+    });
   });
 
   it("Engine mode holds: paid APIs only refuses the GPU run and says it runs on your GPU", async () => {
