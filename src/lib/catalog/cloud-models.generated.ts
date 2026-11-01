@@ -1760,6 +1760,262 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "flux-3-klein",
+    "name": "FLUX 3 Klein",
+    "vendor": "Black Forest Labs",
+    "family": "flux",
+    "engine": "cloud",
+    "kind": "image",
+    "tagline": "BFL's open 5.6B model: text to image, edits with up to 10 references, layout boxes",
+    "routes": [
+      {
+        "op": "t2i",
+        "provider": "fal",
+        "endpoint": "blackforestlabs/flux-3/klein/text-to-image",
+        "map": {
+          "numOutputs": "num_images",
+          "seed": "seed",
+          "size": {
+            "key": "image_size",
+            "multiple": 16,
+            "min": 256,
+            "max": 4096,
+            "bases": {
+              "1K": 1024,
+              "1.5K": 1536,
+              "2K": 2048,
+              "4K": 4096
+            }
+          },
+          "promptExpansion": "enable_prompt_expansion",
+          "boundingBoxes": {
+            "key": "bounding_boxes",
+            "max": 32
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "max": 3,
+            "range": {
+              "min": 0,
+              "max": 4
+            }
+          }
+        },
+        "loraEndpoint": "blackforestlabs/flux-3/klein/text-to-image/lora"
+      },
+      {
+        "op": "edit",
+        "provider": "fal",
+        "endpoint": "blackforestlabs/flux-3/klein/edit-image",
+        "map": {
+          "images": "image_urls",
+          "numOutputs": "num_images",
+          "seed": "seed",
+          "size": {
+            "key": "image_size",
+            "multiple": 16,
+            "min": 256,
+            "max": 4096,
+            "bases": {
+              "1K": 1024,
+              "1.5K": 1536,
+              "2K": 2048,
+              "4K": 4096
+            }
+          },
+          "promptExpansion": "enable_prompt_expansion",
+          "boundingBoxes": {
+            "key": "bounding_boxes",
+            "max": 32
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "max": 3,
+            "range": {
+              "min": 0,
+              "max": 4
+            }
+          }
+        },
+        "loraEndpoint": "blackforestlabs/flux-3/klein/edit-image/lora"
+      }
+    ],
+    "options": {
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9",
+        "5:4",
+        "4:5"
+      ],
+      "resolutions": [
+        "1K",
+        "1.5K",
+        "2K",
+        "4K"
+      ],
+      "seed": true,
+      "maxOutputs": 4,
+      "maxImages": 10,
+      "layout": "flux3"
+    },
+    "badges": [
+      "new"
+    ],
+    "licence": {
+      "licence": "FLUX Kommunity License v1.0",
+      "commercial": null,
+      "note": "FLUX Kommunity License v1.0: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross annual revenue (affiliates included); other commercial use needs a BFL licence. Its commercial-use exception is not blanket permission for commercial fine-tuning or distribution. The Qwen3-VL-4B-Instruct text encoder is Apache-2.0",
+      "checked": "2026-11-01"
+    },
+    "defaults": {
+      "aspectRatio": "1:1",
+      "resolution": "1K"
+    },
+    "pricing": {
+      "unit": "image",
+      "usd": 0.009,
+      "note": "per image at 1K (fal's planned rates by size)",
+      "byResolution": {
+        "1K": 0.009,
+        "1.5K": 0.011,
+        "2K": 0.014,
+        "4K": 0.036
+      },
+      "withLorasPerMegapixel": 0.012
+    }
+  },
+  {
+    "id": "flux-3-klein-base",
+    "name": "FLUX 3 Klein Base with LoRAs",
+    "vendor": "Black Forest Labs",
+    "family": "flux",
+    "engine": "cloud",
+    "kind": "image",
+    "tagline": "The undistilled Klein your FLUX 3 Klein LoRAs are trained on: text to image and edits with them",
+    "routes": [
+      {
+        "op": "t2i",
+        "provider": "fal",
+        "endpoint": "blackforestlabs/flux-3/klein/base/text-to-image/lora",
+        "map": {
+          "numOutputs": "num_images",
+          "seed": "seed",
+          "size": {
+            "key": "image_size",
+            "multiple": 16,
+            "min": 256,
+            "max": 4096,
+            "bases": {
+              "1K": 1024,
+              "1.5K": 1536,
+              "2K": 2048,
+              "4K": 4096
+            }
+          },
+          "promptExpansion": "enable_prompt_expansion",
+          "boundingBoxes": {
+            "key": "bounding_boxes",
+            "max": 32
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "max": 3,
+            "range": {
+              "min": 0,
+              "max": 4
+            }
+          }
+        }
+      },
+      {
+        "op": "edit",
+        "provider": "fal",
+        "endpoint": "blackforestlabs/flux-3/klein/base/edit-image/lora",
+        "map": {
+          "images": "image_urls",
+          "numOutputs": "num_images",
+          "seed": "seed",
+          "size": {
+            "key": "image_size",
+            "multiple": 16,
+            "min": 256,
+            "max": 4096,
+            "bases": {
+              "1K": 1024,
+              "1.5K": 1536,
+              "2K": 2048,
+              "4K": 4096
+            }
+          },
+          "promptExpansion": "enable_prompt_expansion",
+          "boundingBoxes": {
+            "key": "bounding_boxes",
+            "max": 32
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "max": 3,
+            "range": {
+              "min": 0,
+              "max": 4
+            }
+          }
+        }
+      }
+    ],
+    "options": {
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9",
+        "5:4",
+        "4:5"
+      ],
+      "resolutions": [
+        "1K",
+        "1.5K",
+        "2K",
+        "4K"
+      ],
+      "seed": true,
+      "maxOutputs": 4,
+      "maxImages": 10,
+      "layout": "flux3"
+    },
+    "badges": [
+      "new"
+    ],
+    "licence": {
+      "licence": "FLUX Kommunity License v1.0",
+      "commercial": null,
+      "note": "FLUX Kommunity License v1.0: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross annual revenue (affiliates included); other commercial use needs a BFL licence. Its commercial-use exception is not blanket permission for commercial fine-tuning or distribution. The Qwen3-VL-4B-Instruct text encoder is Apache-2.0",
+      "checked": "2026-11-01"
+    },
+    "defaults": {
+      "aspectRatio": "1:1",
+      "resolution": "1K"
+    },
+    "pricing": {
+      "unit": "megapixel",
+      "usd": 0.035
+    }
+  },
+  {
     "id": "wan-2-7-image",
     "name": "Wan 2.7 Image",
     "vendor": "Alibaba Wan",

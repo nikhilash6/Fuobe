@@ -120,7 +120,8 @@ export function framedLength(f: FieldMap["numFrames"] | undefined, seconds: numb
 
 /**
  * Width and height for an aspect ratio (FieldMap.size): the table's size for the tier and shape when it has one
- * (Fuobe Soul: its first tier when the tier is unknown), else the shape on a `base`×`base` pixel budget; or the size
+ * (Fuobe Soul: its first tier when the tier is unknown), else the shape on a `base`×`base` pixel budget (the tier's own square
+ * when `bases` names it: fal's FLUX 3 Klein 2K is 2048 × 2048); or the size
  * the request asks for (`asked`: a layout's canvas) on the route's grid. Neither side above `max` (Replicate's Z-Image
  * takes 1440) nor below `min` (fal's MOSS-Image takes 512–2048): the shape is scaled to fit, then a side that still
  * can't keep it is held at the limit.
@@ -131,7 +132,7 @@ export function sizeValue(
   resolution?: string,
   asked?: { width: number; height: number },
 ): { width: number; height: number } {
-  const base = f.base ?? 1024;
+  const base = (resolution !== undefined ? f.bases?.[resolution] : undefined) ?? f.base ?? 1024;
   const ratio = (aspectRatio && ratioOf(aspectRatio)) || 1;
   const round = (v: number) => Math.max(f.multiple, Math.round(v / f.multiple) * f.multiple);
   const tier = f.table && (f.table[resolution ?? ""] ?? Object.values(f.table)[0]);

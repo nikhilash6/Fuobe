@@ -464,6 +464,8 @@ export interface FieldMap {
     max?: number;
     min?: number;
     base?: number;
+    /** The square each resolution tier is (fal's FLUX 3 Klein: 1K = 1024 … 4K = 4096), over `base`. */
+    bases?: Record<string, number>;
     /** Exact sizes per resolution tier and aspect ratio (Fuobe Soul's table); the computed size where it has none. */
     table?: Record<string, Record<string, [number, number]>>;
   };
@@ -480,6 +482,12 @@ export interface FieldMap {
    * layout (params.extra.layout), which expansion would rewrite; a plain prompt leaves the API's default.
    */
   promptExpansion?: string;
+  /**
+   * A layout the API takes as boxes of its own (fal's FLUX 3 Klein bounding_boxes: {label, description, box: {x_min, y_min,
+   * x_max, y_max} as 0-1 fractions}, at most `max`): the plan writes them into params.extra[key] from the draft, and the
+   * prompt names each box as <label> (src/lib/layout-prompt.ts flux3Boxes).
+   */
+  boundingBoxes?: { key: string; max?: number };
   /**
    * A camera path (params.cameraPath, build plan N7-5) as the API's keyframes [{time, azimuth, elevation, distance}]:
    * `min`–`max` of them, the height kept inside `elevation`, at most `maxTurns` turns of travel. `free`: the API's fixed
@@ -682,6 +690,11 @@ export interface Pricing {
   factors?: { param: string; values: Record<string, number> }[];
   /** The price per unit when the run carries LoRAs and goes to the route's LoRA endpoint (fal's /lora variants cost more). */
   withLoras?: number;
+  /**
+   * The LoRA endpoint bills per megapixel of what it makes while the plain one bills per image (fal's FLUX 3 Klein: $0.012
+   * per megapixel with LoRAs): a run with LoRAs costs this times the megapixels of the size the route sends.
+   */
+  withLorasPerMegapixel?: number;
   /** The LoRA endpoint publishes no price yet (fal's MOSS-Image /lora): a run with LoRAs is priced as unknown, never as free. */
   lorasUnknown?: true;
   /** withLoras at each resolution, when it differs (Fuobe Cinema's LTX-2.3 bills per megapixel of video). */

@@ -17,7 +17,7 @@ import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { askedSize, clipWords, numFramesValue, sizeValue } from "./payload";
 import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soulSize, type SoulOverlay } from "./soul";
 import { computeDimensions, fitCanvas } from "@/lib/comfy";
-import { carriesLayout, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
+import { carriesLayout, flux3Boxes, flux3Caption, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
 import { pricingOn, type PriceClock } from "./promo";
 import { presetRoutes } from "./preset-recipe-routes";
 
@@ -612,10 +612,17 @@ function planLayout(model: ModelDef, op: Operation, prompt: string, drawn: Layou
   const canvas = layoutCanvas(model, params, op);
   // Only a pixel layout depends on the canvas (its sides on MOSS's 16 px grid); the others place boxes on a 0-1000 grid or in words.
   const checkedAt = pixels ? canvas : { width: 1024, height: 1024 };
-  const problem = validateLayout(draft, checkedAt.width, checkedAt.height, format ?? "words").find((i) => i.level === "error");
+  // A route that takes the boxes as a field of their own (fal's FLUX 3 Klein bounding_boxes) gets them there, and the
+  // caption that names them as its prompt; everything else reads the boxes in its prompt.
+  const boxes = routesFor(model, op)[0]?.map?.boundingBoxes;
+  const problem = validateLayout(draft, checkedAt.width, checkedAt.height, boxes ? "flux3-boxes" : (format ?? "words")).find((i) => i.level === "error");
   if (problem) throw new Error(problem.message);
-  const compiled = layoutCompilerFor(model)(draft, canvas.width, canvas.height);
+  const compiled = boxes && draft.items.length ? { format: "flux3" as const, prompt: flux3Caption(draft) } : layoutCompilerFor(model)(draft, canvas.width, canvas.height);
   const extra: Record<string, unknown> = { ...params.extra };
+  if (boxes) {
+    if (draft.items.length) extra[boxes.key] = flux3Boxes(draft).slice(0, boxes.max);
+    else delete extra[boxes.key];
+  }
   if (pixels && draft.items.length) {
     const route = routesFor(model, op)[0];
     const key = (route?.map?.size ?? route?.preview?.size)?.key;
@@ -1006,6 +1013,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   // A talking avatar is as long as its voice (params.sourceDuration: the voice's header, read by the studio or the server).
   const voice = op === "avatar" && params.sourceDuration && params.sourceDuration > 0 ? avatarSeconds(model, params.sourceDuration, params.fps) : undefined;
   if (p.unit === "image") per = usd * n;
+  // Per image by tier, but per megapixel with LoRAs (fal's FLUX 3 Klein /lora): the route's size in megapixels.
+  if (withLoras && p.withLorasPerMegapixel !== undefined) per = p.withLorasPerMegapixel * (routeMegapixels(model, params, op) ?? sentMegapixels(params) ?? 1) * n;
   // Per megapixel of every image made: Soul's sizes are known (about 1 or 2 MP), so is a size sent as fal's image_size
   // {width, height} (Fuobe Mixed Media's frames); other models are taken as 1 MP.
   if (p.unit === "megapixel") {

@@ -428,7 +428,8 @@ export function parseLayout(input: string | object, canvas: { width: number; hei
 // ---------------------------------------------------------------------------
 // Checks
 
-export type LayoutTarget = LayoutFormat | "words" | "mosi";
+/** What a layout is checked for: a model's form, plain words, MOSI, or fal's FLUX 3 Klein boxes ("flux3-boxes"). */
+export type LayoutTarget = LayoutFormat | "words" | "mosi" | "flux3-boxes";
 
 export interface LayoutIssue {
   level: "error" | "warning";
@@ -457,6 +458,13 @@ export function validateLayout(draft: LayoutDraft, width: number, height: number
   });
   if (Math.max(width, height) > LAYOUT_MAX_SIDE || width * height > LAYOUT_MAX_PIXELS) {
     issues.push({ level: "warning", message: `${width} × ${height} is past what MOSS-Image was made for (${LAYOUT_MAX_SIDE} px a side, 4 megapixels): the boxes may drift` });
+  }
+  // fal's FLUX 3 Klein boxes ("flux3-boxes"): 32 at most, each described in up to 500 characters.
+  if (target === "flux3-boxes") {
+    if (draft.items.length > FLUX3_BOX_LIMITS.boxes) issues.push({ level: "error", message: `FLUX 3 Klein takes up to ${FLUX3_BOX_LIMITS.boxes} boxes (this layout has ${draft.items.length})` });
+    draft.items.forEach((it, i) => {
+      if (flux3Desc(it).length > FLUX3_BOX_LIMITS.description) issues.push({ level: "error", message: `Box ${i + 1}'s words are past the ${FLUX3_BOX_LIMITS.description} characters FLUX 3 Klein reads for a box: shorten them`, item: i });
+    });
   }
   const limit = LAYOUT_PROMPT_LIMITS[target];
   if (limit && !issues.some((x) => x.level === "error")) {
@@ -509,14 +517,48 @@ function itemWords(it: LayoutItem): string {
  * table [{"id": "obj_N", "bbox": [0-1000, y before x], "desc": …}] with a text box's words quoted after its desc.
  */
 export function compileFlux3(draft: LayoutDraft): string {
+  const caption = flux3Caption(draft);
+  if (!draft.items.length) return caption;
+  const rows = draft.items.map((it, i) => ({ id: flux3Label(i), bbox: gridBox(it.box), desc: flux3Desc(it) }));
+  return `${caption} ${pyJson(rows)}`;
+}
+
+/** A FLUX.3 box's id, the <id> the caption names it by: obj_1, obj_2… */
+const flux3Label = (i: number) => `obj_${i + 1}`;
+
+/** What a FLUX.3 box holds: its caption, with a text box's words quoted after it. */
+const flux3Desc = (it: LayoutItem) => (it.label === "text" && it.text ? `${it.caption} "${it.text}"`.trim() : it.caption);
+
+/**
+ * The words of FLUX.3's layout prompt without its table: the caption, then a sentence citing each box as <obj_N>. The
+ * prompt fal's FLUX 3 Klein gets beside its bounding_boxes (flux3Boxes), which carry the table's boxes.
+ */
+export function flux3Caption(draft: LayoutDraft): string {
   const caption = draft.summary.caption.trim();
   if (!draft.items.length) return caption;
-  const rows = draft.items.map((it, i) => {
-    const desc = it.label === "text" && it.text ? `${it.caption} "${it.text}"`.trim() : it.caption;
-    return { id: `obj_${i + 1}`, bbox: gridBox(it.box), desc };
+  const cites = draft.items.map((it, i) => `<${flux3Label(i)}> ${itemWords(it)}`).join(", ");
+  return [sentence(caption), `${cites}.`].filter(Boolean).join(" ");
+}
+
+/** One of fal's FLUX 3 Klein bounding_boxes: where an element goes as 0-1 fractions of the picture, from its top-left corner. */
+export interface Flux3Box {
+  label: string;
+  description: string;
+  box: { x_min: number; y_min: number; x_max: number; y_max: number };
+}
+
+/** fal takes a box's description up to 500 characters and up to 32 boxes (the FLUX 3 Klein schemas, read 2026-11-01). */
+export const FLUX3_BOX_LIMITS = { boxes: 32, description: 500 } as const;
+
+/**
+ * compileFlux3's table as fal's FLUX 3 Klein bounding_boxes: the same boxes (the 0-1000 grid's, as fractions, so both engines
+ * place an element at the same spot), labels and descriptions, which the caption (flux3Caption) names as <obj_N>.
+ */
+export function flux3Boxes(draft: LayoutDraft): Flux3Box[] {
+  return draft.items.map((it, i) => {
+    const [y0, x0, y1, x1] = gridBox(it.box).map((v) => v / 1000);
+    return { label: flux3Label(i), description: flux3Desc(it), box: { x_min: x0, y_min: y0, x_max: x1, y_max: y1 } };
   });
-  const cites = draft.items.map((it, i) => `<obj_${i + 1}> ${itemWords(it)}`).join(", ");
-  return `${[sentence(caption), `${cites}.`].filter(Boolean).join(" ")} ${pyJson(rows)}`;
 }
 
 /** The share of the canvas a box covers that reads as its background (ComfyUI's Ideogram node takes one apart from the elements). */

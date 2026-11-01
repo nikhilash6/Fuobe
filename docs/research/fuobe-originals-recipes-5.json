@@ -7008,6 +7008,60 @@
    "price": "free on own GPU",
    "schemaUrl": "https://github.com/ostris/ai-toolkit",
    "checked": "2026-10-23"
+  },
+  {
+   "provider": "fal",
+   "id": "blackforestlabs/flux-3/klein/base/trainer",
+   "family": "FLUX 3 Klein base",
+   "role": "Soul ID on FLUX 3 Image Klein (nm10-flux3-klein; FLUX Kommunity licence, shown as information)",
+   "required": [
+    "images_data_url"
+   ],
+   "fields": {
+    "images_data_url": "string",
+    "trigger_phrase": "string default=\"\"",
+    "steps": "integer default=1000 minimum=100 maximum=10000",
+    "learning_rate": "number default=0.0001 minimum=1e-06 maximum=0.01",
+    "resolution": "integer default=1024 enum=[512, 768, 1024]"
+   },
+   "price": "Your request will cost $0.0043 per training step (minimum 100 steps). The default 1000 steps cost $4.30.",
+   "baseLicence": "FLUX Kommunity License v1.0 (non-commercial; commercial outputs for Qualifying Users under US$5M revenue)",
+   "commercialWeights": null,
+   "licenceNote": "Not blanket permission for commercial fine-tuning or distribution (the model card); information, never a gate",
+   "status": "active",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/trainer",
+   "checked": "2026-11-01",
+   "loraOutput": [
+    "lora_file"
+   ],
+   "outputChecked": "2026-11-01"
+  },
+  {
+   "provider": "fal",
+   "id": "blackforestlabs/flux-3/klein/base/trainer/edit",
+   "family": "FLUX 3 Klein base",
+   "role": "Edit LoRAs from before / after pairs on FLUX 3 Image Klein (recorded; Soul ID trains subjects with the plain trainer)",
+   "required": [
+    "images_data_url"
+   ],
+   "fields": {
+    "images_data_url": "string",
+    "trigger_phrase": "string default=\"\"",
+    "steps": "integer default=1000 minimum=100 maximum=10000",
+    "learning_rate": "number default=0.0001 minimum=1e-06 maximum=0.01",
+    "resolution": "integer default=1024 enum=[512, 768, 1024]"
+   },
+   "price": "Your request will cost $0.002 per training step, multiplied by the reference images per pair: x2.11 with 1, x3.44 with 2, x5.09 with 3, x6.95 with 4 (up to x23.44 with 10). 1000 steps cost $4.22 with 1 reference image and $13.90 with 4.",
+   "baseLicence": "FLUX Kommunity License v1.0 (non-commercial; commercial outputs for Qualifying Users under US$5M revenue)",
+   "commercialWeights": null,
+   "licenceNote": "Not blanket permission for commercial fine-tuning or distribution (the model card); information, never a gate",
+   "status": "active",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/trainer/edit",
+   "checked": "2026-11-01",
+   "loraOutput": [
+    "lora_file"
+   ],
+   "outputChecked": "2026-11-01"
   }
  ],
  "loraLibrary": [
