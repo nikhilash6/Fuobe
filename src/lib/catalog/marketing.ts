@@ -980,7 +980,8 @@ export function formatModels(format: FormatDef, engine: Engine, has: { product: 
   }
   switch (format.id) {
     case "product-standalone":
-      return [original, { id: "bria-product-shot", note: "Keeps the product pixel-exact" }, { id: "nano-banana-pro" }, { id: "gpt-image-2-5" }, { id: "product-photography", note: "One-tap studio shot" }];
+      // The GPU's Standalone recipe (cut out, on white, relit by a LoRA) has no hosted copy: the cloud says so.
+      return [{ ...original, note: `${original.note} · the cut-out and relight run on your GPU only` }, { id: "bria-product-shot", note: "Keeps the product pixel-exact" }, { id: "nano-banana-pro" }, { id: "gpt-image-2-5" }, { id: "product-photography", note: "One-tap studio shot" }];
     case "product-with-model":
       return [original, { id: "nano-banana-pro", note: "Product + person references" }, { id: "gpt-image-2-5" }];
     case "ads":

@@ -2052,6 +2052,7 @@ const originals: ModelDef[] = [
       },
     }),
     defaults: { duration: 5, resolution: EVOLUTION_DEFAULT_RESOLUTION.cloud },
+    engineNote: "Both engines run Wan 2.2 Fun VACE with a direction frame per segment; in the cloud the change level shapes the direction frame only, and how much of the clip's own look stays is set on your GPU only",
     engineDefaults: { open: { resolution: EVOLUTION_DEFAULT_RESOLUTION.open, aspectRatio: "auto" } },
     engineOptions: {
       open: {
@@ -2090,6 +2091,8 @@ const originals: ModelDef[] = [
     // Qwen-Image 2.1's edit graph reads up to four pictures and keeps the first one's shape. Neither of its graphs takes a
     // negative prompt, so the open half has none (the hosted half keeps it).
     engineOptions: { open: { maxImages: 4, negativePrompt: false } },
+    // The Standalone recipe's graph has no hosted copy: it stays the GPU's, the cloud makes the shot as an ordinary edit.
+    engineNote: "A Standalone shot from one product photo is cut out and relit into the scene on your GPU only (Qwen-Image-Edit 2509 + the White_to_Scene LoRA); the cloud makes it as a hosted Qwen-Image-Edit 2511 edit",
   },
   {
     ...original({
@@ -2159,10 +2162,12 @@ const originals: ModelDef[] = [
     ...original({
       id: "fuobe-speak",
       open: [{ ...comfy("avatar", "infinitetalk-wanwrapper", "InfiniteTalk + FusioniX, 25 steps, shift 10, guidance 5 / 5, 15 motion frames"), extra: { ...SPEAK_GRAPH }, loraSlot: true }],
-      tagline: "A portrait speaks your voice track, lips, face and head in sync, long takes · InfiniteTalk + FusioniX free on your GPU (16 GB), or hosted on fal",
+      tagline: "A portrait speaks your voice track, lips, face and head in sync, long takes · InfiniteTalk + the FusioniX LoRA free on your GPU (16 GB), or fal's InfiniteTalk without the LoRA",
       options: { resolutions: ["480p", "720p"], seed: true, maxImages: 1, promptOptional: true, defaultPrompt: SPEAK_PROMPT },
     }),
     engineDefaults: { open: { aspectRatio: "auto" } },
+    // fal's InfiniteTalk endpoints (and Replicate) take no LoRA (checked 2026-11-01: research studios[speak].original.cloud).
+    engineNote: "Your GPU adds the FusioniX LoRA (with Higgsfield's Infinite Talk settings); the cloud runs fal's InfiniteTalk without it",
     // The GPU graph frames the portrait itself (its shape by default); the LoRA is the recipe's, downloaded before a run.
     engineOptions: { open: { aspectRatios: ["auto", ...VID_AR], negativePrompt: true, ...(SPEAK_LORA && { loras: [SPEAK_LORA] }) } },
   },

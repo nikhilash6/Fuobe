@@ -18627,7 +18627,13 @@
     "cloud": {
      "endpoint": "fal-ai/infinitalk",
      "fps": 25,
-     "note": "No motion_frame, shift, guidance or LoRA fields: the like-for-like copy runs only on the GPU. num_frames 41–721 at 25 fps follows the voice's length."
+     "note": "No motion_frame, shift, guidance or LoRA fields: the like-for-like copy runs only on the GPU. num_frames 41–721 at 25 fps follows the voice's length.",
+     "loraCheck": {
+      "checked": "2026-11-01",
+      "fal": "fal's model search lists three InfiniteTalk endpoints (fal-ai/infinitalk, fal-ai/infinitalk/video-to-video, fal-ai/infinitalk/single-text); their OpenAPI inputs (prompt, image_url or video_url, audio_url or text_input and voice, num_frames, resolution, seed, acceleration, enable_safety_checker) have no LoRA field, and fal-ai/infinitalk/lora doesn't exist (404)",
+      "replicate": "no InfiniteTalk model found at the likely slugs (zsxkib/infinite-talk, zsxkib/infinitetalk, meigen-ai/infinitetalk, lucataco/infinitetalk, fofr/infinitetalk, camenduru/infinitetalk, wan-video/infinitetalk: 404); Replicate's search needs an API token, which this machine doesn't have, so a model under another name isn't ruled out. zsxkib/multitalk exists (MultiTalk, a different model)",
+      "result": "no hosted InfiniteTalk takes a LoRA: the cloud runs fal's InfiniteTalk without FusioniX, the GPU keeps it, and the UI says so (the owner's call of 2026-10-30)"
+     }
     },
     "motion": {
      "id": "fuobe-speak-motion",

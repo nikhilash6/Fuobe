@@ -721,6 +721,11 @@ export interface ModelDef {
    * LTX-2.3 graphs make silent clips).
    */
   engineOptions?: Partial<Record<Engine, Partial<ModelOptions>>>;
+  /**
+   * What each engine runs when they differ, in one plain line (the owner's rule of 2026-10-30: each engine does all it
+   * can, the cloud only on hosted models, and the UI says so). Settings → Models & licences shows it under the model.
+   */
+  engineNote?: string;
   /** Hidden from pickers (used only internally by presets). */
   hidden?: boolean;
   /**
