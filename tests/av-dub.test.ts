@@ -7,6 +7,7 @@ import { cueReducer, cueProblems, formatCueTime, normalizeCues, parseCueTime } f
 import {
   BLANK_FRAME,
   crowdedLines,
+  DBS_OPEN_ONLY_NOTE,
   DEFAULT_VOICE_SPLIT,
   DUB_STEP_MODELS,
   linearGain,
@@ -15,6 +16,7 @@ import {
   MUSIC_MODEL_NOTE,
   OPTIONAL_PREPARE,
   oneShotRequests,
+  pickVoiceSplit,
   PHRASE_MAX,
   prepareMedia,
   prepareSteps,
@@ -43,6 +45,9 @@ process.env.OLLAMA_URL = "http://127.0.0.1:9";
 const { setSetting } = await import("@/server/settings");
 const gens = await import("@/server/generations");
 const dub = await import("@/server/dub");
+const { changeAccess } = await import("@/server/model-access");
+const { STUDIO_ROWS, studioTool, toolFor } = await import("@/server/gpu/tools");
+const { loadIndex } = await import("@/server/gpu/index-file");
 const { saveFile } = await import("@/server/storage");
 
 beforeAll(() => setSetting("demoMode", "auto"));
@@ -140,6 +145,21 @@ describe("dub pipeline DAGs", () => {
     expect(voiceSplitModel()).toBe("oss-voice-separate");
     expect(VOICE_SPLITS.dbs.note).toBe("Keeps the music and sound effects of the original");
     expect(VOICE_SPLITS.melband.note).toBe(MUSIC_MODEL_NOTE);
+  });
+
+  it("the default voice split follows Settings → Models & licences: the next split that is on, else MelBand", () => {
+    const off = (...ids: string[]) => (id: string) => !ids.includes(id);
+    expect(pickVoiceSplit(undefined, off())).toBe("melband");
+    expect(pickVoiceSplit(undefined, off("oss-voice-separate"))).toBe("dbs");
+    expect(voiceSplitModel(undefined, off("oss-voice-separate"))).toBe("oss-dbs-voice-separate");
+    expect(pickVoiceSplit("nope", off("oss-voice-separate"))).toBe("dbs");
+    // Both off: the default, whose run then refuses, naming the switch.
+    expect(pickVoiceSplit(undefined, off("oss-voice-separate", "oss-dbs-voice-separate"))).toBe("melband");
+    // A split asked for by name is kept even when it's off (the run says why it can't start).
+    expect(pickVoiceSplit("melband", off("oss-voice-separate"))).toBe("melband");
+    expect(pickVoiceSplit()).toBe("melband");
+    // The cloud says plainly that keeping the whole soundtrack is the open engine's.
+    expect(DBS_OPEN_ONLY_NOTE).toBe("Keeping the music and sound effects of the original (DBS) runs on your GPU (open source)");
   });
 
   it("cloud: the Voice split changes nothing (no SAM Audio on the cloud: Demucs stays, three beds, voice only when it fails)", () => {
@@ -486,6 +506,37 @@ describe("dub sessions (demo mode)", () => {
     expect(voiced.generations[voiced.voices!.es[0].ids.film].request.inputs?.audio2).toBe(split.outputs[1].url);
     // The voice split is open-engine only: a cloud dub, or one shot, keeps none.
     expect(dub.createDubSession({ engine: "cloud", mode: "steps", video: clip(), targets: ["es"], voiceSplit: "dbs" }).voiceSplit).toBeUndefined();
+  });
+
+  it("with MelBand RoFormer switched off, an open dub that names no split runs DBS (as the studio's picker does)", async () => {
+    changeAccess([{ kind: "model", id: "oss-voice-separate", on: false }]);
+    try {
+      expect(dub.dubVoiceSplit({ engine: "open", mode: "steps" })).toBe("dbs");
+      expect(dub.dubVoiceSplit({ engine: "cloud", mode: "steps" })).toBeUndefined();
+      expect(dub.previewDub({ engine: "open", mode: "steps", video: clip(), targets: ["es"] })).toMatchObject({ engine: "open", costUsd: 0, steps: 2 });
+      const s = dub.createDubSession({ engine: "open", mode: "steps", video: clip(), targets: ["es"] });
+      expect(s.voiceSplit).toBe("dbs");
+      expect(gens.getGeneration(s.prepare!.stems)!.modelId).toBe("oss-dbs-voice-separate");
+      await settle(s.prepare!.stems);
+    } finally {
+      changeAccess([{ kind: "reset" }]);
+    }
+    // All on: MelBand RoFormer, the default.
+    expect(dub.dubVoiceSplit({ engine: "open", mode: "steps" })).toBe("melband");
+  });
+
+  it("has a row on the GPU pre-flight board: the voice split, the cloned voice, its timeline, lip sync and the mux", () => {
+    const row = STUDIO_ROWS.find((r) => r.href === "/audio/translate")!;
+    expect(row).toMatchObject({ label: "Translate & dub", group: "Audio" });
+    const t = studioTool(row)!;
+    expect(t.ref).toBe("studio:/audio/translate");
+    expect(t.local).toBeUndefined();
+    expect(t.workflows).toEqual(expect.arrayContaining(["dub-prepare-separate-transcribe", "tts-chatterbox-multilingual", "audio-timeline", "lipsync-v2v-infinitetalk", "video-mux-audio"]));
+    const idx = loadIndex();
+    for (const wf of t.workflows) expect(idx.workflows[wf], wf).toBeDefined();
+    // Graph B (DBS) is in the requirement index too.
+    expect(idx.workflows["dub-prepare-dbs-transcribe"]).toBeDefined();
+    expect(toolFor("studio:/audio/translate")?.workflows).toEqual(t.workflows);
   });
 
   it("prices the open dub's first step free with either voice split", () => {

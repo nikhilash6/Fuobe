@@ -2,8 +2,8 @@
 // Usage: node tests/e2e/dub-voice-split.mjs [appUrl] [outDir]   (the app in demo mode: no keys, no ComfyUI)
 // Checks, at 1440 px and 390 px in light and dark: the open engine's Voice split (MelBand RoFormer by default, DBS
 // with "Keeps the music and sound effects of the original"), the route line and the price line following it; the
-// cloud engine's Demucs note and no Voice split; no sideways scroll. Then a DBS dub in demo mode: its first step runs
-// on DBS + Qwen3-ASR. Screenshots go to outDir.
+// cloud engine's Demucs note, its line that DBS runs on your GPU, and no Voice split; no sideways scroll. Then a DBS
+// dub in demo mode: its first step runs on DBS + Qwen3-ASR. Screenshots go to outDir.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -72,6 +72,7 @@ try {
       page = await ctx.newPage();
       await openRoute(page, `${app}/audio/translate`);
       check(await page.getByText("Music and effects: Demucs. Music model: some sound effects may be lowered, and singing may be replaced.").isVisible(), `${label}: the cloud names Demucs and what it does`);
+      check(await page.getByText("Keeping the music and sound effects of the original (DBS) runs on your GPU (open source).").isVisible(), `${label}: the cloud says DBS runs on your GPU`);
       check((await page.getByRole("combobox", { name: "Voice split" }).count()) === 0, `${label}: no Voice split on the cloud`);
       await page.screenshot({ path: path.join(out, `dub-cloud-${dname}-${theme}.png`), fullPage: true });
       await noSideScroll(page, `${label} cloud`);

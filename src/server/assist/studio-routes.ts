@@ -17,7 +17,7 @@ import { clampLayers, decomposeCost, defaultLayers, TOOL_MODELS, TOOL_LABELS, ty
 import { createBatch, estimateBatch, listCreatives, type BatchInput } from "../ads";
 import { createManualBrand, createProduct, DuplicateProductError, getBrand, getProduct, heuristicManualKit, listProducts, updateProduct } from "../brand";
 import { createPipeline, providerNames, type PipelineStep } from "../chains";
-import { createDubSession, previewDub, videoLength, type CreateDubInput } from "../dub";
+import { createDubSession, dubVoiceSplit, previewDub, videoLength, type CreateDubInput } from "../dub";
 import { createChannel, createEpisode, estimateEpisode, listChannels } from "../faceless";
 import { chooseRoute } from "../generations";
 import { createProject, deleteProject, FileUrl, jobSteps, startJob } from "../layers";
@@ -252,7 +252,8 @@ const ONE_SHOT_NAMES: Record<OneShotModel, string> = { "heygen-translate": "HeyG
  */
 function prepareProblem(input: Pick<CreateDubInput, "engine" | "video" | "source" | "targets" | "voiceSplit">): string | null {
   const modes: { label: string; needs: string; demo: boolean }[] = [];
-  for (const s of prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: input.targets, voiceSplit: input.voiceSplit })) {
+  const voiceSplit = dubVoiceSplit({ engine: input.engine, mode: "steps", voiceSplit: input.voiceSplit });
+  for (const s of prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: input.targets, voiceSplit })) {
     const m = getModel(s.request.modelId);
     if (!m || !s.request.op) continue;
     const label = s.request.step?.label ?? s.key;

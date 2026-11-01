@@ -24,6 +24,7 @@ import { cueProblems } from "@/lib/av/cue-edit";
 import {
   BACKGROUND_DB,
   crowdedLines,
+  DBS_OPEN_ONLY_NOTE,
   DEFAULT_VOICE_SPLIT,
   dubResult,
   languageStage,
@@ -223,7 +224,8 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
           )}
           {!oneShot && engine === "open" && (
             <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-start">
-              <Label htmlFor="dub-split" className="text-[13px] sm:w-32 sm:pt-2">
+              {/* A label points at the Select; with one split left, the name beside it is plain text. */}
+              <Label htmlFor={splits.length > 1 ? "dub-split" : undefined} className="text-[13px] sm:w-32 sm:pt-2">
                 Voice split
               </Label>
               <div className="min-w-0 flex-1">
@@ -241,7 +243,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p id="dub-split" className="pt-1.5 text-[13px] font-medium">
+                  <p className="pt-1.5 text-[13px] font-medium">
                     {VOICE_SPLITS[split].name}
                   </p>
                 )}
@@ -250,7 +252,12 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
             </div>
           )}
           {/* The cloud splits the music and effects with Demucs (no SAM Audio on the cloud: the owner's call). */}
-          {!oneShot && engine === "cloud" && <p className="mt-3 text-[12px] leading-snug text-muted-foreground">Music and effects: Demucs. {MUSIC_MODEL_NOTE}.</p>}
+          {!oneShot && engine === "cloud" && (
+            <div className="mt-3 space-y-1 text-[12px] leading-snug text-muted-foreground">
+              <p>Music and effects: Demucs. {MUSIC_MODEL_NOTE}.</p>
+              <p>{DBS_OPEN_ONLY_NOTE}.</p>
+            </div>
+          )}
         </Panel>
         <Panel title="Languages">
           <div className="space-y-3">

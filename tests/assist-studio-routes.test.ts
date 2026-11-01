@@ -23,6 +23,7 @@ const gens = await import("@/server/generations");
 const layers = await import("@/server/layers");
 const shorts = await import("@/server/shorts");
 const dub = await import("@/server/dub");
+const { changeAccess } = await import("@/server/model-access");
 const faceless = await import("@/server/faceless");
 const ads = await import("@/server/ads");
 const brand = await import("@/server/brand");
@@ -244,6 +245,18 @@ describe("Translate & dub", () => {
     expect(await ok.json()).toMatchObject({ engine: "open", costUsd: 0, steps: 2 });
     const bad = await post({ engine: "open", mode: "steps", video: clip, targets: ["es"], voiceSplit: "sam" });
     expect([bad.status, (await bad.json()).error]).toEqual([400, "Check the dub settings"]);
+  });
+
+  it("with MelBand RoFormer switched off, dub_video without a voice split plans and runs DBS (not a run that would refuse)", async () => {
+    changeAccess([{ kind: "model", id: "oss-voice-separate", on: false }]);
+    try {
+      const b = body(await run("dub_video", { video: clip, languages: ["Spanish"] }, "open"));
+      const s = dub.getDubSession(b.dub)!;
+      expect(s).toMatchObject({ engine: "open", mode: "steps", voiceSplit: "dbs" });
+      expect(gen(s.prepare!.stems)).toMatchObject({ modelId: "oss-dbs-voice-separate", op: "separate-audio", provider: "mock" });
+    } finally {
+      changeAccess([{ kind: "reset" }]);
+    }
   });
 
   it("dubs in one go on the cloud when asked, without lip sync", async () => {

@@ -14,6 +14,7 @@ import { TOOL_MODELS } from "@/lib/layers";
 import { createPipeline, type PipelineStep } from "../chains";
 import { db } from "../db";
 import { chooseRoute, ConnectComfyError, createGenerations, outputKind, previewChained } from "../generations";
+import { isOffered } from "../model-access";
 import { engineMode } from "../settings";
 import { fileUrl, saveFile } from "../storage";
 import { defineTool, type JobPlace, type ToolContext, type ToolOutcome } from "./define";
@@ -255,7 +256,7 @@ function dubSteps(i: DubToolInput, ctx: ToolContext): PipelineStep[] {
     return labelled(langs.map((l, k) => ({ key: `dub${k}`, label: `Dub · ${l}`, request: req({ modelId: "heygen-translate", op: "dub", inputs: { video: i.video }, params: { targetLanguage: l, sourceLanguage: i.source_language } }) })));
   }
   const steps: (PipelineStep & { label: string })[] = [
-    { key: "stems", label: "Voice and background", request: req({ modelId: voiceSplitModel(i.voice_split), op: "separate-audio", inputs: { video: i.video } }) },
+    { key: "stems", label: "Voice and background", request: req({ modelId: voiceSplitModel(i.voice_split, (id) => isOffered(id, "open")), op: "separate-audio", inputs: { video: i.video } }) },
     { key: "words", label: "Transcript", request: req({ modelId: "oss-qwen3-asr", op: "transcribe", params: { sourceLanguage: i.source_language } }), after: "stems", chain: [{ slot: "audio", stem: "voice" }] },
   ];
   langs.forEach((l, k) => {

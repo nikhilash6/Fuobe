@@ -6,6 +6,7 @@ import {
   DUB_FEATURE,
   languageStage,
   oneShotRequests,
+  pickVoiceSplit,
   prepareMedia,
   prepareSteps,
   reviewCues,
@@ -23,6 +24,7 @@ import type { Engine, Generation } from "@/lib/catalog/types";
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { cancelGeneration, createGenerations, getGeneration, previewChained } from "./generations";
+import { isOffered } from "./model-access";
 import { storedMedia } from "./storage";
 
 /**
@@ -110,11 +112,20 @@ export function videoLength(ref: string, measured?: number): number | undefined 
   return measured && measured > 0 ? measured : undefined;
 }
 
+/**
+ * The voice split an open step dub runs: the one asked for, else the default as Settings → Models & licences leaves it
+ * (MelBand RoFormer, or DBS when MelBand is switched off), as the studio's picker does. None on the cloud or one shot.
+ */
+export function dubVoiceSplit(input: Pick<CreateDubInput, "engine" | "mode" | "voiceSplit">): VoiceSplit | undefined {
+  return input.engine === "open" && input.mode === "steps" ? pickVoiceSplit(input.voiceSplit, (id) => isOffered(id, "open")) : undefined;
+}
+
 export function createDubSession(input: CreateDubInput): DubSessionView {
   if (input.mode === "oneshot" && input.engine === "open") throw new Error("One-shot dubbing is a cloud service — the open engine dubs step by step");
   const now = Date.now();
   const title = input.title?.trim().slice(0, 120) || "Dubbed video";
   const duration = videoLength(input.video, input.duration);
+  const voiceSplit = dubVoiceSplit(input);
   const base: DubSession = {
     id: nanoid(10),
     title,
@@ -124,7 +135,7 @@ export function createDubSession(input: CreateDubInput): DubSessionView {
     source: input.source || "auto",
     targets: [...new Set(input.targets)],
     ...(duration && { duration }),
-    ...(input.engine === "open" && input.mode === "steps" && input.voiceSplit && { voiceSplit: input.voiceSplit }),
+    ...(voiceSplit && { voiceSplit }),
     batchId: nanoid(10),
     createdAt: now,
     updatedAt: now,
@@ -145,7 +156,7 @@ export function createDubSession(input: CreateDubInput): DubSessionView {
     }
     return dubView(save({ ...base, model, oneshot }));
   }
-  const steps = prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: base.targets, title, voiceSplit: input.voiceSplit });
+  const steps = prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets: base.targets, title, voiceSplit });
   const run = createPipeline(steps, { batchId: base.batchId });
   const prepare = Object.fromEntries(Object.entries(run.byKey).map(([k, g]) => [k, g.id]));
   return dubView(save({ ...base, prepare }));
@@ -218,7 +229,7 @@ export function previewDub(input: CreateDubInput): DubPrice {
     const jobs = oneShotRequests({ model: input.model ?? "heygen-translate", video: input.video, source: input.source, targets });
     return priceSteps(input.engine, jobs.map((j, i) => ({ key: `dub:${i}`, request: j.request })), seconds);
   }
-  return priceSteps(input.engine, prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets, voiceSplit: input.voiceSplit }), seconds);
+  return priceSteps(input.engine, prepareSteps({ engine: input.engine, video: input.video, source: input.source, targets, voiceSplit: dubVoiceSplit(input) }), seconds);
 }
 
 /** What voicing one language would cost (POST /api/dub/[id]/voice?preview=1). */
