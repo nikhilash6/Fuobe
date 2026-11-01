@@ -84,8 +84,10 @@ export function settingsShape(
   const ops = op ? [op] : studioOps;
   const routes = (model?.routes ?? []).filter((r) => ops.includes(r.op));
   const sized = !routes.length || routes.some((r) => !r.unsized);
+  // A cloud edit that follows image 1's shape at the chosen tier (ModelRoute.followsImage: fal's FLUX 3 Klein) keeps Resolution only.
+  const shaped = routes.length > 0 && routes.every((r) => r.unsized || r.followsImage);
   return {
-    aspect: !sized || op === "i2v" || op === "flf2v" ? null : many(o.aspectRatios),
+    aspect: !sized || shaped || op === "i2v" || op === "flf2v" ? null : many(o.aspectRatios),
     resolution: sized ? many(o.resolutions) : null,
     duration: params.shots ? null : many(o.durations),
     count: (kind === "image" || kind === "video") && !single,
@@ -1124,7 +1126,9 @@ export function filterModels(models: ModelDef[], opts: { kind?: MediaKind; ops?:
  */
 export function bestForStudio(models: ModelDef[], engine: Engine, defaultId: string | undefined, max = 4, op?: Operation): ModelDef[] {
   const pool = models.filter((m) => m.engine === engine && (!op || m.id === defaultId || m.routes.some((r) => r.op === op)));
-  const score = (m: ModelDef) => (m.id === defaultId ? 0 : m.badges?.includes("top") ? 1 : m.badges?.includes("new") ? 2 : 9);
+  // A model ranked by its badges only for some operations (ModelDef.bestOps) isn't ranked in the other studios' lists.
+  const ranked = (m: ModelDef) => !op || !m.bestOps || m.bestOps.includes(op);
+  const score = (m: ModelDef) => (m.id === defaultId ? 0 : !ranked(m) ? 9 : m.badges?.includes("top") ? 1 : m.badges?.includes("new") ? 2 : 9);
   return pool
     .map((m, i) => [m, score(m), i] as const)
     .filter(([, s]) => s < 9)

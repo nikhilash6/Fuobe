@@ -130,6 +130,8 @@ describe("Fuobe Soul ID targets (build plan O3)", () => {
       "fal-flux2-klein-4b",
       "fal-flux2-klein-9b",
       "fal-krea-2",
+      "aitk-flux3-klein",
+      "fal-flux3-klein",
     ]);
     // The portrait trainer crops to a face: no style on it, and no place or object either (they train on FLUX.1 on the GPU).
     // Fuobe Soul's style trains on fal's Z-Image trainer.

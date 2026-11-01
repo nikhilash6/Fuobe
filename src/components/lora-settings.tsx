@@ -63,6 +63,7 @@ function baseName(base: string): string {
     [/^qwen-image-edit/, "Qwen-Image-Edit"],
     [/^flux2-klein-4b/, "FLUX.2 [klein] 4B"],
     [/^flux2-klein-9b/, "FLUX.2 [klein] 9B"],
+    [/^flux3-klein/, "FLUX 3 Klein"],
   ];
   return known.find(([re]) => re.test(base))?.[1] ?? base;
 }

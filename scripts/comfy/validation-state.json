@@ -131,6 +131,24 @@
     "error": null,
     "at": "2026-10-16T20:57:15.735Z"
   },
+  "flux3-klein-base-t2i-lora": {
+    "sha256": "f5efb062048cb0f88b9c2a8313db4c23b8d52166619c2007ea02fa27843e378c",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T13:51:37.715Z"
+  },
+  "flux3-klein-edit": {
+    "sha256": "dc58d70c1432a916fdb55124e82e757fc0b72b1575d0dc85a44981a4c837bd20",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T13:51:49.612Z"
+  },
+  "flux3-klein-t2i": {
+    "sha256": "35bb355680ed0b6ac49231ad7efe2ae17c3a9786b77de26a4b3ea7789970b917",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-01T13:51:34.372Z"
+  },
   "frame-extract": {
     "sha256": "0f695a5ddf779a1d7b57f1c817e14c36e53534c81148449055f39c55cf9952ab",
     "validated": true,

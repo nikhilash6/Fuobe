@@ -25,6 +25,9 @@ import {
   languageName,
   paletteSentence,
   parseCueLines,
+  PROMPT_HELPER_GRAPHS,
+  PROMPT_HELPER_PARAM,
+  skipPromptHelper,
   randomSeed,
   splitCueWords,
   swatchPixels,
@@ -40,6 +43,7 @@ import {
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
+import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
 import { crossfadeProblem, fadeCurveWav } from "@/lib/av/crossfade";
@@ -833,7 +837,15 @@ const SLOT_RULES: Record<string, { reuse?: boolean; required?: string[]; hints?:
  * person): a reference left out goes with the nodes only it feeds, and the encoder runs on the ones it was given.
  * Slots drop from the last, so an encoder's numbered inputs never have a gap.
  */
-const OPTIONAL_REFERENCE_INPUTS: ReadonlySet<string> = new Set(["TextEncodeQwenImage21", "TextEncodeFibo2", "Krea2EditModelPatch", "Krea2EditGroundedEncode"]);
+const OPTIONAL_REFERENCE_INPUTS: ReadonlySet<string> = new Set([
+  "TextEncodeQwenImage21",
+  "TextEncodeFibo2",
+  "Krea2EditModelPatch",
+  "Krea2EditGroundedEncode",
+  // FLUX 3 Image Klein's edit: its references on one ReferenceMultiLatent, and the batch its prompt helper looks at.
+  "ReferenceMultiLatent",
+  "BatchImagesNode",
+]);
 
 /** Uploads that are sides of one object (image = the first side, image2 the second…), and the node they all go into. */
 interface ViewSlots {
@@ -842,6 +854,8 @@ interface ViewSlots {
 }
 
 const IMAGE_SLOTS = ["image", "image2", "image3", "image4"] as const;
+/** Every reference slot a graph can bind, in order (FLUX 3 Image Klein's edit takes 10). */
+const REFERENCE_SLOTS = ["image", "image2", "image3", "image4", "image5", "image6", "image7", "image8", "image9", "image10"] as const;
 
 /**
  * Which slot each photo of a multi-view 3D model goes to: params.extra.views names the side of each photo
@@ -865,6 +879,12 @@ const MEDIA_HINT: Record<string, string> = {
   image2: "Add a second image",
   image3: "Add a third image",
   image4: "Add a fourth image",
+  image5: "Add a fifth image",
+  image6: "Add a sixth image",
+  image7: "Add a seventh image",
+  image8: "Add an eighth image",
+  image9: "Add a ninth image",
+  image10: "Add a tenth image",
   endImage: "Add an end frame",
   mask: "Paint the area to change",
   video: "Add a video",
@@ -1065,6 +1085,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     image2: images[1],
     image3: images[2],
     image4: images[3],
+    // FLUX 3 Image Klein's edit binds up to ten references.
+    ...Object.fromEntries(REFERENCE_SLOTS.slice(4).map((k, i) => [k, images[i + 4]])),
     endImage: input.endImage,
     mask: input.mask,
     video: input.video ?? clips[0],
@@ -1455,6 +1477,11 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   const sourceChannels = b.channels || b.separationModel ? (ctx.media?.(String(values.audio ?? ""))?.channels ?? (Number(extra.sourceChannels) || undefined)) : undefined;
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
+  // Options → Prompt helper (FLUX 3 Image Klein) and a layout's draft (kept for Reuse): read here, never bound.
+  const helper = extra[PROMPT_HELPER_PARAM];
+  const laidOut = carriesBoxes(extra);
+  delete extra[PROMPT_HELPER_PARAM];
+  delete extra[LAYOUT_PARAM];
   for (const [k, v] of Object.entries(extra)) values[k as BindingKey] = v;
   // SeedVR2's `scale` multiplies the picture before one diffusion pass over all of it, and its graph is made for up to
   // limits.maxWidth × maxHeight: the multiplier comes down to fit the picture (a 3000 × 2000 photo at the template's 4x
@@ -1500,7 +1527,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   }
   // The Character swap without an anchor frame: its loader and fit are taken out after binding.
   if (dropAnchor) left.push("image2");
-  for (const [k, prev] of [["image2", "image"], ["image3", "image2"], ["image4", "image3"]] as const) {
+  for (const [k, prev] of REFERENCE_SLOTS.slice(1).map((slot, i) => [slot, REFERENCE_SLOTS[i]] as const)) {
     if (rules.views || !b[k] || values[k] !== undefined || rules.required?.includes(k) || left.includes(k)) continue;
     if (values[prev] === undefined && !left.includes(prev)) continue;
     const loader = b[k]!.length === 1 ? b[k]![0].node : undefined;
@@ -1537,6 +1564,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (bound.missing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${bound.missing.join(", ")}`);
   let wf = bound.workflow;
   const outputIds = manifest.outputs.map((o) => o.node);
+  // The prompt helper (FLUX 3 Image Klein's upsampler) off, or a layout with boxes it would rewrite: the words as typed.
+  if (PROMPT_HELPER_GRAPHS.has(manifest.id) && (helper === "off" || laidOut)) wf = skipPromptHelper(wf, outputIds);
   if (dropAnchor) wf = withoutAnchor(wf, b.image2![0].node);
   // LoRA "none": the swap LoRA's loader is linked out (H3 runs with the Turbo LoRA alone).
   if (dropSwapLora && b.lora?.length === 1) wf = bypassNode(wf, b.lora[0].node, "model", outputIds);

@@ -1386,5 +1386,103 @@ export const HOSTED_TRAINERS: HostedTrainer[] = [
     "priceText": "Your request will cost $0.0048 per step. For example, the default 2000-step training will cost $9.60.",
     "usdPerStep": 0.0048,
     "minBilledSteps": 1
+  },
+  {
+    "id": "blackforestlabs/flux-3/klein/base/trainer",
+    "provider": "fal",
+    "family": "FLUX 3 Klein base",
+    "base": "flux-3-klein-base",
+    "media": "image",
+    "role": "Soul ID on FLUX 3 Image Klein (nm10-flux3-klein; FLUX Kommunity licence, shown as information)",
+    "dataField": "images_data_url",
+    "loraOutput": [
+      "lora_file"
+    ],
+    "fields": {
+      "images_data_url": {
+        "type": "string"
+      },
+      "learning_rate": {
+        "type": "number",
+        "default": 0.0001,
+        "min": 1e-06,
+        "max": 0.01
+      },
+      "resolution": {
+        "type": "integer",
+        "enum": [
+          512,
+          768,
+          1024
+        ],
+        "default": 1024
+      },
+      "steps": {
+        "type": "integer",
+        "default": 1000,
+        "min": 100,
+        "max": 10000
+      },
+      "trigger_phrase": {
+        "type": "string",
+        "default": ""
+      }
+    },
+    "licence": "FLUX Kommunity License v1.0 (non-commercial; commercial outputs for Qualifying Users under US$5M revenue)",
+    "commercial": null,
+    "status": "active",
+    "checked": "2026-11-01",
+    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/trainer",
+    "priceText": "Your request will cost $0.0043 per training step (minimum 100 steps). The default 1000 steps cost $4.30.",
+    "usdPerStep": 0.0043,
+    "minBilledSteps": 100
+  },
+  {
+    "id": "blackforestlabs/flux-3/klein/base/trainer/edit",
+    "provider": "fal",
+    "family": "FLUX 3 Klein base",
+    "base": "flux-3-klein-base",
+    "media": "image",
+    "role": "Edit LoRAs from before / after pairs on FLUX 3 Image Klein (recorded; Soul ID trains subjects with the plain trainer)",
+    "dataField": "images_data_url",
+    "loraOutput": [
+      "lora_file"
+    ],
+    "fields": {
+      "images_data_url": {
+        "type": "string"
+      },
+      "learning_rate": {
+        "type": "number",
+        "default": 0.0001,
+        "min": 1e-06,
+        "max": 0.01
+      },
+      "resolution": {
+        "type": "integer",
+        "enum": [
+          512,
+          768,
+          1024
+        ],
+        "default": 1024
+      },
+      "steps": {
+        "type": "integer",
+        "default": 1000,
+        "min": 100,
+        "max": 10000
+      },
+      "trigger_phrase": {
+        "type": "string",
+        "default": ""
+      }
+    },
+    "licence": "FLUX Kommunity License v1.0 (non-commercial; commercial outputs for Qualifying Users under US$5M revenue)",
+    "commercial": null,
+    "status": "active",
+    "checked": "2026-11-01",
+    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/trainer/edit",
+    "priceText": "Your request will cost $0.002 per training step, multiplied by the reference images per pair: x2.11 with 1, x3.44 with 2, x5.09 with 3, x6.95 with 4 (up to x23.44 with 10). 1000 steps cost $4.22 with 1 reference image and $13.90 with 4."
   }
 ];
