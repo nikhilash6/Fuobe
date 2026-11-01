@@ -54,6 +54,8 @@
 //   octreeResolution                      (Hunyuan3D 2.1 mesh resolution)
 //   columns, rows                         (ImageGridtoBatch: how the sheet is cut into tiles)
 //   gridPrompt, sheetPrompt               (contact-sheet / turnaround framing text placed before the prompt)
+// Keys added with the nm10-flux3-klein workflows (research #10 §6.3):
+//   image5 … image10                      (further reference images: FLUX 3 Image Klein's edit takes up to 10)
 // Keys added with the av-tools workflows (Wave B):
 //   frameIndex                            (Extract frame: which frame of the Trim Video window, -1 = its last, 0 = its first)
 // Keys added with the comfyui-oss-4 workflows (docs/research/comfyui-oss-4.md). * = the provider fills it from the
@@ -354,7 +356,26 @@ export const KNOWN_MODELS = {
   'fibo2_edit_turbo_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors', variants: ['fibo2_edit_turbo_bf16.safetensors'] },
   'qwen3vl_4b_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/Fibo-2.0/resolve/main/text_encoders/qwen3vl_4b_int8_convrot.safetensors' },
   'qwen3.5_9b_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/MOSS-Image/resolve/main/text_encoders/qwen3.5_9b_int8_convrot.safetensors', variants: ['qwen3.5_9b_bf16.safetensors'] },
+  // FLUX 3 Image Klein (research #10 §6.3, nm10-flux3-klein): BFL's ComfyUI repack, gated "auto" (accept the FLUX Kommunity
+  // License on Hugging Face, then a token downloads it), pinned to the revision read on 2026-11-01. Its Qwen3-VL-4B int8 encoder and
+  // flux2-vae are the same names and sizes as the FIBO 2 and flux2-dev rows above, which download without a token. `variants`:
+  // the same weights in another precision in the same repo (nvfp4 for Blackwell GPUs, bf16).
+  'flux3-image-klein-int8-convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-int8-convrot.safetensors', variants: ['flux3-image-klein-nvfp4.safetensors', 'flux3-image-klein-bf16.safetensors'] },
+  'flux3-image-klein-nvfp4.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-nvfp4.safetensors' },
+  'flux3-image-klein-bf16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-bf16.safetensors' },
+  'flux3-image-klein-base-int8-convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-base-int8-convrot.safetensors', variants: ['flux3-image-klein-base-nvfp4.safetensors', 'flux3-image-klein-base-bf16.safetensors'] },
+  'flux3-image-klein-base-nvfp4.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-base-nvfp4.safetensors' },
+  'flux3-image-klein-base-bf16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/diffusion_models/flux3-image-klein-base-bf16.safetensors' },
+  // BFL's prompt upsampler (Qwen3.5 9B fine-tune, Apache-2.0): the Prompt helper. The w4a8 file is the Comfy templates' (the card's
+  // download line names the int8 one, 9.75 GB).
+  'qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy/resolve/feef60b0aaf63a4773ace96636ebbcf43b881312/text_encoders/qwen3.5_9b_flux3_prompt_upsampler_w4a8.safetensors', variants: ['qwen3.5_9b_flux3_prompt_upsampler_int8_convrot.safetensors', 'qwen3.5_9b_flux3_prompt_upsampler_bf16.safetensors'] },
 };
+
+// FLUX 3 Image Klein (flux3-klein-*): every file's licence, as information (the owner's rule: never a gate).
+const KLEIN_LICENSE =
+  'FLUX Kommunity License v1.0 (FLUX 3 Image Klein and Klein Base: non-commercial use, plus commercial outputs for Qualifying Users under US$5M gross ' +
+  'annual revenue; other commercial use needs a BFL licence; not blanket permission for commercial fine-tuning or distribution); Qwen3-VL-4B-Instruct ' +
+  'encoder and the FLUX 3 prompt upsampler (Qwen3.5 9B fine-tune) Apache-2.0; FLUX.2 VAE Apache-2.0';
 
 // MiniMax H3 video (minimax-h3-*): licence and note text the seven graphs share.
 const H3_LICENSE =
@@ -766,6 +787,74 @@ export const SPEC = [
       'The text encoder is qwen3.5_9b_int8_convrot (the int8 file FIBO 2\'s prompt writer also loads), not the template\'s qwen3.5_9b_w4a8_gptq. ' +
       'The 16 GB VRAM figure is an estimate, as MOSS-Image publishes none: about 15 GB of files (DiT 5.4 + encoder 9.7 + VAE 0.25), and ComfyUI offloads. ' +
       'The int8 files run through comfy-kitchen\'s kernels, which need a PyTorch built for CUDA 13 (cu130): comfy/quant_ops.py turns its CUDA backend off otherwise and logs a warning, and the model may run slower.',
+  },
+  // ---- FLUX 3 Image Klein (research #10 §6.3, package nm10-flux3-klein) ------------------------------------------------
+  {
+    id: 'flux3-klein-t2i',
+    title: 'FLUX 3 Image Klein text to image (16 steps; BFL\'s prompt helper writes the full caption, or a layout of boxes as typed)',
+    capability: 't2i',
+    handBuilt: 'hand-built/flux3-klein-t2i.json',
+    bindings: {
+      prompt: [b('11', 'prompt')], width: [b('6', 'width')], height: [b('6', 'height')],
+      seed: [b('7', 'seed'), b('11', 'sampling_mode.seed')], steps: [b('7', 'steps')], unet: [b('1', 'unet_name')],
+    },
+    outputs: [{ node: '9', kind: 'image' }],
+    defaults: { unet: 'flux3-image-klein-int8-convrot.safetensors' },
+    limits: { maxWidth: 4096, maxHeight: 4096, dimensionMultiple: 16 },
+    optionalModels: ['flux3-image-klein-nvfp4.safetensors', 'flux3-image-klein-bf16.safetensors'],
+    vramGb: 16, // a guess (16-24 GB): see notes
+    license: KLEIN_LICENSE,
+    notes:
+      'Comfy-Org\'s image_flux3_klein_distilled_t2i (2026-10-15, minComfyUIVersion 0.41.0) without its subgraph, ResolutionSelector, box editor and notes; core nodes only. ' +
+      'The prompt goes to TextGenerate on BFL\'s FLUX 3 prompt upsampler (CLIPLoader type flux3, 3,584 tokens, top_k 1 as the card\'s greedy decoding, presence penalty 1.5, ' +
+      'the t2i system prompt of black-forest-labs/flux-3-image-klein-pup@3f3edb52), whose caption Qwen3-VL-4B encodes. Prompt helper off (params.extra.promptHelper "off"), ' +
+      'or a layout of boxes (compileFlux3: a caption citing <obj_N>, then the 0-1000 table), sends the words as typed: the provider takes the helper\'s branch out. ' +
+      'Distilled: 16 steps (the card; the template has 15), CFG 1, er_sde / simple, an empty negative. The template\'s file names (flux3_image_klein_sd_int8_convrot) are not ' +
+      'in the repository: the files are BFL\'s (flux3-image-klein-int8-convrot). VRAM about 16-24 GB, estimated: BFL\'s card gives 25-31 GB on a B200 at 1 MP with the helper off, ' +
+      'Freefield measured 17.8 GB with the int8 files; the helper adds a 6.7 GB encoder, which ComfyUI offloads after it runs.',
+  },
+  {
+    id: 'flux3-klein-edit',
+    title: 'FLUX 3 Image Klein edit with up to 10 references (16 steps; the prompt helper looks at them)',
+    capability: 'edit',
+    handBuilt: 'hand-built/flux3-klein-edit.json',
+    bindings: {
+      prompt: [b('11', 'prompt')], image: [b('20', 'image')], image2: [b('21', 'image')], image3: [b('22', 'image')], image4: [b('23', 'image')],
+      image5: [b('24', 'image')], image6: [b('25', 'image')], image7: [b('26', 'image')], image8: [b('27', 'image')], image9: [b('28', 'image')],
+      image10: [b('29', 'image')], seed: [b('7', 'seed'), b('11', 'sampling_mode.seed')], steps: [b('7', 'steps')], unet: [b('1', 'unet_name')],
+    },
+    outputs: [{ node: '9', kind: 'image' }],
+    defaults: { unet: 'flux3-image-klein-int8-convrot.safetensors' },
+    limits: { maxImages: 10 },
+    optionalModels: ['flux3-image-klein-nvfp4.safetensors', 'flux3-image-klein-bf16.safetensors'],
+    vramGb: 16, // a guess (16-24 GB): see notes
+    license: KLEIN_LICENSE,
+    notes:
+      'Comfy-Org\'s image_flux3_klein_distilled_image_edit with ten LoadImage nodes on one ReferenceMultiLatent (resize, 1 MP each; the result takes reference 1\'s shape, ' +
+      'as the template\'s empty_latent) and on the BatchImagesNode the prompt helper looks at (the i2i system prompt, presence penalty 0). References not given are left out ' +
+      '(ReferenceMultiLatent and BatchImagesNode take them as optional inputs; slots drop from the last). Prompt: the instruction, references named by order ' +
+      '(the first image, the second image… or <ref_image_0> in a typed caption). 16 steps, CFG 1, euler / simple, an empty negative (ConditioningZeroOut) with the ' +
+      'references on both sides, as the template. Prompt helper off sends the words as typed. Removed: the box editor, image compare and notes.',
+  },
+  {
+    id: 'flux3-klein-base-t2i-lora',
+    title: 'FLUX 3 Image Klein Base text to image with LoRAs (50 steps, CFG 3.5; the base LoRAs are trained on)',
+    capability: 't2i',
+    handBuilt: 'hand-built/flux3-klein-base-t2i-lora.json',
+    bindings: {
+      prompt: [b('11', 'prompt')], width: [b('6', 'width')], height: [b('6', 'height')],
+      seed: [b('7', 'seed'), b('11', 'sampling_mode.seed')], steps: [b('7', 'steps')], cfg: [b('7', 'cfg')], unet: [b('1', 'unet_name')],
+    },
+    outputs: [{ node: '9', kind: 'image' }],
+    defaults: { unet: 'flux3-image-klein-base-int8-convrot.safetensors' },
+    limits: { maxWidth: 4096, maxHeight: 4096, dimensionMultiple: 16 },
+    optionalModels: ['flux3-image-klein-base-nvfp4.safetensors', 'flux3-image-klein-base-bf16.safetensors'],
+    vramGb: 16, // a guess (16-24 GB): see notes
+    license: KLEIN_LICENSE,
+    notes:
+      'flux3-klein-t2i on Klein Base, the undistilled checkpoint BFL, fal\'s trainer and AI-Toolkit train LoRAs on: 50 steps, CFG 3.5, euler / simple (the card), ' +
+      'the empty negative now counts. The run\'s LoRAs (a trained FLUX 3 Klein Soul ID, Settings -> LoRAs) are injected after the UNETLoader as a LoraLoaderModelOnly stack. ' +
+      'Same prompt helper, Prompt helper off and layout rules as flux3-klein-t2i. About three times the distilled model\'s sampling time.',
   },
   {
     id: 'qwen-image-edit-2509',

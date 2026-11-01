@@ -100,6 +100,8 @@ const NUMERIC_DEFAULT_KEYS = [
 ];
 export const BINDING_KEYS = new Set([
   'prompt', 'negativePrompt', 'image', 'image2', 'image3', 'image4', 'mask', 'endImage', 'video', 'audio',
+  // nm10-flux3-klein: FLUX 3 Image Klein's edit takes up to 10 references
+  'image5', 'image6', 'image7', 'image8', 'image9', 'image10',
   'width', 'height', 'frames', 'fps', 'seed', 'steps', 'cfg', 'guidance', 'denoise', 'shift',
   'loraHigh', 'loraLow', 'lora', 'loraStrength', 'upscaleModel', 'scale', 'duration', 'lyrics', 'tags',
   // library extensions
@@ -364,7 +366,7 @@ async function main() {
       const size = await hfSize(known.url, sizeCache);
       if (size && typeof size === 'object' && size.error) errs.push(`model ${file}: ${known.url} -> ${size.error}`);
       const bytes = typeof size === 'number' ? size : size?.size;
-      models.set(file, { file, folder: known.folder, url: known.url, sizeGb: bytes ? gb(bytes) : null, ...(optional && { optional: true }) });
+      models.set(file, { file, folder: known.folder, url: known.url, sizeGb: bytes ? gb(bytes) : null, ...(size?.gated && { gated: true }), ...(optional && { optional: true }) });
     }
 
     // ---- custom nodes

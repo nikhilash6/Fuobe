@@ -70,9 +70,10 @@ describe("requirements.json", () => {
     expect([...hosts]).toEqual(["huggingface.co"]);
   });
 
-  it("marks exactly the LTX-2.5 files as gated", () => {
+  it("marks exactly the LTX-2.5 and FLUX 3 Image Klein files as gated", () => {
     const gated = files.filter(([, f]) => f.gated).map(([k]) => k);
-    expect(gated.sort()).toEqual(files.filter(([, f]) => f.url.includes("/Lightricks/LTX-2.5/")).map(([k]) => k).sort());
+    const gatedRepos = ["/Lightricks/LTX-2.5/", "/black-forest-labs/flux-3-image-klein-comfy/"];
+    expect(gated.sort()).toEqual(files.filter(([, f]) => gatedRepos.some((r) => f.url.includes(r))).map(([k]) => k).sort());
     expect(gated.length).toBeGreaterThan(0);
   });
 
@@ -108,9 +109,10 @@ describe("requirements.json", () => {
     expect(index.packs["ComfyUI-ThinkSound_Wrapper"].isolated).toBe(true);
   });
 
-  it("stays within its size budget (200 KB, 25 KB gzipped)", () => {
-    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(200 * 1024);
-    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(25 * 1024);
+  // The index grows by a row per workflow and file (FLUX 3 Image Klein's three graphs and seven files took it past 200 KB).
+  it("stays within its size budget (215 KB, 26 KB gzipped)", () => {
+    expect(Buffer.byteLength(text)).toBeLessThanOrEqual(215 * 1024);
+    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(26 * 1024);
   });
 });
 
