@@ -437,10 +437,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "app-image-to-3d": {
-    "poster": "/previews/presets/app-image-to-3d.jpg?v=7c3b64a3",
+    "poster": "/previews/presets/app-image-to-3d.jpg?v=28c7b74f",
+    "video": "/previews/presets/app-image-to-3d.mp4?v=2d80f6f1",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "app-j-magazine": {
@@ -3106,10 +3107,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-buckle-up": {
-    "poster": "/previews/presets/motion-buckle-up.jpg?v=114080eb",
+    "poster": "/previews/presets/motion-buckle-up.jpg?v=2b0c2d85",
+    "video": "/previews/presets/motion-buckle-up.mp4?v=4bf55264",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "minimax-h3",
     "variant": "lean-json"
   },
   "motion-bullet-time": {
