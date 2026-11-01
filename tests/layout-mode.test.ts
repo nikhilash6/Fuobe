@@ -259,7 +259,10 @@ describe("Edit layout", () => {
     expect(editableLayout(gen({ outputs: [{ url: "/a.png", kind: "image", meta: { actualPrompt: fixture.actual_prompt } }] }), 0)).toBeNull();
     // fal's other models' outputs never carry an actual_prompt, only the seed.
     expect(extractOutputs({ images: [{ url: "https://x/a.png", width: 1, height: 1 }], seed: 3 }, "t2i")[0]).toMatchObject({ meta: { seed: 3 } });
+    expect(extractOutputs({ images: [{ url: "https://x/a.png", width: 1, height: 1 }], seed: 3 }, "edit")[0]).toMatchObject({ meta: { seed: 3 } });
     expect(extractOutputs({ images: [{ url: "https://x/a.png", width: 1, height: 1 }] }, "t2i")[0]).not.toHaveProperty("meta");
+    // Other image tools (a background removal, layers) keep their outputs as they were.
+    expect(extractOutputs({ images: [{ url: "https://x/a.png", width: 1, height: 1 }], seed: 3 }, "bg-remove")[0]).not.toHaveProperty("meta");
     // A run with Layout on but no box drawn has nothing to reopen.
     const empty = { feature: "image", modelId: "moss-image", prompt: "A poster", params: { extra: { layout: { ...poster, items: [] } } } } as GenerationRequest;
     expect(editableLayout(gen({ request: empty }), 0)).toBeNull();
