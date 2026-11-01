@@ -1586,8 +1586,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-film-colors": {
-    "poster": "/previews/presets/effect-film-colors.jpg?v=2d8248bd",
-    "video": "/previews/presets/effect-film-colors.mp4?v=af83d11d",
+    "poster": "/previews/presets/effect-film-colors.jpg?v=84c3baeb",
+    "video": "/previews/presets/effect-film-colors.mp4?v=fdc286b3",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "ideogram4+fuobe-grade",
@@ -2219,10 +2219,11 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-naturalistic-clean": {
-    "poster": "/previews/presets/effect-naturalistic-clean.jpg?v=c1c22eb4",
+    "poster": "/previews/presets/effect-naturalistic-clean.jpg?v=7bd35653",
+    "video": "/previews/presets/effect-naturalistic-clean.mp4?v=9b3727df",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
-    "model": "ideogram4",
+    "model": "ideogram4+fuobe-grade",
     "variant": "lean-json"
   },
   "effect-nature-bloom": {
