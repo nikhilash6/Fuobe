@@ -34,7 +34,14 @@ import { DATA_DIR, db } from "../db";
  * principal's waiting tasks (the runner, renewed by its beats); a task a computer took stays with that computer.
  */
 
-export type Principal = "owner" | `acct:${string}`;
+/**
+ * Whose tasks: the owner's, an account's, or (for a worker, docs/gpu-workers.md) a pool of the owner's GPUs. A task
+ * always belongs to the owner or an account (its `principal`); a task for workers also names the pools that may take it
+ * (`pools`), and a worker reaches it only through those.
+ */
+export type Principal = "owner" | `acct:${string}` | `pool:${string}`;
+
+export const isPool = (p: Principal): p is `pool:${string}` => p.startsWith("pool:");
 
 /** The relay's own folder: staged inputs and received outputs. Never served as it is. */
 export const relayDir = () => path.join(DATA_DIR, "relay");
@@ -87,6 +94,18 @@ export interface TaskRow {
   /** Why the computer's ComfyUI can't take it: "setting" (it answers, without Fuobe's setting), else it doesn't answer. */
   down_why: string | null;
   note: string | null;
+  /** Workers only (all null for a browser computer's task): see pool.ts. */
+  account: string | null;
+  pools: string | null;
+  rank_at: number | null;
+  lane: string | null;
+  needs_json: string | null;
+  est_ms: number | null;
+  tried_json: string | null;
+  requeues: number;
+  not_after: number | null;
+  only_worker: string | null;
+  worker_id: string | null;
   created_at: number;
   updated_at: number;
   claimed_at: number | null;
@@ -116,8 +135,8 @@ export interface Received {
   contentType?: string;
 }
 
-const hash = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
-const json = <T,>(s: string | null, fallback: T): T => {
+export const hash = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
+export const json = <T,>(s: string | null, fallback: T): T => {
   if (!s) return fallback;
   try {
     return JSON.parse(s) as T;
@@ -126,7 +145,7 @@ const json = <T,>(s: string | null, fallback: T): T => {
   }
 };
 
-function setTask(id: string, fields: Partial<TaskRow>): void {
+export function setTask(id: string, fields: Partial<TaskRow>): void {
   const keys = Object.keys(fields);
   if (!keys.length) return;
   rdb()
@@ -134,11 +153,21 @@ function setTask(id: string, fields: Partial<TaskRow>): void {
     .run({ ...fields, updated_at: Date.now(), id });
 }
 
-/** A principal's task, or null (another principal's task is no task at all). */
+/**
+ * A principal's task, or null (another principal's task is no task at all). A pool's: a task for workers that this pool
+ * may take.
+ */
 export function getTask(principal: Principal, id: string): TaskRow | null {
   if (typeof id !== "string" || !/^[A-Za-z0-9_-]{16}$/.test(id)) return null;
+  if (isPool(principal)) {
+    const t = rdb().prepare("SELECT * FROM relay_tasks WHERE id = ? AND pools IS NOT NULL").get(id) as TaskRow | undefined;
+    return t && poolsOf(t).includes(principal.slice(5)) ? t : null;
+  }
   return (rdb().prepare("SELECT * FROM relay_tasks WHERE id = ? AND principal = ?").get(id, principal) as TaskRow | undefined) ?? null;
 }
+
+/** The pools that may take a task (none: a browser computer's). */
+export const poolsOf = (t: Pick<TaskRow, "pools">): string[] => (t.pools ? t.pools.split(",").filter(Boolean) : []);
 
 // ---------------------------------------------------------------------------
 // Inputs: staged by the server when it plans the run (comfyui.ts prepareFile, ctx.upload)
@@ -180,6 +209,8 @@ export interface NewTask {
   made?: string;
   /** The run's LoRAs (for the words of a refusal). */
   loras?: { file: string; url?: string }[];
+  /** For workers (pool.ts): the pools that may take it, and what they need to. */
+  pool?: { pools: string[]; account?: string; rankAt: number; lane: string; needs: unknown; estMs?: number; notAfter?: number; onlyWorker?: string };
 }
 
 /** A ComfyUI job for a computer: the graph, the inputs it names, and a prompt id minted here. */
@@ -190,9 +221,11 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
   const d = rdb();
   const named = graphStrings(t.graph);
   d.transaction(() => {
+    const pool = t.pool;
     d.prepare(
-      `INSERT INTO relay_tasks (id, principal, generation_id, state, graph_json, prompt_id, prefix, meta_batch, preview, workflow_id, extra_json, created_at, updated_at)
-       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO relay_tasks (id, principal, generation_id, state, graph_json, prompt_id, prefix, meta_batch, preview, workflow_id, extra_json, created_at, updated_at,
+         account, pools, rank_at, lane, needs_json, est_ms, not_after, only_worker)
+       VALUES (?, ?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       t.principal,
@@ -206,6 +239,14 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
       JSON.stringify({ made: t.made, loras: t.loras ?? [] }),
       now,
       now,
+      pool?.account ?? null,
+      pool ? pool.pools.join(",") : null,
+      pool ? pool.rankAt : null,
+      pool?.lane ?? null,
+      pool ? JSON.stringify(pool.needs) : null,
+      pool?.estMs ?? null,
+      pool?.notAfter ?? null,
+      pool?.onlyWorker ?? null,
     );
     const free = d.prepare("SELECT name FROM relay_inputs WHERE principal = ? AND task_id IS NULL ORDER BY created_at").all(t.principal) as { name: string }[];
     let n = 0;
@@ -214,7 +255,7 @@ export function createTask(t: NewTask): { id: string; promptId: string } {
   return { id, promptId };
 }
 
-const inputsOf = (taskId: string) => rdb().prepare("SELECT * FROM relay_inputs WHERE task_id = ? ORDER BY n").all(taskId) as InputRow[];
+export const inputsOf = (taskId: string) => rdb().prepare("SELECT * FROM relay_inputs WHERE task_id = ? ORDER BY n").all(taskId) as InputRow[];
 
 // ---------------------------------------------------------------------------
 // The runner: one computer at a time runs a principal's waiting tasks
@@ -255,7 +296,7 @@ export function runnerFacts(principal: Principal): (ComputerFacts & { port?: num
  */
 export function forgetComputer(principal: Principal, why: "Stopped" | "switched" | "disconnected" = "Stopped"): void {
   rdb().prepare("DELETE FROM relay_runners WHERE principal = ?").run(principal);
-  for (const t of rdb().prepare(`SELECT id FROM relay_tasks WHERE principal = ? AND state IN (${ACTIVE_STATES.map(() => "?").join(",")})`).all(principal, ...ACTIVE_STATES) as { id: string }[]) {
+  for (const t of rdb().prepare(`SELECT id FROM relay_tasks WHERE principal = ? AND pools IS NULL AND state IN (${ACTIVE_STATES.map(() => "?").join(",")})`).all(principal, ...ACTIVE_STATES) as { id: string }[]) {
     endTask(t.id, "canceled", { error: why });
   }
 }
@@ -333,11 +374,11 @@ export function beat(principal: Principal, b: BeatInput, now = Date.now()): Beat
   const stops = (
     d.prepare("SELECT id, prompt_id, prefix FROM relay_tasks WHERE principal = ? AND device = ? AND stop = 1").all(principal, b.device) as { id: string; prompt_id: string; prefix: string | null }[]
   ).map((s) => ({ task: s.id, promptId: s.prompt_id, ...(s.prefix && { prefix: s.prefix }) }));
-  const waiting = (d.prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE principal = ? AND state = 'waiting'").get(principal) as { n: number }).n;
+  const waiting = (d.prepare("SELECT COUNT(*) AS n FROM relay_tasks WHERE principal = ? AND pools IS NULL AND state = 'waiting'").get(principal) as { n: number }).n;
   return { runner: free, heldElsewhere: !free && elsewhere, waiting, stops };
 }
 
-function noteProgress(id: string, r: Record<string, unknown>, now: number) {
+export function noteProgress(id: string, r: Record<string, unknown>, now: number) {
   const p: Progress = { at: now };
   for (const k of ["value", "max", "nodesDone", "position"] as const) {
     const v = nonNeg(r[k]);
@@ -357,7 +398,7 @@ export function claim(principal: Principal, device: string, running: string[], n
   const d = rdb();
   return d.transaction((): ClaimedTask | null => {
     const mine = d
-      .prepare(`SELECT * FROM relay_tasks WHERE principal = ? AND device = ? AND state IN ('sending','queued','running','collecting') AND stop = 0 ORDER BY created_at LIMIT 40`)
+      .prepare(`SELECT * FROM relay_tasks WHERE principal = ? AND pools IS NULL AND device = ? AND state IN ('sending','queued','running','collecting') AND stop = 0 ORDER BY created_at LIMIT 40`)
       .all(principal, device) as TaskRow[];
     let t: TaskRow | undefined = mine.find((x) => !running.includes(x.id));
     if (!t) {
@@ -366,32 +407,40 @@ export function claim(principal: Principal, device: string, running: string[], n
       // The oldest waiting task, or one another computer took but never sent and went quiet on.
       t = d
         .prepare(
-          `SELECT * FROM relay_tasks WHERE principal = ? AND stop = 0 AND (state = 'waiting' OR (state = 'sending' AND sent_at IS NULL AND device != ? AND device_seen_at < ?))
+          `SELECT * FROM relay_tasks WHERE principal = ? AND pools IS NULL AND stop = 0 AND (state = 'waiting' OR (state = 'sending' AND sent_at IS NULL AND device != ? AND device_seen_at < ?))
            ORDER BY created_at LIMIT 1`,
         )
         .get(principal, device, now - RELAY_TIMES.leaseMs) as TaskRow | undefined;
       if (!t) return null;
     }
-    const lease = crypto.randomBytes(32).toString("hex");
-    const resume = t.state === "waiting" || t.device !== device ? undefined : (t.state as ClaimedTask["resume"]);
-    const fresh = t.state === "waiting" || t.device !== device;
-    setTask(t.id, { device, lease_hash: hash(lease), state: t.state === "waiting" ? "sending" : t.state, claimed_at: now, device_seen_at: now });
-    if (fresh) d.prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
-    const inputs: TaskInput[] = inputsOf(t.id).map((i) => ({ n: i.n!, name: i.name, size: i.size, sha256: i.sha256, contentType: i.content_type }));
-    return {
-      id: t.id,
-      generationId: t.generation_id,
-      lease,
-      graph: json(t.graph_json, {}),
-      promptId: t.prompt_id,
-      preview: !!t.preview,
-      ...(t.prefix && { prefix: t.prefix }),
-      ...(t.meta_batch && { metaBatch: true }),
-      inputs,
-      ...(resume && { resume }),
-      ...(t.state === "collecting" && { wanted: json<WantedFile[]>(t.wanted_json, []), received: json<Received[]>(t.received_json, []).map((r) => ({ n: r.n, bytes: r.bytes, done: r.done })) }),
-    };
+    return takeTask(t, device, now);
   })();
+}
+
+/**
+ * Hand a task to a computer or worker (inside the caller's transaction): a new lease, and the task as it is sent. A task
+ * this device had already resumes where it was; anything else starts by sending its inputs again.
+ */
+export function takeTask(t: TaskRow, device: string, now: number, fields: Partial<TaskRow> = {}): ClaimedTask {
+  const lease = crypto.randomBytes(32).toString("hex");
+  const resume = t.state === "waiting" || t.device !== device ? undefined : (t.state as ClaimedTask["resume"]);
+  const fresh = t.state === "waiting" || t.device !== device;
+  setTask(t.id, { device, lease_hash: hash(lease), state: t.state === "waiting" ? "sending" : t.state, claimed_at: now, device_seen_at: now, ...fields });
+  if (fresh) rdb().prepare("UPDATE relay_inputs SET reads = 0 WHERE task_id = ?").run(t.id);
+  const inputs: TaskInput[] = inputsOf(t.id).map((i) => ({ n: i.n!, name: i.name, size: i.size, sha256: i.sha256, contentType: i.content_type }));
+  return {
+    id: t.id,
+    generationId: t.generation_id,
+    lease,
+    graph: json(t.graph_json, {}),
+    promptId: t.prompt_id,
+    preview: !!t.preview,
+    ...(t.prefix && { prefix: t.prefix }),
+    ...(t.meta_batch && { metaBatch: true }),
+    inputs,
+    ...(resume && { resume }),
+    ...(t.state === "collecting" && { wanted: json<WantedFile[]>(t.wanted_json, []), received: json<Received[]>(t.received_json, []).map((r) => ({ n: r.n, bytes: r.bytes, done: r.done })) }),
+  };
 }
 
 export class RelayError extends Error {
@@ -429,7 +478,7 @@ export function inputFor(t: TaskRow, n: number): { path: string; size: number; c
  * Ends a task (its inputs go; its outputs stay until the run has kept them). `takeOff`: a prompt already on the
  * computer's ComfyUI is taken off it there (the computer hears it at its next beat): a cancel, or a timeout.
  */
-function endTask(id: string, state: "done" | "failed" | "canceled", fields: Partial<TaskRow> = {}, takeOff = state === "canceled") {
+export function endTask(id: string, state: "done" | "failed" | "canceled", fields: Partial<TaskRow> = {}, takeOff = state === "canceled") {
   const t = rdb().prepare("SELECT state, device FROM relay_tasks WHERE id = ?").get(id) as { state: RelayState; device: string | null } | undefined;
   const stop = takeOff && t && t.device && (SENT_STATES as readonly string[]).includes(t.state) ? 1 : 0;
   setTask(id, { state, finished_at: Date.now(), down_at: null, down_why: null, ...(stop && { stop }), ...fields });
@@ -738,12 +787,17 @@ export function sweepRelay(now = Date.now()): { inputs: number; tasks: number } 
  * Returns the task as it is now.
  */
 export function checkClocks(t: TaskRow, now = Date.now()): TaskRow {
+  if (t.pools) return poolClocks ? poolClocks(t, now) : t;
   if (!(SENT_STATES as readonly string[]).includes(t.state)) return t;
   if (t.device_seen_at && now - t.device_seen_at > RELAY_TIMES.silentMs) endTask(t.id, "failed", { error: "silent" }, true);
   else if (t.down_at && now - t.down_at > RELAY_TIMES.comfyDownMs) endTask(t.id, "failed", { error: "down" }, true);
   else return t;
   return getTask(t.principal, t.id) ?? t;
 }
+
+/** A task for workers keeps the workers' clocks (pool.ts sets this, so this file needn't import it). */
+let poolClocks: ((t: TaskRow, now: number) => TaskRow) | null = null;
+export const setPoolClocks = (fn: (t: TaskRow, now: number) => TaskRow) => (poolClocks = fn);
 
 /** The file of a received output, for the principal whose task it is (anyone else: null). */
 export function receivedFile(principal: Principal, taskId: string, n: number): { path: string; contentType?: string } | null {

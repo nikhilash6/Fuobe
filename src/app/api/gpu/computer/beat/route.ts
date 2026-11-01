@@ -1,5 +1,6 @@
-import { principalOf, rateOf, relayAnswer, requestWorker } from "@/server/computer/http";
+import { callerKey, principalOf, rateOf, relayAnswer, requestWorker } from "@/server/computer/http";
 import { beat, cleanFacts, type BeatInput } from "@/server/computer/tasks";
+import { cleanBeat, workerBeat } from "@/server/computer/pool";
 import { noteWorkerFacts } from "@/server/computer/workers";
 
 /** What a beat may weigh: the facts, with up to 20,000 LoRA names. */
@@ -14,7 +15,7 @@ const MAX_BYTES = 3 * 2 ** 20;
 export async function POST(request: Request) {
   const principal = principalOf(request);
   if (principal instanceof Response) return principal;
-  const limited = rateOf(principal, "beat", 30);
+  const limited = rateOf(callerKey(request, principal), "beat", 30);
   if (limited) return limited;
   const text = await request.text().catch(() => "");
   if (text.length > MAX_BYTES) return Response.json({ error: "Too much at once" }, { status: 413 });
@@ -24,8 +25,16 @@ export async function POST(request: Request) {
   } catch {
     return Response.json({ error: "Send JSON" }, { status: 400 });
   }
-  // A paired ComfyUI's facts are kept with it too (the person's list of paired ComfyUIs shows its GPU).
   const worker = requestWorker(request);
+  // One of the owner's shared GPUs: its own beat (pool.ts).
+  if (worker?.kind === "pool") {
+    try {
+      return Response.json(workerBeat(worker, cleanBeat(body)), { headers: { "Cache-Control": "no-store" } });
+    } catch (e) {
+      return relayAnswer(e);
+    }
+  }
+  // A paired ComfyUI's facts are kept with it too (the person's list of paired ComfyUIs shows its GPU).
   if (worker && body?.facts !== undefined) {
     const facts = cleanFacts(body.facts);
     delete facts.loras;

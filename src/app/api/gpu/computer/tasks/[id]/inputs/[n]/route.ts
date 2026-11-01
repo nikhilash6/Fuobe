@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { Readable } from "node:stream";
 import { connection } from "next/server";
-import { principalOf, rateOf, relayAnswer } from "@/server/computer/http";
+import { callerKey, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
 import { inputFor, leased } from "@/server/computer/tasks";
 
 /**
@@ -13,7 +13,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/gpu/computer
   await connection();
   const principal = principalOf(request);
   if (principal instanceof Response) return principal;
-  const limited = rateOf(principal, "input", 120);
+  const limited = rateOf(callerKey(request, principal), "input", 120);
   if (limited) return limited;
   const { id, n } = await ctx.params;
   try {

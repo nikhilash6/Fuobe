@@ -7,6 +7,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConnectChoice, OwnerComfyWhere } from "@/components/gpu/connect-choice";
+import { WorkersChip } from "@/components/workers-admin";
 import { usePagePlace } from "@/components/gpu/use-local-comfy";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -476,6 +477,8 @@ function LocalComfy({ get, onWhere }: { get: (n: string) => PublicSetting | unde
   return (
     <>
       <OwnerComfyWhere value={get("comfyWhere")?.value || "server"} onChange={onWhere} />
+      {get("comfyWhere")?.value === "workers" && <p className="text-[13px] text-muted-foreground">ComfyUI jobs run on your workers now.</p>}
+      <WorkersChip />
       <ConnectField name="comfyUrl" setting={get("comfyUrl")} provider="comfyui" label="ComfyUI server URL" placeholder="http://127.0.0.1:8188" hint="Where ComfyUI listens; a local install is http://127.0.0.1:8188." />
       <ConnectField name="comfyToken" setting={get("comfyToken")} provider="comfyui" label="Auth token (optional)" hint="Sent as a Bearer token, for ComfyUI behind a proxy." />
       <ConnectField

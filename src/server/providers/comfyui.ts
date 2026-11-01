@@ -94,6 +94,7 @@ import {
   type Principal,
   type TaskRow,
 } from "../computer/tasks";
+import { OWNER_BOOST_MS, poolFields, poolWaitMs, poolWaitWords } from "../computer/pool";
 
 export const WORKFLOW_DIR = path.join(process.cwd(), "workflows", "comfyui");
 
@@ -162,7 +163,27 @@ export function computerScope(): Principal | undefined {
   const own = ownGpu();
   if (own) return own.kind === "computer" ? own.principal : undefined;
   if (serverScope.getStore()) return undefined;
-  return getSetting("comfyWhere") === "computer" ? "owner" : undefined;
+  const where = getSetting("comfyWhere");
+  // Workers (docs/gpu-workers.md) take the owner's jobs the way the owner's own computer would: staged here, run there.
+  return where === "computer" || where === "workers" ? "owner" : undefined;
+}
+
+/** The owner's ComfyUI jobs go to the workers (Settings: ComfyUI runs on "workers"), not to one computer. */
+const onWorkers = (computer: Principal | undefined) => computer === "owner" && !ownGpu() && getSetting("comfyWhere") === "workers";
+
+/**
+ * FUOBE_POOL_MEDIA_INPUTS: what a job for workers may send them ("image" unless set; "image,video,audio" for all).
+ * Pictures are always made again from their pixels first (no EXIF, no GPS, nothing a decoder on that PC could trip on).
+ */
+const poolMedia = () => new Set((process.env.FUOBE_POOL_MEDIA_INPUTS ?? "image").split(",").map((s) => s.trim()).filter(Boolean));
+
+export async function forWorkers(data: Buffer, contentType: string, name: string): Promise<{ data: Buffer; contentType: string; name: string }> {
+  const kind = contentType.split("/")[0];
+  if (!poolMedia().has(kind)) throw new ProviderError(kind === "video" ? "The shared GPUs don't take clips yet." : kind === "audio" ? "The shared GPUs don't take sound yet." : "The shared GPUs don't take this kind of file.");
+  if (kind !== "image") return { data, contentType, name };
+  const sharp = (await import("sharp")).default;
+  const png = await sharp(data, { failOn: "error", limitInputPixels: 64 * 2 ** 20 }).rotate().png().toBuffer();
+  return { data: png, contentType: "image/png", name: name.replace(/\.[^.]*$/, "") + ".png" };
 }
 
 /** A run the owner sent to the studio's own ComfyUI before Settings moved ComfyUI to the owner's computer. */
@@ -1749,8 +1770,9 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   const computer = computerScope();
   if (computer) {
     if (worker === "isolated") throw new ProviderError(ISOLATED_ON_COMPUTER);
-    const staged = stageInput(computer, data, contentType, name);
-    rememberSent(staged, data, contentType, name);
+    const sent = onWorkers(computer) ? await forWorkers(data, contentType, name) : { data, contentType, name };
+    const staged = stageInput(computer, sent.data, sent.contentType, sent.name);
+    rememberSent(staged, sent.data, sent.contentType, sent.name);
     return staged;
   }
   const form = new FormData();
@@ -1814,7 +1836,9 @@ async function sweepPasses(prefix: string, worker: ComfyWorker = "main"): Promis
 /** Run `fn` as a principal's work on its own computer: an account's (as that account), or the owner's. */
 export function onComputer<T>(principal: Principal, fn: () => T): T {
   if (principal === "owner") return outsideTenant(() => outsideOwnGpu(fn));
-  return runAsTenant({ kind: "account", id: principal.slice(5) }, () => onOwnGpu({ kind: "computer", principal }, fn));
+  // A task always belongs to the owner or an account; a pool only takes it (callers pass the task's own principal).
+  if (!principal.startsWith("acct:")) throw new Error("Not a task's principal");
+  return runAsTenant({ kind: "account", id: principal.slice(5) }, () => onOwnGpu({ kind: "computer", principal: principal as `acct:${string}` }, fn));
 }
 
 /** The most one result may weigh when it comes from a computer: an account's 1 GB (less when its files are fuller); the owner's 8 GB. */
@@ -1893,13 +1917,16 @@ async function pollComputer(principal: Principal, meta: Record<string, unknown>,
   const found = typeof meta.relay === "string" ? getTask(principal, meta.relay) : null;
   if (!found) return { state: "failed", error: "This run was lost. Press Retry." };
   const t = checkClocks(found);
+  // A run on the workers: while it waits, its place in line; once a worker has it, that worker's reports (a worker that
+  // goes quiet gives it back to the line, pool.ts, so no "open Fuobe on your computer").
+  if (t.pools && t.state === "waiting") return { state: "queued", message: t.note === "resent" ? "Back in line for another GPU" : poolWaitWords(t) };
   const p = taskProgress(t.id);
   const kind = extraOf(t).made ?? made ?? "image";
   const waitMs = tenantAccount() ? ACCOUNT_LIMITS.queueMs : 4 * 3_600_000;
   const sentAt = t.sent_at ?? undefined;
   // Sent, and the computer's tab stopped answering (closed, asleep): not a run that looks alive for half an hour.
-  const r = t.state === "waiting" ? null : runnerFacts(principal);
-  const away = t.state !== "waiting" && (!r || Date.now() - r.seenAt >= RELAY_TIMES.onlineMs);
+  const r = t.state === "waiting" || t.pools ? null : runnerFacts(principal);
+  const away = !t.pools && t.state !== "waiting" && (!r || Date.now() - r.seenAt >= RELAY_TIMES.onlineMs);
   const down = t.down_at ? (t.down_why === "setting" ? RELAY_WORDS.comfyNoSetting : RELAY_WORDS.comfyDown) : away ? RELAY_WORDS.computerAway : undefined;
   switch (t.state) {
     case "waiting": {
@@ -1998,6 +2025,8 @@ export const comfyProvider: ProviderAdapter = {
         workflowId: manifest.id,
         made: model?.kind,
         loras: (input.loras ?? []).map((l) => ({ file: l.file, ...(l.url && { url: l.url }) })),
+        // The owner's jobs on the workers: the lane and files they need, ahead of everyone else's, with a wait limit.
+        ...(onWorkers(computer) && { pool: poolFields(manifest.id, { boostMs: OWNER_BOOST_MS, waitMs: poolWaitMs() }) }),
       });
       return { externalId: task.promptId, meta: { ...meta, generationId, relay: task.id }, payload: wf };
     }

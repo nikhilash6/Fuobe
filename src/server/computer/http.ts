@@ -46,10 +46,12 @@ export function principalOf(request: Request): Principal | Response {
 function workerPrincipal(request: Request, auth: string, no: (status: number, error: string, extra?: Record<string, unknown>) => Response): Principal | Response {
   const w = workerFromAuth(auth, request.headers.get("cf-ipcountry"));
   if (!w) return no(401, "This ComfyUI isn't paired with this studio any more. Pair it again from Fuobe Connect.", { code: "worker-token" });
-  if (w.kind !== "personal" || !w.principal) return no(403, "Shared workers aren't switched on for this studio.", { code: "pool-off" });
   const host = request.headers.get("host") ?? new URL(request.url).host;
   if (!authEnabled() && !hostAllowed(host)) return no(403, "Blocked a request for an address this studio isn't reached at.");
   workerOfRequest.set(request, w);
+  // One of the owner's shared GPUs (docs/gpu-workers.md): it takes tasks for its pool, never a person's own.
+  if (w.kind === "pool") return `pool:${w.pool}`;
+  if (!w.principal) return no(401, "This worker's token isn't valid.", { code: "worker-token" });
   if (w.principal === "owner") {
     return getSetting("comfyWhere") === "computer" ? "owner" : no(409, "This studio's ComfyUI runs on its server.", { code: "server-mode" });
   }
@@ -66,9 +68,18 @@ function workerPrincipal(request: Request, auth: string, no: (status: number, er
 const workerOfRequest = new WeakMap<Request, WorkerRow>();
 export const requestWorker = (request: Request): WorkerRow | null => workerOfRequest.get(request) ?? null;
 
-/** At most `limit` calls a minute of one kind for a principal. */
-export function rateOf(principal: Principal, what: string, limit: number): Response | null {
-  const r = hit(`relay-${what}:${principal}`, limit, 60_000);
+/**
+ * Whose limits a call counts against: a principal's (a person's computers share them), or one worker's own (three
+ * workers of one pool that beat every 5 seconds are never held up by each other).
+ */
+export function callerKey(request: Request, principal: Principal): string {
+  const w = workerOfRequest.get(request);
+  return w ? `${principal}:${w.id}` : principal;
+}
+
+/** At most `limit` calls a minute of one kind for a caller (callerKey). */
+export function rateOf(caller: string, what: string, limit: number): Response | null {
+  const r = hit(`relay-${what}:${caller}`, limit, 60_000);
   return r.ok ? null : Response.json({ error: "Too many at once. Fuobe tries again by itself." }, { status: 429, headers: { "Retry-After": String(r.retryAfterS), "Cache-Control": "no-store" } });
 }
 

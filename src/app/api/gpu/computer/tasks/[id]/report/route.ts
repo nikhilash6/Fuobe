@@ -1,6 +1,7 @@
 import { RELAY_LIMITS, TAB_FAILURES, type ReportEvent } from "@/lib/relay";
 import { gateAsProxy, readBodyWithin } from "@/server/direct-gate";
-import { principalOf, rateOf, relayAnswer } from "@/server/computer/http";
+import { callerKey, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
+import { noteFinished } from "@/server/computer/bench";
 import { leased, report, type TaskRow } from "@/server/computer/tasks";
 import { onComputer, planRelayOutputs } from "@/server/providers/comfyui";
 import { enter } from "@/server/rate";
@@ -27,7 +28,7 @@ function eventOf(b: Record<string, unknown>): ReportEvent | null {
     case "running":
       return { event: e, value: num(b.value), max: num(b.max), nodesDone: num(b.nodesDone), ...(typeof b.node === "string" && { node: b.node }) };
     case "finished":
-      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never } : null;
+      return b.entry && typeof b.entry === "object" ? { event: e, entry: b.entry as never, ...(num(b.peakVramBytes) !== undefined && { peakVramBytes: num(b.peakVramBytes) }) } : null;
     case "passes":
       return Array.isArray(b.entries) && b.entries.length <= 64 ? { event: e, running: b.running === true, entries: b.entries as never } : null;
     case "failed":
@@ -58,7 +59,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
   if (denied) return denied;
   const principal = principalOf(request);
   if (principal instanceof Response) return principal;
-  const limited = rateOf(principal, "report", 300);
+  const limited = rateOf(callerKey(request, principal), "report", 300);
   if (limited) return limited;
   const { id } = await ctx.params;
   const lease = request.headers.get("x-fuobe-lease");
@@ -71,10 +72,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
   const declared = Number(request.headers.get("content-length") ?? NaN);
   if (Number.isFinite(declared) && declared > cap) return no(413, "That report is too large");
   if (cap > LARGE_BYTES && !(declared <= LARGE_BYTES)) {
-    const big = rateOf(principal, "report-large", 30);
+    const big = rateOf(callerKey(request, principal), "report-large", 30);
     if (big) return big;
   }
-  const mine = enter(`relay-report:${principal}`, AT_ONCE.person);
+  const mine = enter(`relay-report:${callerKey(request, principal)}`, AT_ONCE.person);
   if (!mine) return no(429, "Too many at once. Fuobe tries again by itself.", { "Retry-After": "1" });
   const all = enter("relay-report", AT_ONCE.all);
   if (!all) {
@@ -93,10 +94,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gpu/compute
     if (!LARGE_EVENTS.has(event.event) && raw!.length > RELAY_LIMITS.smallReportBytes) return no(413, "That report is too large");
     // Where the job is now (it may have moved while the body arrived).
     const t = leased(principal, id, lease);
-    return Response.json(
-      report(t, event, (entries, passes) => onComputer(principal, () => planRelayOutputs(t, entries, passes))),
-      { headers: { "Cache-Control": "no-store" } },
-    );
+    const answer = report(t, event, (entries, passes) => onComputer(t.principal, () => planRelayOutputs(t, entries, passes)));
+    // A worker's finished job counts toward its lane's times there.
+    if (t.pools && (event.event === "finished" || event.event === "passes") && answer.state !== "running") noteFinished(t, Date.now(), event.event === "finished" ? event.peakVramBytes : undefined);
+    return Response.json(answer, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return relayAnswer(e);
   } finally {
