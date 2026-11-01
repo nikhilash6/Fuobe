@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { saveSettings, testConnection, type ConnectionTest } from "@/lib/api";
+import { saveSettings, testConnection, useViewer, type ConnectionTest } from "@/lib/api";
 import { settingProblem, type TestProvider } from "@/lib/connections";
 import { addressHost, addressKind, refusedLine, refusedOnHosted } from "@/lib/page-place";
 import { cn } from "@/lib/utils";
@@ -21,21 +21,29 @@ export interface PublicSetting {
   isSet: boolean;
 }
 
-/** GET /api/settings: every setting, and whether the server may test a private address for a hosted page. */
-const settingsQuery = (enabled: boolean) => ({
-  queryKey: ["settings"],
-  queryFn: async () => (await (await fetch("/api/settings")).json()) as { settings: PublicSetting[]; allowPrivate?: boolean },
-  enabled,
-});
+/**
+ * GET /api/settings: every setting, and whether the server may test a private address for a hosted page. Only the
+ * studio's owner may read them, so it waits until the page knows who is looking and is never asked for anyone else
+ * (a guest's Home still mounts the guide's GPU card, hidden, on a phone).
+ */
+function useSettingsQuery<T>(enabled: boolean, select: (d: { settings: PublicSetting[]; allowPrivate?: boolean }) => T) {
+  const owner = !!useViewer().data?.owner;
+  return useQuery({
+    queryKey: ["settings"],
+    queryFn: async () => (await (await fetch("/api/settings")).json()) as { settings: PublicSetting[]; allowPrivate?: boolean },
+    enabled: enabled && owner,
+    select,
+  });
+}
 
 /** Every setting as the browser may see it (secrets masked). `enabled: false` waits (Home's guide, until the status says it's wanted). */
 export function useSettings(enabled = true) {
-  return useQuery({ ...settingsQuery(enabled), select: (d) => d.settings });
+  return useSettingsQuery(enabled, (d) => d.settings);
 }
 
 /** The server may call a private address (FUOBE_ALLOW_PRIVATE_URLS: a VPN such as Tailscale) for a hosted page. */
 export function useAllowPrivate(enabled = true): boolean {
-  return useQuery({ ...settingsQuery(enabled), select: (d) => d.allowPrivate === true }).data ?? false;
+  return useSettingsQuery(enabled, (d) => d.allowPrivate === true).data ?? false;
 }
 
 interface Result extends ConnectionTest {
