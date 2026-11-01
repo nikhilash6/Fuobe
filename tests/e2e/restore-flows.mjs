@@ -1,7 +1,7 @@
 // Restore & colourise in the browser (demo mode: no keys, no GPU). The tool opened from a clip handed over: its canvas
 // and tiles, the gated-download step and the GPU note, the words written from the frames (offline), Restore to 4K on
 // the GPU and refused in the cloud with the reason, the cloud size, a demo run with its Before/After wipe. Then the
-// Upscale tool's link, the masked Hugging Face token in Settings → LoRAs, the restore step offered under a clip
+// Upscale tool's first step (Restore, then upscale), the masked Hugging Face token in Settings → LoRAs, the restore step offered under a clip
 // in Shorts and the Explainer, and each page at 1440 and 390 px, light and dark, without sideways scroll.
 // Usage: node tests/e2e/restore-flows.mjs [appUrl] [--shots <dir>]   Exits 1 on a failed check.
 import { execFileSync } from "node:child_process";
@@ -105,7 +105,14 @@ try {
     await page.goto(`${app}/upscale/video`, { waitUntil: "load" });
     const up = page.getByRole("link", { name: /Restore archive footage first/ });
     await up.first().waitFor({ timeout: 30_000 });
-    check("Upscale: Restore archive footage first", (await up.first().getAttribute("href")) === "/video-tools/restore");
+    check("Upscale: Restore archive footage first", (await up.first().getAttribute("href")) === "/video-tools/restore?then=upscale");
+    check("Upscale: the step says the upscale follows in one run", /then upscaled, in one run/.test(await text(page)));
+    await page.goto(`${app}/video-tools/restore?then=upscale&video=${encodeURIComponent(clip)}`, { waitUntil: "load" });
+    const then = page.getByRole("switch", { name: /Then upscale/ });
+    await then.waitFor({ timeout: 30_000 });
+    check("Restore opened from Upscale: Then upscale is on", (await then.getAttribute("aria-checked")) === "true");
+    await page.getByText(/Then upscaled on your GPU with SeedVR2/).first().waitFor({ timeout: 30_000 });
+    check("Restore opened from Upscale: the upscale is in the plan", true);
 
     await page.goto(`${app}/settings#huggingface`, { waitUntil: "load" });
     const token = page.locator("#huggingface input").first();
