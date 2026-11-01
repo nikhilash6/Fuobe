@@ -4,7 +4,6 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
 import { flyPoseOf, type FramePoses } from "@/lib/camera-path";
-import { muxWebM, type EncodedFrame } from "@/lib/webm";
 import {
   LENS,
   blurScale,
@@ -27,6 +26,7 @@ import {
   type Rect,
 } from "@/lib/scene3d";
 import type { SceneSource } from "./scene-actions";
+import { encodeFrames, encodeVp8, pathVideoType, recordWithMediaRecorder, vp8Supported } from "./video-encode";
 
 /**
  * The 3D scene viewer's renderer (three.js, loaded only when a scene opens): a MoGe mesh (GLB) or a point cloud
@@ -201,100 +201,6 @@ function sampleVertices(root: THREE.Object3D, max = 80_000): Float32Array {
     }
   }
   return Float32Array.from(out);
-}
-
-/** The type MediaRecorder records a path in when WebCodecs can't: MP4 (H.264) where it writes it, else WebM. Null: none. */
-export function pathVideoType(): string | null {
-  if (typeof MediaRecorder === "undefined") return null;
-  return ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((t) => MediaRecorder.isTypeSupported(t)) ?? null;
-}
-
-const VP8 = (width: number, height: number, fps: number): VideoEncoderConfig => ({ codec: "vp8", width, height, bitrate: 8_000_000, framerate: fps });
-
-/** WebCodecs can encode VP8 at this size here. */
-async function vp8Supported(width: number, height: number, fps: number): Promise<boolean> {
-  if (typeof VideoEncoder === "undefined" || typeof VideoFrame === "undefined") return false;
-  try {
-    return !!(await VideoEncoder.isConfigSupported(VP8(width, height, fps))).supported;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * `count` frames of two streams (`draw(i)` gives frame i of each) encoded with WebCodecs and written as two WebM files:
- * every frame kept, frame i at i / fps, a keyframe each second.
- */
-async function encodeVp8(count: number, width: number, height: number, fps: number, outputs: number, draw: (i: number) => ImageData[]): Promise<Uint8Array[]> {
-  const chunks: EncodedFrame[][] = Array.from({ length: outputs }, () => []);
-  let failure: unknown;
-  const encoders = chunks.map((_, k) => {
-    const e = new VideoEncoder({
-      output: (chunk) => {
-        const data = new Uint8Array(chunk.byteLength);
-        chunk.copyTo(data);
-        chunks[k].push({ data, key: chunk.type === "key" });
-      },
-      error: (err) => (failure = err),
-    });
-    e.configure(VP8(width, height, fps));
-    return e;
-  });
-  try {
-    const step = 1e6 / fps;
-    for (let i = 0; i < count; i++) {
-      const images = draw(i);
-      images.forEach((img, k) => {
-        const f = new VideoFrame(img.data, { format: "RGBA", codedWidth: width, codedHeight: height, timestamp: Math.round(i * step), duration: Math.round(step) });
-        encoders[k].encode(f, { keyFrame: i % Math.max(1, Math.round(fps)) === 0 });
-        f.close();
-      });
-      if (failure) throw failure;
-      // Let the encoders and the page breathe (the progress label repaints).
-      while (encoders.some((e) => e.encodeQueueSize > 4)) await new Promise((r) => setTimeout(r, 5));
-      if (i % 4 === 3) await new Promise((r) => setTimeout(r, 0));
-    }
-    await Promise.all(encoders.map((e) => e.flush()));
-    if (failure) throw failure;
-  } finally {
-    encoders.forEach((e) => e.state !== "closed" && e.close());
-  }
-  if (chunks.some((c) => c.length !== count)) throw new Error(`The path render lost frames (${chunks[0].length} of ${count})`);
-  const track = { codec: "V_VP8" as const, width, height, fps };
-  return chunks.map((c) => muxWebM(track, c));
-}
-
-/** The fallback: a canvas per stream recorded with MediaRecorder, each frame handed over 1/fps apart. */
-async function recordWithMediaRecorder(type: string, count: number, width: number, height: number, fps: number, outputs: number, draw: (i: number) => ImageData[]): Promise<Blob[]> {
-  const canvases = Array.from({ length: outputs }, () => Object.assign(document.createElement("canvas"), { width, height }));
-  const ctxs = canvases.map((c) => c.getContext("2d")!);
-  const streams = canvases.map((c) => c.captureStream(0));
-  const tracks = streams.map((s) => s.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void });
-  const recorders = streams.map((s) => new MediaRecorder(s, { mimeType: type, videoBitsPerSecond: 8_000_000 }));
-  const chunks: Blob[][] = recorders.map(() => []);
-  const stopped = recorders.map((r, i) => {
-    r.ondataavailable = (e) => e.data.size && chunks[i].push(e.data);
-    return new Promise<void>((resolve) => (r.onstop = () => resolve()));
-  });
-  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  const step = 1000 / Math.max(1, fps);
-  try {
-    recorders.forEach((r) => r.start());
-    await wait(step);
-    const t0 = performance.now();
-    for (let i = 0; i < count; i++) {
-      draw(i).forEach((img, k) => ctxs[k].putImageData(img, 0, 0));
-      tracks.forEach((t) => t.requestFrame?.());
-      await wait(Math.max(0, t0 + (i + 1) * step - performance.now()));
-    }
-    await wait(step);
-  } finally {
-    recorders.forEach((r) => r.state !== "inactive" && r.stop());
-    await Promise.all(stopped);
-    streams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
-  }
-  const base = type.split(";")[0];
-  return chunks.map((c) => new Blob(c, { type: base }));
 }
 
 export class SceneEngine {
@@ -665,7 +571,7 @@ export class SceneEngine {
    */
   async recordPath(
     path: FramePoses,
-    o: { fps: number; mask?: boolean; onProgress?: (p: number) => void; signal?: AbortSignal },
+    o: { fps: number; mask?: boolean; mp4?: boolean; onProgress?: (p: number) => void; signal?: AbortSignal },
   ): Promise<{ render: Blob; mask?: Blob; type: string; frames: number }> {
     if (!this.view || !this.info) throw new Error("The scene isn't ready yet");
     const { width, height, poses, intrinsic } = path;
@@ -706,6 +612,11 @@ export class SceneEngine {
     };
     this.playing = true;
     try {
+      // Blockout to film: the render as the cloud models read it (MP4 where the browser encodes H.264).
+      if (o.mp4 && !mask) {
+        const out = await encodeFrames(poses.length, width, height, o.fps, (i) => (stop(), frame(i), o.onProgress?.((i + 1) / poses.length), render), true);
+        return { render: out.blob, type: out.type, frames: poses.length };
+      }
       if (exact) {
         const [a, b] = await encodeVp8(poses.length, width, height, o.fps, images.length, (i) => {
           stop();

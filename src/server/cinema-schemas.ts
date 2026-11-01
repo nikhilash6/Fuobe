@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { BLOCKOUT } from "@/lib/blockout";
 import { DISTANCE, MAX_KEYS } from "@/lib/camera-path";
 import { APERTURE, LENS } from "@/lib/scene3d";
 import { CinemaError } from "./cinema";
@@ -78,12 +79,36 @@ export const TilesPut = z.object({ tiles: z.array(z.object({ url: FileRef, row: 
 
 const Shot = z.object({ prompt: z.string().max(2000), duration: z.number().min(1).max(30) });
 
+const Words = z.string().trim().max(BLOCKOUT.maxBeatWords);
+
+/** A blockout to film (src/lib/catalog/cinema.ts BlockoutRun; Assist's blockout_film takes the same). */
+export const BlockoutSchema = z.object({
+  video: FileRef,
+  depth: FileRef.optional(),
+  firstFrame: FileRef.optional(),
+  depthInvert: z.boolean().optional(),
+  seconds: z.number().min(BLOCKOUT.minSeconds).max(BLOCKOUT.maxSeconds),
+  webm: z.boolean().optional(),
+  beats: z
+    .array(z.object({ id: z.string().max(40).optional(), start: z.number().min(0).max(BLOCKOUT.maxSeconds), end: z.number().min(0).max(BLOCKOUT.maxSeconds).optional(), label: z.string().trim().max(80), words: Words.default("") }))
+    .max(BLOCKOUT.maxMarkers)
+    .default([]),
+  refs: z
+    .array(z.object({ url: FileRef, role: z.enum(["interior", "exterior", "location", "character", "prop", "style"]), name: z.string().trim().max(60).optional() }))
+    .max(BLOCKOUT.maxRefs)
+    .default([]),
+  style: Words.optional(),
+  constraints: Words.optional(),
+  sounds: z.array(z.string().trim().max(120)).max(12).optional(),
+  avoid: z.array(z.string().trim().max(120)).max(16).optional(),
+});
+
 export const GenerateBody = z.object({
   folderId: z.string().max(40).nullable().optional(),
   input: z.object({
     engine: z.enum(["cloud", "open"]),
     mode: z.enum(["video", "image"]),
-    action: z.enum(["generate", "extend-forward", "extend-backward", "edit", "grid", "cast", "location", "location-view", "scene", "recompose", "path", "turnaround"]).default("generate"),
+    action: z.enum(["generate", "extend-forward", "extend-backward", "edit", "grid", "cast", "location", "location-view", "scene", "recompose", "path", "turnaround", "blockout"]).default("generate"),
     modelId: z.string().max(80).optional(),
     prompt: z.string().max(60_000).default(""),
     moves: z.array(z.string().max(40)).max(12).optional(),
@@ -143,6 +168,8 @@ export const GenerateBody = z.object({
       .optional(),
     // Turnaround (N7-6): the Soul Cast result's pictures by side, the route and length (the engine is the run's).
     turnaround: TurnaroundSchema.omit({ engine: true, realPerson: true, consent: true }).optional(),
+    // Blockout to film: the grey box (its depth and first frame when the builder made them), beats, references, words.
+    blockout: BlockoutSchema.optional(),
   }),
 });
 

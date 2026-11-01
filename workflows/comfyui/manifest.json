@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-01T13:54:14.821Z",
+  "generatedAt": "2026-11-01T17:57:33.515Z",
   "comfyuiCommit": "5841c187a76ffdb565c14d9565aacbdb9a54b056",
   "comfyuiVersion": "0.42.0",
   "workflowTemplatesVersion": "0.11.93",
@@ -14956,6 +14956,219 @@
       "notes": "Fuobe's Evolution on the GPU: video-segment-resample (<=81 frames @16 fps + first frame) -> qwen-image-edit-2511 takes the first frame toward the creative direction (images 2-3 = references) -> this graph -> video-concat-N -> the clip's sound. Any clip loads: VHS_LoadVideo resamples it to fps (16), keeps at most `frames` frames and cuts them to 4n+1 (Wan format), and every length in the graph is the loaded count, so a short or 30 fps clip is neither a shape error nor slow motion (Edit video sends whole clips). Unlike video-restyle-wan22-fun-vace the sampler starts from the segment itself: reference latent + VAE-encoded frames (LatentConcat on t, the shape WanVaceToVideo makes), noised to denoise = the noise level it starts from (flow matching: (1 - denoise) x clip + denoise x noise; low 0.45, medium 0.65, high 0.85). The simple scheduler with shift s reaches sigma = denoise N - steps steps into a schedule of N = round(steps x (s - (s - 1) x denoise) / denoise) steps, and the last `steps` run (Lightx2v 4-step), so the run starts within a few hundredths of any denoise from 0.02 to 1 (KSampler's floor(steps / denoise) could only make 1, 0.8, 0.67, 0.57 or 0.5 with 4 steps). Wan 2.2's high-noise expert takes only the steps at or above its switch point (sigma 0.875; ComfySwitchNode gives the first sampler the low-noise expert when the run starts below it, as all three intensities do). Control: Depth Anything 3 depth on every frame (no kept frame, no masks); the direction frame is the VACE reference. Same weights as the restyle graph."
     },
     {
+      "id": "video-blockout-wan22-fun-vace",
+      "title": "Blockout to film: Wan 2.2 Fun VACE driven by the blockout's own depth + a first frame drawn from the references",
+      "capability": "v2v",
+      "file": "video-blockout-wan22-fun-vace.json",
+      "source": "hand-built (scripts/comfy/hand-built/video-blockout-wan22-fun-vace.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "1",
+            "input": "file"
+          }
+        ],
+        "image": [
+          {
+            "node": "4",
+            "input": "image"
+          }
+        ],
+        "prompt": [
+          {
+            "node": "12",
+            "input": "text"
+          }
+        ],
+        "negativePrompt": [
+          {
+            "node": "13",
+            "input": "text"
+          }
+        ],
+        "width": [
+          {
+            "node": "3",
+            "input": "width"
+          },
+          {
+            "node": "5",
+            "input": "width"
+          },
+          {
+            "node": "34",
+            "input": "width"
+          },
+          {
+            "node": "35",
+            "input": "width"
+          },
+          {
+            "node": "15",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "3",
+            "input": "height"
+          },
+          {
+            "node": "5",
+            "input": "height"
+          },
+          {
+            "node": "34",
+            "input": "height"
+          },
+          {
+            "node": "35",
+            "input": "height"
+          },
+          {
+            "node": "15",
+            "input": "height"
+          }
+        ],
+        "frames": [
+          {
+            "node": "30",
+            "input": "value"
+          }
+        ],
+        "fps": [
+          {
+            "node": "26",
+            "input": "fps"
+          }
+        ],
+        "seed": [
+          {
+            "node": "22",
+            "input": "noise_seed"
+          },
+          {
+            "node": "23",
+            "input": "noise_seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "22",
+            "input": "steps"
+          },
+          {
+            "node": "23",
+            "input": "steps"
+          }
+        ],
+        "cfg": [
+          {
+            "node": "22",
+            "input": "cfg"
+          },
+          {
+            "node": "23",
+            "input": "cfg"
+          }
+        ],
+        "shift": [
+          {
+            "node": "20",
+            "input": "shift"
+          },
+          {
+            "node": "21",
+            "input": "shift"
+          }
+        ],
+        "controlStrength": [
+          {
+            "node": "15",
+            "input": "strength"
+          }
+        ],
+        "invertDepth": [
+          {
+            "node": "41",
+            "input": "value"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "27",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "27",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "width": 832,
+        "height": 480,
+        "frames": 81,
+        "fps": 16,
+        "steps": 4,
+        "cfg": 1,
+        "shift": 5,
+        "controlStrength": 1,
+        "frameStep": 4
+      },
+      "limits": {
+        "maxWidth": 1280,
+        "maxHeight": 1280,
+        "dimensionMultiple": 16,
+        "maxFrames": 81
+      },
+      "models": [
+        {
+          "file": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+          "sizeGb": 6.74
+        },
+        {
+          "file": "wan_2.1_vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sizeGb": 0.25
+        },
+        {
+          "file": "wan2.2_fun_vace_high_noise_14B_fp8_scaled.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_vace_high_noise_14B_fp8_scaled.safetensors",
+          "sizeGb": 17.35
+        },
+        {
+          "file": "wan2.2_fun_vace_low_noise_14B_fp8_scaled.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_vace_low_noise_14B_fp8_scaled.safetensors",
+          "sizeGb": 17.35
+        },
+        {
+          "file": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+          "sizeGb": 1.23
+        },
+        {
+          "file": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
+          "sizeGb": 1.23
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 24,
+      "license": "Apache-2.0 (Wan 2.2 Fun VACE, lightx2v)",
+      "validated": true,
+      "notes": "Cinema's Blockout on your GPU: the browser renders the grey box and its depth (near = bright, as Depth Anything draws it) at 16 fps; video-segment-resample cuts the depth into 81-frame windows that overlap by one frame; qwen-image-edit-2511 draws the first frame from the grey box's first frame and up to two references; each window runs this graph with the first frame (window 1) or the last frame of the window before (frame-extract), then video-concat-encoded joins them. The same graph as video-restyle-wan22-fun-vace without Depth Anything 3: control frame 0 = the first frame (kept), frames 1..N-1 = the depth video, near = bright (invertDepth: true runs it through ImageInvert first, for a near = dark pass such as Blender's mist; ComfySwitchNode picks); the first frame is also the VACE reference. Lightx2v 4 steps. Silent (no audio input): sound comes afterwards (Sound for video). A blockout uploaded without a depth pass runs video-restyle-wan22-fun-vace instead (Depth Anything 3 on the grey box)."
+    },
+    {
       "id": "mixed-media-zimage-frames",
       "title": "Mixed Media: per-frame stylisation at 4-24 fps (Z-Image Turbo img2img + Fun Union ControlNet canny)",
       "capability": "v2v",
@@ -21472,6 +21685,159 @@
       "license": "n/a (no model; VideoHelperSuite GPL-3.0 code and the system ffmpeg's prores_ks / libx265 / ffv1 / libx264 encoders)",
       "validated": true,
       "notes": "video-export-pro with VHS_LoadVideo decoding framesPerBatch frames per pass (64 by default) into one VHS_VideoCombine encode that stays open across passes, at the source frame rate, with the source's sound: the export Fuobe's Export mode runs (video-export-pro decodes the whole clip). Same params.format mapping (prores_422_hq -> video/ProRes + hq, prores_4444 -> + 4444, h265_10bit -> video/h265-mp4 (yuv420p10le), ffv1 -> video/ffv1-mkv, h264 -> video/h264-mp4; exr -> video-export-exr). VHS lists only <prefix>_00001-audio.<ext> when the clip has sound, <prefix>_00001.<ext> otherwise, on the last pass. Caveat: VHS's ProRes \"hq\" profile leaves the pixel format to prores_ks, which picks yuv444p10le for the RGB frames, so \"ProRes 422 HQ\" is the HQ profile (apch) carrying 4:4:4 10-bit samples (FFmpeg decodes it; a strict 4:2:2 file needs a VHS format with -pix_fmt yuv422p10le, which would be a change to the node pack). The same holds for video-export-pro. Tested on CPU (3 s 320x180 25 fps clip with sound): ProRes apch / yuv444p10le / PCM and H.265 Main 10 yuv420p10le with AAC; on a silent 2 s 24 fps clip FFV1 gbrap16le .mkv, 48 of 48 frames; each ffprobe-checked."
+    },
+    {
+      "id": "video-regenerate-h3",
+      "title": "Regenerate a soft clip at 1080p, 2K or 4K: Open-H3 Regenerate 2K (MiniMax H3 FL2VA + NVIDIA's refiner LoRA, 3 Euler steps, the LBH latent upscaler, the fast H3 VAE decoder) (ComfyUI-Open-H3-Regenerate + LBH packs)",
+      "capability": "upscale-video",
+      "file": "video-regenerate-h3.json",
+      "source": "hand-built (scripts/comfy/hand-built/video-regenerate-h3.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "9",
+            "input": "file"
+          }
+        ],
+        "prompt": [
+          {
+            "node": "16",
+            "input": "text"
+          }
+        ],
+        "resolution": [
+          {
+            "node": "17",
+            "input": "resolution"
+          }
+        ],
+        "draftSize": [
+          {
+            "node": "11",
+            "input": "size"
+          }
+        ],
+        "frames": [
+          {
+            "node": "11",
+            "input": "max_frames"
+          }
+        ],
+        "startSigma": [
+          {
+            "node": "19",
+            "input": "start_sigma"
+          }
+        ],
+        "steps": [
+          {
+            "node": "19",
+            "input": "steps"
+          }
+        ],
+        "seed": [
+          {
+            "node": "20",
+            "input": "noise_seed"
+          }
+        ],
+        "startTime": [
+          {
+            "node": "29",
+            "input": "start_time"
+          }
+        ],
+        "duration": [
+          {
+            "node": "29",
+            "input": "duration"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "28",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "28",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "frames": 121,
+        "steps": 3,
+        "duration": 0,
+        "startTime": 0,
+        "resolution": "2k (2560x1440)",
+        "draftSize": "768p (1344x768)",
+        "startSigma": 0.8,
+        "fps": 24
+      },
+      "limits": {
+        "maxFrames": 360
+      },
+      "models": [
+        {
+          "file": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+          "sizeGb": 20.97
+        },
+        {
+          "file": "open_h3_regenerate_2k_lora.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/lora/open_h3_regenerate_2k_lora.safetensors",
+          "sizeGb": 12.45
+        },
+        {
+          "file": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+          "sizeGb": 15.69
+        },
+        {
+          "file": "minimax_h3_video_vae_fp16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_fp16.safetensors",
+          "sizeGb": 5.21
+        },
+        {
+          "file": "minimax_h3_audio_vae_fp32.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_audio_vae_fp32.safetensors",
+          "sizeGb": 0.61
+        },
+        {
+          "file": "minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors",
+          "folder": "latent_upscale_models",
+          "url": "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/latent_upsampler/minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors",
+          "sizeGb": 0.69
+        },
+        {
+          "file": "fast_h3_vae_noncausal_24l.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/vae_fast/fast_h3_vae_noncausal_24l.safetensors",
+          "sizeGb": 6.47
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-Open-H3-Regenerate",
+          "repo": "https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate/tree/9b686c5ffd380e9d1351f9b8beef6d20d703ca3e"
+        },
+        {
+          "name": "Comfyui_Minimax_h3_latent_Upscaler",
+          "repo": "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler/tree/40316cf008b2fd8663263270669eb4da23f89d2c"
+        }
+      ],
+      "vramGb": 48,
+      "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder, NVIDIA's Open-H3-Regenerate-2K LoRA and the fast H3 VAE decoder, a distilled Model Derivative): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; Comfy's docs add that commercial use of locally made outputs needs a MiniMax licence · the LoRA's merged LightX2V Turbo v1.2 part Apache-2.0 (at 3ec17a3), its LMS Sharp part no stated licence · LBH latent upscaler weights Apache-2.0, its node code MIT · ComfyUI-Open-H3-Regenerate Apache-2.0 · Qwen3-VL-32B base Apache-2.0",
+      "validated": false,
+      "notes": "rdh9616's \"Open-H3 Regenerate 2K - Draft Video\" example (ComfyUI-Open-H3-Regenerate at 9b686c5) without the note, the three PreviewAny nodes and OpenH3VideoToPrompt: the prompt goes straight into CLIPTextEncode 16, so nothing calls a server from inside the graph. curve_name \"none\" (the tensors of the Sharp curve branches are zero in the blocks checked), so the curve table is never read (\"(model's own table)\": no 21 GB ref2va file needed). A Video Slice (29) in front cuts the 15 s window a longer clip is regenerated in (startTime, duration; 0 = the whole clip). Prepare Draft (11) resamples to 24 fps, cover-crops to draftSize (768p for H3 drafts, 576p for other models; a portrait clip gets the preset turned, and any other shape is cropped to 16:9, since the upscale always targets 16:9 or 9:16) and cuts frames (round(seconds x 24), at most 360 = 15 s per pass); Save Refined Latent (24) and Finish (26) read its frame count. The LBH upscaler puts the latent on the target grid (resolution: 1080p (1920x1080) | 2k (2560x1440) | 4k (3840x2160), 4K via 2K), the refine re-noises it to startSigma (0 = the release 0.909 grid; Close 0.7, Balanced 0.8) and runs steps (3, or 2 = Faster) Euler steps at CFG 1 with Sol-Attn sparse attention and the audio held as encoded silence; the refined latent is saved before decoding (output/open_h3_latents/, redo a failed decode with rdh's \"Decode Saved Latent\" graph) and decoded by the fast H3 VAE decoder (tiled H3 VAE fallback). Finish trims the padding, crops 1088 -> 1080 and 2176 -> 2160 and cuts the draft's own sound to length, which CreateVideo muxes back at 24 fps. Measured by the pack's author: about 3 min per 5 s at 2K on a 72 GB RTX PRO 5000 (9.5 min with dense attention); 22 s on a B200 (NVIDIA); a community run reached about 1080p on 32 GB with a lossy LoRA. The packs were tested by their author on ComfyUI 0.42.0.",
+      "validationError": "HTTP 400: missing_node_type: Node 'Open-H3 Regenerate LoRA (curve branches off)' not found. The custom node may not be installed. (Node ID '#3')"
     },
     {
       "id": "video-sdr-to-hdr-exr",

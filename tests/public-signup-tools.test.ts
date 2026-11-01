@@ -321,6 +321,7 @@ describe("the GPU pre-flight board lists PR #15's tools like main's studios", ()
       "/video-tools/remove-dialogue": { label: "Remove dialogue", group: "Video tools", workflows: ["separate-soundtrack-dbs", "video-mux-audio"] },
       "/audio/clean": { label: "Clean up voice", group: "Audio", workflows: ["voice-clean-reuse"] },
       "/cinema": { label: "Fly path", group: "Video", workflows: ["wan21-i2v-uni3c-path"] },
+      "/cinema?blockout=1": { label: "Blockout to film", group: "Video", workflows: ["video-blockout-wan22-fun-vace", "qwen-image-edit-2511-multi", "video-segment-resample", "frame-extract", "video-concat-encoded"] },
       "/character-sheet": { label: "Turnaround", group: "Video", workflows: ["wan22-flf2v-14b", "qwen-image-edit-2511-multi"], loras: ["qwen-image-edit-2511-multiple-angles-lora.safetensors"] },
     };
     for (const [href, w] of Object.entries(want)) {

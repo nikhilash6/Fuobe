@@ -8,11 +8,13 @@
  * the server (POST /api/canvases/:id/run) plan a graph exactly the same way.
  */
 import type { CanvasComment, CanvasGroup, CanvasPage, CanvasShape } from "./canvas-board";
+import { EXAMPLE_SCENE, EXAMPLE_WORDS, beatsFrom, blockoutFramePrompt, compileBlockoutPrompt, type BlockoutRef } from "@/lib/blockout";
 import { getModel, getPreset, MODELS, supportsOp } from "./index";
 import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
 import { estimateCost, inferOperation, planGeneration, routesFor, type Plan } from "./plan";
 import { replacedBy, replacementOf } from "./replaced";
+import { REGEN_COPY, REGEN_MODEL } from "./regenerate";
 import {
   OPERATION_LABELS,
   OPERATION_OUTPUT,
@@ -275,6 +277,15 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("join"), id: "join", keywords: "concat merge stitch film" },
   { ...pick("frame"), id: "frame", keywords: "still last frame screenshot" },
   { ...pick("upscale"), id: "upscale", data: { mediaKind: "image" }, keywords: "enhance resolution 4k sharpen" },
+  // The Upscale node on Open-H3 Regenerate: a clip redrawn at 2K from its words, on your GPU only (nobody hosts it).
+  {
+    ...pick("upscale"),
+    id: "upscale-regenerate",
+    label: "Regenerate (creative)",
+    description: "Redraws a soft clip at 1080p, 2K or 4K from its words: details may change, motion and layout stay (your GPU)",
+    data: { mediaKind: "video", modelId: REGEN_MODEL },
+    keywords: "regenerate redraw 2k 4k h3 creative upscale sharpen finish",
+  },
   { ...pick("bg-remove"), id: "bg-remove", data: { mediaKind: "image" }, keywords: "cutout matte transparent" },
   { ...pick("tts"), id: "tts", keywords: "voice speech narration clone" },
   { ...pick("voice-change"), id: "voice-change", keywords: "voice changer speech to speech revoice convert" },
@@ -295,19 +306,27 @@ function pick(type: CanvasNodeType): Omit<PaletteItem, "id"> {
 
 const paletteCache = new Map<string, PaletteItem[]>();
 
+/** Why a GPU-only entry (Regenerate: nobody hosts its model) can't be added on a cloud board, or on a cloud-only install. */
+export const GPU_ONLY_ENTRY = `${REGEN_COPY.gpuOnly}: switch the board to Open source`;
+export const GPU_ONLY_INSTALL = `${REGEN_COPY.gpuOnly}: this install uses paid APIs only`;
+
 /**
  * Palette entries whose models exist in this catalog (no text models until an LLM model is
- * installed). On an install locked to one engine, entries with no model there are disabled, with why.
+ * installed). On an install locked to one engine, entries with no model there are disabled, with why. An entry fixed to
+ * an open model nobody hosts (Regenerate) is disabled on the cloud engine too, with that reason.
  */
-export function paletteItems(mode: "both" | "open" | "cloud" = "both"): PaletteItem[] {
-  const hit = paletteCache.get(mode);
+export function paletteItems(mode: "both" | "open" | "cloud" = "both", engine?: Engine): PaletteItem[] {
+  const key = `${mode}:${engine ?? ""}`;
+  const hit = paletteCache.get(key);
   if (hit) return hit;
   // Clean up voice has no cloud route: a cloud-only install doesn't offer it at all.
   const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice")).map((p): PaletteItem => {
+    const fixed = p.data?.modelId ? getModel(p.data.modelId) : undefined;
+    if (fixed && !runsOn(fixed, "cloud") && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? GPU_ONLY_INSTALL : GPU_ONLY_ENTRY };
     if (mode === "both" || !isGenerator(p) || defaultModelForNode({ type: p.type, data: p.data ?? {} }, mode)) return p;
     return { ...p, disabled: `No ${mode === "open" ? "open-source" : "cloud"} model for ${p.label.toLowerCase()} yet` };
   });
-  paletteCache.set(mode, items);
+  paletteCache.set(key, items);
   return items;
 }
 
@@ -422,6 +441,9 @@ export function defaultModelForNode(n: Pick<CanvasNode, "type" | "data">, engine
     return defaultModelFor(n.data.op ?? KIND_OP[kind], engine) ?? MODELS.find((m) => m.engine === engine && !m.hidden && m.kind === kind);
   }
   const op = nodeOps(n)[0];
+  // The Upscale node's Regenerate choice starts on Open-H3 Regenerate (on the cloud the entry is disabled: paletteItems).
+  const fixed = n.data.modelId === REGEN_MODEL ? getModel(REGEN_MODEL) : undefined;
+  if (fixed && op && supportsOp(fixed, op) && runsOn(fixed, engine)) return fixed;
   return op ? defaultModelFor(op, engine, { hidden: true }) : undefined;
 }
 
@@ -555,9 +577,13 @@ export function inputPorts(n: Pick<CanvasNode, "type" | "data">): PortDef[] {
   const ids = new Set(ops.flatMap((op) => OP_PORTS[op] ?? []));
   // Start & end frames: shown on image-to-video models that can take an end frame.
   if (ops.includes("i2v") && (model?.options.endFrame || (model && supportsOp(model, "flf2v")))) ids.add("endImage");
+  // Reference clips: on reference-to-video models that take them (Seedance 2.5's @Video1, as Cinema's Blockout sends it).
+  if (ops.includes("ref2v") && (model?.options.maxVideos ?? 0) > 0) ids.add("videos");
   // A cloned voice only where the model clones voices (Text to speech and Change voice always show it, and say
   // which models clone when a voice is connected to one that doesn't).
   if (ids.has("voice") && model && !model.options.voiceClone && n.type !== "tts" && n.type !== "voice-change") ids.delete("voice");
+  // A model that redraws from words even where its operation takes none (Open-H3 Regenerate on the Upscale node).
+  if (model?.options.requires?.prompt) ids.add("prompt");
   // Visual elements only on image and video models.
   if (ids.has("elements") && model && model.kind !== "image" && model.kind !== "video") ids.delete("elements");
   const maxImages = model?.options.maxImages ?? (ops.some((op) => MULTI_IMAGE_OPS.has(op)) ? 4 : 1);
@@ -1570,6 +1596,8 @@ export function counterpart(graph: CanvasGraph, n: CanvasNode, engine: Engine): 
   const current = n.data.modelId ? getModel(n.data.modelId) : undefined;
   // A Fuobe Original runs on both: it stays, on the other engine.
   if (current && runsOn(current, engine)) return current;
+  // Open-H3 Regenerate is GPU-only: nobody hosts it, so it has no cloud stand-in (the owner's rule).
+  if (current?.id === REGEN_MODEL) return undefined;
   if (n.type !== "model") return defaultModelForNode(n, engine);
   const op = n.data.op ?? effectiveOp(graph, n) ?? (current ? current.routes[0].op : KIND_OP[n.data.mediaKind ?? "image"]);
   const kind = current?.kind ?? n.data.mediaKind;
@@ -1789,6 +1817,71 @@ const ROW = 500;
 /** A video node with its clip is taller (four inputs, prompt, settings, result). */
 const FILM_ROW = 620;
 
+/**
+ * "Blockout → film" (package blockout-film), as Cinema's Blockout runs a one-shot blockout: in the cloud the grey box goes
+ * to Seedance 2.5 as its reference clip (@Video1) with three stills and the compiled prompt (the corridor example's
+ * beats); on your GPU the grey box's first frame is drawn from the stills, then the blockout's depth (near = bright)
+ * drives Wan 2.2 Fun VACE for one 81-frame window. Cinema's Blockout builds blockouts and chains longer ones.
+ */
+const BLOCKOUT_REFS: Pick<BlockoutRef, "role" | "name">[] = [{ role: "interior" }, { role: "character" }, { role: "exterior" }];
+const BLOCKOUT_BEATS = () => beatsFrom(EXAMPLE_SCENE.markers, EXAMPLE_SCENE.duration, EXAMPLE_WORDS);
+const BLOCKOUT_STYLE = "Low-key horror, cold torchlight, 35 mm film grain";
+const BLOCKOUT_CLOUD = tpl(
+  [
+    { id: "blockout", type: "video-input", x: 0, y: 0, data: { label: "Blockout (grey-box render)" } },
+    { id: "interior", type: "image-input", x: 0, y: 340, data: { label: "Interior" } },
+    { id: "character", type: "image-input", x: 0, y: 640, data: { label: "Character" } },
+    { id: "exterior", type: "image-input", x: 0, y: 940, data: { label: "Exterior" } },
+    {
+      id: "beats",
+      type: "prompt",
+      x: COL,
+      y: 0,
+      width: 420,
+      data: {
+        label: "Beats (Subject · Action · Camera · Style · No)",
+        text: compileBlockoutPrompt({ beats: BLOCKOUT_BEATS(), refs: BLOCKOUT_REFS, target: "seedance", style: BLOCKOUT_STYLE, sound: true, audio: ["Footsteps on concrete", "A long door creak", "Low room tone"], avoid: ["jump cuts", "text on screen", "extra people"] }),
+      },
+    },
+    { id: "film", type: "model", x: COL * 2 + 80, y: 280, data: { mediaKind: "video", label: "Film", op: "ref2v", params: { aspectRatio: "16:9", duration: 8, resolution: "720p", generateAudio: true } }, models: { cloud: "seedance-2-5", open: "seedance-2-5" } },
+    { id: "out", type: "output", x: COL * 3 + 120, y: 320, data: { label: "Film" } },
+  ],
+  [
+    ["blockout", "film", "videos"],
+    ["interior", "film", "images"],
+    ["character", "film", "images"],
+    ["exterior", "film", "images"],
+    ["beats", "film", "prompt"],
+    ["film", "out"],
+  ],
+);
+const BLOCKOUT_OPEN = tpl(
+  [
+    { id: "first", type: "image-input", x: 0, y: 0, data: { label: "Blockout's first frame" } },
+    { id: "interior", type: "image-input", x: 0, y: 320, data: { label: "Interior" } },
+    { id: "character", type: "image-input", x: 0, y: 620, data: { label: "Character" } },
+    { id: "depth", type: "video-input", x: COL, y: 620, data: { label: "Blockout depth (near = bright)" } },
+    { id: "look", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "First frame from the stills", op: "edit", prompt: blockoutFramePrompt(BLOCKOUT_REFS.slice(0, 2), BLOCKOUT_STYLE) }, models: { cloud: "oss-qwen-edit", open: "oss-qwen-edit" } },
+    {
+      id: "film",
+      type: "model",
+      x: COL * 2 + 40,
+      y: 260,
+      data: { mediaKind: "video", label: "Film (one 5 s window)", op: "v2v", prompt: compileBlockoutPrompt({ beats: BLOCKOUT_BEATS().filter((b) => b.start < 5), refs: BLOCKOUT_REFS, target: "open", style: BLOCKOUT_STYLE }), params: { aspectRatio: "16:9", duration: 5, resolution: "480p" } },
+      models: { cloud: "oss-wan22-vace-blockout", open: "oss-wan22-vace-blockout" },
+    },
+    { id: "out", type: "output", x: COL * 3 + 80, y: 300, data: { label: "Film" } },
+  ],
+  [
+    ["first", "look", "images"],
+    ["interior", "look", "images"],
+    ["character", "look", "images"],
+    ["look", "film", "images"],
+    ["depth", "film", "video"],
+    ["film", "out"],
+  ],
+);
+
 export const CANVAS_TEMPLATES: CanvasTemplate[] = [
   {
     id: "image-animate",
@@ -1959,6 +2052,14 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
         ["animate", "film", "videos"],
       ],
     ),
+  },
+  {
+    id: "blockout-film",
+    name: "Blockout → film",
+    description: "A grey-box blockout sets the camera and timing; reference stills and timed beats say what it becomes",
+    icon: "Box",
+    hue: 210,
+    build: (engine) => (engine === "cloud" ? BLOCKOUT_CLOUD(engine) : BLOCKOUT_OPEN(engine)),
   },
   {
     id: "clips-film",

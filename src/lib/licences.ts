@@ -511,6 +511,19 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "PlagueKind's H3 SLA attention (needs Triton) and AdaLN LoRA fix for MiniMax H3; MIT code",
   }),
+  // Open-H3 Regenerate 2K (Upscale → Video's Regenerate · creative), opt-in in install-comfyui.sh (OPEN_H3_REGEN=1).
+  pack("ComfyUI-Open-H3-Regenerate", "https://github.com/rdh9616/ComfyUI-Open-H3-Regenerate/tree/9b686c5ffd380e9d1351f9b8beef6d20d703ca3e", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "rdh9616's Open-H3 Regenerate nodes (NVIDIA's refine recipe, with NVIDIA's fast H3 VAE decoder vendored); Apache-2.0 code with a NOTICE file. The MiniMax H3 weights and the refiner LoRA it runs leave out the US, the EU, the UK and South Korea",
+  }),
+  pack("Comfyui_Minimax_h3_latent_Upscaler", "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler/tree/40316cf008b2fd8663263270669eb4da23f89d2c", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "LBH-123-AI's H3 latent upscaler nodes (the Open-H3 Regenerate nodes call them by name); MIT code, copyright (c) 2026 LBH-123-AI. Its upscaler weights are Apache-2.0",
+  }),
   // Clean up voice: Fuobe's own pack, in this repository at its pinned commit (comfy-nodes/ComfyUI-RE-USE).
   pack("ComfyUI-RE-USE", "https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE", {
     name: "MIT",

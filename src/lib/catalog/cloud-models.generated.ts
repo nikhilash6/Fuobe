@@ -4412,8 +4412,22 @@ export const CLOUD_MODELS: ModelDef[] = [
     },
     "pricing": {
       "unit": "second",
-      "usd": 0.473,
-      "note": "720p"
+      "usd": 0.46224,
+      "note": "720p; 480p $0.21494, 1080p $1.13724. Reference clips bill their own seconds with the output, at 0.6 times the rate",
+      "byResolution": {
+        "480p": 0.21494,
+        "720p": 0.46224,
+        "1080p": 1.13724
+      },
+      "clipInput": {
+        "usd": 0.27734,
+        "byResolution": {
+          "480p": 0.12897,
+          "720p": 0.27734,
+          "1080p": 0.68234
+        },
+        "plain": true
+      }
     }
   },
   {
@@ -7207,6 +7221,55 @@ export const CLOUD_MODELS: ModelDef[] = [
     "hidden": true
   },
   {
+    "id": "minimax-h3-max-3d",
+    "name": "MiniMax H3 Max 3D to video",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A grey-box blockout from Blender or the browser, rendered as a finished shot from your reference stills",
+    "routes": [
+      {
+        "op": "v2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/3d-to-video",
+        "map": {
+          "images": "reference_image_urls",
+          "video": "video_url",
+          "resolution": "resolution"
+        }
+      }
+    ],
+    "options": {
+      "resolutions": [
+        "480P",
+        "768P",
+        "1080P"
+      ],
+      "maxImages": 8
+    },
+    "defaults": {
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768P; 480P $0.05, 1080P $0.16; at least 5 s a shot; + $0.50 processing a request; + $0.10 for each reference it draws when given none (up to 2)",
+      "byResolution": {
+        "480P": 0.05,
+        "768P": 0.08,
+        "1080P": 0.16
+      },
+      "minSeconds": 5,
+      "perRequest": 0.5,
+      "generatedRefs": {
+        "usd": 0.1,
+        "count": 2
+      }
+    },
+    "hidden": true
+  },
+  {
     "id": "hailuo-2-3",
     "name": "MiniMax Hailuo 2.3",
     "vendor": "MiniMax",
@@ -9437,6 +9500,88 @@ export const CLOUD_MODELS: ModelDef[] = [
           "param": "model",
           "values": {
             "Starlight Fast 2": 0.5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "topaz-astra",
+    "name": "Topaz Astra 2",
+    "vendor": "Topaz Labs",
+    "family": "topaz",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Creative upscale that invents fine detail and texture, steered by optional words: to 1080p or 4K",
+    "routes": [
+      {
+        "op": "upscale-video",
+        "provider": "fal",
+        "endpoint": "topaz/upscale/video/creative",
+        "map": {
+          "omitEmptyPrompt": true,
+          "video": "video_url",
+          "targetFps": "target_fps",
+          "upscaleFactor": {
+            "key": "upscale_factor",
+            "min": 1,
+            "max": 4
+          },
+          "ranges": {
+            "target_fps": {
+              "min": 16,
+              "max": 60,
+              "integer": true
+            }
+          },
+          "defaults": {
+            "H264_output": true
+          }
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "creativity",
+          "label": "Creativity",
+          "min": 0,
+          "max": 1,
+          "step": 0.05,
+          "default": 0.5
+        }
+      ],
+      "fpsTargets": [
+        24,
+        30,
+        60
+      ],
+      "resolutions": [
+        "1080p",
+        "4K"
+      ],
+      "promptOptional": true
+    },
+    "badges": [
+      "new",
+      "4k"
+    ],
+    "defaults": {
+      "resolution": "4K"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.5,
+      "note": "4K at 30 fps; up to 1080p $0.30/s; 60 fps doubles",
+      "byResolution": {
+        "1080p": 0.3,
+        "4K": 0.5
+      },
+      "factors": [
+        {
+          "param": "targetFps",
+          "values": {
+            "60": 2
           }
         }
       ]
@@ -20047,10 +20192,12 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
     "pricing": {
       "unit": "second",
       "usd": 0.075,
-      "note": "768p; 480p $0.0625/s; whole seconds, 5\u201315 per call",
+      "note": "768p; 480p $0.0625/s; whole seconds, 5\u201315 per call; a re-render at 2K $0.1625/s, 4K $0.20/s",
       "byResolution": {
         "768p": 0.075,
-        "480p": 0.0625
+        "480p": 0.0625,
+        "2K": 0.1625,
+        "4K": 0.2
       }
     }
   },

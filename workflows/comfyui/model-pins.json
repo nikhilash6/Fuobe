@@ -654,6 +654,21 @@
   "sizeBytes": 40861043888,
   "sha256": "63b1966f0423bdc94d87273b8958de91e0a8f642c635f9113632d09cae3aa4ad"
  },
+ "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/latent_upsampler/minimax_h3_latent_upscaler_3d_conv_v1_bf16.safetensors": {
+  "revision": "5809c33730c18b6b1c827b40974855a4288641b3",
+  "sizeBytes": 690592992,
+  "sha256": "4f57821f5837f32f7142b67d815606dbd7550f194e5c769f7d6c3f83b146a5e6"
+ },
+ "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/lora/open_h3_regenerate_2k_lora.safetensors": {
+  "revision": "5809c33730c18b6b1c827b40974855a4288641b3",
+  "sizeBytes": 12452449080,
+  "sha256": "8e36a0912ab72f7f3b00f41e3c7c97c7dfdec21e66c88ab22f08b9b0c681bb04"
+ },
+ "https://huggingface.co/Efficient-Large-Model/Open-H3-Regenerate-2K/resolve/5809c33730c18b6b1c827b40974855a4288641b3/vae_fast/fast_h3_vae_noncausal_24l.safetensors": {
+  "revision": "5809c33730c18b6b1c827b40974855a4288641b3",
+  "sizeBytes": 6471256328,
+  "sha256": "8658f1e85b5997c4ba716406a2f148bfa36cf97d4d5fcd402c7bd341f54e77a1"
+ },
  "https://huggingface.co/FunAudioLLM/ThinkSound/resolve/main/synchformer_state_dict.pth": {
   "revision": "7f152d1a088f91b21307337060216f0dec8d4a8f",
   "sizeBytes": 950058171,
