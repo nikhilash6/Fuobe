@@ -53,7 +53,7 @@ export function InstallConnect({ className, then }: { className?: string; then?:
         </li>
         {own && (
           <li>
-            In ComfyUI, open <span className="text-foreground">Settings → Fuobe Connect</span> and enter <Copyable text={origin()} label="this studio's address" />
+            In ComfyUI&apos;s own settings, find <span className="text-foreground">Fuobe Connect</span> and enter <Copyable text={origin()} label="this studio's address" />
           </li>
         )}
       </ol>

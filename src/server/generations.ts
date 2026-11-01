@@ -446,6 +446,15 @@ export const ASSET_FREE: Record<string, string> = {
   "relay_tasks.received_json": "how much of each result has arrived",
   "relay_tasks.result_json": "the finished entry a person's ComfyUI reported: its own file names",
   "relay_tasks.refusal_json": "a ComfyUI refusal: node classes and model names",
+  "relay_tasks.needs_json": "what a job for the workers needs: workflow, model file names and sizes, node packs, VRAM",
+  "relay_tasks.tried_json": "the ids of the workers that lost or failed this job",
+  "relay_workers.facts_json": "what a worker said about its ComfyUI: its GPU, memory and version",
+  "relay_workers.inventory_json": "a worker's model files and node packs: names, sizes and hashes on that PC",
+  "relay_workers.lanes_json": "the lanes a worker can run: hashes of model file names",
+  "relay_workers.bench_json": "a worker's job times in each lane",
+  "relay_workers.hours_json": "a worker's hours: a time zone and windows",
+  "relay_workers.allow_json": "the lanes the owner lets a worker run, with their delays",
+  "relay_pairings.facts_json": "what a paired ComfyUI said about itself: its name, GPU and version",
 };
 
 /** The query that finds the rows of one ASSET_REFS table naming a file (@id), except the purged generation's own (@g). */
