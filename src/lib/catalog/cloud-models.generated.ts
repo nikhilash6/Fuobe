@@ -6179,7 +6179,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "hailuo",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Expressive characters and dynamic action",
+    "tagline": "Video with its own synchronized sound, 5\u201315 s, from words, a start frame, start and end frames, or references",
     "routes": [
       {
         "op": "t2v",
@@ -6274,8 +6274,8 @@ export const CLOUD_MODELS: ModelDef[] = [
     },
     "badges": [
       "top",
-      "new",
-      "audio"
+      "audio",
+      "new"
     ],
     "defaults": {
       "aspectRatio": "16:9",

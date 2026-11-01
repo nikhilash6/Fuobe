@@ -237,10 +237,10 @@ export const KNOWN_MODELS = {
   'h3_character_swap_v1.5.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/d06323b7c8e70e97cdab48b78a1e05f786c8cba9/h3_character_swap_v1.5.safetensors' },
   'h3_character_swap_pro4500_1000.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA/resolve/a665bb7e3bb9804e487d2925f67744f554c8ad49/h3_character_swap_pro4500_1000.safetensors' },
   'H3-Person-Remover-V1.safetensors': { folder: 'loras', url: 'https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA/resolve/fe136b3dc93aea993b9f194d48ea9859fdc2de14/H3-Person-Remover-V1.safetensors' },
-  // MiniMax H3 video (minimax-h3-*): the first+last-frame model (pruned int8), Comfy-Org's int8 video VAE (the file the official H3
-  // templates load), larryvrh's turbo v4 LoRA (Apache-2.0) and pablodawson's 360 Orbit LoRA, each at a pinned revision.
+  // MiniMax H3 video (minimax-h3-*): the first+last-frame model (pruned int8), Kijai's int8 video VAE (the file
+  // the H3 preview clips were rendered with), larryvrh's turbo v4 LoRA (Apache-2.0) and pablodawson's 360 Orbit LoRA, each at a pinned revision.
   'minimax_h3_fl2va_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors' },
-  'minimax_h3_video_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors' },
+  'minimax_h3_video_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors' },
   'minimax_h3_turbo_v4_step600_ema.safetensors': { folder: 'loras', url: 'https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/43a74557ac3f6539db8e0f2a959d03feb7a81480/minimax_h3_turbo_v4_step600_ema.safetensors' },
   'minimax_h3_flf2v_lora_v1.safetensors': { folder: 'loras', url: 'https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA/resolve/5ddbc2dbbe95edbbdaf5017c3e934b1d01791697/minimax_h3_flf2v_lora_v1.safetensors' },
   'depth_anything_3_mono_large.safetensors': { folder: 'geometry_estimation', url: 'https://huggingface.co/Comfy-Org/Depth-Anything-3/resolve/main/geometry_estimation/depth_anything_3_mono_large.safetensors' },
@@ -364,14 +364,14 @@ const H3_LICENSE =
 const H3_LICENSE_FAST = `${H3_LICENSE} · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT`;
 const H3_NOTES_FIRST_FRAME =
   'The first frame is resized to width x height with no crop, so the canvas should have the still\'s shape (an "auto" aspect ratio sizes it from the still).';
+const H3_NOTES_SIZE = 'Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344).';
 const H3_NOTES_CANVAS =
-  'Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). ' +
-  'frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s).';
+  `${H3_NOTES_SIZE} frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s).`;
 const H3_NOTES_LAYOUT =
   'The prompt reads best in MiniMax\'s layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape ' +
   'and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it.';
 const H3_NOTES_FILES =
-  'Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (2.81 GB) ' +
+  'Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) ' +
   'and the audio VAE (0.61 GB).';
 const H3_NOTES_COMMON = `${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FILES}`;
 const H3_NOTES_TIME = 'With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768.';
@@ -1487,7 +1487,7 @@ export const SPEC = [
       "with pablodawson's 360 Orbit LoRA (minimax_h3_flf2v_lora_v1, LoraLoaderModelOnly at 1.0), MiniMaxH3SigmaShift 12 / 3, BasicScheduler simple 28 steps, " +
       "KSamplerSelect res_multistep, CFG 1; core nodes only. 73 frames (3.04 s) is the LoRA's training length. The prompt reads best in the LoRA's own caption style: " +
       'one frozen instant, the camera in one continuous 360-degree orbit, everything holding its place, camera parallax the only movement. The LoRA was trained ' +
-      `without sound; the graph still decodes H3's audio. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_CANVAS} ${H3_NOTES_FILES} With the Orbit LoRA (0.16 GB).`,
+      `without sound; the graph still decodes H3's audio. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_SIZE} ${H3_NOTES_FILES} With the Orbit LoRA (0.16 GB).`,
   },
   {
     id: 'infinitetalk-native',

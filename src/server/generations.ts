@@ -1519,7 +1519,8 @@ async function submitNow(
     // start (and end) frame's alignment line for the clip's length on H3's frame grid. It becomes the run's prompt, so Reuse
     // makes the same clip. An orbit keeps its words as they are: the Orbit LoRA reads its own caption style.
     const h3Op = plan.op === "t2v" || plan.op === "i2v" || plan.op === "flf2v" ? plan.op : undefined;
-    if (plan.model.options.promptFormat === "minimax-h3" && h3Op && prompt && plan.params.extra?.orbit !== true) {
+    const orbit = h3Op === "i2v" && plan.params.extra?.orbit === true;
+    if (plan.model.options.promptFormat === "minimax-h3" && h3Op && prompt && !orbit) {
       const wrapped = h3Prompt(prompt, h3Op, h3Frames(plan.params.duration ?? plan.model.defaults?.duration ?? 5));
       if (wrapped !== prompt) {
         prompt = wrapped;

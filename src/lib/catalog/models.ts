@@ -516,7 +516,7 @@ const open: ModelDef[] = [
     family: "minimax-h3",
     kind: "video",
     tagline: "Video with its own synchronized sound from words, a start frame, or start and end frames · about 2-3 min for a 5 s clip on a 32 GB GPU",
-    badges: ["new", "top", "audio"],
+    badges: ["new", "audio", "top"],
     routes: [
       comfy("t2v", "minimax-h3-t2v", "turbo v4 LoRA, 8 steps"),
       comfy("i2v", "minimax-h3-i2v", "turbo v4 LoRA, 8 steps; the clip takes the start frame's shape"),
@@ -549,7 +549,7 @@ const open: ModelDef[] = [
     family: "ltx",
     kind: "video",
     tagline: "Open video with native synchronized audio, up to 10s",
-    badges: ["audio", "new", "top"],
+    badges: ["audio", "top", "new"],
     routes: [comfy("t2v", "ltx25-t2v"), comfy("i2v", "ltx25-i2v")],
     options: { multiShot: CONCAT_SHOTS, aspectRatios: VID_AR, durations: [5, 8, 10], resolutions: ["720p", "1080p"], seed: true, negativePrompt: true, audio: "always" },
     defaults: { aspectRatio: "16:9", duration: 5, resolution: "720p" },

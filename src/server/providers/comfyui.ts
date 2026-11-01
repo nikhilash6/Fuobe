@@ -919,6 +919,14 @@ function captionCues(input: GenInput, extra: Record<string, unknown>): CaptionCu
 }
 
 const seconds = (n: number) => (n >= 10 ? String(Math.round(n)) : String(Math.round(n * 10) / 10));
+
+/**
+ * Per-frame restyle graphs that follow the clip when a run sets nothing else (Edit video sends a clip and words): the clip's
+ * shape, its frame rate up to FOLLOW_CLIP_MAX_FPS, and its whole length. The Mixed Media studio sends its own size, rate and
+ * frame count (src/lib/catalog/mixed-media.ts), and those win.
+ */
+const FOLLOW_CLIP: ReadonlySet<string> = new Set(["mixed-media-zimage-frames"]);
+const FOLLOW_CLIP_MAX_FPS = 24;
 const GB = 2 ** 30;
 
 const clipFacts = (clip: MediaInfo | undefined) => ({ width: clip?.width, height: clip?.height, fps: clip?.fps, frames: clip?.frames, duration: clip?.videoDuration ?? clip?.duration });
@@ -1106,6 +1114,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // Frame rate (params.fps, or a model's fps control), trim window and frame counts.
   const fpsIn = input.fps ?? (typeof extra.fps === "number" && extra.fps > 0 ? extra.fps : undefined);
   if (b.fps && fpsIn) values.fps = fpsIn;
+  const followClip = FOLLOW_CLIP.has(manifest.id) && ctx.op === "v2v" && !!clip;
+  if (followClip && b.fps && !fpsIn && clip?.fps && clip.fps > 0) values.fps = Math.max(1, Math.min(FOLLOW_CLIP_MAX_FPS, Math.round(clip.fps)));
   const fps = Number(values.fps ?? d.fps ?? 16);
   const start = Math.max(0, input.startTime ?? 0);
   if (b.startTime || b.startFrame) {
@@ -1129,7 +1139,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // MiniMax H3 stretches the start frame to the canvas with no crop: a clip from a still (or the orbit of one) always takes the
   // still's shape, so an aspect ratio left over from a text draft can't distort it.
   const h3 = isH3Graph(manifest.id);
-  const aspectRatio = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || b.image) ? "auto" : input.aspectRatio;
+  const aspectRatio = h3 && (ctx.op === "i2v" || ctx.op === "flf2v" || b.image) ? "auto" : followClip && !input.aspectRatio ? "auto" : input.aspectRatio;
   if (b.width || b.height) {
     const multiple = Number(manifest.limits?.dimensionMultiple ?? 16);
     // With motion paths the frame keeps the start image's shape, so the paths need no cropping;
@@ -1166,6 +1176,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       while (frames > cap) frames -= 17;
       values.frames = frames;
     } else values.frames = computeFrames(span, fps, Number(d.frameStep ?? 4), manifest.limits?.maxFrames);
+  } else if (followClip && b.frames && !span && extra.frames === undefined && clipLength) {
+    // The whole clip from its start (or the start time asked), refused past the graph's frame cap rather than cut short.
+    const frames = Math.max(1, Math.floor((clipLength - start) * fps));
+    const cap = Number(manifest.limits?.maxFrames ?? Infinity);
+    if (frames > cap) {
+      throw new ProviderError(`This model redraws up to ${cap} frames per job on the open engine (${seconds(cap / fps)} s at ${fps} fps; this clip is ${seconds(clipLength - start)} s) — trim the clip, or pick a range and a frame rate in the Mixed Media studio`);
+    }
+    values.frames = frames;
   }
   // Lip re-sync and a talking avatar run as long as the voice (its header, or the length the run was given); a voice past
   // the frame cap is refused, not cut.

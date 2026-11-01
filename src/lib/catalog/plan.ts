@@ -368,6 +368,11 @@ export function planGeneration(
   if (!routesFor(model, op).length) {
     throw new Error(`${model.name} can't do ${op} — try another model`);
   }
+  // MiniMax H3's orbit of a still (its Orbit LoRA graph, src/lib/comfy-variants.ts) runs at the LoRA's own length, 3 s
+  // (73 frames), unless the run names a length.
+  if (model.options.promptFormat === "minimax-h3" && op === "i2v" && params.extra?.orbit === true && req.params?.duration === undefined && params.duration === model.defaults?.duration) {
+    params = { ...params, duration: 3 };
+  }
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");

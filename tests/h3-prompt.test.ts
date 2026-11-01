@@ -42,11 +42,25 @@ describe("h3Prompt", () => {
     expect(p).toContain("overall_soundscape: Surf and gulls.");
   });
 
-  it("passes words already in the layout through unchanged (a reused run is not wrapped twice)", () => {
+  it("rebuilds the alignment line when a stored prompt runs at another length or operation", () => {
+    const own = "integrated_multimodal_description: [Shot 1] The candle melts\n\noverall_soundscape: A soft hiss.\n\nnon_diegetic_music: N/A";
+    const fiveSeconds = h3Prompt("The candle melts", "flf2v", 124, "A soft hiss.");
+    expect(fiveSeconds).toContain("aligns with the 5.17-second mark");
+    // Reused at 10 s: the end frame moves to the new length, once.
+    const tenSeconds = h3Prompt(fiveSeconds, "flf2v", 243);
+    expect(tenSeconds).toBe(h3Prompt("The candle melts", "flf2v", 243, "A soft hiss."));
+    expect(tenSeconds.match(/aligns with the/g)).toHaveLength(2);
+    expect(tenSeconds).not.toContain("5.17");
+    // Reused from a start frame alone, or as text to video: the line follows the operation.
+    expect(h3Prompt(fiveSeconds, "i2v", 124)).toBe(h3Prompt("The candle melts", "i2v", 124, "A soft hiss."));
+    expect(h3Prompt(fiveSeconds, "t2v", 124)).toBe(own);
+    expect(h3Prompt(h3Prompt("The candle melts", "i2v", 124, "A soft hiss."), "flf2v", 362)).toContain("aligns with the 15.08-second mark");
+  });
+
+  it("keeps words already in the layout, with this run's alignment line (a reused run is not wrapped twice)", () => {
     const once = h3Prompt("A dancer spins", "i2v", 124);
     expect(inH3Layout(once)).toBe(true);
     expect(h3Prompt(once, "i2v", 124)).toBe(once);
-    expect(h3Prompt(once, "flf2v", 243)).toBe(once);
     const own = "integrated_multimodal_description: [Shot 1] A dancer spins\n\noverall_soundscape: Applause.\n\nnon_diegetic_music: N/A";
     expect(h3Prompt(own, "t2v", 124)).toBe(own);
   });

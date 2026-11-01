@@ -28,6 +28,7 @@ const { IMAGE_STUDIO, REFRAME_STUDIO, UPSCALE_STUDIO, VIDEO_EDIT_STUDIO, VIDEO_S
 const { studioCatalog } = await import("@/lib/studio-catalog");
 const { startingModel } = await import("@/lib/your-keys");
 const { MARKETING_IMAGE_MODEL } = await import("@/lib/catalog/marketing");
+const { modelHref } = await import("@/lib/palette-index");
 
 beforeAll(() => setSetting("demoMode", "auto"));
 afterAll(() => {
@@ -59,7 +60,7 @@ const h3 = getModel("oss-minimax-h3")!;
 describe("MiniMax H3 on your GPU: the catalog entry", () => {
   it("is the first open video model, with sound, three routes and no negative prompt", () => {
     expect(h3).toMatchObject({ name: "MiniMax H3", vendor: "MiniMax", family: "minimax-h3", kind: "video", engine: "open" });
-    expect(h3.badges).toEqual(["open", "new", "top", "audio"]);
+    expect(h3.badges).toEqual(["open", "new", "audio", "top"]);
     expect(h3.routes.map((r) => [r.op, r.provider, r.endpoint])).toEqual([
       ["t2v", "comfyui", "minimax-h3-t2v"],
       ["i2v", "comfyui", "minimax-h3-i2v"],
@@ -83,7 +84,7 @@ describe("MiniMax H3 on your GPU: the catalog entry", () => {
     expect(h3.defaults).toEqual({ aspectRatio: "auto", duration: 5, resolution: "768p" });
     const video = MODELS.filter((m) => m.engine === "open" && m.kind === "video" && m.vendor !== "Fuobe Original").map((m) => m.id);
     expect(video.slice(0, 3)).toEqual(["oss-minimax-h3", "oss-ltx25", "oss-wan22-14b-fast"]);
-    expect(getModel("oss-ltx25")!.badges).toEqual(["open", "audio", "new", "top"]);
+    expect(getModel("oss-ltx25")!.badges).toEqual(["open", "audio", "top", "new"]);
     expect(getModel("oss-wan22-14b-fast")!.badges).toEqual(["open", "fast", "top"]);
   });
 
@@ -230,15 +231,23 @@ describe("MiniMax H3 on your GPU: canvas, frames and prompt", () => {
       const { workflow } = await prepare("minimax-h3-t2v", { duration, aspectRatio: "16:9" }, "t2v");
       expect((workflow as Graph)["131"].inputs.length, `${duration} s`).toBe(frames);
     }
-    // The orbit's own length when none is asked.
-    expect(((await prepare("minimax-h3-i2v", { images: ["square.png"], extra: { orbit: true } }, "i2v")).workflow as Graph)["131"].inputs.length).toBe(73);
+    // The orbit's own length when the run names none (the planner gives it 3 s), and the length it names otherwise.
+    const orbit = (params: NonNullable<Parameters<typeof planGeneration>[0]["params"]>) =>
+      planGeneration({ feature: "video", modelId: "oss-minimax-h3", op: "i2v", prompt: "a dancer mid-leap", inputs: { images: ["/api/files/square.png"] }, params }, getModel, getPreset).params;
+    const planned = orbit({ extra: { orbit: true } });
+    expect(planned.duration).toBe(3);
+    expect(((await prepare("minimax-h3-orbit", { ...planned, images: ["square.png"] }, "i2v")).workflow as Graph)["131"].inputs.length).toBe(73);
+    expect(orbit({ duration: 5, extra: { orbit: true } }).duration).toBe(5);
+    expect(orbit({}).duration).toBe(5);
   });
 
   it("wraps the words in H3's layout on the server and keeps it as the run's prompt; an orbit keeps its words", async () => {
     const still = saveFile({ data: encodePng({ width: 8, height: 6, data: Buffer.alloc(8 * 6 * 4, 200) }), contentType: "image/png", source: "upload" });
     const submit = mockProvider.submit;
     const seen = new Map<string, string>();
+    const lengths = new Map<string, number | undefined>();
     mockProvider.submit = async (ctx) => {
+      if (ctx.model.id === "oss-minimax-h3") lengths.set(ctx.generationId, ctx.input.duration);
       if (ctx.model.id === "oss-minimax-h3") seen.set(ctx.generationId, ctx.input.prompt ?? "");
       return submit(ctx);
     };
@@ -256,8 +265,13 @@ describe("MiniMax H3 on your GPU: canvas, frames and prompt", () => {
       const [t2v] = createGenerations({ feature: "video", modelId: "oss-minimax-h3", op: "t2v", prompt: "Waves roll onto a beach at dawn" });
       expect(await settled(t2v.id)).toMatch(/^integrated_multimodal_description: \[Shot 1\] Waves roll onto a beach at dawn\n\noverall_soundscape: /);
       const words = "One frozen instant, filmed by a camera that moves in one continuous 360-degree orbit.";
-      const [orbit] = createGenerations({ feature: "video", modelId: "oss-minimax-h3", op: "i2v", prompt: words, inputs: { images: [still.url] }, params: { duration: 3, extra: { orbit: true } } });
+      // An orbit with no length asked: its words as they are, at the Orbit LoRA's 3 s (73 frames).
+      const [orbit] = createGenerations({ feature: "video", modelId: "oss-minimax-h3", op: "i2v", prompt: words, inputs: { images: [still.url] }, params: { extra: { orbit: true } } });
       expect(await settled(orbit.id)).toBe(words);
+      expect(lengths.get(orbit.id)).toBe(3);
+      // The orbit setting on a text run changes nothing: the turbo graph runs, so the words are wrapped.
+      const [text] = createGenerations({ feature: "video", modelId: "oss-minimax-h3", op: "t2v", prompt: "Waves roll onto a beach at dawn", params: { extra: { orbit: true } } });
+      expect(await settled(text.id)).toMatch(/^integrated_multimodal_description: \[Shot 1\] Waves roll/);
       // Hosted H3 gets plain words.
       expect(getModel("minimax-h3")!.options.promptFormat).toBeUndefined();
     } finally {
@@ -313,7 +327,7 @@ describe("the Video studio and the other studio defaults", () => {
     expect(manifest.workflows.find((w) => w.id === "upscale-image-seedvr2")!.validated).toBe(true);
   });
 
-  it("Edit video starts on your GPU on a v2v model that runs on a clip and words alone", async () => {
+  it("Edit video starts on your GPU on a v2v model that runs on a clip and words alone, in the clip's shape, rate and length", async () => {
     const id = VIDEO_EDIT_STUDIO.defaultModels.open;
     const view = (x: string) => (getModel(x)?.engines ? onEngine(getModel(x)!, "open") : getModel(x));
     const model = view(id)! as ModelDef;
@@ -321,14 +335,35 @@ describe("the Video studio and the other studio defaults", () => {
     expect(route.provider).toBe("comfyui");
     const plan = planGeneration({ feature: "video-edit", modelId: id, op: "v2v", prompt: "make it snow", inputs: { video: "/api/files/clip.mp4" }, engine: "open" }, view, getPreset);
     expect(plan.op).toBe("v2v");
-    const prepared = await prepareWorkflow(route.endpoint, { prompt: plan.prompt, video: "clip.mp4", seed: 1, ...plan.params } as GenInput, {
-      generationId: "g",
-      op: "v2v",
-      upload: async (_d, _t, n) => n,
-      media: (() => ({ width: 1280, height: 720, duration: 5, videoDuration: 5, fps: 24 })) as never,
-      serverRam: async () => undefined,
-    });
+    const run = (clip: { width: number; height: number; duration: number; fps: number }, params: Partial<GenInput> = {}) =>
+      prepareWorkflow(route.endpoint, { prompt: plan.prompt, video: "clip.mp4", seed: 1, ...plan.params, ...params } as GenInput, {
+        generationId: "g",
+        op: "v2v",
+        upload: async (_d, _t, n) => n,
+        media: (() => ({ ...clip, videoDuration: clip.duration })) as never,
+        serverRam: async () => undefined,
+      });
+    const prepared = await run({ width: 1280, height: 720, duration: 5, fps: 24 });
     expect(prepared.manifest.id).toBe(route.endpoint);
+    // The edit follows the clip: its shape, its frame rate and its whole length.
+    const at = (key: string) => {
+      const [{ node, input }] = (wf(route.endpoint).bindings as Record<string, { node: string; input: string }[]>)[key];
+      return (prepared.workflow as Graph)[node].inputs[input];
+    };
+    const [w, h] = [Number(at("width")), Number(at("height"))];
+    expect(w).toBeGreaterThan(h);
+    expect(Math.abs(w / h - 16 / 9)).toBeLessThan(0.02);
+    expect([at("fps"), at("frames")]).toEqual([24, 120]);
+    // A 30 fps portrait clip: its shape, at 24 fps. Past the frame cap the run is refused, not cut short.
+    const tall = (await run({ width: 1080, height: 1920, duration: 4, fps: 30 })).workflow as Graph;
+    const shape = (key: string) => tall[(wf(route.endpoint).bindings as Record<string, { node: string }[]>)[key][0].node].inputs;
+    expect(Number(shape("height").height)).toBeGreaterThan(Number(shape("width").width));
+    expect(shape("fps").force_rate).toBe(24);
+    await expect(run({ width: 1280, height: 720, duration: 30, fps: 24 })).rejects.toThrow(/up to 240 frames/);
+    // What a run sets itself still wins (the Mixed Media studio sends its own size, rate and frames).
+    const own = (await run({ width: 1280, height: 720, duration: 5, fps: 24 }, { fps: 8, aspectRatio: "9:16", extra: { frames: 40 } })).workflow as Graph;
+    expect([own["1"].inputs.force_rate, own["1"].inputs.frame_load_cap]).toEqual([8, 40]);
+    expect(Number(own["3"].inputs.height)).toBeGreaterThan(Number(own["3"].inputs.width));
     expect(filterModels(MODELS, { kind: "video", ops: VIDEO_EDIT_STUDIO.ops }).map((m) => m.id)).toContain(id);
   });
 
@@ -337,6 +372,9 @@ describe("the Video studio and the other studio defaults", () => {
     expect(newOpenModels()[0].id).toBe("oss-minimax-h3");
     expect(getModel("oss-sdxl")!.hidden).toBe(true);
     expect(filterModels(MODELS, { kind: "image", ops: IMAGE_STUDIO.pickerOps ?? IMAGE_STUDIO.ops }).map((m) => m.id)).not.toContain("oss-sdxl");
+    // The Models page has no studio to send it to: its row links to itself.
+    expect(modelHref(getModel("oss-sdxl")!)).toMatch(/^\/models\?q=/);
+    expect(modelHref(h3)).toBe("/video?model=oss-minimax-h3");
   });
 
   it("Fuobe Marketing Image runs Qwen-Image 2.1 on your GPU; its Standalone product shot keeps the 2509 graph", () => {

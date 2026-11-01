@@ -14,12 +14,15 @@ const label = (v: string | number) =>
     .replace(/^f(\d)(\d)?/, (_, a, b) => `f/${a}${b ? `.${b}` : ""}`)
     .replace(/^\w/, (c) => c.toUpperCase());
 
-/** "Director" popover for enum settings such as genre, lens, light, grade and camera move. */
+/**
+ * "Director" popover for enum settings such as genre, lens, light, grade and camera move. A model whose only settings are
+ * its Quality (MiniMax H3's Fast / Best, MOSS-Image's tiers) shows them under "Quality".
+ */
 export function ControlsChip({
   controls,
   values,
   onChange,
-  title = "Director",
+  title: named,
 }: {
   controls: NonNullable<ModelOptions["controls"]>;
   values: Record<string, unknown>;
@@ -27,6 +30,7 @@ export function ControlsChip({
   /** The chip's name: "Director" (Cinema's genre, lens, light…), "Options" for a tool's model settings (Upscale). */
   title?: string;
 }) {
+  const title = named ?? (controls.length && controls.every((c) => c.param === "quality") ? "Quality" : "Director");
   const set = controls.filter((c) => values[c.param] !== undefined);
   return (
     <Popover>

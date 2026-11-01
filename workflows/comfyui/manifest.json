@@ -4902,8 +4902,8 @@
         {
           "file": "minimax_h3_video_vae_int8_convrot.safetensors",
           "folder": "vae",
-          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors",
-          "sizeGb": 2.81
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
         },
         {
           "file": "minimax_h3_audio_vae_fp32.safetensors",
@@ -4943,7 +4943,7 @@
       "vramGb": 32,
       "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT",
       "validated": false,
-      "notes": "Text to video with sound: MiniMaxH3ImageToVideo with no frames given, the fl2va pruned int8 model with the turbo v4 LoRA at 1.0 (MiniMaxH3TurboLoRA, MiniMaxH3TurboSampler), BasicScheduler simple 8 steps, H3SLAAttention (sparsity 0.85, block 64, int8 QK; needs Triton) and H3AdaLNLoRAFix (port), CFG 1. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (2.81 GB) and the audio VAE (0.61 GB). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
+      "notes": "Text to video with sound: MiniMaxH3ImageToVideo with no frames given, the fl2va pruned int8 model with the turbo v4 LoRA at 1.0 (MiniMaxH3TurboLoRA, MiniMaxH3TurboSampler), BasicScheduler simple 8 steps, H3SLAAttention (sparsity 0.85, block 64, int8 QK; needs Triton) and H3AdaLNLoRAFix (port), CFG 1. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
     },
     {
       "id": "minimax-h3-i2v",
@@ -5029,8 +5029,8 @@
         {
           "file": "minimax_h3_video_vae_int8_convrot.safetensors",
           "folder": "vae",
-          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors",
-          "sizeGb": 2.81
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
         },
         {
           "file": "minimax_h3_audio_vae_fp32.safetensors",
@@ -5070,7 +5070,7 @@
       "vramGb": 32,
       "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT",
       "validated": false,
-      "notes": "Image to video with sound: image = the first frame (MiniMaxH3ImageToVideo first_frame), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (2.81 GB) and the audio VAE (0.61 GB). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
+      "notes": "Image to video with sound: image = the first frame (MiniMaxH3ImageToVideo first_frame), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
     },
     {
       "id": "minimax-h3-flf2v",
@@ -5162,8 +5162,8 @@
         {
           "file": "minimax_h3_video_vae_int8_convrot.safetensors",
           "folder": "vae",
-          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors",
-          "sizeGb": 2.81
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
         },
         {
           "file": "minimax_h3_audio_vae_fp32.safetensors",
@@ -5203,7 +5203,7 @@
       "vramGb": 32,
       "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · turbo v4 LoRA Apache-2.0 (larryvrh) · ComfyUI-MiniMax-H3-Turbo nodes Apache-2.0 · PlagueKind nodes MIT",
       "validated": false,
-      "notes": "Start and end frame to video with sound: image = the first frame, endImage = the last (cover-cropped to the canvas), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (2.81 GB) and the audio VAE (0.61 GB). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
+      "notes": "Start and end frame to video with sound: image = the first frame, endImage = the last (cover-cropped to the canvas), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768."
     },
     {
       "id": "minimax-h3-t2v-hq",
@@ -5276,8 +5276,8 @@
         {
           "file": "minimax_h3_video_vae_int8_convrot.safetensors",
           "folder": "vae",
-          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors",
-          "sizeGb": 2.81
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
         },
         {
           "file": "minimax_h3_audio_vae_fp32.safetensors",
@@ -5302,7 +5302,7 @@
       "vramGb": 32,
       "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0",
       "validated": false,
-      "notes": "Text to video with sound, the sharper setting: the fl2va pruned int8 model without the turbo LoRA, BasicScheduler simple 20 steps, KSamplerSelect res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-t2v. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (2.81 GB) and the audio VAE (0.61 GB)."
+      "notes": "Text to video with sound, the sharper setting: the fl2va pruned int8 model without the turbo LoRA, BasicScheduler simple 20 steps, KSamplerSelect res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-t2v. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
     },
     {
       "id": "minimax-h3-i2v-hq",
@@ -5381,8 +5381,8 @@
         {
           "file": "minimax_h3_video_vae_int8_convrot.safetensors",
           "folder": "vae",
-          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors",
-          "sizeGb": 2.81
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
         },
         {
           "file": "minimax_h3_audio_vae_fp32.safetensors",
@@ -5407,7 +5407,7 @@
       "vramGb": 32,
       "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0",
       "validated": false,
-      "notes": "Image to video with sound, the sharper setting: image = the first frame, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-i2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (2.81 GB) and the audio VAE (0.61 GB)."
+      "notes": "Image to video with sound, the sharper setting: image = the first frame, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-i2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
     },
     {
       "id": "minimax-h3-flf2v-hq",
@@ -5492,8 +5492,8 @@
         {
           "file": "minimax_h3_video_vae_int8_convrot.safetensors",
           "folder": "vae",
-          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors",
-          "sizeGb": 2.81
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
         },
         {
           "file": "minimax_h3_audio_vae_fp32.safetensors",
@@ -5518,7 +5518,7 @@
       "vramGb": 32,
       "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0",
       "validated": false,
-      "notes": "Start and end frame to video with sound, the sharper setting: image = the first frame, endImage = the last, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-flf2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (2.81 GB) and the audio VAE (0.61 GB)."
+      "notes": "Start and end frame to video with sound, the sharper setting: image = the first frame, endImage = the last, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-flf2v. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). The prompt reads best in MiniMax's layout: an alignment line for the reference frames, then integrated_multimodal_description, overall_soundscape and non_diegetic_music. The sound is generated with the picture (stereo) and saved with it. Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB)."
     },
     {
       "id": "minimax-h3-orbit",
@@ -5597,8 +5597,8 @@
         {
           "file": "minimax_h3_video_vae_int8_convrot.safetensors",
           "folder": "vae",
-          "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors",
-          "sizeGb": 2.81
+          "url": "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors",
+          "sizeGb": 3.17
         },
         {
           "file": "minimax_h3_audio_vae_fp32.safetensors",
@@ -5629,7 +5629,7 @@
       "vramGb": 32,
       "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · pablodawson's 360 Orbit LoRA under the same MiniMax H3 Community License",
       "validated": false,
-      "notes": "A camera orbit around one frozen instant: image (LoadImage 138) is both the first and the last frame of MiniMaxH3ImageToVideo. The fl2va pruned int8 model with pablodawson's 360 Orbit LoRA (minimax_h3_flf2v_lora_v1, LoraLoaderModelOnly at 1.0), MiniMaxH3SigmaShift 12 / 3, BasicScheduler simple 28 steps, KSamplerSelect res_multistep, CFG 1; core nodes only. 73 frames (3.04 s) is the LoRA's training length. The prompt reads best in the LoRA's own caption style: one frozen instant, the camera in one continuous 360-degree orbit, everything holding its place, camera parallax the only movement. The LoRA was trained without sound; the graph still decodes H3's audio. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). frames = length at 24 fps on the 17n+5 grid (73 = 3.04 s, 124 = 5.17 s, 243 = 10.13 s, 362 = 15.08 s; trained on 5-15 s). Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (2.81 GB) and the audio VAE (0.61 GB). With the Orbit LoRA (0.16 GB)."
+      "notes": "A camera orbit around one frozen instant: image (LoadImage 138) is both the first and the last frame of MiniMaxH3ImageToVideo. The fl2va pruned int8 model with pablodawson's 360 Orbit LoRA (minimax_h3_flf2v_lora_v1, LoraLoaderModelOnly at 1.0), MiniMaxH3SigmaShift 12 / 3, BasicScheduler simple 28 steps, KSamplerSelect res_multistep, CFG 1; core nodes only. 73 frames (3.04 s) is the LoRA's training length. The prompt reads best in the LoRA's own caption style: one frozen instant, the camera in one continuous 360-degree orbit, everything holding its place, camera parallax the only movement. The LoRA was trained without sound; the graph still decodes H3's audio. The first frame is resized to width x height with no crop, so the canvas should have the still's shape (an \"auto\" aspect ratio sizes it from the still). Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With the Orbit LoRA (0.16 GB)."
     },
     {
       "id": "infinitetalk-native",

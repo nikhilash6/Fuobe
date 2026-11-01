@@ -204,10 +204,10 @@
   "sizeBytes": 5207808496,
   "sha256": "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522"
  },
- "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/1c41cfca8ebba91d0af792a05c5761fb2c3a7975/vae/minimax_h3_video_vae_int8_convrot.safetensors": {
-  "revision": "1c41cfca8ebba91d0af792a05c5761fb2c3a7975",
-  "sizeBytes": 2811065184,
-  "sha256": "52a2c8c73583c86e4f41cdcce3a6ad0ea562987bc0bf3d60a0cef5f5c8e60c0e"
+ "https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors": {
+  "revision": "f5c3b1d5a63e008a691fca1b6096fd57a5307536",
+  "sizeBytes": 3171670912,
+  "sha256": "9bb2d96f218c76babd85e0611b85ca8fb330a90546c01a0005e8a58a59593410"
  },
  "https://huggingface.co/Comfy-Org/MoGe/resolve/main/geometry_estimation/moge_2_vitl_normal_fp16.safetensors": {
   "revision": "1484985258ba7ef45c314144fcf0e90924ffbf44",
