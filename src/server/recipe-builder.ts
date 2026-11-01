@@ -30,7 +30,7 @@ import { db } from "./db";
 import { llmText, llmTextBackend, type LlmImage } from "./enhance";
 import { listElements } from "./elements";
 import { currentRequest, getGeneration, unfilledRequest } from "./generations";
-import { startedIds } from "@/lib/assist";
+import { declinedByUser, type AssistItem } from "@/lib/assist";
 import { cardTitle, getTool, planFor } from "./assist/tools";
 import { getSkill, SkillError } from "./skills";
 import { absolutePath, readRef } from "./storage";
@@ -961,11 +961,32 @@ function chatLift(c: ChatCall, useId: string): Lifted {
 }
 
 /** The words a user typed (the files they attached are listed after them), unless Fuobe wrote them for a lone /skill. */
-function userWords(text: string): { words: string; files: string[] } {
-  const [body, attached = ""] = text.split(/\n\nAttached files[^\n]*\n/);
-  const files = [...attached.matchAll(/^- \w+ \d+: (\S+)$/gm)].map((m) => m[1]);
-  const words = /^Use the .+ skills?(?: with the attached files)?\.$/.test(body.trim()) ? "" : body.trim();
-  return { words, files };
+function userWords(text: string): string {
+  const [body] = text.split(/\n\nAttached files[^\n]*\n/);
+  return /^Use the .+ skills?(?: with the attached files)?\.$/.test(body.trim()) ? "" : body.trim();
+}
+
+/**
+ * The generation ids a tool result names, for a chat saved before its generations items said which call made them:
+ * each `started`, `results` and `final` (a generate call, a studio that opened, Katana), and each `id` (a pipeline's
+ * steps, a storyboard's frames). Ids that aren't generations are dropped by the caller.
+ */
+function idsInResult(text: string): string[] {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  const walk = (v: unknown, key?: string) => {
+    if (typeof v === "string") {
+      if (key && ["started", "results", "final", "id"].includes(key) && /^[\w-]{4,40}$/.test(v)) out.push(v);
+    } else if (Array.isArray(v)) v.forEach((x) => walk(x, key));
+    else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, k);
+  };
+  walk(json);
+  return out;
 }
 
 export interface ThreadDraft extends DraftResult {
@@ -982,9 +1003,12 @@ export interface ThreadDraft extends DraftResult {
  * call is one tool step with the exact input it ran with, and a reference into or out of one is refused (W7).
  */
 export function draftFromThread(threadId: string): ThreadDraft {
-  const r = db().prepare("SELECT messages_json FROM assist_threads WHERE id = ?").get(threadId) as { messages_json: string } | undefined;
+  const r = db().prepare("SELECT messages_json, items_json FROM assist_threads WHERE id = ?").get(threadId) as { messages_json: string; items_json: string } | undefined;
   if (!r) throw new SkillError("No such chat", 404);
   const messages = JSON.parse(r.messages_json) as { role: string; content: unknown }[];
+  // The generations each call started, as the chat shows them (every tool's own list, whatever its result says).
+  const madeBy = new Map<string, string[]>();
+  for (const i of JSON.parse(r.items_json) as AssistItem[]) if (i.role === "generations" && i.use) madeBy.set(i.use, [...(madeBy.get(i.use) ?? []), ...i.ids]);
   const uses: { id: string; name: string; input: Record<string, unknown> }[] = [];
   const results = new Map<string, { error: boolean; text: string }>();
   const words: string[] = [];
@@ -994,8 +1018,8 @@ export function draftFromThread(threadId: string): ThreadDraft {
       if (m.role === "assistant" && b.type === "tool_use" && b.id && b.name) uses.push({ id: b.id, name: b.name, input: (b.input ?? {}) as Record<string, unknown> });
       else if (m.role === "user" && b.type === "tool_result" && b.tool_use_id) results.set(b.tool_use_id, { error: !!b.is_error, text: textOf(b.content) });
       else if (m.role === "user" && b.type === "text" && typeof b.text === "string") {
-        const u = userWords(b.text);
-        if (u.words) words.push(u.words);
+        const said = userWords(b.text);
+        if (said) words.push(said);
       }
     }
   }
@@ -1009,11 +1033,11 @@ export function draftFromThread(threadId: string): ThreadDraft {
     const res = results.get(u.id);
     if (!res) return;
     if (res.error) {
-      if (/declined|instead of approving/i.test(res.text)) declined++;
+      if (declinedByUser(res.text.trim())) declined++;
       else failed++;
       return;
     }
-    const gens = [...new Set(startedIds(res.text))].map((id) => getGeneration(id, { includeDeleted: true })).filter((g): g is Generation => !!g);
+    const gens = [...new Set(madeBy.get(u.id) ?? idsInResult(res.text))].map((id) => getGeneration(id, { includeDeleted: true })).filter((g): g is Generation => !!g);
     const live = gens.filter((g) => g.status !== "failed" && g.status !== "canceled");
     if (!live.length) {
       if (gens.length) failed++;
@@ -1023,9 +1047,15 @@ export function draftFromThread(threadId: string): ThreadDraft {
     const studio = !GENERATE_TOOLS.has(u.name);
     calls.push({ use: u.id, order, name: u.name, input: u.input, gens: live, inputs: new Set(mediaIn(u.input).map((f) => f.url)), outputs, makes: studio ? u.name : `${u.name}:${live.at(-1)!.kind}`, studio });
   });
-  // The same tool making the same kind of thing again: the last try, unless a later call used an earlier one's result.
-  const usedLater = (c: ChatCall) => calls.some((d) => d.order > c.order && [...c.outputs].some((u) => d.inputs.has(u)));
-  const kept = calls.filter((c) => usedLater(c) || !calls.some((d) => d.order > c.order && d.makes === c.makes));
+  // The same tool making the same kind of thing again: the last try, unless a later call that is kept used an earlier
+  // one's result. Walked from the end, so a call is kept only for a kept call (A, B from A, A', B' from A' keeps A', B').
+  const keptSet = new Set<ChatCall>();
+  for (const c of [...calls].reverse()) {
+    const last = !calls.some((d) => d.order > c.order && d.makes === c.makes);
+    const used = [...keptSet].some((d) => [...c.outputs].some((u) => d.inputs.has(u)));
+    if (last || used) keptSet.add(c);
+  }
+  const kept = calls.filter((c) => keptSet.has(c));
   const replaced = calls.length - kept.length;
   // A studio step's result feeding a later step, or a step's result feeding a studio step: refused (W7).
   const joined: typeof kept = [];

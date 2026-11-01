@@ -32,6 +32,10 @@ const { saveFile } = await import("@/server/storage");
 const { encodePng } = await import("@/server/png");
 const draftRoute = await import("@/app/api/assist/skills/draft/route");
 const nameRoute = await import("@/app/api/assist/skills/draft/name/route");
+const { insideSkill } = await import("@/server/assist/skill-tools");
+const { zip } = await import("@/server/zip");
+const { NESTED_SKILL } = await import("@/lib/recipe");
+const { DECLINED } = await import("@/lib/assist");
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -82,16 +86,25 @@ function storedChat(calls: { id: string; name: string; input: unknown; result: u
   return t.id;
 }
 
-/** A finished row written straight into the table (a studio's result): only what the builder reads. */
-function row(o: { id: string; request: Record<string, unknown>; feature: string; op: string; kind: string; outputs: { url: string; kind: string }[] }) {
-  const now = Date.now();
-  db()
-    .prepare(
-      `INSERT INTO generations (id, batch_id, feature, preset_id, model_id, engine, provider, op, kind, status, progress, message, prompt, request_json, provider_input_json, external_id, external_meta_json, outputs_json, error, cost_usd, favorite, created_at, updated_at, completed_at, depends_on)
-       VALUES (@id, NULL, @feature, NULL, @model, 'cloud', 'mock', @op, @kind, 'succeeded', NULL, NULL, NULL, @request, NULL, NULL, NULL, @outputs, NULL, 0, 0, @now, @now, @now, NULL)`,
-    )
-    .run({ id: o.id, feature: o.feature, model: o.request.modelId as string, op: o.op, kind: o.kind, request: JSON.stringify(o.request), outputs: JSON.stringify(o.outputs), now });
-  return o.id;
+/** The text of a call's tool result, as the chat stored it. */
+function toolResult(thread: string, use: string): string {
+  const history = JSON.parse((db().prepare("SELECT messages_json FROM assist_threads WHERE id = ?").get(thread) as { messages_json: string }).messages_json) as { content: unknown }[];
+  const b = history.flatMap((m) => (Array.isArray(m.content) ? m.content : [])).find((x: { tool_use_id?: string }) => x.tool_use_id === use) as { content: string };
+  return b.content;
+}
+
+/** Calls run in a chat through the real agent, one message each, every one approved on its card. */
+async function chatRun(engine: "cloud" | "open", calls: { id: string; name: string; input: unknown }[], thread?: string, said = "Make my lamp turn on a plinth") {
+  const id = thread ?? agent.createThread({ agent: "offline", engine }).id;
+  for (const c of calls) {
+    agent.addMessage(id, said, [photo]);
+    await agent.run(id, scripted(reply([toolUse(c.id, c.name, c.input)], "tool_use")));
+    expect(agent.getThread(id)!.thread.status).toBe("waiting");
+    await agent.answerApproval(id, true);
+    await agent.run(id, scripted(reply([text("Started.")], "end_turn")));
+    expect(toolResult(id, c.id)).not.toMatch(/^\{"error"/);
+  }
+  return id;
 }
 
 describe("draftFromThread", () => {
@@ -199,25 +212,43 @@ describe("draftFromThread", () => {
     expect(draft!.notes.join(" ")).toMatch(/An earlier try of a step was left out/);
   });
 
-  it("makes a studio call one tool step with the input it ran with, and refuses a reference into it", async () => {
-    const video = gens.createGenerations({ feature: "assist", modelId: "kling-3", op: "i2v", prompt: "the lamp turns", inputs: { images: [photo] }, params: { duration: 5 } });
-    await settle(video.map((g) => g.id));
-    const made = gens.getGeneration(video[0].id)!.outputs[0].url;
-    const captioned = row({ id: "cap-from-gen", feature: "captions", op: "captions", kind: "video", request: { feature: "captions", modelId: "veed-captions", op: "captions", inputs: { video: made } }, outputs: [{ url: clip, kind: "video" }] });
-    const id = storedChat([
-      { id: "toolu_video", name: "generate", input: { summary: "Clip", jobs: [{ model_id: "kling-3", prompt: "the lamp turns", images: [photo] }] }, result: [{ model: "kling-3", started: video.map((g) => g.id) }] },
-      { id: "toolu_caps", name: "add_captions", input: { video: made, translate_to: "Spanish" }, result: { started: [captioned], href: "/video-tools/captions" } },
+  it("refuses a generate result passed into a studio call, as the studio call really answered", async () => {
+    // A clip made in the chat, then captioned in the chat: both calls run through the agent, approved on their cards.
+    const t = await chatRun("open", [
+      { id: "toolu_clip", name: "generate", input: { summary: "Clip", jobs: [{ model_id: "kling-3", op: "i2v", prompt: "the lamp turns", images: [photo], duration: 5 }] } },
     ]);
-    const { draft, refusals } = builder.draftFromThread(id);
-    expect(refusals).toEqual([{ id: captioned, title: expect.any(String), reason: builder.STUDIO_WAIT }]);
+    const [made] = await settle(threadIds(t));
+    await chatRun("open", [{ id: "toolu_caps", name: "add_captions", input: { video: made.outputs[0].url, translate_to: "Spanish" } }], t);
+    await settle(threadIds(t));
+    const { draft, refusals } = builder.draftFromThread(t);
+    expect(refusals).toEqual([{ id: expect.any(String), title: "Captions in Spanish", reason: builder.STUDIO_WAIT }]);
     expect(draft!.recipe.steps.map((s) => s.kind)).toEqual(["generate"]);
+  });
 
-    // On its own, the studio call is the skill: its exact input, its file a candidate.
-    const solo = row({ id: "cap-solo", feature: "captions", op: "captions", kind: "video", request: { feature: "captions", modelId: "veed-captions", op: "captions", inputs: { video: clip } }, outputs: [{ url: clip, kind: "video" }] });
-    const alone = builder.draftFromThread(storedChat([{ id: "toolu_solo", name: "add_captions", input: { video: clip, translate_to: "German" }, result: { started: [solo] } }]));
-    expect(alone.refusals).toEqual([]);
-    expect(alone.draft!.recipe.steps).toEqual([{ key: expect.any(String), kind: "tool", label: "Captions", tool: "add_captions", input: { video: clip, translate_to: "German" } }]);
-    expect(alone.draft!.candidates).toEqual([expect.objectContaining({ kind: "media", type: "video", example: clip, at: [{ step: alone.draft!.recipe.steps[0].key, path: ["video"] }] })]);
+  /** Each studio tool as it really answers (a studio that opened, Katana's final cut), run through the agent in demo mode. */
+  it.each([
+    ["split_layers", "Layers", () => ({ image: photo, focus: "the lamp and the background" }), "results"],
+    ["add_captions", "Captions", () => ({ video: clip, translate_to: "German" }), "results"],
+    ["katana", "Katana", () => ({ reference: clip, photos: [photo], instructions: "keep the warm light" }), "final"],
+  ])("makes a %s call that opened in %s one tool step with the input it ran with", async (tool, studio, input, field) => {
+    const t = await chatRun("open", [{ id: `toolu_${tool}`, name: tool, input: input() }]);
+    // The real result: the studio's own shape, with no "started" list.
+    const result = toolResult(t, `toolu_${tool}`);
+    expect(result).not.toMatch(/"started"/);
+    expect(JSON.parse(result)).toHaveProperty(field);
+    await settle(threadIds(t), 110_000);
+    const check = (id: string) => {
+      const { draft, refusals } = builder.draftFromThread(id);
+      expect(refusals).toEqual([]);
+      expect(draft!.recipe.steps).toEqual([{ key: expect.any(String), kind: "tool", label: studio, tool, input: input() }]);
+      expect(draft!.recipe.source).toMatchObject({ from: "assist", thread: t, generations: threadIds(t) });
+      expect(draft!.candidates.filter((c) => c.kind === "media").map((c) => c.example)).toEqual(Object.values(input()).flat().filter((v) => typeof v === "string" && v.startsWith("/api/files/")));
+    };
+    check(t);
+    // A chat saved before its generations said which call made them: read from the result itself.
+    const items = agent.getThread(t)!.thread.items.map((i) => (i.role === "generations" ? { ...i, use: undefined } : i));
+    db().prepare("UPDATE assist_threads SET items_json = ? WHERE id = ?").run(JSON.stringify(items), t);
+    check(t);
   });
 
   it("says when nothing in a chat ran, and 404s an unknown chat", async () => {
@@ -225,6 +256,42 @@ describe("draftFromThread", () => {
     expect(builder.draftFromThread(t.id)).toMatchObject({ draft: null, refusals: [{ id: t.id, reason: expect.stringMatching(/Nothing in it has run yet/) }] });
     expect((await draftRoute.POST(json({ thread: "nope" }))).status).toBe(404);
     expect((await draftRoute.POST(json({ thread: "" }))).status).toBe(400);
+  });
+});
+
+describe("draftFromThread: tries and errors", () => {
+  it("keeps the last tries when retries interleave (A, B from A, A', B' from A'), with nothing left over", async () => {
+    const t = agent.createThread({ agent: "offline", engine: "cloud" }).id;
+    const still = (id: string, prompt: string) => ({ id, name: "generate", input: { summary: prompt, jobs: [{ model_id: "nano-banana-pro", op: "edit", prompt, images: [photo] }] } });
+    const turn = (id: string, prompt: string, from: string) => ({ id, name: "generate", input: { summary: prompt, jobs: [{ model_id: "kling-3", op: "i2v", prompt, images: [from], duration: 5 }] } });
+    const outputOf = async (use: string) => {
+      const ids = agent.getThread(t)!.thread.items.flatMap((i) => (i.role === "generations" && i.use === use ? i.ids : []));
+      return (await settle(ids)).at(-1)!.outputs[0].url;
+    };
+    await chatRun("cloud", [still("toolu_a", "lamp first try")], t);
+    await chatRun("cloud", [turn("toolu_b", "turn the first try", await outputOf("toolu_a"))], t);
+    await chatRun("cloud", [still("toolu_a2", "lamp second try")], t);
+    await chatRun("cloud", [turn("toolu_b2", "turn the second try", await outputOf("toolu_a2"))], t);
+    await settle(threadIds(t));
+    const { draft, refusals } = builder.draftFromThread(t);
+    expect(refusals).toEqual([]);
+    const steps = draft!.recipe.steps.filter((s) => s.kind === "generate");
+    expect(steps.map((s) => s.request.prompt)).toEqual(["lamp second try", "turn the second try"]);
+    expect(steps[1].after).toBe(steps[0].key);
+    expect(draft!.notes.join(" ")).toMatch(/2 earlier tries of steps were left out/);
+  });
+
+  it("counts only the chat's own decline as declined: an error that says declined is a call that didn't run", async () => {
+    const failed = { id: "toolu_refused", name: "generate", input: { summary: "Poster", jobs: [{ model_id: "nano-banana-pro", prompt: "a poster" }] }, result: [{ model: "nano-banana-pro", error: "The request was declined by the provider's safety system" }], error: true };
+    const declined = { id: "toolu_no", name: "generate", input: { summary: "Poster", jobs: [{ model_id: "nano-banana-pro", prompt: "a poster" }] }, result: DECLINED, error: true };
+    expect(builder.draftFromThread(storedChat([failed])).draft).toBeNull();
+    const id = storedChat([failed, declined]);
+    expect(builder.draftFromThread(id)).toMatchObject({ draft: null, refusals: [{ reason: "Nothing it made can be repeated yet" }] });
+    // Both kinds side by side, under a call that ran: the notes say which was which.
+    const ran = gens.createGenerations({ feature: "assist", modelId: "nano-banana-pro", op: "t2i", prompt: "a lamp" });
+    await settle(ran.map((g) => g.id));
+    const both = storedChat([failed, declined, { id: "toolu_ran", name: "generate", input: { summary: "Lamp", jobs: [{ model_id: "nano-banana-pro", prompt: "a lamp" }] }, result: [{ model: "nano-banana-pro", started: ran.map((g) => g.id) }] }]);
+    expect(builder.draftFromThread(both).draft!.notes.join(" ")).toMatch(/Left out: 1 plan you declined and 1 that didn't run/);
   });
 });
 
@@ -294,6 +361,58 @@ describe("run_skill", () => {
   });
 });
 
+describe("a skill inside a skill", () => {
+  const nestedRecipe = (name: string) => ({
+    fuobeRecipe: 1,
+    params: [{ id: "product", label: "Product photo", type: "image", required: true, example: photo }],
+    steps: [{ key: "again", kind: "tool", tool: "run_skill", input: { name, values: { product: "{{product}}" } } }],
+  });
+
+  it("is refused when a recipe is saved, written as a file or uploaded", () => {
+    skills.createSkill({ name: "loop-self", title: "Loop", description: "Runs itself.", body: "# Loop" });
+    expect(() => recipes.saveRecipe("loop-self", nestedRecipe("loop-self"))).toThrow(NESTED_SKILL);
+    expect(() => recipes.saveRecipe("loop-self", nestedRecipe(lampSkill()))).toThrow(NESTED_SKILL);
+    expect(() => skills.setSkillFile("loop-self", "recipe.json", JSON.stringify(nestedRecipe("loop-self")))).toThrow(NESTED_SKILL);
+    expect(skills.getSkill("loop-self")!.recipe).toBeFalsy();
+    const archive = zip([
+      { name: "loop-up/SKILL.md", data: Buffer.from("---\nname: loop-up\ndescription: Runs itself.\n---\n# Loop\n") },
+      { name: "loop-up/recipe.json", data: Buffer.from(JSON.stringify(nestedRecipe("loop-up"))) },
+    ]);
+    expect(() => skills.importSkill({ name: "loop-up.zip", data: archive })).toThrow(NESTED_SKILL);
+    expect(skills.getSkill("loop-up")).toBeFalsy();
+  });
+
+  it("is priced and run as an error, never a loop, even from inside a skill's own work", async () => {
+    const name = lampSkill();
+    // A recipe.json stored before the rule (written straight into the table): it no longer reads as a recipe.
+    skills.createSkill({ name: "loop-old", title: "Old loop", description: "Runs itself.", body: "# Loop" });
+    db().prepare("UPDATE skills SET files_json = ? WHERE name = ?").run(JSON.stringify([{ path: "recipe.json", content: JSON.stringify(nestedRecipe("loop-old")) }]), "loop-old");
+    const plan = tools.planFor("run_skill", { name: "loop-old", values: { product: photo } }, { engine: "cloud" });
+    expect(plan.jobs).toEqual([expect.objectContaining({ error: expect.stringMatching(/doesn't run by itself/) })]);
+    // The guard: run_skill inside a skill's pricing or run answers an error at once.
+    const inner = { name, values: { product: photo, name: "Halo" } };
+    expect(insideSkill("outer", () => tools.planFor("run_skill", inner, { engine: "cloud" })).jobs[0].error).toMatch(/can't run another skill/);
+    expect(insideSkill("outer", () => tools.validateInput("run_skill", inner, { engine: "cloud" }))).toMatch(/can't run another skill/);
+    const out = await insideSkill("outer", () => tools.executeTool("run_skill", inner, { engine: "cloud" }));
+    expect(out).toMatchObject({ isError: true, content: expect.stringMatching(/can't run another skill/) });
+    // Outside a skill it prices as before.
+    expect(tools.planFor("run_skill", inner, { engine: "cloud" }).jobs.every((j) => !j.error)).toBe(true);
+  });
+});
+
+describe("run_skill's values", () => {
+  it("are words to every provider: one string type, numbers taken as their digits", () => {
+    const name = lampSkill();
+    const schema = tools.apiTools().find((t) => t.name === "run_skill")!.input_schema as { properties: Record<string, { additionalProperties?: unknown; items?: { additionalProperties?: unknown } }> };
+    expect(JSON.stringify(schema)).not.toMatch(/"type":\[/);
+    expect(schema.properties.values.additionalProperties).toEqual({ type: "string" });
+    expect(schema.properties.rows.items!.additionalProperties).toEqual({ type: "string" });
+    expect(tools.validateInput("run_skill", { name, values: { product: photo, name: 42 } }, { engine: "cloud" })).toBeNull();
+    const plan = tools.planFor("run_skill", { name, values: { product: photo, name: 42 } }, { engine: "cloud" });
+    expect(plan.jobs[1]).toMatchObject({ prompt: "42 on a travertine plinth" });
+  });
+});
+
 describe("the offline planner", () => {
   it("turns /lamp-turntable plus an attachment into one run_skill card, and runs it", async () => {
     const name = lampSkill();
@@ -329,5 +448,26 @@ describe("the offline planner", () => {
     const items = agent.getThread(t.id)!.thread.items;
     expect(items.some((i) => i.role === "approval")).toBe(false);
     expect(items.findLast((i) => i.role === "assistant")).toMatchObject({ text: `Lamp turntable needs Product photo (an image). Attach it and send /${name} again.` });
+  });
+  it("runs a skill only when the message names it: a new request later in the chat is planned as usual", async () => {
+    const name = lampSkill();
+    const t = agent.createThread({ agent: "offline", engine: "cloud" });
+    agent.addMessage(t.id, `/${name}`, [photo]);
+    await agent.run(t.id, agent.offline);
+    await agent.answerApproval(t.id, true);
+    await agent.run(t.id, agent.offline);
+    agent.addMessage(t.id, "now make a 5 second video of a cat surfing");
+    await agent.run(t.id, agent.offline);
+    const history = JSON.parse((db().prepare("SELECT messages_json FROM assist_threads WHERE id = ?").get(t.id) as { messages_json: string }).messages_json) as { role: string; content: Block[] }[];
+    const call = history.at(-1)!.content.find((b) => b.type === "tool_use") as { name: string; input: { jobs: { prompt: string }[] } };
+    expect(call.name).toBe("generate");
+    expect(call.input.jobs[0].prompt).toMatch(/cat surfing/);
+    expect(agent.getThread(t.id)!.thread.items.some((i) => i.role === "assistant" && /needs Product photo/.test(i.text))).toBe(false);
+    // Named again, it runs again.
+    await agent.answerApproval(t.id, false);
+    agent.addMessage(t.id, `/${name} Halo floor lamp`, [photo]);
+    await agent.run(t.id, agent.offline);
+    const again = JSON.parse((db().prepare("SELECT messages_json FROM assist_threads WHERE id = ?").get(t.id) as { messages_json: string }).messages_json) as { role: string; content: Block[] }[];
+    expect(again.at(-1)!.content.find((b) => b.type === "tool_use")).toMatchObject({ name: "run_skill", input: { name, values: { product: photo, name: "Halo floor lamp" } } });
   });
 });

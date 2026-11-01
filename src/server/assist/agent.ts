@@ -8,14 +8,15 @@ import {
   ASSIST_EFFORTS,
   CLAUDE_MODELS,
   contextUpdate,
+  DECLINED,
   DEFAULT_CLAUDE_MODEL,
   DEFAULT_EFFORT,
   factMap,
   guessCategory,
   normalizeAgent,
   renderContext,
+  REPLIED_INSTEAD,
   slashSkills,
-  startedIds,
   threadTitle,
   type AssistAgent,
   type AssistAvailability,
@@ -78,6 +79,8 @@ export interface ModelRequest {
   threadId?: string;
   /** Skills loaded in the chat (the offline planner uses their hints). */
   skills?: SkillMeta[];
+  /** The skills the person's latest message named (/name): the offline planner runs one of those, never an earlier one. */
+  named?: string[];
   /** Custom MCP connectors (Settings → Assist): Claude gets them through the MCP connector; other agents can't use them. */
   connectors?: Connector[];
 }
@@ -832,7 +835,7 @@ export const local: ModelCall = async ({ system, messages, tools, settings }) =>
 };
 
 /** A rule-based planner with the same shape as a model reply, for installs without an LLM. */
-export const offline: ModelCall = async ({ messages, ctx, skills }) => {
+export const offline: ModelCall = async ({ messages, ctx, skills, named }) => {
   // Context updates (system messages) aren't the user's words.
   const last = messages.findLast((m) => m.role !== "system");
   const blocks = last && typeof last.content !== "string" ? last.content : [];
@@ -873,8 +876,9 @@ export const offline: ModelCall = async ({ messages, ctx, skills }) => {
     if (stills.length) return reply([text(`Pick a number from 1 to ${stills.length}.`)], "end_turn");
     // No stills in this chat: read it as a new request.
   }
-  // A loaded skill that runs by itself (the last one loaded): its inputs filled from the message, one run_skill card.
-  for (const s of [...(skills ?? [])].reverse()) {
+  // A skill this message named that runs by itself (the last one named): its inputs filled from the message, one
+  // run_skill card. A skill loaded earlier in the chat stays a hint, so a new request isn't read as its inputs.
+  for (const s of (skills ?? []).filter((k) => named?.includes(k.name)).reverse()) {
     const recipe = (s as { recipe?: boolean }).recipe ? skillRecipe(s.name) : null;
     if (!recipe) continue;
     const r = offlineSkillRun(said, s.name, s.title, recipe);
@@ -956,6 +960,13 @@ const FOLLOW_UP: Record<MediaKind, string> = {
   text: "Want it shorter, in another tone, or voiced?",
   model3d: "Want another take, or a model from a different photo?",
 };
+
+/**
+ * The generation ids a tool result started, in order: every id of each `"started": [...]` list (on
+ * the open engine 4 takes are 4 generations of one job) and each `"id": "..."`.
+ */
+const startedIds = (body: string) =>
+  [...body.matchAll(/"started":\s*\[([^\]]*)\]|"(?:started|id)":\s*"([\w-]+)"/g)].flatMap((m) => (m[2] ? [m[2]] : [...m[1].matchAll(/"([\w-]+)"/g)].map((x) => x[1])));
 
 /** The kind of the last generation a tool result started (the end of a chain), image when unknown. */
 function startedKind(body: string): MediaKind {
@@ -1303,6 +1314,9 @@ function toolCtx(s: State): ToolContext {
   };
 }
 
+/** A call's generations remember the call (Save as skill matches each call to what it made, whatever its result says). */
+const madeBy = (it: AssistItem, use: string): AssistItem => (it.role === "generations" ? { ...it, use } : it);
+
 async function runTool(name: string, input: unknown, ctx: ToolContext): Promise<{ result: Omit<ToolResult, "tool_use_id">; items: AssistItem[] }> {
   const out = await executeTool(name, input, ctx);
   return { result: { type: "tool_result", content: out.content, ...(out.isError && { is_error: true }) }, items: out.items ?? [] };
@@ -1356,6 +1370,7 @@ async function step(s: State, model: ModelCall): Promise<"continue" | "stop"> {
   const connectors = chatConnectors(s);
   const { system, update, sent } = contextFor(s, connectors);
   const active = s.ext.skills.map((n) => getSkill(n)).filter((x): x is NonNullable<typeof x> => !!x);
+  const latest = s.thread.items.findLast((i) => i.role === "user");
   const res = await model({
     system,
     messages: update ? [...s.messages, update] : s.messages,
@@ -1364,6 +1379,7 @@ async function step(s: State, model: ModelCall): Promise<"continue" | "stop"> {
     settings: { model: s.ext.model, effort: s.ext.effort, provider: s.ext.provider },
     threadId: s.thread.id,
     skills: active,
+    named: latest?.role === "user" ? (latest.skills ?? []) : [],
     ...(connectors.length && { connectors }),
   });
 
@@ -1440,7 +1456,7 @@ async function step(s: State, model: ModelCall): Promise<"continue" | "stop"> {
     const { result, items } = await runTool(u.name, u.input, ctx);
     results.push({ ...result, tool_use_id: u.id });
     if (price && !result.is_error) s.ext.spentUsd = Math.round((s.ext.spentUsd + price) * 1000) / 1000;
-    for (const it of items) push(s, it);
+    for (const it of items) push(s, madeBy(it, u.id));
   }
   const order = uses.map((u) => u.id);
   if (gated.length) {
@@ -1558,7 +1574,7 @@ export function addMessage(id: string, text: string, attachments: string[] = [])
   // The first message names the chat, unless it was started with a name (a scheduled run's).
   if (!s.thread.items.some((i) => i.role === "user") && s.thread.title === "New chat") s.thread.title = threadTitle(slash.text || titles.join(", ") || text);
   // Tool results first: they answer the assistant's last turn.
-  const results = s.pending ? decline(s, "The user replied with new instructions instead of approving; follow them.") : [];
+  const results = s.pending ? decline(s, REPLIED_INSTEAD) : [];
   if (!results.length) closeDanglingToolUses(s.messages);
   appendUser(s.messages, [...results, ...userBlocks(words, attachments)]);
   push(s, { role: "user", text: slash.skills.length ? slash.text : text, ...(attachments.length && { attachments }), ...(slash.skills.length && { skills: slash.skills }) });
@@ -1576,7 +1592,7 @@ function settle(s: State, approved: boolean): Pending {
   return p;
 }
 
-function decline(s: State, why = "The user declined this plan. Ask what they'd like to change."): ToolResult[] {
+function decline(s: State, why = DECLINED): ToolResult[] {
   const p = settle(s, false);
   return ordered([...p.results, ...p.gated.map((g) => ({ type: "tool_result" as const, tool_use_id: g.id, is_error: true, content: why }))], p.order);
 }
@@ -1587,7 +1603,7 @@ async function runApproved(s: State, p: Pending): Promise<ToolResult[]> {
   for (const g of p.gated) {
     const { result, items } = await runTool(g.name, g.input, ctx);
     results.push({ ...result, tool_use_id: g.id });
-    for (const it of items) push(s, it);
+    for (const it of items) push(s, madeBy(it, g.id));
   }
   return ordered(results, p.order);
 }
