@@ -143,9 +143,10 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       url,
       pinnedUrl: pin ? pinUrl(url, pin.revision) : url,
       sizeBytes: pin?.sizeBytes ?? Math.round(r.sizeGb * 1e9),
-      // The hash rides along where a copied command checks it: formats that can run code when they load (.pth, .ckpt…)
-      // and the other non-safetensors files. Every file's sha256 stays in model-pins.json (the size budget, §4.3).
-      ...(pin?.sha256 && ext !== '.safetensors' && { sha256: pin.sha256 }),
+      // The hash rides along where a copied command checks it: formats that can run code when they load (.pth, .ckpt…),
+      // the other non-safetensors files, and a file from outside Hugging Face (a release asset, which its owner can replace).
+      // Every file's sha256 stays in model-pins.json (the size budget, §4.3).
+      ...(pin?.sha256 && (ext !== '.safetensors' || !hfParts(url)) && { sha256: pin.sha256 }),
       gated: r.gated,
       ...(packFolder.has(r.folder) && { packFolder: packFolder.get(r.folder) }),
       presence,
@@ -282,17 +283,20 @@ export async function refreshPins(dir = LIBRARY, { token = process.env.HF_TOKEN,
   // Group by repo and revision asked for.
   const groups = new Map();
   const failed = [];
+  const byHand = [];
   for (const url of urls) {
     const p = hfParts(url);
     if (!p) {
-      failed.push({ url, why: 'not a Hugging Face resolve URL' });
+      // A release asset elsewhere (Zen Image Edit's adapter on GitHub): its pin is kept by hand.
+      failed.push({ url, why: 'not a Hugging Face resolve URL (pin kept by hand)' });
+      byHand.push(url);
       continue;
     }
     const k = `${p.kind}\u0000${p.repo}\u0000${p.rev}`;
     if (!groups.has(k)) groups.set(k, { ...p, items: [] });
     groups.get(k).items.push({ url, path: p.path });
   }
-  const pins = {};
+  const pins = Object.fromEntries(byHand.flatMap((url) => (old[url] ? [[url, old[url]]] : [])));
   for (const g of groups.values()) {
     let sha = /^[0-9a-f]{40}$/.test(g.rev) ? g.rev : null;
     try {

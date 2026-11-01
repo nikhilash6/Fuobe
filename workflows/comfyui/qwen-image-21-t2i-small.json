@@ -1,0 +1,134 @@
+{
+  "1": {
+    "inputs": {
+      "model_folder": "",
+      "adapter_file": "models/text_encoders/adapter_v12.safetensors",
+      "text_encoder": "Qwen/Qwen3.5-0.8B",
+      "dtype": "bf16"
+    },
+    "class_type": "ZenImage21AdapterLoader",
+    "_meta": {
+      "title": "Zen Image Edit adapter (Qwen3.5-0.8B)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "3": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "4": {
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "shift": 5
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "Static shift 5 (Zen's schedule)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "adapter": [
+        "1",
+        0
+      ],
+      "prompt": "",
+      "negative_prompt": "",
+      "resolution": 1024,
+      "width": 1024,
+      "height": 1024
+    },
+    "class_type": "ZenImage21TextEncode",
+    "_meta": {
+      "title": "Zen Image Edit text encode"
+    }
+  },
+  "6": {
+    "inputs": {
+      "seed": 0,
+      "steps": 30,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "5",
+        0
+      ],
+      "negative": [
+        "5",
+        1
+      ],
+      "latent_image": [
+        "5",
+        2
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "7": {
+    "inputs": {
+      "samples": [
+        "6",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "8": {
+    "inputs": {
+      "image": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "SplitImageWithAlpha",
+    "_meta": {
+      "title": "Drop the alpha"
+    }
+  },
+  "90": {
+    "inputs": {
+      "filename_prefix": "fuobe/qwen-image-21-t2i-small",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

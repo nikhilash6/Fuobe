@@ -80,6 +80,7 @@ import {
   viewerDefaults,
   writesCaptions,
 } from "@/lib/composer";
+import { qwen21Note } from "@/lib/qwen21-speed";
 import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
 import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
@@ -807,6 +808,8 @@ export function Composer({ docked }: { docked: boolean }) {
     preset?.userPrompt,
   );
   const effectiveOp = studioOp ?? op;
+  // Qwen-Image 2.1's Options → GPU on Small: what the small encoder can't do (or that a speed with its own graph wins).
+  const smallGpuNote = qwen21Note(opts.controls, p.extra, effectiveOp);
   // SDR to HDR, Export: every format the studio's models on this engine write; picking one this model doesn't
   // write moves the request to the model that does (EXR frames → LTX 2.3 HDR on the cloud).
   const engineModels = useMemo(() => models.filter((m) => m.engine === (model?.engine ?? engine)), [models, model?.engine, engine]);
@@ -1096,7 +1099,7 @@ export function Composer({ docked }: { docked: boolean }) {
           onStrength={(v) => setDraft({ presetStrength: v })}
         />
       )}
-      {opts.controls && <ControlsChip controls={opts.controls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} />}
+      {opts.controls && <ControlsChip controls={opts.controls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} op={effectiveOp} />}
     </>
   );
   const hasSecondary =
@@ -1595,6 +1598,7 @@ export function Composer({ docked }: { docked: boolean }) {
       )}
       {sketched.note && <p className="px-2 pt-1 text-[12px] text-muted-foreground">{sketched.note}</p>}
       {signed.notes.length > 0 && <p className="px-2 pt-1 text-[12px] text-muted-foreground">{signed.notes.join(" · ")}</p>}
+      {smallGpuNote && <p className="px-2 pt-1 text-[12px] text-muted-foreground">{smallGpuNote}</p>}
       {model && op && model.options.endFrame === undefined && draft.slots.endImage?.ref && (
         <p className="px-2 pt-1 text-[12px] text-warning">{model.name} ignores the end frame — pick Kling 2.5, Veo 3.1, Seedance or Wan 2.2 to use it.</p>
       )}

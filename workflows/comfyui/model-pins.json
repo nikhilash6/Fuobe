@@ -1,4 +1,9 @@
 {
+ "https://github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors": {
+  "revision": "v2",
+  "sizeBytes": 638987136,
+  "sha256": "85578cd0b41dfac3fad1845be2755971367deee5348a692feb589a09d120ea8c"
+ },
  "https://huggingface.co/ATH-MaaS/OvisOCR3/resolve/main/model.safetensors": {
   "revision": "4833d5d2afa6e769ee933f024504d67ace80a24c",
   "sizeBytes": 1706030528,
@@ -1009,5 +1014,30 @@
   "revision": "1b1521dd659608e1e063ada83e0acfe1da473a8b",
   "sizeBytes": 38592940,
   "sha256": "35c2a4e284515275d2e49a8e8cb5cd392ae67a1f1d345de1c12a0202c7b6b610"
+ },
+ "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights_v1_5.safetensors": {
+  "revision": "5bae28369ecea3232405c17a53c04d35d15796b8",
+  "sizeBytes": 67144520,
+  "sha256": "0cfee5d5fbb9c5f6262c82db4f59dd4e872dfaac9fb7c82c9f7191e0d31406c4"
+ },
+ "https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/6b0a1176327c01522a44276c5da67331a025b6fc/pytorch_lora_weights.safetensors": {
+  "revision": "6b0a1176327c01522a44276c5da67331a025b6fc",
+  "sizeBytes": 67144280,
+  "sha256": "53c69320d4163da51032f90275074028cb098556039c72b45f8dce9f0f9e34a3"
+ },
+ "https://huggingface.co/PrunaAI/P-Q-Image-2.1-Comfy/resolve/aa7dcecb1767e220e31a55706e33fd057c9a3fca/p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors": {
+  "revision": "aa7dcecb1767e220e31a55706e33fd057c9a3fca",
+  "sizeBytes": 344061264,
+  "sha256": "b10e6231bebc4852d921f168366fdb0f495ff867bcabd592a0626ca11dba7561"
+ },
+ "https://huggingface.co/akhaliq/Qwen-Image-2.1-Next-Scene-LoRA/resolve/67ce88cd413fe177758af5d91e25eb3a334aa06f/next_scene_step2500.safetensors": {
+  "revision": "67ce88cd413fe177758af5d91e25eb3a334aa06f",
+  "sizeBytes": 335605648,
+  "sha256": "55482093e8b8a80183810037df12f804196cee58e9e85311dc4f3bacf27a60b0"
+ },
+ "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors": {
+  "revision": "9a10df811f183323e4e94d255c18add1924ce340",
+  "sizeBytes": 675509688,
+  "sha256": "36f56608b02077a50a08ea3dbcdb88351298ceba49948f41f9f87186378e6908"
  }
 }
