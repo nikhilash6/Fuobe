@@ -10,7 +10,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
  */
 export async function GET(request: Request) {
   await connection();
-  if (!isOwnerRequest(request, sessionCookieOf(request))) return Response.json({ error: "Only the studio's owner sees accounts" }, { status: 403, headers: NO_STORE });
+  if (!isOwnerRequest(request, sessionCookieOf(request))) return Response.json({ error: "You can't open this." }, { status: 403, headers: NO_STORE });
   const items = listAccounts();
   if (new URL(request.url).searchParams.get("format") === "csv") {
     const day = new Date().toISOString().slice(0, 10);

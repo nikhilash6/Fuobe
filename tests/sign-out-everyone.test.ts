@@ -221,7 +221,7 @@ describe("H-1: Sign everyone out", () => {
     const a = auth.createAccount("proxy-signout@example.com", "long enough");
     const r = proxy(req("POST", { cookie: auth.createSession(a.id).value }));
     expect(r.status).toBe(403);
-    expect((await r.json()).error).toMatch(/owner/);
+    expect((await r.json()).error).toMatch(/aren't part of your account/);
     expect(proxy(req("POST")).status).toBe(401);
   });
 });

@@ -235,7 +235,8 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                 onChange={setMode}
                 options={[
                   { value: "here", label: "Generate here", hint: "Fuobe makes the episodes now" },
-                  { value: "claude", label: "Generate in Claude", hint: "Copy a prompt for Claude Code with Fuobe's MCP server" },
+                  // Handing the brief to Claude Code needs Fuobe's own MCP server: the owner's.
+                  ...(visitor ? [] : [{ value: "claude" as const, label: "Generate in Claude", hint: "Copy a prompt for Claude Code with Fuobe's MCP server" }]),
                 ]}
               />
               <span className="text-[12px] text-muted-foreground">{mode === "claude" ? "Claude writes them and runs Fuobe over MCP" : visitor ? "Makes the episodes now" : engine === "open" ? "Makes the episodes now, on your ComfyUI" : "Makes the episodes now, with your providers"}</span>
@@ -282,7 +283,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
                   <Sparkles className="size-3.5" /> Presets
                 </a>
                 <span className="text-[12px] text-muted-foreground">
-                  {engine === "open" ? (visitor ? "Gemma 4 reads the clip" : "Reading a clip is free (Gemma 4 on your ComfyUI)") : perMinute > 0 ? `Reading a clip costs about ${usd(perMinute)} a minute` : "Reading a clip runs as a free demo"}
+                  {engine === "open" ? (visitor ? "We study the clip's pacing and look" : "Reading a clip is free (Gemma 4 on your ComfyUI)") : perMinute > 0 ? `Reading a clip costs about ${usd(perMinute)} a minute` : "Reading a clip runs as a free demo"}
                 </span>
                 <input ref={file} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm" hidden onChange={(e) => (void onFile(e.target.files?.[0]), (e.target.value = ""))} />
               </div>
@@ -444,7 +445,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
               </Button>
             </div>
             {visitor ? (
-              <SelfHostNote className="mt-2">Content Factory runs on a self-hosted Fuobe for now.</SelfHostNote>
+              <SelfHostNote className="mt-2">Content Factory isn&apos;t available here.</SelfHostNote>
             ) : (
               mode === "here" &&
               est?.error && (
@@ -484,7 +485,7 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
             <h2 id="presets-title" className="font-heading text-[24px]">
               Pick a trending style to start from
             </h2>
-            <p className="text-[13px] text-muted-foreground">Ready-made briefs from formats that do well — nothing to read, so nothing to pay for.</p>
+            <p className="text-[13px] text-muted-foreground">Ready-made briefs from formats that perform.</p>
           </div>
           <PresetGrid value={view ? (view.reference?.presetId ?? null) : presetId} onPick={(p) => choosePreset(p.id)} />
         </section>

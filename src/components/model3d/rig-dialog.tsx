@@ -51,8 +51,7 @@ export function RigDialog({ glb, open, onOpenChange, cloudAllowed }: { glb: stri
         </DialogHeader>
         {!cloudAllowed ? (
           <p className="rounded-xl bg-muted p-3 text-[13px] text-muted-foreground" role="note">
-            Rigging runs on Meshy in the cloud, and this install runs open-source models only (Settings → Engine mode). There is no open rigger yet: UniRig&apos;s ComfyUI
-            pack isn&apos;t verified.
+            Rigging runs on a cloud model, which isn&apos;t available here.
           </p>
         ) : (
           <div className="grid gap-3">

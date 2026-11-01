@@ -18,7 +18,7 @@ export const MODEL3D_MODES: { id: Model3dMode; label: string; hint: string }[] =
   { id: "multi", label: "From several images", hint: "2–4 photos of the same object from different sides" },
   { id: "text", label: "From text", hint: "Describe one object" },
   { id: "objects", label: "Pick an object", hint: "Name what to take out of a photo" },
-  { id: "splat", label: "Splat", hint: "A Gaussian splat of the subject" },
+  { id: "splat", label: "Splat", hint: "A soft, photoreal 3D capture" },
 ];
 
 export interface Model3dChoice {
@@ -37,26 +37,26 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
       { id: "meshy-7-1", note: "Textured, optional rigging · ≈ $1.20" },
     ],
     open: [
-      { id: "oss-pixal3d", note: "Most faithful to the photo · textured GLB + turntable video · 16 GB GPU" },
-      { id: "oss-trellis2", note: "Fallback · textured GLB + turntable video · 16 GB GPU · MIT" },
-      { id: "oss-hunyuan3d-21", note: "Shape only · 10 GB GPU" },
+      { id: "oss-pixal3d", note: "Most faithful to your photo, with a turntable video" },
+      { id: "oss-trellis2", note: "A dependable second choice, with a turntable video" },
+      { id: "oss-hunyuan3d-21", note: "The shape only, without colour" },
     ],
   },
   multi: {
     cloud: [{ id: "meshy-7-1-multi", note: "Textured, from 2–4 photos · ≈ $1.20" }],
-    open: [{ id: "oss-trellis2-multi", note: "The front plus up to 3 sides · textured GLB + turntable · 16 GB GPU · MIT" }],
+    open: [{ id: "oss-trellis2-multi", note: "The front plus up to 3 sides, with a turntable video" }],
   },
   text: {
     cloud: [{ id: "tripo-h3-1-text", note: "A textured model from words · ≈ $0.20" }],
-    open: [{ id: "oss-text-trellis2", note: "Draws the object, then builds it · textured GLB + turntable · 20 GB GPU" }],
+    open: [{ id: "oss-text-trellis2", note: "Draws the object, then builds it in 3D, with a turntable video" }],
   },
   objects: {
     cloud: [{ id: "sam-3d-objects", note: "Rebuilds what you name, as it stands in the photo · ≈ $0.02" }],
     open: [],
   },
   splat: {
-    cloud: [{ id: "triposplat", note: "The subject as a .ply splat · ≈ $0.05" }],
-    open: [{ id: "oss-triposplat", note: "The subject as a .spz splat + an orbit video · 8 GB GPU · MIT" }],
+    cloud: [{ id: "triposplat", note: "A soft, photoreal 3D capture · ≈ $0.05" }],
+    open: [{ id: "oss-triposplat", note: "A soft, photoreal 3D capture, with an orbit video" }],
   },
 };
 

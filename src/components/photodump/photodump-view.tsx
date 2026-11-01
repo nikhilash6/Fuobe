@@ -26,9 +26,9 @@ import { RunLine, Steps } from "./steps";
 import { CharacterPicker } from "./subject";
 import { UploadBox } from "./upload-box";
 
-const STEPS = ["Choose a Pack", "Add your photo", "Get your photos"];
+const STEPS = ["Choose a pack", "Add your photo", "Get your photos"];
 const MODEL_NAMES: Record<string, string> = {
-  "fuobe-soul": "Fuobe Soul + Soul ID",
+  "fuobe-soul": "Fuobe Soul (keeps your face)",
   "nano-banana-pro": "Nano Banana Pro",
   "nano-banana-2-1": "Nano Banana 2.1",
   "seedream-5-pro": "Seedream 5.0 Pro",
@@ -40,7 +40,7 @@ const MODEL_NAMES: Record<string, string> = {
 const TABS = [
   ["all", "All"],
   ["photodump", "Photodump"],
-  ["instadump", "Instadump"],
+  ["instadump", "From a selfie"],
   ["mine", "My packs"],
 ] as const;
 const ratioOf = (a: string) => {
@@ -196,8 +196,8 @@ export function PhotodumpView() {
   const unavailable = (m?: string): string | null => {
     if (m !== PHOTODUMP_SOUL) return null;
     if (pack?.custom) return "Your own packs recreate each reference photo with an edit model";
-    if (!character) return "Needs a character with a trained Soul ID";
-    return soulIdOf({ kind: "element", handle: character.handle, name: character.name, references: character.references, loras: character.loras }, engine) ? null : `${character.name} has no Soul ID yet`;
+    if (!character) return "Pick a trained character";
+    return soulIdOf({ kind: "element", handle: character.handle, name: character.name, references: character.references, loras: character.loras }, engine) ? null : `${character.name} isn't trained yet`;
   };
   const pick = choices.includes(modelPick) && !unavailable(modelPick) ? modelPick : undefined;
   const body = pack && subjectReady
@@ -208,7 +208,7 @@ export function PhotodumpView() {
   const current = runs.find((r) => r.batchId === batchId);
   const items = current?.items ?? [];
   const state = runState(items);
-  const product = pack?.product === "photodump" ? "Photodump" : "Instadump";
+  const product = "photo set";
 
   const generate = () => {
     if (visitor) return;
@@ -225,16 +225,16 @@ export function PhotodumpView() {
 
   return (
     <PageShell wide>
-      <PageHeader title="Photodump" description="A whole set of photos of you in one go — from one selfie (Instadump) or a saved character, in a pack of styles.">
+      <PageHeader title="Photodump" description="A whole set of photos of you in one go, from one selfie or a saved character, in a pack of styles.">
         <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>
-      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Photodump runs on a self-hosted Fuobe for now.</SelfHostNote>}
+      {visitor && <SelfHostNote className="-mt-3 mb-6 max-w-2xl">Photodump isn&apos;t available here.</SelfHostNote>}
       <div className="mb-6">
         <Steps steps={STEPS} current={step} reached={reached} onGo={go} />
       </div>
 
       {step === 0 && (
-        <section aria-label="Choose a Pack" className="space-y-4">
+        <section aria-label="Choose a pack" className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <div role="tablist" aria-label="Packs" className="scrollbar-none inline-flex max-w-full overflow-x-auto rounded-full bg-muted p-0.5">
               {TABS.map(([id, label]) => (
@@ -275,7 +275,7 @@ export function PhotodumpView() {
                     <PackCover id={p.id} name={p.name} count={p.count} refs={p.refs} hue={p.hue} tone={p.tone} className="aspect-[3/4]" />
                   </button>
                   <p className="mt-1.5 line-clamp-2 px-0.5 text-[12px] text-muted-foreground">
-                    {p.custom ? "Your pack" : p.product === "instadump" ? `Instadump${p.author ? ` · by ${p.author}` : ""}` : "Soul 2.0 Photodump"} · {p.description}
+                    {p.custom ? "Your pack · " : ""}{p.description}
                   </p>
                   {p.custom && (
                     <button
@@ -291,7 +291,7 @@ export function PhotodumpView() {
               );
             })}
           </div>
-          {!shown.length && <p className="py-10 text-center text-[14px] text-muted-foreground">{tab === "mine" && !needle ? (visitor ? "Packs of your own are saved on a self-hosted Fuobe." : "No packs of your own yet — create one from your reference photos.") : `No packs match “${q}”`}</p>}
+          {!shown.length && <p className="py-10 text-center text-[14px] text-muted-foreground">{tab === "mine" && !needle ? (visitor ? "Saving packs of your own isn't available here." : "No packs of your own yet — create one from your reference photos.") : `No packs match “${q}”`}</p>}
           <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
             <p className="min-w-0 truncate text-[13px]">{pack ? <><span className="font-medium">{pack.name}</span> · {pack.count} photos</> : <span className="text-muted-foreground">Pick a pack to continue</span>}</p>
             <Button disabled={!pack} onClick={() => go(1)}>
@@ -328,7 +328,7 @@ export function PhotodumpView() {
           <div className="min-w-0 space-y-4">
             <div>
               <h2 className="font-heading text-[26px] leading-tight">Add your photo</h2>
-              <p className="text-[14px] text-muted-foreground">Upload one selfie or photo - it’ll be the base for your photodump styles. Or use a saved character.</p>
+              <p className="text-[14px] text-muted-foreground">Add one clear selfie, and every photo in the pack is made from it. Or use a saved character.</p>
             </div>
             <div role="radiogroup" aria-label="Who is in the photos" onKeyDown={radioKeys} className="inline-flex rounded-full bg-muted p-0.5">
               {(
@@ -348,12 +348,12 @@ export function PhotodumpView() {
                 <div inert={visitor} className={cn(visitor && "opacity-50")}>
                   <UploadBox value={selfie} onChange={setSelfie} title="Add your photo" hint="Use a clear, well-lit photo for best results." maxMb={MAX_SELFIE_MB} className="aspect-[4/3] max-h-[420px] w-full" />
                 </div>
-                <p className="text-[12px] text-muted-foreground">Portrait-to-portrait works best: a clear, high-resolution photo with a visible face, without heavy stylization.</p>
+                <p className="text-[12px] text-muted-foreground">A clear, sharp photo of your face works best.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 <CharacterPicker value={elementId} onChange={setElementId} />
-                <p className="text-[12px] text-muted-foreground">Characters with a trained Soul ID keep the face best (Fuobe Soul, on either engine); others are sent as reference photos.</p>
+                <p className="text-[12px] text-muted-foreground">Trained characters keep the face best.</p>
               </div>
             )}
           </div>

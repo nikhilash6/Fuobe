@@ -7,6 +7,7 @@ import { uploadFile, useAskBeforeUpload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import type { SlotValue } from "./media-slot";
+import { cleanVoiceFile, CleanVoiceSwitch, useCleanVoiceAvailability, useCleanVoicePref } from "@/components/audio-tools/clean-voice-switch";
 
 /** Decode any recording the browser made and re-encode it as 16-bit mono WAV — every voice API takes WAV. */
 export async function toWav(blob: Blob): Promise<File> {
@@ -40,17 +41,26 @@ export async function toWav(blob: Blob): Promise<File> {
   }
 }
 
-/** Mic button: record a voice sample, convert it to WAV and upload it. Whoever the upload would refuse is asked first. */
-export function VoiceRecorder({ onRecorded, max = 60, className }: { onRecorded: (v: SlotValue) => void; max?: number; className?: string }) {
-  const [state, setState] = useState<"idle" | "recording" | "saving">("idle");
+/**
+ * Mic button: record a voice sample, convert it to WAV and upload it. Whoever the upload would refuse is asked first.
+ * `clean`: a "Clean up voice" switch sits beside it, and while it is on the recording is cleaned (RE-USE, open engine)
+ * before it is handed over, named "Recording · cleaned" (the original rides along to compare).
+ */
+export function VoiceRecorder({ onRecorded, max = 60, className, clean }: { onRecorded: (v: SlotValue & { original?: string }) => void; max?: number; className?: string; clean?: boolean }) {
+  const [state, setState] = useState<"idle" | "recording" | "saving" | "cleaning">("idle");
+  const [cleanOn] = useCleanVoicePref();
+  const cleanHere = useCleanVoiceAvailability() === "ok" && !!clean && cleanOn;
   const [secs, setSecs] = useState(0);
   const rec = useRef<MediaRecorder | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // The clean in progress: aborted when the recorder goes away, or by "Use the original" (skipped).
+  const cleaning = useRef<{ c: AbortController; skipped: boolean } | null>(null);
 
   useEffect(
     () => () => {
       if (timer.current) clearInterval(timer.current);
       rec.current?.stream.getTracks().forEach((t) => t.stop());
+      cleaning.current?.c.abort();
     },
     [],
   );
@@ -79,6 +89,23 @@ export function VoiceRecorder({ onRecorded, max = 60, className }: { onRecorded:
       try {
         const file = await toWav(new Blob(chunks, { type: r.mimeType }));
         const asset = await uploadFile(file);
+        if (cleanHere) {
+          setState("cleaning");
+          const job = { c: new AbortController(), skipped: false };
+          cleaning.current = job;
+          try {
+            const { url } = await cleanVoiceFile(asset.url, "Recording", job.c.signal);
+            onRecorded({ ref: url, preview: url, kind: "audio", name: "Recording · cleaned", original: asset.url });
+          } catch (e) {
+            // Gone from the page: nothing to hand over. Skipped: the original, quietly. Failed: the original, and why.
+            if (job.c.signal.aborted && !job.skipped) return;
+            if (!job.skipped) toastError(e, "Couldn't clean the voice, so the original is kept");
+            onRecorded({ ref: asset.url, preview: asset.url, kind: "audio", name: "Recording" });
+          } finally {
+            if (cleaning.current === job) cleaning.current = null;
+          }
+          return;
+        }
         onRecorded({ ref: asset.url, preview: asset.url, kind: "audio", name: "Recording" });
       } catch (e) {
         toastError(e, "Couldn't save the recording");
@@ -97,19 +124,34 @@ export function VoiceRecorder({ onRecorded, max = 60, className }: { onRecorded:
     }, 1000);
   };
 
-  return (
+  const skipClean = () => {
+    const job = cleaning.current;
+    if (!job) return;
+    job.skipped = true;
+    job.c.abort();
+  };
+
+  const button = (
     <button
       type="button"
-      onClick={state === "recording" ? stop : start}
+      onClick={state === "recording" ? stop : state === "cleaning" ? skipClean : start}
       disabled={state === "saving"}
+      title={state === "cleaning" ? "Use the original recording now" : undefined}
       className={cn(
         "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium transition-colors",
         state === "recording" ? "bg-destructive text-white" : "bg-secondary text-secondary-foreground hover:bg-accent",
         className,
       )}
     >
-      {state === "saving" ? <Loader2 className="size-3.5 animate-spin" /> : state === "recording" ? <Square className="size-3 fill-current" /> : <Mic className="size-3.5" />}
-      {state === "recording" ? `Stop · 0:${String(secs).padStart(2, "0")}` : state === "saving" ? "Saving…" : "Record"}
+      {state === "saving" || state === "cleaning" ? <Loader2 className="size-3.5 animate-spin" /> : state === "recording" ? <Square className="size-3 fill-current" /> : <Mic className="size-3.5" />}
+      {state === "recording" ? `Stop · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}` : state === "saving" ? "Saving…" : state === "cleaning" ? "Cleaning… · Skip" : "Record"}
     </button>
+  );
+  if (!clean) return button;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      {button}
+      <CleanVoiceSwitch hint="" />
+    </span>
   );
 }

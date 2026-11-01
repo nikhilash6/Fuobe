@@ -2,6 +2,7 @@ import { shareRoute } from "@/lib/share";
 import { fileResponse } from "@/server/file-response";
 import { findShare } from "@/server/share-access";
 import { shareServesFile } from "@/server/shares";
+import { fileHeld } from "@/server/account-library";
 
 const NOINDEX = { "X-Robots-Tag": "noindex, nofollow, noarchive", "Referrer-Policy": "no-referrer" };
 
@@ -15,7 +16,8 @@ export async function GET(request: Request, ctx: RouteContext<"/s/[token]/f/[...
   const { token, path: parts } = await ctx.params;
   const rel = shareRoute(`/s/${token}/f/${parts.join("/")}`)?.file;
   const row = rel ? findShare(token) : null;
-  if (!rel || !row || !shareServesFile(row, rel)) return new Response("Not found", { status: 404, headers: NOINDEX });
+  // A file hidden by the owner, or held for its check, is never served by a link.
+  if (!rel || !row || !shareServesFile(row, rel) || fileHeld(rel)) return new Response("Not found", { status: 404, headers: NOINDEX });
   // Revoking stops new requests at once; a browser may keep what it already has for a few minutes.
   return fileResponse(request, rel, { cache: "private, max-age=300", headers: NOINDEX, clean: true });
 }

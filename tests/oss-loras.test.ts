@@ -57,7 +57,7 @@ describe("the map v2", () => {
     // BTS's licence is on hold in the research: its preset keeps running its words until it is evaluated, and Details
     // says so in plain words, without the research notes.
     expect(getPreset("motion-bts")!.open!.loras).toBeUndefined();
-    expect(getPreset("motion-bts")!.parity).toBe("On your GPU, Fuobe DoP follows the move's description. In the cloud it runs on a partner model.");
+    expect(getPreset("motion-bts")!.parity).toBe("On your GPU, Fuobe DoP films this move from a written direction.");
   });
 
   it("knows each LoRA's family", () => {
@@ -150,7 +150,7 @@ describe("every motion and effect on Fuobe DoP", () => {
     expect(wiggle.cloud).toMatchObject({ modelId: "kling-2-5-turbo", partner: true });
     expect(wiggle.cloud!.loras).toBeUndefined();
     expect(wiggle.cloud!.promptTemplate).toBeUndefined();
-    expect(wiggle.parity).toBe("On your GPU, Fuobe DoP uses a LoRA trained for this move. Its LoRA is licensed for your GPU only, so in the cloud it runs on a partner model.");
+    expect(wiggle.parity).toBe("On your GPU, Fuobe DoP uses a style trained for this move. Its trained style is licensed for your GPU only.");
     // Sent to fal (a Mix, a hand-made request), it goes and the run says what the licence says...
     const fal = getModel(DOP_MODEL)!.routes.find((r) => r.provider === "fal" && r.op === "i2v")!;
     const sent = fitLoras(wiggle.open!.loras ?? [], fal);

@@ -19,7 +19,7 @@ export class LayersRequestError extends Error {
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw responseError(res, new LayersRequestError(body.error ?? `Request failed (${res.status})`, res.status));
+  if (!res.ok) throw responseError(res, new LayersRequestError(body.error ?? "Something went wrong. Please try again.", res.status));
   return body;
 }
 

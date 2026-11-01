@@ -225,7 +225,7 @@ describe("catalog", () => {
     expect(l.licence.class).toBe("paid-api");
     expect(l.licence.name).toMatch(/fal/);
     expect(l.licence.name).toMatch(/Replicate/);
-    expect(l.licence.note).toMatch(/Kuaishou/);
+    expect(l.licence.note).toMatch(/You pay per run/);
     expect(isOffered("kling-4", "cloud")).toBe(true);
   });
 
@@ -563,7 +563,7 @@ describe("@mentions become Kling elements", () => {
   });
 
   it("says voices aren't sent yet", () => {
-    expect(elementsNote(kling)).toMatch(/voices: not yet/);
+    expect(elementsNote(kling)).toMatch(/voices aren't used/);
     expect(elementsNote(getModel("kling-3"))).toBeUndefined();
   });
 });

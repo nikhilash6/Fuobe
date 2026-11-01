@@ -81,8 +81,8 @@ describe("an account's Kling 4.0 reference clips", () => {
     // The read that measures a clip for the price (generations.ts prepClip) goes through readRef's guard.
     await asA(async () => {
       expect((await readRef(mine.url)).data.equals(CLIP)).toBe(true);
-      await expect(readRef(theirs.url)).rejects.toThrow(/isn't yours/);
-      await expect(readRef(owners.url)).rejects.toThrow(/isn't yours/);
+      await expect(readRef(theirs.url)).rejects.toThrow(/We can't find that file/);
+      await expect(readRef(owners.url)).rejects.toThrow(/We can't find that file/);
     });
   });
 

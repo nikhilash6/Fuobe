@@ -74,7 +74,7 @@
   </tr>
 </table>
 
-**Also inside:** Cinema (with a Fly path through 3D scenes), Shorts, Marketing and Ads studios, Canvas node workflows, Storyboard, Turnaround video, voice and music tools (Split soundtrack takes any soundtrack apart into dialogue, music and effects), skills, MCP and a CLI. [See every feature →](docs/FEATURES.md)
+**Also inside:** Live edit (the picture changes as you type, on your own GPU), Cinema (with a Fly path through 3D scenes), Shorts, Marketing and Ads studios, Canvas node workflows, Storyboard, Turnaround video, voice and music tools (Split soundtrack takes any soundtrack apart into dialogue, music and effects), skills, MCP and a CLI. [See every feature →](docs/FEATURES.md)
 
 ## Quick start
 
@@ -179,11 +179,11 @@ Browser checks, catalog generation, the evaluation harness and the project layou
 | [Command line](docs/cli.md) | The `fuobe` CLI, plus MCP and skills for other agents |
 | [Architecture](docs/ARCHITECTURE.md) | How a request flows from the composer to the providers and back |
 | [Development](docs/DEVELOPMENT.md) | Tests, browser checks, the evaluation harness, project layout |
-| [Status](docs/STATUS.md) | What works, what is verified and what is left (also in the app at `/status`) |
+| [Status](docs/STATUS.md) | What works, what is verified and what is left |
 
 ## License
 
-Fuobe's code is [MIT licensed](LICENSE). Model weights, LoRAs and ComfyUI node packs have their own licences: **Settings → Models & licences** shows each one with a switch, and [Model licences](docs/FEATURES.md#model-licences) lists the ones to check before commercial use.
+Fuobe's code is [MIT licensed](LICENSE). Model weights, LoRAs and ComfyUI node packs have their own licences. [CREDITS.md](CREDITS.md) lists the notices and attributions they ask for and the licence of every open model Fuobe runs (`node scripts/credits.mjs` writes it). **Settings → Models & licences** shows each one with a switch, and [Model licences](docs/FEATURES.md#model-licences) lists the ones to check before commercial use.
 
 <br>
 

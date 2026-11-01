@@ -3,10 +3,11 @@ import fs from "node:fs";
 import { CONNECT_GPU_HEADER, CONNECT_GPU_MESSAGE, GUEST_HEADER, GUEST_RUN_MESSAGE } from "@/lib/guest-access";
 import type { WantedFile } from "@/lib/relay";
 import { sniffMedia } from "@/lib/sniff";
-import { accountGpu, authEnabled, crossSite, hostAllowed, requestViewer, validToken } from "../auth";
+import { accountById, accountGpu, authEnabled, crossSite, hostAllowed, publicSignup, requestViewer, validToken } from "../auth";
 import { hit } from "../rate";
 import { getSetting } from "../settings";
 import { RelayError, type Principal } from "./tasks";
+import { isWorkerAuth, workerFromAuth, type WorkerRow } from "./workers";
 
 /**
  * What every "computer" route (src/app/api/gpu/computer) checks first: a person in a browser on this site (no API
@@ -17,7 +18,9 @@ import { RelayError, type Principal } from "./tasks";
 export function principalOf(request: Request): Principal | Response {
   const no = (status: number, error: string, extra: Record<string, unknown> = {}, headers: Record<string, string> = {}) =>
     Response.json({ error, ...extra }, { status, headers: { "Cache-Control": "no-store", ...headers } });
-  if (validToken(request.headers.get("authorization"))) return no(403, "Only Fuobe open in a browser runs jobs on your computer.");
+  const auth = request.headers.get("authorization");
+  if (isWorkerAuth(auth)) return workerPrincipal(request, auth!, no);
+  if (validToken(auth)) return no(403, "Only Fuobe open in a browser runs jobs on your computer.");
   const host = request.headers.get("host") ?? new URL(request.url).host;
   if (crossSite(request, host)) return no(403, "Blocked a request from another website.");
   const site = request.headers.get("sec-fetch-site");
@@ -34,9 +37,49 @@ export function principalOf(request: Request): Principal | Response {
   return `acct:${viewer.account.id}`;
 }
 
-/** At most `limit` calls a minute of one kind for a principal. */
-export function rateOf(principal: Principal, what: string, limit: number): Response | null {
-  const r = hit(`relay-${what}:${principal}`, limit, 60_000);
+/**
+ * A worker's call (`Authorization: Bearer fuobe_wkr_…`, from a program: no browser checks). A paired ComfyUI acts as its
+ * person's own computer, with the same checks their browser gets: the owner while Settings says ComfyUI runs on the
+ * owner's computer, an account while sign-up is open and its GPU is "this computer". Its token says whose it is; the
+ * request can't change that.
+ */
+function workerPrincipal(request: Request, auth: string, no: (status: number, error: string, extra?: Record<string, unknown>) => Response): Principal | Response {
+  const w = workerFromAuth(auth, request.headers.get("cf-ipcountry"));
+  if (!w) return no(401, "This ComfyUI isn't paired with this studio any more. Pair it again from Fuobe Connect.", { code: "worker-token" });
+  const host = request.headers.get("host") ?? new URL(request.url).host;
+  if (!authEnabled() && !hostAllowed(host)) return no(403, "Blocked a request for an address this studio isn't reached at.");
+  workerOfRequest.set(request, w);
+  // One of the owner's shared GPUs (docs/gpu-workers.md): it takes tasks for its pool, never a person's own.
+  if (w.kind === "pool") return `pool:${w.pool}`;
+  if (!w.principal) return no(401, "This worker's token isn't valid.", { code: "worker-token" });
+  if (w.principal === "owner") {
+    return getSetting("comfyWhere") === "computer" ? "owner" : no(409, "This studio's ComfyUI runs on its server.", { code: "server-mode" });
+  }
+  const id = w.principal.startsWith("acct:") ? w.principal.slice(5) : "";
+  const account = id ? accountById(id) : undefined;
+  if (!account || account.disabled || !publicSignup(host)) return no(401, "This account can't run jobs here now.", { code: "worker-token" });
+  const gpu = accountGpu(id);
+  if (!gpu) return no(403, CONNECT_GPU_MESSAGE, { code: "connect-gpu" });
+  if (gpu.mode !== "computer") return no(409, "Your GPU is connected with a link, so the server runs it.", { code: "link-mode" });
+  return w.principal as Principal;
+}
+
+/** The worker that made a request, once principalOf has read it (null: a browser). */
+const workerOfRequest = new WeakMap<Request, WorkerRow>();
+export const requestWorker = (request: Request): WorkerRow | null => workerOfRequest.get(request) ?? null;
+
+/**
+ * Whose limits a call counts against: a principal's (a person's computers share them), or one worker's own (three
+ * workers of one pool that beat every 5 seconds are never held up by each other).
+ */
+export function callerKey(request: Request, principal: Principal): string {
+  const w = workerOfRequest.get(request);
+  return w ? `${principal}:${w.id}` : principal;
+}
+
+/** At most `limit` calls a minute of one kind for a caller (callerKey). */
+export function rateOf(caller: string, what: string, limit: number): Response | null {
+  const r = hit(`relay-${what}:${caller}`, limit, 60_000);
   return r.ok ? null : Response.json({ error: "Too many at once. Fuobe tries again by itself." }, { status: 429, headers: { "Retry-After": String(r.retryAfterS), "Cache-Control": "no-store" } });
 }
 

@@ -95,7 +95,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
   const est = estimate.data && !estimate.isError ? estimate.data : undefined;
 
   const blocker = visitor
-    ? "Restore runs on a self-hosted Fuobe for now"
+    ? "Restore & colourise isn't available here"
     : !clip
     ? "Add a clip"
     : clip.error
@@ -150,9 +150,9 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
       {!clip && (
         <ToolHero
           title="Restore & colourise"
-          subtitle={`Old scans, tape and black-and-white film back in colour, clean and sharp, with Lightricks' Restore IC-LoRA. Priced before it runs${visitor ? "." : "; free on your own ComfyUI."}`}
+          subtitle={`Old scans, tape and black-and-white film back in colour, clean and sharp${visitor ? "." : ", free on your own ComfyUI."}`}
         >
-          {visitor && <SelfHostNote className="mt-3 max-w-xl">Restore & colourise runs on a self-hosted Fuobe for now.</SelfHostNote>}
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">Restore &amp; colourise isn&apos;t available here.</SelfHostNote>}
         </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>

@@ -34,7 +34,7 @@ export interface ModelRow {
 }
 
 /** The picker's and the Models page's note on models that run on the isolated ComfyUI worker. */
-export const ISOLATED_NOTE = "Runs on the isolated ComfyUI worker";
+export const ISOLATED_NOTE = "Runs on a second ComfyUI";
 
 const BADGE_LABEL: Record<string, string> = {
   new: "New",

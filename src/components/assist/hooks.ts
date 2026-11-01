@@ -36,7 +36,7 @@ export type ScheduleRuleInput = ScheduleRule extends infer R ? (R extends { kind
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw Object.assign(responseError(res, body.error ?? `Request failed (${res.status})`), { status: res.status });
+  if (!res.ok) throw Object.assign(responseError(res, body.error ?? "Something went wrong. Please try again."), { status: res.status });
   return body;
 }
 
@@ -188,7 +188,7 @@ export type RecipeFailure = Error & { status?: number; problems?: string[] };
 async function recipeCall<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const out = (await res.json().catch(() => ({}))) as T & { error?: string; problems?: string[] };
-  if (!res.ok) throw Object.assign(responseError(res, out.error ?? `Request failed (${res.status})`), { status: res.status, problems: out.problems }) as RecipeFailure;
+  if (!res.ok) throw Object.assign(responseError(res, out.error ?? "Something went wrong. Please try again."), { status: res.status, problems: out.problems }) as RecipeFailure;
   return out;
 }
 
@@ -470,7 +470,7 @@ export function useScheduleActions() {
       const body = (await r.json().catch(() => ({}))) as { threadId?: string | null; error?: string };
       refresh();
       if (r.status === 409) return null;
-      if (!r.ok) throw responseError(r, body.error ?? `Request failed (${r.status})`);
+      if (!r.ok) throw responseError(r, body.error ?? "Something went wrong. Please try again.");
       return body.threadId ?? null;
     },
   };

@@ -259,7 +259,7 @@ async function ready(page, url) {
   await page.locator("#layout-caption").fill("A candle sale poster");
   await page.getByRole("button", { name: "Done" }).click();
   const strip = await page.locator("[data-layout-strip]").innerText();
-  check("layout: the strip says the size it's compiled at", /Compiled for MOSS-Image at \d+ × \d+/.test(strip), strip.replace(/\n/g, " "));
+  check("layout: the strip says the size it's laid out at", /Laid out for MOSS-Image at \d+ × \d+/.test(strip), strip.replace(/\n/g, " "));
   const sent = page.waitForRequest((r) => r.url().endsWith("/api/generations") && r.method() === "POST", { timeout: 30_000 });
   await page.getByRole("button", { name: /^Generate/ }).click();
   const body = JSON.parse((await sent).postData() ?? "{}");

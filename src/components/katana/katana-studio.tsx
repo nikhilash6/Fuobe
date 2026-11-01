@@ -57,7 +57,7 @@ async function findCuts(src: string, duration: number, onProgress: (p: number) =
 
 /** visitor: a guest or an account, whose own GPU doesn't run Katana yet (the page says so). */
 const money = (usd: number | null | undefined, demo?: boolean, open?: boolean, visitor?: boolean) =>
-  visitor && (demo || open) ? "Self-hosted only" : demo ? "Placeholder · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
+  visitor && (demo || open) ? "Not available here" : demo ? "Placeholder · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
 
 /** Katana: rebuild a reference edit with your subject, shot for shot. */
 export function KatanaStudio() {
@@ -128,7 +128,7 @@ export function KatanaStudio() {
                 ? (preview.error as Error).message
                 : null;
   // A guest or an account reads why Recreate is off, not a step on an upload that is off too.
-  const blocker = visitor ? "Katana runs on a self-hosted Fuobe for now" : setupBlocker;
+  const blocker = visitor ? "Katana isn't available here" : setupBlocker;
 
   const scan = async () => {
     if (!reference || !meta || scanning !== null) return;
@@ -159,7 +159,7 @@ export function KatanaStudio() {
   return (
     <ToolShell title="Katana" selfHostedOnly>
       <ToolHero title="Recreate the edit. Make it yours." subtitle="Drop a reference edit and up to 5 photos of your subject — Katana rebuilds it shot for shot, at the original cut times, with the original sound.">
-        {visitor && <SelfHostNote className="mt-3 max-w-xl">Katana runs on a self-hosted Fuobe for now.</SelfHostNote>}
+        {visitor && <SelfHostNote className="mt-3 max-w-xl">Katana isn&apos;t available here.</SelfHostNote>}
       </ToolHero>
       <div className="mx-auto mt-8 grid max-w-[1040px] gap-4 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
         {/* A guest's or an account's files would be uploaded for an edit that can't start here. */}
@@ -246,7 +246,7 @@ export function KatanaStudio() {
             <p className="mt-2 flex items-start gap-1.5 text-[12px] text-muted-foreground">
               <Users className="mt-0.5 size-3.5 shrink-0" /> A person, a product or an outfit. Clear, well-lit photos from a couple of angles work best.
             </p>
-            {engine === "open" && <p className="mt-1 text-[12px] text-muted-foreground">The open engine uses your first {OPEN_KEYFRAME_PHOTOS} photos (Qwen-Image 2.1 Turbo takes the frame and {OPEN_KEYFRAME_PHOTOS} references).</p>}
+            {engine === "open" && <p className="mt-1 text-[12px] text-muted-foreground">We use your first {OPEN_KEYFRAME_PHOTOS} photos.</p>}
           </Panel>
           <Panel title="Instructions (optional)">
             <Textarea

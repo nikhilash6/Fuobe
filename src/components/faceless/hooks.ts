@@ -26,7 +26,7 @@ import { responseError } from "@/lib/refusals";
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw responseError(res, body.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? "Something went wrong. Please try again.");
   return body;
 }
 

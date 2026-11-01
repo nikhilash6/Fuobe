@@ -153,8 +153,8 @@ function EmptyProjects({ loading, onCreate, className }: { loading?: boolean; on
             </>
           ) : (
             <>
-              <h2 className="mt-5 font-heading text-[26px] leading-tight">Projects aren&apos;t on free accounts yet</h2>
-              <SelfHostNote className="mt-2 text-[15px]">Free accounts can use the Image, Video and Audio studios, camera motions, effects and apps.</SelfHostNote>
+              <h2 className="mt-5 font-heading text-[26px] leading-tight">Projects aren&apos;t available here</h2>
+              <SelfHostNote className="mt-2 text-[15px]" />
             </>
           )}
         </>

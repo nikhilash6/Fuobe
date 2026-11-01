@@ -31,6 +31,7 @@ export const IMAGE_STUDIO: StudioConfig = {
   // the face mosaic after the picture: its step's model is known here so the price counts it before the run.
   signature: true,
   extraModels: [...Object.values(SIGNATURE_MODELS), ...Object.values(FACE_MOSAIC_MODELS)],
+  related: { href: "/live-edit?from=image", label: "Try it live: change a picture as you type" },
   suggestions: [
     "Editorial portrait of a woman in a yellow raincoat, Tokyo crosswalk at dusk, 35mm film",
     "Isometric cozy reading nook with plants and warm lamp light, 3D render",
@@ -51,6 +52,7 @@ export const EDIT_STUDIO: StudioConfig = {
   // The image and up to 9 references (FLUX 3 Klein takes 10 in all); each model's own limit caps it.
   multiRef: { label: "Add ref", max: 9 },
   sketch: ["mask", "draw"],
+  live: true,
   defaultModels: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
   suggestions: [
     "Make it golden hour",
@@ -64,7 +66,7 @@ export const INPAINT_STUDIO: StudioConfig = {
   feature: "edit",
   title: "Inpaint",
   hero: "Paint it, then say what goes there",
-  subtitle: "Paint the area to change, then say what goes there. Qwen-Image 2.1 and FLUX Fill use your mask directly.",
+  subtitle: "Brush over what should change, then describe it.",
   placeholder: "What should fill the painted area? e.g. “a vase of white tulips”",
   kind: "image",
   ops: ["inpaint", "edit"],
@@ -115,7 +117,7 @@ export const LIPSYNC_STUDIO: StudioConfig = {
   slots: [
     { key: "image", label: "Portrait", accept: "image", hint: "For a talking avatar" },
     { key: "video", label: "Video", accept: "video", hint: "To re-sync an existing clip" },
-    { key: "audio", label: "Voice", accept: "audio", required: true },
+    { key: "audio", label: "Voice", accept: "audio", required: true, cleanVoice: true },
   ],
   anyOf: [["image", "video"]],
   defaultModels: { cloud: "kling-avatar-2", open: "oss-infinitetalk" },
@@ -194,7 +196,7 @@ export const VIDEO_EXPORT_STUDIO: StudioConfig = {
   feature: "export-video",
   title: "Upscale",
   hero: "Export for the edit",
-  subtitle: "ProRes 422 HQ or 4444, H.265 10-bit, lossless FFV1 or EXR frames, written by ComfyUI on your machine for free.",
+  subtitle: "ProRes 422 HQ or 4444, H.265 10-bit, lossless FFV1 or EXR frames, free on your own GPU.",
   placeholder: "",
   kind: "video",
   ops: ["export-video"],
@@ -208,7 +210,7 @@ export const VIDEO_EXPORT_STUDIO: StudioConfig = {
   controlsTitle: "Options",
   // No cloud API transcodes a finished clip, and the server runs no ffmpeg of its own.
   comfyOnly: {
-    note: "Export formats are written by ComfyUI on your own machine, for free, and no ComfyUI is connected. Connect one under Settings → Open-source engine.",
+    note: "Export formats are made on your own GPU. Connect your GPU to use them.",
     alternative: { label: "ProRes 422 HQ in the cloud: Topaz SDR to HDR (also converts it to HDR)", href: "/upscale/hdr?model=topaz-sdr-to-hdr&format=prores_422_hq" },
   },
 };
@@ -251,7 +253,7 @@ export const VOICE_CHANGE_STUDIO: StudioConfig = {
   kind: "audio",
   ops: ["voice-change"],
   feed: { kind: "audio", features: ["audio"] },
-  slots: [{ key: "audio", label: "Recording", accept: "audio", required: true }],
+  slots: [{ key: "audio", label: "Recording", accept: "audio", required: true, cleanVoice: true }],
   defaultModels: { cloud: "elevenlabs-voice-changer", open: "oss-chatterbox-vc" },
   promptOptional: true,
   hidePrompt: true,
@@ -321,7 +323,7 @@ export const FOLEY_STUDIO: StudioConfig = {
   feature: "audio",
   title: "Audio",
   hero: "Add sound to a video",
-  subtitle: "Foley in sync with the picture: HunyuanVideo-Foley or MMAudio on your ComfyUI.",
+  subtitle: "Sound effects in sync with the picture.",
   placeholder: "Optional: describe the sound, e.g. “footsteps on gravel, distant birds”",
   kind: "video",
   ops: ["v2a"],
@@ -434,7 +436,7 @@ export const VIDEO_MATTE_STUDIO: StudioConfig = {
   feature: "video-tools",
   title: "Video tools",
   hero: "Cut out the subject",
-  subtitle: "Every frame matted — a transparent WebM you can drop over anything, or its black-and-white alpha mask. Pick SAM to keep just what you name.",
+  subtitle: "Cut the subject out of every frame and drop it over anything. Or name what to keep.",
   placeholder: "What to keep, e.g. “the dog” or “the woman in red”",
   kind: "video",
   ops: ["bg-remove-video"],
@@ -484,7 +486,7 @@ export const JOIN_CLIPS_STUDIO: StudioConfig = {
 export const VIDEO_COLOR_MATCH_STUDIO: StudioConfig = {
   ...VIDEO_MATTE_STUDIO,
   hero: "Match the colors of a reference",
-  subtitle: "Every frame takes on the palette of the image you add — no AI model, runs on CPU.",
+  subtitle: "Every frame takes on the palette of the image you add.",
   placeholder: "",
   ops: ["color-match"],
   slots: [

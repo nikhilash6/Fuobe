@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { connection } from "next/server";
 import { RELAY_LIMITS } from "@/lib/relay";
 import { gateAsProxy } from "@/server/direct-gate";
-import { isUtf8File, outputType, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
+import { callerKey, isUtf8File, outputType, principalOf, rateOf, relayAnswer } from "@/server/computer/http";
 import { failTask, getTask, leased, outputFile, outputStatus, receivePart, RelayError, SNIFF_BYTES, wantedOf, type TaskRow } from "@/server/computer/tasks";
 import { enter } from "@/server/rate";
 
@@ -62,7 +62,7 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/gpu/computer
   if (denied) return denied;
   const principal = principalOf(request);
   if (principal instanceof Response) return principal;
-  const limited = rateOf(principal, "output", 600);
+  const limited = rateOf(callerKey(request, principal), "output", 600);
   if (limited) return limited;
   const declared = request.headers.get("content-length");
   if (declared === null || !/^\d+$/.test(declared)) return no(411, "Send the part with its size (Content-Length).");
@@ -80,7 +80,7 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/gpu/computer
   } catch (e) {
     return relayAnswer(e);
   }
-  const mine = enter(`relay-out:${principal}`, 1);
+  const mine = enter(`relay-out:${callerKey(request, principal)}`, 1);
   if (!mine) return no(429, "Another result of yours is uploading. Fuobe tries again by itself.", { "Retry-After": "2" });
   const all = enter("relay-out", AT_ONCE);
   if (!all) {
@@ -88,7 +88,7 @@ export async function PUT(request: Request, ctx: RouteContext<"/api/gpu/computer
     return no(429, "The studio is busy saving other results. Fuobe tries again by itself.", { "Retry-After": "3" });
   }
   try {
-    const owner = principal === "owner";
+    const owner = t.principal === "owner";
     const r = await receivePart(t, n, { offset, total, length }, (file, append) => writeBody(request, file, append, length), (head, w) => outputType(head, w, owner));
     // A text result is UTF-8 through to its end.
     const w = wantedOf(t).find((x) => x.n === n);

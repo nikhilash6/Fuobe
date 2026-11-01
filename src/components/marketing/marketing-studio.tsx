@@ -28,6 +28,7 @@ import { RunsList } from "./runs";
 import { EmptyIcon, MarketingHeader, useMarketingEngine } from "./shell";
 import { TemplateGallery, type MediaFilter } from "./template-gallery";
 import { TemplatePreview } from "./template-preview";
+import { plainTagline } from "@/lib/plain-tagline";
 
 const IMAGE_FORMATS: FormatId[] = ["product-standalone", "product-with-model", "ads", "poster", "marketplace"];
 const VIDEO_FORMATS: FormatId[] = ["motion-hyper", "motion-2d", "motion-mixed", "motion-saas", "ugc-talking", "tiktok"];
@@ -170,7 +171,7 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
             {choices.map((c) => (
               <button key={c.id} type="button" onClick={() => set({ modelId: c.id })} className={cn("w-full rounded-lg px-2.5 py-1.5 text-left hover:bg-accent", model.id === c.id && "bg-brand-faint")}>
                 <span className={cn("block text-[13px] font-medium", model.id === c.id && "text-brand-text")}>{models[c.id]?.name ?? c.id}</span>
-                <span className="block text-[11px] text-muted-foreground">{visitor ? withoutOwnGpu(c.note ?? models[c.id]?.tagline ?? "") : (c.note ?? models[c.id]?.tagline)}</span>
+                <span className="block text-[11px] text-muted-foreground">{visitor ? withoutOwnGpu(c.note ?? plainTagline(models[c.id]?.tagline ?? "")) : (c.note ?? plainTagline(models[c.id]?.tagline ?? ""))}</span>
               </button>
             ))}
             {elsewhere.map((c) => (
@@ -349,13 +350,13 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   const est = useEstimate<RunEstimate>("/api/marketing/estimate", draft.avatar?.uploading || draft.voiceSample?.uploading ? null : body);
   const badSite = !!f.oneOf?.includes("website") && !!draft.website.trim() && !looksLikeWebsite(draft.website);
   const blocker = visitor
-    ? "Marketing Studio runs on a self-hosted Fuobe for now"
+    ? "Marketing Studio isn't available here"
     : draft.product === null && f.product === "required"
       ? "Attach a product to generate"
       : badSite
         ? "Enter a valid website URL"
         : est.data?.blocker;
-  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Self-hosted only" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
+  const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Not available here" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : est.data.costUsd === 0 ? "Free" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   // Until a template is picked or you start on the composer it stays slim (the attachment tiles fold
   // away), so the template gallery behind it stays in view.
@@ -407,7 +408,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">
             Product shots, motion, UGC presenters, ads, posters and listings — from Fuobe&apos;s templates, on {engine === "open" ? (visitor ? "open-source models" : "your own GPU, free") : "Fuobe Marketing Image or partner models in the cloud"}.
           </p>
-          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Marketing Studio runs on a self-hosted Fuobe for now.</SelfHostNote>}
+          {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Marketing Studio isn&apos;t available here.</SelfHostNote>}
         </div>
         <div role="tablist" aria-label="View" className="mx-auto mt-4 flex w-fit rounded-full bg-muted p-0.5">
           {(["templates", "generations"] as const).map((t) => (

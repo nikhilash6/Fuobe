@@ -53,12 +53,12 @@ describe("which paid models an account can run", () => {
 describe("the engine switch for an account", () => {
   it("is locked on open source without a key, pointing at Your keys", () => {
     expect(accountEngine(account([]))).toEqual({
-      locked: { text: "Open source only", tip: "Your runs use your own GPU. Add a fal.ai or Replicate key to use paid models.", href: "/settings#your-keys", addKey: true },
+      locked: { text: "Open source", tip: "Runs on your own GPU. Add a fal.ai or Replicate key to use paid models.", href: "/settings#your-keys", addKey: true },
     });
   });
 
   it("is locked when the studio runs open-source models only, saying so", () => {
-    expect(accountEngine(account(["fal"], { paidAllowed: false }))).toMatchObject({ locked: { tip: "This studio runs open-source models only." } });
+    expect(accountEngine(account(["fal"], { paidAllowed: false }))).toMatchObject({ locked: { tip: "Runs on your own GPU." } });
   });
 
   it("switches with a key, saying who pays and where open models run", () => {

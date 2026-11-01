@@ -133,7 +133,7 @@ export function PathOptions({ engine, preset, onPreset, duration, onDuration, re
         <p className="text-[12px] text-muted-foreground">Length</p>
         {open ? (
           <p className="text-[13px]">
-            About {OPEN_SECONDS} s <span className="text-muted-foreground">· {PATH_FRAMES} frames at {PATH_FPS} fps, always, on the open engine</span>
+            About {OPEN_SECONDS} s <span className="text-muted-foreground">· {PATH_FRAMES} frames at {PATH_FPS} fps on your GPU</span>
           </p>
         ) : (
           <div className="flex flex-wrap gap-1" role="radiogroup" aria-label="Length">

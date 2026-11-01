@@ -113,7 +113,8 @@ describe("requirements.json", () => {
   // 204.4 KB (24.9 to 25.3 KB gzipped), leaving the old 200 KB / 25 KB no room. Each graph adds about 1-2.5 KB raw and
   // 0.2-0.5 KB gzipped, so 216 KB / 27 KB leaves room for the next few graphs (n7-3's among them) while still catching a
   // build that bloats it. The server parses it once per change, and /api/gpu/requirements serves it compressed.
-  // FLUX 3 Image Klein's three graphs and seven files (nm10-flux3-klein) add about 6 KB.
+  // FLUX 3 Image Klein's three graphs and seven files (nm10-flux3-klein) add about 6 KB. Clean up voice (its pack, two
+  // weight files and two graphs) adds about 0.5 KB gzipped, and Live edit (its node file, LoRA and graph) about 1.6 KB.
   it("stays within its size budget (216 KB, 27 KB gzipped)", () => {
     expect(Buffer.byteLength(text)).toBeLessThanOrEqual(216 * 1024);
     expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(27 * 1024);

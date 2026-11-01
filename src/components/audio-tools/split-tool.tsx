@@ -2,6 +2,7 @@
 
 import { AudioLines, Clapperboard, Cpu, Download, FileVideo, Headphones, Library, Loader2, Pause, Play, Save, SlidersVertical, Upload, Volume2, VolumeX, X } from "lucide-react";
 import { nanoid } from "nanoid";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -512,7 +513,7 @@ async function exportWav(stems: Stem[], buffers: Partial<Record<StemId, AudioBuf
     const q = new URLSearchParams({ offset: String(offset), ...(id && { id }), ...(last && { last: "1", name }) });
     const res = await fetch(`/api/audio-tools/export?${q}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: new Blob([mixPart(plan, f, f + per, k) as BlobPart]) });
     const body = (await res.json().catch(() => ({}))) as { id?: string; received?: number; url?: string; error?: string };
-    if (!res.ok) throw responseError(res, body.error ?? `Export failed (${res.status})`);
+    if (!res.ok) throw responseError(res, body.error ?? "The export didn't finish. Please try again.");
     if (last) {
       if (!body.url) throw new Error("Export failed");
       return { url: body.url, lowered: k < 1 };
@@ -645,6 +646,11 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
             {busy === "remux" ? <Loader2 className="size-4 animate-spin" /> : <Clapperboard className="size-4" />} Put back on the video{remuxCost ? ` · ${remuxCost}` : ""}
           </Button>
         )}
+        <Button variant="ghost" className="rounded-full" asChild>
+          <Link href={`/audio/clean?${source.kind}=${encodeURIComponent(source.ref)}&background=keep`}>
+            <AudioLines className="size-4" /> Clean the dialogue
+          </Link>
+        </Button>
         <span className="text-[12px] text-muted-foreground">{mixName(mix)}</span>
       </div>
     </section>
@@ -658,7 +664,7 @@ function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engin
  * Why a guest or an account can't split: POST /api/audio-tools answers them own-gpu-tool (docs/public-signup.md), so the
  * page says so up front and its upload and run are off, instead of a run the server refuses.
  */
-const SELF_HOSTED = "Split soundtrack runs on a self-hosted Fuobe for now";
+const SELF_HOSTED = "Split soundtrack isn't available here";
 /** Where the time estimate is for: the host's device when it said; else a CPU's, the figures the estimate then uses. */
 const onDevice = (device?: string) => (device === "cuda" ? "on your GPU" : device ? "on your CPU" : "on a CPU");
 
@@ -734,7 +740,7 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
     run.mutate(body, {
       onSuccess: (r) => {
         setResultId(r.result.id);
-        toast.success("Splitting on your ComfyUI");
+        toast.success("Splitting…");
       },
       onError: (e) => toastError(e),
     });
@@ -747,11 +753,7 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
       {!source && (
         <ToolHero
           title="Split any soundtrack"
-          subtitle={
-            visitor
-              ? "Dialogue, music and effects from a song, podcast, film clip or video, with a free live mixer. Runs with DBS (open source, 23 MB, CPU or GPU)."
-              : "Dialogue, music and effects from a song, podcast, film clip or video, with a free live mixer. Runs on your ComfyUI with DBS (open source, 23 MB, CPU or GPU): free."
-          }
+          subtitle="Dialogue, music and effects from a song, podcast, film clip or video, with a free live mixer."
         >
           {visitor && <SelfHostNote className="mt-3 max-w-xl">{SELF_HOSTED}.</SelfHostNote>}
         </ToolHero>
@@ -773,10 +775,8 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
           <Panel>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">
-                <span className="font-medium text-foreground">Split soundtrack runs on your GPU (open source).</span>{" "}
-                {mode === "cloud"
-                  ? "This install is set to paid cloud APIs only (Settings → Engine mode), and DBS isn't hosted on fal or Replicate."
-                  : "DBS isn't hosted on fal or Replicate, so there's no cloud route for dialogue, music and effects."}
+                <span className="font-medium text-foreground">Split soundtrack runs on your GPU.</span>{" "}
+                {mode === "cloud" ? "Turn on open-source models in Settings → Engine mode to use it." : "Switch to Open source to use it."}
               </p>
               {mode === "both" ? (
                 <Button variant="outline" size="sm" className="shrink-0 rounded-full" onClick={() => setEngine("open")}>
@@ -830,13 +830,12 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
                 {visitor && engine !== "cloud" ? (
                   <>
                     <span className="font-mono text-foreground">{openToolPrice(p, true)}</span>
-                    {` · ${SELF_HOSTED}`}
                   </>
                 ) : blocker && engine !== "cloud" ? (
                   blocker
                 ) : engine === "cloud" ? (
                   mode === "cloud" ? (
-                    "Not available on this install: it is set to paid cloud APIs only"
+                    "Split soundtrack works with open-source models, which aren't available here"
                   ) : (
                     "Switch to the open engine to split"
                   )

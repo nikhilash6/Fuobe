@@ -388,7 +388,7 @@ export function anchorPrompt(o: Pick<CharacterOptions, "who" | "index" | "subjec
 export const ANCHOR_MODELS: Record<Engine, { id: string; label: string; note: string; extra?: Record<string, string>; tokens?: string }[]> = {
   cloud: [
     // fal bills Sunburst by tokens, so the catalog has no fixed price for it: the estimate leaves it out and says so.
-    { id: "gpt-image-2-5-sunburst", label: "GPT Image 2.5 Sunburst", note: "Openjutsu's choice, low quality: billed by tokens", extra: { quality: "low" }, tokens: "$8 per million tokens in, $30 per million out" },
+    { id: "gpt-image-2-5-sunburst", label: "GPT Image 2.5 Sunburst", note: "Fast draft frame", extra: { quality: "low" }, tokens: "$8 per million tokens in, $30 per million out" },
     { id: "nano-banana-pro", label: "Nano Banana Pro", note: "$0.15 an image" },
   ],
   open: [

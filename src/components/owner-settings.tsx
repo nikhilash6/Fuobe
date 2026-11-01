@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, Info, KeyRound, Loader2, LogOut, Scale, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { FUOBE_CREDITS } from "@/lib/connections";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ export function SettingsIntro() {
   if (!hydrated || !v) return null;
   if (v.owner)
     return "Choose open source, paid APIs or both, connect providers, point Fuobe at your ComfyUI server, and choose how prompts get enhanced. Keys stay on this server.";
-  return v.account ? "Your account, your GPU and your own keys. The studio's own settings are its owner's." : "How a free account runs Fuobe, and every model's licence.";
+  return v.account ? "Your account, your GPU and your keys." : "Connect your GPU, and read every model's licence.";
 }
 
 /**
@@ -40,10 +41,9 @@ export function OwnerSettings({ children }: { children: React.ReactNode }) {
         <AccountSection email={v.account.email} />
       ) : (
         <section className="space-y-3 border-b py-8">
-          <h2 className="text-[15px] font-semibold">Run Fuobe on your own GPU or key</h2>
+          <h2 className="text-[15px] font-semibold">Run Fuobe on your own GPU</h2>
           <p className="max-w-xl text-[13px] text-pretty text-muted-foreground">
-            Create a free account, then connect the ComfyUI on your computer (or one elsewhere through a link), and your runs go to your own GPU. No GPU? Add your own fal.ai or
-            Replicate key.
+            Create a free account, connect the ComfyUI on your computer, and make as much as you like, free.
           </p>
           <div className="flex gap-2">
             <Button asChild size="sm">
@@ -70,15 +70,15 @@ function Licences() {
         <h2 id="licences-title" className="text-[15px] font-semibold">
           Licences
         </h2>
-        <p className="mt-1 text-[13px] text-muted-foreground">Every model&apos;s licence, Fuobe&apos;s own, and the notices the open models ask for.</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">Every model&apos;s licence, and the credits for the open models Fuobe uses.</p>
       </div>
       <div className="flex flex-wrap content-start gap-2">
         <Link href="/settings/models" className={linkCard}>
           <Scale className="size-4 text-muted-foreground" /> Models &amp; licences
         </Link>
-        <Link href="/settings/about" className={linkCard}>
-          <Info className="size-4 text-muted-foreground" /> About &amp; licences
-        </Link>
+        <a href={FUOBE_CREDITS} target="_blank" rel="noopener" className={linkCard}>
+          <Info className="size-4 text-muted-foreground" /> Credits
+        </a>
       </div>
     </section>
   );
@@ -119,7 +119,7 @@ function AccountSection({ email }: { email: string }) {
         setBusy(false);
         setOpen(false);
         setPassword("");
-        toast("You were signed out", { description: "This browser isn't signed in any more. Log in again to delete your account." });
+        toast("You were signed out", { description: "Log in again to delete your account." });
         void qc.invalidateQueries({ queryKey: ["viewer"] });
         void qc.invalidateQueries({ queryKey: ["status"] });
         announceAuthChange();
@@ -129,7 +129,7 @@ function AccountSection({ email }: { email: string }) {
       setError(body.error ?? `The account wasn't deleted (${res.status})`);
       setWrong(res.status === 403);
     } catch {
-      setError("The account wasn't deleted: the studio didn't answer. Try again.");
+      setError("We couldn't reach Fuobe. Check your connection and try again.");
     }
     setBusy(false);
   };
@@ -274,7 +274,7 @@ function ChangePassword({ email, open, onOpenChange }: { email: string; open: bo
         setBusy(false);
         reset();
         onOpenChange(false);
-        toast("You were signed out", { description: "This browser isn't signed in any more. Log in again to change your password." });
+        toast("You were signed out", { description: "Log in again to change your password." });
         void qc.invalidateQueries({ queryKey: ["viewer"] });
         void qc.invalidateQueries({ queryKey: ["status"] });
         announceAuthChange();
@@ -285,7 +285,7 @@ function ChangePassword({ email, open, onOpenChange }: { email: string; open: bo
         setWrong(res.status === 403);
       }
     } catch {
-      setError("The password wasn't changed: the studio didn't answer. Try again.");
+      setError("We couldn't reach Fuobe. Check your connection and try again.");
     }
     setBusy(false);
   };

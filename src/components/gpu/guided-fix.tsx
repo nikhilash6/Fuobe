@@ -28,7 +28,7 @@ const DOWNLOAD_KINDS = new Set<Need["kind"]>(["model", "model-replace", "lora"])
 /** One plain sentence: why this is by hand. */
 const WHY: Partial<Record<WhyCode, string>> = {
   "no-manager": "Your ComfyUI doesn't have ComfyUI-Manager, the add-on that installs things for Fuobe. Run these in a terminal instead:",
-  "manual-only": "Fuobe doesn't install things on your computer yet. Run these in a terminal, then check again:",
+  "manual-only": "Run these in a terminal, then check again:",
 };
 
 const VERB: Record<string, string> = { image: "draw", video: "animate", audio: "speak", text: "listen", model3d: "build" };
@@ -269,7 +269,7 @@ function Body({ detail, actions, titleRef }: { detail: GpuSetupDetail; actions: 
       {plan?.state === "gpu" && <GpuState plan={plan} actions={actions} />}
       {plan?.state === "unsupported" && (
         <div className="space-y-3 text-[13px] text-muted-foreground">
-          <p>This one needs a second ComfyUI running alongside the first, for add-ons that change process-wide settings. Your GPU connects one ComfyUI for now.</p>
+          <p>This one needs its own ComfyUI, so it can&apos;t run next to your other add-ons.</p>
           <Button variant="secondary" className="h-11 sm:h-9" onClick={actions.close}>
             Close
           </Button>

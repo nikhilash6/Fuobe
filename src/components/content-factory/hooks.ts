@@ -21,7 +21,7 @@ export class ApiError extends Error {
 async function json<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as T & { error?: string; needsUpload?: boolean };
-  if (!res.ok) throw responseError(res, new ApiError(body.error ?? `Request failed (${res.status})`, !!body.needsUpload));
+  if (!res.ok) throw responseError(res, new ApiError(body.error ?? "Something went wrong. Please try again.", !!body.needsUpload));
   return body;
 }
 

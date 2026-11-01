@@ -83,6 +83,7 @@ import { LayerGrader } from "./grade-gl";
 import { useKeepAlpha } from "./keep-alpha";
 import { LayerThumb } from "./layers-panel";
 import { loadImage, ratioOf, renderDoc, renderNative, sizeOf, uploadRender } from "./render";
+import { plainTagline } from "@/lib/plain-tagline";
 
 export const TOOLS: { id: ToolId; label: string; icon: typeof Layers; isNew?: boolean; hint: string }[] = [
   { id: "decompose", label: "Layer Decomposition", icon: Layers, isNew: true, hint: "Split the image into editable layers" },
@@ -556,7 +557,7 @@ function EditTextTool() {
       <ModelSelect tool="text-detect" value={detector.modelId} onChange={detector.setModelId} label="Detector" />
       {detector.model && detectors > 1 && (
         <p className="text-[11px] text-pretty text-muted-foreground">
-          {detector.model.tagline}
+          {plainTagline(detector.model.tagline)}
           {detector.model.pricing?.note && !isDemo(detector.model) ? ` · The price is an estimate: ${detector.model.pricing.note}.` : ""}
         </p>
       )}

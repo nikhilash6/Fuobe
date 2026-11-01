@@ -6,8 +6,12 @@ import { countsAsView, SHARE_VIEW_HEADER, shareRoute } from "@/lib/share";
 import {
   ACCOUNT_LIBRARY_MESSAGE,
   accountGeneration,
+  accountLive,
+  CONNECT_GPU_MESSAGE,
+  liveRoute,
   accountMayChange,
   accountOwnRead,
+  anyoneMayReport,
   ASSIST_OWNER_MESSAGE,
   CONNECT_GPU_HEADER,
   CONNECT_GPU_OR_KEY_MESSAGE,
@@ -28,12 +32,20 @@ import { fileAccount, generationAccount } from "@/server/account-library";
 import { hit } from "@/server/rate";
 import { recordExists } from "@/server/records";
 import { findShare, shareGuard, shareTargetExists } from "@/server/share-access";
+import { hostedRunsOn } from "@/server/hosted-switch";
 
 /**
  * Paths that work signed out: the login page and its API (and share links: openShare). Sign-up and
  * "who am I" answer for themselves whether public sign-up is on.
  */
-const OPEN = new Set(["/login", "/api/auth/login", "/api/auth/signup", "/api/auth/me"]);
+const OPEN = new Set(["/login", "/api/auth/login", "/api/auth/signup", "/api/auth/me", "/api/gpu/pair/start", "/api/gpu/pair/poll"]);
+
+/**
+ * A worker's token (src/server/computer/workers.ts) works only on the routes a computer runs jobs through; the route
+ * checks the token itself. Anywhere else it is refused, whatever else the request carries.
+ */
+const WORKER_BEARER = /^Bearer\s+fuobe_wkr_/i;
+const workerRoute = (pathname: string) => pathname.startsWith("/api/gpu/computer/");
 
 const APP_IDS = new Set(APPS.map((a) => a.id));
 
@@ -87,8 +99,8 @@ const COMPASS =
 const behindHttps = (request: NextRequest) => request.nextUrl.protocol === "https:";
 
 /** A dead link's section: the way back to it, and what is missing when the link names a stored item. */
-const SECTIONS: { prefix: string; label: string; missing?: string }[] = [
-  { prefix: "/apps", label: "Browse apps", missing: "This app isn’t here" },
+const SECTIONS: { prefix: string; label: string; missing?: string; why?: string }[] = [
+  { prefix: "/apps", label: "Browse apps", missing: "This app isn’t here", why: "It may have a new name. Browse all apps to find it." },
   { prefix: "/canvas", label: "Back to Canvas", missing: "This canvas isn’t here" },
   { prefix: "/cinema", label: "Back to Cinema", missing: "This project isn’t here" },
   { prefix: "/shorts", label: "Back to Shorts", missing: "This session isn’t here" },
@@ -110,8 +122,8 @@ const notFound = (request: NextRequest) => {
   const s = SECTIONS.find((x) => request.nextUrl.pathname.startsWith(`${x.prefix}/`));
   const back = s && { href: s.prefix, label: s.label };
   return s?.missing
-    ? plain404(s.missing, "It’s private, or it was deleted, or it never existed.", back)
-    : plain404("Nothing here", "The page you’re looking for moved, or never existed.", back);
+    ? plain404(s.missing, s.why ?? "It may have been deleted, or the link is incomplete.", back)
+    : plain404("This page isn’t here", "It may have moved. Head back and find it from there.", back);
 };
 
 const shareGone = (request: NextRequest) =>
@@ -162,9 +174,13 @@ function priceCheck(request: NextRequest, who: string): NextResponse {
 function guest(request: NextRequest): NextResponse {
   const { pathname, search } = request.nextUrl;
   const { method } = request;
+  // Live edit runs on a GPU of one's own: signing up is the next step (the node file's download is open).
+  const live = liveRoute(pathname);
+  if (live && live !== "nodes") return NextResponse.json({ error: GUEST_RUN_MESSAGE }, { status: 401, headers: guestHeaders });
   if (method === "GET" || method === "HEAD") return readAsGuest(request, false);
   if (isPriceCheck(method, pathname, search)) return priceCheck(request, `guest:${LoginGuard.clientKey(request.headers)}`);
   if (isAssistChange(method, pathname)) return assistOwner();
+  if (anyoneMayReport(method, pathname)) return pass(request);
   // What an account may send, the library, the owner's settings and the studios' runs: signing up is the next step.
   if (!accountMayChange(method, pathname, search) && !isLibraryChange(method, pathname) && !ownerOnly(method, pathname) && !ownGpuRun(method, pathname)) return ownGpuTool();
   return NextResponse.json({ error: GUEST_RUN_MESSAGE }, { status: 401, headers: guestHeaders });
@@ -209,8 +225,15 @@ const notYours = () => NextResponse.json({ error: ACCOUNT_LIBRARY_MESSAGE }, { s
 function account(request: NextRequest, who: Account): NextResponse {
   const { pathname, search } = request.nextUrl;
   if (ownerOnly(request.method, pathname)) {
-    const verb = request.method === "GET" || request.method === "HEAD" ? "see" : "change";
-    return NextResponse.json({ error: `Only the studio's owner can ${verb} settings, keys and tokens.` }, { status: 403 });
+    return NextResponse.json({ error: "These settings aren't part of your account." }, { status: 403 });
+  }
+  // Live edit: only on its own GPU, its masters in its own files, no Library.
+  const live = liveRoute(pathname);
+  if (live) {
+    const may = accountLive(live, who.gpu ? (who.gpu.mode === "computer" ? "computer" : "link") : null);
+    if (may === "library") return NextResponse.json({ error: LIBRARY_MESSAGE, code: "library" }, { status: 403 });
+    if (may === "connect-gpu") return NextResponse.json({ error: CONNECT_GPU_MESSAGE, code: "connect-gpu" }, { status: 403, headers: { [CONNECT_GPU_HEADER]: "1" } });
+    return pass(request);
   }
   // Its own runs and their files: only what it made.
   const gen = accountGeneration(request.method, pathname);
@@ -225,7 +248,9 @@ function account(request: NextRequest, who: Account): NextResponse {
   // A tool its own GPU or key wouldn't run says so first: "Connect your GPU" only for what a GPU or a key unlocks.
   if (!ownGpuRun(request.method, pathname)) return ownGpuTool();
   // Neither its own GPU nor its own key: nothing it could run on. (Which one a run needs, the route says.)
-  if (!who.gpu && !hasCloudKey(who)) return NextResponse.json({ error: CONNECT_GPU_OR_KEY_MESSAGE, code: "connect-gpu" }, { status: 403, headers: { [CONNECT_GPU_HEADER]: "1" } });
+  // With hosted runs on (FUOBE_HOSTED_RUNS=1), a run in the studios may go to this install's GPUs: the route decides.
+  const hosted = hostedRunsOn() && request.method === "POST" && pathname === "/api/generations";
+  if (!who.gpu && !hasCloudKey(who) && !hosted) return NextResponse.json({ error: CONNECT_GPU_OR_KEY_MESSAGE, code: "connect-gpu" }, { status: 403, headers: { [CONNECT_GPU_HEADER]: "1" } });
   return pass(request);
 }
 
@@ -317,6 +342,9 @@ export function proxy(request: NextRequest) {
   }
   const hub = read && hubModeLink(request);
   if (hub) return NextResponse.redirect(hub);
+  if (WORKER_BEARER.test(request.headers.get("authorization") ?? "")) {
+    return workerRoute(pathname) ? NextResponse.next() : NextResponse.json({ error: "A worker's token only runs jobs." }, { status: 403, headers: { "Cache-Control": "no-store" } });
+  }
   if (!authEnabled()) return pass(request);
   if (OPEN.has(pathname)) return NextResponse.next();
   const open = publicSignup(request.headers.get("host") ?? request.nextUrl.host);
@@ -339,8 +367,8 @@ export const config = {
   // (/api/uploads, a Soul finish, a Layers render, a skill upload, an Assist source, an explainer document), and Split
   // soundtrack's mix export (a WAV in parts of 16 MB), make the same checks themselves (src/server/direct-gate.ts): the
   // proxy would hold the whole file in memory first. So do a computer's report of a finished job and its results
-  // (src/app/api/gpu/computer/tasks).
+  // (src/app/api/gpu/computer/tasks), and live edit's kept master from a tab on its own computer (src/app/api/live/masters).
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico$|apple-icon\\.png$|samples/|previews/|vendor/|api/uploads$|api/generations/[^/]+/finish$|api/layers/renders$|api/assist/skills/upload$|api/assist/projects/[^/]+/sources$|api/explainer/document$|api/audio-tools/export$|api/gpu/computer/tasks/[^/]+/(?:report|outputs/[^/]+)$|[^/]+\\.svg$).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico$|apple-icon\\.png$|samples/|previews/|vendor/|api/uploads$|api/generations/[^/]+/finish$|api/layers/renders$|api/assist/skills/upload$|api/assist/projects/[^/]+/sources$|api/explainer/document$|api/audio-tools/export$|api/gpu/computer/tasks/[^/]+/(?:report|outputs/[^/]+)$|api/live/masters$|[^/]+\\.svg$).*)",
   ],
 };

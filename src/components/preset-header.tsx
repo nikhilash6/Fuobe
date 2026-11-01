@@ -92,27 +92,30 @@ export function PresetHeader({
         <PopoverContent align="end" collisionPadding={12} className="w-[min(92vw,360px)] space-y-2 p-3 text-[13px]">
           <p className="text-muted-foreground">{preset.description}</p>
           <ul className="space-y-1">
-            {routes.map((r) => (
-              <li key={`${r.engine}-${r.alt ? "alt" : "first"}`} className="flex items-start gap-2">
-                {r.alt ? (
-                  <span className="size-3.5 shrink-0" aria-hidden />
-                ) : r.engine === "cloud" ? (
-                  <Cloud className="mt-0.5 size-3.5 shrink-0" />
-                ) : (
-                  <Cpu className="mt-0.5 size-3.5 shrink-0" />
-                )}
-                <span className="text-muted-foreground">{r.alt ? "or" : r.label}</span>
-                <span className="ml-auto flex min-w-0 flex-col items-end text-right">
-                  <span className={cn("max-w-full truncate font-medium", !r.model && "font-normal text-muted-foreground", r.alt && "font-normal")}>{r.model ?? "Not available yet"}</span>
-                  {r.made && (
-                    <span className="flex items-center gap-1 text-[11px] font-medium text-brand-text">
-                      <Sparkles className="size-3 shrink-0" aria-hidden />
-                      Used for this preview
-                    </span>
+            {/* An engine with no model for this preset has no row. */}
+            {routes
+              .filter((r) => r.model)
+              .map((r) => (
+                <li key={`${r.engine}-${r.alt ? "alt" : "first"}`} className="flex items-start gap-2">
+                  {r.alt ? (
+                    <span className="size-3.5 shrink-0" aria-hidden />
+                  ) : r.engine === "cloud" ? (
+                    <Cloud className="mt-0.5 size-3.5 shrink-0" />
+                  ) : (
+                    <Cpu className="mt-0.5 size-3.5 shrink-0" />
                   )}
-                </span>
-              </li>
-            ))}
+                  <span className="text-muted-foreground">{r.alt ? "or" : r.label}</span>
+                  <span className="ml-auto flex min-w-0 flex-col items-end text-right">
+                    <span className={cn("max-w-full truncate font-medium", !r.model && "font-normal text-muted-foreground", r.alt && "font-normal")}>{r.model}</span>
+                    {r.made && (
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-brand-text">
+                        <Sparkles className="size-3 shrink-0" aria-hidden />
+                        Used for this preview
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
           </ul>
           {note && <p className="border-t pt-2 text-[12px] text-muted-foreground">{note}</p>}
         </PopoverContent>

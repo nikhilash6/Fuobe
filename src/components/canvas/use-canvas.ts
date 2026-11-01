@@ -11,7 +11,7 @@ import { responseError } from "@/lib/refusals";
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw Object.assign(responseError(res, body.error ?? `Request failed (${res.status})`), { body, status: res.status });
+  if (!res.ok) throw Object.assign(responseError(res, body.error ?? "Something went wrong. Please try again."), { body, status: res.status });
   return body;
 }
 
@@ -97,7 +97,7 @@ export function useRunCanvas(id: string) {
     mutationFn: async (body: { page: string; targets?: string[]; group?: string; force?: boolean; pages: CanvasPage[] }) => {
       const res = await send(`/api/canvases/${id}/run`, "POST", body);
       const data = (await res.json().catch(() => ({}))) as Partial<RunResponse> & { error?: string };
-      if (!res.ok && !data.errors) throw responseError(res, data.error ?? `Request failed (${res.status})`);
+      if (!res.ok && !data.errors) throw responseError(res, data.error ?? "Something went wrong. Please try again.");
       return { ...data, ok: res.ok } as RunResponse & { ok: boolean; error?: string };
     },
     onSuccess: (r) => {

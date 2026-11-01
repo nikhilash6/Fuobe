@@ -514,14 +514,14 @@ export interface PresetRouteLine {
 
 /**
  * The preset's note on how it runs (preset.parity) under its route lines. When it opens on the model its preview was
- * made with, the note is about its second choice, and says so: "Fuobe DoP: Wan 2.2 with …" reads "Or Fuobe DoP: …", and
+ * made with, the note is about its second choice, and says so: "Fuobe DoP: Wan 2.2 with …" reads "As a second choice, Fuobe DoP: …", and
  * "The open version …" names that model.
  */
 export function parityNote(parity: string | undefined, lines: Pick<PresetRouteLine, "engine" | "model" | "alt">[]): string | undefined {
   if (!parity) return undefined;
   const alt = lines.filter((l) => l.alt);
   if (!alt.length) return parity;
-  if (/^Fuobe DoP\b/.test(parity)) return `Or ${parity}`;
+  if (/^Fuobe DoP\b/.test(parity)) return `As a second choice, ${parity}`;
   const openAlt = alt.find((l) => l.engine === "open")?.model;
   if (openAlt && parity.startsWith("The open version ")) return `${openAlt}, the second choice on your GPU, ${parity.slice("The open version ".length)}`;
   return parity;

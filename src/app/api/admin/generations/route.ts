@@ -11,7 +11,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
  */
 export async function GET(request: Request) {
   await connection();
-  if (!isOwnerRequest(request, sessionCookieOf(request))) return Response.json({ error: "Only the studio's owner sees accounts' runs" }, { status: 403, headers: NO_STORE });
+  if (!isOwnerRequest(request, sessionCookieOf(request))) return Response.json({ error: "You can't open this." }, { status: 403, headers: NO_STORE });
   const o = accountRunOptions(new URL(request.url).searchParams);
   if ("error" in o) return Response.json({ error: o.error }, { status: 400, headers: NO_STORE });
   return Response.json(listAccountRuns(o), { headers: NO_STORE });

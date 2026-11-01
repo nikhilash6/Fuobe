@@ -199,6 +199,8 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
     indexPacks[name] = {
       repo: p.repo,
       commit: p.commit,
+      // A node file Fuobe ships itself (fuobe_live.py): written into custom_nodes, never cloned.
+      ...(p.bundled && { bundled: p.bundled }),
       ...(p.registry && { registry: { id: p.registry.id, version: p.registry.version ?? '' } }),
       classes: uniq(packClassesUsed.get(name) ?? []),
       folders: uniq(p.folders ?? []),

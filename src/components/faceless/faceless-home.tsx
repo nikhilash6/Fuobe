@@ -191,7 +191,7 @@ export function FacelessHome() {
                 {refError}
               </p>
             )}
-            {visitor && <SelfHostNote className="px-1 pt-2">Faceless channels run on a self-hosted Fuobe for now.</SelfHostNote>}
+            {visitor && <SelfHostNote className="px-1 pt-2">Faceless channels aren&apos;t available here.</SelfHostNote>}
           </div>
         </div>
 

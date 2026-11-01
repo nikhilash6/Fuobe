@@ -209,7 +209,7 @@ export function ColorSignaturePanel({
               <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Your palettes</p>
               {visitor ? (
                 <div className="rounded-lg border border-dashed p-4 text-center">
-                  <SelfHostNote className="text-[12px]">Saving palettes isn&apos;t on free accounts yet.</SelfHostNote>
+                  <SelfHostNote className="text-[12px]">Saving palettes isn&apos;t available here.</SelfHostNote>
                 </div>
               ) : isLoading ? (
                 <div className="grid grid-cols-2 gap-2">

@@ -322,7 +322,7 @@ export function explainComfyError(nodeErrors: unknown, manifest?: ManifestWorkfl
       }
     }
   }
-  return [...new Set(parts)].slice(0, 20).join("\n") || "ComfyUI rejected the workflow";
+  return [...new Set(parts)].slice(0, 20).join("\n") || "Your ComfyUI couldn't run this. Check the setup, then retry.";
 }
 
 // ---------------------------------------------------------------------------

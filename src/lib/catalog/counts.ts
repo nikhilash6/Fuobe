@@ -1,5 +1,5 @@
 /**
- * How many models Fuobe has, as every page quotes it (Home, /models, Project status, About & licences).
+ * How many models Fuobe has, as every page quotes it (Home and Settings).
  *
  * The rule:
  * - A model counts when a visitor can pick it: it is listed in a studio's picker, on /models and in the ⌘K palette.

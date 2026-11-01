@@ -1,0 +1,18 @@
+ComfyUI-RE-USE
+Copyright (c) 2026 workingprototype and the Fuobe contributors (MIT, see LICENSE)
+
+This pack contains code adapted from NVIDIA's RE-USE repository
+(https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE): the network classes and the STFT settings in
+reuse_engine.py, from models/generator_SEMamba_time_d4.py, models/codec_module_time_d4.py,
+models/mamba_block2_SEMamba.py and inference.py.
+
+  SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+  SPDX-License-Identifier: OpenMDW-1.1
+
+The OpenMDW-1.1 licence text, with NVIDIA's third-party notices, is in LICENSE.OpenMDW-1.1-NVIDIA.
+
+The Mamba layer is a plain-PyTorch rewrite (no mamba_ssm). It loads the published weights unchanged and matches the
+reference maths numerically, but it is not NVIDIA's code path.
+
+The model weights are not part of this pack. They are NVIDIA's (OpenMDW-1.1) and are downloaded separately into
+models/reuse/ (see README.md).

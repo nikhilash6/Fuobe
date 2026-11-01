@@ -58,7 +58,7 @@ export const PromptInput = forwardRef<
     className?: string;
     /** Docked and not focused: keep the prompt to one line. */
     collapsed?: boolean;
-    /** What the model does with an @mention, under the menu's heading (Kling 4.0: "Up to 7 as Kling elements · voices: not yet"). */
+    /** What the model does with an @mention, under the menu's heading (Kling 4.0: "Up to 7 as Kling elements · voices aren't used"). */
     elementsNote?: string;
   }
 >(function PromptInput({ value, onChange, onSubmit, placeholder, elements, className, collapsed, elementsNote }, ref) {

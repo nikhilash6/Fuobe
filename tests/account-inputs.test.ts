@@ -65,7 +65,7 @@ describe("an account's run names only files it uploaded here", () => {
     const owners = saveFile({ data: TINY_PNG, contentType: "image/png", source: "upload" });
     const r = await run(motion([owners.url]));
     expect(r.status).toBe(403);
-    expect(await r.json()).toMatchObject({ code: "input-not-yours", error: "That file isn't yours. Upload your own." });
+    expect(await r.json()).toMatchObject({ code: "input-not-yours", error: "We can't find that file. Upload it again." });
     const extra = await run(motion([own().url], { params: { extra: { audio2: owners.url } } }));
     expect(extra.status).toBe(403);
     expect(extra.headers.get("x-fuobe-gpu-setup")).toBeNull();
@@ -113,7 +113,7 @@ describe("an account's fair share", () => {
     expect(r.status).toBe(201);
     const body = await r.json();
     expect(body.items.length).toBe(4);
-    expect(body.notes).toContain("Account runs make up to 4 at a time.");
+    expect(body.notes).toContain("Each run makes up to 4 results.");
   });
 
   it("never reached the install's ComfyUI", () => {

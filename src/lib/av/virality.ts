@@ -1,7 +1,5 @@
 /**
- * Virality predictor, honestly: Higgsfield's predictor scores a video with Meta's TRIBE v2 (a brain-response
- * model, CC BY-NC — non-commercial only) and no provider hosts it. Fuobe doesn't invent a score. It
- * measures the hook — the first 3 seconds — in the browser (movement, a cut, faces, on-screen text,
+ * Hook check: Fuobe doesn't invent a virality score. It measures the hook — the first 3 seconds — in the browser (movement, a cut, faces, on-screen text,
  * sound, the opening frame's contrast, the format) and holds each measurement against a plain rule of
  * thumb. Every signal says what was measured and why it matters; nothing here is a prediction.
  *
@@ -21,28 +19,8 @@ export const MAX_AUDIO_BYTES = 150 * 1024 * 1024;
 export const SILENCE_DB = -45;
 
 export const VIRALITY_PARITY = {
-  title: "A heuristic hook check, not a prediction",
-  lead: "A quick check of your first 3 seconds: motion, cuts, faces, text and sound, held against common rules of thumb. Useful for spotting a slow opening, not a forecast of views.",
-  body: "Higgsfield's Virality Predictor scores videos with Meta's TRIBE v2, a brain-response model released for non-commercial use only (CC BY-NC 4.0). No cloud provider hosts it, so Fuobe shows no virality score. This page measures your first 3 seconds in your browser and holds them against common rules of thumb — useful for spotting a slow opening, not a forecast of views.",
-  cloud: "Cloud: no hosted TRIBE v2 model exists to call.",
-  open: "Open engine: TRIBE v2 can run on your own GPU as an optional, non-commercial worker; Fuobe doesn't bundle it.",
-};
-
-/** The optional TRIBE v2 worker's contract (docs/workers/tribe-v2.md), as the page summarises it. */
-export const TRIBE_WORKER = {
-  endpoint: "POST {TRIBE_URL}/analyze · multipart field “video” (MP4, up to 60 s)",
-  output: [
-    "engagement: one value per second, 0–100",
-    "peak_t / peak_val: the strongest second",
-    "hook_score: mean engagement over 0–3 s",
-    "regions: visual, attention, auditory, language and default mode (focus drift, lower is better), per second",
-  ],
-  needs: [
-    "facebook/tribev2 weights — CC BY-NC 4.0, non-commercial use only",
-    "Llama-3.2-3B (gated on Hugging Face: accept Meta's licence, give the worker a token)",
-    "V-JEPA2 and Wav2Vec-BERT (TRIBE v2's video and audio encoders) on your own GPU",
-  ],
-  status: "Documented only: Fuobe has no TRIBE_URL setting yet, so this page keeps its browser heuristics.",
+  title: "How strong is your hook?",
+  lead: "A quick look at your first 3 seconds: movement, cuts, faces, text and sound, held against what keeps viewers watching. Great for spotting a slow opening.",
 };
 
 export type Verdict = "strong" | "ok" | "weak" | "unknown";

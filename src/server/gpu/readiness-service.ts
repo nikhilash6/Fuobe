@@ -60,8 +60,8 @@ export function buildViews(inv: GpuInventory, idx: RequirementIndex, ctx: Readin
     if (b) badges.presets[tool.ref.slice("preset:".length)] = b;
   }
   const warnings: string[] = [];
-  if (inv.exposed) warnings.push("Your studio's ComfyUI answers anyone on the internet. Put it behind a token or Cloudflare Access before you share this studio.");
-  if (inv.errors.length) warnings.push(`Some checks didn't finish (${[...new Set(inv.errors.map((e) => e.step.split("/")[0]))].slice(0, 4).join(", ")}). What they would have found counts as there.`);
+  if (inv.exposed) warnings.push("Your ComfyUI is open to anyone online. Add a token, or put it behind Cloudflare Access, before you share the link.");
+  if (inv.errors.length) warnings.push("A few checks didn't finish, so some items may show as ready. Check again to be sure.");
   return { report: { indexHash: idx.hash, checkedAt: inv.checkedAt, summary, studios, warnings }, badges };
 }
 

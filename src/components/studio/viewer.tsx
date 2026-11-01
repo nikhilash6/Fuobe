@@ -84,7 +84,7 @@ function Details({ g, index }: { g: Generation; index: number }) {
       </div>
       <div className="divide-y rounded-lg border px-3">
         <Row label="Model" value={g.modelName ?? g.modelId} />
-        <Row label="Engine" value={g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "In your browser" : g.engine === "open" ? "Open source · ComfyUI" : `Cloud · ${g.provider}`} />
+        <Row label="Made on" value={g.provider === "mock" ? "Placeholder" : g.provider === "local" ? "In your browser" : g.engine === "open" ? "Your GPU" : "Cloud"} />
         <Row label="Mode" value={OPERATION_LABELS[g.op]} />
         <Row label={g.modelId.startsWith("fuobe-soul") ? "Look" : "Preset"} value={g.presetName} />
         <Row label="Finish" value={finishText(g.outputs[index])} />

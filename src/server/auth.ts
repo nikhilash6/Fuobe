@@ -780,7 +780,8 @@ const touched = new Map<string, number>();
 
 export function validToken(header: string | null): boolean {
   const m = /^Bearer\s+(fuobe_[\w-]+)$/i.exec(header ?? "");
-  if (!m) return false;
+  // A worker's token (src/server/computer/workers.ts) or a scoped admin token is never the owner.
+  if (!m || /^fuobe_(wkr|adm)_/i.test(m[1])) return false;
   const h = Buffer.from(tokenHash(m[1]));
   const d = read();
   const hit = d.tokens.find((t) => same(Buffer.from(t.hash), h));

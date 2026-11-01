@@ -332,8 +332,8 @@ export class RefError extends Error {
   }
 }
 
-export const LINK_INPUT_MESSAGE = "Upload the file first. Runs on your GPU can't fetch links.";
-export const NOT_YOURS_MESSAGE = "That file isn't yours. Upload your own.";
+export const LINK_INPUT_MESSAGE = "Upload the file to use it here.";
+export const NOT_YOURS_MESSAGE = "We can't find that file. Upload it again.";
 export const GONE_MESSAGE = "That file has expired. Upload it again.";
 
 /**

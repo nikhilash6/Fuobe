@@ -35,7 +35,7 @@ describe("separate-soundtrack-dbs in the manifest", () => {
     expect(entry.bindings.channels).toEqual([{ node: "3", input: "channels" }]);
     expect(entry.defaults).toEqual({ separationModel: "DBS-BSRNN-DnR", channels: "mono" });
     expect(entry.notes).toMatch(/^CPU OK, about 1\.7 GiB on CUDA\./);
-    expect(entry.license).toBe("DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)");
+    expect(entry.license).toBe("DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; bundled DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)");
   });
 
   it("outputs voice, music, effects, background and the report, in that order", () => {
@@ -290,7 +290,7 @@ describe("licences, as information", () => {
       licence: {
         name: "MIT",
         class: "commercial",
-        note: "Dialogue / music / effects separation; MIT code, vendored DBS code Apache-2.0 with MIT notices; the DBS weights are Apache-2.0, trained on DnR v2 (CC BY 4.0). Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved",
+        note: "Dialogue, music and effects separation; MIT code, bundled DBS code Apache-2.0 with MIT notices. The DBS weights are Apache-2.0, trained on DnR v2 (CC BY 4.0), some of whose clips carry their own licences",
       },
     });
     expect(licenceInfo(workflowLicence(entry))).toMatchObject({ name: "Apache-2.0", class: "commercial" });
@@ -300,7 +300,7 @@ describe("licences, as information", () => {
     const dnr = ATTRIBUTIONS.find((a) => a.licence === "CC BY 4.0");
     expect(dnr?.text).toBe("Trained on the Divide and Remaster (DnR) v2 dataset by Darius Petermann, Gordon Wichern, Zhong-Qiu Wang and Jonathan Le Roux");
     // The open question about DnR's own source clips, recorded as information (research §3.2).
-    expect(dnr?.note).toMatch(/^Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included\./);
+    expect(dnr?.note).toMatch(/^Some of its clips carry their own licences\./);
     expect(entry.notes).toMatch(/NC variants included; whether that reaches the weights or their outputs is unresolved/);
     // Still information: the workflow's licence row reads Apache-2.0, nothing is flagged or hidden for it.
     expect(licenceInfo(workflowLicence(entry)).class).toBe("commercial");

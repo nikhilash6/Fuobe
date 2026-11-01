@@ -1,4 +1,5 @@
-import { principalOf, rateOf, relayAnswer } from "@/server/computer/http";
+import { callerKey, principalOf, rateOf, relayAnswer, requestWorker } from "@/server/computer/http";
+import { workerClaim } from "@/server/computer/pool";
 import { claim } from "@/server/computer/tasks";
 
 /**
@@ -10,12 +11,14 @@ import { claim } from "@/server/computer/tasks";
 export async function POST(request: Request) {
   const principal = principalOf(request);
   if (principal instanceof Response) return principal;
-  const limited = rateOf(principal, "claim", 60);
+  const limited = rateOf(callerKey(request, principal), "claim", 60);
   if (limited) return limited;
   const body = (await request.json().catch(() => null)) as { device?: unknown; running?: unknown } | null;
   const running = Array.isArray(body?.running) ? body.running.filter((x): x is string => typeof x === "string").slice(0, 32) : [];
   try {
-    const task = claim(principal, String(body?.device ?? ""), running);
+    const worker = requestWorker(request);
+    // A shared GPU takes the best task it can run from its pool (pool.ts); a person's computer, their own oldest.
+    const task = worker?.kind === "pool" ? workerClaim(worker, running) : claim(principal, String(body?.device ?? ""), running);
     if (!task) return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
     return Response.json({ task }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

@@ -299,7 +299,7 @@ const ROWS: Row[] = [
     "grade",
     "landscape",
   ],
-  ["Cannabis", "Smoky psychedelic poster look", "a smoky psychedelic poster: swirling smoke, {color} haze, 70s poster style and soft grain", [color("color", "Haze colour", "#3ddc84")], 140, "wind", "portrait"],
+  ["Cannabis", "Smoky poster look in a soft haze", "a smoky psychedelic poster: swirling smoke, {color} haze, 70s poster style and soft grain", [color("color", "Haze colour", "#3ddc84")], 140, "wind", "portrait"],
   ["Bubbles", "Dreamy soap-bubble texture", "a dreamy soap-bubble texture: iridescent {color} bubbles floating and refracting the scene, soft focus", [color("color", "Bubble tint", "#a0c4ff")], 215, "water", "portrait"],
   [
     "Magazine",
@@ -314,7 +314,7 @@ const ROWS: Row[] = [
   ["Modern", "Clean geometric minimalism", "clean geometric minimalism: flat shapes, thin lines and plenty of negative space in {c1} and {c2}", [color("c1", "Colour 1", "#111111"), color("c2", "Colour 2", "#f2f2f2")], 0, "grade", "product"],
   [
     "LSD",
-    "Hallucinogenic colour waves",
+    "Kaleidoscopic colour waves",
     "hallucinogenic colour waves: rippling {palette} bands flowing over the frame with kaleidoscopic edges",
     [select("palette", "Palette", [["Rainbow", "rainbow"], ["Sunset", "magenta, orange and gold"], ["Ocean", "teal, violet and blue"]])],
     300,
@@ -349,9 +349,12 @@ const slug = (s: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
+/** Looks renamed since their id was made: the id (and every link and cover) keeps the first name. */
+const RENAMED: Record<string, string> = { Acid: "Neon Melt", Akrill: "Acrylic", Cannabis: "Smoke Haze", LSD: "Kaleido", Toxic: "Neon Slime" };
+
 export const MIXED_PRESETS: MixedPreset[] = ROWS.map(([name, description, look, settings, hue, fx, scene]) => ({
   id: `mixed-${slug(name)}`,
-  name,
+  name: RENAMED[name] ?? name,
   description,
   look,
   settings: [...settings, INTENSITY],

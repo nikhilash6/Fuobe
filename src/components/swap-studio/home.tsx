@@ -22,8 +22,8 @@ import { useCreateSwapProject, useDeleteSwapProject, useSwapProjects } from "./h
 const STEPS = [
   { icon: Film, title: "Clips and your character", text: "Add whole clips (MP4, MOV, MKV, WebM or AVI, up to 2½ minutes) and a picture of who comes in." },
   { icon: Scissors, title: "Shots and words", text: "Find the edits, keep or replace each shot, transcribe who says what and build the prompts." },
-  { icon: UserRound, title: "Who and the scene", text: "Click who to swap on any frame, track the shot, approve a mask and a scene anchor." },
-  { icon: Layers, title: "Segments and takes", text: "Render each shot in segments that continue from each other, compare takes, keep the best, assemble." },
+  { icon: UserRound, title: "Who and the scene", text: "Click who to swap, then check how they look in the scene." },
+  { icon: Layers, title: "Segments and takes", text: "Render each shot, compare takes, keep the best and put it together." },
 ];
 
 const ago = (t: number) => {
@@ -85,7 +85,7 @@ export function SwapStudioHome() {
             {visitor ? "New project" : `New project · ${engine === "open" ? "your GPU" : "cloud"}`}
           </Button>
         </form>
-        {visitor && <SelfHostNote className="mt-3 max-w-lg">Character Swap runs on a self-hosted Fuobe for now.</SelfHostNote>}
+        {visitor && <SelfHostNote className="mt-3 max-w-lg">Character Swap isn&apos;t available here.</SelfHostNote>}
       </ToolHero>
 
       <ol className="mx-auto mt-8 grid max-w-[1040px] gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="How it works">
@@ -154,7 +154,7 @@ export function SwapStudioHome() {
         <details>
           <summary className="cursor-pointer text-[13px] font-semibold">Models and licences</summary>
           <ul className="mt-2 space-y-1 text-[12px] text-pretty text-muted-foreground">
-            <li>The workbench follows Akatz Labs&apos; H3 Character Swap tool (MIT): H3 Relay 2.0 on your GPU (masks, history, lossless continuations), or fal&apos;s MiniMax H3 with the swap LoRA in the cloud. Its prompts are reused with that notice; the swap LoRA releases are Akatz Labs&apos;.</li>
+            <li>Built on Akatz Labs&apos; H3 Character Swap tool (MIT).</li>
             <li>Your GPU: {characterLicenceLine("open", STUDIO_MODELS.open.swap)}</li>
             <li>Cloud: {characterLicenceLine("cloud", STUDIO_MODELS.cloud.swap)}</li>
           </ul>

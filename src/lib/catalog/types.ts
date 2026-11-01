@@ -58,6 +58,7 @@ export type Operation =
   | "mux" // video + audio → the video with that soundtrack
   | "image-to-3d" // image → a 3D model (.glb), optionally a turntable video
   | "separate-audio" // audio or video → stems (meta.stem): voice and background; DBS also music and effects
+  | "enhance-voice" // audio or video → the main speaker's voice, cleaned (meta.stem voice): noise, echo, clipping and codec damage removed
   | "translate" // text → the same text in params.targetLanguage (LLM)
   | "write" // brief → text (LLM: scripts, ad copy, shot lists)
   | "vectorize" // image → the same picture as an SVG
@@ -131,6 +132,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   mux: "Add soundtrack",
   "image-to-3d": "Image to 3D",
   "separate-audio": "Separate voice",
+  "enhance-voice": "Clean up voice",
   translate: "Translate",
   write: "Write",
   vectorize: "Vectorize",
@@ -201,6 +203,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   mux: "video",
   "image-to-3d": "model3d",
   "separate-audio": "audio",
+  "enhance-voice": "audio",
   translate: "text",
   write: "text",
   vectorize: "image",
@@ -977,6 +980,16 @@ export interface GenerationRequest {
    * server from the session only (the request schema drops it from what a client sends).
    */
   account?: string;
+  /**
+   * Server-only, like `account` (src/server/run-stamp.ts): the run goes to this install's GPUs ("pool", hosted runs);
+   * the billing service's hold for it and the words of its charge; the moderation service sees its outputs first.
+   */
+  place?: "pool";
+  hold?: string;
+  charge?: string;
+  checkOutputs?: boolean;
+  /** How long a run on this install's GPUs may wait in line (ms), when the billing service set it. */
+  waitMs?: number;
   feature: string;
   presetId?: string;
   modelId: string;
@@ -1232,6 +1245,16 @@ export interface Generation {
   fix?: GenerationFix | null;
   /** Failed or stopped before its paid provider took the job (no external id): the card says "Not billed", not its price. */
   notBilled?: true;
+  /** Ran on this install's GPUs (hosted runs), not the account's own. */
+  place?: "pool";
+  /** The billing service's words for what a run on this install's GPUs costs ("7 units"); shown when it succeeded. */
+  charge?: string;
+  /** A run with a billing hold that failed or was stopped: nothing was charged. */
+  notCharged?: true;
+  /** "checking": its outputs wait for the moderation service before they show. */
+  stage?: "checking";
+  /** A run waiting for this install's GPUs: its place in line and the wait, about (GET /api/generations/<id>). */
+  queue?: { place: number; etaSeconds: number | null };
   /**
    * What the run leaves out or changes, said when it is created (LoRAs a cloud run can't carry, a clip length
    * the API rounds). Only on the answer that creates it; not stored.
@@ -1253,6 +1276,8 @@ export interface InputSlot {
   hint?: string;
   accept: MediaKind;
   required?: boolean;
+  /** A voice slot: offers "Clean up voice" (RE-USE on the open engine) under it, which cleans the file as it lands. */
+  cleanVoice?: boolean;
 }
 
 export interface PresetChoice {
@@ -1289,6 +1314,59 @@ export interface PresetRoute {
    * harness promotes Fuobe DoP's words). Picking the preset doesn't move the composer to it; an engine switch does.
    */
   partner?: boolean;
+  /** MiniMax H3's sound lines for this route's words (its overall_soundscape and non_diegetic_music fields). */
+  sound?: { soundscape: string; music: string };
+  /**
+   * A step that makes the clip's end frame from the person's picture first, as the preset's preview made its own: the
+   * clip then runs from the picture to that frame (start and end frames). Only when no end frame is given.
+   */
+  end?: PresetEndStep;
+}
+
+/** The end-frame step of a route (PresetRoute.end): an image edit of the start frame. */
+export interface PresetEndStep {
+  modelId: string;
+  op: Operation;
+  /** Its words: "{prompt}" and "{option:key}" fill as in the preset's own template. */
+  promptTemplate: string;
+  params?: GenParams;
+}
+
+/**
+ * The recipe that made a preset's preview (src/lib/catalog/preset-recipe-book.json), written for any picture: the
+ * preview's own subject and setting became "the subject" and "the scene", and the effect's words stayed.
+ */
+export interface PresetRecipeBook {
+  /** A MiniMax H3 clip. */
+  clip?: {
+    /** fast: the 8-step Turbo graph; best: the 20-step graph; orbit: the Orbit LoRA (its training caption's words). */
+    quality: "fast" | "best" | "orbit";
+    /** The clip's length on H3's frame grid at 24 fps (3 s = 73 frames, 5 s = 124). */
+    seconds: number;
+    /** H3's [Shot 1] description (an orbit has none: ORBIT_WORDS). */
+    words?: string;
+    /** H3's overall_soundscape and non_diegetic_music. */
+    sound?: string;
+    music?: string;
+    /** The end frame the clip runs to, made from the start frame first. */
+    end?: PresetRecipeEdit;
+  };
+  /** An image app's result: the Qwen-Image 2.1 edit that made its preview. */
+  edit?: PresetRecipeEdit;
+}
+
+/** A Qwen-Image 2.1 step of a recipe. */
+export interface PresetRecipeEdit {
+  /** turbo: its 8-step Turbo edit; full: its 25-step edit; expand: its outpaint (grey margins, filled). */
+  graph: "turbo" | "full" | "expand";
+  /** The instruction (expand: the words for the new margins). */
+  prompt: string;
+  /** The long side the pictures are scaled to first (the graphs' default is 2048). */
+  maxDimension?: number;
+  /** expand: the pixels added on the left, top, right and bottom. */
+  pads?: [number, number, number, number];
+  /** A crop of the picture first, as fractions of its width and height (x, y, width, height), scaled back to its size. */
+  crop?: [number, number, number, number];
 }
 
 export type PresetType = "app" | "motion" | "effect";
@@ -1316,6 +1394,10 @@ export interface Preset {
   grade?: string;
   /** Fuobe DoP's relight effects: a step that makes the start frame first, on each engine (src/lib/catalog/dop.ts). */
   prestep?: PresetPrestep;
+  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice). */
+  tool?: "clean-voice";
+  /** The recipe its preview was made with (src/lib/catalog/preset-recipe-book.json): the route it opens on follows it. */
+  recipe?: PresetRecipeBook;
 }
 
 /**

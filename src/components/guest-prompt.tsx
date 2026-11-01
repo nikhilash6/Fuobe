@@ -174,7 +174,7 @@ export function GuestPrompt() {
                   <LogIn className="size-5" />
                 </div>
                 <DialogTitle>You were signed out</DialogTitle>
-                <DialogDescription>This browser isn&apos;t signed in any more, for example because the password was changed in another browser. Log in again to go on.</DialogDescription>
+                <DialogDescription>Your password changed in another browser. Log in again to carry on.</DialogDescription>
               </DialogHeader>
               <DialogFooter className="gap-2 sm:justify-start">
                 <Button asChild>

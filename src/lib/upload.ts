@@ -14,6 +14,6 @@ export async function postFile(file: File, signal?: AbortSignal): Promise<Asset>
     headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) },
   });
   const body = (await res.json().catch(() => ({}))) as Asset & { error?: string };
-  if (!res.ok) throw responseError(res, body.error ?? `Upload failed (${res.status})`);
+  if (!res.ok) throw responseError(res, body.error ?? "That upload didn't go through. Please try again.");
   return body;
 }

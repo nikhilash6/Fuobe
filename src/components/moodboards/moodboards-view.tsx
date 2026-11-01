@@ -103,7 +103,7 @@ function BoardCard({ m, onRename, onDelete }: { m: Moodboard; onRename: () => vo
                   )
                 }
               >
-                <RotateCcw /> {m.status === "failed" ? "Retry" : `Rebuild for ${m.engine === "cloud" ? "open source" : "cloud"}`}
+                <RotateCcw /> {m.status === "failed" ? "Retry" : "Rebuild"}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem disabled={!ready || m.lora?.status === "training"} onSelect={() => setTimeout(() => setTraining(true))}>
@@ -127,7 +127,7 @@ function BoardCard({ m, onRename, onDelete }: { m: Moodboard; onRename: () => vo
           : m.lora?.status === "ready"
             ? `Style LoRA ready · @${m.lora.handle}`
             : m.lora?.status === "training"
-              ? "Training style LoRA…"
+              ? "Learning your style…"
               : m.styleId
                 ? "Recraft style saved"
                 : m.engine === "open"

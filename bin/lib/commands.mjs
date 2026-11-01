@@ -905,6 +905,14 @@ export const COMMANDS = {
     passthrough: true,
     run: evalHarness,
   },
+  worker: {
+    summary: "Run this PC's GPU as a worker for a studio (docs/gpu-workers.md)",
+    usage: "fuobe worker <setup | run | pause [--now] [--for 2h] | resume | status | bench | install [--yes]>",
+    examples: ["fuobe worker setup", "fuobe worker run", "fuobe worker pause --for 2h", "fuobe worker pause --now", "fuobe worker resume"],
+    passthrough: true,
+    ownConfig: true,
+    run: async (ctx) => (await import("./worker/index.mjs")).worker(ctx.positionals, ctx.io),
+  },
 };
 
 /** Other names people type. */

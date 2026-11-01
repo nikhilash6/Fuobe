@@ -66,6 +66,8 @@ const MODEL_STUDIOS: [string, StudioConfig][] = [
 const IN_3D = new Set([...ALL_MODELS_3D.map((m) => m.id), RIG_MODEL]);
 /** The Layers editor's tools (cut-out, layers, text detection…): its project list is where they start. */
 const IN_LAYERS = new Set(Object.values(TOOL_MODELS).flatMap((t) => [...t.cloud, ...t.open]));
+/** Where a model no studio, app or tool offers opens: the studio of what it makes. */
+const KIND_HOME: Record<ModelDef["kind"], string> = { image: "/image", video: "/video", audio: "/audio", text: "/assist", model3d: "/image-to-3d" };
 /** Tools with their own flow (and their own model choice), by operation. */
 const TOOL_PAGES: [string, Operation][] = [
   ["/video-tools/captions", "captions"],
@@ -76,7 +78,7 @@ const TOOL_PAGES: [string, Operation][] = [
 /**
  * Where a model opens: the first studio that offers it, Image to 3D, an app that runs it (each with
  * ?model=, which also brings the model's engine), the Layers editor or a tool of its operation, else
- * its row on the Models page (which reads ?q=). A model kept out of the pickers (hidden) has no studio to open in.
+ * the main studio of its kind. A model kept out of the pickers (hidden) has no studio to open in.
  */
 export function modelHref(m: ModelDef): string {
   const ops = new Set(m.routes.map((r) => r.op));
@@ -89,7 +91,7 @@ export function modelHref(m: ModelDef): string {
   if (IN_LAYERS.has(m.id)) return "/layers";
   const tool = TOOL_PAGES.find(([, op]) => ops.has(op));
   if (tool) return tool[0];
-  return `/models?q=${encodeURIComponent(m.name)}`;
+  return KIND_HOME[m.kind];
 }
 
 const preset = (p: Preset): PalettePreset => ({ id: p.id, name: p.name, category: p.category, cloud: !!p.cloud, open: !!p.open });

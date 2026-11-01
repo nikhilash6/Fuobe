@@ -74,7 +74,7 @@ describe("Loop / extend and Join plans", () => {
     expect(chain.summary).toBe("Plays it 60 times back to back (3 calls of up to 5): 10:00.");
     // Each tile says what its call does (not the pipeline's "Step 1 of 3").
     expect(chain.steps.map((s) => s.request.step?.label)).toEqual(["5 plays · call 1 of 3", "4 plays · call 2 of 3", "3 plays · call 3 of 3"]);
-    expect(chain.notes).toEqual(["No crossfade on the cloud: switch to the open engine for smooth seams and an exact length."]);
+    expect(chain.notes).toEqual(["For smooth seams and an exact length, switch to Open source."]);
   });
 
   it("sends each cloud call exactly its planned plays, whatever the clip's length in milliseconds", () => {

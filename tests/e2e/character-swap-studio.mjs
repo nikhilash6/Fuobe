@@ -1,8 +1,7 @@
 // Character Swap Studio, browser check (o/h3-studio): the whole flow in demo mode on the cloud engine — a project, the
 // character, a clip, Detect edits, a cut at the playhead and Keep original, the transcript and Build shot prompts, a
 // click on a frame and Track shot, a mask and a scene anchor approved, two segments (the second continuing from the
-// first, waiting for it), takes made, compared and reviewed, Export decisions, the assembly with a download, and the
-// Finish stage shown as not available. Then every stage at 1440 and 390 px, light and dark, without sideways scroll;
+// first, waiting for it), takes made, compared and reviewed, Export decisions, and the assembly with a download. Then every stage at 1440 and 390 px, light and dark, without sideways scroll;
 // a project on your GPU shows its 24 fps copy; an AVI on the cloud gets a copy the browser can play; the sidebar links
 // here and Genjutsu's Character swap opens its clip and character in a new project; an unknown project is a 404.
 // Usage: node tests/e2e/character-swap-studio.mjs [appUrl] [--shots <dir>]   (app in demo mode, ComfyUI unreachable).
@@ -181,12 +180,11 @@ try {
     check("Export decisions: the clip's review and the take's", !!exported, exported ? "" : JSON.stringify(last.clips?.[0]?.shots?.[0]?.segments?.map((g) => g.takes.map((t) => [t.favourite, t.decision]))) + ` review=${last.clips?.[0]?.review}`);
     await shot("06-review");
 
-    // Assemble; the Finish stage is not available.
+    // Assemble.
     await page.getByRole("tab", { name: "Assemble" }).click();
     await page.getByRole("button", { name: "Assemble clip" }).click();
     await page.getByRole("link", { name: "Download" }).waitFor({ timeout: 120_000 });
     check("assembled, with a download", true);
-    check("Finish stage shown as not available", /Not available/.test(await text()) && /Raw assembly migration is pending/.test(await text()));
     await shot("07-assemble");
     await context.close();
   }
@@ -235,7 +233,7 @@ try {
     await page.getByText("24 fps copy").first().waitFor();
     check("your GPU: the clip's 24 fps copy is made on import", true);
     await page.getByRole("tab", { name: "Assemble" }).click();
-    check("your GPU: where it runs (ComfyUI connection, no SSH)", /doesn't open SSH sessions/.test(await page.evaluate(() => document.body.innerText)));
+    check("your GPU: where it runs (ComfyUI connection)", /Runs on your ComfyUI/.test(await page.evaluate(() => document.body.innerText)));
     await page.goto(`${app}/genjutsu?mode=character`, { waitUntil: "load" });
     await page.getByRole("link", { name: /Open in Character Swap Studio/ }).waitFor({ timeout: 90_000 });
     check("Genjutsu's Character swap links the studio", true);

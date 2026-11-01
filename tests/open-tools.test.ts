@@ -368,7 +368,7 @@ describe("Fuobe Speak", () => {
     expect(speak.name).toBe("Fuobe Speak");
     // Settings → Models & licences.
     const entry = accessList().models.find((m) => m.id === "fuobe-speak")!;
-    expect(entry.engineNote).toBe("Your GPU adds the FusioniX LoRA (with Higgsfield's Infinite Talk settings); the cloud runs fal's InfiniteTalk without it");
+    expect(entry.engineNote).toBe("Your GPU adds FusioniX to InfiniteTalk; the cloud runs InfiniteTalk without it");
     // No hosted InfiniteTalk takes a LoRA (fal's three endpoints, checked): the research says so, and the cloud route has no LoRA field.
     const research = JSON.parse(fs.readFileSync(path.join(__dirname, "../docs/research/fuobe-originals-recipes-5.json"), "utf8"));
     expect(research.studios.find((s: { id: string }) => s.id === "speak").original.cloud.loraCheck.result).toMatch(/no hosted InfiniteTalk takes a LoRA/);
