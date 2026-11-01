@@ -32,6 +32,7 @@ import {
   UserRoundPlus,
   Wand2,
   WandSparkles,
+  Zap,
   ZoomIn,
   type LucideIcon,
 } from "lucide-react";
@@ -77,6 +78,7 @@ import { toastError } from "@/lib/refusals";
 export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   animate: Clapperboard,
   edit: Wand2,
+  "live-edit": Zap,
   upscale: ZoomIn,
   reference: ImagePlus,
   grade: SlidersHorizontal,

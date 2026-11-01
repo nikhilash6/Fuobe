@@ -210,6 +210,36 @@ export function useFadeEdges<T extends HTMLElement>() {
   return ref;
 }
 
+/**
+ * A card that opens a tool of its own (Live edit), shown before the presets: the same card chrome, its own link. Only
+ * on the All tab with no search, or when the search matches its words; never when the gallery shows cloud tools only.
+ */
+export interface LinkCard {
+  href: string;
+  title: string;
+  line: string;
+  /** More words a search finds it by. */
+  words?: string;
+  badge?: string;
+  /** Its picture: a node (a playing demo), drawn in the card's 4:3 frame. */
+  cover: React.ReactNode;
+}
+
+function LeadingCard({ card }: { card: LinkCard }) {
+  return (
+    <Link href={card.href} className="group/card flex min-w-0 flex-col gap-2 rounded-xl p-1.5 transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring" data-leading-card>
+      <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
+        {card.cover}
+        {card.badge && <span className="pointer-events-none absolute top-1.5 right-1.5 rounded-full bg-highlight px-1.5 py-0.5 text-[10.5px] font-semibold text-highlight-foreground">{card.badge}</span>}
+      </div>
+      <div className="min-w-0 px-0.5 pb-0.5">
+        <p className="truncate text-[14px] font-medium">{card.title}</p>
+        <p className="line-clamp-2 text-[12.5px] text-muted-foreground">{card.line}</p>
+      </div>
+    </Link>
+  );
+}
+
 const FIRST_PAGE = 30;
 const PAGE = 40;
 
@@ -220,6 +250,7 @@ export function PresetGallery({
   categories,
   href,
   noun = "presets",
+  leading,
 }: {
   /** In the order the All view shows them (featuredGallery): a category or a search keeps it. */
   presets: PresetCardData[];
@@ -229,6 +260,8 @@ export function PresetGallery({
   href: string;
   /** Plural shown in the result count, e.g. "effects". */
   noun?: string;
+  /** Tools of their own shown first (LinkCard). */
+  leading?: LinkCard[];
 }) {
   const [cat, setCat] = useState("All");
   const [q, setQ] = useState("");
@@ -254,6 +287,7 @@ export function PresetGallery({
 
   const strip = useFadeEdges<HTMLDivElement>();
   const stale = q.trim().toLowerCase() !== query;
+  const lead = (leading ?? []).filter((c) => cat === "All" && runsOn !== "cloud" && (!query || matchesSearch(`${c.title} ${c.line} ${c.words ?? ""}`.toLowerCase(), query)));
   // One fetch of the viewer's chips (the GPU pre-flight); each card gets one string.
   const badges = useGpuBadges().data;
   const viewer = useViewer().data;
@@ -327,9 +361,12 @@ export function PresetGallery({
           ))}
         </div>
       </div>
-      {list.length ? (
+      {list.length || lead.length ? (
         <>
           <div ref={grid} className={cn(GRID, "transition-opacity", stale && "opacity-70")}>
+            {lead.map((c) => (
+              <LeadingCard key={c.href} card={c} />
+            ))}
             {list.slice(0, shown).map((p) => (
               <PresetCard key={p.id} preset={p} href={href.replace("{id}", p.id)} engine={locked} gpu={p.open ? badgeKey(badges?.presets[p.id]) : undefined} gpuName={badges?.gpu} />
             ))}

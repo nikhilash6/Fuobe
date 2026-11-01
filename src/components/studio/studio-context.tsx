@@ -85,6 +85,8 @@ export interface StudioConfig {
   comfyOnly?: { note: string; alternative?: { label: string; href: string } };
   /** Frames mode (Video studio): up to 10 stills, each at its own time in the clip, instead of a start and an end frame. */
   frames?: boolean;
+  /** A Live switch in the header (Edit): the picture changes as you type, on the viewer's own GPU (Live edit). */
+  live?: boolean;
 }
 
 export interface Draft {

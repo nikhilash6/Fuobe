@@ -75,11 +75,11 @@ export function sidebarCookie(open: boolean): string {
 }
 
 /**
- * Full-screen studios: a project open in Cinema, Canvas or Layers, and Assist (with its own rail of
- * chats). They have a sidebar of their own, so the app sidebar folds to its icon rail while one is
+ * Full-screen studios: a project open in Cinema, Canvas or Layers, Assist (with its own rail of
+ * chats), and Live edit (the picture fills the page). They have a sidebar of their own, so the app sidebar folds to its icon rail while one is
  * open, without touching the remembered choice, and comes back on the way out.
  */
-const FULL_SCREEN = /^\/(?:(?:cinema|canvas|layers)\/[^/]+\/?|assist(?:\/.*)?)$/;
+const FULL_SCREEN = /^\/(?:(?:cinema|canvas|layers)\/[^/]+\/?|assist(?:\/.*)?|live-edit\/?)$/;
 
 /**
  * Which full-screen studio a path belongs to (null on any other page): the project's own path, or

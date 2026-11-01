@@ -15,6 +15,7 @@ import { CLEAN_FEATURE } from "./av/clean-voice";
 export type OutputActionId =
   | "animate"
   | "edit"
+  | "live-edit"
   | "upscale"
   | "reference"
   | "grade"
@@ -99,6 +100,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("animate", "Animate", `/video?image=${q(o.url)}`, "primary");
       out.push(file, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });
       link("edit", "Edit", `/edit?image=${q(o.url)}`);
+      link("live-edit", "Change it as you type", `/live-edit?image=${q(o.url)}&gen=${q(g.id)}&from=library`);
       link("upscale", "Upscale", `/upscale?image=${q(o.url)}`);
       link("reference", "Use as reference", `/image?ref=${q(o.url)}`);
       link("grade", "Color grade", `/color-grade?image=${q(o.url)}`);

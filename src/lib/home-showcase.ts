@@ -108,7 +108,14 @@ export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => 
 ];
 
 /** Destinations with a section of their own on Home, so they aren't pills as well. */
-export const HOME_OWN_SECTIONS = ["/assist", "/motions", "/effects", "/apps"];
+export const HOME_OWN_SECTIONS = ["/assist", "/motions", "/effects", "/apps", "/live-edit"];
+
+/** Live edit's moment on Home: a recorded session plays (no GPU, no requests), with one way in. */
+export const HOME_LIVE = {
+  href: "/live-edit?from=home",
+  title: "Change it as you type",
+  line: "Type a change and watch the picture follow in under a second. Keep what you like; nothing blurs, however many changes you stack.",
+};
 
 /** Assist's starter skills, as its empty chat lists them first (assist-view.tsx). */
 export const HOME_SKILLS = ["product-photoshoot", "ugc-video", "thumbnail-generation", "faceless-video", "short-film", "localization"];

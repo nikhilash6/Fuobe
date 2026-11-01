@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, CircleAlert, ImageIcon, Loader2, MessageCircle, Video, Wand2 } from "lucide-react";
+import { ArrowRight, CircleAlert, ImageIcon, Loader2, MessageCircle, Video, Wand2, Zap } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { GetStarted } from "@/components/get-started";
@@ -30,6 +30,7 @@ const MODES = [
   { id: "image", label: "Image", icon: ImageIcon, href: "/image", placeholder: "Describe an image…" },
   { id: "video", label: "Video", icon: Video, href: "/video", placeholder: "Describe a shot…" },
   { id: "edit", label: "Edit", icon: Wand2, href: "/edit", placeholder: "Describe a change (you'll add the image next)…" },
+  { id: "live", label: "Live", icon: Zap, href: "/live-edit", placeholder: "Type and watch it change…" },
 ];
 
 /** A Try chip under the composer: it picks the mode and fills in the prompt; Start still runs it. */
@@ -212,11 +213,13 @@ export function HomeView({
   // carries a one-time token from this tab, so only this button can start a run that way.
   const go = () => {
     const p = prompt.trim();
+    // Live edit renders as you type there: the words go along, nothing starts by itself.
+    if (mode.id === "live") return router.push(`/live-edit?from=home${p ? `&text=${encodeURIComponent(p)}` : ""}`);
     router.push(p ? `${mode.href}?prompt=${encodeURIComponent(p)}&${START_PARAM}=${issueStartToken()}` : mode.href);
   };
   // What Start will run, and what it costs, before it's pressed (or why it's a demo, and the engine that would run it).
-  const runsFor = status ? startLine(status, quotes?.[mode.id], engine, mode.id as "image" | "video" | "edit") : null;
-  const openModel = quotes?.[mode.id]?.open?.name;
+  const runsFor = status && mode.id !== "live" ? startLine(status, quotes?.[mode.id as "image" | "video" | "edit"], engine, mode.id as "image" | "video" | "edit") : null;
+  const openModel = mode.id === "live" ? undefined : quotes?.[mode.id as "image" | "video" | "edit"]?.open?.name;
   const focusComposer = () => requestAnimationFrame(() => box.current?.focus());
   const startOver = useCallback(() => {
     setPrompt("");

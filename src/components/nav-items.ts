@@ -45,6 +45,7 @@ import {
   Wand2,
   WandSparkles,
   Workflow,
+  Zap,
   ZoomIn,
   type LucideIcon,
 } from "lucide-react";
@@ -80,6 +81,7 @@ export const NAV: NavGroupDef[] = [
       { href: "/image", label: "Image", icon: ImageIcon, eager: true, keywords: "text to image picture photo" },
       { href: "/video", label: "Video", icon: Video, eager: true, keywords: "text to video image to video animate" },
       { href: "/edit", label: "Edit", icon: Wand2, keywords: "edit image change" },
+      { href: "/live-edit", label: "Live edit", icon: Zap, keywords: "realtime live as you type instant change" },
       { href: "/layers", label: "Layers", icon: Layers2, keywords: "layered psd split" },
       { href: "/inpaint", label: "Inpaint", icon: Brush, keywords: "mask fill remove" },
       { href: "/color-grade", label: "Color grading", icon: SlidersHorizontal, keywords: "grade lut colour" },

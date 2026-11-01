@@ -70,6 +70,7 @@ describe("outputActions", () => {
       "bar:download",
       "bar:favorite",
       "menu:edit",
+      "menu:live-edit",
       "menu:upscale",
       "menu:reference",
       "menu:grade",

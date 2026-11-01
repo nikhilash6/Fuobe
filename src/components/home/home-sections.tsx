@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Fragment } from "react";
-import { ArrowRight, AudioLines, Box, CalendarClock, ImageIcon, ListChecks, Plug, ScanEye, Sparkles, Video, type LucideIcon } from "lucide-react";
+import { ArrowRight, AudioLines, Box, CalendarClock, CornerDownLeft, ImageIcon, ListChecks, Plug, ScanEye, Sparkles, Undo2, Video, Zap, type LucideIcon } from "lucide-react";
 import { GitHubMark } from "@/components/github-mark";
 import { BeforeAfter } from "@/components/home/before-after";
 import {
@@ -18,11 +18,12 @@ import {
 } from "@/components/home/home-islands";
 import { ShowcaseTile } from "@/components/home/showcase-tile";
 import { IntentLink } from "@/components/intent-link";
+import { LiveDemo } from "@/components/live/live-demo";
 import { NAV } from "@/components/nav-items";
 import { PresetCard } from "@/components/preset-gallery";
 import { ASSIST_SUGGESTIONS } from "@/lib/assist";
 import { FUOBE_REPO } from "@/lib/connections";
-import { presetHref, type HomeShowcase } from "@/lib/home-showcase";
+import { HOME_LIVE, presetHref, type HomeShowcase } from "@/lib/home-showcase";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
 
@@ -154,6 +155,43 @@ export function AppsSection({ facts, beforeAfter, reveals }: Pick<HomeShowcase, 
           <BeforeAfter pairs={beforeAfter} />
         </div>
         <Cards items={reveals} className="self-start sm:grid-cols-3 xl:col-span-7" />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Live edit's moment: a recorded session plays beside what it does and one way in. The player is the only island; it
+ * pauses off screen, and nothing here reaches a GPU.
+ */
+export function LiveEditSection() {
+  const points: [LucideIcon, string][] = [
+    [Zap, "Live frames as you type, on your own GPU"],
+    [CornerDownLeft, "Enter keeps a change; typing never does"],
+    [Undo2, "Undo, redo and compare every step"],
+  ];
+  return (
+    <section aria-labelledby="home-live" className={cn(SECTION, "[--cv:720px] sm:[--cv:860px] md:[--cv:820px] lg:[--cv:470px] xl:[--cv:500px]")}>
+      <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-12 lg:gap-10">
+        <LiveDemo className="aspect-[4/3] w-full shadow-strong lg:col-span-7" />
+        <div className="min-w-0 lg:col-span-5">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-highlight px-2 py-0.5 text-[11px] font-semibold text-highlight-foreground">New · Live edit</span>
+          <h2 id="home-live" className={cn(H2, "mt-3")}>
+            {HOME_LIVE.title}
+          </h2>
+          <p className={LINE}>{HOME_LIVE.line}</p>
+          <ul className="mt-4 space-y-2 text-[14px]">
+            {points.map(([Icon, t]) => (
+              <li key={t} className="flex items-center gap-2.5">
+                <Icon className="size-4 shrink-0 text-primary" />
+                {t}
+              </li>
+            ))}
+          </ul>
+          <IntentLink href={HOME_LIVE.href} className="group mt-6 inline-flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-[14px] font-medium text-primary-foreground transition hover:opacity-90">
+            Open Live edit <ArrowRight className="size-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+          </IntentLink>
+        </div>
       </div>
     </section>
   );

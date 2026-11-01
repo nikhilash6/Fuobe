@@ -74,7 +74,7 @@
   </tr>
 </table>
 
-**Also inside:** Cinema (with a Fly path through 3D scenes), Shorts, Marketing and Ads studios, Canvas node workflows, Storyboard, Turnaround video, voice and music tools (Split soundtrack takes any soundtrack apart into dialogue, music and effects), skills, MCP and a CLI. [See every feature →](docs/FEATURES.md)
+**Also inside:** Live edit (the picture changes as you type, on your own GPU), Cinema (with a Fly path through 3D scenes), Shorts, Marketing and Ads studios, Canvas node workflows, Storyboard, Turnaround video, voice and music tools (Split soundtrack takes any soundtrack apart into dialogue, music and effects), skills, MCP and a CLI. [See every feature →](docs/FEATURES.md)
 
 ## Quick start
 

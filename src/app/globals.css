@@ -658,3 +658,10 @@
 @media (prefers-reduced-motion: reduce) {
   .pv, .pv * { animation: none !important; transition: none !important; }
 }
+
+/* Live edit (src/components/live): a new frame fades in over the last; the demo dock's caret blinks. */
+@keyframes live-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes live-caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  [data-live-stage] img, [data-live-demo] img { animation: none !important; transition: none !important; }
+}

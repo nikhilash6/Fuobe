@@ -161,7 +161,7 @@ describe("Home's showcase", () => {
     for (const p of home.pills) expect(routes.has(p.href), p.href).toBe(true);
   });
 
-  it("covers every place to create: the studio cards, the pills and the four with a section of their own", async () => {
+  it("covers every place to create: the studio cards, the pills and the five with a section of their own", async () => {
     const home = await homeShowcase();
     const create = NAV.find((g) => g.label === "Create")!.items.filter((i) => i.href !== "/");
     const studios = NAV.find((g) => g.label === "Studios")!.items;

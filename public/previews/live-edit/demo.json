@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "size": [960, 720],
+  "frames": {
+    "before": { "src": "/previews/presets/ba/960/app-makeup-studio-before.jpg", "small": "/previews/presets/ba/512/app-makeup-studio-before.jpg" },
+    "after": { "src": "/previews/presets/ba/960/app-makeup-studio-after.jpg", "small": "/previews/presets/ba/512/app-makeup-studio-after.jpg" }
+  },
+  "script": [
+    { "type": "frame", "frame": "before", "ms": 900 },
+    { "type": "type", "text": "evening makeup", "ms": 1100 },
+    { "type": "frame", "frame": "after", "live": "0.71 s", "ms": 700 },
+    { "type": "type", "text": ", deep red lips", "ms": 1000 },
+    { "type": "frame", "frame": "after", "live": "0.68 s", "ms": 900 },
+    { "type": "keep", "label": "evening makeup, deep red lips", "ms": 1300 },
+    { "type": "compare", "ms": 2800 },
+    { "type": "pause", "ms": 1400 }
+  ]
+}

@@ -27,6 +27,7 @@ export const IMAGE_STUDIO: StudioConfig = {
   // the face mosaic after the picture: its step's model is known here so the price counts it before the run.
   signature: true,
   extraModels: [...Object.values(SIGNATURE_MODELS), ...Object.values(FACE_MOSAIC_MODELS)],
+  related: { href: "/live-edit?from=image", label: "Try it live: change a picture as you type" },
   suggestions: [
     "Editorial portrait of a woman in a yellow raincoat, Tokyo crosswalk at dusk, 35mm film",
     "Isometric cozy reading nook with plants and warm lamp light, 3D render",
@@ -46,6 +47,7 @@ export const EDIT_STUDIO: StudioConfig = {
   slots: [{ key: "image", label: "Image", accept: "image", required: true }],
   multiRef: { label: "Add ref", max: 6 },
   sketch: ["mask", "draw"],
+  live: true,
   defaultModels: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
   suggestions: [
     "Make it golden hour",

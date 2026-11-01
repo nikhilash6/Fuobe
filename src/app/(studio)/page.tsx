@@ -3,6 +3,7 @@ import {
   AssistSection,
   EffectsSection,
   HomeFooter,
+  LiveEditSection,
   MotionsSection,
   OpenSourceSection,
   ShowcaseWall,
@@ -32,6 +33,7 @@ export default async function Page() {
       <EffectsSection facts={home.facts} effects={home.effects} />
       <MotionsSection facts={home.facts} motions={home.motions} />
       <AppsSection facts={home.facts} beforeAfter={home.beforeAfter} reveals={home.reveals} />
+      <LiveEditSection />
       <StudiosSection facts={home.facts} studios={home.studios} audioTools={home.audioTools} pills={home.pills} />
       <AssistSection facts={home.facts} runsOn={home.runsOn} skills={home.skills} />
       <OpenSourceSection facts={home.facts} newModels={home.newModels} />

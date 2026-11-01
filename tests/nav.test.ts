@@ -70,9 +70,9 @@ describe("remembered sidebar state", () => {
     const foldable = NAV.filter((g) => g.collapsible).map((g) => groupId(g.label));
     for (const id of DEFAULT_NAV_CLOSED) expect(foldable).toContain(id);
     expect(NAV.map((g) => g.label).slice(0, 2)).toEqual(["Create", "Library"]);
-    // The part that can't fold stays short: Create and Library hold 15 rows; Studios below them can be folded away.
+    // The part that can't fold stays short: Create and Library hold 16 rows (Live edit joined Create); Studios below them can be folded away.
     const always = NAV.filter((g) => !g.collapsible).flatMap((g) => g.items);
-    expect(always.length).toBeLessThanOrEqual(15);
+    expect(always.length).toBeLessThanOrEqual(16);
     expect(DEFAULT_NAV_CLOSED).not.toContain("studios");
   });
 
@@ -138,7 +138,7 @@ describe("remembered sidebar state", () => {
 
 describe("full-screen studios", () => {
   it("are an open Cinema, Canvas or Layers project, and Assist", () => {
-    for (const p of ["/cinema/abc", "/canvas/x1", "/layers/l-2/", "/assist", "/assist/memory", "/assist/projects/p1"]) expect(fullScreenStudio(p)).not.toBeNull();
+    for (const p of ["/cinema/abc", "/canvas/x1", "/layers/l-2/", "/assist", "/assist/memory", "/assist/projects/p1", "/live-edit"]) expect(fullScreenStudio(p)).not.toBeNull();
     for (const p of ["/", "/cinema", "/canvas", "/layers", "/assistant", "/apps/app-packshot", "/cinema/a/b", "/library"]) expect(fullScreenStudio(p)).toBeNull();
   });
 
