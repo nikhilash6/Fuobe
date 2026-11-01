@@ -70,9 +70,9 @@ describe("requirements.json", () => {
     expect([...hosts]).toEqual(["huggingface.co"]);
   });
 
-  it("marks exactly the LTX-2.5 files as gated", () => {
+  it("marks exactly the LTX-2.5 files as gated (the model's repo, and Lightricks' Restore and Detail Refine IC-LoRAs)", () => {
     const gated = files.filter(([, f]) => f.gated).map(([k]) => k);
-    expect(gated.sort()).toEqual(files.filter(([, f]) => f.url.includes("/Lightricks/LTX-2.5/")).map(([k]) => k).sort());
+    expect(gated.sort()).toEqual(files.filter(([, f]) => /\/Lightricks\/LTX-2\.5(\/|-22b-IC-LoRA-(Restore|Refine-Details)\/)/.test(f.url)).map(([k]) => k).sort());
     expect(gated.length).toBeGreaterThan(0);
   });
 
@@ -108,9 +108,10 @@ describe("requirements.json", () => {
     expect(index.packs["ComfyUI-ThinkSound_Wrapper"].isolated).toBe(true);
   });
 
-  it("stays within its size budget (200 KB, 25 KB gzipped)", () => {
+  // 26 KB gzipped since Restore & colourise's graph and pack (o/archive-restore): the library was at 24.8 KB before it.
+  it("stays within its size budget (200 KB, 26 KB gzipped)", () => {
     expect(Buffer.byteLength(text)).toBeLessThanOrEqual(200 * 1024);
-    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(25 * 1024);
+    expect(zlib.gzipSync(text).length).toBeLessThanOrEqual(26 * 1024);
   });
 });
 
