@@ -118,6 +118,8 @@ export interface ManifestWorkflow {
    */
   expand?: "captions" | "timeline" | "videos" | "audios";
   validated: boolean;
+  /** What ComfyUI answered when it last refused this graph. */
+  validationError?: string;
   notes?: string;
 }
 

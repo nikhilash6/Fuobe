@@ -63,6 +63,7 @@ describe("GET /api/comfyui", () => {
     for (const w of body.workflows) {
       if (passed.get(w.id)) expect(w.validated, w.id).toBe(true);
       else expect("validated" in w, w.id).toBe(false);
+      expect("validationError" in w, w.id).toBe(false);
     }
     expect(body.workflows.some((w) => w.validated === true)).toBe(true);
   });

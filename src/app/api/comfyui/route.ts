@@ -53,7 +53,8 @@ export async function GET(request?: Request) {
   });
 }
 
-/** A workflow as anyone but the owner gets it: `validated` only on a checked one (its mark on the Workflows page). */
-function forVisitor({ validated, ...w }: ManifestWorkflow): Omit<ManifestWorkflow, "validated"> & { validated?: true } {
+/** A workflow as anyone but the owner gets it: `validated` only on a checked one (its mark on the Workflows page), and no check details. */
+function forVisitor({ validated, ...w }: ManifestWorkflow): Omit<ManifestWorkflow, "validated" | "validationError"> & { validated?: true } {
+  delete w.validationError;
   return validated ? { ...w, validated } : w;
 }
