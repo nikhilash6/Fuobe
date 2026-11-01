@@ -10,6 +10,7 @@ import { parseArgs } from "node:util";
 import { loadSuite, suiteFiles, validateAll } from "./lib/cases.mjs";
 import { compareRuns, compareText, promote, promoteText, researchRecords } from "./lib/compare.mjs";
 import { coversFromMasters, makeCovers, versionCovers } from "./lib/covers.mjs";
+import { templateCoversFromMasters, versionTemplateCovers } from "./lib/template-covers.mjs";
 import { scoreRun } from "./lib/metrics.mjs";
 import { METRICS_DIR, REPO_DIR, resultsDir } from "./lib/paths.mjs";
 import { RECIPES_FILE } from "./lib/recipes.mjs";
@@ -80,12 +81,22 @@ pnpm eval:covers --from-masters <dir> --run <name> [--engine comfyui] [--model <
   cover) is skipped (--replace takes it over). Run again, it encodes only new or changed masters (--force: all).
   Clips loop without a jump: their last frames are crossfaded into their first ones.
 
+pnpm eval:covers --templates <dir> [--only group/id,group/id] [--force] [--dry-run] [--public-dir public]
+
+  Covers for the studios' template and style tiles, from rendered masters: one folder per tile,
+  <dir>/<group>/<tile id>/ (groups: marketing, fashion, photodump, shorts, mixed-media, canvas, content-factory,
+  explainer), holding clip.mp4 or still.png, then frame-2.png… for a tile with more frames (up to frame-4), and a
+  meta.json that can say { "rest": "end" } (a reveal: its last frame is the poster) or { "same": "<preset id>" }
+  (the tile shows that preset's cover). Encoded like the preset covers into public/previews/templates/<group>/ and
+  merged into src/lib/template-covers.generated.ts. Run again, it encodes only new or changed masters (--force: all).
+
 pnpm eval:covers --versions [--dry-run] [--public-dir public] [--manifest …]
 
-  Every URL in the manifest ends in its file's content version (?v=, 8 hex digits of its sha256; a poster's also
-  covers its small copy in thumbs/), so a cover made again gets a new URL. Both commands above write them; this
-  one versions the manifest from the files as they are. It encodes only a poster's small copy that's missing or
-  older than its poster (one copied in by hand), first; --dry-run lists those and fails until they're made.`,
+  Every URL in the manifests (the presets', and the template tiles') ends in its file's content version (?v=, 8 hex
+  digits of its sha256; a still's also covers its small copy in thumbs/), so a cover made again gets a new URL. The
+  commands above write them; this one versions both manifests from the files as they are (with --manifest, only
+  that presets' manifest). It encodes only a still's small copy that's missing or older than its still (one copied
+  in by hand), first; --dry-run lists those and fails until they're made.`,
   history: "pnpm eval:history [--suite soul] [--case soul/v1-general] [--limit 20]",
   validate: "pnpm eval:validate [suite files…]   checks every case file and that the generated suites match the research",
   trash: "pnpm eval:trash <runId> [--dry-run]   moves the run's generations to that Fuobe's Trash (its results here stay)",
@@ -443,11 +454,13 @@ async function covers(args, ctx) {
       force: { type: "boolean" },
       replace: { type: "boolean" },
       versions: { type: "boolean" },
+      templates: { type: "string" },
     },
     { positionals: true },
   );
   if (v.help) return ctx.print(HELP.covers), 0;
   if (v["from-masters"]) return coversFromMastersCmd(v, ctx);
+  if (v.templates) return templateCoversCmd(v, ctx);
   if (v.versions) return versionsCmd(v, ctx);
   const { dir } = resolveRun(root(v, ctx.env), positionals[0] ?? "latest");
   const r = makeCovers(dir, { variant: v.variant, dryRun: v["dry-run"], publicDir: v["public-dir"] && path.resolve(v["public-dir"]), manifest: v.manifest && path.resolve(v.manifest), commercialOnly: v["commercial-only"] });
@@ -467,10 +480,19 @@ async function covers(args, ctx) {
  */
 function versionsCmd(v, ctx) {
   const dry = v["dry-run"];
-  const r = versionCovers({ dryRun: dry, publicDir: v["public-dir"] && path.resolve(v["public-dir"]), manifest: v.manifest && path.resolve(v.manifest) });
-  const status = r.unversioned.length || (dry && r.thumbs.length) ? 1 : 0;
-  if (v.json) return ctx.print(JSON.stringify(r, null, 2)), status;
-  ctx.print(`${r.changed} of ${r.urls} cover URLs in ${r.entries} entries ${dry ? "would get" : "got"} a new version`);
+  const publicDir = v["public-dir"] && path.resolve(v["public-dir"]);
+  const presets = versionCovers({ dryRun: dry, publicDir, manifest: v.manifest && path.resolve(v.manifest) });
+  // The template tiles' manifest is versioned with it (its own file: --manifest names the presets' alone).
+  const templates = v.manifest ? null : versionTemplateCovers({ dryRun: dry, publicDir });
+  const both = [presets, templates].filter(Boolean);
+  const status = both.some((r) => r.unversioned.length || (dry && r.thumbs.length)) ? 1 : 0;
+  if (v.json) return ctx.print(JSON.stringify(templates ? { ...presets, templates } : presets, null, 2)), status;
+  for (const r of both) versionsReport(r, r === templates ? "template tile " : "", dry, ctx);
+  return status;
+}
+
+function versionsReport(r, what, dry, ctx) {
+  ctx.print(`${r.changed} of ${r.urls} ${what}cover URLs in ${r.entries} entries ${dry ? "would get" : "got"} a new version`);
   const list = (items, why) => {
     for (const u of items.slice(0, 10)) ctx.print(`  · ${u}: ${why}`);
     if (items.length > 10) ctx.print(`  · and ${items.length - 10} more`);
@@ -478,7 +500,29 @@ function versionsCmd(v, ctx) {
   list(r.thumbs, dry ? "small copy missing or older than its poster: would be made first" : "small copy made (it was missing or older than its poster)");
   list(r.unversioned, "no file, so no version");
   if ((r.changed || r.thumbs.length) && !dry) ctx.note(`Look at the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest}${r.thumbs.length ? " and the small copies it made" : ""} before committing them.`);
-  return status;
+}
+
+/** pnpm eval:covers --templates <dir>: the template tiles' covers from rendered masters, merged into their manifest. */
+function templateCoversCmd(v, ctx) {
+  const r = templateCoversFromMasters(path.resolve(v.templates), {
+    only: v.only?.split(",").map((s) => s.trim()).filter(Boolean),
+    force: v.force,
+    dryRun: v["dry-run"],
+    publicDir: v["public-dir"] && path.resolve(v["public-dir"]),
+  });
+  if (v.json) return ctx.print(JSON.stringify(r, null, 2)), 0;
+  const n = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+  const clips = r.covers.filter((c) => c.video).length;
+  const kept = r.covers.filter((c) => c.kept).length;
+  const same = r.covers.filter((c) => c.same).length;
+  const tail = v["dry-run"] ? " would be made" : kept ? `, ${kept} already up to date` : "";
+  ctx.print(`${n(r.covers.length, "template tile cover")} (${n(clips, "clip")}, ${n(r.covers.length - clips, "still")}, ${same} showing a preset's cover)${tail}`);
+  for (const c of r.covers.slice(0, 20)) ctx.print(`  ${c.key} ← ${c.same ?? path.basename(c.from)}${c.frames ? ` + ${n(c.frames, "frame")}` : ""}${c.kept ? " · up to date" : ""}`);
+  if (r.covers.length > 20) ctx.print(`  and ${r.covers.length - 20} more`);
+  for (const sk of r.skipped.slice(0, 10)) ctx.print(`  · ${sk.key}: ${sk.why}`);
+  if (r.skipped.length > 10) ctx.print(`  · and ${r.skipped.length - 10} more`);
+  if (r.covers.length && !v["dry-run"]) ctx.note(`Look at the media in ${path.relative(REPO_DIR, r.folder) || r.folder} and the diff of ${path.relative(REPO_DIR, r.manifest) || r.manifest} before committing them.`);
+  return 0;
 }
 
 /** pnpm eval:covers --from-masters <dir>: covers from rendered masters, merged into the manifest. */
