@@ -54,6 +54,8 @@ export type OutputActionId =
   | "download-vtt"
   | "download-all"
   | "download-exr"
+  | "download-splat"
+  | "make-3d"
   | "favorite"
   | "finalize"
   | "regenerate"
@@ -151,6 +153,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       // A picture drawn from a layout (or one fal's MOSS-Image planned itself) reopens as boxes in the Image studio.
       if (editableLayout(g, index)) link("edit-layout", "Edit layout", editLayoutHref(g, index));
       link("genjutsu", "Animate with Genjutsu", `/genjutsu?mode=motion&image=${q(o.url)}`);
+      link("make-3d", "Make it 3D", `/apps/app-photo-to-3d?image=${q(o.url)}`);
       out.push({ id: "save-character", label: "Save as character", placement: "menu" });
       break;
     case "video": {
@@ -218,10 +221,18 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
         if (ext !== "vtt") out.push({ id: "download-vtt", label: "Download .vtt", placement: "menu" });
       }
       break;
-    case "model3d":
+    case "model3d": {
       if (!ctx.inViewer) out.push({ id: "view-3d", label: "View in 3D", placement: "primary" });
       out.push({ ...file, label: `Download .${ext}` }, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });
+      // A GLB made from a splat (Photo to 3D): the splat too.
+      const splat = o.meta?.role ? undefined : g.outputs.findIndex((x) => x !== o && x.kind === "model3d" && x.meta?.role === "splat");
+      if (splat !== undefined && splat >= 0) {
+        const s = g.outputs[splat];
+        const splatName = downloadName(g, s, splat);
+        out.push({ id: "download-splat", label: `Download 3D splat (.${extensionOf(s)})`, placement: "menu", href: downloadHref(s.url, splatName), download: splatName });
+      }
       break;
+    }
   }
   // Uploads (the Library's Uploads tab) are files, not generations: hand-offs, download, and a
   // delete that first checks nothing uses the file.
@@ -428,12 +439,14 @@ export function textOf(o: Pick<OutputFile, "text" | "meta">): string {
 
 /**
  * The outputs a result shows as tiles (and the viewer browses): a 3D model's turntable video is
- * its preview, not a result of its own.
+ * its preview, not a result of its own, and so is a splat beside the GLB made from it.
  */
 export function shownOutputs(g: Pick<Generation, "kind" | "outputs">): number[] {
   const all = g.outputs.map((_, i) => i);
   if (g.kind !== "model3d") return all;
-  const own = all.filter((i) => g.outputs[i].kind === "model3d");
+  // A splat that came beside the GLB made from it (Photo to 3D) is one of the GLB's downloads, not a tile of its own.
+  const mesh = g.outputs.some((o) => o.kind === "model3d" && !o.meta?.role);
+  const own = all.filter((i) => g.outputs[i].kind === "model3d" && !(mesh && g.outputs[i].meta?.role === "splat"));
   return own.length ? own : all;
 }
 

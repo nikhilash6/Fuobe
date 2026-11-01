@@ -184,6 +184,8 @@ export const ACCOUNT_FINISH_MAX_BYTES = 300 * 2 ** 20;
 
 /** What an account's finished model says of its turntable: none on the server; the 3D page records one in the browser. */
 export const ACCOUNT_TURNTABLE = "skipped: record it in your browser";
+/** A job that came with an orbit clip of its splat keeps it as the turntable. */
+export const OWN_ORBIT = "skipped: the job's own orbit clip";
 
 /**
  * Step 1 (see the header): the web GLB. Returns the outputs to store: the model output with meta.web and
@@ -229,13 +231,19 @@ export async function finishModel(
     if (stats) {
       const web = saveFile({ data: await fs.promises.readFile(webFile), contentType: "model/gltf-binary", name: "model-web.glb", source: "derived", generationId });
       meta.web = web.url;
-      Object.assign(finish, { material: stats.material, triangles: stats.triangles, rawBytes: stats.bytesIn, webBytes: stats.bytesOut, webAsset: web.id, turntable: o.account ? ACCOUNT_TURNTABLE : "queued" });
+      Object.assign(finish, { material: stats.material, triangles: stats.triangles, rawBytes: stats.bytesIn, webBytes: stats.bytesOut, webAsset: web.id, turntable: turntableState(outputs, o.account) });
     }
   } finally {
     await removeDir(tmp);
   }
   if (finish.error) console.warn(`[fuobe] 3D finish for ${generationId}: ${finish.error}`);
   return outputs.map((x, j) => (j === i ? { ...mesh, meta: { ...meta, finish } } : x));
+}
+
+/** The turntable step a finished model gets: none when the job brought its own orbit clip (Photo to 3D), none on an account (its browser records one), else queued. */
+export function turntableState(outputs: OutputFile[], account?: string): string {
+  if (outputs.some((x) => x.kind === "video" && x.meta?.role === "orbit")) return OWN_ORBIT;
+  return account ? ACCOUNT_TURNTABLE : "queued";
 }
 
 /** Whether this process is finishing that job (either step) right now. */

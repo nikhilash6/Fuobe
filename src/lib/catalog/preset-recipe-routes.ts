@@ -53,6 +53,7 @@ export type RecipeKind = "h3" | "orbit" | "qwen";
  * - Restore Photo: its Restore LoRA keeps every face and the framing, where a plain edit redraws them.
  * - Head Swap: the whole head, hair included, comes from its own head LoRA; a plain edit keeps the first hair.
  * - Outfit Swap: its Outfit Swap LoRA keeps everything but the clothes in place, where a plain edit moves the picture.
+ * - Photo to 3D: only its own graph makes the GLB, the splat and the orbit clip together.
  */
 export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-fuobe-angles",
@@ -75,6 +76,7 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-restore-photo",
   "app-head-swap",
   "app-outfit-swap",
+  "app-photo-to-3d",
 ]);
 
 /**

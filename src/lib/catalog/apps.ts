@@ -775,6 +775,21 @@ export const APPS: Preset[] = [
     open: { modelId: "oss-pixal3d", op: "image-to-3d" },
     parity: "Comes with a turntable video of your model.",
   }),
+  // Photo to 3D: one photo of a person or a product → a GLB to turn with taps (src/components/model3d/turn-chips.tsx),
+  // the splat it was made from and a clip of it turning. Idol isn't hosted anywhere, so there is no cloud route.
+  app({
+    name: "Photo to 3D",
+    category: "Product",
+    description: "Your photo as a 3D model to turn and download",
+    icon: "Rotate3d",
+    hue: 265,
+    badges: ["new"],
+    inputs: [{ key: "image", label: "Photo", hint: "One person or one product, whole and on its own", accept: "image", required: true }],
+    prompt: "",
+    cloud: null,
+    open: { modelId: "oss-idol-3d", op: "image-to-3d" },
+    parity: "Gives you a 3D model (.glb) to turn and download, and a clip of it turning.",
+  }),
   videoApp({
     name: "Billboard Ad",
     category: "Product",

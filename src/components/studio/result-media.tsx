@@ -3,8 +3,9 @@
 import { AudioLines, Box, Download, FileText, Film, Layers } from "lucide-react";
 import { createElement, useEffect, useState } from "react";
 import { loadModelViewer, useViewerSrc, viewerLook } from "@/components/model3d/model-viewer";
+import { TurnChips } from "@/components/model3d/turn-chips";
 import { FORMAT_INFO } from "@/lib/av/formats";
-import { splatFormatOf, viewerGlb } from "@/lib/av/model3d";
+import { FRONT_YAW, splatFormatOf, turnOrbit, viewerGlb } from "@/lib/av/model3d";
 import type { Generation, OutputFile, VideoFormat } from "@/lib/catalog/types";
 import { extensionOf } from "@/lib/library";
 import { cuesOf, cueTime, editOnlyFormat, isLayered, layerInfo, modelPreview, textOf, videoPoster } from "@/lib/output-actions";
@@ -195,7 +196,7 @@ export function LayersStack({ g, className, bare }: { g: Generation; className?:
 /**
  * A .glb in an orbitable viewer. @google/model-viewer (with three.js) loads only when one is opened. A Gaussian
  * splat (.ply / .spz / .ksplat), which it can't load, shows its orbit video or picture and the file to download.
- * A rigged character plays its animation instead of turning.
+ * A rigged character plays its animation instead of turning; a still model turns, and the chips under it turn it to a side.
  */
 export function ModelViewer({ output, g }: { output: OutputFile; g: Generation }) {
   const [ready, setReady] = useState(false);
@@ -227,7 +228,9 @@ export function ModelViewer({ output, g }: { output: OutputFile; g: Generation }
       </div>
     );
   }
-  return createElement("model-viewer", {
+  const rigged = output.meta?.rigged === true;
+  const frontYaw = FRONT_YAW[g.modelId] ?? 0;
+  const model = createElement("model-viewer", {
     ref: setViewer,
     src,
     poster,
@@ -236,11 +239,19 @@ export function ModelViewer({ output, g }: { output: OutputFile; g: Generation }
     reveal: "auto",
     "camera-controls": "",
     // A rigged character plays its animation; a still model turns.
-    ...(output.meta?.rigged === true ? { autoplay: "" } : { "auto-rotate": "" }),
+    ...(rigged ? { autoplay: "" } : { "auto-rotate": "" }),
     "touch-action": "pan-y",
     ...viewerLook(typeof material === "string" ? material : undefined),
+    ...(frontYaw ? { "camera-orbit": turnOrbit("front", frontYaw) } : {}),
     style: { width: "100%", height: "100%", background: "transparent" },
   });
+  if (rigged) return model;
+  return (
+    <div className="relative size-full">
+      {model}
+      <TurnChips viewer={viewer} frontYaw={frontYaw} dark className="absolute inset-x-3 bottom-3" />
+    </div>
+  );
 }
 
 /** A splat in the full-screen viewer: its orbit video or picture, what Fuobe can't do yet, and the file. */

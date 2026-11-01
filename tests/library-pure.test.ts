@@ -79,6 +79,7 @@ describe("outputActions", () => {
       "menu:grade",
       "menu:layers",
       "menu:genjutsu",
+      "menu:make-3d",
       "menu:save-character",
       "menu:reuse",
       "menu:make-skill",

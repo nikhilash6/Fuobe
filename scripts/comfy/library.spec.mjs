@@ -5160,6 +5160,35 @@ export const SPEC = [
       'VRAM: vendor peak 7.2 GB in the SDK; unmeasured in ComfyUI.',
   },
   {
+    // Photo to 3D (app-photo-to-3d) and Image to 3D's quick model: Idol (TripoSplat's architecture, new weights) on core nodes,
+    // its splat turned into a GLB with core SplatToMesh (docs/research/idol-9.md §5.5).
+    id: 'image-to-3d-idol',
+    title: 'Image to a 3D model (.glb) + its Gaussian splat + an orbit video (Idol on core TripoSplat nodes, SplatToMesh)',
+    capability: 'image-to-3d',
+    handBuilt: 'hand-built/image-to-3d-idol.json',
+    bindings: {
+      image: [b('99', 'image')], cutout: [b('88:35', 'switch')], photoCrop: [b('88:104', 'switch')], seed: [b('88:6', 'seed'), b('88:55', 'seed')],
+      steps: [b('88:6', 'steps')], cfg: [b('88:6', 'cfg')], sampler: [b('88:6', 'sampler_name')], numGaussians: [b('88:55', 'num_gaussians')],
+      splatFormat: [b('92', 'format')], orbitFrames: [b('75', 'frames')], meshDetail: [b('60', 'resolution')], frontYaw: [b('79', 'mode.yaw'), b('80', 'mode.yaw')],
+    },
+    outputs: [{ node: '61', kind: 'model3d' }, { node: '51', kind: 'model3d', role: 'splat' }, { node: '42', kind: 'video', role: 'orbit' }, { node: '77', kind: 'image' }],
+    defaults: { splatFormat: 'spz', cutout: true, photoCrop: false },
+    limits: { maxGaussians: 1048576 },
+    vramGb: 10,
+    license:
+      'Apache-2.0 (speridlabs/Idol weights, via nynxz/Idol; built on TripoSplat, MIT, VAST-AI-Research); the dino_v3_vit_h image encoder is under the DINOv3 License ' +
+      '(royalty-free, commercial use allowed, trade-control limits; the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT',
+    notes:
+      'One photo of one person or product -> a vertex-coloured GLB (main output, no role: the server makes its web GLB), the splat (role splat, .spz), ' +
+      'a 4 s orbit of the splat (role orbit: the server skips its mesh turntable) and a front still (the poster). image-to-splat-triposplat with Idol\'s files and ' +
+      'reference sampler (50 euler steps, cfg 4; the shift 3 is built into the TripoSplat model class). BiRefNet cut-out (cutout false = the image\'s own alpha), ' +
+      'then TripoSplatPreprocessImage = Idol\'s "synthetic" 1.2 crop; photoCrop true scales it to 720 px on a black 1024 square, about Idol\'s "real" 1.7 crop (core nodes, not run). ' +
+      'SplatToMesh (meshDetail = its grid, 384 by default; min_opacity 0.05 drops Idol\'s faint halo, which RenderSplat\'s opacity_threshold 0.05 also hides in the clip and still; ' +
+      'the .spz keeps it: no core node prunes a splat). frontYaw turns the orbit\'s start and the still to the subject\'s front (calibrated on the GPU). ' +
+      'Backdrop #ece4da, the middle of the server turntable\'s studio sweep. New weights 1.32 GB (idol_fp16 0.74, idol_decoder_fp16 0.58); with TripoSplat\'s shared ' +
+      'DINOv3 ViT-H, FLUX.2 VAE and BiRefNet 3.78 GB. VRAM unmeasured (vendor peak 7.2 GB for Idol, plus the mesh grid). Not validated: no /prompt server was used.',
+  },
+  {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).
     id: 'wan21-i2v-uni3c-path',
     title: 'Fly path: a still filmed along a camera path, Wan 2.1 I2V guided by Uni3C on a browser render of the path (core nodes)',

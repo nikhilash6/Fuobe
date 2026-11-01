@@ -23217,6 +23217,184 @@
       "notes": "Subject or product splat (3D Angles, 3D Jutsu props, a splat alternative to TRELLIS.2 spins). The official template 3d_triposplat_image_to_gaussian_splat (2026-06-02) with the UI-only live-preview patch removed and a 75-frame H.264 orbit (RenderSplat + CreateCameraInfo orbit yaw 35, pitch 30, distance 2.5; role turntable, 25 fps). Subject only: BiRefNet cuts it out first (cutout false = use the image's own alpha). Output 1 (role splat): splatFormat spz (Niantic, gzip, ~10x smaller, base colour), ply (full spherical harmonics) or ksplat, saved by SaveGLB under that extension. ComfyUI serves all three as application/octet-stream, so Fuobe goes by the extension: spz and ply are saved as 3D models (model/x-spz, model/ply), ksplat as a .bin file, and each output records its format. cutout is true by default (manifest defaults). numGaussians up to 1,048,576 (262,144 by default); seed drives both the sampler and the decoder. RenderSplat also takes a look_at camera, so a view picked in the browser can be rendered on the server. 3.78 GB of weights (TripoSplat 0.74, DINOv3 ViT-H 1.68, TripoSplat VAE decoder 0.58, FLUX.2 VAE 0.34, BiRefNet 0.44)."
     },
     {
+      "id": "image-to-3d-idol",
+      "title": "Image to a 3D model (.glb) + its Gaussian splat + an orbit video (Idol on core TripoSplat nodes, SplatToMesh)",
+      "capability": "image-to-3d",
+      "file": "image-to-3d-idol.json",
+      "source": "hand-built (scripts/comfy/hand-built/image-to-3d-idol.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "99",
+            "input": "image"
+          }
+        ],
+        "cutout": [
+          {
+            "node": "88:35",
+            "input": "switch"
+          }
+        ],
+        "photoCrop": [
+          {
+            "node": "88:104",
+            "input": "switch"
+          }
+        ],
+        "seed": [
+          {
+            "node": "88:6",
+            "input": "seed"
+          },
+          {
+            "node": "88:55",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "88:6",
+            "input": "steps"
+          }
+        ],
+        "cfg": [
+          {
+            "node": "88:6",
+            "input": "cfg"
+          }
+        ],
+        "sampler": [
+          {
+            "node": "88:6",
+            "input": "sampler_name"
+          }
+        ],
+        "numGaussians": [
+          {
+            "node": "88:55",
+            "input": "num_gaussians"
+          }
+        ],
+        "splatFormat": [
+          {
+            "node": "92",
+            "input": "format"
+          }
+        ],
+        "orbitFrames": [
+          {
+            "node": "75",
+            "input": "frames"
+          }
+        ],
+        "meshDetail": [
+          {
+            "node": "60",
+            "input": "resolution"
+          }
+        ],
+        "frontYaw": [
+          {
+            "node": "79",
+            "input": "mode.yaw"
+          },
+          {
+            "node": "80",
+            "input": "mode.yaw"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "61",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "51",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "42",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "77",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "61",
+          "kind": "model3d"
+        },
+        {
+          "node": "51",
+          "kind": "model3d",
+          "role": "splat"
+        },
+        {
+          "node": "42",
+          "kind": "video",
+          "role": "orbit"
+        },
+        {
+          "node": "77",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 50,
+        "cfg": 4,
+        "numGaussians": 262144,
+        "orbitFrames": 96,
+        "meshDetail": 384,
+        "frontYaw": 0,
+        "splatFormat": "spz",
+        "cutout": true,
+        "photoCrop": false
+      },
+      "limits": {
+        "maxGaussians": 1048576
+      },
+      "models": [
+        {
+          "file": "dino_v3_vit_h.safetensors",
+          "folder": "clip_vision",
+          "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/clip_vision/dino_v3_vit_h.safetensors",
+          "sizeGb": 1.68
+        },
+        {
+          "file": "flux2-vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "idol_decoder_fp16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/vae/idol_decoder_fp16.safetensors",
+          "sizeGb": 0.58
+        },
+        {
+          "file": "idol_fp16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/diffusion_models/idol_fp16.safetensors",
+          "sizeGb": 0.74
+        },
+        {
+          "file": "birefnet.safetensors",
+          "folder": "background_removal",
+          "url": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors",
+          "sizeGb": 0.44
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 10,
+      "license": "Apache-2.0 (speridlabs/Idol weights, via nynxz/Idol; built on TripoSplat, MIT, VAST-AI-Research); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a \"Built with DINOv3\" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT",
+      "validated": false,
+      "notes": "One photo of one person or product -> a vertex-coloured GLB (main output, no role: the server makes its web GLB), the splat (role splat, .spz), a 4 s orbit of the splat (role orbit: the server skips its mesh turntable) and a front still (the poster). image-to-splat-triposplat with Idol's files and reference sampler (50 euler steps, cfg 4; the shift 3 is built into the TripoSplat model class). BiRefNet cut-out (cutout false = the image's own alpha), then TripoSplatPreprocessImage = Idol's \"synthetic\" 1.2 crop; photoCrop true scales it to 720 px on a black 1024 square, about Idol's \"real\" 1.7 crop (core nodes, not run). SplatToMesh (meshDetail = its grid, 384 by default; min_opacity 0.05 drops Idol's faint halo, which RenderSplat's opacity_threshold 0.05 also hides in the clip and still; the .spz keeps it: no core node prunes a splat). frontYaw turns the orbit's start and the still to the subject's front (calibrated on the GPU). Backdrop #ece4da, the middle of the server turntable's studio sweep. New weights 1.32 GB (idol_fp16 0.74, idol_decoder_fp16 0.58); with TripoSplat's shared DINOv3 ViT-H, FLUX.2 VAE and BiRefNet 3.78 GB. VRAM unmeasured (vendor peak 7.2 GB for Idol, plus the mesh grid). Not validated: no /prompt server was used."
+    },
+    {
       "id": "image-to-splat-idol",
       "title": "Image to a Gaussian splat of one object (Idol on the TripoSplat core nodes) + an orbit video",
       "capability": "splat",

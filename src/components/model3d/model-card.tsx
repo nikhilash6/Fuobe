@@ -6,7 +6,7 @@ import { createElement, useCallback, useEffect, useEffectEvent, useRef, useState
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { uploadFile, useEngine, useHydrated } from "@/lib/api";
-import { animateSpinHref, animationName, model3dView, photorealAngle, photorealBody, stillOf, type Model3dView } from "@/lib/av/model3d";
+import { animateSpinHref, animationName, FRONT_YAW, model3dView, photorealAngle, photorealBody, stillOf, turnOrbit, type Model3dView } from "@/lib/av/model3d";
 import { anyAngleHref } from "@/lib/catalog/any-angle";
 import { PATH_FPS, PATH_FRAMES } from "@/lib/camera-path";
 import { useFlyAround } from "@/components/fly-around-run";
@@ -19,6 +19,7 @@ import { RigDialog } from "./rig-dialog";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { NextSteps } from "@/components/nav/next-steps";
 import { recordableType, recordTurntable } from "./turntable";
+import { TurnChips } from "./turn-chips";
 
 /**
  * Left out of the card's next steps: its own Animate the spin button is that step (and knows a turntable recorded
@@ -131,6 +132,8 @@ export function ModelCard({ g, cloudAllowed }: { g: Generation; cloudAllowed: bo
   const label = g.modelName ?? "3D";
   // Behind the viewer: the studio sweep the server's turntable and poster are on, so opening 3D doesn't jump.
   const backdrop = view.material ? TURNTABLE_BACKDROP : undefined;
+  // The model's own front (a GLB made from a splat faces where the model put the subject).
+  const frontYaw = FRONT_YAW[g.modelId] ?? 0;
   const startRecording = useCallback(
     async (el: HTMLElement) => {
       setRecording(0);
@@ -290,9 +293,12 @@ export function ModelCard({ g, cloudAllowed }: { g: Generation; cloudAllowed: bo
             "touch-action": "pan-y",
             "interaction-prompt": "none",
             ...viewerLook(view.material),
+            ...(frontYaw ? { "camera-orbit": turnOrbit("front", frontYaw) } : {}),
             style: { width: "100%", height: "100%", background: "transparent" },
           })
         )}
+        {/* Tap to turn a still model to a side (a rig plays its animation instead). */}
+        {open3d && ready && !failed && !!src && !view.rigged && recording === null && <TurnChips viewer={viewer} frontYaw={frontYaw} compact className="absolute inset-x-3 bottom-3" />}
         {recording !== null && (
           <div className="absolute inset-x-3 bottom-3 rounded-full bg-background/90 px-3 py-1.5 text-[12px] font-medium shadow-soft" role="status">
             Recording the turntable… {Math.round(recording * 100)}%

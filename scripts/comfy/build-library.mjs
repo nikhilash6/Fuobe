@@ -114,6 +114,8 @@ const NUMERIC_DEFAULT_KEYS = [
   'motionFrame', 'audioCfg', 'threshold', 'mosaicScale',
   // archive-restore
   'windowStart', 'windowFrames', 'prefixFrames', 'canvasWidth', 'canvasHeight', 'tileWidth', 'tileHeight', 'tileFrames',
+  // Photo to 3D (Idol)
+  'meshDetail', 'frontYaw',
 ];
 export const BINDING_KEYS = new Set([
   'prompt', 'negativePrompt', 'image', 'image2', 'image3', 'image4', 'mask', 'endImage', 'video', 'audio',
@@ -184,6 +186,8 @@ export const BINDING_KEYS = new Set([
   'splatFile', 'cameraYaw', 'cameraPitch', 'cameraDistance', 'cameraFov', 'targetX', 'targetY', 'targetZ',
   // Head Swap: the paste-back edge's blur and the paste-back switch
   'maskBlur', 'pasteBack',
+  // Photo to 3D (Idol): SplatToMesh's grid and the turn that faces the subject's front
+  'meshDetail', 'frontYaw',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

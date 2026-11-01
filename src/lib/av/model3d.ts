@@ -44,6 +44,7 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
     open: [
       { id: "oss-pixal3d", note: "Most faithful to your photo, with a turntable video" },
       { id: "oss-trellis2", note: "A dependable second choice, with a turntable video" },
+      { id: "oss-idol-3d", note: "A quick model of a person or product, with an orbit clip" },
       { id: "oss-hunyuan3d-21", note: "The shape only, without colour" },
     ],
   },
@@ -297,6 +298,8 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   const files = g.outputs.filter((o) => o.kind === "model3d");
   const mesh = files.find((o) => o.meta?.role !== "mesh") ?? files[0];
   const fromSplat = files.find((o) => o !== mesh && o.meta?.role === "mesh");
+  // A GLB made from a splat in its own graph (Photo to 3D): the splat beside it (role "splat") is one of its downloads.
+  const sideSplat = mesh && !splatFormatOf(mesh) ? files.find((o) => o !== mesh && o.meta?.role === "splat") : undefined;
   const meta = (mesh?.meta ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
   const videos = g.outputs.filter((o) => o.kind === "video");
@@ -306,6 +309,7 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   const formats: Record<string, string> = {};
   const listed = meta.formats;
   if (listed && typeof listed === "object") for (const [k, v] of Object.entries(listed as Record<string, unknown>)) if (typeof v === "string") formats[k.toLowerCase()] = v;
+  if (sideSplat) formats.splat = sideSplat.url;
   const format = splatFormatOf(mesh);
   const splat = mesh && format ? { url: mesh.url, format } : undefined;
   return {
@@ -479,4 +483,34 @@ export function retextureRequest(o: { glb: string; prompt?: string; style?: stri
     inputs: { model3d: o.glb, ...(o.style && { images: [o.style] }) },
     ...(o.size && o.size !== "2k" && { params: { extra: { texture_resolution: o.size } } }),
   };
+}
+
+// Turn with taps: the views a 3D viewer's chips turn to
+
+export type TurnView = "front" | "left" | "back" | "right" | "above";
+
+/**
+ * The chips under a 3D view, in order. Left and right are the subject's own (as SIDE_LABELS): facing its front, its
+ * left side is on your right. theta is model-viewer's orbit angle round the model (0 = the camera on +Z, 90 = on +X),
+ * phi the angle down from straight above.
+ */
+export const TURN_VIEWS: { id: TurnView; label: string; theta: number; phi: number }[] = [
+  { id: "front", label: "Front", theta: 0, phi: 75 },
+  { id: "left", label: "Left side", theta: 90, phi: 75 },
+  { id: "back", label: "Back", theta: 180, phi: 75 },
+  { id: "right", label: "Right side", theta: 270, phi: 75 },
+  { id: "above", label: "From above", theta: 25, phi: 35 },
+];
+
+/**
+ * The yaw (degrees) that turns a model's own front to model-viewer's front, by model: a GLB made from a splat faces
+ * the way the model put the subject, which the GPU test measures. Models not listed face +Z already.
+ */
+export const FRONT_YAW: Record<string, number> = { "oss-idol-3d": 0 };
+
+/** model-viewer's camera-orbit for a chip: its angle plus the model's front, at the distance the viewer frames it. */
+export function turnOrbit(view: TurnView, frontYaw = 0): string {
+  const v = TURN_VIEWS.find((t) => t.id === view) ?? TURN_VIEWS[0];
+  const theta = (((v.theta + frontYaw) % 360) + 360) % 360;
+  return `${theta}deg ${v.phi}deg 130%`;
 }

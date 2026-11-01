@@ -190,7 +190,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
   const visitor = useLikelyVisitor();
   const access = useModelAccess();
   const create = useCreateGeneration();
-  const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d", MODEL3D_FILM_FEATURE], limit: 24 });
+  const results = useGenerations({ features: [MODEL3D_FEATURE, "app:app-image-to-3d", "app:app-photo-to-3d", MODEL3D_FILM_FEATURE], limit: 24 });
   const [mode, setMode] = useState<Model3dMode>("image");
   const router = useRouter();
   // A mode picked here goes in the URL (?mode=), so a reload or a shared link opens it again (UrlModel reads it).

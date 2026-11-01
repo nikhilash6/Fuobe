@@ -2243,6 +2243,19 @@ const open: ModelDef[] = [
       ],
     },
   }),
+  // Photo to 3D: Idol (TripoSplat's architecture, Speridlabs' weights) on core nodes; its splat becomes the GLB (SplatToMesh), with the
+  // .spz and an orbit clip of the splat beside it (docs/research/idol-9.md). Not hosted anywhere: open engine only.
+  o({
+    id: "oss-idol-3d",
+    name: "Idol 3D Mesh",
+    vendor: "Speridlabs",
+    family: "tripo",
+    kind: "model3d",
+    tagline: "A quick 3D model (.glb) of a person or product from one photo, plus an orbit clip · 8 GB GPU · Apache-2.0 · Built with DINOv3",
+    badges: ["new"],
+    routes: [comfy("image-to-3d", "image-to-3d-idol", "BiRefNet cut-out → Idol → mesh from the splat + .spz + a 4 s orbit")],
+    options: { seed: true, maxImages: 1 },
+  }),
   // Round 4 (r4/cinema-3d): Cinema Studio's "Create 3D scene". The mesh is in the photo's own camera space
   // (glTF axes, metres), so the viewer starts where the photo was taken.
   o({

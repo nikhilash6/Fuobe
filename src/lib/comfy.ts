@@ -68,6 +68,7 @@ export interface ManifestOutput {
    * window), and a matte graph's "cutout" (transparent video) and "matte" (black and white) videos. A "preview" is the clip shown
    * for an EXR export (the frames ride along zipped). A "master" is a lossless copy a later job continues from (Character Swap
    * Studio's segment, 16-bit FFV1). A "report" is a node's own account of the run (DBS: model, device, windows, seconds).
+   * An "orbit" is a clip of a splat turning that came with a 3D model (Photo to 3D): the server's mesh turntable never replaces it.
    */
   role?:
     | "cues"
@@ -78,6 +79,7 @@ export interface ManifestOutput {
     | "tiles"
     | "first-frame"
     | "turntable"
+    | "orbit"
     | "lines"
     | "frame"
     | "frames"
