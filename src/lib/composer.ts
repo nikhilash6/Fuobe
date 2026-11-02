@@ -1273,3 +1273,10 @@ export function controlsFor(controls: NonNullable<ModelDef["options"]["controls"
     return values.length > 1 ? [{ ...c, values }] : [];
   });
 }
+
+/** A related studio's link (StudioConfig.related), opened on its model for this engine when it names one (Lipsync → Kandinsky 6.0). */
+export function relatedHref(related: { href: string; models?: Partial<Record<Engine, string>> }, engine: Engine): string {
+  const model = related.models?.[engine];
+  if (!model) return related.href;
+  return `${related.href}${related.href.includes("?") ? "&" : "?"}model=${encodeURIComponent(model)}`;
+}

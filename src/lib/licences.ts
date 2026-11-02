@@ -474,6 +474,20 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "VoxCPM2 text to speech (voice design) and voice clone nodes; Apache-2.0 code. The VoxCPM2 weights it downloads are Apache-2.0",
   }),
+  // Kandinsky 6.0 (nm10-kandinsky6), pinned in workflows/comfyui/packs.json: Kandinsky Lab's packs, the comfyui/ folder of each
+  // repository, LICENSE files read at the pinned commits.
+  pack("kandinsky6", "https://github.com/kandinskylab/kandinsky-6/tree/7ceeefad7fb625011f7db602c43893a989f19c15/comfyui", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Kandinsky 6.0 text and image to video with sound; MIT code, its vendored Kandinsky video code Apache-2.0. The Kandinsky weights are MIT; the MMAudio audio VAE file it loads (v1-44.pth) is CC BY-NC 4.0",
+  }),
+  pack("kandinsky6-sr", "https://github.com/kandinskylab/kandinsky-6-sr/tree/b15e2aac526519c51f59dfec2b848355bb8902de/comfyui", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Kandinsky VSR video upscaling (2x, 2.25x, 4x); Apache-2.0 code. The Kandinsky VSR weights are MIT",
+  }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
     ...GPL,

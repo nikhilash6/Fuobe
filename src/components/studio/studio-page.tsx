@@ -20,6 +20,7 @@ import {
   presetModel,
   presetParams,
   promptShown,
+  relatedHref,
   routeParams,
   START_PARAM,
   withoutLayout,
@@ -522,7 +523,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
             <h2 className="font-heading text-display text-balance">{config.hero}</h2>
             {config.subtitle && <p className="mt-2 max-w-xl text-[13px] text-muted-foreground">{config.subtitle}</p>}
             {config.related && (
-              <Link href={config.related.href} className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+              <Link href={relatedHref(config.related, engine)} className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                 {config.related.label}
                 <ArrowRight className="size-3" />
               </Link>

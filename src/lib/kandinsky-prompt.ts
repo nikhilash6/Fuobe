@@ -13,7 +13,7 @@ export const inKandinskyForm = (text: string): boolean => /<S>[\s\S]*?<E>|<AUDCA
 const QUOTED = /"([^"\n]*\p{L}[^"\n]*)"|“([^”\n]*\p{L}[^”\n]*)”|«([^»\n]*\p{L}[^»\n]*)»|„([^“”\n]*\p{L}[^“”\n]*)[“”]/gu;
 
 /** A sound line: "Sound: rain on the glass", on a line of its own or as the last sentence. */
-const SOUND = /(?:^|\n|(?<=[.!?…])\s+)(?:sounds?|audio|music)\s*:\s*([^\n]+?)\s*$/i;
+const SOUND = /(?:^|\n|(?<=[.!?…]["”»]?)\s+)(?:sounds?|audio|music)\s*:\s*([^\n]+?)\s*$/i;
 
 /**
  * The person's words in Kandinsky 6.0's form: quoted words become spoken lines, a closing "Sound: …" line the sound caption.

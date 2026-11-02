@@ -19,8 +19,11 @@ export interface StudioConfig {
   hero: string;
   /** Small line under the hero (e.g. which models an app runs on). */
   subtitle?: string;
-  /** A studio that does the job in more depth, linked under the hero (Edit video → Genjutsu). */
-  related?: { href: string; label: string };
+  /**
+   * A studio that does the job in more depth, linked under the hero (Edit video → Genjutsu). `models`: the model it opens on,
+   * per engine (Lipsync → the Video studio on Kandinsky 6.0, a talking character from words), added as ?model=.
+   */
+  related?: { href: string; label: string; models?: Partial<Record<Engine, string>> };
   /** Steps a tool runs before this one, then this one after it, as one job (Upscale → Restore archive footage first). */
   firstSteps?: UpscaleFirstStep[];
   /** Open finishing models shown side by side above the toolbar (Upscale → Video: Restore · faithful, Regenerate · creative). */

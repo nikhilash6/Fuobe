@@ -184,6 +184,17 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/extend", label: "Extend", group: "Video", config: S.EXTEND_STUDIO },
   { href: "/reframe", label: "Reframe", group: "Video", config: S.REFRAME_STUDIO },
   { href: "/lipsync", label: "Lipsync", group: "Video", config: S.LIPSYNC_STUDIO },
+  // nm10-kandinsky6: Kandinsky 6.0's clips with dialogue and sound (the Video studio, and Lipsync's "talking character from
+  // words" link), on Lite unless Quality picks Pro.
+  {
+    href: "/video?model=oss-kandinsky6",
+    label: "Video with dialogue",
+    group: "Video",
+    steps: [
+      { modelId: "oss-kandinsky6", op: "t2v" },
+      { modelId: "oss-kandinsky6", op: "i2v" },
+    ],
+  },
   { href: "/character-swap", label: "Character swap", group: "Video", workflows: [STUDIO_WORKFLOWS.mask, STUDIO_WORKFLOWS.segment] },
   // Cinema's 3D scene films a still along a keyframed camera path (N7-5).
   { href: "/cinema", label: "Fly path", group: "Video", steps: [{ modelId: PATH_MODELS.open, op: "camera-path" }] },
@@ -273,6 +284,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
       { modelId: SHARPEN_TOOLS.mux, op: "mux" },
     ],
   },
+  // nm10-kandinsky6: Upscale → Video's Kandinsky VSR (2x, 2.25x, 4x; clips up to 5 s).
+  { href: "/upscale/video?model=oss-kandinsky6-vsr", label: "Kandinsky VSR", group: "Video tools", steps: [{ modelId: "oss-kandinsky6-vsr", op: "upscale-video" }] },
   { href: "/upscale/fps", label: "FPS boost", group: "Video tools", config: S.FPS_BOOST_STUDIO },
   { href: "/upscale/hdr", label: "SDR to HDR", group: "Video tools", config: S.SDR_TO_HDR_STUDIO },
   { href: "/upscale/export", label: "Export", group: "Video tools", config: S.VIDEO_EXPORT_STUDIO },
