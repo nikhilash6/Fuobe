@@ -106,7 +106,11 @@ export function LayoutEditor(props: {
         ref={content}
         showCloseButton={false}
         aria-describedby="layout-editor-hint"
-        className="flex h-[100svh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 outline-none sm:h-[min(92vh,880px)] sm:w-[min(96vw,1180px)] sm:max-w-none sm:rounded-xl"
+        // "nokey": a board under the dialog (Canvas) leaves its keys alone; the keys stay in the editor (Escape still closes it).
+        className="nokey flex h-[100svh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 outline-none sm:h-[min(92vh,880px)] sm:w-[min(96vw,1180px)] sm:max-w-none sm:rounded-xl"
+        onKeyDown={(e) => {
+          if (e.key !== "Escape") e.stopPropagation();
+        }}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           content.current?.focus();
