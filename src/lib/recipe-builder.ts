@@ -65,6 +65,13 @@ export interface DraftCandidate {
   setting?: SettingId;
   /** Why it can't vary. */
   locked?: string;
+  /**
+   * Words inside the text at each spot (a canvas's text node joined into a step's words, W5): it varies as those words,
+   * not as the whole text.
+   */
+  part?: boolean;
+  /** It starts as Varies (an input of the skill a canvas was drawn from, a Table's column). */
+  varies?: boolean;
 }
 
 export type SettingId = "numOutputs" | "aspectRatio" | "duration" | "resolution";
@@ -85,6 +92,10 @@ export interface SkillDraft {
   notes: string[];
   /** The LLM the optional naming pass would ask (null: none, so there is none). */
   llm: "claude" | "ollama" | null;
+  /** A canvas's Table rows (W5), by candidate id: the Run form's Many tab starts with them. */
+  rows?: Record<string, string>[];
+  /** The user skill a canvas was drawn from (W5): saving can put the steps back into it. */
+  replaces?: { name: string; title: string };
 }
 
 /** A picked result the builder couldn't use, and why. */
@@ -345,10 +356,10 @@ export function buildRecipe(draft: Pick<SkillDraft, "recipe" | "candidates">, ch
       const step = byKey.get(spot.step);
       if (!step) continue;
       const body = bodyOf(step);
-      if (c.kind === "element") {
+      if (c.kind === "element" || c.part) {
         const words = getAt(body, spot.path);
         if (typeof words !== "string") continue;
-        const next = words.replace(handleRe(String(c.example)), `{{${id}}}`);
+        const next = c.kind === "element" ? words.replace(handleRe(String(c.example)), `{{${id}}}`) : words.split(String(c.example)).join(`{{${id}}}`);
         if (next !== words) {
           setAt(body, spot.path, next);
           used++;
@@ -404,6 +415,69 @@ export function buildRecipe(draft: Pick<SkillDraft, "recipe" | "candidates">, ch
   recipe.params = params;
   if (Object.keys(checks).length) recipe.checks = checks;
   return recipe;
+}
+
+// ---------------------------------------------------------------------------
+// A recipe made elsewhere (a canvas, W5) as a draft
+
+/** Every spot of each placeholder in a value: its path, and whether the placeholder is the whole string there. */
+function spotsIn(v: unknown, path: (string | number)[], out: Map<string, { path: (string | number)[]; whole: boolean }[]>): void {
+  if (typeof v === "string") {
+    for (const m of v.matchAll(/\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g)) {
+      const list = out.get(m[1]) ?? [];
+      if (!list.some((x) => x.path.join("/") === path.join("/"))) list.push({ path, whole: m[0] === v });
+      out.set(m[1], list);
+    }
+  } else if (Array.isArray(v)) v.forEach((x, i) => spotsIn(x, [...path, i], out));
+  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) spotsIn(x, [...path, k], out);
+}
+
+/**
+ * A recipe with inputs (a canvas read as a recipe, W5) as the review screen's draft: each input put back to the value it
+ * has (Fixed), and a candidate that puts it back as an input when it varies. `varies`: the inputs that start as Varies.
+ * The words of a text input joined into longer words vary as those words (`part`).
+ */
+export function fixedDraft(recipe: Recipe, varies: string[] = []): Pick<SkillDraft, "recipe" | "candidates"> {
+  const fixed = clone(recipe);
+  const candidates: DraftCandidate[] = [];
+  const spots = new Map<string, { step: string; path: (string | number)[]; whole: boolean }[]>();
+  for (const s of fixed.steps) {
+    const found = new Map<string, { path: (string | number)[]; whole: boolean }[]>();
+    spotsIn(bodyOf(s), [], found);
+    for (const [id, list] of found) spots.set(id, [...(spots.get(id) ?? []), ...list.map((x) => ({ ...x, step: s.key }))]);
+  }
+  const byKey = new Map(fixed.steps.map((s) => [s.key, s]));
+  for (const p of recipe.params) {
+    const at = spots.get(p.id) ?? [];
+    if (!at.length) continue;
+    const value = p.example ?? p.default ?? "";
+    for (const spot of at) {
+      const body = bodyOf(byKey.get(spot.step)!);
+      const cur = getAt(body, spot.path);
+      if (typeof cur !== "string") continue;
+      setAt(body, spot.path, spot.whole && typeof value === "number" ? value : cur.replace(new RegExp(`\\{\\{\\s*${p.id}\\s*\\}\\}`, "g"), String(value)));
+    }
+    const kind: CandidateKind = isMediaType(p.type) ? "media" : p.type === "element" ? "element" : p.type === "text" ? "text" : "setting";
+    const part = kind === "text" && at.some((x) => !x.whole);
+    const text = String(value);
+    const locked = kind === "text" && !text.trim() ? "Write its words on the canvas first" : kind === "text" && text.length > 2000 ? "Too long to change in a form (over 2000 characters)" : undefined;
+    candidates.push({
+      id: p.id,
+      label: p.label,
+      type: p.type,
+      kind,
+      example: value,
+      at: at.map(({ step, path }) => ({ step, path })),
+      ...(part && { part: true }),
+      ...(p.max !== undefined && { max: p.max }),
+      ...(p.min !== undefined && { min: p.min }),
+      ...(p.options && { options: p.options }),
+      ...(locked && { locked }),
+      ...(!locked && varies.includes(p.id) && { varies: true }),
+    });
+  }
+  fixed.params = [];
+  return { recipe: fixed, candidates };
 }
 
 // ---------------------------------------------------------------------------
