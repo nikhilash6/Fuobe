@@ -745,7 +745,7 @@ const removePersonRoute: StudioRoute<RemovePersonToolInput> = {
     return {
       ids: [r.final.id],
       href: modeHref("video-tools", "remove-person"),
-      info: { note: "The removal is listed under Your removals in Remove a person, beside the original with a Before/After wipe; each window there can be redone." },
+      info: { note: "The removal is listed under Your removals in Remove a person. When it finishes, Redo a window on that page shows each of its windows, and any weak one can be drawn again with the windows before it kept." },
     };
   },
 };

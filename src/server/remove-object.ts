@@ -383,6 +383,23 @@ function soundStepAfter(g: Generation): Generation | null {
   return null;
 }
 
+/** The step that cut the clip's original sound for a removal's mux (when the part isn't the whole clip). */
+function soundCutOf(mux: Generation): Generation | null {
+  const rows = db().prepare("SELECT id FROM generations WHERE batch_id IS ? AND op = 'trim' ORDER BY created_at").all(mux.batchId) as { id: string }[];
+  for (const r of rows) {
+    const g = getGeneration(r.id);
+    if (g && g.id !== mux.id && g.request.step?.label === "Original sound") return g;
+  }
+  return null;
+}
+
+/** A step's request as it was asked, without what belonged to that run only. */
+function askedAgain<T extends object>(request: T): T {
+  const req = { ...request } as T & Record<string, unknown>;
+  for (const k of ["asked", "chainFilled", "chainSkipped", "notice", "chain"]) delete req[k];
+  return req;
+}
+
 /**
  * Redo an H3 person removal from one window: the same graph sent to the same ComfyUI with H3 Relay's window controls,
  * so the windows before it come back from their checkpoints exactly, the window is drawn with a new seed and the ones
@@ -403,10 +420,13 @@ export async function createRemovalReroll(body: RerollBody): Promise<{ final: Ge
   if (!controls) throw new ShortsError("The windows before this one weren't saved — redo from the first window", 422);
 
   // The step as it ran (its chained inputs filled in), without what belongs to that run only.
-  const req = { ...erase.request } as typeof erase.request & Record<string, unknown>;
-  for (const k of ["asked", "chainFilled", "chainSkipped", "notice", "chain"]) delete req[k];
+  const req = askedAgain(erase.request);
   const masterSeed = Number(review.seed);
   const mux = soundStepAfter(erase);
+  // The sound goes back as before: the mux's own audio, or (when that mux never started) the original sound cut again.
+  const audio = mux?.request.inputs?.audio;
+  const cut = mux && !audio ? soundCutOf(mux) : null;
+  if (mux && !audio && !cut) throw new ShortsError("This removal's sound wasn't ready — run the removal again", 409);
   const was = (erase.request.batchTitle ?? erase.request.title ?? "Remove a person").replace(/ · from window \d+$/, "");
   const title = `${was} · from window ${body.window + 1}`;
   const steps: PlanStep[] = [
@@ -426,6 +446,7 @@ export async function createRemovalReroll(body: RerollBody): Promise<{ final: Ge
       },
     },
   ];
+  if (cut) steps.push({ key: "sound", request: { ...askedAgain(cut.request), batchTitle: title } });
   if (mux) {
     steps.push({
       key: "final",
@@ -435,11 +456,11 @@ export async function createRemovalReroll(body: RerollBody): Promise<{ final: Ge
         title,
         modelId: mux.modelId,
         op: "mux",
-        ...(mux.request.inputs?.audio ? { inputs: { audio: mux.request.inputs.audio } } : {}),
+        ...(audio ? { inputs: { audio } } : {}),
         step: { label: "Put the sound back", index: 1, of: 2 },
       },
-      after: ["erase0"],
-      chain: [{ slot: "video" }],
+      after: cut ? ["erase0", "sound"] : ["erase0"],
+      chain: cut ? [{ slot: "video" }, { slot: "audio" }] : [{ slot: "video" }],
     });
   }
   const p = run(steps);

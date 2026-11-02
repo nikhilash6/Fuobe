@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { getModel, getPreset } from "@/lib/catalog";
 import { h3Canvas, H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
 import { planGeneration } from "@/lib/catalog/plan";
@@ -30,8 +30,8 @@ import type { ManifestWorkflow } from "@/lib/comfy";
 // H3 Person Remover, everywhere (o/person-remover-plus): mask first, window review and "Redo from here".
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-person-remover-plus-"));
 process.env.FUOBE_DATA_DIR = tmp;
-process.env.COMFYUI_URL = "http://comfy.test:8188";
-const { prepareWorkflow } = await import("@/server/providers/comfyui");
+process.env.COMFYUI_URL = "http://127.0.0.1:8199";
+const { prepareWorkflow, withRemovalReview } = await import("@/server/providers/comfyui");
 const { runAsTenant } = await import("@/server/tenant");
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
@@ -168,5 +168,51 @@ describe("Redo from here", () => {
     // Never another run's files for an account's run.
     const account = await runAsTenant({ kind: "account", id: "acc1" }, () => prep({ [REVIEW_EXTRA.reuse]: reuse }));
     expect((account.workflow as Record<string, { inputs: Record<string, unknown> }>).source.inputs.file).toBe("new_fit.mp4");
+    // ...and an account's run keeps no review (nothing on its GPU is fetched for it, and it can't be redone).
+    expect(account.meta.reviewInputs).toBeUndefined();
+  });
+});
+
+describe("window previews from the studio's ComfyUI", () => {
+  it("are copied into the result's files from a local ComfyUI, with its token, never left as ComfyUI links", async () => {
+    const asked: { url: string; auth?: string }[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      asked.push({ url, auth: (init?.headers as Record<string, string> | undefined)?.Authorization });
+      if (url.includes("/h3_relay/removal/previews")) return Response.json(run);
+      if (url.includes("window-002.mp4")) return new Response(Buffer.from("mp4-bytes"), { headers: { "content-type": "video/mp4" } });
+      if (url.includes("window-001.jpg")) return new Response(Buffer.from("jpg-bytes"), { headers: { "content-type": "image/jpeg" } });
+      return new Response("no", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { setSetting } = await import("@/server/settings");
+    setSetting("comfyToken", "tok-123");
+    try {
+      const entry = { outputs: { review: { h3_removal_run: [run.run_id] } } };
+      const outputs = [{ url: "http://127.0.0.1:8199/view?filename=out.mp4", kind: "video" as const, contentType: "video/mp4" }];
+      const [out] = await withRemovalReview(entry, outputs, reuse, "main", "gen1");
+      const meta = out.meta as { review: RemovalReview; artifacts: Record<string, string> };
+      expect(asked[0].url).toBe(`http://127.0.0.1:8199/h3_relay/removal/previews?workflow_id=&node_id=review&run_id=${run.run_id}`);
+      expect(asked.every((a) => a.auth === "Bearer tok-123")).toBe(true);
+      expect(Object.keys(meta.artifacts).sort()).toEqual(["window-001-poster", "window-002"]);
+      for (const link of Object.values(meta.artifacts)) expect(link).toMatch(/^\/api\/files\//);
+      expect(meta.review.windows.map((w) => [w.index, w.poster, w.video])).toEqual([
+        [0, "window-001-poster", undefined],
+        [1, undefined, "window-002"],
+        [2, undefined, undefined],
+      ]);
+      // An account's run (its own GPU, or the hosted pool): no review is read.
+      const n = asked.length;
+      const acc = await runAsTenant({ kind: "account", id: "acc1" }, () => withRemovalReview(entry, outputs, reuse, "main", "gen2"));
+      expect(acc[0].meta).toBeUndefined();
+      expect(asked.length).toBe(n);
+      // A preview ComfyUI won't give is left out; the window can still be redone.
+      fetchMock.mockImplementation(async (url: string) => (url.includes("/previews") ? Response.json(run) : new Response("no", { status: 403 })));
+      const [bare] = await withRemovalReview(entry, outputs, reuse, "main", "gen3");
+      expect((bare.meta as { artifacts: Record<string, string> }).artifacts).toEqual({});
+      expect((bare.meta as { review: RemovalReview }).review.windows.every((w) => !w.video && !w.poster && w.recordId)).toBe(true);
+    } finally {
+      setSetting("comfyToken", "");
+      vi.unstubAllGlobals();
+    }
   });
 });

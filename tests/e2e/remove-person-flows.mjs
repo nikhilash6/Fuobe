@@ -66,12 +66,21 @@ try {
     if (shots) await page.screenshot({ path: path.join(shots, "remove-person-open-1440.png"), fullPage: true });
     await page.getByRole("button", { name: /Remove it/ }).click();
     await page.getByRole("heading", { name: "Windows" }).waitFor({ timeout: 120_000 });
-    const redo = page.getByRole("button", { name: "Redo from window 2" });
-    check("each window with Redo from here", (await page.getByRole("button", { name: /Redo from window/ }).count()) === 3);
+    const redo = page.getByRole("button", { name: "Redo from here, window 2" });
+    check("each window with Redo from here", (await page.getByRole("button", { name: /^Redo from here, window/ }).count()) === 3);
     await redo.click();
     await page.getByText(/Redoing from window 2/).first().waitFor({ timeout: 30_000 });
     check("Redo from here starts a new run", true);
     if (shots) await page.screenshot({ path: path.join(shots, "remove-person-result-1440.png"), fullPage: true });
+    // After a reload the earlier removal's windows are still there to redo.
+    await page.reload({ waitUntil: "load" });
+    await page.getByRole("heading", { name: "Redo a window" }).waitFor({ timeout: 60_000 });
+    await page.locator("#earlier-windows ~ div details summary").first().click();
+    const again = page.getByRole("button", { name: "Redo from here, window 1" }).first();
+    await again.waitFor({ timeout: 30_000 });
+    await again.click();
+    await page.getByText(/Redoing from window 1/).first().waitFor({ timeout: 30_000 });
+    check("after a reload: an earlier removal's windows can be redone", true);
     await context.close();
   }
   {

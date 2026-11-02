@@ -27,6 +27,7 @@ import {
   REMOVE,
   REMOVE_EXAMPLES,
   REMOVE_MODES,
+  rerollProblem,
   reviewOfOutput,
   type Eraser,
   type RemoveMode,
@@ -112,6 +113,9 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
   const runGuard = useSubmitGuard();
   const previewGuard = useSubmitGuard();
   const history = useGenerations({ features: [REMOVE.feature], limit: 24 });
+  // Earlier H3 person removals whose windows can still be redone (the step that made them carries the review).
+  const reviewable = useGenerations({ features: [REMOVE.feature, REMOVE.stepFeature], models: [PERSON_ERASER], statuses: ["succeeded"], limit: 12 });
+  const earlier = (reviewable.data ?? []).filter((g) => !run?.ids.includes(g.id) && reviewOfOutput(g.outputs.find((o) => o.kind === "video")?.meta));
 
   // Hand-off: /video-tools/remove-object?video=/api/files/… (a result's menu in the Library, the feed or Cinema).
   useEffect(() => {
@@ -137,6 +141,8 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
   const h3 = !!eraser?.cleanFrame;
   // Removing a person with H3 runs on your GPU only (nothing hosted fills the person green for it): said on the cloud.
   const personOnCloud = personAsked && engine === "cloud";
+  // H3 Person Removal switched off in Settings → Models & licences: said, so the fallback isn't a surprise.
+  const personOff = personAsked && engine === "open" && mode === "type" && !isOn(PERSON_ERASER);
 
   // The selection's first frame, grabbed by the browser: what points and paint are made on.
   const startAt = range ? Math.round(range.startTime * 100) / 100 : null;
@@ -491,6 +497,13 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
                 </div>
               )}
 
+              {personOff && (
+                <p className="flex gap-1.5 rounded-xl bg-muted/60 p-3 text-[13px]" role="status">
+                  <Cpu className="mt-0.5 size-3.5 shrink-0" />
+                  <span>Person removal with MiniMax H3 is turned off here{eraser ? `, so ${eraser.label} is used instead` : ""}.</span>
+                </p>
+              )}
+
               {h3 && (
                 <Field label="Mask expansion" htmlFor="remove-grow" hint={`${REMOVE.maskGrow.min}–${REMOVE.maskGrow.max} px`}>
                   <div className="flex items-center gap-2">
@@ -560,6 +573,26 @@ export function RemoveObjectTool({ tabs, person = false }: { tabs?: React.ReactN
       </div>
 
       {run && <RunPanel run={run} onAgain={start} onRedo={(r) => setRun({ ...run, final: r.final.id, ids: r.items.map((g) => g.id) })} />}
+
+      {earlier.length > 0 && (
+        <section className="mt-10" aria-labelledby="earlier-windows">
+          <h3 id="earlier-windows" className="mb-1 font-heading text-[22px]">
+            Redo a window
+          </h3>
+          <p className="mb-3 text-[13px] text-muted-foreground">Your earlier person removals, window by window. Open one to redo a weak part.</p>
+          <div className="space-y-2">
+            {earlier.map((g) => (
+              <details key={g.id} className="group rounded-xl border px-3 py-2">
+                <summary className="cursor-pointer truncate text-[13px] font-medium">{g.request.batchTitle ?? g.request.title ?? "Remove a person"}</summary>
+                <WindowReview
+                  g={g}
+                  onRedo={(r) => setRun({ final: r.final.id, ids: r.items.map((x) => x.id), before: g.request.inputs?.video ?? g.outputs.find((o) => o.kind === "video")?.url ?? "", start: 0 })}
+                />
+              </details>
+            ))}
+          </div>
+        </section>
+      )}
 
       {(history.data?.length ?? 0) > 0 && (
         <section className="mt-10" aria-labelledby="removals">
@@ -734,6 +767,7 @@ function WindowReview({ g, onRedo }: { g: Generation; onRedo: (r: { final: Gener
       .finally(() => setBusy(null));
   };
   const fps = 24;
+  const why = (index: number) => rerollProblem(review, index);
   return (
     <div className="mt-4 space-y-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -759,7 +793,15 @@ function WindowReview({ g, onRedo }: { g: Generation; onRedo: (r: { final: Gener
                 <span className="min-w-0 truncate text-[12px] text-muted-foreground">
                   {w.index + 1} · {from} s{w.reused ? " · kept" : ""}
                 </span>
-                <Button size="sm" variant="ghost" className="h-7 shrink-0 rounded-full px-2 text-[12px]" disabled={busy !== null} onClick={() => redo(w.index)} aria-label={`Redo from window ${w.index + 1}`}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 shrink-0 rounded-full px-2 text-[12px]"
+                  disabled={busy !== null || !!why(w.index)}
+                  title={why(w.index) ?? undefined}
+                  onClick={() => redo(w.index)}
+                  aria-label={`Redo from here, window ${w.index + 1}`}
+                >
                   {busy === w.index ? <Loader2 className="size-3 animate-spin" /> : <Dices className="size-3" />} Redo from here
                 </Button>
               </div>
