@@ -5,7 +5,7 @@ import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { writeLyrics } from "@/lib/api";
 import type { ModelDef } from "@/lib/catalog/types";
-import { INSTRUMENTAL, insertTag, isInstrumental, normalizeLyrics, SECTION_TAGS, songLength, structureOf } from "@/lib/lyrics";
+import { INSTRUMENTAL, insertTag, isInstrumental, normalizeLyrics, promptWithLyrics, SECTION_TAGS, songLength, structureOf } from "@/lib/lyrics";
 import { toastError } from "@/lib/refusals";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +36,8 @@ export function LyricsEditor({
   const area = useRef<HTMLTextAreaElement>(null);
   const [writing, setWriting] = useState(false);
   const spec = model.options.lyrics ?? {};
-  const length = normalizeLyrics(value).length;
+  // Lyrics read after the description (Lyria 3.5) count with it.
+  const length = spec.inPrompt && value.trim() ? promptWithLyrics(idea, value).length : normalizeLyrics(value).length;
   const over = !!spec.max && length > spec.max;
   const structure = structureOf(value);
   const instrumental = !!value.trim() && isInstrumental(value);
@@ -82,7 +83,7 @@ export function LyricsEditor({
             {writing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
             {writing ? "Writing…" : "Write the lyrics"}
           </button>
-          {!spec.required && (
+          {!spec.required && !spec.instrumentalModel && (
             <button
               type="button"
               onClick={() => onChange(instrumental ? "" : INSTRUMENTAL)}

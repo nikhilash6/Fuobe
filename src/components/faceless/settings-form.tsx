@@ -248,7 +248,7 @@ export function EpisodeSettingsForm({
             </Section>
           )}
           {value.music && beds.length > 1 && (
-            <Section title="Music" hint="Longer films play the bed again, with a soft crossfade on your GPU.">
+            <Section title="Music" hint={value.engine === "open" ? "Longer films play the bed again, with a soft crossfade." : "Longer films play the bed again from the start."}>
               <Segmented
                 label="Music model"
                 value={bed?.id ?? ""}

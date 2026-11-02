@@ -1014,15 +1014,30 @@ model("stable-audio-3-music", "Stable Audio 3 Music", "Stability AI", "stable-au
 # Full songs (nm10-music3, research #10 endpointRecords): lyrics go in params.extra.lyrics with Fuobe's section tags
 # (src/lib/lyrics.ts); FieldMap.lyrics sends them in the API's own field. Mureka 9.5 moved from the versioned route
 # (mureka/api/generate/song, whose fal catalog entry lost its metadata) to its own; a past run's Version (params.extra.model)
-# is no field there, so it's left out. Mureka prices a song by whether lyrics come with it (Pricing.withLyrics).
+# is no field there, so it's left out (a saved run on another version moves to the model that runs it: replaced.ts
+# murekaVersion). Mureka prices a song by whether lyrics come with it (Pricing.withLyrics). Its songs sing words: an
+# instrumental is its own model (ModelOptions.lyrics.instrumentalModel).
 model("mureka-song", "Mureka 9.5", "Mureka", "mureka", "audio", "Full songs with vocals in many genres, 2 to 5 minutes",
       [("music", "mureka/v9.5/generate/song", "fal", {"ignore": ["model"]})],
       pricing=("request", 0.50, "a song from a prompt; with your lyrics $0.15", {"withLyrics": 0.15}),
-      defaults={"duration": 180}, options={"durations": [120, 180, 240, 300]})
+      defaults={"duration": 180}, options={"durations": [120, 180, 240, 300], "lyrics": {"instrumentalModel": "mureka-9-5-instrumental"}})
 model("mureka-9", "Mureka 9", "Mureka", "mureka", "audio", "Songs with vocals at a lower price, sung from your lyrics or written for you",
-      [("music", "mureka/v9/generate/song")], badges=["new"], pricing=("request", 0.30, "a song from a prompt; with your lyrics $0.045", {"withLyrics": 0.045}))
+      [("music", "mureka/v9/generate/song")], badges=["new"], pricing=("request", 0.30, "a song from a prompt; with your lyrics $0.045", {"withLyrics": 0.045}),
+      options={"lyrics": {"instrumentalModel": "mureka-9-instrumental"}})
+model("mureka-9-5-instrumental", "Mureka 9.5 Instrumental", "Mureka", "mureka", "audio", "Mureka's newest instrumental tracks and beds, no vocals",
+      [("music", "mureka/v9.5/generate/instrumental")], badges=["new"], pricing=("request", 0.15))
 model("mureka-9-instrumental", "Mureka 9 Instrumental", "Mureka", "mureka", "audio", "Instrumental tracks and beds, no vocals",
       [("music", "mureka/v9/generate/instrumental")], badges=["new"], pricing=("request", 0.045))
+# Mureka's earlier versions stay on the versioned route (fal serves 7.6, O2 and 8 there; 9 and 9.5 have routes of their own).
+# Its duration is a 9.5 field only, and its Version is always sent (the route's own default is 9.5). With lyrics 7.6 costs
+# $0.03, O2 and 8 $0.045; from a prompt all three $0.30.
+model("mureka-8", "Mureka 8", "Mureka", "mureka", "audio", "Mureka's earlier versions (8, O2, 7.6), for songs made with them",
+      [("music", "mureka/api/generate/song", "fal", {"drop": ["duration"]})],
+      pricing=("request", 0.30, "a song from a prompt; with your lyrics $0.045 ($0.03 on 7.6)", {"withLyrics": 0.045}),
+      options={"controls": [{"param": "model", "label": "Version", "values": ["mureka-8", "mureka-o2", "mureka-7.6"], "default": "mureka-8",
+                             "labels": {"mureka-8": "Mureka 8", "mureka-o2": "Mureka O2", "mureka-7.6": "Mureka 7.6"}}],
+               "lyrics": {"instrumentalModel": "mureka-9-instrumental"}},
+      api_defaults={"model": "mureka-8"})
 # MiniMax Music 3 is the open model the open engine runs too (oss-minimax-music-3): the same weights, hosted. Its lyrics are
 # required: a run with none asks for an instrumental.
 model("minimax-music-3", "MiniMax Music 3 · both engines", "MiniMax", "minimax-music", "audio", "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
@@ -2167,7 +2182,11 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     if op in ("music", "song-extend", "song-remix") and "lyrics" in kf and (inputs.get(kf["lyrics"]) or {}).get("type") == "string":
         spec = inputs.get(kf["lyrics"]) or {}
         most = num(spec.get("maxLength"))
-        fmap["lyrics"] = {"key": kf["lyrics"], **({"max": most} if most else {})}
+        # An API with an instrumental switch (MiniMax Music 2.5's is_instrumental) gets it for lyrics that are only
+        # [Instrumental], with its own lyrics writer (lyrics_optimizer) off.
+        fmap["lyrics"] = {"key": kf["lyrics"], **({"max": most} if most else {}),
+                          **({"instrumental": kf["instrumental"]} if kf.get("instrumental") in inputs else {}),
+                          **({"autoLyrics": kf["autoLyrics"]} if kf.get("autoLyrics") in inputs else {})}
         # Required by the API with no fallback of Fuobe's (MiniMax Music 3 asks for an instrumental when there are none).
         needed = spec.get("required") and kf["lyrics"] not in (m.get("api_defaults") or {})
         opts["lyrics"] = {**({"max": most} if most else {}), **({"required": True} if needed else {})}
@@ -2324,7 +2343,8 @@ for m in M:
     # No route sends a prompt (try-on, 3D, transcription): planning and the composer don't ask for one.
     if all(r["map"].get("prompt") is False for r in routes):
         opts["promptless"] = True
-    opts.update(m["options"])
+    # The lyrics options read from the schema (max, required) keep what the model adds to them (its instrumental model).
+    opts.update({k: ({**opts[k], **v} if k == "lyrics" and isinstance(opts.get(k), dict) else v) for k, v in m["options"].items()})
     # A model-wide control or slider goes only to the routes whose schema has its field (Ideogram Vector's
     # quality is a text-to-vector setting; image-to-vector has none).
     offered = [c["param"] for c in opts.get("controls", [])] + [x["param"] for x in opts.get("sliders", [])]

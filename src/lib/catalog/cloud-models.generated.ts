@@ -12594,7 +12594,9 @@ export const CLOUD_MODELS: ModelDef[] = [
         "map": {
           "lyrics": {
             "key": "lyrics",
-            "max": 3500
+            "max": 3500,
+            "instrumental": "is_instrumental",
+            "autoLyrics": "lyrics_optimizer"
           },
           "fixed": {
             "lyrics_optimizer": true
@@ -12686,7 +12688,8 @@ export const CLOUD_MODELS: ModelDef[] = [
     ],
     "options": {
       "lyrics": {
-        "max": 5000
+        "max": 5000,
+        "instrumentalModel": "mureka-9-5-instrumental"
       },
       "durations": [
         120,
@@ -12728,7 +12731,8 @@ export const CLOUD_MODELS: ModelDef[] = [
     ],
     "options": {
       "lyrics": {
-        "max": 5000
+        "max": 5000,
+        "instrumentalModel": "mureka-9-instrumental"
       }
     },
     "badges": [
@@ -12739,6 +12743,31 @@ export const CLOUD_MODELS: ModelDef[] = [
       "usd": 0.3,
       "note": "a song from a prompt; with your lyrics $0.045",
       "withLyrics": 0.045
+    }
+  },
+  {
+    "id": "mureka-9-5-instrumental",
+    "name": "Mureka 9.5 Instrumental",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Mureka's newest instrumental tracks and beds, no vocals",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9.5/generate/instrumental",
+        "map": {}
+      }
+    ],
+    "options": {},
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.15
     }
   },
   {
@@ -12764,6 +12793,60 @@ export const CLOUD_MODELS: ModelDef[] = [
     "pricing": {
       "unit": "request",
       "usd": 0.045
+    }
+  },
+  {
+    "id": "mureka-8",
+    "name": "Mureka 8",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Mureka's earlier versions (8, O2, 7.6), for songs made with them",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/api/generate/song",
+        "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          },
+          "defaults": {
+            "model": "mureka-8"
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "max": 5000,
+        "instrumentalModel": "mureka-9-instrumental"
+      },
+      "controls": [
+        {
+          "param": "model",
+          "label": "Version",
+          "values": [
+            "mureka-8",
+            "mureka-o2",
+            "mureka-7.6"
+          ],
+          "default": "mureka-8",
+          "labels": {
+            "mureka-8": "Mureka 8",
+            "mureka-o2": "Mureka O2",
+            "mureka-7.6": "Mureka 7.6"
+          }
+        }
+      ]
+    },
+    "pricing": {
+      "unit": "request",
+      "usd": 0.3,
+      "note": "a song from a prompt; with your lyrics $0.045 ($0.03 on 7.6)",
+      "withLyrics": 0.045
     }
   },
   {

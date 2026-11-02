@@ -90,3 +90,13 @@ describe("a song's Mureka id on Reuse", () => {
     expect(withSongId({ lyrics: "x" }, song, "/api/files/a.mp3", false)).toEqual({ lyrics: "x" });
   });
 });
+
+describe("written lyrics cut to a model's limit", () => {
+  it("at the last line break before it, or at the limit when there is none", async () => {
+    const { trimLyrics } = await import("@/server/enhance");
+    expect(trimLyrics("[Verse]\nabc def\nghi jkl", 16)).toBe("[Verse]\nabc def");
+    const one = `[Verse]\n${"a".repeat(50)}`;
+    expect(trimLyrics(one.replace("\n", " "), 20).length).toBeLessThanOrEqual(20);
+    expect(trimLyrics("x".repeat(40), 10)).toBe("x".repeat(10));
+  });
+});

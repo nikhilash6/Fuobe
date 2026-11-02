@@ -203,7 +203,14 @@ export async function writeLyrics(idea: string, o: { seconds?: number; max?: num
   const text = await llmText(LYRICS_SYSTEM, `Write lyrics for this song, about ${Math.round(seconds / 60 * 10) / 10} minutes long: ${sections}.${room}\n\n${idea.trim()}`);
   const words = normalizeLyrics(text?.replace(/^```\w*\n?|```$/g, ""));
   if (!words) return null;
-  return o.max && words.length > o.max ? normalizeLyrics(words.slice(0, words.lastIndexOf("\n", o.max))) : words;
+  return o.max && words.length > o.max ? trimLyrics(words, o.max) : words;
+}
+
+/** Lyrics cut to at most `max` characters at the last line break before it (at `max` itself when there is none). */
+export function trimLyrics(words: string, max: number): string {
+  const cut = words.lastIndexOf("\n", max);
+  const out = normalizeLyrics(words.slice(0, cut > 0 ? cut : max));
+  return out.length > max ? out.slice(0, max).trimEnd() : out;
 }
 
 export async function enhancePrompt(prompt: string, kind: MediaKind, op: Operation): Promise<string> {

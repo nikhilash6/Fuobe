@@ -21,7 +21,7 @@ import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soul
 import { computeDimensions, fitCanvas } from "@/lib/comfy";
 import { carriesLayout, flux3Boxes, flux3Caption, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
 import { pricingOn, type PriceClock } from "./promo";
-import { isInstrumental, lyricsOf, lyricsProblem, LYRICS_PARAM } from "@/lib/lyrics";
+import { isInstrumental, lyricsOf, lyricsProblem, LYRICS_PARAM, promptLyricsProblem } from "@/lib/lyrics";
 import { presetRoutes } from "./preset-recipe-routes";
 
 export { pricingAt } from "./promo";
@@ -498,9 +498,14 @@ export function planGeneration(
     const words = lyricsOf(params.extra);
     const rest = { ...params.extra };
     delete rest[LYRICS_PARAM];
-    if (model.options.lyrics && words) {
-      const problem = lyricsProblem(words, model.options.lyrics.max, model.name);
+    const spec = model.options.lyrics;
+    if (spec && words) {
+      // Lyrics read after the description (Lyria 3.5) share its limit with it.
+      const problem = spec.inPrompt && spec.max ? promptLyricsProblem(prompt, words, spec.max, model.name) : lyricsProblem(words, spec.max, model.name);
       if (problem) throw new Error(problem);
+      // A model that sings words only (Mureka's songs): an instrumental is its maker's instrumental model.
+      const own = spec.instrumentalModel && op === "music" && isInstrumental(words) ? getModel(spec.instrumentalModel) : undefined;
+      if (own) throw new Error(`${model.name} sings the lyrics you write: for an instrumental, pick ${own.name}`);
       params = { ...params, extra: { ...rest, [LYRICS_PARAM]: words } };
     } else {
       if (words && !isInstrumental(words) && op === "music") notes.push(`${model.name} writes its own words from your description: the lyrics aren't sent`);

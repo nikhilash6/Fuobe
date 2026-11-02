@@ -1,5 +1,5 @@
 import { readTimeline, timelineTracks } from "@/lib/av/timeline";
-import { LYRICS_PARAM, lyricsOf, promptWithLyrics, SONG_ID_PARAM } from "@/lib/lyrics";
+import { isInstrumental, LYRICS_PARAM, lyricsOf, promptWithLyrics, SONG_ID_PARAM } from "@/lib/lyrics";
 import { toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { upscaleFactorFor } from "@/lib/av/upscale";
 import { carriesBoxes, carriesLayout, LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -540,7 +540,11 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
   const songId = input.extra?.[SONG_ID_PARAM];
   if (map.songSource && typeof songId === "string" && songId.trim()) out[map.songSource.songId] = songId.trim();
   const lyrics = map.lyrics ? lyricsOf(input.extra) : "";
-  if (lyrics && map.lyrics?.key) out[map.lyrics.key] = lyrics;
+  if (lyrics && map.lyrics?.instrumental && isInstrumental(lyrics)) {
+    // An instrumental, by the API's own switch (MiniMax Music 2.5): no words, and nothing written for it.
+    out[map.lyrics.instrumental] = true;
+    if (map.lyrics.autoLyrics) out[map.lyrics.autoLyrics] = false;
+  } else if (lyrics && map.lyrics?.key) out[map.lyrics.key] = lyrics;
   else if (lyrics && map.lyrics?.inPrompt && map.prompt !== false) {
     const key = map.prompt ?? "prompt";
     setPath(out, key, promptWithLyrics(typeof out[key] === "string" ? (out[key] as string) : (input.prompt ?? ""), lyrics));

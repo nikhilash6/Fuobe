@@ -536,9 +536,11 @@ export interface FieldMap {
   /**
    * Song lyrics (params.extra.lyrics, section tags such as [Verse] on lines of their own: src/lib/lyrics.ts): the API's lyrics
    * field and the most characters it takes, or (`inPrompt`) written after the prompt for an API that reads them there
-   * (Lyria 3.5). A route without it never sends params.extra.lyrics.
+   * (Lyria 3.5). A route without it never sends params.extra.lyrics. `instrumental`: the API's switch for a song with no
+   * vocals (MiniMax Music 2.5's is_instrumental), sent in place of lyrics that are only [Instrumental], with its own lyrics
+   * writer (`autoLyrics`) off.
    */
-  lyrics?: { key?: string; inPrompt?: true; max?: number };
+  lyrics?: { key?: string; inPrompt?: true; max?: number; instrumental?: string; autoLyrics?: string };
   /**
    * A song tool's source song (Mureka extend / remix): one of the provider's own songs by id (params.extra.songId, kept on a
    * result as meta.songId) in `songId`, else the song file (inputs.audio) sent first to `upload` (Mureka's files/upload with
@@ -633,8 +635,10 @@ export interface ModelOptions {
   /**
    * The model sings lyrics (Audio → Music's lyrics editor, params.extra.lyrics): the most characters it takes, and whether they
    * go after the prompt (Lyria 3.5) rather than in a field of their own. Section tags ([Verse], [Chorus]) on lines of their own.
+   * `instrumentalModel`: the model sings words only, and its maker's instrumental model is this one (Mureka 9.5 → Mureka 9.5
+   * Instrumental): the editor offers no Instrumental, and lyrics that are only [Instrumental] are refused with its name.
    */
-  lyrics?: { max?: number; inPrompt?: true; required?: true };
+  lyrics?: { max?: number; inPrompt?: true; required?: true; instrumentalModel?: string };
   /** Takes a song to cover (inputs.audio: YuE2 sings its melody with the new style and lyrics). */
   cover?: true;
   /** Draft mode (cheap preview, then a full render of the take you like). */

@@ -124,6 +124,15 @@ export function lyricsProblem(text: string, max: number | undefined, model = "Th
   return null;
 }
 
+/** What is wrong with a description and lyrics read as one text of up to `max` characters (Lyria 3.5); null when they fit. */
+export function promptLyricsProblem(prompt: string, lyrics: string, max: number, model = "This model"): string | null {
+  const n = promptWithLyrics(prompt, lyrics).length;
+  if (n > max) {
+    return `${model} reads up to ${max.toLocaleString("en-US")} characters of description and lyrics together: these are ${n.toLocaleString("en-US")}. Shorten them or drop a verse`;
+  }
+  return null;
+}
+
 /** The prompt with the lyrics after it, for a model that reads both in one text (Lyria 3.5). */
 export function promptWithLyrics(prompt: string, lyrics: string): string {
   const words = normalizeLyrics(lyrics);

@@ -12,6 +12,7 @@ import type { GenerationRequest, ModelRoute, Operation } from "@/lib/catalog/typ
 import { nextSteps, outputActions } from "@/lib/output-actions";
 import { downloadName } from "@/lib/library";
 import { songFormat, songToolProblem } from "@/lib/lyrics";
+import { migrateRequest } from "@/lib/catalog/replaced";
 import type { Generation } from "@/lib/catalog/types";
 
 const route = (id: string, op?: Operation): ModelRoute => {
@@ -100,12 +101,56 @@ describe("Mureka 9 / 9.5", () => {
   });
 });
 
+describe("Mureka's versions", () => {
+  it("Mureka 9.5 Instrumental: a description, $0.15 a track", () => {
+    expect(payload("mureka-9-5-instrumental", { prompt: "Warm lo-fi bed" })).toEqual({ prompt: "Warm lo-fi bed" });
+    expect(cost("mureka-9-5-instrumental")).toBe(0.15);
+  });
+
+  it("Mureka 8, O2 and 7.6 stay on the versioned route, the Version always sent", () => {
+    expect(route("mureka-8").endpoint).toBe("mureka/api/generate/song");
+    expect(payload("mureka-8", { prompt: "pop" })).toEqual({ prompt: "pop", model: "mureka-8" });
+    expect(payload("mureka-8", { prompt: "pop", duration: 180, extra: { model: "mureka-7.6", lyrics: "[Verse]\nla" } })).toEqual({ prompt: "pop", model: "mureka-7.6", lyrics: "[Verse]\nla" });
+    expect(cost("mureka-8")).toBe(0.3);
+    expect(cost("mureka-8", { extra: { lyrics: "[Verse]\nla" } })).toBe(0.045);
+  });
+
+  it("a song saved with its Version runs that version again", () => {
+    const saved = (model: string) => migrateRequest({ modelId: "mureka-song", prompt: "pop", params: { duration: 180, extra: { model, seed: 3 } } });
+    expect(saved("mureka-9")).toEqual({ request: { modelId: "mureka-9", prompt: "pop", params: { duration: 180, extra: { seed: 3 } } } });
+    expect(saved("mureka-9.5")).toEqual({ request: { modelId: "mureka-song", prompt: "pop", params: { duration: 180, extra: { seed: 3 } } } });
+    expect(saved("mureka-7.6").request).toMatchObject({ modelId: "mureka-8", params: { extra: { model: "mureka-7.6" } } });
+    expect(saved("mureka-o2").request.modelId).toBe("mureka-8");
+    expect(migrateRequest({ modelId: "mureka-song", params: { extra: { model: "mureka-9" } } }).request).toEqual({ modelId: "mureka-9", params: {} });
+    // Today's runs are left as they are.
+    const now = { modelId: "mureka-song", prompt: "pop" };
+    expect(migrateRequest(now).request).toBe(now);
+  });
+
+  it("a Mureka song sings words: an instrumental is its instrumental model", () => {
+    expect(planError({ modelId: "mureka-song", prompt: "pop", params: { extra: { lyrics: "[Instrumental]" } } })).toBe("Mureka 9.5 sings the lyrics you write: for an instrumental, pick Mureka 9.5 Instrumental");
+    expect(planError({ modelId: "mureka-9", prompt: "pop", params: { extra: { lyrics: "[Instrumental]" } } })).toBe("Mureka 9 sings the lyrics you write: for an instrumental, pick Mureka 9 Instrumental");
+    expect(getModel("mureka-song")!.options.lyrics).toEqual({ max: 5000, instrumentalModel: "mureka-9-5-instrumental" });
+  });
+
+  it("MiniMax Music 2.5 makes an instrumental by its own switch, with no words written for it", () => {
+    expect(payload("minimax-music-2-5", { prompt: "lo-fi", extra: { lyrics: "[Instrumental]" } })).toEqual({ prompt: "lo-fi", is_instrumental: true, lyrics_optimizer: false });
+    expect(payload("minimax-music-2-5", { prompt: "lo-fi", extra: { lyrics: "[Verse]\nla" } })).toEqual({ prompt: "lo-fi", lyrics: "[Verse]\nla", lyrics_optimizer: true });
+  });
+});
+
 describe("ElevenLabs Music v2.5 and Lyria 3.5", () => {
   it("ElevenLabs takes a length in milliseconds and bills each started minute", () => {
     expect(payload("elevenlabs-music-2-5", { prompt: "Synthwave", duration: 90, seed: 3 })).toEqual({ prompt: "Synthwave", music_length_ms: 90000 });
     expect(cost("elevenlabs-music-2-5", { duration: 30 })).toBe(0.6);
     expect(cost("elevenlabs-music-2-5", { duration: 90 })).toBe(1.2);
     expect(getModel("elevenlabs-music-2-5")!.options.lyrics).toBeUndefined();
+  });
+
+  it("Lyria 3.5 counts the description and the lyrics together against its 5,000 characters", () => {
+    const lyrics = `[Verse]\n${"la la la la\n".repeat(380)}`.trim();
+    expect(plan({ modelId: "lyria-3-5", prompt: "x".repeat(200), params: { extra: { lyrics } } }).op).toBe("music");
+    expect(planError({ modelId: "lyria-3-5", prompt: "x".repeat(510), params: { extra: { lyrics } } })).toMatch(/^Lyria 3\.5 reads up to 5,000 characters of description and lyrics together: these are 5,\d{3}\. Shorten them or drop a verse$/);
   });
 
   it("Lyria 3.5 reads the lyrics after the description, takes a picture, and has no negative prompt", () => {
