@@ -10,7 +10,7 @@ import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
-import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, REGEN_OFFERED, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { libraryEntry, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
 import { ANGLES_2511_LORA } from "@/lib/catalog/open-tools";
 import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
@@ -226,17 +226,21 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/audio/music", label: "Music", group: "Audio", config: S.MUSIC_STUDIO },
   { href: "/audio/video", label: "Sound for video", group: "Audio", config: S.FOLEY_STUDIO },
   { href: "/upscale/video", label: "Upscale video", group: "Video tools", config: S.VIDEO_UPSCALE_STUDIO },
-  // n7-3: Upscale → Video's Regenerate · creative (Open-H3 Regenerate with its refiner LoRA); a clip over 15 s is redrawn in
-  // parts joined packet by packet.
-  {
-    href: `/upscale/video?model=${REGEN_MODEL}&resolution=${REGEN_DEFAULT_TIER}`,
-    label: "Regenerate in 2K",
-    group: "Video tools",
-    steps: [
-      { modelId: REGEN_MODEL, op: "upscale-video" },
-      { modelId: REGEN_JOIN, op: "concat" },
-    ],
-  },
+  // Upscale → Video's Regenerate · creative (Open-H3 Regenerate with its refiner LoRA); a clip over 15 s is redrawn in
+  // parts joined packet by packet. Listed only while it is offered (REGEN_OFFERED).
+  ...(REGEN_OFFERED
+    ? [
+        {
+          href: `/upscale/video?model=${REGEN_MODEL}&resolution=${REGEN_DEFAULT_TIER}`,
+          label: "Regenerate in 2K",
+          group: "Video tools",
+          steps: [
+            { modelId: REGEN_MODEL, op: "upscale-video" as const },
+            { modelId: REGEN_JOIN, op: "concat" as const },
+          ],
+        } satisfies StudioRowDef,
+      ]
+    : []),
   { href: "/upscale/fps", label: "FPS boost", group: "Video tools", config: S.FPS_BOOST_STUDIO },
   { href: "/upscale/hdr", label: "SDR to HDR", group: "Video tools", config: S.SDR_TO_HDR_STUDIO },
   { href: "/upscale/export", label: "Export", group: "Video tools", config: S.VIDEO_EXPORT_STUDIO },

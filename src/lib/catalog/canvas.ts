@@ -14,7 +14,7 @@ import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
 import { estimateCost, inferOperation, planGeneration, routesFor, type Plan } from "./plan";
 import { replacedBy, replacementOf } from "./replaced";
-import { REGEN_COPY, REGEN_MODEL } from "./regenerate";
+import { REGEN_COPY, REGEN_MODEL, REGEN_OFFERED } from "./regenerate";
 import {
   OPERATION_LABELS,
   OPERATION_OUTPUT,
@@ -320,7 +320,7 @@ export function paletteItems(mode: "both" | "open" | "cloud" = "both", engine?: 
   const hit = paletteCache.get(key);
   if (hit) return hit;
   // Clean up voice has no cloud route: a cloud-only install doesn't offer it at all.
-  const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice")).map((p): PaletteItem => {
+  const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice") && (p.id !== "upscale-regenerate" || REGEN_OFFERED)).map((p): PaletteItem => {
     const fixed = p.data?.modelId ? getModel(p.data.modelId) : undefined;
     if (fixed && !runsOn(fixed, "cloud") && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? GPU_ONLY_INSTALL : GPU_ONLY_ENTRY };
     if (mode === "both" || !isGenerator(p) || defaultModelForNode({ type: p.type, data: p.data ?? {} }, mode)) return p;

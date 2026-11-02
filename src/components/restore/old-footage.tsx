@@ -4,6 +4,7 @@ import { ArrowUpRight, Palette } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { meanChroma, MONOCHROME_CHROMA, restoreHref } from "@/lib/catalog/restore";
+import { useLikelyVisitor } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /** The mean chroma of a few small frames of a clip, read in the browser (null when it can't be read). */
@@ -65,7 +66,9 @@ export function useLooksMonochrome(src: string | undefined): boolean | null {
  * work here stays; the restored clip lands in the Library, to pick here.
  */
 export function OldFootageOffer({ url, src, className }: { url?: string; src?: string; className?: string }) {
-  const mono = useLooksMonochrome(src ?? url);
+  const visitor = useLikelyVisitor();
+  const mono = useLooksMonochrome(visitor ? undefined : (src ?? url));
+  if (visitor) return null;
   return (
     <p className={cn("flex gap-1.5 text-[12px] leading-snug", mono ? "text-foreground" : "text-muted-foreground", className)}>
       <Palette className={cn("mt-0.5 size-3.5 shrink-0", mono && "text-brand-text")} />

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
-import { useCreateGeneration, useEngineMode, useGenerationActions } from "@/lib/api";
+import { useCreateGeneration, useEngineMode, useGenerationActions, useLikelyVisitor } from "@/lib/api";
 import { useSoulFinish } from "./soul-finish";
 import { elapsed, formatCost, leftLabel, notePace, ratioValue, timeAgo, timeLeft } from "@/lib/format";
 import { downloadHref, downloadName, userTitle } from "@/lib/library";
@@ -273,7 +273,8 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
  */
 function NextSteps({ g, index }: { g: Generation; index: number }) {
   const engineMode = useEngineMode();
-  const steps = nextSteps(g, index, 3, { engineMode });
+  const visitor = useLikelyVisitor();
+  const steps = nextSteps(g, index, 3, { engineMode, visitor });
   if (!steps.length) return null;
   return (
     <nav aria-label="Next steps" className="flex flex-wrap gap-1.5">

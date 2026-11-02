@@ -12,7 +12,7 @@ import { PRESETS as GRADE_PRESETS } from "./grade";
 import { storedPath } from "./share";
 import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout-prompt";
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
-import { canRerender, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
+import { canRerender, REGEN_OFFERED, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
 
 export type OutputActionId =
@@ -83,7 +83,12 @@ export interface ActionContext {
    * (a server render, a share page): as "both".
    */
   engineMode?: "both" | "open" | "cloud";
+  /** A guest or an account: hand-offs to the tools that run on a self-hosted Fuobe only are left out. */
+  visitor?: boolean;
 }
+
+/** Hand-offs to tools a guest or an account can't open (they run on a self-hosted Fuobe only). */
+const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(["restore-video", "remove-dialogue"]);
 
 const q = (url: string) => encodeURIComponent(url);
 
@@ -102,7 +107,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
     ];
   }
   const out: OutputAction[] = [];
-  const link = (id: OutputActionId, label: string, href: string, placement: OutputAction["placement"] = "menu") => out.push({ id, label, href, placement });
+  const link = (id: OutputActionId, label: string, href: string, placement: OutputAction["placement"] = "menu") => {
+    if (!(ctx.visitor && OWNER_ONLY_ACTIONS.has(id))) out.push({ id, label, href, placement });
+  };
   switch (o.kind) {
     case "image":
       if (isVector(g, o)) {
@@ -177,7 +184,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   // delete that first checks nothing uses the file.
   if (g.feature === "upload") {
     // An upload's Regenerate (it has no words of its own) sits with its other hand-offs.
-    if (o.kind === "video" && ctx.engineMode !== "cloud") link("regenerate", "Regenerate in 2K", regenerateHref(o.url));
+    if (REGEN_OFFERED && o.kind === "video" && ctx.engineMode !== "cloud") link("regenerate", "Regenerate in 2K", regenerateHref(o.url));
     return [...out.filter((a) => a.id !== "favorite"), { id: "delete-upload", label: "Delete", placement: "menu", destructive: true }];
   }
   if (g.outputs.length > 1) out.push({ id: "download-all", label: `Download all ${g.outputs.length} (.zip)`, placement: "menu", href: `/api/generations/zip?ids=${g.id}`, download: "" });
@@ -187,7 +194,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   // results keep their upscalers in Upscale.
   if (o.kind === "video" && g.status === "succeeded") {
     if (canRerender(g, ctx.engineMode)) out.push({ id: "rerender-2k", label: rerenderLabel(g.modelId), placement: "menu" });
-    else if ((g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
+    else if (REGEN_OFFERED && (g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
   }
   if (ctx.compare) out.push({ id: "compare", label: "Compare with original", placement: "menu" });
   if (ctx.reuse) out.push({ id: "reuse", label: "Reuse settings", placement: "menu" });
@@ -222,7 +229,7 @@ function likelySpeech(g: Generation): boolean {
  * Up to `max` next steps for output `index` (Animate, Upscale, Edit for a picture), taken from
  * outputActions so they go where the tile's own actions go. Only hand-offs to another studio.
  */
-export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<ActionContext, "engineMode"> = {}): OutputAction[] {
+export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<ActionContext, "engineMode" | "visitor"> = {}): OutputAction[] {
   const o = g.outputs[index];
   if (!o || g.status !== "succeeded") return [];
   const all = outputActions(g, index, ctx);
@@ -232,7 +239,7 @@ export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<Actio
     ? ["extend", "upscale", ...(likelySpeech(g) ? (["remove-dialogue"] as const) : []), "split-soundtrack"]
     : NEXT_STEPS.video;
   // H3, LTX, Wan and SANA clips (the drafts Open-H3 Regenerate was shown on) offer Regenerate in 2K right after Upscale.
-  const regen = o.kind === "video" && regenerateFamily(g.modelId) ? (["regenerate"] as const) : [];
+  const regen = REGEN_OFFERED && o.kind === "video" && regenerateFamily(g.modelId) ? (["regenerate"] as const) : [];
   const withRegen = (ids: OutputActionId[] | undefined) => {
     if (!ids || !regen.length) return ids;
     const at = ids.indexOf("upscale");

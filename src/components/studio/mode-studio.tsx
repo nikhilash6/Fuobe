@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { StudioCatalog } from "@/lib/studio-catalog";
+import { useLikelyVisitor } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { StudioPage } from "./studio-page";
 import type { StudioConfig } from "./studio-context";
@@ -12,6 +13,8 @@ export interface ModeTab {
   id: string;
   label: string;
   href: string;
+  /** Left out for a guest or an account (a tool that runs on a self-hosted Fuobe only), unless it is the page shown. */
+  ownerOnly?: true;
 }
 
 /** A tab chosen with the keyboard: the next mode's tabs (each mode's page draws its own) take the focus back. */
@@ -24,6 +27,8 @@ let refocus = false;
 export function ModeTabs({ tabs, current }: { tabs: ModeTab[]; current: string }) {
   const [ref, fade] = useEdgeFade<HTMLDivElement>();
   const active = useRef<HTMLAnchorElement>(null);
+  const visitor = useLikelyVisitor();
+  const shown = visitor ? tabs.filter((m) => !m.ownerOnly || m.id === current) : tabs;
   // Keep the selected tab in view when the row scrolls (only the row: the page stays put).
   useEffect(() => {
     const el = active.current;
@@ -39,7 +44,7 @@ export function ModeTabs({ tabs, current }: { tabs: ModeTab[]; current: string }
   return (
     <nav aria-label="Modes" className="border-b">
       <div ref={ref} style={fade} className="scrollbar-none flex gap-1 overflow-x-auto px-3 sm:px-6">
-        {tabs.map((m) => {
+        {shown.map((m) => {
           const on = m.id === current;
           return (
             <Link

@@ -5,7 +5,8 @@
  */
 export type HubKind = "audio" | "video-tools" | "upscale";
 
-export const HUB_MODES: Record<HubKind, { id: string; label: string }[]> = {
+/** ownerOnly: a mode that runs on a self-hosted Fuobe only and is new there; its tab is left out for a guest or an account. */
+export const HUB_MODES: Record<HubKind, { id: string; label: string; ownerOnly?: true }[]> = {
   upscale: [
     { id: "image", label: "Image" },
     { id: "video", label: "Video" },
@@ -30,9 +31,9 @@ export const HUB_MODES: Record<HubKind, { id: string; label: string }[]> = {
   "video-tools": [
     { id: "matte", label: "Remove background" },
     { id: "remove-object", label: "Remove object" },
-    { id: "remove-dialogue", label: "Remove dialogue" },
+    { id: "remove-dialogue", label: "Remove dialogue", ownerOnly: true },
     { id: "evolution", label: "Evolution" },
-    { id: "restore", label: "Restore & colourise" },
+    { id: "restore", label: "Restore & colourise", ownerOnly: true },
     { id: "relight", label: "Relight" },
     { id: "depth", label: "Depth map" },
     { id: "captions", label: "Captions" },

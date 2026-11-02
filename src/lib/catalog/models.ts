@@ -6,7 +6,7 @@ import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
-import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
+import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_OFFERED, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
 import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
@@ -780,6 +780,7 @@ const open: ModelDef[] = [
     kind: "video",
     tagline: "Redraws a soft clip at 1080p, 2K or 4K. Details may change; motion and layout stay.",
     badges: ["new", "4k", "audio"],
+    hidden: !REGEN_OFFERED,
     routes: [comfy("upscale-video", REGEN_WORKFLOW, "Built on MiniMax H3: redraws the clip at 24 fps, up to 15 s a pass, keeping its sound")],
     options: {
       seed: true,

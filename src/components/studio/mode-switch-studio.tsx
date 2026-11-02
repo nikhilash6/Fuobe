@@ -85,7 +85,7 @@ const HUB_TITLE: Record<HubKind, string> = { upscale: "Upscale", audio: "Audio",
  */
 export function ModeSwitchStudio({ kind, mode }: { kind: HubKind; mode?: string }) {
   const current = mode ?? HUB_MODES[kind][0].id;
-  const tabs = HUB_MODES[kind].map((m) => ({ id: m.id, label: m.label, href: modeHref(kind, m.id) }));
+  const tabs = HUB_MODES[kind].map((m) => ({ id: m.id, label: m.label, href: modeHref(kind, m.id), ...(m.ownerOnly && { ownerOnly: true as const }) }));
   const Tool = TOOLS[kind]?.[current];
   if (Tool) return <Tool tabs={<ModeTabs tabs={tabs} current={current} />} />;
   const config = CONFIGS[kind][current];

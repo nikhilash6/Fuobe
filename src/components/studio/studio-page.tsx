@@ -11,7 +11,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import type { Generation, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
-import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest } from "@/lib/api";
+import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest, useLikelyVisitor } from "@/lib/api";
 import {
   claimStartToken,
   followEngineDefault,
@@ -431,8 +431,10 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
   // Config and actions only: the draft lives in the composer, so typing doesn't re-render the page or the feed.
   const { config, setDraft } = useStudioActions();
   const [engine, setEngine, engineMode] = useEngine();
-  // A GPU-only step (Regenerate) isn't offered while the install runs paid APIs only.
-  const firstSteps = config.firstSteps?.filter((f) => !f.openOnly || engineMode !== "cloud");
+  // A GPU-only step isn't offered while the install runs paid APIs only. A guest or an account sees none: each step
+  // opens a tool that runs on a self-hosted Fuobe only.
+  const visitor = useLikelyVisitor();
+  const firstSteps = visitor ? undefined : config.firstSteps?.filter((f) => !f.openOnly || engineMode !== "cloud");
   const feed = useGenerations(config.feed);
   const bridge = useComposerBridge();
   const [dragging, setDragging] = useState(false);
