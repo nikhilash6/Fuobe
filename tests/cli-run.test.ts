@@ -138,10 +138,18 @@ beforeAll(async () => {
       const b = s.json as { values?: Record<string, string>; csv?: string; engine?: string };
       // The CSV the CLI sent, read as the server would: header first, one run per line.
       const rows = b.csv ? b.csv.trim().split("\n").slice(1).map((l, i) => ({ line: i + 2, name: l.split(",")[1] ?? "" })) : [{ line: 1, name: b.values?.name ?? "" }];
-      if (skill === "run") return send(201, { engine: b.engine ?? "cloud", demo: false, runs: rows.map((_, i) => ({ batchId: `b${i}`, ids: i ? [`gen${i + 1}`] : ["gen1"], href: "/library" })) });
-      const runs = rows.map((r) => ({ line: r.line, jobs: [job], total: r.name === "bad" ? null : 0.62, errors: r.name === "bad" ? ["Product name: at most 200 characters"] : [] }));
+      if (skill === "run") {
+        // A real file can fail a check its stand-in passed: the server names the row by its line in the table sent.
+        const long = rows.filter((r) => r.name === "toolong");
+        if (long.length) return send(422, { error: `Fix the recipe first: ${long.map((r) => `Row ${r.line}: The clip is longer than 10 s`).join("; ")}`, problems: [] });
+        // A tool row that couldn't start while the others run.
+        return send(201, { engine: b.engine ?? "cloud", demo: false, runs: rows.map((r, i) => (r.name === "nope" ? { ids: [], error: "The tool couldn't start" } : { batchId: `b${i}`, ids: i ? [`gen${i + 1}`] : ["gen1"], href: "/library" })) });
+      }
+      // A clip is priced by its length once it's uploaded: more than its stand-in.
+      const real = JSON.stringify(b).includes("/api/files/uploads/2026-10-22/up1.png");
+      const runs = rows.map((r) => ({ line: r.line, jobs: [job], total: r.name === "bad" ? null : real && r.name === "Long clip" ? 1.5 : 0.62, errors: r.name === "bad" ? ["Product name: at most 200 characters"] : [] }));
       const ok = runs.every((r) => !r.errors.length);
-      return send(200, { engine: b.engine ?? "cloud", runs, jobs: [job], total: ok ? Math.round(0.62 * runs.length * 100) / 100 : null, demo: false, runnable: ok, errors: [] });
+      return send(200, { engine: b.engine ?? "cloud", runs, jobs: [job], total: ok ? Math.round(runs.reduce((a, r) => a + (r.total ?? 0), 0) * 100) / 100 : null, demo: false, runnable: ok, errors: [] });
     }
     if (skill === "download") {
       res.writeHead(200, { "content-type": "application/zip" });
@@ -487,6 +495,80 @@ describe("fuobe skills: a skill that runs by itself (W4)", () => {
     expect(r.code).toBe(1);
     expect(r.stderr.trim()).toBe("Row 4: Product name: at most 200 characters");
     expect(seen.some((s) => s.path.endsWith("/run") || s.path === "/api/uploads")).toBe(false);
+  });
+
+  /** A terminal that answers each question in turn. */
+  function terminal(answers: string[]) {
+    const out: string[] = [];
+    const questions: string[] = [];
+    const io = {
+      stdout: { write: (t: string) => out.push(t) },
+      stderr: { write: (t: string) => out.push(t) },
+      env: { FUOBE_URL: base, FUOBE_TOKEN: TOKEN, FUOBE_CONFIG: path.join(tmp, "config.json") },
+      cwd: tmp,
+      home: tmp,
+      fetch: globalThis.fetch,
+      columns: 100,
+      stdinIsTTY: true,
+      stderrIsTTY: false,
+      now: () => Date.now(),
+      sleep: (ms: number) => new Promise((r) => setTimeout(r, ms)),
+      onInterrupt: () => () => {},
+      ask: async (q: string) => (questions.push(q), answers.shift() ?? "n"),
+      readStdin: async () => "",
+    };
+    return { io, out, questions };
+  }
+
+  it("with the files uploaded it prices again, and asks again when that's more", async () => {
+    const { main } = await import("../bin/lib/cli.mjs");
+    fs.writeFileSync(path.join(tmp, "clip.png"), PNG);
+    const no = terminal(["y", "n"]);
+    expect(await main(["skills", "run", "weekly-promo", "-p", "product=clip.png", "-p", "name=Long clip"], no.io)).toBe(1);
+    expect(no.questions).toEqual(["Run 1 for $0.62? [y/N] ", "With your files it costs $1.50, not $0.62. Run 1 for $1.50? [y/N] "]);
+    expect(no.out.join("")).toContain("Nothing was started.");
+    expect(seen.filter((s) => s.method === "POST").map((s) => s.path)).toEqual([
+      "/api/assist/skills/weekly-promo/estimate",
+      "/api/assist/skills/weekly-promo/verify",
+      "/api/uploads",
+      "/api/assist/skills/weekly-promo/estimate",
+    ]);
+    expect(posts("estimate")[1].json).toEqual({ values: { product: "/api/files/uploads/2026-10-22/up1.png", name: "Long clip" }, engine: "cloud" });
+    seen = [];
+    const yes = terminal(["y", "y"]);
+    expect(await main(["skills", "run", "weekly-promo", "-p", "product=clip.png", "-p", "name=Long clip"], yes.io)).toBe(0);
+    expect(posts("run")).toHaveLength(1);
+    // The same price with the real file: one question.
+    seen = [];
+    const same = terminal(["y"]);
+    expect(await main(["skills", "run", "weekly-promo", "-p", "product=clip.png", "-p", "name=Lumen"], same.io)).toBe(0);
+    expect(same.questions).toEqual(["Run 1 for $0.62? [y/N] "]);
+    expect(posts("estimate")).toHaveLength(2);
+    expect(posts("run")).toHaveLength(1);
+  });
+
+  it("--wait exits 1 and --json lists each run's error when a row didn't start", async () => {
+    fs.writeFileSync(path.join(tmp, "some.csv"), "product,name\nhttps://cdn.test/a.png,Lumen\n\nhttps://cdn.test/b.png,nope\n");
+    const r = await run(["skills", "run", "weekly-promo", "--rows", "some.csv", "--yes", "--wait", "--json", "--interval", "0.2"]);
+    expect(r.code).toBe(1);
+    const out = JSON.parse(r.stdout);
+    expect(out.items.map((g: { id: string }) => g.id)).toEqual(["gen1"]);
+    expect(out.runs).toEqual([
+      { batchId: "b0", ids: ["gen1"], href: "/library", line: 2 },
+      { ids: [], error: "The tool couldn't start", line: 4 },
+    ]);
+    const words = await run(["skills", "run", "weekly-promo", "--rows", "some.csv", "--yes", "--wait", "--interval", "0.2"]);
+    expect(words.code).toBe(1);
+    expect(words.stderr).toContain("Row 4 didn't start: The tool couldn't start");
+    expect(words.stderr).toContain("Started Weekly promo (1 didn't start).");
+  });
+
+  it("a row the run refuses is named by its line in the file", async () => {
+    fs.writeFileSync(path.join(tmp, "long.csv"), "product,name\nhttps://cdn.test/a.png,Lumen\n\nhttps://cdn.test/b.png,toolong\n");
+    const r = await run(["skills", "run", "weekly-promo", "--rows", "long.csv", "--yes"]);
+    expect(r.code).toBe(1);
+    expect(r.stderr.trim().split("\n").at(-1)).toBe("Fix the recipe first: Row 4: The clip is longer than 10 s");
+    expect(posts("run")).toHaveLength(1);
   });
 
   it("asks on a terminal: no starts nothing, yes runs", async () => {

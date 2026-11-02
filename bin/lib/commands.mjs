@@ -291,11 +291,11 @@ async function saveOutputs(ctx, gens, dir) {
   return files;
 }
 
-/** Wait, report, download: shared by generate --wait, wait and download. Returns the exit code. */
-async function finish(ctx, ids, { download }) {
+/** Wait, report, download: shared by generate --wait, wait and download. `also` adds to the --json output. Returns the exit code. */
+async function finish(ctx, ids, { download, also = {} }) {
   const { gens, stopped } = await waitFor(ctx, ids);
   const files = download && !stopped ? await saveOutputs(ctx, gens, ctx.values.out ?? ".") : [];
-  if (ctx.values.json) ctx.json({ items: gens, ...(download && { files }), ...(stopped && { stopped }) });
+  if (ctx.values.json) ctx.json({ items: gens, ...(download && { files }), ...(stopped && { stopped }), ...also });
   else if (!download || stopped) report(ctx, gens);
   else for (const g of gens.filter((x) => x.status !== "succeeded")) report(ctx, [g]);
   if (stopped === "interrupted") {
@@ -716,6 +716,8 @@ async function skillRequest(ctx, view) {
   return {
     rows: true,
     files: [...files],
+    /** The line in the person's file of the i-th run (one run per row). */
+    runLine: (i) => rest[i]?.line,
     // A row's line in the table sent, back to its line in the person's file.
     lineOf: (l) => {
       const k = sent.indexOf(l);
@@ -767,6 +769,20 @@ async function skillsEstimate(ctx, name) {
   return est.runnable ? EXIT.ok : EXIT.failed;
 }
 
+/** "Run 20 for $12.40? [y/N] " */
+const runQuestion = (est, runs) => `Run ${runs} ${est.total === null ? "(some prices vary)" : `for ${exactCost(est.total)}`}? [y/N] `;
+
+/** What a price check says the runs cost, in a sentence's words. */
+const costWords = (est) => (est.total === null ? "an amount that varies" : exactCost(est.total));
+
+/** Whether the price with the real files is higher than the one first shown (a clip is priced by its length, which a stand-in doesn't have). */
+function priceRose(first, real) {
+  if (real.demo || real.total === 0) return false;
+  if (first.demo || first.total === 0) return true;
+  if (first.total === null) return false;
+  return real.total === null || real.total > first.total + 0.005;
+}
+
 async function skillsRun(ctx, name) {
   const v = ctx.values;
   const view = await recipeOf(ctx, name);
@@ -776,11 +792,11 @@ async function skillsRun(ctx, name) {
   const est = await priceSkill(ctx, view, engine, req.body(fileStandIn));
   if (!est.runnable) throw new ApiError(estimateProblems(est, req).join("\n") || `/${view.name} can't run with these values`);
   const runs = est.runs.length;
+  const asks = !v.yes && !v.json;
   const costs = !est.demo && est.total !== 0;
-  if (costs && !v.yes && !v.json) {
-    const price = est.total === null ? "(some prices vary)" : `for ${exactCost(est.total)}`;
-    if (!ctx.io.stdinIsTTY) throw new UsageError(`Running ${runs === 1 ? "it" : `these ${runs}`} costs ${est.total === null ? "an amount that varies" : exactCost(est.total)}: add --yes to run without asking`);
-    const answer = await ctx.io.ask(`Run ${runs} ${price}? [y/N] `);
+  if (costs && asks) {
+    if (!ctx.io.stdinIsTTY) throw new UsageError(`Running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(est)}: add --yes to run without asking`);
+    const answer = await ctx.io.ask(runQuestion(est, runs));
     if (!/^y(es)?$/i.test(answer.trim())) {
       ctx.note("Nothing was started.");
       return EXIT.failed;
@@ -789,21 +805,50 @@ async function skillsRun(ctx, name) {
   if (!view.ready.includes(engine)) await checkSkill(ctx, view, engine);
   const uploaded = new Map();
   for (const f of req.files) uploaded.set(f, await uploadFile(ctx, f));
-  const out = await ctx.client.request("POST", `/api/assist/skills/${enc(view.name)}/run`, { json: { ...req.body((f) => uploaded.get(f)), engine } });
+  const body = req.body((f) => uploaded.get(f));
+  // Priced again with the real files: when that's more than the price first shown, it asks again.
+  if (asks && req.files.length) {
+    const real = await priceSkill(ctx, view, engine, body);
+    if (!real.runnable) throw new ApiError(estimateProblems(real, req).join("\n") || `/${view.name} can't run with these files`);
+    if (priceRose(est, real)) {
+      const was = costs ? `, not ${costWords(est)}` : "";
+      if (!ctx.io.stdinIsTTY) throw new UsageError(`With your files uploaded, running ${runs === 1 ? "it" : `these ${runs}`} costs ${costWords(real)}${was}: add --yes to run without asking. Nothing was started.`);
+      const answer = await ctx.io.ask(`With your files it costs ${costWords(real)}${was}. ${runQuestion(real, runs)}`);
+      if (!/^y(es)?$/i.test(answer.trim())) {
+        ctx.note("Nothing was started.");
+        return EXIT.failed;
+      }
+    }
+  }
+  let out;
+  try {
+    out = await ctx.client.request("POST", `/api/assist/skills/${enc(view.name)}/run`, { json: { ...body, engine } });
+  } catch (e) {
+    // A refusal names rows by their line in the table sent: say the line in the person's file instead.
+    if (req.rows && e instanceof ApiError) e.message = e.message.replace(/\bRow (\d+): /g, (_, n) => `Row ${req.lineOf(Number(n))}: `);
+    throw e;
+  }
   const ids = out.runs.flatMap((r) => r.ids);
   const started = out.runs.filter((r) => !r.error).length;
+  const all = started === out.runs.length;
+  // Each run as the server answered, with its row's line in the file for a table.
+  const runsOut = out.runs.map((r, i) => (req.rows ? { ...r, line: req.runLine(i) } : r));
   const demo = out.demo ? " (a demo: nothing connected, free)" : "";
-  for (const [i, r] of out.runs.entries()) if (r.error && !v.json) ctx.note(`Run ${i + 1} didn't start: ${r.error}`);
+  for (const [i, r] of out.runs.entries()) if (r.error && !v.json) ctx.note(`${req.rows ? `Row ${req.runLine(i)}` : `Run ${i + 1}`} didn't start: ${r.error}`);
   const studio = out.runs.find((r) => r.href && !r.href.startsWith("/library"))?.href;
   if (v.wait || v.out) {
-    if (!v.json) ctx.note(`Started ${started === 1 ? view.title : `${started} runs of ${view.title}`}${demo}.${studio ? ` It opens in ${absolute(ctx, studio)}` : ""}`);
-    return finish(ctx, ids, { download: !!v.out });
+    if (!v.json) ctx.note(`Started ${started === 1 ? view.title : `${started} runs of ${view.title}`}${all ? "" : ` (${out.runs.length - started} didn't start)`}${demo}.${studio ? ` It opens in ${absolute(ctx, studio)}` : ""}`);
+    const code = await finish(ctx, ids, { download: !!v.out, also: { runs: runsOut } });
+    return code === EXIT.ok && !all ? EXIT.failed : code;
   }
-  if (v.json) return ctx.json(out);
+  if (v.json) {
+    ctx.json({ ...out, runs: runsOut });
+    return all ? EXIT.ok : EXIT.failed;
+  }
   ctx.print(`Started ${started === 1 ? view.title : `${started} runs of ${view.title}`} on ${engineWords(out.engine)}${demo}: ${ids.join(" ")}`);
   if (studio) ctx.print(`It opens in ${absolute(ctx, studio)}`);
   if (ids.length) ctx.print(`Wait for ${ids.length === 1 ? "it" : "them"}: fuobe wait ${ids.join(" ")}   Save ${ids.length === 1 ? "it" : "them"}: fuobe download ${ids.join(" ")} --out .`);
-  return started === out.runs.length ? EXIT.ok : EXIT.failed;
+  return all ? EXIT.ok : EXIT.failed;
 }
 
 async function skillsExport(ctx, name) {

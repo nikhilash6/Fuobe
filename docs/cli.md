@@ -220,11 +220,15 @@ fuobe skills export weekly-promo --out weekly-promo.zip   # SKILL.md and its fil
   what the rows leave empty. A row that doesn't fit is named by its line, and then nothing starts.
 - `run` prices the whole batch first and asks `Run 20 for $12.40? [y/N]` when it costs money. `--yes`
   starts it without asking; so does `--json` (for scripts). Without a terminal to ask on, it stops and
-  says to add `--yes`. Free runs (your GPU, or a demo) start without asking.
+  says to add `--yes`. Free runs (your GPU, or a demo) start without asking. Once your files are uploaded
+  it prices them again (a clip is priced by its length): when that's more, it asks again with the new
+  price, or stops without a terminal.
 - `--engine open|cloud` picks where it runs, among the engines its steps run on (by default: where it
   was checked). A skill not yet checked on that engine gets its free plan check first.
 - `--wait` and `--out <dir>` wait for the results and save them, as `fuobe generate` does; without them,
-  `run` prints the ids to pass to `fuobe wait` or `fuobe download`.
+  `run` prints the ids to pass to `fuobe wait` or `fuobe download`. When a row didn't start (a studio
+  tool's run can refuse one row and start the rest), it says which by its line in your file and exits 1;
+  `--json` lists every run under `runs`, each with its `error` and, for `--rows`, its `line`.
 - `export` saves the skill as a zip (`SKILL.md`, `recipe.json` and its other files); `--examples` keeps
   the values it was made with, which are left out by default.
 
