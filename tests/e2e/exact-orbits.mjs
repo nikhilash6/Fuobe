@@ -137,8 +137,8 @@ for (const phone of [false, true]) {
         const root = page.getByTestId("exact-orbit");
         await root.waitFor({ timeout: 60_000 });
         await exactControls(page, root, `${tag} DoP`, phone);
-        // The composer's price is the exact orbit's.
-        await page.getByText(scheme === "light" ? /≈ \$0\.40/ : /Free · on your GPU/).locator("visible=true").first().waitFor({ timeout: 30_000 });
+        // The composer's price is the exact orbit's (short on a phone, so the model chip keeps its name).
+        await page.getByText(scheme === "light" ? /≈ \$0\.40/ : phone ? /^Free$/ : /Free · on your GPU/).locator("visible=true").first().waitFor({ timeout: 30_000 });
         await noSideScroll(page, `${tag} DoP`);
         await shoot(page, `dop-${tag}`);
         await ctx.close();
