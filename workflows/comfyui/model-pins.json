@@ -965,6 +965,11 @@
   "sizeBytes": 849608296,
   "sha256": "2a32ce938ec71db2b49a817b4844ae86995569518dea56ee0ddc209cbe8e1377"
  },
+ "https://huggingface.co/lilylilith/QI_2.1_AnyAngle/resolve/5c8b4c8e05ba6328d54bf8d34ec724fef5a414ae/QI2.1_AnyAngle.safetensors": {
+  "revision": "5c8b4c8e05ba6328d54bf8d34ec724fef5a414ae",
+  "sizeBytes": 119590312,
+  "sha256": "e4d7a0d44a45ed62daabd0f2484a1a59046618a4c47e76b1eab5e386a7a35d8a"
+ },
  "https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights.safetensors": {
   "revision": "5bae28369ecea3232405c17a53c04d35d15796b8",
   "sizeBytes": 67144520,

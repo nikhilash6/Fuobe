@@ -14,9 +14,11 @@ import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
 import { canRerender, REGEN_OFFERED, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
+import { anyAngleHref } from "./catalog/any-angle";
 
 export type OutputActionId =
   | "animate"
+  | "new-angle"
   | "edit"
   | "live-edit"
   | "relight"
@@ -124,6 +126,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("relight", "Relight", `/apps/app-relight?image=${q(o.url)}&gen=${q(g.id)}`);
       link("live-edit", "Change it as you type", `/live-edit?image=${q(o.url)}&gen=${q(g.id)}&from=library`);
       link("upscale", "Upscale", `/upscale?image=${q(o.url)}`);
+      // Any Angle: the same photo from another camera (its 3D view is built once per photo).
+      link("new-angle", "New angle", anyAngleHref(o.url));
       link("reference", "Use as reference", `/image?ref=${q(o.url)}`);
       link("grade", "Color grade", `/color-grade?image=${q(o.url)}`);
       link("layers", "Open in Layers", layersHref(g, o.url));

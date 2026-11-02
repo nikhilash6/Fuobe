@@ -161,6 +161,8 @@ export const BINDING_KEYS = new Set([
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
   // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
   'invertDepth',
+  // Any Angle: the 3D view's file and each angle's camera
+  'splatFile', 'cameraYaw', 'cameraPitch', 'cameraDistance', 'cameraFov', 'targetX', 'targetY', 'targetZ',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

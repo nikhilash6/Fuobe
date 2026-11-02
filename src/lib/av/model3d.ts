@@ -184,7 +184,7 @@ export function viewerGlb(o: { url: string; meta?: Record<string, unknown> }): s
 }
 
 export interface Model3dView {
-  /** The original GLB (the download). */
+  /** The original GLB (the download): a splat's is the mesh made from it, when there is one. */
   glb?: string;
   /** The GLB to show in a viewer: the web GLB when there is one, else `glb`. */
   web?: string;
@@ -227,7 +227,10 @@ export function stillOf(g: Pick<Generation, "request">): string | undefined {
 }
 
 export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3dView {
-  const mesh = g.outputs.find((o) => o.kind === "model3d");
+  // The model itself; a splat's GLB made from it (role "mesh") is what the viewer shows of a splat.
+  const files = g.outputs.filter((o) => o.kind === "model3d");
+  const mesh = files.find((o) => o.meta?.role !== "mesh") ?? files[0];
+  const fromSplat = files.find((o) => o !== mesh && o.meta?.role === "mesh");
   const meta = (mesh?.meta ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
   const videos = g.outputs.filter((o) => o.kind === "video");
@@ -240,8 +243,8 @@ export function model3dView(g: Pick<Generation, "outputs" | "request">): Model3d
   const format = splatFormatOf(mesh);
   const splat = mesh && format ? { url: mesh.url, format } : undefined;
   return {
-    glb: splat ? undefined : mesh?.url,
-    web: mesh && !splat ? viewerGlb(mesh) : undefined,
+    glb: splat ? fromSplat?.url : mesh?.url,
+    web: mesh && !splat ? viewerGlb(mesh) : fromSplat?.url,
     splat,
     turntable: str(meta.turntable) ?? str(meta.video) ?? video?.url,
     rendering: pending ? { queued: finish.turntable === "queued", progress: typeof finish.turntableProgress === "number" ? finish.turntableProgress : 0 } : undefined,

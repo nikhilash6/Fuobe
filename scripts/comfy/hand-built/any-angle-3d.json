@@ -1,0 +1,392 @@
+{
+  "1": {
+    "inputs": {
+      "image": "subject.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Photo"
+    }
+  },
+  "2": {
+    "inputs": {
+      "bg_removal_name": "birefnet.safetensors"
+    },
+    "class_type": "LoadBackgroundRemovalModel",
+    "_meta": {
+      "title": "Load Background Removal Model"
+    }
+  },
+  "3": {
+    "inputs": {
+      "bg_removal_model": [
+        "2",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "RemoveBackground",
+    "_meta": {
+      "title": "Remove Background"
+    }
+  },
+  "6": {
+    "inputs": {
+      "erode_radius": 1,
+      "size": 1024,
+      "image": [
+        "1",
+        0
+      ],
+      "mask": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "TripoSplatPreprocessImage",
+    "_meta": {
+      "title": "TripoSplat Preprocess Image"
+    }
+  },
+  "7": {
+    "inputs": {
+      "clip_name": "dino_v3_vit_h.safetensors"
+    },
+    "class_type": "CLIPVisionLoader",
+    "_meta": {
+      "title": "Load CLIP Vision"
+    }
+  },
+  "8": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "9": {
+    "inputs": {
+      "vae_name": "triposplat_vae_decoder_fp16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "10": {
+    "inputs": {
+      "unet_name": "triposplat_fp16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "11": {
+    "inputs": {
+      "clip_vision": [
+        "7",
+        0
+      ],
+      "vae": [
+        "8",
+        0
+      ],
+      "image": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "TripoSplatConditioning",
+    "_meta": {
+      "title": "TripoSplat Conditioning"
+    }
+  },
+  "12": {
+    "inputs": {
+      "seed": 46,
+      "steps": 20,
+      "cfg": 3,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "10",
+        0
+      ],
+      "positive": [
+        "11",
+        0
+      ],
+      "negative": [
+        "11",
+        1
+      ],
+      "latent_image": [
+        "11",
+        2
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "13": {
+    "inputs": {
+      "num_gaussians": 262144,
+      "seed": 46,
+      "samples": [
+        "12",
+        0
+      ],
+      "vae": [
+        "9",
+        0
+      ]
+    },
+    "class_type": "VAEDecodeTripoSplat",
+    "_meta": {
+      "title": "TripoSplat Decode"
+    }
+  },
+  "15": {
+    "inputs": {
+      "format": "spz",
+      "splat": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "SplatToFile3D",
+    "_meta": {
+      "title": "Create 3D File (from Splat)"
+    }
+  },
+  "16": {
+    "inputs": {
+      "filename_prefix": "fuobe/any-angle-3d",
+      "mesh": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "SaveGLB",
+    "_meta": {
+      "title": "Save the 3D view (.spz)"
+    }
+  },
+  "20": {
+    "inputs": {
+      "mask": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "Cut-out as a picture"
+    }
+  },
+  "21": {
+    "inputs": {
+      "filename_prefix": "fuobe/any-angle-3d",
+      "images": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save the cut-out"
+    }
+  },
+  "80": {
+    "inputs": {
+      "mode": "orbit",
+      "mode.yaw": 0,
+      "mode.pitch": 10,
+      "mode.distance": 2,
+      "target_x": 0,
+      "target_y": 0,
+      "target_z": 0,
+      "roll": 0,
+      "fov": 33,
+      "zoom": 1,
+      "camera_type": "perspective"
+    },
+    "class_type": "CreateCameraInfo",
+    "_meta": {
+      "title": "Create Camera Info"
+    }
+  },
+  "81": {
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "frames": 48,
+      "splat_scale": 1,
+      "sharpen": 2,
+      "headlight_shading": 0,
+      "opacity_threshold": 0,
+      "render_style": "color",
+      "background": "#101010",
+      "splat": [
+        "13",
+        0
+      ],
+      "camera_info": [
+        "80",
+        0
+      ]
+    },
+    "class_type": "RenderSplat",
+    "_meta": {
+      "title": "Render Splat"
+    }
+  },
+  "82": {
+    "inputs": {
+      "fps": 12,
+      "images": [
+        "81",
+        0
+      ]
+    },
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "83": {
+    "inputs": {
+      "filename_prefix": "fuobe/any-angle-3d",
+      "format": "auto",
+      "format.codec": "auto",
+      "video": [
+        "82",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save the turntable"
+    }
+  },
+  "84": {
+    "inputs": {
+      "upscale_method": "area",
+      "width": 192,
+      "height": 192,
+      "crop": "disabled",
+      "image": [
+        "81",
+        0
+      ]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Turntable at 192 px"
+    }
+  },
+  "85": {
+    "inputs": {
+      "filename_prefix": "fuobe/any-angle-3d",
+      "fps": 12,
+      "lossless": true,
+      "quality": 100,
+      "method": "default",
+      "images": [
+        "84",
+        0
+      ]
+    },
+    "class_type": "SaveAnimatedWEBP",
+    "_meta": {
+      "title": "Save the sweep"
+    }
+  },
+  "86": {
+    "inputs": {
+      "mask": [
+        "81",
+        1
+      ]
+    },
+    "class_type": "MaskToImage",
+    "_meta": {
+      "title": "Turntable coverage"
+    }
+  },
+  "87": {
+    "inputs": {
+      "upscale_method": "area",
+      "width": 192,
+      "height": 192,
+      "crop": "disabled",
+      "image": [
+        "86",
+        0
+      ]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Coverage at 192 px"
+    }
+  },
+  "88": {
+    "inputs": {
+      "filename_prefix": "fuobe/any-angle-3d",
+      "fps": 12,
+      "lossless": true,
+      "quality": 100,
+      "method": "default",
+      "images": [
+        "87",
+        0
+      ]
+    },
+    "class_type": "SaveAnimatedWEBP",
+    "_meta": {
+      "title": "Save the sweep's coverage"
+    }
+  },
+  "90": {
+    "inputs": {
+      "resolution": 256,
+      "kernel": 5,
+      "smooth": 0,
+      "level": 0.4,
+      "min_component": 500,
+      "min_opacity": 0.02,
+      "color_sharpen": 2,
+      "splat": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "SplatToMesh",
+    "_meta": {
+      "title": "Splat to Mesh"
+    }
+  },
+  "91": {
+    "inputs": {
+      "filename_prefix": "fuobe/any-angle-3d",
+      "mesh": [
+        "90",
+        0
+      ]
+    },
+    "class_type": "SaveGLB",
+    "_meta": {
+      "title": "Save the 3D model (.glb)"
+    }
+  }
+}

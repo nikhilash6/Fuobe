@@ -18,6 +18,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-ai-influencer": "7ebfff3e",
   "app-ai-stylist": ["636887ff","4c5398e9"],
   "app-angles": ["ef8588d2","75a696f0"],
+  "app-any-angle": ["a5ee2f2e","179ee01c"],
   "app-asmr-add-on": ["c5ef11ee","9b3e4516"],
   "app-asmr-classic": ["cb4166ca","78e03e27"],
   "app-asmr-host": "42ffa436",

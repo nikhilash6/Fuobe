@@ -47,7 +47,10 @@ export interface Asset {
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };
   // With its status, so a refusal or a missing thing isn't retried (src/app/providers.tsx).
-  if (!res.ok) throw responseError(res, Object.assign(new Error(body.error ?? "Something went wrong. Please try again."), { status: res.status }));
+  // Its code too, when the refusal has one (a run that waits for a place: ACTIVE_RUNS_CODE).
+  const given = (body as { code?: unknown }).code;
+  const code = typeof given === "string" ? given : undefined;
+  if (!res.ok) throw responseError(res, Object.assign(new Error(body.error ?? "Something went wrong. Please try again."), { status: res.status }, code && { code }));
   return body;
 }
 

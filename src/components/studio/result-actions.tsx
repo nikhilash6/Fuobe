@@ -27,6 +27,7 @@ import {
   Pin,
   Repeat,
   RotateCcw,
+  Rotate3d,
   Share2,
   SlidersHorizontal,
   SlidersVertical,
@@ -82,6 +83,7 @@ import { toastError } from "@/lib/refusals";
 
 export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   animate: Clapperboard,
+  "new-angle": Rotate3d,
   edit: Wand2,
   "live-edit": Zap,
   upscale: ZoomIn,

@@ -3,7 +3,8 @@ import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { loraEntry, loraRef } from "./loras";
-import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
+import { ANGLES_LORA, ANY_ANGLE_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
+import { ANY_ANGLE } from "./any-angle";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
 import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_OFFERED, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
@@ -1874,6 +1875,32 @@ const open: ModelDef[] = [
       maxImages: 1,
       sliders: [{ param: "numGaussians", label: "Gaussians", min: 32768, max: 1048576, step: 32768, default: 262144 }],
     },
+  }),
+  // Any Angle (app-any-angle, src/lib/catalog/any-angle.ts): two helpers its page runs, hidden from the pickers. The 3D view of
+  // a photo, built once (TripoSplat with the cut-out, fixed seeds, a turntable the front view is measured on, a GLB)…
+  o({
+    id: ANY_ANGLE.buildModel,
+    name: "Any Angle 3D view",
+    vendor: "Tripo (VAST)",
+    family: "tripo",
+    kind: "model3d",
+    tagline: "A 3D view of the photo's subject for picking camera angles · 8 GB GPU · MIT · Built with DINOv3",
+    routes: [comfy("splat", ANY_ANGLE.buildGraph, "BiRefNet cut-out → TripoSplat (seed 46) → .spz, a 48-frame turntable, its sweep and a GLB")],
+    options: { maxImages: 1, promptless: true },
+    hidden: true,
+  }),
+  // …and one angle from it: the view rendered at the camera, repainted by Qwen-Image 2.1 with the AnyAngle LoRA (its own
+  // prompt, so no words of the visitor's). No hosted Qwen-Image 2.1 takes the LoRA, so it runs on a GPU only.
+  o({
+    id: ANY_ANGLE.shotModel,
+    name: "Any Angle",
+    vendor: "Qwen (Alibaba) · lilylilith",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "The same photo from a camera you pick: a 3D view rendered there and repainted · Qwen-Image 2.1 + AnyAngle LoRA · 32 GB GPU · non-commercial weights",
+    routes: [comfy("edit", ANY_ANGLE.shotGraph, "the saved 3D view rendered at the camera → Qwen-Image 2.1 int8 + AnyAngle LoRA, 25 steps, cfg 1")],
+    options: { maxImages: 1, seed: true, promptless: true, ...(ANY_ANGLE_LORA && { loras: [ANY_ANGLE_LORA] }) },
+    hidden: true,
   }),
   // Round 4 (r4/cinema-3d): Cinema Studio's "Create 3D scene". The mesh is in the photo's own camera space
   // (glTF axes, metres), so the viewer starts where the photo was taken.

@@ -140,6 +140,12 @@ export function graphProblem(graph: Record<string, { class_type?: unknown; input
     for (const k of keys) {
       const v = node?.inputs?.[k];
       if (v === undefined || Array.isArray(v)) continue;
+      // Load3D's picture entries (Any Angle's saved view): each a file this run sent, or empty.
+      if (cls === "Load3D" && k === "image" && v && typeof v === "object") {
+        const bad = Object.entries(v as Record<string, unknown>).find(([f, x]) => f !== "camera_info" && x !== "" && x !== null && (typeof x !== "string" || !staged.includes(x)));
+        if (bad) return `Node ${id} (${cls}) reads ${typeof bad[1] === "string" ? `“${bad[1].slice(0, 80)}”` : "a value"}, which this run didn't send`;
+        continue;
+      }
       if (typeof v !== "string" || !staged.includes(v.replace(/ \[input\]$/, ""))) return `Node ${id} (${cls}) reads ${typeof v === "string" ? `“${v.slice(0, 80)}”` : "a value"}, which this run didn't send`;
     }
   }

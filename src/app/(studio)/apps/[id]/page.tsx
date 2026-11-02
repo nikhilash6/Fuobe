@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Studio } from "@/components/studio/studio";
 import { CleanVoiceTool } from "@/components/audio-tools/clean-voice-tool";
+import { AnyAngleGate } from "@/components/any-angle/any-angle-tool";
 import { RelightGate } from "@/components/relight/relight-gate";
 import { APPS, getModel, getPreset } from "@/lib/catalog";
 import { withRecipe } from "@/lib/catalog/preset-recipes";
 import { appStudio } from "@/lib/studios";
+import { anyAngleToolLive } from "@/server/any-angle-live";
 import { relightToolLive } from "@/server/relight";
 
 export function generateStaticParams() {
@@ -25,6 +27,9 @@ async function AppStudio({ params }: { params: PageProps<"/apps/[id]">["params"]
   if (!preset || preset.type !== "app") notFound();
   // An app that is a tool of its own (Clean up voice): the same tool as its Audio mode, under the app's name.
   if (preset.tool === "clean-voice") return <CleanVoiceTool app={{ name: preset.name, description: preset.description }} />;
+  // Any Angle: build a 3D view of the photo once, then pick camera angles from it. Open to everyone once its workflows
+  // have passed their check on a GPU; the owner gets it before then.
+  if (preset.tool === "any-angle") return <AnyAngleGate live={anyAngleToolLive()} app={{ name: preset.name }} />;
   // The app opens on the model its preview was made with, its own route one pick away.
   const studio = <Studio config={withRecipe(appStudio(preset), (m) => !!getModel(m))} />;
   // Relight: tap the photo to place lights, a live preview, then Generate lighting and an instant Intensity blend. The

@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { getModel, getPreset } from "@/lib/catalog";
+import { ANY_ANGLE } from "@/lib/catalog/any-angle";
+import { NO_SUBJECT_MESSAGE, withFrontView } from "./any-angle";
 import { applyMentions } from "@/lib/catalog/elements";
 import { migrateRequest, replacedBy } from "@/lib/catalog/replaced";
 import { directorFieldWords } from "@/lib/catalog/cinema";
@@ -890,7 +892,8 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   const found = catalogModel && offeredFor(catalogModel, original.engine);
   const shotModel = found && dualEngine(found) ? onEngine(found, engineFor(found, original.engine)) : found;
   // An account's 3D model would be finished on this server, outside its own limits: not yet (the route refuses first).
-  if (original.account && shotModel?.kind === "model3d") throw new Error(OWN_GPU_TOOL_MESSAGE);
+  // Any Angle's 3D view is the exception: a splat and its turntable, nothing to finish here.
+  if (original.account && shotModel?.kind === "model3d" && shotModel.id !== ANY_ANGLE.buildModel) throw new Error(OWN_GPU_TOOL_MESSAGE);
   if (!opts.dependsOn && shotModel?.options.multiShot?.mode === "concat" && (original.params?.shots?.filter((x) => x.prompt.trim()).length ?? 0) > 1) {
     return createShotFilm(original, shotModel);
   }
@@ -2106,6 +2109,17 @@ async function pollOne(r: Row): Promise<void> {
       return;
     }
     if (cards.size) outputs.splice(0, outputs.length, ...outputs.filter((o) => !cards.has(o)));
+  }
+  // Any Angle's 3D view: its front view is measured on the turntable it rendered, and kept on the splat (meta.front).
+  if (r.model_id === ANY_ANGLE.buildModel) {
+    const measured = await withFrontView(JSON.parse(r.request_json) as GenerationRequest, outputs);
+    if (!measured) {
+      // Nothing of a failed build is kept, the owner's included.
+      for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
+      update(r.id, { status: "failed", error: NO_SUBJECT_MESSAGE, completed_at: Date.now(), message: null });
+      return;
+    }
+    outputs.splice(0, outputs.length, ...measured);
   }
   // Fuobe Soul: what follows in the browser (the look's grade, an overlay, Soul Cinema's 21:9 crop), on each image;
   // API clients read it as meta.

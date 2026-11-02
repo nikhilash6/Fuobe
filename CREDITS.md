@@ -13,7 +13,7 @@ Some licences ask the app that runs their model to say so.
 - **MiniMax H3**: Fuobe Character swap, MiniMax H3, Open-H3 Regenerate, H3 Character Swap · Relay 2.0, H3 Person Removal · Relay 2.0, H3 Character Swap · studio segment, MiniMax H3 Text to Video + Audio (20 steps), MiniMax H3 Image to Video + Audio (20 steps), MiniMax H3 Start + End Frame to Video + Audio (20 steps), MiniMax H3 360-degree orbit of a still + Audio (Orbit LoRA, 28 steps)
 - **Built with Llama**: HiDream-I1 Dev
 - **Keep the licence text and NVIDIA's notices when you share the weights**: RE-USE (clean up voice), Clean the dialogue of a soundtrack and keep its music and effects (DBS + NVIDIA RE-USE)
-- **Built with DINOv3**: Pixal3D, TRELLIS.2, TRELLIS.2 Multi-view, Qwen-Image 2.1 → TRELLIS.2, TripoSplat
+- **Built with DINOv3**: Pixal3D, TRELLIS.2, TRELLIS.2 Multi-view, Qwen-Image 2.1 → TRELLIS.2, TripoSplat, Any Angle 3D view
 
 ## Attributions
 
@@ -25,7 +25,7 @@ Some licences ask the app that runs their model to say so.
 
 ## Open model licences
 
-158 models, one row for each set of open weights Fuobe runs: 89 allow commercial use, 32 with conditions, 23 are non-commercial and 14 aren't available everywhere.
+160 models, one row for each set of open weights Fuobe runs: 89 allow commercial use, 33 with conditions, 24 are non-commercial and 14 aren't available everywhere.
 
 | Model | By | Kind | Licence | Note |
 | --- | --- | --- | --- | --- |
@@ -164,6 +164,8 @@ Some licences ask the app that runs their model to say so.
 | TRELLIS.2 Multi-view | Tencent ARC × Microsoft | 3D | [MIT (Pixal3D multi-view weights by TencentARC, TRELLIS.2 VAEs as repackaged by Comfy-Org, BiRefNet, microsoft/MoGe 2); the dino_v3_L_naf image encoder is DINOv3 ViT-L under the DINOv3 License (royalty-free, commercial use allowed; the app must show a "Built with DINOv3" notice)](https://huggingface.co/Comfy-Org/Pixal3D) | Conditions apply |
 | Qwen-Image 2.1 → TRELLIS.2 | Alibaba Qwen × Microsoft | 3D | [MIT (TRELLIS.2 weights, DINOv3-NAF / TRELLIS VAEs as repackaged by Comfy-Org, BiRefNet); the dino_v3_L_naf image encoder is DINOv3 ViT-L under the DINOv3 License (royalty-free, commercial use allowed; the app must show a "Built with DINOv3" notice)](https://huggingface.co/Comfy-Org/TRELLIS.2) | Conditions apply |
 | TripoSplat | Tripo (VAST) | 3D | [MIT (VAST-AI/TripoSplat weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT](https://huggingface.co/VAST-AI/TripoSplat) | Conditions apply |
+| Any Angle 3D view | Tripo (VAST) | 3D | [MIT (VAST-AI/TripoSplat weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT](https://huggingface.co/VAST-AI/TripoSplat) | Conditions apply |
+| Any Angle | Qwen (Alibaba) · lilylilith | Image | [Qwen Research License Agreement (Qwen-Image 2.1, Qwen3-VL 8B encoder, VAE): NON-COMMERCIAL, research and evaluation only; the AnyAngle LoRA (lilylilith/QI_2.1_AnyAngle) Apache-2.0](https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE) | Non-commercial |
 | MoGe 2 scene | Microsoft | 3D | [MIT (microsoft/MoGe 2 and 3, Comfy-Org/MoGe repack)](https://spdx.org/licenses/MIT.html) |  |
 | Wan 2.1 + Uni3C path | Alibaba (Wan, DAMO Uni3C) | Video | [Apache-2.0 (Wan 2.1 I2V 14B; Uni3C, alibaba-damo-academy/Uni3C — Kijai's repack repo carries no licence field)](https://spdx.org/licenses/Apache-2.0.html) |  |
 | FLUX.2 [klein] Try-On | Black Forest Labs × xocialize | Image | [Apache-2.0 (FLUX.2 [klein] 4B, try-on LoRA by xocialize); segformer_b2_clothes MIT; ComfyUI-RMBG code GPL-3.0](https://spdx.org/licenses/Apache-2.0.html) |  |
