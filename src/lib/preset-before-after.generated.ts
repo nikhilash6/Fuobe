@@ -51,5 +51,6 @@ export const PRESET_BEFORE_AFTER: Record<string, string> = {
   "app-text-edit": "84d7797d",
   "app-upscale": "69a94761",
   "app-vectorize": "03816a24",
-  "app-virtual-try-on": "c17268c0"
+  "app-virtual-try-on": "c17268c0",
+  "app-watermark-remover": "a08df112"
 };

@@ -1008,6 +1008,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "ideogram4",
     "variant": "lean-json"
   },
+  "app-watermark-remover": {
+    "poster": "/previews/presets/app-watermark-remover.jpg?v=5482261c",
+    "video": "/previews/presets/app-watermark-remover.mp4?v=3f5731b9",
+    "run": "comfyui-previews-2026-10",
+    "engine": "comfyui",
+    "model": "ideogram4+qwen-image-2.1-edit",
+    "variant": "lean-json"
+  },
   "app-what-s-next": {
     "poster": "/previews/presets/app-what-s-next.jpg?v=96f44568",
     "video": "/previews/presets/app-what-s-next.mp4?v=e5867853",

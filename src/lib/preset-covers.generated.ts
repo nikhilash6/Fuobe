@@ -136,6 +136,7 @@ export const PRESET_COVERS: Record<string, PresetCoverEntry> = {
   "app-video-face-swap": ["a09a9980","8e35beb0"],
   "app-virtual-try-on": ["e033467c","5bb3c8b1"],
   "app-volcano-ad": "ceee550d",
+  "app-watermark-remover": ["5482261c","3f5731b9"],
   "app-what-s-next": ["96f44568","e5867853"],
   "app-yes-kiss": ["491815ab","c0c21248"],
   "app-zoom-out": ["0843fb80","18db8e37"],
