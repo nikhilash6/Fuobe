@@ -120,7 +120,7 @@ export function layoutShape(shape: SettingsShape): SettingsShape {
   return { ...shape, enhance: false };
 }
 
-export const MATTE_OUTPUT_LABELS: Record<MatteOutput, string> = { cutout: "Cutout video", matte: "Alpha mask" };
+export const MATTE_OUTPUT_LABELS: Record<MatteOutput, string> = { cutout: "Cutout video", matte: "Alpha mask", foreground: "Clean foreground" };
 export const colormapLabel = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
 
 /**

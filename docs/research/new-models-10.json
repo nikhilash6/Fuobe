@@ -3967,8 +3967,7 @@
    "falCategory": "video-to-video",
    "status": "active",
    "keyFields": {
-    "video": "video_url",
-    "spillSuppression": "spill_suppression"
+    "video": "video_url"
    },
    "inputs": {
     "output_container_and_codec": {
@@ -4037,7 +4036,7 @@
    "falCategory": "image-to-image",
    "status": "active",
    "keyFields": {
-    "images": "image_url",
+    "image": "image_url",
     "prompt": "prompt"
    },
    "inputs": {

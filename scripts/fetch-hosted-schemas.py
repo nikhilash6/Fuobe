@@ -210,12 +210,12 @@ NEW10_TRAINERS = {
 # into docs/research/new-models-10.json endpointRecords (part 4's record shape). Both are Bria's own hosted models (proprietary).
 KEYING = {
     "bria/video/background-removal/green-screen-despill": (
-        "bg-remove-video", {"video": "video_url", "spillSuppression": "spill_suppression"}, "Bria green-screen despill", "Bria Video Background Removal: Green Screen Despill",
+        "bg-remove-video", {"video": "video_url"}, "Bria green-screen despill", "Bria Video Background Removal: Green Screen Despill",
         "Chroma (green-screen) footage keyed onto a transparent background with the green spill pulled out of the edges. spill_suppression 0-1 "
         "(1 by default, 0 turns it off); output_container_and_codec webm_vp9 keeps the transparency (a codec that can't carry alpha falls back "
         "to black and says so in warning); preserve_audio keeps the sound. Released 2026-08-27."),
     "bria/guided-remove-background": (
-        "bg-remove", {"images": "image_url", "prompt": "prompt"}, "Bria guided cut-out", "Bria Guided Remove Background",
+        "bg-remove", {"image": "image_url", "prompt": "prompt"}, "Bria guided cut-out", "Bria Guided Remove Background",
         "The photo's obvious subject cut out (the original pixels with a new alpha, RGBA PNG), adjusted by plain words: add something ('the "
         "person with the mat'), drop something ('without the lamp') or narrow it ('only the chair'). The prompt is optional (empty = the plain "
         "cut-out); autocrop tightens the canvas to what is kept. Released 2026-10-10."),

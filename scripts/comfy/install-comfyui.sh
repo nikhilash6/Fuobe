@@ -17,7 +17,9 @@ declare -A NODES=(
   [ComfyUI-VideoHelperSuite]="https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite 4d907bee61e92c2e65af3bd6383a4e4d356126d1"
   [ComfyUI-KJNodes]="https://github.com/kijai/ComfyUI-KJNodes 17195fcfa8a05f601b766a0f09c9733284f47416"
   [ComfyUI-Frame-Interpolation]="https://github.com/Fannovel16/ComfyUI-Frame-Interpolation 26545cc2dd95bc3d27f056016300673bdeee78f5"
-  [ComfyUI-RMBG]="https://github.com/1038lab/ComfyUI-RMBG 229529e0ea63fb7085848225d74f91f6dc164956"
+  # 3.3.0 (2026-10-20; no tag, so the commit): adds AILab_VRMBG (Bria VRMBG 3.0) and AILab_FeyNoBg for nm10-keying; RMBG and
+  # ClothesSegment keep their inputs. Its requirements add nobg and refiners.
+  [ComfyUI-RMBG]="https://github.com/1038lab/ComfyUI-RMBG a66a5e641a54988d80ed6aad18946081c85f309e"
   [ComfyUI-ReActor]="https://github.com/Gourieff/ComfyUI-ReActor 3be5f356fe5b120a7a274d2509c0ecef5d0a7498"
   [ComfyUI-MMAudio]="https://github.com/kijai/ComfyUI-MMAudio 8eaeb72edc3aaf2059b57f2d96a1f6f689f19ae2"
   # audio / video-depth packs added with the comfyui-oss-2 workflows (2026-10-16)
@@ -43,6 +45,10 @@ declare -A NODES=(
   # dependencies) and PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel imports triton, installed below).
   [ComfyUI-MiniMax-H3-Turbo]="https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo 77bfa67575b14e3be6214f1747732e540c68b5dd"
   [plaguekind-nodes]="https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes d58d006a4ea32c25c06499f2ff104f0852a045a6"
+  # Green screen (nm10-keying): pixelworldai's CorridorKey wrapper (no LICENSE file; CorridorKey itself is under the Corridor
+  # Key Licence). Read at this commit: its loader pip-installs Corridor's v1 engine from GitHub and downloads the v1.0
+  # weights the first time it runs, never at import.
+  [ComfyUI-CorridorKeyWrapper]="https://github.com/pixelworldai/ComfyUI-CorridorKeyWrapper 7eb44e48c182e81e9dd32024770247d01f1631d3"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.

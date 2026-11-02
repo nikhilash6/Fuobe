@@ -136,7 +136,7 @@
   },
   "ComfyUI-RMBG": {
     "repo": "https://github.com/1038lab/ComfyUI-RMBG",
-    "commit": "229529e0ea63fb7085848225d74f91f6dc164956",
+    "commit": "a66a5e641a54988d80ed6aad18946081c85f309e",
     "registry": { "id": "comfyui-rmbg", "version": "" },
     "requirementsTxt": true,
     "isolated": false,
@@ -296,5 +296,14 @@
     "isolated": false,
     "subdir": null,
     "folders": []
+  },
+  "ComfyUI-CorridorKeyWrapper": {
+    "repo": "https://github.com/pixelworldai/ComfyUI-CorridorKeyWrapper",
+    "commit": "7eb44e48c182e81e9dd32024770247d01f1631d3",
+    "registry": null,
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": ["corridorkey"]
   }
 }
