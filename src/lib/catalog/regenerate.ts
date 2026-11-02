@@ -7,7 +7,7 @@
  * Nobody hosts the open model, so Regenerate · creative is GPU-only: the cloud engine says it runs on your GPU, and
  * Engine mode "Paid APIs only" hides it (the owner's rule of 10-30).
  */
-import type { Generation, GenerationRequest, LoraRef } from "./types";
+import type { ChainSlot, Generation, GenerationRequest, LoraRef } from "./types";
 
 export const REGEN_MODEL = "oss-h3-regenerate";
 export const REGEN_WORKFLOW = "video-regenerate-h3";
@@ -105,6 +105,111 @@ export const REGEN_ONE_PASS_NOTE = "This run redraws up to 15 s in one pass. If 
 /** The refusal when a single pass would get a clip longer than 15 s (it would come back cut short). */
 export function regenOnePassRefusal(seconds: number): string {
   return `Regenerate redraws up to 15 s in one pass, and this clip runs ${Math.round(seconds * 10) / 10} s. Open the finished clip and pick Regenerate in 2K: it is redrawn in 15 s parts and joined`;
+}
+
+// ---------------------------------------------------------------------------
+// Finishing passes inside other tools (package n7-10): Faceless scenes, Shorts segments, Edit video results
+
+/** The start noise a finishing pass uses (rdh: 0.8 "stays closer to the draft"; Creativity's Balanced). */
+export const REGEN_FINISH_SIGMA = 0.8;
+/** The size a scene or a segment is finished at (the shorter edge). */
+export const REGEN_FINISH_TIER = "1080p";
+/** RIFE (FPS Boost's graph): a 16 fps clip is brought to Regenerate's 24 fps first, so no frame is redrawn twice. */
+export const REGEN_SMOOTH_MODEL = "oss-rife";
+
+/** Whether a clip at this frame rate goes through RIFE first (Prepare Draft would otherwise repeat frames to reach 24). */
+export function needsSmoothing(fps: number | undefined): boolean {
+  return typeof fps === "number" && fps > 0 && fps < REGEN_FPS - 0.5;
+}
+
+/** Wan 2.x and the tools built on it (Wan VACE restyles) make 16 fps clips. */
+export function sixteenFpsModel(modelId: string | undefined): boolean {
+  return !!modelId && /(^|-)wan(\d|-|$)|vace/.test(modelId);
+}
+
+/** A clip a finishing pass reads: a stored file, or what an earlier step makes (its key). */
+export type FinishClip = { url: string } | { key: string };
+
+export interface FinishStepsInput {
+  /** The steps' key prefix (unique in the plan). */
+  key: string;
+  clip: FinishClip;
+  /** The words the pass redraws from (the scene's or the segment's own). */
+  prompt: string;
+  /** The clip's length (at most 15 s: one pass). */
+  seconds: number;
+  /** The clip's frame rate: below 24, RIFE runs first. */
+  fps?: number;
+  /** The draft preset: "h3" (768p, an H3 draft) or "other" (576p). */
+  draftFrom: "h3" | "other";
+  tier?: (typeof REGEN_TIERS)[number];
+  /** Fields every step shares (feature, batch title). */
+  helper: Pick<GenerationRequest, "feature" | "batchTitle">;
+  label: string;
+  seed?: number;
+}
+
+/** A plan step (src/lib/catalog/shorts.ts PlanStep's shape, kept here so this module stays free of the tools). */
+export interface FinishStep {
+  key: string;
+  request: GenerationRequest;
+  after?: string[];
+  chain?: ChainSlot[];
+}
+
+/** Why a finishing pass can't take this clip (one pass redraws at most 15 s), or null. */
+export function finishLengthProblem(seconds: number | undefined): string | null {
+  if (seconds === undefined || !(seconds > 0)) return null;
+  return seconds > REGEN_WINDOW_SECONDS + 0.05 ? `Regenerate redraws up to ${REGEN_WINDOW_SECONDS} s in one pass, and this part runs ${Math.round(seconds * 10) / 10} s. Pick a shorter part` : null;
+}
+
+/**
+ * One finishing pass of a clip: RIFE to 24 fps first when it is slower (a Wan VACE restyle's 16 fps), then Open-H3
+ * Regenerate at 1080p from the clip's own words, near the draft (start sigma 0.8), with the preset asked for. Returns
+ * the steps and the key of the finished clip.
+ */
+export function regenFinishSteps(o: FinishStepsInput): { steps: FinishStep[]; final: string } {
+  const problem = finishLengthProblem(o.seconds);
+  if (problem) throw new Error(problem);
+  const steps: FinishStep[] = [];
+  let clip = o.clip;
+  if (needsSmoothing(o.fps)) {
+    const key = `${o.key}-smooth`;
+    steps.push({
+      key,
+      request: {
+        ...o.helper,
+        modelId: REGEN_SMOOTH_MODEL,
+        op: "interpolate",
+        ...("url" in clip ? { inputs: { video: clip.url } } : {}),
+        params: { targetFps: REGEN_FPS, numOutputs: 1 },
+        step: { label: `${o.label} · to ${REGEN_FPS} fps`, index: 0, of: 2 },
+      },
+      ...("key" in clip ? { after: [clip.key], chain: [{ slot: "video" as const }] } : {}),
+    });
+    clip = { key };
+  }
+  const key = `${o.key}-regen`;
+  steps.push({
+    key,
+    request: {
+      ...o.helper,
+      modelId: REGEN_MODEL,
+      op: "upscale-video",
+      prompt: o.prompt.trim().slice(0, HANDOFF_PROMPT),
+      ...("url" in clip ? { inputs: { video: clip.url } } : {}),
+      params: {
+        resolution: o.tier ?? REGEN_FINISH_TIER,
+        sourceDuration: Math.round(o.seconds * 1000) / 1000,
+        numOutputs: 1,
+        ...(o.seed !== undefined ? { seed: o.seed } : {}),
+        extra: { startSigma: REGEN_FINISH_SIGMA, draftFrom: o.draftFrom },
+      },
+      step: { label: `${o.label} · redraw at ${o.tier ?? REGEN_FINISH_TIER}`, index: steps.length, of: steps.length + 1 },
+    },
+    ...("key" in clip ? { after: [clip.key], chain: [{ slot: "video" as const }] } : {}),
+  });
+  return { steps, final: key };
 }
 
 /** The note for a clip that isn't 16:9 or 9:16. */

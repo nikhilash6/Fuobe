@@ -127,14 +127,15 @@ export function useEpisode(id: string) {
     refetchInterval: (q) => {
       const s = q.state.data?.episode.status;
       const up = q.state.data?.upscaled?.status;
-      if (up === "queued" || up === "running") return connected ? 8000 : 2000;
+      const regen = q.state.data?.regenerated?.status;
+      if (up === "queued" || up === "running" || regen === "queued" || regen === "running") return connected ? 8000 : 2000;
       if (!s || !inFlight(s)) return false;
       return s === "writing" ? 1500 : connected ? 8000 : 2000;
     },
   });
   useEffect(() => {
     const plan = q.data?.episode.plan;
-    ids.current = new Set([...Object.values(plan?.ids ?? {}), ...(plan?.upscaled ? [plan.upscaled] : [])]);
+    ids.current = new Set([...Object.values(plan?.ids ?? {}), ...(plan?.upscaled ? [plan.upscaled] : []), ...Object.values(plan?.regenerated?.ids ?? {})]);
   }, [q.data]);
   return q;
 }
@@ -158,7 +159,7 @@ export function useUpdateEpisode(id: string) {
 }
 
 export function useEpisodeAction(id: string) {
-  return useEpisodeMutation(id, (action: "render" | "retry" | "rewrite" | "undo" | "upscale") => send<EpisodeView>(`/api/faceless/episodes/${id}/${action}`, "POST"));
+  return useEpisodeMutation(id, (action: "render" | "retry" | "rewrite" | "undo" | "upscale" | "regenerate") => send<EpisodeView>(`/api/faceless/episodes/${id}/${action}`, "POST"));
 }
 
 export interface ChangeDraft {
