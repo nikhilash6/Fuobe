@@ -26,6 +26,7 @@ import {
   sheetCrop,
   sheetPanelLimit,
   sheetPanelStyle,
+  sheetState,
   STORYBOARD_ASPECTS,
   STORYBOARD_PARTNER_IDS,
   type SheetFrames,
@@ -376,7 +377,7 @@ function Board({
           <h3 className="line-clamp-2 font-heading text-[19px] leading-snug">{boardTitle(frames, idea)}</h3>
           <p className="text-[12px] text-muted-foreground">
             {sheet
-              ? `${sheet.panels.length} panels on one sheet · ${done ? "done" : "on the way"}`
+              ? `${sheet.panels.length} panels on one sheet · ${sheetState(first.status)}`
               : `${frames.length} frames · ${done === frames.length ? "done" : `${done}/${frames.length} ready`}`}{" "}
             · {modelName(first, names)} · {timeAgo(first.createdAt)}
           </p>

@@ -16,7 +16,7 @@
  */
 import { LAYOUT_PARAM, type LayoutDraft } from "@/lib/layout-prompt";
 import { loraEntry, loraRef } from "./loras";
-import type { ChainSlot, Engine, GenerationRequest, LoraRef } from "./types";
+import type { ChainSlot, Engine, GenerationRequest, GenerationStatus, LoraRef } from "./types";
 
 export const MAX_FRAMES = 8;
 
@@ -218,6 +218,14 @@ export function sheetPanelLimit(owner: boolean, test: SheetTest | null = ONE_SHE
   return owner ? MAX_FRAMES : 0;
 }
 
+/** Where a sheet is, in the board's header: one generation draws every panel, so it is done, failed or still coming. */
+export function sheetState(status: GenerationStatus): string {
+  if (status === "succeeded") return "done";
+  if (status === "failed") return "failed";
+  if (status === "canceled") return "cancelled";
+  return "on the way";
+}
+
 /** A box on the sheet: [x0, y0, x1, y1] as 0-1 fractions, from its top-left corner (a layout box). */
 export type SheetBox = [number, number, number, number];
 
@@ -323,8 +331,12 @@ export function sheetCaption(n: number, grid: Pick<SheetGrid, "cols" | "rows">, 
  * sheet shaped so the panels are as large as they can be. The layout goes as params.extra.layout, which the plan compiles
  * at the size the model renders and keeps from being rewritten; the panels go in request.frame.sheet for the crop.
  */
-export function planOneSheet(input: Omit<StoryboardPlanInput, "partner" | "nextScene" | "look">): FrameRequest {
+export function planOneSheet(input: Omit<StoryboardPlanInput, "partner" | "nextScene" | "look">, test: SheetTest | null = ONE_SHEET_GPU_TEST): FrameRequest {
+  // The most panels a sheet may have: the owner's whole board until a GPU render is recorded, then what that render showed.
+  const limit = sheetPanelLimit(true, test);
+  if (!limit) throw new Error("One sheet isn't available yet: make the board frame by frame");
   const scenes = input.scenes.map((s) => s.trim()).filter(Boolean).slice(0, MAX_FRAMES);
+  if (scenes.length > limit) throw new Error(`A one-sheet board has at most ${limit} panels: remove some scenes, or make it frame by frame`);
   if (!scenes.length) throw new Error("Describe the story or write at least one scene");
   if (input.references?.length) throw new Error("A one-sheet board is drawn from your words alone: remove the references, or make it frame by frame");
   const panelAspect = input.aspectRatio && input.aspectRatio !== "auto" ? input.aspectRatio : "16:9";
