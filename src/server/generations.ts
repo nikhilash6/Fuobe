@@ -405,8 +405,8 @@ export const ASSET_REFS: AssetRef[] = [
   { table: "katana_jobs", cols: ["data_json"], what: "Katana job", name: "json_extract(data_json, '$.title')" },
   // Content Factory: a series' reference clip and its thumbnail.
   { table: "content_series", cols: ["data_json"], what: "Content Factory series", name: "COALESCE(json_extract(data_json, '$.name'), json_extract(data_json, '$.reference.title'))" },
-  // Assist's scheduled tasks: the files the prompt runs with.
-  { table: "assist_schedules", cols: ["attachments_json"], what: "scheduled task", name: "title" },
+  // Assist's scheduled tasks: the files the prompt runs with, and the files a skill task's inputs name.
+  { table: "assist_schedules", cols: ["attachments_json", "skill_json"], what: "scheduled task", name: "title" },
   // Character Swap Studio: the character picture, each clip and its 24 fps copy, masks, anchors, takes and their masters.
   { table: "swap_projects", cols: ["data_json"], what: "Character Swap project", name: "name" },
   // A user skill's bundled text files: its recipe.json names the files a run starts from (an example, a fixed logo).

@@ -23,7 +23,7 @@ const agent = await import("@/server/assist/agent");
 const tools = await import("@/server/assist/tools");
 const sched = await import("@/server/assist/schedules");
 const projects = await import("@/server/assist/projects");
-const { db } = await import("@/server/db");
+const { db, MIGRATIONS } = await import("@/server/db");
 const { spendOf } = await import("@/lib/assist-schedule");
 const connectors = await import("@/server/assist/connectors");
 const listRoute = await import("@/app/api/assist/schedules/route");
@@ -365,5 +365,201 @@ describe("connectors in scheduled runs", () => {
     expect(m.seen[0].connectors).toEqual(["linear"]);
     expect(m.seen[0].system).toMatch(/approval cards and the cost cap don't cover them/);
     expect(m.seen[0].system).toMatch(/say what you'll do and wait for the user's OK in chat/);
+  });
+});
+
+describe("a skill on a schedule (Skills W4)", () => {
+  const skills = () => import("@/server/skills");
+  const recipes = () => import("@/server/recipes");
+  /** A model that must never be called: a skill task's runs have no model planning them. */
+  const noModel: import("@/server/assist/agent").ModelCall = async () => {
+    throw new Error("a skill task called a model");
+  };
+  const at = T("2026-10-27T08:00:00Z");
+  const daily = { kind: "daily" as const, time: "09:00" };
+
+  async function promoSkill(name = "weekly-promo") {
+    const s = await skills();
+    if (s.getSkill(name)) return name;
+    s.createSkill({ name, title: "Weekly promo", description: "A promo still from a product photo.", body: "# Weekly promo\n\n1. Stage the product." });
+    (await recipes()).saveRecipe(name, {
+      fuobeRecipe: 1,
+      params: [
+        { id: "product", label: "Product photo", type: "image", required: true },
+        { id: "name", label: "Product name", type: "text", required: true, max: 200 },
+      ],
+      steps: [{ key: "ad", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "edit", prompt: "{{name}} on a sunlit plinth", inputs: { images: ["{{product}}"] } } }],
+    });
+    return name;
+  }
+
+  async function upload(name: string, createdAt: number) {
+    const { saveFile } = await import("@/server/storage");
+    const { encodePng } = await import("@/server/png");
+    const a = saveFile({ data: encodePng({ width: 8, height: 8, data: Buffer.alloc(8 * 8 * 4, 200) }), contentType: "image/png", source: "upload", name });
+    db().prepare("UPDATE assets SET created_at = ? WHERE id = ?").run(createdAt, a.id);
+    return a;
+  }
+
+  const stored = (threadId: string) => JSON.parse((db().prepare("SELECT messages_json FROM assist_threads WHERE id = ?").get(threadId) as { messages_json: string }).messages_json) as Anthropic.Beta.BetaMessageParam[];
+
+  it("newest upload with no upload of that kind yet: the run fails and says why, and the task stays on", async () => {
+    const name = await promoSkill();
+    const s = sched.createSchedule({ ...base, prompt: "", title: "", skill: { name, values: { name: "Lumen lamp" }, sources: { product: "newest" } }, rule: daily }, at);
+    expect(await sched.sweepSchedules(T("2026-10-27T09:00:00Z"), { model: noModel })).toEqual([]);
+    expect(sched.getSchedule(s.id)).toMatchObject({ paused: false, runs: 1, last: { threadId: null, status: "failed", text: "There's no image upload yet for “Product photo” — upload one, or edit the task to pick a file" } });
+  });
+
+  it("is checked when saved: the skill, its inputs and the engine; and needs no prompt or model", async () => {
+    const name = await promoSkill();
+    const save = (skill: import("@/lib/assist-schedule").ScheduleSkill, extra: Partial<import("@/server/assist/schedules").ScheduleInput> = {}) =>
+      sched.createSchedule({ ...base, prompt: "", title: "", skill, rule: daily, ...extra }, at);
+    expect(() => save({ name: "nope", values: {} })).toThrow("There's no skill called /nope");
+    expect(() => save({ name: "product-photoshoot", values: {} })).toThrow(/doesn't run by itself/);
+    expect(() => save({ name, values: { colour: "red" }, sources: { product: "newest" } })).toThrow("/weekly-promo has no input “colour”");
+    expect(() => save({ name, values: { product: "/api/files/uploads/x.png" }, sources: { name: "newest" } })).toThrow(/Product name isn't a file/);
+    expect(() => save({ name, values: {}, sources: { product: "newest" } })).toThrow("Product name is needed");
+    expect(() => save({ name, values: { name: "Lumen" }, sources: { product: "newest" } }, { engine: "open" })).toThrow(/runs on the cloud only/);
+    expect(() => sched.createSchedule({ ...base, prompt: " ", title: "x", rule: daily }, at)).toThrow("Write what Assist should do each time");
+    const s = save({ name, values: { name: "Lumen lamp" }, sources: { product: "newest" } }, { mode: { mode: "smart" }, connectors: true, attachments: ["/api/files/uploads/a.png"] });
+    expect(s).toMatchObject({
+      title: "Weekly promo",
+      prompt: "/weekly-promo Product photo: your newest image upload · Product name: Lumen lamp",
+      skill: { name, values: { name: "Lumen lamp" }, sources: { product: "newest" } },
+      // No model plans it, so no mode and no connectors; a request's files don't apply.
+      mode: null,
+      connectors: false,
+      attachments: [],
+    });
+    // Through the route, with no prompt; switching back to a request needs one.
+    const res = await listRoute.POST(new Request("http://x", { method: "POST", body: JSON.stringify({ ...base, prompt: "", title: "Promo", skill: { name, values: { name: "Lumen" }, sources: { product: "newest" } }, rule: daily }) }));
+    expect(res.status).toBe(201);
+    const ctx = { params: Promise.resolve({ scheduleId: (await res.json()).id }) };
+    const back = await oneRoute.PATCH(new Request("http://x", { method: "PATCH", body: JSON.stringify({ skill: null, prompt: "" }) }), ctx);
+    expect(back.status).toBe(400);
+    expect((await back.json()).error).toBe("Write what Assist should do each time");
+  });
+
+  it("ask first: one card with the skill's price, and the newest upload is read when the run starts", async () => {
+    const name = await promoSkill();
+    const older = await upload("old.png", T("2026-10-26T08:00:00Z"));
+    const s = sched.createSchedule({ ...base, prompt: "", title: "", skill: { name, values: { name: "Lumen lamp" }, sources: { product: "newest" } }, rule: daily }, at);
+    // Uploaded after the task was saved: the run uses it.
+    const newer = await upload("new.png", T("2026-10-27T08:30:00Z"));
+    const [id] = await sched.sweepSchedules(T("2026-10-27T09:00:00Z"), { model: noModel });
+    const t = threadOf(id);
+    expect(t).toMatchObject({ status: "waiting", agent: "offline", scheduleId: s.id });
+    expect(t.items[0]).toMatchObject({ role: "notice", text: expect.stringMatching(/^Scheduled run of “Weekly promo” · Every day at 09:00 · plans wait for your approval · runs the Weekly promo skill as it was saved, with no AI model planning it\.$/) });
+    expect(t.items[1]).toMatchObject({ role: "user", text: "Product photo: your newest image upload (file 1) · Product name: Lumen lamp", skills: [name], attachments: [newer.url] });
+    const card = t.items.find((i) => i.role === "approval");
+    const price = (await recipes()).estimateRecipe(name, { values: { product: newer.url, name: "Lumen lamp" } }, "cloud");
+    expect(card).toMatchObject({ status: "pending", summary: "Weekly promo", totalUsd: price.total });
+    expect(card?.role === "approval" && card.jobs.map((j) => [j.tool, j.modelId])).toEqual([["run_skill", "nano-banana-pro"]]);
+    // The offline planner's note isn't under a skill task's card: no planner made it.
+    expect(t.items.some((i) => i.role === "notice" && /Offline planner/.test(i.text))).toBe(false);
+    const use = stored(id).flatMap((m) => (typeof m.content === "string" ? [] : m.content)).find((b) => b.type === "tool_use");
+    expect(use).toMatchObject({ name: "run_skill", input: { name, values: { name: "Lumen lamp", product: newer.url }, engine: "cloud" } });
+    expect(older.url).not.toBe(newer.url);
+    expect(sched.getSchedule(s.id)!.last).toMatchObject({ threadId: id, status: "waiting", text: expect.stringMatching(/^A plan waits for your approval/) });
+    // Approved later: the skill's steps start with the file that was newest when it ran.
+    await agent.answerApproval(id, true);
+    await agent.run(id);
+    const made = threadOf(id).items.flatMap((i) => (i.role === "generations" ? i.ids : []));
+    expect(made).toHaveLength(1);
+    const { getGeneration } = await import("@/server/generations");
+    expect(getGeneration(made[0])!.request).toMatchObject({ prompt: "Lumen lamp on a sunlit plinth", inputs: { images: [newer.url] }, skill: { name } });
+    expect(sched.getSchedule(s.id)!.last).toMatchObject({ status: "done", text: "Started 1 result" });
+  });
+
+  it("auto-run: within the cap it starts on its own; over the cap it waits, with the reason", async () => {
+    const name = await promoSkill();
+    const photo = await upload("cap.png", T("2026-10-27T08:40:00Z"));
+    setSetting("falKey", "fal-test-key");
+    const realFetch = globalThis.fetch;
+    // The paid job is queued for fal; no request may leave this test.
+    globalThis.fetch = (async () => new Response("offline", { status: 503 })) as typeof fetch;
+    try {
+      const price = spendOf(tools.planFor("run_skill", { name, values: { product: photo.url, name: "Lumen" } }, { engine: "cloud" }).jobs)!;
+      expect(price).toBeGreaterThan(0);
+      const skill = { name, values: { name: "Lumen", product: photo.url } };
+      const fits = sched.createSchedule({ ...base, prompt: "", title: "Fits", approval: "auto", capUsd: Math.round(price * 150) / 100, skill, rule: daily }, at);
+      const [a] = await sched.sweepSchedules(T("2026-10-27T09:00:00Z"), { model: noModel });
+      expect(threadOf(a)).toMatchObject({ status: "idle", spentUsd: price });
+      expect(threadOf(a).items.some((i) => i.role === "approval")).toBe(false);
+      expect(threadOf(a).items.filter((i) => i.role === "generations")).toHaveLength(1);
+      expect(threadOf(a).items.at(-1)).toMatchObject({ role: "assistant", text: "Started Weekly promo. The results appear here and in your Library as they finish." });
+      expect(sched.getSchedule(fits.id)!.last).toMatchObject({ status: "done", text: "Started 1 result" });
+      sched.deleteSchedule(fits.id);
+
+      const cap = Math.floor(price * 50) / 100;
+      sched.createSchedule({ ...base, prompt: "", title: "Over", approval: "auto", capUsd: cap, skill, rule: daily }, at);
+      const [b] = await sched.sweepSchedules(T("2026-10-27T09:00:00Z"), { model: noModel });
+      const t = threadOf(b);
+      expect(t.status).toBe("waiting");
+      expect(t.items.some((i) => i.role === "generations")).toBe(false);
+      expect(t.items.find((i) => i.role === "approval")).toMatchObject({ status: "pending", summary: "Weekly promo" });
+      expect(t.items.at(-1)).toMatchObject({ role: "notice", text: expect.stringMatching(/^Waiting for you: it costs about \$[\d.]+ and this run has \$[\d.]+ left of its \$[\d.]+ cap\./) });
+    } finally {
+      globalThis.fetch = realFetch;
+      db().prepare("UPDATE generations SET status = 'canceled' WHERE status IN ('queued', 'running')").run();
+    }
+  });
+
+  it("a fixed file keeps its task's file out of Empty trash; a value that no longer fits fails the run with the reason", async () => {
+    const name = await promoSkill();
+    const photo = await upload("fixed.png", T("2026-10-27T08:45:00Z"));
+    const s = sched.createSchedule({ ...base, prompt: "", title: "Fixed", skill: { name, values: { name: "Lumen", product: photo.url } }, rule: daily }, at);
+    const { assetUses } = await import("@/server/generations");
+    expect(assetUses(photo.id)).toContainEqual({ what: "scheduled task", key: s.id, name: "Fixed" });
+    // The skill's inputs changed after the task was saved (a new required input): the run says what's missing.
+    (await recipes()).saveRecipe(name, {
+      fuobeRecipe: 1,
+      params: [
+        { id: "product", label: "Product photo", type: "image", required: true },
+        { id: "name", label: "Product name", type: "text", required: true, max: 200 },
+        { id: "tagline", label: "Tagline", type: "text", required: true },
+      ],
+      steps: [{ key: "ad", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "edit", prompt: "{{name}}: {{tagline}}", inputs: { images: ["{{product}}"] } } }],
+    });
+    const [id] = await sched.sweepSchedules(T("2026-10-27T09:00:00Z"), { model: noModel });
+    expect(threadOf(id).items.some((i) => i.role === "approval")).toBe(false);
+    expect(sched.getSchedule(s.id)!.last).toMatchObject({ threadId: id, status: "failed", text: "Weekly promo didn't start: /weekly-promo needs tagline (text)" });
+    (await skills()).deleteSkill(name);
+  });
+
+  it("a renamed skill keeps its tasks; a deleted one pauses them and says why", async () => {
+    const s0 = await skills();
+    const name = await promoSkill("monday-promo");
+    const s = sched.createSchedule({ ...base, prompt: "", title: "Monday", skill: { name, values: { name: "Lumen" }, sources: { product: "newest" } }, rule: daily }, at);
+    s0.updateSkill(name, { name: "monday-ad" });
+    expect(sched.getSchedule(s.id)).toMatchObject({ paused: false, skill: { name: "monday-ad" }, prompt: "/monday-ad Product photo: your newest image upload · Product name: Lumen" });
+    s0.deleteSkill("monday-ad");
+    expect(sched.getSchedule(s.id)).toMatchObject({ paused: true, nextRunAt: null, last: { threadId: null, status: "failed", text: "Paused: its skill was deleted" } });
+    expect(await sched.sweepSchedules(T("2026-10-28T09:00:00Z"), { model: noModel })).toEqual([]);
+    // It can still be renamed or deleted; resuming says why it can't run.
+    expect(sched.updateSchedule(s.id, { title: "Monday (old)" })!.title).toBe("Monday (old)");
+    expect(() => sched.updateSchedule(s.id, { paused: false })).toThrow("There's no skill called /monday-ad");
+    // A skill removed behind deleteSkill's back: the start finds no skill and pauses the task.
+    const other = await promoSkill("tuesday-promo");
+    const t = sched.createSchedule({ ...base, prompt: "", title: "Tuesday", skill: { name: other, values: { name: "Lumen" }, sources: { product: "newest" } }, rule: daily }, at);
+    db().prepare("DELETE FROM skills WHERE name = ?").run(other);
+    const res = await runRoute.POST(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ scheduleId: t.id }) });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ threadId: null, reason: "paused", error: "Its skill was deleted — edit the task to pick another" });
+    expect(sched.getSchedule(t.id)).toMatchObject({ paused: true });
+  });
+
+  it("the migration adds skill_json to a database from before, and its tasks keep running as requests", () => {
+    const d = db();
+    const id = MIGRATIONS.findIndex((m) => m.includes("ALTER TABLE assist_schedules ADD COLUMN skill_json"));
+    expect(id).toBe(MIGRATIONS.length - 1);
+    const old = sched.createSchedule({ ...base, title: "From before", rule: daily }, at);
+    d.exec("ALTER TABLE assist_schedules DROP COLUMN skill_json");
+    d.prepare("DELETE FROM _migrations WHERE id = ?").run(id);
+    d.close();
+    globalThis.__fuobeDb = undefined;
+    const cols = (db().prepare("PRAGMA table_info(assist_schedules)").all() as { name: string }[]).map((c) => c.name);
+    expect(cols).toContain("skill_json");
+    expect(sched.getSchedule(old.id)).toMatchObject({ title: "From before", prompt: "Make today's perfume ad", skill: null });
   });
 });
