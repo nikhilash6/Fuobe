@@ -128,10 +128,14 @@ export const BINDING_KEYS = new Set([
   'gridPrompt', 'sheetPrompt',
   // av-tools (Wave B, see library.spec.mjs header)
   'frameIndex',
+  // nm10-music3 (see library.spec.mjs header)
+  'tiledDecode',
   // comfyui-oss-4 additions (see library.spec.mjs header)
   'maskPrompt', 'maskGrow', 'skipPass2', 'supersample', 'zoomStart', 'zoomEnd', 'panStartX', 'panStartY', 'panEndX', 'panEndY',
   'easeInOut', 'chunkFrames', 'crossfade', 'headroomDb', 'fadeCurve', 'format', 'profile', 'peakNits', 'resolutionLevel', 'fovX',
   'decimation', 'cutout', 'numGaussians', 'splatFormat', 'orbitFrames', 'frameWidth',
+  // idol-1 (docs/research/idol-9.md §5.5): Idol 3D's looser photo crop (the sampler key is MOSS-Image's)
+  'photoCrop',
   // round 4 (engine seams, see library.spec.mjs header)
   'curveMode', 'filterSpeckle', 'colorPrecision',
   // remove-object package (round 4)
@@ -141,7 +145,7 @@ export const BINDING_KEYS = new Set([
   // Fuobe Soul (Originals O2): image to image at Soul's tier
   'megapixels',
   // Genjutsu's Character swap (Originals O5): MiniMax H3 with the h3_character_swap / H3 Relay packs
-  'quality', 'selection', 'subjectIndex', 'positiveCoords', 'negativeCoords', 'audioGuide', 'useMask', 'windowFrames', 'historyFrames',
+  'quality', 'selection', 'subjectIndex', 'positiveCoords', 'negativeCoords', 'audioGuide', 'useMask', 'windowFrames', 'historyFrames', 'windowControls',
   // Character Swap Studio (o/h3-studio): continuation history from the previous take's master, masks on any frame spliced into a version
   'historyVideo', 'historyStart', 'historyLength', 'keyFrame', 'spanFrames', 'tailStart', 'tailFrames', 'prevMask',
   // Originals O11: Fuobe Speak's InfiniteTalk recipe on kijai's wrapper, the face mosaic
@@ -156,10 +160,18 @@ export const BINDING_KEYS = new Set([
   'preset',
   // Open-H3 Regenerate (n7-3): the pack's output size and draft size (its combo strings) and the refine's start noise
   'resolution', 'draftSize', 'startSigma',
+  // Character swap in 2K (n7-4): the mask composite's window starts, the two layers' places and the mask's soft edge
+  'takeStart', 'maskStart', 'takeX', 'takeY', 'regionWidth', 'regionHeight', 'regenWidth', 'regenHeight', 'regenX', 'regenY', 'trimX', 'trimY', 'feather',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
+  // Clean up dialogue (DBS graph C, docs/research/dbs-separation-7.md §4.4): each stem's level in the remix
+  'voiceDb', 'musicDb', 'effectsDb',
   // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
   'invertDepth',
+  // Design a voice (nm10-voice-design): the voice in words, and what a voice sample says (Qwen3-TTS / VoxCPM2 clones)
+  'voiceDescription', 'voiceTranscript',
+  // VoxCPM2's device combo (cuda | mps | cpu): the server's first torch device
+  'device',
   // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
   // nm10-rtx-video: the NVIDIA RTX Video nodes' quality (Super Resolution) or mode (Frame Generation)

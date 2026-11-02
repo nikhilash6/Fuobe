@@ -87,7 +87,7 @@ export function getRecipe(name: string): { skill: Skill; recipe: Recipe } {
 }
 
 /** Tools a recipe may call: the gated ones that make something (not remember, which changes what Assist knows). */
-const runnableTool = (name: string) => !!getTool(name)?.gated && name !== "remember";
+const runnableTool = (name: string) => !!getTool(name)?.gated && name !== "remember" && name !== "run_skill";
 
 /**
  * Problems only the server can see: a model the catalog doesn't have (after REPLACED_BY), a tool a recipe can't call,

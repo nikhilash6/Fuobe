@@ -18,7 +18,7 @@ import type {
   SkillSummary,
 } from "@/lib/assist";
 import type { ConnectorView } from "@/lib/assist-connectors";
-import type { ScheduleRule, ScheduleView } from "@/lib/assist-schedule";
+import type { ScheduleRule, ScheduleSkill, ScheduleView } from "@/lib/assist-schedule";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import type { RecipeEstimate, RecipeRun, RecipeView, VerifyResult } from "@/lib/recipe";
 import type { DraftRefusal, Naming, SkillDraft } from "@/lib/recipe-builder";
@@ -243,17 +243,22 @@ export interface DraftCheckResult {
   why?: string;
 }
 
-/** The draft of a skill from picked results: its steps rebuilt, every input Fixed, and the picks it couldn't use. */
-export function useSkillDraft(ids: string[]) {
+/** What a skill is drafted from: results picked in the Library (W2), or an Assist chat whose plans ran (W3). */
+export type DraftSource = { generations: string[] } | { thread: string };
+
+const sourceKey = (s: DraftSource) => ("thread" in s ? `chat:${s.thread}` : s.generations.join(","));
+
+/** The draft of a skill from picked results or a chat: its steps rebuilt, every input Fixed, and what it couldn't use. */
+export function useSkillDraft(source: DraftSource) {
   return useQuery({
-    queryKey: ["skill-draft", ids.join(",")],
-    enabled: ids.length > 0,
+    queryKey: ["skill-draft", sourceKey(source)],
+    enabled: "thread" in source || source.generations.length > 0,
     retry: false,
     // Read once while the review is open, and dropped when it closes: opened again, it is drafted again (a name saved
     // since is taken, a result trashed since is gone).
     staleTime: Infinity,
     gcTime: 0,
-    queryFn: () => recipeCall<{ draft: SkillDraft | null; refusals: DraftRefusal[] }>("/api/assist/skills/draft", { generations: ids }),
+    queryFn: () => recipeCall<{ draft: SkillDraft | null; refusals: DraftRefusal[] }>("/api/assist/skills/draft", source),
   });
 }
 
@@ -263,7 +268,7 @@ export function useDraftActions() {
     /** Price it on each engine (`plan`), or add the free dry run (`demo`). */
     check: (recipe: unknown, level: "plan" | "demo", title?: string) => recipeCall<DraftCheckResult>("/api/assist/skills/draft/check", { recipe, level, title }),
     /** The optional naming pass (null: no LLM, or its answer didn't fit). */
-    name: async (ids: string[]) => (await recipeCall<{ naming: Naming | null }>("/api/assist/skills/draft/name", { generations: ids })).naming,
+    name: async (source: DraftSource) => (await recipeCall<{ naming: Naming | null }>("/api/assist/skills/draft/name", source)).naming,
     save: async (body: { name: string; title: string; description: string; whenToUse?: string; body: string; recipe: unknown }) => {
       const view = await recipeCall<RecipeView>("/api/assist/skills/draft/save", body);
       qc.setQueryData(["assist-recipe", view.name], view);
@@ -429,6 +434,8 @@ export interface ScheduleForm {
   engine: Engine;
   mode?: AssistModeChoice | null;
   connectors?: boolean;
+  /** Run a saved skill instead of a request (null: back to a request). */
+  skill?: ScheduleSkill | null;
   paused?: boolean;
 }
 

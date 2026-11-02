@@ -18312,7 +18312,7 @@
    "keyFields": {
     "prompt": "prompt",
     "voice": "voice",
-    "referenceVoice": "speaker_voice_embedding_file_url"
+    "voiceEmbedding": "speaker_voice_embedding_file_url"
    },
    "output": "audio.url",
    "outputShape": {

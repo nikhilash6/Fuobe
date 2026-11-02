@@ -9,6 +9,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 COMFYUI_DIR="${COMFYUI_DIR:-/home/user/ComfyUI}"
 # Versions the committed library was generated/validated with (2026-10-16; round-3 packs 2026-10-17).
+# MiniMax H3's Sol-H3-VAE loader (#17411, 0df1646a) and H3 latent upscaler (#17412, 35060f01) were merged into master on
+# 2026-10-28 and are in no release yet (v0.43.2 lacks them). Master 17ff1dcc (2026-11-01; frontend 1.57.6, workflow templates
+# 0.11.100, comfy-kitchen 0.2.40, comfy-aimdo 0.6.0) has both, but the library has not been validated on it yet, so it is opt-in:
+# COMFYUI_REF=17ff1dcce963bd9f23095ec9b28febbfc4db8388. Move the default only after a full re-validation on it (npm run build,
+# node validate-workflows.mjs) updates the manifest's comfyuiCommit.
 COMFYUI_REF="${COMFYUI_REF:-fc04da91b2ab12f99e4716371a7e4f98ac982597}"   # v0.41.0-7
 PYTHON_VERSION="${PYTHON_VERSION:-3.13}"
 

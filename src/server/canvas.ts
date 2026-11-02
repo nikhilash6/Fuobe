@@ -1,4 +1,6 @@
 import "server-only";
+import { MAX_KEYS } from "@/lib/camera-path";
+import { CameraKeySchema, ExactOrbitSchema } from "./fly-around";
 import fs from "node:fs";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -19,6 +21,7 @@ import {
   CANVAS_TEXT_MAX as TEXT_MAX,
   CONCAT_LIMITS,
   TABLE_LIMITS,
+  LAYOUT_NODE_LIMITS,
   cleanGraph,
   concatClips,
   depIdentity,
@@ -44,9 +47,11 @@ import {
   type StepSource,
 } from "@/lib/catalog/canvas";
 import type { Engine, Generation, GenerationRequest, MediaKind } from "@/lib/catalog/types";
+import { readLayout } from "@/lib/layout-prompt";
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { listElements } from "./elements";
+import { isOffered } from "./model-access";
 import { createGenerations, getGeneration } from "./generations";
 import { silentWav } from "./marketing";
 import { engineMode } from "./settings";
@@ -103,6 +108,9 @@ const NODE_TYPES = [
   "translate",
   "concat",
   "table",
+  "layout",
+  "camera-path",
+  "fly-around",
   "output",
   "note",
 ] as const satisfies readonly CanvasNodeType[];
@@ -130,6 +138,21 @@ const Handle = z
   .string()
   .max(200)
   .transform((h) => h.replace(/[^\p{L}\p{N}_-]/gu, "").slice(0, 60) || undefined);
+
+/** A Layout node's draft: up to 64 boxes with their words clamped, fractions on the canvas (readLayout keeps the rest). */
+const LayoutData = z
+  .unknown()
+  .transform((v) => readLayout(v) ?? undefined)
+  .refine((d) => !d || d.items.length <= LAYOUT_NODE_LIMITS.boxes, `A layout holds up to ${LAYOUT_NODE_LIMITS.boxes} boxes`)
+  .transform((d) =>
+    d
+      ? {
+          ...d,
+          summary: { ...d.summary, caption: d.summary.caption.slice(0, TEXT_MAX), meta: d.summary.meta.slice(0, 20).map((m) => m.slice(0, 80)) },
+          items: d.items.map((it) => ({ ...it, caption: it.caption.slice(0, 2000), ...(it.text !== undefined && { text: it.text.slice(0, 2000) }) })),
+        }
+      : undefined,
+  );
 
 const NodeData = z.object({
   label: clamped(80).optional(),
@@ -169,6 +192,13 @@ const NodeData = z.object({
   rows: z.array(z.array(z.string().max(TABLE_LIMITS.cell)).max(TABLE_LIMITS.columns)).max(TABLE_LIMITS.rows * 2).optional(),
   // Translate (video) on the open engine: the dub it started in Translate & dub.
   dubId: z.string().max(40).optional(),
+  // Layout: its boxes (read as a Fuobe draft, anything else dropped).
+  layout: LayoutData.optional(),
+  // Camera path (N7-7): a preset, an exact orbit or keys; Fly around: the clip's length.
+  pathPreset: z.string().max(40).optional(),
+  orbit: ExactOrbitSchema.optional(),
+  keys: z.array(CameraKeySchema).min(1).max(MAX_KEYS).optional(),
+  duration: z.number().min(1).max(15).optional(),
 });
 
 const Num = z.number().finite();
@@ -377,7 +407,7 @@ export function createCanvas(input: CreateCanvasInput = {}): Canvas {
   // A locked install only ever gets the variant it can run.
   const mode = engineMode();
   const engine: Engine = mode === "both" ? (input.engine ?? "cloud") : mode;
-  const graph = template ? template.build(engine) : (input.graph ?? EMPTY_GRAPH);
+  const graph = template ? template.build(engine, (id) => isOffered(id, engine)) : (input.graph ?? EMPTY_GRAPH);
   const pages = !template && input.pages?.length ? input.pages : [{ id: FIRST_PAGE_ID, name: pageName(0), graph: cleanGraph(graph) }];
   const now = Date.now();
   const row: Row = {

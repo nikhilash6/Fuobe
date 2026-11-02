@@ -130,6 +130,23 @@ describe("hosted runs on", () => {
     expect((await visitorStatus(auth.accountById(a)!)).viewer.hosted).toBeUndefined();
   });
 
+  it("QMA · 96 views (an edit with its own LoRA in the recipe) plans and prices on this install's GPU", async () => {
+    process.env.FUOBE_BILLING_URL = fake.url;
+    process.env.FUOBE_BILLING_TOKEN = "test-billing-token";
+    const up = (await (await upload(TINY_PNG, "image/png", "product.png")).json()) as { url: string };
+    const { decidePlace, poolQuote } = await import("@/server/hosted-run");
+    const { QMA_MODEL } = await import("@/lib/qma");
+    const req = { feature: "image", modelId: QMA_MODEL, op: "edit" as const, prompt: "studio light", inputs: { images: [up.url] }, params: { numOutputs: 1, extra: { horizontal_angle: 180, vertical_angle: 0, zoom: 5 } } };
+    const place = await decidePlace(auth.accountById(a)!, req, undefined);
+    expect(place.kind).toBe("pool");
+    if (place.kind !== "pool") return;
+    expect(place.planned.model.id).toBe(QMA_MODEL);
+    expect(place.planned.route.provider).toBe("comfyui");
+    const quoted = await poolQuote(auth.accountById(a)!, req, undefined);
+    expect(quoted?.planned.model.id).toBe(QMA_MODEL);
+    expect(quoted?.quote).toBeTruthy();
+  });
+
   it("the pool's allow and deny lists, for models and apps", () => {
     expect(poolAllows({ pool: {} }, "m")).toBe(true);
     expect(poolAllows({ pool: { allow: ["m"] } }, "m")).toBe(true);

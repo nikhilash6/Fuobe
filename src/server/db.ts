@@ -605,6 +605,13 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS assets_account ON assets(account_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS assets_rel ON assets(rel_path);
   CREATE INDEX IF NOT EXISTS assets_generation ON assets(generation_id);`,
+  // originals (o/nm10-voice-design): a designed voice on its element (Design a voice): the model, the words, what its clip
+  // says and, once the cloud has cloned it, Qwen3-TTS's embedding file (src/lib/catalog/elements.ts ElementVoice).
+  `ALTER TABLE characters ADD COLUMN voice_json TEXT;`,
+  // originals (o/w2s-w4): a scheduled task can run a saved skill (Skills W4) instead of a request Assist plans: the
+  // skill's name, one set of its inputs as text (a file is its /api/files/… URL) and the file inputs that take the
+  // newest upload of their kind when the run starts. NULL: a request, as before.
+  `ALTER TABLE assist_schedules ADD COLUMN skill_json TEXT;`,
 ];
 
 /**

@@ -93,10 +93,28 @@ const GenerateStepSchema = z.object({
   chain: z.array(ChainSlotSchema).max(RECIPE_LIMITS.steps).optional(),
   request: RequestSchema,
 });
+/** Why a step can't be a saved skill (run_skill): a skill runs its own steps, never another skill or itself. */
+export const NESTED_SKILL = "a skill can't run another skill: put that skill's steps in this one instead";
+/** Tools a recipe's step never calls. */
+const NOT_A_STEP = new Set(["run_skill"]);
+
+/** Whether a recipe.json's text has a step that runs a skill (checked before its shape, so an upload is refused by name). */
+export function runsASkill(text: string): boolean {
+  try {
+    const json = JSON.parse(text.replace(/^\uFEFF/, "")) as { steps?: unknown };
+    return Array.isArray(json?.steps) && json.steps.some((s) => !!s && typeof s === "object" && NOT_A_STEP.has(String((s as { tool?: unknown }).tool)));
+  } catch {
+    return false;
+  }
+}
+
 const ToolStepSchema = z.object({
   ...StepBase,
   kind: z.literal("tool"),
-  tool: z.string().regex(/^[a-z][a-z0-9_]{1,40}$/, "an Assist tool's name, e.g. dub_video"),
+  tool: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{1,40}$/, "an Assist tool's name, e.g. dub_video")
+    .refine((t) => !NOT_A_STEP.has(t), NESTED_SKILL),
   input: z.record(z.string(), z.unknown()),
 });
 const StepSchema = z.discriminatedUnion("kind", [GenerateStepSchema, ToolStepSchema]);

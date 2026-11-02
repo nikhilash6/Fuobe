@@ -8,12 +8,14 @@ import {
   ASSIST_EFFORTS,
   CLAUDE_MODELS,
   contextUpdate,
+  DECLINED,
   DEFAULT_CLAUDE_MODEL,
   DEFAULT_EFFORT,
   factMap,
   guessCategory,
   normalizeAgent,
   renderContext,
+  REPLIED_INSTEAD,
   slashSkills,
   threadTitle,
   type AssistAgent,
@@ -31,6 +33,7 @@ import {
 import { freePick, manualGroups, smartPick, toOption, choices, type Choice, type ConnectedProvider, type World } from "@/lib/assist-models";
 import { getLlmModel, getLlmProvider, LLM_REGISTRY_CHECKED } from "@/lib/catalog/llm-providers";
 import type { Engine, Generation, MediaKind } from "@/lib/catalog/types";
+import { isMediaType, RECIPE_LIMITS, type Recipe } from "@/lib/recipe";
 import { db } from "../db";
 import { getGeneration } from "../generations";
 import { activeLocal, aiHelper, chatLocal, emptyReply, localLabel, localProblem, localSoon, pinnedKind, toChatMessages, type Ready } from "../llm";
@@ -40,7 +43,7 @@ import { toHostedMessages } from "../llm/hosted-messages";
 import type { Replay } from "../llm/types";
 import { offeredDefault } from "../model-access";
 import { engineMode, getSetting } from "../settings";
-import { getSkill } from "../skills";
+import { getSkill, skillRecipe } from "../skills";
 import { readRef } from "../storage";
 import { spendOf, withinCap } from "@/lib/assist-schedule";
 import { activeConnectors, connectorName, MCP_BETA, mcpParams, withoutMissingServers, type Connector } from "./connectors";
@@ -76,6 +79,8 @@ export interface ModelRequest {
   threadId?: string;
   /** Skills loaded in the chat (the offline planner uses their hints). */
   skills?: SkillMeta[];
+  /** The skills the person's latest message named (/name): the offline planner runs one of those, never an earlier one. */
+  named?: string[];
   /** Custom MCP connectors (Settings → Assist): Claude gets them through the MCP connector; other agents can't use them. */
   connectors?: Connector[];
 }
@@ -700,13 +705,14 @@ How you work:
 - Call generate (or create_storyboard) directly. The app shows the user a plan card with the cost and runs it when they approve — never ask "shall I go ahead?" in text.
 - For multi-step work (an image, then animate it; transcribe, translate, then voice it), put the steps in one generate call and set "after" on each later job: it starts by itself when the earlier job finishes and gets its result as input. When you need to judge a result before deciding the next step, wait with check_generations instead (look=true to see images) and pass the output URL into the next call.
 - Besides images, video and audio, models can transcribe speech, translate or write text (scripts, captions, ad copy), split images into layers, separate voice from background, trim, caption or re-sound clips, and turn an image into a 3D model: search_models with kind "text" or "model3d" finds the text and 3D ones.
-- Whole studio jobs have their own tools, and each job opens in its studio, where the user can carry on: split_layers (a Layers project), restyle_footage (a Shorts Studio session), dub_video (a dub the user reviews line by line in Translate & dub), faceless_episode (a Faceless Studio episode), create_ads (an Ads Studio batch), add_captions (the Captions editor), restore_video (old or black-and-white footage restored and colourised, in Restore & colourise), blockout_film (a grey-box 3D blockout from Blender or any 3D app filmed from reference stills and timed beats, as Cinema's Blockout does; in the Library) and katana (a reference edit — a 1–30 s video — rebuilt shot for shot with the user's own subject from 1–5 photos, when they want "this edit, but with me / my product"). Use them instead of chaining those steps by hand; once one starts, say which studio it's in (the chat links to it).
+- Whole studio jobs have their own tools, and each job opens in its studio, where the user can carry on: split_layers (a Layers project), restyle_footage (a Shorts Studio session), dub_video (a dub the user reviews line by line in Translate & dub), faceless_episode (a Faceless Studio episode), create_ads (an Ads Studio batch), add_captions (the Captions editor), restore_video (old or black-and-white footage restored and colourised, in Restore & colourise), remove_person (a person removed from a video and the scene rebuilt behind them, on the user's own GPU, in Remove a person), blockout_film (a grey-box 3D blockout from Blender or any 3D app filmed from reference stills and timed beats, as Cinema's Blockout does; in the Library), fly_around (a still filmed along an exact camera path: an orbit by its degrees, direction, tilt and pulse, or a ready move; in the Library) and katana (a reference edit — a 1–30 s video — rebuilt shot for shot with the user's own subject from 1–5 photos, when they want "this edit, but with me / my product"). Use them instead of chaining those steps by hand; once one starts, say which studio it's in (the chat links to it).
 - Use the user's files by the URLs listed in their message. Earlier outputs are found with list_recent. Saved characters and products are Elements: check list_elements and write their @handle in prompts.
 - Results show up in the chat by themselves, so don't repeat URLs back. After starting jobs, say briefly what's coming; after they finish, give a short take and suggest a next step.
 - Be brief and friendly. Plain sentences, no headings. Prices are estimates in USD; open-source models run free on the user's own GPU.
 
 Skills, memory and projects (your context below lists them):
 - Skills are playbooks for whole kinds of jobs. When the request matches one under "Skills you can load", call load_skill with its name before planning, then follow it. A message that starts with /name has already loaded that skill. Follow every skill under "Skills in use".
+- A skill marked "runs by itself" is a saved recipe: when one fits the request, call run_skill with its name and values for its inputs (files from the user's attachments, words from their message) instead of planning the steps again. Ask only for a required input you can't fill.
 - Memory is what you know about the user. Follow it without mentioning it. When the user states something lasting — a preference, their style, a convention, their setup, a fix that worked — save it with remember: one short sentence, no secrets, nothing about only the current job. Correct an outdated memory with remember and its id as "replaces".
 - In a project, follow its instructions. Its sources are listed with ids: read one in full with read_source when it matters; image, video and audio sources are inputs by URL.
 - "Context update" messages from the system later in the chat replace the matching parts of your context.`;
@@ -829,7 +835,7 @@ export const local: ModelCall = async ({ system, messages, tools, settings }) =>
 };
 
 /** A rule-based planner with the same shape as a model reply, for installs without an LLM. */
-export const offline: ModelCall = async ({ messages, ctx, skills }) => {
+export const offline: ModelCall = async ({ messages, ctx, skills, named }) => {
   // Context updates (system messages) aren't the user's words.
   const last = messages.findLast((m) => m.role !== "system");
   const blocks = last && typeof last.content !== "string" ? last.content : [];
@@ -870,6 +876,18 @@ export const offline: ModelCall = async ({ messages, ctx, skills }) => {
     if (stills.length) return reply([text(`Pick a number from 1 to ${stills.length}.`)], "end_turn");
     // No stills in this chat: read it as a new request.
   }
+  // A skill this message named that runs by itself (the last one named): its inputs filled from the message, one
+  // run_skill card. A skill loaded earlier in the chat stays a hint, so a new request isn't read as its inputs.
+  for (const s of (skills ?? []).filter((k) => named?.includes(k.name)).reverse()) {
+    const recipe = (s as { recipe?: boolean }).recipe ? skillRecipe(s.name) : null;
+    if (!recipe) continue;
+    const r = offlineSkillRun(said, s.name, s.title, recipe);
+    if (!("tool" in r)) return reply([text(r.say)], "end_turn");
+    return reply(
+      [text(r.say), { type: "tool_use", id: `toolu_offline_${nanoid(10)}`, name: r.tool, input: r.input, caller: { type: "direct" } } as unknown as Anthropic.Beta.BetaToolUseBlock],
+      "tool_use",
+    );
+  }
   const hint = skills?.find((s) => s.offline)?.offline;
   const plan = offlinePlan(said, ctx.engine, hint);
   if (!plan) return reply([text("Tell me what to make — an image, a video, a voice-over or a storyboard — and attach any photos to use.")], "end_turn");
@@ -879,6 +897,57 @@ export const offline: ModelCall = async ({ messages, ctx, skills }) => {
     "tool_use",
   );
 };
+
+const TYPE_NAMES: Record<string, string> = { image: "an image", video: "a video", audio: "an audio file", text: "words", number: "a number", choice: "a choice", element: "an element" };
+
+/**
+ * A saved skill that runs by itself, from a message (no LLM): its media inputs from the attached files by kind and
+ * order, its first text input from the words, the rest from their defaults or the values it was made with. A required
+ * input still empty (a file that wasn't attached) is asked for by name instead.
+ */
+export function offlineSkillRun(message: string, name: string, title: string, recipe: Recipe): { tool: "run_skill"; input: Record<string, unknown>; say: string } | { say: string } {
+  const [body, attached = ""] = message.split(/\n\nAttached files[^\n]*\n/);
+  const files = [...attached.matchAll(/^- (image|video|audio|text|model3d) \d+: (\S+)$/gm)].map((m) => ({ kind: m[1], url: m[2] }));
+  // A lone "/name" (with files) gets words written for it: those aren't the person's.
+  const words = /^Use the .+ skills?(?: with the attached files)?\.$/.test(body.trim()) ? "" : body.trim();
+  const values: Record<string, string | number> = {};
+  const taken = new Set<number>();
+  let wordsUsed = false;
+  const filled: string[] = [];
+  for (const p of recipe.params) {
+    if (isMediaType(p.type)) {
+      const i = files.findIndex((f, k) => !taken.has(k) && f.kind === p.type);
+      if (i >= 0) {
+        taken.add(i);
+        values[p.id] = files[i].url;
+        filled.push(`your ${p.type}`);
+        continue;
+      }
+      // A file the person didn't attach is theirs to give: only a default stands in, never the one it was made with.
+      if (p.default !== undefined && p.default !== "") values[p.id] = p.default;
+      continue;
+    }
+    if (p.type === "text" && !wordsUsed && words) {
+      wordsUsed = true;
+      values[p.id] = words.slice(0, p.max ?? RECIPE_LIMITS.text);
+      filled.push(`“${words.length > 60 ? `${words.slice(0, 59).trimEnd()}…` : words}”`);
+      continue;
+    }
+    const v = p.default ?? p.example;
+    if (v !== undefined && v !== null && v !== "") values[p.id] = v;
+  }
+  const missing = recipe.params.filter((p) => p.required && values[p.id] === undefined);
+  if (missing.length) {
+    const need = missing.map((p) => `${p.label} (${TYPE_NAMES[p.type] ?? p.type})`);
+    const media = missing.some((p) => isMediaType(p.type));
+    return { say: `${title} needs ${need.length > 1 ? `${need.slice(0, -1).join(", ")} and ${need.at(-1)}` : need[0]}. ${media ? "Attach it and send /" + name + " again." : `Send /${name} with it.`}` };
+  }
+  return {
+    tool: "run_skill",
+    input: { name, values },
+    say: `I'll run your ${title} skill${filled.length ? ` with ${filled.join(" and ")}` : ""}: the same steps it was saved with, priced below.`,
+  };
+}
 
 /** Under every offline plan: the rule-based planner is a fallback, not the assistant. */
 export const OFFLINE_NOTE = "Offline planner — connect a model in Settings → AI helper (Anthropic, OpenAI, Google, OpenRouter… or a local model) for better plans.";
@@ -1245,6 +1314,9 @@ function toolCtx(s: State): ToolContext {
   };
 }
 
+/** A call's generations remember the call (Save as skill matches each call to what it made, whatever its result says). */
+const madeBy = (it: AssistItem, use: string): AssistItem => (it.role === "generations" ? { ...it, use } : it);
+
 async function runTool(name: string, input: unknown, ctx: ToolContext): Promise<{ result: Omit<ToolResult, "tool_use_id">; items: AssistItem[] }> {
   const out = await executeTool(name, input, ctx);
   return { result: { type: "tool_result", content: out.content, ...(out.isError && { is_error: true }) }, items: out.items ?? [] };
@@ -1298,6 +1370,7 @@ async function step(s: State, model: ModelCall): Promise<"continue" | "stop"> {
   const connectors = chatConnectors(s);
   const { system, update, sent } = contextFor(s, connectors);
   const active = s.ext.skills.map((n) => getSkill(n)).filter((x): x is NonNullable<typeof x> => !!x);
+  const latest = s.thread.items.findLast((i) => i.role === "user");
   const res = await model({
     system,
     messages: update ? [...s.messages, update] : s.messages,
@@ -1306,6 +1379,7 @@ async function step(s: State, model: ModelCall): Promise<"continue" | "stop"> {
     settings: { model: s.ext.model, effort: s.ext.effort, provider: s.ext.provider },
     threadId: s.thread.id,
     skills: active,
+    named: latest?.role === "user" ? (latest.skills ?? []) : [],
     ...(connectors.length && { connectors }),
   });
 
@@ -1370,7 +1444,7 @@ async function step(s: State, model: ModelCall): Promise<"continue" | "stop"> {
       }
       if (ask) {
         // Malformed arguments (common from small local models) go straight back as an error the model can fix, not onto an approval card.
-        const invalid = validateInput(u.name, u.input);
+        const invalid = validateInput(u.name, u.input, ctx);
         if (invalid) {
           results.push({ type: "tool_result", tool_use_id: u.id, is_error: true, content: invalid });
           continue;
@@ -1382,7 +1456,7 @@ async function step(s: State, model: ModelCall): Promise<"continue" | "stop"> {
     const { result, items } = await runTool(u.name, u.input, ctx);
     results.push({ ...result, tool_use_id: u.id });
     if (price && !result.is_error) s.ext.spentUsd = Math.round((s.ext.spentUsd + price) * 1000) / 1000;
-    for (const it of items) push(s, it);
+    for (const it of items) push(s, madeBy(it, u.id));
   }
   const order = uses.map((u) => u.id);
   if (gated.length) {
@@ -1500,7 +1574,7 @@ export function addMessage(id: string, text: string, attachments: string[] = [])
   // The first message names the chat, unless it was started with a name (a scheduled run's).
   if (!s.thread.items.some((i) => i.role === "user") && s.thread.title === "New chat") s.thread.title = threadTitle(slash.text || titles.join(", ") || text);
   // Tool results first: they answer the assistant's last turn.
-  const results = s.pending ? decline(s, "The user replied with new instructions instead of approving; follow them.") : [];
+  const results = s.pending ? decline(s, REPLIED_INSTEAD) : [];
   if (!results.length) closeDanglingToolUses(s.messages);
   appendUser(s.messages, [...results, ...userBlocks(words, attachments)]);
   push(s, { role: "user", text: slash.skills.length ? slash.text : text, ...(attachments.length && { attachments }), ...(slash.skills.length && { skills: slash.skills }) });
@@ -1518,7 +1592,7 @@ function settle(s: State, approved: boolean): Pending {
   return p;
 }
 
-function decline(s: State, why = "The user declined this plan. Ask what they'd like to change."): ToolResult[] {
+function decline(s: State, why = DECLINED): ToolResult[] {
   const p = settle(s, false);
   return ordered([...p.results, ...p.gated.map((g) => ({ type: "tool_result" as const, tool_use_id: g.id, is_error: true, content: why }))], p.order);
 }
@@ -1529,7 +1603,7 @@ async function runApproved(s: State, p: Pending): Promise<ToolResult[]> {
   for (const g of p.gated) {
     const { result, items } = await runTool(g.name, g.input, ctx);
     results.push({ ...result, tool_use_id: g.id });
-    for (const it of items) push(s, it);
+    for (const it of items) push(s, madeBy(it, g.id));
   }
   return ordered(results, p.order);
 }

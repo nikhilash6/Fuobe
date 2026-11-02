@@ -92,6 +92,13 @@ function Row({ row, owner }: { row: StudioRow; owner: boolean }) {
             {stateLine(t)}
             {(t.state === "almost" || t.state === "setup") && t.downloadBytes > 0 ? ` · about ${Math.max(1, Math.ceil(t.downloadBytes / 100e6 / 60))}–${Math.max(1, Math.ceil(t.downloadBytes / 25e6 / 60))} min` : ""}
           </p>
+          {row.gpuTier && (
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              {row.gpuTier.label === "Standard" ? "" : t.state === "ready" ? "Ready on this GPU: " : "On this GPU: "}
+              {row.gpuTier.label === "Standard" ? "" : <span className="font-medium text-foreground">{row.gpuTier.label}</span>}
+              {row.gpuTier.note ? `${row.gpuTier.label === "Standard" ? "" : " · "}${row.gpuTier.note}` : ""}
+            </p>
+          )}
           {row.others.length > 0 && t.state !== "ready" && (
             <p className="mt-0.5 flex items-center gap-1 text-[12px] text-muted-foreground">
               <ChevronRight aria-hidden className="size-3" />
