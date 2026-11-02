@@ -77,11 +77,11 @@ export function LiveEditPanel({ image, text, onUse, onClose }: { image?: string;
   const live = useLiveTransport();
   if (live.s === "ready") return <LiveEditor variant="embedded" transport={live.transport} image={fileParam(image ?? null)} text={text} from="edit" canSave={live.owner} onUse={onUse} onClose={onClose} />;
   return (
-    <div className="grid h-full place-items-center rounded-2xl border p-4" data-live-panel>
+    <div className="grid h-full place-items-center rounded-2xl border p-2 sm:p-4" data-live-panel>
       {live.s === "loading" ? (
         <span className="text-[13px] text-muted-foreground">Starting Live edit…</span>
       ) : (
-        <div className="grid w-full max-w-3xl items-center gap-5 md:grid-cols-[1.3fr_1fr]">
+        <div className="grid w-full max-w-5xl items-center gap-5 md:grid-cols-[1.3fr_1fr]">
           <LiveDemo className="aspect-[4/3] w-full" />
           <div>
             <p className="font-heading text-[24px] leading-tight">Change it as you type</p>
@@ -142,7 +142,7 @@ function LiveShowcase({ kind }: { kind: "guest" | "connect" | "unsupported" }) {
         <div className="max-w-md">
           <p className="font-heading text-[34px] leading-[1.08] text-balance sm:text-[40px]">Change a picture as you type</p>
           <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground text-pretty">
-            Type a change and the picture follows in under a second. Press Enter to keep it, then type the next. Every kept step is a lossless full-size master, so nothing blurs, however many changes you stack.
+            Type a change and watch the picture follow. Press Enter to keep it, then type the next. Every kept step is a lossless full-size master, so nothing blurs, however many changes you stack.
           </p>
           <ul className="mt-4 space-y-1.5 text-[13.5px]">
             {["Live frames as you type, on your own GPU", "Keep, undo and redo every step", "Paint a region to change only that", "Compare with the step before or the original"].map((t) => (
@@ -186,7 +186,7 @@ function LiveShowcase({ kind }: { kind: "guest" | "connect" | "unsupported" }) {
             )}
           </div>
           <p className="mt-4 text-[12px] text-muted-foreground">
-            Qwen-Image 2.1 with the DMD2 2-step LoRA · non-commercial weights ·{" "}
+            Runs on your own GPU ·{" "}
             <Link href="/settings/about" className="underline-offset-2 hover:underline">
               licence
             </Link>
