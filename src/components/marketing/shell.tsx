@@ -8,6 +8,7 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine } from "@/lib/api";
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { isPlainClick, useTappedTab } from "@/lib/use-tapped-tab";
 
 export type SuiteTab = "studio" | "click" | "ads" | "multiplier";
 
@@ -38,6 +39,10 @@ export function MarketingHeader({
   selfHostedOnly?: boolean;
 }) {
   const nav = useRef<HTMLElement>(null);
+  // Each tool's page draws this header: the tab tapped here is the current one from the next frame on, until the new page
+  // (with its own header) replaces this one.
+  const [tapped, tap] = useTappedTab<SuiteTab>(active);
+  const current = tapped ?? active;
   // On a phone the tabs scroll sideways: bring the current one into view.
   useEffect(() => {
     const el = nav.current?.querySelector<HTMLElement>('[aria-current="page"]');
@@ -60,10 +65,11 @@ export function MarketingHeader({
           <Link
             key={t.id}
             href={t.href}
-            aria-current={t.id === active ? "page" : undefined}
+            aria-current={t.id === current ? "page" : undefined}
+            onClick={(e) => isPlainClick(e) && tap(t.id)}
             className={cn(
               "inline-flex h-9 shrink-0 items-center gap-1.5 border-b-2 border-transparent px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
-              t.id === active && "border-primary text-foreground",
+              t.id === current && "border-primary text-foreground",
             )}
           >
             <t.icon className="size-3.5" />

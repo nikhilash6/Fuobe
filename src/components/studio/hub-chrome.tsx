@@ -1,0 +1,165 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { PrefetchOptions } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { EngineSwitch } from "@/components/studio/engine-switch";
+import { useEngine, useLikelyVisitor } from "@/lib/api";
+import { HUB_MODES, HUB_TITLE, hubOfPath, modeHref, modeOfPath, type HubKind } from "@/lib/hubs";
+import { cn } from "@/lib/utils";
+import { isPlainClick, useTappedTab } from "@/lib/use-tapped-tab";
+import { whenIdle } from "@/lib/when-idle";
+import { useEdgeFade } from "./use-edge-fade";
+
+/**
+ * The frame of a hub (Audio, Video tools, Upscale): the sticky title bar and the mode tabs live in the hub's layout, shared
+ * by /<hub> and every /<hub>/<mode>, so they stay on screen while a tab's page loads ("layouts preserve state, remain
+ * interactive, and do not rerender"). Each mode's page draws only its body, and puts its own header controls (the GPU
+ * pill, a tool's extra buttons) into the bar with <HubHeaderExtras>.
+ */
+
+const HubCtx = createContext<{ slot: HTMLElement | null } | null>(null);
+
+/** Inside a hub's frame: the page leaves the title bar and tabs to it. */
+export function useInHub(): boolean {
+  return useContext(HubCtx) !== null;
+}
+
+/** A page's own header controls, shown in the hub's title bar left of the engine switch. */
+export function HubHeaderExtras({ children }: { children: React.ReactNode }) {
+  const slot = useContext(HubCtx)?.slot;
+  return slot ? createPortal(children, slot) : null;
+}
+
+/** `<Link prefetch={true}>` for a link that isn't on screen: the per-link prefetch of a whole (prerendered) mode page. */
+const FULL = { kind: "full" } as unknown as PrefetchOptions;
+
+/**
+ * The hub's mode tabs: underline tabs on their own row under the title; they scroll sideways (with faded edges) on
+ * phones. Each mode is its own history entry, so Back returns to the mode before.
+ *
+ * Instant by design: the tapped tab is marked at once (before the route commits), every tab prefetches its whole mode
+ * page (each is prerendered, so the prefetch comes from the static cache), and the tabs a phone's row scrolls out of
+ * view are prefetched too once the page is idle: a tap then renders the mode from the client cache, with no blank frame.
+ */
+function HubTabs({ kind, pathname, onActive }: { kind: HubKind; pathname: string | null; onActive?: (mode: string) => void }) {
+  const router = useRouter();
+  const [ref, fade] = useEdgeFade<HTMLDivElement>();
+  const activeRef = useRef<HTMLAnchorElement>(null);
+  const visitor = useLikelyVisitor();
+  // The tab just tapped: the current one from the next frame on, until the route moves (then the path says).
+  const [tapped, tap] = useTappedTab<string>(pathname);
+  const shown = pathname ? modeOfPath(kind, pathname) : undefined;
+  const active = tapped ?? shown;
+  const modes = visitor ? HUB_MODES[kind].filter((m) => !m.ownerOnly || m.id === shown) : HUB_MODES[kind];
+
+  useEffect(() => {
+    if (active) onActive?.(active);
+  }, [active, onActive]);
+
+  // Keep the selected tab in view when the row scrolls (only the row: the page stays put).
+  useEffect(() => {
+    const el = activeRef.current;
+    const row = ref.current;
+    if (!el || !row) return;
+    const left = el.offsetLeft - row.offsetLeft;
+    if (left < row.scrollLeft || left + el.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left - 12;
+  }, [active, ref]);
+
+  // Every mode, also the ones scrolled out of the row, once the page is idle (a tab on screen already prefetches itself).
+  // Once per hub and audience: the client cache keeps what was fetched.
+  const hrefs = modes.map((m) => modeHref(kind, m.id)).join(" ");
+  useEffect(() => whenIdle(() => hrefs.split(" ").forEach((href) => router.prefetch(href, FULL))), [hrefs, router]);
+
+  return (
+    <nav aria-label="Modes" className="border-b">
+      <div ref={ref} style={fade} className="scrollbar-none flex gap-1 overflow-x-auto px-3 sm:px-6">
+        {modes.map((m) => {
+          const on = m.id === active;
+          const href = modeHref(kind, m.id);
+          return (
+            <Link
+              key={m.id}
+              ref={on ? activeRef : undefined}
+              href={href}
+              prefetch
+              scroll={false}
+              data-mode={m.id}
+              onTouchStart={() => router.prefetch(href, FULL)}
+              // A new tab or window (modifier, middle button) leaves this page as it is.
+              onClick={(e) => isPlainClick(e) && tap(m.id)}
+              aria-current={on ? "page" : undefined}
+              className={cn(
+                "relative flex h-10 shrink-0 items-center rounded-md px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                "after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full focus-visible:after:bg-ring",
+                on && "text-foreground after:bg-foreground",
+              )}
+            >
+              {m.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+/** Reads the path (runtime data while a route prerenders) inside Suspense; the fallback is the same row, unselected. */
+function PathTabs({ kind, onActive }: { kind: HubKind; onActive: (mode: string) => void }) {
+  const pathname = usePathname();
+  return <HubTabs kind={kind} pathname={pathname} onActive={onActive} />;
+}
+
+function HubEngine({ kind, mode }: { kind: HubKind; mode: string | undefined }) {
+  const [engine, setEngine] = useEngine();
+  const selfHostedOnly = !!HUB_MODES[kind].find((m) => m.id === mode)?.selfHostedOnly;
+  return <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly={selfHostedOnly} />;
+}
+
+/** The title bar and the tabs of a hub. `children`: the mode's page (or, while a route loads, its skeleton). */
+export function HubFrame({ kind, children }: { kind: HubKind; children: React.ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const [mode, setMode] = useState<string | undefined>(undefined);
+  const ctx = useMemo(() => ({ slot }), [slot]);
+  return (
+    <div className="flex min-h-svh min-w-0 flex-col" data-hub={kind}>
+      <div className="sticky top-0 z-20 bg-background/85 backdrop-blur" data-hub-chrome>
+        <header className="flex h-14 items-center gap-2 px-3 sm:px-6">
+          <SidebarTrigger className="md:hidden" />
+          <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{HUB_TITLE[kind]}</h1>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <div ref={setSlot} className="contents" />
+            <HubEngine kind={kind} mode={mode} />
+          </div>
+        </header>
+        <Suspense fallback={<HubTabs kind={kind} pathname={null} />}>
+          <PathTabs kind={kind} onActive={setMode} />
+        </Suspense>
+      </div>
+      <HubCtx.Provider value={ctx}>
+        <div className="flex min-w-0 flex-1 flex-col" data-hub-body>{children}</div>
+      </HubCtx.Provider>
+    </div>
+  );
+}
+
+function PathSkeleton({ generic, hubBody }: { generic: React.ReactNode; hubBody: React.ReactNode }) {
+  const hub = hubOfPath(usePathname());
+  return hub ? <HubFrame kind={hub}>{hubBody}</HubFrame> : generic;
+}
+
+/**
+ * The studio's route skeleton (loading.tsx), for a page whose shell wasn't prefetched yet: on the way into a hub it is
+ * the hub's real title bar and tabs (the new mode already marked) over the body's skeleton, so nothing moves when the
+ * page arrives; elsewhere the generic one.
+ */
+export function StudioRouteSkeleton({ generic, hubBody }: { generic: React.ReactNode; hubBody: React.ReactNode }) {
+  return (
+    <Suspense fallback={generic}>
+      <PathSkeleton generic={generic} hubBody={hubBody} />
+    </Suspense>
+  );
+}

@@ -41,6 +41,7 @@ import { ComposerBridgeCtx, useComposerBridge, type ComposerBridge } from "./att
 import { CatalogProvider, useCatalog } from "./catalog";
 import { Composer } from "./composer";
 import { EngineSwitch } from "./engine-switch";
+import { HubHeaderExtras, useInHub } from "./hub-chrome";
 import { Feed } from "./feed";
 import type { SlotValue } from "./media-slot";
 import { PresetUrlCtx, StartRequestCtx, StudioProvider, usePresetUrl, useStudio, useStudioActions, type Draft, type StudioConfig } from "./studio-context";
@@ -408,9 +409,20 @@ function StudioGpuPill() {
   return <HeaderPill badge={badge} gpu={badges.gpu} compact onOpen={() => openGpuSetup({ ref })} />;
 }
 
-/** Sticky page header (title + engine), with an optional row of mode tabs under it. */
+/**
+ * Sticky page header (title + engine), with an optional row of mode tabs under it. Inside a hub (Audio, Upscale) the hub's
+ * layout draws the bar, the tabs and the engine switch, so they stay put across modes: the studio adds only its own controls.
+ */
 function StudioHeader({ title, header, tabs }: { title: string; header?: React.ReactNode; tabs?: React.ReactNode }) {
   const [engine, setEngine] = useEngine();
+  const inHub = useInHub();
+  if (inHub)
+    return (
+      <HubHeaderExtras>
+        {header}
+        <StudioGpuPill />
+      </HubHeaderExtras>
+    );
   return (
     <div className="sticky top-0 z-20 bg-background/85 backdrop-blur">
       <header className="flex h-14 items-center gap-2 px-3 sm:px-6">
@@ -445,6 +457,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
   const offscreen = useOffscreenResults(feed.data);
   const catalog = useCatalog();
   const [live, setLive] = useState(false);
+  const inHub = useInHub();
 
   const reuse = useCallback(
     (g: Generation) => {
@@ -462,7 +475,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
   return (
     <div
       data-studio
-      className="relative flex min-h-svh min-w-0 flex-col"
+      className={cn("relative flex min-w-0 flex-col", inHub ? "flex-1" : "min-h-svh")}
       onDragEnter={(e) => {
         if (![...e.dataTransfer.types].includes("Files")) return;
         dragDepth.current++;

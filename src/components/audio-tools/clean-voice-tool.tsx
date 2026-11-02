@@ -197,7 +197,7 @@ function Row({ label, children, hint }: { label: string; children: React.ReactNo
 const cleanOf = (g?: Generation | null): OutputFile | undefined => g?.outputs.find((o) => o.kind === "audio");
 const reportOf = (g?: Generation | null): string | undefined => g?.outputs.find((o) => o.kind === "text")?.text;
 
-export function CleanVoiceTool({ tabs, app }: { tabs?: React.ReactNode; app?: { name: string; description: string } }) {
+export function CleanVoiceTool({ app }: { app?: { name: string; description: string } }) {
   const [engine, setEngine, mode] = useEngine();
   const run = useAudioToolRun();
   const [source, setSource] = useState<Source | null>(null);
@@ -292,7 +292,6 @@ export function CleanVoiceTool({ tabs, app }: { tabs?: React.ReactNode; app?: { 
   return (
     <ToolShell
       title={app ? "Apps" : "Audio"}
-      tabs={tabs}
       header={
         app ? (
           <nav aria-label="Breadcrumb" className="hidden items-center gap-1 text-[13px] text-muted-foreground sm:flex">

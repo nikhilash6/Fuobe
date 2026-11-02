@@ -70,7 +70,7 @@ interface Run {
  * result with a before / after wipe. Long clips are cut into pieces or windows, erased and joined with their
  * own sound (src/lib/catalog/remove-object.ts).
  */
-export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
+export function RemoveObjectTool() {
   const [engine, setEngine, engineMode] = useEngine();
   // Removing an object doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front,
   // and the upload, the mask preview and Remove are off, instead of a run the server refuses.
@@ -239,7 +239,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const preview = useGeneration(previewOf?.id ?? null).data;
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
+    <ToolShell title="Video tools" wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title="Remove anything from a video"

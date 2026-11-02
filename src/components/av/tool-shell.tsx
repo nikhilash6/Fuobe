@@ -2,13 +2,15 @@
 
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { EngineSwitch } from "@/components/studio/engine-switch";
+import { HubHeaderExtras, useInHub } from "@/components/studio/hub-chrome";
 import { useEngine } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
  * The frame of a stand-alone audio/video tool (Translate & dub, Captions, Trim, Katana, Image to 3D,
  * Virality): the sticky header with the title, extra controls and the engine switch, an optional row
- * of hub tabs under it, then the page.
+ * of tabs under it, then the page. Inside a hub (Audio, Video tools) the hub's layout draws the title bar, the tabs and the
+ * engine switch; the tool adds only its own header controls to it.
  */
 export function ToolShell({
   title,
@@ -30,6 +32,15 @@ export function ToolShell({
   wide?: boolean;
 }) {
   const [engine, setEngine] = useEngine();
+  const inHub = useInHub();
+  const body = <div className={cn("mx-auto w-full min-w-0 flex-1 px-3 pb-16 sm:px-6", wide ? "max-w-[1240px]" : "max-w-[1040px]")}>{children}</div>;
+  if (inHub)
+    return (
+      <>
+        {header && <HubHeaderExtras>{header}</HubHeaderExtras>}
+        {body}
+      </>
+    );
   return (
     <div className="flex min-h-svh min-w-0 flex-col">
       <div className="sticky top-0 z-20 bg-background/85 backdrop-blur">
@@ -43,7 +54,7 @@ export function ToolShell({
         </header>
         {tabs}
       </div>
-      <div className={cn("mx-auto w-full min-w-0 flex-1 px-3 pb-16 sm:px-6", wide ? "max-w-[1240px]" : "max-w-[1040px]")}>{children}</div>
+      {body}
     </div>
   );
 }

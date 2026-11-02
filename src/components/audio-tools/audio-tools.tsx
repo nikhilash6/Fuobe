@@ -310,7 +310,7 @@ function Results({ feature, title }: { feature: string; title: string }) {
 }
 
 /** Audio → Loop / extend. */
-export function AudioLoopTool({ tabs }: { tabs?: React.ReactNode }) {
+export function AudioLoopTool() {
   const [engine, setEngine, mode] = useEngine();
   const run = useAudioToolRun();
   const [clip, setClip] = useState<Clip | null>(null);
@@ -334,7 +334,7 @@ export function AudioLoopTool({ tabs }: { tabs?: React.ReactNode }) {
     run.mutate(body!, { onSuccess: () => toast.success("Looping…"), onError: (e) => toastError(e) });
   };
   return (
-    <ToolShell title="Audio" tabs={tabs}>
+    <ToolShell title="Audio">
       {!clip && (
         <ToolHero
           title="Make it as long as you need"
@@ -386,7 +386,7 @@ export function AudioLoopTool({ tabs }: { tabs?: React.ReactNode }) {
 }
 
 /** Audio → Join. */
-export function AudioJoinTool({ tabs }: { tabs?: React.ReactNode }) {
+export function AudioJoinTool() {
   const [engine, setEngine, mode] = useEngine();
   const run = useAudioToolRun();
   const [clips, setClips] = useState<Clip[]>([]);
@@ -424,7 +424,7 @@ export function AudioJoinTool({ tabs }: { tabs?: React.ReactNode }) {
     run.mutate(body!, { onSuccess: () => toast.success("Joining…"), onError: (e) => toastError(e) });
   };
   return (
-    <ToolShell title="Audio" tabs={tabs}>
+    <ToolShell title="Audio">
       {!clips.length && (
         <ToolHero
           title="Join clips into one track"

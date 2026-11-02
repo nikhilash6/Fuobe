@@ -25,7 +25,7 @@ const MIN_LENGTH = 0.5;
  * part (filmstrip, handles, play the selection, typed times); a clip the browser can't decode is
  * trimmed by typed times, with its length read from the file when it says.
  */
-export function TrimTool({ tabs }: { tabs?: React.ReactNode }) {
+export function TrimTool() {
   const [engine] = useEngine();
   const create = useCreateGeneration();
   const results = useGenerations({ features: [TRIM_FEATURE], limit: 24 });
@@ -87,7 +87,7 @@ export function TrimTool({ tabs }: { tabs?: React.ReactNode }) {
   const typed = !!unread && unread.length == null;
   const total = unread?.length ?? length;
   return (
-    <ToolShell title="Video tools" tabs={tabs}>
+    <ToolShell title="Video tools">
       {!video && <ToolHero title="Keep just the part you need" subtitle="Pick where it starts and ends, and the sound comes along." />}
       <div className={cn("mx-auto max-w-[820px] space-y-3", video ? "pt-4" : "mt-8")}>
         <MediaDrop kind="video" value={video} onChange={pick} onFile={(f) => (dropped.current = f)} preview={false} title="Add a video to trim" hint="MP4, MOV or WebM up to 200 MB" compact />

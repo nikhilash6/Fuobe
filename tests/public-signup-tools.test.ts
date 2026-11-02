@@ -299,7 +299,7 @@ describe("Split soundtrack's and Remove dialogue's pages tell a visitor up front
       expect(page).toContain(`const SELF_HOSTED = "${tool} isn't available here";`);
       expect(page).toMatch(/blocker = visitor \? SELF_HOSTED/);
       expect(page).toMatch(/\{visitor && (\( ?)?<SelfHostNote className="mt-3 max-w-xl">\{SELF_HOSTED\}\.<\/SelfHostNote> ?\)?\}/);
-      expect(page).toMatch(/<ToolShell title="[^"]+" tabs=\{tabs\} selfHostedOnly>/);
+      expect(page).toMatch(/<ToolShell title="[^"]+" selfHostedOnly>/);
       expect(page).toMatch(/onUpdate=\{setSource\} disabled=\{visitor\}/);
       // The upload button, From library, the hidden file input and the drop all honour it.
       expect(page.match(/disabled=\{disabled\}/g)?.length).toBe(3);

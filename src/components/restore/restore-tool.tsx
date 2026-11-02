@@ -44,7 +44,7 @@ interface Run {
  * to 4K, deinterlacing and a reference picture; priced before it runs ("Free" on your GPU); the result with a before /
  * after wipe. A clip handed over from the Library or a result arrives as ?video=.
  */
-export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
+export function RestoreTool() {
   const [engine] = useEngine();
   // Guests and free accounts: it plans with the studio's own AI helpers and joins on the server (own-gpu-tool).
   const visitor = useLikelyVisitor();
@@ -146,7 +146,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
   };
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
+    <ToolShell title="Video tools" wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title="Restore & colourise"

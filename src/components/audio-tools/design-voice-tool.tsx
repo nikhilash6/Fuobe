@@ -126,7 +126,7 @@ function Take({ g, index, description, line, canSave }: { g: Generation; index: 
   );
 }
 
-export function DesignVoiceTool({ tabs }: { tabs?: React.ReactNode }) {
+export function DesignVoiceTool() {
   const [engine, setEngine, mode] = useEngine();
   const visitor = useIsVisitor();
   const create = useCreateGeneration();
@@ -171,7 +171,7 @@ export function DesignVoiceTool({ tabs }: { tabs?: React.ReactNode }) {
   };
 
   return (
-    <ToolShell title="Audio" tabs={tabs}>
+    <ToolShell title="Audio">
       <ToolHero title="Design a voice" subtitle="Describe who’s speaking. Hear three takes of your line, then save the one you like as a voice you can use anywhere." />
       <div className="mx-auto mt-8 max-w-[820px] min-w-0 space-y-3">
         <Panel title="The voice">

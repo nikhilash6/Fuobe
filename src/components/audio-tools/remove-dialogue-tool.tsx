@@ -375,7 +375,7 @@ function ResultPanel({
   );
 }
 
-export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
+export function RemoveDialogueTool() {
   const [engine, setEngine, mode] = useEngine();
   // A guest or an account: the run answers own-gpu-tool, so the page says so and the upload and run are off.
   const visitor = useLikelyVisitor();
@@ -467,7 +467,7 @@ export function RemoveDialogueTool({ tabs }: { tabs?: React.ReactNode }) {
         : null;
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} selfHostedOnly>
+    <ToolShell title="Video tools" selfHostedOnly>
       {!source && (
         <ToolHero
           title="Remove dialogue"

@@ -92,7 +92,7 @@ function download(name: string, text: string, type: string) {
 }
 
 /** Captions (Video tools → Captions): transcribe, fix every line, style, burn in — or export .srt / .vtt. */
-export function CaptionsStudio({ tabs }: { tabs?: React.ReactNode }) {
+export function CaptionsStudio() {
   // The last project comes back after a reload (this browser only); a hand-off link wins. Both are read
   // once mounted: on a link from Assist the address only changes as the new page commits, so reading
   // it while rendering would still see /assist.
@@ -105,7 +105,7 @@ export function CaptionsStudio({ tabs }: { tabs?: React.ReactNode }) {
   const video = picked === undefined ? (saved?.video ?? null) : picked;
   const results = useGenerations({ features: ["captions"], kinds: ["video"], limit: 24 });
   return (
-    <ToolShell title="Video tools" tabs={tabs}>
+    <ToolShell title="Video tools">
       {saved === undefined ? null : video && !video.uploading ? (
         <Editor
           key={video.ref}

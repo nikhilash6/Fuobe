@@ -1,4 +1,4 @@
-import { MarketingSkeleton } from "@/components/skeletons";
+import { MarketingSkeleton } from "@/components/marketing/skeletons";
 
 export default function Loading() {
   return <MarketingSkeleton />;

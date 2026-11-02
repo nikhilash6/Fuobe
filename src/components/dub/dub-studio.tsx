@@ -79,7 +79,7 @@ function StageBadge({ stage }: { stage: DubStage }) {
 }
 
 /** Translate & dub (Audio → Translate): a new dub, the dubs in progress and, opened, one dub's review. */
-export function DubStudio({ tabs }: { tabs?: React.ReactNode }) {
+export function DubStudio() {
   const sessions = useDubSessions();
   const [openId, setOpenId] = useState<string | null>(null);
   // Hand-off: /audio/translate?dub=<id> opens that dub (Assist and MCP link the dubs they start).
@@ -99,7 +99,7 @@ export function DubStudio({ tabs }: { tabs?: React.ReactNode }) {
   // A dub removed elsewhere (another tab) just closes.
   const open = sessions.data?.find((s) => s.id === openId);
   return (
-    <ToolShell title="Audio" tabs={tabs} selfHostedOnly>
+    <ToolShell title="Audio" selfHostedOnly>
       {open ? (
         <SessionView key={open.id} s={open} onBack={() => show(null)} />
       ) : openId && sessions.isLoading ? (

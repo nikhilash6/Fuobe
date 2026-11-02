@@ -54,7 +54,7 @@ async function frameDataUrl(blob: Blob | null | undefined): Promise<string | und
  * and a creative direction you write or an LLM writes from the references; priced before it runs ("Free" on your
  * GPU); the result with a before / after wipe.
  */
-export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
+export function EvolutionTool() {
   const [engine] = useEngine();
   // Evolution doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and
   // the upload and Evolve are off, instead of a run the server refuses.
@@ -159,7 +159,7 @@ export function EvolutionTool({ tabs }: { tabs?: React.ReactNode }) {
   };
 
   return (
-    <ToolShell title="Video tools" tabs={tabs} wide selfHostedOnly>
+    <ToolShell title="Video tools" wide selfHostedOnly>
       {!clip && (
         <ToolHero
           title="Take a clip further"
