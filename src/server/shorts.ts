@@ -322,7 +322,8 @@ export interface ShortsEstimate {
   notes: string[];
 }
 
-function notesFor(input: ShortsPlanInput, segments: number): string[] {
+/** `read`: whether the clip's header was read (else its sound is unknown, and a split is planned once it's read). */
+function notesFor(input: ShortsPlanInput, segments: number, read: boolean): string[] {
   const notes: string[] = [];
   const refs = input.look.references?.length ?? 0;
   const original = input.modelId === SHORTS_ORIGINAL;
@@ -336,7 +337,8 @@ function notesFor(input: ShortsPlanInput, segments: number): string[] {
       if (vaceDownsample(fps)) notes.push(`Wan 2.2 Fun VACE works this ${Math.round(fps!)} fps clip at ${Math.round(fps! / (vaceDownsample(fps) + 1))} fps and brings it back to its own rate`);
     } else notes.push("Fuobe Shorts on your GPU renders 480p at 16 fps, 5 s a segment");
   }
-  if (separates(input.engine, input.sound)) notes.push(`Original sound: ${soundLine(input.sound)} — your GPU splits the clip's sound first (free)`);
+  // planStitch splits only a clip that has sound to split.
+  if ((!read || input.source.hasAudio) && separates(input.engine, input.sound)) notes.push(`Original sound: ${soundLine(input.sound)} — your GPU splits the clip's sound first (free)`);
   if (input.engine === "cloud") {
     const { width: w, height: h } = input.source;
     if (!input.reframes && w && h && needsFit(input.source, input.aspectRatio)) notes.push(`Your ${w}×${h} clip is centre-cropped to ${input.aspectRatio} before the restyle`);
@@ -346,11 +348,11 @@ function notesFor(input: ShortsPlanInput, segments: number): string[] {
 
 /** What a session would cost and how it would run, without creating anything. */
 export async function estimateShorts(body: ShortsBody): Promise<ShortsEstimate> {
-  return estimateWith(body, {});
+  return estimateWith(body, {}, false);
 }
 
 /** estimateShorts for a clip whose header was read already (Assist prices with its sound and length). */
-export function estimateWith(body: ShortsBody, info: SourceInfo): ShortsEstimate {
+export function estimateWith(body: ShortsBody, info: SourceInfo, read = true): ShortsEstimate {
   const { input } = planWith(body, info);
   const plan = planShorts(input);
   const all = priceSteps(plan.steps);
@@ -361,7 +363,7 @@ export function estimateWith(body: ShortsBody, info: SourceInfo): ShortsEstimate
     segments: plan.segments.length,
     seconds: Math.round((input.range.end - input.range.start) * 10) / 10,
     refsSent: input.engine === "open" ? Math.min(SHORTS.openReferences, input.look.references?.length ?? 0) : Math.min(input.maxRefs, input.look.references?.length ?? 0),
-    notes: notesFor(input, plan.segments.length),
+    notes: notesFor(input, plan.segments.length, read),
   };
 }
 

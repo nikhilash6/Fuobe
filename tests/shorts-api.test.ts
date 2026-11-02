@@ -273,6 +273,15 @@ describe("Shorts sessions", () => {
     expect(shorts.getSession(s.id).settings.sound).toEqual({ sound: "dialogue-only" });
   });
 
+  it("Original sound: a clip read as silent gets no split, and no note about one", () => {
+    const b = body({ engine: "open", source: { url: clip, duration: 12 }, sound: { sound: "no-dialogue" } }) as never;
+    const note = /your GPU splits the clip's sound first/;
+    expect(shorts.estimateWith(b, { duration: 12, hasAudio: true }).notes.join(" ")).toMatch(note);
+    expect(shorts.estimateWith(b, { duration: 12, hasAudio: false }).notes.join(" ")).not.toMatch(note);
+    // Sound the header reader couldn't find counts as none, as the stitch plans it.
+    expect(shorts.estimateWith(b, { duration: 12 }).notes.join(" ")).not.toMatch(note);
+  });
+
   it("runs the open engine: segment (+ first frame) → Qwen first-frame restyle → Wan VACE → join → soundtrack", async () => {
     const s = await shorts.createSession(body({ engine: "open" }) as never);
     // Fuobe Shorts is the open engine's restyle model (the same graph oss-wan22-vace-restyle ran), on the GPU.

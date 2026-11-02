@@ -178,7 +178,8 @@ async function planInput(body: MixedBody, opts: { probe: boolean }): Promise<{ i
   if (reach) notes.push(...reach.notes);
   const soundProblem = originalSoundProblem(body.engine, body.sound);
   if (soundProblem) throw new ShortsError(soundProblem, 422);
-  const split = separates(body.engine, body.sound) && info.hasAudio !== false;
+  // Sound we couldn't read counts as none (below), so no split is planned for it either; unread (an estimate), it's split once read.
+  const split = separates(body.engine, body.sound) && (opts.probe ? info.hasAudio === true : info.hasAudio !== false);
   if (split) notes.push(`Original sound: ${soundLine(body.sound)} — your GPU splits the clip's sound first (free)`);
   const name = (body.source.name ?? "").replace(/\.[a-z0-9]{2,4}$/i, "").trim().slice(0, 40);
   return {
