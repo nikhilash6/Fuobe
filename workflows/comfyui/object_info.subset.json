@@ -4894,69 +4894,6 @@
     "essentials_category": "Video Tools",
     "has_intermediate_output": false
   },
-  "CropFuobeLive": {
-    "input": {
-      "required": {
-        "image": [
-          "IMAGE"
-        ],
-        "context": [
-          "FLOAT",
-          {
-            "default": 1.6,
-            "min": 1,
-            "max": 4,
-            "step": 0.1
-          }
-        ],
-        "multiple": [
-          "INT",
-          {
-            "default": 32,
-            "min": 8,
-            "max": 128,
-            "step": 8
-          }
-        ]
-      },
-      "optional": {
-        "mask_image": [
-          "IMAGE"
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "image",
-        "context",
-        "multiple"
-      ],
-      "optional": [
-        "mask_image"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "IMAGE",
-      "FUOBE_BOX"
-    ],
-    "output_is_list": [
-      false,
-      false
-    ],
-    "output_name": [
-      "image",
-      "box"
-    ],
-    "name": "CropFuobeLive",
-    "display_name": "Crop Around Region (Fuobe live)",
-    "description": "",
-    "python_module": "custom_nodes.fuobe-live",
-    "category": "fuobe/live",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
   "CropMask": {
     "input": {
       "required": {
@@ -8215,703 +8152,16 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
-  "H3CharacterSwapAssemble": {
-    "input": {
-      "required": {
-        "state": [
-          "H3_RELAY_STATE"
-        ],
-        "shot": [
-          "H3_RELAY_SHOT"
-        ],
-        "filename_prefix": [
-          "STRING",
-          {
-            "default": "character-swap"
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "state",
-        "shot",
-        "filename_prefix"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "IMAGE",
-      "AUDIO",
-      "STRING"
-    ],
-    "output_is_list": [
-      false,
-      false,
-      false
-    ],
-    "output_name": [
-      "generated_frames",
-      "source_audio",
-      "report"
-    ],
-    "name": "H3CharacterSwapAssemble",
-    "display_name": "H3 Relay · Save Video with Source Audio",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap",
-    "output_node": true,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "H3CharacterSwapController": {
-    "input": {
-      "required": {
-        "models": [
-          "H3_RELAY_MODELS"
-        ],
-        "shot": [
-          "H3_RELAY_SHOT"
-        ],
-        "plan": [
-          "H3_RELAY_PLAN"
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "models",
-        "shot",
-        "plan"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "H3_RELAY_STATE",
-      "H3_RELAY_SHOT",
-      "STRING"
-    ],
-    "output_is_list": [
-      false,
-      false,
-      false
-    ],
-    "output_name": [
-      "completed_windows",
-      "shot",
-      "status"
-    ],
-    "name": "H3CharacterSwapController",
-    "display_name": "H3 Relay · Generate Character Swap",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "H3CharacterSwapExpandMask": {
-    "input": {
-      "required": {
-        "masks": [
-          "MASK"
-        ],
-        "images": [
-          "IMAGE"
-        ],
-        "source_frames": [
-          "INT",
-          {
-            "default": 120,
-            "min": 1
-          }
-        ],
-        "expansion_px": [
-          "INT",
-          {
-            "default": 64,
-            "min": 0,
-            "max": 256,
-            "tooltip": "Outward Euclidean radius in prepared-video pixels; identical to the app's mask expansion."
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "masks",
-        "images",
-        "source_frames",
-        "expansion_px"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "MASK",
-      "IMAGE"
-    ],
-    "output_is_list": [
-      false,
-      false
-    ],
-    "output_name": [
-      "generation_mask",
-      "mask_overlay"
-    ],
-    "name": "H3CharacterSwapExpandMask",
-    "display_name": "H3 · Expand Person Mask",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap/masks",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "H3CharacterSwapModels": {
-    "input": {
-      "required": {
-        "model": [
-          "MODEL"
-        ],
-        "clip": [
-          "CLIP"
-        ],
-        "video_vae": [
-          "VAE"
-        ],
-        "audio_vae": [
-          "VAE"
-        ]
-      },
-      "hidden": {
-        "unique_id": "UNIQUE_ID",
-        "execution_prompt": "PROMPT"
-      }
-    },
-    "input_order": {
-      "required": [
-        "model",
-        "clip",
-        "video_vae",
-        "audio_vae"
-      ],
-      "hidden": [
-        "unique_id",
-        "execution_prompt"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "H3_RELAY_MODELS"
-    ],
-    "output_is_list": [
-      false
-    ],
-    "output_name": [
-      "H3_RELAY_MODELS"
-    ],
-    "name": "H3CharacterSwapModels",
-    "display_name": "H3 Relay · Character Swap Models",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "H3CharacterSwapPrepareVideo": {
-    "input": {
-      "required": {
-        "video": [
-          "VIDEO"
-        ],
-        "resolution": [
-          [
-            "480",
-            "768"
-          ],
-          {
-            "default": "480",
-            "tooltip": "480 = up to 0.5 megapixels; 768 = up to 1.0 megapixel. Preserve aligned sources already within the budget; otherwise resize near the source aspect ratio and center-crop to the 32-pixel grid."
-          }
-        ]
-      },
-      "optional": {
-        "duration_seconds": [
-          "FLOAT",
-          {
-            "default": 0,
-            "min": 0,
-            "max": 149.66,
-            "step": 0.1,
-            "tooltip": "0 = full clip. Otherwise trim to the requested duration before padding to the H3 frame grid: 5 seconds = 120 source frames, padded to 124, then trimmed back."
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "video",
-        "resolution"
-      ],
-      "optional": [
-        "duration_seconds"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "IMAGE",
-      "AUDIO",
-      "INT",
-      "INT",
-      "INT",
-      "INT",
-      "FLOAT",
-      "STRING",
-      "VIDEO"
-    ],
-    "output_is_list": [
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      false
-    ],
-    "output_name": [
-      "reference_frames",
-      "source_audio",
-      "width",
-      "height",
-      "h3_length",
-      "source_frames",
-      "fps",
-      "summary",
-      "prepared_video"
-    ],
-    "name": "H3CharacterSwapPrepareVideo",
-    "display_name": "H3 · Prepare Source Video",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "H3CharacterSwapRecoverMasks": {
-    "input": {
-      "required": {
-        "masks": [
-          "MASK"
-        ],
-        "images": [
-          "IMAGE"
-        ],
-        "model": [
-          "MODEL"
-        ],
-        "conditioning": [
-          "CONDITIONING"
-        ],
-        "selection": [
-          "H3_SUBJECT_SELECTION"
-        ],
-        "source_frames": [
-          "INT"
-        ],
-        "recover_empty_frames": [
-          "BOOLEAN",
-          {
-            "default": true
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "masks",
-        "images",
-        "model",
-        "conditioning",
-        "selection",
-        "source_frames",
-        "recover_empty_frames"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "MASK",
-      "STRING"
-    ],
-    "output_is_list": [
-      false,
-      false
-    ],
-    "output_name": [
-      "recovered_masks",
-      "report"
-    ],
-    "name": "H3CharacterSwapRecoverMasks",
-    "display_name": "H3CharacterSwapRecoverMasks",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap/masks",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "H3CharacterSwapSelectSubject": {
-    "input": {
-      "required": {
-        "masks": [
-          "MASK"
-        ],
-        "selection": [
-          [
-            "largest",
-            "leftmost",
-            "rightmost",
-            "index"
-          ]
-        ],
-        "index": [
-          "INT",
-          {
-            "default": 0,
-            "min": 0
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "masks",
-        "selection",
-        "index"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "MASK",
-      "H3_SUBJECT_SELECTION"
-    ],
-    "output_is_list": [
-      false,
-      false
-    ],
-    "output_name": [
-      "selected_mask",
-      "selection"
-    ],
-    "name": "H3CharacterSwapSelectSubject",
-    "display_name": "H3 · Select Person",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap/masks",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "H3CharacterSwapSettings": {
-    "input": {
-      "required": {
-        "prompt": [
-          "STRING",
-          {
-            "multiline": true,
-            "default": "Replace the selected person in <Video 1> with the character in <Picture 1>. Preserve the source performance, scene and audio timing."
-          }
-        ],
-        "seed": [
-          "INT",
-          {
-            "default": 194731,
-            "min": 0,
-            "max": 18446744073709552000
-          }
-        ],
-        "audio_guide": [
-          "BOOLEAN",
-          {
-            "default": true,
-            "tooltip": "Use the source soundtrack for reference conditioning and the frame-zero audio guide. Output keeps source audio either way."
-          }
-        ],
-        "steps": [
-          "INT",
-          {
-            "default": 8,
-            "min": 1,
-            "max": 100
-          }
-        ],
-        "cfg": [
-          "FLOAT",
-          {
-            "default": 1,
-            "min": 0,
-            "max": 20
-          }
-        ],
-        "sampler_name": [
-          "STRING",
-          {
-            "default": "er_sde"
-          }
-        ],
-        "scheduler": [
-          "STRING",
-          {
-            "default": "normal"
-          }
-        ],
-        "activation_memory_gib": [
-          "FLOAT",
-          {
-            "default": 17,
-            "min": 0,
-            "max": 128,
-            "step": 0.5,
-            "tooltip": "Estimated sampling workspace for ComfyUI memory placement; not a VRAM limit or reservation."
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "prompt",
-        "seed",
-        "audio_guide",
-        "steps",
-        "cfg",
-        "sampler_name",
-        "scheduler",
-        "activation_memory_gib"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "H3_RELAY_BODY_SETTINGS"
-    ],
-    "output_is_list": [
-      false
-    ],
-    "output_name": [
-      "H3_RELAY_BODY_SETTINGS"
-    ],
-    "name": "H3CharacterSwapSettings",
-    "display_name": "H3 · Generation Settings",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "H3CharacterSwapShot": {
-    "input": {
-      "required": {
-        "source_video": [
-          "VIDEO"
-        ],
-        "source": [
-          "IMAGE"
-        ],
-        "source_audio": [
-          "AUDIO"
-        ],
-        "source_frames": [
-          "INT"
-        ],
-        "fps": [
-          "FLOAT"
-        ],
-        "reference": [
-          "IMAGE"
-        ],
-        "use_anchor": [
-          "BOOLEAN",
-          {
-            "default": false
-          }
-        ],
-        "use_mask": [
-          "BOOLEAN",
-          {
-            "default": true
-          }
-        ],
-        "shot_id": [
-          "STRING",
-          {
-            "default": "character-swap"
-          }
-        ]
-      },
-      "optional": {
-        "anchor": [
-          "IMAGE"
-        ],
-        "body_mask": [
-          "MASK"
-        ],
-        "segment_mode": [
-          "BOOLEAN",
-          {
-            "default": false
-          }
-        ],
-        "history_file": [
-          "STRING",
-          {
-            "default": ""
-          }
-        ],
-        "segment_reference": [
-          "IMAGE"
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "source_video",
-        "source",
-        "source_audio",
-        "source_frames",
-        "fps",
-        "reference",
-        "use_anchor",
-        "use_mask",
-        "shot_id"
-      ],
-      "optional": [
-        "anchor",
-        "body_mask",
-        "segment_mode",
-        "history_file",
-        "segment_reference"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "H3_RELAY_SHOT"
-    ],
-    "output_is_list": [
-      false
-    ],
-    "output_name": [
-      "H3_RELAY_SHOT"
-    ],
-    "name": "H3CharacterSwapShot",
-    "display_name": "H3 Relay · Prepare Character Swap",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "H3CharacterSwapWindowPlan": {
-    "input": {
-      "required": {
-        "shot": [
-          "H3_RELAY_SHOT"
-        ],
-        "settings": [
-          "H3_RELAY_BODY_SETTINGS"
-        ],
-        "window_frames": [
-          [
-            "22",
-            "39",
-            "56",
-            "73",
-            "90",
-            "107",
-            "124",
-            "141",
-            "158",
-            "175",
-            "192",
-            "209",
-            "226",
-            "243",
-            "260",
-            "277",
-            "294",
-            "311",
-            "328",
-            "345",
-            "362"
-          ],
-          {
-            "default": "124"
-          }
-        ],
-        "history_frames": [
-          [
-            "0",
-            "1",
-            "18",
-            "35",
-            "52",
-            "69",
-            "86",
-            "103",
-            "120",
-            "137",
-            "154",
-            "171",
-            "188",
-            "205",
-            "222",
-            "239",
-            "256",
-            "273",
-            "290",
-            "307",
-            "324",
-            "341"
-          ],
-          {
-            "default": "18"
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "shot",
-        "settings",
-        "window_frames",
-        "history_frames"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "H3_RELAY_PLAN",
-      "STRING"
-    ],
-    "output_is_list": [
-      false,
-      false
-    ],
-    "output_name": [
-      "plan",
-      "timeline"
-    ],
-    "name": "H3CharacterSwapWindowPlan",
-    "display_name": "H3 Relay · Window Plan",
-    "description": "",
-    "python_module": "custom_nodes.h3_character_swap",
-    "category": "H3 Character Swap",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
+  "H3CharacterSwapAssemble": null,
+  "H3CharacterSwapController": null,
+  "H3CharacterSwapExpandMask": null,
+  "H3CharacterSwapModels": null,
+  "H3CharacterSwapPrepareVideo": null,
+  "H3CharacterSwapRecoverMasks": null,
+  "H3CharacterSwapSelectSubject": null,
+  "H3CharacterSwapSettings": null,
+  "H3CharacterSwapShot": null,
+  "H3CharacterSwapWindowPlan": null,
   "H3RelayAppendWindow": null,
   "H3RelayApplyEditMask": null,
   "H3RelayApplyHistory": null,
@@ -12182,241 +11432,8 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
-  "LTXAddVideoICLoRAGuide": {
-    "input": {
-      "required": {
-        "positive": [
-          "CONDITIONING",
-          {}
-        ],
-        "negative": [
-          "CONDITIONING",
-          {}
-        ],
-        "vae": [
-          "VAE",
-          {}
-        ],
-        "latent": [
-          "LATENT",
-          {
-            "tooltip": "Video-only latent to condition. Must be a 5D video latent (batch, channels, frames, height, width)."
-          }
-        ],
-        "image": [
-          "IMAGE",
-          {}
-        ],
-        "frame_idx": [
-          "INT",
-          {
-            "tooltip": "RoPE position of the reference, in pixel frames.\n0 aligns the reference with the generated clip. Use for video references.\n>0 places the reference at a specific pixel-frame position in the clip.\n-1 places the reference outside the generated frame range, while still using it for attention conditioning. Use for single-image references.\nFor multi-frame references, >0 values are rounded down to 1 mod 8.",
-            "default": 0,
-            "min": -9999,
-            "max": 9999
-          }
-        ],
-        "strength": [
-          "FLOAT",
-          {
-            "default": 1,
-            "min": 0,
-            "max": 1,
-            "step": 0.01
-          }
-        ],
-        "latent_downscale_factor": [
-          "FLOAT",
-          {
-            "tooltip": "For IC-LoRA on small grid. 1 means original size, 2 means half size, 3 means third, etc.",
-            "default": 1,
-            "min": 1,
-            "max": 10,
-            "step": 1
-          }
-        ],
-        "crop": [
-          "COMBO",
-          {
-            "tooltip": "Crop mode when resizing. 'center' crops to fit, 'disabled' stretches to fit.",
-            "default": "disabled",
-            "multiselect": false,
-            "options": [
-              "disabled",
-              "center"
-            ]
-          }
-        ],
-        "use_tiled_encode": [
-          "BOOLEAN",
-          {
-            "tooltip": "Enable tiled VAE encoding for large resolutions/long videos to reduce memory usage.",
-            "default": false
-          }
-        ],
-        "tile_size": [
-          "INT",
-          {
-            "tooltip": "Spatial tile size for tiled encoding. Only used when use_tiled_encode is enabled.",
-            "default": 256,
-            "min": 64,
-            "max": 512,
-            "step": 32
-          }
-        ],
-        "tile_overlap": [
-          "INT",
-          {
-            "tooltip": "Overlap between tiles for tiled encoding. Only used when use_tiled_encode is enabled.",
-            "default": 64,
-            "min": 16,
-            "max": 256,
-            "step": 16
-          }
-        ]
-      },
-      "optional": {
-        "use_streaming": [
-          "BOOLEAN",
-          {
-            "tooltip": "Off (default): encode the whole clip as one IC-LoRA guide. On: re-encode one fresh guide per LTXVTiledFusionSampler temporal window and write the plan the sampler reads. Set tile_frames on this node and the sampler to the same value (97 for LTX).",
-            "default": false
-          }
-        ],
-        "tile_frames": [
-          "INT",
-          {
-            "tooltip": "Window length in pixel frames, used only when use_streaming is on. Snapped to 8n+1. Must match LTXVTiledFusionSampler. Ignored when use_streaming is off.",
-            "default": 97,
-            "min": 0,
-            "max": 1000,
-            "step": 1
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "positive",
-        "negative",
-        "vae",
-        "latent",
-        "image",
-        "frame_idx",
-        "strength",
-        "latent_downscale_factor",
-        "crop",
-        "use_tiled_encode",
-        "tile_size",
-        "tile_overlap"
-      ],
-      "optional": [
-        "use_streaming",
-        "tile_frames"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "CONDITIONING",
-      "CONDITIONING",
-      "LATENT"
-    ],
-    "output_is_list": [
-      false,
-      false,
-      false
-    ],
-    "output_name": [
-      "positive",
-      "negative",
-      "latent"
-    ],
-    "output_tooltips": [
-      null,
-      null,
-      null
-    ],
-    "output_matchtypes": null,
-    "name": "LTXAddVideoICLoRAGuide",
-    "display_name": "🅛🅣🅧 Add Video IC-LoRA Guide",
-    "description": "Adds one or more conditioning frames starting at the specified frame index. Supports both single images and multi-frame videos. The latent_downscale_factor resizes input to a fraction of the target size (1 = original, 2 = half, 3 = third, etc.) for IC-LoRA on small grids. For LTXVTiledFusionSampler temporal windows, turn on use_streaming and set tile_frames to the same 8n+1 value as the sampler (97 for LTX).",
-    "python_module": "custom_nodes.ComfyUI-LTXVideo",
-    "category": "Lightricks/IC-LoRA",
-    "output_node": false,
-    "deprecated": false,
-    "experimental": false,
-    "dev_only": false,
-    "api_node": false,
-    "price_badge": null,
-    "search_aliases": null,
-    "essentials_category": null,
-    "has_intermediate_output": false
-  },
-  "LTXICLoRALoaderModelOnly": {
-    "input": {
-      "required": {
-        "model": [
-          "MODEL",
-          {}
-        ],
-        "lora_name": [
-          "COMBO",
-          {
-            "multiselect": false,
-            "options": []
-          }
-        ],
-        "strength_model": [
-          "FLOAT",
-          {
-            "default": 1,
-            "min": -100,
-            "max": 100,
-            "step": 0.01
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "model",
-        "lora_name",
-        "strength_model"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "MODEL",
-      "FLOAT"
-    ],
-    "output_is_list": [
-      false,
-      false
-    ],
-    "output_name": [
-      "model",
-      "latent_downscale_factor"
-    ],
-    "output_tooltips": [
-      null,
-      null
-    ],
-    "output_matchtypes": null,
-    "name": "LTXICLoRALoaderModelOnly",
-    "display_name": "🅛🅣🅧 IC-LoRA Loader Model Only",
-    "description": "Loads a LoRA model and extracts the latent_downscale_factor from the safetensors metadata.",
-    "python_module": "custom_nodes.ComfyUI-LTXVideo",
-    "category": "Lightricks/IC-LoRA",
-    "output_node": false,
-    "deprecated": false,
-    "experimental": false,
-    "dev_only": false,
-    "api_node": false,
-    "price_badge": null,
-    "search_aliases": null,
-    "essentials_category": null,
-    "has_intermediate_output": false
-  },
+  "LTXAddVideoICLoRAGuide": null,
+  "LTXICLoRALoaderModelOnly": null,
   "LTXVAddGuide": {
     "input": {
       "required": {
@@ -13276,186 +12293,7 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
-  "LTXVTiledFusionSampler": {
-    "input": {
-      "required": {
-        "model": [
-          "MODEL",
-          {
-            "tooltip": "The diffusion model to use."
-          }
-        ],
-        "positive": [
-          "CONDITIONING",
-          {
-            "tooltip": "Positive conditioning from the IC-LoRA guide node. Must carry keyframe_idxs / guide_attention_entries so each tile can be cropped to the LoRA's trained window."
-          }
-        ],
-        "negative": [
-          "CONDITIONING",
-          {
-            "tooltip": "Negative conditioning from the IC-LoRA guide node."
-          }
-        ],
-        "latents": [
-          "LATENT",
-          {
-            "tooltip": "The latent RETURNED BY the IC-LoRA guide node (it carries appended guide frames plus the noise mask). A bare empty video latent will not work."
-          }
-        ],
-        "sigmas": [
-          "SIGMAS",
-          {
-            "tooltip": "Denoise schedule. Must be descending and end at 0. Fusion walks this list one step at a time."
-          }
-        ],
-        "sampler": [
-          "SAMPLER",
-          {
-            "tooltip": "From KSamplerSelect (same type as SamplerCustomAdvanced). Discrete step samplers only: euler, euler_ancestral, heun, dpm_2, … History methods (DPM++ 2M, LMS) lose their multi-step memory because fusion owns the loop. Adaptive samplers cannot fuse. Ancestral methods add independent noise per tile and can seam."
-          }
-        ],
-        "seed": [
-          "INT",
-          {
-            "default": 42,
-            "min": 0,
-            "max": 18446744073709552000,
-            "control_after_generate": true,
-            "tooltip": "Seed for the single shared noise field across all tiles."
-          }
-        ],
-        "cfg": [
-          "FLOAT",
-          {
-            "default": 1,
-            "min": 0,
-            "max": 20,
-            "step": 0.1,
-            "tooltip": "Classifier-free guidance scale. Distilled models typically use 1.0."
-          }
-        ],
-        "tile_width": [
-          "INT",
-          {
-            "default": 1024,
-            "min": 256,
-            "max": 4096,
-            "step": 32,
-            "tooltip": "Tile width in pixels, multiple of 32. Set this to the IC-LoRA's trained spatial window. Tiles smaller than the trained window make every tile see content at the wrong scale."
-          }
-        ],
-        "tile_height": [
-          "INT",
-          {
-            "default": 576,
-            "min": 256,
-            "max": 4096,
-            "step": 32,
-            "tooltip": "Tile height in pixels, multiple of 32. Match tile_width to the IC-LoRA's trained spatial window."
-          }
-        ],
-        "overlap_frac": [
-          "FLOAT",
-          {
-            "default": 0.5,
-            "min": 0.25,
-            "max": 0.75,
-            "step": 0.05,
-            "tooltip": "Fraction of each tile overlapping its neighbor. Stay at 0.5 or above: below that a periodic grid appears on structured content."
-          }
-        ],
-        "blend_var": [
-          "FLOAT",
-          {
-            "default": 0.05,
-            "min": 0.01,
-            "max": 0.2,
-            "step": 0.01,
-            "tooltip": "Variance of the Gaussian blend weights in the overlaps. Leave at 0.05 unless you are measuring seams."
-          }
-        ],
-        "grid_cycle": [
-          "INT",
-          {
-            "default": 1,
-            "min": 1,
-            "max": 4,
-            "tooltip": "Cycle shifted tile grids across steps. 1 = fixed grid (cheapest), 4 = thorough. Spatial only: cycling the temporal grid slides content in time."
-          }
-        ],
-        "tile_frames": [
-          "INT",
-          {
-            "default": 0,
-            "min": 0,
-            "max": 1000,
-            "step": 1,
-            "tooltip": "Temporal window in pixel frames (97 for LTX). 0 = one extent. Other values are snapped to 8n+1. >0 needs LTXAddVideoICLoRAGuide with use_streaming on and the SAME tile_frames: that re-encodes a fresh guide per window and writes the plan this sampler reads. A whole-clip guide cannot be sliced, and windowing is disabled if the plan is missing."
-          }
-        ]
-      },
-      "optional": {
-        "vae": [
-          "VAE",
-          {
-            "tooltip": "Used to read the model's temporal and spatial downscale factors. If omitted, they are taken from the diffusion model (LTX defaults: 8 frames and 32 pixels per latent cell)."
-          }
-        ],
-        "canvas_device": [
-          [
-            "auto",
-            "gpu",
-            "cpu"
-          ],
-          {
-            "default": "auto",
-            "tooltip": "Where to keep the full-canvas tensors and cached tile latents/noise/masks. auto = GPU if there is enough free memory, otherwise CPU. Processed conds stay on the GPU."
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "model",
-        "positive",
-        "negative",
-        "latents",
-        "sigmas",
-        "sampler",
-        "seed",
-        "cfg",
-        "tile_width",
-        "tile_height",
-        "overlap_frac",
-        "blend_var",
-        "grid_cycle",
-        "tile_frames"
-      ],
-      "optional": [
-        "vae",
-        "canvas_device"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "LATENT"
-    ],
-    "output_is_list": [
-      false
-    ],
-    "output_name": [
-      "output"
-    ],
-    "name": "LTXVTiledFusionSampler",
-    "display_name": "🅛🅣🅧 Tiled Fusion Sampler",
-    "description": "",
-    "python_module": "custom_nodes.ComfyUI-LTXVideo",
-    "category": "sampling",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
+  "LTXVTiledFusionSampler": null,
   "LatentBatchSeedBehavior": {
     "input": {
       "required": {
@@ -13998,7 +12836,9 @@
           "COMBO",
           {
             "multiselect": false,
-            "options": []
+            "options": [
+              "moge_2_vitl_normal_fp16.safetensors"
+            ]
           }
         ],
         "weight_dtype": [
@@ -14101,42 +12941,6 @@
     ],
     "essentials_category": "Basics"
   },
-  "LoadImageFuobeLive": {
-    "input": {
-      "required": {
-        "image": [
-          "STRING",
-          {
-            "default": "",
-            "tooltip": "A Fuobe-named picture in the input folder."
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "image"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "IMAGE"
-    ],
-    "output_is_list": [
-      false
-    ],
-    "output_name": [
-      "IMAGE"
-    ],
-    "name": "LoadImageFuobeLive",
-    "display_name": "Load Image (Fuobe live)",
-    "description": "",
-    "python_module": "custom_nodes.fuobe-live",
-    "category": "fuobe/live",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
   "LoadImageMask": {
     "input": {
       "required": {
@@ -14196,7 +13000,9 @@
           "COMBO",
           {
             "multiselect": false,
-            "options": []
+            "options": [
+              "moge_2_vitl_normal_fp16.safetensors"
+            ]
           }
         ]
       }
@@ -15449,7 +14255,32 @@
           "MODEL"
         ],
         "lora_name": [
-          []
+          [
+            "Flux_2-Turbo-LoRA_comfyui.safetensors",
+            "Krea2-realism-V2.safetensors",
+            "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
+            "Qwen-Image-Edit-2509-Light-Migration.safetensors",
+            "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+            "Qwen-Image-Edit-2509-Relight.safetensors",
+            "Qwen-Image-Edit-2509-White_to_Scene.safetensors",
+            "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+            "krea2_general_edit_v2.safetensors",
+            "krea2_identity_edit_v2.safetensors",
+            "krea2_inpaint_edit.safetensors",
+            "krea2_style_reference.safetensors",
+            "lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors",
+            "lightx2v_T2V_14B_cfg_step_distill_v2_lora_rank64_bf16.safetensors",
+            "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+            "minimax_h3_turbo_v4_step600_ema.safetensors",
+            "next-scene_lora-v2-3000.safetensors",
+            "qwen-image-2.1-outpaint-v2.safetensors",
+            "tryon-klein-4b.safetensors",
+            "uso-flux1-dit-lora-v1.safetensors",
+            "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+            "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+            "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+            "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors"
+          ]
         ],
         "strength": [
           "FLOAT",
@@ -16372,105 +15203,6 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
-  "PasteBackFuobeLive": {
-    "input": {
-      "required": {
-        "base": [
-          "IMAGE"
-        ],
-        "edited": [
-          "IMAGE"
-        ],
-        "mode": [
-          [
-            "auto",
-            "mask",
-            "off"
-          ]
-        ],
-        "threshold": [
-          "FLOAT",
-          {
-            "default": 0.06,
-            "min": 0,
-            "max": 1,
-            "step": 0.01
-          }
-        ],
-        "feather": [
-          "INT",
-          {
-            "default": 24,
-            "min": 0,
-            "max": 256
-          }
-        ],
-        "match_color": [
-          "BOOLEAN",
-          {
-            "default": true
-          }
-        ],
-        "out_max_side": [
-          "INT",
-          {
-            "default": 0,
-            "min": 0,
-            "max": 4096,
-            "step": 32
-          }
-        ]
-      },
-      "optional": {
-        "box": [
-          "FUOBE_BOX"
-        ],
-        "mask_image": [
-          "IMAGE"
-        ],
-        "detail": [
-          "BOOLEAN",
-          {
-            "default": true
-          }
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "base",
-        "edited",
-        "mode",
-        "threshold",
-        "feather",
-        "match_color",
-        "out_max_side"
-      ],
-      "optional": [
-        "box",
-        "mask_image",
-        "detail"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "IMAGE"
-    ],
-    "output_is_list": [
-      false
-    ],
-    "output_name": [
-      "IMAGE"
-    ],
-    "name": "PasteBackFuobeLive",
-    "display_name": "Paste Back Unchanged Pixels (Fuobe live)",
-    "description": "",
-    "python_module": "custom_nodes.fuobe-live",
-    "category": "fuobe/live",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
   "Pixal3DConditioning": {
     "input": {
       "required": {
@@ -16930,141 +15662,6 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
-  "Qwen21EncodeFuobeLive": {
-    "input": {
-      "required": {
-        "clip": [
-          "CLIP"
-        ],
-        "prompt": [
-          "STRING",
-          {
-            "multiline": true
-          }
-        ],
-        "width": [
-          "INT",
-          {
-            "default": 1024,
-            "min": 32,
-            "max": 8192,
-            "step": 32
-          }
-        ],
-        "height": [
-          "INT",
-          {
-            "default": 1024,
-            "min": 32,
-            "max": 8192,
-            "step": 32
-          }
-        ]
-      },
-      "optional": {
-        "reference": [
-          "QWEN21_REFERENCE"
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "clip",
-        "prompt",
-        "width",
-        "height"
-      ],
-      "optional": [
-        "reference"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "CONDITIONING",
-      "LATENT"
-    ],
-    "output_is_list": [
-      false,
-      false
-    ],
-    "output_name": [
-      "positive",
-      "latent"
-    ],
-    "name": "Qwen21EncodeFuobeLive",
-    "display_name": "Qwen Image 2.1 Encode, positive only (Fuobe live)",
-    "description": "",
-    "python_module": "custom_nodes.fuobe-live",
-    "category": "fuobe/live",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
-  "Qwen21ReferenceFuobeLive": {
-    "input": {
-      "required": {
-        "vae": [
-          "VAE"
-        ],
-        "resolution": [
-          "INT",
-          {
-            "default": 1024,
-            "min": 0,
-            "max": 4096,
-            "step": 32
-          }
-        ],
-        "image_1": [
-          "IMAGE"
-        ]
-      },
-      "optional": {
-        "image_2": [
-          "IMAGE"
-        ],
-        "image_3": [
-          "IMAGE"
-        ],
-        "image_4": [
-          "IMAGE"
-        ]
-      }
-    },
-    "input_order": {
-      "required": [
-        "vae",
-        "resolution",
-        "image_1"
-      ],
-      "optional": [
-        "image_2",
-        "image_3",
-        "image_4"
-      ]
-    },
-    "is_input_list": false,
-    "output": [
-      "QWEN21_REFERENCE",
-      "IMAGE"
-    ],
-    "output_is_list": [
-      false,
-      false
-    ],
-    "output_name": [
-      "reference",
-      "image_1"
-    ],
-    "name": "Qwen21ReferenceFuobeLive",
-    "display_name": "Qwen Image 2.1 Reference (Fuobe live)",
-    "description": "",
-    "python_module": "custom_nodes.fuobe-live",
-    "category": "fuobe/live",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
-  },
   "QwenImage21Cache": {
     "input": {
       "required": {
@@ -17226,50 +15823,58 @@
     "input": {
       "required": {
         "reuse_model": [
-          "REUSE_MODEL"
+          "REUSE_MODEL",
+          {}
         ],
         "audio": [
-          "AUDIO"
+          "AUDIO",
+          {}
         ],
         "rate": [
-          [
-            "source",
-            "source up to 24000",
-            "source up to 16000",
-            "8000",
-            "16000",
-            "22050",
-            "24000",
-            "32000",
-            "44100",
-            "48000"
-          ],
+          "COMBO",
           {
             "default": "source",
-            "tooltip": "The rate the model runs at. Lower is faster and band-limited; higher than the source fills the empty high band (bandwidth extension)."
+            "tooltip": "The rate the model runs at. Lower is faster and band-limited; higher than the source fills the empty high band (bandwidth extension).",
+            "multiselect": false,
+            "options": [
+              "source",
+              "source up to 24000",
+              "source up to 16000",
+              "8000",
+              "16000",
+              "22050",
+              "24000",
+              "32000",
+              "44100",
+              "48000"
+            ]
           }
         ],
         "pre_lowpass": [
-          [
-            "off",
-            "8000",
-            "16000",
-            "22050",
-            "24000"
-          ],
+          "COMBO",
           {
             "default": "off",
-            "tooltip": "Resample down to this rate first (before bandwidth extension)"
+            "tooltip": "Resample down to this rate first (before bandwidth extension)",
+            "multiselect": false,
+            "options": [
+              "off",
+              "8000",
+              "16000",
+              "22050",
+              "24000"
+            ]
           }
         ],
         "channels": [
-          [
-            "mono",
-            "each channel"
-          ],
+          "COMBO",
           {
             "default": "mono",
-            "tooltip": "Mono is the mean of the channels; more than 2 channels always run in mono"
+            "tooltip": "Mono is the mean of the channels; more than 2 channels always run in mono",
+            "multiselect": false,
+            "options": [
+              "mono",
+              "each channel"
+            ]
           }
         ],
         "chunk_seconds": [
@@ -17302,13 +15907,15 @@
           }
         ],
         "level": [
-          [
-            "match input",
-            "-16 LUFS",
-            "off"
-          ],
+          "COMBO",
           {
-            "default": "match input"
+            "default": "match input",
+            "multiselect": false,
+            "options": [
+              "match input",
+              "-16 LUFS",
+              "off"
+            ]
           }
         ]
       },
@@ -17365,31 +15972,33 @@
     "description": "Clean up voice: removes noise, echo, clipping and codec damage from speech and keeps the main speaker.",
     "python_module": "custom_nodes.ComfyUI-RE-USE",
     "category": "audio/RE-USE",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
+    "output_node": false
   },
   "REUSELoader": {
     "input": {
       "required": {
         "model": [
-          [
-            "NemotronLabs-RE-USE-laughter.safetensors",
-            "NemotronLabs-RE-USE.safetensors"
-          ],
+          "COMBO",
           {
             "default": "NemotronLabs-RE-USE.safetensors",
-            "tooltip": "A RE-USE model in models/reuse"
+            "tooltip": "A RE-USE model in models/reuse",
+            "multiselect": false,
+            "options": [
+              "NemotronLabs-RE-USE-laughter.safetensors",
+              "NemotronLabs-RE-USE.safetensors"
+            ]
           }
         ],
         "device": [
-          [
-            "auto",
-            "cuda",
-            "cpu"
-          ],
+          "COMBO",
           {
-            "default": "auto"
+            "default": "auto",
+            "multiselect": false,
+            "options": [
+              "auto",
+              "cuda",
+              "cpu"
+            ]
           }
         ]
       }
@@ -17415,9 +16024,7 @@
     "description": "Loads NVIDIA RE-USE (speech enhancement, 9.6M parameters) from models/reuse.",
     "python_module": "custom_nodes.ComfyUI-RE-USE",
     "category": "audio/RE-USE",
-    "output_node": false,
-    "has_intermediate_output": false,
-    "search_aliases": []
+    "output_node": false
   },
   "RIFE VFI": {
     "input": {
@@ -18239,7 +16846,7 @@
           "COMFY_DYNAMICCOMBO_V3",
           {
             "display_name": "sign_mode",
-            "tooltip": "udf: robust to messy/non-manifold input. sdf: clean single surface with QEF (Quadratic Error Function) sharp-feature recovery, but needs consistent winding.",
+            "tooltip": "udf: robust to messy/non-manifold input. sdf: clean single surface with QEF (Quadratic Error Function) sharp-feature recovery, but needs consistent winding. solid: one watertight solid from messy input: a global inside/outside graph cut (CelloCut) removes double shells and closes small holes. Slower.",
             "options": [
               {
                 "key": "udf",
@@ -18248,7 +16855,7 @@
                     "qef": [
                       "BOOLEAN",
                       {
-                        "tooltip": "QEF (Quadratic Error Function) dual-vertex placement for sharper edges.",
+                        "tooltip": "QEF (Quadratic Error Function) vertex placement: sharp edges on hard-surface input, jagged creases on organic input.",
                         "advanced": true,
                         "default": false
                       }
@@ -18292,6 +16899,31 @@
                     ]
                   }
                 }
+              },
+              {
+                "key": "solid",
+                "inputs": {
+                  "required": {
+                    "fill": [
+                      "FLOAT",
+                      {
+                        "tooltip": "Cost of closing an opening relative to following the surface. Lower closes larger openings (0 puts a lid on a cup); higher only closes small holes and cracks.",
+                        "default": 20,
+                        "min": 0,
+                        "max": 1000,
+                        "step": 1
+                      }
+                    ],
+                    "qef": [
+                      "BOOLEAN",
+                      {
+                        "tooltip": "QEF (Quadratic Error Function) vertex placement: sharp edges on hard-surface input, jagged creases on organic input.",
+                        "advanced": true,
+                        "default": false
+                      }
+                    ]
+                  }
+                }
               }
             ]
           }
@@ -18299,7 +16931,7 @@
         "band": [
           "FLOAT",
           {
-            "tooltip": "Narrow-band width in voxel units. In UDF mode also offsets the surface.",
+            "tooltip": "Narrow-band width in voxel units. In udf mode also offsets the surface; in solid mode it is the closing radius: creases are filleted and gaps bridged at this size, the surface sits half a voxel out.",
             "advanced": true,
             "default": 1,
             "min": 0.5,
@@ -20582,61 +19214,6 @@
     ],
     "essentials_category": "Basics",
     "has_intermediate_output": false
-  },
-  "SaveImageFuobeLive": {
-    "input": {
-      "required": {
-        "images": [
-          "IMAGE"
-        ],
-        "format": [
-          [
-            "webp",
-            "png"
-          ]
-        ],
-        "quality": [
-          "INT",
-          {
-            "default": 85,
-            "min": 50,
-            "max": 100
-          }
-        ],
-        "to": [
-          [
-            "socket",
-            "temp"
-          ]
-        ]
-      },
-      "hidden": {
-        "unique_id": "UNIQUE_ID"
-      }
-    },
-    "input_order": {
-      "required": [
-        "images",
-        "format",
-        "quality",
-        "to"
-      ],
-      "hidden": [
-        "unique_id"
-      ]
-    },
-    "is_input_list": false,
-    "output": [],
-    "output_is_list": [],
-    "output_name": [],
-    "name": "SaveImageFuobeLive",
-    "display_name": "Send Image (Fuobe live)",
-    "description": "",
-    "python_module": "custom_nodes.fuobe-live",
-    "category": "fuobe/live",
-    "output_node": true,
-    "has_intermediate_output": false,
-    "search_aliases": []
   },
   "SaveSVGNode": {
     "input": {
