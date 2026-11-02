@@ -10797,7 +10797,7 @@
       "vramGb": 4,
       "license": "Meta SAM License (SAM 3.1: royalty-free, commercial use allowed; attribution + acceptable-use terms)",
       "validated": true,
-      "notes": "WorldCast cases (N7-9): the person in the still and in each view as a mask, white where they are, the size of the picture. SAM3_Detect with the words (prompt, \"person\" by default; threshold 0.4, every match merged into one mask) then MaskToImage. The WorldCast worker cuts its tight no_padding_black crops from it. Core nodes and the SAM 3.1 checkpoint only."
+      "notes": "WorldCast cases: the person in the still and in each view as a mask, white where they are, the size of the picture. SAM3_Detect with the words (prompt, \"person\" by default; threshold 0.4, every match merged into one mask) then MaskToImage. The WorldCast worker cuts its tight no_padding_black crops from it. Core nodes and the SAM 3.1 checkpoint only."
     },
     {
       "id": "palette-transfer-image",

@@ -2732,7 +2732,7 @@ export const SPEC = [
     license: 'Meta SAM License (SAM 3.1: royalty-free, commercial use allowed; attribution + acceptable-use terms)',
     modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
     notes:
-      'WorldCast cases (N7-9): the person in the still and in each view as a mask, white where they are, the size of the picture. SAM3_Detect with the words (prompt, "person" by default; ' +
+      'WorldCast cases: the person in the still and in each view as a mask, white where they are, the size of the picture. SAM3_Detect with the words (prompt, "person" by default; ' +
       'threshold 0.4, every match merged into one mask) then MaskToImage. The WorldCast worker cuts its tight no_padding_black crops from it. Core nodes and the SAM 3.1 checkpoint only.',
   },
 
