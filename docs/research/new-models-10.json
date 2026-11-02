@@ -1096,12 +1096,22 @@
    "area": "image gen/edit",
    "licence": "Qwen Research License",
    "vram": "14.2 GB DiT + 17.5 GB encoder",
-   "hosted": [],
+   "hosted": [
+    {
+     "provider": "fal",
+     "endpoint": "fal-ai/qwen-image-2.1"
+    },
+    {
+     "provider": "fal",
+     "endpoint": "fal-ai/qwen-image-2.1/edit"
+    }
+   ],
    "comfy": "native",
    "released": "2026-09-14 / 2026-10-09",
    "url": "https://huggingface.co/Qwen/Qwen-Image-2.1",
    "inFuobe": true,
-   "confirmed": true
+   "confirmed": true,
+   "hostedNote": "Read 2026-11-02 (qma-angles): fal serves fal-ai/qwen-image-2.1 (text to image, $0.02 per megapixel) and fal-ai/qwen-image-2.1/edit (1-10 image_urls, guidance_scale 1-10, prompt_expander, $0.0367 per megapixel), neither in fal's model search yet and neither with a LoRA input (no /lora twin: 404). Replicate has no Qwen-Image 2.1 (qwen/qwen-image-2 is the older API model). Comfy-Org/Qwen-Image-2.1 @ aacf31a6: DiT bf16 14.23 GB / int8_convrot 7.26 GB, Qwen3-VL 8B encoder bf16 17.53 GB / int8_convrot 9.35 GB / w4a8 6.31 GB, VAE bf16 0.68 GB; Fuobe's graphs load the int8 files (about 20 GB)."
   },
   {
    "name": "FIBO 2 (Dev, Edit Turbo)",
@@ -1176,6 +1186,21 @@
    "comfy": "partner nodes",
    "released": "2026-09 .. 2026-10",
    "url": "https://fal.ai/models/google/nano-banana-2.1",
+   "inFuobe": true,
+   "confirmed": true
+  },
+  {
+   "name": "QMA Camera Angles LoRA for Qwen-Image 2.1 (gribbliest, 96 views)",
+   "area": "camera angles",
+   "licence": "Apache-2.0 (card; no LICENSE file); base Qwen-Image 2.1 is Qwen Research (non-commercial)",
+   "vram": "319 MB LoRA on the 20 GB Qwen-Image 2.1 edit graph",
+   "hosted": [],
+   "comfy": "LoRA (LoraLoaderModelOnly on the native Qwen-Image 2.1 edit graph); optional camera-drag node CoreyCorza/QMA-Multi-Angle-Lora-Node, not needed",
+   "released": "2026-10-13",
+   "url": "https://huggingface.co/gribbliest/qwen-image-2.1-qma-camera-angles",
+   "revision": "13007eec2648c09529e930164c2ccc9c8c12428c",
+   "sha256": "ad2c20e0e103b6ad3ffffc56ab4e89c0822263c488aa4dd70e7e03091ff37b8d",
+   "notes": "\"<qma> {azimuth} {elevation} {distance}\": 8 azimuths relative to the original camera, 4 elevations, 3 distances; strength 1.0, 30 steps, CFG 3, euler / simple, ~1 MP. Not hostable: fal's Qwen-Image 2.1 takes no LoRAs.",
    "inFuobe": true,
    "confirmed": true
   }
