@@ -4,6 +4,7 @@
 // keyboard; ratings land in review/ratings.json (pnpm eval:review serves the page and saves them;
 // opened as a file it keeps them in the browser and offers a download). review/key.json, which the
 // page never loads, says which side was which; the summary unblinds the ratings with it.
+import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -14,6 +15,13 @@ import { candidateOf, latestJobs, readJson, writeJson } from "./store.mjs";
 const IMAGE = /\.(png|jpe?g|webp|gif|svg)$/i;
 const VIDEO = /\.(mp4|mov|m4v|webm)$/i;
 const AUDIO = /\.(flac|wav|mp3|m4a|ogg)$/i;
+/** The one format a blind audio pair is served in (lossless; every current browser plays it). */
+const AUDIO_EXT = ".flac";
+/** A sound re-encoded as FLAC for the review; false when ffmpeg can't (the file is then served as it is, under the FLAC name). */
+function toAudio(file, dest) {
+  const r = spawnSync("ffmpeg", ["-v", "error", "-y", "-i", file, "-vn", "-c:a", "flac", dest], { stdio: "ignore" });
+  return r.status === 0 && fs.existsSync(dest);
+}
 const hash = (s) => crypto.createHash("sha256").update(s).digest("hex");
 
 /** The first picture or clip of a succeeded row (helpers like masks left out); a separation's first stem. */
@@ -98,21 +106,26 @@ export function writeReview(run, opts = {}) {
   fs.rmSync(mediaDir, { recursive: true, force: true });
   fs.mkdirSync(mediaDir, { recursive: true });
   const placed = new Map();
-  const place = (file) => {
-    if (placed.has(file)) return placed.get(file);
-    const name = `${hash(`media|${file}`).slice(0, 10)}${path.extname(file).toLowerCase()}`;
+  const place = (file, audio = false) => {
+    const key = `${audio ? "a" : "m"}|${file}`;
+    if (placed.has(key)) return placed.get(key);
+    const name = `${hash(`media|${file}`).slice(0, 10)}${audio ? AUDIO_EXT : path.extname(file).toLowerCase()}`;
     const dest = path.join(mediaDir, name);
-    try {
-      fs.linkSync(file, dest);
-    } catch {
-      fs.copyFileSync(file, dest);
+    if (!audio || path.extname(file).toLowerCase() === AUDIO_EXT || !toAudio(file, dest)) {
+      try {
+        fs.linkSync(file, dest);
+      } catch {
+        fs.copyFileSync(file, dest);
+      }
     }
-    placed.set(file, `media/${name}`);
+    placed.set(key, `media/${name}`);
     return `media/${name}`;
   };
   const items = pairs.map((p) => {
     const [left, right] = p.aLeft ? [p.a, p.b] : [p.b, p.a];
-    return { id: p.id, prompt: p.prompt ?? "", title: p.caseTitle ?? "", left: place(left.file), right: place(right.file), video: [left.file, right.file].some((f) => VIDEO.test(f)), audio: [left.file, right.file].every((f) => AUDIO.test(f)) };
+    // Two sounds are served in one format, so a file type (DBS's FLAC against MelBand's MP3) can't say which is which.
+    const audio = [left.file, right.file].every((f) => AUDIO.test(f));
+    return { id: p.id, prompt: p.prompt ?? "", title: p.caseTitle ?? "", left: place(left.file, audio), right: place(right.file, audio), video: [left.file, right.file].some((f) => VIDEO.test(f)), audio };
   });
   writeJson(path.join(out, "key.json"), {
     runId: run.runId,

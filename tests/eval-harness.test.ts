@@ -346,7 +346,7 @@ describe("the runner on the demo provider", () => {
   });
 
   it("runs each Genjutsu mode's own partner model on fal", async () => {
-    type Plan = { jobs: { case: string; variant: string; model: string; skip?: string }[] };
+    type Plan = { jobs: { case: string; variant: string; model: string; skip?: string; costUsd?: number | null }[] };
     const dry = async (args: string[]) => JSON.parse((await cli(["run", ...args, "--dry-run", "--json"])).stdout) as Plan;
     setSetting("falKey", "fal-test-key");
     try {
@@ -385,6 +385,17 @@ describe("the runner on the demo provider", () => {
         ["shorts/segment", "fuobe-shorts", null],
         ["shorts/session", "fuobe-shorts", null],
         ["shorts/session", "fuobe-shorts", null],
+      ]);
+      // Clean up dialogue's hosted cleaners: planned and priced as dry runs, each on its own op.
+      const sep = await dry(["--suite", "separation", "--engine", "cloud", "--variants", "clean-veed,clean-deepfilternet,demucs", "--cases", "separation/centre,separation/video", "--allow-fixtures"]);
+      expect(sep.jobs.map((j) => [j.case, j.variant, j.model, j.skip ? "refused" : typeof j.costUsd])).toEqual([
+        ["separation/centre", "clean-veed", "veed-clean-audio", "number"],
+        ["separation/centre", "clean-deepfilternet", "deepfilternet3", "number"],
+        ["separation/centre", "demucs", "demucs", "number"],
+        // VEED takes a video's file itself; DeepFilterNet 3 and Demucs take audio only.
+        ["separation/video", "clean-veed", "veed-clean-audio", "number"],
+        ["separation/video", "clean-deepfilternet", "deepfilternet3", "refused"],
+        ["separation/video", "demucs", "demucs", "refused"],
       ]);
       const shp = await dry(["--suite", "shorts", "--engine", "cloud", "--variants", "partner", "--seeds", "1001", "--allow-fixtures"]);
       expect(shp.jobs.map((j) => [j.case, j.model, j.skip ?? null])).toEqual([
@@ -437,6 +448,12 @@ describe("the runner on the demo provider", () => {
       ["demucs", "oss-dbs-separate", null, null, "the demucs variant runs on cloud only"],
     ]);
     expect(jobs.every((j) => j.request.op === "separate-audio")).toBe(true);
+    // Clean up dialogue on the open engine: graph C with the music and effects at −18 dB; the cloud cleaners run enhance-voice.
+    const clean = plan.expandJobs(suite, { engine: "open", variants: ["clean-dialogue", "clean-veed"], cases: ["separation/hiss"], exists: () => true }) as unknown as typeof jobs;
+    expect(clean.map((j) => [j.variant, j.request.modelId, j.request.op, j.request.params.extra ?? null, j.skip ?? null])).toEqual([
+      ["clean-dialogue", "oss-dbs-remix", "separate-audio", { separationModel: "DBS-BSRNN-DnR", channels: "mono", voiceDb: 0, musicDb: -18, effectsDb: -18 }, null],
+      ["clean-veed", "oss-dbs-separate", "enhance-voice", null, "the clean-veed variant runs on cloud only"],
+    ]);
     // The cloud runs Demucs as today's cloud dub does; DBS isn't hosted, so its variants say they run on the open engine.
     const cloud = plan.expandJobs(suite, { engine: "cloud", variants: ["demucs", "bsrnn-mono"], cases: ["separation/centre"], exists: () => true }) as unknown as { variant: string; skip?: string; request: { modelId: string } }[];
     expect(cloud.map((j) => [j.variant, j.request.modelId, j.skip ?? null])).toEqual([
@@ -596,6 +613,31 @@ describe("report, blind review, compare and promote", () => {
     const html = fs.readFileSync(path.join(runDir, "report.html"), "utf8");
     expect(html).toContain('<meta name="viewport"');
     expect(html).toContain("prefers-color-scheme: dark");
+  });
+
+  it("serves both sounds of a blind pair in one format, so the file type doesn't give the model away", () => {
+    if (spawnSync("ffmpeg", ["-version"]).status !== 0) return; // re-encoding needs ffmpeg
+    const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-review-audio-"));
+    const tone = (file: string) => spawnSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5", path.join(runDir, file)]);
+    const rows = [
+      ["dbs-dub", ".flac"],
+      ["melband", ".mp3"],
+    ].map(([variant, ext]) => {
+      fs.mkdirSync(path.join(runDir, variant), { recursive: true });
+      for (const stem of ["voice", "background"]) tone(`${variant}/${stem}${ext}`);
+      return { id: `separation__centre--p1--s1001--${variant}`, key: "separation/centre/p1/s1001", variant, status: "succeeded", caseId: "separation/centre", caseTitle: "Centre", outputs: ["voice", "background"].map((stem) => ({ file: `${variant}/${stem}${ext}`, kind: "audio", stem })) };
+    });
+    fs.writeFileSync(path.join(runDir, "run.json"), JSON.stringify({ candidate: "dbs-dub" }));
+    try {
+      expect(review.writeReview({ dir: runDir, runId: "fake-sep", rows }).pairs).toBe(2);
+      const media = fs.readdirSync(path.join(runDir, "review", "media"));
+      expect(media).toHaveLength(4);
+      expect(media.every((f) => f.endsWith(".flac"))).toBe(true);
+      for (const f of media) expect(spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=format_name", "-of", "csv=p=0", path.join(runDir, "review", "media", f)], { encoding: "utf8" }).stdout.trim()).toBe("flac");
+      expect(fs.readFileSync(path.join(runDir, "review", "index.html"), "utf8")).not.toMatch(/\.mp3|melband|dbs-dub/);
+    } finally {
+      fs.rmSync(runDir, { recursive: true, force: true });
+    }
   });
 
   it("builds blind pairs whose page doesn't say which side is which, saves ratings and unblinds them in the summary", async () => {
