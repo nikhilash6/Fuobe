@@ -3,6 +3,7 @@ import { z } from "zod";
 import { planJoin, planLoop, CROSSFADE_MAX, JOIN_MAX_CLIPS, LOOP_MAX_SECONDS, type AudioToolPreview, type ToolPlan } from "@/lib/av/audio-tools";
 import { CLOUD_ONLY_PROBLEM, DBS_MODELS, dbsChannelsFor, hostPick, missingDbs, planRemux, planSplit, splitTime } from "@/lib/av/split";
 import { CLOUD_ONLY_REMOVE_PROBLEM, LOWER_MAX_DB, LOWER_MIN_DB, NO_SOUND_PROBLEM, planRemoveDialogue, removeDialogueTime } from "@/lib/av/remove-dialogue";
+import { planCleanDialogue } from "@/lib/av/clean-dialogue";
 import { CLOUD_ONLY_CLEAN_PROBLEM, missingReuse, NO_REUSE_PACK, planClean, planTime, tooLongProblem } from "@/lib/av/clean-voice";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { lastGpuDevice } from "./account-gpu";
@@ -20,7 +21,8 @@ import { tenant, tenantAccount } from "./tenant";
  * the plan from src/lib/av/audio-tools.ts, src/lib/av/split.ts or src/lib/av/remove-dialogue.ts is priced step by step,
  * and a run is one createPipeline batch, so its results land in the Library like any generation. Split soundtrack and
  * Remove dialogue run on the open engine only (DBS isn't hosted); a split's mix goes back on the video with a "remux" run
- * on either engine.
+ * on either engine. Clean up dialogue (src/lib/av/clean-dialogue.ts) runs on both: DBS's remix on the open engine, a hosted
+ * speech cleaner (VEED, DeepFilterNet 3, ElevenLabs isolation) in the cloud.
  */
 
 /** A stored file, or one of Fuobe's published example inputs (a page's example, loaded as the source: example-files.ts). */
@@ -91,6 +93,24 @@ export const AudioToolBody = z.discriminatedUnion("tool", [
     /** A video: put the clean soundtrack back on the picture. */
     remux: z.boolean().optional(),
     stereo: z.boolean().optional(),
+    channels: z.number().int().positive().max(64).optional(),
+    sourceDuration: z.number().positive().max(36_000).optional(),
+  }),
+  z.object({
+    tool: z.literal("clean-dialogue"),
+    engine: Engine,
+    media: FileUrl,
+    kind: z.enum(["audio", "video"]),
+    name: z.string().max(200).optional(),
+    /** Open: the music and effects' level under the dialogue (dB), or "off". */
+    bed: z.union([z.literal("off"), z.number().int().min(-40).max(0)]).optional(),
+    quality: z.enum(["fast", "best"]).optional(),
+    stereo: z.boolean().optional(),
+    /** Cloud: the hosted cleaner. */
+    cleaner: z.enum(["veed", "deepfilternet", "isolation"]).optional(),
+    strength: z.number().min(0).max(1).optional(),
+    /** A video: put the clean soundtrack back on the picture (default on). */
+    remux: z.boolean().optional(),
     channels: z.number().int().positive().max(64).optional(),
     sourceDuration: z.number().positive().max(36_000).optional(),
   }),
@@ -176,6 +196,12 @@ async function plan(body: AudioToolRequest): Promise<ToolPlan & { engine: Engine
       const channels = facts?.channels ?? body.channels;
       return { engine: body.engine, ...planClean({ ...body, seconds, channels, silent: facts?.hasAudio === false }), split: { duration: seconds, channels }, headerChannels: facts?.channels };
     }
+    if (body.tool === "clean-dialogue") {
+      const facts = factsOf(body.media);
+      const seconds = facts?.duration ?? body.sourceDuration;
+      const channels = facts?.channels ?? body.channels;
+      return { engine: body.engine, ...planCleanDialogue({ ...body, seconds, channels, silent: facts?.hasAudio === false }), split: { duration: seconds, channels }, headerChannels: facts?.channels };
+    }
     if (body.tool === "remux") {
       present(body.audio, "That mix is gone — export it again");
       present(body.video, "That video is gone — add it again");
@@ -209,7 +235,7 @@ export async function previewAudioTool(body: AudioToolRequest): Promise<AudioToo
     cost = cost === null || r.costUsd === null ? null : cost + r.costUsd;
   }
   const out: AudioToolPreview = { summary: p.summary, notes: p.notes, length: p.length, steps: p.steps.length, costUsd: cost === null ? null : Math.round(cost * 1000) / 1000, demo };
-  if (body.tool === "split" || body.tool === "remove-dialogue") {
+  if (body.tool === "split" || body.tool === "remove-dialogue" || (body.tool === "clean-dialogue" && body.engine === "open")) {
     // How long it takes on this host: its device (asked once a minute), the model it would use (one it has on disk) and
     // how many passes. A model the host doesn't have is refused here, before the run, with how to install it.
     // A visitor's price check (a guest's, or an account's on its own GPU) never calls a GPU, as main's price checks
@@ -228,8 +254,8 @@ export async function previewAudioTool(body: AudioToolRequest): Promise<AudioToo
     if (installed && !installed.includes(DBS_MODELS[quality])) throw new AudioToolError(missingDbs(DBS_MODELS[quality], installed));
     const { duration: seconds, channels } = p.split ?? {};
     Object.assign(out, { hostPick: pick, ...(device && { device }), ...(installed && { installed: installed.map((m) => (m === DBS_MODELS.best ? "best" : "fast")) }), ...(p.headerChannels && { channels: p.headerChannels }) });
-    const mode = dbsChannelsFor(body.tool === "split" && body.stereo ? "each channel" : "mono", channels);
-    if (seconds) out.estimate = (body.tool === "split" ? splitTime : removeDialogueTime)({ seconds, quality, mode, channels, device });
+    const mode = dbsChannelsFor((body.tool === "split" || body.tool === "clean-dialogue") && body.stereo ? "each channel" : "mono", channels);
+    if (seconds) out.estimate = (body.tool === "remove-dialogue" ? removeDialogueTime : splitTime)({ seconds, quality, mode, channels, device });
   }
   if (body.tool === "clean") {
     // As Split: the host's device and its RE-USE files (and DBS's, to keep music & effects), asked live for the owner;

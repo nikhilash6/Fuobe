@@ -11,6 +11,7 @@ import {
   MUSIC_STUDIO,
   SDR_TO_HDR_STUDIO,
   SFX_STUDIO,
+  SONG_TOOLS_STUDIO,
   TRANSCRIBE_STUDIO,
   TRANSLATE_STUDIO,
   UPSCALE_STUDIO,
@@ -49,6 +50,7 @@ const CONFIGS: Record<HubKind, Record<string, StudioConfig>> = {
     transcribe: TRANSCRIBE_STUDIO,
     sfx: SFX_STUDIO,
     music: MUSIC_STUDIO,
+    song: SONG_TOOLS_STUDIO,
     video: FOLEY_STUDIO,
   },
   "video-tools": {
@@ -72,6 +74,7 @@ const TOOLS: Partial<Record<HubKind, Record<string, () => React.ReactNode>>> = {
   },
   "video-tools": {
     "remove-object": () => <RemoveObjectTool />,
+    "remove-person": () => <RemoveObjectTool person />,
     "remove-dialogue": () => <RemoveDialogueTool />,
     evolution: () => <EvolutionTool />,
     restore: () => <RestoreTool />,

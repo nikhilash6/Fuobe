@@ -14,7 +14,7 @@ const MESSAGES: Record<string, string> = {
 };
 
 /**
- * Audio → Loop / extend, Join, Split soundtrack and Clean up voice (and a split's mix put back on its video), and Video
+ * Audio → Loop / extend, Join, Split soundtrack (and its Clean up dialogue) and Clean up voice (and a split's mix put back on its video), and Video
  * tools → Remove dialogue: start a run; `?preview=1` only plans and prices it.
  */
 async function post(request: Request) {
@@ -29,7 +29,7 @@ async function post(request: Request) {
         ? "Export the mix first"
         : tool === "remove-dialogue" && path === "video"
           ? "Add the video to take the dialogue out of"
-          : tool === "clean" && path === "media"
+          : (tool === "clean" || tool === "clean-dialogue") && path === "media"
             ? "Add the audio or video to clean"
             : (MESSAGES[path] ?? "Check the settings");
     return Response.json({ error: msg }, { status: 400 });

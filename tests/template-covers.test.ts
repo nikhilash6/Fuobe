@@ -127,8 +127,8 @@ describe("the template covers manifest", () => {
         lines.push(`  ${JSON.stringify(key)}: ${JSON.stringify(gen.slimEntry(key, { poster: e.poster, ...(e.video && { video: e.video }), ...(e.at && { at: e.at }), ...(e.frames && { frames: e.frames }) }))}`);
       }
     }
-    // The studios' tiles (239), Fuobe Soul's looks (139), AI Influencer's types (9) and the empty pages' examples (6).
-    expect(lines).toHaveLength(239 + 139 + 9 + 6);
+    // The studios' tiles (240, with Keyframes → animation), Fuobe Soul's looks (139), AI Influencer's types (9) and the empty pages' examples (6).
+    expect(lines).toHaveLength(240 + 139 + 9 + 6);
     const text = `{\n${lines.join(",\n")}\n}`;
     expect(text.length).toBeLessThan(36_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);

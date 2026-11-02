@@ -120,7 +120,7 @@ export interface ManifestWorkflow {
    * "timeline": one loader per audio clip, each placed at its start time; "videos" / "audios": one loader
    * per clip of a join, src/lib/av/joins.ts).
    */
-  expand?: "captions" | "timeline" | "videos" | "audios";
+  expand?: "captions" | "timeline" | "videos" | "audios" | "keyframes";
   validated: boolean;
   /** What ComfyUI answered when it last refused this graph. */
   validationError?: string;

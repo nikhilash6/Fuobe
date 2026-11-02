@@ -23,6 +23,7 @@ Some licences ask the app that runs their model to say so.
 - [TIGER / Look2Hear, copyright (c) 2026 Kai Li](https://github.com/JusperLee/TIGER). MIT. For dialogue, music and effects separation.
 - [RE-USE speech enhancement model, copyright (c) 2026 NVIDIA Corporation](https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE). OpenMDW-1.1. For clean up voice. Trained in part on WSJ (LDC) and an internal NVIDIA set (model card). The older nvidia/RE-USE repository is non-commercial (NSCLv1); Fuobe uses only the NemotronLabs repositories.
 - [Openjutsu, copyright (c) 2026 D3voz: the graphs Fuobe sends to your GPU, the settings code Fuobe ported from it, the SolarRenderer long-clip patch and the 17 light looks' wording](https://github.com/D3voz/openjutsu). MIT. For genjutsu: Group swap, Scene edit, From picture, Fix faces and Fix colours.
+- [Adapted from MOSS-Image's prompt-enhancer skill and its layout reference (commit 2b46b1e), copyright OpenMOSS](https://github.com/OpenMOSS/MOSS-Image). Apache-2.0. For the Layout Poster skill and Plan layout.
 
 ## Open model licences
 

@@ -2,9 +2,10 @@
  * The run a composer's draft asks for (what Generate sends): its own module, so a test can build the run an example's
  * draft makes (tests/examples-catalog.test.ts) the way the composer does.
  */
-import type { Engine, GenerationRequest, MediaKind, Operation } from "@/lib/catalog/types";
+import type { Engine, GenerationRequest, GenParams, MediaKind, Operation } from "@/lib/catalog/types";
 import type { FrameSupport } from "@/lib/catalog/keyframes";
 import { framesRequest, layoutRequest } from "@/lib/composer";
+import type { InbetweenTiming } from "@/lib/inbetween";
 import type { SlotValue } from "./media-slot";
 import type { Draft } from "./studio-context";
 
@@ -13,6 +14,19 @@ export interface FramesContext {
   support: FrameSupport;
   duration: number;
   chained: boolean;
+  /** Keyframe animation (Fuobe Animation): each gap's timing, fitted to the frames and the engine. */
+  animation?: { timing: InbetweenTiming };
+}
+
+/**
+ * The draft's keyframe-animation settings (params.extra.inbetween, stillMouth) go only with an animation: after Animation
+ * is turned off or another model is picked they stay in the draft (to come back to) but are not sent to that model.
+ */
+function withoutAnimation(params: GenParams, animating: boolean): GenParams {
+  const extra = params.extra;
+  if (animating || !extra || !("inbetween" in extra || "stillMouth" in extra)) return params;
+  const { inbetween: _i, stillMouth: _s, ...rest } = extra;
+  return { ...params, extra: Object.keys(rest).length ? rest : undefined };
 }
 
 export function buildRequest(
@@ -33,14 +47,14 @@ export function buildRequest(
   let images = [s.image, s.image2, s.image3].filter((x): x is SlotValue => !!x?.ref).map((x) => x.ref).concat(refKind === "image" ? refs : []);
   const videos = refKind === "video" ? refs : [];
   let endImage = s.endImage?.ref || undefined;
-  let params = draft.params;
+  let params = withoutAnimation(draft.params, !!(draft.frames && frames?.animation));
   let pinned = op;
   // Frames mode: the stills in order at their times (or the first and last as start and end frame), at the strip's length.
   if (draft.frames && frames) {
     const sent = framesRequest(draft.frames, frames);
     images = sent.images;
     endImage = sent.endImage;
-    params = { ...params, ...sent.params };
+    params = { ...params, ...sent.params, ...(frames.animation && { extra: { ...params.extra, inbetween: frames.animation.timing } }) };
     pinned = op ?? sent.op;
   }
   // Layout mode: the boxes ride as params.extra.layout, captioned with the prompt; the plan compiles them for the model.

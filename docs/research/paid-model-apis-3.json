@@ -395,11 +395,11 @@
   "fal-ai/gemini-omni-flash/edit resolves (unlisted alias of google/gemini-omni-flash/edit from part 1); not recorded separately."
  ],
  "counts": {
-  "endpoints": 206,
-  "fal": 165,
+  "endpoints": 207,
+  "fal": 166,
   "replicate": 41,
   "reverified": 9,
-  "new": 197
+  "new": 198
  },
  "endpoints": [
   {
@@ -21343,6 +21343,77 @@
    "verified": true,
    "sourceUrl": "https://fal.ai/models/veed/clean-audio/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=veed/clean-audio",
+   "capability": "audio"
+  },
+  {
+   "family": "deepfilternet",
+   "model": "DeepFilterNet 3",
+   "title": "DeepFilterNet 3",
+   "vendor": "Hendrik Schröter (Rikorose)",
+   "operation": "audio-clean",
+   "provider": "fal",
+   "endpoint": "fal-ai/deepfilternet3",
+   "falCategory": "audio-to-audio",
+   "status": "active",
+   "inputs": {
+    "audio_url": {
+     "type": "string",
+     "required": true,
+     "desc": "The URL of the audio to enhance.",
+     "examples": [
+      "https://v3b.fal.media/files/b/0a8a4022/DLoZhabKeVjd3urncoRE4_dirty.mp3"
+     ]
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history."
+    },
+    "audio_format": {
+     "type": "enum",
+     "values": [
+      "mp3",
+      "aac",
+      "m4a",
+      "ogg",
+      "opus",
+      "flac",
+      "wav"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "mp3",
+     "desc": "The format for the output audio."
+    },
+    "bitrate": {
+     "type": "string",
+     "required": false,
+     "default": "192k",
+     "desc": "The bitrate of the output audio."
+    }
+   },
+   "keyFields": {
+    "audio": "audio_url"
+   },
+   "output": "audio_file.url",
+   "outputShape": {
+    "audio_file": "object{url,content_type,file_name,file_size,duration,channels,sample_rate,bitrate}",
+    "timings": "object{preprocess,inference,postprocess}"
+   },
+   "price": "$0.001 per seconds",
+   "pricing": {
+    "usd": 0.001,
+    "unit": "second",
+    "note": "$0.001 per second (fal's model page; whether input or compute seconds is not said: Fuobe prices the input's seconds)"
+   },
+   "replicateEquivalent": null,
+   "license": "MIT OR Apache-2.0 (DeepFilterNet code and the DeepFilterNet3 weights, github.com/Rikorose/DeepFilterNet README, read 2026-11-02); fal hosts it as a paid API",
+   "notes": "Speech enhancement (noise suppression), not separation: one denoised track, 48 kHz mono in fal's example. Audio only (audio_url); a video's soundtrack goes in through extract-soundtrack. audio_format mp3 by default (flac / wav / aac / m4a / ogg / opus), bitrate 192k. Added for DBS D5 (Clean up dialogue).",
+   "verified": true,
+   "checked": "2026-11-02",
+   "sourceUrl": "https://fal.ai/models/fal-ai/deepfilternet3/api",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/deepfilternet3",
    "capability": "audio"
   },
   {

@@ -8,7 +8,7 @@ import { createClient, networkMessage, statusMessage } from "../bin/lib/client.m
 import { GEN_OPTIONS, mcpSetup, outputName, toolFailure } from "../bin/lib/commands.mjs";
 import { configPath, normalizeUrl, readConfig, resolveTarget, writeConfig } from "../bin/lib/config.mjs";
 import { clip, countOutputs, formatCost, formatDuration, previewText, table } from "../bin/lib/format.mjs";
-import { findSkillDirs, packSkill, parseSource, skillHead } from "../bin/lib/skills.mjs";
+import { csvCells, estimateLines, exactCost, findSkillDirs, headerInputs, packSkill, parseSource, priceWords, skillHead, skillValues, toCsv } from "../bin/lib/skills.mjs";
 import { crc32, zipFiles } from "../bin/lib/zip.mjs";
 import { unzip } from "@/server/assist/unzip";
 
@@ -442,5 +442,53 @@ describe("the CLI package", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"));
     expect(pkg.bin).toEqual({ fuobe: "bin/fuobe.mjs" });
     expect(fs.readFileSync(path.join(root, "fuobe.mjs"), "utf8").startsWith("#!/usr/bin/env node\n")).toBe(true);
+  });
+});
+
+describe("running a skill from the CLI (W4)", () => {
+  const params = [
+    { id: "product", label: "Product photo", type: "image" },
+    { id: "name", label: "Product name", type: "text" },
+  ];
+
+  it("reads -p input=value as text, keeping everything after the first =", () => {
+    expect(skillValues(["product=lamp.png", "name=Lumen = desk", "takes=2", "aspect="])).toEqual({ product: "lamp.png", name: "Lumen = desk", takes: "2", aspect: "" });
+    expect(usage(() => skillValues(["lamp.png"]))).toMatch(/^-p takes input=value, not “lamp\.png”/);
+    expect(usage(() => skillValues(["name=a", "name=b"]))).toBe("-p name is given twice");
+  });
+
+  it("reads a table as Fuobe does: quotes, line breaks in quotes, a BOM, tabs, empty rows skipped", () => {
+    expect(csvCells('\uFEFFproduct,name\n"a.png","Lumen, ""desk"""\n\n b.png ,"two\nlines"\n')).toEqual([
+      { cells: ["product", "name"], line: 1 },
+      { cells: ["a.png", 'Lumen, "desk"'], line: 2 },
+      { cells: ["b.png", "two\nlines"], line: 4 },
+    ]);
+    expect(csvCells("Product photo\tProduct name\na.png\tLumen").map((r) => r.cells)).toEqual([
+      ["Product photo", "Product name"],
+      ["a.png", "Lumen"],
+    ]);
+    // A header names an input by its id or its label, whatever the case and spacing.
+    expect(headerInputs(["PRODUCT_photo", "name", "notes"], params)).toEqual(["product", "name", null]);
+  });
+
+  it("writes rows back as CSV and knows the line each starts on", () => {
+    const csv = toCsv([
+      ["product", "name"],
+      ["/api/files/a.png", "Lumen, desk"],
+      ["/api/files/b.png", "two\nlines"],
+      ["/api/files/c.png", 'say "hi"'],
+    ]);
+    expect(csv.text).toBe('product,name\n/api/files/a.png,"Lumen, desk"\n/api/files/b.png,"two\nlines"\n/api/files/c.png,"say ""hi"""\n');
+    expect(csv.lines).toEqual([1, 2, 3, 5]);
+    expect(csvCells(csv.text).map((r) => r.cells[1])).toEqual(["name", "Lumen, desk", "two\nlines", 'say "hi"']);
+  });
+
+  it("prices to the cent before asking, and names a row's problem by its line", () => {
+    expect([exactCost(12.4), exactCost(0), exactCost(0.004)]).toEqual(["$12.40", "free", "<$0.01"]);
+    expect(priceWords({ demo: false, total: 12.4 }, 20)).toBe("20 runs · $12.40 in all");
+    expect(priceWords({ demo: true, total: 0 }, 1)).toBe("a demo (nothing connected), free");
+    const job = { modelName: "Nano Banana Pro", note: "Edit", count: 1, costUsd: 0.62, demo: false };
+    const est = { engine: "open", jobs: [job], errors: [], runs: [{ line: 3, errors: ["Product name is needed"] }], runnable: false, total: null, demo: false };
+    expect(estimateLines(est, "Weekly promo", { rows: true, lineOf: (l: number) => l + 1 })).toEqual(["Weekly promo on your GPU (open source): 1 step", "  1. Nano Banana Pro · Edit · $0.62", "Row 4: Product name is needed"]);
   });
 });

@@ -293,6 +293,7 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /Llama 3\.1 Community License/, name: "Llama 3.1 Community License", class: "conditions", url: "https://www.llama.com/llama3_1/license/" },
   { re: /DINOv3 License/, name: "DINOv3 License", class: "conditions" },
   // Before SAM's: the H3 workflows' text names both, and the territory catch is the one that counts.
+  { re: /MiniMax-Music3 Community License/, name: "MiniMax-Music3 Community License", class: "conditions", url: "https://huggingface.co/MiniMaxAI/MiniMax-Music3/blob/1b525ccb685ae809f33027c51c351eeb5833cf72/LICENSE" },
   { re: /MiniMax H3 Community License/, name: "MiniMax H3 Community License", class: "regions", url: "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE" },
   { re: /SAM License/, name: "Meta SAM License", class: "conditions" },
   { re: /OpenRAIL\+\+-M/, name: "CreativeML OpenRAIL++-M", class: "conditions" },
@@ -639,6 +640,12 @@ export const ATTRIBUTIONS: Attribution[] = [
     text: "Openjutsu, copyright (c) 2026 D3voz: the graphs Fuobe sends to your GPU, the settings code Fuobe ported from it, the SolarRenderer long-clip patch and the 17 light looks' wording",
     licence: "MIT",
     url: "https://github.com/D3voz/openjutsu",
+  },
+  {
+    for: "The Layout Poster skill and Plan layout",
+    text: "Adapted from MOSS-Image's prompt-enhancer skill and its layout reference (commit 2b46b1e), copyright OpenMOSS",
+    licence: "Apache-2.0",
+    url: "https://github.com/OpenMOSS/MOSS-Image",
   },
 ];
 

@@ -668,8 +668,15 @@
  "hosted": [
   {
    "provider": "fal.ai",
+   "endpoint": "speridlabs/idol",
+   "result": "hosted since 2026-10-30 (catalog status active; re-checked 2026-11-02): image_url, image_type synthetic|real, num_gaussians 32,768-1,048,576, num_inference_steps 1-50 (default 50), guidance_scale 0-10 (default 3), seed, enable_safety_checker -> model_mesh (.ply), model_glb (point cloud), preprocessed_image, camera. fal-ai/idol answers the same schema but is not in the catalog. Fuobe's cloud model idol-3d (package idol-1).",
+   "price": "$0.10 per generation",
+   "source": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=speridlabs/idol; https://api.fal.ai/v1/models?endpoint_id=speridlabs/idol; https://fal.ai/models/speridlabs/idol"
+  },
+  {
+   "provider": "fal.ai",
    "endpoint": null,
-   "result": "not hosted: queue OpenAPI 404 for fal-ai/idol, speridlabs/idol, fal-ai/idol/image-to-3d, fal-ai/speridlabs-idol; full paged scan of api.fal.ai/v1/models (1,447 models, 2026-10-30) finds only tripo3d/triposplat for splat/gaussian (a different model)",
+   "result": "2026-10-30 (superseded the same evening): not hosted: queue OpenAPI 404 for fal-ai/idol, speridlabs/idol, fal-ai/idol/image-to-3d, fal-ai/speridlabs-idol; full paged scan of api.fal.ai/v1/models (1,447 models, 2026-10-30) finds only tripo3d/triposplat for splat/gaussian (a different model)",
    "price": null,
    "source": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/idol; https://api.fal.ai/v1/models"
   },
@@ -689,8 +696,8 @@
   }
  ],
  "hostedSummary": {
-  "idolHosted": false,
-  "cloudRoute": "none; open engine only, no substitute",
+  "idolHosted": true,
+  "cloudRoute": "fal speridlabs/idol ($0.10) since 2026-10-30, built as idol-3d (corrected 2026-11-02; the 2026-10-30 check predates fal's listing)",
   "existingCloudSplat": "triposplat (fal tripo3d/triposplat, <= 262,144 Gaussians, $0.05; cloud-models.generated.ts L15265-15307) stays as it is and is never labelled Idol"
  },
  "fuobeToday": {

@@ -17,6 +17,7 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { useRun, useRunPreview } from "@/components/photodump/hooks";
 import { ResultsGrid } from "@/components/photodump/results";
 import { RunLine } from "@/components/photodump/steps";
+import { AnimatePosesButton } from "@/components/turnaround/animate-poses";
 import { TurnaroundButton } from "@/components/turnaround/turnaround-dialog";
 import { HandoffImage } from "@/components/nav/next-steps";
 import { useElements, useEngine, useGenerations, useLikelyVisitor, useSaveElement } from "@/lib/api";
@@ -353,6 +354,7 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
                       // Photos someone brought are of a real person: the consent line is asked for.
                       realPerson={(latest.request.inputs?.images ?? []).some((u) => u.startsWith("/api/files/"))}
                     />
+                    <AnimatePosesButton key={`poses-${latest.id}`} pictures={sheetPictures(latest)} name={mode === "cast" ? castNameFor(cast) : undefined} />
                   </div>
                   <SaveCharacter
                     key={`save-${latest.id}`}

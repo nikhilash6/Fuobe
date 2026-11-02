@@ -4,9 +4,10 @@
  */
 import { nanoid } from "nanoid";
 import type { Generation, GenerationRequest, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
-import { presetModel, presetParams, routeParams, withoutLayout } from "@/lib/composer";
+import { handoffFrames, presetModel, presetParams, routeParams, withoutLayout } from "@/lib/composer";
 import { presetRoutes } from "@/lib/catalog/preset-recipe-routes";
-import { positionsFrom } from "@/lib/catalog/keyframes";
+import { positionsFrom, spread } from "@/lib/catalog/keyframes";
+import { songFromRun } from "@/lib/lyrics";
 import { reuseSignature, withSignatureWords } from "@/lib/catalog/palettes";
 import { movedAppRequest } from "@/lib/catalog/plan";
 import { currentModelId, migrateRequest } from "@/lib/catalog/replaced";
@@ -64,12 +65,19 @@ export function initialDraft(
   }
   if (sp.get("video")) slots.video = slot(sp.get("video"));
   if (sp.get("audio")) slots.audio = slot(sp.get("audio"));
+  // A Mureka song handed over (a music result's Extend, Remix or Stems): its id goes with it.
+  const song = sp.get("audio") && sp.get("song") ? { id: sp.get("song")!, url: sp.get("audio")! } : undefined;
+  // A song's lyrics handed over with it (a sung result's Remix, which needs the whole song's words).
+  const lyrics = sp.get("lyrics") ?? undefined;
   // A voice sample handed over (Clean up voice → "Use as a voice sample"): the voice a cloning model speaks with.
   if (sp.get("voice")) slots.voiceAudio = slot(sp.get("voice"));
   // An output format handed over in the link (Export → "ProRes in the cloud"), when the model writes it.
   const format = model?.options.formats?.find((f) => f === sp.get("format"));
   // A size handed over (Regenerate in 2K → 1440p), when the model offers it.
   const resolution = model?.options.resolutions?.find((r) => r === sp.get("resolution"));
+  // Stills handed over as frames (Storyboard's "Animate these panels", a Character Sheet's poses): Frames mode, evenly spaced.
+  const handed = config.frames ? handoffFrames(sp.get("frames")) : [];
+  const frames = handed.length ? handed.map((u, i) => ({ value: slot(u)!, at: spread(handed.length)[i] })) : undefined;
   return {
     prompt: sp.get("prompt") ?? "",
     negativePrompt: "",
@@ -79,6 +87,9 @@ export function initialDraft(
     refs,
     presetId: sp.get("preset") ?? config.preset?.id,
     presetOptions: {},
+    ...(frames && { frames }),
+    ...(song && { song }),
+    ...(lyrics && { lyrics }),
   };
 }
 
@@ -124,6 +135,11 @@ export function draftFromRequest(request: GenerationRequest, config: StudioConfi
   // A spoken language stored as a name (Assist's "Spanish") or a locale comes back as the model's own code.
   const languages = getModel(r.modelId)?.options.sourceLanguages;
   if (languages?.length && params.sourceLanguage) params.sourceLanguage = matchSpokenLanguage(params.sourceLanguage, languages) ?? params.sourceLanguage;
+  // A song's lyrics come back in the lyrics editor. One of Mureka's own songs (an extend or remix by its id) comes back as
+  // the attached song's id, so a song swapped in afterwards is sent as itself, never as the old id.
+  const sung = songFromRun(params.extra, r.inputs?.audio);
+  params.extra = sung.extra;
+  const { lyrics, song } = sung;
   // A layout run comes back in Layout mode (studios that have it): its boxes in the editor, the prompt as their caption.
   const laid = config.layout ? withoutLayout(params) : { params, layout: undefined };
   return {
@@ -140,6 +156,8 @@ export function draftFromRequest(request: GenerationRequest, config: StudioConfi
     presetStrength: r.presetStrength,
     mix: r.mix,
     signature: signed?.signature,
+    lyrics,
+    song,
   };
 }
 

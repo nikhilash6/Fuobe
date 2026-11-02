@@ -975,10 +975,36 @@ export const MARKETING_IMAGE_NOTE: Record<Engine, string> = {
  * Whether a run's words are set over the picture in the browser (an open model, or the Original on either engine), not
  * drawn by the model (GPT Image 2.5, Ideogram, Recraft, Nano Banana Pro in the cloud).
  */
-export const wordsOnTop = (engine: Engine, modelId: string): boolean => engine === "open" || modelId === MARKETING_IMAGE_MODEL;
+export const wordsOnTop = (engine: Engine, modelId: string, drawn = false): boolean => !drawn && (engine === "open" || modelId === MARKETING_IMAGE_MODEL);
+
+/**
+ * "Words drawn by the model", a choice on the formats with words (Ads, Poster, Marketplace) and in Ads Studio:
+ * the copy's places (planAd, src/lib/layout-surfaces.ts) become a layout, and a model that reads boxes draws the
+ * headline, the button and the product in them. Setting the words on top in the browser stays the default: it gives
+ * your exact fonts. MOSS-Image on your GPU; MOSS-Image hosted on fal, Ideogram 4.5 or FLUX.3 in the cloud, each with
+ * prompt expansion off (src/lib/catalog/plan.ts planLayout).
+ */
+export const DRAWN_WORDS_MODELS: Record<Engine, ModelChoice[]> = {
+  open: [{ id: "oss-moss-image", name: "MOSS-Image", note: "MOSS-Image on your GPU · draws your words in place, free" }],
+  cloud: [
+    { id: "moss-image", name: "MOSS-Image", note: "MOSS-Image, hosted on fal · draws your words in place" },
+    { id: "ideogram-4-5", name: "Ideogram 4.5", note: "Draws the exact text in place and keeps your product photo" },
+    { id: "flux-3", name: "FLUX.3", note: "Draws the text in place and keeps your product photo" },
+  ],
+};
+
+export const DRAWN_WORDS_LABEL = "Words drawn by the model";
+/** The option's hint, beside the default it leaves alone. */
+export const DRAWN_WORDS_HINT = "The headline and button are drawn into the picture, in their places. Off: they're set on top in your brand fonts, letter for letter.";
+
+/** The model that draws the words on an engine: the one asked for when it is a choice there, else the first. */
+export function drawnWordsModel(engine: Engine, asked?: string | null): string {
+  return asked && DRAWN_WORDS_MODELS[engine].some((c) => c.id === asked) ? asked : DRAWN_WORDS_MODELS[engine][0].id;
+}
 
 /** The models a Marketing Studio format can use on an engine, the default first: the Original for every image format. */
-export function formatModels(format: FormatDef, engine: Engine, has: { product: boolean; avatar: boolean }): ModelChoice[] {
+export function formatModels(format: FormatDef, engine: Engine, has: { product: boolean; avatar: boolean }, drawn = false): ModelChoice[] {
+  if (drawn && format.text && format.pipeline === "image") return DRAWN_WORDS_MODELS[engine];
   const original: ModelChoice = { id: MARKETING_IMAGE_MODEL, note: MARKETING_IMAGE_NOTE[engine] };
   if (engine === "open") {
     switch (format.pipeline) {
@@ -1031,6 +1057,8 @@ export const AD_VISUAL_MODELS: Record<Engine, ModelChoice[]> = {
     { id: MARKETING_IMAGE_MODEL, name: "Fuobe Marketing Image", note: "Fuobe Original · Qwen-Image-Edit 2511 with your product photo, hosted on fal" },
     { id: "nano-banana-pro", name: "Nano Banana Pro", note: "Google's Gemini 3 Pro Image, through fal" },
     { id: "gpt-image-2-5", name: "GPT Image 2.5", note: "OpenAI's GPT Image 2.5 Flare, through fal" },
+    // A model that reads boxes gets a "keep clear" layout: the product placed where the words leave room (src/server/ads.ts).
+    { id: "flux-3", name: "FLUX.3", note: "Black Forest Labs' FLUX.3 through fal, with the product kept clear of the words" },
   ],
 };
 

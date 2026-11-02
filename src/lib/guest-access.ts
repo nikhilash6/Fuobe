@@ -97,7 +97,7 @@ export function guestRead(pathname: string): GuestRead {
  * The run routes whose `?preview=1` only plans and prices (any other route would ignore the flag and run). AI
  * Influencer, Fashion Factory and Character Sheet price on load, with synchronous price functions.
  */
-const PREVIEWS = [/^\/api\/(generations|audio-tools|dub|katana|turnaround|influencer|photodump|photodump\/fashion|photodump\/character)$/, /^\/api\/dub\/[^/]+\/voice$/];
+const PREVIEWS = [/^\/api\/(generations|audio-tools|dub|katana|turnaround|fly-around|influencer|photodump|photodump\/fashion|photodump\/character)$/, /^\/api\/dub\/[^/]+\/voice$/];
 
 /** The estimate routes (named: a dynamic segment called "estimate" on another route must not pass for one). */
 const ESTIMATES =

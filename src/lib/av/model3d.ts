@@ -1,4 +1,6 @@
 import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/catalog/types";
+import { PATH_FRAMES, keyAt } from "@/lib/camera-path";
+import { exactOrbitKeys, type ExactOrbit } from "@/lib/exact-orbit";
 
 /**
  * Image to 3D / Product spin: the modes (from an image, from several images, from text, pick an object, a splat),
@@ -10,6 +12,8 @@ import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/ca
 export const MODEL3D_FEATURE = "image-to-3d";
 /** The helper steps of a chain (the open text-to-3D still): kept out of the page's results and the Library. */
 export const MODEL3D_STEP_FEATURE = "image-to-3d-step";
+/** "Film it photoreal": the photoreal orbits, listed with the models they were filmed from. */
+export const MODEL3D_FILM_FEATURE = "image-to-3d-film";
 
 export type Model3dMode = "image" | "multi" | "text" | "objects" | "splat";
 
@@ -35,6 +39,7 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
       { id: "trellis-2", note: "Detailed geometry · ≈ $0.30" },
       { id: "tripo-h3-1", note: "Clean topology, PBR · ≈ $0.30" },
       { id: "meshy-7-1", note: "Textured, optional rigging · ≈ $1.20" },
+      { id: "tripo-p2", note: "Production tier, realistic textures · ≈ $1.10" },
     ],
     open: [
       { id: "oss-pixal3d", note: "Most faithful to your photo, with a turntable video" },
@@ -55,8 +60,15 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
     open: [],
   },
   splat: {
-    cloud: [{ id: "triposplat", note: "A soft, photoreal 3D capture · ≈ $0.05" }],
-    open: [{ id: "oss-triposplat", note: "A soft, photoreal 3D capture, with an orbit video" }],
+    cloud: [
+      { id: "triposplat", note: "A soft, photoreal 3D capture · ≈ $0.05" },
+      { id: "idol-3d", note: "One object from one picture · ≈ $0.10" },
+    ],
+    // TripoSplat stays the default until Idol 3D is compared with it side by side.
+    open: [
+      { id: "oss-triposplat", note: "A soft, photoreal 3D capture, with an orbit video" },
+      { id: "oss-idol", note: "One object from one picture, with an orbit video" },
+    ],
   },
 };
 
@@ -66,7 +78,56 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
  * dino_v3_vit_h) and TRELLIS.2 (a DINOv3 ViT-L encoder, dino_v3_L_naf in Comfy-Org's repackage) do; Hunyuan3D,
  * Tripo, Meshy and SAM 3D don't. Open models get theirs from their workflow's licence.
  */
-export const CLOUD_NOTICES: Record<string, string[]> = { triposplat: ["Built with DINOv3"], "trellis-2": ["Built with DINOv3"] };
+export const CLOUD_NOTICES: Record<string, string[]> = { triposplat: ["Built with DINOv3"], "idol-3d": ["Built with DINOv3"], "trellis-2": ["Built with DINOv3"] };
+
+/** Idol 3D on each engine: the open graph (image-to-splat-idol) and fal's speridlabs/idol. */
+export const IDOL_MODELS = { open: "oss-idol", cloud: "idol-3d" } as const;
+export const isIdol = (id: string | null | undefined) => id === IDOL_MODELS.open || id === IDOL_MODELS.cloud;
+
+export type IdolQuality = "best" | "quick";
+
+/**
+ * Idol 3D's two settings on the open engine (the graph's bindings, sent as params.extra). best is Idol's reference
+ * (idol-sdk: 50 Euler steps, CFG weight 3 in its (1+w) form = ComfyUI cfg 4, 262,144 Gaussians); quick is the
+ * ComfyUI-Idol README's "faster trade-off" (20 dpmpp_2m steps) and "fast preview" (65,536 Gaussians), quality
+ * unmeasured (docs/research/idol-9.md §11). Labelled by steps and Gaussians, never by seconds.
+ */
+export const IDOL_PRESETS: Record<IdolQuality, { steps: number; sampler: string; cfg: number; numGaussians: number }> = {
+  best: { steps: 50, sampler: "euler", cfg: 4, numGaussians: 262144 },
+  quick: { steps: 20, sampler: "dpmpp_2m", cfg: 4, numGaussians: 65536 },
+};
+
+/** The two settings as the page offers them. */
+export const IDOL_QUALITIES: { id: IdolQuality; label: string; hint: string }[] = [
+  { id: "best", label: "Best", hint: "50 steps · 262,144 Gaussians" },
+  { id: "quick", label: "Quick look", hint: "20 steps · 65,536 Gaussians" },
+];
+
+/**
+ * Idol 3D's settings for a request: on the open engine the graph's (photoCrop picks the looser crop), on fal the
+ * endpoint's own fields. fal takes the steps, the Gaussians and the kind of picture ("real" is Idol's photo crop),
+ * but no sampler and no CFG in ComfyUI's form, so its guidance stays fal's default (Idol's reference weight 3).
+ */
+export function idolExtra(engine: Engine, quality: IdolQuality = "best", photoCrop = false): Record<string, unknown> {
+  const p = IDOL_PRESETS[quality] ?? IDOL_PRESETS.best;
+  if (engine === "open") return { ...p, photoCrop };
+  return { num_inference_steps: p.steps, num_gaussians: p.numGaussians, image_type: photoCrop ? "real" : "synthetic" };
+}
+
+/**
+ * Whether a new picture reads as a photo for Idol's crop: an upload (dropped here, or an earlier one picked from the
+ * library) is; a result made here (a render or a generated image) isn't. undefined: the picture is the same one, or the
+ * second report of an upload already counted, so the switch keeps what the person set.
+ */
+export function idolPhotoFor(
+  next: { ref: string; uploading?: boolean; source?: "upload" | "generation" } | null,
+  prev: { ref: string; uploading?: boolean } | null | undefined,
+): boolean | undefined {
+  if (!next || next.ref === prev?.ref) return undefined;
+  if (next.uploading) return true;
+  if (prev?.uploading) return undefined;
+  return next.source === "upload";
+}
 
 /** Every model the page offers (⌘K's ?model= links land on its mode). */
 export const ALL_MODELS_3D: Model3dChoice[] = Object.values(MODELS_3D).flatMap((m) => [...m.cloud, ...m.open]);
@@ -100,6 +161,10 @@ export interface Model3dInput {
   views?: Partial<Record<ViewSide, string>>;
   /** From text: the object; Pick an object: what to take out. */
   prompt?: string;
+  /** Splat with Idol 3D: Best (its reference settings, the default) or Quick look. */
+  quality?: IdolQuality;
+  /** Splat with Idol 3D: the picture is a photo, so the object gets Idol's looser crop. */
+  photoCrop?: boolean;
 }
 
 /** The model for a mode and engine: the one picked when the mode offers it, else its default (null: none on that engine). */
@@ -152,7 +217,8 @@ export function model3dRequest(i: Model3dInput): GenerationRequest {
     case "objects":
       return { ...base, op: "image-to-3d", prompt, inputs: { images } };
     case "splat":
-      return { ...base, op: "splat", inputs: { images } };
+      // Idol 3D gets its Best / Quick look settings and the photo crop; TripoSplat's request is unchanged.
+      return { ...base, op: "splat", inputs: { images }, ...(isIdol(modelId) && { params: { extra: idolExtra(i.engine, i.quality, !!i.photoCrop) } }) };
     default:
       return { ...base, op: "image-to-3d", inputs: { images } };
   }
@@ -268,6 +334,34 @@ export function animateSpinHref(v: Model3dView, turntable?: string): string | nu
 }
 
 // ---------------------------------------------------------------------------
+// Film it photoreal: a photoreal orbit whose geometry matches the 3D model
+
+/** The orbit "Film it photoreal" films: one level turn round the model, counter-clockwise seen from above. */
+export const PHOTOREAL_ORBIT: ExactOrbit = { degrees: 360, direction: "ccw", tilt: 0, pulse: 0 };
+
+/**
+ * The model's turntable angle (radians) for frame i of the path render: the camera moving round to the right is the
+ * model turning the other way under a still camera. One constant to flip if a GPU run shows the film turning against
+ * its render.
+ */
+export const PHOTOREAL_TURN_SIGN: 1 | -1 = -1;
+export function photorealAngle(i: number, frames = PATH_FRAMES): number {
+  const k = keyAt(exactOrbitKeys(PHOTOREAL_ORBIT), frames > 1 ? i / (frames - 1) : 0);
+  return (PHOTOREAL_TURN_SIGN * k.azimuth * Math.PI) / 180 + 0;
+}
+
+/**
+ * "Film it photoreal": the photo the model was made from, filmed going round it. Cloud: H3 Max camera-controls from the
+ * photo along the orbit. Open: Wan 2.1 + Uni3C from the photo, guided by the model recorded along the same orbit
+ * (`render`; the browser records the GLB, a splat hands its own orbit video). Null when there's no photo to start from.
+ */
+export function photorealBody(v: Pick<Model3dView, "photo" | "poster">, engine: Engine, render?: string, still?: string) {
+  const image = v.photo ?? still;
+  if (!image) return null;
+  return { engine, image, orbit: PHOTOREAL_ORBIT, feature: MODEL3D_FILM_FEATURE, title: "Photoreal orbit", ...(engine === "open" && render && { render }) };
+}
+
+// ---------------------------------------------------------------------------
 // Rig & animate (Meshy rigging on fal; cloud only — UniRig's ComfyUI pack isn't verified)
 
 export const RIG_MODEL = "meshy-rigging";
@@ -360,4 +454,29 @@ export function animationId(v: unknown): number | null {
 export function rigRequest(o: { glb: string; animation?: number | null }): GenerationRequest {
   const animation = o.animation === undefined || o.animation === null ? null : animationId(o.animation);
   return { feature: MODEL3D_FEATURE, modelId: RIG_MODEL, op: "rig-3d", inputs: { model3d: o.glb }, ...(animation !== null && { params: { animation } }) };
+}
+
+// ---------------------------------------------------------------------------
+// Retexture (Meshy 7 or 6 on fal; cloud only): new textures on a finished model, from words or a style picture.
+
+/** The retexture models, the default first. */
+export const RETEXTURE_MODELS = [
+  { id: "meshy-7-retexture", label: "Meshy 7" },
+  { id: "meshy-6-retexture", label: "Meshy 6" },
+] as const;
+export type RetextureModel = (typeof RETEXTURE_MODELS)[number]["id"];
+/** Meshy's style prompt: "Maximum 600 characters". */
+export const RETEXTURE_PROMPT_MAX = 600;
+export const RETEXTURE_SIZES = ["2k", "4k", "8k"] as const;
+
+/** Retexture a finished model: the words, or a style picture (which wins when both go), at a texture size. */
+export function retextureRequest(o: { glb: string; prompt?: string; style?: string; model?: RetextureModel; size?: (typeof RETEXTURE_SIZES)[number] }): GenerationRequest {
+  return {
+    feature: MODEL3D_FEATURE,
+    modelId: o.model ?? RETEXTURE_MODELS[0].id,
+    op: "retexture-3d",
+    prompt: (o.prompt ?? "").trim().slice(0, RETEXTURE_PROMPT_MAX),
+    inputs: { model3d: o.glb, ...(o.style && { images: [o.style] }) },
+    ...(o.size && o.size !== "2k" && { params: { extra: { texture_resolution: o.size } } }),
+  };
 }

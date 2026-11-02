@@ -11,6 +11,8 @@ import { ANGLES_2511_LORA } from "./open-tools";
 import { composeShots, estimateCost, planGeneration, routesFor } from "./plan";
 import { soulRecipe } from "./soul";
 import { planTurnaround, type TurnaroundInput } from "./turnaround";
+import { planFlyAround } from "./fly-around";
+import { exactDefaults, exactSummary, normalizeExact, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { CAST_LOOK } from "./soul-cards";
 import type { Engine, GenerationRequest, GenParams, LoraRef, ModelDef, Operation } from "./types";
 
@@ -218,6 +220,11 @@ export interface CinemaGenerateInput {
   prompt: string;
   /** # camera moves, in order. */
   moves?: string[];
+  /**
+   * The first move as an exact orbit: an orbit move (drone-orbit, arc-left, arc-right, bullet-time) with
+   * the Exact switch on follows these numbers instead of a LoRA's or the prompt's idea of an orbit.
+   */
+  exact?: Partial<ExactOrbit>;
   settings: DirectorSettings;
   brief?: string;
   /** Reference images (the first one is the start frame). @elements add theirs on the server. */
@@ -638,7 +645,8 @@ export const CAST_SHEET_MODEL = "oss-zimage-soul-cast";
 export const CINEMA_MODELS: Record<CinemaMode, Record<Engine, string[]>> = {
   video: {
     // Kling 4.0: a 30 s take (up to 6 shots) in one call, with @Elements and reference clips.
-    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-4", "kling-3", "veo-3-1", "minimax-h3-max"],
+    // H3 Max Turbo: the cheap draft take (about $0.14 for 5 s at 768P in November), with sound.
+    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-4", "kling-3", "veo-3-1", "minimax-h3-max", "minimax-h3-max-turbo"],
     open: [CINEMA_MODEL, "oss-minimax-h3", "oss-ltx25", "oss-wan22-14b"],
   },
   image: { cloud: [CINEMA_STILL_MODEL, "nano-banana-pro", "seedream-5-pro"], open: [CINEMA_STILL_MODEL, "oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism", "oss-moss-image"] },
@@ -1480,7 +1488,27 @@ function clipModel(model: ModelDef, input: CinemaGenerateInput, notes: string[])
   return instead;
 }
 
+/**
+ * An exact orbit: the first move, an orbit with the Exact switch on, filmed from the start frame along
+ * the orbit's numbers as Fly around plans it (src/lib/catalog/fly-around.ts): H3 Max camera-controls on the cloud; on your
+ * GPU, MoGe 2's depth, the server's render of the path and Uni3C. The other moves and the Director's words stay words.
+ */
+function planExactVideo(input: CinemaGenerateInput): CinemaPlan | null {
+  const moves = (input.moves ?? []).filter((m) => moveBySlug(m));
+  if (!input.exact || !takesExact(moves[0])) return null;
+  const orbit = normalizeExact(input.exact, exactDefaults(moves[0]));
+  const image = input.images?.[0];
+  const compiled = compileDirector({ prompt: input.prompt, settings: input.settings, moves: moves.slice(1), brief: input.brief, mode: "video", target: "prompt" });
+  const plan = planFlyAround({ engine: input.engine, image, orbit, prompt: compiled.prompt, duration: input.duration, resolution: input.resolution, feature: "cinema" });
+  const notes = [`${moveBySlug(moves[0])!.name} follows your numbers exactly: ${exactSummary(orbit)}`, ...plan.notes];
+  if ((input.images?.length ?? 0) > 1) notes.push("An exact orbit films from the first image alone");
+  const blocker = !image ? "Add a start frame to film an exact orbit" : plan.blocker;
+  return finish(plan.model, plan.steps, notes, blocker);
+}
+
 function planVideo(input: CinemaGenerateInput, ctx: CinemaContext): CinemaPlan {
+  const exact = planExactVideo(input);
+  if (exact) return exact;
   const notes: string[] = [];
   const engine = input.engine;
   const open = engine === "open";

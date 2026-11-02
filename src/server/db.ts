@@ -608,6 +608,10 @@ export const MIGRATIONS: string[] = [
   // Design a voice: a designed voice on its element: the model, the words, what its clip
   // says and, once the cloud has cloned it, Qwen3-TTS's embedding file (src/lib/catalog/elements.ts ElementVoice).
   `ALTER TABLE characters ADD COLUMN voice_json TEXT;`,
+  // a scheduled task can run a saved skill instead of a request Assist plans: the
+  // skill's name, one set of its inputs as text (a file is its /api/files/… URL) and the file inputs that take the
+  // newest upload of their kind when the run starts. NULL: a request, as before.
+  `ALTER TABLE assist_schedules ADD COLUMN skill_json TEXT;`,
 ];
 
 /**

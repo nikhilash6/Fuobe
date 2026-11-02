@@ -359,7 +359,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
     scenePrice,
   };
   const onLoadShot = (shot: DirectorShot) => {
-    setDraft({ mode: "video", prompt: shot.prompt, moves: shot.moves, duration: shot.duration, source: null, action: "generate", multiShot: { mode: "off", shots: [] } });
+    setDraft({ mode: "video", prompt: shot.prompt, moves: shot.moves, exact: null, duration: shot.duration, source: null, action: "generate", multiShot: { mode: "off", shots: [] } });
     if (Object.keys(shot.settings).length) onSettings(shot.settings);
     toast("Shot loaded — review it, then press Generate", { duration: 2500 });
     if (!xl) setPanel(null);

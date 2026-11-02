@@ -21,6 +21,16 @@ export type ScheduleRule =
 /** Ask first: the plan waits in the chat as an approval card. Auto: plans run up to `capUsd` per run. */
 export type ScheduleApproval = "ask" | "auto";
 
+/**
+ * A task that runs a saved skill: no model plans it. `values` are one set of the recipe's inputs as text
+ * (a file is its /api/files/… URL); an input in `sources` takes the newest upload of its kind when the run starts.
+ */
+export interface ScheduleSkill {
+  name: string;
+  values: Record<string, string>;
+  sources?: Record<string, "newest">;
+}
+
 export const SCHEDULE_HOURS = [1, 2, 3, 4, 6, 8, 12, 24, 48, 72, 168] as const;
 export const MAX_SCHEDULE_HOURS = 168;
 export const MAX_SCHEDULE_PROMPT = 4000;
@@ -44,6 +54,8 @@ export interface ScheduleView {
   mode: { mode: "free" | "smart" | "manual"; agent?: "claude" | "hosted" | "local" | "ollama" | "offline"; provider?: string | null; model?: string | null; effort?: "low" | "medium" | "high" | "xhigh" | "max" | null } | null;
   /** Whether runs may use the connectors in Settings (Claude runs only). Their tools run without asking, so it's off unless the task opts in. */
   connectors: boolean;
+  /** A task that runs a skill instead of a request (null: a request Assist plans). */
+  skill: ScheduleSkill | null;
   paused: boolean;
   /** When it runs next (null: paused, or a one-off that has run). */
   nextRunAt: number | null;
@@ -257,6 +269,35 @@ export function zoneLabel(tz: string, at = Date.now()): string {
   } catch {
     return tz;
   }
+}
+
+// ---------------------------------------------------------------------------
+// A skill on a schedule
+
+const KIND_WORDS = { image: "image", video: "video", audio: "audio file" } as const;
+
+/** "your newest image upload": what a "newest upload" input reads when the run starts. */
+export const newestWords = (type: "image" | "video" | "audio"): string => `your newest ${KIND_WORDS[type]} upload`;
+
+/**
+ * "/weekly-promo Product photo: your newest image upload · Product name: Lumen lamp": a skill task in one line (its
+ * stored prompt). A run's first message passes `files`, which names each file it attaches ("file 1"), the newest
+ * upload it read included.
+ */
+export function skillTaskLine(skill: ScheduleSkill, params: { id: string; label: string; type: string }[], files?: (url: string) => string): string {
+  const parts = params.flatMap((p) => {
+    const v = skill.values[p.id];
+    const file = p.type === "image" || p.type === "video" || p.type === "audio" ? p.type : null;
+    if (skill.sources?.[p.id] === "newest" && file) {
+      // A run's line says when there was nothing to read, so the input was left out.
+      if (files && !v) return [`${p.label}: no ${KIND_WORDS[file]} upload yet, so it's left out`];
+      return [`${p.label}: ${newestWords(file)}${files && v ? ` (${files(v)})` : ""}`];
+    }
+    if (v === undefined || v === "") return [];
+    if (file && /^(\/api\/files\/|https?:\/\/)/i.test(v)) return [`${p.label}: ${files ? files(v) : "a file you picked"}`];
+    return [`${p.label}: ${v.length > 80 ? `${v.slice(0, 79).trimEnd()}…` : v}`];
+  });
+  return parts.length ? `/${skill.name} ${parts.join(" · ")}` : `/${skill.name}`;
 }
 
 // ---------------------------------------------------------------------------

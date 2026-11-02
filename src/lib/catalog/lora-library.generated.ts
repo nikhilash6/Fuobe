@@ -3373,6 +3373,53 @@ export const LORA_LIBRARY: LoraEntry[] = [
     },
     "released": "2026-10-13",
     "notes": "Rank-64 edit LoRA trained with AI-Toolkit for 3,000 steps at 512 and 1024 px on photo and Blender pairs covering all 96 views. Prompt: \"<qma> {azimuth} {elevation} {distance}\", 8 azimuths (front view, front-right quarter view, right side view, back-right quarter view, back view, back-left quarter view, left side view, front-left quarter view) relative to the ORIGINAL CAMERA (\"right side view\" = the camera swings 90 degrees to its own right), 4 elevations (low-angle, eye-level, elevated, high-angle shot), 3 distances (close-up, medium shot, wide shot); more edit words may follow. Card settings: strength 1.0, 30 steps, CFG 3, euler / simple, about 1 MP (768 px for previews). Quarter views, elevated shots and distance changes are the most reliable; big orbits on wide landscapes can stop short of 90 degrees. fal hosts Qwen-Image 2.1 (fal-ai/qwen-image-2.1, fal-ai/qwen-image-2.1/edit, read 2026-11-02) without a LoRA input, and Replicate has no Qwen-Image 2.1, so QMA runs on your GPU only."
+  },
+  {
+    "key": "anisora-3-2-i2v-high",
+    "name": "AniSora 3.2 for Wan 2.2 I2V A14B, high-noise expert (bilibili Index-AniSora, extracted by Kijai)",
+    "file": "Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors",
+    "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/8260d429d19fd7a72304cad059160b95d843913f/LoRAs/AniSora/Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors",
+    "page": "https://huggingface.co/Kijai/WanVideo_comfy/tree/main/LoRAs/AniSora",
+    "strength": 1.0,
+    "base": "wan2.2-i2v-a14b",
+    "download": "direct",
+    "group": "adapter",
+    "target": "high",
+    "version": "8260d429d19fd7a72304cad059160b95d843913f",
+    "sha256": "bdc68451d6bccd6efb70f6eb916ede7cc470e3b6dacd0273da528246334095da",
+    "sizeBytes": 630695648,
+    "licence": {
+      "commercial": true,
+      "hostedOk": true,
+      "snapshotDate": "2026-11-02",
+      "name": "Apache-2.0 (bilibili's Index-AniSora weights: GitHub bilibili/Index-anisora LICENSE and the HF card IndexTeam/Index-anisora, V3.2 released 2025-09-23); Kijai's rank-64 extraction repository states no licence of its own"
+    },
+    "released": "2025-09-27",
+    "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high, end_image_url, num_frames 17-161)",
+    "notes": "The difference between bilibili's AniSora V3.2 (anime motion trained on Wan 2.2 I2V A14B) and the base high-noise expert, extracted at rank 64 by Kijai (file last changed in commit f32501d0, 2025-09-27). The source of the file the 'Keyframes to Full Character Animation' graph loads at strength 1.0 on the high-noise expert, with the lightx2v 4-step LoRA on the low-noise expert, 4 steps at CFG 1 (high 0-2, low 2-end), shift 5. Only a high-noise file exists."
+  },
+  {
+    "key": "wan22-i2v-lightx2v-4step-low",
+    "name": "Lightx2v 4-step for Wan 2.2 I2V A14B, low-noise expert (Comfy-Org repack)",
+    "file": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+    "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/ee6f4a40737a995bf5818954cfce6d59443b0f04/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+    "page": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+    "strength": 1.0,
+    "base": "wan2.2-i2v-a14b",
+    "download": "direct",
+    "group": "adapter",
+    "target": "low",
+    "version": "ee6f4a40737a995bf5818954cfce6d59443b0f04",
+    "sha256": "024f21de095bc8fad9809ded3e9e49a2e170dcf27075da8145ba7d60d8aab7f9",
+    "sizeBytes": 1226977424,
+    "licence": {
+      "commercial": true,
+      "hostedOk": true,
+      "snapshotDate": "2026-11-02",
+      "name": "Apache-2.0 (the Comfy-Org repack's card; LightX2V's Wan2.2-Lightning is Apache-2.0)"
+    },
+    "released": "2025-08-07",
+    "notes": "The repository now answers as Comfy-Org/Wan-2.2 (Hugging Face redirects the old name). The open graph loads it on the low-noise expert so the in-betweens take 4 steps; in the cloud fal's own acceleration takes its place (fal's endpoint runs its own step count), so it is never sent there."
   }
 ];
 

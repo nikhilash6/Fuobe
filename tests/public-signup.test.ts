@@ -240,8 +240,13 @@ describe("accounts never run on the owner's keys or GPU", () => {
       // Restore & colourise: its run and its prompt writer.
       "/api/restore",
       "/api/restore/prompt",
+      // Remove a person on H3: its mask preview and "Redo from here".
+      "/api/remove-object/preview",
+      "/api/remove-object/reroll",
       // Character Swap Studio's Sharpen: a studio job, like its assembly.
       "/api/swap-studio/projects/p1/sharpen",
+      // Plan layout plans with the studio's own AI helper.
+      "/api/layout/plan",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);

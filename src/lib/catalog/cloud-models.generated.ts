@@ -7270,6 +7270,1146 @@ export const CLOUD_MODELS: ModelDef[] = [
     "hidden": true
   },
   {
+    "id": "minimax-h3-max-lipsync",
+    "name": "MiniMax H3 Max Lip Sync \u00b7 up to 15 min",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A portrait speaks your audio: 5 seconds to 15 minutes, as long as the voice, 480P to 2K",
+    "routes": [
+      {
+        "op": "avatar",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/lip-sync/image-to-video",
+        "map": {
+          "prompt": false,
+          "image": "image_url",
+          "audio": "audio_url",
+          "seed": "seed",
+          "resolution": "resolution"
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "resolutions": [
+        "480P",
+        "768P",
+        "1080P",
+        "2K"
+      ],
+      "maxImages": 1,
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "defaults": {
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768P; 480P $0.05, 1080P $0.16, 2K $0.32; 1.2\u00d7 for audio over 15 s",
+      "byResolution": {
+        "480P": 0.05,
+        "768P": 0.08,
+        "1080P": 0.16,
+        "2K": 0.32
+      },
+      "longFactor": {
+        "over": 15,
+        "factor": 1.2
+      }
+    }
+  },
+  {
+    "id": "minimax-h3-max-relight",
+    "name": "MiniMax H3 Max Relight",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Real footage relit to a light you pick \u2014 direction, colour and softness \u2014 up to 15 s",
+    "routes": [
+      {
+        "op": "relight-video",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/relight",
+        "map": {
+          "prompt": false,
+          "image": "reference_image_url",
+          "video": "video_url",
+          "seed": "seed",
+          "resolution": "resolution",
+          "fixed": {
+            "aspect_ratio": "adaptive"
+          }
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "resolutions": [
+        "480P",
+        "768P",
+        "1080P",
+        "2K"
+      ],
+      "maxImages": 1,
+      "promptless": true,
+      "lightSphere": true,
+      "promptOptional": true
+    },
+    "badges": [
+      "new"
+    ],
+    "defaults": {
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768P; 480P $0.05, 1080P $0.16, 2K $0.32; billed on the clip's length",
+      "byResolution": {
+        "480P": 0.05,
+        "768P": 0.08,
+        "1080P": 0.16,
+        "2K": 0.32
+      }
+    }
+  },
+  {
+    "id": "minimax-h3-max-insert",
+    "name": "MiniMax H3 Max Insert a moment",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A new 5\u201313 s moment generated inside your clip, between two points you mark",
+    "routes": [
+      {
+        "op": "insert-moment",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/insert-video",
+        "map": {
+          "omitEmptyPrompt": true,
+          "videos": "reference_video_urls",
+          "images": "reference_image_urls",
+          "video": "video_url",
+          "seed": "seed",
+          "startTime": {
+            "key": "start_time",
+            "type": "number"
+          },
+          "endTime": {
+            "key": "resume_time",
+            "type": "number"
+          },
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "promptMax": 50000
+        }
+      }
+    ],
+    "options": {
+      "maxVideos": 3,
+      "seed": true,
+      "resolutions": [
+        "480p",
+        "768p"
+      ],
+      "durations": [
+        5,
+        6,
+        8,
+        10,
+        12,
+        13
+      ],
+      "maxImages": 9,
+      "promptOptional": true
+    },
+    "badges": [
+      "new"
+    ],
+    "defaults": {
+      "resolution": "768p",
+      "duration": 5
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.06,
+      "note": "768p; 480p $0.05; only the new moment is billed; references past the first 4,096 tokens add $0.02 per 1,000",
+      "byResolution": {
+        "480p": 0.05,
+        "768p": 0.06
+      }
+    }
+  },
+  {
+    "id": "minimax-h3-max-look-pixel",
+    "name": "MiniMax H3 Max \u00b7 16-bit Pixel look",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A new 5\u201315 s clip with sound, made as 16-bit pixel art in motion, from words or a first frame (it doesn't restyle a clip)",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/16bit-pixel",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/16bit-pixel",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "durations": [
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
+      "maxImages": 1
+    },
+    "badges": [
+      "new",
+      "audio"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768p, sound included"
+    }
+  },
+  {
+    "id": "minimax-h3-max-look-hand-drawn",
+    "name": "MiniMax H3 Max \u00b7 Hand-drawn look",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A new 5\u201315 s clip with sound, made as a hand-drawn animation, from words or a first frame (it doesn't restyle a clip)",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/hand-drawn",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/hand-drawn",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "durations": [
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
+      "maxImages": 1
+    },
+    "badges": [
+      "new",
+      "audio"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768p, sound included"
+    }
+  },
+  {
+    "id": "minimax-h3-max-look-low-poly",
+    "name": "MiniMax H3 Max \u00b7 Low Poly look",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A new 5\u201315 s clip with sound, made as low-poly 3D, from words or a first frame (it doesn't restyle a clip)",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/low-poly",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/low-poly",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "durations": [
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
+      "maxImages": 1
+    },
+    "badges": [
+      "new",
+      "audio"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768p, sound included"
+    }
+  },
+  {
+    "id": "minimax-h3-max-look-retro-toon",
+    "name": "MiniMax H3 Max \u00b7 Retro Toon 70s look",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A new 5\u201315 s clip with sound, made as a 1970s cartoon, from words or a first frame (it doesn't restyle a clip)",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/retro-toon-70s",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/retro-toon-70s",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "durations": [
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
+      "maxImages": 1
+    },
+    "badges": [
+      "new",
+      "audio"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768p, sound included"
+    }
+  },
+  {
+    "id": "minimax-h3-max-look-vhs",
+    "name": "MiniMax H3 Max \u00b7 VHS look",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "A new 5\u201315 s clip with sound, made as a worn VHS tape, with the tape damage you pick, from words or a first frame (it doesn't restyle a clip)",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/vhs",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max/styles/vhs",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "controls": [
+        {
+          "param": "damage_level",
+          "label": "Tape wear",
+          "values": [
+            "light",
+            "medium",
+            "heavy"
+          ],
+          "default": "medium"
+        }
+      ],
+      "seed": true,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "durations": [
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
+      "maxImages": 1
+    },
+    "badges": [
+      "new",
+      "audio"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768p, sound included"
+    }
+  },
+  {
+    "id": "minimax-h3-max-turbo",
+    "name": "MiniMax H3 Max Turbo",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Fast, cheap H3 Max with sound \u2014 drafts and quick takes from words or frames, 1\u201315 s",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max-turbo/text-to-video",
+        "map": {
+          "seed": "seed",
+          "aspectRatio": "aspect_ratio",
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "defaults": {
+            "prompt_expansion_mode": "balanced"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max-turbo/image-to-video",
+        "map": {
+          "image": "image_url",
+          "endImage": "end_image_url",
+          "seed": "seed",
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "defaults": {
+            "prompt_expansion_mode": "balanced"
+          }
+        }
+      },
+      {
+        "op": "flf2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max-turbo/image-to-video",
+        "map": {
+          "image": "image_url",
+          "endImage": "end_image_url",
+          "seed": "seed",
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "defaults": {
+            "prompt_expansion_mode": "balanced"
+          }
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "resolutions": [
+        "480P",
+        "768P",
+        "1080P"
+      ],
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
+      "endFrame": true,
+      "maxImages": 1
+    },
+    "badges": [
+      "new",
+      "fast",
+      "audio"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5,
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.04,
+      "note": "768P; 480P $0.025, 1080P $0.08 \u2014 $0.028 (480P $0.0175, 1080P $0.056) until 2026-11-15",
+      "byResolution": {
+        "480P": 0.025,
+        "768P": 0.04,
+        "1080P": 0.08
+      },
+      "promo": {
+        "until": "2026-11-15",
+        "usd": 0.028,
+        "byResolution": {
+          "480P": 0.0175,
+          "768P": 0.028,
+          "1080P": 0.056
+        }
+      }
+    }
+  },
+  {
+    "id": "minimax-h3-max-turbo-refs",
+    "name": "MiniMax H3 Max Turbo \u00b7 references",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Turbo with up to 12 references \u2014 pictures, clips and sound together (Image 1, Video 1, Audio 1 in the prompt)",
+    "routes": [
+      {
+        "op": "ref2v",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max-turbo/reference-to-video",
+        "map": {
+          "images": "reference_image_urls",
+          "videos": "reference_video_urls",
+          "audios": "reference_audio_urls",
+          "seed": "seed",
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P",
+              "1080P"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "defaults": {
+            "prompt_expansion_mode": "balanced"
+          }
+        }
+      }
+    ],
+    "options": {
+      "maxVideos": 3,
+      "maxAudios": 3,
+      "seed": true,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "resolutions": [
+        "480P",
+        "768P",
+        "1080P"
+      ],
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
+      "maxImages": 9,
+      "maxReferences": 12
+    },
+    "badges": [
+      "new",
+      "audio"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5,
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "768P; 480P $0.05, 1080P $0.16; references past the first 4,096 tokens add $0.016 per 1,000",
+      "byResolution": {
+        "480P": 0.05,
+        "768P": 0.08,
+        "1080P": 0.16
+      }
+    }
+  },
+  {
+    "id": "minimax-h3-max-turbo-extend",
+    "name": "MiniMax H3 Max Turbo \u00b7 extend",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Continue a 1.6\u201360 s clip with up to 15 s more, sound and all; only the new seconds are billed",
+    "routes": [
+      {
+        "op": "extend",
+        "provider": "fal",
+        "endpoint": "minimax/h3-max-turbo/extend-video",
+        "map": {
+          "video": "video_url",
+          "audios": "reference_audio_urls",
+          "seed": "seed",
+          "resolution": "resolution",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "maxAudios": 3,
+      "seed": true,
+      "resolutions": [
+        "480P",
+        "768P",
+        "1080P",
+        "2K"
+      ],
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ]
+    },
+    "badges": [
+      "new",
+      "audio"
+    ],
+    "defaults": {
+      "duration": 5,
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.04,
+      "note": "768P; 480P $0.025, 1080P $0.08, 2K $0.16; only the new seconds",
+      "byResolution": {
+        "480P": 0.025,
+        "768P": 0.04,
+        "1080P": 0.08,
+        "2K": 0.16
+      }
+    }
+  },
+  {
+    "id": "minimax-h3-lite",
+    "name": "MiniMax H3 Lite",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "The lightest H3 with sound: words, frames or references, 4\u201315 s at 480P or 768P",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "replicate",
+        "endpoint": "minimax/h3-lite",
+        "map": {
+          "aspectRatio": {
+            "key": "ratio",
+            "accepts": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "replicate",
+        "endpoint": "minimax/h3-lite",
+        "map": {
+          "image": "first_frame_image",
+          "aspectRatio": {
+            "key": "ratio",
+            "accepts": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "flf2v",
+        "provider": "replicate",
+        "endpoint": "minimax/h3-lite",
+        "map": {
+          "image": "first_frame_image",
+          "endImage": "last_frame_image",
+          "aspectRatio": {
+            "key": "ratio",
+            "accepts": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "ref2v",
+        "provider": "replicate",
+        "endpoint": "minimax/h3-lite",
+        "map": {
+          "images": "reference_image_urls",
+          "videos": "reference_video_urls",
+          "audios": "reference_audio_urls",
+          "aspectRatio": {
+            "key": "ratio",
+            "accepts": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480P",
+              "768P"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "resolutions": [
+        "480P",
+        "768P"
+      ],
+      "durations": [
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
+      "maxImages": 9,
+      "endFrame": true,
+      "maxVideos": 3,
+      "maxAudios": 3
+    },
+    "badges": [
+      "new",
+      "audio"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5,
+      "resolution": "768P"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.04,
+      "note": "768P; 480P $0.025",
+      "byResolution": {
+        "480P": 0.025,
+        "768P": 0.04
+      }
+    }
+  },
+  {
+    "id": "minimax-h3-highspeed",
+    "name": "MiniMax H3 HighSpeed",
+    "vendor": "MiniMax",
+    "family": "hailuo",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "H3 tuned for speed, with sound: words, frames or references, 4\u201315 s",
+    "routes": [
+      {
+        "op": "t2v",
+        "provider": "replicate",
+        "endpoint": "minimax/h3-highspeed",
+        "map": {
+          "aspectRatio": {
+            "key": "ratio",
+            "accepts": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      },
+      {
+        "op": "i2v",
+        "provider": "replicate",
+        "endpoint": "minimax/h3-highspeed",
+        "map": {
+          "image": "first_frame_image",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "fixed": {
+            "ratio": "adaptive"
+          }
+        }
+      },
+      {
+        "op": "flf2v",
+        "provider": "replicate",
+        "endpoint": "minimax/h3-highspeed",
+        "map": {
+          "image": "first_frame_image",
+          "endImage": "last_frame_image",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "fixed": {
+            "ratio": "adaptive"
+          }
+        }
+      },
+      {
+        "op": "ref2v",
+        "provider": "replicate",
+        "endpoint": "minimax/h3-highspeed",
+        "map": {
+          "images": "reference_image_urls",
+          "videos": "reference_video_urls",
+          "audios": "reference_audio_urls",
+          "aspectRatio": {
+            "key": "ratio",
+            "accepts": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          }
+        }
+      }
+    ],
+    "options": {
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "durations": [
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15
+      ],
+      "maxImages": 9,
+      "endFrame": true,
+      "maxVideos": 3,
+      "maxAudios": 3
+    },
+    "badges": [
+      "new",
+      "audio",
+      "fast"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.06
+    }
+  },
+  {
     "id": "hailuo-2-3",
     "name": "MiniMax Hailuo 2.3",
     "vendor": "MiniMax",
@@ -8342,6 +9482,132 @@ export const CLOUD_MODELS: ModelDef[] = [
     "defaults": {
       "aspectRatio": "16:9",
       "generateAudio": true
+    }
+  },
+  {
+    "id": "vidu-q4",
+    "name": "Vidu Q4",
+    "vendor": "Shengshu",
+    "family": "vidu",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Vidu's newest: a start frame or up to 12 references and 3 voices, 3\u201316 s, up to 4K",
+    "routes": [
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "fal-ai/vidu/q4/image-to-video",
+        "map": {
+          "image": "image_url",
+          "seed": "seed",
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "540p",
+              "720p",
+              "1080p",
+              "2K",
+              "4K"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "promptMax": 5000
+        }
+      },
+      {
+        "op": "ref2v",
+        "provider": "fal",
+        "endpoint": "fal-ai/vidu/q4/reference-to-video",
+        "map": {
+          "images": "reference_image_urls",
+          "audios": "reference_audio_urls",
+          "seed": "seed",
+          "generateAudio": "audio",
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "1:1"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "540p",
+              "720p",
+              "1080p",
+              "2K",
+              "4K"
+            ]
+          },
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "promptMax": 5000
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "resolutions": [
+        "540p",
+        "720p",
+        "1080p",
+        "2K",
+        "4K"
+      ],
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10,
+        12,
+        15,
+        16
+      ],
+      "maxImages": 12,
+      "maxAudios": 3,
+      "audio": true,
+      "aspectRatios": [
+        "16:9",
+        "9:16",
+        "4:3",
+        "3:4",
+        "1:1"
+      ],
+      "referenceAudio": "mp3"
+    },
+    "badges": [
+      "new",
+      "4k",
+      "audio"
+    ],
+    "defaults": {
+      "aspectRatio": "16:9",
+      "duration": 5,
+      "resolution": "720p",
+      "generateAudio": true
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.0665,
+      "note": "720p; 540p $0.0315, 1080p $0.084, 2K $0.133, 4K $0.273; sound costs nothing extra",
+      "byResolution": {
+        "540p": 0.0315,
+        "720p": 0.0665,
+        "1080p": 0.084,
+        "2K": 0.133,
+        "4K": 0.273
+      }
     }
   },
   {
@@ -12592,13 +13858,23 @@ export const CLOUD_MODELS: ModelDef[] = [
         "provider": "fal",
         "endpoint": "fal-ai/minimax-music/v2.5",
         "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 3500,
+            "instrumental": "is_instrumental",
+            "autoLyrics": "lyrics_optimizer"
+          },
           "fixed": {
             "lyrics_optimizer": true
           }
         }
       }
     ],
-    "options": {},
+    "options": {
+      "lyrics": {
+        "max": 3500
+      }
+    },
     "pricing": {
       "unit": "request",
       "usd": 0.15
@@ -12655,35 +13931,472 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "mureka",
     "engine": "cloud",
     "kind": "audio",
-    "tagline": "Full songs with vocals in many genres",
+    "tagline": "Full songs with vocals in many genres, 2 to 5 minutes",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9.5/generate/song",
+        "map": {
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          },
+          "ignore": [
+            "model"
+          ]
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "max": 5000,
+        "instrumentalModel": "mureka-9-5-instrumental"
+      },
+      "durations": [
+        120,
+        180,
+        240,
+        300
+      ]
+    },
+    "defaults": {
+      "duration": 180
+    },
+    "pricing": {
+      "unit": "request",
+      "usd": 0.5,
+      "note": "a song from a prompt; with your lyrics $0.15",
+      "withLyrics": 0.15
+    }
+  },
+  {
+    "id": "mureka-9",
+    "name": "Mureka 9",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Songs with vocals at a lower price, sung from your lyrics or written for you",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9/generate/song",
+        "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "max": 5000,
+        "instrumentalModel": "mureka-9-instrumental"
+      }
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.3,
+      "note": "a song from a prompt; with your lyrics $0.045",
+      "withLyrics": 0.045
+    }
+  },
+  {
+    "id": "mureka-9-5-instrumental",
+    "name": "Mureka 9.5 Instrumental",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Mureka's newest instrumental tracks and beds, no vocals",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9.5/generate/instrumental",
+        "map": {}
+      }
+    ],
+    "options": {},
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.15
+    }
+  },
+  {
+    "id": "mureka-9-instrumental",
+    "name": "Mureka 9 Instrumental",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Instrumental tracks and beds, no vocals",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9/generate/instrumental",
+        "map": {}
+      }
+    ],
+    "options": {},
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.045
+    }
+  },
+  {
+    "id": "mureka-8",
+    "name": "Mureka 8",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Mureka's earlier versions (8, O2, 7.6), for songs made with them",
     "routes": [
       {
         "op": "music",
         "provider": "fal",
         "endpoint": "mureka/api/generate/song",
-        "map": {}
+        "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          },
+          "defaults": {
+            "model": "mureka-8"
+          }
+        }
       }
     ],
     "options": {
+      "lyrics": {
+        "max": 5000,
+        "instrumentalModel": "mureka-9-instrumental"
+      },
       "controls": [
         {
           "param": "model",
           "label": "Version",
           "values": [
-            "mureka-7.6",
-            "mureka-o2",
             "mureka-8",
-            "mureka-9",
-            "mureka-9.5"
+            "mureka-o2",
+            "mureka-7.6"
           ],
-          "default": "mureka-9.5"
+          "default": "mureka-8",
+          "labels": {
+            "mureka-8": "Mureka 8",
+            "mureka-o2": "Mureka O2",
+            "mureka-7.6": "Mureka 7.6"
+          }
         }
       ]
     },
     "pricing": {
       "unit": "request",
-      "usd": 0.75,
-      "note": "prompt-to-song on mureka-9.5; with lyrics $0.225"
+      "usd": 0.3,
+      "note": "a song from a prompt; with your lyrics $0.045 ($0.03 on 7.6)",
+      "withLyrics": 0.045
+    }
+  },
+  {
+    "id": "minimax-music-3",
+    "name": "MiniMax Music 3 \u00b7 both engines",
+    "vendor": "MiniMax",
+    "family": "minimax-music",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "minimax/music-3",
+        "map": {
+          "seed": "seed",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "lyrics": {
+            "key": "lyrics"
+          },
+          "defaults": {
+            "lyrics": "[instrumental]"
+          }
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "lyrics": {},
+      "durations": [
+        30,
+        60,
+        120,
+        180,
+        240,
+        300
+      ]
+    },
+    "badges": [
+      "new",
+      "top"
+    ],
+    "licence": {
+      "licence": "MiniMax-Music3 Community License",
+      "commercial": true,
+      "note": "MIT-style grant with notice and an Acceptable Use Policy; commercial products show \"MiniMax-Music3\" in their interface; above US$20M yearly revenue needs MiniMax's written authorisation. The Comfy-Org repack is tagged Apache-2.0.",
+      "checked": "2026-11-01"
+    },
+    "defaults": {
+      "duration": 120
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.002
+    }
+  },
+  {
+    "id": "elevenlabs-music-2-5",
+    "name": "ElevenLabs Music v2.5",
+    "vendor": "ElevenLabs",
+    "family": "elevenlabs",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Studio-quality songs and scores up to 10 minutes",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "elevenlabs/music/v2.5",
+        "map": {
+          "duration": {
+            "key": "music_length_ms",
+            "type": "number",
+            "multiplier": 1000
+          }
+        }
+      }
+    ],
+    "options": {
+      "durations": [
+        15,
+        30,
+        60,
+        120,
+        180,
+        300,
+        600
+      ]
+    },
+    "badges": [
+      "new"
+    ],
+    "defaults": {
+      "duration": 60
+    },
+    "pricing": {
+      "unit": "minute",
+      "usd": 0.6,
+      "note": "billed per started minute",
+      "roundUp": true
+    }
+  },
+  {
+    "id": "mureka-extend",
+    "name": "Mureka Extend",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Makes a song longer with new lyrics, after its end or before its start",
+    "routes": [
+      {
+        "op": "song-extend",
+        "provider": "fal",
+        "endpoint": "mureka/v8/song/extend",
+        "map": {
+          "prompt": false,
+          "lyrics": {
+            "key": "lyrics",
+            "max": 3000
+          },
+          "songSource": {
+            "songId": "song_id",
+            "uploadId": "upload_audio_id",
+            "upload": {
+              "endpoint": "mureka/api/files/upload",
+              "purpose": "audio"
+            }
+          },
+          "startTime": {
+            "key": "extend_at",
+            "type": "number",
+            "multiplier": 1000
+          }
+        }
+      }
+    ],
+    "options": {
+      "controls": [
+        {
+          "param": "extend_type",
+          "label": "Where",
+          "values": [
+            "tail",
+            "head"
+          ],
+          "default": "tail",
+          "labels": {
+            "tail": "After the end",
+            "head": "Before the start"
+          }
+        }
+      ],
+      "lyrics": {
+        "max": 3000,
+        "required": true
+      },
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.004,
+      "note": "plus $0.01 to send a song Mureka didn't make",
+      "uploadUsd": 0.01
+    }
+  },
+  {
+    "id": "mureka-remix",
+    "name": "Mureka Remix",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "A new arrangement of a song in the style you describe, with its lyrics",
+    "routes": [
+      {
+        "op": "song-remix",
+        "provider": "fal",
+        "endpoint": "mureka/v8/song/remix",
+        "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          },
+          "songSource": {
+            "songId": "song_id",
+            "uploadId": "upload_audio_id",
+            "upload": {
+              "endpoint": "mureka/api/files/upload",
+              "purpose": "remix"
+            }
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "max": 5000,
+        "required": true
+      }
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.2,
+      "note": "plus $0.01 to send a song Mureka didn't make",
+      "uploadUsd": 0.01
+    }
+  },
+  {
+    "id": "mureka-stems",
+    "name": "Mureka Stems",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "A song split into its vocal and instrument tracks",
+    "routes": [
+      {
+        "op": "song-stems",
+        "provider": "fal",
+        "endpoint": "mureka/api/song/stem",
+        "map": {
+          "prompt": false,
+          "audio": "audio_url"
+        }
+      }
+    ],
+    "options": {
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.2,
+      "note": "audio-separation-3, the default"
+    }
+  },
+  {
+    "id": "lyria-3-5",
+    "name": "Lyria 3.5",
+    "vendor": "Google",
+    "family": "lyria",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Google DeepMind's newest music model: full songs from words or a picture",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "google/lyria-3.5",
+        "map": {
+          "image": "image_url",
+          "lyrics": {
+            "inPrompt": true,
+            "max": 5000
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "inPrompt": true,
+        "max": 5000
+      },
+      "maxImages": 1
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.1
     }
   },
   {
@@ -14812,6 +16525,86 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "veed-clean-audio",
+    "name": "VEED Clean Audio",
+    "vendor": "VEED",
+    "family": "veed",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Removes background noise from speech and levels it, keeping quiet and distant words",
+    "routes": [
+      {
+        "op": "enhance-voice",
+        "provider": "fal",
+        "endpoint": "veed/clean-audio",
+        "map": {
+          "prompt": false,
+          "video": "audio_url",
+          "audio": "audio_url",
+          "fixed": {
+            "output_format": "flac"
+          }
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "strength",
+          "label": "Strength",
+          "min": 0,
+          "max": 1,
+          "step": 0.01,
+          "default": 0.874
+        }
+      ],
+      "promptless": true
+    },
+    "pricing": {
+      "unit": "minute",
+      "usd": 0.0125,
+      "note": "per minute of input, rounded up to whole minutes, at least 1",
+      "roundUp": true
+    }
+  },
+  {
+    "id": "deepfilternet3",
+    "name": "DeepFilterNet 3",
+    "vendor": "DeepFilterNet",
+    "family": "deepfilternet",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Open-source speech denoiser: steady noise, hiss and hum out of a voice",
+    "routes": [
+      {
+        "op": "enhance-voice",
+        "provider": "fal",
+        "endpoint": "fal-ai/deepfilternet3",
+        "map": {
+          "prompt": false,
+          "audio": "audio_url",
+          "fixed": {
+            "audio_format": "flac"
+          }
+        }
+      }
+    ],
+    "options": {
+      "promptless": true
+    },
+    "licence": {
+      "licence": "MIT OR Apache-2.0",
+      "commercial": true,
+      "note": "MIT OR Apache-2.0 (DeepFilterNet code and the DeepFilterNet3 weights, github.com/Rikorose/DeepFilterNet README, read 2026-11-02); fal hosts it as a paid API",
+      "checked": "2026-11-02"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.001,
+      "note": "per second of audio"
+    }
+  },
+  {
     "id": "hunyuan-3d-3-1-pro",
     "name": "Hunyuan3D 3.1 Pro",
     "vendor": "Tencent Hunyuan",
@@ -16244,6 +18037,78 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "idol-3d",
+    "name": "Idol 3D",
+    "vendor": "Speridlabs",
+    "family": "idol",
+    "engine": "cloud",
+    "kind": "model3d",
+    "tagline": "A Gaussian splat (.ply) of one object from one picture \u00b7 TripoSplat's architecture, retrained",
+    "routes": [
+      {
+        "op": "splat",
+        "provider": "fal",
+        "endpoint": "speridlabs/idol",
+        "map": {
+          "prompt": false,
+          "image": "image_url",
+          "seed": "seed"
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "num_gaussians",
+          "label": "Gaussians",
+          "min": 32768,
+          "max": 1048576,
+          "step": 32768,
+          "default": 262144
+        },
+        {
+          "param": "num_inference_steps",
+          "label": "Steps",
+          "min": 1,
+          "max": 50,
+          "step": 1,
+          "default": 50
+        }
+      ],
+      "controls": [
+        {
+          "param": "image_type",
+          "label": "Picture",
+          "values": [
+            "synthetic",
+            "real"
+          ],
+          "default": "synthetic",
+          "labels": {
+            "synthetic": "A render or generated image",
+            "real": "A photo"
+          }
+        }
+      ],
+      "seed": true,
+      "maxImages": 1,
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "licence": {
+      "licence": "Apache-2.0",
+      "commercial": true,
+      "note": "Apache-2.0 (speridlabs/idol weights); TripoSplat's architecture (MIT); DINOv3 image encoder under the DINOv3 License (\"Built with DINOv3\"). fal's safety checker reads the input image",
+      "checked": "2026-11-02"
+    },
+    "pricing": {
+      "unit": "request",
+      "usd": 0.1
+    }
+  },
+  {
     "id": "sam-3d-objects",
     "name": "SAM 3D Objects",
     "vendor": "Meta",
@@ -16416,6 +18281,182 @@ export const CLOUD_MODELS: ModelDef[] = [
       "usd": 0.2,
       "note": "+$0.12 with an animation preset",
       "animationUsd": 0.12
+    }
+  },
+  {
+    "id": "meshy-7-retexture",
+    "name": "Meshy 7 Retexture",
+    "vendor": "Meshy",
+    "family": "meshy",
+    "engine": "cloud",
+    "kind": "model3d",
+    "tagline": "New textures on a 3D model, from words or a style picture",
+    "routes": [
+      {
+        "op": "retexture-3d",
+        "provider": "fal",
+        "endpoint": "meshy/v7/retexture",
+        "map": {
+          "prompt": "text_style_prompt",
+          "omitEmptyPrompt": true,
+          "image": "image_style_url",
+          "model3d": "model_url",
+          "fixed": {
+            "enable_pbr": true
+          },
+          "promptMax": 600
+        }
+      }
+    ],
+    "options": {
+      "controls": [
+        {
+          "param": "texture_resolution",
+          "label": "Texture size",
+          "values": [
+            "2k",
+            "4k",
+            "8k"
+          ],
+          "default": "2k"
+        }
+      ],
+      "maxImages": 1,
+      "promptOptional": true
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.3,
+      "note": "2K or 4K textures; 8K $0.45; realistic surface detail included",
+      "factors": [
+        {
+          "param": "texture_resolution",
+          "values": {
+            "8k": 1.5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "meshy-6-retexture",
+    "name": "Meshy 6 Retexture",
+    "vendor": "Meshy",
+    "family": "meshy",
+    "engine": "cloud",
+    "kind": "model3d",
+    "tagline": "New textures on a 3D model, from words or a style picture",
+    "routes": [
+      {
+        "op": "retexture-3d",
+        "provider": "fal",
+        "endpoint": "meshy/v6/retexture",
+        "map": {
+          "prompt": "text_style_prompt",
+          "omitEmptyPrompt": true,
+          "image": "image_style_url",
+          "model3d": "model_url",
+          "fixed": {
+            "enable_pbr": true
+          },
+          "promptMax": 600
+        }
+      }
+    ],
+    "options": {
+      "controls": [
+        {
+          "param": "texture_resolution",
+          "label": "Texture size",
+          "values": [
+            "2k",
+            "4k",
+            "8k"
+          ],
+          "default": "2k"
+        }
+      ],
+      "maxImages": 1,
+      "promptOptional": true
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.3,
+      "note": "2K or 4K textures; 8K $0.45; realistic surface detail included",
+      "factors": [
+        {
+          "param": "texture_resolution",
+          "values": {
+            "8k": 1.5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "tripo-p2",
+    "name": "Tripo P2",
+    "vendor": "Tripo",
+    "family": "tripo",
+    "engine": "cloud",
+    "kind": "model3d",
+    "tagline": "Tripo's production tier: detailed 3D models with realistic textures",
+    "routes": [
+      {
+        "op": "image-to-3d",
+        "provider": "fal",
+        "endpoint": "tripo3d/p2/image-to-3d",
+        "map": {
+          "prompt": false,
+          "image": "image_url",
+          "seed": "model_seed",
+          "fixed": {
+            "texture_version": "v3.5-20260815"
+          }
+        }
+      }
+    ],
+    "options": {
+      "controls": [
+        {
+          "param": "texture_quality",
+          "label": "Texture",
+          "values": [
+            "fast",
+            "standard",
+            "detailed",
+            "extreme"
+          ],
+          "default": "standard"
+        }
+      ],
+      "seed": true,
+      "maxImages": 1,
+      "promptless": true
+    },
+    "badges": [
+      "new",
+      "pro"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 1.1,
+      "note": "standard textures; detailed $1.20, extreme $1.30",
+      "factors": [
+        {
+          "param": "texture_quality",
+          "values": {
+            "detailed": 1.0909090909090908,
+            "extreme": 1.1818181818181817
+          }
+        }
+      ]
     }
   },
   {
@@ -19394,6 +21435,164 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
       "usd": 0.036,
       "note": "$0.001605 per megapixel of video: about $0.18 for 5 s at 720p ($0.20 with LoRAs)",
       "withLoras": 0.04
+    }
+  },
+  {
+    "id": "fuobe-animation",
+    "name": "Fuobe Animation",
+    "vendor": "Fuobe Original",
+    "family": "fuobe-animation",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Keyframes in, the in-betweens drawn, one finished animation, with timing per gap: Wan 2.2 + AniSora",
+    "routes": [
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "fal-ai/wan/v2.2-a14b/image-to-video",
+        "map": {
+          "negativePrompt": "negative_prompt",
+          "image": "image_url",
+          "endImage": "end_image_url",
+          "seed": "seed",
+          "numFrames": {
+            "key": "num_frames",
+            "fps": 16,
+            "min": 17,
+            "max": 161,
+            "step": 4
+          },
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "auto",
+              "16:9",
+              "9:16",
+              "1:1"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480p",
+              "580p",
+              "720p"
+            ]
+          },
+          "fixed": {
+            "interpolator_model": "none",
+            "frames_per_second": 16
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "range": {
+              "min": 0,
+              "max": 4
+            },
+            "transformer": "high",
+            "weightName": true
+          }
+        },
+        "loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+      },
+      {
+        "op": "flf2v",
+        "provider": "fal",
+        "endpoint": "fal-ai/wan/v2.2-a14b/image-to-video",
+        "map": {
+          "negativePrompt": "negative_prompt",
+          "image": "image_url",
+          "endImage": "end_image_url",
+          "seed": "seed",
+          "numFrames": {
+            "key": "num_frames",
+            "fps": 16,
+            "min": 17,
+            "max": 161,
+            "step": 4
+          },
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "auto",
+              "16:9",
+              "9:16",
+              "1:1"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480p",
+              "580p",
+              "720p"
+            ]
+          },
+          "fixed": {
+            "interpolator_model": "none",
+            "frames_per_second": 16
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "range": {
+              "min": 0,
+              "max": 4
+            },
+            "transformer": "high",
+            "weightName": true
+          }
+        },
+        "loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+      }
+    ],
+    "options": {
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10
+      ],
+      "negativePrompt": true,
+      "seed": true,
+      "endFrame": true,
+      "aspectRatios": [
+        "auto",
+        "16:9",
+        "9:16",
+        "1:1"
+      ],
+      "resolutions": [
+        "480p",
+        "580p",
+        "720p"
+      ],
+      "maxImages": 1
+    },
+    "licence": {
+      "licence": "Apache-2.0",
+      "commercial": true,
+      "note": "Wan 2.1 / 2.2 weights are Apache-2.0",
+      "checked": "2026-10-23"
+    },
+    "defaults": {
+      "aspectRatio": "auto",
+      "duration": 5,
+      "resolution": "720p"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "720p on fal; 580p $0.06/s, 480p $0.04/s; with LoRAs $0.10/s, per gap's clip",
+      "byResolution": {
+        "720p": 0.08,
+        "580p": 0.06,
+        "480p": 0.04
+      },
+      "withLoras": 0.1
     }
   },
   {

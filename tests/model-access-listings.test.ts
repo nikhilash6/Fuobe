@@ -99,8 +99,8 @@ describe("Models & licences in listings and picks", () => {
     // MiniMax H3's four (Akatz Labs' swap LoRA V1.5 and V1 and Person Remover V1, lightx2v's H3 Turbo), and Fuobe Restore's
     // two gated IC-LoRAs (Lightricks' Restore and Detail Refine), Open-H3 Regenerate's merged refiner LoRA, and Any Angle's
     // AnyAngle LoRA for Qwen-Image 2.1, each once. Qwen-Image 2.1's three speed LoRAs and its Next-Scene LoRA are four more,
-    // and the QMA camera-angles LoRA one more.
-    expect(list.loras.length).toBe(183);
+    // the QMA camera-angles LoRA one more, and Fuobe Animation's AniSora 3.2 and lightx2v 4-step low-noise LoRAs two more.
+    expect(list.loras.length).toBe(185);
     expect(list.loras.find((l) => l.file === "open_h3_regenerate_2k_lora.safetensors")).toMatchObject({ group: "adapter", base: "MiniMax H3", on: true, licence: { name: "MiniMax H3 Community License", class: "regions" } });
     expect(list.packs.find((p) => p.name === "ComfyUI-Open-H3-Regenerate")).toMatchObject({ licence: { name: "Apache-2.0" }, on: true, models: 1 });
     expect(list.packs.find((p) => p.name === "Comfyui_Minimax_h3_latent_Upscaler")).toMatchObject({ licence: { name: "MIT" }, on: true, models: 1 });

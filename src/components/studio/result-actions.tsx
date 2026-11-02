@@ -2,6 +2,9 @@
 
 import {
   ArchiveRestore,
+  Disc3,
+  Layers3,
+  ListMusic,
   AudioLines,
   BookmarkPlus,
   Box,
@@ -23,6 +26,7 @@ import {
   LayoutDashboard,
   Mic2,
   MicOff,
+  UserX,
   MoreHorizontal,
   Pin,
   Repeat,
@@ -102,7 +106,9 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "loop-audio": Repeat,
   "split-soundtrack": SlidersVertical,
   "remove-dialogue": MicOff,
+  "remove-person": UserX,
   "clean-voice": AudioWaveform,
+  "clean-dialogue": AudioLines,
   "copy-text": Copy,
   "view-3d": Box,
   download: Download,
@@ -126,6 +132,9 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "delete-upload": Trash2,
   restore: ArchiveRestore,
   "restore-video": Palette,
+  "extend-song": ListMusic,
+  "remix-song": Disc3,
+  "song-stems": Layers3,
   "delete-forever": Trash2,
 };
 
