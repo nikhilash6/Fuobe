@@ -1063,7 +1063,7 @@ export const APPS: Preset[] = [
     badges: ["new"],
     tool: "recolor",
     options: [
-      { key: "item", label: "What is it?", choices: ITEMS.map((i) => ({ value: i.value, label: i.label, prompt: i.words })) },
+      { key: "item", label: "What is it?", choices: ITEMS.map((i) => ({ value: i.value, label: i.label, prompt: i.words, extra: { recolorItem: i.value } })) },
       {
         key: "colour",
         label: "Colour",

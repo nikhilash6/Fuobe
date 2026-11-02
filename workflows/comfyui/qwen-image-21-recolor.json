@@ -47,54 +47,39 @@
       "title": "Load Image - The photo"
     }
   },
-  "12": {
-    "inputs": {
-      "value": "[{\"x\": 512, \"y\": 512}]"
-    },
-    "class_type": "PrimitiveStringMultiline",
-    "_meta": {
-      "title": "Taps on the piece (JSON points, photo pixels)"
-    }
-  },
-  "13": {
-    "inputs": {
-      "value": ""
-    },
-    "class_type": "PrimitiveStringMultiline",
-    "_meta": {
-      "title": "Taps to leave out (JSON points, or empty)"
-    }
-  },
   "14": {
     "inputs": {
-      "threshold": 0.5,
-      "refine_iterations": 2,
-      "individual_masks": false,
-      "model": [
-        "4",
-        0
-      ],
+      "touches": "{\"v\": 1, \"items\": [{\"t\": \"name\", \"w\": \"clothing\", \"x\": 512, \"y\": 512, \"op\": 1}]}",
+      "grow": 0,
+      "soften": 0,
+      "smooth": 0,
+      "fill_holes": true,
+      "if_nothing": "empty mask",
+      "free_vram": true,
+      "invert": false,
+      "ask": "",
+      "fine_edges": "off",
       "image": [
         "10",
         0
       ],
-      "positive_coords": [
-        "12",
+      "model": [
+        "4",
         0
       ],
-      "negative_coords": [
-        "13",
-        0
+      "clip": [
+        "4",
+        1
       ]
     },
-    "class_type": "SAM3_Detect",
+    "class_type": "AUSBOSS_NODES_MaskByTouch",
     "_meta": {
-      "title": "SAM 3.1 - The tapped piece, one mask"
+      "title": "Mask by Touch - The thing of that name under each tap"
     }
   },
   "15": {
     "inputs": {
-      "expand": 4,
+      "expand": 1,
       "tapered_corners": true,
       "mask": [
         "14",
@@ -109,7 +94,7 @@
   "20": {
     "inputs": {
       "context_factor": 1.4,
-      "blend_pixels": 8,
+      "blend_pixels": 2,
       "output_multiple": 32,
       "target_width": 0,
       "target_height": 0,
@@ -237,7 +222,7 @@
   "27": {
     "inputs": {
       "seed": 0,
-      "steps": 25,
+      "steps": 20,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",

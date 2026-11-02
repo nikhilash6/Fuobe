@@ -407,6 +407,12 @@
     "error": null,
     "at": "2026-11-02T01:11:11.304Z"
   },
+  "qwen-image-21-recolor": {
+    "sha256": "770927631d3423d8c72a087ec1bcaf9c3ae421415fc398809f47a1921670099f",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T09:12:49.843Z"
+  },
   "qwen-image-2512-t2i": {
     "sha256": "c18da4a3488120bdcee722e4ae7d187385544ec4805753e7dae6946ddb6f6ba5",
     "validated": true,

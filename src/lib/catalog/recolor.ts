@@ -1,9 +1,10 @@
 /**
- * Tap to Recolor: tap a piece of clothing (or anything) in a photo and pick a colour; only that piece changes, its
- * fabric, folds and sheen kept. On the open engine SAM 3.1 turns the taps into a mask and Qwen-Image 2.1 repaints the
- * piece inside it (workflows/comfyui/qwen-image-21-recolor.json), so the rest of the photo stays as it was.
+ * Tap to Recolor: tap a piece of clothing (or a bag, shoes, a hat) in a photo and pick a colour; only that piece
+ * changes, its fabric, folds and sheen kept. On the open engine SAM 3.1 finds the piece under the taps by its name
+ * (AusBoss Mask by Touch) and Qwen-Image 2.1 repaints it inside that mask
+ * (workflows/comfyui/qwen-image-21-recolor.json), so the rest of the photo stays as it was.
  *
- * Pure module (the swatches, the words, the taps as SAM's point lists, the request a run sends), shared by the app's
+ * Pure module (the swatches, the words, the taps as the mask node's touches, the request a run sends), shared by the app's
  * page (src/components/recolor), the catalog, the ComfyUI provider and the tests.
  */
 import type { GenerationRequest, PixelPoint } from "./types";
@@ -12,7 +13,7 @@ export const RECOLOR = {
   appId: "app-tap-to-recolor",
   modelId: "oss-recolor",
   feature: "app:app-tap-to-recolor",
-  /** Taps on one photo (SAM 3.1 reads a few points well; more only adds noise). */
+  /** Taps of each kind on one photo. */
   maxPoints: 8,
   /** Colours one Recolor makes, each its own run. */
   maxColours: 4,
@@ -40,7 +41,7 @@ export const SWATCHES: Swatch[] = [
   { value: "camel", label: "Camel", hex: "#B98B5E", words: "warm camel" },
   { value: "emerald", label: "Emerald", hex: "#0E6B4F", words: "deep emerald green" },
   { value: "sage", label: "Sage", hex: "#9CAF94", words: "muted sage green" },
-  { value: "cobalt", label: "Cobalt", hex: "#1F48A8", words: "vivid cobalt blue" },
+  { value: "cobalt", label: "Cobalt", hex: "#1F48A8", words: "deep cobalt blue" },
   { value: "navy", label: "Navy", hex: "#1B2541", words: "dark navy" },
   { value: "lilac", label: "Lilac", hex: "#B7A3D9", words: "soft lilac" },
 ];
@@ -48,17 +49,26 @@ export const SWATCHES: Swatch[] = [
 /** The option value a custom colour runs under: its words come in as the run's prompt. */
 export const CUSTOM_COLOUR = "custom";
 
-export const ITEMS: { value: string; label: string; words: string }[] = [
-  // The crop the graph repaints is centred on the tapped piece.
-  { value: "auto", label: "Auto", words: "the piece in the middle of the picture" },
-  { value: "dress", label: "Dress", words: "the dress" },
-  { value: "top", label: "Top", words: "the top" },
-  { value: "jacket", label: "Jacket", words: "the jacket" },
-  { value: "trousers", label: "Trousers", words: "the trousers" },
-  { value: "skirt", label: "Skirt", words: "the skirt" },
-  { value: "bag", label: "Bag", words: "the bag" },
-  { value: "shoes", label: "Shoes", words: "the shoes" },
+/**
+ * The pieces a tap can be. `words`: what the repaint model reads. `find`: the names SAM 3.1 looks for under each tap
+ * (of the things with that name, the smallest under the tap; a tap's names are joined). SAM's point prompt on its own
+ * takes the whole person, so every tap goes through names. A named garment also takes "clothing", so a coat tapped as
+ * Jacket is still found.
+ */
+export const ITEMS: { value: string; label: string; words: string; find: string[] }[] = [
+  // The repaint only reaches the masked piece, so words for the whole outfit point the model at it.
+  { value: "auto", label: "Auto", words: "the outfit", find: ["clothing", "bag", "shoe", "hat", "scarf"] },
+  { value: "dress", label: "Dress", words: "the dress", find: ["dress", "clothing"] },
+  { value: "top", label: "Top", words: "the top", find: ["top", "clothing"] },
+  { value: "jacket", label: "Jacket", words: "the jacket", find: ["jacket", "clothing"] },
+  { value: "trousers", label: "Trousers", words: "the trousers", find: ["trousers", "clothing"] },
+  { value: "skirt", label: "Skirt", words: "the skirt", find: ["skirt", "clothing"] },
+  { value: "bag", label: "Bag", words: "the bag", find: ["bag", "handbag"] },
+  { value: "shoes", label: "Shoes", words: "the shoes", find: ["shoe"] },
 ];
+
+/** What a "Leave out" tap takes away: whichever of these is under it (a hand, hair, a strap or a belt over the piece). */
+export const LEAVE_OUT = ["hand", "arm", "hair", "belt", "bag strap", "necklace"];
 
 /** "#abc" / "abc" / "#AABBCC" → "#AABBCC", or null. */
 export function normaliseHex(s: string): string | null {
@@ -154,12 +164,12 @@ export function colourChip(colour: string): { label: string; hex: string } | nul
 }
 
 /**
- * The taps as SAM 3.1's point lists (JSON `[{"x":int,"y":int}]`, the photo's pixels): positive and negative, "" for
- * none. `from` is the size of the picture the taps were placed on, `to` the photo's own size when known: taps on a
- * smaller copy are scaled up. Points land inside the photo.
+ * The taps in the photo's pixels: [add, leave out], at most RECOLOR.maxPoints of each. `from` is the size of the
+ * picture the taps were placed on, `to` the photo's own size when known: taps on a smaller copy are scaled up. Points
+ * land inside the photo.
  */
-export function recolorCoords(points: PixelPoint[] | undefined, to?: { width: number; height: number }, from?: { width: number; height: number }): [string, string] {
-  if (!points?.length) return ["", ""];
+export function recolorPoints(points: PixelPoint[] | undefined, to?: { width: number; height: number }, from?: { width: number; height: number }): [{ x: number; y: number }[], { x: number; y: number }[]] {
+  if (!points?.length) return [[], []];
   const kx = to && from && from.width > 0 ? to.width / from.width : 1;
   const ky = to && from && from.height > 0 ? to.height / from.height : 1;
   const at = (p: PixelPoint) => {
@@ -172,8 +182,29 @@ export function recolorCoords(points: PixelPoint[] | undefined, to?: { width: nu
     return { x: Math.max(0, x), y: Math.max(0, y) };
   };
   const pick = (neg: boolean) => points.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && (p.label === "negative") === neg).slice(0, RECOLOR.maxPoints).map(at);
-  const [pos, neg] = [pick(false), pick(true)];
-  return [pos.length ? JSON.stringify(pos) : "", neg.length ? JSON.stringify(neg) : ""];
+  return [pick(false), pick(true)];
+}
+
+/**
+ * The taps as the mask node's touches (`{"v":1,"items":[{"t":"name","w":word,"x":int,"y":int,"op":1|0}]}`, the photo's
+ * pixels): every "Add to it" tap asks for the piece's names under it, then every "Leave out" tap takes away what
+ * LEAVE_OUT names under it. "" when no tap adds anything. Sizes as in recolorPoints.
+ */
+export function recolorTouches(points: PixelPoint[] | undefined, item?: string, to?: { width: number; height: number }, from?: { width: number; height: number }): string {
+  const [pos, neg] = recolorPoints(points, to, from);
+  if (!pos.length) return "";
+  const find = (ITEMS.find((i) => i.value === item) ?? ITEMS[0]).find;
+  const items = [
+    ...find.flatMap((w) => pos.map((p) => ({ t: "name", w, x: p.x, y: p.y, op: 1 }))),
+    ...neg.flatMap((p) => LEAVE_OUT.map((w) => ({ t: "name", w, x: p.x, y: p.y, op: 0 }))),
+  ];
+  return JSON.stringify({ v: 1, items });
+}
+
+/** The piece a run's taps are on (params.extra.recolorItem, set by the "What is it?" choice); Auto when unknown. */
+export function recolorItem(extra: Record<string, unknown> | undefined): string {
+  const v = String(extra?.recolorItem ?? "");
+  return ITEMS.some((i) => i.value === v) ? v : "auto";
 }
 
 /** The size the taps were placed on, as a run carries it (params.extra.frameWidth / frameHeight). */
@@ -200,7 +231,7 @@ export function recolorRequest(o: { image: string; points: PixelPoint[]; frame: 
     presetOptions: { item, colour: swatch ? o.colour : CUSTOM_COLOUR },
     params: {
       points: o.points.slice(0, RECOLOR.maxPoints * 2).map((p) => ({ x: Math.round(p.x), y: Math.round(p.y), label: p.label === "negative" ? "negative" : "positive" })),
-      extra: { frameWidth: Math.round(o.frame.width), frameHeight: Math.round(o.frame.height) },
+      extra: { frameWidth: Math.round(o.frame.width), frameHeight: Math.round(o.frame.height), recolorItem: item },
       ...(o.seed !== undefined ? { seed: o.seed } : {}),
     },
   };

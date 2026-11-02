@@ -60,9 +60,9 @@ describe("Tap to Recolor in the catalog", () => {
     expect(m.options.requires).toMatchObject({ images: 1, points: true, msg: R.RECOLOR_TAP_FIRST });
   });
 
-  it("lists the graph with its bindings, its four files and its pack, unvalidated until it runs on a GPU", () => {
+  it("lists the graph with its bindings, its four files and its pack, validated", () => {
     expect(entry.capability).toBe("recolor");
-    expect(Object.keys(entry.bindings).sort()).toEqual(["filenamePrefix", "image", "maskGrow", "negativeCoords", "positiveCoords", "prompt", "seed", "steps"]);
+    expect(Object.keys(entry.bindings).sort()).toEqual(["filenamePrefix", "image", "maskGrow", "prompt", "seed", "steps", "touches"]);
     expect(entry.models.map((m) => m.file).sort()).toEqual([
       "qwen3vl_8b_int8_convrot.safetensors",
       "qwen_image_2.1_int8_convrot.safetensors",
@@ -71,8 +71,8 @@ describe("Tap to Recolor in the catalog", () => {
     ]);
     for (const m of entry.models) expect(m.url, m.file).toMatch(/^https:\/\/huggingface\.co\/Comfy-Org\//);
     expect(entry.customNodes.map((c) => c.name)).toEqual(["ausboss-nodes"]);
-    expect(entry.validated).toBe(false);
-    expect(entry.defaults).toMatchObject({ steps: 25, maskGrow: 4 });
+    expect(entry.validated).toBe(true);
+    expect(entry.defaults).toMatchObject({ steps: 20, maskGrow: 1 });
     const req = read("requirements.json") as { workflows: Record<string, { files: string[]; packs: Record<string, string[]> }> };
     expect(req.workflows["qwen-image-21-recolor"].files).toContain("checkpoints/sam3.1_multiplex_fp16.safetensors");
     expect(Object.keys(req.workflows["qwen-image-21-recolor"].packs)).toEqual(["ausboss-nodes"]);
@@ -86,40 +86,53 @@ describe("Tap to Recolor in the catalog", () => {
 
 describe("Tap to Recolor's graph", () => {
   const wf = read("qwen-image-21-recolor.json") as ComfyWorkflow;
-  it("masks the tapped piece with SAM 3.1's point path, crops around it, repaints it and stitches it back without a tone match", () => {
-    expect(wf["14"].class_type).toBe("SAM3_Detect");
-    expect(wf["14"].inputs).toMatchObject({ positive_coords: ["12", 0], negative_coords: ["13", 0], model: ["4", 0], image: ["10", 0] });
-    expect(wf["14"].inputs.conditioning).toBeUndefined();
-    expect(wf["20"].inputs.mask).toEqual(["15", 0]);
+  it("masks the tapped piece by name with SAM 3.1, crops around it, repaints it and stitches it back tightly without a tone match", () => {
+    expect(wf["14"].class_type).toBe("AUSBOSS_NODES_MaskByTouch");
+    expect(wf["14"].inputs).toMatchObject({ model: ["4", 0], clip: ["4", 1], image: ["10", 0], if_nothing: "empty mask", free_vram: true, grow: 0 });
+    expect(wf["15"].inputs).toMatchObject({ mask: ["14", 0], expand: 1 });
+    expect(wf["20"].inputs).toMatchObject({ mask: ["15", 0], blend_pixels: 2 });
     expect(wf["25"].class_type).toBe("SetLatentNoiseMask");
-    expect(wf["27"].inputs).toMatchObject({ steps: 25, cfg: 1, sampler_name: "euler", scheduler: "simple", denoise: 1 });
+    expect(wf["27"].inputs).toMatchObject({ steps: 20, cfg: 1, sampler_name: "euler", scheduler: "simple", denoise: 1 });
     expect(wf["30"].class_type).toBe("AUSBOSS_NODES_StitchInpaint");
     expect(wf["30"].inputs.color_match).toBe(0);
     expect(wf["90"].inputs.images).toEqual(["30", 0]);
   });
 
-  it("binds the photo, the taps as point lists, the words, the seed and the run's prefix", async () => {
-    const { workflow } = await prepare({ prompt: "Change the colour of the dress to soft ivory (#F2EBDD).", images: ["photo.png"], points: taps, extra: { frameWidth: 1024, frameHeight: 1280 } } as GenInput);
+  it("binds the photo, the taps as named touches, the words, the seed and the run's prefix", async () => {
+    const { workflow } = await prepare({ prompt: "Change the colour of the dress to soft ivory (#F2EBDD).", images: ["photo.png"], points: taps, extra: { frameWidth: 1024, frameHeight: 1280, recolorItem: "dress" } } as GenInput);
     expect(at(workflow, "image")).toEqual(["photo.png"]);
-    expect(JSON.parse(String(at(workflow, "positiveCoords")[0]))).toEqual([
-      { x: 400, y: 600 },
-      { x: 420, y: 700 },
+    const touches = JSON.parse(String(at(workflow, "touches")[0])) as { v: number; items: { t: string; w: string; x: number; y: number; op: number }[] };
+    expect(touches.v).toBe(1);
+    // Each tap asks for a dress, then for any clothing, under it; the Leave out tap takes away a hand, hair, a strap…
+    expect(touches.items.filter((i) => i.op === 1)).toEqual([
+      { t: "name", w: "dress", x: 400, y: 600, op: 1 },
+      { t: "name", w: "dress", x: 420, y: 700, op: 1 },
+      { t: "name", w: "clothing", x: 400, y: 600, op: 1 },
+      { t: "name", w: "clothing", x: 420, y: 700, op: 1 },
     ]);
-    expect(JSON.parse(String(at(workflow, "negativeCoords")[0]))).toEqual([{ x: 300, y: 900 }]);
+    const out = touches.items.filter((i) => i.op === 0);
+    expect(out.map((i) => i.w)).toEqual(R.LEAVE_OUT);
+    for (const i of out) expect(i).toMatchObject({ t: "name", x: 300, y: 900 });
+    // What a Leave out tap names lies over a piece; it is never the piece itself.
+    expect(R.LEAVE_OUT).not.toContain("clothing");
     expect(at(workflow, "prompt")).toEqual(["Change the colour of the dress to soft ivory (#F2EBDD)."]);
     expect(at(workflow, "seed")).toEqual([7]);
     expect(at(workflow, "filenamePrefix")).toEqual(["fuobe/g"]);
-    // The size the taps came with isn't a graph input.
+    // The size the taps came with and the piece's name aren't graph inputs.
     expect(JSON.stringify(workflow)).not.toContain("frameWidth");
+    expect(JSON.stringify(workflow)).not.toContain("recolorItem");
   });
 
   it("moves taps placed on a smaller copy onto the photo's own pixels, inside the picture", async () => {
     const { workflow } = await prepare({ prompt: "x", images: ["photo.png"], points: [{ x: 512, y: 640 }, { x: 2000, y: -5 }], extra: { frameWidth: 1024, frameHeight: 1280 } } as GenInput, { width: 2048, height: 2560 });
-    expect(JSON.parse(String(at(workflow, "positiveCoords")[0]))).toEqual([
+    const items = JSON.parse(String(at(workflow, "touches")[0])).items as { w: string; x: number; y: number; op: number }[];
+    // No piece named: Auto looks for clothing, a bag, shoes, a hat or a scarf under each tap.
+    expect([...new Set(items.map((i) => i.w))]).toEqual(R.ITEMS[0].find);
+    expect(items.filter((i) => i.w === "clothing").map(({ x, y }) => ({ x, y }))).toEqual([
       { x: 1024, y: 1280 },
       { x: 2047, y: 0 },
     ]);
-    expect(at(workflow, "negativeCoords")).toEqual([""]);
+    expect(items.every((i) => i.op === 1)).toBe(true);
   });
 
   it("refuses a run with no tap on the piece", async () => {
@@ -132,18 +145,20 @@ describe("Tap to Recolor's runs", () => {
   it("builds one run per colour with the taps, and the words from the swatch", () => {
     const req = R.recolorRequest({ image: "/api/files/a.png", points: taps, frame, colour: "emerald", item: "dress" });
     expect(req).toMatchObject({ feature: "app:app-tap-to-recolor", presetId: "app-tap-to-recolor", modelId: "oss-recolor", op: "edit", engine: "open", inputs: { images: ["/api/files/a.png"] } });
-    expect(req.params?.extra).toEqual({ frameWidth: 1024, frameHeight: 1280 });
+    expect(req.params?.extra).toEqual({ frameWidth: 1024, frameHeight: 1280, recolorItem: "dress" });
     const p = plan(req);
     expect(p.op).toBe("edit");
     expect(p.prompt).toBe(
       "Change the colour of the dress to deep emerald green (#0E6B4F). Keep its fabric, weave, folds, seams, stitching, sheen, print and shadows exactly as they are, so only the colour is new.",
     );
     expect(p.params.points).toHaveLength(3);
+    expect(p.params.extra?.recolorItem).toBe("dress");
   });
 
-  it("names a custom colour by its nearest name with its code, and the piece in the middle when the piece is Auto", () => {
+  it("names a custom colour by its nearest name with its code, and the outfit when the piece is Auto", () => {
     const p = plan(R.recolorRequest({ image: "/api/files/a.png", points: taps, frame, colour: "c98b93" }));
-    expect(p.prompt).toMatch(/^Change the colour of the piece in the middle of the picture to dusty rose pink \(#C98B93\)\. Keep its fabric/);
+    expect(p.prompt).toMatch(/^Change the colour of the outfit to dusty rose pink \(#C98B93\)\. Keep its fabric/);
+    expect(p.params.extra?.recolorItem).toBe("auto");
   });
 
   it("asks for a tap before it runs, and for a real colour", () => {
@@ -174,7 +189,9 @@ describe("Tap to Recolor's colours", () => {
 
   it("keeps at most eight taps of each kind", () => {
     const many = Array.from({ length: 12 }, (_, i) => ({ x: i, y: i }));
-    expect(JSON.parse(R.recolorCoords(many)[0])).toHaveLength(R.RECOLOR.maxPoints);
+    expect(R.recolorPoints(many)[0]).toHaveLength(R.RECOLOR.maxPoints);
+    expect(R.recolorItem({ recolorItem: "jacket" })).toBe("jacket");
+    expect(R.recolorItem({ recolorItem: "spaceship" })).toBe("auto");
   });
 });
 

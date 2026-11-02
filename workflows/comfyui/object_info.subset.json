@@ -1184,6 +1184,192 @@
       "ausboss"
     ]
   },
+  "AUSBOSS_NODES_MaskByTouch": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE",
+          {
+            "tooltip": "The picture to pick from."
+          }
+        ],
+        "model": [
+          "MODEL",
+          {
+            "tooltip": "SAM 3: MODEL from a Load Checkpoint that loads the SAM 3 file."
+          }
+        ],
+        "clip": [
+          "CLIP",
+          {
+            "tooltip": "SAM 3's text reader: CLIP from the same Load Checkpoint."
+          }
+        ],
+        "touches": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": false,
+            "tooltip": "What you picked on the node's picture. The node writes this itself when you click or paint; Clear on the node empties it."
+          }
+        ],
+        "grow": [
+          "INT",
+          {
+            "default": 0,
+            "min": -128,
+            "max": 256,
+            "step": 1,
+            "tooltip": "Grow the picked area by this many pixels. Below zero shrinks it. 0 keeps the exact outline."
+          }
+        ],
+        "soften": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 100,
+            "step": 0.1,
+            "tooltip": "Soften the mask's edge by this many pixels. 0 keeps a hard edge."
+          }
+        ],
+        "smooth": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 64,
+            "step": 1,
+            "tooltip": "Round off a ragged outline by this many pixels. 0 leaves the outline as found."
+          }
+        ],
+        "fill_holes": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "Closes pinholes inside the picked area. Larger openings stay open, like a mug's handle."
+          }
+        ],
+        "if_nothing": [
+          [
+            "stop the run",
+            "empty mask"
+          ],
+          {
+            "default": "stop the run",
+            "tooltip": "When nothing is picked. Stop the run: the workflow stops here with a message, and nothing after this node runs. Empty mask: the run goes on with a mask of nothing."
+          }
+        ]
+      },
+      "optional": {
+        "free_vram": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Takes SAM 3 out of the graphics card's memory when the workflow has run this node. Turn it on in a workflow that loads a big model after this node."
+          }
+        ],
+        "invert": [
+          "BOOLEAN",
+          {
+            "default": false,
+            "tooltip": "Turns the mask round: white everywhere except what you picked. With nothing picked the mask stays empty."
+          }
+        ],
+        "ask": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": false,
+            "tooltip": "Used by the node's own picture for a single run. Leave it empty: it is never saved with the workflow."
+          }
+        ],
+        "fine_edges": [
+          [
+            "off",
+            "birefnet.safetensors"
+          ],
+          {
+            "default": "off",
+            "tooltip": "Hair and fur, strand by strand: where what you picked ends at the outline of the picture's main subject, that outline is taken from ComfyUI's background-removal model. The cut-out also loses the colour of the old background. Off keeps the edge as found. The ? page says where to get the model file."
+          }
+        ]
+      },
+      "hidden": {
+        "unique_id": "UNIQUE_ID"
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "model",
+        "clip",
+        "touches",
+        "grow",
+        "soften",
+        "smooth",
+        "fill_holes",
+        "if_nothing"
+      ],
+      "optional": [
+        "free_vram",
+        "invert",
+        "ask",
+        "fine_edges"
+      ],
+      "hidden": [
+        "unique_id"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "mask",
+      "cut_out",
+      "names"
+    ],
+    "name": "AUSBOSS_NODES_MaskByTouch",
+    "display_name": "Mask by Touch 🆎",
+    "description": "Click a thing on the picture, or paint over it, and get its mask. No name to type and no MaskEditor. Moving over the picture lights up what a click would take. A painted stroke takes the thing under it, or exactly the paint. What is lit is what the mask will be. When nothing is picked it stops the run with a plain message, so nothing after it runs on an empty mask (or it can pass an empty mask on: a setting). It uses ComfyUI's own SAM 3: wire model and clip from a Load Checkpoint that loads the SAM 3 file. It also returns the picked area cut out on a see-through background, and the names of what you picked as text.",
+    "python_module": "custom_nodes.ausboss-nodes",
+    "category": "🆎 AusBoss/Mask",
+    "output_node": true,
+    "has_intermediate_output": false,
+    "output_tooltips": [
+      "White where the picked area is. One mask per picture.",
+      "The picture with everything but the picked area see-through (RGBA).",
+      "The names of the things you picked, in the order you picked them, like: jacket, hat. Empty when nothing you picked has a name."
+    ],
+    "search_aliases": [
+      "quick select",
+      "magic wand",
+      "click to mask",
+      "segment",
+      "segment anything",
+      "sam",
+      "sam3",
+      "select",
+      "pick",
+      "brush mask",
+      "inpaint mask",
+      "paint mask",
+      "point",
+      "tap",
+      "touch",
+      "object mask",
+      "auto mask",
+      "ausboss"
+    ]
+  },
   "AUSBOSS_NODES_StitchInpaint": {
     "input": {
       "required": {

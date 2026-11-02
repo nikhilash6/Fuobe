@@ -3145,11 +3145,11 @@ export const SPEC = [
   },
   {
     id: 'qwen-image-21-recolor',
-    title: 'Qwen-Image 2.1 Recolor (SAM 3.1 tap mask, crop, repaint, paste back)',
+    title: 'Qwen-Image 2.1 Recolor (tap mask by name, crop, repaint, paste back)',
     capability: 'recolor',
     handBuilt: 'hand-built/qwen-image-21-recolor.json',
     bindings: {
-      image: [b('10', 'image')], positiveCoords: [b('12', 'value')], negativeCoords: [b('13', 'value')], maskGrow: [b('15', 'expand')],
+      image: [b('10', 'image')], touches: [b('14', 'touches')], maskGrow: [b('15', 'expand')],
       prompt: [b('22', 'values.a')], seed: [b('27', 'seed')], steps: [b('27', 'steps')],
     },
     outputs: [{ node: '90', kind: 'image' }],
@@ -3157,13 +3157,17 @@ export const SPEC = [
     license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Meta SAM License (SAM 3.1); AusBoss nodes MIT',
     modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
     notes:
-      'Tap to Recolor: qwen-image-21-inpaint with the mask made in the graph from the taps (the AusBoss example\'s Mask by Touch, on core SAM 3.1). ' +
-      'positiveCoords / negativeCoords = JSON point lists [{"x":int,"y":int}] in the photo\'s pixels (PrimitiveStringMultiline -> SAM3_Detect point path, threshold 0.5, refine 2, one merged mask; ' +
-      'negativeCoords may be empty) -> GrowMask maskGrow (4) so the anti-aliased edge changes too -> Crop For Inpaint (context 1.4, blend 8 px, multiple 32, 1.5 MP, bicubic) -> ' +
-      'GrowMask 8 on the crop\'s mask -> StringFormat "{a} Keep everything else in the picture exactly the same." -> TextEncodeQwenImage21 with the crop as image 1 (resolution 0) -> ' +
-      'VAEEncode + SetLatentNoiseMask -> QwenImage21Cache -> KSampler 25 steps, cfg 1, euler, simple -> SplitImageWithAlpha -> Stitch Inpaint (classic, colour match 0: a tone match ' +
-      'would pull the new colour back). Only the tapped piece is sampled and pasted, so the rest of the photo stays as it was; a tap that finds nothing gives the photo back unchanged. ' +
-      'Prompt: "Change the colour of <the piece> to <colour words (#hex)>. Keep its fabric, weave, folds, seams, stitching, sheen, print and shadows exactly as they are, so only the colour is new."',
+      'Tap to Recolor: qwen-image-21-inpaint with the mask made in the graph from the taps by AusBoss Mask by Touch on core SAM 3.1. ' +
+      'touches = the node\'s JSON {"v":1,"items":[{"t":"name","w":word,"x":int,"y":int,"op":1|0}]} in the photo\'s pixels (src/lib/catalog/recolor.ts recolorTouches): ' +
+      'each tap asks for the smallest thing of the piece\'s name under it (Jacket: jacket + clothing; Auto: clothing, bag, shoe, hat, scarf), a Leave out tap takes away a hand, arm, hair, ' +
+      'belt, bag strap or necklace under it. SAM 3.1\'s point prompt alone (SAM3_Detect) returned the whole person on every GPU test, so taps go through names. If nothing is found ' +
+      'the mask is empty and the photo comes back unchanged (if_nothing "empty mask"); free_vram unloads SAM before the repaint. -> GrowMask maskGrow (1) -> Crop For Inpaint ' +
+      '(context 1.4, blend 2 px, multiple 32, 1.5 MP, bicubic: a tight paste, since a wider one showed a blotchy rim on flat studio backgrounds) -> GrowMask 8 on the crop\'s mask ' +
+      '(the sampling mask: smaller left old-colour specks at the edge) -> StringFormat "{a} Keep everything else in the picture exactly the same." -> TextEncodeQwenImage21 with ' +
+      'the crop as image 1 (resolution 0) -> VAEEncode + SetLatentNoiseMask -> QwenImage21Cache -> KSampler 20 steps, cfg 1, euler, simple (16 looked the same as 25 on the tests) -> ' +
+      'SplitImageWithAlpha -> Stitch Inpaint (classic, colour match 0: a tone match would pull the new colour back). Outside the piece the photo is bit-identical. ' +
+      'RTX 5090: about 32 s per colour warm at 1.5 MP (target_megapixels 1.0 + 16 steps: 19 s, slightly softer stripes), peak 23 GB. ' +
+      'Prompt: "Change the colour of <the piece> (Auto: the outfit) to <colour words (#hex)>. Keep its fabric, weave, folds, seams, stitching, sheen, print and shadows exactly as they are, so only the colour is new."',
   },
   {
     id: 'qwen-image-21-outpaint',
