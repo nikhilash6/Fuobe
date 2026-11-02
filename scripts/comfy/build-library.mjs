@@ -157,7 +157,7 @@ export const BINDING_KEYS = new Set([
   // Open-H3 Regenerate (n7-3): the pack's output size and draft size (its combo strings) and the refine's start noise
   'resolution', 'draftSize', 'startSigma',
   // Character swap in 2K (n7-4): the mask composite's window starts, the two layers' places and the mask's soft edge
-  'takeStart', 'maskStart', 'takeX', 'takeY', 'regionWidth', 'regionHeight', 'regionX', 'regionY', 'feather',
+  'takeStart', 'maskStart', 'takeX', 'takeY', 'regionWidth', 'regionHeight', 'regenWidth', 'regenHeight', 'regenX', 'regenY', 'trimX', 'trimY', 'feather',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
   // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it

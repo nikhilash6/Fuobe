@@ -91,22 +91,27 @@
   },
   "regen_scaled": {
     "class_type": "ImageScale",
-    "inputs": { "image": ["regen_parts", 0], "upscale_method": "lanczos", "width": 320, "height": 180, "crop": "disabled" },
+    "inputs": { "image": ["regen_parts", 0], "upscale_method": "lanczos", "width": 316, "height": 179, "crop": "disabled" },
     "_meta": { "title": "Regenerate to its place in the footage" }
   },
   "regen_mask_img": {
     "class_type": "ImageScale",
-    "inputs": { "image": ["mask_parts", 0], "upscale_method": "bilinear", "width": 320, "height": 180, "crop": "center" },
-    "_meta": { "title": "Mask to the regenerate's place (the centre the regenerate kept)" }
+    "inputs": { "image": ["mask_parts", 0], "upscale_method": "bilinear", "width": 316, "height": 180, "crop": "center" },
+    "_meta": { "title": "Mask to the region the regenerate's draft kept (its centre)" }
   },
   "regen_mask": {
     "class_type": "ImageToMask",
     "inputs": { "image": ["regen_mask_img", 0], "channel": "red" },
     "_meta": { "title": "Mask (red channel)" }
   },
+  "regen_trim": {
+    "class_type": "CropMask",
+    "inputs": { "mask": ["regen_mask", 0], "x": 0, "y": 0, "width": 316, "height": 179 },
+    "_meta": { "title": "Mask to the rows the regenerate kept (1080 of 1088, 2160 of 2176)" }
+  },
   "regen_grow": {
     "class_type": "GrowMask",
-    "inputs": { "mask": ["regen_mask", 0], "expand": 8, "tapered_corners": true },
+    "inputs": { "mask": ["regen_trim", 0], "expand": 8, "tapered_corners": true },
     "_meta": { "title": "Grow the mask" }
   },
   "regen_feather": {
@@ -116,7 +121,7 @@
   },
   "composite": {
     "class_type": "ImageCompositeMasked",
-    "inputs": { "destination": ["base", 0], "source": ["regen_scaled", 0], "x": 0, "y": 0, "resize_source": false, "mask": ["regen_feather", 0] },
+    "inputs": { "destination": ["base", 0], "source": ["regen_scaled", 0], "x": 2, "y": 0, "resize_source": false, "mask": ["regen_feather", 0] },
     "_meta": { "title": "Only your character from the regenerate, over the footage" }
   },
   "create": {

@@ -33,7 +33,7 @@
         "regen_scaled",
         0
       ],
-      "x": 0,
+      "x": 2,
       "y": 0,
       "resize_source": false,
       "mask": [
@@ -133,7 +133,7 @@
     "class_type": "GrowMask",
     "inputs": {
       "mask": [
-        "regen_mask",
+        "regen_trim",
         0
       ],
       "expand": 8,
@@ -164,12 +164,12 @@
         0
       ],
       "upscale_method": "bilinear",
-      "width": 320,
+      "width": 316,
       "height": 180,
       "crop": "center"
     },
     "_meta": {
-      "title": "Mask to the regenerate's place (the centre the regenerate kept)"
+      "title": "Mask to the region the regenerate's draft kept (its centre)"
     }
   },
   "regen_parts": {
@@ -192,8 +192,8 @@
         0
       ],
       "upscale_method": "lanczos",
-      "width": 320,
-      "height": 180,
+      "width": 316,
+      "height": 179,
       "crop": "disabled"
     },
     "_meta": {
@@ -213,6 +213,22 @@
     },
     "_meta": {
       "title": "This window of the regenerate"
+    }
+  },
+  "regen_trim": {
+    "class_type": "CropMask",
+    "inputs": {
+      "mask": [
+        "regen_mask",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "width": 316,
+      "height": 179
+    },
+    "_meta": {
+      "title": "Mask to the rows the regenerate kept (1080 of 1088, 2160 of 2176)"
     }
   },
   "save": {

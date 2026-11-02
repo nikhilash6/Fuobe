@@ -4633,14 +4633,16 @@ export const SPEC = [
       duration: [b('source_slice', 'duration'), b('regen_slice', 'duration'), b('take_slice', 'duration'), b('mask_slice', 'duration')],
       canvasWidth: [b('take_scaled', 'width'), b('take_mask_img', 'width')], canvasHeight: [b('take_scaled', 'height'), b('take_mask_img', 'height')],
       takeX: [b('base', 'x')], takeY: [b('base', 'y')],
-      regionWidth: [b('regen_scaled', 'width'), b('regen_mask_img', 'width')], regionHeight: [b('regen_scaled', 'height'), b('regen_mask_img', 'height')],
-      regionX: [b('composite', 'x')], regionY: [b('composite', 'y')],
+      regionWidth: [b('regen_mask_img', 'width')], regionHeight: [b('regen_mask_img', 'height')],
+      regenWidth: [b('regen_scaled', 'width'), b('regen_trim', 'width')], regenHeight: [b('regen_scaled', 'height'), b('regen_trim', 'height')],
+      trimX: [b('regen_trim', 'x')], trimY: [b('regen_trim', 'y')],
+      regenX: [b('composite', 'x')], regenY: [b('composite', 'y')],
       maskGrow: [b('take_grow', 'expand'), b('regen_grow', 'expand')],
       feather: [b('take_feather', 'left'), b('take_feather', 'top'), b('take_feather', 'right'), b('take_feather', 'bottom'), b('regen_feather', 'left'), b('regen_feather', 'top'), b('regen_feather', 'right'), b('regen_feather', 'bottom')],
       filenamePrefix: [b('save', 'filename_prefix')],
     },
     outputs: [{ node: 'save', kind: 'video' }],
-    defaults: { startTime: 0, windowStart: 0, takeStart: 0, maskStart: 0, duration: 3, canvasWidth: 320, canvasHeight: 180, takeX: 0, takeY: 0, regionWidth: 316, regionHeight: 180, regionX: 2, regionY: 0, maskGrow: 8, feather: 12 },
+    defaults: { startTime: 0, windowStart: 0, takeStart: 0, maskStart: 0, duration: 3, canvasWidth: 320, canvasHeight: 180, takeX: 0, takeY: 0, regionWidth: 316, regionHeight: 180, regenWidth: 316, regenHeight: 179, trimX: 0, trimY: 0, regenX: 2, regenY: 0, maskGrow: 8, feather: 12 },
     vramGb: 0,
     license: 'n/a (no model; ComfyUI core)',
     notes:
@@ -4648,7 +4650,8 @@ export const SPEC = [
       'video = the footage at 24 fps and the film\'s size (the studio\'s 24 fps copy, or Genjutsu\'s part fitted by video-fit-clip), video3 = the 768p swap (H3\'s canvas), video2 = its regenerate, mask = the approved whole-shot mask from video-mask-h3-relay (H3\'s canvas, white = the person). ' +
       'Each LoadVideo goes through a Video Slice of the same duration (one composite window of at most 3 s, because every stream is decoded as float32, about 25 MB a frame at 1080p) from its own start (startTime, takeStart, windowStart, maskStart). ' +
       'Two layers, each through the mask scaled to it, grown (maskGrow) and feathered (feather): first the swap stretched back over the region of the footage its canvas covers (canvasWidth x canvasHeight at takeX, takeY), ' +
-      'then the regenerate over the centre region its 16:9 / 9:16 draft kept (regionWidth x regionHeight at regionX, regionY; the mask is centre-cropped to it), so a character reaching past that region keeps the 768p swap there rather than the original person. ' +
+      'then the regenerate over the centre region its 16:9 / 9:16 draft kept (regionWidth x regionHeight; the mask is centre-cropped to it), less the rows its finish trims at 1080p and 4K (1080 of 1088, 2160 of 2176; the columns for a tall clip): ' +
+      'the regenerate is laid over regenWidth x regenHeight at regenX, regenY and the mask cut to the same rows (CropMask at trimX, trimY), so a character reaching past that region keeps the 768p swap there rather than the original person. ' +
       'Fuobe works the regions out from the film\'s size and H3\'s canvas. CreateVideo takes the footage\'s own sound and rate (a silent clip stays silent). ' +
       'Run end to end on ComfyUI 0.41.0 (CPU): a 320x180 24 fps clip with sound, a 224x128 swap, a 384x216 regenerate and a 224x128 box mask, a 1.5 s window from 0.5 s: 36 frames and 1.5 s of AAC, the regenerate only inside the feathered box; the same with a silent clip gives video only.',
   },

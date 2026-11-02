@@ -654,10 +654,10 @@
     "at": "2026-10-27T11:01:36.134Z"
   },
   "video-composite-mask": {
-    "sha256": "60029601ea38976c1095bb50c56f0f11c7a86e14aec844f0c1ed400205dd2522",
+    "sha256": "c86a6a0dcd25f45e566cbaff79574bc03d5aaf7cdbd3d976d72bc850a3c85de5",
     "validated": true,
     "error": null,
-    "at": "2026-11-01T20:08:39.633Z"
+    "at": "2026-11-01T23:57:37.751Z"
   },
   "video-concat-2": {
     "sha256": "3d08966f5a3c2da662dc112df537ad4245bcd5dbb90e0451a0beb5c54d8db581",

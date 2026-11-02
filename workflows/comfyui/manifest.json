@@ -21956,31 +21956,55 @@
         ],
         "regionWidth": [
           {
-            "node": "regen_scaled",
-            "input": "width"
-          },
-          {
             "node": "regen_mask_img",
             "input": "width"
           }
         ],
         "regionHeight": [
           {
-            "node": "regen_scaled",
-            "input": "height"
-          },
-          {
             "node": "regen_mask_img",
             "input": "height"
           }
         ],
-        "regionX": [
+        "regenWidth": [
+          {
+            "node": "regen_scaled",
+            "input": "width"
+          },
+          {
+            "node": "regen_trim",
+            "input": "width"
+          }
+        ],
+        "regenHeight": [
+          {
+            "node": "regen_scaled",
+            "input": "height"
+          },
+          {
+            "node": "regen_trim",
+            "input": "height"
+          }
+        ],
+        "trimX": [
+          {
+            "node": "regen_trim",
+            "input": "x"
+          }
+        ],
+        "trimY": [
+          {
+            "node": "regen_trim",
+            "input": "y"
+          }
+        ],
+        "regenX": [
           {
             "node": "composite",
             "input": "x"
           }
         ],
-        "regionY": [
+        "regenY": [
           {
             "node": "composite",
             "input": "y"
@@ -22056,8 +22080,12 @@
         "takeY": 0,
         "regionWidth": 316,
         "regionHeight": 180,
-        "regionX": 2,
-        "regionY": 0,
+        "regenWidth": 316,
+        "regenHeight": 179,
+        "trimX": 0,
+        "trimY": 0,
+        "regenX": 2,
+        "regenY": 0,
         "feather": 12
       },
       "limits": {},
@@ -22066,7 +22094,7 @@
       "vramGb": 0,
       "license": "n/a (no model; ComfyUI core)",
       "validated": true,
-      "notes": "Character Swap Studio's Sharpen and Genjutsu's Character swap at 1080p / 2K / 4K on your GPU: a swap was redrawn by video-regenerate-h3, and only the character goes back over the footage, so the background and the sound stay as filmed. video = the footage at 24 fps and the film's size (the studio's 24 fps copy, or Genjutsu's part fitted by video-fit-clip), video3 = the 768p swap (H3's canvas), video2 = its regenerate, mask = the approved whole-shot mask from video-mask-h3-relay (H3's canvas, white = the person). Each LoadVideo goes through a Video Slice of the same duration (one composite window of at most 3 s, because every stream is decoded as float32, about 25 MB a frame at 1080p) from its own start (startTime, takeStart, windowStart, maskStart). Two layers, each through the mask scaled to it, grown (maskGrow) and feathered (feather): first the swap stretched back over the region of the footage its canvas covers (canvasWidth x canvasHeight at takeX, takeY), then the regenerate over the centre region its 16:9 / 9:16 draft kept (regionWidth x regionHeight at regionX, regionY; the mask is centre-cropped to it), so a character reaching past that region keeps the 768p swap there rather than the original person. Fuobe works the regions out from the film's size and H3's canvas. CreateVideo takes the footage's own sound and rate (a silent clip stays silent). Run end to end on ComfyUI 0.41.0 (CPU): a 320x180 24 fps clip with sound, a 224x128 swap, a 384x216 regenerate and a 224x128 box mask, a 1.5 s window from 0.5 s: 36 frames and 1.5 s of AAC, the regenerate only inside the feathered box; the same with a silent clip gives video only."
+      "notes": "Character Swap Studio's Sharpen and Genjutsu's Character swap at 1080p / 2K / 4K on your GPU: a swap was redrawn by video-regenerate-h3, and only the character goes back over the footage, so the background and the sound stay as filmed. video = the footage at 24 fps and the film's size (the studio's 24 fps copy, or Genjutsu's part fitted by video-fit-clip), video3 = the 768p swap (H3's canvas), video2 = its regenerate, mask = the approved whole-shot mask from video-mask-h3-relay (H3's canvas, white = the person). Each LoadVideo goes through a Video Slice of the same duration (one composite window of at most 3 s, because every stream is decoded as float32, about 25 MB a frame at 1080p) from its own start (startTime, takeStart, windowStart, maskStart). Two layers, each through the mask scaled to it, grown (maskGrow) and feathered (feather): first the swap stretched back over the region of the footage its canvas covers (canvasWidth x canvasHeight at takeX, takeY), then the regenerate over the centre region its 16:9 / 9:16 draft kept (regionWidth x regionHeight; the mask is centre-cropped to it), less the rows its finish trims at 1080p and 4K (1080 of 1088, 2160 of 2176; the columns for a tall clip): the regenerate is laid over regenWidth x regenHeight at regenX, regenY and the mask cut to the same rows (CropMask at trimX, trimY), so a character reaching past that region keeps the 768p swap there rather than the original person. Fuobe works the regions out from the film's size and H3's canvas. CreateVideo takes the footage's own sound and rate (a silent clip stays silent). Run end to end on ComfyUI 0.41.0 (CPU): a 320x180 24 fps clip with sound, a 224x128 swap, a 384x216 regenerate and a 224x128 box mask, a 1.5 s window from 0.5 s: 36 frames and 1.5 s of AAC, the regenerate only inside the feathered box; the same with a silent clip gives video only."
     },
     {
       "id": "video-sdr-to-hdr-exr",
