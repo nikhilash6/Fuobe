@@ -64,7 +64,7 @@ try {
       await page.screenshot({ path: path.join(out, `split-empty-${dname}-${theme}.png`), fullPage: true });
       await noSideScroll(page, `${label} empty`);
       await page.locator('input[type="file"]').setInputFiles(wav);
-      await page.getByText("Split soundtrack runs on your GPU (open source).").waitFor({ timeout: 20_000 });
+      await page.getByText("Split soundtrack runs on your GPU.").waitFor({ timeout: 20_000 });
       check(true, `${label}: the cloud engine says Split soundtrack runs on your GPU`);
       await page.screenshot({ path: path.join(out, `split-cloud-${dname}-${theme}.png`), fullPage: true });
       await page.getByRole("button", { name: "Use open source" }).click();

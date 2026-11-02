@@ -19,6 +19,8 @@ export interface RemovalBody {
   mask?: string;
   source: { url: string; name?: string; duration?: number; fps?: number; width?: number; height?: number; hasAudio?: boolean };
   range?: { start: number; end: number };
+  /** H3 Person Removal: the person's mask grown by this many pixels. */
+  maskGrow?: number;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }
@@ -35,6 +37,8 @@ export interface RemovalEstimate {
   previewUsd: number | null;
   /** The preview is the mask the eraser works from (false: SAM 3.1's reading of the words or clicks). */
   previewExact: boolean;
+  /** The preview is H3 Person Removal's green mask. */
+  previewGreen: boolean;
 }
 
 /** The price and shape of a removal for the current settings, asked for once typing pauses (300 ms). */
@@ -56,6 +60,13 @@ export function useRemovalActions() {
   return {
     run: useMutation({
       mutationFn: (b: RemovalBody) => send<{ final: Generation; items: Generation[] }>("/api/remove-object", "POST", b),
+      onSuccess: (r) => {
+        r.items.forEach(seed);
+        void qc.invalidateQueries({ queryKey: ["generations"] });
+      },
+    }),
+    reroll: useMutation({
+      mutationFn: (b: { id: string; window: number; seed?: number; requestId?: string }) => send<{ final: Generation; items: Generation[] }>("/api/remove-object/reroll", "POST", b),
       onSuccess: (r) => {
         r.items.forEach(seed);
         void qc.invalidateQueries({ queryKey: ["generations"] });

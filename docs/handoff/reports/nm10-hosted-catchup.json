@@ -1,0 +1,165 @@
+{
+ "key": "nm10-hosted-catchup",
+ "impl": {
+  "branch": "o/nm10-hosted-catchup",
+  "summary": "Hosted catch-up built on the cloud engine: 17 catalog lines from schemas and prices read again at fal and Replicate on 2026-11-02 (H3 Max Lip Sync up to 15 min, H3 Max Relight, H3 Max Insert a moment, five H3 Max looks, H3 Max Turbo plus its references and extend, Replicate's H3 Lite and HighSpeed, Vidu Q4, Meshy 7/6 Retexture, Tripo P2). Placements: the Lipsync model menu; a Relight cloud choice whose light is a sphere drawn in the browser from 8 light presets and uploaded as reference_image_url; Edit video's 'Insert a moment' with a two-handle range over the clip; the H3 looks and Turbo in the Video studio menu; Turbo as Cinema's cheap draft; Tripo P2 in Image to 3D and a Retexture action on 3D results. Hosted limits are checked before any paid call, in Fuobe's words: prompt length from the schema's maxLength, the insert's range, the relight/insert/extend clip windows and the lip-sync voice window. Commits are signed; nothing pushed.",
+  "built": [
+   "scripts/fetch-hosted-schemas.py --catchup: reads the CATCHUP endpoints (fal OpenAPI and llms.txt pricing, fal catalog status, Replicate's latest version and billing) into docs/research/new-models-10.json endpointRecords, with licence 'proprietary paid API'. It saves after each record, and get() waits and retries when fal's catalog API answers 429.",
+   "scripts/gen-cloud-models.py: 17 model() lines. New generator options: prompt_max (writes FieldMap.promptMax); model3d for retexture-3d; H3_REPLICATE_ROUTES (each Replicate route sends only its own inputs, and HighSpeed sends ratio 'adaptive' from a frame). Catalog regenerated: 235 cloud models, 218 before.",
+   "Types: Operation 'insert-moment' and 'retexture-3d' (labels and kinds), FieldMap.promptMax, ModelOptions.lightSphere, Pricing.longFactor (H3 lip sync is billed 1.2x over 15 s).",
+   "plan.ts: hostedInputProblem, called from planGeneration. It refuses a prompt over the API's limit, an insert range outside 1.625-60 s or outside the clip, a relight with no sphere, and a retexture with neither words nor a style picture. Also added: missingInputs and promptless entries for the new ops, longFactor in estimateCost, and relight-video joins CLIP_LENGTH_OPS (priced on the clip's length).",
+   "clip-windows.ts: source windows for H3 Max relight (2.4-15 s), insert (up to 60 s) and Turbo extend (1.625-60 s); voiceWindowProblem (lip sync 5 s-15 min); portraitShapeProblem (0.4-2.5); insertRangeProblem, INSERT_RANGE, INSERT_STEP and insertHandles (the range control's logic).",
+   "generations.ts: once the clip or voice header is read, it checks the window for relight, extend, insert and avatar runs and refuses before the paid call, then re-prices a relight on the clip's length. composer.ts clipBlocker covers relight-video, insert-moment and extend. The composer refuses a voice outside the window before Generate.",
+   "src/lib/relight-sphere.ts: 8 light presets and spherePixels(), which renders a 512 px lit sphere as pure pixels (wrapped Lambert plus specular, dark ground).",
+   "src/components/studio/hosted-chips.tsx: LightSphereChip (preset swatches; the picked sphere is uploaded and becomes the run's image, and leaves the run when the model changes) and InsertRangeChip (shadcn Slider with two thumbs on 1/8 s stops, opening around the clip's middle). Both are wired into composer.tsx. Edit video gets pickerOps ['v2v','insert-moment'], and the composer's pinned op gives way to the model's own op for a model that lacks the studio's op. The Relight studio gets clipFacts.",
+   "Image to 3D: Tripo P2 in MODELS_3D.image.cloud; retextureRequest and RETEXTURE_MODELS in src/lib/av/model3d.ts; src/components/model3d/retexture-dialog.tsx (words or a style picture, Meshy 7/6, 2K/4K/8K, price preview) behind a Retexture button on model cards. The ⌘K palette opens the retexture models in Image to 3D.",
+   "Mock provider: insert-moment returns a clip and retexture-3d a model. extractOutputs reads a retexture's model_glb.",
+   "Cinema: minimax-h3-max-turbo added to CINEMA_MODELS.video.cloud as the cheap draft. tests/cinema-models.test.ts expectation updated to match.",
+   "Licence rows: automatic. Each new model is a cloud model with paidApiLicence class 'paid-api' and is switched on by default (tested)."
+  ],
+  "tests": "Added tests/hosted-catchup.test.ts (27 tests, all pass). It covers: research records present, live, priced and licensed; payloads for every route checked against the stored schemas (fields, enums, limits, required fields); prices (lip sync 5 s $0.40, 15 s $1.20, 30 s $2.88 (fal's own example), 60 s at 2K $23.04; relight on the clip's length; insert on the new moment only; Turbo $0.14 for 5 s on 11-02 and $0.20 after 11-15; references at H3 Max's rates; Vidu, Lite, HighSpeed, Meshy 8K $0.45, Tripo $1.10/1.20/1.30); hosted limits in Fuobe's words; the insert range control (insertHandles); the sphere render's size and lit side; demo outputs. Targeted suites pass: 29 files with 440 tests (catalog, cloud-catalog*, kling-4*, payload, licences, model-access*, composer*, demo-ops, hosted-runs, launch-prices, model3d*, public-signup*, canvas-models, pipeline, placeholder-results and others), plus command-palette (22) and cinema / cinema-models (29). npx tsc --noEmit is clean, and eslint is clean on the changed files. Browser: tests/e2e/hosted-catchup.mjs passes every check at 1440 and 390 px in light and dark, with FUOBE_DEMO_MODE=on on port 3455 and no console errors. It checks: Lipsync opens on H3 Max Lip Sync with its per-second price and refuses a 2 s voice before Generate; Relight asks for a light, sets the Golden hour sphere and prices it; Edit video's insert range has two handles over an 8 s clip, opens at 3.5 s and moves in 1/8 s steps; Image to 3D offers Tripo P2, a demo Tripo P2 result has Retexture, and the dialog shows its price; nothing scrolls sideways. In demo mode the composer shows placeholders as free, so the browser checks the picker rows' per-second prices and the exact amounts are covered by the unit tests. The dev server was stopped and .next deleted. Full suite and pnpm build not run (per the stage rules). No paid key was used, so no live fal or Replicate call was made.",
+  "left": [
+   "Brief out of date: nothing from this package existed before. paid-model-apis.json had older records for Turbo t2v/i2v and lip sync; the newer records in new-models-10.json override them.",
+   "Brief prices out of date. Turbo's $0.01625-0.052 was October's promotion; 11-01 to 11-15 is $0.0175/0.028/0.056 and from 11-16 $0.025/0.04/0.08 (modelled as Pricing.promo until 2026-11-15). Turbo reference-to-video is billed at H3 Max's own rates ($0.05/0.08/0.16), and extend at $0.025-0.16 with no promotion, so each is its own catalog line. Relight is $0.05/0.08/0.16/0.32 by resolution. Insert is $0.05 at 480p and $0.06 at 768p for the new moment only, 5-13 s. Replicate H3 Lite is $0.025/0.04 per second and HighSpeed $0.06 (the research had these as unconfirmed). Meshy retexture is $0.30 per model, $0.45 at 8K. Tripo P2 is $1.00-1.30.",
+   "Vidu Q4 on fal has no text-to-video route (404). It takes up to 12 reference images and 3 mp3 voice clips of 3-12 s, sound on request, up to 4K. Vidu's own 15 images are not in fal's schema, so Fuobe sends what fal takes. The 3-12 s length of the voice clips is not checked before the run.",
+   "The H3 Max looks are 5 models in the Video studio menu, and each card says it makes a new clip and doesn't restyle one. They are not yet placed as 'looks' cards in Effects or Mixed Media. Assist placement is not done.",
+   "H3 lip sync's enable_transcription toggle is not exposed: the generator's controls handle enums only. portraitShapeProblem (0.4-2.5) is built and tested but not wired, because image dimensions aren't read before the run.",
+   "Reference-token overage is not priced: insert $0.02/1K and Turbo references $0.016/1K past the first 4,096 tokens. Tripo P2 untextured ($1.00) is not offered.",
+   "The Relight studio's subtitle and suggestions still describe a light in words. The H3 Max sphere model hides the prompt, but the hero copy could say 'pick a light' for it.",
+   "Behaviour change: relight-video joined CLIP_LENGTH_OPS, so LightX Relight is now also priced on the clip's length instead of a default 5 s, which is more accurate.",
+   "H3 Max Director, reference-director and the fal 'worlds' models are record only, as already noted in new-models-10.md; nothing was added for them.",
+   "No new studio page, hub tool, ComfyUI graph or node pack, so no GPU pre-flight board rows and no requirements.json change. No DB migration. No new API route: the sphere and the style picture go through POST /api/uploads, and runs go through POST /api/generations. Accounts are unaffected: cloud runs stay the owner's, and 3D answers own-gpu-tool as before.",
+   "Needs a fal or Replicate key to verify for real: payloads match the stored schemas, but no live run was made."
+  ],
+  "docsNotes": "FEATURES / STATUS (docs pass): cloud adds H3 Max Lip Sync (5 s-15 min of audio, 480P-2K, 1.2x over 15 s), H3 Max Relight (lit-sphere light presets drawn in the browser), Edit video → Insert a moment (H3 Max insert, two-handle range, only the new moment billed), five H3 Max looks (16-bit Pixel, Hand-drawn, Low Poly, Retro Toon 70s, VHS with tape wear), H3 Max Turbo (and its references / extend lines; Cinema's cheap draft), Replicate H3 Lite and HighSpeed, Vidu Q4 (image and reference to video, up to 4K), Image to 3D → Tripo P2 and Retexture (Meshy 7/6). ARCHITECTURE: new ops insert-moment and retexture-3d; FieldMap.promptMax (from the schema's maxLength via gen-cloud-models.py prompt_max) and plan.ts hostedInputProblem; Pricing.longFactor; ModelOptions.lightSphere + src/lib/relight-sphere.ts; clip-windows.ts voice / insert windows; scripts/fetch-hosted-schemas.py --catchup writes new-models-10.json endpointRecords. Research: new-models-10.json now holds the catch-up's 19 endpoint records (read 2026-11-02); new-models-10.md §2.2 'H3 Lite / HighSpeed price unconfirmed' and the Turbo price range can be corrected from them.",
+  "blocked": null
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "medium",
+    "title": "Reference-count limits from the stored schemas are not checked before the paid call, and Turbo references' 12-file total is ignored (its tagline even promises 15)",
+    "where": "src/lib/catalog/plan.ts (planGeneration / hostedInputProblem / extraImages); scripts/gen-cloud-models.py minimax-h3-max-turbo-refs tagline",
+    "detail": "Probed with a throwaway vitest against planGeneration + buildPayload (removed afterwards). All of these plan fine and build payloads that break the schema's maxItems: H3 Max insert with 12 reference_image_urls (max 9) and 5 reference_video_urls (max 3); Turbo references with 5 reference_video_urls (max 3); H3 Lite ref2v with 4 reference_audio_urls (max 3); Vidu Q4 ref2v with 13 reference_image_urls (maxImages 12; extraImages only fires when the route sets maxImages). Turbo references with 9 images + 3 clips + 3 sounds (15 files) also passes, but fal's live llms.txt says 'Reference images, videos, and audio clips must add up to at most 12 files' and each type's clips are '2-15 seconds each, combined duration at most 15 seconds'. None of options.maxVideos / maxAudios is read anywhere outside Cinema, so the composer doesn't cap them either. The model's tagline 'Turbo with up to 9 pictures, 3 clips and 3 sound clips as references' tells visitors they can send 15. The package rules say counts get checked in Fuobe's words before any paid call. The implementer's own test helper (checkAgainstSchema) checks maxItems, but only on the small inputs the tests send.",
+    "fix": "In hostedInputProblem (or a generic step), refuse lists over each route's schema maxItems (images/videos/audios), and add a total cap for Turbo references (12) in plain words. Reword the Turbo references tagline, e.g. 'up to 12 references: pictures, clips and sound'. Add tests that send too many."
+   },
+   {
+    "severity": "medium",
+    "title": "The lip-sync portrait shape (0.4-2.5) is never checked, though the server can already read a picture's size",
+    "where": "src/lib/catalog/clip-windows.ts portraitShapeProblem (unused outside tests); src/server/generations.ts",
+    "detail": "The report says portraitShapeProblem isn't wired 'because image dimensions aren't read before the run'. They are: generations.ts already reads a local picture's header with localHead() + imageSize() from src/lib/image-size.ts (sizedMixedFrame and sizedEdit, around lines 667-690). fal's schema says image_url 'aspect ratio must be between 0.4 and 2.5', so a very tall or very wide portrait reaches the paid endpoint and is refused there. The brief names the limit, and the rules ask for hosted limits to be checked first.",
+    "fix": "In submitNow (or next to sizedEdit), for op 'avatar' read images[0] with localHead/imageSize and throw portraitShapeProblem(...). The composer can check too once the slot preview has loaded. Add a test."
+   },
+   {
+    "severity": "medium",
+    "title": "The canvas offers Meshy Retexture and H3 Max Insert, which can never run there (same for the sphere-only relight)",
+    "where": "src/lib/catalog/canvas.ts UNSUPPORTED_OPS (line 352)",
+    "detail": "UNSUPPORTED_OPS leaves out 'rig-3d' because the canvas has no 3D-model input, but 'retexture-3d' wasn't added. A probe of modelChoices({type:'model', data:{mediaKind:'model3d'}}) now lists meshy-7-retexture and meshy-6-retexture, and nodeOps gives them ['retexture-3d']. Every canvas run would fail with 'Add the 3D model to retexture'. The video list now includes minimax-h3-max-insert (op insert-moment). The canvas can't set params.startTime/endTime, so it always fails with 'Mark where the new moment starts…'. minimax-h3-max-relight is also listed, and its refusal 'Pick a light…' points to a chip the canvas doesn't have.",
+    "fix": "Add 'retexture-3d' and 'insert-moment' to UNSUPPORTED_OPS. Leave lightSphere models out of canvas modelChoices (or skip them in needsMarks-style filtering). Extend tests/canvas-models.test.ts."
+   },
+   {
+    "severity": "low",
+    "title": "Insert's resume point: Fuobe allows 1.75 s, while fal's model page says resume_time is 2.625-60",
+    "where": "src/lib/catalog/clip-windows.ts insertRangeProblem / insertHandles; hosted-chips InsertRangeChip (minStepsBetweenThumbs=1)",
+    "detail": "The live OpenAPI has resume_time exclusiveMinimum 1.625, but fal's live llms.txt for minimax/h3-max/insert-video lists 'resume_time Range: 2.625 to 60', which reads as at least 1 s after the earliest start. The probe start 1.625 / resume 1.75 passes Fuobe's checks and goes to the paid call. The two sources disagree, so this may be a gap of at least 1 s or a floor of 2.625 s.",
+    "fix": "Hold resume to at least 2.625 s (or start + 1 s), both in insertRangeProblem and in the range control's minimum gap. Say why in plain words."
+   },
+   {
+    "severity": "low",
+    "title": "H3 Max insert refuses clips over 60 s, a limit the schema doesn't set",
+    "where": "src/lib/catalog/clip-windows.ts SOURCE_SECONDS['minimax-h3-max-insert'] = {min:1.7, max:60}",
+    "detail": "Only start_time and resume_time are capped at 60 (live OpenAPI and llms.txt). video_url has no length limit, and the output is the whole clip with the new scene in it. A 90 s clip with a moment inserted at 10-12 s is refused by clipWindowProblem in generations.ts and clipBlocker, though insertRangeProblem already keeps both points within 60 s. insertHandles already caps the track at 60 s.",
+    "fix": "Drop max:60 for the insert (keep the minimum), or cite a source for it."
+   },
+   {
+    "severity": "low",
+    "title": "Brief items left undone: H3 looks not placed as Effects / Mixed Media 'looks', no Assist placement, enable_transcription not offered",
+    "where": "brief items 4 and 1, 'WHERE IT SHOWS UP'",
+    "detail": "The report admits all three. The five looks exist only as Video studio models, and their cards say they make a new clip. The brief asked for 'looks' cards in Effects / Mixed Media and for Assist to place them.",
+    "fix": "Follow up, or get the owner to agree to defer them."
+   },
+   {
+    "severity": "low",
+    "title": "Charges the API bills are not priced: reference tokens past 4,096 (insert $0.02/1K, Turbo references $0.016/1K)",
+    "where": "scripts/gen-cloud-models.py minimax-h3-max-insert, minimax-h3-max-turbo-refs pricing",
+    "detail": "The rule is to price input and output when the API bills both. Only the price note mentions this overage, and estimateCost leaves it out, so runs with many references cost more than shown. The report admits it.",
+    "fix": "At least add a per-reference estimate or an 'and up' marker when references go in. Otherwise record it as an owner-accepted gap."
+   },
+   {
+    "severity": "low",
+    "title": "Smaller limit and choice gaps against the schemas",
+    "where": "generated catalog vidu-q4, minimax-h3-max-insert, tripo-p2",
+    "detail": "Vidu Q4's reference voices must be mp3, 3-12 s ('mp3 reference audio clips (3-12 seconds each)'). A .wav or recorded clip goes through unchecked (the probe sent .wav). The report admits the length but not the format. Vidu Q4's durations stop at 15, though the schema allows up to 16. Insert's durations stop at 12, though up to 13 is allowed. Tripo P2 offers texture_quality 'fast', which fal says 'requires v3.5-20260815'. texture_version isn't sent and the schema gives no default, so the run might be refused (unconfirmed). Tripo P2's tagline promises 'quads on request', but there's no quad control.",
+    "fix": "Refuse non-mp3 voices for Vidu Q4 in plain words (or convert them). Let ranged durations reach the schema maximum. Send texture_version v3.5-20260815 with 'fast', or drop 'fast'. Remove 'quads on request', or add the control."
+   },
+   {
+    "severity": "low",
+    "title": "Visitor copy: jargon and leftover wording",
+    "where": "src/components/model3d/retexture-dialog.tsx; tripo-p2 tagline; VIDEO_RELIGHT_STUDIO subtitle",
+    "detail": "The retexture dialog says 'PBR maps are included.' and the Tripo P2 card says 'game-ready meshes with PBR textures, quads on request'. That is 3D jargon on visitor-facing text. The Relight studio still says 'Describe the new light…' when the picked model takes only a picked light (the report admits this). Other new messages (voice window, insert range, prompt length, Pick a light) are plain and good.",
+    "fix": "Say 'realistic surface detail (shine, roughness, bumps) included' or similar. Change the Relight subtitle when a lightSphere model is picked."
+   }
+  ],
+  "checks": [
+   "Read the full stage prompt, the binding rules and the implementer's report; reviewed git diff claude/fuobe-parity-4...o/nm10-hosted-catchup (23 files, 6 commits) with the code around it.",
+   "Fetched fal's live OpenAPI for minimax/h3-max/insert-video and minimax/h3-max/relight. Field names, required fields, enums (480p/768p; 480P-2K; aspect incl. adaptive) and the insert time limits match the stored records and the generated maps. reference_image_url is required and comes from the sphere. aspect_ratio is fixed 'adaptive'.",
+   "Fetched fal llms.txt for insert-video (resume_time 2.625-60: finding 4), Turbo reference-to-video (12-file total, 15 s combined per type: finding 1) and Tripo P2 ('fast' needs texture_version v3.5: finding 8). fal-ai/vidu/q4/text-to-video answers 404 (so no t2v route, correctly), and Turbo t2v answers 200.",
+   "Compared every generated catalog line with the stored schemas. Turbo routes send the required prompt_expansion_mode 'balanced'. HighSpeed sends ratio 'adaptive' only with a frame, and has no resolution field. Lite uses 480P/768P. Vidu Q4 i2v sends no aspect_ratio, and ref2v maps audio→'audio' and voices→reference_audio_urls. Meshy uses model_url/text_style_prompt/image_style_url with promptMax 600 and texture_resolution 2k/4k/8k. Tripo P2 uses model_seed and texture_quality. The VHS damage_level light/medium/heavy goes as a control.",
+   "Prices checked against the stored price lines. Lip sync: $0.05-0.32/s by resolution, 1.2x on the whole video over 15 s (probe: 20 s at 768P = $1.92; 30 s = $2.88 matches fal's own example). Relight is billed on the clip's length (10 s at 2K = $3.20). Insert bills only the new moment (5 s at 768p = $0.30). Turbo's November promo runs to 2026-11-15 end of day UTC (launchHolds), then list price. Turbo references are at H3 Max rates and extend at $0.025-0.16. Vidu Q4 is $0.0315-0.273/s. Meshy is $0.30, or $0.45 at 8K. Tripo P2 is $1.10/$1.20/$1.30. LightX Relight, now on CLIP_LENGTH_OPS, is per second ($0.10/s), so pricing it on the clip's length is correct.",
+   "Throwaway vitest probes, deleted afterwards (git status clean), of planGeneration + buildPayload for 22 cases: over-limit reference lists pass (finding 1); resume 1.75 passes (finding 4); insert without times, relight without a sphere, Turbo extend without words and Vidu with no frame are all refused in plain words. Another probe of canvas modelChoices/nodeOps found finding 3.",
+   "Public sign-up: there is no new route. Retexture and Tripo P2 are model3d output, so accounts get own-gpu-tool from api/generations/route.ts (outputKind) and from hosted-run.ts decidePlace. Account cloud runs still need the account's own key (accountRun). The retexture price preview goes through the existing ?preview=1 path. Uploads (the sphere, the style picture) go through POST /api/uploads. No new file-reading server path.",
+   "Licences: every new model is engine 'cloud' with the automatic paid-API licence class, and research records carry 'proprietary paid API'. No LoRA, node pack, ComfyUI graph or Higgsfield asset or API was added. No hot or off-limits file was touched. The relight sphere is drawn by Fuobe's own code.",
+   "UI: the LightSphereChip buttons have aria-pressed, and the Radix two-thumb Slider has thumb labels (keyboard works). Popovers are sized to min(92vw, …) for 390 px. The browser check uses http://localhost, fails on console and page errors, and doesn't filter hydration errors.",
+   "Ran npx vitest on tests/hosted-catchup, canvas-models, cinema-models, licences and payload: 5 files, 68 tests, all pass. No full suite or build (per the stage rules)."
+  ],
+  "verdict": "changes-requested: the payloads, enums and prices match the hosted schemas, and the package follows the cloud-only and public sign-up rules. But several hosted limits still reach the paid call unchecked: reference counts and Turbo references' 12-file total (with a tagline that promises 15), the lip-sync portrait shape (the server can already read it), insert's resume floor, and Vidu's mp3 voices. The canvas also offers Retexture, Insert and sphere relight models that can never run there. All are small, contained fixes. The missing Effects / Mixed Media looks and Assist placements need a follow-up or the owner's OK."
+ },
+ "fix": {
+  "applied": [
+   "Reference counts (review finding 1, medium): plan.ts hostedInputProblem now calls referenceProblem. It only applies to reference ops (ref2v, insert-moment, extend), so a join's clip list keeps its own limit. It refuses picture, clip and sound lists over each endpoint's limit, taken from the schema's maxItems or the 'up to N' in the description, before any paid call: H3 Max insert 9 pictures / 3 clips, Turbo references 9/3/3, H3 Lite and HighSpeed 9/3/3, Vidu Q4 12 pictures / 3 voices. New ModelOptions.maxReferences: Turbo references are capped at 12 in all, per fal llms.txt ('must add up to at most 12 files'). The message is plain: '... takes up to 12 references in all — pictures, clips and sound together — and this run has 15: remove 3'. The Turbo references tagline now says 'up to 12 references — pictures, clips and sound together'. A start frame or an element's pictures are never counted.",
+   "Vidu Q4 mp3 voices (finding 8): new ModelOptions.referenceAudio 'mp3'. A voice clip with another extension, or a non-mpeg data URI, is refused with 'Vidu Q4 takes MP3 voice clips only: convert the others to MP3 first'. Source: fal schema 'up to 3 mp3 reference audio clips'.",
+   "Portrait shape (finding 2, medium): generations.ts portraitProblem() reads a cloud avatar run's picture header with localHead + imageSize, which are already tenant-checked, so an account only ever reads its own file. It then throws portraitShapeProblem, so H3 Max lip sync refuses a picture outside 0.4-2.5 wide before the run (fal llms.txt: 'aspect ratio must be between 0.4 and 2.5'). It runs in prepare, so previews and runs both refuse.",
+   "Canvas (finding 3, medium): retexture-3d and insert-moment were added to UNSUPPORTED_OPS. lightSphere models are left out of modelChoices through needsMarks, so H3 Max Relight is no longer offered there. Tested.",
+   "Insert resume floor (finding 4): fal llms.txt has resume_time 'Range: 2.625 to 60' (re-checked). insertRangeProblem now refuses a resume before 2.625 s ('The clip can pick up again 2.625 s in at the earliest: move the second handle right'), and insertHandles holds the second handle at 2.625 s or later, which the range control re-normalises.",
+   "Insert clip max (finding 5): SOURCE_SECONDS for minimax-h3-max-insert is now { min: 2.625 } with no 60 s cap. The schema caps only start_time and resume_time, and those are still held within 60 s.",
+   "Duration maxima (finding 8): gen-cloud-models.py ranged_durations now always offers the API's longest whole second. Vidu Q4 offers 16 s and H3 Max insert 13 s. After regenerating, only these two models changed.",
+   "Tripo P2 (finding 8): fal llms.txt says 'The fast quality requires v3.5-20260815', so texture_version v3.5-20260815 is now sent fixed. That is the newest value in the enum, so all four qualities stay. The tagline no longer promises quads (there is no quad control) or says PBR: 'Tripo's production tier: detailed 3D models with realistic textures'. The Image to 3D note now reads 'Production tier, realistic textures'.",
+   "Visitor copy (finding 9): the retexture dialog now says 'Realistic surface detail — shine, roughness and bumps — is included.' instead of 'PBR maps are included.', and the Meshy price note says 'realistic surface detail included'. A new StudioSubtitle component follows the picked model: with H3 Max Relight, the Relight studio reads 'Pick a light — its direction, colour and softness — and the shot is relit to match.' Suggestions were already hidden because the model is promptless.",
+   "Tests: tests/hosted-catchup.test.ts now has 32 tests. New ones cover the over-limit reference lists and the 12-reference total, mp3 voices, the insert's 2.625 s resume and a 90 s clip being accepted, Vidu 16 s and insert 13 s, Tripo texture_version with fast, the canvas choices, and the portrait shape refused through previewGeneration on a saved PNG header (400×1200 and 3000×1000 refused, 1080×1920 accepted).",
+   "Commits dbe10f6b and 64f4dac0 on o/nm10-hosted-catchup, with the attribution lines. Nothing pushed."
+  ],
+  "rejected": [
+   "None of the findings were disproved. Every limit acted on was re-read at fal's live llms.txt / OpenAPI on 2026-11-02: insert resume 2.625-60 and duration 5-13; Turbo references at 12 files in all; Tripo 'fast' needs v3.5-20260815 and quads cost nothing extra; Vidu Q4 takes up to 12 pictures, 3 mp3 voices of 3-12 s and 3-16 s; lip sync takes 0.4-2.5. Replicate's H3 Lite and HighSpeed '9/3/3' limits come from the stored schema descriptions."
+  ],
+  "checks": [
+   "Worktree /home/user/wt/o-nm10-hosted-catchup: the branch held only this package's commits, and claude/fuobe-parity-4 is an ancestor. pnpm install --frozen-lockfile is up to date.",
+   "npx next typegen: exit 0.",
+   "pnpm typecheck: exit 0.",
+   "pnpm lint: exit 0. One warning remains, in scripts/comfy/library.spec.mjs (WAN_NEG_EN unused). That file was not touched by this package.",
+   "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2 (final full run, after the last commit): exit 1, with 8 failed / 4978 passed / 4 skipped in 311 files. Of those 8, 6 are the known RULES item 8 failures: comfy-reuse, dop-originals, preset-featured, soul-runs x2 and split-soundtrack. The other 2, picker-covers and preset-covers, were 5 s timeouts under full-suite load (the files are untouched; they passed in the earlier full run). Run alone they pass, 36/36.",
+   "The earlier full run caught one regression of mine: cloud-catalog-4 'joins at most as many audio clips' got the reference message instead of the join's own message. I fixed it by limiting the check to reference ops (commit 64f4dac0). Targeted re-run: hosted-catchup, cloud-catalog*, payload and kling-4* all pass, 120/120.",
+   "No browser check this stage. The e2e checks are unaffected: the insert range still opens at 3.5 s on an 8 s clip, and no e2e test looks for the copy that changed. .next deleted; git status clean."
+  ],
+  "finalSummary": "The hosted catch-up was already built (17 cloud catalog lines plus placements). Several hosted limits still reached the paid call unchecked; they are now refused first, in plain words. Reference lists are held to each endpoint's counts, and H3 Max Turbo references to 12 in all. Vidu Q4 takes mp3 voices only. A lip-sync portrait must be 0.4-2.5 wide, read from the file's header. An inserted moment cannot pick up again before 2.625 s, and a clip longer than 60 s is no longer refused. Vidu Q4 now offers 16 s and the insert 13 s. Tripo P2 sends the texture version its 'fast' quality needs, and its tagline no longer promises quads. The canvas no longer offers Retexture, Insert or the sphere relight, none of which it can run. Visitor copy no longer says PBR, and the Relight studio says 'pick a light' when H3 Max Relight is picked. Cloud engine: everything is built and tested against the stored schemas, prices and limits, but there is no live fal or Replicate call because no key is available, so payloads are verified against schemas only. Open engine: unchanged; it keeps its own lip-sync, relight and 3D tools. No GPU was needed and no node pack or graph was added. Public sign-up: guests browse read-only as before. Accounts' cloud runs need their own key, and 3D (Tripo P2, Retexture) answers own-gpu-tool. The new portrait check reads files through tenant-checked localHead, so an account only reads its own files. No new route.",
+  "left": [
+   "Owner input: H3 Max looks are still Video studio models. They have not been placed as 'looks' cards in Effects / Mixed Media, and there is no Assist placement.",
+   "Reference-token overage is not priced: insert $0.02/1K and Turbo references $0.016/1K past 4,096 tokens. It is only mentioned in the price notes. Owner to accept, or a follow-up.",
+   "Not checked before the run: the length of Vidu Q4's voice clips (3-12 s each), and the length of Turbo references' clips and sounds (2-15 s each, 15 s combined per type). Both need headers read for every reference.",
+   "H3 lip sync's enable_transcription toggle is not exposed, because the generator's controls handle enums only. Tripo P2's quad and untextured ($1.00) options are not offered.",
+   "The composer has no portrait-shape check of its own yet; the server refuses before the run.",
+   "The full suite has 6 known failures from main (RULES item 8), plus picker-covers and preset-covers timing out at 5 s under full-suite load; both pass alone.",
+   "Live verification needs a fal / Replicate key."
+  ],
+  "blocked": null
+ },
+ "merge": {
+  "merged": [
+   "o/nm10-hosted-catchup"
+  ],
+  "notMerged": [],
+  "conflicts": "composer.tsx, canvas.ts, plan.ts: kept both sides",
+  "checks": "batch of 4 (n7-8, dbs-d5, hosted-catchup, w2s-w4): typecheck 0, lint 0, vitest 5159 passed, 6 failed (main known)",
+  "pushed": true,
+  "head": "85be87db"
+ }
+}

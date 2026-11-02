@@ -1,0 +1,171 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_music3_dit_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Load MiniMax Music 3 DiT (int8)"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "minimax_music3_text_encoder_pruned_int8_convrot.safetensors",
+      "type": "minimax",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "Load MiniMax Music 3 text encoder (pruned int8)"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_music3_dav.safetensors"
+    },
+    "_meta": {
+      "title": "Load MiniMax Music 3 VAE"
+    }
+  },
+  "4": {
+    "class_type": "MiniMaxMusic3TextEncode",
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "caption": "Warm acoustic pop, 96 BPM, soft female vocal, fingerpicked guitar and light drums",
+      "lyrics": "[Instrumental]",
+      "seed": 0,
+      "max_duration": 120.0,
+      "cfg_scale": 1.7,
+      "top_k": 50
+    },
+    "_meta": {
+      "title": "MiniMax Music 3 Text Encode (caption + lyrics)"
+    }
+  },
+  "5": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "4",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Negative (zero)"
+    }
+  },
+  "6": {
+    "class_type": "EmptyMiniMaxMusic3LatentAudio",
+    "inputs": {
+      "seconds": [
+        "4",
+        1
+      ],
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Empty MiniMax Music 3 latent (the encoder's seconds)"
+    }
+  },
+  "7": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "4",
+        0
+      ],
+      "negative": [
+        "5",
+        0
+      ],
+      "latent_image": [
+        "6",
+        0
+      ],
+      "seed": 0,
+      "steps": 30,
+      "cfg": 1.7,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0
+    },
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "7",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAE Decode Audio"
+    }
+  },
+  "9": {
+    "class_type": "VAEDecodeAudioTiled",
+    "inputs": {
+      "samples": [
+        "7",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "tile_size": 1536,
+      "overlap": 64
+    },
+    "_meta": {
+      "title": "VAE Decode Audio (tiled, long songs)"
+    }
+  },
+  "10": {
+    "class_type": "ComfySwitchNode",
+    "inputs": {
+      "switch": false,
+      "on_false": [
+        "8",
+        0
+      ],
+      "on_true": [
+        "9",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Tiled decode?"
+    }
+  },
+  "11": {
+    "class_type": "SaveAudioAdvanced",
+    "inputs": {
+      "audio": [
+        "10",
+        0
+      ],
+      "filename_prefix": "fuobe/music-minimax-3",
+      "format": "mp3",
+      "format.quality": "V0"
+    },
+    "_meta": {
+      "title": "Save Audio (MP3 V0)"
+    }
+  }
+}

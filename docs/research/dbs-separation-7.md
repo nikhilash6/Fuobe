@@ -393,7 +393,7 @@ A `separation` metric family in `scripts/eval/metrics/fuobe_metrics` (SI-SDR and
 
 ### D5 · Clean up dialogue (P1)
 
-A "Clean up dialogue" preset in Split soundtrack plus a direct entry in the Audio hub and on videos. Open: DBS voice, optionally the bed at −18 dB (graph C or the browser mixer). There is no open denoiser in Fuobe's research, so the open route removes music and effects but not hiss or hum (say so). Cloud: add `veed/clean-audio` (research row exists) and `fal-ai/deepfilternet3` (needs a research record first) through `gen-cloud-models.py`; ElevenLabs isolation stays.
+A "Clean up dialogue" preset in Split soundtrack plus a direct entry in the Audio hub and on videos. Open: DBS voice, optionally the bed at −18 dB (graph C or the browser mixer). There is no open denoiser in Fuobe's research, so the open route removes music and effects but not hiss or hum (say so). Cloud: add `veed/clean-audio` (research row exists) and `fal-ai/deepfilternet3` (needs a research record first) through `gen-cloud-models.py`; ElevenLabs isolation stays. *As built (D5):* a Clean up dialogue task in Split soundtrack (`?preset=clean-dialogue`, a chip on audio and video results) and a Clean dialogue (−18 dB) mixer preset. Open: graph C `soundtrack-remix-dbs` on `oss-dbs-remix` (music and effects at Off / −24 / −18 / −12 dB; Off sends −100 dB), then `oss-mux` for a video. Cloud: `veed-clean-audio` (its `audio_url` takes a video too; fal also lists `veed/clean-audio/video`, which returns the video with the picture copied, not used yet), `deepfilternet3` (audio only: `extract-soundtrack` first for a video; MIT OR Apache-2.0) and ElevenLabs isolation, then `merge-audio-video`; no bed under the cloud voice (`samAudioCloud` false). Main's Clean up voice (RE-USE) is the open denoiser this research did not have; the page points to it. Measured on the CPU ComfyUI with graph C, 15 s mono clips (Mandarin read speech, so outside DBS's English training data): speech under loud music went from −15.2 to −5.1 dB SI-SDR against the clean speech; speech over a 50 + 150 Hz hum with pink hiss went from −1.6 to 5.2 dB, the 50 Hz line about 51 dB lower and 150 Hz about 39 dB lower, hiss above 4 kHz only about 10.6 dB lower; a −18 dB bed came out at −17.9 dB against the input music; DBS-BSRNN ran at 0.36–0.42x real time.
 
 ### D6 · Clean the voice first (P1)
 
@@ -441,7 +441,7 @@ An ONNX export of the network core (§5, item 4) made by a script in the eval ve
 - Whether the authors will release more DBS checkpoints (MUSDB 4-stem, EchoSet), and whether fal or Replicate will host DBS. Replicate could not be ruled out with certainty.
 - AudioShake's dollar price per credit.
 - Replicate `ryan5453/demucs` hardware (A100 in the text, A40 in the page's JSON); all Replicate prices are page estimates.
-- Where steady noise (hiss, hum, room tone) lands: sfx or speech. It matters for "Clean up dialogue".
+- Where steady noise (hiss, hum, room tone) lands: sfx or speech. It matters for "Clean up dialogue". *Partly measured (D5):* on one synthetic clip a mains hum went mostly to sfx (removed), broadband hiss mostly stayed with the speech (about 10 dB lower).
 - The licences of individual DnR v2 source clips and whether they matter for the Apache-2.0 weights or their outputs.
 
 ## Sources (read 2026-10-29)

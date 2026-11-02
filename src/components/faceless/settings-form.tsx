@@ -1,5 +1,6 @@
 "use client";
 
+import { songLength } from "@/lib/lyrics";
 import { AtSign, ChevronDown, Film, Images, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -141,6 +142,9 @@ export function EpisodeSettingsForm({
   }, [offPick, onChange]);
   const video = frames ? (camera && { ...camera, engine: value.engine }) : (videos.find((m) => m.id === value.videoModel) ?? videos.find((m) => m.id === ENGINE_MODELS[value.engine].video) ?? videos[0]);
   const resolution = value.resolution && video?.resolutions.includes(value.resolution) ? value.resolution : (DEFAULT_RESOLUTION[video?.id ?? ""]?.[value.animation] ?? video?.resolutions[0]);
+  // The music bed's model (Advanced), with the longest bed each makes; one switched off in Settings leaves the list.
+  const beds = keepOffered((picker.musicModels ?? []).filter((m) => m.engine === value.engine), (m) => offered(access, m.id, value.engine));
+  const bed = beds.find((m) => m.id === value.musicModel) ?? beds.find((m) => m.id === ENGINE_MODELS[value.engine].music) ?? beds[0];
   return (
     <div className="space-y-7">
       {kind === "faceless" && (
@@ -243,6 +247,16 @@ export function EpisodeSettingsForm({
               <Segmented label="Video model" value={video?.id ?? ""} options={videos.map((m) => ({ value: m.id, label: m.name }))} onChange={(videoModel) => onChange({ videoModel, resolution: undefined })} />
             </Section>
           )}
+          {value.music && beds.length > 1 && (
+            <Section title="Music" hint={value.engine === "open" ? "Longer films play the bed again, with a soft crossfade." : "Longer films play the bed again from the start."}>
+              <Segmented
+                label="Music model"
+                value={bed?.id ?? ""}
+                options={beds.map((m) => ({ value: m.id, label: `${m.name} · up to ${songLength(m.maxSeconds)}` }))}
+                onChange={(musicModel) => onChange({ musicModel })}
+              />
+            </Section>
+          )}
           {video && video.resolutions.length > 1 && (
             <Section title="Quality" hint={frames ? "The size the camera moves render at: no model runs, larger sizes take longer and more memory." : undefined}>
               <Segmented label="Quality" value={resolution ?? ""} options={video.resolutions.map((r) => ({ value: r, label: r }))} onChange={(r) => onChange({ resolution: r })} />
@@ -250,8 +264,8 @@ export function EpisodeSettingsForm({
           )}
           <p className="text-[12px] text-muted-foreground">
             {value.engine === "cloud"
-              ? `Pictures: Nano Banana Pro · ${frames ? "Camera: Ken Burns zoom (fal), no video model" : `Video: ${video?.name ?? "Gemini Omni Flash"}`} · Voice: ElevenLabs v4 (Chatterbox for your own voice), timed word by word by ElevenLabs forced alignment · Music: Sonilo · Subtitles: Auto Subtitle`
-              : `Pictures: Qwen-Image 2.1 (Krea 2 Style Reference or Qwen-Image 2.1 Turbo with your images) · ${frames ? "Camera: Ken Burns pan and zoom, scenes over 10 s in pieces" : `Video: ${video?.name ?? "MiniMax H3"}`} · Voice: Chatterbox, timed by Qwen3-ASR · Music: ACE-Step, looped past 4 minutes · Subtitles: Qwen3-ASR + burn-in`}
+              ? `Pictures: Nano Banana Pro · ${frames ? "Camera: Ken Burns zoom (fal), no video model" : `Video: ${video?.name ?? "Gemini Omni Flash"}`} · Voice: ElevenLabs v4 (Chatterbox for your own voice), timed word by word by ElevenLabs forced alignment · Music: ${bed?.name ?? "Sonilo"} · Subtitles: Auto Subtitle`
+              : `Pictures: Qwen-Image 2.1 (Krea 2 Style Reference or Qwen-Image 2.1 Turbo with your images) · ${frames ? "Camera: Ken Burns pan and zoom, scenes over 10 s in pieces" : `Video: ${video?.name ?? "MiniMax H3"}`} · Voice: Chatterbox, timed by Qwen3-ASR · Music: ${bed ? `${bed.name}, looped past ${songLength(bed.maxSeconds)}` : "ACE-Step, looped past 4 minutes"} · Subtitles: Qwen3-ASR + burn-in`}
             {" "}Each scene is cut to where its lines are spoken.
           </p>
         </CollapsibleContent>

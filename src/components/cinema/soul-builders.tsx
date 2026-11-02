@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useSoulFinish } from "@/components/studio/soul-finish";
 import { TurnaroundButton } from "@/components/turnaround/turnaround-dialog";
@@ -35,6 +36,7 @@ import {
 import { soulLook } from "@/lib/catalog/soul";
 import { sheetPictures } from "@/lib/catalog/turnaround";
 import { finishedUrl } from "@/lib/soul-post";
+import { QMA_MODEL } from "@/lib/qma";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -392,6 +394,9 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
   const [prompt, setPrompt] = useState("");
   const [batch, setBatch] = useState(2);
   const [picked, setPicked] = useState<string[]>([]);
+  // Other views on your GPU: the Multiple-Angles default, or QMA · 96 views (qma-angles), when this install offers it.
+  const [qma, setQma] = useState(false);
+  const qmaOffered = engine === "open" && !!getModel(QMA_MODEL);
   const { generate, results, setIds, current } = useBuilderRun(projectId);
   const chosen = picked.map(current);
   const input = { engine, mode: "image" as const, action: "location" as const, prompt, settings, batch };
@@ -400,7 +405,7 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
   const run = (extra?: { view: string; url: string }) =>
     generate.mutate(
       {
-        input: extra ? { ...input, action: "location-view", view: extra.view, source: { url: extra.url, kind: "image" }, batch: 1 } : input,
+        input: extra ? { ...input, action: "location-view", view: extra.view, source: { url: extra.url, kind: "image" }, batch: 1, ...(qma && qmaOffered && { modelId: QMA_MODEL }) } : input,
         folderId,
       },
       {
@@ -459,6 +464,13 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
           {chosen.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[12px] text-muted-foreground">Show the same location from another view:</span>
+              {qmaOffered && (
+                <label className="mr-1 inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                  <Switch checked={qma} onCheckedChange={setQma} aria-label="Use QMA · 96 views, on your GPU" />
+                  QMA · 96 views
+                </label>
+              )}
+              {engine === "cloud" && <span className="mr-1 text-[11.5px] text-muted-foreground">(QMA · 96 views runs on your GPU)</span>}
               {LOCATION_VIEWS.map((v) => (
                 <button key={v.id} type="button" onClick={() => run({ view: v.id, url: chosen[0] })} className="h-7 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent">
                   {v.name}

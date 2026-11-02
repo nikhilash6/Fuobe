@@ -89,8 +89,15 @@ export type Operation =
   | "camera-path" // image + params.cameraPath (+ inputs.video: the open engine's render along the path) → the camera following the path
   // archive-restore
   | "restore-video" // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
+  // nm10-hosted-catchup
+  | "insert-moment" // video + params.startTime / params.endTime (+ prompt, reference images and clips, params.duration: the new scene's length) → the clip with a new scene between them
+  | "retexture-3d" // 3D model (inputs.model3d) + prompt or a style image → the same model with new textures
   // nm10-voice-design
-  | "voice-design"; // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  | "voice-design" // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  // nm10-music3: a song's cloud tools (Mureka). The song is inputs.audio, or one of Mureka's own (params.extra.songId)
+  | "song-extend" // song + lyrics for the new part (+ params.startTime: where it begins; params.extra.extend_type tail | head) → the song, longer
+  | "song-remix" // song + a style (prompt) + the whole song's lyrics → a new arrangement of it
+  | "song-stems"; // song → its vocal and instrument tracks (meta.stem), one file each
 
 export const OPERATION_LABELS: Record<Operation, string> = {
   t2i: "Text to image",
@@ -163,6 +170,11 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   "camera-path": "Fly path",
   composite: "Character over the footage",
   "restore-video": "Restore & colourise",
+  "insert-moment": "Insert a moment",
+  "retexture-3d": "Retexture",
+  "song-extend": "Extend a song",
+  "song-remix": "Remix a song",
+  "song-stems": "Song stems",
 };
 
 export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
@@ -237,6 +249,11 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   "camera-path": "video",
   composite: "video",
   "restore-video": "video",
+  "insert-moment": "video",
+  "retexture-3d": "model3d",
+  "song-extend": "audio",
+  "song-remix": "audio",
+  "song-stems": "audio",
 };
 
 /**
@@ -521,8 +538,24 @@ export interface FieldMap {
   cameraPath?: { key: string; min: number; max: number; elevation: [number, number]; maxTurns: number; free?: { key: string; values: string[] } };
   /** An empty prompt is left out rather than sent as "" (APIs that read a missing prompt as "no words": Bria Expand). */
   omitEmptyPrompt?: boolean;
+  /** The most characters the API's prompt field takes (its schema's maxLength: Vidu Q4 5,000, Meshy retexture 600): a longer one is refused before it's paid for. */
+  promptMax?: number;
   /** params.extra keys this route has no field for (a model-wide control only its other routes read): left out. */
   ignore?: string[];
+  /**
+   * Song lyrics (params.extra.lyrics, section tags such as [Verse] on lines of their own: src/lib/lyrics.ts): the API's lyrics
+   * field and the most characters it takes, or (`inPrompt`) written after the prompt for an API that reads them there
+   * (Lyria 3.5). A route without it never sends params.extra.lyrics. `instrumental`: the API's switch for a song with no
+   * vocals (MiniMax Music 2.5's is_instrumental), sent in place of lyrics that are only [Instrumental], with its own lyrics
+   * writer (`autoLyrics`) off.
+   */
+  lyrics?: { key?: string; inPrompt?: true; max?: number; instrumental?: string; autoLyrics?: string };
+  /**
+   * A song tool's source song (Mureka extend / remix): one of the provider's own songs by id (params.extra.songId, kept on a
+   * result as meta.songId) in `songId`, else the song file (inputs.audio) sent first to `upload` (Mureka's files/upload with
+   * its `purpose`), whose id goes in `uploadId`.
+   */
+  songSource?: { songId: string; uploadId: string; upload: { endpoint: string; purpose: string } };
   /**
    * An upscaler that takes a factor, not a size (Topaz, FLUX Upscale): params.resolution ("1080p", "4K",
    * "Original" = 1) becomes target ÷ the clip's shorter edge (GenInput.sourceSize), kept within min–max.
@@ -595,6 +628,11 @@ export interface ModelRoute {
 export type Badge = "new" | "top" | "fast" | "audio" | "4k" | "hd" | "pro" | "open" | "uncensored" | "beta" | "30s";
 
 export interface ModelOptions {
+  /**
+   * Keyframe animation (Fuobe Animation): its keyframes run with per-gap timing (params.extra.inbetween: frames, every Nth
+   * frame, words; the playback rate), src/lib/inbetween.ts. The film is as long as its gaps, not params.duration.
+   */
+  inbetween?: true;
   aspectRatios?: string[];
   resolutions?: string[];
   durations?: number[];
@@ -615,6 +653,15 @@ export interface ModelOptions {
    * way to make the provider's voice ids yet, so voices aren't sent).
    */
   elements?: { max: number; views: number; videos: number; voices: false; ops: Operation[] };
+  /**
+   * The model sings lyrics (Audio → Music's lyrics editor, params.extra.lyrics): the most characters it takes, and whether they
+   * go after the prompt (Lyria 3.5) rather than in a field of their own. Section tags ([Verse], [Chorus]) on lines of their own.
+   * `instrumentalModel`: the model sings words only, and its maker's instrumental model is this one (Mureka 9.5 → Mureka 9.5
+   * Instrumental): the editor offers no Instrumental, and lyrics that are only [Instrumental] are refused with its name.
+   */
+  lyrics?: { max?: number; inPrompt?: true; required?: true; instrumentalModel?: string };
+  /** Takes a song to cover (inputs.audio: YuE2 sings its melody with the new style and lyrics). */
+  cover?: true;
   /** Draft mode (cheap preview, then a full render of the take you like). */
   draft?: boolean;
   /**
@@ -655,6 +702,11 @@ export interface ModelOptions {
   promptless?: boolean;
   /** The prompt box shows, but the model also runs without words (P-Video Replace, Genjutsu Lite object swap). */
   promptOptional?: boolean;
+  /**
+   * The light goes as a picture of a lit sphere (fal's H3 Max relight: reference_image_url), drawn in the browser from a light
+   * preset (src/lib/relight-sphere.ts) and sent as the run's image; no words.
+   */
+  lightSphere?: boolean;
   /** The words a run takes when none are given (Fuobe Try-On: its try-on LoRA's own instruction). */
   defaultPrompt?: string;
   /** The prompt box's placeholder for this model (Open-H3 Regenerate: describe the clip it redraws). */
@@ -667,8 +719,10 @@ export interface ModelOptions {
    * as the run's prompt; words already in the layout pass through.
    * "kandinsky6" = Kandinsky 6.0's tags: words in quotes become spoken lines (<S>…<E>) and a "Sound:" line the sound caption
    * (<AUDCAP>…<ENDAUDCAP>), on both engines (src/lib/kandinsky-prompt.ts); the run keeps the words as typed.
+   * "qma" = the QMA camera-angles LoRA's "<qma> {azimuth} {elevation} {distance}": the plan writes it from the run's pose
+   * (params.extra horizontal_angle / vertical_angle / zoom, src/lib/qma.ts), the words after it.
    */
-  promptFormat?: "ideogram4" | "minimax-h3" | "kandinsky6";
+  promptFormat?: "ideogram4" | "minimax-h3" | "kandinsky6" | "qma";
   /**
    * The longest clip it takes, in seconds (Kandinsky VSR: 121 frames at 24 fps on both engines): a longer one is refused
    * before it runs, never cut short.
@@ -689,6 +743,10 @@ export interface ModelOptions {
   /** Max reference videos / audio clips it accepts (reference-to-video: inputs.videos / inputs.audios). */
   maxVideos?: number;
   maxAudios?: number;
+  /** The most references across its pictures, clips and sound clips together (fal's H3 Max Turbo references: 12 files). */
+  maxReferences?: number;
+  /** The one format its reference voices are read in (fal's Vidu Q4: mp3); a clip in another is refused before the run. */
+  referenceAudio?: string;
   /** Spoken languages it can be told (transcription, captions): sent as params.sourceLanguage; unset = its default. */
   sourceLanguages?: string[];
   /**
@@ -759,7 +817,7 @@ export interface Pricing {
    * count, rather than on `usd` / `byResolution` (one shape's per-second rate). `withLoras`: the LoRA endpoint's rate.
    */
   videoMegapixel?: { usd: number; withLoras?: number };
-  /** Per-megapixel prices billed on whole megapixels (fal's Qwen-Image 2512). */
+  /** Per-megapixel prices billed on whole megapixels (fal's Qwen-Image 2512); per-minute prices on started minutes (ElevenLabs Music v2.5). */
   roundUp?: true;
   /**
    * Billed per clip by the steps it takes, on the variant a setting picks (fal's Kandinsky 6.0, a 5 s 480p clip: Pro $0.24 at
@@ -774,6 +832,10 @@ export interface Pricing {
    * `maxFrames` (params.sourceDuration). A clip whose size isn't known yet is priced as `assume` (480p, 16:9).
    */
   outputFrames?: { usd: number; fps: number; maxFrames: number; assume: { width: number; height: number } };
+  /** The price per request when the run brings its own lyrics (params.extra.lyrics): Mureka bills a song from lyrics less than one it writes. */
+  withLyrics?: number;
+  /** What sending the song first costs when it isn't one of the provider's own (params.extra.songId): Mureka's files/upload, $0.01. */
+  uploadUsd?: number;
   /** What an animation preset adds to a run (params.animation: Meshy rigging +$0.12). */
   animationUsd?: number;
   /**
@@ -784,6 +846,11 @@ export interface Pricing {
    * rate of a run without clips).
    */
   clipInput?: { usd: number; byResolution?: Record<string, number>; plain?: true };
+  /**
+   * A per-second price multiplied by `factor` for a result longer than `over` seconds (fal's H3 Max lip sync: 1.2× for a video
+   * over 15 s, the whole video at the higher rate).
+   */
+  longFactor?: { over: number; factor: number };
   /** A fixed fee each request adds on top of its seconds (fal's H3 Max 3D to video: $0.50 processing). */
   perRequest?: number;
   /** The fewest seconds a per-second request bills (fal's H3 Max 3D to video: 5 s a shot). */
@@ -1210,6 +1277,12 @@ export interface ChainSlot {
    * with a look makes each next frame from the previous one, and every frame gets the look's grade on its own.
    */
   raw?: boolean;
+  /**
+   * "path" (build plan N7-7, a video slot): the server renders the step's camera path (params.cameraPath) through the
+   * scene the dependency made from the step's still (MoGe 2's depth picture), and that render is the input: Uni3C's guide
+   * when no browser has drawn one (Canvas, Assist, Fuobe DoP, Cinema's exact orbits). src/server/path-render.ts.
+   */
+  render?: "path";
 }
 
 /** How many outputs a planned list (ChainSlot.of) may be short of before the steps reading it fail. */
@@ -1340,6 +1413,8 @@ export interface InputSlot {
   required?: boolean;
   /** A voice slot: offers "Clean up voice" (RE-USE on the open engine) under it, which cleans the file as it lands. */
   cleanVoice?: boolean;
+  /** Shown only for a model that covers a song (ModelOptions.cover: YuE2 in Audio → Music); others never read it. */
+  cover?: boolean;
 }
 
 export interface PresetChoice {
@@ -1450,6 +1525,11 @@ export interface Preset {
   promptPlaceholder?: string;
   cloud: PresetRoute | null;
   open: PresetRoute | null;
+  /**
+   * More routes on your GPU after the open one, each its own pick in the app's model picker (the Angles app's QMA · 96 views):
+   * a model the cloud has no hosted version of keeps its place on the open engine.
+   */
+  openAlso?: PresetRoute[];
   /** Research confidence / parity notes shown in docs and the UI. */
   parity?: string;
   /** Fuobe DoP's colour-grade effects: a src/lib/grade.ts preset the browser applies to the finished clip. */

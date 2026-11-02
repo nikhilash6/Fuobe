@@ -9,6 +9,7 @@ import { StudioSkeleton } from "@/components/skeletons";
 import { StudioPage } from "@/components/studio/studio-page";
 import type { StudioConfig } from "@/components/studio/studio-context";
 import { TrainDialog } from "@/components/train-dialog";
+import { AnimatePosesButton } from "@/components/turnaround/animate-poses";
 import { TurnaroundButton, useCharacterPictures } from "@/components/turnaround/turnaround-dialog";
 import { Button } from "@/components/ui/button";
 import { useElement } from "@/lib/api";
@@ -104,6 +105,7 @@ export function ElementStudio({ id }: { id: string }) {
             {el.kind === "character" && el.references.length > 0 && (
               <TurnaroundButton flyAround label="Fly around" variant="ghost" compact pictures={pictures} name={el.name} elementId={el.id} realPerson />
             )}
+            {el.kind === "character" && <AnimatePosesButton variant="ghost" compact pictures={pictures} name={el.name} />}
             <Button variant="ghost" size="sm" onClick={() => setEditing(true)} aria-label={`Edit ${el.name}`}>
               <Pencil /> <span className="hidden sm:inline">Edit</span>
             </Button>

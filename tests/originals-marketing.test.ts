@@ -84,7 +84,7 @@ describe("Fuobe Marketing Image", () => {
     expect(pickable(formatModels(FORMATS["product-standalone"], "open", { product: true, avatar: false })).map((c) => c.id)).toEqual([MARKETING_IMAGE_MODEL]);
     expect(getModel(MARKETING_IMAGE_MODEL)?.engineNote).toMatch(/runs on your GPU only .*relit into the scene.*offers partner models instead/);
     expect(formatModels(FORMATS["product-standalone"], "open", { product: true, avatar: false })[0].note).toBe("Fuobe Original · Qwen-Image 2.1 on your GPU");
-    expect(AD_VISUAL_MODELS.cloud.map((c) => c.id)).toEqual([MARKETING_IMAGE_MODEL, "nano-banana-pro", "gpt-image-2-5"]);
+    expect(AD_VISUAL_MODELS.cloud.map((c) => c.id)).toEqual([MARKETING_IMAGE_MODEL, "nano-banana-pro", "gpt-image-2-5", "flux-3"]);
     expect(adVisualModel("open", "nano-banana-pro")).toBe(MARKETING_IMAGE_MODEL);
     expect(adVisualModel("cloud", "gpt-image-2-5")).toBe("gpt-image-2-5");
     // Its words are set over the picture on both engines; a partner draws them.
