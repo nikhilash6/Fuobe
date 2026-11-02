@@ -57,23 +57,32 @@ export function pathAzimuth(side: TurnSide): number {
 }
 
 /**
- * WorldCast's convention, for N7-9 (new-models-7.md §3.4, §3.11): its 1–4 anchor photos are named front, right_side, back and
- * left_side, with each one's azimuth in body_views_meta.json. Its demo case puts them at 0°, 91.79°, 171.39° and 266.91°, with
- * `left_sign` −1 (the left side is reached turning the other way: −93°, the same place as 267°). That is viewAzimuth's turn:
- * a side keeps its name and sits within a few degrees of the angle here. Convert in worldcastAnchor and nowhere else; a
- * swapped left and right silently hurts identity.
+ * WorldCast's convention (N7-9; new-models-7.md §3.4, §3.11): its 1–4 anchor photos are named front, right_side, back and
+ * left_side, with each one's azimuth in body_views_meta.json. The names are WHERE THE CAMERA STANDS, not the body's own sides:
+ * the demo case's aligned cameras (no_padding_black/anchors_aligned_camera_info.json) put right_side at +x of the first camera
+ * (moved round to the camera's own right, 91.79°) and left_side at −x (266.91°, `left_sign` −1: reached turning the other
+ * way, −93°), and its "right_side" crop shows the boy facing the lens because the first frame shows him in profile. So
+ * WorldCast's azimuth is the camera-path library's (+ = moved round to the right), and a person's own right side, seen from
+ * the camera moved round to its LEFT (pathAzimuth −90°), is WorldCast's left_side. Convert in worldcastAnchor and nowhere
+ * else; a swapped left and right silently hurts identity.
  */
 export const WORLDCAST = {
-  anchor: { front: "front", right: "right_side", back: "back", left: "left_side" } as const satisfies Record<TurnSide, string>,
+  anchor: { front: "front", right: "left_side", back: "back", left: "right_side" } as const satisfies Record<TurnSide, string>,
   /** The demo case's azimuths (demo_case/A360-031__portrait/body_views_vggt/body_views_meta.json). */
   demoAzimuth: { front: 0, right_side: 91.79, back: 171.39, left_side: 266.91 },
   leftSign: -1 as const,
 };
 
-/** A side as a WorldCast anchor: its name and the azimuth to write for it (left_side signed by `left_sign`: −90°). */
-export function worldcastAnchor(side: TurnSide): { name: (typeof WORLDCAST.anchor)[TurnSide]; azimuth: number; signed: number } {
-  const azimuth = viewAzimuth(side);
-  return { name: WORLDCAST.anchor[side], azimuth, signed: side === "left" ? WORLDCAST.leftSign * (360 - azimuth) : azimuth };
+export type WorldcastView = (typeof WORLDCAST.anchor)[TurnSide];
+
+/**
+ * A side as a WorldCast anchor: its name, the azimuth to write for it (0–360, + = the camera moved round to its right) and
+ * the signed one (left_side by `left_sign`: −90°), which is also where camera-path keyPose puts its camera.
+ */
+export function worldcastAnchor(side: TurnSide): { name: WorldcastView; azimuth: number; signed: number } {
+  const name = WORLDCAST.anchor[side];
+  const azimuth = (((pathAzimuth(side) % 360) + 360) % 360) + 0;
+  return { name, azimuth, signed: name === "left_side" ? WORLDCAST.leftSign * (360 - azimuth) : azimuth };
 }
 
 /**
