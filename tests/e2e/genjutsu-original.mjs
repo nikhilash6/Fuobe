@@ -135,7 +135,7 @@ try {
       check(`${tag}: open: "Click them" is on`, !(await page.getByRole("radio", { name: "Click them" }).isDisabled()));
       const openBody = await text();
       check(`${tag}: open: the GPU it was tested on`, /Tested by its authors on a 96 GB RTX PRO 6000/.test(openBody));
-      check(`${tag}: open: the H3 Relay is an open alternative`, /H3 Relay/.test(openBody));
+      check(`${tag}: open: the H3 Relay is an open alternative`, /H3 Character Swap · Relay 2\.0/.test(openBody));
       // Advanced is still open from the cloud: on your GPU "None" is a choice, and the mask switch is the Original's.
       if (!(await page.getByRole("radiogroup", { name: "Swap style" }).isVisible().catch(() => false))) await page.getByText("Advanced").first().click();
       check(`${tag}: open: Advanced has the LoRA release and the window`, (await page.getByRole("radiogroup", { name: "Swap style" }).count()) === 1 && (await page.getByText("Window", { exact: true }).count()) >= 1);
@@ -156,7 +156,7 @@ try {
       await page.getByRole("option", { name: "124 frames" }).click();
       await settle();
       // H3 Relay has no switch for the whole frame.
-      await page.getByRole("radiogroup", { name: "Model", exact: true }).getByRole("radio", { name: /H3 Relay/ }).click();
+      await page.getByRole("radiogroup", { name: "Model", exact: true }).getByRole("radio", { name: /H3 Character Swap · Relay 2\.0/ }).click();
       await page.waitForTimeout(300);
       check(`${tag}: open: the Relay graph has no mask switch`, (await page.getByRole("switch", { name: "Masked generation" }).count()) === 0);
       await page.getByRole("radiogroup", { name: "Model", exact: true }).getByRole("radio").first().click();

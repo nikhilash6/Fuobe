@@ -105,6 +105,11 @@ describe("round-4 ComfyUI workflows", () => {
       "minimax-h3-fast-i2v",
       "minimax-h3-fast-flf2v",
       "minimax-h3-trim-t2v",
+      // Design a voice (nm10-voice-design): ComfyUI-QwenTTS and ComfyUI-VoxCPM2 aren't on the validation server (tests/voice-design-server.test.ts).
+      "tts-qwen3-design",
+      "tts-qwen3-clone",
+      "tts-voxcpm2",
+      "tts-voxcpm2-clone",
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",

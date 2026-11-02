@@ -18,7 +18,7 @@ import time
 import numpy as np
 
 from . import maths
-from .media import audio_track, have_ffmpeg, images_of, kind_of, video_frames
+from .media import audio_track, have_ffmpeg, images_of, kind_of, video_frames, video_window
 from .models import MODELS, Aesthetic, Clip, Dino, Faces, Missing, device_of
 from .registry import FAMILIES
 
@@ -226,6 +226,26 @@ class Scorer:
         if errs:
             res["warp"] = round(float(np.mean(errs)), 5)
         return res
+
+    def m_background(self, job, outs):
+        """The source clip's frames against the output's on the outer ring of the frame (where the background is): a
+        swap that keeps the background as filmed scores near 0 (and a high PSNR). Lined up from the source's start, so a
+        case's range starts at 0."""
+        clips = [o for o in outs if kind_of(o) == "video"]
+        src = (job.get("inputs") or {}).get("video")
+        if not clips:
+            return {"_note": "not a clip"}
+        if not src or not pathlib.Path(src).exists():
+            return {"_note": "no source clip to compare with"}
+        frames, rate = video_frames(clips[0], fps=self.args.fps, max_frames=self.args.frames, width=256)
+        if not len(frames):
+            return {"_note": "the clip has no frames"}
+        h, w = frames.shape[1:3]
+        source = video_window(src, 0.0, len(frames) / rate, rate, w, h)
+        d = maths.background_difference(frames, source)
+        if not d["frames"]:
+            return {"_note": "no source frames in the case's range"}
+        return {"bgDiff": round(d["mae"], 5), "bgPsnr": round(d["psnr"], 2)}
 
     def m_lipsync(self, job, outs):
         clips = [o for o in outs if kind_of(o) == "video"]
