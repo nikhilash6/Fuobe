@@ -6,7 +6,10 @@
 // 1. Hub tabs (Audio, Video tools, Upscale): the title and the tab row are on screen in every frame, the tapped tab is the
 //    current one within two frames, and the area under the tabs always shows a page or its skeleton, never nothing.
 //    Both after the page has settled (every mode prefetched: no request on the tap, no skeleton) and straight after load
-//    (nothing prefetched yet: the skeleton under the tabs may show).
+//    (nothing prefetched yet: the skeleton under the tabs may show). Within 100 ms of the tap the new page or its skeleton
+//    is there, never the old page.
+// 1b. A fresh load of a mode (phone CPU 4× slower): once drawn, the page never goes blank or back to its skeleton, and a
+//    tab row swiped before the page is interactive stays where it was put.
 // 2. Going back to a mode shows that mode's header controls once (the hidden pages kept for Back add none), and Back marks
 //    the tab of the page it returns to (Audio, the Marketing suite).
 // 2b. Marketing suite tabs: the tapped tab is current within two frames and the tab row never leaves.
@@ -156,6 +159,9 @@ try {
         check(!blank.length, `the page under the tabs was blank in ${blank.length} frame(s), ${blank[0]?.ms}–${blank[blank.length - 1]?.ms} ms`);
         const moved = frames.findIndex((f) => f.current === sw.tab);
         check(moved >= 0 && moved <= 1, `the tapped tab became current only at frame ${moved} (${frames[moved]?.ms} ms)`);
+        // Within 100 ms of the tap (a frame's slack) the area under the tabs is the new page or its skeleton, not the old page.
+        const answered = frames.find((f) => f.path === sw.to || f.skeleton);
+        check(answered && answered.ms <= 120, `neither ${sw.to} nor its skeleton showed within 100 ms (first at ${answered?.ms} ms)`);
         if (settled) {
           // Once the page has settled every mode is prefetched (ahead of the sidebar's routes): the switch is drawn from the
           // client cache, with no request and no skeleton.
@@ -167,6 +173,47 @@ try {
         await ctx.close();
       }
     }
+  }
+
+  // A fresh load (a slow phone: CPU 4× slower): once the mode's page has drawn it stays drawn until it is interactive (a
+  // context change that reaches a part still hydrating makes React swap its server HTML for the skeleton), and the area
+  // under the hub's bar is never blank.
+  for (const device of ["phone", "desktop"]) {
+    for (const path of ["/audio/music", "/upscale/fps"]) {
+      if (!step(`${device}, fresh load: ${path} draws once and never goes blank or back to its skeleton`)) continue;
+      const { ctx, page } = await context(device);
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+      await page.addInitScript((cfg) => {
+        const go = () => (window.__frames ? window.__frames.start(cfg) : requestAnimationFrame(go));
+        go();
+      }, HUB);
+      await page.goto(app + path, { waitUntil: "load" });
+      await page.waitForTimeout(5000);
+      const { list } = await page.evaluate(() => window.__frames.stop());
+      const drawn = list.findIndex((f) => f.bar && f.body > 0 && !f.skeleton);
+      check(drawn >= 0, `${path} never drew its page`);
+      const flip = list.slice(drawn).filter((f) => f.body === 0 || f.skeleton);
+      check(!flip.length, `after drawing at ${Math.round(list[drawn]?.t)} ms the page went back to ${flip[0]?.skeleton ? "its skeleton" : "blank"} in ${flip.length} frame(s)`);
+      const blank = list.filter((f) => f.bar && f.body === 0 && !f.skeleton);
+      check(!blank.length, `the area under the bar was blank in ${blank.length} frame(s) of the load`);
+      await ctx.close();
+    }
+  }
+
+  if (step("phone: a tab row swiped before the page is interactive stays where it was put")) {
+    const { ctx, page } = await context("phone");
+    await page.goto(`${app}/audio`, { waitUntil: "commit" });
+    const row = `${HUB.bar} > div`;
+    await page.waitForSelector(row, { state: "attached", timeout: 30_000 });
+    await page.evaluate((sel) => {
+      document.querySelector(sel).scrollLeft = 200;
+    }, row);
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(4000);
+    const left = await page.evaluate((sel) => document.querySelector(sel).scrollLeft, row);
+    check(left >= 150, `the row was scrolled back to ${left} px`);
+    await ctx.close();
   }
 
   if (step("going back to a mode shows its header controls once")) {

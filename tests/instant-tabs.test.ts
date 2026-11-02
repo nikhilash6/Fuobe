@@ -29,8 +29,37 @@ describe("hub tabs never leave the screen during a switch", () => {
   it("each hub's layout draws the title bar and the tabs, shared by every mode", () => {
     for (const kind of HUBS) {
       const layout = src(`src/app/(studio)/${kind}/layout.tsx`);
-      expect(layout).toContain(`<HubFrame kind="${kind}">`);
+      expect(layout).toContain(`<HubFrame kind="${kind}" skeleton={<HubBodySkeleton />}>`);
+      // A mode still on its way (a cold load's stream, a page not prefetched) is the body's skeleton under the hub's bar.
+      expect(src(`src/app/(studio)/${kind}/loading.tsx`)).toMatch(/return <HubBodySkeleton \/>;/);
     }
+  });
+
+  it("the frame's context never changes after the first render, so it never reaches a part of the page still hydrating", () => {
+    const chrome = src("src/components/studio/hub-chrome.tsx");
+    expect(chrome).toMatch(/const \[store\] = useState\(createSlotStore\);/);
+    expect(chrome).toMatch(/<HubCtx\.Provider value=\{store\}>/);
+    expect(chrome).toMatch(/const slotRef = useCallback\(\(el: HTMLElement \| null\) => store\.set\(el\), \[store\]\);/);
+    expect(chrome).toMatch(/<div ref=\{slotRef\} className="contents" \/>/);
+    // The sidebar's context takes the phone's answer in a transition after hydration, for the same reason.
+    expect(src("src/components/ui/sidebar.tsx")).toMatch(/const isMobile = useIsMobileAfterHydration\(\)/);
+    expect(src("src/hooks/use-mobile.ts")).toMatch(/React\.startTransition\(read\)/);
+  });
+
+  it("a tapped tab whose page wasn't prefetched shows the body's skeleton within 100 ms, and never over a page that came", () => {
+    const chrome = src("src/components/studio/hub-chrome.tsx");
+    expect(Number(chrome.match(/export const HUB_SKELETON_AFTER_MS = (\d+);/)?.[1])).toBeLessThanOrEqual(70);
+    // useLinkStatus is pending only while a navigation waits (a prefetched page skips it); it is reported before paint.
+    const link = chrome.slice(chrome.indexOf("<Link"), chrome.indexOf("</Link>"));
+    expect(link).toMatch(/<TabWaiting onWaiting=\{onWaiting\} \/>/);
+    expect(chrome).toMatch(/const \{ pending \} = useLinkStatus\(\);\s+\/\/[^\n]*\n\s+useLayoutEffect\(/);
+    expect(chrome).toMatch(/const skeletonShown = waiting && late;/);
+    // The old page stays mounted under the skeleton.
+    expect(chrome).toMatch(/<div className=\{skeletonShown \? "hidden" : "contents"\}>\{children\}<\/div>/);
+  });
+
+  it("a row swiped before the page is interactive stays where it was put", () => {
+    expect(src("src/components/studio/hub-chrome.tsx")).toMatch(/if \(first && row\.scrollLeft > 0\) return;/);
   });
 
   it("no mode page draws its own tabs, and the per-mode boundary has a skeleton, never an empty fallback", () => {
@@ -79,9 +108,10 @@ describe("other tab bars switch without a round trip", () => {
     expect(lib).not.toMatch(/router\.replace\(/);
   });
 
-  it("sidebar rows prefetch once the page is idle, not only on hover or touch", () => {
+  it("the sidebar rows next to the open page's row prefetch once the page is idle; the others on hover, touch or focus", () => {
     const sidebar = src("src/components/app-sidebar.tsx");
-    expect(sidebar).toMatch(/<IntentLink\s+href=\{item\.href\}\s+eager=\{item\.eager\}\s+settled\s/);
+    expect(sidebar).toMatch(/const NEAR_ROWS = 2;/);
+    expect(sidebar).toMatch(/<IntentLink\s+href=\{item\.href\}\s+eager=\{item\.eager\}\s+settled=\{here >= 0 && i !== here && Math\.abs\(i - here\) <= NEAR_ROWS\}\s/);
     // The clicked row is the open page's row from the next frame on, in every group; the address takes over once it moves.
     expect(sidebar).toMatch(/onClick=\{\(e\) => isPlainClick\(e\) && setTappedRow\(item\.href\)\}/);
     expect(sidebar).toMatch(/useLayoutEffect\(\(\) => setTappedRow\(null\), \[pathname, search\]\);/);
@@ -120,11 +150,11 @@ describe("other tab bars switch without a round trip", () => {
     expect(lib).toMatch(/if \(set && set\.from !== routed\.toString\(\)\) setSet\(null\);/);
   });
 
-  it("gallery categories mark the chip in an urgent render and filter the grid in a deferred one", () => {
+  it("gallery categories change the chip and the grid in the same frame", () => {
+    // A deferred grid marked the chip a little sooner but showed the filtered grid much later.
     const gallery = src("src/components/preset-gallery.tsx");
-    expect(gallery).toMatch(/const listCat = useDeferredValue\(cat\);/);
-    expect(gallery).toMatch(/aria-pressed=\{cat === c\}/);
-    expect(gallery).not.toMatch(/p\.category === cat\)/);
+    expect(gallery).not.toMatch(/useDeferredValue\(cat\)/);
+    expect(gallery).toMatch(/p\.category === cat\)/);
   });
 
   it("the studio's route skeleton keeps a hub's bar and tabs on the way in", () => {
@@ -237,6 +267,27 @@ describe("idle prefetches: the page's own tabs go before the sidebar's routes", 
     expect(order).toEqual([]);
     tick(200);
     expect(order).toEqual(["row image"]);
+  });
+
+  it("drops the sidebar's idle prefetches for someone who asked to save data, never the page's own tabs", async () => {
+    const { queueIdlePrefetch } = await load();
+    vi.stubGlobal("navigator", { connection: { saveData: true } });
+    queueIdlePrefetch("nav", "/image", () => order.push("row image"));
+    queueIdlePrefetch("page", "/audio/music", () => order.push("tab music"));
+    idle[0]();
+    tick(9000);
+    expect(order).toEqual(["tab music"]);
+  });
+
+  it('relies on Next still reading router.prefetch\'s undocumented `kind` ("full": the whole page, not only the shell)', async () => {
+    const next = (p: string) => fs.readFileSync(path.join(__dirname, "..", "node_modules/next/dist/client/components", p), "utf8");
+    const prefetch = next("prefetch.js");
+    expect(prefetch).toMatch(/const prefetchKind = options\?\.kind \?\? _routerreducertypes\.PrefetchKind\.AUTO;/);
+    expect(prefetch).toMatch(/case _routerreducertypes\.PrefetchKind\.FULL:\s*\{\s*fetchStrategy = _types\.FetchStrategy\.Full;/);
+    expect(next("router-reducer/router-reducer-types.js")).toMatch(/PrefetchKind\["FULL"\] = "full";/);
+    const { prefetchOptions } = await load();
+    expect(prefetchOptions(true)).toMatchObject({ kind: "full" });
+    expect(prefetchOptions(false)).toMatchObject({ kind: "auto" });
   });
 
   it("relies on Next serving route trees and shells before any URL-specific part (the phase order of its prefetch queue)", () => {

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { EngineSwitch } from "@/components/studio/engine-switch";
@@ -20,17 +20,65 @@ import { useEdgeFade } from "./use-edge-fade";
  * pill, a tool's extra buttons) into the bar with <HubHeaderExtras>.
  */
 
-const HubCtx = createContext<{ slot: HTMLElement | null } | null>(null);
+/**
+ * Where a frame's page puts its header controls: the element in the frame's own title bar. A store rather than a value
+ * passed down, so the context never changes after the first render: a context change that reaches a part of the page
+ * still waiting to hydrate makes React throw that part's server HTML away and show its skeleton until its code arrives.
+ */
+interface SlotStore {
+  get: () => HTMLElement | null;
+  set: (el: HTMLElement | null) => void;
+  subscribe: (cb: () => void) => () => void;
+}
+
+function createSlotStore(): SlotStore {
+  let slot: HTMLElement | null = null;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => slot,
+    set: (el) => {
+      if (el === slot) return;
+      slot = el;
+      for (const l of listeners) l();
+    },
+    subscribe: (cb) => {
+      listeners.add(cb);
+      return () => {
+        listeners.delete(cb);
+      };
+    },
+  };
+}
+
+const HubCtx = createContext<SlotStore | null>(null);
+const noSlot = () => null;
+const noSubscribe = () => () => {};
 
 /** Inside a hub's frame: the page leaves the title bar and tabs to it. */
 export function useInHub(): boolean {
   return useContext(HubCtx) !== null;
 }
 
-/** A page's own header controls, shown in the hub's title bar left of the engine switch. */
+/** A page's own header controls, shown in its hub's title bar left of the engine switch. */
 export function HubHeaderExtras({ children }: { children: React.ReactNode }) {
-  const slot = useContext(HubCtx)?.slot;
+  const store = useContext(HubCtx);
+  const slot = useSyncExternalStore(store?.subscribe ?? noSubscribe, store?.get ?? noSlot, noSlot);
   return slot ? createPortal(children, slot) : null;
+}
+
+/**
+ * Reports while its tab's navigation waits (useLinkStatus is pending only when the page wasn't prefetched yet; a
+ * prefetched page skips it). Inside the tab's <Link>.
+ */
+function TabWaiting({ onWaiting }: { onWaiting?: (waiting: boolean) => void }) {
+  const { pending } = useLinkStatus();
+  // Before paint: when the page arrives, the skeleton goes in the same frame.
+  useLayoutEffect(() => {
+    if (!pending || !onWaiting) return;
+    onWaiting(true);
+    return () => onWaiting(false);
+  }, [pending, onWaiting]);
+  return null;
 }
 
 /**
@@ -41,7 +89,17 @@ export function HubHeaderExtras({ children }: { children: React.ReactNode }) {
  * page (each is prerendered, so the prefetch comes from the static cache), and the tabs a phone's row scrolls out of
  * view are prefetched too once the page is idle: a tap then renders the mode from the client cache, with no blank frame.
  */
-function HubTabs({ kind, pathname, onActive }: { kind: HubKind; pathname: string | null; onActive?: (mode: string) => void }) {
+function HubTabs({
+  kind,
+  pathname,
+  onActive,
+  onWaiting,
+}: {
+  kind: HubKind;
+  pathname: string | null;
+  onActive?: (mode: string) => void;
+  onWaiting?: (waiting: boolean) => void;
+}) {
   const router = useRouter();
   const [ref, fade] = useEdgeFade<HTMLDivElement>();
   const activeRef = useRef<HTMLAnchorElement>(null);
@@ -56,11 +114,16 @@ function HubTabs({ kind, pathname, onActive }: { kind: HubKind; pathname: string
     if (active) onActive?.(active);
   }, [active, onActive]);
 
-  // Keep the selected tab in view when the row scrolls (only the row: the page stays put).
+  // Keep the selected tab in view when the row scrolls (only the row: the page stays put). The first time, a row the
+  // visitor already swiped before the page became interactive stays where they put it (a tap there is on its way).
+  const placed = useRef(false);
   useEffect(() => {
     const el = activeRef.current;
     const row = ref.current;
     if (!el || !row) return;
+    const first = !placed.current;
+    placed.current = true;
+    if (first && row.scrollLeft > 0) return;
     const left = el.offsetLeft - row.offsetLeft;
     if (left < row.scrollLeft || left + el.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left - 12;
   }, [active, ref]);
@@ -98,6 +161,7 @@ function HubTabs({ kind, pathname, onActive }: { kind: HubKind; pathname: string
               )}
             >
               {m.label}
+              <TabWaiting onWaiting={onWaiting} />
             </Link>
           );
         })}
@@ -107,10 +171,13 @@ function HubTabs({ kind, pathname, onActive }: { kind: HubKind; pathname: string
 }
 
 /** Reads the path (runtime data while a route prerenders) inside Suspense; the fallback is the same row, unselected. */
-function PathTabs({ kind, onActive }: { kind: HubKind; onActive: (mode: string) => void }) {
+function PathTabs({ kind, onActive, onWaiting }: { kind: HubKind; onActive: (mode: string) => void; onWaiting: (waiting: boolean) => void }) {
   const pathname = usePathname();
-  return <HubTabs kind={kind} pathname={pathname} onActive={onActive} />;
+  return <HubTabs kind={kind} pathname={pathname} onActive={onActive} onWaiting={onWaiting} />;
 }
+
+/** How long a tapped tab's page may keep the old one on screen before the skeleton replaces it. */
+export const HUB_SKELETON_AFTER_MS = 60;
 
 function HubEngine({ kind, mode }: { kind: HubKind; mode: string | undefined }) {
   const [engine, setEngine] = useEngine();
@@ -118,11 +185,28 @@ function HubEngine({ kind, mode }: { kind: HubKind; mode: string | undefined }) 
   return <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly={selfHostedOnly} />;
 }
 
-/** The title bar and the tabs of a hub. `children`: the mode's page (or, while a route loads, its skeleton). */
-export function HubFrame({ kind, children }: { kind: HubKind; children: React.ReactNode }) {
-  const [slot, setSlot] = useState<HTMLElement | null>(null);
+/**
+ * The title bar and the tabs of a hub. `children`: the mode's page (or, while a route loads, its skeleton). `skeleton`:
+ * the page body's skeleton, shown in place of the old page when a tapped tab's page wasn't prefetched yet and hasn't come
+ * within HUB_SKELETON_AFTER_MS (the old page stays mounted under it, so its state is kept if the tap is undone).
+ */
+export function HubFrame({ kind, skeleton, children }: { kind: HubKind; skeleton: React.ReactNode; children: React.ReactNode }) {
+  // Made once: the context's value never changes (see SlotStore).
+  const [store] = useState(createSlotStore);
+  const slotRef = useCallback((el: HTMLElement | null) => store.set(el), [store]);
   const [mode, setMode] = useState<string | undefined>(undefined);
-  const ctx = useMemo(() => ({ slot }), [slot]);
+  const [waiting, setWaiting] = useState(false);
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = window.setTimeout(() => setLate(true), HUB_SKELETON_AFTER_MS);
+    return () => {
+      window.clearTimeout(timer);
+      setLate(false);
+    };
+  }, [waiting]);
+  // `waiting` ends before paint when the page arrives, so the skeleton never covers the new page.
+  const skeletonShown = waiting && late;
   return (
     <div className="flex min-h-svh min-w-0 flex-col" data-hub={kind}>
       <div className="sticky top-0 z-20 bg-background/85 backdrop-blur" data-hub-chrome>
@@ -130,16 +214,19 @@ export function HubFrame({ kind, children }: { kind: HubKind; children: React.Re
           <SidebarTrigger className="md:hidden" />
           <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{HUB_TITLE[kind]}</h1>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <div ref={setSlot} className="contents" />
+            <div ref={slotRef} className="contents" />
             <HubEngine kind={kind} mode={mode} />
           </div>
         </header>
         <Suspense fallback={<HubTabs kind={kind} pathname={null} />}>
-          <PathTabs kind={kind} onActive={setMode} />
+          <PathTabs kind={kind} onActive={setMode} onWaiting={setWaiting} />
         </Suspense>
       </div>
-      <HubCtx.Provider value={ctx}>
-        <div className="flex min-w-0 flex-1 flex-col" data-hub-body>{children}</div>
+      <HubCtx.Provider value={store}>
+        <div className="flex min-w-0 flex-1 flex-col" data-hub-body>
+          {skeletonShown && skeleton}
+          <div className={skeletonShown ? "hidden" : "contents"}>{children}</div>
+        </div>
       </HubCtx.Provider>
     </div>
   );
@@ -147,7 +234,13 @@ export function HubFrame({ kind, children }: { kind: HubKind; children: React.Re
 
 function PathSkeleton({ generic, hubBody }: { generic: React.ReactNode; hubBody: React.ReactNode }) {
   const hub = hubOfPath(usePathname());
-  return hub ? <HubFrame kind={hub}>{hubBody}</HubFrame> : generic;
+  return hub ? (
+    <HubFrame kind={hub} skeleton={hubBody}>
+      {hubBody}
+    </HubFrame>
+  ) : (
+    generic
+  );
 }
 
 /**
