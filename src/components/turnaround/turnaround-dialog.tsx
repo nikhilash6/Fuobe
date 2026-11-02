@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
-import { useEngine, useGenerations } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor } from "@/lib/api";
 import { SOUL_ID_COPY } from "@/lib/catalog/training";
 import {
   FILL_NAMES,
@@ -165,8 +165,10 @@ function Thumb({ url, className }: { url?: string; className?: string }) {
 }
 
 function TurnaroundForm({ pictures, name, realPerson: realDefault = false, elementId, engine: fixedEngine, onRun, title, flyAround, fictional, route: startRoute, onStarted }: Props & { onStarted: (run: Run) => void }) {
-  const [appEngine, setAppEngine] = useEngine();
+  const [appEngine, setAppEngine, engineMode] = useEngine();
   const engine = fixedEngine ?? appEngine;
+  // The note about your GPU is for the studio's own install with both engines: guests and accounts run in the cloud.
+  const visitor = useLikelyVisitor();
   const start = useMemo(() => startingViews(pictures), [pictures]);
   const [views, setViews] = useState<Partial<Record<TurnSide, string>>>(start.views);
   const [sheet, setSheet] = useState<string | undefined>(start.sheet);
@@ -332,7 +334,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
         <Chips label="Route" value={usedRoute} options={p.routes.map((r) => ({ value: r, label: TURN_ROUTES[r].name }))} onChange={(v) => setRoute(v as TurnRoute)} hint={usedRoute ? TURN_ROUTES[usedRoute].detail : undefined} />
       )}
       {p && p.routes.length === 1 && usedRoute && <p className="text-[12px] text-muted-foreground">{TURN_ROUTES[usedRoute].detail}.</p>}
-      {engine === "cloud" && <p className="text-[12px] text-muted-foreground">The 8-view still set, and sides drawn with QMA · 96 views, run on your GPU (open source).</p>}
+      {engine === "cloud" && !visitor && engineMode === "both" && <p className="text-[12px] text-muted-foreground">The 8-view still set, and sides drawn with QMA · 96 views, run on your GPU (open source).</p>}
       {camera && <Chips label="Path" value={path ?? TURN_PATHS[0].id} options={TURN_PATHS.map((x) => ({ value: x.id, label: x.name }))} onChange={setPath} hint={TURN_PATHS.find((x) => x.id === (path ?? TURN_PATHS[0].id))?.description} />}
       <div className="flex flex-wrap gap-x-6 gap-y-3">
         {p && p.durations.length > 0 && <Chips label="Length" value={String(p.duration)} options={p.durations.map((d) => ({ value: String(d), label: `${d} s` }))} onChange={(v) => setDuration(Number(v))} />}

@@ -87,8 +87,8 @@ describe("tools a guest or an account can't open", () => {
     expect(ids(upload(), { visitor: true })).not.toContain("restore-video");
   });
 
-  it("marks their Video tools tabs as the owner's only", () => {
+  it("leaves only Restore & colourise's Video tools tab out for a visitor: Remove dialogue's page says it isn't available here", () => {
     const tabs = Object.fromEntries(HUB_MODES["video-tools"].map((m) => [m.id, m.ownerOnly ?? false]));
-    expect(tabs).toMatchObject({ restore: true, "remove-dialogue": true, matte: false, evolution: false });
+    expect(tabs).toMatchObject({ restore: true, "remove-dialogue": false, matte: false, evolution: false });
   });
 });

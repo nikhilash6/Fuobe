@@ -211,21 +211,27 @@ describe("the turnaround", () => {
 });
 
 describe("the Canvas product angles and the GPU board", () => {
-  it("runs the three angles on QMA on your GPU, with the camera in each node's settings", () => {
+  it("runs the front and side angles on QMA on your GPU, with the camera in each node's settings", () => {
     const t = CANVAS_TEMPLATES.find((x) => x.id === "product-angles")!;
     const open = t.build("open");
     const cloud = t.build("cloud");
     for (const id of ["front", "side", "top"]) {
-      const o = open.nodes.find((n) => n.id === id)!;
-      expect(o.data.modelId).toBe(QMA_MODEL);
-      expect(o.data.params?.extra).toHaveProperty("horizontal_angle");
       const c = cloud.nodes.find((n) => n.id === id)!;
       expect(c.data.modelId).toBe("nano-banana-pro");
       expect(c.data.params).toBeUndefined();
     }
+    for (const id of ["front", "side"]) {
+      const o = open.nodes.find((n) => n.id === id)!;
+      expect(o.data.modelId).toBe(QMA_MODEL);
+      expect(o.data.params?.extra).toHaveProperty("horizontal_angle");
+    }
+    // QMA has no straight-down camera: the flat lay stays a plain edit.
     const top = open.nodes.find((n) => n.id === "top")!;
-    expect(planGeneration({ feature: "canvas", modelId: QMA_MODEL, prompt: top.data.prompt ?? "", inputs: { images: ["/api/files/p.png"] }, params: top.data.params }, getModel, getPreset).prompt).toBe(
-      "<qma> front view high-angle shot medium shot The same product shot top-down as a flat lay on a seamless studio background, even light",
+    expect(top.data.modelId).toBe("oss-qwen-image-21");
+    expect(top.data.params?.extra).toBeUndefined();
+    const side = open.nodes.find((n) => n.id === "side")!;
+    expect(planGeneration({ feature: "canvas", modelId: QMA_MODEL, prompt: side.data.prompt ?? "", inputs: { images: ["/api/files/p.png"] }, params: side.data.params }, getModel, getPreset).prompt).toMatch(
+      /^<qma> .*The same product in a clean side profile/,
     );
   });
 

@@ -16,10 +16,11 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { CoverArt, CoverImg, useCoverPlayback } from "@/components/template-cover";
-import { useEngine, useIsVisitor } from "@/lib/api";
+import { useEngine, useIsVisitor, useModelAccess } from "@/lib/api";
 // Types only: the catalog (models, templates) stays on the server; the page passes slim template cards.
 import type { CanvasNodeType, CanvasSummary, Outline } from "@/lib/catalog/canvas";
 import type { Engine } from "@/lib/catalog/types";
+import { offered, type AccessSummary } from "@/lib/model-access";
 import { timeAgo } from "@/lib/format";
 import { templateCover } from "@/lib/template-covers";
 import { cn } from "@/lib/utils";
@@ -145,7 +146,14 @@ export interface TemplateCardData {
   hue: number;
   /** The picker's section (Effects 2.0 chains); none: the workflows. */
   group?: string;
-  byEngine: Record<Engine, { outline: Outline; models: string[] }>;
+  /** ifOff: a model's name and the one its node falls back to when the model is off on this install. */
+  byEngine: Record<Engine, { outline: Outline; models: string[]; ifOff?: { id: string; name: string; instead: string }[] }>;
+}
+
+/** The model names a card shows as this install offers them: a model that is off shows the one its node falls back to. */
+function offeredNames({ models, ifOff }: TemplateCardData["byEngine"][Engine], access: AccessSummary | undefined, engine: Engine): string[] {
+  if (!ifOff || !access) return models;
+  return [...new Set(models.map((m) => ifOff.find((x) => x.name === m && !offered(access, x.id, engine))?.instead ?? m))];
 }
 
 /** What each template section is, under its heading (a guest or an account runs a canvas on a self-hosted Fuobe only). */
@@ -155,8 +163,9 @@ const GROUP_NOTES: Record<string, (visitor: boolean) => string> = {
 };
 
 /** onUse: none for a guest or an account (a canvas is saved to the owner's library: the page says so once). */
-export function TemplateCard({ t, engine, onUse, busy }: { t: TemplateCardData; engine: Engine; onUse?: () => void; busy: boolean }) {
-  const { outline, models } = t.byEngine[engine];
+export function TemplateCard({ t, engine, onUse, busy, access }: { t: TemplateCardData; engine: Engine; onUse?: () => void; busy: boolean; access?: AccessSummary }) {
+  const { outline } = t.byEngine[engine];
+  const models = offeredNames(t.byEngine[engine], access, engine);
   // Its real cover when it has one (what it makes: a still, a clip, or its frames side by side), with the board in
   // miniature over a corner; else the board alone.
   const cover = templateCover("canvas", t.id);
@@ -222,6 +231,7 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
   const [deleting, setDeleting] = useState<CanvasSummary | null>(null);
   // A canvas is saved to the studio's library, which is its owner's: a guest or an account can look, not start one.
   const visitor = useIsVisitor();
+  const access = useModelAccess();
 
   const items = (canvases.data ?? []).filter((c) => !q || c.name.toLowerCase().includes(q.toLowerCase()));
   const setTab = (t: "mine" | "templates") => router.replace(t === "templates" ? "/canvas?tab=templates" : "/canvas", { scroll: false });
@@ -342,7 +352,7 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
                 {templates
                   .filter((t) => (t.group ?? "") === group)
                   .map((t) => (
-                    <TemplateCard key={t.id} t={t} engine={engine} busy={creating === t.id} onUse={visitor ? undefined : () => void start(t.id, { templateId: t.id, engine })} />
+                    <TemplateCard key={t.id} t={t} engine={engine} access={access} busy={creating === t.id} onUse={visitor ? undefined : () => void start(t.id, { templateId: t.id, engine })} />
                   ))}
               </div>
             </section>

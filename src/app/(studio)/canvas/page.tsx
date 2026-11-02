@@ -6,11 +6,23 @@ import type { Engine } from "@/lib/catalog/types";
 
 export const metadata: Metadata = { title: "Canvas" };
 
-/** One template's board outline and model names on an engine. */
+/**
+ * One template's board outline and model names on an engine, with the name a node falls back to when its model is
+ * switched off in Models & licences (the card swaps it in the browser, as the board the server makes does).
+ */
 function forEngine(t: CanvasTemplate, engine: Engine): TemplateCardData["byEngine"][Engine] {
   const graph = t.build(engine);
-  const names = graph.nodes.filter(isGenerator).map((n) => getModel(n.data.modelId ?? "")?.name);
-  return { outline: outline(graph), models: [...new Set(names.filter((m): m is string => !!m))] };
+  const nameOf = (id?: string) => getModel(id ?? "")?.name;
+  const names = graph.nodes.filter(isGenerator).map((n) => nameOf(n.data.modelId));
+  const without = t.build(engine, () => false).nodes;
+  const ifOff: NonNullable<TemplateCardData["byEngine"][Engine]["ifOff"]> = [];
+  for (const n of graph.nodes) {
+    const id = n.data.modelId;
+    const name = nameOf(id);
+    const instead = nameOf(without.find((x) => x.id === n.id)?.data.modelId);
+    if (id && name && instead && instead !== name && !ifOff.some((x) => x.id === id)) ifOff.push({ id, name, instead });
+  }
+  return { outline: outline(graph), models: [...new Set(names.filter((m): m is string => !!m))], ...(ifOff.length && { ifOff }) };
 }
 
 /** Template cards built here, so the browser never loads the model catalog for /canvas (nor for the pages that prefetch it). */

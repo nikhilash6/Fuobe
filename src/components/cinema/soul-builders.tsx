@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useSoulFinish } from "@/components/studio/soul-finish";
 import { TurnaroundButton } from "@/components/turnaround/turnaround-dialog";
-import { useLikelyVisitor, useSaveElement, useStatus } from "@/lib/api";
+import { useLikelyVisitor, useModelAccess, useSaveElement, useStatus } from "@/lib/api";
 import { getModel } from "@/lib/catalog";
 import {
   CAST_LOOK,
@@ -36,6 +36,7 @@ import {
 import { soulLook } from "@/lib/catalog/soul";
 import { sheetPictures } from "@/lib/catalog/turnaround";
 import { finishedUrl } from "@/lib/soul-post";
+import { offered } from "@/lib/model-access";
 import { QMA_MODEL } from "@/lib/qma";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
@@ -396,7 +397,8 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
   const [picked, setPicked] = useState<string[]>([]);
   // Other views on your GPU: the Multiple-Angles default, or QMA · 96 views, when this install offers it.
   const [qma, setQma] = useState(false);
-  const qmaOffered = engine === "open" && !!getModel(QMA_MODEL);
+  const access = useModelAccess();
+  const qmaOffered = engine === "open" && !!getModel(QMA_MODEL) && offered(access, QMA_MODEL, "open");
   // The hint about your GPU is for the studio's own install: guests and accounts run in the cloud.
   const visitor = useLikelyVisitor();
   const { generate, results, setIds, current } = useBuilderRun(projectId);

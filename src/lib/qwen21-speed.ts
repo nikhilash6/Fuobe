@@ -14,7 +14,7 @@ import type { ModelOptions } from "@/lib/catalog/types";
  *   there (src/server/qwen21-gpu.ts decides once per run, so the pre-flight and the run take the same graph).
  * - Options → Decoder: the Texture-Fix VAE ("Clean") in place of the stock decoder; off until tested.
  *
- * Qwen-Image 2.1 isn't hosted on fal or Replicate, so all of this is the open engine's.
+ * fal's hosted Qwen-Image 2.1 takes no LoRAs or speed graphs, so these options are the open engine's.
  */
 
 export type Qwen21Speed = "full" | "turbo" | "fast" | "details" | "draft";

@@ -809,7 +809,7 @@
    "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base",
    "inFuobe": true,
    "confirmed": true,
-   "builtBy": "nm10-voice-design",
+   "builtBy": "Design a voice",
    "revisions": {
     "Qwen/Qwen3-TTS-12Hz-1.7B-Base": "fd4b254389122332181a7c3db7f27e918eec64e3",
     "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign": "5ecdb67327fd37bb2e042aab12ff7391903235d3",
@@ -827,7 +827,7 @@
    "url": "https://huggingface.co/openbmb/VoxCPM2",
    "inFuobe": true,
    "confirmed": true,
-   "builtBy": "nm10-voice-design"
+   "builtBy": "Design a voice"
   },
   {
    "name": "Fish Audio Drama 3",
@@ -840,7 +840,7 @@
    "url": "https://huggingface.co/fishaudio/drama-3",
    "inFuobe": false,
    "confirmed": true,
-   "consideredNotBuilt": "nm10-voice-design (2026-11-02): no local ComfyUI node (only the Fish Audio API partner node) and not hosted on fal or Replicate; running it locally needs an SGLang-Omni worker (35B MoE, about 40 GB). Left for a later package."
+   "consideredNotBuilt": "Design a voice (2026-11-02): no local ComfyUI node (only the Fish Audio API partner node) and not hosted on fal or Replicate; running it locally needs an SGLang-Omni worker (35B MoE, about 40 GB). Left for later."
   },
   {
    "name": "VEED Dubbing / Dubbing Pro",

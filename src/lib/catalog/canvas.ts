@@ -1921,11 +1921,12 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     build: tpl(
       [
         { id: "product", type: "image-input", x: 0, y: ROW, data: { label: "Product photo" } },
-        // On your GPU the three angles are QMA · 96 views: the camera itself turns (its pose in params.extra) and
+        // On your GPU the front and side angles are QMA · 96 views: the camera itself turns (its pose in params.extra) and
         // the words follow its camera words, so a board switched to the cloud keeps each angle. Without QMA offered: Qwen-Image 2.1.
+        // The top-down flat lay stays on Qwen-Image 2.1: QMA's highest camera is a high angle, not straight down.
         { id: "front", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "Front ¾ angle", op: "edit", prompt: "The same product from a three-quarter front angle on a seamless studio background, soft key light, sharp details" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL, fallback: { open: "oss-qwen-image-21" } }, on: { open: { params: { extra: { horizontal_angle: 45, vertical_angle: 30, zoom: 5 } } } } },
         { id: "side", type: "model", x: COL, y: ROW, data: { mediaKind: "image", label: "Side profile", op: "edit", prompt: "The same product in a clean side profile on a seamless studio background, rim light, sharp details" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL, fallback: { open: "oss-qwen-image-21" } }, on: { open: { params: { extra: { horizontal_angle: 90, vertical_angle: 0, zoom: 5 } } } } },
-        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL, fallback: { open: "oss-qwen-image-21" } }, on: { open: { params: { extra: { horizontal_angle: 0, vertical_angle: 60, zoom: 5 } } } } },
+        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
         { id: "video", type: "model", x: COL * 2, y: ROW - 40, data: { mediaKind: "video", label: "Ad clip", op: "ref2v", prompt: "A premium product commercial: the camera orbits the product from the reference angles, studio lighting, slow and smooth", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "seedance-2-5", open: "oss-wan-vace" } },
         { id: "out", type: "output", x: COL * 3, y: ROW, data: { label: "Ad" } },
       ],
