@@ -488,6 +488,7 @@ export function planGeneration(
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");
+  if (op === "voice-design" && !params.voiceDescription?.trim()) throw new Error("Describe the voice you want");
   if (model.options.motionPaths && !(params.extra?.motionPaths as { paths?: unknown[] } | undefined)?.paths?.length) {
     throw new Error(`Draw on the start frame — ${model.name} moves things along the paths you draw`);
   }

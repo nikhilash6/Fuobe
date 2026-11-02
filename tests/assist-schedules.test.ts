@@ -553,7 +553,9 @@ describe("a skill on a schedule (Skills W4)", () => {
   it("the migration adds skill_json to a database from before, and its tasks keep running as requests", () => {
     const d = db();
     const id = MIGRATIONS.findIndex((m) => m.includes("ALTER TABLE assist_schedules ADD COLUMN skill_json"));
-    expect(id).toBe(MIGRATIONS.length - 1);
+    // The base's migration 25 (characters.voice_json) keeps its place; this one comes after it.
+    expect(MIGRATIONS[25]).toContain("ALTER TABLE characters ADD COLUMN voice_json");
+    expect(id).toBe(26);
     const old = sched.createSchedule({ ...base, title: "From before", rule: daily }, at);
     d.exec("ALTER TABLE assist_schedules DROP COLUMN skill_json");
     d.prepare("DELETE FROM _migrations WHERE id = ?").run(id);
