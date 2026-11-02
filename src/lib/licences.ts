@@ -441,7 +441,7 @@ export const NODE_PACKS: NodePack[] = [
   pack("ComfyUI-VideoHelperSuite", "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite", { ...GPL, note: "Video loading and saving; GPL-3.0 code, like ComfyUI" }),
   pack("ComfyUI-KJNodes", "https://github.com/kijai/ComfyUI-KJNodes", { ...GPL, note: "Utility nodes (GrowMaskWithBlur, resizing); GPL-3.0 code, like ComfyUI" }),
   pack("ComfyUI-Frame-Interpolation", "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "RIFE and FILM frame interpolation; MIT code" }),
-  pack("ComfyUI-RMBG", "https://github.com/1038lab/ComfyUI-RMBG", { ...GPL, note: "Background removal; GPL-3.0 code. Fuobe uses BEN2 (MIT); RMBG-2.0 in the same pack is CC BY-NC 4.0" }),
+  pack("ComfyUI-RMBG", "https://github.com/1038lab/ComfyUI-RMBG", { ...GPL, note: "Background removal; GPL-3.0 code. Fuobe uses BEN2 (MIT); RMBG-2.0 in the same pack is CC BY-NC 4.0. Its Bria VRMBG 3.0 node loads Bria's gated weights (non-commercial unless Bria agrees otherwise); FeyNoBg's weights state no licence" }),
   pack("ComfyUI-ReActor", "https://github.com/Gourieff/ComfyUI-ReActor", { name: "See its repository", class: "commercial", note: "Face swap node; the inswapper_128 weights it loads are for non-commercial research only" }),
   pack("ComfyUI-MMAudio", "https://github.com/kijai/ComfyUI-MMAudio", { name: "Not recorded", class: "unknown", note: "Code licence not recorded; the MMAudio weights it loads are CC BY-NC 4.0 (non-commercial)" }),
   pack("ComfyUI_Fill-ChatterBox", "https://github.com/filliptm/ComfyUI_Fill-ChatterBox", NO_FILE("; the Chatterbox weights are MIT")),
@@ -474,6 +474,8 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "VoxCPM2 text to speech (voice design) and voice clone nodes; Apache-2.0 code. The VoxCPM2 weights it downloads are Apache-2.0",
   }),
+  // Green screen (nm10-keying), pinned in workflows/comfyui/packs.json: the repository has no LICENSE file at the pinned commit.
+  pack("ComfyUI-CorridorKeyWrapper", "https://github.com/pixelworldai/ComfyUI-CorridorKeyWrapper/tree/7eb44e48c182e81e9dd32024770247d01f1631d3", NO_FILE("; the CorridorKey weights it downloads are under the Corridor Key Licence: free for any project, commercial ones included, but never as a paid API or inference service")),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
     ...GPL,
