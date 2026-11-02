@@ -62,6 +62,8 @@ const ROLES: NonNullable<ManifestOutput["role"]>[] = [
   "master",
   // DBS soundtrack separation: the pack's own report of the run (model, device, windows, seconds).
   "report",
+  // Any Angle: the turntable a photo's front view is measured on (colour, coverage), and a GLB made from a splat.
+  "sweep", "sweep-mask", "mesh",
 ];
 
 describe("round-4 ComfyUI workflows", () => {
@@ -149,6 +151,10 @@ describe("round-4 ComfyUI workflows", () => {
       "video-person-remove-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
+      // Any Angle's two graphs: run end to end on the GPU, they wait for their /prompt check while that ComfyUI is busy
+      // rendering (the app stays the owner's until then: src/server/any-angle-live.ts).
+      "any-angle-3d",
+      "any-angle-shot",
       "video-regenerate-h3",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);

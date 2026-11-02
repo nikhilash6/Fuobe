@@ -33,6 +33,7 @@ import {
   swatchPixels,
   tagMetaBatch,
   whisperLanguage,
+  withLoad3dImages,
   type BindingKey,
   type CaptionCue,
   type ComfyWorkflow,
@@ -868,7 +869,17 @@ export function probeComfySync(timeoutMs = 1500): boolean {
 // Building the prompt
 
 /** Loader classes whose input is an uploaded file, and which input holds it (AusBoss's Crop + Rotate + Pad loads the upload itself). */
-const MEDIA_LOADERS: Record<string, string> = { LoadImage: "image", LoadImageMask: "image", LoadVideo: "file", VHS_LoadVideo: "video", LoadAudio: "audio", VHS_LoadAudioUpload: "audio", AUSBOSS_NODES_ImageCropRotatePad: "image" };
+const MEDIA_LOADERS: Record<string, string> = {
+  LoadImage: "image",
+  LoadImageMask: "image",
+  LoadVideo: "file",
+  VHS_LoadVideo: "video",
+  LoadAudio: "audio",
+  VHS_LoadAudioUpload: "audio",
+  AUSBOSS_NODES_ImageCropRotatePad: "image",
+  // Any Angle's saved 3D view (a .spz sent like any input).
+  Load3D: "model_file",
+};
 
 // What we learned about each uploaded clip / track from its header (duration, size, fps, audio), by ComfyUI file name.
 declare global {
@@ -996,6 +1007,7 @@ const MEDIA_HINT: Record<string, string> = {
   image9: "Add a ninth image",
   image10: "Add a tenth image",
   endImage: "Add an end frame",
+  splatFile: "Build the 3D view first",
   mask: "Paint the area to change",
   video: "Add a video",
   video2: "Add a second clip",
@@ -1745,7 +1757,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // maxDimension targets for removed reference branches are expected: their scale nodes go with the loader.
   const realMissing = bound.missing.filter((m) => !/^maxDimension\b/.test(m));
   if (realMissing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${realMissing.join(", ")}`);
-  let wf = bound.workflow;
+  // A saved 3D view read without the browser (Any Angle): Load3D's picture entries point at the run's photo.
+  let wf = withLoad3dImages(bound.workflow, typeof values.image === "string" ? values.image : undefined);
   // Qwen3-TTS's clone needs the sample's words unless it clones from the voice's timbre alone (x_vector_only):
   // a sample with no transcript clones that way instead of failing.
   for (const t of b.voiceTranscript ?? []) {

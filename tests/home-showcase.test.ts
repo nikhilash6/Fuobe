@@ -46,8 +46,8 @@ const exists = (url: string) => (fs.statSync(path.join(root, "public", url.split
 /** Covers the reviews turned down: no real cover yet, or white bars at the sides (and Text Edit's white edge). */
 const NO_COVER = ["app-fuobe-angles", "app-talking-photo", "motion-dolly-zoom-out", "motion-buckle-up"];
 const WHITE_BARS = ["app-dance", "app-simlife", "app-game-dump", "app-japanese-show", "app-comic-book", "app-banana-eating", "app-change-background", "effect-boiling-point", "effect-color-rain", "app-text-edit"];
-/** Studio cards that rest on a still: Mixed Media's look, Marketing's product shot and Image to 3D's turntable shot. */
-const STILLS = ["effect-magazine", "app-macroshot-product", "app-3d-rotation"];
+/** Studio cards that rest on a still: Marketing's product shot and Image to 3D's turntable shot. */
+const STILLS = ["app-macroshot-product", "app-3d-rotation"];
 /**
  * Slots whose clip was taken down with the still it was made from (Flying's eagle had three wings): the card rests
  * on its new still until the new clip is published. Take an id out when its clip is back.
@@ -180,7 +180,9 @@ describe("Home's showcase", () => {
     // The pills keep the sidebar's order and labels.
     const order = [...create, ...studios].map((i) => i.href);
     expect(home.pills.map((p) => order.indexOf(p.href))).toEqual(home.pills.map((p) => order.indexOf(p.href)).sort((a, b) => a - b));
-    expect(home.studios.find((s) => s.href === "/audio")?.card).toBeUndefined();
+    // Audio shows a real cover too: Clean up voice’s demo, as its page does.
+    expect(home.studios.find((s) => s.href === "/audio")?.card?.id).toBe("app-clean-up-voice");
+    expect(home.studios.every((s) => s.card)).toBe(true);
   });
 
   it("quotes the catalog's own numbers", async () => {

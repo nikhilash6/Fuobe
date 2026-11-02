@@ -378,6 +378,24 @@ export const APPS: Preset[] = [
     parity:
       "Follows your camera settings. Your words add detail when it runs on your GPU.",
   }),
+  // Any Angle: a tool of its own (src/components/any-angle/any-angle-tool.tsx, src/lib/catalog/any-angle.ts). The photo
+  // becomes a 3D view once (TripoSplat), each angle is that view rendered at the camera picked and repainted by
+  // Qwen-Image 2.1 with the AnyAngle LoRA. GPU only: no hosted Qwen-Image 2.1 takes the LoRA.
+  app({
+    id: "app-any-angle",
+    name: "Any Angle",
+    category: "Camera",
+    description: "Turn the camera around your photo. Same face, same outfit, same place",
+    icon: "Rotate3d",
+    hue: 170,
+    badges: ["new"],
+    tool: "any-angle",
+    inputs: [{ key: "image", label: "Photo", hint: "One person or one product, in any setting", accept: "image", required: true }],
+    prompt: "Change the camera angle",
+    cloud: null,
+    open: { modelId: "oss-any-angle", op: "edit" },
+    parity: "Runs on your GPU. It builds a 3D view of your photo first, then shoots it again from the camera you pick.",
+  }),
   app({
     name: "Shots",
     category: "Camera",

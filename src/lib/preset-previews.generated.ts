@@ -91,6 +91,14 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "model": "minimax-h3",
     "variant": "lean-json"
   },
+  "app-any-angle": {
+    "poster": "/previews/presets/app-any-angle.jpg?v=a5ee2f2e",
+    "video": "/previews/presets/app-any-angle.mp4?v=179ee01c",
+    "run": "comfyui-previews-2026-11",
+    "engine": "comfyui",
+    "model": "oss-any-angle",
+    "variant": ""
+  },
   "app-asmr-add-on": {
     "poster": "/previews/presets/app-asmr-add-on.jpg?v=c5ef11ee",
     "video": "/previews/presets/app-asmr-add-on.mp4?v=9b3e4516",

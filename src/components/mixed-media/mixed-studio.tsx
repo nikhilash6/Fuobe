@@ -40,10 +40,13 @@ import { downloadHref, downloadName } from "@/lib/library";
 import type { TrimRange } from "@/lib/trim-range";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { MixedHistory } from "./history";
+import { HowReveal } from "./how-reveal";
 import { isFrameRender, renderSteps, useFramesProgress, useMixedActions, useMixedEstimate, useWatchedChain, useWatchedGeneration, type MixedBody } from "./hooks";
 import { AdvancedSettings, loadSaved } from "./settings";
 import { plainTagline } from "@/lib/plain-tagline";
+import { templateCover } from "@/lib/template-covers";
 
 type Tab = "presets" | "history" | "how";
 const TABS: { id: Tab; label: string }[] = [
@@ -72,7 +75,16 @@ const MODE_OPTIONS: { value: MixedMode; label: string; title: string }[] = [
 ];
 
 /** Mixed Media: pick a look, add a ≤10 s clip, tune the settings, preview one frame, render. */
-export function MixedStudio({ models, frameModels }: { models: Record<Engine, RestyleModelInfo[]>; frameModels: Record<Engine, RestyleModelInfo[]> }) {
+export function MixedStudio({
+  models,
+  frameModels,
+  how,
+}: {
+  models: Record<Engine, RestyleModelInfo[]>;
+  frameModels: Record<Engine, RestyleModelInfo[]>;
+  /** "How it works"'s reveal: one look playing out (studioExamples("mixed-media"), from the page). */
+  how?: StudioExampleRow;
+}) {
   const [tab, setTab] = useState<Tab>("presets");
   const [engine, setEngine, engineMode] = useEngine();
   // A render doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
@@ -119,7 +131,7 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
         {tab === "history" ? (
           <MixedHistory onStart={() => pick("presets")} />
         ) : tab === "how" ? (
-          <How onStart={() => pick("presets")} cloud={engineMode !== "open"} />
+          <How onStart={() => pick("presets")} cloud={engineMode !== "open"} reveal={how} />
         ) : (
           <>
             <div className="mx-auto max-w-[720px] pt-8 pb-6 text-center sm:pt-12">
@@ -139,10 +151,11 @@ export function MixedStudio({ models, frameModels }: { models: Record<Engine, Re
   );
 }
 
-function How({ onStart, cloud }: { onStart: () => void; cloud: boolean }) {
+function How({ onStart, cloud, reveal }: { onStart: () => void; cloud: boolean; reveal?: StudioExampleRow }) {
   return (
     <div className="mx-auto max-w-[920px] pt-10">
       <h2 className="text-center font-heading text-[34px] leading-tight">How it works</h2>
+      {!!reveal?.tiles.length && <HowReveal row={reveal} />}
       <ol className="mt-8 grid gap-3 sm:grid-cols-2">
         {HOW.map((h, i) => (
           <li key={h.step} className="rounded-2xl border bg-background p-5">
@@ -187,7 +200,11 @@ function Workspace({ visitor, engine, models, frameModels }: { visitor: boolean;
   const [values, setValues] = useState<MixedValues>({});
   const [q, setQ] = useState("");
   const query = useDeferredValue(q.trim().toLowerCase());
-  const list = useMemo(() => MIXED_PRESETS.filter((p) => !query || `${p.name} ${p.description}`.toLowerCase().includes(query)), [query]);
+  // Looks with a real cover lead; the rest keep their order after them.
+  const list = useMemo(() => {
+    const hits = MIXED_PRESETS.filter((p) => !query || `${p.name} ${p.description}`.toLowerCase().includes(query));
+    return [...hits.filter((p) => templateCover("mixed-media", p.id)), ...hits.filter((p) => !templateCover("mixed-media", p.id))];
+  }, [query]);
   const panel = useRef<HTMLElement>(null);
   const [panelVisible, setPanelVisible] = useState(false);
   useEffect(() => {

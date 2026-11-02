@@ -8,6 +8,7 @@ import { PageShell } from "@/components/page-shell";
 import { PageHeader } from "@/components/page-shell";
 import { HadItemsScript, useHadItems } from "@/components/use-had-items";
 import { SelfHostNote } from "@/components/self-host-note";
+import { ExampleRow } from "@/components/studio/example-row";
 import { useIsVisitor } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -15,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { CinemaProject } from "@/lib/catalog/cinema";
 import { formatUsd } from "./money";
 import { timeAgo } from "@/lib/format";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { useCinemaProjects, useUpdateProject } from "./hooks";
@@ -163,7 +165,8 @@ function EmptyProjects({ loading, onCreate, className }: { loading?: boolean; on
   );
 }
 
-export function CinemaProjects() {
+/** examples: "See what it makes" (studioExamples("cinema"), from the page), under a guest's or an account's empty list. */
+export function CinemaProjects({ examples }: { examples?: StudioExampleRow }) {
   const { data, isLoading } = useCinemaProjects();
   const router = useRouter();
   const [creating, setCreating] = useState(false);
@@ -208,7 +211,10 @@ export function CinemaProjects() {
           <EmptyProjects loading className="[html[data-had-cinema-projects='1']_&]:hidden" onCreate={onCreate} />
         </div>
       ) : !data?.length ? (
-        <EmptyProjects key="empty" onCreate={onCreate} />
+        <div key="empty">
+          <EmptyProjects onCreate={onCreate} />
+          {examples && <ExampleRow row={examples} className="mt-12" />}
+        </div>
       ) : (
         <div key="cards" className={GRID}>
           {data.map((p) => (

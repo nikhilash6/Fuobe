@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-02T01:24:28.192Z",
+  "generatedAt": "2026-11-02T13:12:59.255Z",
   "comfyuiCommit": "5841c187a76ffdb565c14d9565aacbdb9a54b056",
   "comfyuiVersion": "0.42.0",
   "workflowTemplatesVersion": "0.11.93",
@@ -21601,6 +21601,265 @@
       "license": "MIT (VAST-AI/TripoSplat weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a \"Built with DINOv3\" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT",
       "validated": true,
       "notes": "Subject or product splat (3D Angles, 3D Jutsu props, a splat alternative to TRELLIS.2 spins). The official template 3d_triposplat_image_to_gaussian_splat (2026-06-02) with the UI-only live-preview patch removed and a 75-frame H.264 orbit (RenderSplat + CreateCameraInfo orbit yaw 35, pitch 30, distance 2.5; role turntable, 25 fps). Subject only: BiRefNet cuts it out first (cutout false = use the image's own alpha). Output 1 (role splat): splatFormat spz (Niantic, gzip, ~10x smaller, base colour), ply (full spherical harmonics) or ksplat, saved by SaveGLB under that extension. ComfyUI serves all three as application/octet-stream, so Fuobe goes by the extension: spz and ply are saved as 3D models (model/x-spz, model/ply), ksplat as a .bin file, and each output records its format. cutout is true by default (manifest defaults). numGaussians up to 1,048,576 (262,144 by default); seed drives both the sampler and the decoder. RenderSplat also takes a look_at camera, so a view picked in the browser can be rendered on the server. 3.78 GB of weights (TripoSplat 0.74, DINOv3 ViT-H 1.68, TripoSplat VAE decoder 0.58, FLUX.2 VAE 0.34, BiRefNet 0.44)."
+    },
+    {
+      "id": "any-angle-3d",
+      "title": "Any Angle: a photo to a 3D view of its subject (TripoSplat), with a turntable, the sweep its front view is measured on and a GLB",
+      "capability": "splat",
+      "file": "any-angle-3d.json",
+      "source": "hand-built (scripts/comfy/hand-built/any-angle-3d.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "1",
+            "input": "image"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "16",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "83",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "85",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "88",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "21",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "91",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "16",
+          "kind": "model3d",
+          "role": "splat"
+        },
+        {
+          "node": "83",
+          "kind": "video",
+          "role": "turntable"
+        },
+        {
+          "node": "85",
+          "kind": "image",
+          "role": "sweep"
+        },
+        {
+          "node": "88",
+          "kind": "image",
+          "role": "sweep-mask"
+        },
+        {
+          "node": "21",
+          "kind": "image",
+          "role": "matte"
+        },
+        {
+          "node": "91",
+          "kind": "model3d",
+          "role": "mesh"
+        }
+      ],
+      "defaults": {},
+      "limits": {},
+      "models": [
+        {
+          "file": "birefnet.safetensors",
+          "folder": "background_removal",
+          "url": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors",
+          "sizeGb": 0.44
+        },
+        {
+          "file": "dino_v3_vit_h.safetensors",
+          "folder": "clip_vision",
+          "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/clip_vision/dino_v3_vit_h.safetensors",
+          "sizeGb": 1.68
+        },
+        {
+          "file": "flux2-vae.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+          "sizeGb": 0.34
+        },
+        {
+          "file": "triposplat_vae_decoder_fp16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/vae/triposplat_vae_decoder_fp16.safetensors",
+          "sizeGb": 0.58
+        },
+        {
+          "file": "triposplat_fp16.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/VAST-AI/TripoSplat/resolve/main/diffusion_models/triposplat_fp16.safetensors",
+          "sizeGb": 0.74
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 8,
+      "license": "MIT (VAST-AI/TripoSplat weights); the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; the app must show a \"Built with DINOv3\" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT",
+      "validated": false,
+      "notes": "Step 1 of Any Angle, run once per photo (the server keeps the result by the photo's sha256; feature any-angle-step, out of Library). image-to-splat-triposplat's chain with the cut-out always on (without it a turned camera shows the photo as a flat card with black wedges), seeds fixed at 46 for the sampler and the decoder (the same photo gives the same 3D view), 20 steps, cfg 3, dpmpp_2m, 262,144 Gaussians. Outputs: the splat as .spz (role splat, about 3 MB: every angle reloads it), a 48-frame turntable from yaw 0 at pitch 10, distance 2, fov 33, 512 px, 12 fps (role turntable, shown while picking), the same frames at 192 px as lossless animated WebP, colour (role sweep) and RenderSplat's coverage mask (role sweep-mask), the BiRefNet cut-out (role matte) and a GLB from core SplatToMesh at 256 (role mesh, the desktop drag view). The server compares the sweep with the cut-out photo (silhouette overlap and colour correlation, the GPU test's measure) to find the photo's front yaw and distance: TripoSplat drops its own camera estimate and puts each subject in a pose of its own (the test found yaw 125, 75 and 90 on three photos). GPU test (RTX 5090): cut-out 0.8-1.3 s, TripoSplat 1.0 + 18-19.4 + 0.4 s, .spz save under 0.05 s, 48 frames at 512 px 20-37 s, mesh 0.4-0.5 s; about 8.7 GiB peak."
+    },
+    {
+      "id": "any-angle-shot",
+      "title": "Any Angle: one camera angle of a photo, the 3D view rendered there and repainted by Qwen-Image 2.1 + the AnyAngle LoRA",
+      "capability": "edit",
+      "file": "any-angle-shot.json",
+      "source": "hand-built (scripts/comfy/hand-built/any-angle-shot.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "1",
+            "input": "image"
+          }
+        ],
+        "splatFile": [
+          {
+            "node": "2",
+            "input": "model_file"
+          }
+        ],
+        "cameraYaw": [
+          {
+            "node": "20",
+            "input": "mode.yaw"
+          }
+        ],
+        "cameraPitch": [
+          {
+            "node": "20",
+            "input": "mode.pitch"
+          }
+        ],
+        "cameraDistance": [
+          {
+            "node": "20",
+            "input": "mode.distance"
+          }
+        ],
+        "cameraFov": [
+          {
+            "node": "20",
+            "input": "fov"
+          }
+        ],
+        "targetX": [
+          {
+            "node": "20",
+            "input": "target_x"
+          }
+        ],
+        "targetY": [
+          {
+            "node": "20",
+            "input": "target_y"
+          }
+        ],
+        "targetZ": [
+          {
+            "node": "20",
+            "input": "target_z"
+          }
+        ],
+        "width": [
+          {
+            "node": "30",
+            "input": "width"
+          }
+        ],
+        "height": [
+          {
+            "node": "30",
+            "input": "height"
+          }
+        ],
+        "seed": [
+          {
+            "node": "56",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "56",
+            "input": "steps"
+          }
+        ],
+        "cfg": [
+          {
+            "node": "56",
+            "input": "cfg"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "58",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "58",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "width": 1536,
+        "height": 1152,
+        "steps": 25,
+        "cfg": 1
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048,
+        "dimensionMultiple": 8
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "QI2.1_AnyAngle.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/lilylilith/QI_2.1_AnyAngle/resolve/5c8b4c8e05ba6328d54bf8d34ec724fef5a414ae/QI2.1_AnyAngle.safetensors",
+          "sizeGb": 0.12
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 32,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1, Qwen3-VL 8B encoder, VAE): NON-COMMERCIAL, research and evaluation only; the AnyAngle LoRA (lilylilith/QI_2.1_AnyAngle) Apache-2.0",
+      "validated": false,
+      "notes": "Step 2 of Any Angle, one job per angle. The saved .spz goes in like any input (splatFile) and Load3D reads it without the browser: its image entry points at the photo (the provider fills it), then File3DToSplat. CreateCameraInfo orbit takes the camera Fuobe works out (the photo's measured front view plus the preset's turn, height and distance; a close-up aims at the face's height), RenderSplat renders it at the photo's shape (up to 2048 px, black background). Qwen-Image 2.1 int8 + the AnyAngle LoRA at 1.0, loaded here (one model loader, so no request LoRA lands on another), TextEncodeQwenImage21 with the LoRA's own prompt \"Change the camera angle from <image2> to <image1>.\", image 1 the original photo, image 2 the render, resolution 1024 (about 1 MP out: 1184x896 from a 1536x1152 photo), KSampler 25 steps, cfg 1, euler, simple, seed 46. GPU test (RTX 5090): reload + render 2.3 s (a rebuild would be about 20 s), text encode 5.4 s, sampler 22.6 s, about 30 s an angle, peak 28.4-29.2 GiB (card total, with the desktop): vramGb 32, since a 24 GB card has no room to spare. Tested against the alternatives: the other image order gives back the original angle, cfg 3 is 5x slower and no better, bf16 is 2x slower, the photo behind the render adds a ghost second person, grey is no better than black."
     },
     {
       "id": "wan21-i2v-uni3c-path",

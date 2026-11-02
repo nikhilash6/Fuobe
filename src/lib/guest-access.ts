@@ -262,6 +262,9 @@ export function ownGpuRun(method: string, pathname: string): boolean {
   return method === "POST" && pathname === "/api/generations";
 }
 
+/** The code on an account's run refused because its runs going are at the limit: the next one may wait for a place and send again. */
+export const ACTIVE_RUNS_CODE = "active-runs";
+
 export const OWN_GPU_TOOL_MESSAGE = "This tool isn't available here. Try the Image, Video or Audio studio, or an app, effect or camera motion.";
 
 /** Set on an account's refused run: the client shows "Connect your GPU to run this". */

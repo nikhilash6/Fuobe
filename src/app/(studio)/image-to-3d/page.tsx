@@ -6,6 +6,7 @@ import { ALL_MODELS_3D, CLOUD_NOTICES, RIG_MODEL } from "@/lib/av/model3d";
 import { getModel } from "@/lib/catalog";
 import type { Manifest } from "@/lib/comfy";
 import { buildLicenceList, FLAG_LABEL } from "@/lib/licences";
+import { studioExamples } from "@/lib/studio-examples";
 
 export const metadata: Metadata = { title: "Image to 3D" };
 
@@ -59,5 +60,5 @@ export default async function Page() {
       { name: getModel(id)?.name ?? id, notices: licences[id]?.notices ?? CLOUD_NOTICES[id] ?? [], ...(licences[id] && { licence: licences[id] }) },
     ]),
   );
-  return <Model3dStudio info={info} />;
+  return <Model3dStudio info={info} examples={studioExamples("image-to-3d")} />;
 }

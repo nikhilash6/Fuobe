@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { StudioCatalog } from "@/lib/studio-catalog";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { useLikelyVisitor } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { StudioPage } from "./studio-page";
@@ -71,6 +72,18 @@ export function ModeTabs({ tabs, current }: { tabs: ModeTab[]; current: string }
 }
 
 /** One mode of a hub (Audio, Video tools, Upscale): its studio with the hub's tabs. Each mode has its own path. */
-export function ModeStudio({ tabs, current, config, catalog }: { tabs: ModeTab[]; current: string; config: StudioConfig; catalog: StudioCatalog }) {
-  return <StudioPage config={config} catalog={catalog} tabs={<ModeTabs tabs={tabs} current={current} />} />;
+export function ModeStudio({
+  tabs,
+  current,
+  config,
+  catalog,
+  examples,
+}: {
+  tabs: ModeTab[];
+  current: string;
+  config: StudioConfig;
+  catalog: StudioCatalog;
+  examples?: StudioExampleRow;
+}) {
+  return <StudioPage config={config} catalog={catalog} tabs={<ModeTabs tabs={tabs} current={current} />} examples={examples} />;
 }

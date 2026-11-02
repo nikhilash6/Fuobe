@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { uploadFile, useHydrated } from "@/lib/api";
 import { animateSpinHref, animationName, model3dView, stillOf, type Model3dView } from "@/lib/av/model3d";
+import { anyAngleHref } from "@/lib/catalog/any-angle";
 import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -149,7 +150,8 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
   const rigSource = view.rigged ? (g.request.inputs?.model3d ?? view.glb) : view.glb;
   // The radio buttons in the corner: the preview and the 3D view, a rig's clips, or a splat's video and picture.
   // A rig's clip is picked by its key ("main", "walking", "running"); "3d" is the model itself.
-  const choices: { key: string; label: string; on: boolean }[] = view.splat
+  // A splat with a GLB made from it opens that in the viewer, as any model does.
+  const choices: { key: string; label: string; on: boolean }[] = view.splat && !view.glb
     ? clip
       ? [
           { key: "preview", label: "Turntable", on: show === "preview" },
@@ -264,18 +266,27 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
           {g.modelName}
           {g.prompt && !view.rigged ? ` · ${g.prompt}` : ""}
         </p>
-        {view.splat && (
+        {view.splat && !view.glb && (
           <p className="text-[12px] text-muted-foreground">
             Fuobe doesn&apos;t draw splats yet: {clip ? "the turntable shows it turning" : "the picture is what the model saw"}. Open the .{view.splat.format} in a Gaussian-splat viewer (SuperSplat, for one) to look around it.
           </p>
         )}
         <div className="flex flex-wrap gap-1.5">
           {view.splat ? (
-            <Button asChild variant="outline" size="sm" className="rounded-full">
-              <a href={view.splat.url} download={`${name}.${view.splat.format}`}>
-                <Download className="size-3.5" /> .{view.splat.format}
-              </a>
-            </Button>
+            <>
+              {view.glb && (
+                <Button asChild variant="outline" size="sm" className="rounded-full">
+                  <a href={view.glb} download={`${name}.glb`}>
+                    <Download className="size-3.5" /> 3D model (.glb)
+                  </a>
+                </Button>
+              )}
+              <Button asChild variant="outline" size="sm" className="rounded-full">
+                <a href={view.splat.url} download={`${name}.${view.splat.format}`}>
+                  <Download className="size-3.5" /> {view.glb ? `3D splat (.${view.splat.format})` : `.${view.splat.format}`}
+                </a>
+              </Button>
+            </>
           ) : (
             view.glb && (
               <Button asChild variant="outline" size="sm" className="rounded-full">
@@ -324,6 +335,13 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
           {rigSource && !view.splat && g.op !== "splat" && (
             <Button variant="outline" size="sm" className="rounded-full" onClick={() => setRigging(true)}>
               <PersonStanding className="size-3.5" /> {view.rigged ? "Another animation" : "Rig & animate"}
+            </Button>
+          )}
+          {view.splat && view.photo && (
+            <Button asChild variant="outline" size="sm" className="rounded-full">
+              <Link href={anyAngleHref(view.photo)} prefetch={false}>
+                <Rotate3d className="size-3.5" /> Shoot it from any angle
+              </Link>
             </Button>
           )}
           {spin && (

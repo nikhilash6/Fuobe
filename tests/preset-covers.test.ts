@@ -87,7 +87,8 @@ describe("the preset covers manifest", () => {
     for (const id of Object.keys(PRESET_BEFORE_AFTER)) for (const f of beforeAfterFiles(id)) named.add(f);
     const dir = path.join(root, "public", "previews");
     const files = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(jpg|mp4)$/.test(f)) : [];
-    const orphans = files.map((f) => `/previews/${f.replaceAll("\\", "/")}`).filter((u) => !named.has(u));
+    // public/previews/templates is the template covers' (tests/template-covers.test.ts checks it).
+    const orphans = files.map((f) => `/previews/${f.replaceAll("\\", "/")}`).filter((u) => !u.startsWith("/previews/templates/") && !named.has(u));
     expect(orphans).toEqual([]);
   });
 
@@ -172,8 +173,10 @@ describe("the preset covers manifest", () => {
     // Cinema Studio's moves (next/dynamic in camera-moves.tsx, loaded when the "#" picker or the Director panel's
     // Movement tab shows them), and the preset header (next/dynamic in studio-page.tsx, checked below).
     expect(importers(/from "[^"]*preset-covers\.generated"/)).toEqual(["lib/preset-covers.ts"]);
-    // (A type is no code: the cover tile takes a cover without importing the map.)
+    // (A type is no code: the cover tile takes a cover without importing the map.) Any Angle's page shows its own cover
+    // above the upload: a tool of its own, whose chunk loads on that app's page only.
     expect(importers(/^import (?!type )[^;]*from "[^"]*preset-covers";/m)).toEqual([
+      "components/any-angle/any-angle-tool.tsx",
       "components/cinema/move-list.tsx",
       "components/preset-header.tsx",
       "components/studio/preset-chips.tsx",

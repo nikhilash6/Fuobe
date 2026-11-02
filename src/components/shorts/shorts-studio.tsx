@@ -13,6 +13,7 @@ import { VideoTrimmer } from "@/components/studio/video-trimmer";
 import { useEngine, useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import {
   clipShapeProblem,
+  coveredFirst,
   rangeProblem,
   SHORTS,
   SHORTS_CATEGORIES,
@@ -239,7 +240,7 @@ function PresetGrid({
   const query = useDeferredValue(q.trim().toLowerCase());
   const cats = ["All", ...(custom.length ? [CUSTOM] : []), ...SHORTS_CATEGORIES];
   const list = useMemo(
-    () => SHORTS_PRESETS.filter((p) => (cat === "All" || p.category === cat) && (!query || `${p.name} ${p.description} ${p.category}`.toLowerCase().includes(query))),
+    () => coveredFirst(SHORTS_PRESETS.filter((p) => (cat === "All" || p.category === cat) && (!query || `${p.name} ${p.description} ${p.category}`.toLowerCase().includes(query)))),
     [cat, query],
   );
   const mine = custom.filter((p) => (cat === "All" || cat === CUSTOM) && (!query || `${p.name} ${p.description}`.toLowerCase().includes(query)));

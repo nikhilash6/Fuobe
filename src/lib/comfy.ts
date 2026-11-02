@@ -90,7 +90,11 @@ export interface ManifestOutput {
     | "matte"
     | "preview"
     | "master"
-    | "report";
+    | "report"
+    // Any Angle: the turntable at 192 px (colour, and its coverage) the front view is measured on, and a GLB made from a splat.
+    | "sweep"
+    | "sweep-mask"
+    | "mesh";
 }
 
 export interface ManifestWorkflow {
@@ -156,6 +160,22 @@ export function applyBindings(
     }
   }
   return { workflow: out, missing };
+}
+
+/**
+ * Load3D reads a saved 3D file without the browser (Any Angle's saved view): its picture entries, which the viewer's
+ * capture fills in the editor, point at the run's own photo (any file it sent works; nothing else is read from the folder).
+ */
+export function withLoad3dImages(wf: ComfyWorkflow, image: string | undefined): ComfyWorkflow {
+  if (!image) return wf;
+  let out = wf;
+  for (const [id, n] of Object.entries(wf)) {
+    const entry = n.inputs.image;
+    if (n.class_type !== "Load3D" || !entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    if (out === wf) out = cloneWorkflow(wf);
+    out[id].inputs.image = { ...(entry as Record<string, unknown>), image, mask: image, normal: image, recording: "" };
+  }
+  return out;
 }
 
 const MODEL_LOADERS = new Set(["UNETLoader", "CheckpointLoaderSimple", "UnetLoaderGGUF", "ImageOnlyCheckpointLoader"]);

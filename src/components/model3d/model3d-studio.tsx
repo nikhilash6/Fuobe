@@ -15,6 +15,7 @@ import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
+import { ExampleRow } from "@/components/studio/example-row";
 import { useCreateGeneration, useEngine, useGenerations, useHydrated, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
   MAX_3D_PROMPT,
@@ -35,6 +36,7 @@ import {
 } from "@/lib/av/model3d";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { keepOffered, offered } from "@/lib/model-access";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useRunPreview } from "./hooks";
@@ -121,8 +123,11 @@ function ModePicker({ mode, onChange }: { mode: Model3dMode; onChange: (m: Model
   );
 }
 
-/** Image to 3D: a photo, several photos, words, an object in a photo or a splat → a model to spin, download, rig and animate. */
-export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
+/**
+ * Image to 3D: a photo, several photos, words, an object in a photo or a splat → a model to spin, download, rig and animate.
+ * examples: "See what it makes" (studioExamples("image-to-3d"), from the page), where the models go until there is one.
+ */
+export function Model3dStudio({ info, examples }: { info: Record<string, Model3dInfo>; examples?: StudioExampleRow }) {
   const [engine, setEngine, engineMode] = useEngine();
   // A 3D model is finished on this server, so accounts don't get Image to 3D yet, even on their own GPU or key: said up
   // front, and the uploads and Make it 3D are off, instead of a run the server refuses.
@@ -337,6 +342,7 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
           )}
         </Panel>
       </div>
+      {examples && (visitor || (results.isSuccess && !items.length)) && <ExampleRow row={examples} className="mt-12" />}
       <section id="your-3d-models" className="mx-auto mt-12 max-w-[880px] scroll-mt-6" aria-labelledby="models3d">
         {(results.isLoading || items.length > 0) && (
           <h3 id="models3d" className="mb-3 font-heading text-[22px]">

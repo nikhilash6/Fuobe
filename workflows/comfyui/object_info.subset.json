@@ -6855,6 +6855,56 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "File3DToSplat": {
+    "input": {
+      "required": {
+        "model_3d": [
+          "FILE_3D,FILE_3D_SPLAT_ANY,FILE_3D_PLY,FILE_3D_SPLAT,FILE_3D_KSPLAT,FILE_3D_SPZ",
+          {
+            "tooltip": "A gaussian splat 3D file"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model_3d"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "SPLAT"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "splat"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "File3DToSplat",
+    "display_name": "Get Splat",
+    "description": "Parse a splat File3D into a gaussian splat. Inverse of Create 3D File (from Splat). Supported format:  PLY, SPLAT, KSPLAT, SPZ. PLY carries full spherical harmonics, the other formats are base color only. Format is auto-detected from the file contents.",
+    "python_module": "comfy_extras.nodes_gaussian_splat",
+    "category": "3d/splat",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "load splat",
+      "ply to splat",
+      "import splat",
+      "file to splat"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "Flux2Scheduler": {
     "input": {
       "required": {
@@ -12278,6 +12328,108 @@
     "price_badge": null,
     "search_aliases": null,
     "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "Load3D": {
+    "input": {
+      "required": {
+        "model_file": [
+          "COMBO",
+          {
+            "multiselect": false,
+            "options": [
+              "none"
+            ],
+            "file_upload": true
+          }
+        ],
+        "image": [
+          "LOAD_3D",
+          {}
+        ],
+        "width": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 1,
+            "max": 4096,
+            "step": 1
+          }
+        ],
+        "height": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 1,
+            "max": 4096,
+            "step": 1
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model_file",
+        "image",
+        "width",
+        "height"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "STRING",
+      "IMAGE",
+      "LOAD3D_CAMERA",
+      "VIDEO",
+      "FILE_3D",
+      "LOAD3D_MODEL_INFO"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "image",
+      "mask",
+      "mesh_path",
+      "normal",
+      "camera_info",
+      "recording_video",
+      "model_3d",
+      "model_3d_info"
+    ],
+    "output_tooltips": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "Load3D",
+    "display_name": "Load 3D & Animation",
+    "description": "",
+    "python_module": "comfy_extras.nodes_load_3d",
+    "category": "3d",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": true,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": "Basics",
     "has_intermediate_output": false
   },
   "LoadAudio": {
@@ -18147,6 +18299,89 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "SaveAnimatedWEBP": {
+    "input": {
+      "required": {
+        "images": [
+          "IMAGE",
+          {}
+        ],
+        "filename_prefix": [
+          "STRING",
+          {
+            "default": "ComfyUI"
+          }
+        ],
+        "fps": [
+          "FLOAT",
+          {
+            "default": 6,
+            "min": 0.01,
+            "max": 1000,
+            "step": 0.01
+          }
+        ],
+        "lossless": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "quality": [
+          "INT",
+          {
+            "default": 80,
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "method": [
+          "COMBO",
+          {
+            "options": [
+              "default",
+              "fastest",
+              "slowest"
+            ]
+          }
+        ]
+      },
+      "hidden": {
+        "prompt": "PROMPT",
+        "extra_pnginfo": "EXTRA_PNGINFO"
+      }
+    },
+    "input_order": {
+      "required": [
+        "images",
+        "filename_prefix",
+        "fps",
+        "lossless",
+        "quality",
+        "method"
+      ],
+      "hidden": [
+        "prompt",
+        "extra_pnginfo"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "images"
+    ],
+    "name": "SaveAnimatedWEBP",
+    "display_name": "Save Animated WEBP",
+    "description": "",
+    "python_module": "comfy_extras.nodes_images",
+    "category": "image",
+    "output_node": true
+  },
   "SaveAudio": {
     "input": {
       "required": {
@@ -20039,6 +20274,132 @@
       "gaussian to ply",
       "splat to file",
       "export gaussian"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "SplatToMesh": {
+    "input": {
+      "required": {
+        "splat": [
+          "SPLAT",
+          {}
+        ],
+        "resolution": [
+          "INT",
+          {
+            "tooltip": "Density-grid resolution along the longest axis. Higher = finer surface, more VRAM/time (grows with resolution^3).",
+            "default": 384,
+            "min": 64,
+            "max": 768,
+            "step": 16
+          }
+        ],
+        "kernel": [
+          "INT",
+          {
+            "tooltip": "Max splat half-width in voxels. Each gaussian is rasterized over a window sized to its own 3-sigma, capped here - small surfels stay cheap, large ones aren't truncated. Raise if sparse splats leave gaps.",
+            "default": 5,
+            "min": 1,
+            "max": 8
+          }
+        ],
+        "smooth": [
+          "INT",
+          {
+            "tooltip": "Taubin mesh-smoothing iterations. Smooths the surface without shrinking it (volume-preserving), unlike blurring the density. 0 = raw surface.",
+            "advanced": true,
+            "default": 0,
+            "min": 0,
+            "max": 60
+          }
+        ],
+        "level": [
+          "FLOAT",
+          {
+            "tooltip": "Iso-surface level. Auto-picked by Otsu; this biases it (1.0 = auto, lower = fatter/more-connected surface, higher = thinner/tighter).",
+            "default": 0.4,
+            "min": 0,
+            "max": 2,
+            "step": 0.01
+          }
+        ],
+        "min_component": [
+          "INT",
+          {
+            "tooltip": "Drop connected components smaller than this many vertices (0 = keep all). Removes detached floater blobs and the inner shell of the double wall.",
+            "advanced": true,
+            "default": 500,
+            "min": 0,
+            "max": 100000,
+            "step": 50
+          }
+        ],
+        "min_opacity": [
+          "FLOAT",
+          {
+            "tooltip": "Ignore gaussians fainter than this before meshing.",
+            "advanced": true,
+            "default": 0.02,
+            "min": 0,
+            "max": 1,
+            "step": 0.01
+          }
+        ],
+        "color_sharpen": [
+          "FLOAT",
+          {
+            "tooltip": "Crisp up the vertex texture: 1.0 = physically-correct blend; higher biases each voxel's colour toward its dominant gaussian instead of averaging neighbours (de-smears the texture). Colour only - geometry is unchanged.",
+            "default": 2,
+            "min": 1,
+            "max": 8,
+            "step": 0.5
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "splat",
+        "resolution",
+        "kernel",
+        "smooth",
+        "level",
+        "min_component",
+        "min_opacity",
+        "color_sharpen"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MESH"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "mesh"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "SplatToMesh",
+    "display_name": "Extract Mesh from Splat",
+    "description": "Extract a coloured mesh from a gaussian splat.",
+    "python_module": "comfy_extras.nodes_gaussian_splat",
+    "category": "3d/splat",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "splat to mesh",
+      "gaussian surface nets",
+      "splat surface",
+      "mesh splat"
     ],
     "essentials_category": null,
     "has_intermediate_output": false

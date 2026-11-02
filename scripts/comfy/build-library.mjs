@@ -170,6 +170,8 @@ export const BINDING_KEYS = new Set([
   'device',
   // The VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
+  // Any Angle: the 3D view's file and each angle's camera
+  'splatFile', 'cameraYaw', 'cameraPitch', 'cameraDistance', 'cameraFov', 'targetX', 'targetY', 'targetZ',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

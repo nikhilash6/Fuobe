@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { areaCls } from "@/components/brand/fields";
 import { uploadImages } from "@/components/brand/image-list";
+import { ExampleRow } from "@/components/studio/example-row";
 import { fileToSlot, LibraryGrid, type SlotValue } from "@/components/studio/media-slot";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
 import { initialClip, mentionedImages, MULTIPLIER, MULTIPLIER_MODELS, multiplierResolution, type ClipRange as Range, type MarketingRun, type RunEstimate } from "@/lib/catalog/marketing";
@@ -17,6 +18,7 @@ import { formatCost } from "@/lib/format";
 import { probeBlob, probeUrl } from "@/lib/media-probe";
 import { useAskBeforeUpload, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { addRuns, send, useEstimate } from "@/components/marketing/hooks";
@@ -176,8 +178,11 @@ function MentionImages({ value, onChange, onMention, max }: { value: string[]; o
   );
 }
 
-/** Ad Multiplier: a reference ad (4–30 s) → new versions: recreated from a prompt, or with a new hook / CTA. */
-export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) {
+/**
+ * Ad Multiplier: a reference ad (4–30 s) → new versions: recreated from a prompt, or with a new hook / CTA.
+ * examples: "See what it makes" (studioExamples("ads"), from the page), under the empty list of versions.
+ */
+export function AdMultiplier({ models, examples }: { models: Record<string, ModelInfo>; examples?: StudioExampleRow }) {
   const qc = useQueryClient();
   const { engine, setEngine } = useMarketingEngine();
   const access = useModelAccess();
@@ -491,10 +496,13 @@ export function AdMultiplier({ models }: { models: Record<string, ModelInfo> }) 
           <RunsList
             feature="ad-multiplier"
             empty={
-              <div className="rounded-2xl border border-dashed py-12 text-center">
-                <EmptyIcon icon={Copy} />
-                <p className="mt-4 text-[14px] text-muted-foreground">{video ? "Pick what to change and press Generate." : "Start with an ad that already works."}</p>
-              </div>
+              <>
+                <div className="rounded-2xl border border-dashed py-12 text-center">
+                  <EmptyIcon icon={Copy} />
+                  <p className="mt-4 text-[14px] text-muted-foreground">{video ? "Pick what to change and press Generate." : "Start with an ad that already works."}</p>
+                </div>
+                {examples && <ExampleRow row={examples} className="mt-10" />}
+              </>
             }
           />
         </div>
