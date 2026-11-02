@@ -13,6 +13,7 @@ Run it from WorldCast's own clone, in WorldCast's own virtualenv (README.md besi
 Nothing here is Fuobe's code at run time: Fuobe only talks to it over HTTP.
 """
 import argparse
+import hmac
 import io
 import json
 import os
@@ -38,6 +39,8 @@ DEPTH_PRO_CKPT = os.environ.get("WORLDCAST_DEPTH_PRO", os.path.join(REPO, "check
 MODEL_NAME = "PixCtrol/WorldCast@7ccf2e0"
 KEEP_JOBS = 50
 MAX_UPLOAD = 512 * 2**20
+# A shared secret: when set, every call needs "Authorization: Bearer <token>" (Fuobe sends its WORLDCAST_TOKEN setting).
+TOKEN = os.environ.get("WORLDCAST_TOKEN", "").strip()
 
 VIEWS = ("front", "left_side", "right_side", "back")
 FRAMES, FPS, WIDTH, HEIGHT = 81, 15, 480, 832
@@ -304,7 +307,11 @@ def find(jid: str) -> dict:
 
 
 async def read_form(request: Request):
-    if int(request.headers.get("content-length") or 0) > MAX_UPLOAD:
+    # A body without a length (chunked) is refused, so the cap can't be skipped; uvicorn holds a body to its stated length.
+    length = request.headers.get("content-length")
+    if length is None or not length.isdigit():
+        raise HTTPException(411, "send the case with a Content-Length")
+    if int(length) > MAX_UPLOAD:
         raise HTTPException(413, "the case is too big")
     form = await request.form()
     out = {}
@@ -320,6 +327,15 @@ async def read_form(request: Request):
 @app.exception_handler(HTTPException)
 async def http_error(_req, e: HTTPException):
     return JSONResponse({"error": str(e.detail)}, status_code=e.status_code)
+
+
+@app.middleware("http")
+async def check_token(request: Request, call_next):
+    if TOKEN:
+        sent = request.headers.get("authorization", "")
+        if not hmac.compare_digest(sent.encode(), f"Bearer {TOKEN}".encode()):
+            return JSONResponse({"error": "this worker needs its token (WORLDCAST_TOKEN)"}, status_code=401)
+    return await call_next(request)
 
 
 @app.get("/health")
@@ -425,6 +441,8 @@ def main():
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8190)
     args = p.parse_args()
+    if args.host not in ("127.0.0.1", "localhost", "::1") and not TOKEN:
+        print("Warning: listening beyond this machine without WORLDCAST_TOKEN: anyone who reaches it can queue jobs on this GPU", flush=True)
     os.makedirs(WORK, exist_ok=True)
     threading.Thread(target=load_in_background, daemon=True).start()
     threading.Thread(target=runner, daemon=True).start()

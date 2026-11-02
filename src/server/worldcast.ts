@@ -37,12 +37,18 @@ function guard(): void {
   if (tenantAccount()) throw new ProviderError("WorldCast runs on the studio's own GPU only.");
 }
 
+/** The Bearer header for the worker when a WORLDCAST_TOKEN is set (the reference server then refuses calls without it). */
+export function worldcastHeaders(): Record<string, string> {
+  const t = (getSetting("worldcastToken") ?? "").trim();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
 async function call(path: string, init: RequestInit = {}, timeoutMs = 60_000): Promise<Response> {
   guard();
   const base = worldcastBase();
   if (!base) throw new ProviderError(`No WorldCast worker is set up: add its address in ${WORLDCAST_SETTING} (or WORLDCAST_URL)`);
   try {
-    return await fetch(`${base}${path}`, { ...init, signal: init.signal ?? AbortSignal.timeout(timeoutMs) });
+    return await fetch(`${base}${path}`, { ...init, headers: { ...worldcastHeaders(), ...(init.headers as Record<string, string> | undefined) }, signal: init.signal ?? AbortSignal.timeout(timeoutMs) });
   } catch (e) {
     throw new ProviderError(`The WorldCast worker at ${base} doesn't answer (${(e as Error).message}). Start it (workers/worldcast/README.md) or check ${WORLDCAST_SETTING}`);
   }

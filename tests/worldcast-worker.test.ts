@@ -9,7 +9,8 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-worldcast-"));
 process.env.FUOBE_DATA_DIR = dir;
 
 type Job = { status: string; progress?: number; error?: string };
-const state: { jobs: Map<string, Job>; health: unknown; healthStatus: number; caseStatus: number; fields: string[]; files: string[]; canceled: string[] } = {
+const state: { jobs: Map<string, Job>; health: unknown; healthStatus: number; caseStatus: number; fields: string[]; files: string[]; canceled: string[]; auth: (string | undefined)[] } = {
+  auth: [],
   jobs: new Map(),
   health: { ok: true, model: "PixCtrol/WorldCast@7ccf2e0", vram_gb: 80, depth: ["depth-pro"] },
   healthStatus: 200,
@@ -26,6 +27,7 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(body));
   };
   const url = req.url ?? "";
+  state.auth.push(req.headers.authorization);
   if (req.method === "GET" && url === "/health") return send(state.healthStatus, state.health);
   if (req.method === "POST" && url === "/cases") {
     const chunks: Buffer[] = [];
@@ -81,6 +83,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  state.auth = [];
   state.jobs.clear();
   state.healthStatus = 200;
   state.caseStatus = 200;
@@ -168,6 +171,25 @@ describe("the WorldCast worker's client", () => {
     expect(state.canceled).toContain("job1");
     expect(worldcastProvider.isConfigured()).toBe(true);
     expect(await worldcastProvider.prepareFile(Buffer.from("x"), "image/png", "a.png")).toBe("data:image/png;base64,eA==");
+  });
+
+  it("sends the worker's token on every call and on the clip's download when one is set, and nothing without one", async () => {
+    state.jobs.set("job1", { status: "succeeded" });
+    const ctx = { externalId: "job1", meta: {}, route: { op: "camera-path", provider: "worldcast", endpoint: "cases" }, model: {} as never, createdAt: 0 } as const;
+    await wc.jobStatus("job1");
+    expect(state.auth).toEqual([undefined]);
+    process.env.WORLDCAST_TOKEN = "s3cret";
+    try {
+      await wc.worldcastHealth();
+      await wc.submitCase(parts());
+      await wc.jobStatus("job1");
+      await wc.cancelJob("job1");
+      state.jobs.set("job1", { status: "succeeded" });
+      expect(state.auth.slice(1)).toEqual(["Bearer s3cret", "Bearer s3cret", "Bearer s3cret", "Bearer s3cret"]);
+      expect(await worldcastProvider.poll(ctx as never)).toMatchObject({ state: "succeeded", outputs: [{ headers: { Authorization: "Bearer s3cret" } }] });
+    } finally {
+      delete process.env.WORLDCAST_TOKEN;
+    }
   });
 
   it("runs the paper's depth model as a job when asked, and hands its picture on", async () => {

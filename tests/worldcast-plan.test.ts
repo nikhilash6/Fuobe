@@ -17,7 +17,7 @@ const { getModel, MODELS } = await import("@/lib/catalog");
 const { providerEngine } = await import("@/lib/catalog/engines");
 const { planFlyAround } = await import("@/lib/catalog/fly-around");
 const { planTurnaround } = await import("@/lib/catalog/turnaround");
-const { planCinema } = await import("@/lib/catalog/cinema");
+const { pathTake, planCinema } = await import("@/lib/catalog/cinema");
 const { WORLDCAST_MODELS, worldcastFallback, worldcastSteps } = await import("@/lib/catalog/worldcast-plan");
 const { imageSlots, readLayout, worldcastLayout } = await import("@/lib/worldcast");
 const { modelLicence } = await import("@/server/model-access");
@@ -70,8 +70,14 @@ describe("the buttons prefer WorldCast when the worker answers", () => {
     expect(on.duration).toBe(5.4);
     expect(on.costUsd).toBe(0);
     expect(on.blocker).toBeUndefined();
-    expect(on.steps.map((s) => s.key)).toEqual(["depth", "mask-still", "mask-back", "main"]);
+    // The still is the front's anchor too, so WorldCast always has the first frame's anchor it was trained with.
+    expect(on.steps.map((s) => s.key)).toEqual(["depth", "mask-still", "mask-front", "mask-back", "main"]);
+    expect(readLayout(on.steps.at(-1)!.request.params?.extra?.worldcast).anchors.map((a) => a.view)).toEqual(["front", "back"]);
+    expect(on.steps.at(-1)!.request.inputs?.images).toEqual([image, image, V.back]);
     expect(on.notes[0]).toMatch(/the back and sides follow your 1 view/);
+    // With no views named, the still alone is still sent as the front's anchor.
+    const alone = planFlyAround({ engine: "open", image, orbit }, { worldcast: true });
+    expect(readLayout(alone.steps.at(-1)!.request.params?.extra?.worldcast).anchors.map((a) => [a.side, a.view])).toEqual([["front", "front"]]);
     expect(on.notes.join(" ")).toMatch(/RIFE/);
 
     const off = planFlyAround({ engine: "open", image, orbit }, { worldcast: false });
@@ -121,6 +127,9 @@ describe("the buttons prefer WorldCast when the worker answers", () => {
     expect(on.model.id).toBe("oss-worldcast");
     expect(on.blocker).toBeUndefined();
     expect(on.steps.at(-1)?.request.feature).toBe("cinema-path");
+    expect(readLayout(on.steps.at(-1)?.request.params?.extra?.worldcast).anchors.map((a) => a.view)).toEqual(["front"]);
+    // The take remembers WorldCast's own length and the keys it filmed.
+    expect(pathTake(input, on)).toEqual({ keys: on.steps.at(-1)?.request.params?.cameraPath, duration: 81 / 15 });
     const off = planCinema({ ...input, path: { ...input.path, render: "/api/files/uploads/r.webm" } }, { worldcast: false });
     expect(off.model.id).toBe("oss-uni3c-path");
     expect(off.notes).toContain(FALLBACK);
@@ -157,13 +166,28 @@ describe("public sign-up", () => {
     // The owner, with no worker set: Fly path says what it films on.
     expect(worldcastContext()).toBe(false);
   });
+
+  it("keeps the Uni3C / Frames run, saying nothing, when a step WorldCast needs is switched off", async () => {
+    const { changeAccess } = await import("@/server/model-access");
+    const { worldcastContext } = await import("@/server/worldcast-on");
+    expect(worldcastContext()).toBe(false);
+    try {
+      for (const id of ["oss-person-mask", "oss-scene-moge", "oss-worldcast"]) {
+        changeAccess([{ kind: "model", id, on: false }]);
+        expect(worldcastContext()).toBeUndefined();
+        changeAccess([{ kind: "reset" }]);
+      }
+    } finally {
+      changeAccess([{ kind: "reset" }]);
+    }
+  });
 });
 
 const ffmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
 
 describe.skipIf(!ffmpeg)("the server's case", async () => {
   const sharp = (await import("sharp")).default;
-  const { buildCase } = await import("@/server/worldcast-case");
+  const { ANCHOR_MAX_SIDE, buildCase } = await import("@/server/worldcast-case");
   it("crops the still to 480 × 832, renders the path and its holes at 81 frames, and keeps each view whole", async () => {
     const still = await sharp({ create: { width: 320, height: 240, channels: 3, background: "#2050a0" } }).png().toBuffer();
     const mask = await sharp({ create: { width: 320, height: 240, channels: 3, background: "#000" } })
@@ -188,5 +212,20 @@ describe.skipIf(!ffmpeg)("the server's case", async () => {
       const probe = spawnSync("ffprobe", ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=width,height,nb_read_frames,r_frame_rate", "-of", "csv=p=0", f], { encoding: "utf8" });
       expect(probe.stdout.trim()).toBe("480,832,15/1,81");
     }
+  }, 60_000);
+
+  it("brings a big view down to the demo's scale before the worker crops it, with its mask the same size", async () => {
+    const still = await sharp({ create: { width: 320, height: 240, channels: 3, background: "#2050a0" } }).png().toBuffer();
+    const mask = await sharp({ create: { width: 320, height: 240, channels: 3, background: "#fff" } }).png().toBuffer();
+    const depth = await sharp({ create: { width: 160, height: 120, channels: 3, background: "#808080" } }).png().toBuffer();
+    const view = await sharp({ create: { width: 2000, height: 3000, channels: 3, background: "#a03020" } }).png().toBuffer();
+    const viewMask = await sharp({ create: { width: 500, height: 750, channels: 3, background: "#fff" } }).png().toBuffer();
+    const layout = worldcastLayout(["back"]);
+    const keys = [{ t: 0, azimuth: 0, elevation: 0, distance: 1 }, { t: 1, azimuth: -90, elevation: 0, distance: 1 }];
+    const { parts } = await buildCase({ layout, images: [still, view, mask, viewMask, depth], keys });
+    const file = (n: string) => (parts.find((p) => p.name === n) as { data: Uint8Array }).data;
+    expect(ANCHOR_MAX_SIDE).toBe(1344);
+    expect(await sharp(file("anchor_back.png")).metadata()).toMatchObject({ width: 896, height: 1344 });
+    expect(await sharp(file("anchor_back_mask.png")).metadata()).toMatchObject({ width: 896, height: 1344 });
   }, 60_000);
 });

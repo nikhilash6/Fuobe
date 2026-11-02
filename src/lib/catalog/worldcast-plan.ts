@@ -36,7 +36,7 @@ export function worldcastNote(views: number, depth: WorldcastDepth = "moge"): st
 }
 
 /** Said after the run: what else the clip can go through. */
-export const WORLDCAST_AFTER = "In Upscale, FPS Boost (RIFE) takes the clip to 24 fps and the upscalers enlarge it";
+export const WORLDCAST_AFTER = "Upscale, under the finished clip, opens it in Upscale: FPS Boost (RIFE) takes it to 24 fps and the upscalers enlarge it";
 
 /** A picture of the run: a file, or what an earlier step makes. */
 export type WorldcastSource = { url: string } | { key: string };
@@ -84,12 +84,16 @@ const one = (src: WorldcastSource): Pick<WorldcastStep, "after"> & { request: Pi
 
 /** The steps of a WorldCast run, film last (key "main"); numbered as one run. */
 export function worldcastSteps(input: WorldcastInput): WorldcastStep[] {
-  const layout = worldcastLayout(input.anchors.map((a) => a.side));
-  const anchors = layout.anchors.map((a) => input.anchors.find((x) => x.side === a.side)!.src);
+  const still = input.still ?? { url: "/api/files/placeholder.png" };
+  // WorldCast's "front" anchor is the first frame's own camera (the demo's body_views_meta: front = source frame 0). Without a
+  // body view the pipeline drops every anchor, the first frame's included, which the released checkpoint never ran: so the
+  // still is always the front's anchor when no front view is given.
+  const given = input.anchors.some((a) => a.side === "front") ? input.anchors : [{ side: "front" as const, src: still }, ...input.anchors];
+  const layout = worldcastLayout(given.map((a) => a.side));
+  const anchors = layout.anchors.map((a) => given.find((x) => x.side === a.side)!.src);
   const stepFeature = input.stepFeature ?? input.feature;
   const depth = input.depth ?? "moge";
   const steps: WorldcastStep[] = [];
-  const still = input.still ?? { url: "/api/files/placeholder.png" };
   const pre = (key: string, src: WorldcastSource, request: Omit<GenerationRequest, "inputs" | "chain">): WorldcastStep => {
     const o = one(src);
     return { key, request: { ...request, ...o.request }, ...(o.after && { after: o.after }) };

@@ -18,6 +18,12 @@ import { scratchDir } from "./storage";
  */
 
 const MAX_POINTS = 300_000;
+/**
+ * The longest side an anchor picture is sent at. The worker crops each anchor to the person at the size it gets, and
+ * WorldCast encodes that crop at its own size: the demo's body views are cut from 768 × 1344 frames, so a phone photo is
+ * brought down to that scale first (a 4000 × 6000 photo would otherwise add tens of thousands of tokens per anchor).
+ */
+export const ANCHOR_MAX_SIDE = 1344;
 
 export interface CaseInput {
   layout: WorldcastLayout;
@@ -83,9 +89,11 @@ export async function buildCase(input: CaseInput): Promise<{ parts: CasePart[]; 
     const anchors = await Promise.all(
       input.layout.anchors.map(async (_, i) => {
         const pic = input.images[slots.anchor(i)];
-        const size = await sizeOf(pic);
+        const full = await sizeOf(pic);
+        const scale = Math.min(1, ANCHOR_MAX_SIDE / Math.max(full.width, full.height));
+        const size = { width: Math.max(1, Math.round(full.width * scale)), height: Math.max(1, Math.round(full.height * scale)) };
         return {
-          image: await sharp(pic, { failOn: "none" }).rotate().removeAlpha().png().toBuffer(),
+          image: await sharp(pic, { failOn: "none" }).rotate().removeAlpha().resize(size.width, size.height, { fit: "fill" }).png().toBuffer(),
           mask: await binaryMask(input.images[slots.anchorMask(i)], size),
         };
       }),

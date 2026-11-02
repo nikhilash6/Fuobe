@@ -46,7 +46,10 @@ One run is a few steps (`src/lib/catalog/worldcast-plan.ts`):
      480 × 832 frame from the crop's field of view (Fuobe's default 24 mm lens);
    - `render.mp4` and `render_mask.mp4`: the still's point cloud (its MoGe depth) drawn along those poses, 81 frames at
      15 fps, H.264; the mask is white (255) where no point landed (a hole) and black (0) where one did;
-   - the anchors: the views with WorldCast's names and azimuths (below), each with its SAM 3.1 mask, at their own size;
+   - the anchors: the views with WorldCast's names and azimuths (below), each with its SAM 3.1 mask, brought down to a
+     longest side of 1344 px (the demo's body views are cut from 768 × 1344 frames) and never enlarged. The still is
+     always the `front` anchor when no front view is given: the pipeline drops every anchor, the first frame's
+     included, when it has no body view, and the released checkpoint was never trained that way;
    - `anchors_aligned_camera_info.json`: each anchor's camera on a level ring at the subject's distance, looking at
      it. This is a guess: the paper aligns real cameras with VGGT-Omega. Without the file WorldCast skips the anchors'
      Plücker rays; the quality impact of either is unknown.
@@ -71,6 +74,11 @@ camera goes round to its left, so (`worldcastAnchor`):
 ## Contract
 
 All bodies are JSON unless said. Errors answer `{"error": "…"}` with an HTTP status.
+
+Authentication: when the worker has a `WORLDCAST_TOKEN`, every call (health included) needs
+`Authorization: Bearer <token>`, and answers 401 without it. Fuobe sends its own `WORLDCAST_TOKEN` setting (environment)
+on every call and on the clip's download. A worker without a token must listen on `127.0.0.1` only. `POST /cases` and
+`POST /depth` need a `Content-Length` (411 without one; 413 over 512 MB).
 
 ### `GET {WORLDCAST_URL}/health`
 

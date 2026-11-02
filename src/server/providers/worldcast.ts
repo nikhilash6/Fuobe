@@ -1,7 +1,7 @@
 import "server-only";
 import { readLayout } from "@/lib/worldcast";
 import { buildCase } from "../worldcast-case";
-import { WORKER_DEPTH, cancelJob, jobDepthUrl, jobStatus, jobVideoUrl, submitCase, submitDepth, worldcastBase, worldcastHealth, type WorkerDepth } from "../worldcast";
+import { WORKER_DEPTH, cancelJob, jobDepthUrl, jobStatus, jobVideoUrl, submitCase, submitDepth, worldcastBase, worldcastHeaders, worldcastHealth, type WorkerDepth } from "../worldcast";
 import type { ProviderAdapter } from "./types";
 import { ProviderError } from "./types";
 
@@ -10,6 +10,12 @@ import { ProviderError } from "./types";
  * is made (src/server/worldcast-case.ts) and sent as one multipart POST; polls read the job, and the clip is fetched from
  * the worker when it is done. Open engine, the studio's own GPU only (accountRun refuses an account: not ComfyUI, not a key).
  */
+
+/** The worker's Bearer header for the clip's download, when a WORLDCAST_TOKEN is set. */
+function auth(): { headers?: Record<string, string> } {
+  const headers = worldcastHeaders();
+  return Object.keys(headers).length ? { headers } : {};
+}
 
 const DATA_URI = /^data:([^;,]+);base64,(.*)$/s;
 
@@ -58,8 +64,8 @@ export const worldcastProvider: ProviderAdapter = {
 
   async poll({ externalId, meta }) {
     const job = await jobStatus(externalId);
-    if (job.status === "succeeded" && typeof meta.depth === "string") return { state: "succeeded", outputs: [{ url: jobDepthUrl(externalId), kind: "image", contentType: "image/png", meta: { role: "depth" } }] };
-    if (job.status === "succeeded") return { state: "succeeded", outputs: [{ url: jobVideoUrl(externalId), kind: "video", contentType: "video/mp4", meta: { fps: 15 } }] };
+    if (job.status === "succeeded" && typeof meta.depth === "string") return { state: "succeeded", outputs: [{ url: jobDepthUrl(externalId), kind: "image", contentType: "image/png", ...auth(), meta: { role: "depth" } }] };
+    if (job.status === "succeeded") return { state: "succeeded", outputs: [{ url: jobVideoUrl(externalId), kind: "video", contentType: "video/mp4", ...auth(), meta: { fps: 15 } }] };
     if (job.status === "failed") return { state: "failed", error: job.error };
     return { state: job.status, ...(job.progress !== undefined && { progress: job.progress }), message: job.message ?? (job.status === "queued" ? "Waiting for the WorldCast worker" : "WorldCast is filming") };
   },

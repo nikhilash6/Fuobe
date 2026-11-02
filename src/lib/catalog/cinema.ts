@@ -13,6 +13,7 @@ import { soulRecipe } from "./soul";
 import { planTurnaround, type TurnaroundInput } from "./turnaround";
 import { planFlyAround } from "./fly-around";
 import { WORLDCAST_AFTER, WORLDCAST_MODELS, WORLDCAST_SECONDS, worldcastFallback, worldcastNote, worldcastSteps } from "./worldcast-plan";
+import { WORLDCAST_RUN } from "@/lib/worldcast";
 import { exactDefaults, exactSummary, normalizeExact, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 import { CAST_LOOK } from "./soul-cards";
 import type { Engine, GenerationRequest, GenParams, LoraRef, ModelDef, Operation } from "./types";
@@ -2198,8 +2199,10 @@ function planPath(input: CinemaGenerateInput, ctx: CinemaContext = {}): CinemaPl
 
 /** What a filmed path's take remembers: the keys it was planned with (from the photo's pose) and the clip's real length. */
 export function pathTake(input: Pick<CinemaGenerateInput, "engine" | "path">, plan: CinemaPlan): CinemaTakeInfo["path"] {
-  const params = plan.steps[0]?.request.params;
-  const duration = input.engine === "open" ? PATH_FRAMES / PATH_FPS : (params?.duration ?? 5);
+  // WorldCast's plan measures depth and masks first: the film is its last step, 81 frames at 15 fps.
+  const worldcast = plan.model.id === WORLDCAST_MODELS.film;
+  const params = (worldcast ? plan.steps.at(-1) : plan.steps[0])?.request.params;
+  const duration = worldcast ? WORLDCAST_RUN.frames / WORLDCAST_RUN.fps : input.engine === "open" ? PATH_FRAMES / PATH_FPS : (params?.duration ?? 5);
   return { keys: params?.cameraPath ?? normalizeKeys(input.path?.keys ?? []), duration, ...(input.path?.preset ? { preset: input.path.preset } : {}) };
 }
 

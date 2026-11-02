@@ -64,8 +64,10 @@ It loads the weights in the background: `GET /health` answers `"ok": false` unti
 in Fuobe, in **Settings → Open-source engine → WorldCast worker URL** (or `WORLDCAST_URL=http://127.0.0.1:8190`), and
 press **Save & test**.
 
-Listen on `127.0.0.1` when Fuobe runs on the same machine. The worker has no login: if Fuobe runs elsewhere, put it
-behind a tunnel or a proxy that only Fuobe's server can reach.
+Listen on `127.0.0.1` (the default) when Fuobe runs on the same machine. If Fuobe runs elsewhere, never leave the worker
+open: set `WORLDCAST_TOKEN` to a long random secret here and the same value as `WORLDCAST_TOKEN` in Fuobe's environment
+(Fuobe sends it as `Authorization: Bearer …` on every call, and the worker answers 401 without it), and put it behind a
+tunnel or a proxy that only Fuobe's server can reach. The server warns when it listens beyond this machine without a token.
 
 | Variable | Default |
 |---|---|
@@ -75,6 +77,7 @@ behind a tunnel or a proxy that only Fuobe's server can reach.
 | `WORLDCAST_BASE_DIT` | `$WORLDCAST_REPO/checkpoints/base_dit.safetensors` |
 | `WORLDCAST_WORK_DIR` | `$WORLDCAST_REPO/fuobe_jobs` (the 50 latest jobs are kept) |
 | `WORLDCAST_DEPTH_PRO` | `$WORLDCAST_REPO/checkpoints/depth_pro.pt` |
+| `WORLDCAST_TOKEN` | none: no token asked (keep it on `127.0.0.1` then) |
 
 ## Optional: the paper's depth model
 
