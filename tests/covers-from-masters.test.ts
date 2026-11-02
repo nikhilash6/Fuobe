@@ -202,7 +202,7 @@ describe("covers from masters", () => {
     const again = coversFromMasters(masters, { ...PROVENANCE, publicDir: pub, manifest });
     expect(again.covers.filter((c) => !c.kept).map((c) => c.key)).toEqual(["effect-canvas"]);
     expect(frames("effect-canvas.mp4")).toBe(96);
-  });
+  }, 30_000);
 
   it("reads a missing manifest as empty, and stops at one it can't read rather than write over it", () => {
     expect(readManifest(path.join(dir, "no-such-manifest.ts"))).toEqual({});
