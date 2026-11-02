@@ -51,6 +51,24 @@ describe("MCP server", () => {
     expect(await rpc("tools/call", { name: "rm_rf" })).toMatchObject({ error: { code: -32602 } });
   });
 
+  it("serves run_skill (W3): listed, priced by estimate_job, and named in the instructions of version 1.3.0", async () => {
+    const init = (await rpc("initialize", { protocolVersion: "2025-06-18" })) as { result: { serverInfo: { version: string }; instructions: string } };
+    expect(init.result.serverInfo.version).toBe("1.3.0");
+    expect(init.result.instructions).toMatch(/run_skill/);
+    const r = (await rpc("tools/list")) as { result: { tools: { name: string; description: string; inputSchema: { properties: Record<string, { enum?: string[] } & Record<string, unknown>> }; annotations: { readOnlyHint: boolean; openWorldHint: boolean } }[] } };
+    const run = r.result.tools.find((t) => t.name === "run_skill")!;
+    expect(run).toBeDefined();
+    expect(run.annotations).toEqual({ readOnlyHint: false, openWorldHint: true });
+    expect(run.description).toMatch(/estimate_job/);
+    expect(Object.keys(run.inputSchema.properties)).toEqual(["name", "values", "rows", "engine"]);
+    const estimate = r.result.tools.find((t) => t.name === "estimate_job")!;
+    expect(estimate.inputSchema.properties.tool.enum).toContain("run_skill");
+    // A skill without a recipe is a tool error that names the skills that run by themselves.
+    const est = (await rpc("tools/call", { name: "estimate_job", arguments: { tool: "run_skill", arguments: { name: "product-photoshoot" } } })) as { result: { isError: boolean; content: { text: string }[] } };
+    expect(est.result.isError).toBe(true);
+    expect(est.result.content[0].text).toMatch(/doesn't run by itself/);
+  });
+
   it("runs a tool and returns MCP content", async () => {
     const r = (await rpc("tools/call", { name: "search_models", arguments: { kind: "video", query: "kling" } })) as { result: { content: { type: string; text: string }[] } };
     const body = JSON.parse(r.result.content[0].text) as { models: { id: string }[] };

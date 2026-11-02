@@ -98,6 +98,8 @@ describe("Assist is the owner's", () => {
     ["POST", "/api/assist/skills"],
     ["POST", "/api/assist/skills/upload"],
     ["POST", "/api/assist/skills/draft"],
+    // Save as skill from a chat (W3) drafts and names through these two.
+    ["POST", "/api/assist/skills/draft/name"],
     ["PATCH", "/api/assist/skills/ad-multiplier"],
     ["POST", "/api/assist/skills/product-photoshoot/run"],
     ["POST", "/api/assist/memory"],
