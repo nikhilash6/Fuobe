@@ -146,6 +146,19 @@ describe("the WorldCast models", () => {
   });
 });
 
+describe("public sign-up", () => {
+  it("never sends an account's run to the studio's worker, and says nothing about it to a visitor", async () => {
+    const { accountRun, asVisitor } = await import("@/server/generations");
+    const { runAsTenant } = await import("@/server/tenant");
+    const { worldcastContext } = await import("@/server/worldcast-on");
+    expect(accountRun("acct-1", "worldcast")).toMatchObject({ code: "own-gpu-tool" });
+    expect(runAsTenant({ kind: "account", id: "acct-1" }, () => worldcastContext())).toBeUndefined();
+    expect(asVisitor(null, () => worldcastContext())).toBeUndefined();
+    // The owner, with no worker set: Fly path says what it films on.
+    expect(worldcastContext()).toBe(false);
+  });
+});
+
 const ffmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
 
 describe.skipIf(!ffmpeg)("the server's case", async () => {

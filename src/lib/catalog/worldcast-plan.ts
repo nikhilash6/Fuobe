@@ -36,7 +36,7 @@ export function worldcastNote(views: number, depth: WorldcastDepth = "moge"): st
 }
 
 /** Said after the run: what else the clip can go through. */
-export const WORLDCAST_AFTER = "Smooth it to 24 fps with RIFE, or upscale it, from the result's menu";
+export const WORLDCAST_AFTER = "In Upscale, FPS Boost (RIFE) takes the clip to 24 fps and the upscalers enlarge it";
 
 /** A picture of the run: a file, or what an earlier step makes. */
 export type WorldcastSource = { url: string } | { key: string };

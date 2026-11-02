@@ -1916,6 +1916,8 @@ const POLL_MS = 1500;
 const FAST_POLL_MS = 500;
 /** How long a job may run once its provider has started it… */
 const TIMEOUT_MS = 45 * 60 * 1000;
+/** …except on the WorldCast worker (N7-9): 50 steps at CFG 5 on a 14B model, tens of minutes a clip (its time is unpublished). */
+const WORLDCAST_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 /** …and how long it may wait in the provider's queue first (a busy local GPU works through jobs one by one). */
 const QUEUE_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 /** A row this old with no external id, that no submit in this process is working on, was cut off by a restart. */
@@ -2135,7 +2137,8 @@ async function pollOne(r: Row): Promise<void> {
     }
     // A job that has just left the queue gets its full running time from now.
     const startsNow = res?.state === "running" && !run.started_at;
-    const overdue = run.started_at ? now - run.started_at > TIMEOUT_MS : !startsNow && now - run.submitted_at > queueMs;
+    const runMs = r.provider === "worldcast" ? WORLDCAST_TIMEOUT_MS : TIMEOUT_MS;
+    const overdue = run.started_at ? now - run.started_at > runMs : !startsNow && now - run.submitted_at > queueMs;
     if (overdue) {
       // Stop the provider's job too, so it doesn't keep rendering (or billing) for nothing.
       await adapterFor(r.provider, account)
@@ -2144,7 +2147,7 @@ async function pollOne(r: Row): Promise<void> {
       update(r.id, {
         status: "failed",
         error: run.started_at
-          ? `Timed out after ${TIMEOUT_MS / 60_000} minutes`
+          ? `Timed out after ${runMs / 60_000} minutes`
           : res?.state === "queued" && res.timeoutError
             ? res.timeoutError
             : onPool

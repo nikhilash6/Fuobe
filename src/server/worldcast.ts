@@ -167,6 +167,28 @@ export function jobVideoUrl(id: string): string {
   return `${worldcastBase()}/jobs/${id}/video`;
 }
 
+/** The extra depth models the worker may run (POST /depth). */
+export const WORKER_DEPTH = ["depth-pro", "vggt-omega"] as const;
+export type WorkerDepth = (typeof WORKER_DEPTH)[number];
+
+/** POST /depth: one picture's depth with the paper's own model, as a job; its picture is GET /jobs/{id}/depth.png. */
+export async function submitDepth(model: WorkerDepth, image: Buffer, contentType = "image/png"): Promise<string> {
+  const form = new FormData();
+  form.append("model", model);
+  form.append("image", new Blob([new Uint8Array(image)], { type: contentType }), "image.png");
+  const res = await call("/depth", { method: "POST", body: form }, 5 * 60_000);
+  if (!res.ok) throw await failure("a depth job", res);
+  const j = (await res.json().catch(() => ({}))) as { id?: unknown };
+  if (typeof j.id !== "string" || !JOB_ID.test(j.id)) throw new ProviderError("The WorldCast worker didn't answer with a job id");
+  return j.id;
+}
+
+/** A depth job's picture (GET /jobs/{id}/depth.png). */
+export function jobDepthUrl(id: string): string {
+  if (!JOB_ID.test(id)) throw new ProviderError("That isn't a WorldCast job");
+  return `${worldcastBase()}/jobs/${id}/depth.png`;
+}
+
 /** GET /jobs/{id}/video: the MP4. */
 export async function jobVideo(id: string): Promise<Buffer> {
   if (!JOB_ID.test(id)) throw new ProviderError("That isn't a WorldCast job");

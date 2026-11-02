@@ -1,7 +1,7 @@
 import "server-only";
 import { readLayout } from "@/lib/worldcast";
 import { buildCase } from "../worldcast-case";
-import { cancelJob, jobStatus, jobVideoUrl, submitCase, worldcastBase, worldcastHealth } from "../worldcast";
+import { WORKER_DEPTH, cancelJob, jobDepthUrl, jobStatus, jobVideoUrl, submitCase, submitDepth, worldcastBase, worldcastHealth, type WorkerDepth } from "../worldcast";
 import type { ProviderAdapter } from "./types";
 import { ProviderError } from "./types";
 
@@ -26,7 +26,16 @@ export const worldcastProvider: ProviderAdapter = {
   // Kept as data until the case is made: nothing is sent before submit.
   prepareFile: async (data, contentType) => `data:${contentType || "application/octet-stream"};base64,${data.toString("base64")}`,
 
-  async submit({ input }) {
+  async submit({ input, route }) {
+    // The paper's own depth models (Depth Pro, VGGT-Omega), when the worker has them: route endpoint "depth/<model>".
+    if (route.endpoint.startsWith("depth/")) {
+      const model = route.endpoint.slice(6) as WorkerDepth;
+      if (!WORKER_DEPTH.includes(model)) throw new ProviderError("The WorldCast worker doesn't run that model");
+      const still = input.images?.[0];
+      if (!still) throw new ProviderError("Add the still");
+      const id = await submitDepth(model, fileOf(still));
+      return { externalId: id, meta: { depth: model }, payload: { job: id, depth: model } };
+    }
     const layout = readLayout(input.extra?.worldcast);
     const images = (input.images ?? []).map(fileOf);
     const keys = input.cameraPath ?? [];
@@ -47,8 +56,9 @@ export const worldcastProvider: ProviderAdapter = {
     };
   },
 
-  async poll({ externalId }) {
+  async poll({ externalId, meta }) {
     const job = await jobStatus(externalId);
+    if (job.status === "succeeded" && typeof meta.depth === "string") return { state: "succeeded", outputs: [{ url: jobDepthUrl(externalId), kind: "image", contentType: "image/png", meta: { role: "depth" } }] };
     if (job.status === "succeeded") return { state: "succeeded", outputs: [{ url: jobVideoUrl(externalId), kind: "video", contentType: "video/mp4", meta: { fps: 15 } }] };
     if (job.status === "failed") return { state: "failed", error: job.error };
     return { state: job.status, ...(job.progress !== undefined && { progress: job.progress }), message: job.message ?? (job.status === "queued" ? "Waiting for the WorldCast worker" : "WorldCast is filming") };

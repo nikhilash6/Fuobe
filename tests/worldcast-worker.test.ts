@@ -40,7 +40,15 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
-  const m = /^\/jobs\/([^/]+)(\/video)?$/.exec(url);
+  if (req.method === "POST" && url === "/depth") {
+    req.resume();
+    req.on("end", () => {
+      state.jobs.set("depth1", { status: "succeeded" });
+      send(200, { id: "depth1" });
+    });
+    return;
+  }
+  const m = /^\/jobs\/([^/]+)(\/video|\/depth\.png)?$/.exec(url);
   if (m) {
     const job = state.jobs.get(m[1]);
     if (req.method === "DELETE") {
@@ -160,6 +168,15 @@ describe("the WorldCast worker's client", () => {
     expect(state.canceled).toContain("job1");
     expect(worldcastProvider.isConfigured()).toBe(true);
     expect(await worldcastProvider.prepareFile(Buffer.from("x"), "image/png", "a.png")).toBe("data:image/png;base64,eA==");
+  });
+
+  it("runs the paper's depth model as a job when asked, and hands its picture on", async () => {
+    const route = { op: "edit", provider: "worldcast", endpoint: "depth/depth-pro" } as const;
+    const sub = await worldcastProvider.submit({ generationId: "g", model: {} as never, route: route as never, input: { images: ["data:image/png;base64,eA=="] } as never });
+    expect(sub).toMatchObject({ externalId: "depth1", meta: { depth: "depth-pro" } });
+    const polled = await worldcastProvider.poll({ externalId: "depth1", meta: sub.meta!, route: route as never, model: {} as never, createdAt: 0 });
+    expect(polled).toMatchObject({ state: "succeeded", outputs: [{ url: `http://127.0.0.1:${port}/jobs/depth1/depth.png`, kind: "image" }] });
+    await expect(worldcastProvider.submit({ generationId: "g", model: {} as never, route: { ...route, endpoint: "depth/nope" } as never, input: { images: ["data:image/png;base64,eA=="] } as never })).rejects.toThrow(/doesn't run that model/);
   });
 
   it("refuses an account's run, and says where to set the worker when none answers", async () => {
