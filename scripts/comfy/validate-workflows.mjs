@@ -88,6 +88,9 @@ function sampleValue(key, entry, uploads) {
     case 'cutout': return false;
     case 'invertDepth': return true;
     case 'tiledDecode': return true; // MiniMax Music 3's tiled decode branch (the default is the plain one)
+    case 'voiceDescription': return 'A warm, gravelly narrator in his sixties, unhurried.';
+    case 'voiceTranscript': return 'Hello, this is the voice reference.';
+    case 'device': return 'cpu';
     case 'video': case 'video2': case 'video3': case 'video4': return uploads.mp4;
     case 'audio': case 'audio2': return uploads.wav;
     case 'tracks': {

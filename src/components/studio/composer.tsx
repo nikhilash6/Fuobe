@@ -1,5 +1,6 @@
 "use client";
 
+import { OrbitPad, orbitOptions } from "@/components/studio/orbit-pad";
 import { ArrowUp, AtSign, Cloud, Cpu, GalleryHorizontalEnd, LayoutDashboard, Loader2, Sparkles, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -834,6 +835,11 @@ export function Composer({ docked }: { docked: boolean }) {
   const effectiveOp = studioOp ?? op;
   // Qwen-Image 2.1's Options → GPU on Small: what the small encoder can't do (or that a speed with its own graph wins).
   const smallGpuNote = qwen21Note(opts.controls, p.extra, effectiveOp);
+  // A setting an app's choices already set (the Angles app's angle, height and distance on QMA · 96 views) isn't asked twice.
+  const presetSets = new Set((preset?.options ?? []).flatMap((o) => o.choices.flatMap((c) => Object.keys(c.extra ?? {}))));
+  const shownControls = (opts.controls ?? []).filter((c) => !presetSets.has(c.param));
+  // The Angles app's camera: an orbit pad beside its chips.
+  const orbit = orbitOptions(preset?.options);
   // SDR to HDR, Export: every format the studio's models on this engine write; picking one this model doesn't
   // write moves the request to the model that does (EXR frames → LTX 2.3 HDR on the cloud).
   const engineModels = useMemo(() => models.filter((m) => m.engine === (model?.engine ?? engine)), [models, model?.engine, engine]);
@@ -1123,7 +1129,7 @@ export function Composer({ docked }: { docked: boolean }) {
           onStrength={(v) => setDraft({ presetStrength: v })}
         />
       )}
-      {opts.controls && <ControlsChip controls={opts.controls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} op={effectiveOp} />}
+      {shownControls.length > 0 && <ControlsChip controls={shownControls} values={p.extra ?? {}} onChange={setExtra} title={config.controlsTitle} op={effectiveOp} />}
     </>
   );
   const hasSecondary =
@@ -1349,6 +1355,7 @@ export function Composer({ docked }: { docked: boolean }) {
       {/* Preset options (apps) */}
       {preset?.options?.length ? (
         <div className="flex flex-wrap gap-3 px-1.5 pb-2">
+          {orbit && <OrbitPad options={orbit} values={draft.presetOptions} onChange={(next) => setDraft({ presetOptions: next })} />}
           {preset.options.map((o) => (
             <div key={o.key} role="radiogroup" aria-label={o.label} onKeyDown={radioKeys} className="flex flex-wrap items-center gap-1">
               <span className="mr-1 text-[12px] text-muted-foreground">{o.label}</span>

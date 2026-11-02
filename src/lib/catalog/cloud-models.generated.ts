@@ -18326,6 +18326,119 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "qwen-3-tts",
+    "name": "Qwen3-TTS (hosted)",
+    "vendor": "Alibaba Qwen",
+    "family": "qwen-tts",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Design a voice from a description, or clone one, in 10 languages",
+    "routes": [
+      {
+        "op": "voice-design",
+        "provider": "fal",
+        "endpoint": "fal-ai/qwen-3-tts/voice-design/1.7b",
+        "map": {
+          "prompt": "text",
+          "voiceDescription": "prompt",
+          "defaults": {
+            "max_new_tokens": 4096
+          }
+        }
+      },
+      {
+        "op": "tts",
+        "provider": "fal",
+        "endpoint": "fal-ai/qwen-3-tts/text-to-speech/1.7b",
+        "map": {
+          "prompt": "text",
+          "voice": "voice",
+          "voiceTranscript": "reference_text",
+          "voiceEmbedding": "speaker_voice_embedding_file_url",
+          "cloneFirst": {
+            "endpoint": "fal-ai/qwen-3-tts/clone-voice/1.7b",
+            "audio": "audio_url",
+            "text": "reference_text",
+            "output": "speaker_embedding"
+          },
+          "defaults": {
+            "max_new_tokens": 4096
+          }
+        }
+      }
+    ],
+    "options": {
+      "controls": [
+        {
+          "param": "language",
+          "label": "Language",
+          "values": [
+            "English",
+            "Chinese",
+            "Spanish",
+            "French",
+            "German",
+            "Italian",
+            "Japanese",
+            "Korean",
+            "Portuguese",
+            "Russian"
+          ]
+        }
+      ],
+      "voiceClone": true,
+      "voices": [
+        {
+          "id": "Vivian",
+          "name": "Vivian"
+        },
+        {
+          "id": "Serena",
+          "name": "Serena"
+        },
+        {
+          "id": "Uncle_Fu",
+          "name": "Uncle Fu"
+        },
+        {
+          "id": "Dylan",
+          "name": "Dylan"
+        },
+        {
+          "id": "Eric",
+          "name": "Eric"
+        },
+        {
+          "id": "Ryan",
+          "name": "Ryan"
+        },
+        {
+          "id": "Aiden",
+          "name": "Aiden"
+        },
+        {
+          "id": "Ono_Anna",
+          "name": "Ono Anna"
+        },
+        {
+          "id": "Sohee",
+          "name": "Sohee"
+        }
+      ]
+    },
+    "badges": [
+      "new"
+    ],
+    "defaults": {
+      "voice": "Vivian"
+    },
+    "pricing": {
+      "unit": "request",
+      "usd": 0.09,
+      "note": "per 1k chars; cloning a sample adds $0.0008 per minute of it"
+    }
+  },
+  {
     "id": "gemini-3-8-flash-tts",
     "name": "Gemini 3.8 Flash TTS",
     "vendor": "Google",
