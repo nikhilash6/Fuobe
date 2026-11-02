@@ -99,6 +99,8 @@ describe("other tab bars switch without a round trip", () => {
     const marketing = src("src/components/marketing/shell.tsx");
     expect(marketing).toMatch(/useTappedTab<SuiteTab>\(active\)/);
     expect(marketing).toMatch(/aria-current=\{t\.id === current \? "page" : undefined\}/);
+    // The other tools' pages go ahead of the sidebar's routes.
+    expect(marketing).toMatch(/useIdlePrefetch\(\s*TABS\.filter\(\(t\) => t\.id !== active\)\.map\(\(t\) => t\.href\),\s*"page",?\s*\)/);
   });
 
   it("the marketing suite's route skeletons draw its real header and tabs, the page's own tab current", () => {
@@ -216,10 +218,16 @@ describe("idle prefetches: the page's own tabs go before the sidebar's routes", 
     expect(order).toEqual(["tab music", "row image"]);
   });
 
-  it("with no tabs on the page, prefetches the sidebar's rows at the first idle moment", async () => {
+  it("with no tabs on the page, prefetches the sidebar's rows once the page's own prefetches have gone quiet", async () => {
     const { queueIdlePrefetch } = await load();
     queueIdlePrefetch("nav", "/image", () => order.push("row image"));
     idle[0]();
+    expect(order).toEqual([]);
+    tick(300);
+    answered("/gallery-card");
+    tick(400);
+    expect(order).toEqual([]);
+    tick(200);
     expect(order).toEqual(["row image"]);
   });
 

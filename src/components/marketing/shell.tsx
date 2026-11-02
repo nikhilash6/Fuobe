@@ -7,6 +7,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine } from "@/lib/api";
 import type { Engine } from "@/lib/catalog/types";
+import { useIdlePrefetch } from "@/lib/idle-prefetch";
 import { cn } from "@/lib/utils";
 import { isPlainClick, useTappedTab } from "@/lib/use-tapped-tab";
 
@@ -43,6 +44,12 @@ export function MarketingHeader({
   // (with its own header) replaces this one.
   const [tapped, tap] = useTappedTab<SuiteTab>(active);
   const current = tapped ?? active;
+  // The other tools are the likeliest next tap: their pages go ahead of the sidebar's routes (the "page" lane), so a busy
+  // prefetch queue never leaves a tab waiting on the server.
+  useIdlePrefetch(
+    TABS.filter((t) => t.id !== active).map((t) => t.href),
+    "page",
+  );
   // On a phone the tabs scroll sideways: bring the current one into view.
   useEffect(() => {
     const el = nav.current?.querySelector<HTMLElement>('[aria-current="page"]');

@@ -85,10 +85,9 @@ function flush() {
   lanes.nav.clear();
   for (const job of page) job.run();
   // Next serves a prefetch's route tree and shell (the sidebar's forty-odd routes) before any route's URL-specific part (a
-  // hub mode's own page), so the sidebar's rows go out only once the page's own tabs are in.
-  const go = () => nav.forEach((job) => job.run());
-  if (page.length && nav.length) afterPrefetched(page.map((job) => job.href), go);
-  else go();
+  // hub mode's own page, a tab's page), so the sidebar's rows go out only once the page's own tabs are in and the page's
+  // own prefetches (its links on screen) have gone quiet.
+  if (nav.length) afterPrefetched(page.map((job) => job.href), () => nav.forEach((job) => job.run()));
 }
 
 /** Queues one prefetch of `href` (`run`) for the next idle moment, in its lane. Returns a cancel. */
