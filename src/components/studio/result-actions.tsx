@@ -2,6 +2,9 @@
 
 import {
   ArchiveRestore,
+  Disc3,
+  Layers3,
+  ListMusic,
   AudioLines,
   BookmarkPlus,
   Box,
@@ -126,6 +129,9 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "delete-upload": Trash2,
   restore: ArchiveRestore,
   "restore-video": Palette,
+  "extend-song": ListMusic,
+  "remix-song": Disc3,
+  "song-stems": Layers3,
   "delete-forever": Trash2,
 };
 

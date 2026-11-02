@@ -44,6 +44,9 @@ export const H3_ORBIT_GRAPH: Record<string, string> = { "minimax-h3-i2v": "minim
  */
 export const REUSE_BED_GRAPH: Record<string, string> = { "voice-clean-reuse": "voice-clean-bed-reuse" };
 
+/** YuE2 with a song attached (Audio → Music's "Song to cover"): the cover graph sings its melody with the new style and lyrics. */
+export const YUE2_COVER_GRAPH: Record<string, string> = { "music-yue2-song": "music-yue2-cover" };
+
 export interface VariantRequest {
   op: string;
   /** Clips a join takes ("video-concat-{n}"). */
@@ -53,6 +56,8 @@ export interface VariantRequest {
   format?: string;
   /** A second audio track is given (a mux with a background stem). */
   audio2: boolean;
+  /** An audio input is given (a song to cover). */
+  audio?: boolean;
   extra: Record<string, unknown>;
   /** Is this workflow in the library. */
   has: (id: string) => boolean;
@@ -89,6 +94,8 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
   const fromLatent = REGEN_LATENT_GRAPH[endpoint];
   if (fromLatent && typeof r.extra.latentFrom === "string" && r.extra.latentFrom && r.has(fromLatent)) endpoint = fromLatent;
+  const cover = YUE2_COVER_GRAPH[endpoint];
+  if (cover && r.audio && r.has(cover)) endpoint = cover;
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
   return endpoint;

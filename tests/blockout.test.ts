@@ -491,7 +491,7 @@ describe("Cinema API: a blockout in demo mode", () => {
     expect(((await refused.json()) as { error: string }).error).toMatch(/takes MP4 or MOV blockouts, and this one is WebM/);
     const h3 = await generateRoute.POST(json({ input: film("cloud", { video: webm, seconds: 3, refs: [] }, { modelId: "minimax-h3-max-3d" }) }), params(p.id));
     expect(h3.status).toBe(201);
-  });
+  }, 60_000); // encodes real 8 s and 40 s clips with ffmpeg first
 
   it("refuses a blockout from outside Fuobe's files, and one past 60 s", async () => {
     const p = cinema.createProject({ name: "Bad" });

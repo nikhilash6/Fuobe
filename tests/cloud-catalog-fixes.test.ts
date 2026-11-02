@@ -185,7 +185,10 @@ describe("defaults the APIs would get wrong", () => {
     expect(buildPayload(route("sonilo-sfx").map!, { prompt: "rain" })).toMatchObject({ audio_format: "mp3" });
     expect(buildPayload(route("minimax-music-2-5").map!, { prompt: "lofi" })).toEqual({ prompt: "lofi", lyrics_optimizer: true });
     expect(buildPayload(route("whisper").map!, { audio: "a.mp3" })).toMatchObject({ chunk_level: "word" });
-    expect(getModel("mureka-song")!.options.controls!.map((c) => c.param)).toEqual(["model"]);
+    // Mureka 9.5 runs on its own route (nm10-music3): no Version, and a past run's Version isn't sent.
+    expect(route("mureka-song").endpoint).toBe("mureka/v9.5/generate/song");
+    expect(getModel("mureka-song")!.options.controls).toBeUndefined();
+    expect(buildPayload(route("mureka-song").map!, { prompt: "pop", extra: { model: "mureka-8" } })).toEqual({ prompt: "pop" });
     expect(getModel("seedream-5-flash-layers")!.pricing).toMatchObject({ unit: "request", usd: 0.135 });
     expect(getModel("veed-subtitles")!.pricing?.note).toMatch(/dynamic styles .* 2x/);
   });

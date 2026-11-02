@@ -338,6 +338,16 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
     // The face mosaic (O11): a demo picture; no masks, so the browser has nothing to pixelate.
     case "face-mosaic":
       return [{ url: svgUri(demoSvg(brief || "pixelated faces", ar, 6)), kind: "image", contentType: "image/svg+xml", meta: { demo: true } }];
+    // A song's stems (Mureka): its vocals and instruments, one track each.
+    case "song-stems":
+      return (
+        [
+          ["vocals", [330, 495]],
+          ["drums", [90, 140]],
+          ["bass", [55, 82]],
+          ["other", [262, 392]],
+        ] as const
+      ).map(([stem, tones]) => ({ url: toDataUri(demoWav(3, [tones[0], tones[1]]), "audio/wav"), kind: "audio" as const, contentType: "audio/wav", meta: { stem, demo: true } }));
     // The same tone, as long as the loop was asked to be (or the clips joined end to end).
     case "audio-loop":
       return [{ url: toDataUri(demoWav(clamp(Math.round(Number(meta.duration ?? 12)), 4, 30)), "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { demo: true } }];

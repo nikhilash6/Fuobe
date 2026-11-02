@@ -111,5 +111,15 @@
    "Seams for idol-2..9: IDOL_PRESETS, IDOL_QUALITIES, idolExtra, idolPhotoFor, IDOL_MODELS/isIdol and the photoCrop binding on 88:104. idol-5's ?image= handover gets the switch off automatically, if it passes a SlotValue without source 'upload'."
   ],
   "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/idol-1"
+  ],
+  "notMerged": [],
+  "conflicts": "resolved keeping both sides; generated files regenerated",
+  "checks": "batch of 6 (inbetweening, idol-1, person-remover-plus, nm10-h3-any-gpu, n7-7-exact-orbits, nm10-music3): typecheck 0, lint 0, vitest 5340 passed, 6 known + a blockout ffmpeg timeout (fixed in this push)",
+  "pushed": true,
+  "head": "c73f3218"
  }
 }
