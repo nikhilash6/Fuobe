@@ -26,7 +26,20 @@ const listSkills = defineTool({
       if (scored.some((x) => x.n)) list = scored.filter((x) => x.n).sort((a, b) => b.n - a.n).map((x) => x.s);
     }
     return {
-      content: JSON.stringify(list.map((s) => ({ name: s.name, title: s.title, description: s.description, whenToUse: s.whenToUse || undefined, loaded: ctx.thread?.skills.includes(s.name) || undefined }))),
+      content: JSON.stringify(
+        list.map((s) => {
+          // A recipe skill runs by itself with run_skill: its inputs by id and type.
+          const recipe = s.recipe ? skillRecipe(s.name) : null;
+          return {
+            name: s.name,
+            title: s.title,
+            description: s.description,
+            whenToUse: s.whenToUse || undefined,
+            loaded: ctx.thread?.skills.includes(s.name) || undefined,
+            ...(recipe && { runsByItself: { tool: "run_skill", inputs: recipe.params.map((p) => ({ id: p.id, type: p.type, label: p.label, ...(p.required && p.default === undefined && { required: true }) })) } }),
+          };
+        }),
+      ),
       items: [{ id: "", role: "tool", text: `Looked through ${list.length} skill${list.length === 1 ? "" : "s"}` }],
     };
   },

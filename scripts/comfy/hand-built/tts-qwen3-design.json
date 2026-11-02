@@ -1,0 +1,39 @@
+{
+  "1": {
+    "class_type": "AILab_Qwen3TTSVoiceDesign_Advanced",
+    "inputs": {
+      "text": "Hello! This is the voice you described, saying its first line.",
+      "instruct": "A warm, gravelly male narrator in his sixties, unhurried, with a slight smile in his voice.",
+      "model_size": "1.7B",
+      "device": "auto",
+      "precision": "bf16",
+      "language": "Auto",
+      "max_new_tokens": 4096,
+      "do_sample": true,
+      "top_p": 1.0,
+      "top_k": 50,
+      "temperature": 0.9,
+      "repetition_penalty": 1.05,
+      "attention": "auto",
+      "unload_models": false,
+      "seed": 42
+    },
+    "_meta": {
+      "title": "Qwen3-TTS voice design"
+    }
+  },
+  "2": {
+    "class_type": "SaveAudioMP3",
+    "inputs": {
+      "audio": [
+        "1",
+        0
+      ],
+      "filename_prefix": "fuobe/tts-qwen3-design",
+      "quality": "V0"
+    },
+    "_meta": {
+      "title": "Save MP3"
+    }
+  }
+}
