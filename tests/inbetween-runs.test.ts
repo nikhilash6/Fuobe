@@ -12,6 +12,7 @@ process.env.COMFYUI_URL = "http://127.0.0.1:9";
 const { setSetting } = await import("@/server/settings");
 const gens = await import("@/server/generations");
 const { saveFile } = await import("@/server/storage");
+const tools = await import("@/server/assist/tools");
 
 beforeAll(() => setSetting("demoMode", "auto"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -76,5 +77,24 @@ describe("Fuobe Animation runs", () => {
       gens.createGenerations({ feature: "video", modelId: "fuobe-animation", engine: "cloud", prompt: "x", inputs: { images: frames(2) }, params: { keyframeTimes: [0, 1], extra: { inbetween: timing } } }),
     ).toThrow(/your GPU/);
     expect(gens.listGenerations({ limit: 500 }).length).toBe(before);
+  });
+
+  it("takes keyframes with a timing per gap from Assist and MCP's generate tool", async () => {
+    const images = frames(3);
+    const job = { model_id: "fuobe-animation", prompt: "a cat stretches", images, gaps: [{ frames: 21, speed: 2, words: "it yawns" }, { frames: 17 }], still_mouth: true };
+    const plan = tools.planFor("generate", { summary: "Animate", jobs: [job] }, { engine: "open" });
+    expect(plan.error).toBeUndefined();
+    expect(plan.jobs[0]).toMatchObject({ modelId: "fuobe-animation", op: "keyframes", costUsd: 0 });
+    // The cloud keeps every frame: ×2 is refused there, with the reason.
+    const cloud = tools.planFor("generate", { summary: "Animate", jobs: [{ ...job, engine: "cloud" }] }, { engine: "cloud" });
+    expect(cloud.jobs[0].error).toMatch(/your GPU/);
+    const out = await tools.executeTool("generate", { summary: "Animate", jobs: [job] }, { engine: "open" });
+    expect(out.isError).toBeFalsy();
+    const result = JSON.parse(out.content as string)[0];
+    expect(result.error).toBeUndefined();
+    const id = (result.started as string[])[0];
+    const g = gens.getGeneration(id)!;
+    expect(g.request.params?.extra).toMatchObject({ inbetween: { gaps: [{ frames: 21, speed: 2, prompt: "it yawns" }, { frames: 17, speed: 1 }] }, stillMouth: true });
+    expect(g.request.params?.keyframeTimes).toEqual([0, 10 / 24, 26 / 24].map((t) => Math.round(t * 1000) / 1000));
   });
 });

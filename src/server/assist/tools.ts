@@ -2,6 +2,7 @@ import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { keyTimes, type InbetweenTiming, type PlaybackFps, type Speed } from "@/lib/inbetween";
 import { getModel, modelsFor } from "@/lib/catalog";
 import { offeredModels } from "../model-access";
 import { dualEngine, runsOn } from "@/lib/catalog/engines";
@@ -278,6 +279,15 @@ const Job = z.object({
   end_time: z.number().optional().describe("Trim: where the kept part ends, in seconds."),
   num_layers: z.number().int().optional().describe("Layers: how many layers to split the image into."),
   system: z.string().optional().describe("Write: extra instructions for the writer (tone, format, length)."),
+  keyframe_times: z.array(z.number()).optional().describe("Keyframes (2–10 images in order): each image's time in seconds, the first at 0."),
+  gaps: z
+    .array(z.object({ frames: z.number().int(), speed: z.number().int().optional(), words: z.string().optional() }))
+    .optional()
+    .describe(
+      "Keyframe animation (fuobe-animation): one entry per gap between neighbouring images: frames drawn (4n + 1, 17–81), speed (keep every Nth frame, 1–4; the cloud keeps every frame), and what happens in that gap.",
+    ),
+  playback_fps: z.number().int().optional().describe("Keyframe animation: 24 (snappier, the default on the GPU) or 16 (true time; the cloud plays at 16)."),
+  still_mouth: z.boolean().optional().describe("Keyframe animation: keep the character's mouth still between poses."),
   after: z
     .number()
     .int()
@@ -332,6 +342,7 @@ function asRequest(j: JobInput): GenerationRequest {
     ...(j.voice_audio && { voiceAudio: j.voice_audio }),
   };
   const shots = j.shots && j.shots > 1 ? shotList(getModel(currentModelId(j.model_id)), j.shots) : undefined;
+  const animation = animationOf(j);
   return {
     feature: "assist",
     modelId: j.model_id,
@@ -353,9 +364,24 @@ function asRequest(j: JobInput): GenerationRequest {
       endTime: j.end_time,
       numLayers: j.num_layers,
       ...(shots && { shots }),
-      ...(j.system && { extra: { system: j.system } }),
+      ...(j.keyframe_times?.length && { keyframeTimes: j.keyframe_times }),
+      ...((j.system || animation) && { extra: { ...(j.system && { system: j.system }), ...animation } }),
+      ...(animation?.inbetween && !j.keyframe_times?.length && { keyframeTimes: keyTimes({ ...animation.inbetween, fps: animation.inbetween.fps ?? (j.engine === "cloud" ? 16 : 24) }) }),
     },
   };
+}
+
+/** A keyframe animation's timing from a job (gaps, playback rate, still mouth), as the request carries it. */
+function animationOf(j: JobInput): { inbetween?: InbetweenTiming; stillMouth?: true } | undefined {
+  if (!j.gaps?.length && !j.playback_fps && !j.still_mouth) return undefined;
+  // Without a rate the engine's own plays it (24 fps on the GPU, 16 in the cloud: src/lib/inbetween.ts requestTiming).
+  const inbetween = j.gaps?.length
+    ? ({
+        gaps: j.gaps.map((g) => ({ frames: g.frames, speed: (g.speed ?? 1) as Speed, ...(g.words?.trim() && { prompt: g.words.trim() }) })),
+        ...(j.playback_fps && { fps: j.playback_fps as PlaybackFps }),
+      } as InbetweenTiming)
+    : undefined;
+  return { ...(inbetween && { inbetween }), ...(j.still_mouth && { stillMouth: true as const }) };
 }
 
 /** Where an earlier job's result goes in a later one, by what it is and what the later job does. */
