@@ -19,6 +19,7 @@ import {
   ImagePlus,
   Layers2,
   Palette,
+  Film,
   LayoutDashboard,
   Mic2,
   MicOff,
@@ -122,6 +123,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   "delete-upload": Trash2,
   restore: ArchiveRestore,
   "restore-video": Palette,
+  "export-pro": Film,
   "delete-forever": Trash2,
 };
 

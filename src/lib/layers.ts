@@ -239,7 +239,8 @@ export const TOOL_MODELS: Record<LayerTool, { cloud: string[]; open: string[] }>
   // reads it (fal lists $0 per compute second, real cost unverified: the catalog's $0.001 is a placeholder).
   "text-detect": { cloud: ["ideogram-3-text-layers", "florence-2-ocr"], open: ["oss-ocr-lines"] },
   "text-edit": { cloud: ["nano-banana-pro", "seedream-5-pro"], open: ["oss-qwen-image-21", "oss-qwen-image-21-turbo", "oss-krea2-edit"] },
-  "bg-remove": { cloud: ["birefnet-cloud", "ideogram-remove-bg"], open: ["oss-rmbg"] },
+  // Bria's guided cut-out takes optional words on what to keep or drop; FeyNoBg keeps fine hair (nm10-keying).
+  "bg-remove": { cloud: ["birefnet-cloud", "ideogram-remove-bg", "bria-guided-cutout"], open: ["oss-rmbg", "oss-matte-feynobg"] },
   regional: { cloud: ["seedream-5-pro", "nano-banana-pro"], open: ["oss-qwen-image-21", "oss-krea2-edit", "oss-fibo2-edit-turbo"] },
   // SeedVR2 restores detail as it enlarges; 4x ESRGAN is the quick choice.
   upscale: { cloud: ["topaz-image", "seedvr-image", "recraft-crisp"], open: ["oss-seedvr2-image", "oss-upscale-image"] },
@@ -377,6 +378,8 @@ export interface LayerModelInfo {
   pricing?: { unit: string; usd: number; note?: string; promo?: Pricing["promo"] };
   /** Providers its routes run on (demo detection: none of them connected). */
   providers: string[];
+  /** It takes words on what to keep or drop (Bria's guided cut-out): Remove background shows a box for them. */
+  guided?: boolean;
 }
 
 /** Cuts the background back out after an edit model repaints a transparent layer. */

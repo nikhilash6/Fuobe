@@ -14,6 +14,7 @@ import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
 import { canRerender, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
+import { exportsCleanly } from "./av/keying";
 
 export type OutputActionId =
   | "animate"
@@ -58,6 +59,7 @@ export type OutputActionId =
   | "delete-upload"
   | "restore"
   | "restore-video"
+  | "export-pro"
   | "delete-forever";
 
 export interface OutputAction {
@@ -140,6 +142,9 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("upscale", "Upscale", `/upscale/video?video=${q(o.url)}`);
       // Old, faded or black-and-white footage (Fuobe Restore): Video tools → Restore & colourise with the clip in.
       link("restore-video", "Restore & colourise", `/video-tools/restore?video=${q(o.url)}`);
+      // A mask or clean foreground from Remove background or Green screen: on to ProRes 4444 or EXR for the edit (Export runs on
+      // your GPU). A cut-out isn't offered: Export would drop its transparency (src/lib/av/keying.ts).
+      if (ctx.engineMode !== "cloud" && exportsCleanly(g.op, g.request?.params)) link("export-pro", "Export as ProRes or EXR", `/upscale/export?video=${q(o.url)}&format=prores_4444`);
       link("add-sound", "Add sound", `/audio/video?video=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?video=${q(o.url)}`);
       link("remove-dialogue", "Remove dialogue", `/video-tools/remove-dialogue?video=${q(o.url)}`);

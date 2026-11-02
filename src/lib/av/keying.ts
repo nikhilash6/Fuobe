@@ -22,9 +22,9 @@ export function keyFormatValues(format: VideoFormat | undefined, output: MatteOu
 
 /**
  * Whether a Remove background or Green screen result can go to Export (ProRes 4444, EXR) as it is. The export reads a
- * WebM's colour but not its transparency, so only the black-and-white mask (or a clip with no alpha) keeps everything there;
- * a cut-out keeps its alpha only when the key writes ProRes 4444 or EXR itself.
+ * WebM's colour but not its transparency, so only the black-and-white mask and the clean foreground (no alpha) keep
+ * everything there; a cut-out keeps its alpha only when the matte writes ProRes 4444 or EXR itself.
  */
 export function exportsCleanly(op: string | undefined, params: Pick<GenParams, "matteOutput"> | undefined): boolean {
-  return op === "bg-remove-video" && params?.matteOutput === "matte";
+  return op === "bg-remove-video" && (params?.matteOutput === "matte" || params?.matteOutput === "foreground");
 }

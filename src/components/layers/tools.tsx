@@ -701,6 +701,23 @@ function SimpleTool({
   );
 }
 
+/** Remove background: the subject on transparency; a guided model (Bria's) also takes words on what to keep or drop. */
+function RemoveBgTool() {
+  const picker = useToolModel("bg-remove");
+  const [guide, setGuide] = useState("");
+  const guided = !!picker.model?.guided;
+  return (
+    <SimpleTool tool="bg-remove" verb="Remove background" failedTitle="Failed to load image. Please try again." picker={picker} prompt={guided ? guide.trim() || undefined : undefined}>
+      <HowItWorks>Remove background finds the main subject of your image and cuts everything else away, giving you the subject on a transparent background.</HowItWorks>
+      {guided && (
+        <Field label="What to keep or drop (optional)" htmlFor="cutout-guide">
+          <Input id="cutout-guide" value={guide} onChange={(e) => setGuide(e.target.value)} maxLength={300} placeholder="e.g. “keep the shadow” or “without the hand”" className="h-9" />
+        </Field>
+      )}
+    </SimpleTool>
+  );
+}
+
 function RelightTool() {
   const { selected } = useEditor();
   const [light, setLight] = useState(RELIGHT_LIGHTS[0][0]);
@@ -1354,11 +1371,7 @@ export function ToolRail() {
               {tool === "decompose" && <DecomposeTool />}
               {/* Its rows belong to one scope: picking another layer (or the whole image) starts afresh. */}
               {tool === "edit-text" && <EditTextTool key={selected?.id ?? "whole"} />}
-              {tool === "remove-bg" && (
-                <SimpleTool tool="bg-remove" verb="Remove background" failedTitle="Failed to load image. Please try again.">
-                  <HowItWorks>Remove background finds the main subject of your image and cuts everything else away, giving you the subject on a transparent background.</HowItWorks>
-                </SimpleTool>
-              )}
+              {tool === "remove-bg" && <RemoveBgTool />}
               {tool === "regional" && <RegionalTool />}
               {/* Its painted area belongs to one layer (or the whole image): picking another starts afresh. */}
               {tool === "inpaint" && <InpaintTool key={selected?.id ?? "whole"} />}
