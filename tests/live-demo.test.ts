@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { ChangeCount } from "@/components/live/live-demo";
 import {
@@ -14,26 +15,29 @@ import {
   type DemoStep,
   demoEnds,
   demoProblems,
+  frameFile,
+  frameFiles,
   frameOrder,
   framePath,
   LIVE_DEMO,
   LIVE_DEMO_V,
   LOOP_MAX_MS,
   loopMs,
+  MID_W,
   pillText,
-  stepMs,
+  SMALL_W,
   SWEEP_MS,
   sweepPath,
+  tierFor,
   typeDelays,
   viewBefore,
   ZOOM_MAX,
-  ZOOM_MS,
 } from "@/lib/live/demo";
 
 /*
  * The recorded live edit session (public/previews/live-edit/demo.json) and its player (src/lib/live/demo.ts,
- * src/components/live/live-demo.tsx): the file plays, every frame is there, one round stays short, and the session is
- * one prompt that keeps growing.
+ * src/components/live/live-demo.tsx): the file plays, every frame is there in the sizes a card needs, one round stays
+ * short, the whole picture always shows, and the session is one prompt that keeps growing.
  */
 
 const PUBLIC = path.join(__dirname, "..", "public");
@@ -75,10 +79,10 @@ describe("the shipped demo", () => {
     expect(loopMs(shipped)).toBeLessThanOrEqual(LOOP_MAX_MS);
   });
 
-  it("is one prompt of eleven changes, each settled picture shown before the count goes up", () => {
+  it("is one prompt of ten changes or more, each settled picture shown before the count goes up", () => {
     const changes = shipped.script.flatMap((s, i) => (s.type === "change" ? [i] : []));
-    expect(changes).toHaveLength(11);
-    expect(countChanges(shipped)).toBe(11);
+    expect(changes.length).toBeGreaterThanOrEqual(10);
+    expect(countChanges(shipped)).toBe(changes.length);
     for (const [k, i] of changes.entries()) {
       const prev = shipped.script[i - 1];
       expect(prev).toMatchObject({ type: "frame", frame: `s${k + 1}` });
@@ -88,7 +92,7 @@ describe("the shipped demo", () => {
       if (next?.type === "type") expect(next.text.startsWith(", ")).toBe(true);
     }
     // The words at the end are the whole prompt: every change is still in it (a change may hold a comma of its own).
-    expect(viewBefore(shipped, shipped.script.length).typed.split(", ").length).toBeGreaterThanOrEqual(11);
+    expect(viewBefore(shipped, shipped.script.length).typed.split(", ").length).toBeGreaterThanOrEqual(changes.length);
     expect(shipped.script.at(-2)?.type).toBe("compare");
     expect(Object.keys(shipped.frames)[0]).toBe("s0");
     for (const id of Object.keys(shipped.frames)) expect(id).not.toMatch(/^\d+$/);
@@ -98,7 +102,7 @@ describe("the shipped demo", () => {
     const sha8 = (b: Buffer | string) => createHash("sha256").update(b).digest("hex").slice(0, 8);
     expect(sha8(shippedText)).toBe(LIVE_DEMO_V);
     for (const f of Object.values(shipped.frames)) {
-      for (const src of [f.src, f.small].filter(Boolean) as string[]) {
+      for (const src of frameFiles(f)) {
         expect(src).toMatch(/\?v=[0-9a-f]{8}$/);
         expect(src.split("?v=")[1]).toBe(sha8(fs.readFileSync(path.join(PUBLIC, framePath(src)))));
       }
@@ -113,31 +117,27 @@ describe("the shipped demo", () => {
     expect(demoEnds(shuffled)).toEqual(ends);
   });
 
-  it("zooms in on every small change, and back out before the settled picture", () => {
-    let zoom: Box | null = null;
-    let zoomed = 0;
-    for (const s of shipped.script) {
-      if (s.type === "zoom") {
-        zoom = s.box;
-        // A zoom that would keep the whole picture is left out.
-        if (s.box) expect(cameraFor(s.box).s).toBeGreaterThan(1);
-        if (s.box) zoomed++;
-      }
-      if (s.type === "change" || s.type === "compare" || (s.type === "frame" && !s.live)) expect(zoom).toBeNull();
-    }
-    expect(zoomed).toBeGreaterThanOrEqual(4);
+  it("keeps the whole picture: no step zooms in", () => {
+    expect(shipped.script.filter((s) => s.type === "zoom")).toEqual([]);
   });
 
-  it("starts each step's first live frame once the camera has finished moving in", () => {
-    shipped.script.forEach((s, i) => {
-      if (s.type !== "zoom" || !s.box) return;
-      let ms = s.ms;
-      for (const n of shipped.script.slice(i + 1)) {
-        if (n.type === "frame") break;
-        ms += stepMs(n);
+  it("has every settled picture at 1280, 768 and 512 px, and every live frame at 768 px or more, in AVIF and WebP", async () => {
+    expect(shipped.size).toEqual([1280, 960]);
+    const width = async (src: string) => (await sharp(path.join(PUBLIC, framePath(src))).metadata()).width;
+    const live = new Set(shipped.script.flatMap((s) => (s.type === "frame" && s.live ? [s.frame] : [])));
+    for (const [id, f] of Object.entries(shipped.frames)) {
+      expect(await width(f.src)).toBe(f.w ?? shipped.size[0]);
+      expect(f.small && (await width(f.small))).toBe(SMALL_W);
+      // A browser without AVIF gets WebP files, as wide as the AVIF ones.
+      for (const w of [f.webp, f.webpMid, f.webpSrc]) if (w) expect(w).toMatch(/\.webp\?/);
+      expect(f.webp && (await width(f.webp))).toBe(SMALL_W);
+      expect(f.webpSrc && (await width(f.webpSrc))).toBe(f.w ?? shipped.size[0]);
+      if (live.has(id)) expect(f.w).toBeGreaterThanOrEqual(MID_W);
+      else {
+        expect(f.mid && (await width(f.mid))).toBe(MID_W);
+        expect(f.webpMid && (await width(f.webpMid))).toBe(MID_W);
       }
-      expect(ms).toBeGreaterThanOrEqual(ZOOM_MS);
-    });
+    }
   });
 
   it("shows each live frame long enough to be drawn across and seen", () => {
@@ -146,6 +146,50 @@ describe("the shipped demo", () => {
 
   it("shows no timings: the pill says Live, nothing more", () => {
     expect(shippedText).not.toMatch(/Ms"\s*:/);
+  });
+});
+
+describe("the files a card loads", () => {
+  const settled = {
+    src: "/previews/x/1280/a.avif",
+    mid: "/previews/x/768/a.avif",
+    small: "/previews/x/512/a.avif",
+    webp: "/previews/x/512/a.webp",
+    webpMid: "/previews/x/768/a.webp",
+    webpSrc: "/previews/x/1280/a.webp",
+  };
+  const live = { src: "/previews/x/live/a.avif", w: 896, small: "/previews/x/live/512/a.avif", webp: "/previews/x/live/512/a.webp", webpSrc: "/previews/x/live/a.webp" };
+
+  it("is as wide as the card on the screen, in device pixels", () => {
+    // A 638 px card on a 2x screen, a 366 px card on a 3x phone, a 646 px card on a 1x screen, the 200 px Apps card.
+    expect(frameFile(settled, tierFor(638 * 2), 1280)).toBe(settled.src);
+    expect(frameFile(settled, tierFor(366 * 3), 1280)).toBe(settled.src);
+    expect(frameFile(settled, tierFor(646), 1280)).toBe(settled.mid);
+    expect(frameFile(settled, tierFor(200 * 2), 1280)).toBe(settled.small);
+    expect(frameFile(live, tierFor(638 * 2), 1280)).toBe(live.src);
+    expect(frameFile(live, tierFor(646), 1280)).toBe(live.src);
+    expect(frameFile(live, tierFor(200 * 2), 1280)).toBe(live.small);
+  });
+
+  it("waits for the card's width, and takes the largest file when none is as wide", () => {
+    expect(tierFor(0)).toBe(0);
+    expect(tierFor(Number.NaN)).toBe(0);
+    expect(tierFor(5000)).toBe(Number.POSITIVE_INFINITY);
+    expect(frameFile({ src: "/previews/x/a.webp" }, 2000, 1280)).toBe("/previews/x/a.webp");
+    expect(frameFile(settled, 1, 1280)).toBe(settled.small);
+  });
+
+  it("gives a browser without AVIF the WebP files, as wide as the card", () => {
+    expect(frameFile(settled, tierFor(638 * 2), 1280, false)).toBe(settled.webpSrc);
+    expect(frameFile(settled, tierFor(646), 1280, false)).toBe(settled.webpMid);
+    expect(frameFile(settled, tierFor(200 * 2), 1280, false)).toBe(settled.webp);
+    expect(frameFile(live, tierFor(638 * 2), 1280, false)).toBe(live.webpSrc);
+    expect(frameFile(live, tierFor(646), 1280, false)).toBe(live.webpSrc);
+    expect(frameFile(live, tierFor(200 * 2), 1280, false)).toBe(live.webp);
+    // A frame with only its small WebP still plays, from that file.
+    expect(frameFile({ src: "/previews/x/a.avif", webp: "/previews/x/a.webp" }, tierFor(638 * 2), 1280, false)).toBe("/previews/x/a.webp");
+    // No AVIF file reaches a browser without AVIF.
+    for (const need of [400, 646, 1276]) for (const f of [settled, live]) expect(frameFile(f, tierFor(need), 1280, false)).toMatch(/\.webp$/);
   });
 });
 

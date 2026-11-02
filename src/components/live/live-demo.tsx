@@ -3,34 +3,37 @@
 import { Zap } from "lucide-react";
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  cameraFor,
   changesWord,
   countChanges,
   type Demo,
   type DemoView,
   demoEnds,
   FADE_MS,
+  frameFile,
   frameOrder,
   LIVE_DEMO,
   LIVE_DEMO_V,
   pillText,
+  SETTLE_FADE_MS,
+  SMALL_W,
   startView,
   SWEEP_MS,
   sweepPath,
+  tierFor,
   typeDelays,
   viewBefore,
-  ZOOM_MAX,
-  ZOOM_MS,
 } from "@/lib/live/demo";
 import { cn } from "@/lib/utils";
 
 /**
- * A recorded live edit session, played back: one prompt that keeps growing. The camera moves in on the area a change
- * touches, the words type themselves onto the end of the prompt in the dock, each live frame is drawn across the
- * picture as it arrives, the full-quality picture settles, the camera pulls back out and the change count goes up;
- * at the end a compare sweep shows the original against the last picture. It loops, pauses off screen and in a hidden
- * tab and picks up where it stopped, and under reduced motion it is a still before/after. Frames load only once the
- * player is in view. No GPU, no requests beyond the files: guests, Home and the Apps card see it.
+ * A recorded live edit session, played back: one prompt that keeps growing. The words type themselves onto the end of
+ * the prompt in the dock, each live frame is drawn across the picture as it arrives, the full-quality picture settles
+ * and the change count goes up; at the end a compare sweep shows the original against the last picture. The whole
+ * picture always shows (a zoom step in the file is not played). It loops, pauses off screen and in a hidden tab and
+ * picks up where it stopped, and under reduced motion it is a still before/after. Each card loads the files as wide as
+ * it is on the screen, in the order the script shows them, once it is in view; the first picture shows from its small
+ * file at once and turns sharp when its sharp file is decoded, and never goes back. No GPU, no requests beyond the
+ * files: guests, Home and the Apps card see it.
  */
 
 export { LIVE_DEMO };
@@ -48,20 +51,46 @@ const loadDemo = () =>
 
 /** Each frame file is fetched and decoded once per page, however many players show it. */
 const decoded = new Map<string, Promise<void>>();
+/** The files decoded so far. */
+const done = new Set<string>();
 function ready(url: string) {
   let p = decoded.get(url);
   if (!p) {
     const img = new Image();
     img.decoding = "async";
     img.src = url;
-    // A failed decode is tried again the next time the frame is needed.
-    p = img.decode().catch(() => {
-      decoded.delete(url);
-    });
+    p = img.decode().then(
+      () => {
+        done.add(url);
+      },
+      // A failed decode is tried again the next time the frame is needed.
+      () => {
+        decoded.delete(url);
+      },
+    );
     decoded.set(url, p);
   }
   return p;
 }
+/** Files load this many at a time, in order, so the next frames are there first. */
+const LOAD_AT_ONCE = 4;
+function preload(urls: string[], alive: () => boolean) {
+  let i = 0;
+  const next = (): Promise<void> | undefined => (alive() && i < urls.length ? ready(urls[i++]).then(next) : undefined);
+  for (let k = 0; k < LOAD_AT_ONCE; k++) void next();
+}
+
+/** A 2×2 AVIF: a browser that can't show it gets the WebP files. */
+const AVIF_PROBE =
+  "data:image/avif;base64,AAAAHGZ0eXBhdmlmAAAAAG1pZjFhdmlmbWlhZgAAANZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABwaWN0AAAAAAAAAAAAAAAAAAAAACJpbG9jAAAAAERAAAEAAQAAAAAA+gABAAAAAAAAACEAAAAjaWluZgAAAAAAAQAAABVpbmZlAgAAAAABAABhdjAxAAAAAA5waXRtAAAAAAABAAAAVmlwcnAAAAA4aXBjbwAAAAxhdjFDgSACAAAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAABZpcG1hAAAAAAAAAAEAAQOBAgMAAAApbWRhdBIACgc4ADaQENBpMhQZQmMEwAA0AACQQMkY4Jp6ObLjaA==";
+let avifProbe: Promise<boolean> | null = null;
+const avifOk = () =>
+  (avifProbe ??= new Promise<boolean>((res) => {
+    const img = new Image();
+    img.onload = () => res(img.naturalWidth > 0);
+    img.onerror = () => res(false);
+    img.src = AVIF_PROBE;
+  }));
 /** A slow file never stalls the loop for long. */
 const READY_CAP_MS = 1200;
 
@@ -86,6 +115,32 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
   const [view, setView] = useState<DemoView | null>(null);
   /** The script step to run next, kept across pauses so the loop picks up where it stopped. */
   const at = useRef(0);
+  /**
+   * The files this card needs (see tierFor), and whether the browser shows AVIF; nothing loads before both are known.
+   * The card keeps the largest files it has needed, so a narrower window does not load smaller copies of them.
+   */
+  const [tier, setTier] = useState(0);
+  const [avif, setAvif] = useState<boolean | null>(null);
+  /** The first picture shows from its small file until its sharp one is decoded; once sharp, it stays sharp. */
+  const [firstSharp, setFirstSharp] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const on = () => setTier((t) => Math.max(t, tierFor(el.getBoundingClientRect().width * (window.devicePixelRatio || 1))));
+    on();
+    const ro = new ResizeObserver(on);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    void avifOk().then((ok) => alive && setAvif(ok));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -119,14 +174,21 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
     };
   }, []);
 
+  const fileOf = (id: string, need: number) => {
+    const f = demo?.frames[id];
+    return f && demo ? frameFile(f, need, demo.size[0], avif !== false) : "";
+  };
+  const first = demo ? (frameOrder(demo)[0] ?? demoEnds(demo).before) : null;
   const src = (id: string | null) => {
-    const f = id ? demo?.frames[id] : undefined;
-    return f ? (compact && f.small ? f.small : f.src) : "";
+    if (!id) return "";
+    const sharp = fileOf(id, tier);
+    // A still (reduced motion) loads nothing ahead, so it shows the sharp file straight away.
+    return id === first && !reduced && !firstSharp && !done.has(sharp) ? fileOf(id, SMALL_W) : sharp;
   };
 
   // The player: one step at a time, each with its own small animation, then round again.
   useEffect(() => {
-    if (!demo || reduced || !visible) return;
+    if (!demo || reduced || !visible || !tier || avif === null) return;
     let alive = true;
     const timers = new Set<ReturnType<typeof setTimeout>>();
     const wait = (ms: number) =>
@@ -137,18 +199,18 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
         }, ms);
         timers.add(t);
       });
-    const url = (id: string) => {
+    const url = (id: string, need = tier) => {
       const f = demo.frames[id];
-      return f ? (compact && f.small ? f.small : f.src) : "";
+      return f ? frameFile(f, need, demo.size[0], avif) : "";
     };
     const shown = (id: string) => Promise.race([ready(url(id)), wait(READY_CAP_MS)]);
     const order = frameOrder(demo);
     const { before, after } = demoEnds(demo);
-    // Every frame starts loading now, in the order the script shows them.
-    for (const id of order) void ready(url(id));
+    // The first picture already shows from its small file (it went into the page before this ran). Every frame now
+    // loads in the order the script shows them, and the first one's sharp file takes over once it is decoded.
+    preload(order.map((id) => url(id)), () => alive);
+    if (order[0]) void ready(url(order[0])).then(() => alive && setFirstSharp(true));
     void (async () => {
-      await shown(order[0] ?? before);
-      if (!alive) return;
       let i = at.current;
       let typed = "";
       if (i > 0) {
@@ -164,20 +226,20 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
           if (s.type === "frame") {
             await shown(s.frame);
             if (!alive) return;
-            // The same frame again (the original at a new round) keeps its slower fade back.
+            // The same frame again (the original at a new round) keeps its slower fade back; the full-quality picture
+            // fades in over the live frame before it gently, so it reads as the same picture settling.
             setView(
               (v) =>
                 v && {
                   ...v,
                   under: v.frame === s.frame ? v.under : v.frame,
                   frame: s.frame,
-                  fade: v.frame === s.frame ? v.fade : FADE_MS,
+                  fade: v.frame === s.frame ? v.fade : !s.live && v.sweep ? SETTLE_FADE_MS : FADE_MS,
                   sweep: !!s.live,
                 },
             );
             await wait(s.ms);
           } else if (s.type === "zoom") {
-            setView((v) => v && { ...v, zoom: s.box });
             if (s.ms > 0) await wait(s.ms);
           } else if (s.type === "type") {
             const base = typed;
@@ -214,7 +276,7 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
       alive = false;
       for (const t of timers) clearTimeout(t);
     };
-  }, [demo, reduced, visible, compact]);
+  }, [demo, reduced, visible, tier, avif]);
 
   const ends = demo ? demoEnds(demo) : null;
   // Under reduced motion the still compare shows, with nothing left over from a loop that was playing.
@@ -222,10 +284,9 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
   const ratio = demo ? `${demo.size[0]} / ${demo.size[1]}` : "4 / 3";
   const pill = v ? pillText(v, compact) : { main: "Live", count: null };
   const changes = v?.changes ?? 0;
-  const showImages = visible || view !== null;
-  // The small card keeps the whole picture: zoomed in, the typing bar would cover the change.
-  const cam = cameraFor(v?.zoom ?? null, compact ? 1 : ZOOM_MAX);
-  const sweep = sweepPath(cam);
+  // Nothing shows before the card knows which files it needs, so no file is fetched that it then drops.
+  const showImages = (visible || view !== null) && tier > 0 && avif !== null;
+  const sweep = sweepPath({ s: 1, x: 0 });
   // The typed text fades on the left only once it is wider than the bar; short text shows whole.
   const typedOuter = useRef<HTMLSpanElement>(null);
   const typedInner = useRef<HTMLSpanElement>(null);
@@ -242,20 +303,16 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
       {demo && ends && v && showImages && (reduced ? (
         <StillCompare before={src(ends.before)} after={src(ends.after)} changes={countChanges(demo)} />
       ) : (
-        // The camera: it glides in on the area a step changes while the live frames arrive, and back out to keep.
         <div
-          className="absolute inset-0 origin-top-left"
+          className="absolute inset-0"
           style={
             {
-              transform: `translate(${cam.x * 100}%, ${cam.y * 100}%) scale(${cam.s})`,
-              transition: `transform ${ZOOM_MS}ms cubic-bezier(.45,0,.2,1)`,
               "--sweep-from": `${sweep.from}%`,
               "--sweep-to": `${sweep.to}%`,
               "--scan-from": `${sweep.scanFrom}%`,
               "--scan-to": `${sweep.scanTo}%`,
             } as CSSProperties
           }
-          data-live-camera={cam.s > 1 ? cam.s : undefined}
         >
           {/* Both pictures sit in one keyed list, so the frame that drops underneath keeps its painted image. */}
           {[v.under, v.frame]

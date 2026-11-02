@@ -1,9 +1,9 @@
 /**
  * The recorded live edit session that guests, Home and the Apps card see (public/previews/live-edit/demo.json), and
  * the pure parts of its player: how long each step takes, where a paused loop picks up again, which frames are the
- * before and after, and where the camera sits when it zooms in on a change. The session is one prompt that keeps
- * growing: every frame renders all the words so far on the original. The player itself is
- * src/components/live/live-demo.tsx.
+ * before and after, which file of a frame a card needs, and where the camera sits when it zooms in on a change. The
+ * session is one prompt that keeps growing: every frame renders all the words so far on the start picture. The player
+ * itself is src/components/live/live-demo.tsx.
  */
 
 export const LIVE_DEMO = "/previews/live-edit/demo.json";
@@ -11,14 +11,18 @@ export const LIVE_DEMO = "/previews/live-edit/demo.json";
  * The file's content version: the first 8 hex digits of the SHA-256 of demo.json (line endings as \n). The player
  * fetches the file with it (?v=), so a new session reaches returning visitors at once; a test keeps it in step.
  */
-export const LIVE_DEMO_V = "78c8fd0c";
+export const LIVE_DEMO_V = "57bf61aa";
 
 /** A typed character never goes faster than this. */
 export const TYPE_MIN_CHAR_MS = 28;
 /** A space waits a little longer, the way people type. */
 export const TYPE_SPACE_MS = 40;
-/** The picture fades in over the last one; at the loop's restart it fades back to the original more slowly. */
+/**
+ * The picture fades in over the last one; the full-quality picture fades in over the live frame before it more slowly,
+ * and at the loop's restart it fades back to the original more slowly still.
+ */
 export const FADE_MS = 140;
+export const SETTLE_FADE_MS = 350;
 export const REWIND_MS = 320;
 /** One full round stays short enough to watch to the end. */
 export const LOOP_MAX_MS = 45_000;
@@ -31,11 +35,60 @@ export const ZOOM_MAX = 1.7;
 /** Room left around the changed area, as a share of its size on each side. */
 export const ZOOM_PAD = 0.12;
 
+/** The width of a frame's `mid` and `small` files. */
+export const MID_W = 768;
+export const SMALL_W = 512;
+
+/**
+ * One picture of the session, in up to three sizes. Every file may end in ?v= and the first 8 hex digits of its
+ * SHA-256, so a new file is never served from cache.
+ */
 export interface DemoFrame {
-  /** 960 px wide. It may end in ?v= and the first 8 hex digits of the file's SHA-256, so a new file is never served from cache. */
+  /** The sharpest file: `w` px wide (the demo's width when left out). */
   src: string;
-  /** 512 px wide, for the small card. */
+  w?: number;
+  /** MID_W px wide, for a card that needs no more. */
+  mid?: string;
+  /** SMALL_W px wide: the small card, and the first picture while its sharp file loads. */
   small?: string;
+  /** WebP copies of `small`, `mid` and `src`, for a browser that can't show AVIF. */
+  webp?: string;
+  webpMid?: string;
+  webpSrc?: string;
+}
+
+/**
+ * How wide a card's files need to be, from its width on the screen in device pixels: the small files, the middle ones
+ * or the sharpest (Infinity). 0 until the card is measured.
+ */
+export const tierFor = (devicePx: number) =>
+  !(devicePx > 0) ? 0 : devicePx <= SMALL_W / 0.92 ? SMALL_W : devicePx <= MID_W / 0.92 ? MID_W : Number.POSITIVE_INFINITY;
+
+const isAvif = (src: string) => /\.avif(\?|$)/i.test(src);
+
+/**
+ * The file of a frame for a card `need` device pixels wide (its width times the screen's pixel ratio): the smallest
+ * that is about as wide, or the largest there is. The WebP copies are only for a browser without AVIF, which gets no
+ * AVIF file.
+ */
+export function frameFile(f: DemoFrame, need: number, demoW: number, avif = true): string {
+  const full = f.w ?? demoW;
+  const files = [
+    { w: SMALL_W, src: f.small },
+    { w: MID_W, src: f.mid },
+    { w: full, src: f.src },
+    ...(avif
+      ? []
+      : [
+          { w: SMALL_W, src: f.webp },
+          { w: MID_W, src: f.webpMid },
+          { w: full, src: f.webpSrc },
+        ]),
+  ]
+    .filter((x): x is { w: number; src: string } => !!x.src && (avif || !isAvif(x.src)))
+    .sort((a, b) => a.w - b.w);
+  if (!files.length) return f.src;
+  return (files.find((x) => x.w >= need * 0.92) ?? files[files.length - 1]).src;
 }
 
 /** An area of the picture, as shares of its width and height: [left, top, right, bottom]. */
@@ -179,6 +232,9 @@ export function pillText(v: Pick<DemoView, "changes">, compact = false) {
   return { main: "Live", count: compact && v.changes > 1 ? String(v.changes) : null };
 }
 
+/** Every file of a frame. */
+export const frameFiles = (f: DemoFrame) => [f.src, f.mid, f.small, f.webp, f.webpMid, f.webpSrc].filter((x): x is string => !!x);
+
 /** A frame's file, without the ?v= content version. */
 export const framePath = (src: string) => src.split("?")[0];
 
@@ -194,7 +250,7 @@ export function demoProblems(d: Demo, exists?: (src: string) => boolean): string
   const ids = Object.keys(d.frames ?? {});
   if (!ids.length) out.push("no frames");
   for (const [id, f] of Object.entries(d.frames ?? {})) {
-    for (const src of [f.src, f.small].filter(Boolean) as string[]) {
+    for (const src of frameFiles(f)) {
       if (!src.startsWith("/previews/")) out.push(`frame ${id}: ${src} is not under /previews/`);
       else if (exists && !exists(framePath(src))) out.push(`frame ${id}: ${src} is missing`);
     }
