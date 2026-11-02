@@ -270,7 +270,8 @@ describe("What a References run can't carry is said, not dropped", () => {
 
   it("the Quality chip shows on words and frames only: References and Talk always run Pika H3 Flex", () => {
     const controls = getModel("oss-minimax-h3")!.options.controls!;
-    for (const op of ["t2v", "i2v", "flf2v"]) expect(controlsFor(controls, op).map((c) => c.param)).toEqual(["quality"]);
+    // GPU tier (nm10-h3-any-gpu) shows beside it on the same modes; no smaller build runs references, so neither shows there.
+    for (const op of ["t2v", "i2v", "flf2v"]) expect(controlsFor(controls, op).map((c) => c.param)).toEqual(["quality", "gpuTier"]);
     for (const op of ["ref2v", "avatar"]) expect(controlsFor(controls, op)).toEqual([]);
   });
 
