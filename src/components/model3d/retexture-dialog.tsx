@@ -58,7 +58,7 @@ export function RetextureDialog({ glb, open, onOpenChange, cloudAllowed }: { glb
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Retexture</DialogTitle>
-          <DialogDescription>The same model with new textures: describe the look, or add a picture of the style. PBR maps are included.</DialogDescription>
+          <DialogDescription>The same model with new textures: describe the look, or add a picture of the style. Realistic surface detail — shine, roughness and bumps — is included.</DialogDescription>
         </DialogHeader>
         {!cloudAllowed ? (
           <p className="rounded-xl bg-muted p-3 text-[13px] text-muted-foreground" role="note">

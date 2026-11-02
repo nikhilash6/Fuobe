@@ -16,8 +16,9 @@ const SOURCE_SECONDS: Record<string, { min?: number; max?: number }> = {
   "gemini-omni-flash": { max: 10 },
   // fal's H3 Max relight: "up to 15 seconds", resampled to 24 fps and trimmed to 17n+5 frames, "at least 56 frames (about 2.33 seconds)".
   "minimax-h3-max-relight": { min: 2.4, max: 15 },
-  // fal's H3 Max insert takes start and resume times up to 60 s into the clip, the start at least 1.625 s in.
-  "minimax-h3-max-insert": { min: 1.7, max: 60 },
+  // fal's H3 Max insert takes start and resume times up to 60 s into the clip, the resume at least 2.625 s in; the clip itself has
+  // no upper limit (the points keep to its first minute: insertRangeProblem).
+  "minimax-h3-max-insert": { min: 2.625 },
   // fal's H3 Max Turbo extend: "Must be 1.625 s to 60 s long".
   "minimax-h3-max-turbo-extend": { min: 1.625, max: 60 },
 };
@@ -47,14 +48,15 @@ export function portraitShapeProblem(model: { id: string; name: string }, width:
 }
 
 /**
- * Where a new moment may go inside a clip (fal's H3 Max insert: start_time 1.625–60 s, resume_time after it and at most 60 s), in
- * Generate's words, or null. `clip` is the clip's length when known: both points must be inside it.
+ * Where a new moment may go inside a clip (fal's H3 Max insert: start_time 1.625–60 s, resume_time 2.625–60 s and after the
+ * start), in Generate's words, or null. `clip` is the clip's length when known: both points must be inside it.
  */
-export const INSERT_RANGE = { minStart: 1.625, max: 60 } as const;
+export const INSERT_RANGE = { minStart: 1.625, minResume: 2.625, max: 60 } as const;
 export function insertRangeProblem(start: number | undefined, resume: number | undefined, clip?: number): string | null {
   if (start === undefined || resume === undefined || !Number.isFinite(start) || !Number.isFinite(resume)) return "Mark where the new moment starts and where the clip picks up again";
   if (start < INSERT_RANGE.minStart - 1e-6) return `The new moment can start ${INSERT_RANGE.minStart} s into the clip at the earliest: move the first handle right`;
   if (resume <= start + 1e-6) return "The clip has to pick up again after the new moment starts: move the second handle right";
+  if (resume < INSERT_RANGE.minResume - 1e-6) return `The clip can pick up again ${INSERT_RANGE.minResume} s in at the earliest: move the second handle right`;
   if (resume > INSERT_RANGE.max + 1e-6) return `Both points have to be within the first ${INSERT_RANGE.max} s of the clip: trim it first`;
   if (clip !== undefined && clip > 0 && resume > clip + 0.05) return `The clip is ${secs(clip)} long, so it can't pick up again at ${secs(resume)}: move the second handle left`;
   return null;
@@ -66,17 +68,17 @@ export const INSERT_STEP = 0.125;
 /**
  * The two handles of Edit video's "Insert a moment" range on a clip `clip` seconds long (unknown while its header is read): the
  * track runs from the earliest start to the clip's end (at most 60 s), and the handles keep to it, the start before the resume
- * by a step at least, on 1/8 s stops. Without a value they open around the clip's middle.
+ * by a step at least and the resume no earlier than 2.625 s, on 1/8 s stops. Without a value they open around the clip's middle.
  */
 export function insertHandles(clip: number | undefined, value?: [number | undefined, number | undefined]): { min: number; max: number; start: number; resume: number } {
   const snap = (n: number) => Math.round(n / INSERT_STEP) * INSERT_STEP;
   const min = INSERT_RANGE.minStart;
-  const max = Math.max(min + INSERT_STEP, Math.floor(Math.min(INSERT_RANGE.max, clip && clip > 0 ? clip : INSERT_RANGE.max) / INSERT_STEP) * INSERT_STEP);
+  const max = Math.max(INSERT_RANGE.minResume, Math.floor(Math.min(INSERT_RANGE.max, clip && clip > 0 ? clip : INSERT_RANGE.max) / INSERT_STEP) * INSERT_STEP);
   const mid = clip && clip > 0 ? clip / 2 : min + 2;
   let start = snap(value?.[0] ?? mid - 0.5);
   start = Math.min(Math.max(min, start), max - INSERT_STEP);
   let resume = snap(value?.[1] ?? start + 1);
-  resume = Math.min(Math.max(start + INSERT_STEP, resume), max);
+  resume = Math.min(Math.max(start + INSERT_STEP, INSERT_RANGE.minResume, resume), max);
   return { min, max, start, resume };
 }
 

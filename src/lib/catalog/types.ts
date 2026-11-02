@@ -666,6 +666,10 @@ export interface ModelOptions {
   /** Max reference videos / audio clips it accepts (reference-to-video: inputs.videos / inputs.audios). */
   maxVideos?: number;
   maxAudios?: number;
+  /** The most references across its pictures, clips and sound clips together (fal's H3 Max Turbo references: 12 files). */
+  maxReferences?: number;
+  /** The one format its reference voices are read in (fal's Vidu Q4: mp3); a clip in another is refused before the run. */
+  referenceAudio?: string;
   /** Spoken languages it can be told (transcription, captions): sent as params.sourceLanguage; unset = its default. */
   sourceLanguages?: string[];
   /**

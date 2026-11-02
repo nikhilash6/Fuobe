@@ -7428,7 +7428,8 @@ export const CLOUD_MODELS: ModelDef[] = [
         6,
         8,
         10,
-        12
+        12,
+        13
       ],
       "maxImages": 9,
       "promptOptional": true
@@ -7950,7 +7951,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "hailuo",
     "engine": "cloud",
     "kind": "video",
-    "tagline": "Turbo with up to 9 pictures, 3 clips and 3 sound clips as references (Image 1, Video 1, Audio 1 in the prompt)",
+    "tagline": "Turbo with up to 12 references \u2014 pictures, clips and sound together (Image 1, Video 1, Audio 1 in the prompt)",
     "routes": [
       {
         "op": "ref2v",
@@ -8017,7 +8018,8 @@ export const CLOUD_MODELS: ModelDef[] = [
         12,
         15
       ],
-      "maxImages": 9
+      "maxImages": 9,
+      "maxReferences": 12
     },
     "badges": [
       "new",
@@ -9569,7 +9571,8 @@ export const CLOUD_MODELS: ModelDef[] = [
         8,
         10,
         12,
-        15
+        15,
+        16
       ],
       "maxImages": 12,
       "maxAudios": 3,
@@ -9580,7 +9583,8 @@ export const CLOUD_MODELS: ModelDef[] = [
         "4:3",
         "3:4",
         "1:1"
-      ]
+      ],
+      "referenceAudio": "mp3"
     },
     "badges": [
       "new",
@@ -17727,7 +17731,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "pricing": {
       "unit": "request",
       "usd": 0.3,
-      "note": "2K or 4K textures; 8K $0.45; PBR maps included",
+      "note": "2K or 4K textures; 8K $0.45; realistic surface detail included",
       "factors": [
         {
           "param": "texture_resolution",
@@ -17785,7 +17789,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "pricing": {
       "unit": "request",
       "usd": 0.3,
-      "note": "2K or 4K textures; 8K $0.45; PBR maps included",
+      "note": "2K or 4K textures; 8K $0.45; realistic surface detail included",
       "factors": [
         {
           "param": "texture_resolution",
@@ -17803,7 +17807,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "tripo",
     "engine": "cloud",
     "kind": "model3d",
-    "tagline": "Tripo's production tier: game-ready meshes with PBR textures, quads on request",
+    "tagline": "Tripo's production tier: detailed 3D models with realistic textures",
     "routes": [
       {
         "op": "image-to-3d",
@@ -17812,7 +17816,10 @@ export const CLOUD_MODELS: ModelDef[] = [
         "map": {
           "prompt": false,
           "image": "image_url",
-          "seed": "model_seed"
+          "seed": "model_seed",
+          "fixed": {
+            "texture_version": "v3.5-20260815"
+          }
         }
       }
     ],

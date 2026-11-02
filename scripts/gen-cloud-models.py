@@ -643,8 +643,8 @@ model("minimax-h3-max-turbo", "MiniMax H3 Max Turbo", "MiniMax", "hailuo", "vide
                {"byResolution": {"480P": 0.025, "768P": 0.04, "1080P": 0.08},
                 "promo": {"until": "2026-11-15", "usd": 0.028, "byResolution": {"480P": 0.0175, "768P": 0.028, "1080P": 0.056}}}))
 model("minimax-h3-max-turbo-refs", "MiniMax H3 Max Turbo · references", "MiniMax", "hailuo", "video",
-      "Turbo with up to 9 pictures, 3 clips and 3 sound clips as references (Image 1, Video 1, Audio 1 in the prompt)",
-      [("ref2v", "minimax/h3-max-turbo/reference-to-video")], badges=["new", "audio"], fit_values=True,
+      "Turbo with up to 12 references — pictures, clips and sound together (Image 1, Video 1, Audio 1 in the prompt)",
+      [("ref2v", "minimax/h3-max-turbo/reference-to-video")], badges=["new", "audio"], fit_values=True, options={"maxReferences": 12},
       defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "768P"}, ranged_durations=True,
       pricing=("second", 0.08, "768P; 480P $0.05, 1080P $0.16; references past the first 4,096 tokens add $0.016 per 1,000",
                {"byResolution": {"480P": 0.05, "768P": 0.08, "1080P": 0.16}}))
@@ -924,7 +924,7 @@ model("vidu-q3", "Vidu Q3", "Shengshu", "vidu", "video", "Anime-friendly video w
 # sound on request, 3-16 s up to 4K. Vidu's own API takes more references than fal's schema exposes; Fuobe sends what fal takes.
 model("vidu-q4", "Vidu Q4", "Shengshu", "vidu", "video", "Vidu's newest: a start frame or up to 12 references and 3 voices, 3–16 s, up to 4K",
       [("i2v", "fal-ai/vidu/q4/image-to-video"), ("ref2v", "fal-ai/vidu/q4/reference-to-video")], badges=["new", "4k", "audio"], ranged_durations=True,
-      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, options={"maxImages": 12}, prompt_max=True, fit_values=True,
+      defaults={"aspectRatio": "16:9", "duration": 5, "resolution": "720p"}, options={"maxImages": 12, "referenceAudio": "mp3"}, prompt_max=True, fit_values=True,
       pricing=("second", 0.0665, "720p; 540p $0.0315, 1080p $0.084, 2K $0.133, 4K $0.273; sound costs nothing extra",
                {"byResolution": {"540p": 0.0315, "720p": 0.0665, "1080p": 0.084, "2K": 0.133, "4K": 0.273}}))
 model("luma-ray-3-2", "Luma Ray 3.2", "Luma", "luma", "video", "HDR, physically convincing motion",
@@ -1359,10 +1359,12 @@ for _v in ("7", "6"):
     model(f"meshy-{_v}-retexture", f"Meshy {_v} Retexture", "Meshy", "meshy", "model3d", "New textures on a 3D model, from words or a style picture",
           [("retexture-3d", f"meshy/v{_v}/retexture")], badges=["new"], prompt_max=True, controls=[("texture_resolution", "Texture size")],
           options={"promptOptional": True}, fixed={"enable_pbr": True},
-          pricing=("request", 0.3, "2K or 4K textures; 8K $0.45; PBR maps included", {"factors": [{"param": "texture_resolution", "values": {"8k": 1.5}}]}))
+          pricing=("request", 0.3, "2K or 4K textures; 8K $0.45; realistic surface detail included", {"factors": [{"param": "texture_resolution", "values": {"8k": 1.5}}]}))
 # Tripo P2: Tripo's production tier. $1.10 a model with fast or standard textures, $1.20 detailed, $1.30 extreme ($1.00 untextured).
-model("tripo-p2", "Tripo P2", "Tripo", "tripo", "model3d", "Tripo's production tier: game-ready meshes with PBR textures, quads on request",
+# Its "fast" textures need texture version v3.5-20260815 (fal's schema), the newest, which every quality takes: it always goes.
+model("tripo-p2", "Tripo P2", "Tripo", "tripo", "model3d", "Tripo's production tier: detailed 3D models with realistic textures",
       [("image-to-3d", "tripo3d/p2/image-to-3d")], badges=["new", "pro"], controls=[("texture_quality", "Texture")],
+      fixed={"texture_version": "v3.5-20260815"},
       pricing=("request", 1.1, "standard textures; detailed $1.20, extreme $1.30",
                {"factors": [{"param": "texture_quality", "values": {"detailed": 1.2 / 1.1, "extreme": 1.3 / 1.1}}]}))
 # Cinema Studio's "Create 3D scene" on the cloud (part 4 §8): a depth map of the whole frame, which the browser
@@ -2199,7 +2201,11 @@ def build_route(op, ep, provider, m, opts, ropts=None):
                 fmap["duration"]["suffix"] = "s"
             lo, hi = num(spec.get("minimum")), num(spec.get("maximum"))
             if m.get("ranged_durations") and lo is not None and hi is not None:
-                opts["durations"] = union(opts.get("durations", []), [v for v in NICE_DURATIONS if lo <= v <= hi] or [lo])
+                picks = [v for v in NICE_DURATIONS if lo <= v <= hi] or [lo]
+                # The longest whole second the API takes is always one of them (Vidu Q4's 16 s, H3 Max insert's 13 s).
+                if hi == int(hi) and hi not in picks and hi <= max(NICE_DURATIONS):
+                    picks.append(int(hi))
+                opts["durations"] = union(opts.get("durations", []), picks)
         if key.endswith("_ms"):
             fmap["duration"]["multiplier"] = 1000
     part4_ranges(op, inputs, fmap)

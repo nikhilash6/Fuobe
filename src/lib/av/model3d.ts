@@ -35,7 +35,7 @@ export const MODELS_3D: Record<Model3dMode, Record<Engine, Model3dChoice[]>> = {
       { id: "trellis-2", note: "Detailed geometry · ≈ $0.30" },
       { id: "tripo-h3-1", note: "Clean topology, PBR · ≈ $0.30" },
       { id: "meshy-7-1", note: "Textured, optional rigging · ≈ $1.20" },
-      { id: "tripo-p2", note: "Production tier: game-ready, PBR · ≈ $1.10" },
+      { id: "tripo-p2", note: "Production tier, realistic textures · ≈ $1.10" },
     ],
     open: [
       { id: "oss-pixal3d", note: "Most faithful to your photo, with a turntable video" },

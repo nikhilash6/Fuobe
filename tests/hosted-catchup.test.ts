@@ -202,7 +202,10 @@ describe("payloads match the stored schemas", () => {
     expect(payloadFor("tripo-p2", { prompt: "", inputs: { images: [IMG] }, params: { extra: { texture_quality: "detailed" } } }).payload).toMatchObject({
       image_url: IMG,
       texture_quality: "detailed",
+      // fal: "The fast quality requires v3.5-20260815"; the newest version goes with every quality.
+      texture_version: "v3.5-20260815",
     });
+    expect(payloadFor("tripo-p2", { prompt: "", inputs: { images: [IMG] }, params: { extra: { texture_quality: "fast" } } }).payload).toMatchObject({ texture_quality: "fast", texture_version: "v3.5-20260815" });
     expect(MODELS_3D.image.cloud.some((m) => m.id === "tripo-p2")).toBe(true);
   });
 });
@@ -265,13 +268,14 @@ describe("hosted limits are checked before a paid call, in Fuobe's words", () =>
     expect(() => planGeneration(retextureRequest({ glb: GLB }), getModel, getPreset)).toThrow("Describe the new look, or add a style picture");
   });
 
-  it("insert-video's range: start 1.625 s or later, the resume after it, both within 60 s and the clip", () => {
+  it("insert-video's range: start 1.625 s or later, the resume 2.625 s or later and after it, both within 60 s and the clip", () => {
     expect(insertRangeProblem(undefined, 5)).toMatch(/Mark where/);
     expect(insertRangeProblem(1.5, 5)).toMatch(/1.625 s into the clip/);
     expect(insertRangeProblem(4, 4)).toMatch(/after the new moment starts/);
     expect(insertRangeProblem(4, 61)).toMatch(/first 60 s/);
     expect(insertRangeProblem(4, 9, 8)).toMatch(/The clip is 8 s long/);
-    expect(insertRangeProblem(INSERT_RANGE.minStart, 2, 8)).toBeNull();
+    expect(insertRangeProblem(INSERT_RANGE.minStart, 2, 8)).toBe("The clip can pick up again 2.625 s in at the earliest: move the second handle right");
+    expect(insertRangeProblem(INSERT_RANGE.minStart, INSERT_RANGE.minResume, 8)).toBeNull();
     expect(() => planGeneration({ feature: "video-edit", modelId: "minimax-h3-max-insert", prompt: "", inputs: { video: CLIP } } as Req, getModel, getPreset)).toThrow(/Mark where/);
   });
 
@@ -288,6 +292,76 @@ describe("hosted limits are checked before a paid call, in Fuobe's words", () =>
     expect(portraitShapeProblem(lip, 1000, 3000)).toMatch(/0.4:1 \(tall\)/);
     expect(portraitShapeProblem(lip, 1080, 1920)).toBeNull();
   });
+
+  it("an inserted moment takes a clip of any length past 2.625 s: only the two points keep to its first minute", () => {
+    const insert = getModel("minimax-h3-max-insert")!;
+    expect(clipWindowProblem(insert, 90)).toBeNull();
+    expect(clipBlocker("insert-moment", { duration: 90 }, {}, insert, undefined)).toBeNull();
+    expect(clipWindowProblem(insert, 2)).toMatch(/at least 2.625 s|2.625/);
+    expect(insertRangeProblem(10, 12, 90)).toBeNull();
+  });
+
+  it("reference lists past what the endpoint takes, Turbo's 12 references in all, and Vidu Q4's mp3 voices", () => {
+    const plan = (modelId: string, inputs: Req["inputs"]) => () => planGeneration({ feature: "video", modelId, prompt: "Image 1 walks", inputs } as Req, getModel, getPreset);
+    const n = (k: number, u: string) => Array.from({ length: k }, () => u);
+    expect(plan("minimax-h3-max-insert", { video: CLIP, images: n(10, IMG) })).toThrow("MiniMax H3 Max Insert a moment takes up to 9 pictures as references, and this run has 10: remove 1");
+    expect(plan("minimax-h3-max-insert", { video: CLIP, videos: n(4, CLIP) })).toThrow(/up to 3 clips as references/);
+    expect(plan("minimax-h3-max-turbo-refs", { videos: n(4, CLIP) })).toThrow(/up to 3 clips/);
+    expect(plan("minimax-h3-lite", { images: [IMG, IMG], audios: n(4, VOICE) })).toThrow("MiniMax H3 Lite takes up to 3 sound clips as references, and this run has 4: remove 1");
+    expect(plan("vidu-q4", { images: n(13, IMG) })).toThrow(/up to 12 pictures/);
+    expect(plan("minimax-h3-max-turbo-refs", { images: n(9, IMG), videos: n(3, CLIP), audios: n(3, VOICE) })).toThrow(
+      "MiniMax H3 Max Turbo · references takes up to 12 references in all — pictures, clips and sound together — and this run has 15: remove 3",
+    );
+    expect(plan("minimax-h3-max-turbo-refs", { images: n(6, IMG), videos: n(3, CLIP), audios: n(3, VOICE) })).not.toThrow();
+    expect(plan("vidu-q4", { images: [IMG, IMG], audios: ["https://example.com/voice.wav"] })).toThrow("Vidu Q4 takes MP3 voice clips only: convert the others to MP3 first");
+    expect(plan("vidu-q4", { images: [IMG, IMG], audios: [VOICE, "data:audio/mpeg;base64,AAAA"] })).not.toThrow();
+    // A start frame is never counted as a reference.
+    expect(plan("vidu-q4", { images: [IMG] })).not.toThrow();
+  });
+
+  it("the longest whole-second length each API takes is offered (Vidu Q4 16 s, H3 Max insert 13 s)", () => {
+    expect(getModel("vidu-q4")!.options.durations?.at(-1)).toBe(16);
+    expect(getModel("minimax-h3-max-insert")!.options.durations?.at(-1)).toBe(13);
+  });
+});
+
+describe("a talking portrait's shape, read from the file before the run", () => {
+  /** A PNG header of the given size (enough for imageSize). */
+  const png = (w: number, h: number) => {
+    const b = Buffer.alloc(33);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+    b.writeUInt32BE(13, 8);
+    b.write("IHDR", 12, "ascii");
+    b.writeUInt32BE(w, 16);
+    b.writeUInt32BE(h, 20);
+    b[24] = 8;
+    b[25] = 6;
+    return b;
+  };
+  it("H3 Max lip sync refuses a picture too tall or too wide, and takes a phone portrait", async () => {
+    const { saveFile } = await import("@/server/storage");
+    const { previewGeneration } = await import("@/server/generations");
+    const run = (w: number, h: number) => () =>
+      previewGeneration({ feature: "lipsync", modelId: "minimax-h3-max-lipsync", engine: "cloud", prompt: "", inputs: { images: [saveFile({ data: png(w, h), contentType: "image/png", source: "upload" }).id], audio: VOICE } } as Req);
+    expect(run(400, 1200)).toThrow("MiniMax H3 Max Lip Sync · up to 15 min takes pictures from 0.4:1 (tall) to 2.5:1 (wide), and this one is 400×1200: crop it first");
+    expect(run(3000, 1000)).toThrow(/2.5:1 \(wide\)/);
+    // (Past the shape it goes on to need a fal key here: no shape refusal.)
+    expect(run(1080, 1920)).not.toThrow(/crop it first/);
+  });
+});
+
+describe("the canvas", () => {
+  it("leaves out what it can't feed: a 3D model to retexture, the two points of an inserted moment, a light picked on a sphere", async () => {
+    const { modelChoices, nodeOps } = await import("@/lib/catalog/canvas");
+    const ids = (kind: string) => modelChoices({ type: "model", data: { mediaKind: kind } } as never).map((m) => m.id);
+    expect(ids("model3d")).not.toContain("meshy-7-retexture");
+    expect(ids("model3d")).not.toContain("meshy-6-retexture");
+    expect(ids("model3d")).toContain("tripo-p2");
+    expect(ids("video")).not.toContain("minimax-h3-max-insert");
+    expect(ids("video")).not.toContain("minimax-h3-max-relight");
+    expect(ids("video")).toContain("minimax-h3-max-turbo");
+    expect(nodeOps({ type: "model", data: {} } as never, getModel("meshy-7-retexture")!)).toEqual([]);
+  });
 });
 
 describe("the insert range control", () => {
@@ -298,7 +372,8 @@ describe("the insert range control", () => {
   });
 
   it("keeps the handles in order and inside the track", () => {
-    expect(insertHandles(10, [0.2, 0.3])).toMatchObject({ start: 1.625, resume: 1.75 });
+    expect(insertHandles(10, [0.2, 0.3])).toMatchObject({ start: 1.625, resume: 2.625 });
+    expect(insertHandles(10, [2.5, 2.75])).toMatchObject({ start: 2.5, resume: 2.75 });
     expect(insertHandles(10, [9.9, 12])).toMatchObject({ start: 9.875, resume: 10 });
     expect(insertHandles(10, [5, 4])).toMatchObject({ start: 5, resume: 5.125 });
     const h = insertHandles(7.3, [2.06, 6.94]);
