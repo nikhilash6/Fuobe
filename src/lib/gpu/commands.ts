@@ -127,6 +127,12 @@ function packLines(shell: Shell, l: Layout, name: string, p: IndexPack, kind: St
   const req = l.under(shell, "custom_nodes", name, "requirements.txt");
   const pip = p.requirementsTxt ? [`${py} -m pip install -r ${req}`] : [];
   if (kind === "pack-repair") return [comment(shell, `${name} didn't start. Reinstall its Python packages, then restart ComfyUI`), ...pip];
+  if (p.file) {
+    // One node file in a model repo: fetched at the commit, as the package's __init__.py.
+    const url = `${p.repo}/resolve/${p.commit}/${p.file}`;
+    if (!plain(p.file) || !/\.py$/.test(p.file) || !PLAIN_URL.test(url)) return [comment(shell, `Install ${name} by hand: ${p.repo}`)];
+    return [...download(shell, dest, l.under(shell, "custom_nodes", name, "__init__.py"), url, "", kind === "pack-update"), ...pip];
+  }
   if (kind === "pack-update") return [`git -C ${dest} fetch origin`, `git -C ${dest} checkout ${p.commit}`, ...pip];
   if (p.subdir && plain(p.subdir)) {
     const src = l.under(shell, "custom_nodes", `.${name}-src`);

@@ -19,6 +19,7 @@ export type OutputActionId =
   | "animate"
   | "edit"
   | "live-edit"
+  | "relight"
   | "upscale"
   | "reference"
   | "grade"
@@ -120,6 +121,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("animate", "Animate", `/video?image=${q(o.url)}`, "primary");
       out.push(file, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });
       link("edit", "Edit", `/edit?image=${q(o.url)}`);
+      link("relight", "Relight", `/apps/app-relight?image=${q(o.url)}&gen=${q(g.id)}`);
       link("live-edit", "Change it as you type", `/live-edit?image=${q(o.url)}&gen=${q(g.id)}&from=library`);
       link("upscale", "Upscale", `/upscale?image=${q(o.url)}`);
       link("reference", "Use as reference", `/image?ref=${q(o.url)}`);
@@ -245,7 +247,9 @@ export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<Actio
     const at = ids.indexOf("upscale");
     return at < 0 ? [...regen, ...ids] : [...ids.slice(0, at + 1), ...regen, ...ids.slice(at + 1)];
   };
-  const order: OutputActionId[] = o.kind === "video" ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(withRegen(video) ?? [])] : (NEXT_STEPS[o.kind] ?? []);
+  // A picture made in Edit: Relight in place of Edit (its composer is right there).
+  const image: OutputActionId[] | undefined = o.kind === "image" && g.feature === "edit" ? ["animate", "relight", "upscale"] : NEXT_STEPS[o.kind];
+  const order: OutputActionId[] = o.kind === "video" ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(withRegen(video) ?? [])] : (image ?? []);
   return order
     .map((id) => all.find((a) => a.id === id && a.href))
     .filter((a): a is OutputAction => !!a)

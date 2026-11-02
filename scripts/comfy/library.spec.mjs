@@ -202,6 +202,11 @@ export const CUSTOM_NODE_REPOS = {
   // nodes (Apache-2.0). Neither is on the validation server; both download their weights from Hugging Face on first run.
   'ComfyUI-QwenTTS': 'https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293',
   'ComfyUI-VoxCPM2': 'https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f',
+  // Relight (qwen-image-21-relight): Viggle's speed-LoRA loader and step schedule, one file in the model repo itself
+  // (comfyui/viggle_turbo.py), pinned at a revision. The address
+  // is the file: it is downloaded as custom_nodes/viggle_turbo/__init__.py, never cloned (the repo holds the weights).
+  // Qwen Research License (a Qwen-Image 2.1 derivative). Not on the validation server: the entry lists it with `packs`.
+  viggle_turbo: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/comfyui/viggle_turbo.py',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -227,6 +232,7 @@ export const PACK_CLASSES = {
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
   'ComfyUI-QwenTTS': /^AILab_Qwen3TTS(VoiceDesign|VoiceClone|CustomVoice)(_Advanced)?$/,
   'ComfyUI-VoxCPM2': /^VoxCPM2_(TTS|Clone)$/,
+  viggle_turbo: /^ViggleTurbo(Lora|Sigmas)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -237,6 +243,10 @@ export const KNOWN_MODELS = {
   // Live edit: linoyts' 2-step DMD2 LoRA for Qwen-Image 2.1 (pytorch_lora_weights.safetensors upstream, kept under a
   // name of its own), pinned at the revision whose file was measured.
   'Qwen-Image-2.1-DMD2-2steps.safetensors': { folder: 'loras', url: 'https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights.safetensors' },
+  // Relight: Viggle's 6-step speed LoRA for Qwen-Image 2.1 (v0.2.1, rank 256, alpha 256; the r128 cut for smaller GPUs),
+  // pinned at a revision (file hashes r256 2a0148f5…, r128 bafb91d0…).
+  'Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors': { folder: 'loras', url: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors' },
+  'Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors': { folder: 'loras', url: 'https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r128.safetensors' },
   'ltx-2.3-22b-distilled-fp8.safetensors': { folder: 'checkpoints', url: 'https://huggingface.co/Lightricks/LTX-2.3-fp8/resolve/main/ltx-2.3-22b-distilled-fp8.safetensors' },
   'gemma_3_12B_it_fp4_mixed.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors' },
   'RealESRGAN_x4plus.safetensors': { folder: 'upscale_models', url: 'https://huggingface.co/Comfy-Org/Real-ESRGAN_repackaged/resolve/main/RealESRGAN_x4plus.safetensors' },
@@ -2766,6 +2776,49 @@ export const SPEC = [
       'schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder\'s latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). ' +
       'No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. ' +
       'In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there).' + QWEN21_CLEAN_NOTE,
+  },
+  // ---- Relight with placed lights (the Relight app's own tool, src/components/relight): Generate lighting and the scene read.
+  {
+    id: 'qwen-image-21-relight',
+    title: 'Relight with placed lights: Qwen-Image 2.1 + Viggle 6-step speed LoRA, the photo plus words written from the lights (viggle_turbo)',
+    capability: 'edit',
+    handBuilt: 'hand-built/qwen-image-21-relight.json',
+    packs: ['viggle_turbo'],
+    bindings: {
+      prompt: [b('30', 'prompt')], image: [b('10', 'image')], image2: [b('11', 'image')], seed: [b('70', 'noise_seed')],
+    },
+    outputs: [{ node: '90', kind: 'image' }],
+    limits: { maxWidth: 2048, maxHeight: 2048 },
+    vramGb: 24,
+    license:
+      'Qwen Research License Agreement (Qwen-Image 2.1 and Viggle\'s turbo LoRA, a derivative): NON-COMMERCIAL, research and evaluation only; ' +
+      'the viggle_turbo node file ships in the same model repo under the same terms',
+    notes:
+      'Built from Viggle\'s ComfyUI edit workflow (Viggle/Qwen-Image-2.1-viggle-turbo, comfyui/) with one reference: the int8 Qwen-Image 2.1 model, ' +
+      'the v0.2.1 6-step LoRA (r256) on ViggleTurboLora at 1.0 (applied unmerged; it reads lora_alpha / r from the file\'s metadata), QwenImage21Cache auto, ' +
+      'TextEncodeQwenImage21 at resolution 1024 (about 1 MP, sides on the 32 grid), positive only, BasicGuider (no CFG), euler, ' +
+      'ViggleTurboSigmas "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25" (the raw nodes, shifted for the latent\'s size), RandomNoise, SamplerCustomAdvanced, VAEDecode. ' +
+      'The words come from the placed lights ("Relight the photo with a strong sunset orange light coming from the left, at face height, far away. The scene is in ' +
+      'darkness, lit only by these lights …"), so the result is lit only by them and the page blends it with the original (Intensity). Image 2 is an optional ' +
+      'light-guide picture (the rig drawn over the darkened photo), dropped when not given. The seed comes from the photo, so moving one light changes only that light. ' +
+      'A Pruna 8-step v0.1 LoRA in its place must also load through ViggleTurboLora at 1.0: its x2 strength is only in the metadata, so LoraLoaderModelOnly at 1.0 gives half.',
+  },
+  {
+    id: 'relight-scene-read',
+    title: 'Relight scene read: depth (Depth Anything 3 mono large) and the subject\'s matte (BiRefNet) of one photo (core)',
+    capability: 'bg-remove',
+    handBuilt: 'hand-built/relight-scene-read.json',
+    bindings: { image: [b('1', 'image')] },
+    outputs: [
+      { node: '5', kind: 'image', role: 'depth' },
+      { node: '9', kind: 'image', role: 'matte' },
+    ],
+    vramGb: 6,
+    license: 'Depth Anything 3 mono large: Apache-2.0 (model card) · BiRefNet: MIT',
+    notes:
+      'One photo in, two grey PNGs out, for the Relight page\'s depth-true preview: DA3Inference (mono, 504, lower-bound resize) and DA3Render depth with ' +
+      'v2_style normalisation (near = bright), and the core background-removal nodes (birefnet.safetensors) with the mask saved as a picture (white = subject). ' +
+      'Runs once per photo; its runs are helper steps the Library leaves out.',
   },
   {
     id: 'qwen-image-21-live-edit',

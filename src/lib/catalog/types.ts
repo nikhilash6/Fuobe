@@ -39,6 +39,7 @@ export type Operation =
   | "interpolate"
   | "extend" // video → the same clip, continued
   | "grade" // colour grade, rendered in the browser
+  | "relight" // the Relight tool's blend of a photo and its relit picture, rendered in the browser
   | "reframe" // video → same video at a new aspect ratio (AI-filled edges)
   | "finalize" // draft video → full-quality render of the same take
   | "dialogue" // several speakers → one audio track
@@ -116,6 +117,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   interpolate: "Frame interpolation",
   extend: "Extend video",
   grade: "Color grade",
+  relight: "Relight",
   reframe: "Reframe",
   finalize: "Final render",
   dialogue: "Dialogue",
@@ -189,6 +191,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   interpolate: "video",
   extend: "video",
   grade: "image",
+  relight: "image",
   reframe: "video",
   finalize: "video",
   dialogue: "audio",
@@ -1422,8 +1425,8 @@ export interface Preset {
   grade?: string;
   /** Fuobe DoP's relight effects: a step that makes the start frame first, on each engine (src/lib/catalog/dop.ts). */
   prestep?: PresetPrestep;
-  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice). */
-  tool?: "clean-voice";
+  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice, Relight). */
+  tool?: "clean-voice" | "relight";
   /** The recipe its preview was made with (src/lib/catalog/preset-recipe-book.json): the route it opens on follows it. */
   recipe?: PresetRecipeBook;
 }

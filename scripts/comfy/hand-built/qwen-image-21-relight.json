@@ -1,0 +1,221 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_int8_convrot.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "Load CLIP (Qwen3-VL 8B)"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "4": {
+    "class_type": "ViggleTurboLora",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors",
+      "strength": 1
+    },
+    "_meta": {
+      "title": "Speed LoRA (Viggle 6-step, unmerged, reads alpha from metadata)"
+    }
+  },
+  "10": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "image_1.png"
+    },
+    "_meta": {
+      "title": "Photo (image 1)"
+    }
+  },
+  "11": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "image_2.png"
+    },
+    "_meta": {
+      "title": "Light guide (image 2, optional)"
+    }
+  },
+  "30": {
+    "class_type": "TextEncodeQwenImage21",
+    "inputs": {
+      "prompt": "",
+      "negative_prompt": "",
+      "resolution": 1024,
+      "clip": [
+        "2",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "images.image_1": [
+        "10",
+        0
+      ],
+      "images.image_2": [
+        "11",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Text Encode Qwen Image 2.1 (~1 MP)"
+    }
+  },
+  "31": {
+    "class_type": "QwenImage21Cache",
+    "inputs": {
+      "device": "auto",
+      "dtype": "default",
+      "model": [
+        "4",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Qwen Image 2.1 Cache"
+    }
+  },
+  "32": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "70",
+        0
+      ],
+      "guider": [
+        "71",
+        0
+      ],
+      "sampler": [
+        "72",
+        0
+      ],
+      "sigmas": [
+        "73",
+        0
+      ],
+      "latent_image": [
+        "30",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "Sampler"
+    }
+  },
+  "33": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "32",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "34": {
+    "class_type": "SplitImageWithAlpha",
+    "inputs": {
+      "image": [
+        "33",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Drop the alpha"
+    }
+  },
+  "70": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 0
+    },
+    "_meta": {
+      "title": "Seed"
+    }
+  },
+  "71": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "31",
+        0
+      ],
+      "conditioning": [
+        "30",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Basic Guider (no CFG)"
+    }
+  },
+  "72": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "_meta": {
+      "title": "euler"
+    }
+  },
+  "73": {
+    "class_type": "ViggleTurboSigmas",
+    "inputs": {
+      "latent": [
+        "30",
+        2
+      ],
+      "nodes": "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25"
+    },
+    "_meta": {
+      "title": "Viggle 6-step sigmas"
+    }
+  },
+  "90": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "fuobe/qwen-image-21-relight",
+      "images": [
+        "34",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Save relit"
+    }
+  }
+}

@@ -1197,6 +1197,33 @@ const open: ModelDef[] = [
     options: { seed: true, maxImages: 2, controls: [QWEN21_DECODER], ...(NEXT_SCENE_21_LORA && { loras: [loraRef(NEXT_SCENE_21_LORA)] }) },
     hidden: true,
   }),
+  // The Relight tool's Generate lighting (src/components/relight): the photo plus the words written from the placed
+  // lights, a picture lit only by those lights that the page blends in. Image 2 is the light-guide picture, when sent.
+  o({
+    id: "oss-qwen-image-21-relight",
+    // Its runs show this name in the Library: plain, as the tool says it (the engine is in the tagline and the licence).
+    name: "Relight",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Relight with placed lights: Qwen-Image 2.1 with Viggle's 6-step speed LoRA · 24 GB GPU · non-commercial weights",
+    routes: [{ ...comfy("edit", "qwen-image-21-relight", "6 steps, about 1 MP"), unsized: true }],
+    options: { seed: true, maxImages: 2 },
+    hidden: true,
+  }),
+  // Its scene read, once per photo: a depth map (Depth Anything 3) and the subject's matte (BiRefNet) for the page's
+  // depth-true preview. A helper step: the Library leaves its runs out.
+  o({
+    id: "oss-relight-scene",
+    name: "Relight scene read",
+    vendor: "Open source",
+    family: "birefnet",
+    kind: "image",
+    tagline: "Depth and subject cut-out for the Relight preview",
+    routes: [comfy("bg-remove", "relight-scene-read")],
+    options: { maxImages: 1 },
+    hidden: true,
+  }),
   o({
     id: "oss-qwen-next-scene",
     name: "Qwen-Image-Edit Next Scene",
@@ -2494,6 +2521,19 @@ const local: ModelDef[] = [
     kind: "image",
     tagline: "Real-time WebGL grading in your browser — free, nothing leaves your machine",
     routes: [{ op: "grade", provider: "local", endpoint: "webgl" }],
+    options: {},
+    hidden: true,
+  },
+  // Relight: a photo blended with its relit picture at the chosen Intensity, kept from the browser.
+  {
+    id: "local-relight",
+    name: "Relight blend",
+    vendor: "Fuobe",
+    family: "local",
+    engine: "open",
+    kind: "image",
+    tagline: "The relit picture blended into the original in your browser",
+    routes: [{ op: "relight", provider: "local", endpoint: "webgl" }],
     options: {},
     hidden: true,
   },

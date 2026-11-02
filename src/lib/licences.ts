@@ -542,6 +542,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "Fuobe's own pack. The network code is adapted from NVIDIA's RE-USE repository (OpenMDW-1.1, notices kept), and the Mamba layer is a plain-PyTorch rewrite (no mamba-ssm). It matches the reference maths numerically, but it is not NVIDIA's code path",
   }),
+  // Relight: Viggle's node file (speed-LoRA loader and step schedule), in the model repo at the pinned revision.
+  pack("viggle_turbo", "https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/tree/009a44a895ef85f7e643c80fdca9543795248867/comfyui", {
+    name: "Qwen Research License",
+    class: "non-commercial",
+    url: "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE",
+    note: "Viggle's ComfyUI nodes for its Qwen-Image 2.1 turbo LoRA (the loader that reads the LoRA's strength from its metadata, and the 6-step schedule); they ship in the model repo, a Qwen-Image 2.1 derivative under the same research licence",
+  }),
 ];
 
 export const nodePack = (name: string): NodePack | undefined => NODE_PACKS.find((p) => p.name === name);

@@ -2616,14 +2616,17 @@ export function recordLocalGeneration(input: {
   modelId: string;
   op: Generation["op"];
   prompt: string;
+  /** What the tool calls its result, shown instead of the prompt. */
+  title?: string;
   inputs: GenerationRequest["inputs"];
   params?: GenerationRequest["params"];
   output: { url: string; kind: OutputFile["kind"]; contentType?: string };
 }): Generation {
   const model = getModel(input.modelId);
-  if (!model || !model.routes.some((r) => r.provider === "local")) throw new Error("Not a browser tool");
+  // A browser tool's own result: the model's local route for this very step (a grade is not recorded as a Relight blend).
+  if (!model || !model.routes.some((r) => r.provider === "local" && r.op === input.op)) throw new Error("Not a browser tool");
   const now = Date.now();
-  const req: GenerationRequest = { feature: input.feature, modelId: input.modelId, op: input.op, prompt: input.prompt, inputs: input.inputs, params: input.params };
+  const req: GenerationRequest = { feature: input.feature, modelId: input.modelId, op: input.op, prompt: input.prompt, ...(input.title && { title: input.title }), inputs: input.inputs, params: input.params };
   const row: Row = {
     id: nanoid(12),
     batch_id: null,

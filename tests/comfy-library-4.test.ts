@@ -108,6 +108,9 @@ describe("round-4 ComfyUI workflows", () => {
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",
+      // Relight's graphs wait for their first GPU run (Viggle's node file isn't on this server).
+      "qwen-image-21-relight",
+      "relight-scene-read",
       "qwen-image-21-live-edit",
       "qwen-image-21-inpaint",
       "qwen-image-21-outpaint",

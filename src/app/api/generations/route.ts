@@ -8,6 +8,7 @@ import { computerScope, ISOLATED_ON_COMPUTER, workerFor } from "@/server/provide
 import { getSetting } from "@/server/settings";
 import { RUNS_ON_COMPUTER_NOTE } from "@/lib/relay";
 import { OPERATION_LABELS } from "@/lib/catalog/types";
+import { relightRunTitle } from "@/lib/relight/engine";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
 import { db } from "@/server/db";
@@ -83,7 +84,10 @@ export async function POST(request: Request) {
   }
   // A retired model id (an older script, a saved CLI or MCP call) runs on the model that replaced it, and the notes say
   // so: previewGeneration and createGenerations move it (generations.ts currentRequest, replaced.ts).
-  const asked = parsed.data as Parameters<typeof createGenerations>[0];
+  const sent = parsed.data as Parameters<typeof createGenerations>[0];
+  // Generate lighting is named by its look or its lights (src/lib/relight/engine.ts), not by its long prompt.
+  const relightTitle = relightRunTitle(sent);
+  const asked = relightTitle ? { ...sent, title: relightTitle } : sent;
   // Public sign-up: an account runs on its own ComfyUI or its own fal.ai or Replicate key, never the install's providers.
   // Without a key of its own it stays on the open engine; with one, the engine it asked for.
   let req = account ? { ...asked, account: account.id, engine: accountEngineMode(account.id) === "open" ? ("open" as const) : asked.engine } : { ...asked, account: undefined };

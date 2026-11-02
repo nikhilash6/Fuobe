@@ -14,7 +14,7 @@ const read = (f: string) => fs.readFileSync(path.join(LIBRARY, f), "utf8");
 const text = read("requirements.json");
 const index = JSON.parse(text) as RequirementIndex;
 const manifest = JSON.parse(read("manifest.json")) as Manifest;
-type PackPin = { repo: string; commit: string; registry: { id: string; version: string } | null; subdir: string | null; folders: string[]; isolated: boolean };
+type PackPin = { repo: string; commit: string; registry: { id: string; version: string } | null; subdir: string | null; file?: string; folders: string[]; isolated: boolean };
 const packs = JSON.parse(read("packs.json")) as Record<string, PackPin>;
 const pins = JSON.parse(read("model-pins.json")) as Record<string, { revision: string; sizeBytes: number; sha256?: string }>;
 const script = (f: string) => fs.readFileSync(path.join(process.cwd(), "scripts/comfy", f), "utf8");
@@ -185,7 +185,11 @@ describe("packs.json: the single source of pack pins", () => {
     expect(Object.keys(repos).sort()).toEqual(Object.keys(packs).sort());
     for (const [name, url] of Object.entries(repos)) {
       const tree = /^(https:\/\/github\.com\/[^/]+\/[^/]+)\/tree\/([0-9a-f]{40})(?:\/(.+))?$/.exec(url);
-      if (tree) {
+      // One node file in a Hugging Face model repo (viggle_turbo): the repo, the commit and the file.
+      const hfFile = /^(https:\/\/huggingface\.co\/[^/]+\/[^/]+)\/resolve\/([0-9a-f]{40})\/(.+\.py)$/.exec(url);
+      if (hfFile) {
+        expect({ repo: packs[name].repo, commit: packs[name].commit, file: packs[name].file }, name).toEqual({ repo: hfFile[1], commit: hfFile[2], file: hfFile[3] });
+      } else if (tree) {
         expect({ repo: packs[name].repo, commit: packs[name].commit, subdir: packs[name].subdir }, name).toEqual({ repo: tree[1], commit: tree[2], subdir: tree[3] ?? null });
       } else {
         expect(packs[name].repo, name).toBe(url);
