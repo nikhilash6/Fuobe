@@ -526,7 +526,7 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-64">
                 <DropdownMenuItem
                   onClick={() => {
                     setTitle(ep.title);
@@ -555,11 +555,13 @@ export function EpisodeView({ id, backHref, backLabel }: { id: string; backHref:
                     className="items-start"
                   >
                     <Sparkles className="mt-0.5" />
-                    <span className="flex min-w-0 flex-col">
-                      <span>{regenerating ? `Regenerating… ${regenerating.done} of ${regenerating.of}` : FACELESS_REGEN_COPY.label}</span>
-                      <span className="max-w-56 text-[11.5px] leading-snug text-muted-foreground">Sharper, may redraw · {FACELESS_REGEN_COPY.time(regenOffer.scenes)}</span>
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="flex items-baseline gap-3">
+                        <span>{regenerating ? `Regenerating… ${regenerating.done} of ${regenerating.of}` : FACELESS_REGEN_COPY.label}</span>
+                        <span className="ml-auto font-mono text-[11px] text-muted-foreground tabular-nums">Free</span>
+                      </span>
+                      <span className="text-[11.5px] leading-snug text-muted-foreground">Sharper, may redraw · {FACELESS_REGEN_COPY.time(regenOffer.scenes)}</span>
                     </span>
-                    <span className="ml-auto pl-3 font-mono text-[11px] text-muted-foreground tabular-nums">Free</span>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem variant="destructive" onClick={() => setTimeout(() => setConfirm(true))}>

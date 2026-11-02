@@ -489,6 +489,7 @@ export function PromptBar(props: PromptBarProps) {
           label="Resolution"
           value={video && !videoTiers.includes(draft.resolution.video) ? "1080p" : draft.resolution[draft.mode]}
           options={video ? videoTiers : IMAGE_RESOLUTIONS}
+          describe={video && videoTiers.includes("2K") ? (v) => (v !== "2K" ? "" : model.engine === "open" ? "768p draft, then redrawn at 2K on your GPU" : "Rendered from a 768P base") : undefined}
           onChange={(v) => setDraft((d) => ({ resolution: { ...d.resolution, [d.mode]: v } }))}
         />
       ),
