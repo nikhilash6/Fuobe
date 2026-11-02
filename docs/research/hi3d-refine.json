@@ -13,8 +13,16 @@
     "releasedNote": "The README says 'Released on October 23, 2026'; the weights' last commit is 2026-10-23T16:04:31Z. new-models-10 had 10-16 (corrected here).",
     "what": "Refines a coarse mesh into high-resolution geometry, conditioned on a reference image of the same object (README L15). It does not make a mesh from nothing: the README's end-to-end demo makes the coarse mesh with Hunyuan3D-2 mini (L170-185).",
     "output": "Geometry only, batch size one: no textures, materials or vertex colours; recentred and normalised to unit maximum radius, so input world coordinates and absolute scale are not preserved (L189). Not guaranteed watertight or printable.",
-    "resolutions": [512, 1024, 1536],
-    "passes": { "512": 1, "1024": 2, "1536": 3 },
+    "resolutions": [
+      512,
+      1024,
+      1536
+    ],
+    "passes": {
+      "512": 1,
+      "1024": 2,
+      "1536": 3
+    },
     "passesNote": "Pass 1: 64^3 structure / 512^3 extraction grid with transformer_512; pass 2: 128^3 / 1024^3 with transformer_1024; pass 3: 192^3 / 1536^3 with transformer_1024 (L27-33). Nominal sparse grids, not a triangle count.",
     "stepsPerPass": 25,
     "encoders": "facebook/dinov2-large and openai/clip-vit-large-patch14, loaded separately on first use (L96).",
@@ -27,19 +35,60 @@
     "revision": "d502e938cbedc6e87aba8884614c5ca6d177a4b6",
     "format": "safetensors + JSON; the loader neither executes repository Python nor unpickles (L94)",
     "files": [
-      { "path": "transformer_512/model.safetensors", "bytes": 3675679280, "sha256": "8ba88311dccf23463c6e10dd0d3bd5e0c5c35d1608c6f466413b6428b5ad8e56" },
-      { "path": "transformer_1024/model.safetensors", "bytes": 3675679280, "sha256": "a2ca5e44dde51cacecd59b42fceeb5f14e75d55e6dd047337752c4e6f281008c" },
-      { "path": "vae/model.safetensors", "bytes": 376629712, "sha256": "605d207c77f8db0b33c567a5861252f0090cf3c3604dfda1cfee09e8f0b53f3e" },
-      { "path": "model_index.json", "bytes": 224 },
-      { "path": "scheduler/scheduler_config.json", "bytes": 127 },
-      { "path": "vae/config.json", "bytes": 131 },
-      { "path": "transformer_512/config.json", "bytes": 1336 },
-      { "path": "transformer_1024/config.json", "bytes": 1337 }
+      {
+        "path": "transformer_512/model.safetensors",
+        "bytes": 3675679280,
+        "sha256": "8ba88311dccf23463c6e10dd0d3bd5e0c5c35d1608c6f466413b6428b5ad8e56"
+      },
+      {
+        "path": "transformer_1024/model.safetensors",
+        "bytes": 3675679280,
+        "sha256": "a2ca5e44dde51cacecd59b42fceeb5f14e75d55e6dd047337752c4e6f281008c"
+      },
+      {
+        "path": "vae/model.safetensors",
+        "bytes": 376629712,
+        "sha256": "605d207c77f8db0b33c567a5861252f0090cf3c3604dfda1cfee09e8f0b53f3e"
+      },
+      {
+        "path": "model_index.json",
+        "bytes": 224
+      },
+      {
+        "path": "scheduler/scheduler_config.json",
+        "bytes": 127
+      },
+      {
+        "path": "vae/config.json",
+        "bytes": 131
+      },
+      {
+        "path": "transformer_512/config.json",
+        "bytes": 1336
+      },
+      {
+        "path": "transformer_1024/config.json",
+        "bytes": 1337
+      }
     ],
     "totalBytes": 7727990432,
     "encoders": [
-      { "repo": "facebook/dinov2-large", "revision": "47b73eefe95e8d44ec3623f8890bd894b6ea2d6c", "path": "model.safetensors", "bytes": 1217522888, "sha256": "399fba97a95f22c36834418bc69373364a99af3a1153da1c0fb31db567c92e23", "licence": "Apache-2.0" },
-      { "repo": "openai/clip-vit-large-patch14", "revision": "32bd64288804d66eefd0ccbe215aa642df71cc41", "path": "model.safetensors", "bytes": 1710540580, "sha256": "a2bf730a0c7debf160f7a6b50b3aaf3703e7e88ac73de7a314903141db026dcb", "licence": "MIT (OpenAI CLIP)" }
+      {
+        "repo": "facebook/dinov2-large",
+        "revision": "47b73eefe95e8d44ec3623f8890bd894b6ea2d6c",
+        "path": "model.safetensors",
+        "bytes": 1217522888,
+        "sha256": "399fba97a95f22c36834418bc69373364a99af3a1153da1c0fb31db567c92e23",
+        "licence": "Apache-2.0"
+      },
+      {
+        "repo": "openai/clip-vit-large-patch14",
+        "revision": "32bd64288804d66eefd0ccbe215aa642df71cc41",
+        "path": "model.safetensors",
+        "bytes": 1710540580,
+        "sha256": "a2bf730a0c7debf160f7a6b50b3aaf3703e7e88ac73de7a314903141db026dcb",
+        "licence": "MIT (OpenAI CLIP)"
+      }
     ],
     "totalWithEncodersBytes": 10656053900,
     "note": "The brief's 7.74 GB is the three safetensors (7.728 GB); with the two encoders the open route downloads 10.66 GB. t8star/Hi3d-Comfy at 6ae7235d5f03857713ccdcb717a22b16f483aa43 repackages the same files (identical SHA-256) under hi3d/, dino/ and clip/."
@@ -81,19 +130,34 @@
         "chosen": true,
         "why": "In the ComfyUI Registry, native MESH in and out (core SaveGLB writes the GLB, so Fuobe's finish takes it), mesh input from ComfyUI's input folder (Fuobe uploads the coarse GLB like any input), official source pinned inside, pinned core weights with SHA-256. Its separate Windows workbench is not used."
       },
-      { "name": "ComfyUI-Hi3D-Refinement", "repo": "https://github.com/wadi-k/ComfyUI-Hi3D-Refinement", "commit": "2c77b8d6b8f3a91a8d32be6f37fb2d44b6c1f53d", "licence": "Apache-2.0 code", "chosen": false, "note": "One node with model pickers from diffusion_models/vae; can run Hi3D in a separate venv (HI3D_PYTHON). Its example shows TRELLIS.2's texture stage baked onto the refined mesh with a TRELLIS.2 pack (BakeTextureFromVoxel), not core." },
-      { "name": "Rizzlord/ComfyUI-Hi3D", "repo": "https://github.com/Rizzlord/ComfyUI-Hi3D", "chosen": false },
-      { "name": "thatname/ComfyUI-Hi3D", "repo": "https://github.com/thatname/ComfyUI-Hi3D", "chosen": false }
+      {
+        "name": "ComfyUI-Hi3D-Refinement",
+        "repo": "https://github.com/wadi-k/ComfyUI-Hi3D-Refinement",
+        "commit": "2c77b8d6b8f3a91a8d32be6f37fb2d44b6c1f53d",
+        "licence": "Apache-2.0 code",
+        "chosen": false,
+        "note": "One node with model pickers from diffusion_models/vae; can run Hi3D in a separate venv (HI3D_PYTHON). Its example shows TRELLIS.2's texture stage baked onto the refined mesh with a TRELLIS.2 pack (BakeTextureFromVoxel), not core."
+      },
+      {
+        "name": "Rizzlord/ComfyUI-Hi3D",
+        "repo": "https://github.com/Rizzlord/ComfyUI-Hi3D",
+        "chosen": false
+      },
+      {
+        "name": "thatname/ComfyUI-Hi3D",
+        "repo": "https://github.com/thatname/ComfyUI-Hi3D",
+        "chosen": false
+      }
     ]
   },
   "texture": {
-    "verdict": "No texture-on-an-outside-mesh step is possible with what Fuobe installs: the refined mesh ships as geometry only, labelled so.",
+    "verdict": "Not on this base: the refined mesh ships as geometry only, labelled so. 'Texture it' needs one more node (owner step below).",
     "checked": [
-      "Core ComfyUI's TRELLIS.2 texture stage (template 3d_pixal3d_trellis2_image_to_model) textures the shape latent the same graph decoded: its texture sampler takes the sparse structure of its own shape, not a mesh; core has no mesh-to-voxel encoder for an outside mesh.",
-      "Pixal3D's graph is the same TRELLIS.2 pipeline with Pixal3D conditioning: same limit.",
-      "Hunyuan3D 2.1 in core is shape only (no Hunyuan3D-Paint nodes)."
+      "Live core ComfyUI 0.41.0 (2026-11-02, object_info): BakeTextureFromVoxel (mesh, voxel_colors, texture_size, optional reference_mesh) and PaintMesh bake TRELLIS.2's texture voxels onto ANY mesh with UVs (UnwrapMesh), then ApplyTextureToMesh. So core can texture an outside mesh, but only with voxel colours made in the same run (VaeDecodeTextureTrellis output is not saved between runs), and only when that mesh sits in the voxels' frame.",
+      "Hi3D's output is recentred and normalised to unit radius (README L189), so the refined mesh is not in TRELLIS.2's / Pixal3D's frame. Core has no node that translates or scales a MESH (RotateMesh rotates; WeldVertices, FillHoles, DecimateMesh, RemeshMesh, UnwrapMesh, MergeMeshes don't move it). Neither Hi3D pack's node maps its output back (T8's Hi3DRefine returns the normalised mesh; wadi-k's node likewise).",
+      "Pixal3D's graph is the same TRELLIS.2 pipeline (Pixal3D conditioning): same limit. Hunyuan3D 2.1 in core is shape only (no Hunyuan3D-Paint nodes)."
     ],
-    "ownerStep": "To texture the refined mesh, install a mesh-conditioned texture pack: Hunyuan3D-Paint 2.1 (e.g. visualbruno's ComfyUI-Hunyuan3d-2-1 or kijai's ComfyUI-Hunyuan3DWrapper), or a TRELLIS.2 pack with an outside-mesh voxel bake (the wadi-k example uses one). Each needs its own review and licence record (Hunyuan3D-Paint 2.1 excludes the EU, UK and South Korea)."
+    "ownerStep": "Either (a) a small node that fits the refined mesh back onto the coarse mesh's bounding box (scale + offset), so one graph can run Pixal3D / TRELLIS.2 -> Hi3D -> fit -> UnwrapMesh -> BakeTextureFromVoxel (reference_mesh = the refined mesh) -> ApplyTextureToMesh -> SaveGLB (a few lines; could live in Fuobe's own pack like ComfyUI-RE-USE), or (b) a mesh-conditioned texture pack such as Hunyuan3D-Paint 2.1 (e.g. visualbruno/ComfyUI-Hunyuan3d-2-1; its licence excludes the EU, UK and South Korea). Each needs the owner's go-ahead and a licence record."
   },
   "hosted": {
     "open": [],
