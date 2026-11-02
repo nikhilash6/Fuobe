@@ -54,8 +54,8 @@ describe("record pages (real 404s)", () => {
     };
     walk(app, []);
     expect(routes.length).toBeGreaterThan(40);
-    // Ids the catalog answers for (apps, hub modes), not stored records, and share tokens: the proxy checks those itself.
-    const catalog = /^\/(apps|audio|video-tools|upscale|s)\/\[/;
+    // Ids the catalog answers for (apps, hub modes, Canvas templates), not stored records, and share tokens: the proxy checks those itself.
+    const catalog = /^\/(apps|audio|video-tools|upscale|s|canvas\/start)\/\[/;
     for (const route of routes) {
       if (!route.includes("[")) {
         expect(recordForPath(route), route).toBeNull();

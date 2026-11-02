@@ -34,7 +34,7 @@ describe("Canvas templates as ready boards", () => {
       const ranks = CANVAS_TEMPLATES.filter((t) => (t.group ?? "") === s.key).map((t) => t.rank);
       expect(new Set(ranks).size, s.title).toBe(ranks.length);
     }
-    expect(CANVAS_TEMPLATES.filter((t) => t.starter === false).map((t) => t.id)).toEqual(["blockout-film"]);
+    expect(CANVAS_TEMPLATES.filter((t) => t.starter === false).map((t) => t.id)).toEqual(["keyframes-animation", "blockout-film"]);
   });
 
   it("say what they are in plain words: no model names, no engine words", () => {
@@ -93,20 +93,20 @@ describe("Who sees which ready board", () => {
     // A section with nothing to show is left out; the owner's other templates aren't a visitor's.
     expect(sections.every((s) => s.items.length > 0)).toBe(true);
     expect(moreTemplates(cards, visitor)).toEqual([]);
-    expect(sections.flatMap((s) => s.items).some((t) => t.id === "blockout-film")).toBe(false);
+    expect(sections.flatMap((s) => s.items).some((t) => t.id === "blockout-film" || t.id === "keyframes-animation")).toBe(false);
   });
 
   it("the owner: every ready board, covered first then by rank, and Blockout under More templates", () => {
     const sections = templateSections(cards, owner);
     expect(sections.map((s) => s.title)).toEqual(["Films and campaigns", "Effect films"]);
     const all = sections.flatMap((s) => s.items);
-    expect(all).toHaveLength(CANVAS_TEMPLATES.length - 1);
+    expect(all).toHaveLength(CANVAS_TEMPLATES.length - 2);
     for (const s of sections) {
       const covered = s.items.map((t) => hasCover(t.id));
       expect(covered, s.title).toEqual([...covered].sort((a, b) => Number(b) - Number(a)));
     }
     expect(sections[0].items[0].id).toBe(hasCover("product-angles") ? "product-angles" : sections[0].items.find((t) => hasCover(t.id))?.id ?? "product-angles");
-    expect(moreTemplates(cards, owner).map((t) => t.id)).toEqual(["blockout-film"]);
+    expect(moreTemplates(cards, owner).map((t) => t.id).sort()).toEqual(["blockout-film", "keyframes-animation"]);
   });
 
   it("with boards of one's own, one short row: the first three covered boards", () => {

@@ -2173,7 +2173,7 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "Your keyframes in, the in-betweens drawn, one animation: a table times each gap",
     icon: "Sparkles",
     hue: 320,
-    rank: 99,
+    rank: 98,
     starter: false,
     makes: "One animation through your keyframes, each gap timed as the table says.",
     flow: ["Keyframes", "Timing", "Animation"],
