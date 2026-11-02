@@ -1,4 +1,5 @@
 import { readTimeline, timelineTracks } from "@/lib/av/timeline";
+import { isInstrumental, LYRICS_PARAM, lyricsOf, promptWithLyrics, SONG_ID_PARAM } from "@/lib/lyrics";
 import { toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { upscaleFactorFor } from "@/lib/av/upscale";
 import { carriesBoxes, carriesLayout, LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -189,7 +190,8 @@ function setPath(out: Record<string, unknown>, key: string, value: unknown) {
 
 /** A number of seconds in the API's encoding (seconds or ms, number or "5s"). */
 function timeValue(d: DurationField, seconds: number): number | string {
-  const v = seconds * (d.multiplier ?? 1);
+  // Milliseconds are whole (Mureka's extend_at).
+  const v = (d.multiplier ?? 1) >= 1000 ? Math.round(seconds * d.multiplier!) : seconds * (d.multiplier ?? 1);
   return d.type === "number" ? v : `${v}${d.suffix ?? ""}`;
 }
 
@@ -349,6 +351,8 @@ function elementList(e: NonNullable<FieldMap["elements"]>, images: string[], vid
   }
   return { list, usedImages, usedVideos };
 }
+
+export { SONG_ID_PARAM };
 
 /** Build a provider payload from canonical input using a route's {@link FieldMap}. Pure + unit-tested. */
 export function buildPayload(map: FieldMap, input: GenInput): Record<string, unknown> {
@@ -529,8 +533,22 @@ export function buildPayload(map: FieldMap, input: GenInput): Record<string, unk
 
   // A layout draft rides in params.extra for Reuse and Edit layout; the prompt already carries it, in the model's own form.
   // Options → Prompt helper (params.extra.promptHelper) is Fuobe's own: it goes out as the API's prompt expansion, below.
-  const ignore = new Set([...(map.ignore ?? []), LAYOUT_PARAM, PROMPT_HELPER_PARAM, ...(asked ? [map.size!.key!] : [])]);
+  // Song lyrics (params.extra.lyrics) go out only where the route says (FieldMap.lyrics), in the models' own form.
+  const ignore = new Set([...(map.ignore ?? []), LAYOUT_PARAM, PROMPT_HELPER_PARAM, LYRICS_PARAM, SONG_ID_PARAM, ...(asked ? [map.size!.key!] : [])]);
   for (const [k, v] of Object.entries({ ...map.fixed, ...input.extra })) if (!(map.timeline && k === "timeline") && !ignore.has(k)) setPath(out, k, v);
+  // A song tool's song: one of the provider's own by its id (the fal provider sends any other song first, FieldMap.songSource).
+  const songId = input.extra?.[SONG_ID_PARAM];
+  if (map.songSource && typeof songId === "string" && songId.trim()) out[map.songSource.songId] = songId.trim();
+  const lyrics = map.lyrics ? lyricsOf(input.extra) : "";
+  if (lyrics && map.lyrics?.instrumental && isInstrumental(lyrics)) {
+    // An instrumental, by the API's own switch (MiniMax Music 2.5): no words, and nothing written for it.
+    out[map.lyrics.instrumental] = true;
+    if (map.lyrics.autoLyrics) out[map.lyrics.autoLyrics] = false;
+  } else if (lyrics && map.lyrics?.key) out[map.lyrics.key] = lyrics;
+  else if (lyrics && map.lyrics?.inPrompt && map.prompt !== false) {
+    const key = map.prompt ?? "prompt";
+    setPath(out, key, promptWithLyrics(typeof out[key] === "string" ? (out[key] as string) : (input.prompt ?? ""), lyrics));
+  }
   // The API's prompt expansion would rewrite a layout's boxes: off whenever the request carries one (a route that takes the
   // boxes in a field of their own, fal's FLUX 3 Klein, only when the draft places any). Prompt helper "off" turns it off too;
   // "on" leaves the API's default (on).
@@ -1058,6 +1076,9 @@ export function extractOutputs(response: unknown, op?: Operation): ExtractedOutp
     // Recraft makes a style from reference images on the fly and returns its id: keep it to reuse the style.
     const styleId = str(r.style_id);
     if (styleId) out = out.map((o) => ({ ...o, meta: { ...o.meta, styleId } }));
+    // Mureka's songs come back with an id its song tools take (extend, remix): kept on the song (meta.songId).
+    const songId = str(r.song_id);
+    if (songId) out = out.map((o) => (o.kind === "audio" ? { ...o, meta: { ...o.meta, songId } } : o));
     // Cut-out endpoints (Bria extract-object) return the matte next to the image: it rides along on the
     // cut-out (meta.mask) instead of landing in the feed as a second result.
     const mask = fileOf(r.mask)?.url;

@@ -6117,6 +6117,63 @@
       "blank"
     ]
   },
+  "EmptyMiniMaxMusic3LatentAudio": {
+    "input": {
+      "required": {
+        "seconds": [
+          "FLOAT",
+          {
+            "default": 120,
+            "min": 0.04,
+            "max": 360,
+            "step": 0.04
+          }
+        ],
+        "batch_size": [
+          "INT",
+          {
+            "default": 1,
+            "min": 1,
+            "max": 4096
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "seconds",
+        "batch_size"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "LATENT"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "LATENT"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "EmptyMiniMaxMusic3LatentAudio",
+    "display_name": "Empty MiniMax Music3 Latent Audio",
+    "description": "Creates an empty MiniMax Music3 audio latent for the requested duration.",
+    "python_module": "comfy_extras.nodes_minimax_music",
+    "category": "model/latent/minimax music",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "EmptyQwenImageLayeredLatentImage": {
     "input": {
       "required": {
@@ -6299,6 +6356,63 @@
     "description": "",
     "python_module": "comfy_extras.nodes_trellis2",
     "category": "model/latent/trellis",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "EmptyYuE2LatentAudio": {
+    "input": {
+      "required": {
+        "seconds": [
+          "FLOAT",
+          {
+            "default": 120,
+            "min": 0.04,
+            "max": 1000,
+            "step": 0.04
+          }
+        ],
+        "batch_size": [
+          "INT",
+          {
+            "default": 1,
+            "min": 1,
+            "max": 4096
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "seconds",
+        "batch_size"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "LATENT"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "LATENT"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "EmptyYuE2LatentAudio",
+    "display_name": "Empty YuE2 Latent Audio",
+    "description": "",
+    "python_module": "comfy_extras.nodes_yue2",
+    "category": "model/latent/yue2",
     "output_node": false,
     "deprecated": false,
     "experimental": false,
@@ -14834,6 +14948,112 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "MiniMaxMusic3TextEncode": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP",
+          {}
+        ],
+        "caption": [
+          "STRING",
+          {
+            "multiline": true,
+            "dynamicPrompts": true
+          }
+        ],
+        "lyrics": [
+          "STRING",
+          {
+            "multiline": true,
+            "dynamicPrompts": true
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 18446744073709552000,
+            "control_after_generate": true
+          }
+        ],
+        "max_duration": [
+          "FLOAT",
+          {
+            "tooltip": "Maximum duration in seconds; the model can end the song earlier.",
+            "default": 120,
+            "min": 0.04,
+            "max": 360,
+            "step": 0.04
+          }
+        ],
+        "cfg_scale": [
+          "FLOAT",
+          {
+            "advanced": true,
+            "default": 1.5,
+            "min": 0,
+            "max": 100,
+            "step": 0.1,
+            "round": 0.01
+          }
+        ],
+        "top_k": [
+          "INT",
+          {
+            "advanced": true,
+            "default": 50,
+            "min": 1,
+            "max": 16384
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "caption",
+        "lyrics",
+        "seed",
+        "max_duration",
+        "cfg_scale",
+        "top_k"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "FLOAT"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "CONDITIONING",
+      "seconds"
+    ],
+    "output_tooltips": [
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "MiniMaxMusic3TextEncode",
+    "display_name": "MiniMax Music3 Text Encode",
+    "description": "Uses a MiniMax Music3 CLIP model to generate the acoustic conditioning sequence.",
+    "python_module": "comfy_extras.nodes_minimax_music",
+    "category": "model/conditioning/minimax music",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "MoGeGeometryToFOV": {
     "input": {
       "required": {
@@ -20759,6 +20979,66 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "SheetSage2AudioToABC": {
+    "input": {
+      "required": {
+        "audio_encoder": [
+          "AUDIO_ENCODER",
+          {}
+        ],
+        "audio": [
+          "AUDIO",
+          {}
+        ],
+        "mode": [
+          "COMBO",
+          {
+            "tooltip": "full: generates melody and chords; melody: generates melody only, recommended for covers.",
+            "multiselect": false,
+            "options": [
+              "melody",
+              "full"
+            ]
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "audio_encoder",
+        "audio",
+        "mode"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "STRING"
+    ],
+    "output_is_list": [
+      true
+    ],
+    "output_name": [
+      "abc"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "SheetSage2AudioToABC",
+    "display_name": "SheetSage2 Audio to ABC",
+    "description": "Transcribes vocal and instrumental melodies from music into ABC notation. Connect abc output to YuE2 Generate Music node and use the matching mode.",
+    "python_module": "comfy_extras.nodes_audio_encoder",
+    "category": "model/conditioning/yue2",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
   "SkipLayerGuidanceDiTSimple": {
     "input": {
       "required": {
@@ -23764,6 +24044,76 @@
     "output_matchtypes": null,
     "name": "VAEDecodeAudio",
     "display_name": "VAE Decode Audio",
+    "description": "",
+    "python_module": "comfy_extras.nodes_audio",
+    "category": "model/latent",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": [
+      "latent to audio"
+    ],
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "VAEDecodeAudioTiled": {
+    "input": {
+      "required": {
+        "samples": [
+          "LATENT",
+          {}
+        ],
+        "vae": [
+          "VAE",
+          {}
+        ],
+        "tile_size": [
+          "INT",
+          {
+            "default": 512,
+            "min": 32,
+            "max": 8192,
+            "step": 8
+          }
+        ],
+        "overlap": [
+          "INT",
+          {
+            "default": 64,
+            "min": 0,
+            "max": 1024,
+            "step": 8
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "samples",
+        "vae",
+        "tile_size",
+        "overlap"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "AUDIO"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "AUDIO"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "VAEDecodeAudioTiled",
+    "display_name": "VAE Decode Audio (Tiled)",
     "description": "",
     "python_module": "comfy_extras.nodes_audio",
     "category": "model/latent",
@@ -29428,6 +29778,315 @@
     "output_node": false,
     "has_intermediate_output": false,
     "search_aliases": []
+  },
+  "YuE2GenerateABC": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP",
+          {}
+        ],
+        "style": [
+          "STRING",
+          {
+            "multiline": true,
+            "dynamicPrompts": true
+          }
+        ],
+        "lyrics": [
+          "STRING",
+          {
+            "multiline": true,
+            "dynamicPrompts": true
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 18446744073709552000,
+            "control_after_generate": true
+          }
+        ],
+        "mode": [
+          "COMBO",
+          {
+            "tooltip": "full: generates melody and chords; melody: generates melody only, recommended for covers.",
+            "multiselect": false,
+            "options": [
+              "full",
+              "melody"
+            ]
+          }
+        ],
+        "max_abc_tokens": [
+          "INT",
+          {
+            "advanced": true,
+            "default": 8192,
+            "min": 1,
+            "max": 20000
+          }
+        ],
+        "temperature": [
+          "FLOAT",
+          {
+            "advanced": true,
+            "default": 0.7,
+            "min": 0,
+            "max": 5,
+            "step": 0.05
+          }
+        ],
+        "top_p": [
+          "FLOAT",
+          {
+            "advanced": true,
+            "default": 0.9,
+            "min": 0.01,
+            "max": 1,
+            "step": 0.01
+          }
+        ],
+        "top_k": [
+          "INT",
+          {
+            "advanced": true,
+            "default": 30,
+            "min": 1,
+            "max": 32768
+          }
+        ],
+        "repetition_penalty": [
+          "FLOAT",
+          {
+            "advanced": true,
+            "default": 1.005,
+            "min": 0.01,
+            "max": 10,
+            "step": 0.005
+          }
+        ],
+        "penalty_window": [
+          "INT",
+          {
+            "tooltip": "Number of recent ABC tokens used to penalize repetition.",
+            "advanced": true,
+            "default": 100,
+            "min": 1,
+            "max": 20000
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "style",
+        "lyrics",
+        "seed",
+        "mode",
+        "max_abc_tokens",
+        "temperature",
+        "top_p",
+        "top_k",
+        "repetition_penalty",
+        "penalty_window"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "STRING"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "abc"
+    ],
+    "output_tooltips": [
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "YuE2GenerateABC",
+    "display_name": "YuE2 Generate ABC",
+    "description": "Generates the ABC notation of a song from style and lyrics. Connect abc to YuE2 Generate Music node.",
+    "python_module": "comfy_extras.nodes_yue2",
+    "category": "model/conditioning/yue2",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
+  },
+  "YuE2GenerateMusic": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP",
+          {}
+        ],
+        "style": [
+          "STRING",
+          {
+            "multiline": true,
+            "dynamicPrompts": true
+          }
+        ],
+        "lyrics": [
+          "STRING",
+          {
+            "multiline": true,
+            "dynamicPrompts": true
+          }
+        ],
+        "abc": [
+          "STRING",
+          {
+            "tooltip": "Connect the ABC generator or supply an edited score. Leave empty to use off mode automatically.",
+            "default": "",
+            "multiline": true
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 18446744073709552000,
+            "control_after_generate": true
+          }
+        ],
+        "mode": [
+          "COMBO",
+          {
+            "tooltip": "full: generates melody and chords; melody: generates melody only, recommended for covers.",
+            "multiselect": false,
+            "options": [
+              "full",
+              "melody"
+            ]
+          }
+        ],
+        "max_duration": [
+          "FLOAT",
+          {
+            "tooltip": "Maximum duration in seconds. Automatically reduced for long prompts; generation can stop earlier.",
+            "default": 360,
+            "min": 0.04,
+            "max": 900,
+            "step": 0.04
+          }
+        ],
+        "temperature": [
+          "FLOAT",
+          {
+            "advanced": true,
+            "default": 1,
+            "min": 0,
+            "max": 5,
+            "step": 0.05
+          }
+        ],
+        "top_p": [
+          "FLOAT",
+          {
+            "advanced": true,
+            "default": 0.95,
+            "min": 0.01,
+            "max": 1,
+            "step": 0.01
+          }
+        ],
+        "top_k": [
+          "INT",
+          {
+            "advanced": true,
+            "default": 100,
+            "min": 1,
+            "max": 32768
+          }
+        ],
+        "repetition_penalty": [
+          "FLOAT",
+          {
+            "advanced": true,
+            "default": 1.2,
+            "min": 0.01,
+            "max": 10,
+            "step": 0.01
+          }
+        ]
+      },
+      "optional": {
+        "cfg_scale": [
+          "FLOAT",
+          {
+            "tooltip": "Autoregressive guidance for style and lyrics. 1.0 disables CFG, matching the ABC workflow. Use 1.01 to match the original off-mode guidance.",
+            "advanced": true,
+            "default": 1,
+            "min": 0,
+            "max": 100,
+            "step": 0.01
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip",
+        "style",
+        "lyrics",
+        "abc",
+        "seed",
+        "mode",
+        "max_duration",
+        "temperature",
+        "top_p",
+        "top_k",
+        "repetition_penalty"
+      ],
+      "optional": [
+        "cfg_scale"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "FLOAT"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "CONDITIONING",
+      "seconds"
+    ],
+    "output_tooltips": [
+      null,
+      null
+    ],
+    "output_matchtypes": null,
+    "name": "YuE2GenerateMusic",
+    "display_name": "YuE2 Generate Music",
+    "description": "Generates music tokens and acoustic conditioning from style, lyrics, and an ABC notation. Provide the generated seconds to the Empty YuE2 Latent Audio node. An empty ABC input ignores the selected mode.",
+    "python_module": "comfy_extras.nodes_yue2",
+    "category": "model/conditioning/yue2",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": null,
+    "essentials_category": null,
+    "has_intermediate_output": false
   },
   "ZenImage21AdapterLoader": null,
   "ZenImage21TextEncode": null

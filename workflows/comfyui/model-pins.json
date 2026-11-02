@@ -1089,5 +1089,30 @@
   "revision": "f66c13dc17391dd4da99242a407918b92bf7d5fc",
   "sizeBytes": 11894623166,
   "sha256": "748b2bcc9c4b7bf7b23406987b42d4ac40362070c164cf11092482be6a863455"
+ },
+ "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/diffusion_models/minimax_music3_dit_int8_convrot.safetensors": {
+  "revision": "9e364ccd290a401561091fb441ed19cd7de92550",
+  "sizeBytes": 2502161682,
+  "sha256": "d6b959633e69899f99f3a92d6741c0fe79f26958a30811e50e372ef978b24d5f"
+ },
+ "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors": {
+  "revision": "9e364ccd290a401561091fb441ed19cd7de92550",
+  "sizeBytes": 9196611886,
+  "sha256": "010b7416d2336a08c711bc22ee65849c9623069ddb7d89bec011a75699e52014"
+ },
+ "https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/vae/minimax_music3_dav.safetensors": {
+  "revision": "9e364ccd290a401561091fb441ed19cd7de92550",
+  "sizeBytes": 216696128,
+  "sha256": "2a32155b769be01445fcc2a8663b910fc9e1751e18dc1c3ec528064512d9ef0c"
+ },
+ "https://huggingface.co/Comfy-Org/YuE2/resolve/main/checkpoints/yue2_3b_int8_convrot.safetensors": {
+  "revision": "2f76ca75e6ee094169de899cc7fc99d6887e2196",
+  "sizeBytes": 3960938800,
+  "sha256": "96fe199377309001ed8cd26a944baeee8cc31a20ba7c36d1d3c0a7e1f4149db6"
+ },
+ "https://huggingface.co/Comfy-Org/YuE2/resolve/main/audio_encoders/sheetsage2_bf16.safetensors": {
+  "revision": "2f76ca75e6ee094169de899cc7fc99d6887e2196",
+  "sizeBytes": 1386868122,
+  "sha256": "5fd960ce3df281e3f3a889d174584d88f96247711480cf96377b12d7e8b6adc5"
  }
 }

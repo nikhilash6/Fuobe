@@ -56,6 +56,8 @@
 //   gridPrompt, sheetPrompt               (contact-sheet / turnaround framing text placed before the prompt)
 // Keys added with the nm10-flux3-klein workflows (research #10 §6.3):
 //   image5 … image10                      (further reference images: FLUX 3 Image Klein's edit takes up to 10)
+// Keys added with the nm10-music3 workflows (research #10 §6.6). * = the provider fills it from the canonical request:
+//   tiledDecode*                          (MiniMax Music 3: decode the song in tiles, less VRAM; on for songs over 2 minutes)
 // Keys added with the av-tools workflows (Wave B):
 //   frameIndex                            (Extract frame: which frame of the Trim Video window, -1 = its last, 0 = its first)
 // Keys added with the comfyui-oss-4 workflows (docs/research/comfyui-oss-4.md). * = the provider fills it from the
@@ -235,6 +237,13 @@ export const PACK_CLASSES = {
 // Model download locations for files that the source workflow does not annotate
 // (UI templates usually carry node.properties.models; custom-node examples do not).
 export const KNOWN_MODELS = {
+  // nm10-music3: MiniMax Music 3 and YuE2 as Comfy-Org repacked them (the files the core templates audio_minimax_music_3,
+  // audio_yue2_text2music and audio_yue2_music_cover load), pinned in model-pins.json at the revisions read on 2026-11-01.
+  'minimax_music3_dit_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/diffusion_models/minimax_music3_dit_int8_convrot.safetensors' },
+  'minimax_music3_text_encoder_pruned_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors' },
+  'minimax_music3_dav.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/vae/minimax_music3_dav.safetensors' },
+  'yue2_3b_int8_convrot.safetensors': { folder: 'checkpoints', url: 'https://huggingface.co/Comfy-Org/YuE2/resolve/main/checkpoints/yue2_3b_int8_convrot.safetensors' },
+  'sheetsage2_bf16.safetensors': { folder: 'audio_encoders', url: 'https://huggingface.co/Comfy-Org/YuE2/resolve/main/audio_encoders/sheetsage2_bf16.safetensors' },
   // archive-restore: Lightricks' Detail Refine IC-LoRA (stage 2 of Restore & colourise), gated, at the researched commit.
   'ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors': { folder: 'loras', url: 'https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details/resolve/4912c478b35dd96b6cdcc5f7c7ff9d72c2c57929/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors' },
   // Live edit: linoyts' 2-step DMD2 LoRA for Qwen-Image 2.1 (pytorch_lora_weights.safetensors upstream, kept under a
@@ -2019,6 +2028,8 @@ export const SPEC = [
       { op: 'set', node: '94', input: 'bpm', value: 120 },
       { op: 'set', node: '94', input: 'duration', value: 60 },
       { op: 'set', node: '98', input: 'seconds', value: 60 },
+      // nm10-music3: a song with no words is an instrumental (the template's sample lyrics are never sung).
+      { op: 'set', node: '94', input: 'lyrics', value: '[Instrumental]' },
     ],
     bindings: {
       tags: [b('94', 'tags')],
@@ -2031,7 +2042,82 @@ export const SPEC = [
     outputs: [{ node: '106', kind: 'audio' }],
     limits: { maxDurationSec: 240 },
     vramGb: 8,
-    notes: 'Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers ("[Instrumental]" or empty for instrumental). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4).',
+    notes: 'Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers; "[Instrumental]" when there are no words (in place of the template sample lyrics). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4).',
+  },
+  // nm10-music3 (research #10 §6.6): full songs on core nodes. MiniMax Music 3 from the template audio_minimax_music_3
+  // (Comfy-Org's int8 DiT in place of its fp16 one, as the template's own note offers for low VRAM; its Tiled decode switch
+  // kept, turned on by the provider for songs over 2 minutes); YuE2 from audio_yue2_text2music (ABC planning on, "full") and
+  // audio_yue2_music_cover (SheetSage2 reads the song's melody, "melody" mode). The templates' PreviewAny pass-throughs are left out.
+  {
+    id: 'music-minimax-3',
+    title: 'MiniMax Music 3: full songs with vocals up to 5 minutes (caption + lyrics)',
+    capability: 'music',
+    handBuilt: 'hand-built/music-minimax-3.json',
+    bindings: {
+      tags: [b('4', 'caption')],
+      lyrics: [b('4', 'lyrics')],
+      duration: [b('4', 'max_duration')],
+      seed: [b('4', 'seed'), b('7', 'seed')],
+      steps: [b('7', 'steps')],
+      tiledDecode: [b('10', 'switch')],
+    },
+    outputs: [{ node: '11', kind: 'audio' }],
+    defaults: { duration: 120, tiledDecode: false },
+    limits: { maxDurationSec: 300 },
+    vramGb: 24,
+    license: 'MiniMax-Music3 Community License (MiniMaxAI/MiniMax-Music3 @ 1b525ccb: MIT-style grant with the notice kept and an Acceptable Use Policy; a commercial product must show "MiniMax-Music3" in its interface; MiniMax\'s written authorisation above US$20M yearly revenue); the Comfy-Org repack @ 9e364ccd is tagged Apache-2.0',
+    notes:
+      'From the core template audio_minimax_music_3 from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: int8 DiT, MP3 V0. tags = the caption (style, mood, vocals, arrangement; the template suggests Global Metadata, Vocal Details and Arrangement), lyrics with section tags on lines of their own ' +
+      '([Intro] [Verse] [Pre-Chorus] [Chorus] [Post-Chorus] [Bridge] [Instrumental] [Solo] [Outro]); "[Instrumental]" when there are no words. duration = max_duration, an upper bound ' +
+      '(the model can end the song earlier; 9,000 acoustic frames at 25 fps = 5 min). KSampler 30 steps, cfg 1.7, euler / simple and the encoder\'s cfg_scale 1.7 / top_k 50, as the template. ' +
+      '32 kHz stereo. The template\'s Tiled decode switch (VAEDecodeAudioTiled 1536 / 64): less VRAM for long songs, a small risk of seams; tiledDecode true for songs over 120 s. ' +
+      'VRAM 24 GB, the card\'s figure: under 24 GB at full precision and about 22 GB with CPU offload; its 8 GB figure streams the language model layer by layer (diffusers group offload), ' +
+      'which the core node does not do (ComfyUI\'s own partial loading may still fit smaller cards). Files: DiT int8 2.5 GB (fp16 4.91, fp32 9.83), pruned int8 encoder 9.2 GB ' +
+      '(pruned bf16 16.71, full bf16 18.47), DAV VAE 0.22 GB.',
+  },
+  {
+    id: 'music-yue2-song',
+    title: 'YuE2 3B: lyrics to song (style + lyrics, ABC planning)',
+    capability: 'music',
+    handBuilt: 'hand-built/music-yue2-song.json',
+    bindings: {
+      tags: [b('2', 'style'), b('3', 'style')],
+      lyrics: [b('2', 'lyrics'), b('3', 'lyrics')],
+      duration: [b('3', 'max_duration')],
+      seed: [b('2', 'seed'), b('3', 'seed'), b('6', 'seed')],
+      steps: [b('6', 'steps')],
+    },
+    outputs: [{ node: '8', kind: 'audio' }],
+    defaults: { duration: 120 },
+    limits: { maxDurationSec: 300 },
+    vramGb: 12,
+    license: 'CC-BY-NC-4.0 (m-a-p/YuE2-3B @ 8f24312f weights; the Comfy-Org/YuE2 repack @ 2f76ca75 is tagged the same)',
+    notes:
+      'From the core template audio_yue2_text2music from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: MP3 V0. tags = the style (language, genre, vocal, tempo, instruments), lyrics with section tags ([Verse] [Chorus] [Bridge] [Outro]); only the words to be sung. YuE2 Generate ABC plans ' +
+      'melody and chords ("full") before the song; YuE2 Generate Music makes the tokens and the seconds the empty latent takes. duration = max_duration, an upper bound reduced for long prompts. ' +
+      'KSampler 32 steps, cfg 1, dpm_2 / sgm_uniform, as the template. Checkpoint int8 3.96 GB (bf16 7.8 GB). VRAM is not published: 12 GB is Fuobe\'s estimate for the int8 checkpoint.',
+  },
+  {
+    id: 'music-yue2-cover',
+    title: 'YuE2 3B: a cover of a song (its melody, new style and lyrics)',
+    capability: 'music',
+    handBuilt: 'hand-built/music-yue2-cover.json',
+    bindings: {
+      audio: [b('9', 'audio')],
+      tags: [b('3', 'style')],
+      lyrics: [b('3', 'lyrics')],
+      duration: [b('3', 'max_duration')],
+      seed: [b('3', 'seed'), b('6', 'seed')],
+      steps: [b('6', 'steps')],
+    },
+    outputs: [{ node: '8', kind: 'audio' }],
+    defaults: { duration: 300 },
+    limits: { maxDurationSec: 300 },
+    vramGb: 12,
+    license: 'CC-BY-NC-4.0 (m-a-p/YuE2-3B @ 8f24312f and m-a-p/SheetSage2 @ b83c3d79 weights; the Comfy-Org/YuE2 repack @ 2f76ca75 is tagged the same)',
+    notes:
+      'From the core template audio_yue2_music_cover from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: MP3 V0. audio = the song to cover (LoadAudio). SheetSage2 transcribes its melody to ABC ("melody" mode, the template\'s), which YuE2 sings with the new style and lyrics: lyrics close to the ' +
+      'original\'s phrasing and syllable count fit the melody best. The source audio is not YuE2\'s conditioning, only its melody. SheetSage2 bf16 1.39 GB. VRAM is not published: 12 GB is Fuobe\'s estimate for the int8 checkpoint and SheetSage2.',
   },
   {
     id: 'v2a-mmaudio',

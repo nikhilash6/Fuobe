@@ -29,7 +29,9 @@ export const SINGLE_TAKE = new Set<Operation>([
   "bg-remove", "bg-remove-video", "depth-video", "concat", "color-match", "frame", "sdr-to-hdr", "export-video",
 ]);
 
-export const durationLabel = (v: number) => (v >= 1000 ? `${Math.round(v / 1000)}s` : `${v}s`);
+/** A length as it reads on a chip: seconds up to a minute ("10s"), minutes and seconds after it ("2:00", "4:30": a song). */
+export const durationLabel = (v: number) =>
+  v >= 1000 ? `${Math.round(v / 1000)}s` : v >= 60 ? `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, "0")}` : `${v}s`;
 
 export interface SettingsShape {
   /** Show the aspect-ratio control (the model offers several and the operation isn't framed by an input). */
