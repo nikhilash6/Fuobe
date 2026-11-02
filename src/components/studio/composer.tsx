@@ -37,6 +37,7 @@ import {
   OPEN_MIN_GAP,
   type FrameSupport,
 } from "@/lib/catalog/keyframes";
+import { timingFor, timingFromTimes, timingProblem, type InbetweenTiming } from "@/lib/inbetween";
 import { appModels, presetGpuKey, presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipe-routes";
 import {
   appRoute,
@@ -150,6 +151,8 @@ interface FramesContext {
   support: FrameSupport;
   duration: number;
   chained: boolean;
+  /** Keyframe animation (Fuobe Animation): each gap's timing, fitted to the frames and the engine. */
+  animation?: { timing: InbetweenTiming };
 }
 
 function buildRequest(
@@ -177,7 +180,7 @@ function buildRequest(
     const sent = framesRequest(draft.frames, frames);
     images = sent.images;
     endImage = sent.endImage;
-    params = { ...params, ...sent.params };
+    params = { ...params, ...sent.params, ...(frames.animation && { extra: { ...params.extra, inbetween: frames.animation.timing } }) };
     pinned = op ?? sent.op;
   }
   // Layout mode: the boxes ride as params.extra.layout, captioned with the prompt; the plan compiles them for the model.
@@ -552,11 +555,30 @@ export function Composer({ docked }: { docked: boolean }) {
 
   // Frames mode (Video studio): up to 10 stills at their times, as the picked model can take them.
   const framesOn = !!config.frames && !!draft.frames;
+  // Style: Animation (Fuobe Animation): keyframes with a timing per gap, the in-betweens drawn by AniSora.
+  const animationOn = framesOn && !!model?.options.inbetween;
+  // Until a gap is timed, the frames' places on the strip give the timing (Frames mode's times, at the playback rate).
+  const savedTiming = draft.params.extra?.inbetween as Partial<InbetweenTiming> | undefined;
+  const animationTiming =
+    animationOn && model && draft.frames
+      ? savedTiming?.gaps
+        ? timingFor(draft.frames.length, savedTiming, model.engine)
+        : timingFromTimes(frameTimes(draft.frames.map((f) => f.at), framesDuration(model, draft.params.duration)), { engine: model.engine })
+      : undefined;
   const framesCtx: FramesContext | undefined =
-    framesOn && model ? { support: frameSupport(model), duration: framesDuration(model, draft.params.duration), chained: !!keyframeChain(model) } : undefined;
+    framesOn && model
+      ? { support: frameSupport(model), duration: framesDuration(model, draft.params.duration), chained: !!keyframeChain(model), ...(animationTiming && { animation: { timing: animationTiming } }) }
+      : undefined;
   const framesAt = framesCtx && draft.frames ? frameTimes(draft.frames.map((f) => f.at), framesCtx.duration) : [];
   // The open chain's gaps (and one frame's clip) must be clips its model makes; the planner checks two or more frames too.
-  const framesGap = framesCtx?.chained && model && framesAt.length ? chainGapProblem(framesAt, framesCtx.duration, chainTiming(model)) : null;
+  // An animation's gaps are its own timing (two keyframes at least).
+  const framesGap = animationTiming
+    ? draft.frames!.length > 0 && draft.frames!.length < 2
+      ? "Add a second keyframe: the in-betweens go between them"
+      : timingProblem(animationTiming, draft.frames!.length, model!.engine)
+    : framesCtx?.chained && model && framesAt.length
+      ? chainGapProblem(framesAt, framesCtx.duration, chainTiming(model))
+      : null;
   // Layout mode (Image studio): boxes on the picture, one row each, compiled for the model at the size it renders.
   const layoutOn = !!config.layout && !!draft.layout;
   const [layoutEditing, setLayoutEditing] = useState(false);
@@ -1005,7 +1027,19 @@ export function Composer({ docked }: { docked: boolean }) {
     if (framesCtx.support === "start" || framesCtx.support === "none") framesNotice = { text: `${framesBlocker(model, count)!.message}.`, tone: "warn", action };
     else if (framesGap) framesNotice = { text: `${framesGap}.`, tone: "warn" };
     else if (note) framesNotice = { text: note, tone: "info", action };
+    else if (animationTiming && model.engine === "cloud")
+      framesNotice = { text: "In the cloud each gap is one clip with every frame kept, played at 16 fps. Faster speeds and 24 fps playback are on your GPU, free.", tone: "info" };
   }
+  // Style: Animation, in Frames mode: Fuobe Animation (when it's on in this install), and back to the engine's frames model.
+  const animationModel = config.frames && catalog.offered("fuobe-animation", engine) ? catalog.getModel("fuobe-animation") : undefined;
+  const plainFramesModel = catalog.getModel(FRAMES_MODELS[engine].id);
+  const switchStyle = (on: boolean) => {
+    const to = on ? animationModel : plainFramesModel;
+    if (!to) return;
+    setDraft((d) => ({ modelId: to.id, params: { ...to.defaults, ...d.params, resolution: to.defaults?.resolution ?? d.params.resolution, aspectRatio: to.defaults?.aspectRatio ?? d.params.aspectRatio } }));
+  };
+  const setTiming = (t: InbetweenTiming) => setDraft((d) => ({ params: { ...d.params, extra: { ...d.params.extra, inbetween: t } } }));
+  const stillMouth = draft.params.extra?.stillMouth === true;
   const framesChip = config.frames ? (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -1153,6 +1187,18 @@ export function Composer({ docked }: { docked: boolean }) {
           onAddPick={attach.attach}
           onClose={toggleFrames}
           notice={framesNotice}
+          style={animationModel ? { on: animationOn, onChange: switchStyle, engine } : undefined}
+          animation={
+            animationTiming && model
+              ? {
+                  timing: animationTiming,
+                  engine: model.engine,
+                  onTiming: setTiming,
+                  stillMouth,
+                  onStillMouth: (on) => setDraft((d) => ({ params: { ...d.params, extra: { ...d.params.extra, stillMouth: on || undefined } } })),
+                }
+              : undefined
+          }
         />
       )}
       {layoutOn && !collapsed && draft.layout && (

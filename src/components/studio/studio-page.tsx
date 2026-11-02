@@ -15,6 +15,7 @@ import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest } from "@/lib
 import {
   claimStartToken,
   followEngineDefault,
+  handoffFrames,
   handoffKey,
   mergeHandoff,
   presetModel,
@@ -28,7 +29,7 @@ import {
 } from "@/lib/composer";
 import { presetGpuKey, presetRoutes } from "@/lib/catalog/preset-recipe-routes";
 import { editableLayout, EDIT_LAYOUT_PARAM, readEditLayoutParam } from "@/lib/output-actions";
-import { positionsFrom } from "@/lib/catalog/keyframes";
+import { positionsFrom, spread } from "@/lib/catalog/keyframes";
 import { reuseSignature, withSignatureWords } from "@/lib/catalog/palettes";
 import { movedAppRequest } from "@/lib/catalog/plan";
 import { currentModelId, migrateRequest } from "@/lib/catalog/replaced";
@@ -141,6 +142,9 @@ function initialDraft(
   const format = model?.options.formats?.find((f) => f === sp.get("format"));
   // A size handed over (Regenerate in 2K → 1440p), when the model offers it.
   const resolution = model?.options.resolutions?.find((r) => r === sp.get("resolution"));
+  // Stills handed over as frames (Storyboard's "Animate these panels", a Character Sheet's poses): Frames mode, evenly spaced.
+  const handed = config.frames ? handoffFrames(sp.get("frames")) : [];
+  const frames = handed.length ? handed.map((u, i) => ({ value: slot(u)!, at: spread(handed.length)[i] })) : undefined;
   return {
     prompt: sp.get("prompt") ?? "",
     negativePrompt: "",
@@ -150,6 +154,7 @@ function initialDraft(
     refs,
     presetId: sp.get("preset") ?? config.preset?.id,
     presetOptions: {},
+    ...(frames && { frames }),
   };
 }
 

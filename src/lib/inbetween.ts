@@ -222,3 +222,16 @@ export function requestTiming(extra: Record<string, unknown> | undefined, keys: 
 export function gapPrompt(base: string | undefined, gap: Pick<GapTiming, "prompt">, stillMouth: boolean): string {
   return [base?.trim().replace(/[.\s]+$/, ""), gap.prompt?.trim().replace(/[.\s]+$/, ""), stillMouth ? STILL_MOUTH_PROMPT : ""].filter(Boolean).join(". ");
 }
+
+/** Fuobe Animation's model id. */
+export const ANIMATION_MODEL = "fuobe-animation";
+
+/**
+ * The Video studio in Frames mode with these stills as keyframes, in Animation style (Storyboard's "Animate these panels",
+ * a Character Sheet's "Animate between poses"): /video?model=fuobe-animation&frames=a,b,c&prompt=….
+ */
+export function animateHref(stills: string[], prompt?: string): string {
+  const q = new URLSearchParams({ model: ANIMATION_MODEL, frames: stills.slice(0, MAX_KEYS).join(",") });
+  if (prompt?.trim()) q.set("prompt", prompt.trim());
+  return `/video?${q.toString()}`;
+}
