@@ -747,6 +747,11 @@
   "sizeBytes": 630697104,
   "sha256": "37d49218544b9e0bfb8e831d1399f451fbc5068aff6474f42a90c928363c3573"
  },
+ "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/AniSora/Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors": {
+  "revision": "8260d429d19fd7a72304cad059160b95d843913f",
+  "sizeBytes": 630695648,
+  "sha256": "bdc68451d6bccd6efb70f6eb916ede7cc470e3b6dacd0273da528246334095da"
+ },
  "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors": {
   "revision": "8260d429d19fd7a72304cad059160b95d843913f",
   "sizeBytes": 253806278,

@@ -24612,6 +24612,53 @@
    "base": "qwen-image-2.1",
    "download": "direct",
    "checked": "2026-11-01"
+  },
+  {
+   "key": "anisora-3-2-i2v-high",
+   "name": "AniSora 3.2 for Wan 2.2 I2V A14B, high-noise expert (bilibili Index-AniSora, extracted by Kijai)",
+   "url": "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/AniSora/Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors",
+   "page": "https://huggingface.co/Kijai/WanVideo_comfy/tree/main/LoRAs/AniSora",
+   "file": "Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors",
+   "strength": 1.0,
+   "base": "wan2.2-i2v-a14b",
+   "target": "high",
+   "licence": "Apache-2.0 (bilibili's Index-AniSora weights: GitHub bilibili/Index-anisora LICENSE and the HF card IndexTeam/Index-anisora, V3.2 released 2025-09-23); Kijai's rank-64 extraction repository states no licence of its own",
+   "commercial": true,
+   "hostedOk": true,
+   "download": "direct",
+   "released": "2025-09-27",
+   "revision": "8260d429d19fd7a72304cad059160b95d843913f",
+   "sha256": "bdc68451d6bccd6efb70f6eb916ede7cc470e3b6dacd0273da528246334095da",
+   "sizeBytes": 630695648,
+   "checked": "2026-11-02",
+   "usedBy": [
+    "fuobe-animation (keyframe in-betweening, the high-noise expert)"
+   ],
+   "hostedEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora (transformer=high, end_image_url, num_frames 17-161)",
+   "notes": "The difference between bilibili's AniSora V3.2 (anime motion trained on Wan 2.2 I2V A14B) and the base high-noise expert, extracted at rank 64 by Kijai (file last changed in commit f32501d0, 2025-09-27). The source of the file the owner's 'Keyframes to Full Character Animation' graph loads at strength 1.0 on the high-noise expert, with the lightx2v 4-step LoRA on the low-noise expert, 4 steps at CFG 1 (high 0-2, low 2-end), shift 5. Only a high-noise file exists."
+  },
+  {
+   "key": "wan22-i2v-lightx2v-4step-low",
+   "name": "Lightx2v 4-step for Wan 2.2 I2V A14B, low-noise expert (Comfy-Org repack)",
+   "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+   "page": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+   "file": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+   "strength": 1.0,
+   "base": "wan2.2-i2v-a14b",
+   "target": "low",
+   "licence": "Apache-2.0 (the Comfy-Org repack's card; LightX2V's Wan2.2-Lightning is Apache-2.0)",
+   "commercial": true,
+   "hostedOk": true,
+   "download": "direct",
+   "released": "2025-08-07",
+   "revision": "ee6f4a40737a995bf5818954cfce6d59443b0f04",
+   "sha256": "024f21de095bc8fad9809ded3e9e49a2e170dcf27075da8145ba7d60d8aab7f9",
+   "sizeBytes": 1226977424,
+   "checked": "2026-11-02",
+   "usedBy": [
+    "fuobe-animation (keyframe in-betweening, the low-noise expert on your GPU)"
+   ],
+   "notes": "The repository now answers as Comfy-Org/Wan-2.2 (Hugging Face redirects the old name). The open graph loads it on the low-noise expert so the in-betweens take 4 steps; in the cloud fal's own acceleration takes its place (fal's endpoint runs its own step count), so it is never sent there."
   }
  ]
 }
