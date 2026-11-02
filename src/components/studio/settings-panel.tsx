@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useLikelyVisitor } from "@/lib/api";
 import { FORMAT_INFO } from "@/lib/av/formats";
 import { OPERATION_LABELS, type GenParams, type ModelDef, type Operation, type VideoFormat } from "@/lib/catalog/types";
 import { colormapLabel, durationLabel, formatOf, hiddenChanges, MATTE_OUTPUT_LABELS, settingsSummary, videoToolNote, type SettingsShape } from "@/lib/composer";
@@ -236,6 +237,8 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
   const opts = model?.options ?? {};
   const d = model?.defaults ?? {};
   const [advanced, setAdvanced] = useState(p.seed !== undefined || !!negativePrompt);
+  // "Rewrite my prompt now" uses the install's AI helper, which guests and accounts can't call.
+  const visitor = useLikelyVisitor();
   return (
     <div className="space-y-4">
       {extras && <div className="flex flex-wrap gap-1.5 sm:hidden">{extras}</div>}
@@ -342,14 +345,16 @@ function SettingsBody({ model, op, shape, params: p, setP, setExtra, negativePro
           )}
           {shape.enhance && (
             <Toggle label="Enhance prompt" hint="Rewrites your prompt with more detail before it runs" checked={!!p.enhancePrompt} onChange={(v) => setP({ enhancePrompt: v })}>
-              <button
-                type="button"
-                onClick={onRewrite}
-                disabled={enhancing}
-                className="mt-1 inline-flex items-center gap-1 rounded text-[12px] font-medium text-brand-text outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60"
-              >
-                {enhancing ? <Loader2 className="size-3 animate-spin" /> : <Wand2 className="size-3" />} Rewrite my prompt now
-              </button>
+              {!visitor && (
+                <button
+                  type="button"
+                  onClick={onRewrite}
+                  disabled={enhancing}
+                  className="mt-1 inline-flex items-center gap-1 rounded text-[12px] font-medium text-brand-text outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60"
+                >
+                  {enhancing ? <Loader2 className="size-3 animate-spin" /> : <Wand2 className="size-3" />} Rewrite my prompt now
+                </button>
+              )}
             </Toggle>
           )}
         </div>

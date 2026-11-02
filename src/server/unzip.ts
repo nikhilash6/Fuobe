@@ -10,9 +10,13 @@ const inflate = promisify(inflateRaw);
  * Bounded by what is actually unpacked, never by what the headers claim: at most `maxFiles` entries and `maxBytes` of
  * unpacked data (each entry inflates into what is left of that budget, off the event loop). Entries that share or overlap
  * their bytes, run past the archive, or unpack to a length other than the one declared are refused, so a crafted archive
- * can't multiply one small entry into many large files.
+ * can't multiply one small entry into many large files. With `only`, other entries are skipped unread; with `onEntry`,
+ * each entry goes to it as soon as it is unpacked and isn't kept, so one entry at a time is in memory.
  */
-export async function unzip(buf: Buffer, o: { maxFiles?: number; maxBytes?: number } = {}): Promise<{ name: string; data: Buffer }[]> {
+export async function unzip(
+  buf: Buffer,
+  o: { maxFiles?: number; maxBytes?: number; only?: (name: string) => boolean; onEntry?: (name: string, data: Buffer) => void | Promise<void> } = {},
+): Promise<{ name: string; data: Buffer }[]> {
   const maxFiles = o.maxFiles ?? 64;
   const maxBytes = o.maxBytes ?? 512 * 1024 * 1024;
   const tooMuch = () => new Error("The archive unpacks to more than Fuobe keeps from one result");
@@ -49,6 +53,7 @@ export async function unzip(buf: Buffer, o: { maxFiles?: number; maxBytes?: numb
     const name = buf.subarray(at + 46, at + 46 + nameLen).toString("utf8");
     at += 46 + nameLen + extraLen + commentLen;
     if (name.endsWith("/") || name.startsWith("__MACOSX/") || name.split("/").pop()!.startsWith("._")) continue;
+    if (o.only && !o.only(name)) continue;
     if (flags & 0x1) throw new Error("The archive is password-protected");
     if (local + 30 > dirStart || buf.readUInt32LE(local) !== 0x04034b50) throw damaged();
     const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
@@ -74,7 +79,8 @@ export async function unzip(buf: Buffer, o: { maxFiles?: number; maxBytes?: numb
     total += data.length;
     if (total > maxBytes) throw tooMuch();
     if (data.length !== size) throw damaged();
-    out.push({ name, data });
+    if (o.onEntry) await o.onEntry(name, data);
+    else out.push({ name, data });
   }
   return out;
 }

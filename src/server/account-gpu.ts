@@ -7,6 +7,8 @@ import { accountGpu, type Account, type AccountGpu } from "./auth";
 import type { OwnerGpuView } from "@/lib/connections";
 import { runnerFacts, type Principal } from "./computer/tasks";
 import { offeredSummary } from "./model-access";
+import { MODELS } from "@/lib/catalog";
+import { hostedUntestedSummary } from "@/lib/catalog/hosted-untested";
 import { PROVIDERS } from "./providers";
 import { blockedForAccounts, fetchPublic, isLoopbackGpu } from "./remote-fetch";
 import { isInstallHost, REFUSED_ADDRESS } from "./gpu/hosts";
@@ -215,7 +217,8 @@ export async function visitorStatus(account: Account | null) {
     if (b) viewer.balance = b;
   }
   const configured = (id: string) => (id === "comfyui" ? (gpu ? !!live?.online : true) : isCloudProvider(id) && keys.includes(id));
-  const access = keys.length ? offeredSummary() : undefined;
+  // With keys: the hosted routes no live call has passed yet are left out too (they run for the owner only).
+  const access = keys.length ? hostedUntestedSummary(MODELS, offeredSummary()) : undefined;
   return {
     providers: Object.fromEntries(Object.values(PROVIDERS).map((p) => [p.id, { label: p.id === "comfyui" ? "Your GPU" : p.label, configured: configured(p.id) }])),
     demoMode: "off",

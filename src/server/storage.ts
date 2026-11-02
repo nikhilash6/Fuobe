@@ -211,6 +211,26 @@ export function scratchDir(): string {
   return dir;
 }
 
+/**
+ * A provider's result already written to the scratch folder (a song's stems, unpacked from their zip there): its run
+ * keeps it as `scratch:<name>`, and saving the run moves the file in (adoptFile), counted against an account's room
+ * like any other result. The name is random and long, so a provider's answer can't point at another run's file.
+ */
+const SCRATCH_OUTPUT = /^scratch:(out-[A-Za-z0-9_-]{21}\.[a-z0-9]{1,5})$/;
+
+export function newScratchOutput(ext: string): { file: string; url: string } {
+  const name = `out-${nanoid(21)}.${ext.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "bin"}`;
+  return { file: path.join(scratchDir(), name), url: `scratch:${name}` };
+}
+
+/** The file a `scratch:` result names, when it is still there. */
+export function scratchOutputFile(url: string): string | null {
+  const m = SCRATCH_OUTPUT.exec(url);
+  if (!m) return null;
+  const file = path.join(scratchDir(), m[1]);
+  return fs.existsSync(file) ? file : null;
+}
+
 export function getAsset(id: string): Asset | null {
   const row = db().prepare("SELECT * FROM assets WHERE id = ?").get(id) as AssetRow | undefined;
   return row ? toAsset(row) : null;

@@ -130,7 +130,7 @@ beforeAll(async () => {
       const name = /name:\s*(\S+)/.exec(md)![1];
       return send(201, { skill: { name, title: name }, skipped: [], replaced: false });
     }
-    // A skill that runs by itself (W4): its recipe, a price per row, a run per row, and its zip.
+    // A skill that runs by itself: its recipe, a price per row, a run per row, and its zip.
     const skill = /^\/api\/assist\/skills\/weekly-promo\/(recipe|verify|estimate|run|download)$/.exec(url.pathname)?.[1];
     if (skill === "recipe") return send(200, PROMO);
     if (skill === "verify") return send(200, { ok: true, engines: [{ engine: "cloud", plan: { ok: true, errors: [] } }] });
@@ -423,7 +423,7 @@ describe("fuobe CLI against a Fuobe server", () => {
   });
 });
 
-describe("fuobe skills: a skill that runs by itself (W4)", () => {
+describe("fuobe skills: a skill that runs by itself", () => {
   const posts = (what: string) => seen.filter((s) => s.method === "POST" && s.path === `/api/assist/skills/weekly-promo/${what}`);
 
   it("params lists the inputs; estimate prices with stand-ins and uploads nothing", async () => {

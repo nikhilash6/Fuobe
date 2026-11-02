@@ -207,6 +207,14 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   menus don't offer Remove dialogue or Clean up dialogue to a guest or an account. Restore & colourise
   and Remove a person (its mask preview and "Redo from here", `POST /api/remove-object/preview` and
   `/reroll`, answer `own-gpu-tool` too) are left out of the Video tools tabs and the result menus for them.
+  A hosted model whose calls haven't yet passed a live run with a real key (`src/lib/catalog/hosted-untested.ts`:
+  MiniMax H3 Max's lip sync, relight, insert, looks and Turbo, H3 Lite and HighSpeed, Vidu Q4, the Mureka songs and
+  song tools, MiniMax Music 3, ElevenLabs Music, Lyria 3.5, the hosted voice cleaners, Meshy retexture, Tripo P2 and
+  Fuobe Animation's cloud half) answers `own-gpu-tool` for a guest or an account, even on its own key, and is left out
+  of its pickers; Audio → Extend & remix is left out of the Audio tabs. Each opens once a live call passes.
+  "Write the lyrics" and "Rewrite my prompt now" use the studio's AI helper and are hidden from guests and accounts.
+  A song's stems come back as one zip: for an account it is fetched from public addresses only, within what its files
+  have room for (128 MB at most, 256 MB unpacked), and each stem is saved to disk as it is unpacked.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

@@ -88,6 +88,7 @@ import type { PollContext, PollResult, ProviderAdapter, RemoteOutput } from "./p
 import { mediaFacts } from "./media-facts";
 import { renderPathVideo } from "./path-render";
 import { songFormat, songToolProblem } from "@/lib/lyrics";
+import { hostedUntested } from "@/lib/catalog/hosted-untested";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
@@ -99,7 +100,7 @@ import { placeInLine, poolWaitMs, runOnPool } from "./hosted";
 import { sweepBilling } from "./billing-outbox";
 import { moderationConfigured } from "./moderation";
 import { holdForCheck, sweepOutputChecks } from "./output-checks";
-import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir } from "./storage";
+import { absolutePath, adoptFile, contentTypeFor, deleteAsset, localHead, readRef, saveFile, scratchDir, scratchOutputFile } from "./storage";
 
 interface Row {
   id: string;
@@ -718,6 +719,17 @@ function portraitProblem(plan: ReturnType<typeof planGeneration>, req: Generatio
  */
 export const mentionElements = () => (tenant() ? [] : listElements());
 
+/**
+ * A guest's or an account's candidates without the hosted routes no live call has passed yet (hosted-untested.ts): those
+ * run for the owner only. With nothing else to run on, the run is refused as a tool that isn't available here.
+ */
+function triedRoutes(m: ModelDef, routes: ModelRoute[]): ModelRoute[] {
+  if (!tenant()) return routes;
+  const tried = routes.filter((r) => !hostedUntested(m.id, r));
+  if (routes.length && !tried.length) throw new AccountRunError({ error: OWN_GPU_TOOL_MESSAGE, code: "own-gpu-tool" });
+  return tried;
+}
+
 /** Resolve mentions and drawings, plan, enforce the engine mode and pick a provider route. */
 function prepare(original: GenerationRequest) {
   // @element mentions become reference images / LoRAs; the stored request keeps the mentions for "Reuse".
@@ -759,7 +771,7 @@ function prepare(original: GenerationRequest) {
   if (access.dropped.length) plan = { ...plan, loras: access.loras, prompt: withoutTriggers(plan.prompt, plan.loras.filter((l) => !access.loras.some((k) => k.file === l.file)), access.loras) };
   else if (access.loras.some((l, i) => l !== plan.loras[i])) plan = { ...plan, loras: access.loras };
   // A preset can route to another model than the one asked for: its routes that are on (or the switch that's off).
-  const { route, demo } = chooseRoute(offeredRoutes(plan.model, routesFor(plan.model, plan.op)), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
+  const { route, demo } = chooseRoute(triedRoutes(plan.model, offeredRoutes(plan.model, routesFor(plan.model, plan.op))), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
   // Qwen-Image 2.1's Options → Speed loads its speed's LoRA in the graph: that LoRA switched off holds the speed.
   const tier = route.provider === "comfyui" ? speedLora(route.endpoint, plan.params.extra) : undefined;
   if (tier && offeredLoras([{ file: tier.file }]).dropped.length) {
@@ -2197,6 +2209,11 @@ async function pollOne(r: Row): Promise<void> {
       } catch (e) {
         if (account) {
           for (const kept of outputs) if (kept.assetId) deleteAsset(kept.assetId);
+          // Stems unpacked to the scratch folder and not saved go now, not at the next sweep.
+          for (const rest of res.outputs as RichOutput[]) {
+            const left = rest.url ? scratchOutputFile(rest.url) : null;
+            if (left) fs.rmSync(left, { force: true });
+          }
           const why = e instanceof AccountFilesFull ? e.message : "We couldn't save this result. Press Retry.";
           update(r.id, { status: "failed", error: why, completed_at: Date.now(), message: null });
           return;
@@ -2511,17 +2528,24 @@ async function persistAccountOutput(o: RichOutput, generationId: string, account
   };
 }
 
+/** A result the provider already wrote to the scratch folder (a song's stems): the file, as the type the provider gave. */
+function scratchOutput(o: RichOutput): { path: string; contentType?: string } | null {
+  const file = scratchOutputFile(o.url);
+  return file ? { path: file, contentType: o.contentType } : null;
+}
+
 /**
- * A result a computer sent in (its task received and checked it, src/server/computer): moved into the files folder as it
- * is, no second copy, as the type its bytes said. An account's counts against its files first.
+ * A result a computer sent in (its task received and checked it, src/server/computer), or one the provider wrote to the
+ * scratch folder: moved into the files folder as it is, no second copy, as the type its bytes said. An account's counts
+ * against its files first (a result over its room is removed).
  */
 async function persistRelayOutput(o: RichOutput, generationId: string, account: string | undefined, linked: Record<string, unknown> | undefined): Promise<OutputFile> {
-  const file = relayFile(o.url);
+  const file = o.url.startsWith("scratch:") ? scratchOutput(o) : relayFile(o.url);
   if (!file) throw new Error("The result isn't here any more");
   const from = file.path;
   const contentType = o.contentType ?? file.contentType ?? "application/octet-stream";
   const size = fs.statSync(from).size;
-  if (account) roomFor(account, size);
+  if (account) roomFor(account, size, o.url.startsWith("scratch:") ? from : undefined);
   const asset = adoptFile({ from, contentType: account ? accountType(contentType) : contentType, source: "generation", generationId, ...(account && { accountId: account }) });
   const meta = relinkMain(linked, o.url, asset.url);
   const text = o.text ?? (asset.kind === "text" && asset.size <= MAX_INLINE_TEXT * 4 ? fs.readFileSync(absolutePath(asset.relPath), "utf8") : undefined);
@@ -2538,7 +2562,7 @@ async function persistRelayOutput(o: RichOutput, generationId: string, account: 
 async function persistOutput(o: RichOutput, generationId: string): Promise<OutputFile> {
   const linked = await persistArtifacts(o.meta, generationId, o.url);
   const account = tenantAccount();
-  if (o.url?.startsWith("relay:")) return persistRelayOutput(o, generationId, account, linked);
+  if (o.url?.startsWith("relay:") || o.url?.startsWith("scratch:")) return persistRelayOutput(o, generationId, account, linked);
   if (account && o.url && /^https?:\/\//.test(o.url)) return persistAccountOutput(o, generationId, account, linked);
   let data: Buffer;
   let contentType = o.contentType;

@@ -1,10 +1,14 @@
 import "server-only";
+import fs from "node:fs";
 import { createFalClient } from "@fal-ai/client";
 import { loraEndpointFor, routeLoraField } from "@/lib/catalog/loras";
 import { buildPayload, extractOutputs, noOutputsError } from "@/lib/catalog/payload";
 import { accountKeyError, balanceRefusal, cloudKey, missingKeyError, originOf, redactKey, standIn } from "../provider-keys";
-import { tenant } from "../tenant";
+import { tenant, tenantAccount } from "../tenant";
 import { unzip } from "../unzip";
+import { ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "../account-files";
+import { discardBody, fetchPublic, RemoteFetchError } from "../remote-fetch";
+import { newScratchOutput } from "../storage";
 import type { FieldMap } from "@/lib/catalog/types";
 import { ProviderError, type ProviderAdapter } from "./types";
 
@@ -75,30 +79,76 @@ async function bytesWithin(res: Response, max: number): Promise<Buffer> {
   return Buffer.concat(chunks, total);
 }
 
-/** The stems a song tool answers with in one zip (Mureka's zip_url), one result each, named by their file (meta.stem). */
+/** An account's stems: a smaller zip and less unpacked than the owner's, and never more than its files have room for. */
+const ACCOUNT_STEMS_MAX_BYTES = 128 * 1024 * 1024;
+const ACCOUNT_STEMS_UNPACKED_BYTES = 256 * 1024 * 1024;
+
+/**
+ * The stems a song tool answers with in one zip (Mureka's zip_url), one result each, named by their file (meta.stem).
+ * Each stem is written to the scratch folder as it is unpacked (a `scratch:` result, moved into the run's files when it
+ * is saved), never held as a data: URL. An account's zip comes from public addresses only (fetchPublic), within what its
+ * files have room for.
+ */
 export async function stemsFromZip(
   zipUrl: string,
   limits: { maxBytes?: number; waitMs?: number } = {},
 ): Promise<{ url: string; kind: "audio"; contentType: string; meta: { stem: string } }[]> {
-  const maxBytes = limits.maxBytes ?? STEMS_MAX_BYTES;
+  const account = tenantAccount();
+  let maxBytes = limits.maxBytes ?? (account ? ACCOUNT_STEMS_MAX_BYTES : STEMS_MAX_BYTES);
+  let unpacked = account ? ACCOUNT_STEMS_UNPACKED_BYTES : 2 * maxBytes;
+  let left = Infinity;
+  if (account) {
+    left = accountTotalBytes(account) - accountUsage(account).total;
+    if (left <= 0) throw new Error(filesFullMessage(account));
+    if (!diskHasRoom()) throw new Error(ACCOUNT_MESSAGES.diskLow);
+    maxBytes = Math.min(maxBytes, left);
+    unpacked = Math.min(unpacked, left);
+  }
+  const waitMs = limits.waitMs ?? STEMS_WAIT_MS;
+  const tooBig = () => new Error(account && left <= maxBytes ? filesFullMessage(account) : "The stems download is larger than Fuobe keeps from one result");
   let zipped: Buffer;
   try {
-    const res = await fetch(zipUrl, { signal: AbortSignal.timeout(limits.waitMs ?? STEMS_WAIT_MS) });
-    if (!res.ok) throw new Error(`The stems couldn't be downloaded (${res.status})`);
+    // The stand-in fal.ai (tests and `next dev`) is on this machine: only it skips the public-address check.
+    const res =
+      account && originOf(zipUrl) !== standIn("fal")
+        ? await fetchPublic(zipUrl, {}, { maxBytes, deadlineMs: waitMs, timeoutMs: Math.min(waitMs, 60_000) })
+        : await fetch(zipUrl, { signal: AbortSignal.timeout(waitMs) });
+    if (!res.ok) {
+      discardBody(res);
+      throw new Error(`The stems couldn't be downloaded (${res.status})`);
+    }
     zipped = await bytesWithin(res, maxBytes);
   } catch (e) {
-    const name = (e as Error).name;
-    if (name === "TimeoutError" || name === "AbortError") throw new Error("The stems took too long to download. Try again.");
+    const err = e as Error;
+    if (err.name === "TimeoutError" || err.name === "AbortError") throw new Error("The stems took too long to download. Try again.");
+    if (err instanceof RemoteFetchError && /took over|Timed out/.test(err.message)) throw new Error("The stems took too long to download. Try again.");
+    if (err instanceof RemoteFetchError && /^The answer was over/.test(err.message)) throw tooBig();
+    if (/^The stems download is larger/.test(err.message)) throw tooBig();
     throw e;
   }
-  const files = (await unzip(zipped, { maxBytes: 2 * maxBytes })).filter((f) => AUDIO_FILE.test(f.name));
-  if (!files.length) throw new Error("The stems archive held no audio");
-  return files.map((f) => {
-    const ext = AUDIO_FILE.exec(f.name)![1].toLowerCase();
-    const contentType = AUDIO_TYPES[ext] ?? "audio/mpeg";
-    const stem = f.name.split("/").pop()!.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().toLowerCase();
-    return { url: `data:${contentType};base64,${f.data.toString("base64")}`, kind: "audio" as const, contentType, meta: { stem } };
-  });
+  const outputs: { url: string; kind: "audio"; contentType: string; meta: { stem: string } }[] = [];
+  const written: string[] = [];
+  try {
+    await unzip(zipped, {
+      maxBytes: unpacked,
+      only: (name) => AUDIO_FILE.test(name),
+      onEntry: (name, data) => {
+        const ext = AUDIO_FILE.exec(name)![1].toLowerCase();
+        const contentType = AUDIO_TYPES[ext] ?? "audio/mpeg";
+        const stem = name.split("/").pop()!.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim().toLowerCase();
+        const out = newScratchOutput(ext);
+        written.push(out.file);
+        fs.writeFileSync(out.file, data);
+        outputs.push({ url: out.url, kind: "audio", contentType, meta: { stem } });
+      },
+    });
+  } catch (e) {
+    for (const f of written) fs.rmSync(f, { force: true });
+    if (account && left <= unpacked && /more than Fuobe keeps/.test((e as Error).message)) throw new Error(filesFullMessage(account));
+    throw e;
+  }
+  if (!outputs.length) throw new Error("The stems archive held no audio");
+  return outputs;
 }
 
 const AUDIO_FILE = /\.(mp3|wav|flac|m4a|ogg)$/i;

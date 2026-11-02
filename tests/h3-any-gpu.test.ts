@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 import type { GpuInventory, RequirementIndex } from "@/lib/gpu/types";
@@ -169,25 +169,38 @@ describe("Auto and Options → GPU tier, decided once per run", () => {
   it("routes a smaller card to its build, with its file; keeps the full model otherwise", () => {
     try {
       dropSnapshots("install");
-      expect(h3Gpu("minimax-h3-t2v", {}, has)).toEqual({ gpuTier: "standard" });
+      expect(h3Gpu("minimax-h3-t2v", {}, has, has)).toEqual({ gpuTier: "standard" });
       checked({ gb: 16, name: RTX4070 });
-      expect(h3Gpu("minimax-h3-t2v", {}, has)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.int8.file, note: T.TIER_NOTES.fast });
+      expect(h3Gpu("minimax-h3-t2v", {}, has, has)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.int8.file, note: T.TIER_NOTES.fast });
       checked({ gb: 16, name: RTX5060 });
-      expect(h3Gpu("minimax-h3-i2v", {}, has)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.nvfp4.file });
+      expect(h3Gpu("minimax-h3-i2v", {}, has, has)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.nvfp4.file });
       checked({ gb: 12, name: RTX4070, torch: "2.9.1+cu128" });
-      expect(h3Gpu("minimax-h3-t2v", {}, has)).toMatchObject({ gpuTier: "trim", unet: T.TRIM_FILES.fp8.file, note: T.TIER_NOTES.trim });
+      expect(h3Gpu("minimax-h3-t2v", {}, has, has)).toMatchObject({ gpuTier: "trim", unet: T.TRIM_FILES.fp8.file, note: T.TIER_NOTES.trim });
       // Trim has no start-frame graph: the full model (the pre-flight then says it needs a bigger GPU).
-      expect(h3Gpu("minimax-h3-i2v", {}, has)).toEqual({ gpuTier: "standard" });
+      expect(h3Gpu("minimax-h3-i2v", {}, has, has)).toEqual({ gpuTier: "standard" });
       checked({ gb: 32, name: RTX4090 });
-      expect(h3Gpu("minimax-h3-t2v", {}, has)).toEqual({ gpuTier: "standard" });
+      expect(h3Gpu("minimax-h3-t2v", {}, has, has)).toEqual({ gpuTier: "standard" });
       // Best and Fast decode on a smaller build say they need 32 GB.
       checked({ gb: 16, name: RTX4070 });
-      expect(h3Gpu("minimax-h3-t2v", { quality: "best", vae: T.SOL_VAE }, has)?.note).toMatch(/Best needs a 32 GB GPU.*Fast decode needs a 32 GB GPU/);
+      expect(h3Gpu("minimax-h3-t2v", { quality: "best", vae: T.SOL_VAE }, has, has)?.note).toMatch(/Best needs a 32 GB GPU.*Fast decode needs a 32 GB GPU/);
       // Asked for: on any card; an orbit and another model take no tier.
       checked({ gb: 48, name: RTX4090 });
-      expect(h3Gpu("minimax-h3-t2v", { gpuTier: "trim" }, has)).toMatchObject({ gpuTier: "trim", unet: T.TRIM_FILES.int8.file });
-      expect(h3Gpu("minimax-h3-i2v", { orbit: true }, has)).toBeUndefined();
-      expect(h3Gpu("qwen-image-21-t2i", {}, has)).toBeUndefined();
+      expect(h3Gpu("minimax-h3-t2v", { gpuTier: "trim" }, has, has)).toMatchObject({ gpuTier: "trim", unet: T.TRIM_FILES.int8.file });
+      expect(h3Gpu("minimax-h3-i2v", { orbit: true }, has, has)).toBeUndefined();
+      expect(h3Gpu("qwen-image-21-t2i", {}, has, has)).toBeUndefined();
+    } finally {
+      dropSnapshots("install");
+    }
+  });
+
+  it("keeps Auto on the full model until ComfyUI has accepted the smaller build's graph; asking for it still runs it", () => {
+    checked({ gb: 16, name: RTX4070 });
+    try {
+      const accepted = (id: string) => entry(id)?.validated === true;
+      expect(accepted("minimax-h3-fast-t2v")).toBe(false);
+      expect(h3Gpu("minimax-h3-t2v", {}, has, accepted)).toEqual({ gpuTier: "standard" });
+      expect(h3Gpu("minimax-h3-t2v", {}, has)).toEqual({ gpuTier: "standard" });
+      expect(h3Gpu("minimax-h3-t2v", { gpuTier: "fast" }, has, accepted)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.int8.file });
     } finally {
       dropSnapshots("install");
     }
@@ -197,8 +210,8 @@ describe("Auto and Options → GPU tier, decided once per run", () => {
     checked({ gb: 16, name: RTX4070 });
     try {
       changeAccess([{ kind: "model", id: "oss-minimax-h3-fast", on: false }]);
-      expect(h3Gpu("minimax-h3-t2v", {}, has)).toEqual({ gpuTier: "standard" });
-      expect(() => h3Gpu("minimax-h3-t2v", { gpuTier: "fast" }, has)).toThrow(/(turned|switched) off in Settings → Models & licences/);
+      expect(h3Gpu("minimax-h3-t2v", {}, has, has)).toEqual({ gpuTier: "standard" });
+      expect(() => h3Gpu("minimax-h3-t2v", { gpuTier: "fast" }, has, has)).toThrow(/(turned|switched) off in Settings → Models & licences/);
     } finally {
       changeAccess([{ kind: "reset" }]);
       dropSnapshots("install");
@@ -213,7 +226,7 @@ describe("Auto and Options → GPU tier, decided once per run", () => {
     try {
       const run = (extra: Record<string, unknown> = {}) => previewGeneration({ feature: "video", modelId: "oss-minimax-h3", prompt: "a lighthouse at dusk", params: { aspectRatio: "16:9", duration: 5, extra } });
       checked({ gb: 12, name: RTX4070 });
-      const trim = run({ unet: "something-else.safetensors" });
+      const trim = run({ gpuTier: "trim", unet: "something-else.safetensors" });
       expect(trim).toMatchObject({ demo: false, h3: { gpuTier: "trim", unet: T.TRIM_FILES.int8.file }, route: { provider: "comfyui", endpoint: "minimax-h3-t2v" } });
       expect(trim.notes).toContain(T.TIER_NOTES.trim);
       checked({ gb: 32, name: RTX4090 });
@@ -224,7 +237,7 @@ describe("Auto and Options → GPU tier, decided once per run", () => {
       checked({ gb: 16, name: RTX5060 });
       const direct = previewGeneration({ feature: "video", modelId: "oss-minimax-h3-trim", prompt: "a lighthouse at dusk", params: { aspectRatio: "16:9", duration: 5, extra: { unet: "something-else.safetensors" } } });
       expect(direct).toMatchObject({ h3: { gpuTier: "trim", unet: T.TRIM_FILES.nvfp4.file }, route: { provider: "comfyui", endpoint: "minimax-h3-trim-t2v" } });
-      expect(h3Gpu("minimax-h3-fast-i2v", { unet: "something-else.safetensors", gpuTier: "trim" }, has)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.nvfp4.file });
+      expect(h3Gpu("minimax-h3-fast-i2v", { unet: "something-else.safetensors", gpuTier: "trim" }, has, has)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.nvfp4.file });
     } finally {
       g.__fuobeComfyReach = before;
       setSetting("demoMode", "auto");
@@ -282,6 +295,9 @@ describe("the GPU pre-flight", () => {
 });
 
 describe("the pre-flight board", () => {
+  // The board once ComfyUI has accepted the smaller builds' graphs (until then Auto keeps the full model, as runs do).
+  beforeAll(() => void (globalThis.__fuobeTestH3Accepted = true));
+  afterAll(() => void (globalThis.__fuobeTestH3Accepted = undefined));
   const ctx = { account: false, computer: false, isolatedUrl: false };
   const row = (href: string, inv: GpuInventory) => buildViews(inv, index, ctx).report.studios.find((r) => r.href === href)!;
 

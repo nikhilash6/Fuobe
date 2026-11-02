@@ -38,7 +38,7 @@ export const HUB_MODES: Record<HubKind, HubMode[]> = {
     { id: "split", label: "Split soundtrack", selfHostedOnly: true },
     { id: "sfx", label: "Sound effects" },
     { id: "music", label: "Music" },
-    { id: "song", label: "Extend & remix" },
+    { id: "song", label: "Extend & remix", ownerOnly: true },
     { id: "loop", label: "Loop / extend" },
     { id: "join", label: "Join" },
     { id: "video", label: "Sound for video" },
