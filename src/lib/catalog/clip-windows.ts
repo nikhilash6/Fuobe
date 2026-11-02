@@ -60,6 +60,26 @@ export function insertRangeProblem(start: number | undefined, resume: number | u
   return null;
 }
 
+/** The insert range control's step: 1/8 s, so the earliest start (1.625 s) is one of its stops. */
+export const INSERT_STEP = 0.125;
+
+/**
+ * The two handles of Edit video's "Insert a moment" range on a clip `clip` seconds long (unknown while its header is read): the
+ * track runs from the earliest start to the clip's end (at most 60 s), and the handles keep to it, the start before the resume
+ * by a step at least, on 1/8 s stops. Without a value they open around the clip's middle.
+ */
+export function insertHandles(clip: number | undefined, value?: [number | undefined, number | undefined]): { min: number; max: number; start: number; resume: number } {
+  const snap = (n: number) => Math.round(n / INSERT_STEP) * INSERT_STEP;
+  const min = INSERT_RANGE.minStart;
+  const max = Math.max(min + INSERT_STEP, Math.floor(Math.min(INSERT_RANGE.max, clip && clip > 0 ? clip : INSERT_RANGE.max) / INSERT_STEP) * INSERT_STEP);
+  const mid = clip && clip > 0 ? clip / 2 : min + 2;
+  let start = snap(value?.[0] ?? mid - 0.5);
+  start = Math.min(Math.max(min, start), max - INSERT_STEP);
+  let resume = snap(value?.[1] ?? start + 1);
+  resume = Math.min(Math.max(start + INSERT_STEP, resume), max);
+  return { min, max, start, resume };
+}
+
 export function sourceSeconds(modelId: string): { min?: number; max?: number } {
   return SOURCE_SECONDS[modelId] ?? {};
 }

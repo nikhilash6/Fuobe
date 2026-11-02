@@ -398,6 +398,8 @@ export const VIDEO_EDIT_STUDIO: StudioConfig = {
   placeholder: "Describe the edit… e.g. “make it snow”, “replace the car with a horse”",
   kind: "video",
   ops: ["v2v"],
+  // "Insert a moment" (H3 Max insert): a new scene between two points of the clip, picked like any edit model.
+  pickerOps: ["v2v", "insert-moment"],
   feed: { features: ["video-edit"] },
   slots: [{ key: "video", label: "Video", accept: "video", required: true }],
   multiRef: { label: "Add ref", max: 4 },
@@ -468,6 +470,8 @@ export const VIDEO_RELIGHT_STUDIO: StudioConfig = {
   subtitle: "Describe the new light — golden hour, neon, a single window, a campfire.",
   placeholder: "e.g. “warm sunset light from the left, long soft shadows”",
   ops: ["relight-video"],
+  // The clip's length prices a relight billed by the second (H3 Max relight) and holds it to the model's window (up to 15 s).
+  clipFacts: true,
   defaultModels: { cloud: "lightx-relight", open: "oss-bernini-relight" },
   promptOptional: false,
   suggestions: ["Warm golden-hour sun from the left", "Pink and blue neon from the street", "A single cold window light, dark room", "Flickering campfire light from below"],
