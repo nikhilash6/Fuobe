@@ -255,7 +255,8 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
           {!oneShot && engine === "cloud" && (
             <div className="mt-3 space-y-1 text-[12px] leading-snug text-muted-foreground">
               <p>Music and effects: Demucs. {MUSIC_MODEL_NOTE}.</p>
-              <p>{DBS_OPEN_ONLY_NOTE}.</p>
+              {/* The note about your GPU is for the studio's own install with both engines, not a guest or an account. */}
+              {!visitor && engineMode === "both" && <p>{DBS_OPEN_ONLY_NOTE}.</p>}
             </div>
           )}
         </Panel>
