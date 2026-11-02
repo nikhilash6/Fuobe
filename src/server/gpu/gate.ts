@@ -4,6 +4,7 @@ import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { fixPlan } from "@/lib/gpu/plan";
 import { CLEAN_VAE, DECODER_PARAM, GPU_PARAM } from "@/lib/qwen21-speed";
 import { deviceLabel, needTargets, toolReadiness } from "@/lib/gpu/readiness";
+import { GPU_NEED_TEXT } from "@/lib/gpu/rtx";
 import type { FixPlan, ToolReadiness, ToolRef } from "@/lib/gpu/types";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { authEnabled, crossSite, hostAllowed, validToken } from "../auth";
@@ -87,7 +88,14 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
   }
   const dev = snap.inventory.devices[0];
   const plan = fixPlan(r, snap.inventory, idx, { hash: sha256, urlHash: urlHash(t), account: ctx.account, loras, gpu: dev ? deviceLabel(dev.name) : undefined });
-  const what = r.state === "unsupported" ? "needs a second ComfyUI" : `needs ${r.needs.filter((n) => n.kind !== "hf-licence").length} more thing${r.needs.length > 1 ? "s" : ""} on your ComfyUI`;
+  const what =
+    r.state === "unsupported"
+      ? r.gpuNeed
+        ? GPU_NEED_TEXT[r.gpuNeed].replace(/^Needs/, "needs")
+        : "needs a second ComfyUI"
+      : `needs ${r.needs.filter((n) => n.kind !== "hf-licence").length} more thing${r.needs.length > 1 ? "s" : ""} on your ComfyUI`;
+  // A card that can't run it: no setup step helps, so the run stops even on the install's own ComfyUI.
+  if (r.gpuNeed) return { ok: false, ref, plan, message: `${name} ${what}. Pick another choice for this tool.` };
   if (t.key === "install") return { ok: true, warning: `${name} ${what}. Open Connect your GPU to see them.` };
   return { ok: false, ref, plan, message: `${name} ${what} before it can run.` };
 }

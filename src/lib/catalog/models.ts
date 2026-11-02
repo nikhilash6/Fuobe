@@ -8,6 +8,7 @@ import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEA
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
 import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
+import { RTX_FRAMEGEN_MODEL, RTX_FRAMEGEN_WORKFLOW, RTX_HDR_MODEL, RTX_HDR_WORKFLOW, RTX_UPSCALE_MODEL, RTX_UPSCALE_WORKFLOW } from "./rtx-video";
 import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
@@ -874,6 +875,68 @@ const open: ModelDef[] = [
     tagline: "SDR footage expanded to 10-bit HDR: HLG or HDR10 (PQ) MP4, or 16-bit EXR frames",
     routes: [comfy("sdr-to-hdr", "video-sdr-to-hdr", "an inverse tone map (core ImageSDRToHDR), not a learned model")],
     options: { formats: ["hlg_10bit", "pq_10bit", "exr"], sliders: [{ param: "peakNits", label: "Peak brightness (nits)", min: 200, max: 2000, step: 50, default: 650 }] },
+    defaults: { format: "hlg_10bit" },
+  }),
+  // NVIDIA RTX Video (nm10-rtx-video, src/lib/catalog/rtx-video.ts): Comfy-Org's NVIDIA VFX nodes on NVIDIA's RTX Video SDK,
+  // only on an NVIDIA RTX card (frame generation: RTX 40 or later). Listed after each tool's own default so nothing picks
+  // them by default; Upscale → Video offers "Quick · RTX" first on a card that runs it. Nobody hosts them: GPU-only.
+  o({
+    id: RTX_UPSCALE_MODEL,
+    name: "RTX Video Super Resolution",
+    vendor: "NVIDIA",
+    family: "nvidia-rtx-video",
+    kind: "video",
+    tagline: "Fast upscale up to 4x on NVIDIA RTX cards; sharpens without adding new detail",
+    badges: ["fast"],
+    routes: [comfy("upscale-video", RTX_UPSCALE_WORKFLOW, "NVIDIA RTX cards only; in passes, so any length fits, sound kept")],
+    options: {
+      resolutions: VIDEO_UPSCALE_TIERS,
+      controls: [
+        {
+          param: "rtxQuality",
+          label: "Source",
+          values: ["ULTRA", "HIGHBITRATE_ULTRA", "HIGH"],
+          default: "ULTRA",
+          labels: { ULTRA: "Most clips", HIGHBITRATE_ULTRA: "Clean, high quality", HIGH: "Faster" },
+        },
+      ],
+    },
+    defaults: { resolution: "1080p" },
+  }),
+  o({
+    id: RTX_FRAMEGEN_MODEL,
+    name: "RTX Frame Generation",
+    vendor: "NVIDIA",
+    family: "nvidia-rtx-video",
+    kind: "video",
+    tagline: "FPS Boost to 24–120 fps and slow motion on RTX 40 series cards and newer; keeps cuts sharp",
+    badges: ["fast"],
+    routes: [comfy("interpolate", RTX_FRAMEGEN_WORKFLOW, "RTX 40 series cards and newer only; frame rate from the clip's header")],
+    options: {
+      fpsTargets: [...FPS_TARGETS],
+      slowdowns: [...SLOW_MOTION],
+      controls: [
+        {
+          param: "rtxQuality",
+          label: "Quality",
+          values: ["MEDIUM", "HIGH", "LOW"],
+          default: "MEDIUM",
+          labels: { MEDIUM: "Balanced", HIGH: "Best", LOW: "Fastest" },
+        },
+      ],
+    },
+    defaults: { targetFps: DEFAULT_FPS_TARGET },
+  }),
+  o({
+    id: RTX_HDR_MODEL,
+    name: "RTX Video HDR",
+    vendor: "NVIDIA",
+    family: "nvidia-rtx-video",
+    kind: "video",
+    tagline: "SDR footage turned into 10-bit HDR by NVIDIA's learned HDR, on NVIDIA RTX cards: HLG or HDR10 (PQ)",
+    badges: ["fast"],
+    routes: [comfy("sdr-to-hdr", RTX_HDR_WORKFLOW, "NVIDIA RTX cards only; tagged BT.2020 HLG or PQ")],
+    options: { formats: ["hlg_10bit", "pq_10bit"], sliders: [{ param: "peakNits", label: "Peak brightness (nits)", min: 400, max: 2000, step: 50, default: 650 }] },
     defaults: { format: "hlg_10bit" },
   }),
   o({

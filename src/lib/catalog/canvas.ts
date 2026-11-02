@@ -15,6 +15,10 @@ import { chainedWaitMessage, keyframeChain } from "./keyframes";
 import { estimateCost, inferOperation, planGeneration, routesFor, type Plan } from "./plan";
 import { replacedBy, replacementOf } from "./replaced";
 import { REGEN_COPY, REGEN_MODEL } from "./regenerate";
+import { RTX_UPSCALE_MODEL } from "./rtx-video";
+
+/** Upscale node entries fixed to an open model nobody hosts (Open-H3 Regenerate, NVIDIA RTX Video): no cloud stand-in. */
+const GPU_ONLY_FIXED = new Set([REGEN_MODEL, RTX_UPSCALE_MODEL]);
 import {
   OPERATION_LABELS,
   OPERATION_OUTPUT,
@@ -286,6 +290,15 @@ export const PALETTE: PaletteItem[] = [
     data: { mediaKind: "video", modelId: REGEN_MODEL },
     keywords: "regenerate redraw 2k 4k h3 creative upscale sharpen finish",
   },
+  // The Upscale node on NVIDIA RTX Video Super Resolution: a fast upscale on an NVIDIA RTX card only (nobody hosts it).
+  {
+    ...pick("upscale"),
+    id: "upscale-rtx",
+    label: "Quick upscale (RTX)",
+    description: "Fast upscale up to 4x on an NVIDIA RTX card: sharpens without adding new detail (your GPU)",
+    data: { mediaKind: "video", modelId: RTX_UPSCALE_MODEL },
+    keywords: "rtx nvidia quick fast upscale super resolution vsr sharpen 4k",
+  },
   { ...pick("bg-remove"), id: "bg-remove", data: { mediaKind: "image" }, keywords: "cutout matte transparent" },
   { ...pick("tts"), id: "tts", keywords: "voice speech narration clone" },
   { ...pick("voice-change"), id: "voice-change", keywords: "voice changer speech to speech revoice convert" },
@@ -442,7 +455,7 @@ export function defaultModelForNode(n: Pick<CanvasNode, "type" | "data">, engine
   }
   const op = nodeOps(n)[0];
   // The Upscale node's Regenerate choice starts on Open-H3 Regenerate (on the cloud the entry is disabled: paletteItems).
-  const fixed = n.data.modelId === REGEN_MODEL ? getModel(REGEN_MODEL) : undefined;
+  const fixed = n.data.modelId && GPU_ONLY_FIXED.has(n.data.modelId) ? getModel(n.data.modelId) : undefined;
   if (fixed && op && supportsOp(fixed, op) && runsOn(fixed, engine)) return fixed;
   return op ? defaultModelFor(op, engine, { hidden: true }) : undefined;
 }
@@ -1596,8 +1609,8 @@ export function counterpart(graph: CanvasGraph, n: CanvasNode, engine: Engine): 
   const current = n.data.modelId ? getModel(n.data.modelId) : undefined;
   // A Fuobe Original runs on both: it stays, on the other engine.
   if (current && runsOn(current, engine)) return current;
-  // Open-H3 Regenerate is GPU-only: nobody hosts it, so it has no cloud stand-in (the owner's rule).
-  if (current?.id === REGEN_MODEL) return undefined;
+  // Open-H3 Regenerate and NVIDIA RTX Video are GPU-only: nobody hosts them, so they have no cloud stand-in (the owner's rule).
+  if (current && GPU_ONLY_FIXED.has(current.id)) return undefined;
   if (n.type !== "model") return defaultModelForNode(n, engine);
   const op = n.data.op ?? effectiveOp(graph, n) ?? (current ? current.routes[0].op : KIND_OP[n.data.mediaKind ?? "image"]);
   const kind = current?.kind ?? n.data.mediaKind;
