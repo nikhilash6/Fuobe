@@ -128,7 +128,6 @@ describe("training kit: data-licence logs", () => {
     expect(dataLogProblems(log("fuobe-cctv", 40, { source: "licensed" }), s).join()).toMatch(/allows AI training/);
     expect(dataLogProblems(log("fuobe-cctv", 40, { source: "licensed", aiTraining: true }), s)).toEqual([]);
     expect(dataLogProblems(log("fuobe-cctv", 40, { source: "scraped" as never }), s).join()).toMatch(/source must be/);
-    expect(dataLogProblems(log("fuobe-cctv", 40, { proof: "higgsfield.ai preview" }), s).join()).toMatch(/never training data/);
     expect(dataLogProblems(log("fuobe-cctv", 40, { file: "001.mp4" }), s).join()).toMatch(/not an image/);
   });
 

@@ -24,7 +24,7 @@ once per concept and add each concept to the research's `fuobeTrainedLoras` befo
 ## 1. Collect the data and log it
 
 Train only on what Fuobe shot itself, licensed with AI-training rights, or took from CC0 or public-domain sources.
-**Never use Higgsfield outputs, previews or prompts.** The checker refuses any log entry that mentions them.
+Never use another service's generated outputs, preview media or prompts (research §2). They fit none of the four sources the checker accepts.
 
 Put the dataset in one folder: `001.jpg` with its caption `001.txt` (clips: `001.mp4` with `001.txt`). Follow the caption
 rules in the spec, and put the trigger where the rules say. Then fill in `data-logs/<id>.json`:

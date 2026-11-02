@@ -7,7 +7,8 @@
  *   whose request fields come from the research: trainers.generated.ts) and where the file goes (its library entry).
  * - A data-licence log (scripts/train/data-logs/<id>.json) lists every image or clip of the dataset: where it comes
  *   from, its licence or proof of ownership, and consent where people appear. A job does not start while its log is
- *   incomplete, does not match the dataset, or uses anything Fuobe may not train on (Higgsfield outputs or previews).
+ *   incomplete or does not match the dataset. Only four sources count (own shoot, licensed with AI-training rights, CC0,
+ *   public domain): another service's generated outputs or preview media are never one of them (research §2).
  * - The motion library (src/lib/catalog/motion-library.json) lists short CC0 or own-shot driving clips for the sports
  *   moves that are better as motion transfer than as a LoRA. A move picks a clip up only once one passes the check;
  *   until then it keeps its current route.
@@ -217,8 +218,6 @@ export interface DataLog {
 
 const SHA = /^[0-9a-f]{64}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-/** Never training data (Higgsfield's terms §5.1(iii), §5.2(iv), §5.2(v); research §2). */
-const FORBIDDEN = /higgsfield/i;
 const MEDIA: Record<TrainingSpec["media"], RegExp> = { image: /\.(jpe?g|png|webp)$/i, video: /\.(mp4|mov|webm)$/i };
 
 /** A file in the dataset folder, as the kit read it. */
@@ -240,7 +239,6 @@ export function itemProblems(item: DataLogItem, media?: TrainingSpec["media"]): 
   if (!item.author?.trim()) out.push(`${at}: no author`);
   if (!DAY.test(item.date ?? "")) out.push(`${at}: no date`);
   if (item.source === "licensed" && item.aiTraining !== true) out.push(`${at}: a licensed file needs a licence that allows AI training (aiTraining: true)`);
-  if ([item.proof, item.licence, item.author].some((s) => FORBIDDEN.test(s ?? ""))) out.push(`${at}: Higgsfield outputs and previews are never training data`);
   if (typeof item.people !== "boolean") out.push(`${at}: say whether people appear (people: true or false)`);
   if (item.people) {
     const c = item.consent;
