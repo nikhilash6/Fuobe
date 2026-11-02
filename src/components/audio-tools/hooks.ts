@@ -23,6 +23,21 @@ export type AudioToolBody =
       sourceDuration?: number;
     }
   | {
+      tool: "clean-dialogue";
+      engine: Engine;
+      media: string;
+      kind: "audio" | "video";
+      name?: string;
+      bed?: "off" | number;
+      quality?: "fast" | "best";
+      stereo?: boolean;
+      cleaner?: "veed" | "deepfilternet" | "isolation";
+      strength?: number;
+      remux?: boolean;
+      channels?: number;
+      sourceDuration?: number;
+    }
+  | {
       tool: "clean";
       engine: Engine;
       media: string;

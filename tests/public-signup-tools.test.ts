@@ -115,7 +115,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     process.env.FUOBE_PUBLIC_SIGNUP = "1";
     for (const p of ["/api/turnaround/estimate", "/api/turnaround?preview=1", "/api/audio-tools?preview=1"]) expect(passed(proxy(req(p, { method: "POST" }))), p).toBe(true);
     // Signing up wouldn't run these (an account's own GPU or key doesn't either): the account's answer, not the card.
-    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/shorts/sessions", "/api/katana", "/api/marketing/runs", "/api/layers/l1/jobs"]) {
+    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/shorts/sessions", "/api/katana", "/api/marketing/runs", "/api/layers/l1/jobs", "/api/layout/plan"]) {
       const r = proxy(req(p, { method: "POST" }));
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.GUEST_HEADER), p).toBeNull();
@@ -153,7 +153,7 @@ describe("the proxy: PR #15's routes as main treats their kind", () => {
     const cookie = auth.createSession(a.id).value;
     auth.setAccountGpu(a.id, { url: "https://gpu.example" });
     expect(passed(proxy(req("/api/generations", { method: "POST", cookie })))).toBe(true);
-    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/cinema/projects/p1/generate"]) {
+    for (const p of ["/api/turnaround", "/api/audio-tools", "/api/cinema/projects/p1/generate", "/api/layout/plan"]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
       expect(r.headers.get(access.CONNECT_GPU_HEADER), p).toBeNull();
@@ -253,6 +253,28 @@ describe("the routes: a visitor's price is its own GPU's, and the owner's charac
     } finally {
       asked.mockRestore();
     }
+  });
+});
+
+describe("Clean up dialogue (DBS D5) on /api/audio-tools", () => {
+  it("prices a visitor's run on its own GPU, never a demo, only of its own file; the cloud cleaners use the install's keys, so a run is own-gpu-tool", async () => {
+    process.env.FUOBE_PUBLIC_SIGNUP = "1";
+    const who = newAccount();
+    const cookie = auth.createSession(who.id).value;
+    const owners = wav();
+    const body = (media: string, engine = "open") => ({ tool: "clean-dialogue", engine, media, kind: "audio", name: "Take" });
+    for (const c of [undefined, cookie]) {
+      const r = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), c));
+      expect(r.status).toBe(422);
+      expect((await r.json()).error).toBe("That audio file is gone — add it again");
+    }
+    const account = await audioTools.POST(call("/api/audio-tools?preview=1", body(wav("mine.wav", who.id)), cookie));
+    expect(await account.json()).toMatchObject({ steps: 1, costUsd: 0, demo: false, channels: 2 });
+    const owner = await audioTools.POST(call("/api/audio-tools?preview=1", body(owners), auth.createSession().value));
+    expect(await owner.json()).toMatchObject({ steps: 1, demo: true });
+    const run = proxy(req("/api/audio-tools", { method: "POST", cookie }));
+    expect(run.status).toBe(403);
+    expect((await run.json()).code).toBe("own-gpu-tool");
   });
 });
 

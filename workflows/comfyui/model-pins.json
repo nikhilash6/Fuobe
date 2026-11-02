@@ -1044,5 +1044,10 @@
   "revision": "9a10df811f183323e4e94d255c18add1924ce340",
   "sizeBytes": 675509688,
   "sha256": "36f56608b02077a50a08ea3dbcdb88351298ceba49948f41f9f87186378e6908"
+ },
+ "https://huggingface.co/gribbliest/qwen-image-2.1-qma-camera-angles/resolve/13007eec2648c09529e930164c2ccc9c8c12428c/qwen-image-2.1-qma-camera-angles.safetensors": {
+  "revision": "13007eec2648c09529e930164c2ccc9c8c12428c",
+  "sizeBytes": 318820224,
+  "sha256": "ad2c20e0e103b6ad3ffffc56ab4e89c0822263c488aa4dd70e7e03091ff37b8d"
  }
 }

@@ -242,6 +242,8 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/restore/prompt",
       // Character Swap Studio's Sharpen (n7-4): a studio job, like its assembly.
       "/api/swap-studio/projects/p1/sharpen",
+      // Plan layout (N7-8) plans with the studio's own AI helper.
+      "/api/layout/plan",
       // Regenerate in Faceless, Shorts segments and Cinema takes (n7-10): studio jobs, like their renders.
       "/api/faceless/episodes/e1/regenerate",
       "/api/shorts/sessions/s1/segments/0/enhance",

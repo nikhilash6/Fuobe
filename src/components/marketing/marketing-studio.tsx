@@ -12,7 +12,8 @@ import { ResponsivePanel } from "@/components/studio/responsive-panel";
 import { BrandChip } from "@/components/brand/brand-dialog";
 import { inputCls } from "@/components/brand/fields";
 import { withoutOwnGpu } from "@/lib/catalog/engines";
-import { FORMATS, formatModels, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
+import { Switch } from "@/components/ui/switch";
+import { DRAWN_WORDS_HINT, DRAWN_WORDS_LABEL, FORMATS, formatModels, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
 import { SelfHostNote } from "@/components/self-host-note";
 import { formatCost } from "@/lib/format";
 import { useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
@@ -52,6 +53,8 @@ interface Draft {
   voiceSample: SlotValue | null;
   /** SaaS motion: a website or social link to make the video about. */
   website: string;
+  /** "Words drawn by the model" (formats with words): the headline and button drawn in place, not set on top. */
+  drawnWords?: boolean;
 }
 
 const BLANK: Draft = { format: "product-standalone", templateId: null, product: null, avatar: null, reference: null, hookId: null, settingId: null, prompt: "", headline: "", cta: "", aspectRatio: "3:4", batch: 1, voiceSample: null, website: "" };
@@ -111,7 +114,7 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
   const access = useModelAccess();
   // A guest or an account: Marketing Studio runs on a self-hosted Fuobe only, so no model reads "on your GPU".
   const visitor = useLikelyVisitor();
-  const listed = formatModels(f, engine, { product: !!draft.product, avatar: !!draft.avatar });
+  const listed = formatModels(f, engine, { product: !!draft.product, avatar: !!draft.avatar }, !!draft.drawnWords);
   // One listed only to say it runs on your GPU (the Original's Standalone shot in the cloud) is shown, never picked.
   const choices = keepOffered(pickable(listed), (c) => offered(access, c.id, engine));
   const elsewhere = listed.filter((c) => c.unavailable);
@@ -190,6 +193,7 @@ function SettingsPanel({ draft, set, models, engine }: { draft: Draft; set: (p: 
 function TextPanel({ draft, set, template }: { draft: Draft; set: (p: Partial<Draft>) => void; template?: MarketingTemplate }) {
   const [open, setOpen] = useState(false);
   const has = draft.headline || draft.cta;
+  const drawnId = "marketing-drawn-words";
   return (
     <ResponsivePanel
       open={open}
@@ -212,6 +216,18 @@ function TextPanel({ draft, set, template }: { draft: Draft; set: (p: Partial<Dr
           <span className="text-[12px] font-medium text-muted-foreground">Button</span>
           <input value={draft.cta} onChange={(e) => set({ cta: e.target.value })} maxLength={40} placeholder={template?.cta ?? "e.g. Shop now"} className={inputCls} />
         </label>
+        {/* Off by default: words set on top keep your exact fonts. On: a model that places boxes draws them in place. */}
+        <div className="flex items-start gap-3 rounded-xl bg-muted/60 p-3">
+          <div className="min-w-0 flex-1">
+            <label htmlFor={drawnId} className="block text-[13px] font-medium">
+              {DRAWN_WORDS_LABEL}
+            </label>
+            <p id={`${drawnId}-hint`} className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+              {DRAWN_WORDS_HINT}
+            </p>
+          </div>
+          <Switch id={drawnId} checked={!!draft.drawnWords} onCheckedChange={(v) => set({ drawnWords: v, modelId: undefined })} aria-describedby={`${drawnId}-hint`} className="mt-0.5 shrink-0" />
+        </div>
       </div>
     </ResponsivePanel>
   );
@@ -327,7 +343,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       format: draft.format,
       templateId: draft.templateId ?? undefined,
       // A pick that runs on your GPU only (the Original's Standalone shot) isn't sent to the cloud: its default runs.
-      modelId: draft.modelId && !formatModels(f, engine, { product: true, avatar: true }).some((c) => c.unavailable && c.id === draft.modelId) ? draft.modelId : undefined,
+      modelId: draft.modelId && !formatModels(f, engine, { product: true, avatar: true }, !!draft.drawnWords).some((c) => c.unavailable && c.id === draft.modelId) ? draft.modelId : undefined,
       productId: draft.product?.productId,
       productImages: draft.product && !draft.product.productId ? draft.product.images : undefined,
       avatar: f.avatar !== "none" ? draft.avatar?.ref : undefined,
@@ -344,6 +360,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       voice: draft.voice,
       voiceSample: draft.voiceSample?.ref,
       website: f.oneOf?.includes("website") && looksLikeWebsite(draft.website) ? draft.website.trim() : undefined,
+      drawnWords: f.text && f.pipeline === "image" && draft.drawnWords ? true : undefined,
     }),
     [draft, engine, f, brandId],
   );

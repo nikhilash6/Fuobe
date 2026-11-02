@@ -14,6 +14,7 @@ import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
 import { canEnhance, canRerender, ENHANCE_LABEL, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
+import { CLEAN_DIALOGUE_FEATURE, cleanDialogueHref } from "./av/clean-dialogue";
 
 export type OutputActionId =
   | "animate"
@@ -35,6 +36,7 @@ export type OutputActionId =
   | "split-soundtrack"
   | "remove-dialogue"
   | "clean-voice"
+  | "clean-dialogue"
   | "copy-text"
   | "view-3d"
   | "download"
@@ -146,6 +148,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("remove-dialogue", "Remove dialogue", `/video-tools/remove-dialogue?video=${q(o.url)}`);
       // Clean up voice on a video's soundtrack: results that carry sound, and uploads (a clip from a phone or a call).
       if (g.feature === "upload" || (g.op && SOUNDED_VIDEO_OPS.has(g.op))) link("clean-voice", "Clean up voice", `/audio/clean?video=${q(o.url)}`);
+      // Clean up dialogue (Split soundtrack's preset): the music and effects out from under the speech, or a cloud cleaner.
+      if ((g.feature === "upload" || (g.op && SOUNDED_VIDEO_OPS.has(g.op))) && g.feature !== CLEAN_DIALOGUE_FEATURE) link("clean-dialogue", "Clean up dialogue", cleanDialogueHref("video", o.url));
       // A Fuobe DoP colour-grade effect: the clip opens in Color grading with its grade picked (one click to export).
       const dopGrade = gradeOf(o);
       link("grade", dopGrade ? `Apply the ${dopGrade.name} grade` : "Color grade", `/color-grade?video=${q(o.url)}${dopGrade ? `&preset=${q(dopGrade.id)}` : ""}`);
@@ -160,6 +164,7 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("split-soundtrack", "Split soundtrack", `/audio/split?audio=${q(o.url)}`);
       // Not on music or sound effects (it keeps only a voice), nor on a voice it already cleaned.
       if (g.op !== "music" && g.op !== "sfx" && g.feature !== CLEAN_FEATURE) link("clean-voice", "Clean up voice", `/audio/clean?audio=${q(o.url)}`);
+      if (g.op !== "music" && g.op !== "sfx" && g.feature !== CLEAN_DIALOGUE_FEATURE) link("clean-dialogue", "Clean up dialogue", cleanDialogueHref("audio", o.url));
       break;
     case "text":
       out.push({ id: "copy-text", label: "Copy", placement: "primary" }, file, { id: "favorite", label: g.favorite ? "Unfavorite" : "Favorite", placement: "bar" });

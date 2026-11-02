@@ -49,10 +49,17 @@ export const ScheduleRuleSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("once"), at: z.string().regex(/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/, "Pick a date and time") }),
 ]);
 
-/** A scheduled task as the dialog sends it (create: everything; edit: any part). */
+/** A skill a task runs (W4): its name, one set of values as text, and the media inputs that take the newest upload. */
+export const ScheduleSkillSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  values: z.record(z.string().max(64), z.string().max(4000)).refine((v) => Object.keys(v).length <= 24, "Too many inputs"),
+  sources: z.record(z.string().max(64), z.literal("newest")).optional(),
+});
+
+/** A scheduled task as the dialog sends it (create: everything; edit: any part). A task that runs a skill needs no prompt. */
 export const ScheduleBody = z.object({
   title: z.string().trim().min(1).max(80),
-  prompt: z.string().trim().min(1).max(MAX_SCHEDULE_PROMPT),
+  prompt: z.string().trim().max(MAX_SCHEDULE_PROMPT),
   attachments: z.array(z.string().startsWith("/api/files/")).max(8).optional(),
   projectId: z.string().max(40).nullish(),
   rule: ScheduleRuleSchema,
@@ -63,6 +70,8 @@ export const ScheduleBody = z.object({
   mode: ModeChoice.nullish(),
   /** Whether runs may use the connectors in Settings (Claude only; their tools run without asking). */
   connectors: z.boolean().optional(),
+  /** Run a saved skill instead of a request (null: back to a request). */
+  skill: ScheduleSkillSchema.nullish(),
   paused: z.boolean().optional(),
 });
 
