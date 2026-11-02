@@ -1364,6 +1364,15 @@ model("florence-2-ocr", "Florence-2 OCR", "Microsoft", "florence", "text", "Ever
 # ----- 3D: splats, objects in place, text to 3D, multi-view and rigging
 model("triposplat", "TripoSplat", "Tripo", "tripo", "model3d", "A Gaussian splat of the subject in one photo (background removed)",
       [("splat", "tripo3d/triposplat")], badges=["new"], fixed={"output_format": "ply"}, sliders=[("num_gaussians", "Gaussians")])
+# Idol 3D (package idol-1; research #10 §5, idol-9.md): Speridlabs' Idol, hosted on fal since 2026-10-30. Its own label, never
+# TripoSplat's. The splat is a .ply (model_mesh); model_glb, a point-cloud preview of the splat's centres, rides along in meta.formats.
+# image_type "real" is Idol's looser photo crop; the page sends it with its Best / Quick look steps and Gaussians as params.extra.
+IDOL_FAL = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == "speridlabs/idol")
+model("idol-3d", "Idol 3D", "Speridlabs", "idol", "model3d", "A Gaussian splat (.ply) of one object from one picture · TripoSplat's architecture, retrained",
+      [("splat", "speridlabs/idol")], badges=["new"], sliders=[("num_gaussians", "Gaussians", 32768), ("num_inference_steps", "Steps")],
+      controls=[("image_type", "Picture", {"synthetic": "A render or generated image", "real": "A photo"})],
+      licence={"licence": "Apache-2.0", "commercial": True,
+               "note": f"{IDOL_FAL['license']}. fal's safety checker reads the input image", "checked": IDOL_FAL["fetched"]})
 # Its prompt defaults to "car" at the API, so Fuobe always asks for one.
 model("sam-3d-objects", "SAM 3D Objects", "Meta", "sam", "model3d", "The objects you name, rebuilt in 3D where they stand in the photo",
       # export_textured_glb defaults to false (a grey mesh): the viewer shows the textured one.

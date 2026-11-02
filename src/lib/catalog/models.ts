@@ -1972,6 +1972,26 @@ const open: ModelDef[] = [
       sliders: [{ param: "numGaussians", label: "Gaussians", min: 32768, max: 1048576, step: 32768, default: 262144 }],
     },
   }),
+  // idol-1 (docs/research/idol-9.md): Speridlabs' Idol, TripoSplat's architecture retrained, on the same core nodes. Its cloud twin
+  // is "idol-3d" (fal speridlabs/idol, cloud-models.generated.ts).
+  o({
+    id: "oss-idol",
+    name: "Idol 3D",
+    vendor: "Speridlabs",
+    family: "idol",
+    kind: "model3d",
+    tagline: "A Gaussian splat (.spz) of one object from one picture, plus an orbit video · TripoSplat's architecture, retrained · 8 GB GPU · Apache-2.0 · Built with DINOv3",
+    badges: ["new"],
+    routes: [comfy("splat", "image-to-splat-idol", "Idol on the TripoSplat core nodes → .spz + a 3 s orbit")],
+    options: {
+      seed: true,
+      maxImages: 1,
+      sliders: [
+        { param: "numGaussians", label: "Gaussians", min: 32768, max: 1048576, step: 32768, default: 262144 },
+        { param: "steps", label: "Steps", min: 10, max: 50, step: 1, default: 50 },
+      ],
+    },
+  }),
   // Round 4 (r4/cinema-3d): Cinema Studio's "Create 3D scene". The mesh is in the photo's own camera space
   // (glTF axes, metres), so the viewer starts where the photo was taken.
   o({

@@ -5787,6 +5787,95 @@
    "output": "model_mesh.url",
    "sourceUrl": "https://fal.ai/models/tripo3d/p2/image-to-3d",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=tripo3d/p2/image-to-3d"
+  },
+  {
+   "family": "idol",
+   "model": "Idol",
+   "title": "Sperid Labs Idol",
+   "vendor": "Speridlabs",
+   "operation": "image-to-splat",
+   "provider": "fal",
+   "endpoint": "speridlabs/idol",
+   "falCategory": "image-to-3d",
+   "status": "active",
+   "keyFields": {
+    "image": "image_url",
+    "numGaussians": "num_gaussians",
+    "steps": "num_inference_steps",
+    "cfg": "guidance_scale",
+    "seed": "seed",
+    "imageType": "image_type"
+   },
+   "inputs": {
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL of the image of a single object to convert into a 3D Gaussian splat.",
+     "examples": [
+      "https://raw.githubusercontent.com/VAST-AI-Research/TripoSplat/36b6deb0a1613e43c6910de441cb57d50352e44a/static/example_inputs/building_stone_house.webp"
+     ]
+    },
+    "image_type": {
+     "type": "enum",
+     "values": [
+      "synthetic",
+      "real"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "synthetic",
+     "desc": "Kind of input image. `synthetic` for renders and generated images (tight crop), `real` for photographs (looser crop)."
+    },
+    "num_gaussians": {
+     "type": "integer",
+     "required": false,
+     "default": 262144,
+     "minimum": 32768,
+     "maximum": 1048576,
+     "desc": "Target number of Gaussians in the output splat. Rounded down to a multiple of 32."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 50,
+     "minimum": 1,
+     "maximum": 50,
+     "desc": "Number of sampling steps. Fewer are faster but lose some detail."
+    },
+    "guidance_scale": {
+     "type": "number",
+     "required": false,
+     "default": 3,
+     "minimum": 0,
+     "maximum": 10,
+     "desc": "Classifier-free guidance: how strictly the object follows the image."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for reproducibility. If None, a random seed is generated."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Enable safety checking of the input image."
+    }
+   },
+   "output": "model_mesh.url",
+   "price": "Price: $0.1 per generations",
+   "pricing": {
+    "usd": 0.1,
+    "unit": "request"
+   },
+   "license": "Apache-2.0 (speridlabs/idol weights); TripoSplat's architecture (MIT); DINOv3 image encoder under the DINOv3 License (\"Built with DINOv3\")",
+   "notes": "Idol (TripoSplat's architecture, retrained by Speridlabs): one image of one object -> model_mesh, a 3D Gaussian splat (.ply), model_glb (a coloured point cloud of the splat centres, for standard 3D viewers), preprocessed_image (the cut-out it saw) and the predicted camera. num_inference_steps 1-50 (default 50), num_gaussians 32,768-1,048,576 (default 262,144), guidance_scale 0-10 (default 3, Idol's own weight: ComfyUI cfg 4), image_type synthetic | real. No sampler choice and no output format choice.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/speridlabs/idol",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=speridlabs/idol",
+   "capability": "splat",
+   "fetched": "2026-11-02"
   }
  ]
 }

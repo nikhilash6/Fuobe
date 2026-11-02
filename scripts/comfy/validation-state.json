@@ -209,6 +209,12 @@
     "error": null,
     "at": "2026-10-26T00:46:07.467Z"
   },
+  "image-to-splat-idol": {
+    "sha256": "f5230e116764047049fd2b7f7dde07372c3c64b2967219e719ea5114599ba228",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:03:11.136Z"
+  },
   "image-to-splat-triposplat": {
     "sha256": "cb65f4660b4d5fef3c0544146ed51b7d3acf059f3190a102dccf8166908f5413",
     "validated": true,

@@ -22,7 +22,7 @@ Run:  python3 scripts/fetch-hosted-schemas.py
       python3 scripts/fetch-hosted-schemas.py --base-only [endpoint …]                           (Genjutsu's plain endpoints, or O11's / BASE ones by id, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --partner                                          (partner routes in partnerEndpoints, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --part4 [endpoint …]                               (PART4's records in paid-model-apis-4.json, the rest kept)
-      python3 scripts/fetch-hosted-schemas.py --new10 [endpoint …]                               (FLUX 3 Klein: NEW10's records in new-models-10.json, its trainers; or those named)
+      python3 scripts/fetch-hosted-schemas.py --new10 [endpoint …]                               (FLUX 3 Klein and Idol: NEW10's and NEW10_SPLATS' records in new-models-10.json, its trainers; or those named)
       python3 scripts/fetch-hosted-schemas.py --catchup [endpoint …]                             (the hosted catch-up's CATCHUP records in new-models-10.json; or those named)
 
 --part4 re-reads endpoints that research part 4 recorded (docs/research/paid-model-apis-4.json) and refreshes them in
@@ -202,6 +202,20 @@ NEW10 = {
     "blackforestlabs/flux-3/klein/base/edit-image": ("edit", KLEIN_EDIT, "FLUX 3 Klein Base", "FLUX.3 Klein Base (Image Editing)"),
     "blackforestlabs/flux-3/klein/base/text-to-image/lora": ("t2i", {**KLEIN_T2I, "loras": "loras"}, "FLUX 3 Klein Base LoRA", "FLUX 3 Klein Base Text to Image LoRA"),
     "blackforestlabs/flux-3/klein/base/edit-image/lora": ("edit", {**KLEIN_EDIT, "loras": "loras"}, "FLUX 3 Klein Base LoRA", "FLUX 3 Klein Base Edit LoRA"),
+}
+# Research #10 §5 (package idol-1): Speridlabs' Idol is hosted on fal since 2026-10-30 (speridlabs/idol; fal-ai/idol answers the same
+# schema but has no catalog entry). One picture of one object -> a .ply splat (model_mesh), a point-cloud GLB preview (model_glb) and the
+# cut-out it saw (preprocessed_image). image_type "real" is Idol's looser photo crop (1.7), "synthetic" its default (1.2).
+NEW10_SPLATS = {
+    "speridlabs/idol": {
+        "family": "idol", "model": "Idol", "title": "Sperid Labs Idol", "vendor": "Speridlabs",
+        "keyFields": {"image": "image_url", "numGaussians": "num_gaussians", "steps": "num_inference_steps", "cfg": "guidance_scale", "seed": "seed", "imageType": "image_type"},
+        "license": "Apache-2.0 (speridlabs/idol weights); TripoSplat's architecture (MIT); DINOv3 image encoder under the DINOv3 License (\"Built with DINOv3\")",
+        "notes": ("Idol (TripoSplat's architecture, retrained by Speridlabs): one image of one object -> model_mesh, a 3D Gaussian splat (.ply), "
+                  "model_glb (a coloured point cloud of the splat centres, for standard 3D viewers), preprocessed_image (the cut-out it saw) and the "
+                  "predicted camera. num_inference_steps 1-50 (default 50), num_gaussians 32,768-1,048,576 (default 262,144), guidance_scale 0-10 "
+                  "(default 3, Idol's own weight: ComfyUI cfg 4), image_type synthetic | real. No sampler choice and no output format choice."),
+    },
 }
 NEW10_TRAINERS = {
     "blackforestlabs/flux-3/klein/base/trainer": ("FLUX 3 Klein base", "Soul ID on FLUX 3 Image Klein (nm10-flux3-klein; FLUX Kommunity licence, shown as information)"),
@@ -541,6 +555,24 @@ def new10(ids):
                       "fractions, label, description}), the prompt naming each box as <label>. image_size takes 256-4096 px a side."),
             "verified": True, "sourceUrl": f"https://fal.ai/models/{ep}", "schemaUrl": f"https://fal.ai/api/openapi/queue/openapi.json?endpoint_id={ep}",
             "capability": op, "fetched": TODAY,
+        }
+        print(f"{ep}: {records[ep]['status']}, {len(inputs)} inputs, {price}")
+    for ep, meta in NEW10_SPLATS.items():
+        if ids and ep not in ids:
+            continue
+        inputs = fal(ep)
+        missing = [f for f in meta["keyFields"].values() if f not in inputs]
+        if missing:
+            sys.exit(f"{ep}: keyFields {missing} are not inputs")
+        price = llms_price(ep) or fal_price(ep)
+        usd = re.search(r"\$(\d+(?:\.\d+)?)", price or "")
+        records[ep] = {
+            "family": meta["family"], "model": meta["model"], "title": meta["title"], "vendor": meta["vendor"], "operation": "image-to-splat",
+            "provider": "fal", "endpoint": ep, "falCategory": "image-to-3d", "status": fal_catalog_status(ep), "keyFields": meta["keyFields"],
+            "inputs": inputs, "output": "model_mesh.url", "price": price,
+            "pricing": {"usd": float(usd.group(1)), "unit": "request"} if usd else {"usd": None, "unit": "unknown"},
+            "license": meta["license"], "notes": meta["notes"], "verified": True, "sourceUrl": f"https://fal.ai/models/{ep}",
+            "schemaUrl": f"https://fal.ai/api/openapi/queue/openapi.json?endpoint_id={ep}", "capability": "splat", "fetched": TODAY,
         }
         print(f"{ep}: {records[ep]['status']}, {len(inputs)} inputs, {price}")
     data["endpointRecords"] = list(records.values())

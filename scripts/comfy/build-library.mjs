@@ -132,6 +132,8 @@ export const BINDING_KEYS = new Set([
   'maskPrompt', 'maskGrow', 'skipPass2', 'supersample', 'zoomStart', 'zoomEnd', 'panStartX', 'panStartY', 'panEndX', 'panEndY',
   'easeInOut', 'chunkFrames', 'crossfade', 'headroomDb', 'fadeCurve', 'format', 'profile', 'peakNits', 'resolutionLevel', 'fovX',
   'decimation', 'cutout', 'numGaussians', 'splatFormat', 'orbitFrames', 'frameWidth',
+  // idol-1 (docs/research/idol-9.md §5.5): Idol 3D's looser photo crop (the sampler key is MOSS-Image's)
+  'photoCrop',
   // round 4 (engine seams, see library.spec.mjs header)
   'curveMode', 'filterSpeckle', 'colorPrecision',
   // remove-object package (round 4)

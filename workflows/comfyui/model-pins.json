@@ -1049,5 +1049,15 @@
   "revision": "13007eec2648c09529e930164c2ccc9c8c12428c",
   "sizeBytes": 318820224,
   "sha256": "ad2c20e0e103b6ad3ffffc56ab4e89c0822263c488aa4dd70e7e03091ff37b8d"
+ },
+ "https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/diffusion_models/idol_fp16.safetensors": {
+  "revision": "c718f2b1b95b353edd07d17e845719fc10880a44",
+  "sizeBytes": 741107210,
+  "sha256": "cf452146f78e23a0d34be8f9f79bcde642b9a40ef493046c8e9d5f79096f6dd0"
+ },
+ "https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/vae/idol_decoder_fp16.safetensors": {
+  "revision": "c718f2b1b95b353edd07d17e845719fc10880a44",
+  "sizeBytes": 576148658,
+  "sha256": "c511d99eb668ec4b06d883cb6e43770bc35e3864e16e7058e8d6211ba5c509aa"
  }
 }
