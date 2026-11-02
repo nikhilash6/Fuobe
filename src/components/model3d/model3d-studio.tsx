@@ -27,6 +27,7 @@ import {
   SIDE_LABELS,
   SIDES_HINT,
   VIEW_SIDES,
+  idolPhotoFor,
   isIdol,
   model3dBlocker,
   model3dFor,
@@ -199,9 +200,10 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const hydrated = useHydrated();
   const engineKnown = statusKnown && hydrated;
   const [photo, setPhoto] = useState<SlotValue | null>(null);
-  // Idol 3D (Splat): Best or Quick look, and whether the picture is a photo. A picture uploaded or dropped here is taken
-  // for a photo; one picked from the library (a Fuobe result, usually) for a render or a generated image.
-  const [idolQuality, setIdolQuality] = useState<IdolQuality>("best");
+  // Idol 3D (Splat): Best or Quick look, kept per mode and engine like the model pick, and whether the picture is a
+  // photo, which belongs to the picture (shared by every mode). A picture uploaded or dropped here, or an earlier upload
+  // picked from the library, is taken for a photo; a result made here for a render or a generated image.
+  const [idolQualities, setIdolQualities] = useState<Record<string, IdolQuality>>({});
   const [idolPhoto, setIdolPhoto] = useState(true);
   // The last value the drop gave (an upload reports twice: uploading, then done, from one closure).
   const lastPhoto = useRef<SlotValue | null>(null);
@@ -209,10 +211,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
     const prev = lastPhoto.current;
     lastPhoto.current = v;
     setPhoto(v);
-    if (v && v.ref !== prev?.ref) {
-      if (v.uploading) setIdolPhoto(true);
-      else if (!prev?.uploading) setIdolPhoto(false);
-    }
+    const asPhoto = idolPhotoFor(v, prev);
+    if (asPhoto !== undefined) setIdolPhoto(asPhoto);
   };
   const [views, setViews] = useState<Partial<Record<ViewSide, SlotValue | null>>>({});
   const [text, setText] = useState("");
@@ -234,6 +234,8 @@ export function Model3dStudio({ info }: { info: Record<string, Model3dInfo> }) {
   const modelId = model3dFor(mode, engine, wanted && choices.some((m) => m.id === wanted) ? wanted : choices[0]?.id);
   const sides = Object.fromEntries(VIEW_SIDES.flatMap((s) => (views[s] ? [[s, views[s]!.ref]] : []))) as Partial<Record<ViewSide, string>>;
   const idol = mode === "splat" && isIdol(modelId);
+  const idolQuality = idolQualities[`${mode}:${engine}`] ?? "best";
+  const setIdolQuality = (q: IdolQuality) => setIdolQualities((p) => ({ ...p, [`${mode}:${engine}`]: q }));
   const input: Model3dInput = {
     engine,
     mode,

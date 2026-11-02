@@ -109,6 +109,21 @@ export function idolExtra(engine: Engine, quality: IdolQuality = "best", photoCr
   return { num_inference_steps: p.steps, num_gaussians: p.numGaussians, image_type: photoCrop ? "real" : "synthetic" };
 }
 
+/**
+ * Whether a new picture reads as a photo for Idol's crop: an upload (dropped here, or an earlier one picked from the
+ * library) is; a result made here (a render or a generated image) isn't. undefined: the picture is the same one, or the
+ * second report of an upload already counted, so the switch keeps what the person set.
+ */
+export function idolPhotoFor(
+  next: { ref: string; uploading?: boolean; source?: "upload" | "generation" } | null,
+  prev: { ref: string; uploading?: boolean } | null | undefined,
+): boolean | undefined {
+  if (!next || next.ref === prev?.ref) return undefined;
+  if (next.uploading) return true;
+  if (prev?.uploading) return undefined;
+  return next.source === "upload";
+}
+
 /** Every model the page offers (⌘K's ?model= links land on its mode). */
 export const ALL_MODELS_3D: Model3dChoice[] = Object.values(MODELS_3D).flatMap((m) => [...m.cloud, ...m.open]);
 

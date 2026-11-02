@@ -340,6 +340,20 @@ describe("open engine: TripoSplat (image-to-splat-triposplat)", () => {
 describe("Idol 3D (image-to-splat-idol on the open engine, speridlabs/idol on fal)", () => {
   const file = (filename: string) => ({ filename, subfolder: "fuobe", type: "output" });
 
+  it("takes an upload for a photo and a result made here for a render; a repeat or an upload's second report keeps the switch", () => {
+    // Dropped or uploaded here: on, as soon as it starts uploading.
+    expect(m3d.idolPhotoFor({ ref: "", uploading: true }, null)).toBe(true);
+    // The same upload's second report (done) keeps what the person may have set meanwhile.
+    expect(m3d.idolPhotoFor({ ref: "/api/files/a.png" }, { ref: "", uploading: true })).toBeUndefined();
+    // From the library: an earlier upload is a photo; a result made here is not.
+    expect(m3d.idolPhotoFor({ ref: "/api/files/up.jpg", source: "upload" }, { ref: "/api/files/a.png" })).toBe(true);
+    expect(m3d.idolPhotoFor({ ref: "/api/files/gen.png", source: "generation" }, null)).toBe(false);
+    expect(m3d.idolPhotoFor({ ref: "/api/files/x.png" }, null)).toBe(false);
+    // The same picture again, or a cleared slot: unchanged.
+    expect(m3d.idolPhotoFor({ ref: "/api/files/a.png", source: "upload" }, { ref: "/api/files/a.png" })).toBeUndefined();
+    expect(m3d.idolPhotoFor(null, { ref: "/api/files/a.png" })).toBeUndefined();
+  });
+
   it("routes oss-idol to its graph and idol-3d to fal; TripoSplat stays first on both engines", () => {
     expect(getModel("oss-idol")!.routes).toEqual([expect.objectContaining({ op: "splat", provider: "comfyui", endpoint: "image-to-splat-idol" })]);
     expect(getModel("idol-3d")!.routes).toEqual([expect.objectContaining({ op: "splat", provider: "fal", endpoint: "speridlabs/idol" })]);
