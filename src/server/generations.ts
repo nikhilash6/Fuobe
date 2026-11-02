@@ -1331,19 +1331,6 @@ async function advanceDependents(): Promise<void> {
         fail(`${earlier} has no ${slots[missing].render ? "depth picture" : slotNoun(slots[missing])} to use`);
         continue;
       }
-      // A camera path drawn through the still's depth on this server (Uni3C's guide where no browser drew one); a demo
-      // depth step hands on a demo render.
-      for (let i = 0; i < slots.length; i++) {
-        if (slots[i].render !== "path") continue;
-        // The still, once the other slots are in (it can come from an earlier step too: a Canvas node's picture).
-        const photo = withChainInputs({ ...request, chain: slots }, values as string[]).inputs?.images?.[0];
-        const keys = request.params?.cameraPath ?? [];
-        if (deps[i]!.provider === "mock" || !photo) values[i] = placeholderFor(slots[i]);
-        else {
-          update(r.id, { message: "Rendering the camera path" });
-          values[i] = await asRun(() => renderPathVideo({ photo, depth: values[i]!, keys }, r.id));
-        }
-      }
       // Routing reads cached reachability: make sure it's fresh for local engines. An Original counts with the routes of
       // the engine it runs on, ComfyUI taken as answering: one on the cloud doesn't use it, so doesn't wait for it.
       const model = getModel(request.modelId);
@@ -1363,6 +1350,19 @@ async function advanceDependents(): Promise<void> {
         if (!back && Date.now() - first! < COMFY_WAIT.ms) continue;
       }
       comfyWaits().delete(r.id);
+      // A camera path drawn through the still's depth on this server (Uni3C's guide where no browser drew one); a demo
+      // depth step hands on a demo render. Only once ComfyUI answers: a sweep that waits for it renders nothing.
+      for (let i = 0; i < slots.length; i++) {
+        if (slots[i].render !== "path") continue;
+        // The still, once the other slots are in (it can come from an earlier step too: a Canvas node's picture).
+        const photo = withChainInputs({ ...request, chain: slots }, values as string[]).inputs?.images?.[0];
+        const keys = request.params?.cameraPath ?? [];
+        if (deps[i]!.provider === "mock" || !photo) values[i] = placeholderFor(slots[i]);
+        else {
+          update(r.id, { message: "Rendering the camera path" });
+          values[i] = await asRun(() => renderPathVideo({ photo, depth: values[i]!, keys }, r.id));
+        }
+      }
       if (model?.routes.some((x) => x.provider === "llm")) await probeLocal();
       // Filled with the slots that have an input; stored with its whole chain (and what was skipped) for a retry.
       const filled = withChainInputs({ ...request, chain: slots }, values as string[]);
