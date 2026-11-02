@@ -50,6 +50,27 @@ export interface ElementLora {
   referenceId?: string;
 }
 
+/**
+ * A voice made with Design a voice, on the element that keeps it: its clip (references[0], the take
+ * picked) is what later lines clone, on either engine. The cloud's Qwen3-TTS reuses a voice by cloning that clip into an
+ * embedding file, which Fuobe keeps after its first cloud line (src/server/voices.ts), so it isn't cloned again.
+ */
+export interface ElementVoice {
+  /** The model that made it (oss-qwen3-tts, oss-voxcpm2, qwen-3-tts). */
+  modelId: string;
+  engine: Engine;
+  /** The words it was designed from. */
+  description?: string;
+  /** What the clip says (the take's test line): VoxCPM2's closest ("ultimate") clone and Qwen3-TTS's reference text. */
+  transcript?: string;
+  /** Qwen3-TTS's embedding of the clip on fal, stored by Fuobe (/api/files/…). */
+  embedding?: string;
+}
+
+/** Element voices: the most an ElementVoice's words hold (the API and the form keep to these). */
+export const VOICE_DESCRIPTION_MAX = 500;
+export const VOICE_TRANSCRIPT_MAX = 1000;
+
 export interface StudioElement {
   id: string;
   name: string;
@@ -58,6 +79,8 @@ export interface StudioElement {
   description: string | null;
   references: string[];
   loras: ElementLora[];
+  /** A designed voice's model, words and (once the cloud has cloned it) embedding: voices only. */
+  voice?: ElementVoice;
   status: "ready" | "training" | "failed";
   createdAt: number;
 }

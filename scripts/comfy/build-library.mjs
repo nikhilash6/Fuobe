@@ -80,7 +80,7 @@ export const LOADER_FOLDERS = {
   REUSELoader: { model: 'reuse' },
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
-// Zen Image Edit's adapter loader reads paths (nm10-qwen21-fast): its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
+// Zen Image Edit's adapter loader reads paths: its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
 const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader']);
 // Binding keys whose input is a user-supplied model file (not part of "models").
 const USER_MODEL_KEYS = new Set(['lora', 'loraHigh', 'loraLow', 'upscaleModel']);
@@ -160,7 +160,11 @@ export const BINDING_KEYS = new Set([
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
   // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
   'invertDepth',
-  // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
+  // Design a voice: the voice in words, and what a voice sample says (Qwen3-TTS / VoxCPM2 clones)
+  'voiceDescription', 'voiceTranscript',
+  // VoxCPM2's device combo (cuda | mps | cpu): the server's first torch device
+  'device',
+  // The VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
 ]);
 

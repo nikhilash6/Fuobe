@@ -163,7 +163,7 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/image", label: "Image", group: "Images", config: S.IMAGE_STUDIO },
   { href: "/edit", label: "Edit", group: "Images", config: S.EDIT_STUDIO },
   { href: "/inpaint", label: "Inpaint", group: "Images", config: S.INPAINT_STUDIO },
-  // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): text to image and edits on Zen Image Edit's small encoder, which the
+  // Qwen-Image 2.1 on a 16 GB card: text to image and edits on Zen Image Edit's small encoder, which the
   // Image and Edit studios pick by themselves under 20 GB once it is ready (Options → GPU on Auto). The row's page opens the Image
   // studio on Qwen-Image 2.1.
   {
@@ -217,6 +217,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/audio", label: "Voice", group: "Audio", config: S.AUDIO_STUDIO },
   { href: "/audio/dialogue", label: "Dialogue", group: "Audio", config: S.DIALOGUE_STUDIO },
   { href: "/audio/voice-change", label: "Voice change", group: "Audio", config: S.VOICE_CHANGE_STUDIO },
+  // Design a voice: Qwen3-TTS designs the takes and clones the one saved (VoxCPM2 is the other choice).
+  { href: "/audio/design", label: "Design a voice", group: "Audio", steps: [{ modelId: "oss-qwen3-tts", op: "voice-design" }, { modelId: "oss-qwen3-tts", op: "tts" }] },
   { href: "/audio/transcribe", label: "Transcribe", group: "Audio", config: S.TRANSCRIBE_STUDIO },
   // DBS soundtrack separation (D1): dialogue, music and effects.
   { href: "/audio/split", label: "Split soundtrack", group: "Audio", steps: [{ modelId: SPLIT_MODEL, op: "separate-audio" }] },

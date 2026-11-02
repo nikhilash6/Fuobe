@@ -8,6 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { useAskBeforeUpload, useElements } from "@/lib/api";
 import type { GenParams, ModelDef } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
+import { voiceOrigin } from "@/lib/voice-design";
 import { fileToSlot, type SlotValue } from "./media-slot";
 import { VoiceRecorder } from "./voice-recorder";
 import { useMaybeClean } from "@/components/audio-tools/clean-voice-switch";
@@ -118,7 +119,7 @@ export function VoicePicker({
                   onClick={() => pick({ kind: "sample", value: { ref: e.references[0], preview: e.references[0], kind: "audio", name: e.name } })}
                   icon={<AudioLines className="size-3.5" />}
                   name={e.name}
-                  hint={e.description ?? "Saved voice"}
+                  hint={voiceOrigin(e.voice) ?? e.description ?? "Saved voice"}
                 />
               ))
             ) : (

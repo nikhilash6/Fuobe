@@ -116,6 +116,10 @@
 // Keys added with MOSS-Image (docs/research/new-models-7.md §4.6). Model settings (params.extra; MOSS-Image's Quality control writes them):
 //   sampler, scheduler                    (KSampler sampler_name / scheduler)
 //   unet                                  (UNETLoader file: the Fast tier's drop-in 8-step DMD file, listed in optionalModels)
+// Keys added with Design a voice. * = the provider fills it:
+//   voiceDescription*                     (the voice in words: params.voiceDescription, op voice-design)
+//   voiceTranscript*                      (what the voice sample says: params.voiceTranscript, or a saved voice's line)
+//   device*                               (VoxCPM2's device combo: the server's first torch device, cuda | mps | cpu)
 // Entry field requiredModels: files a loader reads by a name with no extension (DBSLoader's model folder), listed in the
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
@@ -190,10 +194,14 @@ export const CUSTOM_NODE_REPOS = {
   'ComfyUI-RE-USE': 'https://github.com/workingprototype/Fuobe/tree/8cc0417b5cb8a603f06502d97d5c6d8c6035ea0d/comfy-nodes/ComfyUI-RE-USE',
   // Live edit: Fuobe's own node file (src/lib/comfy-live-nodes.ts), shipped with Fuobe rather than cloned from a repo.
   'fuobe-live': 'https://github.com/workingprototype/Fuobe',
-  // nm10-qwen21-fast: Qwen-Image 2.1 on a 16 GB card: recoilme's Zen Image Edit nodes (Qwen3.5-0.8B encoder + fusion adapter),
+  // Qwen-Image 2.1 on a 16 GB card: recoilme's Zen Image Edit nodes (Qwen3.5-0.8B encoder + fusion adapter),
   // Apache-2.0 code, release v2 (adapter_v12). Not on the validation server (needs transformers >= 5.17; the pinned
   // ComfyUI's venv has 5.22.1).
   'zen-image-edit-comfyui': 'https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d',
+  // Design a voice: 1038lab's Qwen3-TTS nodes (GPL-3.0 code, Apache-2.0 weights) and Saganaki22's VoxCPM2
+  // nodes (Apache-2.0). Neither is on the validation server; both download their weights from Hugging Face on first run.
+  'ComfyUI-QwenTTS': 'https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293',
+  'ComfyUI-VoxCPM2': 'https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -217,6 +225,8 @@ export const PACK_CLASSES = {
   // Live edit's nodes (fuobe_live.py), which Fuobe writes into custom_nodes itself.
   'fuobe-live': /FuobeLive$/,
   'zen-image-edit-comfyui': /^ZenImage21(AdapterLoader|TextEncode)$/,
+  'ComfyUI-QwenTTS': /^AILab_Qwen3TTS(VoiceDesign|VoiceClone|CustomVoice)(_Advanced)?$/,
+  'ComfyUI-VoxCPM2': /^VoxCPM2_(TTS|Clone)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -386,13 +396,13 @@ export const KNOWN_MODELS = {
   'qwen3vl_8b_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors', variants: ['qwen3vl_8b_bf16.safetensors'] },
   'qwen_image_2.1_vae_bf16.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors' },
   'qwen-image-2.1-outpaint-v2.safetensors': { folder: 'loras', url: 'https://huggingface.co/ausboss/Qwen-Image-2.1-Outpaint-LoRA/resolve/main/qwen-image-2.1-outpaint-v2.safetensors' },
-  // nm10-qwen21-fast: Qwen-Image 2.1 speed tiers, the clean decoder and the 2.1 Next-Scene LoRA, each pinned at the revision
+  // Qwen-Image 2.1 speed tiers, the clean decoder and the 2.1 Next-Scene LoRA, each pinned at the revision
   // its card was read at (2026-11-01) and renamed where upstream uses a name many LoRAs share (pytorch_lora_weights).
   'Qwen-Image-2.1-DMD2-2steps-v1.5.safetensors': { folder: 'loras', url: 'https://huggingface.co/linoyts/Qwen-Image-2.1-DMD2-2steps/resolve/5bae28369ecea3232405c17a53c04d35d15796b8/pytorch_lora_weights_v1_5.safetensors' },
   'Qwen-Image-2.1-Lightning-4steps.safetensors': { folder: 'loras', url: 'https://huggingface.co/lightx2v/Qwen-Image-2.1-Lightning/resolve/6b0a1176327c01522a44276c5da67331a025b6fc/pytorch_lora_weights.safetensors' },
   'p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors': { folder: 'loras', url: 'https://huggingface.co/PrunaAI/P-Q-Image-2.1-Comfy/resolve/aa7dcecb1767e220e31a55706e33fd057c9a3fca/p_q_image_2.1_6_steps_upsampled_v0.2_comfyui_bf16.safetensors' },
   'Qwen-Image-2.1-Next-Scene-step2500.safetensors': { folder: 'loras', url: 'https://huggingface.co/akhaliq/Qwen-Image-2.1-Next-Scene-LoRA/resolve/67ce88cd413fe177758af5d91e25eb3a334aa06f/next_scene_step2500.safetensors' },
-  // Zen Image Edit's fusion adapter (nm10-qwen21-fast): a GitHub release asset of recoilme/zen-image-edit-comfyui (release v2,
+  // Zen Image Edit's fusion adapter: a GitHub release asset of recoilme/zen-image-edit-comfyui (release v2,
   // sha256 and size in model-pins.json), kept in models/text_encoders; the loader is given its full path at run time.
   'adapter_v12.safetensors': { folder: 'text_encoders', url: 'https://github.com/recoilme/zen-image-edit-comfyui/releases/download/v2/adapter_v12.safetensors' },
   'texture_fix_vae_for_qwen_image_2.1_bf16.safetensors': { folder: 'vae', url: 'https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors' },
@@ -565,7 +575,7 @@ function wanI2V(variant) {
   };
 }
 
-// nm10-qwen21-fast: Options → Decoder "Clean" on every Qwen-Image 2.1 graph picks madebyollin's Texture-Fix VAE (the vae binding).
+// Options → Decoder "Clean" on every Qwen-Image 2.1 graph picks madebyollin's Texture-Fix VAE (the vae binding).
 const QWEN21_CLEAN_VAE = 'texture_fix_vae_for_qwen_image_2.1_bf16.safetensors';
 const QWEN21_LICENCE = 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only';
 const QWEN21_CLEAN_NOTE = ' Options → Decoder "Clean" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked).';
@@ -575,7 +585,7 @@ const ZEN_LICENCE = '; Zen Image Edit fusion adapter adapter_v12 (AiArtLab / rec
 const ZEN_FIRST_RUN = [
   'Qwen3.5-0.8B (1.7 GB, Apache-2.0), the text encoder: Fuobe uses the pinned copy in models/text_encoders/qwen3.5_0.8b when it is there (hf download Qwen/Qwen3.5-0.8B --revision 2fc06364715b967f1860aea9cf38778875588b17 --local-dir models/text_encoders/qwen3.5_0.8b); otherwise the loader downloads it from Hugging Face on first run',
 ];
-// The speed tiers' LoRAs (nm10-qwen21-fast, cards read 2026-11-01): file, licence, what the card says.
+// The speed tiers' LoRAs (cards read 2026-11-01): file, licence, what the card says.
 const QWEN21_TIERS = {
   draft: {
     title: '2 steps, DMD2 LoRA v1.5',
@@ -1954,6 +1964,101 @@ export const SPEC = [
       'run install-comfyui.sh with INDEXTTS_RUNTIME=1, ideally in a separate worker. Emotion from a second clip or a vector (IndexTTS2EmotionVector / IndexTTS2EmotionFromText) is not wired.',
   },
   {
+    id: 'tts-qwen3-design',
+    title: 'Qwen3-TTS 1.7B voice design (a new voice from a description)',
+    capability: 'voice-design',
+    handBuilt: 'hand-built/tts-qwen3-design.json',
+    packs: ['ComfyUI-QwenTTS'],
+    bindings: {
+      prompt: [b('1', 'text')],
+      voiceDescription: [b('1', 'instruct')],
+      seed: [b('1', 'seed')],
+    },
+    outputs: [{ node: '2', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'Qwen3-TTS weights Apache-2.0 (Qwen); ComfyUI-QwenTTS code GPL-3.0',
+    autoDownloads: [
+      'ComfyUI-QwenTTS downloads Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign (whole repository at its current revision; 5ecdb67327fd37bb2e042aab12ff7391903235d3 when this was written: model.safetensors 3.83 GB + speech_tokenizer 0.68 GB) into models/tts/Qwen3-TTS/Qwen3-TTS-12Hz-1.7B-VoiceDesign on first run (models/TTS/Qwen3-TTS when no tts folder is registered: ComfyUI-VoxCPM2 registers models/tts)',
+    ],
+    notes:
+      'AILab_Qwen3TTSVoiceDesign_Advanced(text = the line, instruct = the voice in words, model_size 1.7B, language Auto, do_sample true so each seed is a different take: ' +
+      'top_p 1.0, top_k 50, temperature 0.9, repetition_penalty 1.05 as fal sends; max_new_tokens 4096 = about 5 minutes at 12 Hz; unload_models false keeps it loaded for the next take). ' +
+      'The Basic node samples greedily (do_sample false): every take would be the same. 10 languages (Auto, Chinese, English, Japanese, Korean, French, German, Spanish, Portuguese, Russian, Italian). ' +
+      'Install the pack with its requirements.txt (transformers >= 4.57, torch >= 2.9.1). A designed voice is reused by cloning the chosen take (tts-qwen3-clone with the take and its line as reference_text). Output MP3 V0.',
+  },
+  {
+    id: 'tts-qwen3-clone',
+    title: 'Qwen3-TTS 1.7B voice clone (a short sample, optionally its transcript)',
+    capability: 'tts',
+    handBuilt: 'hand-built/tts-qwen3-clone.json',
+    packs: ['ComfyUI-QwenTTS'],
+    bindings: {
+      prompt: [b('2', 'target_text')],
+      audio: [b('1', 'audio')],
+      voiceTranscript: [b('2', 'reference_text')],
+      seed: [b('2', 'seed')],
+    },
+    outputs: [{ node: '3', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'Qwen3-TTS weights Apache-2.0 (Qwen); ComfyUI-QwenTTS code GPL-3.0',
+    autoDownloads: [
+      'ComfyUI-QwenTTS downloads Qwen/Qwen3-TTS-12Hz-1.7B-Base (whole repository at its current revision; fd4b254389122332181a7c3db7f27e918eec64e3 when this was written: model.safetensors 3.86 GB + speech_tokenizer 0.68 GB) into models/tts/Qwen3-TTS/Qwen3-TTS-12Hz-1.7B-Base on first run (models/TTS/Qwen3-TTS when no tts folder is registered: ComfyUI-VoxCPM2 registers models/tts)',
+    ],
+    notes:
+      'AILab_Qwen3TTSVoiceClone_Advanced(target_text = the line, reference_audio = the voice sample, reference_text = what the sample says (a closer clone), ' +
+      'x_vector_only false with a transcript; the pack refuses an empty reference_text otherwise, so without one the provider turns x_vector_only on (a timbre-only clone), model_size 1.7B, do_sample true, the same sampling as the design graph). A saved voice from Design a voice passes its take and the take\'s line. Output MP3 V0. Get consent for cloned voices.',
+  },
+  {
+    id: 'tts-voxcpm2',
+    title: 'VoxCPM2 TTS with voice design (48 kHz, 30 languages)',
+    capability: 'voice-design',
+    handBuilt: 'hand-built/tts-voxcpm2.json',
+    packs: ['ComfyUI-VoxCPM2'],
+    bindings: {
+      prompt: [b('1', 'text')],
+      voiceDescription: [b('1', 'voice_description')],
+      seed: [b('1', 'seed')],
+      device: [b('1', 'device')],
+    },
+    outputs: [{ node: '2', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'VoxCPM2 weights Apache-2.0 (OpenBMB); ComfyUI-VoxCPM2 code Apache-2.0',
+    autoDownloads: [
+      'ComfyUI-VoxCPM2 downloads openbmb/VoxCPM2 (whole repository; 32279effe8c19989596f05d353d1447f51d9e915 when this was written: model.safetensors 4.58 GB, audiovae.pth 0.38 GB) into models/tts/VoxCPM/VoxCPM2 on first run',
+    ],
+    notes:
+      'VoxCPM2_TTS(voice_description = the voice in words, wrapped in parentheses before the text by the node; text = the line; model VoxCPM2, lora None, cfg 2.0, 10 timesteps, max_tokens 4096, normalize_text true, dtype auto, device cuda). ' +
+      'device is a combo of what the GPU has (cuda, mps, cpu): bound to the server\'s first torch device (/system_stats), cuda when it can\'t say. 48 kHz output, 30 languages. ' +
+      'The pack also trains LoRAs (VoxCPM_LoraTrainer) and loads them (lora_name): not wired yet. Install the pack with its requirements.txt (voxcpm, funasr, modelscope).',
+  },
+  {
+    id: 'tts-voxcpm2-clone',
+    title: 'VoxCPM2 voice clone (controllable from a clip, ultimate with its transcript; 48 kHz)',
+    capability: 'tts',
+    handBuilt: 'hand-built/tts-voxcpm2-clone.json',
+    packs: ['ComfyUI-VoxCPM2'],
+    bindings: {
+      prompt: [b('2', 'text')],
+      audio: [b('1', 'audio')],
+      voiceTranscript: [b('2', 'prompt_text')],
+      seed: [b('2', 'seed')],
+      device: [b('2', 'device')],
+    },
+    outputs: [{ node: '3', kind: 'audio' }],
+    limits: { maxDurationSec: 300 },
+    vramGb: 8,
+    license: 'VoxCPM2 weights Apache-2.0 (OpenBMB); ComfyUI-VoxCPM2 code Apache-2.0',
+    autoDownloads: [
+      'ComfyUI-VoxCPM2 downloads openbmb/VoxCPM2 (whole repository; 32279effe8c19989596f05d353d1447f51d9e915 when this was written: model.safetensors 4.58 GB, audiovae.pth 0.38 GB) into models/tts/VoxCPM/VoxCPM2 on first run',
+    ],
+    notes:
+      'VoxCPM2_Clone(reference_audio = the voice sample, at most 50 s; prompt_text = what it says: given, the closest ("ultimate") clone, empty, the "controllable" clone; text = the line; ' +
+      'the same model settings as tts-voxcpm2, denoiser and ASR off, 3 retries on a babbling or silent take). A saved voice from Design a voice passes its take and the take\'s line, so it is cloned the ultimate way. Output MP3 V0. Get consent for cloned voices.',
+  },
+  {
     id: 'tts-dialogue-chatterbox',
     title: 'Chatterbox Dialogue (2 speakers, voice clone)',
     capability: 'dialogue',
@@ -2730,7 +2835,7 @@ export const SPEC = [
       'prompt = the optional "what goes there" hint (the lead-in "Also include in the prompt:" is added); it must not name the subject, which then appears again in the margin. ' +
       'Removed: AusBoss Seed/Text/Compare/RunTimer/ShowText/WorkflowNote and its SaveImage (SaveImage).' + QWEN21_CLEAN_NOTE,
   },
-  // ---- nm10-qwen21-fast: Qwen-Image 2.1 in 2-6 steps (Options → Speed), the 2.1 Next-Scene LoRA, and a 16 GB route ---------
+  // ---- Qwen-Image 2.1 in 2-6 steps (Options → Speed), the 2.1 Next-Scene LoRA, and a 16 GB route ---------------------------
   // Each speed graph is its base graph with one LoRA + ManualSigmas branch (qwen21Tier above); the provider picks it from
   // params.extra.speed (src/lib/comfy-variants.ts). Turbo is qwen-image-21-turbo-edit; Full is the base graph.
   qwen21Tier('t2i', 'draft', { title: 'Qwen-Image 2.1 Text to Image', capability: 't2i', bindings: { prompt: [b('4', 'prompt')], width: [b('5', 'width')], height: [b('5', 'height')] }, output: '9', limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 32 } }),

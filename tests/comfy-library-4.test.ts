@@ -100,13 +100,18 @@ describe("round-4 ComfyUI workflows", () => {
       "minimax-h3-i2v-hq",
       "minimax-h3-flf2v-hq",
       "minimax-h3-orbit",
+      // Design a voice: ComfyUI-QwenTTS and ComfyUI-VoxCPM2 aren't on the validation server (tests/voice-design-server.test.ts).
+      "tts-qwen3-design",
+      "tts-qwen3-clone",
+      "tts-voxcpm2",
+      "tts-voxcpm2-clone",
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",
       "qwen-image-21-live-edit",
       "qwen-image-21-inpaint",
       "qwen-image-21-outpaint",
-      // Qwen-Image 2.1's speeds, its next scene and its 16 GB route (nm10-qwen21-fast): unvalidated like their base graphs until
+      // Qwen-Image 2.1's speeds, its next scene and its 16 GB route: unvalidated like their base graphs until
       // they run on a GPU (tests/qwen21-fast.test.ts).
       "qwen-image-21-t2i-draft",
       "qwen-image-21-t2i-fast",

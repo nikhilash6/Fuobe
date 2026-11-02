@@ -18,6 +18,7 @@ export const HUB_MODES: Record<HubKind, { id: string; label: string; ownerOnly?:
     { id: "speech", label: "Speech" },
     { id: "dialogue", label: "Dialogue" },
     { id: "voice-change", label: "Voice change" },
+    { id: "design", label: "Design a voice" },
     { id: "translate", label: "Translate" },
     { id: "transcribe", label: "Transcribe" },
     { id: "clean", label: "Clean up voice" },

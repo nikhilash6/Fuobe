@@ -605,6 +605,9 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS assets_account ON assets(account_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS assets_rel ON assets(rel_path);
   CREATE INDEX IF NOT EXISTS assets_generation ON assets(generation_id);`,
+  // Design a voice: a designed voice on its element: the model, the words, what its clip
+  // says and, once the cloud has cloned it, Qwen3-TTS's embedding file (src/lib/catalog/elements.ts ElementVoice).
+  `ALTER TABLE characters ADD COLUMN voice_json TEXT;`,
 ];
 
 /**

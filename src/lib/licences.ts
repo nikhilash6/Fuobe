@@ -456,12 +456,23 @@ export const NODE_PACKS: NodePack[] = [
   pack("ComfyUI-ThinkSound_Wrapper", "https://github.com/ShmuelRonen/ComfyUI-ThinkSound_Wrapper", NO_FILE("; the ThinkSound weights are Apache-2.0"), "isolated"),
   pack("fuobe-live", "https://github.com/workingprototype/Fuobe", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "Fuobe's own live edit nodes (fuobe_live.py, shipped with Fuobe): a loader, a cached reference encode, a crop, a paste-back and a socket save. The Qwen-Image 2.1 weights and the DMD2 LoRA they run are non-commercial" }),
   pack("ausboss-nodes", "https://github.com/ausboss/ComfyUI-AusBoss", { name: "MIT", class: "commercial", url: SPDX("MIT"), note: "Crop For Inpaint, Stitch Inpaint and Crop + Rotate + Pad for Qwen-Image 2.1's inpaint and expand; MIT code. The Qwen-Image 2.1 weights they run are non-commercial" }),
-  // Qwen-Image 2.1 on a 16 GB card (nm10-qwen21-fast): recoilme's Zen Image Edit nodes, LICENSE Apache-2.0 at the pinned commit.
+  // Qwen-Image 2.1 on a 16 GB card: recoilme's Zen Image Edit nodes, LICENSE Apache-2.0 at the pinned commit.
   pack("zen-image-edit-comfyui", "https://github.com/recoilme/zen-image-edit-comfyui/tree/7a29e58c973b84798df926e3251727884fdacc2d", {
     name: "Apache-2.0",
     class: "commercial",
     url: SPDX("Apache-2.0"),
     note: "Zen Image Edit's adapter loader and text encode: Qwen-Image 2.1 on the Qwen3.5-0.8B encoder (Apache-2.0) and a fusion adapter. The adapter and the Qwen-Image 2.1 weights are non-commercial (Qwen Research License)",
+  }),
+  // Design a voice, pinned in workflows/comfyui/packs.json: LICENSE files read at the pinned commits.
+  pack("ComfyUI-QwenTTS", "https://github.com/1038lab/ComfyUI-QwenTTS/tree/d8122a8ba835b65fd65c113d2b273b1ad1579293", {
+    ...GPL,
+    note: "Qwen3-TTS voice design and voice clone nodes; GPL-3.0 code. The Qwen3-TTS 1.7B weights it downloads are Apache-2.0",
+  }),
+  pack("ComfyUI-VoxCPM2", "https://github.com/Saganaki22/ComfyUI-VoxCPM2/tree/0e52a6cd006769e030d0e1ae907ffebbbfac4f5f", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "VoxCPM2 text to speech (voice design) and voice clone nodes; Apache-2.0 code. The VoxCPM2 weights it downloads are Apache-2.0",
   }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
