@@ -60,7 +60,7 @@ try {
     await page.getByRole("heading", { name: "Swap a character through whole clips" }).waitFor({ timeout: 120_000 });
     check("projects page: hero and steps", (await text()).includes("Who and the scene"));
     check("sidebar links the studio", (await page.locator('a[href="/character-swap"]').count()) > 0);
-    await page.getByPlaceholder(/Name the project/).fill("Rain scene");
+    await page.getByPlaceholder("Project name, e.g. Rain scene").fill("Rain scene");
     await page.getByRole("button", { name: /New project · cloud/ }).click();
     await page.waitForURL(/\/character-swap\/swap-/, { timeout: 60_000 });
     projectUrl = page.url();
