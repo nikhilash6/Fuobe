@@ -16244,6 +16244,78 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "idol-3d",
+    "name": "Idol 3D",
+    "vendor": "Speridlabs",
+    "family": "idol",
+    "engine": "cloud",
+    "kind": "model3d",
+    "tagline": "A Gaussian splat (.ply) of one object from one picture \u00b7 TripoSplat's architecture, retrained",
+    "routes": [
+      {
+        "op": "splat",
+        "provider": "fal",
+        "endpoint": "speridlabs/idol",
+        "map": {
+          "prompt": false,
+          "image": "image_url",
+          "seed": "seed"
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "num_gaussians",
+          "label": "Gaussians",
+          "min": 32768,
+          "max": 1048576,
+          "step": 32768,
+          "default": 262144
+        },
+        {
+          "param": "num_inference_steps",
+          "label": "Steps",
+          "min": 1,
+          "max": 50,
+          "step": 1,
+          "default": 50
+        }
+      ],
+      "controls": [
+        {
+          "param": "image_type",
+          "label": "Picture",
+          "values": [
+            "synthetic",
+            "real"
+          ],
+          "default": "synthetic",
+          "labels": {
+            "synthetic": "A render or generated image",
+            "real": "A photo"
+          }
+        }
+      ],
+      "seed": true,
+      "maxImages": 1,
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "licence": {
+      "licence": "Apache-2.0",
+      "commercial": true,
+      "note": "Apache-2.0 (speridlabs/idol weights); TripoSplat's architecture (MIT); DINOv3 image encoder under the DINOv3 License (\"Built with DINOv3\"). fal's safety checker reads the input image",
+      "checked": "2026-11-02"
+    },
+    "pricing": {
+      "unit": "request",
+      "usd": 0.1
+    }
+  },
+  {
     "id": "sam-3d-objects",
     "name": "SAM 3D Objects",
     "vendor": "Meta",

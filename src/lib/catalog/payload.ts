@@ -854,7 +854,7 @@ function sceneOutputs(response: unknown): ExtractedOutput[] {
 }
 
 /**
- * Gaussian splats (TripoSplat's model_mesh, a .ply unless it says .spz) with meta.format; the cut-out the
+ * Gaussian splats (TripoSplat's and Idol's model_mesh, a .ply unless it says .spz) with meta.format; the cut-out the
  * model actually saw is the preview.
  */
 function splatOutputs(response: unknown): ExtractedOutput[] {
@@ -863,7 +863,9 @@ function splatOutputs(response: unknown): ExtractedOutput[] {
   if (!f) return model3dOutputs(response);
   const format = /\.spz(\?|$)/i.test(f.url) || f.contentType?.includes("spz") ? "spz" : "ply";
   const preview = isObj(r) ? fileOf(r.preprocessed_image)?.url : undefined;
-  return [{ url: f.url, kind: "model3d", contentType: format === "spz" ? "model/x-spz" : "model/ply", meta: compact({ format, preview }) }];
+  // Idol's point-cloud preview of the splat's centres (model_glb) rides along as a download ("points").
+  const glb = isObj(r) ? fileOf(r.model_glb)?.url : undefined;
+  return [{ url: f.url, kind: "model3d", contentType: format === "spz" ? "model/x-spz" : "model/ply", meta: compact({ format, preview, formats: glb ? { points: glb } : undefined }) }];
 }
 
 /**

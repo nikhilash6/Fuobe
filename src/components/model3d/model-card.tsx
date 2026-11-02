@@ -17,7 +17,7 @@ import { PlaceholderChip } from "@/components/demo-mode";
 import { recordableType, recordTurntable } from "./turntable";
 
 /** Downloads besides the main file, by the name the provider gave them. */
-const FORMAT_LABEL: Record<string, string> = { rigged: "Rigged .glb", walking: "Walk .glb", running: "Run .glb", fbx: ".fbx", splat: "Splat" };
+const FORMAT_LABEL: Record<string, string> = { rigged: "Rigged .glb", walking: "Walk .glb", running: "Run .glb", fbx: ".fbx", splat: "Splat", points: "Points .glb" };
 const formatLabel = (k: string) => FORMAT_LABEL[k] ?? `.${k}`;
 
 /** What the viewer shows of a rig: the result itself, or one of Meshy's walk and run cycles. */
