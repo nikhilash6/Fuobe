@@ -374,6 +374,7 @@ describe("studio tools", () => {
     create_ads: [{ brief: "oat milk for runners" }, { brief: "oat milk", product_image: image, count: 2, aspect_ratios: ["1:1", "9:16"] }],
     add_captions: [{ video }, { video, translate_to: "Spanish" }],
     restore_video: [{ video }, { video, prompt: "a harbour in the 1930s, natural colour", reference: image }],
+    remove_person: [{ video, who: "the man in the grey shirt" }, { video, who: "the woman on the left", start: 0, end: 1, mask_grow: 9 }],
     blockout_film: [
       { video, seconds: 8, beats: [{ start: 0, label: "Arrival", words: "She walks in." }] },
       { video, seconds: 40, beats: [{ start: 0, label: "Arrival" }, { start: 20, label: "Lights out" }], references: [{ url: image, role: "character", name: "Mara" }], model: "minimax-h3-max-3d", sounds: ["Footsteps"] },
@@ -389,6 +390,12 @@ describe("studio tools", () => {
           for (const input of inputs)
             for (const engine of ["cloud", "open"] as const) {
               const p = plan(name, input, engine);
+              // Remove a person runs on your GPU only (MiniMax H3 with the Person Remover LoRA): an install that runs the
+              // cloud alone says so on the card.
+              if (name === "remove_person" && mode === "cloud") {
+                expect(p.jobs.find((j) => j.error)?.error ?? p.error, `${name} ${engine}/${mode}`).toBeTruthy();
+                continue;
+              }
               expect(p.error, `${name} ${engine}/${mode}`).toBeUndefined();
               expect(p.jobs.length, `${name} ${engine}/${mode}`).toBeGreaterThan(0);
               for (const j of p.jobs) expect(j.error, `${name} ${engine}/${mode}: ${j.modelId}`).toBeUndefined();

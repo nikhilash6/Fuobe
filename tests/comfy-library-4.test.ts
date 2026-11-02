@@ -143,7 +143,6 @@ describe("round-4 ComfyUI workflows", () => {
       "voice-clean-bed-reuse",
       "video-character-swap-h3",
       "video-character-swap-h3-relay",
-      "video-person-remove-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
       "video-regenerate-h3",

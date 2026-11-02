@@ -35,6 +35,7 @@ export type OutputActionId =
   | "loop-audio"
   | "split-soundtrack"
   | "remove-dialogue"
+  | "remove-person"
   | "clean-voice"
   | "clean-dialogue"
   | "copy-text"
@@ -145,6 +146,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("add-sound", "Add sound", `/audio/video?video=${q(o.url)}`);
       link("split-soundtrack", "Split soundtrack", `/audio/split?video=${q(o.url)}`);
       link("remove-dialogue", "Remove dialogue", `/video-tools/remove-dialogue?video=${q(o.url)}`);
+      // H3 Person Removal (o/person-remover-plus): Video tools → Remove a person with the clip in.
+      link("remove-person", "Remove a person", `/video-tools/remove-person?video=${q(o.url)}`);
       // Clean up voice on a video's soundtrack: results that carry sound, and uploads (a clip from a phone or a call).
       if (g.feature === "upload" || (g.op && SOUNDED_VIDEO_OPS.has(g.op))) link("clean-voice", "Clean up voice", `/audio/clean?video=${q(o.url)}`);
       // Clean up dialogue (Split soundtrack's preset): the music and effects out from under the speech, or a cloud cleaner.

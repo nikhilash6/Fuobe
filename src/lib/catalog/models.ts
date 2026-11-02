@@ -1128,6 +1128,19 @@ const open: ModelDef[] = [
     routes: [comfy("remove-object", "video-person-remove-h3-relay", "H3 Relay Person Removal: the person painted green, 22-frame windows with 18 of history from the clean first frame (image), 12 steps, silent")],
     options: { seed: true, maxImages: 1 },
   }),
+  // Its mask first (o/person-remover-plus): the removal graph's own SAM 3.1 chain on the part's first seconds, the person
+  // filled green exactly as H3 will see them. Run by Remove object's "Preview the mask", not the composer.
+  o({
+    id: "oss-h3-removal-mask",
+    name: "SAM 3.1 green mask · H3 Person Removal",
+    vendor: "Meta × Akatz Labs",
+    family: "sam",
+    kind: "video",
+    tagline: "Who H3 Person Removal will take out: SAM 3.1 finds them, the mask is grown and filled green over the first seconds",
+    routes: [comfy("bg-remove-video", "video-person-remove-h3-mask", "SAM 3.1 detect + track, threshold 0.5, grown maskGrow px, filled green: the removal's own mask")],
+    options: {},
+    hidden: true,
+  }),
   // Character Swap Studio (/character-swap, o/h3-studio): Akatz Labs' workbench for whole clips. A segment is one H3 Relay
   // pass (its approved mask, anchor and the previous take's lossless master as history); a mask is SAM 3.1 on any frame
   // of a shot, spliced into the version it corrects. Both run through the studio, not the composer.

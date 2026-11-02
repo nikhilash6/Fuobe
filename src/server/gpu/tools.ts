@@ -5,11 +5,11 @@ import { CLEAN_DIALOGUE_PRESET, OPEN_MODEL as CLEAN_DIALOGUE_MODEL, OPEN_MUX_MOD
 import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { CLEAN_MODEL } from "@/lib/av/clean-voice";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
-import { graphLoras } from "@/lib/catalog/character-swap";
+import { graphLoras, PERSON_REMOVER_LORA } from "@/lib/catalog/character-swap";
 import { BLOCKOUT_MODELS, PATH_MODELS } from "@/lib/catalog/cinema";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
-import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
+import { PERSON_REMOVAL_TOOLS, REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
 import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { COMPOSITE_MODEL } from "@/lib/catalog/sharpen";
@@ -302,6 +302,21 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     steps: [
       { modelId: REMOVE_DIALOGUE_MODELS.split, op: "separate-audio" },
       { modelId: REMOVE_DIALOGUE_MODELS.mux, op: "mux" },
+    ],
+  },
+  // Remove a person (o/person-remover-plus): the part fitted to 24 fps, its first frame cleaned by Qwen-Image 2.1, the green
+  // mask preview, H3 Relay's Person Removal with Akatz Labs' Person Remover LoRA, and the sound put back.
+  {
+    href: "/video-tools/remove-person",
+    label: "Remove a person",
+    group: "Video tools",
+    steps: [
+      { modelId: "oss-h3-person-remove", op: "remove-object", loras: [PERSON_REMOVER_LORA] },
+      { modelId: PERSON_REMOVAL_TOOLS.mask, op: "bg-remove-video" },
+      { modelId: PERSON_REMOVAL_TOOLS.fit, op: "trim" },
+      { modelId: PERSON_REMOVAL_TOOLS.frame, op: "frame" },
+      { modelId: PERSON_REMOVAL_TOOLS.clean, op: "edit" },
+      { modelId: REMOVE_TOOLS.open.mux, op: "mux" },
     ],
   },
   { href: "/video-tools/relight", label: "Relight", group: "Video tools", config: S.VIDEO_RELIGHT_STUDIO },

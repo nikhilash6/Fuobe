@@ -4306,16 +4306,39 @@ export const SPEC = [
       maskPrompt: [b('subject', 'text')], maskGrow: [b('grow_mask', 'expand')], seed: [b('plan', 'seed')], steps: [b('schedule', 'steps')],
       windowFrames: [b('plan', 'window_frames')], historyFrames: [b('plan', 'history_frames')],
       lora: [b('adapter', 'lora_name')], loraStrength: [b('adapter', 'strength_model')], filenamePrefix: [b('save', 'filename_prefix')],
+      windowControls: [b('review', 'window_controls')],
     },
     outputs: [{ node: 'save', kind: 'video' }],
-    defaults: { maskPrompt: 'person', maskGrow: 5, steps: 12, windowFrames: '22', historyFrames: '18', lora: 'H3-Person-Remover-V1.safetensors', loraStrength: 1 },
+    defaults: { maskPrompt: 'person', maskGrow: 5, steps: 12, windowFrames: '22', historyFrames: '18', lora: 'H3-Person-Remover-V1.safetensors', loraStrength: 1, windowControls: '{}' },
     limits: { maxDurationSec: 60, maxFrames: 3592 },
     vramGb: 24,
     license: 'MiniMax H3 Community License (H3 Ref2VA, its video and audio VAEs, the packaged Qwen3-VL text encoder, Akatz Labs\' Person Remover V1 LoRA): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax\'s written authorization; show "MiniMax H3" on the product\'s interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · SAM 3.1 under Meta\'s SAM License (commercial use allowed under its terms) · H3 Relay nodes GPL-3.0 (Sendy Software LLC and contributors; vendored Context Loop and Spectrum GPL-3.0); the graph is H3 Relay\'s example workflow (GPL-3.0 repository)',
     notes:
       'H3 Relay\'s toolkit H3-Person-Removal.api.json at e2a7665b (Akatz Labs\' tool ships the same file). Changed: the clean first frame goes through an ImageScale (centre crop) to the video\'s exact size, so an edit that came back a little larger or smaller still fits; SAM 3.1\'s words default to "person"; the save prefix. ' +
       'video = the part already fitted to 24 fps on the 32-pixel grid (oss-fit-clip), image = the clean first frame (the app makes it with Qwen-Image-Edit from the part\'s first frame). 22-frame windows with 18 of history, 12 steps, er_sde / simple, CFG 1, LoRA 1.0, mask grown 5 px, seed 904234 by default (Akatz\'s settings). The output is silent: the app puts the clip\'s sound back. ' +
-      'Needs the h3-relay pack (H3_RELAY=1) and FFmpeg.',
+      'Needs the h3-relay pack (H3_RELAY=1) and FFmpeg. ' +
+      'windowControls = H3 Relay\'s Review Windows controls (originals o/person-remover-plus): {config_key, windows: {index: {seed, locked, record_id}}}; locked windows come back exactly from the checkpoints the Relay keeps in ComfyUI\'s output/__h3_removal_cache, the first unlocked one is drawn again with its seed (Redo from here). The provider reads the run\'s window previews from /h3_relay/removal/previews.',
+  },
+  // Remove object's mask first (originals o/person-remover-plus): the removal graph's own SAM 3.1 chain on the first seconds
+  // of the fitted part, the person filled green exactly as the removal will see it (the model card: "check the saved
+  // green-mask preview before running the full removal"). Native ComfyUI nodes only.
+  {
+    id: 'video-person-remove-h3-mask',
+    title: 'Remove a person, mask first: SAM 3.1 finds who you name, thresholds and grows the mask and fills it green over the clip, as H3 Person Removal sees it (core nodes)',
+    capability: 'person-mask',
+    handBuilt: 'hand-built/video-person-remove-h3-mask.json',
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    bindings: {
+      video: [b('source', 'file')], maskPrompt: [b('subject', 'text')], maskGrow: [b('grow_mask', 'expand')], filenamePrefix: [b('save', 'filename_prefix')],
+    },
+    outputs: [{ node: 'save', kind: 'video' }],
+    defaults: { maskPrompt: 'person', maskGrow: 5 },
+    limits: { maxDurationSec: 10, maxFrames: 240 },
+    vramGb: 6,
+    license: 'SAM 3.1 under Meta\'s SAM License (commercial use allowed under its terms); the chain is H3 Relay\'s Person Removal example (GPL-3.0 repository)',
+    notes:
+      'The SAM 3.1 part of video-person-remove-h3-relay, node for node (detect 0.4 with 2 refinements, track 0.5 with 1 object and detection every 12 frames, threshold 0.5, grow maskGrow px, green 0x00FF00), saved as a video instead of sampled. ' +
+      'video = the first seconds of the part, fitted to 24 fps on the 32-pixel grid like the removal (oss-fit-clip). Needs nothing but SAM 3.1.',
   },
 
   // Character Swap Studio (o/h3-studio; docs/research/openjutsu-6.md §4.2): Akatz Labs' H3 Character Swap workbench for whole
