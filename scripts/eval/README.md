@@ -523,8 +523,9 @@ pnpm eval:covers --from-masters <dir> --run comfyui-previews-2026-10 --engine co
 - Each cover records the run, the engine, the model and the variant: `--model` for stills, `--video-model`
   for clips. A folder's `meta.json` can name its own `model` and `variant`.
 - A folder's `meta.json` with `"length": "full"` keeps the clip's whole length (at most 8 seconds) instead
-  of its first 4 seconds, for an effect whose end matters. The cover loops like the others: the same
-  crossfade, and its first frame as the poster. The cards play a clip of any length. A change to
+  of its first 4 seconds, for an effect whose end matters. Every frame of the clip shows clean: 6 frames
+  are added after its last one, dissolving back to its first, so the loop has no jump and the end is not
+  blended away. Its first frame is the poster. The cards play a clip of any length. A change to
   `meta.json` makes the cover again on the next run, as a new master does.
 - The manifest is merged. Covers that other runs wrote stay, and only the ids found in `<dir>` are
   replaced. An id whose cover another run made in another folder (a measured `eval:covers` cover) is

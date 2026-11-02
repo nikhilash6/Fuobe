@@ -304,6 +304,27 @@ export function seamless(frames, fade) {
 }
 
 /**
+ * A loop that keeps every frame: `fade` frames are added after the last one, dissolving from it to the first, so the
+ * clip shows its whole length clean and its loop goes back to its first frame without a jump. For a clip whose end
+ * matters (`length: "full"`), which seamless would blend into its opening.
+ * @param {Buffer[]} frames
+ * @param {number} fade
+ */
+export function dissolveBack(frames, fade) {
+  if (!fade || frames.length < 2) return frames;
+  const last = frames.at(-1);
+  const first = frames[0];
+  const out = frames.slice();
+  for (let k = 0; k < fade; k++) {
+    const a = (k + 1) / (fade + 1);
+    const blend = Buffer.allocUnsafe(last.length);
+    for (let i = 0; i < blend.length; i++) blend[i] = Math.round(last[i] * (1 - a) + first[i] * a);
+    out.push(blend);
+  }
+  return out;
+}
+
+/**
  * A still at most STILL_PX wide/tall (a 4:2:0 JPEG), or a clip's first seconds at most CLIP_PX that loops
  * without a jump (crossfaded, unless it loops already), with its first frame as the poster.
  *
@@ -312,7 +333,8 @@ export function seamless(frames, fade) {
  * and starts the clip there, so nothing jumps.
  *
  * With `length: "full"` (an effect whose end matters), the clip keeps its whole length (up to REST_CLIP_SECONDS)
- * instead of its first CLIP_SECONDS, and loops as any other: crossfaded, with its first frame as the poster.
+ * instead of its first CLIP_SECONDS. Every frame shows clean: its loop dissolves from its last frame back to its first
+ * after the end (dissolveBack) rather than over it, and its first frame is the poster.
  * @param {string} src
  * @param {"image" | "video"} kind
  * @param {string} destBase
@@ -324,14 +346,17 @@ export function encode(src, kind, destBase, opts = {}) {
   if (kind === "video") {
     const atEnd = opts.rest === "end";
     // How much of the clip its loop keeps: the first CLIP_SECONDS, or all of it (up to REST_CLIP_SECONDS).
-    const keep = opts.length === "full" ? REST_CLIP_SECONDS : CLIP_SECONDS;
-    // Decoded at CLIP_FPS: what it keeps, plus the frames the crossfade takes back from the start (a reveal: all of it).
-    const seconds = atEnd ? REST_CLIP_SECONDS : keep + LOOP_FADE / CLIP_FPS;
+    const full = opts.length === "full";
+    const keep = full ? REST_CLIP_SECONDS : CLIP_SECONDS;
+    // Decoded at CLIP_FPS: what it keeps, plus the frames the crossfade takes back from the start (a reveal or a full
+    // clip: all of it, as a full clip's dissolve is added after its end).
+    const seconds = atEnd || full ? REST_CLIP_SECONDS : keep + LOOP_FADE / CLIP_FPS;
     const y4m = run(["-i", src, "-t", String(seconds), "-an", "-sn", "-dn", "-vf", `${fit(CLIP_PX)},fps=${CLIP_FPS},format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
     const { header, frames, luma } = readY4m(y4m);
     if (frames.length < 2) throw new Error(`${src} has no frames to make a clip of`);
     const cut = frames.slice(0, keep * CLIP_FPS);
-    const looped = atEnd ? frames : loopsAlready(cut, luma) ? cut : seamless(frames, Math.min(LOOP_FADE, Math.floor(frames.length / 4)));
+    const fade = Math.min(LOOP_FADE, Math.floor(frames.length / 4));
+    const looped = atEnd ? frames : loopsAlready(cut, luma) ? cut : full ? dissolveBack(cut, fade) : seamless(frames, fade);
     const stream = (list) => Buffer.concat([Buffer.from(`${header}\n`, "latin1"), ...list.flatMap((fr) => [Buffer.from("FRAME\n"), fr])]);
     run(["-f", "yuv4mpegpipe", "-i", "-", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", "-map_metadata", "-1", "-movflags", "+faststart", `${destBase}.mp4`], stream(looped));
     if (atEnd) {

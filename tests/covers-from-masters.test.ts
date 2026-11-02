@@ -15,9 +15,10 @@ const covers = (await import("../scripts/eval/lib/covers.mjs")) as unknown as {
   withVersions: (entries: Record<string, Entry>, publicDir: string) => Record<string, Entry>;
   versionCovers: (opts: { publicDir?: string; manifest?: string; dryRun?: boolean }) => { entries: number; urls: number; changed: number; thumbs: string[]; unversioned: string[] };
   seamless: (frames: Buffer[], fade: number) => Buffer[];
+  dissolveBack: (frames: Buffer[], fade: number) => Buffer[];
   loopsAlready: (frames: Buffer[], luma: number) => boolean;
 };
-const { coversFromMasters, loopsAlready, readManifest, seamless, versionCovers, withVersions, writeManifest } = covers;
+const { coversFromMasters, dissolveBack, loopsAlready, readManifest, seamless, versionCovers, withVersions, writeManifest } = covers;
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-covers-masters-"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -183,13 +184,13 @@ describe("covers from masters", () => {
     ]);
     const seconds = (f: string) => Number(spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path.join(out, f)], { encoding: "utf8" }).stdout);
     const frames = (f: string) => Number(spawnSync("ffprobe", ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", path.join(out, f)], { encoding: "utf8" }).stdout);
-    // The usual cover: the first 4 s (96 frames at 24 fps). The full one: all 5.2 s (124 or 125 frames), less the 6 the
-    // loop's crossfade blends into its end.
+    // The usual cover: the first 4 s (96 frames at 24 fps). The full one: all 5.2 s (124 or 125 frames), plus the 6 of
+    // the dissolve back to its first frame added after its end.
     expect(frames("effect-set-on-fire.mp4")).toBe(96);
     expect(seconds("effect-set-on-fire.mp4")).toBeLessThanOrEqual(4.1);
-    expect(frames("effect-canvas.mp4")).toBeGreaterThanOrEqual(118);
-    expect(frames("effect-canvas.mp4")).toBeLessThanOrEqual(119);
-    expect(seconds("effect-canvas.mp4")).toBeGreaterThan(4.8);
+    expect(frames("effect-canvas.mp4")).toBeGreaterThanOrEqual(130);
+    expect(frames("effect-canvas.mp4")).toBeLessThanOrEqual(131);
+    expect(seconds("effect-canvas.mp4")).toBeGreaterThan(5.3);
     // The manifest entry is a clip cover like any other: the length is the file's.
     expect(readManifest(manifest)["effect-canvas"]).toEqual({ poster: versioned("/previews/presets/effect-canvas.jpg"), video: versioned("/previews/presets/effect-canvas.mp4"), run: "comfyui-previews-test", engine: "comfyui", model: "minimax-h3", variant: "lean-json" });
 
@@ -373,5 +374,18 @@ describe("covers from masters", () => {
     const orbit = [100, 100, 100, 110, 120, 130, 140, 130, 120, 110, 100, 100, 100].map((v) => Buffer.alloc(8, v));
     expect(loopsAlready(orbit, 8)).toBe(true);
     expect(loopsAlready(frames, 2)).toBe(false);
+  });
+
+  it("keeps every frame of a clip whose end matters, and dissolves from its last frame back to its first after it", () => {
+    const frames = Array.from({ length: 20 }, (_, i) => Buffer.from([i * 10, i * 10]));
+    const out = dissolveBack(frames, 4);
+    expect(out).toHaveLength(24);
+    // Every frame as it was, the first and the last too.
+    expect(out.slice(0, 20)).toEqual(frames);
+    // Then four frames from the last (190) towards the first (0): the loop back to the first is a step like theirs.
+    expect(out.slice(20).map((b) => b[0])).toEqual([152, 114, 76, 38]);
+    const steps = out.map((b, i) => Math.abs(b[0] - out[(i + 1) % out.length][0]));
+    expect(Math.max(...steps)).toBe(38);
+    expect(dissolveBack(frames, 0)).toBe(frames);
   });
 });

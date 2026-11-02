@@ -1258,8 +1258,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "effect-canvas": {
-    "poster": "/previews/presets/effect-canvas.jpg?v=178338e7",
-    "video": "/previews/presets/effect-canvas.mp4?v=30c52045",
+    "poster": "/previews/presets/effect-canvas.jpg?v=74b8b693",
+    "video": "/previews/presets/effect-canvas.mp4?v=63bb1c96",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "minimax-h3",
@@ -3224,8 +3224,8 @@ export const PRESET_PREVIEWS: Record<string, PresetPreviewMedia> = {
     "variant": "lean-json"
   },
   "motion-dutch-angle": {
-    "poster": "/previews/presets/motion-dutch-angle.jpg?v=973f914f",
-    "video": "/previews/presets/motion-dutch-angle.mp4?v=074d1af0",
+    "poster": "/previews/presets/motion-dutch-angle.jpg?v=b5de1047",
+    "video": "/previews/presets/motion-dutch-angle.mp4?v=16570d51",
     "run": "comfyui-previews-2026-10",
     "engine": "comfyui",
     "model": "minimax-h3",

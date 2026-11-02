@@ -40,8 +40,8 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
   motion: [
     `
       motion-dolly-in motion-crane-up motion-catwalk motion-classic-static motion-glam motion-slow-motion motion-zoom-in
-      motion-super-dolly-in motion-super-dolly-out motion-crash-zoom-in motion-crash-zoom-out motion-360-orbit
-      motion-arc-left motion-lazy-susan motion-crane-down motion-crane-over-the-head motion-dolly-left motion-tracking
+      motion-super-dolly-in motion-super-dolly-out motion-crash-zoom-in motion-arc-left motion-lazy-susan
+      motion-crane-down motion-crane-over-the-head motion-tracking
       motion-double-dolly motion-snorricam motion-fpv-drone motion-aerial-pullback motion-helicopter-shot
       motion-car-grip motion-car-chasing motion-static motion-documentary-snap motion-dreamy-flow motion-epic-scale
       motion-intimate-observer motion-one-take motion-silent-machine
@@ -51,7 +51,8 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       motion-action-run motion-drone-reveal motion-robo-arm motion-kiss motion-raw-chaos motion-zoom-out
       motion-dolly-zoom-in motion-through-object-out motion-jib-up motion-overhead motion-buckle-up motion-truck-left
       motion-bts motion-robot-arm motion-timelapse-glam motion-low-shutter motion-focus-change motion-roll-transition
-      motion-flying-cam-transition motion-boxing motion-ski-carving motion-snowboard-carving
+      motion-flying-cam-transition motion-boxing motion-ski-carving motion-snowboard-carving motion-crash-zoom-out
+      motion-360-orbit motion-dolly-left
     `,
     `
       motion-zoom motion-dolly-out motion-rapid-zoom-in motion-through-object-in motion-earth-zoom-out motion-pan-left
@@ -70,7 +71,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
   effect: [
     `
       effect-sand-storm effect-outfit-switch effect-wind-to-face effect-levitation effect-nature-bloom effect-lens-flare
-      effect-dirty-lens effect-train-rush effect-exploded-view effect-display-transition effect-splash-transition
+      effect-dirty-lens effect-train-rush effect-exploded-view effect-display-transition
       effect-pearl-earring effect-blue-depth effect-magazine effect-film-colors effect-black-gloss effect-crimson-vigil
       effect-bleached-warm effect-cold-steel
     `,
@@ -82,7 +83,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       effect-pool-jump effect-raven-transition effect-ballet effect-hair-style effect-column-wipe effect-studio-slide
       effect-cutout effect-boarding-pass effect-floating-fall effect-stop-world effect-agamemnon effect-acid
       effect-bubbles effect-canvas effect-comic effect-fragments effect-multiverse effect-ocean effect-origami
-      effect-particles effect-bleach-bypass effect-teal-orange-epic
+      effect-particles effect-bleach-bypass effect-teal-orange-epic effect-splash-transition
     `,
     `
       effect-ice-rose effect-medusa-gorgona effect-bloom-mouth effect-floral-eyes effect-sakura-petals
