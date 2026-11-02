@@ -300,3 +300,14 @@ describe("the offline planner", () => {
     expect(agent.offlineSoundtrack("a red fox in the snow")).toBeNull();
   });
 });
+
+describe("public sign-up: the tools are the owner's (docs/public-signup.md)", () => {
+  it("a visitor's change to an Assist chat (where the tools run) is refused, and MCP is owner-only, so a visitor never runs them", async () => {
+    const access = await import("@/lib/guest-access");
+    // Approving a split_soundtrack / remove_dialogue card is a change to the chat: assist-owner for guests and accounts.
+    expect(access.isAssistChange("POST", "/api/assist/abc123/approval")).toBe(true);
+    expect(access.isAssistChange("POST", "/api/assist/abc123/messages")).toBe(true);
+    expect(access.ownerOnly("POST", "/api/mcp")).toBe(true);
+    expect(access.ownerOnly("GET", "/api/mcp")).toBe(true);
+  });
+});
