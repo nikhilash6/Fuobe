@@ -295,7 +295,7 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
     case "separate-audio": {
       const stem = (name: string, wav: Buffer): DemoOutput => ({ url: toDataUri(wav, "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { stem: name, demo: true } });
       // A split with levels (graph C): one mix of the stems.
-      if (meta.remix) return [{ url: toDataUri(demoWav(3, [220, 392], 3), "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { role: "mix", demo: true } }];
+      if (meta.remix) return [{ url: toDataUri(demoWav(3, [220, 392], 3), "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { demo: true } }];
       // A dialogue / music / effects split (DBS) returns those three and the music-and-effects bed, voice first.
       const stems: DemoOutput[] = meta.threeStems
         ? [stem("voice", demoWav(3, [220, 330], 3)), stem("music", demoWav(3, [262, 392])), stem("effects", demoWav(3, [90, 140], 7)), stem("background", demoWav(3, [110, 165]))]

@@ -3565,7 +3565,7 @@ export const SPEC = [
       musicDb: [b('5', 'volume')],
       effectsDb: [b('6', 'volume')],
     },
-    outputs: [{ node: '9', kind: 'audio', role: 'mix' }],
+    outputs: [{ node: '9', kind: 'audio' }],
     defaults: { separationModel: 'DBS-BSRNN-DnR', channels: 'mono', voiceDb: 0, musicDb: 0, effectsDb: 0 },
     vramGb: 0,
     license: 'DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)',

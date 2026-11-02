@@ -922,7 +922,7 @@ async function runSoundtrack(name: string, href: string, build: () => { body: Au
         costUsd: preview.costUsd,
         ...(preview.estimate && !preview.demo && { takes: `${durationWords(preview.estimate)} on your GPU` }),
         demo: preview.demo || undefined,
-        note: "It runs in the background: check_generations on the result gives the output URLs (audio outputs carry meta.stem: voice, music, effects or background; a mix carries meta.role mix).",
+        note: "It runs in the background: check_generations on the result gives the output URLs (a split's audio outputs carry meta.stem: voice, music, effects or background; a mix is the one audio output).",
       }),
       items: [
         { id: "", role: "tool", text: `${name}: started${preview.estimate && !preview.demo ? ` (${durationWords(preview.estimate)})` : ""}`, href },

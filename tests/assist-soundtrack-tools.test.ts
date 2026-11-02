@@ -150,7 +150,7 @@ describe("graph C runs for a remix (soundtrack-remix-dbs)", () => {
   it("is in the manifest, validated, with its pack and the four DBS files on the GPU pre-flight's index", () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/comfyui/manifest.json"), "utf8"));
     const w = manifest.workflows.find((x: { id: string }) => x.id === "soundtrack-remix-dbs");
-    expect(w).toMatchObject({ capability: "separate-audio", validated: true, outputs: [{ node: "9", kind: "audio", role: "mix" }] });
+    expect(w).toMatchObject({ capability: "separate-audio", validated: true, outputs: [{ node: "9", kind: "audio" }] });
     const reqs = JSON.parse(fs.readFileSync(path.join(process.cwd(), "workflows/comfyui/requirements.json"), "utf8"));
     const r = reqs.workflows?.["soundtrack-remix-dbs"] ?? reqs["soundtrack-remix-dbs"];
     expect(r.packs).toEqual({ "ComfyUI-DBS": ["DBSLoader", "DBSSeparate"] });
@@ -254,7 +254,7 @@ describe("split_soundtrack and remove_dialogue as tools", () => {
     expect(g.request.params?.extra).toMatchObject({ remix: true, voiceDb: 0, musicDb: -12, effectsDb: -100 });
     expect(g.outputs).toHaveLength(1);
     expect(g.outputs[0]).toMatchObject({ kind: "audio" });
-    expect(g.outputs[0].meta?.role).toBe("mix");
+    expect(g.outputs[0].meta?.stem).toBeUndefined();
   }, 30_000);
 
   it("runs Remove dialogue as the page does: the split, then the mux with the background stem", async () => {

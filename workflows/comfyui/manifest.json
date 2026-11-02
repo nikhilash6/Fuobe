@@ -16586,8 +16586,7 @@
       "outputs": [
         {
           "node": "9",
-          "kind": "audio",
-          "role": "mix"
+          "kind": "audio"
         }
       ],
       "defaults": {
