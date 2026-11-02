@@ -226,6 +226,25 @@ describe("image cut-outs", () => {
     // Both are bg-remove models, so the Canvas node and the model picker list them too.
     expect(modelsFor({ kind: "image", ops: ["bg-remove"] }).map((m) => m.id)).toEqual(expect.arrayContaining(["oss-matte-feynobg", "bria-guided-cutout"]));
   });
+
+  it("the Canvas Remove background node takes the guided cut-out's words from a text node", async () => {
+    const { describeNode, inputPorts } = await import("@/lib/catalog/canvas");
+    const at = { x: 0, y: 0 };
+    const cut = { id: "cut", type: "bg-remove" as const, position: at, data: { mediaKind: "image" as const, modelId: "bria-guided-cutout" } };
+    expect(inputPorts(cut).map((p) => p.id)).toEqual(["prompt", "images"]);
+    // Plain cut-outs take a picture only.
+    expect(inputPorts({ ...cut, data: { ...cut.data, modelId: "birefnet-cloud" } }).map((p) => p.id)).toEqual(["images"]);
+    const graph = {
+      nodes: [{ id: "pic", type: "image-input" as const, position: at, data: { url: "/api/files/u/p.png" } }, { id: "words", type: "prompt" as const, position: at, data: { text: "keep the shadow" } }, cut],
+      edges: [
+        { id: "e1", source: "pic", sourceHandle: "out", target: "cut", targetHandle: "images" },
+        { id: "e2", source: "words", sourceHandle: "out", target: "cut", targetHandle: "prompt" },
+      ],
+    };
+    const d = describeNode(graph as never, cut as never, { engineMode: "cloud" });
+    expect(d.error).toBeUndefined();
+    expect(d.request).toMatchObject({ modelId: "bria-guided-cutout", op: "bg-remove", prompt: "keep the shadow", inputs: { images: ["/api/files/u/p.png"] } });
+  });
 });
 
 describe("a matte's way to the edit", () => {

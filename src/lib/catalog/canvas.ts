@@ -584,6 +584,8 @@ export function inputPorts(n: Pick<CanvasNode, "type" | "data">): PortDef[] {
   if (ids.has("voice") && model && !model.options.voiceClone && n.type !== "tts" && n.type !== "voice-change") ids.delete("voice");
   // A model that redraws from words even where its operation takes none (Open-H3 Regenerate on the Upscale node).
   if (model?.options.requires?.prompt) ids.add("prompt");
+  // A cut-out that reads optional words on what to keep or drop (Bria's guided cut-out on Remove background).
+  if (model?.options.guided) ids.add("prompt");
   // Visual elements only on image and video models.
   if (ids.has("elements") && model && model.kind !== "image" && model.kind !== "video") ids.delete("elements");
   const maxImages = model?.options.maxImages ?? (ops.some((op) => MULTI_IMAGE_OPS.has(op)) ? 4 : 1);
