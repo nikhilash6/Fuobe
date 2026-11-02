@@ -104,12 +104,17 @@ function TappedRowReset() {
   return null;
 }
 
+/** How many rows above and below the open page's row prefetch once the page is idle (the rest wait for a hover, touch or focus). */
+const NEAR_ROWS = 2;
+
 function Items({ group, pathname, search }: { group: NavGroupDef; pathname: string; search: URLSearchParams }) {
   const hrefs = group.items.map((i) => i.href);
+  // The open page's row: the rows next to it are the likeliest next taps.
+  const here = group.items.findIndex((i) => navActive(i.href, pathname, search, hrefs));
   const tapped = useSyncExternalStore(subscribeTapped, () => tappedRow, () => null);
   const [at, query] = tapped ? tapped.split("?") : [pathname];
   const where = tapped ? new URLSearchParams(query ?? "") : search;
-  return group.items.map((item) => {
+  return group.items.map((item, i) => {
     const active = navActive(item.href, at, where, hrefs);
     return (
       <SidebarMenuItem key={item.href} className={cn(group.compact && "min-w-0")}>
@@ -125,7 +130,7 @@ function Items({ group, pathname, search }: { group: NavGroupDef; pathname: stri
           <IntentLink
             href={item.href}
             eager={item.eager}
-            settled
+            settled={here >= 0 && i !== here && Math.abs(i - here) <= NEAR_ROWS}
             onClick={(e) => isPlainClick(e) && setTappedRow(item.href)}
             aria-current={active ? "page" : undefined}
             title={group.compact && item.short ? item.label : undefined}

@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import type { PrefetchOptions } from "next/dist/shared/lib/app-router-context.shared-runtime";
+
+type PrefetchOptions = NonNullable<Parameters<ReturnType<typeof useRouter>["prefetch"]>[1]>;
 
 /** Runs `fn` once the browser is idle after the page has loaded (soon after, where requestIdleCallback is missing). Returns a cancel. */
 export function whenIdle(fn: () => void): () => void {
@@ -77,6 +78,10 @@ export function afterPrefetched(hrefs: string[], done: () => void, quiet = 500, 
   check();
 }
 
+function saveData(): boolean {
+  return typeof navigator !== "undefined" && !!(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+}
+
 function flush() {
   flushing = false;
   const page = [...lanes.page];
@@ -92,6 +97,8 @@ function flush() {
 
 /** Queues one prefetch of `href` (`run`) for the next idle moment, in its lane. Returns a cancel. */
 export function queueIdlePrefetch(lane: PrefetchLane, href: string, run: () => void): () => void {
+  // Someone who asked to save data gets the page's own tabs only; the app's routes wait for a hover, touch or focus.
+  if (lane === "nav" && saveData()) return () => {};
   const job = { href, run };
   lanes[lane].add(job);
   if (!flushing) {
@@ -103,7 +110,9 @@ export function queueIdlePrefetch(lane: PrefetchLane, href: string, run: () => v
 
 /**
  * router.prefetch's options. `full`: what <Link prefetch={true}> asks for, the whole page with its URL data (a prerendered
- * page comes from the static cache), rather than only the route's shared shell.
+ * page comes from the static cache), rather than only the route's shared shell. `kind` isn't in Next's documented
+ * options (only onInvalidate is) and an unknown value falls back to the shell without an error: tests/instant-tabs.test.ts
+ * checks that Next still reads it.
  */
 export function prefetchOptions(full: boolean, onInvalidate?: () => void): PrefetchOptions {
   return { kind: full ? "full" : "auto", onInvalidate } as unknown as PrefetchOptions;

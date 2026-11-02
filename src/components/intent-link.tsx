@@ -12,10 +12,9 @@ import { cn } from "@/lib/utils";
  * once the pointer is over it, a finger touches it or it gets keyboard focus (the "hover-triggered
  * prefetch" of Next's prefetching guide). `eager` rows prefetch as soon as they're on screen, like a
  * plain Link: the few routes most visits go to next. `settled` rows prefetch once the page has
- * loaded and the browser is idle, also the ones scrolled out of view (the app's own navigation: a tap
- * there must not wait a round trip, and a touch comes too late to start one), after the page's own
- * tabs (useIdlePrefetch's "nav" lane). A page full of these no longer fetches every route behind it
- * on a cold visit.
+ * loaded and the browser is idle, also when scrolled out of view, after the page's own tabs
+ * (useIdlePrefetch's "nav" lane): the sidebar gives it to the few rows next to the open page's row.
+ * A page full of these fetches only those routes on a cold visit, not every route behind it.
  */
 export function IntentLink({
   eager,
