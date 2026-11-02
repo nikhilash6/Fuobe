@@ -541,7 +541,9 @@
               "temporal",
               "lipsync",
               "continuity",
-              "palette"
+              "palette",
+              "separation",
+              "wer"
             ]
           }
         },
@@ -1285,7 +1287,9 @@
                 "temporal",
                 "lipsync",
                 "continuity",
-                "palette"
+                "palette",
+                "separation",
+                "wer"
               ]
             }
           },

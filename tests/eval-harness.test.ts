@@ -410,6 +410,41 @@ describe("the runner on the demo provider", () => {
     }
   });
 
+  it("runs the separation suite: stems keep their names, and each variant asks for its DBS model and channels", async () => {
+    const r = await cli(["run", "--suite", "separation", "--engine", "demo", "--cases", "separation/centre", "--no-metrics"]);
+    expect(r.code, r.stderr).toBe(0);
+    const rows = store.latestJobs(path.join(results, runIdFrom(r.stderr)));
+    expect(rows.map((x) => [x.caseId, x.status])).toEqual([["separation/centre", "succeeded"]]);
+    const outs = (rows[0].outputs ?? []) as { kind: string; stem?: string }[];
+    // The demo split answers a voice and a background stem, recorded by name for the scorer.
+    expect(outs.filter((o) => o.kind === "audio").map((o) => o.stem)).toEqual(expect.arrayContaining(["voice", "background"]));
+    const suite = cases.loadSuite("separation") as unknown as { file: string; kind: string; decides: string; description: string };
+    expect(suite).toMatchObject({ kind: "audio", defaults: { candidate: "bsrnn-mono", metrics: ["separation", "wer"] } });
+    expect(suite.description).toMatch(/DBS-TIGER-DnR Apache-2\.0.*MelBand RoFormer MIT/);
+    expect(suite.decides).toMatch(/reviewed code change/);
+    const jobs = plan.expandJobs(suite, { engine: "open", variants: ["bsrnn-mono", "bsrnn-stereo", "tiger-mono", "tiger-stereo", "dbs-dub", "melband", "demucs"], cases: ["separation/centre"], exists: () => true }) as unknown as {
+      variant: string;
+      skip?: string;
+      request: { modelId: string; op?: string; params: { extra?: Record<string, unknown> } };
+    }[];
+    expect(jobs.map((j) => [j.variant, j.request.modelId, j.request.params.extra?.separationModel ?? null, j.request.params.extra?.channels ?? null, j.skip ?? null])).toEqual([
+      ["bsrnn-mono", "oss-dbs-separate", "DBS-BSRNN-DnR", "mono", null],
+      ["bsrnn-stereo", "oss-dbs-separate", "DBS-BSRNN-DnR", "each channel", null],
+      ["tiger-mono", "oss-dbs-separate", "DBS-TIGER-DnR", "mono", null],
+      ["tiger-stereo", "oss-dbs-separate", "DBS-TIGER-DnR", "each channel", null],
+      ["dbs-dub", "oss-dbs-voice-separate", "DBS-BSRNN-DnR", null, null],
+      ["melband", "oss-voice-separate", null, null, null],
+      ["demucs", "oss-dbs-separate", null, null, "the demucs variant runs on cloud only"],
+    ]);
+    expect(jobs.every((j) => j.request.op === "separate-audio")).toBe(true);
+    // The cloud runs Demucs as today's cloud dub does; DBS isn't hosted, so its variants say they run on the open engine.
+    const cloud = plan.expandJobs(suite, { engine: "cloud", variants: ["demucs", "bsrnn-mono"], cases: ["separation/centre"], exists: () => true }) as unknown as { variant: string; skip?: string; request: { modelId: string } }[];
+    expect(cloud.map((j) => [j.variant, j.request.modelId, j.skip ?? null])).toEqual([
+      ["demucs", "demucs", null],
+      ["bsrnn-mono", "demucs", "the bsrnn-mono variant runs on open / demo only"],
+    ]);
+  });
+
   it("runs Fuobe Cinema's Director and camera-move cases, and plans its cloud variants", async () => {
     const r = await cli(["run", "--suite", "cinema", "--engine", "demo", "--cases", "cinema/director-noir,cinema/move-dolly-in", "--no-metrics"]);
     expect(r.code, r.stderr).toBe(0);

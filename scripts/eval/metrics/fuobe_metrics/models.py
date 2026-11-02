@@ -234,6 +234,6 @@ class Asr:
                 continue
             feats = self.processor(chunk, sampling_rate=sr, return_tensors="pt").input_features.to(self.device)
             with self.torch.no_grad():
-                ids = self.model.generate(feats, max_new_tokens=220)
+                ids = self.model.generate(feats)
             out.append(self.processor.batch_decode(ids, skip_special_tokens=True)[0].strip())
         return " ".join(t for t in out if t)
