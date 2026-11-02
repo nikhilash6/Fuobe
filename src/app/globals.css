@@ -250,6 +250,9 @@
   --animate-wave-bar: wave-bar 900ms ease-in-out infinite;
   /* Clean up voice's demo: the "Busy brasserie" dot pulses while the room plays. */
   --animate-live-dot: live-dot 1.1s ease-out infinite;
+  /* Watermark Remover: the scan line moving down the picture, and the line across the marks being removed. */
+  --animate-wm-scan: wm-scan 2.2s ease-in-out infinite;
+  --animate-wm-sweep: wm-sweep 1.6s ease-in-out infinite;
 
   @keyframes shimmer-text {
     from { mask-position: 100% 0; }
@@ -287,6 +290,17 @@
   @keyframes live-dot {
     from { box-shadow: 0 0 0 0 rgb(255 179 71 / 60%); }
     to { box-shadow: 0 0 0 8px rgb(255 179 71 / 0%); }
+  }
+  @keyframes wm-scan {
+    0% { top: 0%; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+  @keyframes wm-sweep {
+    0% { top: 0%; }
+    50% { top: calc(100% - 2px); }
+    100% { top: 0%; }
   }
 }
 

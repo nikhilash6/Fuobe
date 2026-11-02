@@ -1905,6 +1905,24 @@ export const APPS: Preset[] = [
     open: { modelId: "oss-reuse-voice", op: "enhance-voice" },
     parity: "Runs on open-source models only, on your GPU or CPU. RE-USE isn't hosted on fal or Replicate.",
   }),
+  // Watermark Remover (ComfyUI-Qwen-Watermark): an app with a page of its own (src/components/watermark): scan, keep what you
+  // like, remove the rest; a brush for anything missed. Both steps run on your GPU through POST /api/generations.
+  app({
+    id: "app-watermark-remover",
+    name: "Watermark Remover",
+    category: "Utility",
+    description: "Clears text, logos, stickers and mosaics off a photo. The rest stays exactly as it was",
+    icon: "ScanLine",
+    hue: 205,
+    badges: ["new"],
+    tool: "watermark",
+    inputs: [{ key: "image", label: "Photo", hint: "A photo up to 4096 pixels on its longest side", accept: "image", required: true }],
+    userPrompt: "none",
+    prompt: "Remove the watermark",
+    cloud: null,
+    open: { modelId: "oss-watermark-remover", op: "watermark-remove" },
+    parity: "Runs on your own GPU. What was hidden under a mark is re-imagined from what's around it; everything outside the marks stays pixel for pixel the same.",
+  }),
   app({
     name: "Object Remover",
     category: "Utility",

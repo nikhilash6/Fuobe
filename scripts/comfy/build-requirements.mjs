@@ -26,6 +26,12 @@ export const LIBRARY = path.join(REPO, 'workflows', 'comfyui');
 /** ComfyUI's folder_paths.supported_pt_extensions: the files a folder listing shows. */
 export const PT_EXTENSIONS = ['.ckpt', '.pt', '.pt2', '.bin', '.pth', '.safetensors', '.pkl', '.sft'];
 
+/**
+ * Folders ComfyUI lists only when a loaded pack registers them (GET /models/<folder>): ComfyUI-Qwen-Watermark reads
+ * models/sams by its path without registering it, so a listing can't tell whether its SAM file is there.
+ */
+const UNLISTED_FOLDERS = new Set(['sams']);
+
 /** Core classes of the newest families, read one by one when /object_info can't be: an older ComfyUI lacks them first. */
 const NEWEST_CORE = /^(SeedVR2|Trellis2|SAM3|LTXV|LTXAV|ComfyMathExpression|TextEncodeQwenImage21|QwenImage21Cache|Ideogram4|TextEncodeFibo2|DualModelGuider|CFGOverride)/;
 const NEWEST_CORE_MODULES = new Set(['comfy_extras.nodes_bg_removal']);
@@ -136,7 +142,7 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       }
     }
     const ext = path.extname(r.file).toLowerCase();
-    const presence = loaders.size ? 'loader' : PT_EXTENSIONS.includes(ext) ? 'list' : 'unobservable';
+    const presence = loaders.size ? 'loader' : PT_EXTENSIONS.includes(ext) && !UNLISTED_FOLDERS.has(r.folder) ? 'list' : 'unobservable';
     files[key] = {
       folder: r.folder,
       file: r.file,
@@ -210,6 +216,8 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       // One node file in a model repo (viggle_turbo): downloaded, not cloned.
       ...(p.file && { file: p.file }),
       requirementsTxt: !!p.requirementsTxt,
+      // Python packages to install by name instead of the pack's requirements.txt (pinned versions only).
+      ...(Array.isArray(p.pip) && p.pip.length && { pip: [...p.pip] }),
       install: p.registry?.version ? 'registry' : 'manual',
     };
   }

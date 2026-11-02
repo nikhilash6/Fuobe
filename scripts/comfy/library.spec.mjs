@@ -155,6 +155,12 @@
 //   pasteBack                             (true: only the masked area comes from the edit, the rest is the input's pixels)
 // Keys added with the Outfit Swap app. Model settings (params.extra; the app's Shoes choice writes it):
 //   request                               (the sentence after the swap: "Replace everything they wear." | "Keep their own shoes and legwear.")
+// Keys added with the Watermark Remover (ComfyUI-Qwen-Watermark). * = the provider fills it:
+//   boxes*                                (QWMDetect boxes_json: the marks the visitor kept, params.extra.boxes, checked and rebuilt
+//                                          by src/lib/watermark.ts: pixels, 1-32 boxes clamped to the picture, known types only)
+//   detectMode*                           (QWMDetect mode: manual_boxes with boxes, manual_mask on the brush graph, else auto_qwen)
+//   maxSize*                              (here QWMPrepare max_side on both passes: 1024; 1536 past 3000 px; 768 on a GPU under 16 GB)
+// Output role "quality": a node's JSON verdict on the run (QWMFinal), folded into the image outputs' meta.quality.
 
 import fs from 'node:fs';
 
@@ -235,6 +241,9 @@ export const CUSTOM_NODE_REPOS = {
   'ComfyUI-H3-FaceRefine': 'https://github.com/Carasibana/ComfyUI-H3-FaceRefine',
   'ComfyUI-Impact-Pack': 'https://github.com/ltdrdata/ComfyUI-Impact-Pack',
   comfyui_controlnet_aux: 'https://github.com/Fannovel16/comfyui_controlnet_aux/tree/a587a4c1594524c1d2de5cd1a86cd868ff448e1c',
+  // Watermark Remover: overflowofedge's Qwen watermark nodes (MIT), read at this commit: no network, subprocess, eval or
+  // file writes. Not on the validation server (the image-watermark-* entries list it with `packs`); pinned in install-comfyui.sh.
+  'ComfyUI-Qwen-Watermark': 'https://github.com/overflowofedge/ComfyUI-Qwen-Watermark/tree/eef829d34d6e9d0d2ae0c1386fab7371a864cf34',
 };
 
 // Node classes of the packs entries list in `packs` (packs the validation server doesn't have installed): the build
@@ -272,6 +281,7 @@ export const PACK_CLASSES = {
   'ComfyUI-Impact-Pack': /^SAMLoader$/,
   comfyui_controlnet_aux: /^Metric3D-NormalMapPreprocessor$/,
   'ComfyUI-KJNodes': /^VRAM_Debug$/,
+  'ComfyUI-Qwen-Watermark': /^QWM(Detect|ResidualDetect|RefineMask|Prepare|Composite|Final)$/,
 };
 
 // Model download locations for files that the source workflow does not annotate
@@ -284,6 +294,10 @@ export const KNOWN_MODELS = {
   'minimax_music3_dav.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/vae/minimax_music3_dav.safetensors' },
   'yue2_3b_int8_convrot.safetensors': { folder: 'checkpoints', url: 'https://huggingface.co/Comfy-Org/YuE2/resolve/main/checkpoints/yue2_3b_int8_convrot.safetensors' },
   'sheetsage2_bf16.safetensors': { folder: 'audio_encoders', url: 'https://huggingface.co/Comfy-Org/YuE2/resolve/main/audio_encoders/sheetsage2_bf16.safetensors' },
+  // Watermark Remover: Meta's SAM ViT-B (Apache-2.0), the file ComfyUI-Qwen-Watermark's QWMRefineMask loads. Meta hosts it
+  // outside Hugging Face, so this is ybelkada's mirror at a pinned revision: its LFS SHA-256 (ec2df627…) is Meta's file's, and
+  // the setup commands check it (a .pth can run code when it loads).
+  'sam_vit_b_01ec64.pth': { folder: 'sams', url: 'https://huggingface.co/ybelkada/segment-anything/resolve/7790786db131bcdc639f24a915d9f2c331d843ee/checkpoints/sam_vit_b_01ec64.pth' },
   // archive-restore: Lightricks' Detail Refine IC-LoRA (stage 2 of Restore & colourise), gated, at the researched commit.
   'ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors': { folder: 'loras', url: 'https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details/resolve/4912c478b35dd96b6cdcc5f7c7ff9d72c2c57929/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors' },
   // Live edit: linoyts' 2-step DMD2 LoRA for Qwen-Image 2.1 (pytorch_lora_weights.safetensors upstream, kept under a
@@ -2810,6 +2824,74 @@ export const SPEC = [
       'Fuobe Soul\'s PixeletedFace look: SAM3_Detect with the words (prompt, "face" by default: every face, one merged mask, threshold 0.4), GrowMask 12 px so the hair line and jaw are covered, ' +
       'then the picture shrunk by mosaicScale with area averaging (0.04: blocks of 25 px) and blown back up with nearest-exact to its own size, composited only under the mask (ImageCompositeMasked). ' +
       'No face found: the picture comes back unchanged. Core nodes and the SAM 3.1 checkpoint only.',
+  },
+
+  // ---- Watermark Remover (ComfyUI-Qwen-Watermark @ eef829d3) ----------------
+  // Scan, then remove the marks the visitor kept: the app's own page (src/components/watermark) runs both through
+  // POST /api/generations. Same Qwen files as Live edit and Inpaint, plus SAM ViT-B for sticker outlines.
+  {
+    id: 'image-watermark-scan-qwen3vl',
+    title: 'Find watermarks, captions, logos, stickers and mosaics on a photo (Qwen3-VL, ComfyUI-Qwen-Watermark)',
+    capability: 'watermark-scan',
+    handBuilt: 'hand-built/image-watermark-scan-qwen3vl.json',
+    packs: ['ComfyUI-Qwen-Watermark'],
+    bindings: { image: [b('1', 'image')] },
+    outputs: [{ node: '23', kind: 'text', role: 'report' }],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 10,
+    license: 'Qwen3-VL 8B Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
+    notes:
+      'The pack\'s detect-only workflow (qwen_watermark_detection.api.json) without its preview and save nodes: QWMDetect auto_qwen reads the picture once with ' +
+      'Qwen3-VL 8B (int8, detection side 1024, expand 20, padding 0.35, min confidence 0.65) and PreviewAny shows its report, the only output: JSON ' +
+      '{coordinate_space: "pixels", image_size, boxes: [{label, bbox (padded repair box), source_bbox (tight), overlay_type, mask_method, confidence}], ' +
+      'rejected_boxes (below 0.65), status}. The app draws source_bbox and sends the kept boxes to image-watermark-remove-qwen21. ' +
+      'The GPU pre-flight also checks image-watermark-remove-qwen21 for a scan (its companion graph).',
+  },
+  {
+    id: 'image-watermark-remove-qwen21',
+    title: 'Remove watermarks, captions, logos, stickers and mosaics, the rest unchanged (Qwen-Image 2.1, ComfyUI-Qwen-Watermark)',
+    capability: 'watermark-remove',
+    handBuilt: 'hand-built/image-watermark-remove-qwen21.json',
+    packs: ['ComfyUI-Qwen-Watermark'],
+    bindings: {
+      image: [b('1', 'image')],
+      seed: [b('12', 'seed'), b('30', 'seed')],
+      detectMode: [b('3', 'mode')],
+      boxes: [b('3', 'boxes_json')],
+      maxSize: [b('5', 'max_side'), b('28', 'max_side')],
+    },
+    outputs: [{ node: '33', kind: 'image' }, { node: '38', kind: 'text', role: 'quality' }],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Qwen3-VL 8B Apache-2.0; SAM ViT-B (segment-anything) Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
+    notes:
+      'The pack\'s main workflow (qwen21_watermark.api.json, plain settings) with the int8 UNET (qwen_image_2.1_int8_convrot, as Live edit) and without its ' +
+      'debug save and preview nodes. QWMDetect (manual_boxes with the kept boxes, auto_qwen for API callers) -> QWMRefineMask (a rectangle for text, logos, ' +
+      'blocks and mosaics, a SAM ViT-B outline for stickers) -> QWMPrepare (context 96, max side maxSize, OpenCV pre-fill) -> Qwen-Image 2.1 edit, 20 steps, ' +
+      'cfg 1 -> QWMComposite (feather 6, align, colour match) -> QWMResidualDetect (Qwen3-VL looks for leftovers inside the first mask) -> one more pass ' +
+      'when it finds some -> QWMFinal keeps the better pass and raises when any pixel outside the mask changed. Outputs: the picture (SaveImage, PNG) and ' +
+      'the quality report (PreviewAny, role quality: folded into the picture\'s meta, never a result of its own). Seeds are random per run. ' +
+      'The structure settings (denoise 0.65 / 0.55, context 384, no pre-fill) are the pack\'s alternative for faces; the GPU test decides between them.',
+  },
+  {
+    id: 'image-watermark-remove-qwen21-brush',
+    title: 'Remove what was brushed, the rest unchanged (Qwen-Image 2.1, ComfyUI-Qwen-Watermark)',
+    capability: 'watermark-remove',
+    handBuilt: 'hand-built/image-watermark-remove-qwen21-brush.json',
+    packs: ['ComfyUI-Qwen-Watermark'],
+    bindings: {
+      image: [b('1', 'image')],
+      mask: [b('50', 'image')],
+      seed: [b('12', 'seed'), b('30', 'seed')],
+      maxSize: [b('5', 'max_side'), b('28', 'max_side')],
+    },
+    outputs: [{ node: '33', kind: 'image' }, { node: '38', kind: 'text', role: 'quality' }],
+    limits: { maxWidth: 4096, maxHeight: 4096 },
+    vramGb: 20,
+    license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Qwen3-VL 8B Apache-2.0; SAM ViT-B (segment-anything) Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
+    notes:
+      'image-watermark-remove-qwen21 with a painted mask: LoadImageMask (red channel, white = remove, the picture\'s size) into QWMDetect manual_mask. ' +
+      'The provider runs it when the request carries a mask, on the latest result.',
   },
 
   // ---- palette / colour lock ----------------------------------------------

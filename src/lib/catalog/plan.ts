@@ -24,6 +24,7 @@ import { carriesLayout, flux3Boxes, flux3Caption, layoutCompilerFor, LAYOUT_MAX_
 import { pricingOn, type PriceClock } from "./promo";
 import { isInstrumental, lyricsOf, lyricsProblem, LYRICS_PARAM, promptLyricsProblem } from "@/lib/lyrics";
 import { presetRoutes } from "./preset-recipe-routes";
+import { checkWatermarkBoxes } from "@/lib/watermark";
 
 export { pricingAt } from "./promo";
 
@@ -254,6 +255,8 @@ const PROMPTLESS = new Set<Operation>([
   "song-extend", "song-stems",
   // An inserted moment can be left to the model; a retexture takes words or a style picture
   "insert-moment", "retexture-3d",
+  // Watermark Remover: the marks are found, kept or brushed; no words
+  "watermark-scan", "watermark-remove",
 ]);
 
 /**
@@ -588,6 +591,13 @@ export function planGeneration(
 
   const missing = missingInputs(op, req) ?? unreadInputs(model, op, req) ?? missingImages(model, req);
   if (missing) throw new Error(missing);
+  // Watermark Remover: the kept marks are checked and rebuilt here (never passed on as sent); a brushed run takes none.
+  if (op === "watermark-remove" && params.extra && "boxes" in params.extra) {
+    const extra = { ...params.extra };
+    if (req.inputs?.mask) delete extra.boxes;
+    else extra.boxes = checkWatermarkBoxes(extra.boxes).json;
+    params = { ...params, extra };
+  }
   const tooMany = extraImages(model, op, req);
   if (tooMany) throw new Error(tooMany);
 
@@ -844,6 +854,8 @@ const NEEDS: Partial<
   keyframes: { images: 1, msg: "Add the keyframes, in order" },
   "sdr-to-hdr": { video: true, msg: "Add the video to convert" },
   "face-mosaic": { images: 1, msg: "Add the picture whose faces to pixelate" },
+  "watermark-scan": { images: 1, msg: "Add the picture to check" },
+  "watermark-remove": { images: 1, msg: "Add the picture to clean" },
   "restore-video": { video: true, msg: "Add the archive clip to restore" },
   "song-extend": { audio: true, msg: "Add the song to extend" },
   "song-remix": { audio: true, msg: "Add the song to remix" },

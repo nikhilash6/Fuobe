@@ -125,7 +125,9 @@ function packLines(shell: Shell, l: Layout, name: string, p: IndexPack, kind: St
   const dest = l.under(shell, "custom_nodes", name);
   const py = l.python(shell);
   const req = l.under(shell, "custom_nodes", name, "requirements.txt");
-  const pip = p.requirementsTxt ? [`${py} -m pip install -r ${req}`] : [];
+  // A pack's own requirements.txt, or the pinned packages packs.json names instead (only "name==version" ones are written).
+  const named = (p.pip ?? []).filter((s) => /^[A-Za-z0-9][A-Za-z0-9._-]*==[0-9][0-9A-Za-z.+-]*$/.test(s));
+  const pip = p.requirementsTxt ? [`${py} -m pip install -r ${req}`] : named.length ? [`${py} -m pip install ${named.join(" ")}`] : [];
   if (kind === "pack-repair") return [comment(shell, `${name} didn't start. Reinstall its Python packages, then restart ComfyUI`), ...pip];
   if (p.file) {
     // One node file in a model repo: fetched at the commit, as the package's __init__.py.

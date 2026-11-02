@@ -10851,6 +10851,259 @@
       "notes": "Fuobe Soul's PixeletedFace look: SAM3_Detect with the words (prompt, \"face\" by default: every face, one merged mask, threshold 0.4), GrowMask 12 px so the hair line and jaw are covered, then the picture shrunk by mosaicScale with area averaging (0.04: blocks of 25 px) and blown back up with nearest-exact to its own size, composited only under the mask (ImageCompositeMasked). No face found: the picture comes back unchanged. Core nodes and the SAM 3.1 checkpoint only."
     },
     {
+      "id": "image-watermark-scan-qwen3vl",
+      "title": "Find watermarks, captions, logos, stickers and mosaics on a photo (Qwen3-VL, ComfyUI-Qwen-Watermark)",
+      "capability": "watermark-scan",
+      "file": "image-watermark-scan-qwen3vl.json",
+      "source": "hand-built (scripts/comfy/hand-built/image-watermark-scan-qwen3vl.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "1",
+            "input": "image"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "23",
+          "kind": "text",
+          "role": "report"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxWidth": 4096,
+        "maxHeight": 4096
+      },
+      "models": [
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-Qwen-Watermark",
+          "repo": "https://github.com/overflowofedge/ComfyUI-Qwen-Watermark/tree/eef829d34d6e9d0d2ae0c1386fab7371a864cf34"
+        }
+      ],
+      "vramGb": 10,
+      "license": "Qwen3-VL 8B Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT",
+      "validated": false,
+      "notes": "The pack's detect-only workflow (qwen_watermark_detection.api.json) without its preview and save nodes: QWMDetect auto_qwen reads the picture once with Qwen3-VL 8B (int8, detection side 1024, expand 20, padding 0.35, min confidence 0.65) and PreviewAny shows its report, the only output: JSON {coordinate_space: \"pixels\", image_size, boxes: [{label, bbox (padded repair box), source_bbox (tight), overlay_type, mask_method, confidence}], rejected_boxes (below 0.65), status}. The app draws source_bbox and sends the kept boxes to image-watermark-remove-qwen21. The GPU pre-flight also checks image-watermark-remove-qwen21 for a scan (its companion graph)."
+    },
+    {
+      "id": "image-watermark-remove-qwen21",
+      "title": "Remove watermarks, captions, logos, stickers and mosaics, the rest unchanged (Qwen-Image 2.1, ComfyUI-Qwen-Watermark)",
+      "capability": "watermark-remove",
+      "file": "image-watermark-remove-qwen21.json",
+      "source": "hand-built (scripts/comfy/hand-built/image-watermark-remove-qwen21.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "1",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "12",
+            "input": "seed"
+          },
+          {
+            "node": "30",
+            "input": "seed"
+          }
+        ],
+        "detectMode": [
+          {
+            "node": "3",
+            "input": "mode"
+          }
+        ],
+        "boxes": [
+          {
+            "node": "3",
+            "input": "boxes_json"
+          }
+        ],
+        "maxSize": [
+          {
+            "node": "5",
+            "input": "max_side"
+          },
+          {
+            "node": "28",
+            "input": "max_side"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "33",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "33",
+          "kind": "image"
+        },
+        {
+          "node": "38",
+          "kind": "text",
+          "role": "quality"
+        }
+      ],
+      "defaults": {
+        "maxSize": 1024
+      },
+      "limits": {
+        "maxWidth": 4096,
+        "maxHeight": 4096
+      },
+      "models": [
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "sam_vit_b_01ec64.pth",
+          "folder": "sams",
+          "url": "https://huggingface.co/ybelkada/segment-anything/resolve/7790786db131bcdc639f24a915d9f2c331d843ee/checkpoints/sam_vit_b_01ec64.pth",
+          "sizeGb": 0.38
+        },
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-Qwen-Watermark",
+          "repo": "https://github.com/overflowofedge/ComfyUI-Qwen-Watermark/tree/eef829d34d6e9d0d2ae0c1386fab7371a864cf34"
+        }
+      ],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Qwen3-VL 8B Apache-2.0; SAM ViT-B (segment-anything) Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT",
+      "validated": false,
+      "notes": "The pack's main workflow (qwen21_watermark.api.json, plain settings) with the int8 UNET (qwen_image_2.1_int8_convrot, as Live edit) and without its debug save and preview nodes. QWMDetect (manual_boxes with the kept boxes, auto_qwen for API callers) -> QWMRefineMask (a rectangle for text, logos, blocks and mosaics, a SAM ViT-B outline for stickers) -> QWMPrepare (context 96, max side maxSize, OpenCV pre-fill) -> Qwen-Image 2.1 edit, 20 steps, cfg 1 -> QWMComposite (feather 6, align, colour match) -> QWMResidualDetect (Qwen3-VL looks for leftovers inside the first mask) -> one more pass when it finds some -> QWMFinal keeps the better pass and raises when any pixel outside the mask changed. Outputs: the picture (SaveImage, PNG) and the quality report (PreviewAny, role quality: folded into the picture's meta, never a result of its own). Seeds are random per run. The structure settings (denoise 0.65 / 0.55, context 384, no pre-fill) are the pack's alternative for faces; the GPU test decides between them."
+    },
+    {
+      "id": "image-watermark-remove-qwen21-brush",
+      "title": "Remove what was brushed, the rest unchanged (Qwen-Image 2.1, ComfyUI-Qwen-Watermark)",
+      "capability": "watermark-remove",
+      "file": "image-watermark-remove-qwen21-brush.json",
+      "source": "hand-built (scripts/comfy/hand-built/image-watermark-remove-qwen21-brush.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "1",
+            "input": "image"
+          }
+        ],
+        "mask": [
+          {
+            "node": "50",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "12",
+            "input": "seed"
+          },
+          {
+            "node": "30",
+            "input": "seed"
+          }
+        ],
+        "maxSize": [
+          {
+            "node": "5",
+            "input": "max_side"
+          },
+          {
+            "node": "28",
+            "input": "max_side"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "33",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "33",
+          "kind": "image"
+        },
+        {
+          "node": "38",
+          "kind": "text",
+          "role": "quality"
+        }
+      ],
+      "defaults": {
+        "maxSize": 1024
+      },
+      "limits": {
+        "maxWidth": 4096,
+        "maxHeight": 4096
+      },
+      "models": [
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "sam_vit_b_01ec64.pth",
+          "folder": "sams",
+          "url": "https://huggingface.co/ybelkada/segment-anything/resolve/7790786db131bcdc639f24a915d9f2c331d843ee/checkpoints/sam_vit_b_01ec64.pth",
+          "sizeGb": 0.38
+        },
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-Qwen-Watermark",
+          "repo": "https://github.com/overflowofedge/ComfyUI-Qwen-Watermark/tree/eef829d34d6e9d0d2ae0c1386fab7371a864cf34"
+        }
+      ],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Qwen3-VL 8B Apache-2.0; SAM ViT-B (segment-anything) Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT",
+      "validated": false,
+      "notes": "image-watermark-remove-qwen21 with a painted mask: LoadImageMask (red channel, white = remove, the picture's size) into QWMDetect manual_mask. The provider runs it when the request carries a mask, on the latest result."
+    },
+    {
       "id": "palette-transfer-image",
       "title": "Palette Lock (ColorTransfer to a swatch)",
       "capability": "grade",

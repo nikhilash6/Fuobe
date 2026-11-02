@@ -54,6 +54,7 @@ export type RecipeKind = "h3" | "orbit" | "qwen";
  * - Head Swap: the whole head, hair included, comes from its own head LoRA; a plain edit keeps the first hair.
  * - Outfit Swap: its Outfit Swap LoRA keeps everything but the clothes in place, where a plain edit moves the picture.
  * - Photo to 3D: only its own graph makes the GLB, the splat and the orbit clip together.
+ * - Watermark Remover: a tool of its own (scan, keep, remove) that changes nothing outside the marks.
  */
 export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-fuobe-angles",
@@ -77,6 +78,7 @@ export const OWN_ROUTE_APPS: ReadonlySet<string> = new Set([
   "app-head-swap",
   "app-outfit-swap",
   "app-photo-to-3d",
+  "app-watermark-remover",
 ]);
 
 /**

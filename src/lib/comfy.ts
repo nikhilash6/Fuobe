@@ -96,7 +96,9 @@ export interface ManifestOutput {
     // Any Angle: the turntable at 192 px (colour, and its coverage) the front view is measured on, and a GLB made from a splat.
     | "sweep"
     | "sweep-mask"
-    | "mesh";
+    | "mesh"
+    // Watermark Remover: the repair's verdict (QWMFinal), folded into the picture outputs' meta.
+    | "quality";
 }
 
 export interface ManifestWorkflow {

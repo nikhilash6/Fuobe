@@ -89,6 +89,9 @@ export type Operation =
   // N7-5
   | "composite" // footage + its redrawn swap + the swap + the person's mask → only the person over the footage (Character swap in 2K)
   | "camera-path" // image + params.cameraPath (+ inputs.video: the open engine's render along the path) → the camera following the path
+  // Watermark Remover
+  | "watermark-scan" // image → a JSON report of the marks printed over it (text, logos, stickers, mosaics, blocks) with their boxes in pixels
+  | "watermark-remove" // image + params.extra.boxes (the marks kept for removal) or a mask (white = remove) → the same picture, only under them repaired
   // archive-restore
   | "restore-video" // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
   // Design a voice
@@ -181,6 +184,8 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   "face-mosaic": "Pixelate faces",
   "camera-path": "Fly path",
   composite: "Character over the footage",
+  "watermark-scan": "Find marks",
+  "watermark-remove": "Remove watermark",
   "restore-video": "Restore & colourise",
   "face-fix-video": "Fix faces",
   "tone-video": "Fix colours",
@@ -269,6 +274,8 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   "face-mosaic": "image",
   "camera-path": "video",
   composite: "video",
+  "watermark-scan": "text",
+  "watermark-remove": "image",
   "restore-video": "video",
   "face-fix-video": "video",
   "tone-video": "video",
@@ -1533,8 +1540,8 @@ export interface Preset {
   grade?: string;
   /** Fuobe DoP's relight effects: a step that makes the start frame first, on each engine (src/lib/catalog/dop.ts). */
   prestep?: PresetPrestep;
-  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice, Relight, Any Angle, Tap to Recolor). */
-  tool?: "clean-voice" | "relight" | "any-angle" | "recolor";
+  /** An app that is a tool of its own: its page renders that tool rather than the composer (Clean up voice, Relight, Any Angle, Tap to Recolor, Watermark Remover). */
+  tool?: "clean-voice" | "relight" | "any-angle" | "recolor" | "watermark";
   /** The recipe its preview was made with (src/lib/catalog/preset-recipe-book.json): the route it opens on follows it. */
   recipe?: PresetRecipeBook;
 }

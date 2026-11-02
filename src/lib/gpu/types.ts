@@ -52,6 +52,8 @@ export interface IndexPack {
    */
   file?: string;
   requirementsTxt: boolean;
+  /** Python packages installed by name, pinned (`segment-anything==1.0`), when its requirements.txt isn't safe to install. */
+  pip?: string[];
   install: "registry" | "manual";
 }
 

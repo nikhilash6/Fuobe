@@ -75,6 +75,7 @@ describe("outputActions", () => {
       "menu:recolor",
       "menu:upscale",
       "menu:new-angle",
+      "menu:remove-watermark",
       "menu:reference",
       "menu:grade",
       "menu:layers",

@@ -17,6 +17,7 @@ import { CLEAN_FEATURE } from "./av/clean-voice";
 import { anyAngleHref } from "./catalog/any-angle";
 import { isInstrumental, lyricsOf, songFormat, STEMS_FORMATS } from "./lyrics";
 import { CLEAN_DIALOGUE_FEATURE, cleanDialogueHref } from "./av/clean-dialogue";
+import { WATERMARK_APP_ID, WATERMARK_FEATURE } from "./watermark";
 
 export type OutputActionId =
   | "animate"
@@ -46,6 +47,7 @@ export type OutputActionId =
   | "remove-person"
   | "clean-voice"
   | "clean-dialogue"
+  | "remove-watermark"
   | "copy-text"
   | "view-3d"
   | "remix-kinetic"
@@ -154,6 +156,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("upscale", "Upscale", `/upscale?image=${q(o.url)}`);
       // Any Angle: the same photo from another camera (its 3D view is built once per photo).
       link("new-angle", "New angle", anyAngleHref(o.url));
+      // The Watermark Remover's own results go back through its brush instead.
+      if (g.feature !== WATERMARK_FEATURE) link("remove-watermark", "Remove watermark", `/apps/${WATERMARK_APP_ID}?image=${q(o.url)}`);
       link("reference", "Use as reference", `/image?ref=${q(o.url)}`);
       link("grade", "Color grade", `/color-grade?image=${q(o.url)}`);
       link("layers", "Open in Layers", layersHref(g, o.url));

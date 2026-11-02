@@ -606,6 +606,32 @@ from an example and not rendered yet.
 - **GPU**: 20–24 GB estimates (`vramGb`), none measured here. ComfyUI 0.42.0 or newer: `TextEncodeQwenImage21`,
   `QwenImage21Cache`, `Ideogram4Scheduler`, `DualModelGuider`, `CFGOverride` and `TextEncodeFibo2` came with it.
 
+## Watermark Remover (ComfyUI-Qwen-Watermark)
+
+Three hand-built graphs from overflowofedge's ComfyUI-Qwen-Watermark (MIT, pinned at `eef829d3`) for the Watermark Remover
+app (`app-watermark-remover`, its own page in `src/components/watermark`). The page runs a scan, shows the marks it found,
+and removes the ones the visitor didn't keep; a brush covers anything missed. Both steps are ordinary runs on the person's
+own GPU (`POST /api/generations`).
+
+| id | capability | what it does |
+|---|---|---|
+| `image-watermark-scan-qwen3vl` | watermark-scan | `QWMDetect` auto_qwen (Qwen3-VL 8B int8, one pass); the report (`PreviewAny`) is the only output: boxes in pixels with their type, a tight `source_bbox` and the less sure `rejected_boxes` |
+| `image-watermark-remove-qwen21` | watermark-remove | `QWMDetect` manual_boxes with the kept marks (`boxes`, `detectMode`), a rectangle or a SAM ViT-B outline per mark, Qwen-Image 2.1 int8 repair at `maxSize`, a leftover check and at most one more pass; `QWMFinal` refuses to change any pixel outside the mask. Its report (role `quality`) is folded into the picture's meta |
+| `image-watermark-remove-qwen21-brush` | watermark-remove | the same with a painted mask (`LoadImageMask`, red, white = remove) into `QWMDetect` manual_mask; `src/lib/comfy-variants.ts` runs it when a request carries a mask |
+
+The provider fills `boxes` (checked and rebuilt by `src/lib/watermark.ts`, clamped to the picture), `detectMode` and `maxSize`
+(1024; 1536 past 3000 px; 768 on a GPU under 16 GB) and draws both seeds at random. The GPU pre-flight checks the removal
+along with a scan (`COMPANION_GRAPHS`), so nobody is stopped after the first step.
+
+The pack's `requirements.txt` is not installed (its `opencv-contrib-python-headless` next to `opencv-python` can leave `cv2`
+broken): `packs.json` names `pip: ["segment-anything==1.0"]` instead, which the setup commands install by name. SAM ViT-B
+comes from a Hugging Face mirror (`ybelkada/segment-anything`) at a pinned revision whose SHA-256 is Meta's file's
+(`ec2df627…`). ComfyUI lists `models/sams` only when a pack registers the folder, so its presence is `unobservable`.
+
+They were built with a stand-in for `/object_info` (the committed subset) and are `validated: false` until
+`node validate-workflows.mjs image-watermark-scan-qwen3vl image-watermark-remove-qwen21 image-watermark-remove-qwen21-brush --shared`
+runs on a ComfyUI 0.42 with the pack installed.
+
 ## Adding a workflow
 
 1. Find the template name in `$COMFYUI_DIR/.venv/lib/python3.*/site-packages/comfyui_workflow_templates_json/templates/index.json`

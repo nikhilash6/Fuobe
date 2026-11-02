@@ -45,6 +45,7 @@ import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { MOTION_GRAPHS, motionTransferPrompt, neutralPrompt, WORDS_NEEDED } from "@/lib/comfy-prompts";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
+import { checkWatermarkBoxes, COPY as WATERMARK_COPY, MAX_SIDE as MAX_WATERMARK_SIDE, maxSideFor, qualityOf } from "@/lib/watermark";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -513,11 +514,16 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
     .filter((o) => o.role === "frame")
     .map((o) => parseOcrFrame(textsOf(outputs[o.node]).join("\n")))
     .find(Boolean);
+  // The Watermark Remover's verdict (QWMFinal's report, a PreviewAny): kept on the picture's meta, never a result of its own.
+  const quality = declared
+    .filter((o) => o.role === "quality")
+    .map((o) => qualityOf(textsOf(outputs[o.node]).join("\n")))
+    .find(Boolean);
   const files: ComfyOutput[] = [];
   const pick = (type: string) => {
     for (const nodeId of order) {
       const spec: ManifestOutput | undefined = declared.find((o) => o.node === nodeId);
-      if (spec?.role === "language" || spec?.role === "frame") continue;
+      if (spec?.role === "language" || spec?.role === "frame" || spec?.role === "quality") continue;
       const ui = outputs[nodeId] ?? {};
       const texts = textsOf(ui);
       const found: { key: string; f: HistoryFile }[] = [];
@@ -552,6 +558,7 @@ export function collectOutputs(entry: HistoryEntry, manifest: ManifestWorkflow |
         if (spec?.role === "splat" && ext) meta.format = ext;
         // Qwen-Image-Layered saves its layers back to front.
         if (spec?.role === "layers") Object.assign(meta, { z: i, name: i === 0 ? "Background" : `Layer ${i}` });
+        if (quality && kind === "image") meta.quality = quality;
         if (Object.keys(meta).length) o.meta = meta;
         files.push(o);
       });
@@ -1050,6 +1057,8 @@ export interface PrepareContext {
   device?: () => Promise<string | undefined>;
   /** Where a model file is on the server's disk (comfyModelPath), undefined when it can't say: Zen Image Edit's loader reads paths. */
   modelPath?: (folder: string, name: string) => Promise<string | undefined>;
+  /** The first device's memory in bytes (GET /system_stats devices[0].vram_total): the Watermark Remover's repair size. */
+  vram?: () => Promise<number | undefined>;
   /** The DBS models on the server's disk (GET /models/dbs), undefined when it can't say: a run never gets one that isn't there. */
   dbsModels?: () => Promise<DbsModel[] | undefined>;
   /** The RE-USE files on the server's disk (GET /models/reuse): null without ComfyUI-RE-USE, undefined when it can't say. */
@@ -1230,6 +1239,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     format: input.format,
     audio2: !!audio2 || !!extra.audio2,
     audio: !!input.audio,
+    mask: !!input.mask,
     extra,
     has: (id) => loadManifest().workflows.some((w) => w.id === id),
   });
@@ -1731,6 +1741,27 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (b.channels) values.channels = dbsChannelsFor(extra.channels, sourceChannels);
   for (const k of ["separationModel", "channels", "sourceChannels"]) delete extra[k];
   // Options → Prompt helper (FLUX 3 Image Klein) and a layout's draft (kept for Reuse): read here, never bound.
+  // Watermark Remover: the marks kept (checked and rebuilt again, clamped to this picture), how QWMDetect finds what to repair,
+  // and the size the repair works at (the picture's size and the GPU's memory). Never what the request says for these.
+  if (manifest.capability === "watermark-remove") {
+    const still = ctx.media?.(String(values.image ?? ""));
+    if (still?.width && still.height && Math.max(still.width, still.height) > MAX_WATERMARK_SIDE) throw new ProviderError(WATERMARK_COPY.tooBig, 400);
+    const brushed = !!b.mask;
+    if (!brushed && extra.boxes !== undefined) {
+      try {
+        values.boxes = checkWatermarkBoxes(extra.boxes, { width: still?.width, height: still?.height }).json;
+      } catch (e) {
+        throw new ProviderError((e as Error).message, 400);
+      }
+      values.detectMode = "manual_boxes";
+    } else if (b.detectMode) values.detectMode = brushed ? "manual_mask" : "auto_qwen";
+    if (b.maxSize) values.maxSize = maxSideFor(still?.width, still?.height, await ctx.vram?.().catch(() => undefined));
+    for (const k of ["boxes", "detectMode", "maxSize"]) delete extra[k];
+  }
+  if (manifest.capability === "watermark-scan") {
+    const still = ctx.media?.(String(values.image ?? ""));
+    if (still?.width && still.height && Math.max(still.width, still.height) > MAX_WATERMARK_SIDE) throw new ProviderError(WATERMARK_COPY.tooBig, 400);
+  }
   const helper = extra[PROMPT_HELPER_PARAM];
   const laidOut = carriesBoxes(extra);
   delete extra[PROMPT_HELPER_PARAM];
@@ -2367,6 +2398,13 @@ export const comfyProvider: ProviderAdapter = {
       },
       device: () => comfyDevice(worker),
       modelPath: (folder, name) => comfyModelPath(folder, name, worker),
+      vram: async () => {
+        const computer = computerScope();
+        if (computer) return runnerFacts(computer)?.vramBytes;
+        const s = await comfyJson<{ devices?: { vram_total?: unknown }[] }>("/system_stats", worker).catch(() => undefined);
+        const v = s?.devices?.[0]?.vram_total;
+        return typeof v === "number" && v > 0 ? v : undefined;
+      },
       // Fresh: a model installed a moment ago runs. (On someone's computer, nothing to ask: its ComfyUI has the last word.)
       dbsModels: () => comfyDbsModels(worker, 0),
       reuseModels: () => comfyReuseModels(worker, 0),

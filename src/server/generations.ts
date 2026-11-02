@@ -12,6 +12,7 @@ import { withSignatureWords } from "@/lib/catalog/palettes";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
 import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
+import { COPY as WATERMARK_COPY, rejectedRepair, type WatermarkQuality } from "@/lib/watermark";
 import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
 import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, insertRangeProblem, portraitShapeProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
@@ -2195,6 +2196,11 @@ async function pollOne(r: Row): Promise<void> {
     // What the GPU was missing (a model, a node class): the tile offers "Fix it", and the GPU's check counts as stale.
     update(r.id, { status: "failed", error: res.error, completed_at: Date.now(), message: null, ...(res.fix && { fix_json: JSON.stringify(res.fix) }) });
     if (res.fix) markStale(account ? `acct:${account}` : "install");
+    return;
+  }
+  // The Watermark Remover gave the original back (no clean repair was possible): no new result, the run says what to try.
+  if (r.op === "watermark-remove" && (res.outputs as RichOutput[]).some((o) => rejectedRepair(o.meta?.quality as WatermarkQuality | undefined))) {
+    update(r.id, { status: "failed", error: WATERMARK_COPY.rejected, completed_at: Date.now(), message: null });
     return;
   }
   // Mark first so a slow download isn't polled twice.

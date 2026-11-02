@@ -160,6 +160,7 @@ export function rankPalette(entries: PaletteEntry[], query: string, limits: Reco
 
 /** Words people type for an app that its name doesn't say. */
 export const APP_KEYWORDS: Record<string, string> = {
+  "app-watermark-remover": "watermark remove watermark logo text caption overlay stamp sticker mosaic blur block clean photo erase logo remove text",
   "app-clean-up-voice": "clean up voice denoise noise removal remove echo reverb enhance speech podcast audio fix mic phone audio restore audio",
 };
 

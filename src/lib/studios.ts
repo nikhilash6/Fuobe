@@ -56,6 +56,7 @@ export const EDIT_STUDIO: StudioConfig = {
   multiRef: { label: "Add ref", max: 9 },
   sketch: ["mask", "draw"],
   live: true,
+  related: { href: "/apps/app-watermark-remover", label: "Remove watermarks, captions and logos automatically" },
   defaultModels: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
   suggestions: [
     "Make it golden hour",

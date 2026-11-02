@@ -53,6 +53,14 @@ export const YUE2_COVER_GRAPH: Record<string, string> = { "music-yue2-song": "mu
  * describer.
  */
 export const OUTFIT_WORDS_GRAPH: Record<string, string> = { "outfit-swap-qwen-image-21": "outfit-swap-qwen-image-21-text" };
+/** The Watermark Remover with a brushed area (inputs.mask, white = remove): the graph that reads the mask instead of boxes. */
+export const WATERMARK_BRUSH_GRAPH: Record<string, string> = { "image-watermark-remove-qwen21": "image-watermark-remove-qwen21-brush" };
+
+/**
+ * Graphs the GPU pre-flight checks along with the one that runs: a step whose next step is sure to follow (the Watermark
+ * Remover's scan, then its removal), so one setup plan covers the whole flow and nobody is stopped after the first step.
+ */
+export const COMPANION_GRAPHS: Record<string, string[]> = { "image-watermark-scan-qwen3vl": ["image-watermark-remove-qwen21"] };
 
 export interface VariantRequest {
   op: string;
@@ -65,6 +73,8 @@ export interface VariantRequest {
   audio2: boolean;
   /** An audio input is given (a song to cover). */
   audio?: boolean;
+  /** A painted mask is given (the Watermark Remover's brush). */
+  mask?: boolean;
   extra: Record<string, unknown>;
   /** Is this workflow in the library. */
   has: (id: string) => boolean;
@@ -106,5 +116,7 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   if (words && r.images < 2 && r.has(words)) endpoint = words;
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
+  const brush = WATERMARK_BRUSH_GRAPH[endpoint];
+  if (brush && r.mask && r.has(brush)) endpoint = brush;
   return endpoint;
 }

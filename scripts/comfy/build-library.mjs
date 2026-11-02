@@ -82,6 +82,8 @@ export const LOADER_FOLDERS = {
   OpenH3RegenFastVAEDecode: { vae_name: 'vae' },
   // Clean up voice: ComfyUI-RE-USE's loader reads models/reuse.
   REUSELoader: { model: 'reuse' },
+  // Watermark Remover: ComfyUI-Qwen-Watermark's mask refiner reads SAM from models/sams.
+  QWMRefineMask: { sam_model: 'sams' },
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
 // Zen Image Edit's adapter loader reads paths: its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
@@ -188,6 +190,8 @@ export const BINDING_KEYS = new Set([
   'maskBlur', 'pasteBack',
   // Photo to 3D (Idol): SplatToMesh's grid and the turn that faces the subject's front
   'meshDetail', 'frontYaw',
+  // Watermark Remover (ComfyUI-Qwen-Watermark): the kept marks and how the pack finds what to repair
+  'boxes', 'detectMode',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

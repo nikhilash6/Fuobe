@@ -475,6 +475,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "VoxCPM2 text to speech (voice design) and voice clone nodes; Apache-2.0 code. The VoxCPM2 weights it downloads are Apache-2.0",
   }),
+  // Watermark Remover (image-watermark-*): overflowofedge's Qwen watermark nodes, pinned in install-comfyui.sh.
+  pack("ComfyUI-Qwen-Watermark", "https://github.com/overflowofedge/ComfyUI-Qwen-Watermark/tree/eef829d34d6e9d0d2ae0c1386fab7371a864cf34", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "The Watermark Remover's nodes: find the marks (Qwen3-VL 8B, Apache-2.0), outline stickers (SAM ViT-B, Apache-2.0), repair and check the result; MIT code. The Qwen-Image 2.1 weights the repair runs are non-commercial",
+  }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
     ...GPL,

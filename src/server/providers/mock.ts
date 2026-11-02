@@ -7,6 +7,7 @@ import { H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
 import { HAND_OFF, windowArtifact } from "@/lib/catalog/remove-object";
 import { OPERATION_OUTPUT, type MediaKind, type Operation } from "@/lib/catalog/types";
 import { spectralColor } from "@/lib/scene3d";
+import { imageSize } from "@/lib/image-size";
 import type { ProviderAdapter, RemoteOutput } from "./types";
 import { textOutput } from "./llm";
 import { encodePng } from "../png";
@@ -235,6 +236,28 @@ function demoOcr(brief: string): DemoOutput {
   return textOutput(lines.map((l) => l.text).join("\n"), null, { lines, demo: true });
 }
 
+/** The picture a data URI carries (the Watermark Remover's input, which the demo keeps whole), else null. */
+function dataUriBytes(uri: unknown): Buffer | null {
+  const m = typeof uri === "string" ? /^data:[^;,]+;base64,(.*)$/s.exec(uri) : null;
+  return m ? Buffer.from(m[1], "base64") : null;
+}
+
+/**
+ * The Watermark Remover's scan in demo mode: a report like the pack's (pixels), with a caption across the lower third and a
+ * corner logo, sized to the picture (a 1000 x 1000 one when its size can't be read).
+ */
+export function demoWatermarkReport(image: unknown): string {
+  const bytes = dataUriBytes(image);
+  const size = (bytes && imageSize(bytes)) || { width: 1000, height: 1000 };
+  const { width: w, height: h } = size;
+  const px = (b: number[]) => [Math.round(b[0] * w), Math.round(b[1] * h), Math.round(b[2] * w), Math.round(b[3] * h)];
+  const boxes = [
+    { label: "caption text across the picture", bbox: px([0.14, 0.58, 0.86, 0.74]), source_bbox: px([0.18, 0.61, 0.82, 0.7]), overlay_type: "translucent_text_logo", mask_method: "rectangle", confidence: 0.92 },
+    { label: "round logo in the corner", bbox: px([0.76, 0.06, 0.96, 0.24]), source_bbox: px([0.79, 0.08, 0.93, 0.21]), overlay_type: "text_logo", mask_method: "rectangle", confidence: 0.88 },
+  ];
+  return JSON.stringify({ coordinate_space: "pixels", image_size: [w, h], boxes, rejected_boxes: [], status: "detected", demo: true });
+}
+
 /** A black-and-white mask (white = the object) in the picture's shape. */
 function demoMaskSvg(ar: string): string {
   const [w, h] = ar === "9:16" || ar === "3:4" || ar === "2:3" ? [360, 640] : ar === "1:1" ? [512, 512] : [640, 360];
@@ -348,6 +371,14 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
           ["other", [262, 392]],
         ] as const
       ).map(([stem, tones]) => ({ url: toDataUri(demoWav(3, [tones[0], tones[1]]), "audio/wav"), kind: "audio" as const, contentType: "audio/wav", meta: { stem, demo: true } }));
+    // The Watermark Remover: two marks sized to the picture; the removal gives the picture back as it came (a demo).
+    case "watermark-scan":
+      return [textOutput(demoWatermarkReport(meta.image), null, { role: "report", demo: true })];
+    case "watermark-remove": {
+      const image = typeof meta.image === "string" && meta.image.startsWith("data:image/") ? meta.image : null;
+      const contentType = image ? image.slice(5, image.indexOf(";")) : "image/svg+xml";
+      return [{ url: image ?? svgUri(demoSvg("clean picture", ar, 6)), kind: "image", contentType, meta: { demo: true, quality: { status: "completed_clean_first_pass", selectedPass: 1, outsideMaskMaxDifference: 0, needsReview: false } } }];
+    }
     // The same tone, as long as the loop was asked to be (or the clips joined end to end).
     case "audio-loop":
       return [{ url: toDataUri(demoWav(clamp(Math.round(Number(meta.duration ?? 12)), 4, 30)), "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { demo: true } }];
@@ -412,7 +443,9 @@ export const mockProvider: ProviderAdapter = {
   label: "Placeholder",
   isConfigured: () => true,
 
-  async prepareFile(data, contentType) {
+  async prepareFile(data, contentType, _name, route) {
+    // The Watermark Remover's picture is kept whole (its scan reads the size, its removal gives it back); others stay tiny.
+    if ((route?.op === "watermark-scan" || route?.op === "watermark-remove") && contentType.startsWith("image/")) return toDataUri(data, contentType);
     return toDataUri(data.subarray(0, 64), contentType); // never sent anywhere; keep it tiny
   },
 
@@ -450,6 +483,8 @@ export const mockProvider: ProviderAdapter = {
         h3Review: route.provider === "comfyui" && route.endpoint === H3_REMOVAL_WORKFLOW,
         // A stem split that also transcribes (ComfyUI's dub-prepare-separate-transcribe).
         transcript: route.op === "separate-audio" && route.provider === "comfyui" && route.endpoint.includes("transcribe"),
+        // The Watermark Remover's picture (kept whole by prepareFile).
+        image: route.op === "watermark-scan" || route.op === "watermark-remove" ? input.images?.[0] : undefined,
         // A dialogue / music / effects split (ComfyUI's separate-soundtrack-dbs): four stems.
         threeStems: route.op === "separate-audio" && route.endpoint === "separate-soundtrack-dbs",
         // DBS graph C (soundtrack-remix-dbs): one remixed track.

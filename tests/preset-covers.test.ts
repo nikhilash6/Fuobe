@@ -201,7 +201,9 @@ describe("the preset covers manifest", () => {
     // above the upload: a tool of its own, whose chunk loads on that app's page only.
     // The navigation's covers and the search index's are resolved on the server: nav-covers.ts is server-only (the
     // studios layout passes them down as props) and palette-index.ts is read by the prerendered GET /api/search-index.
+    // The app page (a server page) hands the Watermark Remover's demo its cover.
     expect(importers(/^import (?!type )[^;]*from "[^"]*preset-covers";/m)).toEqual([
+      "app/(studio)/apps/[id]/page.tsx",
       "components/any-angle/any-angle-tool.tsx",
       "components/cinema/move-list.tsx",
       "components/preset-header.tsx",

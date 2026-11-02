@@ -48,6 +48,11 @@ declare -A NODES=(
   # dependencies) and PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel imports triton, installed below).
   [ComfyUI-MiniMax-H3-Turbo]="https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo 77bfa67575b14e3be6214f1747732e540c68b5dd"
   [plaguekind-nodes]="https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes d58d006a4ea32c25c06499f2ff104f0852a045a6"
+  # Watermark Remover (image-watermark-*): overflowofedge's Qwen watermark nodes (MIT), read at this commit (no network,
+  # subprocess, eval or file writes). Its requirements.txt is NOT installed: it asks for opencv-contrib-python-headless,
+  # which next to opencv-python can leave cv2 broken; core cv2 has every function it uses, and segment-anything is in the
+  # union below. Its SAM ViT-B file goes in models/sams (SAM_WEIGHTS block at the end).
+  [ComfyUI-Qwen-Watermark]="https://github.com/overflowofedge/ComfyUI-Qwen-Watermark eef829d34d6e9d0d2ae0c1386fab7371a864cf34"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.
@@ -290,3 +295,19 @@ fi
 # --- end ComfyUI-RE-USE
 
 echo "ComfyUI installed in $COMFYUI_DIR. Start it with: $SCRIPT_DIR/start-comfyui.sh"
+
+# --- SAM ViT-B (image-watermark-remove-qwen21: sticker outlines), 375 MB (Meta's file, from a pinned Hugging Face mirror), into models/sams, checked with
+# sha256sum -c before it is kept (a .pth can run code when it loads). Only with REAL_MODELS=1 (validation needs no weights).
+if [ "${REAL_MODELS:-0}" = "1" ]; then
+  SAM_DIR="$COMFYUI_DIR/models/sams"
+  mkdir -p "$SAM_DIR"
+  if [ ! -s "$SAM_DIR/sam_vit_b_01ec64.pth" ]; then
+    if curl -fsSL --retry 3 -o "$SAM_DIR/sam_vit_b_01ec64.pth.part" "https://huggingface.co/ybelkada/segment-anything/resolve/7790786db131bcdc639f24a915d9f2c331d843ee/checkpoints/sam_vit_b_01ec64.pth" \
+      && (cd "$SAM_DIR" && echo "ec2df62732614e57411cdcf32a23ffdf28910380d03139ee0f4fcbe91eb8c912  sam_vit_b_01ec64.pth.part" | sha256sum -c --quiet); then
+      mv "$SAM_DIR/sam_vit_b_01ec64.pth.part" "$SAM_DIR/sam_vit_b_01ec64.pth"
+    else
+      rm -f "$SAM_DIR/sam_vit_b_01ec64.pth.part"
+      echo "warn: could not fetch SAM ViT-B (or it failed its SHA-256 check)"
+    fi
+  fi
+fi

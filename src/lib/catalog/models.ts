@@ -2893,6 +2893,35 @@ const faceMosaic: ModelDef = o({
   hidden: true,
 });
 
+/**
+ * The Watermark Remover app's two steps on the GPU (ComfyUI-Qwen-Watermark): Qwen3-VL finds the marks printed over a photo,
+ * then Qwen-Image 2.1 repairs only under the ones kept (or a brushed area). Hidden: the app's own page runs them.
+ */
+const watermark: ModelDef[] = [
+  o({
+    id: "oss-watermark-scan",
+    name: "Find watermarks",
+    vendor: "Qwen3-VL + ComfyUI",
+    family: "qwen",
+    kind: "text",
+    tagline: "Finds text, logos, stickers, mosaics and blocks printed over a photo, with their boxes",
+    routes: [{ ...comfy("watermark-scan", "image-watermark-scan-qwen3vl", "Qwen3-VL 8B int8, one pass, boxes in pixels"), unsized: true, maxImages: 1 }],
+    options: { maxImages: 1, promptOptional: true },
+    hidden: true,
+  }),
+  o({
+    id: "oss-watermark-remover",
+    name: "Watermark Remover",
+    vendor: "Qwen-Image 2.1 + ComfyUI",
+    family: "qwen",
+    kind: "image",
+    tagline: "Repairs only under the marks kept for removal; every other pixel stays as it was",
+    routes: [{ ...comfy("watermark-remove", "image-watermark-remove-qwen21", "Qwen-Image 2.1 int8 repair, a leftover check, a second pass when needed"), unsized: true, maxImages: 1 }],
+    options: { maxImages: 1, promptOptional: true, seed: true },
+    hidden: true,
+  }),
+];
+
 /** Tools that run entirely in the browser; recorded in the library like any other result. */
 const local: ModelDef[] = [
   {
@@ -3001,4 +3030,4 @@ const local: ModelDef[] = [
   }),
 ];
 
-export const MODELS: ModelDef[] = [...originals, ...cloud, ...open, faceMosaic, ...local];
+export const MODELS: ModelDef[] = [...originals, ...cloud, ...open, faceMosaic, ...watermark, ...local];

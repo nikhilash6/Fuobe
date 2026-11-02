@@ -387,5 +387,15 @@
     "isolated": false,
     "subdir": null,
     "folders": []
+  },
+  "ComfyUI-Qwen-Watermark": {
+    "repo": "https://github.com/overflowofedge/ComfyUI-Qwen-Watermark",
+    "commit": "eef829d34d6e9d0d2ae0c1386fab7371a864cf34",
+    "registry": null,
+    "requirementsTxt": false,
+    "pip": ["segment-anything==1.0"],
+    "isolated": false,
+    "subdir": null,
+    "folders": ["sams"]
   }
 }
