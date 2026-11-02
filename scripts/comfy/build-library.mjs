@@ -141,7 +141,7 @@ export const BINDING_KEYS = new Set([
   // Fuobe Soul (Originals O2): image to image at Soul's tier
   'megapixels',
   // Genjutsu's Character swap (Originals O5): MiniMax H3 with the h3_character_swap / H3 Relay packs
-  'quality', 'selection', 'subjectIndex', 'positiveCoords', 'negativeCoords', 'audioGuide', 'useMask', 'windowFrames', 'historyFrames',
+  'quality', 'selection', 'subjectIndex', 'positiveCoords', 'negativeCoords', 'audioGuide', 'useMask', 'windowFrames', 'historyFrames', 'windowControls',
   // Character Swap Studio (o/h3-studio): continuation history from the previous take's master, masks on any frame spliced into a version
   'historyVideo', 'historyStart', 'historyLength', 'keyFrame', 'spanFrames', 'tailStart', 'tailFrames', 'prevMask',
   // Originals O11: Fuobe Speak's InfiniteTalk recipe on kijai's wrapper, the face mosaic

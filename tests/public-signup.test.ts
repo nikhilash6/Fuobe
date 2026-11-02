@@ -240,6 +240,9 @@ describe("accounts never run on the owner's keys or GPU", () => {
       // Restore & colourise (o/archive-restore): its run and its prompt writer.
       "/api/restore",
       "/api/restore/prompt",
+      // Remove a person on H3 (o/person-remover-plus): its mask preview and "Redo from here".
+      "/api/remove-object/preview",
+      "/api/remove-object/reroll",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);
