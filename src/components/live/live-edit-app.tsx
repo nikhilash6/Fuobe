@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { openConnect, useComputerSupport } from "@/components/gpu/open-connect";
 import { rememberedComfy } from "@/components/gpu/computer-runtime";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Button } from "@/components/ui/button";
 import { signInHref, useHydrated, useStatus, useViewer } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -116,7 +116,7 @@ export function LiveEditPanel({ image, text, onUse, onClose }: { image?: string;
 
 export function LiveSkeleton() {
   return (
-    <div className="flex h-[100dvh] flex-col gap-3 p-3 sm:p-4" aria-busy>
+    <div className="flex h-content flex-col gap-3 p-3 sm:p-4" aria-busy>
       <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
       <div className="min-h-0 flex-1 animate-pulse rounded-2xl bg-muted" />
       <div className="h-11 animate-pulse rounded-2xl bg-muted" />
@@ -128,14 +128,14 @@ export function LiveSkeleton() {
 function LiveShowcase({ kind }: { kind: "guest" | "connect" | "unsupported" }) {
   const [nudge, setNudge] = useState(false);
   return (
-    <div className="flex min-h-[100dvh] flex-col">
+    <div className="flex min-h-content flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-6">
-        <SidebarTrigger className="md:hidden" />
         <h1 className="flex items-center gap-2 font-heading text-[22px] leading-none">
           <Zap className="size-4 text-primary" />
           Live edit
         </h1>
         <span className="ml-1 rounded-full bg-highlight px-2 py-0.5 text-[11px] font-semibold text-highlight-foreground">New</span>
+        <PhoneNavButton className="ml-auto" />
       </header>
       <div className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-6 px-3 pb-6 sm:px-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:gap-10">
         <LiveDemo className="aspect-[4/3] w-full shadow-strong" onTypeAttempt={() => setNudge(true)} />

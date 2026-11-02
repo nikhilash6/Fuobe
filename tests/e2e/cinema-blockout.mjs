@@ -69,10 +69,7 @@ async function open(ctx, engine, query = "") {
   await ctx.addInitScript((e) => localStorage.setItem("fuobe.engine", e), engine);
   await hideDevBadge(ctx);
   const page = await ctx.newPage();
-  // The app sidebar's hydration mismatch at desktop width (its Suspense fallback, ViewerRowPlaceholder) is the base
-  // branch's: it shows on /image and on /cinema with no blockout at all (2026-11-01). Any other mismatch counts.
-  const known = (m) => /^Hydration failed/.test(m) && /ViewerRowPlaceholder/.test(m) && !/Blockout/.test(m);
-  page.on("pageerror", (e) => !known(e.message) && errors.push(e.message));
+  page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`${app}/cinema/${project.id}${query}`, { waitUntil: "load", timeout: 120_000 });
   return page;
 }

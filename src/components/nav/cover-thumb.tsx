@@ -1,0 +1,91 @@
+"use client";
+
+import { createElement } from "react";
+import { navIcon } from "@/lib/nav-icons";
+import type { NavIconName } from "@/lib/nav-model";
+import { cn } from "@/lib/utils";
+import { useNavCover } from "./nav-ui";
+
+/*
+ * A nav cover: a real preset still in a box of fixed size, so nothing moves when the picture arrives. The box shows
+ * the muted fill until then (and the entry's icon when the preset has no cover). Covers are decoration next to a
+ * written name, so the image is alt="" and the box is hidden from assistive tech.
+ */
+
+export type CoverSize = "row" | "tile" | "lead" | "card" | "thumb" | "chip" | "pill" | "wide";
+
+interface SizeSpec {
+  /** The box (size, shape); a caller's className can override any of it. */
+  box: string;
+  /** The image's intrinsic size for its width/height attributes (posters are 512x384, thumbs 320x240). */
+  w: number;
+  h: number;
+  /** Which copy to load: the 320 px thumb for small boxes; fluid boxes pick between both by `sizes`. */
+  src: "thumb" | "both";
+  sizes: string;
+}
+
+export const COVER_SIZES: Record<CoverSize, SizeSpec> = {
+  /** 36x27: a launcher row, a search grid tile. */
+  row: { box: "h-[27px] w-9 rounded-[6px]", w: 36, h: 27, src: "thumb", sizes: "36px" },
+  /** 56x56: the phone Studios sheet. */
+  tile: { box: "size-14 rounded-[14px]", w: 56, h: 56, src: "thumb", sizes: "56px" },
+  /** 4:3, full width: a launcher column's lead card. */
+  lead: { box: "aspect-[4/3] w-full rounded-[12px]", w: 512, h: 384, src: "both", sizes: "(min-width: 1024px) 272px, 72px" },
+  /** 4:3, full width: a goal band's studio card. */
+  card: { box: "aspect-[4/3] w-full rounded-[14px]", w: 512, h: 384, src: "both", sizes: "(min-width: 768px) 248px, 160px" },
+  /** 64x48: a search result row. */
+  thumb: { box: "h-12 w-16 rounded-[8px]", w: 64, h: 48, src: "thumb", sizes: "64px" },
+  /** 56x42: a one-tap preset chip. */
+  chip: { box: "h-[42px] w-14 rounded-[8px]", w: 56, h: 42, src: "thumb", sizes: "56px" },
+  /** 40x40: a next-step pill. */
+  pill: { box: "size-10 rounded-[10px]", w: 40, h: 40, src: "thumb", sizes: "40px" },
+  /** 16:9, full width: the "next to try" card. */
+  wide: { box: "aspect-video w-full rounded-[10px]", w: 512, h: 288, src: "both", sizes: "300px" },
+};
+
+export function CoverThumb({
+  id,
+  size,
+  icon,
+  eager,
+  className,
+}: {
+  /** A preset id with a real cover (NavEntry.cover, a goal tap's preset); undefined shows the fallback. */
+  id: string | undefined;
+  size: CoverSize;
+  /** Shown on the muted fill when there is no cover. */
+  icon?: NavIconName;
+  /** Load at once (a panel about to open) instead of when it comes near the screen. */
+  eager?: boolean;
+  className?: string;
+}) {
+  const cover = useNavCover(id);
+  const s = COVER_SIZES[size];
+  return (
+    <span aria-hidden data-cover={cover ? id : undefined} className={cn("relative block shrink-0 overflow-hidden bg-muted", s.box, className)}>
+      {cover ? (
+        // eslint-disable-next-line @next/next/no-img-element -- versioned static covers, sized by the box (no optimizer round trip)
+        <img
+          src={cover.thumb}
+          srcSet={s.src === "both" ? `${cover.thumb} 320w, ${cover.poster} 512w` : undefined}
+          sizes={s.src === "both" ? s.sizes : undefined}
+          width={s.w}
+          height={s.h}
+          alt=""
+          loading={eager ? "eager" : "lazy"}
+          decoding="async"
+          draggable={false}
+          className="absolute inset-0 size-full object-cover object-[50%_25%]"
+        />
+      ) : icon ? (
+        <NavIcon name={icon} className="absolute inset-0 m-auto size-[42%] max-h-6 max-w-6 text-muted-foreground" />
+      ) : null}
+    </span>
+  );
+}
+
+/** A model icon by name (NavEntry.icon), decorative. */
+export function NavIcon({ name, className }: { name: NavIconName; className?: string }) {
+  return createElement(navIcon(name), { "aria-hidden": true, className });
+}

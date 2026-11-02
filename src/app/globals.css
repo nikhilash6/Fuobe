@@ -269,9 +269,12 @@
     @apply font-sans;
   }
   body {
-    /* the frame color; the inset <main> sheet uses bg-background */
+    /* the frame color (the top bar and pages outside the app frame); the app's <main> uses bg-background */
     @apply bg-sidebar text-foreground antialiased;
     font-feature-settings: "cv11", "ss01"; /* Inter: single-storey a, open digits; optional */
+    /* viewport-fit=cover puts the page under the notch of a phone held sideways; every page keeps clear of it here (fixed bars pad themselves) */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
   h1, h2, h3, .font-heading {
     letter-spacing: -0.01em; /* Liner uses -0.03em on Flare; Instrument Serif is already tight */
@@ -315,6 +318,38 @@
   }
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * The app frame (components/nav): the top bar from md (56 px) and the phone's tab bar below it
+ * (64 px plus the home indicator's inset). Pages size themselves to what is left: h-content,
+ * min-h-content; sticky headers sit under the bar (top-chrome) and sticky footers above the tabs
+ * (bottom-chrome). A full-screen studio, and the on-screen keyboard, hide the phone's tabs.
+ * ------------------------------------------------------------------------------------------- */
+:root {
+  --chrome-top: 0px;
+  --chrome-bottom: 0px;
+  --content-h: calc(100svh - var(--chrome-top) - var(--chrome-bottom));
+}
+@media (min-width: 768px) {
+  :root { --chrome-top: 3.5rem; }
+}
+@media (max-width: 767.98px) {
+  :root { --chrome-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+  html[data-fullscreen-studio], html[data-keyboard-open] { --chrome-bottom: 0px; }
+}
+@media print {
+  :root { --chrome-top: 0px; --chrome-bottom: 0px; }
+}
+@utility h-content { height: var(--content-h); }
+@utility min-h-content { min-height: var(--content-h); }
+@utility max-h-content { max-height: var(--content-h); }
+@utility top-chrome { top: var(--chrome-top); }
+@utility bottom-chrome { bottom: var(--chrome-bottom); }
+/* A link to #section, and Tab moving down the page, stop clear of the bar and the tabs (focus is never hidden under them). */
+html {
+  scroll-padding-top: var(--chrome-top);
+  scroll-padding-bottom: var(--chrome-bottom);
+}
+
 /* Markdown (status / docs pages) */
 .prose-fuobe { font-size: var(--text-body); line-height: 1.7; }
 .prose-fuobe h1 { font-family: var(--font-heading); font-size: 34px; line-height: 1.15; margin: 0 0 0.6em; }
@@ -344,7 +379,7 @@
   mask-image: linear-gradient(to right, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
 }
 .fade-x[data-fade-start] { --fade-l: 32px; }
-.fade-x[data-fade-end] { --fade-r: 32px; }
+.fade-x[data-fade-end] { --fade-r: 56px; }
 
 /*
  * Home's sections under the fold (home-sections.tsx): the first paint doesn't wait for their layout. Until the page
@@ -357,23 +392,6 @@
 }
 .home-cv[data-laid-out] {
   content-visibility: visible;
-}
-
-/* Sidebar groups that remember being collapsed (app-sidebar.tsx). In icon mode every item shows. */
-[data-nav-group][data-open="false"] [data-nav-items] { display: none; }
-/* A collapsed group still shows the page you're on (only that item), so something is always lit. */
-[data-nav-group][data-open="false"]:has([data-active="true"]) [data-nav-items] { display: revert-layer; }
-[data-nav-group][data-open="false"] [data-nav-items] > li:not(:has([data-active="true"])) { display: none; }
-[data-collapsible="icon"] [data-nav-group] [data-nav-items] { display: flex; }
-[data-collapsible="icon"] [data-nav-group][data-open] [data-nav-items] > li { display: revert-layer; }
-
-/*
- * A vertical scroller fades out at an edge with more past it (app-sidebar.tsx). --fade-t and --fade-b
- * are as deep as what's hidden there, up to 24px and 40px (scrollFades in src/lib/nav.ts).
- */
-.fade-y[data-more-above],
-.fade-y[data-more-below] {
-  mask-image: linear-gradient(to bottom, transparent, #000 var(--fade-t, 0px), #000 calc(100% - var(--fade-b, 0px)), transparent);
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -679,4 +697,9 @@
 @keyframes live-scan { from { opacity: 1; transform: translateX(var(--scan-from, -10%)); } 85% { opacity: 1; } to { opacity: 0; transform: translateX(var(--scan-to, 110%)); } }
 @media (prefers-reduced-motion: reduce) {
   [data-live-stage] img, [data-live-demo] img { animation: none !important; transition: none !important; }
+}
+
+/* Menus and popovers open and close without their fade, zoom and slide when the system asks for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"] { animation: none !important; }
 }

@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useIsOwner, useIsVisitor } from "@/lib/api";
@@ -64,10 +64,9 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
   const projectName = (id: string | null) => projects.data?.find((p) => p.id === id);
 
   return (
-    <div className={cn("flex min-w-0 flex-col", !projectId && "min-h-svh")}>
+    <div className={cn("flex min-w-0 flex-col", !projectId && "min-h-content")}>
       {!projectId && (
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur sm:px-6">
-          <SidebarTrigger className="md:hidden" />
+        <header className="sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur sm:px-6">
           <RailButton />
           <h1 className="font-heading text-[22px] leading-none">Memory</h1>
           {owner && (
@@ -81,6 +80,7 @@ export function MemoryView({ projectId }: { projectId?: string } = {}) {
               </Button>
             </div>
           )}
+          <PhoneNavButton />
         </header>
       )}
       <div className={cn("w-full max-w-[900px] min-w-0 flex-1 px-3 pb-16 sm:px-6", projectId ? "pt-2" : "pt-4 md:pt-8")}>

@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { toast } from "sonner";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
 import type { Generation, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
@@ -310,7 +310,7 @@ function PromptSuggestions({ suggestions }: { suggestions: string[] }) {
   const model = catalog.getModel(draft.modelId);
   if (!promptShown(config.hidePrompt, preset?.userPrompt, model?.options.promptless)) return null;
   return (
-    <div className="mx-auto mt-4 flex max-w-[760px] flex-wrap justify-center gap-2 px-3 pb-10">
+    <div className="mx-auto mt-4 flex w-full max-w-[760px] min-w-0 flex-wrap justify-center gap-2 px-3 pb-10">
       {suggestions.map((s) => (
         <button
           key={s}
@@ -427,15 +427,15 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
       </HubHeaderExtras>
     );
   return (
-    <div className="sticky top-0 z-20 bg-background/85 backdrop-blur">
+    <div className="sticky top-chrome z-20 bg-background/85 backdrop-blur">
       <header className="flex h-14 items-center gap-2 px-3 sm:px-6">
-        <SidebarTrigger className="md:hidden" />
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{title}</h1>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {header}
           <StudioGpuPill />
           <EngineSwitch value={engine} onChange={setEngine} />
         </div>
+        <PhoneNavButton />
       </header>
       {tabs}
     </div>
@@ -478,7 +478,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
   return (
     <div
       data-studio
-      className={cn("relative flex min-w-0 flex-col", inHub ? "flex-1" : "min-h-svh")}
+      className={cn("relative flex min-w-0 flex-col", inHub ? "flex-1" : "min-h-content")}
       onDragEnter={(e) => {
         if (![...e.dataTransfer.types].includes("Files")) return;
         dragDepth.current++;
@@ -525,7 +525,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
 
       {live && (
         <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-4 sm:px-6">
-          <div className="h-[calc(100svh-4.5rem)] min-h-[520px]">
+          <div className="h-[calc(var(--content-h)-4.5rem)] min-h-[520px]">
             <LiveArea onClose={() => setLive(false)} />
           </div>
         </div>
@@ -573,7 +573,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
         className={cn(
           live && "hidden",
           hasItems
-            ? "sticky bottom-0 z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6"
+            ? "sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-8 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6"
             : "px-3 pt-6 sm:px-6 sm:pt-10",
         )}
       >

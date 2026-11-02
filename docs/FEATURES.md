@@ -107,7 +107,7 @@ More on running it: [Development → Evaluation harness](DEVELOPMENT.md#evaluati
 
 ## Placeholder results
 
-- **Off by default.** With nothing connected, a run opens the connect card: the ComfyUI on this computer, a server address, or an API key. To give a tour without keys or a GPU, turn on **Settings → Show placeholder results (for a tour)**: every run then makes a result labelled "Placeholder", and the sidebar shows a "Placeholders on" chip that turns it off.
+- **Off by default.** With nothing connected, a run opens the connect card: the ComfyUI on this computer, a server address, or an API key. To give a tour without keys or a GPU, turn on **Settings → Show placeholder results (for a tour)**: every run then makes a result labelled "Placeholder", and the top bar and the account menu show a "Placeholders on" chip that turns it off.
 
 ## Model licences
 

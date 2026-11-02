@@ -292,7 +292,7 @@ export function PhotodumpView() {
             })}
           </div>
           {!shown.length && <p className="py-10 text-center text-[14px] text-muted-foreground">{tab === "mine" && !needle ? (visitor ? "Saving packs of your own isn't available here." : "No packs of your own yet — create one from your reference photos.") : `No packs match “${q}”`}</p>}
-          <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
+          <div className="sticky bottom-[calc(var(--chrome-bottom)+0.75rem)] z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
             <p className="min-w-0 truncate text-[13px]">{pack ? <><span className="font-medium">{pack.name}</span> · {pack.count} photos</> : <span className="text-muted-foreground">Pick a pack to continue</span>}</p>
             <Button disabled={!pack} onClick={() => go(1)}>
               Use this pack <ArrowRight />
@@ -357,7 +357,7 @@ export function PhotodumpView() {
               </div>
             )}
           </div>
-          <aside className="space-y-5 rounded-2xl border p-4 lg:sticky lg:top-6 lg:self-start">
+          <aside className="space-y-5 rounded-2xl border p-4 lg:sticky lg:top-[calc(var(--chrome-top)+1.5rem)] lg:self-start">
             <div className="flex items-center gap-3">
               <PackCover id={pack.id} name={pack.name} count={pack.count} refs={pack.refs} hue={pack.hue} tone={pack.tone} bare className="size-14 shrink-0 rounded-lg" />
               <div className="min-w-0">

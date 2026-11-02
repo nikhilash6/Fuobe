@@ -20,7 +20,7 @@ export function PageState({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <PhoneBar className="bg-transparent backdrop-blur-none" />
       <div className="mx-auto flex w-full max-w-[520px] flex-1 flex-col items-center justify-center px-6 pb-[12vh] text-center">
         <span className="grid size-12 place-items-center rounded-2xl bg-brand-faint text-brand-text">

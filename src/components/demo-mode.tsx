@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Placeholder results (src/lib/demo-mode.ts): off by default, on only by the owner's choice in Settings, for a tour.
- * While on, the sidebar shows "Placeholders on", a chip whose click turns them off (with Undo). Every result the demo
+ * While on, the top bar shows "Placeholders on", a chip whose click turns them off (with Undo). Every result the demo
  * provider made carries a "Placeholder" chip; for the owner it opens a small card with the ways to the real thing:
  * the ComfyUI on this computer (the connect card), an API key (Settings), and placeholders off.
  */
@@ -113,8 +113,8 @@ function PlaceholderCard({ close }: { close: () => void }) {
 }
 
 /**
- * The sidebar's "Placeholders on" while the switch is on (the owner's only: nobody else's runs make placeholders). A
- * click turns them off at once, with Undo in the toast; Settings has the switch itself. `icon`: the collapsed sidebar's
+ * The top bar's and the account menu's "Placeholders on" while the switch is on (the owner's only: nobody else's runs make placeholders). A
+ * click turns them off at once, with Undo in the toast; Settings has the switch itself. `icon`: a
  * round version, the same button with only its mark showing.
  */
 export function PlaceholdersOnChip({ className, icon }: { className?: string; icon?: boolean }) {

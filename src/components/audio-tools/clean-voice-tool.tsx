@@ -306,7 +306,7 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
     >
       {!source && !demo && <ToolHero title={app?.name ?? "Clean up voice"} subtitle={TOOL_SUBTITLE} />}
       {/* The demo's photo narrows on a short screen, so its play button and Noise on / off stay above the fold. */}
-      <div className={cn("mx-auto space-y-3", demo ? "max-w-[min(760px,max(480px,calc((100svh_-_356px)*4/3)))] pt-6" : "max-w-[860px]", source ? "pt-4" : !demo && "mt-6")}>
+      <div className={cn("mx-auto space-y-3", demo ? "max-w-[min(760px,max(480px,calc((var(--content-h)_-_356px)*4/3)))] pt-6" : "max-w-[860px]", source ? "pt-4" : !demo && "mt-6")}>
         {demo && (
           <>
             <CleanVoiceDemo name={app?.name ?? "Clean up voice"} ready={known} />

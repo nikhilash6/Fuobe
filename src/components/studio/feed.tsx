@@ -5,7 +5,6 @@ import { lineWords } from "@/lib/hosted";
 import { openGpuSetup } from "@/hooks/use-gpu";
 import { useLocalJob } from "@/components/gpu/computer-runner";
 import { jobFraction, jobWords } from "@/lib/relay";
-import Link from "next/link";
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -17,19 +16,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { OPERATION_LABELS, type Generation } from "@/lib/catalog/types";
-import { useCreateGeneration, useEngineMode, useGenerationActions, useLikelyVisitor } from "@/lib/api";
+import { useCreateGeneration, useGenerationActions } from "@/lib/api";
 import { useSoulFinish } from "./soul-finish";
 import { elapsed, formatCost, leftLabel, notePace, ratioValue, timeAgo, timeLeft } from "@/lib/format";
 import { downloadHref, downloadName, userTitle } from "@/lib/library";
-import { isLayered, nextSteps, shownOutputs } from "@/lib/output-actions";
+import { isLayered, shownOutputs } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { toastError } from "@/lib/refusals";
-import { ACTION_ICONS, TileActions, useCanHover, type RunnerOptions } from "./result-actions";
+import { TileActions, useCanHover, type RunnerOptions } from "./result-actions";
 import { LayersStack, MediaThumb } from "./result-media";
 import { useNow } from "./use-now";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { Viewer } from "./viewer";
+import { NextSteps } from "@/components/nav/next-steps";
 
 export { MediaThumb } from "./result-media";
 export { downloadName } from "@/lib/library";
@@ -267,34 +267,6 @@ const OutputTile = memo(function OutputTile({ g, index, ratio, layered, count }:
   );
 });
 
-/**
- * Under the newest result: three next steps as chips (Animate, Upscale, Edit for a picture). A
- * group with several takes has none: which one to animate is picked on its tile.
- */
-function NextSteps({ g, index }: { g: Generation; index: number }) {
-  const engineMode = useEngineMode();
-  const visitor = useLikelyVisitor();
-  const steps = nextSteps(g, index, 3, { engineMode, visitor });
-  if (!steps.length) return null;
-  return (
-    <nav aria-label="Next steps" className="flex flex-wrap gap-1.5">
-      {steps.map((a) => {
-        const Icon = ACTION_ICONS[a.id];
-        return (
-          <Link
-            key={a.id}
-            href={a.href!}
-            prefetch={false}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-secondary px-3 text-[13px] font-medium text-secondary-foreground transition-colors outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <Icon className="size-3.5" /> {a.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
-
 /** One request: the user's words in serif, a meta line, then its outputs (or progress / failure). */
 export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g: Generation; newest?: boolean }) {
   const feed = useFeed();
@@ -424,7 +396,8 @@ export const GenerationGroup = memo(function GenerationGroup({ g, newest }: { g:
             shown.map((i) => <OutputTile key={g.outputs[i].url} g={g} index={i} ratio={ratio} count={shown.length} />)
           ))}
       </div>
-      {newest && !layered && shown.length === 1 && <NextSteps g={g} index={shown[0]} />}
+      {/* Under the newest result: where it can go next, with it attached. A group with several takes has none: which one to take on is picked on its tile. */}
+      {newest && !layered && shown.length === 1 && <NextSteps g={g} index={shown[0]} variant="row" max={5} className="pt-1" />}
     </section>
   );
 });

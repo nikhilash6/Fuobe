@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NotFoundState } from "@/components/empty-state";
 import { EngineSwitch } from "@/components/studio/engine-switch";
@@ -170,9 +170,8 @@ export function EpisodeWizard({ channelId, picker }: { channelId: string; picker
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
         <Link href={`/faceless/${channelId}`} className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4 shrink-0" />
           <span className="truncate">{channel?.name ?? "Channel"}</span>
@@ -180,6 +179,7 @@ export function EpisodeWizard({ channelId, picker }: { channelId: string; picker
         <div className="ml-auto">
           <EngineSwitch value={engine} onChange={setEngine} />
         </div>
+        <PhoneNavButton />
       </header>
       <div className="mx-auto w-full max-w-[920px] min-w-0 flex-1 px-3 pb-32 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3 pt-6">
@@ -349,7 +349,7 @@ export function EpisodeWizard({ channelId, picker }: { channelId: string; picker
       </div>
 
       {channel && settings && (
-        <div className="sticky bottom-0 z-20 border-t bg-background/90 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+        <div className="sticky bottom-chrome z-20 border-t bg-background/90 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
           <div className="mx-auto flex w-full max-w-[920px] min-w-0 flex-wrap items-center gap-3 px-3 pt-3 sm:px-6">
             {step === 2 ? (
               <>

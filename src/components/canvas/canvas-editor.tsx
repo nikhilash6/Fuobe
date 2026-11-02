@@ -35,7 +35,7 @@ import { ErrorState, NotFoundState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EngineSwitch } from "@/components/studio/engine-switch";
@@ -208,7 +208,7 @@ export function CanvasEditor({ id }: { id: string }) {
 
 function EditorSkeleton() {
   return (
-    <div className="flex h-svh flex-col md:h-[calc(100svh-0.5rem)]">
+    <div className="flex h-content flex-col">
       <div className="flex h-14 items-center gap-3 border-b px-3 sm:px-4">
         <Skeleton className="h-6 w-48" />
         <Skeleton className="ml-auto h-8 w-24 rounded-full" />
@@ -1260,7 +1260,7 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
   return (
     <EditorStoreContext.Provider value={store}>
       <EditorActionsContext.Provider value={actions}>
-        <div className="fuobe-canvas flex h-svh min-w-0 flex-col md:h-[calc(100svh-0.5rem)]">
+        <div className="fuobe-canvas flex h-content min-w-0 flex-col">
           <EditorHeader
             name={name}
             setName={setName}
@@ -1518,7 +1518,6 @@ const EditorHeader = memo(function EditorHeader({
   const mod = useModKey();
   return (
     <header className="z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-2 sm:px-4">
-      <SidebarTrigger className="md:hidden" />
       <Tooltip>
         <TooltipTrigger asChild>
           <Link href="/canvas" className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="All canvases">
@@ -1602,6 +1601,7 @@ const EditorHeader = memo(function EditorHeader({
           </DropdownMenu>
         </div>
       </div>
+      <PhoneNavButton />
     </header>
   );
 });

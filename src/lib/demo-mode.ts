@@ -1,5 +1,5 @@
 /**
- * Placeholder results' words and ways out, for the sidebar's "Placeholders on" chip and the "Placeholder" chip on a
+ * Placeholder results' words and ways out, for the top bar's "Placeholders on" chip and the "Placeholder" chip on a
  * result (src/components/demo-mode.tsx). Pure, so the rules are tested without a browser.
  *
  * Placeholder results are off by default on every install: a run with nothing connected opens the connect card. The
@@ -14,7 +14,7 @@ export const PLACEHOLDER_SETTING = "Show placeholder results (for a tour)";
 /** The chip on every result the demo provider made. */
 export const PLACEHOLDER_CHIP = "Placeholder";
 
-/** The sidebar's chip while the switch is on: a click turns it off. */
+/** The top bar's chip while the switch is on: a click turns it off. */
 export const PLACEHOLDERS_ON = "Placeholders on";
 
 export type PlaceholderAction = "computer" | "key" | "off";

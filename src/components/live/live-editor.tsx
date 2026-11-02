@@ -998,7 +998,7 @@ export function LiveEditor(props: LiveEditorProps) {
 
   return (
     <div
-      className={cn("flex min-h-0 w-full flex-col bg-background", embedded ? "h-full rounded-2xl border" : "h-[100dvh]")}
+      className={cn("flex min-h-0 w-full flex-col bg-background", embedded ? "h-full rounded-2xl border" : "h-content")}
       data-live-editor
       onDragOver={(e) => {
         if ([...e.dataTransfer.items].some((i) => i.kind === "file")) {

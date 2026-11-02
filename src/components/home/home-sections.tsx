@@ -203,7 +203,7 @@ export function LiveEditSection() {
 const WAVE = [
   0.3, 0.45, 0.7, 0.5, 0.85, 1, 0.75, 0.55, 0.4, 0.6, 0.9, 0.7, 0.45, 0.3, 0.5, 0.8, 0.95, 0.65, 0.4, 0.55, 0.75, 0.5, 0.35, 0.6, 0.8, 0.55, 0.35, 0.25,
 ];
-/** How many of the Audio card's tools it names where its card is narrowest (lg to xl, four cards a row beside the sidebar). */
+/** How many of the Audio card's tools it names where its card is narrowest (lg to xl, four cards a row). */
 const AUDIO_NARROW = 3;
 
 /**

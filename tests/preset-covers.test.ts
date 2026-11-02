@@ -175,12 +175,21 @@ describe("the preset covers manifest", () => {
     expect(importers(/from "[^"]*preset-covers\.generated"/)).toEqual(["lib/preset-covers.ts"]);
     // (A type is no code: the cover tile takes a cover without importing the map.) Any Angle's page shows its own cover
     // above the upload: a tool of its own, whose chunk loads on that app's page only.
+    // The navigation's covers and the search index's are resolved on the server: nav-covers.ts is server-only (the
+    // studios layout passes them down as props) and palette-index.ts is read by the prerendered GET /api/search-index.
     expect(importers(/^import (?!type )[^;]*from "[^"]*preset-covers";/m)).toEqual([
       "components/any-angle/any-angle-tool.tsx",
       "components/cinema/move-list.tsx",
       "components/preset-header.tsx",
       "components/studio/preset-chips.tsx",
+      "lib/nav-covers.ts",
+      "lib/palette-index.ts",
     ]);
+    expect(fs.readFileSync(path.join(root, "src", "lib", "nav-covers.ts"), "utf8")).toMatch(/^import "server-only";$/m);
+    // Client code takes the covers' type only (the covers come as props).
+    for (const f of importers(/^import (?!type )[^;]*from "[^"]*nav-covers";/m)) expect(sources.find((s) => s.file === f)!.text, f).not.toMatch(/^["']use client["'];?$/m);
+    // The index is server code: the prerendered route, and Home's showcase (server-only) for model links.
+    expect(importers(/from "[^"]*palette-index"/)).toEqual(["app/api/search-index/route.ts", "lib/home-showcase.ts"]);
     const composer = fs.readFileSync(path.join(root, "src", "components", "studio", "composer.tsx"), "utf8");
     expect(composer).toMatch(/dynamic\(\(\) => import\("\.\/preset-chips"\)/);
     expect(importers(/from "[^"]*\/move-list"/)).toEqual([]);

@@ -223,7 +223,7 @@ function logInAgain(who: "owner" | "account", here?: string): string {
 const TITLES: Record<FindReason | RefusalAction | "connect", string> = {
   run: "Connect your GPU to run this",
   upload: "Connect your GPU or add a key to add your own files",
-  // Opened with no run waiting (the setup guide, the sidebar's Connect).
+  // Opened with no run waiting (the setup guide, the account menu's Connect).
   connect: "Connect your GPU",
   setting: "Your ComfyUI needs Fuobe's setting again",
   find: "Find your ComfyUI",

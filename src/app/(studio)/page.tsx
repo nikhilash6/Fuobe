@@ -11,9 +11,25 @@ import {
   StudiosSection,
 } from "@/components/home/home-sections";
 import { HomeView } from "@/components/home-view";
+import { GoalRow } from "@/components/nav/goal-row";
 import { ASSIST_SUGGESTIONS } from "@/lib/assist";
+import { getPreset } from "@/lib/catalog";
 import { HOME_TRY, homeShowcase, roundedDown } from "@/lib/home-showcase";
+import { GOALS } from "@/lib/nav-model";
 import { startQuotes, starterPriceLine } from "@/lib/starter-prices";
+
+/** The goal bands' one-tap presets by name, read here so the catalog stays on the server. */
+function goalTapNames(): Record<string, string> {
+  return Object.fromEntries(
+    GOALS.flatMap((g) =>
+      g.taps.map((t) => {
+        const p = getPreset(t.preset);
+        if (!p) throw new Error(`The goal row names ${t.preset}, which isn't in the catalog`);
+        return [t.preset, p.name];
+      }),
+    ),
+  );
+}
 
 /**
  * The catalog stays on the server: Home gets slim cards, the numbers it quotes (each computed, lib/home-showcase.ts),
@@ -26,6 +42,7 @@ export default async function Page() {
       openModels={roundedDown(home.facts.openModels)}
       chips={HOME_TRY}
       assist={{ label: "Plan a perfume ad with Assist", href: `/assist?prompt=${encodeURIComponent(ASSIST_SUGGESTIONS[0])}` }}
+      goals={<GoalRow names={goalTapNames()} />}
       wall={<ShowcaseWall wall={home.wall} />}
       prices={starterPriceLine()}
       quotes={startQuotes()}

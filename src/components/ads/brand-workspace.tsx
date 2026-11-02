@@ -64,7 +64,7 @@ export function BrandWorkspace({ brandId }: { brandId: string }) {
 
   if (view.error) {
     return (
-      <div className="flex min-h-svh flex-col">
+      <div className="flex min-h-content flex-col">
         <MarketingHeader title="Ads Studio" active="ads" />
         <div className="mx-auto max-w-md px-4 pt-[14vh] text-center">
           <h2 className="font-heading text-[26px]">This brand isn&apos;t on the shelf</h2>
@@ -81,7 +81,7 @@ export function BrandWorkspace({ brandId }: { brandId: string }) {
     brand && <AdChat brand={brand} products={products} engine={engine} onBatch={() => (setStep("ads"), setChat(false))} onClose={inSheet ? () => setChat(false) : undefined} className="h-full" />;
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader
         title={brand?.name ?? "Ads Studio"}
         active="ads"
@@ -176,7 +176,7 @@ export function BrandWorkspace({ brandId }: { brandId: string }) {
             </>
           )}
         </div>
-        {chatReady && <div className="sticky top-28 hidden h-[calc(100svh-8rem)] w-[340px] shrink-0 xl:block">{chatPanel(false)}</div>}
+        {chatReady && <div className="sticky top-[calc(var(--chrome-top)+7rem)] hidden h-[calc(var(--content-h)-8rem)] w-[340px] shrink-0 xl:block">{chatPanel(false)}</div>}
       </div>
       <Sheet open={chat} onOpenChange={setChat}>
         <SheetContent side="right" showCloseButton={false} className="w-full gap-0 p-0 sm:max-w-md">

@@ -164,7 +164,7 @@ function ChoiceField({
 function StatusStrip({ status, onGuide, guideOpen }: { status?: StatusInfo; onGuide: () => void; guideOpen: boolean }) {
   const place = usePagePlace();
   return (
-    <div className="sticky top-12 z-10 -mx-4 border-b bg-background/90 px-4 py-2.5 backdrop-blur sm:-mx-8 sm:px-8 md:top-0">
+    <div className="sticky top-12 z-10 -mx-4 border-b bg-background/90 px-4 py-2.5 backdrop-blur sm:-mx-8 sm:px-8 md:top-chrome">
       <nav aria-label="Connections" className="scrollbar-none -my-1 flex items-center gap-1.5 overflow-x-auto py-1">
         {status ? (
           <>
@@ -741,7 +741,7 @@ export function SettingsForm({ prices }: { prices?: string }) {
           <span className="min-w-0 space-y-1">
             <span className="block text-[14px] font-medium">{PLACEHOLDER_SETTING}</span>
             <span className="block text-[13px] leading-relaxed text-muted-foreground">
-              While it&rsquo;s on, every run makes a placeholder labelled &ldquo;Placeholder&rdquo;, even with keys or ComfyUI connected, and the sidebar says
+              While it&rsquo;s on, every run makes a placeholder labelled &ldquo;Placeholder&rdquo;, even with keys or ComfyUI connected, and the top bar says
               &ldquo;Placeholders on&rdquo;. While it&rsquo;s off, a run with nothing connected asks you to connect ComfyUI or add a key.
             </span>
           </span>

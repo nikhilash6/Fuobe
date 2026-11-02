@@ -4,7 +4,7 @@ import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine, useLikelyVisitor } from "@/lib/api";
 import { HUB_MODES, HUB_TITLE, hubOfPath, modeHref, modeOfPath, type HubKind } from "@/lib/hubs";
@@ -129,7 +129,7 @@ function HubTabs({
   }, [active, ref]);
 
   // Every mode's whole page, also the ones scrolled out of the row, once the page is idle (a tab on screen already
-  // prefetches itself), ahead of the sidebar's routes: the "page" lane.
+  // prefetches itself), ahead of the navigation's routes: the "page" lane.
   useIdlePrefetch(
     modes.map((m) => modeHref(kind, m.id)),
     "page",
@@ -208,15 +208,15 @@ export function HubFrame({ kind, skeleton, children }: { kind: HubKind; skeleton
   // `waiting` ends before paint when the page arrives, so the skeleton never covers the new page.
   const skeletonShown = waiting && late;
   return (
-    <div className="flex min-h-svh min-w-0 flex-col" data-hub={kind}>
-      <div className="sticky top-0 z-20 bg-background/85 backdrop-blur" data-hub-chrome>
+    <div className="flex min-h-content min-w-0 flex-col" data-hub={kind}>
+      <div className="sticky top-chrome z-20 bg-background/85 backdrop-blur" data-hub-chrome>
         <header className="flex h-14 items-center gap-2 px-3 sm:px-6">
-          <SidebarTrigger className="md:hidden" />
           <h1 className="min-w-0 truncate font-heading text-[22px] leading-[1.15]">{HUB_TITLE[kind]}</h1>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <div ref={slotRef} className="contents" />
             <HubEngine kind={kind} mode={mode} />
           </div>
+          <PhoneNavButton />
         </header>
         <Suspense fallback={<HubTabs kind={kind} pathname={null} />}>
           <PathTabs kind={kind} onActive={setMode} onWaiting={setWaiting} />

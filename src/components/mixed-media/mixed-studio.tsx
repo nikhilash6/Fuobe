@@ -4,7 +4,7 @@ import { ArrowDown, Cloud, Cpu, Download, ImageIcon, Info, Loader2, Search, Spar
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { MediaThumb } from "@/components/studio/result-media";
@@ -103,9 +103,8 @@ export function MixedStudio({
     window.history.replaceState(null, "", url);
   };
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
-        <SidebarTrigger className="md:hidden" />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 backdrop-blur sm:px-6">
         <h1 className="sr-only font-heading text-[22px] leading-none sm:not-sr-only sm:truncate">Mixed Media</h1>
         <div role="tablist" aria-label="Mixed Media" onKeyDown={tabKeys} className="fade-x scrollbar-none flex h-8 min-w-0 items-center overflow-x-auto rounded-full bg-muted p-0.5 sm:ml-4">
           {TABS.map((t) => (
@@ -126,6 +125,7 @@ export function MixedStudio({
           {/* A phone's header has room for the tabs, not "Add key" too. */}
           <EngineSwitch value={engine} onChange={setEngine} wordless selfHostedOnly />
         </div>
+        <PhoneNavButton />
       </header>
       <div className="mx-auto w-full max-w-[1240px] min-w-0 flex-1 px-3 pb-28 sm:px-6 lg:pb-16">
         {tab === "history" ? (
@@ -273,11 +273,11 @@ function Workspace({ visitor, engine, models, frameModels }: { visitor: boolean;
           </div>
         )}
       </section>
-      <aside ref={panel} id="mm-editor" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-16 lg:max-h-[calc(100svh-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
+      <aside ref={panel} id="mm-editor" className="scrollbar-none min-w-0 scroll-mt-16 lg:sticky lg:top-[calc(var(--chrome-top)+4rem)] lg:max-h-[calc(var(--content-h)-4.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-2xl">
         <Editor visitor={visitor} engine={engine} models={models} frameModels={frameModels} preset={preset} values={values} setValues={setValues} onClip={setHasClip} />
       </aside>
       {preset && !panelVisible && (
-        <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 lg:hidden">
+        <div className="fixed inset-x-3 bottom-[max(calc(var(--chrome-bottom)+0.75rem),env(safe-area-inset-bottom))] z-30 lg:hidden">
           <button
             type="button"
             onClick={() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" })}

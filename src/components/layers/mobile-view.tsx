@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DECOMPOSE_COPY, jobStatusText, type LayerDoc, type LayerJob, type LayerProject } from "@/lib/layers";
 import { isFailed, isRunning, latestJob } from "./editor-context";
@@ -60,9 +60,8 @@ export function MobileView({
   const failed = pending && isFailed(pending) ? pending : undefined;
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur">
-        <SidebarTrigger />
+    <div className="flex min-h-content min-w-0 flex-col">
+      <header className="sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur">
         <Button asChild variant="ghost" size="icon-sm" aria-label="All projects">
           <Link href="/layers">
             <ArrowLeft />
@@ -70,6 +69,7 @@ export function MobileView({
         </Button>
         <h1 className="min-w-0 flex-1 truncate font-heading text-[20px]">{project.name}</h1>
         <DownloadMenu doc={doc} name={project.name} jobs={jobs} compact />
+        <PhoneNavButton />
       </header>
       <div className="mx-auto w-full max-w-xl flex-1 space-y-5 px-4 pb-12">
         {!decomposed && !running && !failed ? (

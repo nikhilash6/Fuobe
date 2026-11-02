@@ -1157,11 +1157,11 @@ export function announceAuthChange(): void {
   } catch {}
 }
 
-/** Who used this browser last ("owner", "account" or "guest"): the sidebar's first-paint script reads it (app-sidebar.tsx). */
+/** Who used this browser last ("owner", "account" or "guest"): the app frame's first-paint script reads it (CHROME_STATE_SCRIPT in nav.ts). */
 export const VIEWER_KEY = "fuobe:viewer";
 
 /**
- * Who the next page is for, said before it loads (signing in or out): the sidebar keeps the right row from its first
+ * Who the next page is for, said before it loads (signing in or out): the top bar keeps the right room from its first
  * frame, so its menu doesn't move when the viewer is known.
  */
 export function rememberViewer(kind: "owner" | "account" | "guest"): void {

@@ -177,7 +177,7 @@ export interface HomeFacts {
   apps: number;
   motions: number;
   effects: number;
-  /** Every place to create from the sidebar: Create (but Home) and Studios. */
+  /** Every place to create from the navigation: Create (but Home) and Studios. */
   destinations: number;
   cinemaMoves: number;
   adTemplates: number;
@@ -204,10 +204,10 @@ export const presetHref = (id: string) => (id.startsWith("app-") ? `/apps/${id}`
 const navItems = (label: string) => NAV.find((g) => g.label === label)?.items ?? [];
 const navLabel = (href: string) => [...navItems("Create"), ...navItems("Studios")].find((i) => i.href === href)?.label ?? href;
 
-/** The sidebar's places to create, but Home. */
+/** The navigation's places to create, but Home. */
 export const homeDestinations = () => [...navItems("Create"), ...navItems("Studios")].filter((i) => i.href !== "/");
 
-/** The places to create that have no card or section of their own on Home, in the sidebar's order. */
+/** The places to create that have no card or section of their own on Home, in the navigation's order. */
 export const homePills = () =>
   homeDestinations()
     .filter((i) => !HOME_OWN_SECTIONS.includes(i.href) && !HOME_STUDIOS.some((s) => s.href === i.href))

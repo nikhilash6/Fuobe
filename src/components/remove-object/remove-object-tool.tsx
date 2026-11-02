@@ -328,7 +328,7 @@ export function RemoveObjectTool() {
               </div>
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[112px]">
+            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+112px)]">
               <Field label="How do you point at it?">
                 <Segmented
                   label="How do you point at it?"

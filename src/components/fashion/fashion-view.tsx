@@ -159,7 +159,7 @@ export function FashionView() {
               );
             })}
           </div>
-          <div className="sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
+          <div className="sticky bottom-[calc(var(--chrome-bottom)+0.75rem)] z-10 flex items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
             <p className="min-w-0 truncate text-[13px]">{t ? <span className="font-medium">{t.name}</span> : <span className="text-muted-foreground">Pick a template</span>}</p>
             <Button aria-disabled={!t} className={cn(!t && "opacity-50")} onClick={() => !block(fashionBlocker(s)) && dispatch({ type: "next" })}>
               Continue <ArrowRight />
@@ -292,7 +292,7 @@ function ModelChips({ label, ids, value, onChange }: { label: string; ids: reado
 
 function Footer({ onBack, line, children }: { onBack: () => void; line?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
+    <div className="sticky bottom-[calc(var(--chrome-bottom)+0.75rem)] z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/95 p-3 shadow-normal backdrop-blur">
       <Button variant="outline" onClick={onBack}>
         <ArrowLeft /> Back
       </Button>

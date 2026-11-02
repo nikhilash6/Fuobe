@@ -20,7 +20,7 @@ export function ThanksList({ groups }: { groups: ThanksGroup[] }) {
 
   return (
     <>
-      <div className="sticky top-12 z-10 -mx-4 border-b bg-background/90 px-4 py-2 backdrop-blur sm:-mx-8 sm:px-8 md:top-0">
+      <div className="sticky top-12 z-10 -mx-4 border-b bg-background/90 px-4 py-2 backdrop-blur sm:-mx-8 sm:px-8 md:top-chrome">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
           <label className="relative block min-w-0 lg:w-80 lg:shrink-0">
             <span className="sr-only">Search models, LoRAs, node packs and libraries</span>

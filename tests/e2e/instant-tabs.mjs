@@ -163,7 +163,7 @@ try {
         const answered = frames.find((f) => f.path === sw.to || f.skeleton);
         check(answered && answered.ms <= 120, `neither ${sw.to} nor its skeleton showed within 100 ms (first at ${answered?.ms} ms)`);
         if (settled) {
-          // Once the page has settled every mode is prefetched (ahead of the sidebar's routes): the switch is drawn from the
+          // Once the page has settled every mode is prefetched (ahead of the navigation's routes): the switch is drawn from the
           // client cache, with no request and no skeleton.
           const asked = rsc.slice(before).filter((r) => !r.prefetch);
           check(!asked.length, `the switch waited for the server: ${asked.map((r) => r.url.replace(app, "")).join(", ")}`);
@@ -285,18 +285,27 @@ try {
     await ctx.close();
   }
 
-  if (step("desktop: sidebar Image → Audio never blanks the content area")) {
+  if (step("desktop: Studios launcher Image → Audio never blanks the content area")) {
     const { ctx, page } = await context("desktop");
     await openRoute(page, `${app}/image`, { settleMs: 4000 });
-    const audio = page.locator('[data-sidebar="sidebar"]').getByRole("link", { name: /^Audio$/ }).first();
-    const row = '[data-sidebar="sidebar"] [data-active="true"]';
-    const frames = await sampleSwitch(page, audio, "desktop", { bar: HUB.bar, body: HUB.body, current: row }, (f) => f.path === "/audio" && f.bar && f.body > 0 && !f.skeleton);
+    await page.locator("[data-top-bar]").getByRole("button", { name: /^Studios/ }).click();
+    const audio = page.locator("#studios-launcher").getByRole("link", { name: /^Audio/ }).first();
+    await audio.waitFor();
+    const frames = await sampleSwitch(page, audio, "desktop", { bar: HUB.bar, body: HUB.body, current: HUB.current }, (f) => f.path === "/audio" && f.bar && f.body > 0 && !f.skeleton);
     const blank = frames.filter((f) => f.content === 0);
     check(!blank.length, `the content area was blank in ${blank.length} frame(s), from ${blank[0]?.ms} ms`);
-    const moved = frames.findIndex((f) => f.current === "Audio");
-    check(moved >= 0 && moved <= 1, `the Audio row became the open page's only at frame ${moved} (${frames[moved]?.ms} ms)`);
     const last = frames[frames.length - 1];
     check(last.path === "/audio" && last.bar, `Audio did not land with its tabs (last frame ${JSON.stringify(last)})`);
+    await ctx.close();
+  }
+
+  if (step("desktop: the bar's Library is marked the frame after the click")) {
+    const { ctx, page } = await context("desktop");
+    await openRoute(page, `${app}/image`, { settleMs: 4000 });
+    const library = page.locator("[data-top-bar]").getByRole("link", { name: "Library", exact: true });
+    const frames = await sampleSwitch(page, library, "desktop", { current: '[data-top-bar] a[aria-current="page"]' }, (f) => f.path === "/library");
+    const moved = frames.findIndex((f) => f.current === "Library");
+    check(moved >= 0 && moved <= 1, `Library became the open page's item only at frame ${moved} (${frames[moved]?.ms} ms)`);
     await ctx.close();
   }
 } finally {

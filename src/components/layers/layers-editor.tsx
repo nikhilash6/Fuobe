@@ -66,7 +66,7 @@ const RETRY_MS = [2000, 5000, 15000];
 
 function EditorSkeleton() {
   return (
-    <div className="flex h-svh min-w-0 flex-col overflow-hidden md:h-[calc(100svh-0.5rem)]">
+    <div className="flex h-content min-w-0 flex-col overflow-hidden">
       <div className="flex h-14 items-center gap-3 border-b px-3">
         <Skeleton className="h-6 w-40" />
         <Skeleton className="ml-auto h-8 w-64 rounded-full" />
@@ -661,7 +661,7 @@ function Editor({ view, refetch, models }: { view: LayerProjectView; refetch: ()
 
   return (
     <Ctx.Provider value={ctx}>
-      <div className="flex h-svh min-w-0 flex-col overflow-hidden md:h-[calc(100svh-0.5rem)]">
+      <div className="flex h-content min-w-0 flex-col overflow-hidden">
         <TopBar
           name={view.project.name}
           onRename={(n) => void actions.rename(id, n).catch((e) => toastError(e))}

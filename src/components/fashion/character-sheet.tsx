@@ -2,7 +2,8 @@
 
 import { AtSign, Check, Dices, ImagePlus, Loader2, RotateCcw, Shuffle, Sparkles, UserRoundPlus, X } from "lucide-react";
 import Link from "next/link";
-import { Suspense, useMemo, useRef, useState, type ComponentProps } from "react";
+import { nanoid } from "nanoid";
+import { Suspense, useCallback, useMemo, useRef, useState, type ComponentProps } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
@@ -17,6 +18,7 @@ import { useRun, useRunPreview } from "@/components/photodump/hooks";
 import { ResultsGrid } from "@/components/photodump/results";
 import { RunLine } from "@/components/photodump/steps";
 import { TurnaroundButton } from "@/components/turnaround/turnaround-dialog";
+import { HandoffImage } from "@/components/nav/next-steps";
 import { useElements, useEngine, useGenerations, useLikelyVisitor, useSaveElement } from "@/lib/api";
 import { castFieldVisible, castNameFor, randomCast, SHEET_MAX_REFS, type CastAnswers, type CastFieldData } from "@/lib/catalog/packs";
 import { sheetPictures } from "@/lib/catalog/turnaround";
@@ -206,6 +208,11 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
     if (photos.length + list.length > SHEET_MAX_REFS) toast(`Maximum ${SHEET_MAX_REFS} images`);
     list.slice(0, SHEET_MAX_REFS - photos.length).forEach((f) => fileToList(f, setPhotos, "image"));
   };
+  // A result sent here ("Make a character sheet" under a picture): the first reference photo, From Reference.
+  const takeHandoff = useCallback((url: string) => {
+    setMode("reference");
+    setPhotos((xs) => (xs.some((x) => x.ref === url) ? xs : [{ ref: url, preview: url, kind: "image" as const, id: nanoid(8) }, ...xs].slice(0, SHEET_MAX_REFS)));
+  }, []);
   const create = () => {
     if (visitor) return;
     if (mode === "reference" && !photos.length) return toast("Upload at least 1 image");
@@ -219,6 +226,9 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
 
   return (
     <PageShell wide>
+      <Suspense fallback={null}>
+        <HandoffImage onImage={takeHandoff} />
+      </Suspense>
       <PageHeader title="Character Sheet" description="Build your AI avatar: a consistent character for your videos, from a reference or defined from scratch.">
         <EngineSwitch value={engine} onChange={setEngine} selfHostedOnly />
       </PageHeader>

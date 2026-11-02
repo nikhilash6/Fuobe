@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * prefetch" of Next's prefetching guide). `eager` rows prefetch as soon as they're on screen, like a
  * plain Link: the few routes most visits go to next. `settled` rows prefetch once the page has
  * loaded and the browser is idle, also when scrolled out of view, after the page's own tabs
- * (useIdlePrefetch's "nav" lane): the sidebar gives it to the few rows next to the open page's row.
+ * (useIdlePrefetch's "nav" lane).
  * A page full of these fetches only those routes on a cold visit, not every route behind it.
  */
 export function IntentLink({

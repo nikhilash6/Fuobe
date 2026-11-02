@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useNow } from "@/components/studio/use-now";
@@ -54,10 +54,9 @@ export function ScheduledView({ projectId }: { projectId?: string } = {}) {
   const visitor = useIsVisitor();
 
   return (
-    <div className={cn("flex min-w-0 flex-col", !projectId && "min-h-svh")}>
+    <div className={cn("flex min-w-0 flex-col", !projectId && "min-h-content")}>
       {!projectId && (
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur sm:px-6">
-          <SidebarTrigger className="md:hidden" />
+        <header className="sticky top-chrome z-20 flex h-14 items-center gap-1.5 bg-background/85 px-3 backdrop-blur sm:px-6">
           <RailButton />
           <h1 className="font-heading text-[22px] leading-none">Scheduled</h1>
           {owner && (
@@ -68,6 +67,7 @@ export function ScheduledView({ projectId }: { projectId?: string } = {}) {
               </Button>
             </div>
           )}
+          <PhoneNavButton />
         </header>
       )}
       <div className={cn("w-full max-w-[900px] min-w-0 flex-1 px-3 pb-16 sm:px-6", projectId ? "pt-2" : "pt-4 md:pt-8")}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Box, Loader2, PersonStanding } from "lucide-react";
+import { nanoid } from "nanoid";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -15,6 +16,7 @@ import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
+import { HandoffImage } from "@/components/nav/next-steps";
 import { ExampleRow } from "@/components/studio/example-row";
 import { useCreateGeneration, useEngine, useGenerations, useHydrated, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
@@ -156,6 +158,13 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
     },
     [setEngine],
   );
+  // A picture sent here ("Turn it into 3D" under a result): the photo of From an image, and the front of Several sides.
+  const takeHandoff = useCallback((url: string) => {
+    const slot: SlotValue = { ref: url, preview: url, kind: "image", id: nanoid(8) };
+    setMode((m) => (m === "multi" || m === "text" ? "image" : m));
+    setPhoto((p) => (p?.ref === url ? p : slot));
+    setViews((v) => (v.front ? v : { ...v, front: slot }));
+  }, []);
   // Models switched off in Settings → Models & licences leave the menu, and the pick falls back to one that is on.
   const choices = keepOffered(MODELS_3D[mode][engine], (m) => offered(access, m.id, engine));
   const wanted = picked[`${mode}:${engine}`];
@@ -188,6 +197,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
     <ToolShell title="Image to 3D" selfHostedOnly>
       <Suspense fallback={null}>
         <UrlModel onModel={fromUrl} onMode={setMode} onRig={showRigHint} />
+        <HandoffImage onImage={takeHandoff} />
       </Suspense>
       <ToolHero title="Your product, in 3D" subtitle={HINTS[mode]}>
         {visitor && <SelfHostNote className="mt-3 max-w-xl">Image to 3D isn&apos;t available here.</SelfHostNote>}

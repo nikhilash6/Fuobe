@@ -641,7 +641,7 @@ export function RelightTool({ app }: { app?: { name: string; description: string
         <p className="mt-1 hidden max-w-2xl text-[13px] text-pretty text-muted-foreground sm:block">{SUB}</p>
       </div>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
-        <div className="space-y-2 max-lg:sticky max-lg:top-14 max-lg:z-10 max-lg:-mx-3 max-lg:bg-background/95 max-lg:px-3 max-lg:pb-2 max-lg:backdrop-blur lg:sticky lg:top-20">
+        <div className="space-y-2 max-lg:sticky max-lg:top-[calc(var(--chrome-top)+3.5rem)] max-lg:z-10 max-lg:-mx-3 max-lg:bg-background/95 max-lg:px-3 max-lg:pb-2 max-lg:backdrop-blur lg:sticky lg:top-[calc(var(--chrome-top)+5rem)]">
           <div className="mx-auto w-full max-lg:max-w-[calc(40svh*var(--ar))]" style={{ "--ar": String(pw / Math.max(1, ph)) } as React.CSSProperties}>
             <RelightStage
               photo={img}

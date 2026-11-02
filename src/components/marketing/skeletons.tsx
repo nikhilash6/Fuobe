@@ -11,7 +11,7 @@ import { MarketingHeader, type SuiteTab } from "./shell";
  */
 function MarketingFrame({ title, active, children }: { title: string; active: SuiteTab; children: React.ReactNode }) {
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title={title} active={active} right={<Skeleton className="h-9 w-40 rounded-full max-sm:w-20" />} />
       <div className="flex min-w-0 flex-1 flex-col" aria-busy="true" aria-label="Loading">
         {children}
@@ -57,7 +57,7 @@ export function MarketingSkeleton() {
           ))}
         </div>
       </div>
-      <div className="sticky bottom-0 px-3 pb-3 sm:px-6">
+      <div className="sticky bottom-chrome px-3 pb-3 sm:px-6">
         <Skeleton className="mx-auto h-14 w-full max-w-[860px] rounded-[20px] sm:rounded-composer" />
       </div>
     </MarketingFrame>

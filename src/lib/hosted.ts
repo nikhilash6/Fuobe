@@ -34,7 +34,7 @@ export interface HostedQuote {
   offer?: BillingOffer;
 }
 
-/** The billing service's words for an account's balance (the sidebar chip and its menu). */
+/** The billing service's words for an account's balance (the top bar's chip and the account menu). */
 export interface HostedBalance {
   amount: number;
   chip: string;

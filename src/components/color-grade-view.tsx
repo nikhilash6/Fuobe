@@ -7,7 +7,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { downloadBlob } from "@/components/ads/render";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Slider } from "@/components/ui/slider";
 import { kindOfFile, MAX_MB, MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { uploadFile, useViewer } from "@/lib/api";
@@ -415,14 +415,14 @@ function Grader() {
   const pickFile = (f: File) => open({ url: URL.createObjectURL(f), kind: kindOfFile(f) === "video" ? "video" : "image", file: f });
 
   return (
-    <div className="flex flex-col lg:h-svh">
+    <div className="flex flex-col lg:h-content">
       <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-6">
-        <SidebarTrigger className="md:hidden" />
         <h1 className="font-heading text-[22px] leading-none">Color grading</h1>
         <span className="ml-2 hidden rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-medium text-success sm:inline">Free · runs in your browser</span>
         <div className="ml-auto flex items-center gap-2">
           {input && <MediaSlot label="Replace" kind={input.kind} value={null} onChange={pick} onFile={pickFile} local />}
         </div>
+        <PhoneNavButton />
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3 sm:px-6 lg:flex-row">
         <div
@@ -430,7 +430,7 @@ function Grader() {
           className={cn(
             "relative grid min-h-[40vh] place-items-center overflow-hidden rounded-xl bg-media lg:flex-1",
             // On a phone the picture stays at the top while the looks and sliders scroll under it.
-            input && "max-lg:sticky max-lg:top-0 max-lg:z-10 max-lg:h-[40svh] max-lg:min-h-0",
+            input && "max-lg:sticky max-lg:top-chrome max-lg:z-10 max-lg:h-[40svh] max-lg:min-h-0",
           )}
         >
           {!input ? (

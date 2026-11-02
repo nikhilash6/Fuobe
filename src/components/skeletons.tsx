@@ -3,14 +3,14 @@ import { PageHeader, PageShell } from "@/components/page-shell";
 
 /*
  * Route skeletons (loading.tsx). Server components with no data: they are part of each route's
- * prefetched shell, so a click in the sidebar paints the next page's frame immediately.
+ * prefetched shell, so a click in the menus paints the next page's frame immediately.
  */
 
 /** A studio: sticky title bar, hero line, the pill composer. */
 export function StudioSkeleton() {
   return (
-    <div className="flex min-h-svh min-w-0 flex-col" aria-busy="true" aria-label="Loading">
-      <div className="sticky top-0 z-20 flex h-14 items-center gap-2 bg-background/85 px-3 sm:px-6">
+    <div className="flex min-h-content min-w-0 flex-col" aria-busy="true" aria-label="Loading">
+      <div className="sticky top-chrome z-20 flex h-14 items-center gap-2 bg-background/85 px-3 sm:px-6">
         <Skeleton className="h-6 w-32 rounded-lg" />
         <Skeleton className="ml-auto h-9 w-44 rounded-full" />
       </div>

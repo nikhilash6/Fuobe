@@ -109,7 +109,7 @@ export function AdsHome({ examples }: { examples?: StudioExampleRow }) {
   // A brand is saved to the studio's library, which is its owner's: a guest or an account is told so, not given the form.
   const visitor = useIsVisitor();
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title="Ads Studio" active="ads" engine={engine} onEngine={setEngine} />
       <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-3 pb-20 sm:px-6">
         <section className="mx-auto max-w-[720px] pt-8 text-center sm:pt-14">

@@ -3,7 +3,7 @@
 import { Clapperboard, Copy, LayoutTemplate, MousePointerClick, Target } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine } from "@/lib/api";
 import type { Engine } from "@/lib/catalog/types";
@@ -44,7 +44,7 @@ export function MarketingHeader({
   // (with its own header) replaces this one.
   const [tapped, tap] = useTappedTab<SuiteTab>(active);
   const current = tapped ?? active;
-  // The other tools are the likeliest next tap: their pages go ahead of the sidebar's routes (the "page" lane), so a busy
+  // The other tools are the likeliest next tap: their pages go ahead of the navigation's routes (the "page" lane), so a busy
   // prefetch queue never leaves a tab waiting on the server.
   useIdlePrefetch(
     TABS.filter((t) => t.id !== active).map((t) => t.href),
@@ -58,14 +58,14 @@ export function MarketingHeader({
     if (el.offsetLeft + el.offsetWidth > box.scrollLeft + box.clientWidth || el.offsetLeft < box.scrollLeft) box.scrollLeft = el.offsetLeft - 12;
   }, [active]);
   return (
-    <header className="sticky top-0 z-30 border-b border-transparent bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+    <header className="sticky top-chrome z-30 border-b border-transparent bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="flex h-14 min-w-0 items-center gap-2 px-3 sm:px-6">
-        <SidebarTrigger className="md:hidden" />
         <h1 className="min-w-0 truncate font-heading text-[22px] leading-none">{title}</h1>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {right}
           {engine && onEngine && <EngineSwitch value={engine} onChange={onEngine} selfHostedOnly={selfHostedOnly} />}
         </div>
+        <PhoneNavButton />
       </div>
       <nav ref={nav} aria-label="Marketing tools" className="scrollbar-none -mb-px flex gap-1 overflow-x-auto px-3 sm:px-6">
         {TABS.map((t) => (

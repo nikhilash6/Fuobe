@@ -480,7 +480,7 @@ function SessionView({ s, onBack }: { s: DubSessionView; onBack: () => void }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-        <div className="space-y-3 lg:sticky lg:top-20 lg:self-start">
+        <div className="space-y-3 lg:sticky lg:top-[calc(var(--chrome-top)+5rem)] lg:self-start">
           <div className="overflow-hidden rounded-2xl border bg-media">
             <video ref={video} src={s.video} controls playsInline preload="metadata" onTimeUpdate={(e) => setTime(e.currentTarget.currentTime)} className="max-h-[42vh] w-full object-contain" />
           </div>

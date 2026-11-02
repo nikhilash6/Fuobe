@@ -229,10 +229,10 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   refused for space.
 - **What a visitor sees.** For a guest or an account, `GET /api/status` describes its own GPU
   (`viewer`), with the open engine and no Demo mode. It says nothing about the studio's own
-  ComfyUI, providers, keys or local AI servers. The sidebar shows **Your GPU · Connect** (a guest
-  signs up first), or the account's ComfyUI as online or offline with its GPU and VRAM. At the foot
-  of the sidebar an account sees its email, which opens a menu with Settings, Your GPU (`/connect`)
-  and Sign out.
+  ComfyUI, providers, keys or local AI servers. The account menu (the top bar's right end; the You
+  tab on a phone) shows **Your GPU · Connect** (a guest signs up first), or the account's ComfyUI as
+  online or offline with its GPU and VRAM. An account's menu also shows its email, Settings, Your
+  GPU (`/connect`) and Sign out.
   `GET /api/models` lists the open-source models for a visitor, and the studios price a visitor's
   run as it would go on its own GPU. The studio's own settings page isn't shown to visitors.
 
@@ -296,7 +296,7 @@ With it on:
   Image to 3D, extra LoRAs added to a request, and clips and sound as inputs stay on the account's own GPU.
 - An account can upload pictures for these runs. Clips and sound still need its own GPU or key.
 - A new account goes back to where it was after sign-up, not to "Connect your GPU". Connecting a GPU stays in
-  Settings → Your GPU and at `/connect`; the sidebar says "Your GPU · Optional".
+  Settings → Your GPU and at `/connect`; the account menu says "Your GPU · Optional".
 - A run waiting for the studio's GPUs shows its place in line ("In line · 3rd · about 40 s"). A run may wait
   `FUOBE_POOL_WAIT_MIN` minutes (30 by default); past that it fails.
 - The account's usual limits apply: runs at once, runs per hour, outputs per run, and its space.

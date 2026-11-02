@@ -179,7 +179,7 @@ export interface VisitorView {
    * connecting a GPU of its own is optional.
    */
   hosted?: boolean;
-  /** The billing service's words for the account's balance (billing.ts): the sidebar chip and its menu. */
+  /** The billing service's words for the account's balance (billing.ts): the top bar's chip and the account menu. */
   balance?: Balance;
   /** Extra links the billing service sends for the menu. */
   links?: Action[];

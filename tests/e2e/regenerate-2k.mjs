@@ -63,7 +63,7 @@ try {
       // ---- Upscale → Video, open engine.
       let ctx = await setup(browser, device, theme, "open");
       let page = await ctx.newPage();
-      // (The sidebar's account row hydrates its dev-server Suspense script differently: not this package's.)
+      // (An old dev-server hydration note about the account row: not this package's.)
       page.on("pageerror", (e) => !/Hydration failed[\s\S]*ViewerRowPlaceholder/.test(e.message) && failures.push(`${label} page error: ${e.message.split("\n")[0]}`));
       await openRoute(page, `${app}/upscale/video`);
       const group = page.getByRole("radiogroup", { name: "How to finish the clip" });
@@ -153,7 +153,7 @@ try {
       page = await ctx.newPage();
       await openRoute(page, `${app}/video`);
       // The next steps under the newest result.
-      const chipStep = page.getByRole("navigation", { name: "Next steps" }).first().getByRole("link", { name: "Regenerate in 2K" });
+      const chipStep = page.getByRole("group", { name: /Keep going with this/ }).first().getByRole("link", { name: "Regenerate in 2K" });
       await chipStep.waitFor({ timeout: 30_000 });
       check(await chipStep.isVisible(), `${label}: the next steps offer Regenerate in 2K`);
       const tileOpen = page.getByRole("button", { name: /^Open “A red fox/ }).first();

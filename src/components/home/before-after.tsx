@@ -77,7 +77,7 @@ export function BeforeAfterPicture({ still, zoom, hd, onLoad }: { still: BeforeA
  * has loaded: a browser fetches lazy images well ahead, and on a slow line those would hold up the page's largest
  * paint.
  *
- * From lg to xl (beside the sidebar) the tabs stand in a column next to the picture, in the room it leaves.
+ * From lg to xl the tabs stand in a column next to the picture, in the room it leaves.
  */
 export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
   const [tab, setTab] = useState(0);

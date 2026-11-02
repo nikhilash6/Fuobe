@@ -313,7 +313,7 @@ export function AdMultiplier({ models, examples }: { models: Record<string, Mode
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title="Ad Multiplier" active="multiplier" engine={engine} onEngine={setEngine} />
       <div className="mx-auto w-full min-w-0 max-w-[1180px] flex-1 px-3 pt-6 pb-20 sm:px-6 sm:pt-10">
         <div className="pb-6 text-center">

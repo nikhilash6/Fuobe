@@ -280,7 +280,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title="Click to Ad" active="click" engine={engine} onEngine={setEngine} selfHostedOnly />
       <div className="mx-auto w-full min-w-0 max-w-[980px] flex-1 space-y-5 px-3 pt-6 pb-20 sm:px-6 sm:pt-10">
         <div className="pb-2 text-center">

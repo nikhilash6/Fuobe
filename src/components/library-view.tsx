@@ -797,7 +797,7 @@ function Inner() {
       )}
 
       {(selecting || selected.size > 0) && !uploadsTab && !sharedTab && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:pl-[var(--sidebar-width,0px)]">
+        <div className="pointer-events-none fixed inset-x-0 bottom-chrome z-30 flex justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div role="toolbar" aria-label="Selection" className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full border bg-background p-1.5 shadow-strong">
             {/* Phones show just the count, so every action fits at 390 px. */}
             <span className="shrink-0 px-2.5 text-[13px] font-medium whitespace-nowrap">

@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EngineSwitch } from "@/components/studio/engine-switch";
@@ -150,9 +150,8 @@ export function AssistView() {
   );
 
   return (
-    <div className="flex h-svh min-w-0 flex-col md:h-[calc(100svh-0.5rem)]">
+    <div className="flex h-content min-w-0 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-1.5 px-3 sm:px-6">
-        <SidebarTrigger className="md:hidden" />
         <RailButton />
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {project && (
@@ -193,6 +192,7 @@ export function AssistView() {
           )}
           {thread && <ChatMenu chat={thread} onDeleted={() => go(null)} />}
         </div>
+        <PhoneNavButton />
       </header>
 
       {!id ? (

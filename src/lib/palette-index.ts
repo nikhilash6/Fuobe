@@ -8,6 +8,7 @@ import { enginesOf } from "@/lib/catalog/engines";
 import { OPERATION_LABELS, type ModelDef, type Operation, type Preset } from "@/lib/catalog/types";
 import type { PaletteIndex, PaletteModel, PalettePreset } from "@/lib/command-search";
 import { TOOL_MODELS } from "@/lib/layers";
+import { presetCover } from "@/lib/preset-covers";
 import type { StudioConfig } from "@/components/studio/studio-context";
 import {
   AUDIO_STUDIO,
@@ -94,7 +95,18 @@ export function modelHref(m: ModelDef): string {
   return KIND_HOME[m.kind];
 }
 
-const preset = (p: Preset): PalettePreset => ({ id: p.id, name: p.name, category: p.category, cloud: !!p.cloud, open: !!p.open });
+/** A still at the usual place travels as its version alone (presetThumb, command-search.ts, rebuilds the URL). */
+function coverOf(id: string): string | undefined {
+  const c = presetCover(id);
+  if (!c) return undefined;
+  const usual = new RegExp(`^/previews/presets/${id}\\.jpg\\?v=([0-9a-f]+)$`).exec(c.poster);
+  return usual ? usual[1] : c.poster;
+}
+
+const preset = (p: Preset): PalettePreset => {
+  const cover = coverOf(p.id);
+  return { id: p.id, name: p.name, category: p.category, cloud: !!p.cloud, open: !!p.open, ...(cover && { cover }) };
+};
 
 const model = (m: ModelDef): PaletteModel => ({
   id: m.id,

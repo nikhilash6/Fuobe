@@ -41,8 +41,7 @@ describe("hub tabs never leave the screen during a switch", () => {
     expect(chrome).toMatch(/<HubCtx\.Provider value=\{store\}>/);
     expect(chrome).toMatch(/const slotRef = useCallback\(\(el: HTMLElement \| null\) => store\.set\(el\), \[store\]\);/);
     expect(chrome).toMatch(/<div ref=\{slotRef\} className="contents" \/>/);
-    // The sidebar's context takes the phone's answer in a transition after hydration, for the same reason.
-    expect(src("src/components/ui/sidebar.tsx")).toMatch(/const isMobile = useIsMobileAfterHydration\(\)/);
+    // The phone's answer comes in a transition after hydration, for the same reason.
     expect(src("src/hooks/use-mobile.ts")).toMatch(/React\.startTransition\(read\)/);
   });
 
@@ -108,16 +107,16 @@ describe("other tab bars switch without a round trip", () => {
     expect(lib).not.toMatch(/router\.replace\(/);
   });
 
-  it("the sidebar rows next to the open page's row prefetch once the page is idle; the others on hover, touch or focus", () => {
-    const sidebar = src("src/components/app-sidebar.tsx");
-    expect(sidebar).toMatch(/const NEAR_ROWS = 2;/);
-    expect(sidebar).toMatch(/<IntentLink\s+href=\{item\.href\}\s+eager=\{item\.eager\}\s+settled=\{here >= 0 && i !== here && Math\.abs\(i - here\) <= NEAR_ROWS\}\s/);
-    // The clicked row is the open page's row from the next frame on, in every group; the address takes over once it moves.
-    expect(sidebar).toMatch(/onClick=\{\(e\) => isPlainClick\(e\) && setTappedRow\(item\.href\)\}/);
-    expect(sidebar).toMatch(/useLayoutEffect\(\(\) => setTappedRow\(null\), \[pathname, search\]\);/);
-    expect(sidebar).toMatch(/const active = navActive\(item\.href, at, where, hrefs\);/);
+  it("the bar's routes prefetch on hover, touch or focus, a panel's when it opens, after the page's own tabs; a clicked bar link is marked at once", () => {
+    const bar = src("src/components/nav/top-bar.tsx");
+    // The clicked link is the open page's item from the next frame on; the address takes over once it moves.
+    expect(bar).toMatch(/const \[tapped, onTap\] = useTappedTab<string>\(pathname\);/);
+    expect(bar).toMatch(/active=\{barActive\(tapped \?\? pathname\)\}/);
+    expect(bar).toMatch(/isPlainClick\(e\) && onTap\?\.\(href\)/);
+    // A panel's routes (the launcher, Create, More, a phone sheet) wait in the "nav" lane, behind the page's own tabs.
+    expect(src("src/components/nav/nav-prefetch.tsx")).toMatch(/queueIdlePrefetch\("nav", href, \(\) => go\(href\)\)/);
     const link = src("src/components/intent-link.tsx");
-    // Also the rows scrolled out of view, in the "nav" lane (after the page's own tabs), not the Link's viewport prefetch.
+    // A settled link prefetches also when scrolled out of view, in the "nav" lane (after the page's own tabs), not the Link's viewport prefetch.
     expect(link).toMatch(/useIdlePrefetch\(settled && href \? \[href\] : null, "nav"\);/);
     expect(link).toMatch(/prefetch=\{eager \|\| intent \? null : false\}/);
   });
@@ -129,7 +128,7 @@ describe("other tab bars switch without a round trip", () => {
     const marketing = src("src/components/marketing/shell.tsx");
     expect(marketing).toMatch(/useTappedTab<SuiteTab>\(active\)/);
     expect(marketing).toMatch(/aria-current=\{t\.id === current \? "page" : undefined\}/);
-    // The other tools' pages go ahead of the sidebar's routes.
+    // The other tools' pages go ahead of the navigation's routes.
     expect(marketing).toMatch(/useIdlePrefetch\(\s*TABS\.filter\(\(t\) => t\.id !== active\)\.map\(\(t\) => t\.href\),\s*"page",?\s*\)/);
   });
 
@@ -170,7 +169,7 @@ describe("other tab bars switch without a round trip", () => {
   });
 });
 
-describe("idle prefetches: the page's own tabs go before the sidebar's routes", () => {
+describe("idle prefetches: the page's own tabs go before the navigation's routes", () => {
   let clock = 0;
   let idle: (() => void)[] = [];
   let observed: ((list: { getEntries(): unknown[] }) => void) | null = null;
@@ -219,7 +218,7 @@ describe("idle prefetches: the page's own tabs go before the sidebar's routes", 
     vi.resetModules();
   });
 
-  it("issues the page's tabs first, and the sidebar's rows once the server has answered every tab and gone quiet", async () => {
+  it("issues the page's tabs first, and the navigation's routes once the server has answered every tab and gone quiet", async () => {
     const { queueIdlePrefetch } = await load();
     queueIdlePrefetch("nav", "/image", () => order.push("row image"));
     queueIdlePrefetch("page", "/audio/music", () => order.push("tab music"));
@@ -245,7 +244,7 @@ describe("idle prefetches: the page's own tabs go before the sidebar's routes", 
     expect(order.at(-1)).toBe("tab loop");
   });
 
-  it("lets the sidebar's rows go after 8 s at the latest", async () => {
+  it("lets the navigation's routes go after 8 s at the latest", async () => {
     const { queueIdlePrefetch } = await load();
     queueIdlePrefetch("page", "/audio/music", () => order.push("tab music"));
     queueIdlePrefetch("nav", "/image", () => order.push("row image"));
@@ -256,7 +255,7 @@ describe("idle prefetches: the page's own tabs go before the sidebar's routes", 
     expect(order).toEqual(["tab music", "row image"]);
   });
 
-  it("with no tabs on the page, prefetches the sidebar's rows once the page's own prefetches have gone quiet", async () => {
+  it("with no tabs on the page, prefetches the navigation's routes once the page's own prefetches have gone quiet", async () => {
     const { queueIdlePrefetch } = await load();
     queueIdlePrefetch("nav", "/image", () => order.push("row image"));
     idle[0]();
@@ -269,7 +268,7 @@ describe("idle prefetches: the page's own tabs go before the sidebar's routes", 
     expect(order).toEqual(["row image"]);
   });
 
-  it("drops the sidebar's idle prefetches for someone who asked to save data, never the page's own tabs", async () => {
+  it("drops the navigation's idle prefetches for someone who asked to save data, never the page's own tabs", async () => {
     const { queueIdlePrefetch } = await load();
     vi.stubGlobal("navigator", { connection: { saveData: true } });
     queueIdlePrefetch("nav", "/image", () => order.push("row image"));

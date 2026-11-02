@@ -748,15 +748,15 @@ describe("copyText", () => {
 });
 
 describe("landmarks", () => {
-  it("leaves one <main> per page: the app frame's inset sheet", () => {
-    // Pages render inside StudioChrome, whose SidebarInset is the <main>; a second one inside it
+  it("leaves one <main> per page: the app frame's", () => {
+    // Pages render inside StudioChrome, whose <main id="content"> holds them; a second one inside it
     // would give screen readers two main landmarks.
     const files = (dir: string): string[] =>
       fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name)) : e.name.endsWith(".tsx") ? [path.join(dir, e.name)] : []));
     const root = path.resolve(__dirname, "../src");
     const mains = [...files(path.join(root, "components")), ...files(path.join(root, "app/(studio)"))]
       .filter((f) => /<main[\s>]/.test(fs.readFileSync(f, "utf8")))
-      .map((f) => path.relative(root, f));
-    expect(mains).toEqual(["components/ui/sidebar.tsx"]);
+      .map((f) => path.relative(root, f).split(path.sep).join("/"));
+    expect(mains).toEqual(["components/nav/studio-chrome.tsx"]);
   });
 });

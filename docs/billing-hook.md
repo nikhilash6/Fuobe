@@ -6,7 +6,7 @@ the person sees and whether the run may start. With no service set, every run is
 call at all.
 
 Fuobe has no words of its own for prices or balances. Every word on screen about them (the price on Run, the balance in
-the sidebar, a refusal's text, a link, an offer) comes from the service's answers at runtime.
+the top bar and the account menu, a refusal's text, a link, an offer) comes from the service's answers at runtime.
 
 ## Settings
 
@@ -31,7 +31,7 @@ twice: the service must treat a repeated call (the same `requestId`, or the same
 | `POST /v1/release` | 5 s, through the outbox | the rows couldn't be made after a reserve |
 | `POST /v1/settle` | 5 s, through the outbox | each row that succeeded |
 | `POST /v1/refund` | 5 s, through the outbox | each row that failed, was stopped, or was removed by an output check |
-| `GET /v1/balance?account=<id>` | 1 s | the sidebar's balance chip (cached 10 s) |
+| `GET /v1/balance?account=<id>` | 1 s | the balance pill and the account menu's balance (cached 10 s) |
 | `POST /v1/account-event` | 5 s, best effort | an account was made, verified, signed in or deleted |
 | `POST /v1/interest` | 5 s | a person pressed an offer's button |
 

@@ -21,6 +21,7 @@ import { ACTION_ICONS, downloadUrl, SaveElementForm, useActionRunner } from "./r
 import { LayersStack, ModelViewer, TextReader, VideoFileCard } from "./result-media";
 import { ReviewSelect } from "@/components/library/review";
 import { PlaceholderChip } from "@/components/demo-mode";
+import { NextSteps } from "@/components/nav/next-steps";
 
 
 /** One line of the details; `center` lines the label up with a control (the Review picker) instead of a text value's first line. */
@@ -391,6 +392,8 @@ export function Viewer({
           </div>
           <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-4">
             <Details g={g} index={index} />
+            {/* Where this result can go next, with it attached (a layer is a part: it goes on from the Layers editor). */}
+            {!layered && <NextSteps g={g} index={index} variant="list" max={5} onNavigate={onClose} />}
             {layered && (
               <LayerList
                 g={g}
@@ -453,6 +456,8 @@ export function Viewer({
               <SheetDescription className="sr-only">Every action and the details of this result</SheetDescription>
             </SheetHeader>
             <div className="space-y-4 overflow-y-auto px-4">
+              {/* The next steps first: on a phone this sheet is where they are. */}
+              {!layered && <NextSteps g={g} index={index} variant="list" max={5} onNavigate={onClose} />}
               <div className="grid grid-cols-2 gap-2">
                 {source && (
                   <Button variant="secondary" size="sm" aria-pressed={comparing} onClick={() => (setComparing((v) => !v), setDrawer(false))}>

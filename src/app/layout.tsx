@@ -26,6 +26,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  // The page runs under the notch and home indicator; the bars pad themselves with the safe-area insets.
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#121213" },

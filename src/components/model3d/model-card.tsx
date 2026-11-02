@@ -14,7 +14,17 @@ import { toastError } from "@/lib/refusals";
 import { loadModelViewer, TURNTABLE_BACKDROP, useViewerSrc, viewerLook } from "./model-viewer";
 import { RigDialog } from "./rig-dialog";
 import { PlaceholderChip } from "@/components/demo-mode";
+import { NextSteps } from "@/components/nav/next-steps";
 import { recordableType, recordTurntable } from "./turntable";
+
+/**
+ * Left out of the card's next steps: its own Animate the spin button is that step (and knows a turntable recorded
+ * here), and a rigged character has none.
+ */
+const SPIN_STEPS = ["animate-spin"] as const;
+
+/** The model file among a result's outputs (its turntable and poster ride along as other outputs); -1 without one. */
+const modelAt = (g: Generation) => g.outputs.findIndex((o) => o.kind === "model3d");
 
 /** Downloads besides the main file, by the name the provider gave them. */
 const FORMAT_LABEL: Record<string, string> = { rigged: "Rigged .glb", walking: "Walk .glb", running: "Run .glb", fbx: ".fbx", splat: "Splat" };
@@ -350,6 +360,8 @@ export function ModelCard({ g, cloudAllowed }: { g: Generation; cloudAllowed: bo
             </Button>
           )}
         </div>
+        {/* Where the model goes next: an ad, a sharper still (its own Animate the spin button is above). */}
+        {modelAt(g) >= 0 && <NextSteps g={g} index={modelAt(g)} variant="row" max={3} skip={SPIN_STEPS} className="pt-1" />}
       </div>
       {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} />}
     </article>

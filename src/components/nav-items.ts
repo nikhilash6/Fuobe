@@ -1,50 +1,6 @@
-import {
-  AtSign,
-  AudioLines,
-  Box,
-  Brush,
-  Camera,
-  Clapperboard,
-  Drama,
-  Crop,
-  Factory,
-  FastForward,
-  Film,
-  GalleryHorizontal,
-  Home,
-  ImageIcon,
-  Images,
-  Layers,
-  Layers2,
-  LayoutGrid,
-  Library,
-  Megaphone,
-  MessageCircle,
-  Mic2,
-  Network,
-  PersonStanding,
-  Presentation,
-  Scissors,
-  Settings,
-  Shapes,
-  Shirt,
-  SlidersHorizontal,
-  Smartphone,
-  Sparkles,
-  Star,
-  Swords,
-  Target,
-  TrendingUp,
-  Tv,
-  UserRoundCog,
-  UserRoundPen,
-  Video,
-  Wand2,
-  WandSparkles,
-  Zap,
-  ZoomIn,
-  type LucideIcon,
-} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { navIcon } from "@/lib/nav-icons";
+import { entry, type NavEntry } from "@/lib/nav-model";
 
 export interface NavItem {
   href: string;
@@ -54,83 +10,84 @@ export interface NavItem {
   short?: string;
   /** Prefetched as soon as it's on screen (the rows most visits start from); the others wait for a hover or touch. */
   eager?: boolean;
-  /** More words the ⌘K palette matches ("tts" finds Audio). */
+  /** More words search matches ("tts" finds Audio). */
   keywords?: string;
 }
 
 export interface NavGroupDef {
   label: string;
   items: NavItem[];
-  /** Can be folded away; the choice is remembered (see DEFAULT_NAV_CLOSED). */
+  /** Can be folded away. */
   collapsible?: boolean;
   /** Two small items per row. */
   compact?: boolean;
 }
 
-/** The sidebar, and the destinations of the ⌘K palette. Add a destination with one line in the right group. */
-export const NAV: NavGroupDef[] = [
+/**
+ * The places to create, the library, the studios and settings as four groups, in a fixed order (Home's
+ * showcase reads Create and Studios). Labels, links and search words come from the navigation model
+ * (src/lib/nav-model.ts); only the grouping and the order are kept here.
+ */
+const GROUPS: { label: string; ids: string[]; collapsible?: boolean }[] = [
   {
     label: "Create",
-    items: [
-      { href: "/", label: "Home", icon: Home, eager: true, keywords: "start new creation" },
-      { href: "/assist", label: "Assist", icon: MessageCircle, eager: true, keywords: "agent chat plan" },
-      { href: "/image", label: "Image", icon: ImageIcon, eager: true, keywords: "text to image picture photo" },
-      { href: "/video", label: "Video", icon: Video, eager: true, keywords: "text to video image to video animate" },
-      { href: "/edit", label: "Edit", icon: Wand2, keywords: "edit image change" },
-      { href: "/live-edit", label: "Live edit", icon: Zap, keywords: "realtime live as you type instant change" },
-      { href: "/layers", label: "Layers", icon: Layers2, keywords: "layered psd split" },
-      { href: "/inpaint", label: "Inpaint", icon: Brush, keywords: "mask fill remove" },
-      { href: "/color-grade", label: "Color grading", icon: SlidersHorizontal, keywords: "grade lut colour" },
-      { href: "/motions", label: "Camera motions", icon: Film, keywords: "camera moves presets" },
-      { href: "/effects", label: "Effects", icon: Sparkles, keywords: "vfx presets" },
-      { href: "/storyboard", label: "Storyboard", icon: GalleryHorizontal, keywords: "frames story" },
-      { href: "/canvas", label: "Canvas", icon: Network, keywords: "nodes flow workflow" },
-      { href: "/apps", label: "Apps", icon: LayoutGrid, keywords: "one-click tools" },
-    ],
+    ids: ["home", "assist", "image", "video", "edit", "live-edit", "layers", "inpaint", "color-grade", "motions", "effects", "storyboard", "canvas", "apps"],
   },
-  {
-    label: "Library",
-    items: [
-      { href: "/library", label: "All creations", icon: Library, eager: true, keywords: "library history results" },
-      { href: "/library?tab=favorites", label: "Favorites", icon: Star, keywords: "starred liked" },
-    ],
-  },
+  { label: "Library", ids: ["library", "favorites"] },
   {
     label: "Studios",
-    items: [
-      { href: "/cinema", label: "Cinema Studio", icon: Clapperboard, keywords: "film director shots" },
-      { href: "/shorts", label: "Shorts Studio", icon: Smartphone, keywords: "vertical reels tiktok" },
-      { href: "/mixed-media", label: "Mixed Media", icon: Shapes, keywords: "collage" },
-      { href: "/marketing", label: "Marketing Studio", icon: Megaphone, keywords: "ugc product ads" },
-      { href: "/ads", label: "Ads Studio", icon: Target, keywords: "brand campaign" },
-      { href: "/moodboards", label: "Moodboards", icon: Images, keywords: "style references" },
-      { href: "/photodump", label: "Photodump", icon: Camera, keywords: "photo pack character" },
-      { href: "/fashion-factory", label: "Fashion Factory", icon: Shirt, keywords: "outfits try-on lookbook" },
-      { href: "/character-sheet", label: "Character Sheet", icon: UserRoundCog, keywords: "turnaround" },
-      { href: "/influencer", label: "AI Influencer", icon: UserRoundPen, keywords: "character builder avatar creature shuffle" },
-      { href: "/faceless", label: "Faceless Studio", icon: Tv, keywords: "youtube channel episodes" },
-      { href: "/content-factory", label: "Content Factory", icon: Factory, keywords: "series reference brief episodes" },
-      { href: "/explainer", label: "Explainer", icon: Presentation, keywords: "slides pdf video" },
-      { href: "/lipsync", label: "Lipsync & avatars", icon: Mic2, keywords: "talking avatar" },
-      { href: "/genjutsu", label: "Genjutsu", icon: WandSparkles, keywords: "swap insert character motion transfer" },
-      { href: "/character-swap", label: "Character Swap Studio", short: "Character swap", icon: Drama, keywords: "h3 akatz swap character whole clip shots segments takes" },
-      { href: "/motion-control", label: "Motion control", icon: PersonStanding, keywords: "pose dance transfer" },
-      { href: "/video-edit", label: "Edit video", icon: Scissors, keywords: "video edit restyle" },
-      { href: "/extend", label: "Extend video", icon: FastForward, keywords: "longer continue" },
-      { href: "/reframe", label: "Reframe", icon: Crop, keywords: "aspect ratio outpaint" },
-      { href: "/video-tools", label: "Video tools", icon: Layers, keywords: "join trim matte depth captions evolution remove object restore colourise colorize archive old footage black and white" },
-      { href: "/elements", label: "Elements", icon: AtSign, keywords: "characters places props" },
-      { href: "/upscale", label: "Upscale", icon: ZoomIn, keywords: "enhance resolution 4k" },
-      { href: "/audio", label: "Audio", icon: AudioLines, keywords: "voice tts music sfx dub transcribe" },
-      { href: "/katana", label: "Katana", icon: Swords, keywords: "cut edit clips" },
-      { href: "/image-to-3d", label: "Image to 3D", icon: Box, keywords: "3d mesh glb" },
-      { href: "/virality", label: "Hook check", icon: TrendingUp, keywords: "virality predictor hook score" },
+    ids: [
+      "cinema",
+      "shorts",
+      "mixed-media",
+      "marketing",
+      "ads",
+      "moodboards",
+      "photodump",
+      "fashion-factory",
+      "character-sheet",
+      "influencer",
+      "faceless",
+      "content-factory",
+      "explainer",
+      "lipsync",
+      "genjutsu",
+      "character-swap",
+      "motion-control",
+      "video-edit",
+      "extend",
+      "reframe",
+      "video-tools",
+      "elements",
+      "upscale",
+      "audio",
+      "katana",
+      "image-to-3d",
+      "virality",
     ],
     collapsible: true,
   },
-  {
-    label: "More",
-    items: [{ href: "/settings", label: "Settings", icon: Settings, keywords: "account gpu preferences" }],
-    collapsible: true,
-  },
+  { label: "More", ids: ["settings"], collapsible: true },
 ];
+
+/** A shorter label where a row is narrow ("Character swap"); the phone tiles use the model's own `short`. */
+const ROW_SHORT: Record<string, string> = { "character-swap": "Character swap" };
+
+const item = (e: NavEntry): NavItem => ({
+  href: e.href,
+  label: e.label,
+  icon: navIcon(e.icon),
+  ...(ROW_SHORT[e.id] && { short: ROW_SHORT[e.id] }),
+  ...(e.eager && { eager: true }),
+  keywords: e.keywords,
+});
+
+export const NAV: NavGroupDef[] = GROUPS.map((g) => ({
+  label: g.label,
+  items: g.ids.map((id) => {
+    const e = entry(id);
+    if (!e) throw new Error(`The navigation model has no ${id}`);
+    return item(e);
+  }),
+  ...(g.collapsible && { collapsible: true }),
+}));

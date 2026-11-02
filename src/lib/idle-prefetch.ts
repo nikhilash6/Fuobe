@@ -23,7 +23,7 @@ export function whenIdle(fn: () => void): () => void {
 }
 
 /**
- * Who asked for an idle prefetch: `nav` = the app's own navigation (the sidebar's rows), `page` = the page's own tabs (a
+ * Who asked for an idle prefetch: `nav` = the app's own navigation (the routes the bar's panels lead to), `page` = the page's own tabs (a
  * hub's modes), the likeliest next tap, which go first.
  */
 export type PrefetchLane = "nav" | "page";
@@ -89,8 +89,8 @@ function flush() {
   lanes.page.clear();
   lanes.nav.clear();
   for (const job of page) job.run();
-  // Next serves a prefetch's route tree and shell (the sidebar's forty-odd routes) before any route's URL-specific part (a
-  // hub mode's own page, a tab's page), so the sidebar's rows go out only once the page's own tabs are in and the page's
+  // Next serves a prefetch's route tree and shell (the navigation's forty-odd routes) before any route's URL-specific part (a
+  // hub mode's own page, a tab's page), so the navigation's routes go out only once the page's own tabs are in and the page's
   // own prefetches (its links on screen) have gone quiet.
   if (nav.length) afterPrefetched(page.map((job) => job.href), () => nav.forEach((job) => job.run()));
 }
@@ -120,7 +120,7 @@ export function prefetchOptions(full: boolean, onInvalidate?: () => void): Prefe
 
 /**
  * Prefetches `hrefs` once the page has loaded and the browser is idle, also links that are off screen (scrolled out of a
- * phone's tab row, below the sidebar's fold), and again whenever Next says the prefetched copy went stale. A tap then
+ * phone's tab row, below the fold), and again whenever Next says the prefetched copy went stale. A tap then
  * renders from the client cache instead of waiting a round trip.
  */
 export function useIdlePrefetch(hrefs: readonly string[] | null, lane: PrefetchLane, full = false): void {

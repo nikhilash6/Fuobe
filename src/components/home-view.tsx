@@ -117,7 +117,7 @@ function FirstRunScript() {
 }
 
 /**
- * "New creation" (the sidebar, ⌘K) opens Home with ?new=1: the composer starts empty and takes the
+ * "New creation" (the top bar, the Create sheet) opens Home with ?new=1: the composer starts empty and takes the
  * focus, and the flag leaves the address. It reads the URL, so it sits under Suspense.
  */
 function NewCreation({ onNew }: { onNew: () => void }) {
@@ -139,6 +139,7 @@ export function HomeView({
   openModels,
   chips,
   assist,
+  goals,
   wall,
   children,
   prices,
@@ -149,6 +150,8 @@ export function HomeView({
   chips: readonly TryChip[];
   /** The chip that opens Assist with a job typed in: the owner's, in place of the last Try chip. */
   assist: { label: string; href: string };
+  /** The goal row (each goal opens a band of its studios, one-tap presets and tools), right under the composer. */
+  goals?: React.ReactNode;
   wall: React.ReactNode;
   children: React.ReactNode;
   /** What a first paid image and clip cost, for the first-run guide. */
@@ -390,20 +393,7 @@ export function HomeView({
             </IntentLink>
           )}
         </div>
-        {guide ? (
-          <>
-            <FirstRunScript />
-            <GetStarted
-              className={cn("mt-6 max-w-[960px]", !status && "hidden [html[data-first-run='1']_&]:block")}
-              status={status}
-              prices={prices}
-              onMode={(id) => {
-                setMode(MODES.find((m) => m.id === id) ?? MODES[0]);
-                focusComposer();
-              }}
-            />
-          </>
-        ) : nothingConnected && !status?.viewer && (
+        {!guide && nothingConnected && !status?.viewer && (
           <p className="mt-4 text-[13px] text-muted-foreground">
             {/* Placeholders on (Settings, for a tour): say so; otherwise a run asks for a GPU or a key. */}
             {placeholdersOn(status?.demoMode) ? (
@@ -426,6 +416,26 @@ export function HomeView({
           </p>
         )}
       </div>
+
+      {/* The goals sit right under the hero for everyone; the owner's first-run guide follows them (without its own
+          "What do you want to do?" chips, which the goals already are). */}
+      {goals}
+
+      {guide && (
+        <div className="flex flex-col items-center">
+          <FirstRunScript />
+          <GetStarted
+            className={cn("mt-6 max-w-[960px]", !status && "hidden [html[data-first-run='1']_&]:block")}
+            status={status}
+            prices={prices}
+            intents={!goals}
+            onMode={(id) => {
+              setMode(MODES.find((m) => m.id === id) ?? MODES[0]);
+              focusComposer();
+            }}
+          />
+        </div>
+      )}
 
       {wall}
 

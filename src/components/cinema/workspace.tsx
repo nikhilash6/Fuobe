@@ -11,7 +11,7 @@ import { ErrorState, NotFoundState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { EngineSwitch } from "@/components/studio/engine-switch";
@@ -152,7 +152,7 @@ export function CinemaWorkspace({ id }: { id: string }) {
   const items = useCinemaItems(id);
   if (project.isLoading)
     return (
-      <div className="flex h-svh flex-col">
+      <div className="flex h-content flex-col">
         <div className="flex h-14 items-center gap-3 border-b px-4">
           <Skeleton className="h-6 w-48" />
         </div>
@@ -426,9 +426,8 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
   const builderProps = { projectId: id, folderId, engine, settings, context, brief: project.brief.body };
 
   return (
-    <div className="flex h-svh min-w-0 flex-col md:h-[calc(100svh-0.5rem)]">
+    <div className="flex h-content min-w-0 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-1.5 border-b px-2 sm:gap-2 sm:px-4">
-        <SidebarTrigger className="md:hidden" />
         <Tooltip>
           <TooltipTrigger asChild>
             <Link href="/cinema" className="hidden size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground sm:grid" aria-label="All projects">
@@ -529,6 +528,7 @@ function Workspace({ data, items, loading }: { data: ProjectView; items: CinemaG
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <PhoneNavButton />
       </header>
 
       <div className="flex min-h-0 flex-1">

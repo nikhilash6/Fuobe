@@ -397,7 +397,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   };
 
   return (
-    <div className="flex min-h-svh min-w-0 flex-col">
+    <div className="flex min-h-content min-w-0 flex-col">
       <MarketingHeader title="Marketing Studio" active="studio" engine={engine} onEngine={setEngine} selfHostedOnly />
       <Suspense fallback={null}>
         <UrlParams onTemplate={pickTemplate} onTab={setTab} />
@@ -449,7 +449,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       </div>
 
       {/* Docked composer */}
-      <div className="sticky bottom-0 z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
+      <div className="sticky bottom-chrome z-20 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-8 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
         <div
           ref={composer}
           data-slim={slim || undefined}

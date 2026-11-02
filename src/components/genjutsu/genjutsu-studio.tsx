@@ -641,7 +641,7 @@ export function GenjutsuStudio({ examples }: { examples?: StudioExampleRow }) {
               )}
             </div>
 
-            <Panel className="space-y-4 lg:sticky lg:top-[112px]">
+            <Panel className="space-y-4 lg:sticky lg:top-[calc(var(--chrome-top)+112px)]">
               <p className="text-[13px] text-pretty text-muted-foreground">{modeInfo.hint}</p>
 
               {MODE_TARGETS[mode].length > 0 && (
