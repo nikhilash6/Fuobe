@@ -206,6 +206,8 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       folders: uniq(p.folders ?? []),
       isolated: !!p.isolated,
       ...(p.subdir && { subdir: p.subdir }),
+      // One node file in a model repo (viggle_turbo): downloaded, not cloned.
+      ...(p.file && { file: p.file }),
       requirementsTxt: !!p.requirementsTxt,
       install: p.registry?.version ? 'registry' : 'manual',
     };

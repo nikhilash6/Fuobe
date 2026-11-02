@@ -445,9 +445,12 @@ export const APPS: Preset[] = [
   app({
     name: "Relight",
     category: "Camera",
-    description: "Change the lighting of any photo",
+    description: "Place coloured lights on your photo and watch them land",
     icon: "Lamp",
     hue: 50,
+    // Its page is its own tool (tap to place lights, a live preview, Generate lighting, an Intensity blend:
+    // src/components/relight). The options and words below stay for the composer route the planner and Canvas use.
+    tool: "relight",
     options: [
       opt("light", "Lighting", [
         ["Golden hour", "warm golden hour sunlight"],

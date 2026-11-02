@@ -1,0 +1,110 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "input.png"
+    },
+    "_meta": {
+      "title": "Photo"
+    }
+  },
+  "2": {
+    "class_type": "LoadDA3Model",
+    "inputs": {
+      "model_name": "depth_anything_3_mono_large.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {}
+  },
+  "3": {
+    "class_type": "DA3Inference",
+    "inputs": {
+      "da3_model": [
+        "2",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "resolution": 504,
+      "resize_method": "lower_bound_resize",
+      "mode": "mono"
+    },
+    "_meta": {}
+  },
+  "4": {
+    "class_type": "DA3Render",
+    "inputs": {
+      "da3_geometry": [
+        "3",
+        0
+      ],
+      "output": "depth",
+      "output.normalization": "v2_style",
+      "output.apply_sky_clip": false
+    },
+    "_meta": {
+      "title": "Depth (near = bright)"
+    }
+  },
+  "5": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "4",
+        0
+      ],
+      "filename_prefix": "fuobe/relight-scene-depth"
+    },
+    "_meta": {
+      "title": "Save depth"
+    }
+  },
+  "6": {
+    "class_type": "LoadBackgroundRemovalModel",
+    "inputs": {
+      "bg_removal_name": "birefnet.safetensors"
+    },
+    "_meta": {}
+  },
+  "7": {
+    "class_type": "RemoveBackground",
+    "inputs": {
+      "bg_removal_model": [
+        "6",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ]
+    },
+    "_meta": {}
+  },
+  "8": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "7",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Matte"
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "fuobe/relight-scene-matte"
+    },
+    "_meta": {
+      "title": "Save matte"
+    }
+  }
+}

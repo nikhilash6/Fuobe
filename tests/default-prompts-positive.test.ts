@@ -7,6 +7,7 @@ import { customPack, getPack, SHEET_PROMPT, shotPrompt } from "@/lib/catalog/pac
 import { SHEET_FRONT_PROMPT } from "@/lib/catalog/turnaround";
 import type { Preset } from "@/lib/catalog/types";
 import { ENHANCE_LOOKS, enhancePrompt, RELIGHT_DIRECTIONS, RELIGHT_LIGHTS, relightPrompt } from "@/lib/layers";
+import { LOOKS, lightsOfLook, relightPrompt as lightsPrompt } from "@/lib/relight/lights";
 
 // Default prompts name only what is wanted: an unwanted thing, even negated ("no text", "without a cut"), tends to
 // show up in the picture or the clip.
@@ -73,5 +74,13 @@ describe("default prompts name only what is wanted", () => {
     expect(relightWords("soft natural window light")).toBe(
       "Relight <image1>: soft natural window light. Keep every person, face, pose, object, the setting and the framing exactly as in <image1>, same film grain.",
     );
+  });
+
+  it("the Relight tool's words, written from the placed lights (every look)", () => {
+    for (const look of LOOKS) {
+      expect(lightsPrompt(lightsOfLook(look)), look.id).not.toMatch(NEGATION);
+      expect(lightsPrompt(lightsOfLook(look), "shared"), look.id).not.toMatch(NEGATION);
+    }
+    expect(lightsPrompt(lightsOfLook(LOOKS[0]))).toMatch(/The scene is in darkness, lit only by these lights/);
   });
 });

@@ -10911,6 +10911,150 @@
       "notes": "The Qwen-Image 2.1 turbo image-edit workflow, as the site's fast preview edits run it: turbo int8 model, the fixed 8-step ManualSigmas schedule, KSamplerSelect euler, CFGGuider cfg 1, RandomNoise, SamplerCustomAdvanced on the encoder's latent; references as qwen-image-21-edit (2048 lanczos, resolution 0, up to 4, optional ones dropped). No steps binding: the sigmas are the schedule. Removed: the prompt enhancer branch (Qwen3.5 9B PE model, off in the workflow), the custom-size switch, compare and notes. In a blind test it matched 25 steps (21 vs 22 of 48 outfit edits) and was weaker only on hard camera turns and product rotations (use qwen-image-21-edit there)."
     },
     {
+      "id": "qwen-image-21-relight",
+      "title": "Relight with placed lights: Qwen-Image 2.1 + Viggle 6-step speed LoRA, the photo plus words written from the lights (viggle_turbo)",
+      "capability": "edit",
+      "file": "qwen-image-21-relight.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-relight.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "image2": [
+          {
+            "node": "11",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "70",
+            "input": "noise_seed"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {},
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors",
+          "sizeGb": 1.36
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "viggle_turbo",
+          "repo": "https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo/resolve/009a44a895ef85f7e643c80fdca9543795248867/comfyui/viggle_turbo.py"
+        }
+      ],
+      "vramGb": 24,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1 and Viggle's turbo LoRA, a derivative): NON-COMMERCIAL, research and evaluation only; the viggle_turbo node file ships in the same model repo under the same terms",
+      "validated": false,
+      "notes": "Built from Viggle's ComfyUI edit workflow (Viggle/Qwen-Image-2.1-viggle-turbo, comfyui/) with one reference: the int8 Qwen-Image 2.1 model, the v0.2.1 6-step LoRA (r256) on ViggleTurboLora at 1.0 (applied unmerged; it reads lora_alpha / r from the file's metadata), QwenImage21Cache auto, TextEncodeQwenImage21 at resolution 1024 (about 1 MP, sides on the 32 grid), positive only, BasicGuider (no CFG), euler, ViggleTurboSigmas \"1.0, 0.9375, 0.875, 0.75, 0.5, 0.25\" (the raw nodes, shifted for the latent's size), RandomNoise, SamplerCustomAdvanced, VAEDecode. The words come from the placed lights (\"Relight the photo with a strong sunset orange light coming from the left, at face height, far away. The scene is in darkness, lit only by these lights …\"), so the result is lit only by them and the page blends it with the original (Intensity). Image 2 is an optional light-guide picture (the rig drawn over the darkened photo), dropped when not given. The seed comes from the photo, so moving one light changes only that light. A Pruna 8-step v0.1 LoRA in its place must also load through ViggleTurboLora at 1.0: its x2 strength is only in the metadata, so LoraLoaderModelOnly at 1.0 gives half."
+    },
+    {
+      "id": "relight-scene-read",
+      "title": "Relight scene read: depth (Depth Anything 3 mono large) and the subject's matte (BiRefNet) of one photo (core)",
+      "capability": "bg-remove",
+      "file": "relight-scene-read.json",
+      "source": "hand-built (scripts/comfy/hand-built/relight-scene-read.json)",
+      "bindings": {
+        "image": [
+          {
+            "node": "1",
+            "input": "image"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "5",
+            "input": "filename_prefix"
+          },
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "5",
+          "kind": "image",
+          "role": "depth"
+        },
+        {
+          "node": "9",
+          "kind": "image",
+          "role": "matte"
+        }
+      ],
+      "defaults": {},
+      "limits": {},
+      "models": [
+        {
+          "file": "depth_anything_3_mono_large.safetensors",
+          "folder": "geometry_estimation",
+          "url": "https://huggingface.co/Comfy-Org/Depth-Anything-3/resolve/main/geometry_estimation/depth_anything_3_mono_large.safetensors",
+          "sizeGb": 1.34
+        },
+        {
+          "file": "birefnet.safetensors",
+          "folder": "background_removal",
+          "url": "https://huggingface.co/Comfy-Org/BiRefNet/resolve/main/background_removal/birefnet.safetensors",
+          "sizeGb": 0.44
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 6,
+      "license": "Depth Anything 3 mono large: Apache-2.0 (model card) · BiRefNet: MIT",
+      "validated": false,
+      "notes": "One photo in, two grey PNGs out, for the Relight page's depth-true preview: DA3Inference (mono, 504, lower-bound resize) and DA3Render depth with v2_style normalisation (near = bright), and the core background-removal nodes (birefnet.safetensors) with the mask saved as a picture (white = subject). Runs once per photo; its runs are helper steps the Library leaves out."
+    },
+    {
       "id": "qwen-image-21-live-edit",
       "title": "Qwen-Image 2.1 Live Edit (2-step DMD2 LoRA, as you type)",
       "capability": "edit",

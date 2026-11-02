@@ -72,6 +72,8 @@ export const LOADER_FOLDERS = {
   LTXICLoRALoaderModelOnly: { lora_name: 'loras' },
   // MiniMax H3 video: larryvrh's turbo LoRA loader (ComfyUI-MiniMax-H3-Turbo) reads models/loras.
   MiniMaxH3TurboLoRA: { lora_name: 'loras' },
+  // Relight: Viggle's speed-LoRA loader (viggle_turbo) reads models/loras.
+  ViggleTurboLora: { lora_name: 'loras' },
   // Open-H3 Regenerate (rdh9616's pack): the merged refiner LoRA, LBH's latent upscaler and NVIDIA's fast H3 VAE decoder.
   OpenH3RegenLora: { lora_name: 'loras' },
   OpenH3RegenUpscale: { model_name: 'latent_upscale_models' },

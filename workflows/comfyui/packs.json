@@ -269,5 +269,15 @@
     "isolated": false,
     "subdir": null,
     "folders": []
+  },
+  "viggle_turbo": {
+    "repo": "https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo",
+    "commit": "009a44a895ef85f7e643c80fdca9543795248867",
+    "registry": null,
+    "requirementsTxt": false,
+    "isolated": false,
+    "subdir": null,
+    "file": "comfyui/viggle_turbo.py",
+    "folders": []
   }
 }

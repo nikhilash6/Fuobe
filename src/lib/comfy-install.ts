@@ -28,6 +28,12 @@ export function pinnedRepo(url: string): { repo: string; ref: string; dir?: stri
   return m ? { repo: m[1], ref: m[2], ...(m[3] ? { dir: m[3] } : {}) } : undefined;
 }
 
+/** A node file in a Hugging Face repo at a commit (…/resolve/<sha>/<path>.py): the repo, the commit and the file. */
+export function hfNodeFile(url: string): { repo: string; ref: string; file: string } | undefined {
+  const m = /^(https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+)\/resolve\/([0-9a-f]{40})\/([\w./-]+\.py)$/.exec(url);
+  return m ? { repo: m[1], ref: m[2], file: m[3] } : undefined;
+}
+
 /**
  * The commands that install one node pack into $COMFYUI/custom_nodes/<name>, safe to run again, as
  * scripts/comfy/install-comfyui.sh does. git can't clone a /tree/ page address, so a pinned pack is cloned from its
@@ -36,6 +42,10 @@ export function pinnedRepo(url: string): { repo: string; ref: string; dir?: stri
  * already there.
  */
 export function nodeInstall(node: { name: string; repo: string }): string {
+  // One node file in a Hugging Face model repo, at a commit (Viggle's viggle_turbo.py): downloaded as the package's
+  // __init__.py, never cloned (the repo holds gigabytes of weights).
+  const file = hfNodeFile(node.repo);
+  if (file) return `mkdir -p "$COMFYUI/custom_nodes/${node.name}" && wget -c -O "$COMFYUI/custom_nodes/${node.name}/__init__.py" "${node.repo}"`;
   const pin = pinnedRepo(node.repo);
   if (!pin) return `git -C "$COMFYUI/custom_nodes" clone ${node.repo}`;
   const dest = `"$COMFYUI/custom_nodes/${node.name}"`;
