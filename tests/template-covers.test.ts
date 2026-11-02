@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { CANVAS_TEMPLATES } from "@/lib/catalog/canvas";
 import { PRESETS } from "@/lib/catalog/content-factory";
 import { EXPLAINER_STYLE_IDS } from "@/lib/catalog/faceless";
-import { TEMPLATES } from "@/lib/catalog/marketing";
+import { AD_STYLES, TEMPLATES } from "@/lib/catalog/marketing";
 import { MIXED_PRESETS } from "@/lib/catalog/mixed-media";
 import { FASHION, PACKS } from "@/lib/catalog/packs";
 import { SHORTS_PRESETS } from "@/lib/catalog/shorts";
@@ -37,7 +37,8 @@ const gen = (await import("../scripts/eval/lib/template-covers.mjs")) as unknown
 const root = process.cwd();
 /** Every tile of each group, by id: what the manifest's keys may name. */
 const TILES: Record<TemplateGroup, string[]> = {
-  marketing: TEMPLATES.map((t) => t.id),
+  // Marketing's templates, and Click to Ad's styles as cta-<style>.
+  marketing: [...TEMPLATES.map((t) => t.id), ...AD_STYLES.map((s) => `cta-${s.id}`)],
   fashion: FASHION.map((t) => t.id),
   photodump: PACKS.map((p) => p.id),
   shorts: SHORTS_PRESETS.map((p) => p.id),
@@ -79,6 +80,20 @@ describe("the template covers manifest", () => {
     }
   });
 
+  it("leaves no file in public/previews/templates that no entry names (with each still's small copy)", () => {
+    const named = new Set<string>();
+    for (const key of Object.keys(TEMPLATE_COVERS)) {
+      const [group, id] = key.split("/") as [TemplateGroup, string];
+      const c = templateCover(group, id)!;
+      for (const f of c.frames) for (const u of [f.src, f.thumb]) named.add(u.split("?")[0]);
+      if (c.video) named.add(c.video.split("?")[0]);
+    }
+    const dir = path.join(root, "public", "previews", "templates");
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /.(jpg|mp4)$/.test(f)) : [];
+    const orphans = files.map((f) => `/previews/templates/${f.replaceAll("\\", "/")}`).filter((u) => !named.has(u));
+    expect(orphans).toEqual([]);
+  });
+
   it("stays small with every tile listed: it ships with the studios' pages", () => {
     const pick = <T,>(list: T[], i: number) => list[i % list.length];
     // A tile that shows a preset's cover rests on its peak frame where it has one (the longer entry).
@@ -104,7 +119,7 @@ describe("the template covers manifest", () => {
         lines.push(`  ${JSON.stringify(key)}: ${JSON.stringify(gen.slimEntry(key, { poster: e.poster, ...(e.video && { video: e.video }), ...(e.at && { at: e.at }), ...(e.frames && { frames: e.frames }) }))}`);
       }
     }
-    expect(lines).toHaveLength(229);
+    expect(lines).toHaveLength(239);
     const text = `{\n${lines.join(",\n")}\n}`;
     expect(text.length).toBeLessThan(36_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);

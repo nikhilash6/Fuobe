@@ -12,12 +12,14 @@ import { areaCls, ColorList, inputCls } from "@/components/brand/fields";
 import { ImageList } from "@/components/brand/image-list";
 import { AddFromLink, priceText, ProductThumb, UploadProductButton } from "@/components/brand/products";
 import { SelfHostNote } from "@/components/self-host-note";
+import { useCoverPlayback } from "@/components/template-cover";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { uploadFile, useLikelyVisitor } from "@/lib/api";
-import { AD_STYLES, END_CARD, KIT_LABELS, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
+import { AD_STYLES, END_CARD, KIT_LABELS, type AdStyle, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { templateCover } from "@/lib/template-covers";
 import { endCardPng, renderEndCard, siteLabel, type EndCardInput } from "./end-card";
 import { addRuns, send, useBrand, useEstimate, useProductActions, useProducts, useReadingProduct, useUpdateBrand } from "./hooks";
 import type { ModelInfo } from "./model-info";
@@ -64,6 +66,28 @@ function KitProgress() {
 }
 
 const styleScene = (presenter: boolean, dark?: boolean) => (presenter ? "selfie" : dark ? "noir" : "orbit");
+
+/** One ad style: its real cover when it has one (a clip plays as the template cards' do), else its drawn preview. */
+export function StyleTile({ style: s, selected, onPick }: { style: AdStyle; selected: boolean; onPick: () => void }) {
+  const cover = templateCover("marketing", `cta-${s.id}`);
+  const { ref, playing, asked, handlers } = useCoverPlayback<HTMLButtonElement>(`marketing/cta-${s.id}`, cover);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      {...handlers}
+      aria-pressed={selected}
+      onClick={onPick}
+      className={cn("min-w-0 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring", selected && "ring-2 ring-primary ring-offset-2 ring-offset-background")}
+    >
+      <div className="relative aspect-[9/14] overflow-hidden rounded-xl">
+        <TemplatePreview id={s.id} look={{ scene: styleScene(s.presenter, s.dark), hue: s.hue, hue2: (s.hue + 35) % 360, dark: s.dark }} video cover={cover} playing={playing} asked={asked} sizes="(max-width: 640px) 50vw, 200px" />
+      </div>
+      <p className="mt-1.5 truncate text-[13px] font-medium">{s.name}</p>
+      <p className="line-clamp-2 text-[11px] text-muted-foreground">{s.description}</p>
+    </button>
+  );
+}
 
 /** The end card as the ad will end on it, drawn small (the same drawing as the full-size PNG). */
 function EndCardPreview({ input, className }: { input: EndCardInput; className?: string }) {
@@ -347,23 +371,16 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
           <Step n={3} title="Choose a style and start" hint="Pick what looks right for your product.">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               {AD_STYLES.map((s) => (
-                <button
+                <StyleTile
                   key={s.id}
-                  type="button"
-                  aria-pressed={s.id === styleId}
-                  onClick={() => {
+                  style={s}
+                  selected={s.id === styleId}
+                  onPick={() => {
                     setStyleId(s.id);
                     setPresenter(null);
                     setScript(null);
                   }}
-                  className={cn("min-w-0 rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-ring", s.id === styleId && "ring-2 ring-primary ring-offset-2 ring-offset-background")}
-                >
-                  <div className="aspect-[9/14] overflow-hidden rounded-xl">
-                    <TemplatePreview id={s.id} look={{ scene: styleScene(s.presenter, s.dark), hue: s.hue, hue2: (s.hue + 35) % 360, dark: s.dark }} video />
-                  </div>
-                  <p className="mt-1.5 truncate text-[13px] font-medium">{s.name}</p>
-                  <p className="line-clamp-2 text-[11px] text-muted-foreground">{s.description}</p>
-                </button>
+                />
               ))}
             </div>
             <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2">

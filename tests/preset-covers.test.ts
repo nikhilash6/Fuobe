@@ -87,7 +87,8 @@ describe("the preset covers manifest", () => {
     for (const id of Object.keys(PRESET_BEFORE_AFTER)) for (const f of beforeAfterFiles(id)) named.add(f);
     const dir = path.join(root, "public", "previews");
     const files = fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(jpg|mp4)$/.test(f)) : [];
-    const orphans = files.map((f) => `/previews/${f.replaceAll("\\", "/")}`).filter((u) => !named.has(u));
+    // public/previews/templates is the template covers' (tests/template-covers.test.ts checks it).
+    const orphans = files.map((f) => `/previews/${f.replaceAll("\\", "/")}`).filter((u) => !u.startsWith("/previews/templates/") && !named.has(u));
     expect(orphans).toEqual([]);
   });
 

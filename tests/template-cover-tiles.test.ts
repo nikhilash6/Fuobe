@@ -11,6 +11,7 @@ vi.mock("@/lib/template-covers.generated", () => ({
   TEMPLATE_COVERS: {
     "marketing/ps-sunlit-plinth": "1a2b3c4d",
     "marketing/m2-sticker-pop": ["2b3c4d5e", "3c4d5e6f"],
+    "marketing/cta-luxury": ["0a1b2c3d", "1b2c3d4e"],
     "fashion/ultra-bold": { poster: "/previews/templates/fashion/ultra-bold.jpg?v=4d5e6f70", frames: ["/previews/templates/fashion/ultra-bold-2.jpg?v=5e6f7081", "/previews/templates/fashion/ultra-bold-3.jpg?v=6f708192"] },
     "photodump/zen": {
       poster: "/previews/templates/photodump/zen.jpg?v=708192a3",
@@ -29,13 +30,14 @@ vi.mock("@/lib/template-covers.generated", () => ({
 }));
 
 const { TemplateCard: MarketingCard } = await import("@/components/marketing/template-gallery");
+const { StyleTile } = await import("@/components/marketing/click-to-ad");
 const { TemplatePreview: FashionPreview } = await import("@/components/fashion/template-preview");
 const { PackCover } = await import("@/components/photodump/covers");
 const { LookCard } = await import("@/components/shorts/preset-card");
 const { TemplateCard: CanvasCard } = await import("@/components/canvas/canvas-list");
 const { PresetTile } = await import("@/components/content-factory/parts");
 const { StyleArt } = await import("@/components/faceless/style-art");
-const { TEMPLATES } = await import("@/lib/catalog/marketing");
+const { AD_STYLES, TEMPLATES } = await import("@/lib/catalog/marketing");
 const { FASHION, PACKS } = await import("@/lib/catalog/packs");
 const { coveredFirst, SHORTS_PRESETS, shortsPreview } = await import("@/lib/catalog/shorts");
 const { MIXED_PRESETS, mixedPreview } = await import("@/lib/catalog/mixed-media");
@@ -73,6 +75,22 @@ describe("Marketing Studio's template cards", () => {
     const h = card("ps-ice-bath");
     expect(h).toContain('<svg viewBox="0 0 240 320"');
     expect(h).not.toContain("<img");
+  });
+});
+
+describe("Click to Ad's styles", () => {
+  const tile = (id: string) => html(StyleTile, { style: by(AD_STYLES, id), selected: false, onPick: noop });
+
+  it("show the style's cover (its still until the clip plays), else the drawn preview", () => {
+    const h = tile("luxury");
+    expect(h).toContain('src="/previews/templates/marketing/cta-luxury.jpg?v=0a1b2c3d"');
+    expect(h).toContain("/previews/templates/marketing/thumbs/cta-luxury.jpg?v=0a1b2c3d 320w");
+    expect(h).not.toContain("<video");
+    expect(h).not.toContain("<svg viewBox=\"0 0 240 320\"");
+    expect(unversioned(h)).toEqual([]);
+    const drawn = tile("simple-ugc");
+    expect(drawn).toContain('<svg viewBox="0 0 240 320"');
+    expect(drawn).not.toContain("<img");
   });
 });
 
