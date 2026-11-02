@@ -47,6 +47,7 @@ import type { Engine, Generation, GenerationRequest, MediaKind } from "@/lib/cat
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { listElements } from "./elements";
+import { isOffered } from "./model-access";
 import { createGenerations, getGeneration } from "./generations";
 import { silentWav } from "./marketing";
 import { engineMode } from "./settings";
@@ -379,7 +380,7 @@ export function createCanvas(input: CreateCanvasInput = {}): Canvas {
   // A locked install only ever gets the variant it can run.
   const mode = engineMode();
   const engine: Engine = mode === "both" ? (input.engine ?? "cloud") : mode;
-  const graph = template ? template.build(engine) : (input.graph ?? EMPTY_GRAPH);
+  const graph = template ? template.build(engine, (id) => isOffered(id, engine)) : (input.graph ?? EMPTY_GRAPH);
   const pages = !template && input.pages?.length ? input.pages : [{ id: FIRST_PAGE_ID, name: pageName(0), graph: cleanGraph(graph) }];
   const now = Date.now();
   const row: Row = {

@@ -1,0 +1,55 @@
+{
+  "1": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "voice_reference.wav"
+    },
+    "_meta": {
+      "title": "Voice reference"
+    }
+  },
+  "2": {
+    "class_type": "VoxCPM2_Clone",
+    "inputs": {
+      "voice_description": "",
+      "text": "Hello! This voice was cloned from a short reference clip.",
+      "reference_audio": [
+        "1",
+        0
+      ],
+      "prompt_text": "",
+      "model_name": "VoxCPM2",
+      "lora_name": "None",
+      "cfg_value": 2,
+      "inference_timesteps": 10,
+      "max_tokens": 4096,
+      "normalize_text": true,
+      "seed": 42,
+      "force_offload": false,
+      "dtype": "auto",
+      "device": "cuda",
+      "torch_compile": false,
+      "enable_denoiser": false,
+      "enable_asr": false,
+      "retry_max_attempts": 3,
+      "retry_threshold": 6
+    },
+    "_meta": {
+      "title": "VoxCPM2 voice clone"
+    }
+  },
+  "3": {
+    "class_type": "SaveAudioMP3",
+    "inputs": {
+      "audio": [
+        "2",
+        0
+      ],
+      "filename_prefix": "fuobe/tts-voxcpm2-clone",
+      "quality": "V0"
+    },
+    "_meta": {
+      "title": "Save MP3"
+    }
+  }
+}

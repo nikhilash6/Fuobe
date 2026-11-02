@@ -50,7 +50,7 @@ describe("/api/turnaround", () => {
     const res = await post({ engine: "open", views: { front, back } }, true);
     expect(res.status).toBe(200);
     const p = await res.json();
-    expect(p).toMatchObject({ route: "frames", routes: ["frames"], fills: ["right", "left"], steps: 3, costUsd: 0, demo: true, gpuGb: 24, duration: 8 });
+    expect(p).toMatchObject({ route: "frames", routes: ["frames", "stills"], fills: ["right", "left"], steps: 3, costUsd: 0, demo: true, gpuGb: 24, duration: 8 });
     expect(p.frames.map((f: { side: string; from: string }) => `${f.side}:${f.from}`)).toEqual(["front:picture", "right:angles", "back:picture", "left:angles", "front:picture"]);
     expect(p.blocker).toBeUndefined();
   });

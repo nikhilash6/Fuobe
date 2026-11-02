@@ -46,7 +46,8 @@ export type AssistItem =
   | { id: string; role: "tool"; text: string; href?: string; studio?: string; connector?: string; failed?: boolean }
   /** `opens`: the studios the plan's jobs open in; `notes`: why a studio job runs in the Library instead. */
   | { id: string; role: "approval"; summary: string; jobs: PlannedJob[]; totalUsd: number | null; status: "pending" | "approved" | "declined"; opens?: string[]; notes?: string[] }
-  | { id: string; role: "generations"; ids: string[]; storyboard?: boolean }
+  /** `use`: the tool call that started them (its tool_use id), so a chat's calls are matched to what they made. */
+  | { id: string; role: "generations"; ids: string[]; storyboard?: boolean; use?: string }
   | { id: string; role: "notice"; text: string; tone: "info" | "error" };
 
 export type AssistStatus = "idle" | "running" | "waiting";
@@ -459,6 +460,12 @@ export function skillSlug(title: string): string {
       .replace(/-+$/, "") || "my-skill"
   );
 }
+
+/** The tool result a plan gets when the person declines its card, or answers it with a new message instead. */
+export const DECLINED = "The user declined this plan. Ask what they'd like to change.";
+export const REPLIED_INSTEAD = "The user replied with new instructions instead of approving; follow them.";
+/** Whether a tool result is the chat's own word that the person didn't approve the plan (not a provider's error). */
+export const declinedByUser = (result: string): boolean => result === DECLINED || result === REPLIED_INSTEAD;
 
 /**
  * Leading `/name` tokens of a message: "/product-photoshoot /thumbnail-generation a coffee ad"

@@ -121,7 +121,8 @@ describe("apps and tools pick the new models first", () => {
     expect(openRoute("app-virtual-try-on").modelId).toBe("oss-tryon-klein");
     // Layers' Angles runs no LoRA: Qwen-Image 2.1 (25 steps) on the plain camera words.
     expect(TOOL_MODELS.angles.open).toEqual(["oss-qwen-image-21"]);
-    expect(RECOMPOSE_MODELS.open).toEqual(["oss-qwen-edit", "oss-qwen-image-21"]);
+    // QMA · 96 views re-shoots from the flown pose, as a third pick.
+    expect(RECOMPOSE_MODELS.open).toEqual(["oss-qwen-edit", "oss-qwen-image-21", "oss-qwen-image-21-qma"]);
   });
 
   it("Layers: Qwen-Image 2.1 edits, inpaints, expands and makes a layer first; Ideogram 4 is the next pick for a layer", () => {

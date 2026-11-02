@@ -87,6 +87,19 @@ def video_frames(path: str | pathlib.Path, fps: float = 4.0, max_frames: int = 3
     return frames[: n * w * h * 3].reshape(n, h, w, 3)[:max_frames], rate
 
 
+def video_window(path: str | pathlib.Path, start: float, seconds: float, rate: float, width: int, height: int) -> np.ndarray:
+    """`seconds` of a clip from `start`, sampled at `rate` and scaled to width × height (to line it up with another clip's frames)."""
+    r = subprocess.run(
+        ["ffmpeg", "-v", "error", "-ss", f"{start:.3f}", "-t", f"{seconds:.3f}", "-i", str(path), "-vf", f"fps={rate},scale={width}:{height}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        capture_output=True,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(f"ffmpeg couldn't read {pathlib.Path(path).name}: {r.stderr.decode(errors='replace').strip()[:200]}")
+    frames = np.frombuffer(r.stdout, dtype=np.uint8)
+    n = len(frames) // (width * height * 3)
+    return frames[: n * width * height * 3].reshape(n, height, width, 3)
+
+
 def audio_track(path: str | pathlib.Path, sr: int = 16000) -> np.ndarray | None:
     """The sound as mono float32 at `sr` Hz, or None when there is none."""
     r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", str(sr), "-f", "s16le", "-"], capture_output=True)

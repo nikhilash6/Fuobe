@@ -3328,6 +3328,29 @@ export const LORA_LIBRARY: LoraEntry[] = [
     },
     "released": "2026-10-07",
     "notes": "The card's licence tag is apache-2.0 (no LICENSE file); the base, Qwen-Image 2.1, is Qwen Research (non-commercial). The step-2500 checkpoint in diffusers / ComfyUI key layout, at 0.7 with a 0.5 px blur on each chained panel (the card's clean-chain recipe). Trained at 512 px on Sintel and Tears of Steel frame pairs. Qwen-Image 2.1 isn't hosted on fal or Replicate, so the cloud keeps the 2509 next-scene LoRA."
+  },
+  {
+    "key": "qwen21-qma-angles",
+    "name": "QMA Camera Angles for Qwen-Image 2.1 (gribbliest)",
+    "file": "qwen-image-2.1-qma-camera-angles.safetensors",
+    "url": "https://huggingface.co/gribbliest/qwen-image-2.1-qma-camera-angles/resolve/13007eec2648c09529e930164c2ccc9c8c12428c/qwen-image-2.1-qma-camera-angles.safetensors",
+    "page": "https://huggingface.co/gribbliest/qwen-image-2.1-qma-camera-angles",
+    "strength": 1,
+    "base": "qwen-image-2.1",
+    "download": "direct",
+    "group": "adapter",
+    "trigger": "<qma>",
+    "version": "13007eec2648c09529e930164c2ccc9c8c12428c",
+    "sha256": "ad2c20e0e103b6ad3ffffc56ab4e89c0822263c488aa4dd70e7e03091ff37b8d",
+    "sizeBytes": 318820224,
+    "licence": {
+      "commercial": false,
+      "hostedOk": false,
+      "snapshotDate": "2026-11-02",
+      "name": "Apache-2.0 as the licence on its card (no LICENSE file in the repository); an adapter of Qwen-Image 2.1 (Qwen Research License), so non-commercial through its base"
+    },
+    "released": "2026-10-13",
+    "notes": "Rank-64 edit LoRA trained with AI-Toolkit for 3,000 steps at 512 and 1024 px on photo and Blender pairs covering all 96 views. Prompt: \"<qma> {azimuth} {elevation} {distance}\", 8 azimuths (front view, front-right quarter view, right side view, back-right quarter view, back view, back-left quarter view, left side view, front-left quarter view) relative to the ORIGINAL CAMERA (\"right side view\" = the camera swings 90 degrees to its own right), 4 elevations (low-angle, eye-level, elevated, high-angle shot), 3 distances (close-up, medium shot, wide shot); more edit words may follow. Card settings: strength 1.0, 30 steps, CFG 3, euler / simple, about 1 MP (768 px for previews). Quarter views, elevated shots and distance changes are the most reliable; big orbits on wide landscapes can stop short of 90 degrees. fal hosts Qwen-Image 2.1 (fal-ai/qwen-image-2.1, fal-ai/qwen-image-2.1/edit, read 2026-11-02) without a LoRA input, and Replicate has no Qwen-Image 2.1, so QMA runs on your GPU only."
   }
 ];
 
