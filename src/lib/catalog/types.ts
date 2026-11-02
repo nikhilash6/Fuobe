@@ -1154,6 +1154,12 @@ export interface ChainSlot {
    * with a look makes each next frame from the previous one, and every frame gets the look's grade on its own.
    */
   raw?: boolean;
+  /**
+   * "path" (build plan N7-7, a video slot): the server renders the step's camera path (params.cameraPath) through the
+   * scene the dependency made from the step's still (MoGe 2's depth picture), and that render is the input: Uni3C's guide
+   * when no browser has drawn one (Canvas, Assist, Fuobe DoP, Cinema's exact orbits). src/server/path-render.ts.
+   */
+  render?: "path";
 }
 
 /** How many outputs a planned list (ChainSlot.of) may be short of before the steps reading it fail. */
