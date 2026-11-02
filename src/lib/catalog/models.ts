@@ -3,11 +3,13 @@ import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { QWEN21_DECODER, QWEN21_GPU, QWEN21_SPEED } from "@/lib/qwen21-speed";
+import { QMA_AZIMUTHS, QMA_AZIMUTH_LABELS, QMA_DISTANCES, QMA_DISTANCE_LABELS, QMA_DISTANCE_ZOOM, QMA_ELEVATIONS, QMA_ELEVATION_DEGREES, QMA_ELEVATION_LABELS, QMA_MODEL, QMA_PARAMS } from "@/lib/qma";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
 import { RESTORE, offlineRestorePrompt } from "./restore";
 import { REGEN_COPY, REGEN_DEFAULT_TIER, REGEN_MODEL, REGEN_TIERS, REGEN_WORKFLOW } from "./regenerate";
+import { COMPOSITE_MODEL, COMPOSITE_WORKFLOW } from "./sharpen";
 import { denoiseFor, EVOLUTION, EVOLUTION_DEFAULT_RESOLUTION, EVOLUTION_RESOLUTIONS, INTENSITIES, type Intensity } from "./evolution";
 import { LAST_FRAME_CHAIN, type ModelDef, type ModelOptions, type ModelRoute, type Operation } from "./types";
 
@@ -59,6 +61,8 @@ const RESTORE_LORA = (() => {
 const TRYON_LORA = loraEntry("tryon-klein-4b");
 /** akhaliq's Next-Scene LoRA for Qwen-Image 2.1: the 2.1 next-scene graph loads it, and its switch in Models & licences holds the model. */
 const NEXT_SCENE_21_LORA = loraEntry("qwen21-next-scene");
+/** gribbliest's QMA camera-angles LoRA for Qwen-Image 2.1: the QMA graph loads it, and its switch in Models & licences holds the model. */
+const QMA_LORA = loraEntry("qwen21-qma-angles");
 /** The try-on LoRA card's own instruction, for a run with no words. */
 export const TRYON_PROMPT = "a full-body photo of a person. Replace the outfit with the top and bottom as shown in the reference images. The final image is a full body shot.";
 
@@ -1147,6 +1151,19 @@ const open: ModelDef[] = [
     options: { keepsNamed: true, matteOutputs: ["matte"] },
     hidden: true,
   }),
+  // Character swap in 2K (n7-4): only the swapped character goes back over the footage, from the 768p swap and its
+  // regenerate, through the person's mask (src/lib/catalog/sharpen.ts). Run by Character Swap Studio and Genjutsu.
+  o({
+    id: COMPOSITE_MODEL,
+    name: "Character over the footage",
+    vendor: "ComfyUI",
+    family: "utility",
+    kind: "video",
+    tagline: "Puts only the swapped character back over the original footage, with its own sound · CPU",
+    routes: [comfy("composite", COMPOSITE_WORKFLOW, "the swap, then its regenerate, each through the person's mask (grown, feathered); a few seconds a pass")],
+    options: {},
+    hidden: true,
+  }),
   o({
     id: "oss-qwen-relight",
     name: "Qwen-Image-Edit Relight",
@@ -1182,6 +1199,34 @@ const open: ModelDef[] = [
     options: { seed: true, maxImages: 2, controls: [QWEN21_DECODER], ...(NEXT_SCENE_21_LORA && { loras: [loraRef(NEXT_SCENE_21_LORA)] }) },
     hidden: true,
   }),
+  // QMA camera angles (qma-angles): Qwen-Image 2.1 with gribbliest's QMA LoRA re-shoots a picture from one of 96 cameras. The
+  // pose is the Angles app's own three settings (horizontal_angle, vertical_angle, zoom); the plan writes the LoRA's words
+  // from it (promptFormat "qma", src/lib/qma.ts). Open engine only: fal's Qwen-Image 2.1 takes no LoRAs.
+  o({
+    id: QMA_MODEL,
+    name: "QMA · 96 views",
+    vendor: "Alibaba Qwen",
+    family: "qwen-image",
+    kind: "image",
+    tagline: "Re-shoot a picture from any of 96 camera angles: 8 sides, 4 heights, 3 distances · on your GPU, 20 GB · non-commercial weights",
+    badges: ["new"],
+    routes: [{ ...comfy("edit", "qwen-image-21-qma", "QMA LoRA at 1.0, 30 steps, CFG 3"), unsized: true, maxImages: 1 }],
+    options: {
+      seed: true,
+      maxImages: 1,
+      promptFormat: "qma",
+      promptOptional: true,
+      promptPlaceholder: "Anything else to change (optional)",
+      controls: [
+        { param: QMA_PARAMS.horizontal, label: "Angle", values: QMA_AZIMUTHS.map((_, i) => i * 45), default: 45, labels: Object.fromEntries(QMA_AZIMUTHS.map((a, i) => [String(i * 45), QMA_AZIMUTH_LABELS[a]])) },
+        { param: QMA_PARAMS.vertical, label: "Height", values: QMA_ELEVATIONS.map((e) => QMA_ELEVATION_DEGREES[e]), default: 0, labels: Object.fromEntries(QMA_ELEVATIONS.map((e) => [String(QMA_ELEVATION_DEGREES[e]), QMA_ELEVATION_LABELS[e]])) },
+        { param: QMA_PARAMS.zoom, label: "Distance", values: QMA_DISTANCES.map((d) => QMA_DISTANCE_ZOOM[d]), default: 5, labels: Object.fromEntries(QMA_DISTANCES.map((d) => [String(QMA_DISTANCE_ZOOM[d]), QMA_DISTANCE_LABELS[d]])) },
+        { param: "size", label: "Size", values: ["full", "preview"], default: "full", labels: { full: "Full · about 1 MP", preview: "Preview · 768 px, faster" }, sets: { full: { megapixels: 1 }, preview: { megapixels: 0.6 } } },
+        QWEN21_DECODER,
+      ],
+      ...(QMA_LORA && { loras: [loraRef(QMA_LORA)] }),
+    },
+  }),
   o({
     id: "oss-qwen-next-scene",
     name: "Qwen-Image-Edit Next Scene",
@@ -1215,6 +1260,30 @@ const open: ModelDef[] = [
     tagline: "Expressive zero-shot cloning (commercial use under 100M users)",
     routes: [comfy("tts", "tts-indextts2")],
     options: { voiceClone: true },
+  }),
+  // Design a voice (nm10-voice-design): a new voice from words, then reused by cloning the take picked (src/server/voices.ts).
+  // Qwen3-TTS 1.7B runs the same weights on fal (qwen-3-tts); VoxCPM2 is hosted nowhere, so it runs on your GPU only.
+  o({
+    id: "oss-qwen3-tts",
+    name: "Qwen3-TTS",
+    vendor: "Alibaba Qwen",
+    family: "qwen-tts",
+    kind: "audio",
+    tagline: "Design a voice from a description, or clone one from a short sample, in 10 languages",
+    badges: ["new"],
+    routes: [comfy("voice-design", "tts-qwen3-design"), comfy("tts", "tts-qwen3-clone")],
+    options: { voiceClone: true, seed: true },
+  }),
+  o({
+    id: "oss-voxcpm2",
+    name: "VoxCPM2",
+    vendor: "OpenBMB",
+    family: "voxcpm",
+    kind: "audio",
+    tagline: "Design or clone a voice in studio-quality 48 kHz, in 30 languages",
+    badges: ["new"],
+    routes: [comfy("voice-design", "tts-voxcpm2"), comfy("tts", "tts-voxcpm2-clone")],
+    options: { voiceClone: true, seed: true },
   }),
   o({
     id: "oss-chatterbox-dialogue",

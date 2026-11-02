@@ -1,0 +1,377 @@
+{
+  "$schema": "./case.schema.json",
+  "suite": "character-2k",
+  "title": "Fuobe Character swap in 2K · the regenerate's start noise",
+  "description": "The Character swap at 1080p / 2K / 4K (package n7-4-character-swap-2k, src/lib/catalog/sharpen.ts) on Genjutsu's route (POST /api/genjutsu), on your clip and character in local/genjutsu/: person.mp4 (5–15 s, one continuous shot, at least 1080p, the person visible in its first frame) and character.png (a consenting person or a drawn character). On your GPU the 768p swap is redrawn by Open-H3 Regenerate and only the character is composited back over the footage; each case tries one start noise (character.sharpenSigma: 0.7, 0.8 or the release's 0.909) against the 768p swap. In the cloud fal's H3 makes 2K itself (no start noise), for reference. Scores: identity (the face against the character picture: does the redraw keep who they are?), background (the frame's outer ring against the source clip: does the background stay as filmed?) and temporal (flicker). Needs a GPU ComfyUI with OPEN_H3_REGEN=1 and H3_RELAY=1 for the open cases.",
+  "original": [
+    "fuobe-character-swap"
+  ],
+  "kind": "video",
+  "decides": "The default start noise of the Character swap's 2K finish on your GPU (SHARPEN_SIGMA in src/lib/catalog/sharpen.ts, now 0.8). In one open run on at least 3 clips, the sigma whose identity is highest within 0.01 of the 768p swap's, with bgDiff within 0.002 of the best, becomes the default in a reviewed change; a tie keeps 0.8. A sigma whose identity falls more than 0.03 below the 768p swap is never the default.",
+  "targets": {
+    "open": {
+      "models": [
+        "fuobe-character-swap"
+      ]
+    },
+    "cloud": {
+      "models": [
+        "fuobe-character-swap"
+      ]
+    },
+    "demo": {
+      "models": [
+        "fuobe-character-swap"
+      ]
+    }
+  },
+  "defaults": {
+    "seeds": [
+      1001,
+      2002
+    ],
+    "metrics": [
+      "identity",
+      "background",
+      "temporal"
+    ],
+    "timeoutSeconds": 3600,
+    "candidate": "original"
+  },
+  "variants": {
+    "original": {
+      "description": "The Character swap as Genjutsu runs it"
+    }
+  },
+  "cases": [
+    {
+      "id": "character-2k/768p",
+      "title": "The 768p swap alone: the baseline every finish is compared with",
+      "models": {
+        "open": [
+          "fuobe-character-swap"
+        ],
+        "cloud": [
+          "fuobe-character-swap"
+        ],
+        "demo": [
+          "fuobe-character-swap"
+        ]
+      },
+      "inputs": {
+        "video": "local/genjutsu/person.mp4",
+        "images": [
+          "local/genjutsu/character.png"
+        ]
+      },
+      "demoInputs": {
+        "video": "fixtures/walk-6s.mp4",
+        "images": [
+          "fixtures/character/drawn-face-2.png"
+        ]
+      },
+      "prompts": [
+        {
+          "id": "direction",
+          "text": "keep the walk and the timing; the character wears the same clothes as in the picture"
+        }
+      ],
+      "references": "local/genjutsu/character.png",
+      "metrics": [
+        "identity",
+        "background",
+        "temporal"
+      ],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "mode": "character",
+          "modelId": "{{modelId}}",
+          "prompt": "{{prompt}}",
+          "references": [
+            "{{inputs.images.0}}"
+          ],
+          "source": "{{source:inputs.video}}",
+          "range": {
+            "start": 0,
+            "end": 5
+          },
+          "quality": "768p",
+          "character": {
+            "who": "largest"
+          },
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}"
+        }
+      }
+    },
+    {
+      "id": "character-2k/sigma-07",
+      "title": "2K on your GPU at start noise 0.7 (Close: stays nearest the swap)",
+      "models": {
+        "open": [
+          "fuobe-character-swap"
+        ],
+        "cloud": [
+          "fuobe-character-swap"
+        ],
+        "demo": [
+          "fuobe-character-swap"
+        ]
+      },
+      "inputs": {
+        "video": "local/genjutsu/person.mp4",
+        "images": [
+          "local/genjutsu/character.png"
+        ]
+      },
+      "demoInputs": {
+        "video": "fixtures/walk-6s.mp4",
+        "images": [
+          "fixtures/character/drawn-face-2.png"
+        ]
+      },
+      "prompts": [
+        {
+          "id": "direction",
+          "text": "keep the walk and the timing; the character wears the same clothes as in the picture"
+        }
+      ],
+      "references": "local/genjutsu/character.png",
+      "metrics": [
+        "identity",
+        "background",
+        "temporal"
+      ],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "mode": "character",
+          "modelId": "{{modelId}}",
+          "prompt": "{{prompt}}",
+          "references": [
+            "{{inputs.images.0}}"
+          ],
+          "source": "{{source:inputs.video}}",
+          "range": {
+            "start": 0,
+            "end": 5
+          },
+          "quality": "2K",
+          "character": {
+            "who": "largest",
+            "sharpenSigma": 0.7
+          },
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}"
+        }
+      },
+      "engines": [
+        "open",
+        "demo"
+      ]
+    },
+    {
+      "id": "character-2k/sigma-08",
+      "title": "2K on your GPU at start noise 0.8 (the default)",
+      "models": {
+        "open": [
+          "fuobe-character-swap"
+        ],
+        "cloud": [
+          "fuobe-character-swap"
+        ],
+        "demo": [
+          "fuobe-character-swap"
+        ]
+      },
+      "inputs": {
+        "video": "local/genjutsu/person.mp4",
+        "images": [
+          "local/genjutsu/character.png"
+        ]
+      },
+      "demoInputs": {
+        "video": "fixtures/walk-6s.mp4",
+        "images": [
+          "fixtures/character/drawn-face-2.png"
+        ]
+      },
+      "prompts": [
+        {
+          "id": "direction",
+          "text": "keep the walk and the timing; the character wears the same clothes as in the picture"
+        }
+      ],
+      "references": "local/genjutsu/character.png",
+      "metrics": [
+        "identity",
+        "background",
+        "temporal"
+      ],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "mode": "character",
+          "modelId": "{{modelId}}",
+          "prompt": "{{prompt}}",
+          "references": [
+            "{{inputs.images.0}}"
+          ],
+          "source": "{{source:inputs.video}}",
+          "range": {
+            "start": 0,
+            "end": 5
+          },
+          "quality": "2K",
+          "character": {
+            "who": "largest",
+            "sharpenSigma": 0.8
+          },
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}"
+        }
+      },
+      "engines": [
+        "open",
+        "demo"
+      ]
+    },
+    {
+      "id": "character-2k/sigma-0909",
+      "title": "2K on your GPU at the release's start noise 0.909 (redraws the most; a face can drift)",
+      "models": {
+        "open": [
+          "fuobe-character-swap"
+        ],
+        "cloud": [
+          "fuobe-character-swap"
+        ],
+        "demo": [
+          "fuobe-character-swap"
+        ]
+      },
+      "inputs": {
+        "video": "local/genjutsu/person.mp4",
+        "images": [
+          "local/genjutsu/character.png"
+        ]
+      },
+      "demoInputs": {
+        "video": "fixtures/walk-6s.mp4",
+        "images": [
+          "fixtures/character/drawn-face-2.png"
+        ]
+      },
+      "prompts": [
+        {
+          "id": "direction",
+          "text": "keep the walk and the timing; the character wears the same clothes as in the picture"
+        }
+      ],
+      "references": "local/genjutsu/character.png",
+      "metrics": [
+        "identity",
+        "background",
+        "temporal"
+      ],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "mode": "character",
+          "modelId": "{{modelId}}",
+          "prompt": "{{prompt}}",
+          "references": [
+            "{{inputs.images.0}}"
+          ],
+          "source": "{{source:inputs.video}}",
+          "range": {
+            "start": 0,
+            "end": 5
+          },
+          "quality": "2K",
+          "character": {
+            "who": "largest",
+            "sharpenSigma": 0.909
+          },
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}"
+        }
+      },
+      "engines": [
+        "open",
+        "demo"
+      ]
+    },
+    {
+      "id": "character-2k/cloud-2k",
+      "title": "2K in the cloud: fal's H3 makes it from a 768P base (the whole frame is redrawn)",
+      "models": {
+        "open": [
+          "fuobe-character-swap"
+        ],
+        "cloud": [
+          "fuobe-character-swap"
+        ],
+        "demo": [
+          "fuobe-character-swap"
+        ]
+      },
+      "inputs": {
+        "video": "local/genjutsu/person.mp4",
+        "images": [
+          "local/genjutsu/character.png"
+        ]
+      },
+      "demoInputs": {
+        "video": "fixtures/walk-6s.mp4",
+        "images": [
+          "fixtures/character/drawn-face-2.png"
+        ]
+      },
+      "prompts": [
+        {
+          "id": "direction",
+          "text": "keep the walk and the timing; the character wears the same clothes as in the picture"
+        }
+      ],
+      "references": "local/genjutsu/character.png",
+      "metrics": [
+        "identity",
+        "background",
+        "temporal"
+      ],
+      "submit": {
+        "route": "/api/genjutsu",
+        "body": {
+          "engine": "{{engine}}",
+          "mode": "character",
+          "modelId": "{{modelId}}",
+          "prompt": "{{prompt}}",
+          "references": [
+            "{{inputs.images.0}}"
+          ],
+          "source": "{{source:inputs.video}}",
+          "range": {
+            "start": 0,
+            "end": 5
+          },
+          "quality": "2K",
+          "character": {
+            "who": "largest"
+          },
+          "seed": "{{seed}}",
+          "requestId": "{{requestId}}"
+        }
+      },
+      "engines": [
+        "cloud"
+      ],
+      "note": "The cloud has no composite: expect a higher bgDiff than your GPU's cases"
+    }
+  ]
+}

@@ -33,6 +33,8 @@ export const METRIC_INFO = {
   wer: { label: "WER, dialogue stem", better: "lower", unit: "0–1", tie: 0.02, digits: 3 },
   werInput: { label: "WER, input as is", better: "lower", unit: "0–1", tie: 0.02, digits: 3 },
   werTranscript: { label: "WER, the job's transcript", better: "lower", unit: "0–1", tie: 0.02, digits: 3 },
+  bgDiff: { label: "Background change vs the source", better: "lower", unit: "0–1", tie: 0.002, digits: 4 },
+  bgPsnr: { label: "Background PSNR vs the source", better: "higher", unit: "dB", tie: 0.3, digits: 1 },
   seconds: { label: "Time", better: "lower", unit: "s (wall clock)", tie: 0.5, digits: 1 },
   costUsd: { label: "Cost", better: "lower", unit: "US$", tie: 0.0005, digits: 4 },
   vramGb: { label: "Peak memory", better: "lower", unit: "GB", tie: 0.1, digits: 2 },

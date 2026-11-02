@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, FolderInput, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { BookmarkPlus, Check, FolderInput, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -30,12 +30,13 @@ import { Label } from "@/components/ui/label";
 import type { AssistThreadSummary } from "@/lib/assist";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { useSkillBuilder } from "@/components/skills/skill-builder-provider";
 import { useChatActions, useProjects } from "./hooks";
 import { ProjectDot } from "./project-dot";
 
 /**
  * A chat's menu (the rail row and the chat header): rename it, move it into a project or out of
- * one, delete it. While a reply is running the server refuses a move, and says so in a toast.
+ * one, save what ran in it as a skill, delete it. While a reply is running the server refuses a move, and says so in a toast.
  */
 export function ChatMenu({
   chat,
@@ -52,6 +53,7 @@ export function ChatMenu({
   const actions = useChatActions();
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const builder = useSkillBuilder();
   const move = async (projectId: string | null) => {
     if ((chat.projectId ?? null) === projectId) return;
     try {
@@ -103,6 +105,11 @@ export function ChatMenu({
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+          {builder && (
+            <DropdownMenuItem onSelect={() => builder.openChat(chat.id)}>
+              <BookmarkPlus /> Save as skill…
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
             <Trash2 /> Delete…

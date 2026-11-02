@@ -140,6 +140,29 @@ def best_lag_correlation(a: np.ndarray, b: np.ndarray, max_lag: int) -> dict:
     return best
 
 
+def ring_mask(h: int, w: int, frac: float = 0.15) -> np.ndarray:
+    """True on the frame's outer ring (`frac` of each side): where the background is, around a person in the middle."""
+    m = np.zeros((h, w), dtype=bool)
+    dy, dx = max(1, int(round(h * frac))), max(1, int(round(w * frac)))
+    m[:dy, :] = m[-dy:, :] = True
+    m[:, :dx] = m[:, -dx:] = True
+    return m
+
+
+def background_difference(out: np.ndarray, src: np.ndarray, frac: float = 0.15) -> dict:
+    """How far a clip's background moved from the source's: mean abs error (0–1) and PSNR (dB) on the outer ring of
+    each frame, over the frames both have (uint8 N×H×W×3, the same size)."""
+    n = min(len(out), len(src))
+    if n == 0:
+        return {"mae": float("nan"), "psnr": float("nan"), "frames": 0}
+    a = out[:n].astype(np.float32) / 255.0
+    b = src[:n].astype(np.float32) / 255.0
+    ring = ring_mask(a.shape[1], a.shape[2], frac)
+    diff = (a - b)[:, ring]
+    mse = float(np.mean(diff**2))
+    return {"mae": float(np.mean(np.abs(diff))), "psnr": 99.0 if mse <= 1e-10 else float(10 * np.log10(1.0 / mse)), "frames": n}
+
+
 def consecutive_similarity(embs: np.ndarray) -> float:
     """Mean cosine between consecutive items (the shots of a film): how well a look and its subject carry across cuts."""
     e = l2norm(np.atleast_2d(embs))

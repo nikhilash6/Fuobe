@@ -18,3 +18,9 @@ export function recipeFailure(e: unknown): Response {
 }
 
 export const badBody = (issues: z.core.$ZodIssue[]) => Response.json({ error: issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ") }, { status: 400 });
+
+/** What a skill is drafted from: results picked in the Library (W2), or an Assist chat whose plans ran (W3). */
+export const DraftSource = z.union([
+  z.object({ generations: z.array(z.string().min(1).max(40)).min(1).max(200) }),
+  z.object({ thread: z.string().min(1).max(40) }),
+]);

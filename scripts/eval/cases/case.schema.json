@@ -542,6 +542,7 @@
               "lipsync",
               "continuity",
               "palette",
+              "background",
               "separation",
               "wer"
             ]
@@ -1288,6 +1289,7 @@
                 "lipsync",
                 "continuity",
                 "palette",
+                "background",
                 "separation",
                 "wer"
               ]

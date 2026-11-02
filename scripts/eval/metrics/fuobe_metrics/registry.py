@@ -19,6 +19,7 @@ FAMILIES = {
     # Word error rate of the voice stem (Whisper), of the input as it is (the same ASR without separating first), and of
     # the job's own transcript when its graph transcribes (Qwen3-ASR in the dub's first step).
     "wer": ["wer", "werInput", "werTranscript"],
+    "background": ["bgDiff", "bgPsnr"],
 }
 
 METRICS = {
@@ -52,6 +53,8 @@ METRICS = {
     "wer": {"label": "WER, dialogue stem", "better": "lower", "unit": "word error rate 0–1"},
     "werInput": {"label": "WER, input as is", "better": "lower", "unit": "word error rate 0–1"},
     "werTranscript": {"label": "WER, the job's transcript", "better": "lower", "unit": "word error rate 0–1"},
+    "bgDiff": {"label": "Background change vs the source", "better": "lower", "unit": "mean abs error 0–1 on the frame's outer ring"},
+    "bgPsnr": {"label": "Background PSNR vs the source", "better": "higher", "unit": "dB on the frame's outer ring"},
 }
 
 # Weights, each pinned to a Hugging Face revision. "commercial" says whether the model itself may be used
