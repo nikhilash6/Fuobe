@@ -3864,7 +3864,7 @@ export const SPEC = [
       '-> SaveGLB. Resolution 512 runs one pass (transformer_512), 1024 two and 1536 three (transformer_1024), 25 scheduler steps each. Output: geometry only (no texture, material or vertex colour), ' +
       'recentred at unit radius, not guaranteed watertight; the Fuobe server finishes it like any image-to-3D GLB (web GLB + CPU turntable). Needs Linux or Windows with an NVIDIA GPU of compute capability 8.0+ ' +
       'and CUDA 12 (official stack: CUDA 12.0-12.5, torch 2.5.0+cu124, flash-attn 2.7.4.post1, spconv-cu120 2.3.6; the pack keeps ComfyUI\'s torch and pins spconv-cu126 2.3.8, with an SDPA attention option). ' +
-      'No CPU path. 1536 is validated upstream only on a 96 GB H20; the pack\'s author ran 512-1536 on a 24 GB laptop RTX 5090 with offload (vramGb is an estimate). Not run by Fuobe yet (no GPU here). ' +
+      'No CPU path. 1536 is validated upstream only on a 96 GB H20; the pack\'s author ran 512-1536 on a 24 GB laptop RTX 5090 with offload (vramGb is an estimate). Not yet run end to end through Fuobe. ' +
       'Weights: 7.73 GB Hi3D + 1.22 GB DINOv2-L + 1.71 GB CLIP ViT-L/14 at pinned revisions.',
   },
   {

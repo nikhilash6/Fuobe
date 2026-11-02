@@ -141,6 +141,8 @@ describe("round-4 ComfyUI workflows", () => {
       // Clean up voice: ComfyUI-RE-USE isn't on the validation server; the pack's own tests run it (comfy-nodes/ComfyUI-RE-USE/tests).
       "voice-clean-reuse",
       "voice-clean-bed-reuse",
+      // Hi3D refine (hi3d-refine): Comfyui-Hi3d-T8 needs an Ampere-or-newer NVIDIA GPU, so it isn't on the validation server.
+      "mesh-refine-hi3d",
       "video-character-swap-h3",
       "video-character-swap-h3-relay",
       "video-person-remove-h3-relay",
