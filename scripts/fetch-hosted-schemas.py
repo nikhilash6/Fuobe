@@ -23,6 +23,7 @@ Run:  python3 scripts/fetch-hosted-schemas.py
       python3 scripts/fetch-hosted-schemas.py --partner                                          (partner routes in partnerEndpoints, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --part4 [endpoint …]                               (PART4's records in paid-model-apis-4.json, the rest kept)
       python3 scripts/fetch-hosted-schemas.py --new10 [endpoint …]                               (FLUX 3 Klein: NEW10's records in new-models-10.json, its trainers; or those named)
+      python3 scripts/fetch-hosted-schemas.py --keying [endpoint …]                              (Bria green-screen despill and guided cut-out: KEYING's records in new-models-10.json)
 
 --part4 re-reads endpoints that research part 4 recorded (docs/research/paid-model-apis-4.json) and refreshes them in
 place: their inputs, the price lines of their llms.txt, their status in fal's catalog (active / playground-only, read
@@ -203,6 +204,21 @@ NEW10 = {
 NEW10_TRAINERS = {
     "blackforestlabs/flux-3/klein/base/trainer": ("FLUX 3 Klein base", "Soul ID on FLUX 3 Image Klein (nm10-flux3-klein; FLUX Kommunity licence, shown as information)"),
     "blackforestlabs/flux-3/klein/base/trainer/edit": ("FLUX 3 Klein base", "Edit LoRAs from before / after pairs on FLUX 3 Image Klein (recorded; Soul ID trains subjects with the plain trainer)"),
+}
+
+# Research #10 (build package nm10-keying): Bria's green-screen key with despill and its guided cut-out on fal, read with --keying
+# into docs/research/new-models-10.json endpointRecords (part 4's record shape). Both are Bria's own hosted models (proprietary).
+KEYING = {
+    "bria/video/background-removal/green-screen-despill": (
+        "bg-remove-video", {"video": "video_url", "spillSuppression": "spill_suppression"}, "Bria green-screen despill", "Bria Video Background Removal: Green Screen Despill",
+        "Chroma (green-screen) footage keyed onto a transparent background with the green spill pulled out of the edges. spill_suppression 0-1 "
+        "(1 by default, 0 turns it off); output_container_and_codec webm_vp9 keeps the transparency (a codec that can't carry alpha falls back "
+        "to black and says so in warning); preserve_audio keeps the sound. Released 2026-08-27."),
+    "bria/guided-remove-background": (
+        "bg-remove", {"images": "image_url", "prompt": "prompt"}, "Bria guided cut-out", "Bria Guided Remove Background",
+        "The photo's obvious subject cut out (the original pixels with a new alpha, RGBA PNG), adjusted by plain words: add something ('the "
+        "person with the mat'), drop something ('without the lamp') or narrow it ('only the chair'). The prompt is optional (empty = the plain "
+        "cut-out); autocrop tightens the canvas to what is kept. Released 2026-10-10."),
 }
 
 
@@ -522,7 +538,38 @@ def new10(ids):
     FILE.write_text(json.dumps(raw, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def keying(ids):
+    """nm10-keying's Bria records (endpointRecords in new-models-10.json); only those named in `ids` when it names any."""
+    path = ROOT / "docs/research/new-models-10.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    records = {e["endpoint"]: e for e in data.get("endpointRecords") or []}
+    for ep, (op, kf, model, title, notes) in KEYING.items():
+        if ids and ep not in ids:
+            continue
+        inputs = fal(ep)
+        missing = [f for f in kf.values() if f not in inputs]
+        if missing:
+            sys.exit(f"{ep}: keyFields {missing} are not inputs")
+        price = llms_price(ep)
+        m = re.search(r"\$(\d+(?:\.\d+)?) per (second|image)", price or "")
+        pricing = {"usd": float(m.group(1)), "unit": m.group(2)} if m else {"usd": None, "unit": "unknown"}
+        records[ep] = {
+            "family": "bria", "model": model, "title": title, "vendor": "Bria", "operation": op, "provider": "fal", "endpoint": ep,
+            "falCategory": "video-to-video" if op == "bg-remove-video" else "image-to-image", "status": fal_catalog_status(ep), "keyFields": kf,
+            "inputs": inputs, "output": "video.url" if op == "bg-remove-video" else "image.url", "price": price, "pricing": pricing,
+            "license": "Bria's hosted model (proprietary; used through fal's API)", "notes": notes,
+            "verified": True, "sourceUrl": f"https://fal.ai/models/{ep}", "schemaUrl": f"https://fal.ai/api/openapi/queue/openapi.json?endpoint_id={ep}",
+            "capability": op, "fetched": TODAY,
+        }
+        print(f"{ep}: {records[ep]['status']}, {len(inputs)} inputs, {price}")
+    data["endpointRecords"] = list(records.values())
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def main():
+    if "--keying" in sys.argv:
+        keying(sys.argv[sys.argv.index("--keying") + 1:])
+        return
     if "--new10" in sys.argv:
         new10(sys.argv[sys.argv.index("--new10") + 1:])
         return
