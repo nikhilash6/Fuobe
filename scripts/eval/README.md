@@ -128,8 +128,9 @@ One JSON file per Original in `cases/`. Later Original packages add their own fi
 | `cinema` | Fuobe Cinema (O6) | 3 Director scenes (the prompt Cinema compiles), 4 camera moves as LTX-2.3's `camera_lora` (cloud), 2 films of 3 shots | `original`, `words` (no camera LoRA), `expansion` (fal's prompt expansion on), `wan` (Wan 2.2 A14B hosted), `partner` (Seedance 2.5); all but `original` cloud only | clip, temporal, continuity |
 | `marketing` | Fuobe Marketing Image, Fuobe Try-On, the AI Influencer sheet and Instadump (O10) | 7: a Standalone product shot (the product-shot graph on your GPU; hosted Qwen-Image-Edit in the cloud), an ad's picture, a poster without a product, a try-on, the builder's sheet (through `/api/influencer`), an Instadump photo from a selfie | `original`, `partner` (cloud: GPT Image 2.5, Nano Banana Pro, Ideogram 3.0, FASHN) | clip, aesthetic, style (the product), identity (try-on, Instadump) |
 | `turnaround` | Turnaround video (N7-6) | 4 through `/api/turnaround`: four views, the front and the back (sides drawn by the Angles app), the front alone, a sheet alone (a front drawn from it) | `default` (Frames on your GPU, H3 Max references in the cloud), `keyframes` (cloud: FLUX 3 Max), `camera` (cloud: H3 Max camera controls) | identity of 8 sampled frames against the views, temporal, clip |
+| `separation` | Soundtrack separation (DBS D4): Split soundtrack, Remove dialogue, the dub's voice split | 6 synthetic 12 s mixes with known stems (dialogue centred and panned left, a mains hum, tape hiss, a master at −0.1 dBFS, the same mix inside a video) and your own clip for the blind review | `bsrnn-mono` (DBS-BSRNN, the fast stereo bed), `bsrnn-stereo`, `tiger-mono`, `tiger-stereo` (each channel), `dbs-dub` and `melband` (the dub's first step, Qwen3-ASR 0.6B), `demucs` (cloud) | separation, wer |
 
-`soul.json`, `soul-cinema.json`, `soul-hex.json`, `dop.json`, `dop-mix.json` and `dop-mixed-media.json` are **generated** from the research. They come from
+`soul.json`, `soul-cinema.json`, `soul-hex.json`, `dop.json`, `dop-mix.json`, `dop-mixed-media.json` and `separation.json` are **generated** from the research. They come from
 `docs/research/higgsfield-image-studios.json` (the look ids) and
 `docs/research/fuobe-originals-recipes-5.json` (recipes, LoRAs, Soul Cinema's recipe, the motion map).
 `soul-hex`'s palettes are Fuobe's own. Run
@@ -357,6 +358,8 @@ still has its timing and cost, and the report says why the scores are missing.
 | SyncNet (optional) | `syncnet` | higher | runs only when `FUOBE_EVAL_SYNCNET_CMD` points at your own SyncNet. It isn't bundled because its weights' licence isn't stated | yours |
 | Shot continuity | `continuity` | higher | CLIP similarity between consecutive shots of a film | CLIP |
 | Palette | `paletteFit`, `paletteCover` | lower, higher | the mean ΔE (CIE76, Lab) from each pixel to the nearest colour of the palette the request sent (`params.palette`, or the palette lock's colours), and the share of the palette's colours that are nearest for at least 3% of the pixels | none (numpy) |
+| Separation | `voiceSiSdr`, `musicSiSdr`, `effectsSiSdr`, `backgroundSiSdr`, `voiceSdr`, `backgroundSdr`, `mixError`, `bedLevel`, `bedPeak`, `stereoCorrGap`, `noiseInVoice`, `speedX` | see each | each stem against the mix's known part (SI-SDR, and SDR where the level counts; a mono stem is scored against the reference's mono mean); voice + bed against the input (dB under it); the bed's level and peak against the known bed (AudioMerge scales a bed that peaks over full scale down); the bed's left/right correlation against the known bed's; the share of a known hum or hiss left in the dialogue; times real time from ComfyUI-DBS's report (all passes), else from ComfyUI's time for the graph | none (numpy) |
+| Word error rate | `wer`, `werInput`, `werTranscript` | lower | the dialogue stem heard by Whisper against the words spoken; `werInput` is the same on the input as it is (what "Clean the voice first" changes); `werTranscript` is the job's own transcript (Qwen3-ASR in the dub's first step) | **Whisper base.en** (OpenAI, **MIT**; the card says Apache-2.0) through transformers (Apache-2.0): `pnpm eval:setup --asr` |
 | Time, cost, memory | `seconds`, `costUsd`, `vramGb` | lower | from the runner | — |
 
 Identity needs `pnpm eval:setup --identity`, which installs insightface and onnxruntime (MIT
@@ -472,6 +475,27 @@ in at least 6 of the 8 cases. Then the default for all 32 effects goes back to K
 change (the `mixed-media-route` branch of `src/lib/catalog/dop.ts`), and `docs/STATUS.md` records the run.
 Anything less keeps Fuobe DoP. The metrics are shown beside the ratings but don't decide this one: the two
 models' clips differ in look by design (the still is redrawn first), so the people decide.
+
+### The separation suite: defaults with numbers
+
+The separation suite chooses the soundtrack split's defaults (doc `docs/research/dbs-separation-7.md`, §2.4 and §9 D4).
+Its test mixes are built here, so every stem is known exactly:
+
+```bash
+pnpm eval:setup --asr                                             # Whisper for the word error rate (optional)
+python3 -I scripts/eval/fixtures/make-separation.py --speech <folder>   # local/separation/<mix>/: mix, voice, music, effects, background, noise, meta.json
+pnpm eval:run --suite separation --engine open --variants bsrnn-mono,bsrnn-stereo,tiger-mono,tiger-stereo
+pnpm eval:run --suite separation --engine open --cases separation/centre,separation/hum,separation/video --variants bsrnn-mono,dbs-dub,melband
+pnpm eval:review latest                                           # your own clip in local/separation/real/clip.mp4, blind
+```
+
+`--speech` takes a folder of speech files with their words (`<name>.flac` and `<name>.txt`, or an `index.json`):
+Fuobe's own TTS lines are the intended source. The music, effects, hum and hiss are synthesized by the script from
+fixed seeds (Fuobe's own, CC0). Each mix's `meta.json` records the words, the levels and every source's licence. The
+blind review pairs the dialogue stems and the music & effects stems of two variants as separate questions, with
+players instead of pictures. The cloud runs Demucs (as today's cloud dub does); DBS isn't hosted, and SAM Audio
+isn't offered on the cloud engine. The suite's `decides` field holds the rule; a person changes a default, in a
+reviewed commit.
 
 ## Covers: the renders become the preview media
 

@@ -223,7 +223,7 @@ def report_speed(report: dict) -> float | None:
     included), or None when the report doesn't say."""
     if not isinstance(report, dict):
         return None
-    for key in ("realtime_factor", "x_realtime", "times_realtime", "speed_x_realtime", "realtime_x", "rtf_x"):
+    for key in ("times_real_time", "realtime_factor", "x_realtime", "times_realtime", "speed_x_realtime", "realtime_x", "rtf_x"):
         v = report.get(key)
         if isinstance(v, (int, float)) and v > 0:
             return float(v)

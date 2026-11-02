@@ -115,6 +115,7 @@ def test_wer_on_fixed_strings():
 
 
 def test_report_speed():
+    assert sep.report_speed({"times_real_time": 0.2, "audio_seconds": 12.0, "seconds": 60.12}) == 0.2
     assert sep.report_speed({"realtime_factor": 0.27}) == 0.27
     assert sep.report_speed({"audio_seconds": 20.0, "run_seconds": 80.0}) == 0.25
     assert sep.report_speed({"model": "x"}) is None
