@@ -1909,8 +1909,8 @@ export const SPEC = [
       '([Intro] [Verse] [Pre-Chorus] [Chorus] [Post-Chorus] [Bridge] [Instrumental] [Solo] [Outro]); "[Instrumental]" when there are no words. duration = max_duration, an upper bound ' +
       '(the model can end the song earlier; 9,000 acoustic frames at 25 fps = 5 min). KSampler 30 steps, cfg 1.7, euler / simple and the encoder\'s cfg_scale 1.7 / top_k 50, as the template. ' +
       '32 kHz stereo. The template\'s Tiled decode switch (VAEDecodeAudioTiled 1536 / 64): less VRAM for long songs, a small risk of seams; tiledDecode true for songs over 120 s. ' +
-      'VRAM 24 GB is a guess: the card says under 24 GB at full precision and about 22 GB with CPU offload; its 8 GB figure streams the language model layer by layer (diffusers group offload), ' +
-      'which the core node does not do (ComfyUI\'s own partial loading may still fit smaller cards: not measured here). Files: DiT int8 2.5 GB (fp16 4.91, fp32 9.83), pruned int8 encoder 9.2 GB ' +
+      'VRAM 24 GB, the card\'s figure: under 24 GB at full precision and about 22 GB with CPU offload; its 8 GB figure streams the language model layer by layer (diffusers group offload), ' +
+      'which the core node does not do (ComfyUI\'s own partial loading may still fit smaller cards). Files: DiT int8 2.5 GB (fp16 4.91, fp32 9.83), pruned int8 encoder 9.2 GB ' +
       '(pruned bf16 16.71, full bf16 18.47), DAV VAE 0.22 GB.',
   },
   {
@@ -1928,12 +1928,12 @@ export const SPEC = [
     outputs: [{ node: '8', kind: 'audio' }],
     defaults: { duration: 120 },
     limits: { maxDurationSec: 300 },
-    vramGb: 'unverified',
+    vramGb: 12,
     license: 'CC-BY-NC-4.0 (m-a-p/YuE2-3B @ 8f24312f weights; the Comfy-Org/YuE2 repack @ 2f76ca75 is tagged the same)',
     notes:
       'From the core template audio_yue2_text2music from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: MP3 V0. tags = the style (language, genre, vocal, tempo, instruments), lyrics with section tags ([Verse] [Chorus] [Bridge] [Outro]); only the words to be sung. YuE2 Generate ABC plans ' +
       'melody and chords ("full") before the song; YuE2 Generate Music makes the tokens and the seconds the empty latent takes. duration = max_duration, an upper bound reduced for long prompts. ' +
-      'KSampler 32 steps, cfg 1, dpm_2 / sgm_uniform, as the template. Checkpoint int8 3.96 GB (bf16 7.8 GB). VRAM not published: unverified.',
+      'KSampler 32 steps, cfg 1, dpm_2 / sgm_uniform, as the template. Checkpoint int8 3.96 GB (bf16 7.8 GB). VRAM is not published: 12 GB is Fuobe\'s estimate for the int8 checkpoint.',
   },
   {
     id: 'music-yue2-cover',
@@ -1951,11 +1951,11 @@ export const SPEC = [
     outputs: [{ node: '8', kind: 'audio' }],
     defaults: { duration: 300 },
     limits: { maxDurationSec: 300 },
-    vramGb: 'unverified',
+    vramGb: 12,
     license: 'CC-BY-NC-4.0 (m-a-p/YuE2-3B @ 8f24312f and m-a-p/SheetSage2 @ b83c3d79 weights; the Comfy-Org/YuE2 repack @ 2f76ca75 is tagged the same)',
     notes:
       'From the core template audio_yue2_music_cover from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: MP3 V0. audio = the song to cover (LoadAudio). SheetSage2 transcribes its melody to ABC ("melody" mode, the template\'s), which YuE2 sings with the new style and lyrics: lyrics close to the ' +
-      'original\'s phrasing and syllable count fit the melody best. The source audio is not YuE2\'s conditioning, only its melody. SheetSage2 bf16 1.39 GB. VRAM not published: unverified.',
+      'original\'s phrasing and syllable count fit the melody best. The source audio is not YuE2\'s conditioning, only its melody. SheetSage2 bf16 1.39 GB. VRAM is not published: 12 GB is Fuobe\'s estimate for the int8 checkpoint and SheetSage2.',
   },
   {
     id: 'v2a-mmaudio',
