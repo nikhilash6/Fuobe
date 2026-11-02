@@ -103,6 +103,11 @@ describe("round-4 ComfyUI workflows", () => {
       "minimax-h3-i2v-hq",
       "minimax-h3-flf2v-hq",
       "minimax-h3-orbit",
+      // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu): FastH3 V2 and Trim, unvalidated like the H3 graphs until a GPU run.
+      "minimax-h3-fast-t2v",
+      "minimax-h3-fast-i2v",
+      "minimax-h3-fast-flf2v",
+      "minimax-h3-trim-t2v",
       // Design a voice (nm10-voice-design): ComfyUI-QwenTTS and ComfyUI-VoxCPM2 aren't on the validation server (tests/voice-design-server.test.ts).
       "tts-qwen3-design",
       "tts-qwen3-clone",
@@ -148,7 +153,6 @@ describe("round-4 ComfyUI workflows", () => {
       "voice-clean-bed-reuse",
       "video-character-swap-h3",
       "video-character-swap-h3-relay",
-      "video-person-remove-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
       "video-regenerate-h3",

@@ -316,13 +316,35 @@ export const MUSIC_STUDIO: StudioConfig = {
   feature: "audio",
   title: "Audio",
   hero: "What should it sound like?",
-  placeholder: "Genre, mood, instruments, tempo — add lyrics on new lines",
+  placeholder: "Genre, mood, voice, instruments, tempo",
   kind: "audio",
   ops: ["music"],
   feed: { kind: "audio", features: ["audio"] },
-  slots: [],
+  // A song to cover, for a model that covers one (YuE2); the lyrics have an editor of their own under the prompt.
+  slots: [{ key: "audio", label: "Song to cover", accept: "audio", cover: true }],
   defaultModels: { cloud: "sonilo-music", open: "oss-ace-step" },
   suggestions: ["Lo-fi hip hop beat with soft piano, 80 bpm", "Epic orchestral trailer music building to a drop", "Upbeat indie pop with handclaps and a whistled hook"],
+};
+
+/**
+ * Audio → Extend & remix (nm10-music3): a song's cloud tools on Mureka. Extend it with new lyrics, remix it in another style
+ * with its lyrics, or split it into its stems. Any song works: Mureka's own by its id, any other sent to it first. The
+ * song's length is read so an extension starts at its end (voiceFacts).
+ */
+export const SONG_TOOLS_STUDIO: StudioConfig = {
+  feature: "song-tools",
+  title: "Audio",
+  hero: "Take a song further",
+  subtitle: "Extend it with new lyrics, remix it in another style, or split it into its tracks. Runs in the cloud on Mureka.",
+  placeholder: "The remix's style: genre, mood, voice, instruments",
+  kind: "audio",
+  ops: ["song-extend", "song-remix", "song-stems"],
+  feed: { kind: "audio", features: ["song-tools"] },
+  slots: [{ key: "audio", label: "Song", accept: "audio", required: true }],
+  defaultModels: { cloud: "mureka-extend", open: "" },
+  promptOptional: true,
+  voiceFacts: true,
+  controlsTitle: "Options",
 };
 
 export const FOLEY_STUDIO: StudioConfig = {
@@ -398,6 +420,8 @@ export const VIDEO_EDIT_STUDIO: StudioConfig = {
   placeholder: "Describe the edit… e.g. “make it snow”, “replace the car with a horse”",
   kind: "video",
   ops: ["v2v"],
+  // "Insert a moment" (H3 Max insert): a new scene between two points of the clip, picked like any edit model.
+  pickerOps: ["v2v", "insert-moment"],
   feed: { features: ["video-edit"] },
   slots: [{ key: "video", label: "Video", accept: "video", required: true }],
   multiRef: { label: "Add ref", max: 4 },
@@ -484,6 +508,8 @@ export const VIDEO_RELIGHT_STUDIO: StudioConfig = {
   subtitle: "Describe the new light — golden hour, neon, a single window, a campfire.",
   placeholder: "e.g. “warm sunset light from the left, long soft shadows”",
   ops: ["relight-video"],
+  // The clip's length prices a relight billed by the second (H3 Max relight) and holds it to the model's window (up to 15 s).
+  clipFacts: true,
   defaultModels: { cloud: "lightx-relight", open: "oss-bernini-relight" },
   promptOptional: false,
   suggestions: ["Warm golden-hour sun from the left", "Pink and blue neon from the street", "A single cold window light, dark room", "Flickering campfire light from below"],

@@ -18,7 +18,7 @@ import type {
   SkillSummary,
 } from "@/lib/assist";
 import type { ConnectorView } from "@/lib/assist-connectors";
-import type { ScheduleRule, ScheduleView } from "@/lib/assist-schedule";
+import type { ScheduleRule, ScheduleSkill, ScheduleView } from "@/lib/assist-schedule";
 import type { Engine, Generation } from "@/lib/catalog/types";
 import type { RecipeEstimate, RecipeRun, RecipeView, VerifyResult } from "@/lib/recipe";
 import type { DraftRefusal, Naming, SkillDraft } from "@/lib/recipe-builder";
@@ -434,6 +434,8 @@ export interface ScheduleForm {
   engine: Engine;
   mode?: AssistModeChoice | null;
   connectors?: boolean;
+  /** Run a saved skill instead of a request (null: back to a request). */
+  skill?: ScheduleSkill | null;
   paused?: boolean;
 }
 

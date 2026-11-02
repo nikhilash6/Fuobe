@@ -1,9 +1,30 @@
 "use client";
 
 import { Loader2, Minus, Plus, TriangleAlert, X } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { Fragment, useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  ENGINE_TIMING,
+  gapLabel,
+  gapSeconds,
+  keyTimes,
+  lengthLabel,
+  MAX_GAP_FRAMES,
+  MIN_GAP_FRAMES,
+  moveKey,
+  SPEEDS,
+  stepGap,
+  totalFrames,
+  totalSeconds,
+  type GapTiming,
+  type InbetweenTiming,
+  type PlaybackFps,
+} from "@/lib/inbetween";
+import type { Engine } from "@/lib/catalog/types";
 import { useAskBeforeUpload } from "@/lib/api";
 import { FRAMES_HINT, frameRange, frameRole, frameTimes, KEYFRAME_SNAP, MAX_KEYFRAMES, secondsLabel } from "@/lib/catalog/keyframes";
 import type { FrameAttachment } from "@/lib/composer";
@@ -15,6 +36,15 @@ export interface FramesNotice {
   /** "warn": Generate waits for it; "info": what the model will do. */
   tone: "info" | "warn";
   action?: { label: string; onClick: () => void };
+}
+
+/** Keyframe animation's controls (Fuobe Animation): each gap's timing, the playback rate and a still mouth. */
+export interface FramesAnimation {
+  timing: InbetweenTiming;
+  engine: Engine;
+  onTiming: (t: InbetweenTiming) => void;
+  stillMouth: boolean;
+  onStillMouth: (on: boolean) => void;
 }
 
 const pct = (t: number, duration: number) => `${duration > 0 ? (t / duration) * 100 : 0}%`;
@@ -36,6 +66,8 @@ export function FramesStrip({
   onAddPick,
   onClose,
   notice,
+  style,
+  animation,
 }: {
   frames: FrameAttachment<SlotValue>[];
   duration: number;
@@ -50,10 +82,17 @@ export function FramesStrip({
   onAddPick: (v: SlotValue) => void;
   onClose: () => void;
   notice?: FramesNotice | null;
+  /** Style: Animation, when Fuobe Animation can run here. */
+  style?: { on: boolean; onChange: (on: boolean) => void; engine: Engine };
+  animation?: FramesAnimation;
 }) {
   const titleId = useId();
   const hintId = useId();
-  const times = frameTimes(frames.map((f) => f.at), duration);
+  const styleId = useId();
+  // An animation's keyframes sit where their gaps' timing puts them; the film is as long as the gaps.
+  const length = animation ? totalSeconds(animation.timing) : duration;
+  const times = animation ? keyTimes(animation.timing) : frameTimes(frames.map((f) => f.at), duration);
+  const setGap = (i: number, g: GapTiming) => animation?.onTiming({ ...animation.timing, gaps: animation.timing.gaps.map((x, j) => (j === i ? g : x)) });
   return (
     <div role="group" aria-labelledby={titleId} aria-describedby={hintId} data-frames-strip className="space-y-1.5 px-1 pt-1 pb-2">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-1">
@@ -64,7 +103,22 @@ export function FramesStrip({
           {FRAMES_HINT}
         </span>
         <div className="ml-auto flex items-center gap-1">
-          <LengthStepper value={duration} options={durations} onDuration={onDuration} />
+          {style && (
+            <label htmlFor={styleId} className="mr-1 flex cursor-pointer items-center gap-1.5 text-[12px] font-medium">
+              <Switch id={styleId} checked={style.on} onCheckedChange={style.onChange} aria-describedby={`${styleId}-hint`} />
+              Animation
+              <span id={`${styleId}-hint`} className="sr-only">
+                The in-betweens drawn in an anime style, with a timing for each gap{style.engine === "open" ? ", free on your GPU" : ""}
+              </span>
+            </label>
+          )}
+          {animation ? (
+            <span className="rounded-full bg-muted px-2.5 py-1 text-[12px] font-medium tabular-nums" aria-live="polite" data-animation-length>
+              {lengthLabel(length)} · {totalFrames(animation.timing)} frames
+            </span>
+          ) : (
+            <LengthStepper value={duration} options={durations} onDuration={onDuration} />
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -83,15 +137,19 @@ export function FramesStrip({
 
       <div className="scrollbar-none flex items-start gap-2 overflow-x-auto px-1 pt-1.5">
         {frames.map((f, i) => (
-          <FrameTile
-            key={f.value.id ?? `${f.value.ref}-${i}`}
-            index={i}
-            role={frameRole(i, frames.length, f.at)}
-            value={f.value}
-            time={times[i]}
-            onChange={(v) => onFrame(i, v)}
-            onFile={(file) => onFrameFile(i, file)}
-          />
+          <Fragment key={f.value.id ?? `${f.value.ref}-${i}`}>
+            {animation && i > 0 && animation.timing.gaps[i - 1] && (
+              <GapChip index={i - 1} gap={animation.timing.gaps[i - 1]} fps={animation.timing.fps} engine={animation.engine} onChange={(g) => setGap(i - 1, g)} />
+            )}
+            <FrameTile
+              index={i}
+              role={animation ? (i === 0 ? "Start frame" : i === frames.length - 1 ? "End frame" : "Middle frame") : frameRole(i, frames.length, f.at)}
+              value={f.value}
+              time={times[i] ?? 0}
+              onChange={(v) => onFrame(i, v)}
+              onFile={(file) => onFrameFile(i, file)}
+            />
+          </Fragment>
         ))}
         {frames.length < MAX_KEYFRAMES && (
           <div className="flex shrink-0 flex-col items-center gap-1">
@@ -103,7 +161,17 @@ export function FramesStrip({
         )}
       </div>
 
-      {frames.length > 0 && <Ruler frames={frames} times={times} duration={duration} onMove={onMove} />}
+      {frames.length > 0 && (
+        <Ruler
+          frames={frames}
+          times={times}
+          duration={Math.max(length, 0.1)}
+          onMove={animation ? (i, seconds) => animation.onTiming(moveKey(animation.timing, i, seconds)) : onMove}
+          lastFree={!!animation}
+        />
+      )}
+
+      {animation && <AnimationOptions animation={animation} />}
 
       {notice && (
         // A warning (Generate waits for it) reads in the body colour beside an amber icon: amber text on white is under 4.5:1.
@@ -257,7 +325,20 @@ const labelEvery = (d: number) => (d <= 5 ? 1 : d <= 10 ? 2 : d <= 20 ? 5 : 10);
  * The time ruler: one marker per frame at its time. Drag a marker (it snaps to 0.1 s and stays between
  * its neighbours), or focus it and use the arrow keys (0.1 s; Shift or Page Up / Down: 1 s; Home / End).
  */
-function Ruler({ frames, times, duration, onMove }: { frames: FrameAttachment<SlotValue>[]; times: number[]; duration: number; onMove: (i: number, seconds: number) => void }) {
+function Ruler({
+  frames,
+  times,
+  duration,
+  onMove,
+  lastFree,
+}: {
+  frames: FrameAttachment<SlotValue>[];
+  times: number[];
+  duration: number;
+  onMove: (i: number, seconds: number) => void;
+  /** An animation: the last keyframe can move later (the film grows with it). */
+  lastFree?: boolean;
+}) {
   const track = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<number | null>(null);
   const secondsAt = (clientX: number) => {
@@ -283,7 +364,8 @@ function Ruler({ frames, times, duration, onMove }: { frames: FrameAttachment<Sl
                 {thumb}
               </span>
             );
-          const [lo, hi] = frameRange(times, i, duration);
+          const [lo, hi0] = frameRange(times, i, duration);
+          const hi = lastFree && i === frames.length - 1 ? hi0 + 5 : hi0;
           const step = (by: number) => onMove(i, times[i] + by);
           return (
             <button
@@ -347,6 +429,106 @@ function Ruler({ frames, times, duration, onMove }: { frames: FrameAttachment<Sl
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** One gap's timing on the strip, between its two keyframes: frames and speed, and a popover to change them and its words. */
+function GapChip({ index, gap, fps, engine, onChange }: { index: number; gap: GapTiming; fps: PlaybackFps; engine: Engine; onChange: (g: GapTiming) => void }) {
+  const can = ENGINE_TIMING[engine];
+  const name = `keyframes ${index + 1} and ${index + 2}`;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-gap-chip={index}
+          aria-label={`Timing between ${name}: ${gap.frames} frames, ${gap.speed === 1 ? "every frame" : `every ${gap.speed}th frame`}, ${lengthLabel(gapSeconds(gap, fps))}`}
+          className="mt-3.5 flex h-8 shrink-0 flex-col items-center justify-center rounded-full border bg-background px-2 text-[10.5px] leading-tight font-medium tabular-nums shadow-soft outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          <span>{gapLabel(gap)}</span>
+          <span className="text-muted-foreground">{lengthLabel(gapSeconds(gap, fps))}</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 space-y-3 p-3" align="center">
+        <p className="text-[13px] font-medium">
+          Keyframes {index + 1} → {index + 2}
+        </p>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12px] text-muted-foreground">Frames drawn</span>
+          <div role="group" aria-label="Frames drawn" className="flex items-center gap-0.5 rounded-full bg-muted p-0.5">
+            <button type="button" aria-label="Fewer frames" disabled={gap.frames <= MIN_GAP_FRAMES} onClick={() => onChange(stepGap(gap, -1))} className="grid size-6 place-items-center rounded-full hover:bg-background disabled:opacity-40">
+              <Minus className="size-3" />
+            </button>
+            <span className="min-w-10 text-center text-[12px] font-medium tabular-nums">{gap.frames}</span>
+            <button type="button" aria-label="More frames" disabled={gap.frames >= MAX_GAP_FRAMES} onClick={() => onChange(stepGap(gap, 1))} className="grid size-6 place-items-center rounded-full hover:bg-background disabled:opacity-40">
+              <Plus className="size-3" />
+            </button>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12px] text-muted-foreground">Speed</span>
+            <div role="radiogroup" aria-label="Speed" className="flex items-center gap-0.5 rounded-full bg-muted p-0.5">
+              {SPEEDS.map((sp) => {
+                const allowed = can.speeds.includes(sp);
+                return (
+                  <button
+                    key={sp}
+                    type="button"
+                    role="radio"
+                    aria-checked={gap.speed === sp}
+                    disabled={!allowed}
+                    title={allowed ? undefined : "On your GPU"}
+                    onClick={() => onChange({ ...gap, speed: sp })}
+                    className={cn("h-6 min-w-8 rounded-full px-1.5 text-[12px] font-medium tabular-nums disabled:opacity-40", gap.speed === sp ? "bg-background shadow-soft" : "hover:bg-background/60")}
+                  >
+                    ×{sp}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            {engine === "open" ? "Faster keeps every 2nd, 3rd or 4th frame, for a snappier move." : "In the cloud every frame is kept. ×2–×4 are on your GPU."} This gap plays for {lengthLabel(gapSeconds(gap, fps))}.
+          </p>
+        </div>
+        <label className="block space-y-1">
+          <span className="text-[12px] text-muted-foreground">What happens in this gap (optional)</span>
+          <Input value={gap.prompt ?? ""} maxLength={500} placeholder="she jumps and lands" onChange={(e) => onChange({ ...gap, prompt: e.target.value || undefined })} className="h-8 text-[13px]" />
+        </label>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** The animation's playback rate and the still-mouth switch, under the ruler. */
+function AnimationOptions({ animation }: { animation: FramesAnimation }) {
+  const mouthId = useId();
+  const rates = ENGINE_TIMING[animation.engine].rates;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 text-[12px]">
+      <div role="radiogroup" aria-label="Playback" className="flex items-center gap-1.5">
+        <span className="text-muted-foreground">Playback</span>
+        <div className="flex items-center gap-0.5 rounded-full bg-muted p-0.5">
+          {rates.map((r) => (
+            <button
+              key={r}
+              type="button"
+              role="radio"
+              aria-checked={animation.timing.fps === r}
+              onClick={() => animation.onTiming({ ...animation.timing, fps: r })}
+              className={cn("h-6 rounded-full px-2 font-medium tabular-nums", animation.timing.fps === r ? "bg-background shadow-soft" : "hover:bg-background/60")}
+            >
+              {r} fps{r === 16 && rates.length > 1 ? " · true time" : ""}
+            </button>
+          ))}
+        </div>
+      </div>
+      <label htmlFor={mouthId} className="flex cursor-pointer items-center gap-1.5">
+        <Switch id={mouthId} checked={animation.stillMouth} onCheckedChange={animation.onStillMouth} />
+        Keep mouth still
+      </label>
     </div>
   );
 }

@@ -2,7 +2,8 @@
 
 import { AtSign, Check, Dices, ImagePlus, Loader2, RotateCcw, Shuffle, Sparkles, UserRoundPlus, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState, type ComponentProps } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader, PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
@@ -15,6 +16,7 @@ import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { useRun, useRunPreview } from "@/components/photodump/hooks";
 import { ResultsGrid } from "@/components/photodump/results";
 import { RunLine } from "@/components/photodump/steps";
+import { AnimatePosesButton } from "@/components/turnaround/animate-poses";
 import { TurnaroundButton } from "@/components/turnaround/turnaround-dialog";
 import { useElements, useEngine, useGenerations, useLikelyVisitor, useSaveElement } from "@/lib/api";
 import { castFieldVisible, castNameFor, randomCast, SHEET_MAX_REFS, type CastAnswers, type CastFieldData } from "@/lib/catalog/packs";
@@ -152,6 +154,22 @@ export function SaveCharacter({ item, extra, defaultName }: { item: Generation; 
  * reference photos, from a Soul Cast build, or from a description (the AI Influencer app) — saved as
  * a character element.
  */
+type TurnaroundProps = ComponentProps<typeof TurnaroundButton>;
+
+/** ?stills=1 (the GPU pre-flight board's "Turnaround stills · 8 views"): the dialog starts on the 8-view still set. */
+function TurnaroundFromLink(props: TurnaroundProps) {
+  const stills = useSearchParams().get("stills") === "1";
+  return <TurnaroundButton {...props} {...(stills && { route: "stills" as const })} />;
+}
+
+function SheetTurnaround(props: TurnaroundProps) {
+  return (
+    <Suspense fallback={<TurnaroundButton {...props} />}>
+      <TurnaroundFromLink {...props} />
+    </Suspense>
+  );
+}
+
 export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData[]; defaults: CastAnswers }) {
   const [engine, setEngine] = useEngine();
   // A sheet doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
@@ -318,13 +336,14 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
                 <>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border bg-background p-3">
                     <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">Film the character all the way round: front, right side, back, left side.</p>
-                    <TurnaroundButton
+                    <SheetTurnaround
                       key={latest.id}
                       pictures={sheetPictures(latest)}
                       name={mode === "cast" ? castNameFor(cast) : undefined}
                       // Photos someone brought are of a real person: the consent line is asked for.
                       realPerson={(latest.request.inputs?.images ?? []).some((u) => u.startsWith("/api/files/"))}
                     />
+                    <AnimatePosesButton key={`poses-${latest.id}`} pictures={sheetPictures(latest)} name={mode === "cast" ? castNameFor(cast) : undefined} />
                   </div>
                   <SaveCharacter
                     key={`save-${latest.id}`}

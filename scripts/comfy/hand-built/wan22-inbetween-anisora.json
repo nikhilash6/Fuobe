@@ -1,0 +1,330 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Wan 2.2 I2V high noise"
+    }
+  },
+  "2": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "lora_name": "Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors",
+      "strength_model": 1.0
+    },
+    "_meta": {
+      "title": "AniSora 3.2 (high noise)"
+    }
+  },
+  "3": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "shift": 5
+    },
+    "_meta": {
+      "title": "Shift (high)"
+    }
+  },
+  "4": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "Wan 2.2 I2V low noise"
+    }
+  },
+  "5": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+      "strength_model": 1.0
+    },
+    "_meta": {
+      "title": "Lightx2v 4-step (low noise)"
+    }
+  },
+  "6": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "shift": 5
+    },
+    "_meta": {
+      "title": "Shift (low)"
+    }
+  },
+  "7": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    },
+    "_meta": {
+      "title": "Text encoder"
+    }
+  },
+  "8": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    },
+    "_meta": {
+      "title": "VAE"
+    }
+  },
+  "9": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+      "clip": [
+        "7",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Negative words (shared)"
+    }
+  },
+  "k1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "keyframe1.png"
+    },
+    "_meta": {
+      "title": "Keyframe 1"
+    }
+  },
+  "k2": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "keyframe2.png"
+    },
+    "_meta": {
+      "title": "Keyframe 2"
+    }
+  },
+  "p1": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "mouth does not move",
+      "clip": [
+        "7",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Words, keyframes 1 → 2"
+    }
+  },
+  "f1": {
+    "class_type": "WanFirstLastFrameToVideo",
+    "inputs": {
+      "width": 1280,
+      "height": 720,
+      "length": 33,
+      "batch_size": 1,
+      "positive": [
+        "p1",
+        0
+      ],
+      "negative": [
+        "9",
+        0
+      ],
+      "vae": [
+        "8",
+        0
+      ],
+      "start_image": [
+        "k1",
+        0
+      ],
+      "end_image": [
+        "k2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "First / last frame, keyframes 1 → 2"
+    }
+  },
+  "h1": {
+    "class_type": "KSamplerAdvanced",
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": 42,
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 2,
+      "return_with_leftover_noise": "enable",
+      "model": [
+        "3",
+        0
+      ],
+      "positive": [
+        "f1",
+        0
+      ],
+      "negative": [
+        "f1",
+        1
+      ],
+      "latent_image": [
+        "f1",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "High noise (AniSora), keyframes 1 → 2"
+    }
+  },
+  "l1": {
+    "class_type": "KSamplerAdvanced",
+    "inputs": {
+      "add_noise": "disable",
+      "noise_seed": 0,
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 2,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable",
+      "model": [
+        "6",
+        0
+      ],
+      "positive": [
+        "f1",
+        0
+      ],
+      "negative": [
+        "f1",
+        1
+      ],
+      "latent_image": [
+        "h1",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Low noise (4 steps), keyframes 1 → 2"
+    }
+  },
+  "d1": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "l1",
+        0
+      ],
+      "vae": [
+        "8",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Decode, keyframes 1 → 2"
+    }
+  },
+  "s1": {
+    "class_type": "VHS_SelectEveryNthImage",
+    "inputs": {
+      "images": [
+        "d1",
+        0
+      ],
+      "select_every_nth": 1,
+      "skip_first_images": 1
+    },
+    "_meta": {
+      "title": "Every frame, keyframes 1 → 2"
+    }
+  },
+  "first": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "d1",
+        0
+      ],
+      "batch_index": 0,
+      "length": 1
+    },
+    "_meta": {
+      "title": "Keyframe 1's frame"
+    }
+  },
+  "batch": {
+    "class_type": "BatchImagesNode",
+    "inputs": {
+      "images.image0": [
+        "first",
+        0
+      ],
+      "images.image1": [
+        "s1",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "All frames in order"
+    }
+  },
+  "video": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "fps": 24,
+      "bit_depth": "auto",
+      "color_space": "sRGB",
+      "codec": "none",
+      "images": [
+        "batch",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Create Video"
+    }
+  },
+  "save": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "fuobe/wan22-inbetween-anisora",
+      "format": "auto",
+      "format.codec": "auto",
+      "codec": "auto",
+      "video": [
+        "video",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Save Video"
+    }
+  }
+}

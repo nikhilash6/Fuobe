@@ -8,6 +8,7 @@ import {
   MAX_ADS_PER_PRODUCT,
   MAX_PRODUCTS_PER_RUN,
   adVisualModel,
+  drawnWordsModel,
   MARKETING_IMAGE_MODEL,
   type AdConcept,
   type AdCreative,
@@ -16,7 +17,9 @@ import {
   type Product,
 } from "@/lib/catalog/marketing";
 import type { Engine, Generation, GenerationRequest, OutputFile } from "@/lib/catalog/types";
-import { getModel } from "@/lib/catalog";
+import { getModel, supportsOp } from "@/lib/catalog";
+import { adDraft } from "@/lib/layout-surfaces";
+import { LAYOUT_PARAM, readsBoxes } from "@/lib/layout-prompt";
 import { getBrand, getProduct, listProducts, parseJsonObject } from "./brand";
 import { db } from "./db";
 import { llmText } from "./enhance";
@@ -44,6 +47,11 @@ export const BatchBody = z.object({
   direction: z.string().max(1000).optional(),
   /** The visual model (AD_VISUAL_MODELS); Fuobe Marketing Image when left out or not offered on this engine. */
   modelId: z.string().max(80).optional(),
+  /**
+   * "Words drawn by the model": each ad is drawn whole from a layout of its planned rectangles (headline, body and
+   * button as text, the logo area and the product as objects) by a model that reads boxes (DRAWN_WORDS_MODELS), in 4:5.
+   */
+  drawnWords: z.boolean().optional(),
 });
 export type BatchInput = z.infer<typeof BatchBody>;
 
@@ -157,11 +165,45 @@ export async function writeConcepts(brand: BrandKit, product: Product, count: nu
 
 const NO_TEXT = "No text, letters, words, logos or watermarks anywhere in the picture; leave calm space for a headline";
 
-export function visualRequest(c: Pick<AdConcept, "visual" | "headline">, product: Product | null, brand: BrandKit, engine: Engine, asked?: string | null): GenerationRequest {
-  const hero = product?.images[0];
-  const modelId = adVisualModel(engine, asked);
+/** The format a drawn ad is made in (the one it is shown and downloaded in, as a baked ad is). */
+export const DRAWN_AD_RATIO = "4:5";
+
+/**
+ * An ad's picture. Words set on top (the default): the visual alone, no text in it; a visual model that reads boxes
+ * also gets a "keep clear" layout, the product placed where the words leave room. Words drawn by the model: the whole
+ * ad as a layout of planAd's rectangles, drawn by MOSS-Image (or Ideogram 4.5 / FLUX.3 in the cloud).
+ */
+export function visualRequest(
+  c: Pick<AdConcept, "visual" | "headline"> & Partial<Pick<AdConcept, "body" | "cta">>,
+  product: Product | null,
+  brand: BrandKit,
+  engine: Engine,
+  asked?: string | null,
+  drawn = false,
+): GenerationRequest {
+  const modelId = drawn ? drawnWordsModel(engine, asked) : adVisualModel(engine, asked);
   const model = getModel(modelId);
+  // A model that draws from words alone (MOSS-Image) describes the product instead of copying the photo; one that
+  // edits (Ideogram 4.5, FLUX.3) keeps the photo.
+  const hero = drawn && model && !supportsOp(model, "edit") ? undefined : product?.images[0];
+  // A drawn ad's logo is the brand's own, sent after the photo to a model that takes more than one; else no logo box.
+  const logo = drawn && hero && model && (model.options.maxImages ?? 1) > 1 && brand.logo && !/\.svg(\?|$)/i.test(brand.logo) ? brand.logo : undefined;
   const aspect = model?.options.aspectRatios?.includes("4:5") ? "4:5" : model?.options.aspectRatios?.includes("3:4") ? "3:4" : undefined;
+  const visual = c.visual.replace(/[.\s]+$/, "");
+  const layout =
+    drawn || (model && readsBoxes(model))
+      ? adDraft({
+          ratio: aspect ?? DRAWN_AD_RATIO,
+          layout: "overlay",
+          content: drawn ? { headline: c.headline, body: c.body || undefined, cta: c.cta || undefined, brand: brand.name } : { headline: c.headline },
+          brand,
+          mode: drawn ? "words" : "clear",
+          logo: !!logo,
+          product: product ? `${product.name}: ${visual}` : visual,
+          caption: "",
+          meta: ["advertising", drawn ? "social media ad" : "photography"],
+        })
+      : undefined;
   return {
     feature: "ads",
     modelId,
@@ -169,16 +211,17 @@ export function visualRequest(c: Pick<AdConcept, "visual" | "headline">, product
     ...(modelId === MARKETING_IMAGE_MODEL && { engine }),
     op: hero ? "edit" : "t2i",
     prompt: [
-      `Advertising photograph: ${c.visual.replace(/[.\s]+$/, "")}`,
-      hero && "Keep the product exactly as in the reference photo: shape, label, logo, text and colours",
+      `${drawn ? "A finished social media ad" : "Advertising photograph"}: ${visual}`,
+      hero && `Keep the product exactly as in the ${logo ? "first " : ""}reference photo: shape, label, logo, text and colours`,
+      logo && "The last reference image is the brand's logo: place it as it is, in its box",
       brandLine(brand),
-      NO_TEXT,
+      !drawn && NO_TEXT,
     ]
       .filter(Boolean)
       .join(". ")
       .concat("."),
-    inputs: hero ? { images: [hero] } : undefined,
-    params: { aspectRatio: aspect, numOutputs: 1 },
+    inputs: hero ? { images: logo ? [hero, logo] : [hero] } : undefined,
+    params: { aspectRatio: aspect, numOutputs: 1, ...(layout && { extra: { [LAYOUT_PARAM]: layout } }) },
     title: c.headline,
     batchTitle: `${brand.name} · ads`,
   };
@@ -210,8 +253,11 @@ interface CreativeRow {
 interface CreativeMeta {
   engine: Engine;
   modelId: string;
-  /** "baked": drawn whole, words included, in one format by a one-shot ad model before build plan O7 (history). */
-  route: "fuobe" | "baked";
+  /**
+   * "baked": drawn whole, words included, in one format by a one-shot ad model before build plan O7 (history).
+   * "drawn": drawn whole from a layout of its rectangles by a model that reads boxes ("Words drawn by the model").
+   */
+  route: "fuobe" | "baked" | "drawn";
   direction?: string;
   /** A baked ad's one format. */
   ratio?: string;
@@ -243,7 +289,7 @@ export function estimateBatch(input: BatchInput, draft?: { brand: BrandKit; prod
   if (!brand) throw new AdsError("That brand no longer exists");
   const total = input.items.reduce((n, i) => n + i.count, 0);
   const product = draft ? draft.product : getProduct(input.items[0].productId);
-  const p = previewGeneration(visualRequest({ visual: "the product", headline: "Ad" }, product, brand, input.engine, input.modelId));
+  const p = previewGeneration(visualRequest({ visual: "the product", headline: "Ad", cta: "Shop now" }, product, brand, input.engine, input.modelId, !!input.drawnWords));
   let copy = 0;
   try {
     copy = previewGeneration({ feature: "ads", modelId: input.engine === "open" ? "oss-text-llm" : "text-llm", op: "write", prompt: "copy" }).costUsd ?? 0;
@@ -282,11 +328,11 @@ export function createBatch(input: BatchInput, fixed: FixedCopy = {}): { batchId
     return { product: p, count: i.count };
   });
   const est = estimateBatch(input); // validates the model, engine mode and price now
-  const route = "fuobe";
+  const route = input.drawnWords ? "drawn" : "fuobe";
   const batchId = nanoid(10);
   const now = Date.now();
   db().prepare("INSERT INTO ad_batches (id, brand_id, engine, route, model_id, direction, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(batchId, brand.id, input.engine, route, est.modelId, input.direction ?? null, now);
-  const meta: CreativeMeta = { engine: input.engine, modelId: est.modelId, route, direction: input.direction };
+  const meta: CreativeMeta = { engine: input.engine, modelId: est.modelId, route, direction: input.direction, ...(route === "drawn" && { ratio: DRAWN_AD_RATIO }) };
   const insert = db().prepare(
     "INSERT INTO ad_creatives (id, batch_id, brand_id, product_id, position, status, generation_id, meta_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)",
   );
@@ -330,7 +376,7 @@ async function fillBatch(batchId: string, brand: BrandKit, ids: { id: string; pr
         .run(k.angle, k.headline, k.body, k.cta, k.visual, Date.now(), c.id).changes;
       if (!ok) return;
       try {
-        setGen(c.id, createGenerations(visualRequest(k, product, brand, input.engine, input.modelId), { batchId })[0]);
+        setGen(c.id, createGenerations(visualRequest(k, product, brand, input.engine, input.modelId, !!input.drawnWords), { batchId })[0]);
       } catch (e) {
         fail(c.id, (e as Error).message);
       }
@@ -375,8 +421,9 @@ function toCreative(r: CreativeRow): AdCreative {
     error: s.error,
     generationId: r.generation_id,
     image: s.image,
-    baked: meta.route === "baked",
-    ...(meta.route === "baked" && { ratio: (AD_RATIOS as readonly string[]).includes(meta.ratio ?? "") ? (meta.ratio as AdCreative["ratio"]) : "4:5" }),
+    // A drawn ad holds its words, as a baked one does: shown and downloaded whole, in the format it was made in.
+    baked: meta.route === "baked" || meta.route === "drawn",
+    ...((meta.route === "baked" || meta.route === "drawn") && { ratio: (AD_RATIOS as readonly string[]).includes(meta.ratio ?? "") ? (meta.ratio as AdCreative["ratio"]) : "4:5" }),
     layout: r.layout,
     engine: meta.engine,
     modelId: meta.modelId,
@@ -459,8 +506,10 @@ export async function retryCreative(id: string): Promise<AdCreative> {
   let concept: AdConcept = { angle: r.angle ?? "", headline: r.headline ?? "", body: r.body ?? "", cta: r.cta ?? "", visual: r.visual ?? "" };
   if (!concept.headline || !concept.visual) concept = (await writeConcepts(brand, product ?? fakeProduct(brand), 1, meta.direction, r.position))[0];
   // The batch's own visual model (a baked ad's one-shot model isn't one: Fuobe Marketing Image makes it).
-  const g = createGenerations(visualRequest(concept, product, brand, meta.engine, meta.modelId), { batchId: r.batch_id })[0];
-  const fresh: CreativeMeta = { ...meta, route: "fuobe", ratio: undefined };
+  // A drawn ad is drawn again (the same words, in their places).
+  const drawn = meta.route === "drawn";
+  const g = createGenerations(visualRequest(concept, product, brand, meta.engine, meta.modelId, drawn), { batchId: r.batch_id })[0];
+  const fresh: CreativeMeta = { ...meta, route: drawn ? "drawn" : "fuobe", ratio: drawn ? DRAWN_AD_RATIO : undefined };
   db()
     .prepare("UPDATE ad_creatives SET angle = ?, headline = ?, body = ?, cta = ?, visual = ?, meta_json = ? WHERE id = ?")
     .run(concept.angle, concept.headline, concept.body, concept.cta, concept.visual, JSON.stringify(fresh), id);

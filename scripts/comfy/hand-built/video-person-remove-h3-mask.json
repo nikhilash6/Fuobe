@@ -1,0 +1,235 @@
+{
+  "source": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "source.mp4"
+    },
+    "_meta": {
+      "title": "The part (24 fps, sides on the 32 grid)"
+    }
+  },
+  "components": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "source",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "GetVideoComponents"
+    }
+  },
+  "dimensions": {
+    "class_type": "GetImageSize",
+    "inputs": {
+      "image": [
+        "components",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "GetImageSize"
+    }
+  },
+  "green": {
+    "class_type": "EmptyImage",
+    "inputs": {
+      "width": [
+        "dimensions",
+        0
+      ],
+      "height": [
+        "dimensions",
+        1
+      ],
+      "batch_size": 1,
+      "color": 65280
+    },
+    "_meta": {
+      "title": "EmptyImage"
+    }
+  },
+  "sam": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "CheckpointLoaderSimple"
+    }
+  },
+  "subject": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "sam",
+        1
+      ],
+      "text": "person"
+    },
+    "_meta": {
+      "title": "Who to remove (SAM 3.1 words)"
+    }
+  },
+  "first_frame": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "components",
+        0
+      ],
+      "batch_index": 0,
+      "length": 1
+    },
+    "_meta": {
+      "title": "ImageFromBatch"
+    }
+  },
+  "detect": {
+    "class_type": "SAM3_Detect",
+    "inputs": {
+      "model": [
+        "sam",
+        0
+      ],
+      "image": [
+        "first_frame",
+        0
+      ],
+      "conditioning": [
+        "subject",
+        0
+      ],
+      "threshold": 0.4,
+      "refine_iterations": 2,
+      "individual_masks": false
+    },
+    "_meta": {
+      "title": "SAM3_Detect"
+    }
+  },
+  "track": {
+    "class_type": "SAM3_VideoTrack",
+    "inputs": {
+      "model": [
+        "sam",
+        0
+      ],
+      "images": [
+        "components",
+        0
+      ],
+      "initial_mask": [
+        "detect",
+        0
+      ],
+      "conditioning": [
+        "subject",
+        0
+      ],
+      "detection_threshold": 0.5,
+      "max_objects": 1,
+      "detect_interval": 12
+    },
+    "_meta": {
+      "title": "SAM3_VideoTrack"
+    }
+  },
+  "mask": {
+    "class_type": "SAM3_TrackToMask",
+    "inputs": {
+      "track_data": [
+        "track",
+        0
+      ],
+      "object_indices": ""
+    },
+    "_meta": {
+      "title": "SAM3_TrackToMask"
+    }
+  },
+  "binary_mask": {
+    "class_type": "ThresholdMask",
+    "inputs": {
+      "mask": [
+        "mask",
+        0
+      ],
+      "value": 0.5
+    },
+    "_meta": {
+      "title": "ThresholdMask"
+    }
+  },
+  "grow_mask": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "mask": [
+        "binary_mask",
+        0
+      ],
+      "expand": 5,
+      "tapered_corners": false
+    },
+    "_meta": {
+      "title": "GrowMask"
+    }
+  },
+  "green_guide": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "components",
+        0
+      ],
+      "source": [
+        "green",
+        0
+      ],
+      "mask": [
+        "grow_mask",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": false
+    },
+    "_meta": {
+      "title": "ImageCompositeMasked"
+    }
+  },
+  "video": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "green_guide",
+        0
+      ],
+      "fps": [
+        "components",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "CreateVideo"
+    }
+  },
+  "save": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "video",
+        0
+      ],
+      "filename_prefix": "fuobe/video-person-remove-h3-mask",
+      "format": "mp4",
+      "format.codec": "h264",
+      "format.codec.encoding": "re-encode",
+      "format.codec.encoding.crf": 23
+    },
+    "_meta": {
+      "title": "The green mask over the part"
+    }
+  }
+}

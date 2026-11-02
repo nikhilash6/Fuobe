@@ -12,7 +12,7 @@ import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
 import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
-import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, sourceFrames } from "@/lib/catalog/clip-windows";
+import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, insertRangeProblem, portraitShapeProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, withoutTriggers } from "@/lib/catalog/plan";
 import { framedLength, keepMatte, sizeValue } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
@@ -52,6 +52,8 @@ import { listElements } from "./elements";
 import { markStale } from "./gpu/snapshots";
 import { loadIndex } from "./gpu/index-file";
 import { qwen21Gpu } from "./qwen21-gpu";
+import { h3Gpu } from "./h3-gpu";
+import { H3_TIER_PARAM, H3_UNET_PARAM } from "@/lib/gpu/h3-tier";
 import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qwen21-speed";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
@@ -82,6 +84,8 @@ import { offeredLoras, offeredRoutes, requireOffered } from "./model-access";
 import { llmBackends, llmLabel, llmMissing, llmUsesClaude, probeLocal } from "./providers/llm";
 import type { PollContext, PollResult, ProviderAdapter, RemoteOutput } from "./providers/types";
 import { mediaFacts } from "./media-facts";
+import { renderPathVideo } from "./path-render";
+import { songFormat, songToolProblem } from "@/lib/lyrics";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
@@ -406,8 +410,8 @@ export const ASSET_REFS: AssetRef[] = [
   { table: "katana_jobs", cols: ["data_json"], what: "Katana job", name: "json_extract(data_json, '$.title')" },
   // Content Factory: a series' reference clip and its thumbnail.
   { table: "content_series", cols: ["data_json"], what: "Content Factory series", name: "COALESCE(json_extract(data_json, '$.name'), json_extract(data_json, '$.reference.title'))" },
-  // Assist's scheduled tasks: the files the prompt runs with.
-  { table: "assist_schedules", cols: ["attachments_json"], what: "scheduled task", name: "title" },
+  // Assist's scheduled tasks: the files the prompt runs with, and the files a skill task's inputs name.
+  { table: "assist_schedules", cols: ["attachments_json", "skill_json"], what: "scheduled task", name: "title" },
   // Character Swap Studio: the character picture, each clip and its 24 fps copy, masks, anchors, takes and their masters.
   { table: "swap_projects", cols: ["data_json"], what: "Character Swap project", name: "name" },
   // A user skill's bundled text files: its recipe.json names the files a run starts from (an example, a fixed logo).
@@ -693,6 +697,18 @@ function sizedEdit(plan: ReturnType<typeof planGeneration>, req: GenerationReque
 }
 
 /**
+ * A talking avatar's picture held to the shape the hosted model takes (fal's H3 Max lip sync: 0.4 to 2.5 wide), read from the
+ * file's header before the run is paid for. A picture that isn't a file in Fuobe (or isn't the run's own) goes as it is.
+ */
+function portraitProblem(plan: ReturnType<typeof planGeneration>, req: GenerationRequest): string | null {
+  if (plan.op !== "avatar" || plan.model.engine === "open") return null;
+  const first = req.inputs?.images?.[0];
+  const head = first ? localHead(first) : null;
+  const size = head ? imageSize(head) : null;
+  return size ? portraitShapeProblem(plan.model, size.width, size.height) : null;
+}
+
+/**
  * The elements "@Name" can mention: the owner's. An account's run or a visitor's price check has none, so "@Name" stays
  * words there (an owner's element photo or LoRA never reaches someone else's run).
  */
@@ -713,6 +729,8 @@ function prepare(original: GenerationRequest) {
   const lookup = (id: string) => (model && id === model.id ? model : getModel(id));
   const req = model ? stripMotionPaths(applySketch(applyMentions(worded, model, mentionElements()).request, model).request, model) : worded;
   let plan = sizedEdit(sizedMixedFrame(planGeneration(req, lookup, getPreset), req), req);
+  const portrait = portraitProblem(plan, req);
+  if (portrait) throw new Error(portrait);
   if (mode !== "both" && plan.model.engine !== mode) {
     // An account on the open engine has no key of its own that opens (Your keys), or the studio is open-source only.
     const cloud = mode === "open" && tenantAccount() ? plan.model.routes.map((r) => r.provider).find(isCloudProvider) : undefined;
@@ -753,6 +771,15 @@ function prepare(original: GenerationRequest) {
   // Qwen-Image 2.1's Options → GPU, decided once here (src/server/qwen21-gpu.ts): the pre-flight and the run read the choice.
   const gpu = route.provider === "comfyui" && !demo ? qwen21Gpu(route.endpoint, plan.params.extra ?? {}, (id) => !!loadIndex().workflows[id]) : undefined;
   if (gpu) plan = { ...plan, params: { ...plan.params, extra: { ...plan.params.extra, [GPU_PARAM]: gpu.gpu } }, notes: [...(plan.notes ?? []), ...(gpu.note ? [gpu.note] : [])] };
+  // MiniMax H3's Options → GPU tier, decided once here too (src/server/h3-gpu.ts): FastH3 V2 or Trim on a smaller card, with its file.
+  const h3 = route.provider === "comfyui" && !demo ? h3Gpu(route.endpoint, plan.params.extra ?? {}, (id) => !!loadIndex().workflows[id]) : undefined;
+  if (h3) {
+    // The file is the plan's alone (never one a request names).
+    const extra: Record<string, unknown> = { ...plan.params.extra, [H3_TIER_PARAM]: h3.gpuTier };
+    if (h3.unet) extra[H3_UNET_PARAM] = h3.unet;
+    else delete extra[H3_UNET_PARAM];
+    plan = { ...plan, params: { ...plan.params, extra }, notes: [...(plan.notes ?? []), ...(h3.note ? [h3.note] : [])] };
+  }
   // What the cloud run can carry: a LoRA whose licence doesn't allow hosting stays on the GPU, and an API
   // takes at most so many (the plan's notes say which were left out). Open runs carry them all. Without a
   // civitai key a look's civitai LoRA the run can't get is left out (and said), rather than failing at the
@@ -807,7 +834,7 @@ function prepare(original: GenerationRequest) {
   const unreachable = asked.filter((l) => !reachable.loras.includes(l));
   // Priced for the clip the route makes: Replicate's Wan 2.2 fast makes 5 s when 3 s was asked.
   const priced = made !== undefined && plan.params.duration !== undefined ? { ...plan.params, duration: Math.round(made * 2) / 2 } : plan.params;
-  return { req, plan, route, demo, providerId, notes, asked, unreachable, switchedOff: access.dropped, gpu: gpu?.gpu, cost: free ? 0 : estimateCost(plan.model, priced, 1, plan.op, withLoras) };
+  return { req, plan, route, demo, providerId, notes, asked, unreachable, switchedOff: access.dropped, gpu: gpu?.gpu, h3: h3 && { gpuTier: h3.gpuTier, ...(h3.unet && { unet: h3.unet }) }, cost: free ? 0 : estimateCost(plan.model, priced, 1, plan.op, withLoras) };
 }
 
 /** The LoRA files a graph loads itself (not injected), so a run downloads the ones ComfyUI lacks before it starts. */
@@ -821,7 +848,7 @@ const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "ext
 export function previewGeneration(asked: GenerationRequest) {
   const moved = currentRequest(asked);
   const prepared = prepare(moved.request);
-  const { plan, route, demo, providerId, cost, asked: askedLoras, unreachable, switchedOff, gpu } = prepared;
+  const { plan, route, demo, providerId, cost, asked: askedLoras, unreachable, switchedOff, gpu, h3 } = prepared;
   const notes = moved.note ? [moved.note, ...prepared.notes] : prepared.notes;
   const fitted = routeLoras(route, askedLoras.filter((l) => !unreachable.includes(l)));
   const loras = {
@@ -847,6 +874,8 @@ export function previewGeneration(asked: GenerationRequest) {
     ...(notes.length && { notes }),
     // Qwen-Image 2.1's Options → GPU as decided for this run: the GPU pre-flight checks the graph it picks.
     ...(gpu && { gpu }),
+    // MiniMax H3's GPU tier and the card's file as decided for this run: the GPU pre-flight checks the graph and file it picks.
+    ...(h3 && { h3 }),
     plan: { end: plan.end },
   };
 }
@@ -1040,6 +1069,8 @@ const SOUNDTRACK_SLOTS = new Set<ChainSlot["slot"]>(["audio", "audio2"]);
 export function pickOutput(outputs: OutputFile[], s: ChainSlot): OutputFile | undefined {
   // A mask: the output made as one (meta.role "mask": a painted window's last tracked frame), else a mask video, else a still.
   if (s.slot === "mask") return outputs.find((o) => o.meta?.role === "mask") ?? outputs.find((o) => o.kind === "video") ?? outputs.find((o) => o.kind === "image");
+  // A path render (ChainSlot.render "path") is drawn from the depth picture the scene step made (MoGe 2: a GLB and a depth PNG).
+  if (s.render === "path") return outputs.find((o) => o.kind === "image");
   const ofKind = outputs.filter((o) => o.kind === SLOT_KIND[s.slot]);
   if (s.index !== undefined) {
     if (!ofKind.length) return undefined;
@@ -1326,7 +1357,7 @@ async function advanceDependents(): Promise<void> {
       const values = await asRun(() => Promise.all(outputs.map((o, i) => chainValue(pickOutput(o, slots[i]), slots[i], r.op))));
       const missing = values.findIndex((u) => !u);
       if (missing >= 0) {
-        fail(`${earlier} has no ${slotNoun(slots[missing])} to use`);
+        fail(`${earlier} has no ${slots[missing].render ? "depth picture" : slotNoun(slots[missing])} to use`);
         continue;
       }
       // Routing reads cached reachability: make sure it's fresh for local engines. An Original counts with the routes of
@@ -1348,6 +1379,19 @@ async function advanceDependents(): Promise<void> {
         if (!back && Date.now() - first! < COMFY_WAIT.ms) continue;
       }
       comfyWaits().delete(r.id);
+      // A camera path drawn through the still's depth on this server (Uni3C's guide where no browser drew one); a demo
+      // depth step hands on a demo render. Only once ComfyUI answers: a sweep that waits for it renders nothing.
+      for (let i = 0; i < slots.length; i++) {
+        if (slots[i].render !== "path") continue;
+        // The still, once the other slots are in (it can come from an earlier step too: a Canvas node's picture).
+        const photo = withChainInputs({ ...request, chain: slots }, values as string[]).inputs?.images?.[0];
+        const keys = request.params?.cameraPath ?? [];
+        if (deps[i]!.provider === "mock" || !photo) values[i] = placeholderFor(slots[i]);
+        else {
+          update(r.id, { message: "Rendering the camera path" });
+          values[i] = await asRun(() => renderPathVideo({ photo, depth: values[i]!, keys }, r.id));
+        }
+      }
       if (model?.routes.some((x) => x.provider === "llm")) await probeLocal();
       // Filled with the slots that have an input; stored with its whole chain (and what was skipped) for a retry.
       const filled = withChainInputs({ ...request, chain: slots }, values as string[]);
@@ -1565,6 +1609,9 @@ function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: Ret
   return own.run(() => submitNow(id, route, providerId, plan, req, index));
 }
 
+/** A song's cloud tools (Mureka): the song's length and format are read before it's sent. */
+const SONG_TOOL_OPS = new Set<Operation>(["song-extend", "song-remix", "song-stems"]);
+
 async function submitNow(
   id: string,
   route: ModelRoute,
@@ -1641,6 +1688,19 @@ async function submitNow(
         return adapter.prepareFile(f.data, f.contentType, f.name, route);
       });
     };
+    // A song tool's song (Mureka): its length read as a voice's is, and one Mureka refuses (Stems: MP3 or M4A, 10 MB; Remix:
+    // 10 to 350 seconds) refused here, before it's sent to Mureka or paid for.
+    const prepSong = async (ref?: string) => {
+      if (!ref) return undefined;
+      return gate(async () => {
+        const f = await readRef(ref);
+        const facts = mediaFacts(f.data);
+        if (facts.duration && !source.sourceDuration) source = { ...source, sourceDuration: facts.duration };
+        const problem = providerId === "mock" ? null : songToolProblem(plan.op, { format: songFormat(f.contentType, f.name), bytes: f.data.length, seconds: facts.duration });
+        if (problem) throw new Error(problem);
+        return adapter.prepareFile(f.data, f.contentType, f.name, route);
+      });
+    };
     // Reference clips and clip elements a model bills with the output (Kling 4.0, Pricing.clipInput): their headers' lengths.
     // By the clip's place in inputs.videos, so a clip element (params.elements' video) finds its own length.
     const clipLengths: (number | undefined)[] = [];
@@ -1709,7 +1769,7 @@ async function submitNow(
       endImage: await prep(req.inputs?.endImage),
       mask: await prepMask(req.inputs?.mask),
       video: await prepVideo(req.inputs?.video),
-      audio: await (plan.op === "avatar" ? prepVoice : prep)(req.inputs?.audio),
+      audio: await (plan.op === "avatar" ? prepVoice : SONG_TOOL_OPS.has(plan.op) ? prepSong : prep)(req.inputs?.audio),
       audio2: await prep(req.inputs?.audio2),
       voiceAudio: await prep(req.inputs?.voiceAudio),
       voiceAudio2: await prep(req.inputs?.voiceAudio2),
@@ -1729,6 +1789,12 @@ async function submitNow(
     }
     // What the caller said about the clip's length wins; the header fills the rest.
     Object.assign(input, { ...source, ...(plan.params.sourceDuration !== undefined && { sourceDuration: plan.params.sourceDuration }) });
+    // Extending a song (Mureka): the new part starts at its end (or, before its start, at 0) unless the run says where.
+    if (plan.op === "song-extend" && input.startTime === undefined) {
+      const head = input.extra?.extend_type === "head";
+      if (!head && !(input.sourceDuration && input.sourceDuration > 0)) throw new Error("The song's length couldn't be read: add it again as an MP3, WAV or M4A file");
+      input.startTime = head ? 0 : input.sourceDuration;
+    }
     // A talking avatar renders as long as its voice: priced for it once its header is read (an API call that didn't say).
     if (plan.op === "avatar" && plan.params.sourceDuration === undefined && input.sourceDuration && providerId !== "mock" && plan.model.engine !== "open") {
       update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });
@@ -1744,6 +1810,21 @@ async function submitNow(
       if ((plan.params.sourceDuration === undefined || byFrames) && clipEditSeconds(plan.model, input, plan.op) !== undefined) {
         update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration, sourceFps: input.sourceFps }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });
       }
+    }
+    // A clip relit, extended or given a new moment, or a voice made into a talking video, held to the hosted model's window once
+    // its header is read (fal's H3 Max relight: up to 15 s; insert and Turbo extend: up to 60 s; lip sync: 5 s to 15 min).
+    if (input.sourceDuration && !req.chain?.length && providerId !== "mock" && plan.model.engine !== "open") {
+      const problem =
+        plan.op === "avatar"
+          ? voiceWindowProblem(plan.model, input.sourceDuration)
+          : plan.op === "relight-video" || plan.op === "extend"
+            ? clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps)
+            : plan.op === "insert-moment"
+              ? (clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps) ?? insertRangeProblem(input.startTime, input.endTime, input.sourceDuration))
+              : null;
+      if (problem) throw new Error(problem);
+      // A relight is billed on the clip's length: priced for it once the header is read (an API call that didn't say).
+      if (plan.op === "relight-video" && plan.params.sourceDuration === undefined) update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration }, 1, plan.op) });
     }
     const edits = plan.op === "v2v" || plan.op === "video-swap" || plan.op === "video-insert";
     // An edit whose route sends no length keeps the clip's own (Kling 4.0's edit, swap and insert), whatever the request

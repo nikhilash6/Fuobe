@@ -74,7 +74,9 @@ describe("Character swap's ComfyUI graphs", () => {
       const classes = [...new Set(Object.values(graph(id)).map((n) => n.class_type))];
       for (const c of classes) {
         expect(Object.hasOwn(subset, c), c).toBe(true);
-        if (PACK.test(c)) expect(subset[c], c).toBeNull();
+        // The subset was read from a server with H3 Relay (the person removal validates there); the swap tool's pack isn't on it.
+        if (/^H3Relay/.test(c)) expect(subset[c], c).not.toBeNull();
+        else if (PACK.test(c)) expect(subset[c], c).toBeNull();
         else expect(subset[c], c).not.toBeNull();
       }
       const w = entry(id);

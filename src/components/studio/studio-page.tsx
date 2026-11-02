@@ -1,5 +1,6 @@
 "use client";
 
+import { songFromRun } from "@/lib/lyrics";
 import { ArrowRight, ArrowUp, Loader2, Upload, Zap } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -15,6 +16,7 @@ import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest } from "@/lib
 import {
   claimStartToken,
   followEngineDefault,
+  handoffFrames,
   handoffKey,
   mergeHandoff,
   presetModel,
@@ -28,7 +30,7 @@ import {
 } from "@/lib/composer";
 import { presetGpuKey, presetRoutes } from "@/lib/catalog/preset-recipe-routes";
 import { editableLayout, EDIT_LAYOUT_PARAM, readEditLayoutParam } from "@/lib/output-actions";
-import { positionsFrom } from "@/lib/catalog/keyframes";
+import { positionsFrom, spread } from "@/lib/catalog/keyframes";
 import { reuseSignature, withSignatureWords } from "@/lib/catalog/palettes";
 import { movedAppRequest } from "@/lib/catalog/plan";
 import { currentModelId, migrateRequest } from "@/lib/catalog/replaced";
@@ -135,12 +137,19 @@ function initialDraft(
   }
   if (sp.get("video")) slots.video = slot(sp.get("video"));
   if (sp.get("audio")) slots.audio = slot(sp.get("audio"));
+  // A Mureka song handed over (a music result's Extend, Remix or Stems): its id goes with it.
+  const song = sp.get("audio") && sp.get("song") ? { id: sp.get("song")!, url: sp.get("audio")! } : undefined;
+  // A song's lyrics handed over with it (a sung result's Remix, which needs the whole song's words).
+  const lyrics = sp.get("lyrics") ?? undefined;
   // A voice sample handed over (Clean up voice → "Use as a voice sample"): the voice a cloning model speaks with.
   if (sp.get("voice")) slots.voiceAudio = slot(sp.get("voice"));
   // An output format handed over in the link (Export → "ProRes in the cloud"), when the model writes it.
   const format = model?.options.formats?.find((f) => f === sp.get("format"));
   // A size handed over (Regenerate in 2K → 1440p), when the model offers it.
   const resolution = model?.options.resolutions?.find((r) => r === sp.get("resolution"));
+  // Stills handed over as frames (Storyboard's "Animate these panels", a Character Sheet's poses): Frames mode, evenly spaced.
+  const handed = config.frames ? handoffFrames(sp.get("frames")) : [];
+  const frames = handed.length ? handed.map((u, i) => ({ value: slot(u)!, at: spread(handed.length)[i] })) : undefined;
   return {
     prompt: sp.get("prompt") ?? "",
     negativePrompt: "",
@@ -150,6 +159,9 @@ function initialDraft(
     refs,
     presetId: sp.get("preset") ?? config.preset?.id,
     presetOptions: {},
+    ...(frames && { frames }),
+    ...(song && { song }),
+    ...(lyrics && { lyrics }),
   };
 }
 
@@ -182,6 +194,11 @@ function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id:
   // A spoken language stored as a name (Assist's "Spanish") or a locale comes back as the model's own code.
   const languages = getModel(r.modelId)?.options.sourceLanguages;
   if (languages?.length && params.sourceLanguage) params.sourceLanguage = matchSpokenLanguage(params.sourceLanguage, languages) ?? params.sourceLanguage;
+  // A song's lyrics come back in the lyrics editor. One of Mureka's own songs (an extend or remix by its id) comes back as
+  // the attached song's id, so a song swapped in afterwards is sent as itself, never as the old id.
+  const sung = songFromRun(params.extra, r.inputs?.audio);
+  params.extra = sung.extra;
+  const { lyrics, song } = sung;
   // A layout run comes back in Layout mode (studios that have it): its boxes in the editor, the prompt as their caption.
   const laid = config.layout ? withoutLayout(params) : { params, layout: undefined };
   return {
@@ -198,6 +215,8 @@ function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id:
     presetStrength: r.presetStrength,
     mix: r.mix,
     signature: signed?.signature,
+    lyrics,
+    song,
   };
 }
 
@@ -295,6 +314,17 @@ function ActivePresetHeader() {
       }
     />
   );
+}
+
+/**
+ * The line under the hero. It follows the picked model: a relight that matches a light picked on a sphere (H3 Max relight)
+ * takes no words, so it says to pick a light.
+ */
+function StudioSubtitle({ text }: { text: string }) {
+  const { draft } = useStudio();
+  const catalog = useCatalog();
+  const sphere = !!catalog.getModel(draft.modelId)?.options.lightSphere;
+  return <p className="mt-2 max-w-xl text-[13px] text-muted-foreground">{sphere ? "Pick a light — its direction, colour and softness — and the shot is relit to match." : text}</p>;
 }
 
 /**
@@ -520,7 +550,7 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
         ) : (
           <div className="flex flex-col items-center pt-6 text-center sm:pt-[16vh]">
             <h2 className="font-heading text-display text-balance">{config.hero}</h2>
-            {config.subtitle && <p className="mt-2 max-w-xl text-[13px] text-muted-foreground">{config.subtitle}</p>}
+            {config.subtitle && <StudioSubtitle text={config.subtitle} />}
             {config.related && (
               <Link href={config.related.href} className="mt-3 inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                 {config.related.label}

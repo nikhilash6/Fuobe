@@ -2,6 +2,8 @@
 
 import {
   AtSign,
+  Orbit,
+  Rotate3d,
   AudioLines,
   AudioWaveform,
   Building2,
@@ -19,6 +21,7 @@ import {
   Gem,
   ImageIcon,
   Languages,
+  LayoutDashboard,
   MessageSquareText,
   Mic2,
   MonitorPlay,
@@ -57,6 +60,7 @@ import type { EngineMode } from "@/lib/api";
 
 export const ICONS: Record<string, LucideIcon> = {
   Type,
+  LayoutDashboard,
   ImageIcon,
   Film,
   AudioLines,
@@ -78,6 +82,9 @@ export const ICONS: Record<string, LucideIcon> = {
   UserRound,
   Languages,
   Table,
+  // Camera path and Fly around (N7-7)
+  Orbit,
+  Rotate3d,
   // Blockout to film
   Box,
   // Effects 2.0 chains (src/lib/catalog/canvas.ts EFFECT_CHAINS)
@@ -107,6 +114,7 @@ export const PORT_COLOR: Record<PortType, string> = {
   audio: "var(--chart-3)",
   element: "var(--chart-1)",
   voice: "var(--chart-3)",
+  path: "var(--chart-1)",
 };
 
 export type NodeState = GenerationStatus | "idle";
