@@ -1510,6 +1510,7 @@ export const SettingsSchema = z.object({
   voice: VoiceSchema.nullable(),
   elements: z.array(z.string().max(60)).max(8),
   videoModel: z.string().max(60).optional(),
+  musicModel: z.string().max(60).optional(),
   resolution: z.string().max(10).optional(),
   auto: z.boolean().optional(),
   brief: BriefLookSchema.optional(),

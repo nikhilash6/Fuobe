@@ -1290,7 +1290,7 @@ export function Composer({ docked }: { docked: boolean }) {
         />
       )}
 
-      {model?.options.lyrics && effectiveOp && SUNG_OPS.has(effectiveOp) && !collapsed && (
+      {model?.options.lyrics && (effectiveOp ? SUNG_OPS.has(effectiveOp) : model.routes.some((r) => SUNG_OPS.has(r.op))) && !collapsed && (
         <LyricsEditor model={model} value={draft.lyrics ?? ""} onChange={(lyrics) => setDraft({ lyrics })} idea={draft.prompt} seconds={p.duration ?? model.defaults?.duration} />
       )}
 

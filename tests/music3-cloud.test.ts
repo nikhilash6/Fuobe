@@ -62,8 +62,10 @@ describe("MiniMax Music 3 on fal (minimax-music-3)", () => {
       duration: 180,
       seed: 7,
     });
-    // Its lyrics are required: a run with none asks for an instrumental.
+    // Its lyrics are required: a run with none asks for an instrumental (so the lyrics stay optional in Fuobe).
     expect(payload("minimax-music-3", { prompt: "Lo-fi" })).toEqual({ prompt: "Lo-fi", lyrics: "[instrumental]" });
+    expect(getModel("minimax-music-3")!.options.lyrics?.required).toBeUndefined();
+    expect(plan({ modelId: "minimax-music-3", prompt: "Lo-fi" }).op).toBe("music");
   });
 
   it("costs $0.002 a second of the length asked for", () => {

@@ -693,8 +693,8 @@
   {
    "name": "MiniMax Music 3",
    "area": "songs with vocals up to 5 min",
-   "licence": "MiniMax-Music3 Community License (permissive with notice); Comfy-Org repack tagged Apache-2.0",
-   "vram": "< 24 GB full precision; ~22 GB with offload; 8 GB with layer streaming",
+   "licence": "MiniMax-Music3 Community License (LICENSE @ 1b525ccb read 2026-11-01: MIT-style grant with notice; Acceptable Use Policy; a commercial product shows \"MiniMax-Music3\" in its interface; written authorisation above US$20M yearly revenue; hosted services keep safeguards). HF licence tag empty. Comfy-Org repack @ 9e364ccd tagged Apache-2.0",
+   "vram": "< 24 GB full precision; ~22 GB with CPU offload; 8 GB with diffusers' layer streaming (group offload), which the ComfyUI core node does not do (not measured)",
    "hosted": [
     {
      "provider": "fal",
@@ -704,19 +704,19 @@
    "comfy": "native core (template audio_minimax_music_3)",
    "released": "2026-08-07 (weights)",
    "url": "https://huggingface.co/MiniMaxAI/MiniMax-Music3",
-   "inFuobe": false,
+   "inFuobe": true,
    "confirmed": true
   },
   {
    "name": "YuE2-3B",
    "area": "lyrics-to-song, covers, LoRA training",
    "licence": "CC-BY-NC-4.0",
-   "vram": "not stated",
+   "vram": "not published (unverified)",
    "hosted": [],
-   "comfy": "native (v0.36, templates 2026-09-14) + community trainer/encoder",
+   "comfy": "native core (YuE2GenerateABC / YuE2GenerateMusic / EmptyYuE2LatentAudio, SheetSage2AudioToABC for covers; templates audio_yue2_text2music, audio_yue2_music_cover); Comfy-Org/YuE2 @ 2f76ca75: int8 3.96 GB, bf16 7.8 GB, SheetSage2 bf16 1.39 GB (CC-BY-NC-4.0)",
    "released": "2026-09-09",
    "url": "https://huggingface.co/m-a-p/YuE2-3B",
-   "inFuobe": false,
+   "inFuobe": true,
    "confirmed": true
   },
   {
@@ -749,7 +749,7 @@
    "comfy": "no",
    "released": "2026-09-14 .. 2026-10-30",
    "url": "https://fal.ai/models/mureka/v9/generate/song",
-   "inFuobe": false,
+   "inFuobe": true,
    "confirmed": true
   },
   {
@@ -770,7 +770,7 @@
    "comfy": "no",
    "released": "2026-09-14 / 2026-09-19",
    "url": "https://fal.ai/models/elevenlabs/music/v2.5",
-   "inFuobe": false,
+   "inFuobe": true,
    "confirmed": true
   },
   {

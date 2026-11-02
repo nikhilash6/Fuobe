@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getModel } from "@/lib/catalog";
 import { buildEpisodeGraph, defaultSettings, genreInfo, MUSIC_MAX, pickerData, resolveModels, secondsFor, type EpisodeSettings, type ScriptBlock } from "@/lib/catalog/faceless";
 
-// nm10-music3: Faceless, Explainer and Content Factory's music bed can be MiniMax Music 3 (either engine) or ElevenLabs Music
+// nm10-music3: Faceless and Explainer's music bed can be MiniMax Music 3 (either engine) or ElevenLabs Music
 // v2.5 in the cloud, beside Sonilo and ACE-Step; each says the longest bed it makes.
 const block = (i: number, words = 20): ScriptBlock => {
   const narration = Array.from({ length: words }, (_, w) => `w${i}x${w}`).join(" ");
@@ -34,6 +34,11 @@ describe("the music bed's model", () => {
     // A pick from the other engine (a channel moved to your GPU) falls back.
     expect(resolveModels(settings({ engine: "open", musicModel: "minimax-music-3" }), 100, getModel).music).toBe("oss-ace-step");
     expect(resolveModels(settings({ music: false, musicModel: "minimax-music-3" }), 100, getModel).music).toBeNull();
+  });
+
+  it("keeps the pick when the settings are saved", async () => {
+    const { SettingsSchema } = await import("@/server/faceless");
+    expect(SettingsSchema.parse(settings({ musicModel: "minimax-music-3" })).musicModel).toBe("minimax-music-3");
   });
 
   it("asks a model that sings for an instrumental bed", () => {

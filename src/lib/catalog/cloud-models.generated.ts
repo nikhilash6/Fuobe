@@ -12796,9 +12796,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     ],
     "options": {
       "seed": true,
-      "lyrics": {
-        "required": true
-      },
+      "lyrics": {},
       "durations": [
         30,
         60,

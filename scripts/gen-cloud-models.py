@@ -2144,7 +2144,9 @@ def build_route(op, ep, provider, m, opts, ropts=None):
         spec = inputs.get(kf["lyrics"]) or {}
         most = num(spec.get("maxLength"))
         fmap["lyrics"] = {"key": kf["lyrics"], **({"max": most} if most else {})}
-        opts["lyrics"] = {**({"max": most} if most else {}), **({"required": True} if spec.get("required") else {})}
+        # Required by the API with no fallback of Fuobe's (MiniMax Music 3 asks for an instrumental when there are none).
+        needed = spec.get("required") and kf["lyrics"] not in (m.get("api_defaults") or {})
+        opts["lyrics"] = {**({"max": most} if most else {}), **({"required": True} if needed else {})}
     # A song tool's source (Mureka): its own song by id, else the file sent first through the provider's files/upload with
     # the purpose the id field names ("Audio ID returned by /files/upload with purpose='audio'").
     if op in ("song-extend", "song-remix") and "songId" in kf and "uploadId" in kf:
