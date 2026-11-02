@@ -261,7 +261,7 @@ export function MoodboardsView() {
                 aria-label={`Use ${c.name} in the Image studio${c.description ? ` — ${c.description}` : ""}`}
                 className="group/cur min-w-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               >
-                <CuratedCover m={c} className="aspect-[3/4] rounded-xl transition-transform duration-300 group-hover/cur:scale-[1.02]" />
+                <CuratedCover m={c} sizes="(min-width: 1024px) 240px, (min-width: 640px) 33vw, 50vw" className="aspect-[3/4] rounded-xl transition-transform duration-300 group-hover/cur:scale-[1.02]" />
                 <p className="mt-1.5 px-0.5 text-[12px] text-muted-foreground">{c.category}</p>
                 <p className="line-clamp-2 px-0.5 text-[12.5px]">{c.description}</p>
               </Link>

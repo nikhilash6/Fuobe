@@ -37,6 +37,7 @@ import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { voiceOrigin } from "@/lib/voice-design";
+import { ElementsExample } from "@/components/empty-examples";
 
 const TIPS: Record<ElementKind, string> = {
   character: `3+ clear photos of one person (${SOUL_ID_PHOTOS.recommended}+ to train a Soul ID, up to ${SOUL_ID_PHOTOS.max}): different angles, at least one full-body, no sunglasses, filters or group shots.`,
@@ -439,6 +440,7 @@ function ElementsBody() {
           <p className="mx-auto mt-1 max-w-md text-[14px] text-muted-foreground">
             Save a person, a place or a product from a few photos. Then write “@Maya walking into @Rooftop_bar” in any prompt.
           </p>
+          {tab === "all" && <ElementsExample />}
           {!visitor && (
             <Button className="mt-5" variant="outline" onClick={() => setOpen(true)}>
               <Plus /> New element

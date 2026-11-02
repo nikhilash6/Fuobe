@@ -85,7 +85,8 @@ pnpm eval:covers --templates <dir> [--only group/id,group/id] [--force] [--dry-r
 
   Covers for the studios' template and style tiles, from rendered masters: one folder per tile,
   <dir>/<group>/<tile id>/ (groups: marketing, fashion, photodump, shorts, mixed-media, canvas, content-factory,
-  explainer), holding clip.mp4 or still.png, then frame-2.png… for a tile with more frames (up to frame-4), and a
+  explainer, soul, influencer, examples), holding clip.mp4 or still.png, then frame-2.png… for a tile with more
+  frames (up to frame-6), and a
   meta.json that can say { "rest": "end" } (a reveal: its last frame is the poster) or { "same": "<preset id>" }
   (the tile shows that preset's cover). Encoded like the preset covers into public/previews/templates/<group>/ and
   merged into src/lib/template-covers.generated.ts. Run again, it encodes only new or changed masters (--force: all).

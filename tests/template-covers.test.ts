@@ -12,6 +12,8 @@ import { AD_STYLES, TEMPLATES } from "@/lib/catalog/marketing";
 import { MIXED_PRESETS } from "@/lib/catalog/mixed-media";
 import { FASHION, PACKS } from "@/lib/catalog/packs";
 import { SHORTS_PRESETS } from "@/lib/catalog/shorts";
+import { lookSet } from "@/lib/catalog/soul-cards";
+import { CREATURE_TYPES, HUMAN_TIERS } from "@/lib/influencer";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
 import { TEMPLATE_GROUPS, templateCover, type TemplateGroup } from "@/lib/template-covers";
@@ -46,6 +48,12 @@ const TILES: Record<TemplateGroup, string[]> = {
   canvas: CANVAS_TEMPLATES.map((t) => t.id),
   "content-factory": PRESETS.map((p) => p.id),
   explainer: [...EXPLAINER_STYLE_IDS],
+  // Fuobe Soul's looks, Soul 2.0's and Soul's, by look id.
+  soul: [...lookSet("v2").items, ...lookSet("v1").items].map((c) => c.id),
+  // AI Influencer's character types as tier-<type>.
+  influencer: [...HUMAN_TIERS, ...CREATURE_TYPES].map((t) => `tier-${t.id}`),
+  // The example pictures of the empty pages: Character Sheet, Storyboard (six frames), Elements (four pictures).
+  examples: ["character-sheet", "storyboard-heist", "element-maya", "element-rooftop-bar", "element-aurora", "element-together"],
 };
 const VERSIONED = /^(\/previews\/[^?]+)\?v=([0-9a-f]{8})$/;
 const sha8 = (...files: string[]) => {
@@ -111,15 +119,16 @@ describe("the template covers manifest", () => {
         n++;
         let e: Entry;
         if (group === "mixed-media" || id.startsWith("effect-chain-")) e = pick(presetCovers, n);
-        else if (group === "fashion" || group === "photodump" || ["product-angles", "script-film", "table-film", "clips-film", "compare-image"].includes(id))
-          e = { poster: t(key, n), frames: [2, 3, 4].slice(0, group === "photodump" ? 3 : 2).map((k) => t(key, n + k, `-${k}`)) };
+        else if (group === "fashion" || group === "photodump" || ["product-angles", "script-film", "table-film", "clips-film", "compare-image", "storyboard-heist"].includes(id))
+          e = { poster: t(key, n), frames: [2, 3, 4, 5, 6].slice(0, id === "storyboard-heist" ? 5 : group === "photodump" ? 3 : 2).map((k) => t(key, n + k, `-${k}`)) };
         else if (group === "shorts") e = { poster: t(key, n), video: `/previews/templates/${key}.mp4?v=${v(n + 1)}`, at: 3.542 };
         else if (group === "marketing" || group === "content-factory") e = { poster: t(key, n), video: `/previews/templates/${key}.mp4?v=${v(n + 1)}` };
         else e = { poster: t(key, n) };
         lines.push(`  ${JSON.stringify(key)}: ${JSON.stringify(gen.slimEntry(key, { poster: e.poster, ...(e.video && { video: e.video }), ...(e.at && { at: e.at }), ...(e.frames && { frames: e.frames }) }))}`);
       }
     }
-    expect(lines).toHaveLength(239);
+    // The studios' tiles (239), Fuobe Soul's looks (139), AI Influencer's types (9) and the empty pages' examples (6).
+    expect(lines).toHaveLength(239 + 139 + 9 + 6);
     const text = `{\n${lines.join(",\n")}\n}`;
     expect(text.length).toBeLessThan(36_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);
@@ -231,5 +240,14 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     const now = gen.readTemplateManifest(manifest)["marketing/ps-sunlit-plinth"].poster;
     expect(now).not.toBe(was);
     expect(now).toBe(`/previews/templates/marketing/ps-sunlit-plinth.jpg?v=${sha8(poster, fileOf(thumbOf(now), publicDir))}`);
+  });
+
+  it("takes an example board's six frames (the cover and five more), and no more", () => {
+    put("examples/storyboard-heist", Object.fromEntries([["still.png", still], ...[2, 3, 4, 5, 6, 7].map((k) => [`frame-${k}.png`, still])]));
+    const r = run({ only: ["examples/storyboard-heist"] });
+    expect(r.covers.map((c) => c.key)).toEqual(["examples/storyboard-heist"]);
+    const board = gen.readTemplateManifest(manifest)["examples/storyboard-heist"];
+    expect(board.frames).toEqual([2, 3, 4, 5, 6].map((k) => expect.stringMatching(new RegExp(`^/previews/templates/examples/storyboard-heist-${k}\\.jpg\\?v=[0-9a-f]{8}$`))));
+    expect(templateCover("examples", "storyboard-heist", { "examples/storyboard-heist": gen.slimEntry("examples/storyboard-heist", board) } as never)?.frames).toHaveLength(6);
   });
 });

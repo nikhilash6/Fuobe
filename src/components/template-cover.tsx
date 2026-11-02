@@ -41,3 +41,8 @@ export function CoverImg({ frame, sizes, className }: { frame: CoverFrame; sizes
     />
   );
 }
+
+/** The chip on an example picture in an empty list (Character Sheet, Storyboard, Elements): what the tool makes. */
+export function ExampleChip({ className }: { className?: string }) {
+  return <span className={cn("pointer-events-none absolute top-2 left-2 rounded-full bg-background/90 px-2 py-0.5 text-[11px] font-medium text-foreground shadow-soft", className)}>Example</span>;
+}

@@ -7,6 +7,7 @@ import { coverTone, hueOf, spreadHue, type CoverTone } from "@/lib/catalog/packs
 import { lookCard, lookSet, type SoulLookCard } from "@/lib/catalog/soul-cards";
 import { kmeans, suggestName, type MoodboardPick, type MoodboardStatus, type RGB } from "@/lib/catalog/palettes";
 import type { Engine, Generation } from "@/lib/catalog/types";
+import { templateCover, type CoverFrame } from "@/lib/template-covers";
 
 export interface Moodboard {
   id: string;
@@ -41,23 +42,27 @@ export interface CuratedMoodboard {
   categories?: string[];
   /** Whose look: Soul 2.0's looks (the default) or Soul's. */
   source?: CuratedSource;
-  /** A rendered cover, once the evaluation harness made one (otherwise the cover is drawn). */
-  preview?: string;
+  /** The look's real cover (template-covers.ts, "soul/<look id>") and its 320 px copy; without one the cover is drawn. */
+  preview?: CoverFrame;
 }
 
 /** The curated sets: Fuobe Soul's Soul 2.0 looks and its Soul (v1) looks. */
 export type CuratedSource = "soul-v1" | "soul-v2";
 
-const toCurated = (c: SoulLookCard, i: number): CuratedMoodboard => ({
-  id: c.id,
-  name: c.name,
-  category: c.categories[0] ?? "All presets",
-  categories: c.categories,
-  description: c.description,
-  hue: spreadHue(i),
-  tone: coverTone(c.name, c.description),
-  ...(c.family === "v1" && { source: "soul-v1" as const }),
-});
+const toCurated = (c: SoulLookCard, i: number): CuratedMoodboard => {
+  const cover = templateCover("soul", c.id)?.frames[0];
+  return {
+    id: c.id,
+    name: c.name,
+    category: c.categories[0] ?? "All presets",
+    categories: c.categories,
+    description: c.description,
+    hue: spreadHue(i),
+    tone: coverTone(c.name, c.description),
+    ...(c.family === "v1" && { source: "soul-v1" as const }),
+    ...(cover && { preview: cover }),
+  };
+};
 
 /**
  * The curated sets of the Moodboard panel: Fuobe Soul's looks (src/lib/catalog/soul-cards.ts), Soul 2.0's 33 and
@@ -70,10 +75,10 @@ export const CURATED_SETS: Record<CuratedSource, CuratedMoodboard[]> = {
 export const SOUL_STYLES = CURATED_SETS["soul-v1"];
 
 const LOOKS = new Map([...CURATED_SETS["soul-v2"], ...CURATED_SETS["soul-v1"]].map((c) => [c.id, c]));
-/** A curated look's drawn cover by id (the composer chip's dot); unknown ids get a hue of their own. */
-export const curatedLook = (id: string): { hue: number; tone: CoverTone } => {
+/** A curated look's cover by id (the composer chip's dot, the look pickers): its real cover, else drawn; unknown ids get a hue of their own. */
+export const curatedLook = (id: string): { hue: number; tone: CoverTone; preview?: CoverFrame } => {
   const c = LOOKS.get(lookCard(id)?.id ?? id);
-  return c ? { hue: c.hue, tone: c.tone ?? "plain" } : { hue: hueOf(id), tone: "plain" };
+  return c ? { hue: c.hue, tone: c.tone ?? "plain", ...(c.preview && { preview: c.preview }) } : { hue: hueOf(id), tone: "plain" };
 };
 
 /** The category pills of each curated set ("All presets" first). */

@@ -26,6 +26,7 @@ import { timeAgo } from "@/lib/format";
 import { BOARD_TITLES_KEY, boardTitle, filmReady, rememberTitle } from "@/lib/storyboard-board";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
+import { BoardExample, hasBoardExample } from "@/components/empty-examples";
 
 const ASPECTS: readonly string[] = STORYBOARD_ASPECTS;
 
@@ -567,9 +568,10 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
             ))}
           </div>
         ) : (
-          <div className="grid place-items-center rounded-xl border border-dashed py-14 text-center text-muted-foreground">
-            <ImagePlus className="size-6" />
-            <p className="mt-2 text-[14px]">Your storyboards appear here.</p>
+          <div className="grid place-items-center rounded-xl border border-dashed px-4 py-14 text-center text-muted-foreground">
+            {/* An example board (six frames) in place of the icon, once it is published. */}
+            {hasBoardExample() ? <BoardExample /> : <ImagePlus className="size-6" />}
+            <p className={cn("text-[14px]", hasBoardExample() ? "mt-4" : "mt-2")}>Your storyboards appear here.</p>
           </div>
         )}
       </div>

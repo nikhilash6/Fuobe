@@ -1,5 +1,6 @@
 // Real covers for the studios' template and style tiles (Marketing Studio's templates, Fashion Factory, Photodump packs,
-// the Shorts and Mixed Media looks, Canvas templates, Content Factory's trending styles, the Explainer styles), from
+// the Shorts and Mixed Media looks, Canvas templates, Content Factory's trending styles, the Explainer styles, Fuobe
+// Soul's looks, AI Influencer's character types, the Character Sheet, Storyboard and Elements examples), from
 // rendered masters: pnpm eval:covers --templates <dir>. They are encoded the way the preset covers are (covers.mjs:
 // a 768 px still, a 512 px clip, a 320 px copy of each still in thumbs/) into public/previews/templates/<group>/, and
 // listed in src/lib/template-covers.generated.ts, which the tiles read (src/lib/template-covers.ts). A tile that isn't
@@ -17,10 +18,10 @@ export const TEMPLATE_MANIFEST = path.join(REPO_DIR, "src", "lib", "template-cov
 export const PEAKS_FILE = path.join(REPO_DIR, "src", "lib", "preset-peaks.generated.ts");
 
 /** The tile groups, as the manifest's keys start (`<group>/<tile id>`) and the folders under previews/templates/ are named. */
-export const TEMPLATE_GROUPS = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer"];
+export const TEMPLATE_GROUPS = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer", "soul", "influencer", "examples"];
 
-/** At most this many frames per tile: the cover and up to three more (a contact sheet's 2x2, a carousel's slides). */
-const MAX_FRAMES = 4;
+/** At most this many frames per tile: the cover and up to five more (a contact sheet's 2x2, a carousel's slides, an example storyboard). */
+const MAX_FRAMES = 6;
 const STILLS = ["still.png", "still.jpg", "still.webp", "start.png", "start.jpg"];
 const CLIP = "clip.mp4";
 const FRAME = /^frame-([2-9])\.(png|jpe?g|webp)$/;
@@ -195,7 +196,7 @@ function readMaster(folder) {
  * <dir>/<group>/<tile id>/, holding
  *   clip.mp4         a clip cover (its first 4 s, its first frame the poster), or
  *   still.png        a still cover (also still.jpg / still.webp, or start.png);
- *   frame-2.png …    the tile's other frames, in order, up to frame-4 (a carousel's slides, a contact sheet's cells);
+ *   frame-2.png …    the tile's other frames, in order, up to frame-6 (a carousel's slides, a contact sheet's cells);
  *   meta.json        { "rest": "end" } for a reveal: the clip is kept to its end and its last frame is the poster,
  *                    or { "same": "<preset id>" }: the tile shows that preset's cover (no files of its own),
  *                    resting on its clip's peak frame when it has one (presetCoverEntry).

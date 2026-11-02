@@ -7,16 +7,28 @@ import { DrawnTile } from "@/components/photodump/covers";
 import { STATUS_LABEL, type CuratedMoodboard, type Moodboard } from "./logic";
 
 /**
- * A curated look's cover: a rendered cover once the evaluation harness made one (Fuobe's own renders), otherwise
+ * A curated look's cover: its real cover once one is published (template-covers.ts, "soul/<look id>"), otherwise
  * drawn in the look's hue and treatment — grain for black and white, a flash hotspot, gels…; its name on top.
  */
-export function CuratedCover({ m, className }: { m: Pick<CuratedMoodboard, "name" | "hue" | "preview" | "tone">; className?: string }) {
+export function CuratedCover({ m, className, sizes = "200px" }: { m: Pick<CuratedMoodboard, "name" | "hue" | "preview" | "tone">; className?: string; sizes?: string }) {
   return (
     <DrawnTile hue={m.hue} tone={m.tone ?? "plain"} className={className}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {m.preview && <img src={m.preview} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />}
+      {m.preview && (
+        // A real cover: its 320 px copy where the cover shows small (`sizes`, how wide it shows).
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={m.preview.src}
+          srcSet={`${m.preview.thumb} 320w, ${m.preview.src} 768w`}
+          sizes={sizes}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          className="absolute inset-0 size-full object-cover"
+        />
+      )}
       {/* A scrim under the name, so it reads on light covers too (pastel washes, live previews). */}
-      {(m.preview || m.name) && <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent" />}
+      {m.name && <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent" />}
       {m.name && <span className="absolute inset-x-2 bottom-2 font-heading text-[19px] leading-tight text-white drop-shadow-sm">{m.name}</span>}
     </DrawnTile>
   );

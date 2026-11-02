@@ -25,6 +25,7 @@ import { sheetPictures } from "@/lib/catalog/turnaround";
 import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { SheetExample } from "@/components/empty-examples";
 
 type Mode = "reference" | "cast" | "describe";
 const MODES: [Mode, string][] = [
@@ -363,7 +364,8 @@ export function CharacterSheetView({ fields, defaults }: { fields: CastFieldData
               )}
             </>
           ) : (
-            <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed p-6 text-center">
+            <div className="grid min-h-64 place-items-center gap-5 rounded-2xl border border-dashed p-6 text-center">
+              <SheetExample />
               <div className="max-w-sm space-y-1">
                 <p className="font-heading text-[22px]">Your character sheet appears here</p>
                 <p className="text-[13px] text-muted-foreground">Front, three-quarter, profile and back views of the same person — then save it as a character to use in any prompt with @.</p>
