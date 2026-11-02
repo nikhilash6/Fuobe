@@ -138,7 +138,7 @@ describe("Options → GPU tier", () => {
 });
 
 describe("the graph each tier runs", () => {
-  const all = (_: string) => true;
+  const all = () => true;
   it("fast has text, start frame and start + end frames; trim text to video only", () => {
     expect(tierGraphFor("minimax-h3-t2v", "fast", all)).toBe("minimax-h3-fast-t2v");
     expect(tierGraphFor("minimax-h3-i2v", "fast", all)).toBe("minimax-h3-fast-i2v");
