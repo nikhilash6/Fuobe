@@ -11,7 +11,7 @@ import type {
   PresetEndStep,
   PresetRoute,
 } from "./types";
-import { billedClipSeconds, editClipsProblem, sourceSeconds } from "./clip-windows";
+import { billedClipSeconds, editClipsProblem, insertRangeProblem, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
 import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
@@ -243,6 +243,8 @@ const PROMPTLESS = new Set<Operation>([
   "face-mosaic",
   // archive-restore: the scene's words help (period, place, light) but a run without them gets a neutral one
   "restore-video",
+  // nm10-hosted-catchup: an inserted moment can be left to the model; a retexture takes words or a style picture
+  "insert-moment", "retexture-3d",
 ]);
 
 /**
@@ -485,6 +487,8 @@ export function planGeneration(
   if (model.options.promptFormat === "minimax-h3" && op === "i2v" && params.extra?.orbit === true && req.params?.duration === undefined && params.duration === model.defaults?.duration) {
     params = { ...params, duration: 3 };
   }
+  const hosted = hostedInputProblem(model, op, prompt, params, req);
+  if (hosted) throw new Error(hosted);
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
   if (op === "dialogue" && !params.dialogue?.some((l) => l.text.trim())) throw new Error("Write at least one line");
   if (op === "dub" && !params.targetLanguage) throw new Error("Pick a language to translate into");
@@ -788,6 +792,8 @@ const NEEDS: Partial<
   "scene-3d": { images: 1, msg: "Add the image to build the scene from" },
   splat: { images: 1, msg: "Add a photo of the subject" },
   "rig-3d": { model3d: true, msg: "Add the 3D model to rig" },
+  "retexture-3d": { model3d: true, msg: "Add the 3D model to retexture" },
+  "insert-moment": { video: true, msg: "Add the clip to insert a moment into" },
   "extract-frames": { video: true, msg: "Add the video to take frames from" },
   "images-to-video": { images: 1, msg: "Add the images, in order" },
   overlay: { images: 2, msg: "Add the picture and the overlay to put on it" },
@@ -862,6 +868,22 @@ function extraImages(model: ModelDef, op: Operation, req: Pick<GenerationRequest
   return `${model.name} takes up to ${max} image${max === 1 ? "" : "s"} for this — remove the others`;
 }
 
+/**
+ * What a hosted endpoint would refuse after it's paid for, caught first in Fuobe's words: a prompt over the API's own limit
+ * (FieldMap.promptMax: Vidu Q4 5,000 characters), a moment inserted outside the clip's first 60 s (H3 Max insert), a relight
+ * without its lit sphere, a retexture with neither words nor a style picture.
+ */
+export function hostedInputProblem(model: Pick<ModelDef, "name" | "routes" | "options">, op: Operation, prompt: string, params: GenParams, req: Pick<GenerationRequest, "inputs">): string | null {
+  const max = Math.min(...model.routes.filter((r) => r.op === op && r.map?.promptMax).map((r) => r.map!.promptMax!));
+  if (Number.isFinite(max) && prompt.length > max) {
+    return `${model.name} takes up to ${max.toLocaleString("en-US")} characters of prompt, and this one has ${prompt.length.toLocaleString("en-US")}: shorten it`;
+  }
+  if (op === "insert-moment") return insertRangeProblem(params.startTime, params.endTime, params.sourceDuration);
+  if (op === "relight-video" && model.options.lightSphere && !req.inputs?.images?.length) return `Pick a light: ${model.name} matches the light on a sphere you choose`;
+  if (op === "retexture-3d" && !prompt.trim() && !req.inputs?.images?.length) return "Describe the new look, or add a style picture";
+  return null;
+}
+
 /** Models that need several images (try-on: the person, then the garment). */
 function missingImages(model: ModelDef, req: Pick<GenerationRequest, "inputs">): string | null {
   const min = model.options.minImages ?? 0;
@@ -875,7 +897,7 @@ function missingImages(model: ModelDef, req: Pick<GenerationRequest, "inputs">):
  * price counts the clip's seconds (params.sourceDuration) when the caller knows them, and slow motion bills
  * the whole stretched result.
  */
-const CLIP_LENGTH_OPS = new Set<Operation>(["upscale-video", "interpolate", "sdr-to-hdr", "export-video", "restore-video"]);
+const CLIP_LENGTH_OPS = new Set<Operation>(["upscale-video", "interpolate", "sdr-to-hdr", "export-video", "restore-video", "relight-video"]);
 
 /**
  * The seconds a clip edit that keeps the clip's length is billed for (Happy Horse, Runway Aleph, Lucy Edit, Kling O3 4K
@@ -1056,6 +1078,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
     const mp = p.videoMegapixel ? videoMegapixels(model, params, seconds) : undefined;
     const rate = p.videoMegapixel && (withLoras && p.videoMegapixel.withLoras !== undefined ? p.videoMegapixel.withLoras : p.videoMegapixel.usd);
     per = mp !== undefined && rate ? Math.ceil(mp - 1e-9) * rate : usd * seconds;
+    // A long result billed at a higher rate throughout (fal's H3 Max lip sync: 1.2× over 15 s).
+    if (p.longFactor && seconds > p.longFactor.over + 1e-9) per *= p.longFactor.factor;
   }
   if (p.unit === "minute") per = (usd * (voice ?? params.duration ?? 60)) / 60;
   // Settings that change the price (60 fps, a Pro tier, a cheaper model).

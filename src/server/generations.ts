@@ -12,7 +12,7 @@ import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
 import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
-import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, sourceFrames } from "@/lib/catalog/clip-windows";
+import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, insertRangeProblem, sourceFrames, voiceWindowProblem } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, withoutTriggers } from "@/lib/catalog/plan";
 import { framedLength, keepMatte, sizeValue } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
@@ -1736,6 +1736,21 @@ async function submitNow(
       if ((plan.params.sourceDuration === undefined || byFrames) && clipEditSeconds(plan.model, input, plan.op) !== undefined) {
         update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration, sourceFps: input.sourceFps }, 1, plan.op, plan.loras.length > 0 && !!route.loraEndpoint) });
       }
+    }
+    // A clip relit, extended or given a new moment, or a voice made into a talking video, held to the hosted model's window once
+    // its header is read (fal's H3 Max relight: up to 15 s; insert and Turbo extend: up to 60 s; lip sync: 5 s to 15 min).
+    if (input.sourceDuration && !req.chain?.length && providerId !== "mock" && plan.model.engine !== "open") {
+      const problem =
+        plan.op === "avatar"
+          ? voiceWindowProblem(plan.model, input.sourceDuration)
+          : plan.op === "relight-video" || plan.op === "extend"
+            ? clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps)
+            : plan.op === "insert-moment"
+              ? (clipWindowProblem(plan.model, input.sourceDuration, input.sourceFps) ?? insertRangeProblem(input.startTime, input.endTime, input.sourceDuration))
+              : null;
+      if (problem) throw new Error(problem);
+      // A relight is billed on the clip's length: priced for it once the header is read (an API call that didn't say).
+      if (plan.op === "relight-video" && plan.params.sourceDuration === undefined) update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceDuration: input.sourceDuration }, 1, plan.op) });
     }
     const edits = plan.op === "v2v" || plan.op === "video-swap" || plan.op === "video-insert";
     // An edit whose route sends no length keeps the clip's own (Kling 4.0's edit, swap and insert), whatever the request

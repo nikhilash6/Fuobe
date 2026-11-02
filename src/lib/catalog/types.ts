@@ -87,7 +87,10 @@ export type Operation =
   // N7-5
   | "camera-path" // image + params.cameraPath (+ inputs.video: the open engine's render along the path) → the camera following the path
   // archive-restore
-  | "restore-video"; // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
+  | "restore-video" // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
+  // nm10-hosted-catchup
+  | "insert-moment" // video + params.startTime / params.endTime (+ prompt, reference images and clips, params.duration: the new scene's length) → the clip with a new scene between them
+  | "retexture-3d"; // 3D model (inputs.model3d) + prompt or a style image → the same model with new textures
 
 export const OPERATION_LABELS: Record<Operation, string> = {
   t2i: "Text to image",
@@ -158,6 +161,8 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   "face-mosaic": "Pixelate faces",
   "camera-path": "Fly path",
   "restore-video": "Restore & colourise",
+  "insert-moment": "Insert a moment",
+  "retexture-3d": "Retexture",
 };
 
 export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
@@ -230,6 +235,8 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   "face-mosaic": "image",
   "camera-path": "video",
   "restore-video": "video",
+  "insert-moment": "video",
+  "retexture-3d": "model3d",
 };
 
 /**
@@ -503,6 +510,8 @@ export interface FieldMap {
   cameraPath?: { key: string; min: number; max: number; elevation: [number, number]; maxTurns: number; free?: { key: string; values: string[] } };
   /** An empty prompt is left out rather than sent as "" (APIs that read a missing prompt as "no words": Bria Expand). */
   omitEmptyPrompt?: boolean;
+  /** The most characters the API's prompt field takes (its schema's maxLength: Vidu Q4 5,000, Meshy retexture 600): a longer one is refused before it's paid for. */
+  promptMax?: number;
   /** params.extra keys this route has no field for (a model-wide control only its other routes read): left out. */
   ignore?: string[];
   /**
@@ -630,6 +639,11 @@ export interface ModelOptions {
   promptless?: boolean;
   /** The prompt box shows, but the model also runs without words (P-Video Replace, Genjutsu Lite object swap). */
   promptOptional?: boolean;
+  /**
+   * The light goes as a picture of a lit sphere (fal's H3 Max relight: reference_image_url), drawn in the browser from a light
+   * preset (src/lib/relight-sphere.ts) and sent as the run's image; no words.
+   */
+  lightSphere?: boolean;
   /** The words a run takes when none are given (Fuobe Try-On: its try-on LoRA's own instruction). */
   defaultPrompt?: string;
   /** The prompt box's placeholder for this model (Open-H3 Regenerate: describe the clip it redraws). */
@@ -734,6 +748,11 @@ export interface Pricing {
    * rate of a run without clips).
    */
   clipInput?: { usd: number; byResolution?: Record<string, number>; plain?: true };
+  /**
+   * A per-second price multiplied by `factor` for a result longer than `over` seconds (fal's H3 Max lip sync: 1.2× for a video
+   * over 15 s, the whole video at the higher rate).
+   */
+  longFactor?: { over: number; factor: number };
   /** A fixed fee each request adds on top of its seconds (fal's H3 Max 3D to video: $0.50 processing). */
   perRequest?: number;
   /** The fewest seconds a per-second request bills (fal's H3 Max 3D to video: 5 s a shot). */

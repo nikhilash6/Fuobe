@@ -1008,6 +1008,7 @@ export function extractOutputs(response: unknown, op?: Operation): ExtractedOutp
       break;
     case "image-to-3d":
     case "text-to-3d":
+    case "retexture-3d":
       out = model3dOutputs(response);
       break;
     case "scene-3d":

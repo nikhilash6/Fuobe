@@ -14,7 +14,51 @@ const SOURCE_SECONDS: Record<string, { min?: number; max?: number }> = {
   "wan-2-7": { min: 2, max: 10 },
   // Higgsfield feeds Gemini Omni Flash ≤10 s segments.
   "gemini-omni-flash": { max: 10 },
+  // fal's H3 Max relight: "up to 15 seconds", resampled to 24 fps and trimmed to 17n+5 frames, "at least 56 frames (about 2.33 seconds)".
+  "minimax-h3-max-relight": { min: 2.4, max: 15 },
+  // fal's H3 Max insert takes start and resume times up to 60 s into the clip, the start at least 1.625 s in.
+  "minimax-h3-max-insert": { min: 1.7, max: 60 },
+  // fal's H3 Max Turbo extend: "Must be 1.625 s to 60 s long".
+  "minimax-h3-max-turbo-extend": { min: 1.625, max: 60 },
 };
+
+/** How long a voice a talking-avatar model takes (fal's H3 Max lip sync: "at least 5 seconds long. Supports up to 15 minutes"). */
+const VOICE_SECONDS: Record<string, { min: number; max: number }> = { "minimax-h3-max-lipsync": { min: 5, max: 900 } };
+
+/** Why a voice `seconds` long is outside what the model takes, in Generate's words, or null. */
+export function voiceWindowProblem(model: { id: string; name: string }, seconds: number): string | null {
+  const w = VOICE_SECONDS[model.id];
+  if (!w || !(seconds > 0)) return null;
+  if (seconds < w.min - 0.05) return `${model.name} needs at least ${w.min} s of audio, and this is ${secs(seconds)}: use a longer recording`;
+  if (seconds > w.max + 0.05) return `${model.name} takes up to ${w.max / 60} minutes of audio, and this is ${minutes(seconds)}: trim it first`;
+  return null;
+}
+
+/** The picture a talking-avatar model animates: width ÷ height (fal's H3 Max lip sync: "between 0.4 and 2.5"). */
+const PORTRAIT_RATIO: Record<string, [number, number]> = { "minimax-h3-max-lipsync": [0.4, 2.5] };
+
+/** Why a picture `width`×`height` is too tall or wide for the model, or null. */
+export function portraitShapeProblem(model: { id: string; name: string }, width: number, height: number): string | null {
+  const r = PORTRAIT_RATIO[model.id];
+  if (!r || !(width > 0) || !(height > 0)) return null;
+  const shape = width / height;
+  if (shape >= r[0] - 0.005 && shape <= r[1] + 0.005) return null;
+  return `${model.name} takes pictures from ${r[0].toFixed(1)}:1 (tall) to ${r[1].toFixed(1)}:1 (wide), and this one is ${width}×${height}: crop it first`;
+}
+
+/**
+ * Where a new moment may go inside a clip (fal's H3 Max insert: start_time 1.625–60 s, resume_time after it and at most 60 s), in
+ * Generate's words, or null. `clip` is the clip's length when known: both points must be inside it.
+ */
+export const INSERT_RANGE = { minStart: 1.625, max: 60 } as const;
+export function insertRangeProblem(start: number | undefined, resume: number | undefined, clip?: number): string | null {
+  if (start === undefined || resume === undefined || !Number.isFinite(start) || !Number.isFinite(resume)) return "Mark where the new moment starts and where the clip picks up again";
+  if (start < INSERT_RANGE.minStart - 1e-6) return `The new moment can start ${INSERT_RANGE.minStart} s into the clip at the earliest: move the first handle right`;
+  if (resume <= start + 1e-6) return "The clip has to pick up again after the new moment starts: move the second handle right";
+  if (resume > INSERT_RANGE.max + 1e-6) return `Both points have to be within the first ${INSERT_RANGE.max} s of the clip: trim it first`;
+  if (clip !== undefined && clip > 0 && resume > clip + 0.05) return `The clip is ${secs(clip)} long, so it can't pick up again at ${secs(resume)}: move the second handle left`;
+  return null;
+}
 
 export function sourceSeconds(modelId: string): { min?: number; max?: number } {
   return SOURCE_SECONDS[modelId] ?? {};
@@ -110,6 +154,7 @@ export function billedClipSeconds(modelId: string, seconds: number, fps?: number
 }
 
 const secs = (n: number) => `${Math.round(n * 10) / 10} s`;
+const minutes = (n: number) => `${Math.floor(n / 60)} min ${Math.round(n % 60)} s`;
 
 /**
  * Why a clip `seconds` long is outside the model's window, in Generate's words ("Happy Horse Video Edit takes 3–15 s
