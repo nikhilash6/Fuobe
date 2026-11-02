@@ -858,7 +858,9 @@ export function Composer({ docked }: { docked: boolean }) {
   const missingKey = needsKey(model, status)?.[0];
   const ownPayerText = payer && cost ? ` · ${billedTo(payer)}` : missingKey ? ` · ${addKeyLabel(missingKey).toLowerCase()}` : "";
   // On this studio's GPUs: the quote's words (none from the server: free, as the open engine always is).
-  const costText = poolPrice ? (priceUnavailable ? "Price unavailable" : hostedQuote?.text || ownCostText) : ownCostText;
+  // An exact orbit runs as a fly-around: its own price (N7-7).
+  const exactPrice = exact ? fly.price : "";
+  const costText = exactPrice || (poolPrice ? (priceUnavailable ? "Price unavailable" : hostedQuote?.text || ownCostText) : ownCostText);
   const payerText = poolPrice ? "" : ownPayerText;
 
   // Attachments: only when something is attached, a required slot is still empty, or none of a "one of these" group is filled (U8).
@@ -1284,6 +1286,18 @@ export function Composer({ docked }: { docked: boolean }) {
         />
       )}
 
+      {/* Fuobe DoP's orbit moves: the Exact switch and its numbers (N7-7). */}
+      {exactId && !collapsed && (
+        <ExactOrbitControls
+          className="mx-2 mb-2"
+          engine={engine}
+          value={exact}
+          defaults={exactDefaults(exactId)}
+          onChange={(orbit) => setExactBy(orbit ? { id: exactId, orbit } : null)}
+          footer={exact && exactImage && fly.preview.data?.blocker ? <span>{fly.preview.data.blocker}</span> : undefined}
+        />
+      )}
+
       {model && effectiveOp === "dialogue" && <DialogueEditor model={model} lines={p.dialogue ?? defaultLines(model)} onChange={(dialogue) => setP({ dialogue })} />}
 
       {model?.options.multiShot && p.shots && <ShotsEditor model={model} shots={p.shots} onChange={(shots) => setP({ shots })} />}
@@ -1478,16 +1492,6 @@ export function Composer({ docked }: { docked: boolean }) {
           />
           <span className="contents max-sm:hidden">{styleChips}</span>
         </div>
-        {exactId && (
-          <ExactOrbitControls
-            className="mx-1 mb-1.5"
-            engine={engine}
-            value={exact}
-            defaults={exactDefaults(exactId)}
-            onChange={(orbit) => setExactBy(orbit ? { id: exactId, orbit } : null)}
-            footer={exact ? <span>{fly.preview.data?.blocker && exactImage ? fly.preview.data.blocker : fly.price}</span> : undefined}
-          />
-        )}
         {hostedHere && viewerInfo?.gpu.connected && (
           <button
             type="button"
@@ -1503,7 +1507,7 @@ export function Composer({ docked }: { docked: boolean }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums">
-                <span className="sm:hidden">{poolPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
+                <span className="sm:hidden">{poolPrice || exactPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
                 <span className="hidden sm:inline">
                   {costText}
                   {payerText}
