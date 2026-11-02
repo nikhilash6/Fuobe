@@ -1083,7 +1083,15 @@ export interface GenerationRequest {
    * A storyboard frame. `look`: the board's Fuobe Soul look, whose grade and overlay every frame gets after it is made
    * (as meta, like a Soul picture); `crop`: a look board asked for 21:9 is made at 16:9 and cropped after.
    */
-  frame?: { scene: string; index: number; of: number; look?: string; crop?: "21:9" };
+  frame?: {
+    scene: string;
+    index: number;
+    of: number;
+    look?: string;
+    crop?: "21:9";
+    /** A one-sheet board (src/lib/catalog/storyboard.ts planOneSheet): every panel on this one picture, cropped in the browser. */
+    sheet?: { cols: number; rows: number; aspect: string; panels: { scene: string; box: [number, number, number, number] }[] };
+  };
   /** Part of a multi-step job (a shot of a multi-shot film, a step of an extend): shown on its tile. */
   step?: { label: string; index: number; of: number };
   /**
