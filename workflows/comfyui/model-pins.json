@@ -1059,5 +1059,35 @@
   "revision": "c718f2b1b95b353edd07d17e845719fc10880a44",
   "sizeBytes": 576148658,
   "sha256": "c511d99eb668ec4b06d883cb6e43770bc35e3864e16e7058e8d6211ba5c509aa"
+ },
+ "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors": {
+  "revision": "912b6e38b2092ec4d2e86d24183e0d59ea059d48",
+  "sizeBytes": 1988306504,
+  "sha256": "a742069ba173bc3aba64cf8d8289d073e0818f2753f2fc2768f0342645089682"
+ },
+ "https://huggingface.co/FastVideo/FastVideo-FastH3-8-Step-V2-NVFP4-Comfy/resolve/994a40beb8c8f15739e4f0fad96aec101bb7123c/diffusion_models/fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors": {
+  "revision": "994a40beb8c8f15739e4f0fad96aec101bb7123c",
+  "sizeBytes": 13612462670,
+  "sha256": "49371f21b546e59813984938a1b4fbea9348eb5003e07a01d48083efcc5a1d94"
+ },
+ "https://huggingface.co/FastVideo/FastVideo-FastH3-Comfy/resolve/ec1e3aa374a91c57b0b94a1623b7e657c0498cf2/diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors": {
+  "revision": "ec1e3aa374a91c57b0b94a1623b7e657c0498cf2",
+  "sizeBytes": 22128378696,
+  "sha256": "0922785978dc9bfe1adf27d8b291b0ca763f9f165f882e6cb297c72fbb6deda8"
+ },
+ "https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_fp8.safetensors": {
+  "revision": "f66c13dc17391dd4da99242a407918b92bf7d5fc",
+  "sizeBytes": 19683522390,
+  "sha256": "dbc05815de2f86a0028d10e4e90b19b759dd689078835a8c363706934d18f31a"
+ },
+ "https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_int8_convrot.safetensors": {
+  "revision": "f66c13dc17391dd4da99242a407918b92bf7d5fc",
+  "sizeBytes": 18924757904,
+  "sha256": "ff6e40bc592f7362ea0d7bfcf4e0402bb2c26376d9d1bd4fffb047a5203c2153"
+ },
+ "https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_nvfp4.safetensors": {
+  "revision": "f66c13dc17391dd4da99242a407918b92bf7d5fc",
+  "sizeBytes": 11894623166,
+  "sha256": "748b2bcc9c4b7bf7b23406987b42d4ac40362070c164cf11092482be6a863455"
  }
 }

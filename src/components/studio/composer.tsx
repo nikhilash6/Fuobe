@@ -83,6 +83,7 @@ import {
   writesCaptions,
 } from "@/lib/composer";
 import { qwen21Note } from "@/lib/qwen21-speed";
+import { H3_TIER_PARAM, h3TierNote } from "@/lib/gpu/h3-tier";
 import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
 import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
@@ -858,7 +859,9 @@ export function Composer({ docked }: { docked: boolean }) {
   );
   const effectiveOp = studioOp ?? op;
   // Qwen-Image 2.1's Options → GPU on Small: what the small encoder can't do (or that a speed with its own graph wins).
-  const smallGpuNote = qwen21Note(opts.controls, p.extra, effectiveOp);
+  // MiniMax H3's GPU tier: what FastH3 V2 or Trim changes, picked or as Auto runs it on the card the GPU check read.
+  const h3Note = opts.controls?.some((c) => c.param === H3_TIER_PARAM) ? h3TierNote(p.extra, effectiveOp, gpuBadges?.h3Tier) : undefined;
+  const smallGpuNote = qwen21Note(opts.controls, p.extra, effectiveOp) ?? h3Note;
   // A setting an app's choices already set (the Angles app's angle, height and distance on QMA · 96 views) isn't asked twice.
   const presetSets = new Set((preset?.options ?? []).flatMap((o) => o.choices.flatMap((c) => Object.keys(c.extra ?? {}))));
   const shownControls = (opts.controls ?? []).filter((c) => !presetSets.has(c.param));

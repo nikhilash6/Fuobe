@@ -52,6 +52,8 @@ import { listElements } from "./elements";
 import { markStale } from "./gpu/snapshots";
 import { loadIndex } from "./gpu/index-file";
 import { qwen21Gpu } from "./qwen21-gpu";
+import { h3Gpu } from "./h3-gpu";
+import { H3_TIER_PARAM, H3_UNET_PARAM } from "@/lib/gpu/h3-tier";
 import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qwen21-speed";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
@@ -767,6 +769,15 @@ function prepare(original: GenerationRequest) {
   // Qwen-Image 2.1's Options → GPU, decided once here (src/server/qwen21-gpu.ts): the pre-flight and the run read the choice.
   const gpu = route.provider === "comfyui" && !demo ? qwen21Gpu(route.endpoint, plan.params.extra ?? {}, (id) => !!loadIndex().workflows[id]) : undefined;
   if (gpu) plan = { ...plan, params: { ...plan.params, extra: { ...plan.params.extra, [GPU_PARAM]: gpu.gpu } }, notes: [...(plan.notes ?? []), ...(gpu.note ? [gpu.note] : [])] };
+  // MiniMax H3's Options → GPU tier, decided once here too (src/server/h3-gpu.ts): FastH3 V2 or Trim on a smaller card, with its file.
+  const h3 = route.provider === "comfyui" && !demo ? h3Gpu(route.endpoint, plan.params.extra ?? {}, (id) => !!loadIndex().workflows[id]) : undefined;
+  if (h3) {
+    // The file is the plan's alone (never one a request names).
+    const extra: Record<string, unknown> = { ...plan.params.extra, [H3_TIER_PARAM]: h3.gpuTier };
+    if (h3.unet) extra[H3_UNET_PARAM] = h3.unet;
+    else delete extra[H3_UNET_PARAM];
+    plan = { ...plan, params: { ...plan.params, extra }, notes: [...(plan.notes ?? []), ...(h3.note ? [h3.note] : [])] };
+  }
   // What the cloud run can carry: a LoRA whose licence doesn't allow hosting stays on the GPU, and an API
   // takes at most so many (the plan's notes say which were left out). Open runs carry them all. Without a
   // civitai key a look's civitai LoRA the run can't get is left out (and said), rather than failing at the
@@ -821,7 +832,7 @@ function prepare(original: GenerationRequest) {
   const unreachable = asked.filter((l) => !reachable.loras.includes(l));
   // Priced for the clip the route makes: Replicate's Wan 2.2 fast makes 5 s when 3 s was asked.
   const priced = made !== undefined && plan.params.duration !== undefined ? { ...plan.params, duration: Math.round(made * 2) / 2 } : plan.params;
-  return { req, plan, route, demo, providerId, notes, asked, unreachable, switchedOff: access.dropped, gpu: gpu?.gpu, cost: free ? 0 : estimateCost(plan.model, priced, 1, plan.op, withLoras) };
+  return { req, plan, route, demo, providerId, notes, asked, unreachable, switchedOff: access.dropped, gpu: gpu?.gpu, h3: h3 && { gpuTier: h3.gpuTier, ...(h3.unet && { unet: h3.unet }) }, cost: free ? 0 : estimateCost(plan.model, priced, 1, plan.op, withLoras) };
 }
 
 /** The LoRA files a graph loads itself (not injected), so a run downloads the ones ComfyUI lacks before it starts. */
@@ -835,7 +846,7 @@ const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "ext
 export function previewGeneration(asked: GenerationRequest) {
   const moved = currentRequest(asked);
   const prepared = prepare(moved.request);
-  const { plan, route, demo, providerId, cost, asked: askedLoras, unreachable, switchedOff, gpu } = prepared;
+  const { plan, route, demo, providerId, cost, asked: askedLoras, unreachable, switchedOff, gpu, h3 } = prepared;
   const notes = moved.note ? [moved.note, ...prepared.notes] : prepared.notes;
   const fitted = routeLoras(route, askedLoras.filter((l) => !unreachable.includes(l)));
   const loras = {
@@ -861,6 +872,8 @@ export function previewGeneration(asked: GenerationRequest) {
     ...(notes.length && { notes }),
     // Qwen-Image 2.1's Options → GPU as decided for this run: the GPU pre-flight checks the graph it picks.
     ...(gpu && { gpu }),
+    // MiniMax H3's GPU tier and the card's file as decided for this run: the GPU pre-flight checks the graph and file it picks.
+    ...(h3 && { h3 }),
     plan: { end: plan.end },
   };
 }

@@ -1,5 +1,6 @@
 import { exrWorkflow } from "@/lib/av/video-finish";
 import { qwen21Graph } from "@/lib/qwen21-speed";
+import { H3_TIER_PARAM, tierGraphFor } from "@/lib/gpu/h3-tier";
 
 /**
  * Which workflow a ComfyUI route runs for a request: the route's endpoint, or a variant picked by an option.
@@ -68,10 +69,14 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   if (shot && r.extra.productShot === true && r.images === 1 && r.has(shot)) endpoint = shot;
   // Qwen-Image 2.1: Options → Speed's graph, or the small encoder's when Options → GPU says Small (src/lib/qwen21-speed.ts).
   endpoint = qwen21Graph(endpoint, r.extra, r.has);
-  // MiniMax H3: an orbit runs the Orbit LoRA graph (whatever the quality), else Best runs the 20-step graph.
+  // MiniMax H3: an orbit runs the Orbit LoRA graph (whatever the quality or tier); else a smaller card's tier (FastH3 V2 or Trim,
+  // as the plan decided it: src/server/h3-gpu.ts), which wins over Best; else Best runs the 20-step graph.
   const orbit = H3_ORBIT_GRAPH[endpoint];
   const best = H3_BEST_GRAPH[endpoint];
+  const tier = r.extra[H3_TIER_PARAM];
+  const small = tier === "fast" || tier === "trim" ? tierGraphFor(endpoint, tier, r.has) : undefined;
   if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
+  else if (small) endpoint = small;
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
