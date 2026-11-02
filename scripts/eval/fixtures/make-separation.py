@@ -6,8 +6,10 @@ case, and meta.json (the words spoken, the levels, the pan and every source's li
   python3 -I scripts/eval/fixtures/make-separation.py --speech <folder> [--seconds 12]   (needs numpy and ffmpeg)
 
 The speech is yours to bring, with its words: a folder of <name>.flac|.wav files next to <name>.txt (or an
-index.json [{"id", "text"}]), mono, any rate. Fuobe's own TTS lines (open Chatterbox) are the intended source; the
-suite's first measured run used LibriSpeech dev-clean utterances (CC BY 4.0, see --speech-licence). The music, the
+index.json [{"id", "text"}]), mono, any rate, and its licence: --speech-licence "<source, licence>" or a licence.txt in
+the folder (meta.json records it; there is no default, so a rerun with other speech can't be credited to the wrong
+source). Fuobe's own TTS lines (open Chatterbox) are the intended source; the suite's measured runs used LibriSpeech
+dev-clean utterances (CC BY 4.0). The music, the
 effects, the hum and the hiss are synthesized here from fixed seeds (Fuobe's own, CC0), so every stem is known
 exactly and the mixes are the same on every machine.
 """
@@ -49,6 +51,13 @@ def write_flac(path: pathlib.Path, x: np.ndarray) -> None:
     x = np.atleast_2d(x)
     pcm = np.clip(x.T, -1, 1).astype("<f4").tobytes()
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(SR), "-ac", str(x.shape[0]), "-i", "-", "-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24", str(path)], input=pcm, check=True)
+
+
+def write_float_wav(path: pathlib.Path, x: np.ndarray) -> None:
+    """Channels × samples as 32-bit float WAV: values over full scale are kept."""
+    x = np.atleast_2d(x)
+    pcm = x.T.astype("<f4").tobytes()
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(SR), "-ac", str(x.shape[0]), "-i", "-", "-c:a", "pcm_f32le", str(path)], input=pcm, check=True)
 
 
 def speech_lines(folder: pathlib.Path) -> list[tuple[str, np.ndarray, str]]:
@@ -190,16 +199,31 @@ MIXES = {
     "hum": {"title": "Dialogue with a steady 50 Hz mains hum", "speech": ["1272-135031-0003", "1272-135031-0004", "1272-135031-0007"], "pan": 0.5, "noise": "hum", "noiseDb": -34},
     "hiss": {"title": "Dialogue with steady tape hiss", "speech": ["1272-135031-0005", "1272-135031-0006", "1272-135031-0008"], "pan": 0.5, "noise": "hiss", "noiseDb": -36},
     "loud": {"title": "A loud master (peaks at −0.1 dBFS)", "speech": ["1272-141231-0016", "1272-141231-0017", "1272-141231-0018"], "pan": 0.5, "peak": -0.1, "musicDb": -18},
+    # The music and effects carry the master's peaks, so the bed (the mix minus the speech) goes over full scale where
+    # the speech pulls the other way: AudioMerge's peak scaling (research §2.1) has something to scale.
+    "loud-bed": {"title": "A loud master whose music and effects reach full scale", "speech": ["1272-141231-0016", "1272-141231-0017", "1272-141231-0018"], "pan": 0.5, "peak": -0.1, "musicDb": -12, "effectsDb": -16},
 }
+
+
+def speech_licence(folder: pathlib.Path, given: str | None) -> str:
+    """The speech's source and licence: --speech-licence, else the folder's licence.txt."""
+    if given:
+        return given
+    for name in ("licence.txt", "LICENCE.txt", "license.txt", "LICENSE.txt"):
+        f = folder / name
+        if f.exists() and f.read_text(encoding="utf8").strip():
+            return f.read_text(encoding="utf8").strip()
+    raise SystemExit(f"Say where the speech comes from and its licence: --speech-licence \"<source, licence>\" or a licence.txt in {folder}")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--speech", required=True, help="folder of speech files with their words (see above)")
-    ap.add_argument("--speech-licence", default="LibriSpeech dev-clean, speaker 1272 (Panayotov et al. 2015, openslr.org/12), CC BY 4.0, read from hf-internal-testing/librispeech_asr_dummy@5be91486")
+    ap.add_argument("--speech-licence", help='the speech\'s source and licence, recorded in meta.json (else the folder\'s licence.txt); the measured runs used "LibriSpeech dev-clean, speaker 1272 (Panayotov et al. 2015, openslr.org/12), CC BY 4.0, read from hf-internal-testing/librispeech_asr_dummy@5be91486"')
     ap.add_argument("--seconds", type=float, default=12.0)
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args()
+    licence = speech_licence(pathlib.Path(args.speech), args.speech_licence)
     lines = speech_lines(pathlib.Path(args.speech))
     have = {i for i, _, _ in lines}
     out = pathlib.Path(args.out)
@@ -211,7 +235,7 @@ def main() -> int:
         pan = m["pan"]
         voice = np.stack([sp * np.cos(pan * np.pi / 2), sp * np.sin(pan * np.pi / 2)]) * np.sqrt(2)
         mus = at_level(music(sec, 11), m.get("musicDb", -26))
-        fx = at_level(effects(sec, 23), -30)
+        fx = at_level(effects(sec, 23), m.get("effectsDb", -30))
         noise = None
         if m.get("noise") == "hum":
             noise = at_level(hum(sec), m["noiseDb"])
@@ -227,7 +251,12 @@ def main() -> int:
         d = out / name
         d.mkdir(parents=True, exist_ok=True)
         for f, x in [("mix", mix), ("voice", voice), ("music", mus), ("effects", fx), ("background", bed)] + ([("noise", noise)] if noise is not None else []):
-            write_flac(d / f"{f}.flac", x)
+            for old in (d / f"{f}.flac", d / f"{f}.wav"):
+                old.unlink(missing_ok=True)
+            if np.max(np.abs(x)) > 1:
+                write_float_wav(d / f"{f}.wav", x)  # a known part over full scale stays exact (FLAC would clip it)
+            else:
+                write_flac(d / f"{f}.flac", x)
         meta = {
             "title": m["title"],
             "text": text,
@@ -237,7 +266,11 @@ def main() -> int:
             "pan": pan,
             "levelsDbfs": {k: round(20 * np.log10(rms(x)), 2) for k, x in [("mix", mix), ("voice", voice), ("music", mus), ("effects", fx)] + ([("noise", noise)] if noise is not None else [])},
             "peakDbfs": round(20 * np.log10(np.max(np.abs(mix))), 2),
-            "licences": {"speech": args.speech_licence, "music": SYNTH_LICENCE, "effects": SYNTH_LICENCE, **({"noise": SYNTH_LICENCE} if noise is not None else {})},
+            # The known bed's peak, and the fast stereo bed's with a perfect separation (each channel minus the mono speech):
+            # over 0 dBFS, AudioMerge divides the whole bed by its peak.
+            "bedPeakDbfs": round(20 * np.log10(np.max(np.abs(bed))), 2),
+            "fastBedPeakDbfs": round(20 * np.log10(np.max(np.abs(mix - voice.mean(0)))), 2),
+            "licences": {"speech": licence, "music": SYNTH_LICENCE, "effects": SYNTH_LICENCE, **({"noise": SYNTH_LICENCE} if noise is not None else {})},
         }
         (d / "meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf8")
         print(f"{name}: {text[:60]}… mix {meta['levelsDbfs']['mix']} dBFS, peak {meta['peakDbfs']}")

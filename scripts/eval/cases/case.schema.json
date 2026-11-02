@@ -724,6 +724,9 @@
               ]
             }
           },
+          "op": {
+            "type": "string"
+          },
           "params": {
             "type": "object",
             "properties": {

@@ -142,6 +142,8 @@ const Variant = z
     models: PerEngine(z.array(z.string().min(1)).min(1)).optional(),
     /** The engines this variant runs on (a partner model is a cloud model: on the others it would repeat another variant). */
     engines: z.array(z.enum(ENGINES)).min(1).optional(),
+    /** The op this variant's models run (a cleaner beside the splitters: enhance-voice), over the case's and the target's. */
+    op: z.string().optional(),
     params: Params.optional(),
     extra: Json.optional(),
     /** Send this variant through a studio route instead of /api/generations (the case's own submit wins). */

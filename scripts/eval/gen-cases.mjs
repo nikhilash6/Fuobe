@@ -461,7 +461,8 @@ const SEPARATION_MIXES = [
   { id: "off-centre", title: "Dialogue panned left over the same music and effects", checks: "the fast stereo bed (mono speech subtracted from each channel) leaves part of off-centre speech in the bed" },
   { id: "hum", title: "Dialogue with a steady 50 Hz mains hum", checks: "where steady hum goes (noiseInVoice: the share left in the dialogue)" },
   { id: "hiss", title: "Dialogue with steady tape hiss", checks: "where steady hiss goes" },
-  { id: "loud", title: "A loud master that peaks at −0.1 dBFS", checks: "AudioMerge scales a bed that peaks over full scale down as a whole (bedLevel, bedPeak)" },
+  { id: "loud", title: "A loud master that peaks at −0.1 dBFS", checks: "a loud master whose peaks are the dialogue's: the bed stays well under full scale (bedLevel, bedPeak)" },
+  { id: "loud-bed", title: "A loud master whose music and effects reach full scale", checks: "AudioMerge scales a bed that peaks over full scale down as a whole (bedScale, bedLevel, bedPeak; the known bed's own peak is in meta.json)" },
   { id: "video", title: "The centre mix inside a video (H.264 + AAC)", checks: "a video source: the soundtrack read straight from the clip", video: true },
 ];
 
@@ -498,7 +499,7 @@ function separationSuite() {
     $schema: "./case.schema.json",
     suite: "separation",
     title: "Soundtrack separation · dialogue, music and effects",
-    description: `${HEADER} Synthetic 12 s mixes with known stems (python3 -I scripts/eval/fixtures/make-separation.py --speech <folder> writes them into local/separation/; the speech is yours to bring with its words, the music, effects, hum and hiss are synthesized there, CC0) and your own clip for the blind review. Scores each stem against its known part (SI-SDR, SDR), whether voice + bed add back up to the input, the bed's level, peak and stereo image against the known bed, where a steady hum or hiss goes, the dialogue's word error rate (Whisper base.en, pnpm eval:setup --asr; werInput is the same ASR on the input as it is, which is "Clean the voice first" off) and the speed from ComfyUI-DBS's report. Licences (information): ${dbsLicences()}; ComfyUI-DBS MIT; MelBand RoFormer MIT; Demucs MIT; the test mixes' sources are recorded in each mix's meta.json. SAM Audio isn't here: it is not offered on the cloud engine.`,
+    description: `${HEADER} Synthetic 12 s mixes with known stems (python3 -I scripts/eval/fixtures/make-separation.py --speech <folder> --speech-licence "<source, licence>" writes them into local/separation/; the speech is yours to bring with its words and its licence, the music, effects, hum and hiss are synthesized there, CC0; the measured runs used LibriSpeech dev-clean speaker 1272, CC BY 4.0) and your own clip for the blind review. Scores each stem against its known part (SI-SDR, SDR), whether voice + bed add back up to the input, the bed's level, peak and stereo image against the known bed, where a steady hum or hiss goes, the dialogue's word error rate (Whisper base.en, pnpm eval:setup --asr; werInput is the same ASR on the input as it is, which is "Clean the voice first" off) and the speed from ComfyUI-DBS's report. Clean up dialogue (clean-dialogue: one file with the bed at −18 dB) is scored against the voice plus the known bed at that level (remixSiSdr), with the bed's level in it (bedLevel), the noise left in it and its WER. Licences (information): ${dbsLicences()}; ComfyUI-DBS MIT; MelBand RoFormer MIT; Demucs MIT; DeepFilterNet 3 MIT OR Apache-2.0; VEED Clean Audio a hosted paid API; the test mixes' sources are recorded in each mix's meta.json. SAM Audio isn't here: it is not offered on the cloud engine.`,
     original: ["oss-dbs-separate", "oss-dbs-voice-separate"],
     kind: "audio",
     decides: SEPARATION_RULE,
@@ -522,6 +523,10 @@ function separationSuite() {
       "dbs-dub": { description: "The dub's first step with DBS (graph B: DBS-BSRNN voice and bed, then Qwen3-ASR 0.6B on the voice)", models: { open: ["oss-dbs-voice-separate"] }, extra: { separationModel: "DBS-BSRNN-DnR", ...asr }, engines: ["open"] },
       melband: { description: "The dub's first step with MelBand RoFormer (a vocals model; voice and background only, then Qwen3-ASR 0.6B)", models: { open: ["oss-voice-separate"] }, extra: asr, engines: ["open"] },
       demucs: { description: "Demucs (htdemucs on fal, as today's cloud dub uses it): vocals against drums, bass and other, summed into the bed", models: { cloud: ["demucs"] }, engines: ["cloud"] },
+      // Clean up dialogue (D5): graph C gives one file, the dialogue with the music and effects back under it at −18 dB.
+      "clean-dialogue": { description: "Clean up dialogue, open (graph C: DBS-BSRNN dialogue with the music and effects at −18 dB, one file)", models: { open: ["oss-dbs-remix"] }, extra: { separationModel: "DBS-BSRNN-DnR", channels: "mono", voiceDb: 0, musicDb: -18, effectsDb: -18 }, engines: ["open"] },
+      "clean-veed": { description: "Clean up dialogue, cloud: VEED Clean Audio (the voice with nothing under it)", models: { cloud: ["veed-clean-audio"] }, op: "enhance-voice", engines: ["cloud"] },
+      "clean-deepfilternet": { description: "Clean up dialogue, cloud: DeepFilterNet 3 on fal (audio only; a denoiser, so music stays)", models: { cloud: ["deepfilternet3"] }, op: "enhance-voice", engines: ["cloud"] },
     },
     cases,
   };
