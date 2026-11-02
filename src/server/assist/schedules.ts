@@ -388,8 +388,10 @@ function prepareSkillRun(task: ScheduleSkill, projectId: string | null): SkillRu
     if (task.sources?.[p.id] !== "newest" || !isMediaType(p.type)) continue;
     // The owner's newest upload of that kind, as the Library's Uploads list shows it.
     const newest = listAssets({ source: "upload", kind: p.type, limit: 1 })[0];
-    if (!newest) return { stop: "failed", message: `There's no ${newestWords(p.type).replace(/^your newest /, "")} yet for “${p.label}” — upload one, or edit the task to pick a file` };
-    values[p.id] = newest.url;
+    if (newest) values[p.id] = newest.url;
+    // An input the skill can do without (or has a file of its own for) is left out until there's an upload.
+    else if (!p.required || p.default !== undefined) delete values[p.id];
+    else return { stop: "failed", message: `There's no ${newestWords(p.type).replace(/^your newest /, "")} yet for “${p.label}” — upload one, or edit the task to pick a file` };
   }
   const files = [...new Set(recipe.params.flatMap((p) => (isMediaType(p.type) && values[p.id]?.startsWith("/api/files/") ? [values[p.id]] : [])))].slice(0, 8);
   const line = skillTaskLine({ ...task, values }, recipe.params, (url) => (files.includes(url) ? `file ${files.indexOf(url) + 1}` : url));

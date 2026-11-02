@@ -410,6 +410,53 @@ describe("a skill on a schedule (Skills W4)", () => {
     expect(sched.getSchedule(s.id)).toMatchObject({ paused: false, runs: 1, last: { threadId: null, status: "failed", text: "There's no image upload yet for “Product photo” — upload one, or edit the task to pick a file" } });
   });
 
+  it("an input the skill can do without, set to the newest upload with none yet, is left out and the run goes ahead", async () => {
+    const name = "logo-promo";
+    (await skills()).createSkill({ name, title: "Logo promo", description: "A promo still, with a logo when there is one.", body: "# Logo promo\n\n1. Stage it." });
+    (await recipes()).saveRecipe(name, {
+      fuobeRecipe: 1,
+      params: [
+        { id: "name", label: "Product name", type: "text", required: true, max: 200 },
+        { id: "logo", label: "Logo", type: "image" },
+      ],
+      steps: [{ key: "ad", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", prompt: "{{name}} on a sunlit plinth", inputs: { images: ["{{logo}}"] } } }],
+    });
+    const s = sched.createSchedule({ ...base, prompt: "", title: "", skill: { name, values: { name: "Lumen lamp" }, sources: { logo: "newest" } }, rule: daily }, at);
+    const [id] = await sched.sweepSchedules(T("2026-10-27T09:00:00Z"), { model: noModel });
+    const t = threadOf(id);
+    expect(t.items[1]).toMatchObject({ role: "user", text: "Product name: Lumen lamp · Logo: no image upload yet, so it's left out" });
+    expect(t.items.find((i) => i.role === "approval")).toMatchObject({ status: "pending", summary: "Logo promo" });
+    const use = stored(id).flatMap((m) => (typeof m.content === "string" ? [] : m.content)).find((b) => b.type === "tool_use");
+    expect(use).toMatchObject({ name: "run_skill", input: { name, values: { name: "Lumen lamp" } } });
+    expect(sched.getSchedule(s.id)).toMatchObject({ paused: false, last: { threadId: id, status: "waiting" } });
+    (await skills()).deleteSkill(name);
+  });
+
+  it("the dialog starts a needed file input on the newest upload, and one the skill can do without on none", async () => {
+    const { inputsFrom, skillTask } = await import("@/components/assist/schedule-skill");
+    const view = {
+      name: "two-shots",
+      recipe: {
+        params: [
+          { id: "front", label: "Front", type: "image", required: true },
+          { id: "back", label: "Back", type: "image", required: true },
+          { id: "logo", label: "Logo", type: "image" },
+          { id: "badge", label: "Badge", type: "image", required: true, default: "/api/files/uploads/badge.png" },
+        ],
+      },
+    } as unknown as import("@/lib/recipe").RecipeView;
+    // Only the first needed input of a kind reads the newest upload, so two never take the same file; the second asks for one.
+    const fresh = skillTask(view, inputsFrom(null));
+    expect(fresh.task).toEqual({ name: "two-shots", values: {}, sources: { front: "newest" } });
+    expect(fresh.errors).toMatchObject({ back: "Back is needed" });
+    expect(Object.keys(fresh.errors)).toEqual(["back"]);
+    // Picked by hand: the newest upload for the optional logo, a file for the back.
+    const picked = skillTask(view, { ...inputsFrom(null), values: { back: "/api/files/uploads/back.png" }, sources: { logo: "newest" } });
+    expect(picked).toMatchObject({ ok: true, task: { values: { back: "/api/files/uploads/back.png" }, sources: { front: "newest", logo: "newest" } } });
+    // A saved task reopens as it was saved: what it left out stays out.
+    expect(skillTask(view, inputsFrom(picked.task)).task).toEqual(picked.task);
+  });
+
   it("is checked when saved: the skill, its inputs and the engine; and needs no prompt or model", async () => {
     const name = await promoSkill();
     const save = (skill: import("@/lib/assist-schedule").ScheduleSkill, extra: Partial<import("@/server/assist/schedules").ScheduleInput> = {}) =>

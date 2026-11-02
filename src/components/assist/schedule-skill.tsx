@@ -10,7 +10,7 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import type { SkillSummary } from "@/lib/assist";
-import { newestWords, type ScheduleSkill } from "@/lib/assist-schedule";
+import type { ScheduleSkill } from "@/lib/assist-schedule";
 import type { Engine } from "@/lib/catalog/types";
 import { formatCost } from "@/lib/format";
 import { checkValues, isMediaType, type RecipeEstimate, type RecipeParam, type RecipeView } from "@/lib/recipe";
@@ -24,11 +24,14 @@ import { SkillIcon } from "./skill-icon";
  * for each file input a picked file or the newest upload of that kind, read when the run starts.
  */
 
+/** Where a file input comes from: the newest upload when it runs, one picked file, or none (the skill's default, if it has one). */
+type Source = "newest" | "file" | "none";
+
 /** What the form holds: values as typed (a picked file's URL too), the file slots, and where each file input comes from. */
 export interface SkillInputs {
   values: Record<string, string | number | undefined>;
   slots: Record<string, SlotValue | null>;
-  sources: Record<string, "newest" | "file">;
+  sources: Record<string, Source>;
 }
 
 /** The form for a saved task's skill, or an empty one. */
@@ -40,8 +43,21 @@ export const inputsFrom = (skill?: ScheduleSkill | null): SkillInputs => ({
 
 type FileParam = RecipeParam & { type: "image" | "video" | "audio" };
 
-/** A file input with nothing picked takes the newest upload; one that holds a file keeps it. */
-const sourceOf = (p: RecipeParam, inputs: SkillInputs) => inputs.sources[p.id] ?? (typeof inputs.values[p.id] === "string" && inputs.values[p.id] ? "file" : "newest");
+/** An input the skill can't run without: required, with no default of its own. */
+const needed = (p: RecipeParam) => p.required && p.default === undefined;
+
+/**
+ * Where a file input comes from. One that holds a file keeps it. Otherwise an input the skill needs takes the newest
+ * upload (only the first needed input of each kind, so two don't read the same file), and one it can do without, or
+ * that has a default of its own, takes none.
+ */
+function sourceOf(p: RecipeParam, inputs: SkillInputs, params: RecipeParam[]): Source {
+  const set = inputs.sources[p.id];
+  if (set) return set;
+  if (typeof inputs.values[p.id] === "string" && inputs.values[p.id]) return "file";
+  if (!needed(p)) return "none";
+  return params.find((q) => q.type === p.type && needed(q))?.id === p.id ? "newest" : "file";
+}
 
 const slotOf = (p: FileParam, inputs: SkillInputs): SlotValue | null => {
   if (p.id in inputs.slots) return inputs.slots[p.id];
@@ -60,11 +76,13 @@ export function skillTask(view: RecipeView, inputs: SkillInputs): { task: Schedu
   let uploading = false;
   for (const p of view.recipe.params) {
     if (isMediaType(p.type)) {
-      if (sourceOf(p, inputs) === "newest") {
+      const source = sourceOf(p, inputs, view.recipe.params);
+      if (source === "newest") {
         sources[p.id] = "newest";
         priced[p.id] = NEWEST[p.type];
         continue;
       }
+      if (source === "none") continue;
       const slot = slotOf(p as FileParam, inputs);
       if (slot?.uploading) uploading = true;
       else if (slot?.ref) values[p.id] = priced[p.id] = slot.ref;
@@ -185,7 +203,7 @@ export function SkillTaskFields({
               <FileInput
                 key={p.id}
                 p={p as FileParam}
-                source={sourceOf(p, inputs)}
+                source={sourceOf(p, inputs, view.recipe.params)}
                 onSource={(s) => set({ sources: { ...inputs.sources, [p.id]: s } })}
                 slot={slotOf(p as FileParam, inputs)}
                 onSlot={(v) => set({ slots: { ...inputs.slots, [p.id]: v } })}
@@ -240,17 +258,20 @@ function FileInput({
   error,
 }: {
   p: FileParam;
-  source: "newest" | "file";
-  onSource: (s: "newest" | "file") => void;
+  source: Source;
+  onSource: (s: Source) => void;
   slot: SlotValue | null;
   onSlot: (v: SlotValue | null) => void;
   error?: string;
 }) {
   const labelId = useId();
-  const options = [
+  const options: { id: Source; label: string }[] = [
     { id: "newest", label: "Newest upload (when it runs)" },
     { id: "file", label: "This file" },
-  ] as const;
+    // An input the skill can do without: leave it out, or use the file the skill comes with.
+    ...(needed(p) ? [] : [{ id: "none" as const, label: p.default !== undefined ? "The skill's own" : "None" }]),
+  ];
+  const kind = p.type === "image" ? "image" : p.type === "video" ? "video" : "audio file";
   return (
     <div className="space-y-2">
       <p id={labelId} className="text-sm font-medium">
@@ -273,7 +294,16 @@ function FileInput({
         ))}
       </div>
       {source === "newest" ? (
-        <p className="text-[12px] text-muted-foreground">Each run uses {newestWords(p.type)} at that moment: upload a new one before it runs, and that&apos;s the one it takes.</p>
+        <p className="text-[12px] text-muted-foreground">
+          Each run takes the newest {kind} in{" "}
+          <Link href="/library?tab=uploads" className="font-medium text-brand-text underline-offset-2 hover:underline">
+            Library → Uploads
+          </Link>{" "}
+          at that moment, whatever put it there: upload a new one before it runs, and that&apos;s the one it takes.
+          {needed(p) ? "" : p.default !== undefined ? ` With no ${kind} there yet, it uses the skill's own.` : ` With no ${kind} there yet, the run goes ahead without one.`}
+        </p>
+      ) : source === "none" ? (
+        <p className="text-[12px] text-muted-foreground">{p.default !== undefined ? `Every run uses the skill's own ${kind}.` : "Every run goes without one."}</p>
       ) : (
         <div className="flex items-center gap-3">
           <MediaSlot label={p.label} kind={p.type} value={slot} onChange={onSlot} required={p.required} />

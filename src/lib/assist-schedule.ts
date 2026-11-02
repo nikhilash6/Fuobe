@@ -288,7 +288,11 @@ export function skillTaskLine(skill: ScheduleSkill, params: { id: string; label:
   const parts = params.flatMap((p) => {
     const v = skill.values[p.id];
     const file = p.type === "image" || p.type === "video" || p.type === "audio" ? p.type : null;
-    if (skill.sources?.[p.id] === "newest" && file) return [`${p.label}: ${newestWords(file)}${files && v ? ` (${files(v)})` : ""}`];
+    if (skill.sources?.[p.id] === "newest" && file) {
+      // A run's line says when there was nothing to read, so the input was left out.
+      if (files && !v) return [`${p.label}: no ${KIND_WORDS[file]} upload yet, so it's left out`];
+      return [`${p.label}: ${newestWords(file)}${files && v ? ` (${files(v)})` : ""}`];
+    }
     if (v === undefined || v === "") return [];
     if (file && /^(\/api\/files\/|https?:\/\/)/i.test(v)) return [`${p.label}: ${files ? files(v) : "a file you picked"}`];
     return [`${p.label}: ${v.length > 80 ? `${v.slice(0, 79).trimEnd()}…` : v}`];
