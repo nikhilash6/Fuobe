@@ -1,5 +1,5 @@
 import "server-only";
-import { deviceOf, H3_TIER_GRAPH, H3_TIER_MODEL, h3TierFor, H3_TIER_PARAM, TIER_BEST_NOTE, TIER_DECODER_NOTE, TIER_NOTES, tierGraphFor, SOL_VAE, type H3TierChoice } from "@/lib/gpu/h3-tier";
+import { deviceOf, H3_TIER_GRAPH, H3_TIER_MODEL, h3TierFor, H3_TIER_PARAM, TIER_BEST_NOTE, TIER_DECODER_NOTE, TIER_NOTES, tierChoice, tierGraphFor, tierOfGraph, SOL_VAE, type H3TierChoice } from "@/lib/gpu/h3-tier";
 import { getModel } from "@/lib/catalog";
 import { preflightOn } from "./gpu/index-file";
 import { readSnapshot } from "./gpu/snapshots";
@@ -39,9 +39,13 @@ function lastCard() {
 
 /**
  * Options → GPU tier for a MiniMax H3 run on `endpoint` (the route's graph before variants), or undefined when the run takes no
- * tier either way (another model, an orbit, a graph with no smaller build). `has`: is a graph in the library.
+ * tier either way (another model, an orbit, a graph with no smaller build). A FastH3 graph itself keeps its own tier. `has`: is a graph in the library.
  */
 export function h3Gpu(endpoint: string, extra: Record<string, unknown>, has: (id: string) => boolean): H3GpuChoice | undefined {
+  // A FastH3 graph run directly (its hidden model named in the request): its build is fixed, and the file is still the card's,
+  // chosen here, never one the request names.
+  const own = tierOfGraph(endpoint);
+  if (own) return { gpuTier: own, unet: tierChoice(own, deviceOf(lastCard())).unet, note: TIER_NOTES[own] };
   if (!H3_TIER_GRAPH[endpoint] || extra.orbit === true) return undefined;
   const asked = extra[H3_TIER_PARAM];
   const inv = lastCard();

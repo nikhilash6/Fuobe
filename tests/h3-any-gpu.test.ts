@@ -220,6 +220,11 @@ describe("Auto and Options → GPU tier, decided once per run", () => {
       const full = run({ unet: "something-else.safetensors" });
       expect(full.h3).toEqual({ gpuTier: "standard" });
       expect(full.notes ?? []).not.toContain(T.TIER_NOTES.trim);
+      // A FastH3 build named directly (its hidden model): its own tier, and the card's file, never the request's.
+      checked({ gb: 16, name: RTX5060 });
+      const direct = previewGeneration({ feature: "video", modelId: "oss-minimax-h3-trim", prompt: "a lighthouse at dusk", params: { aspectRatio: "16:9", duration: 5, extra: { unet: "something-else.safetensors" } } });
+      expect(direct).toMatchObject({ h3: { gpuTier: "trim", unet: T.TRIM_FILES.nvfp4.file }, route: { provider: "comfyui", endpoint: "minimax-h3-trim-t2v" } });
+      expect(h3Gpu("minimax-h3-fast-i2v", { unet: "something-else.safetensors", gpuTier: "trim" }, has)).toMatchObject({ gpuTier: "fast", unet: T.FAST_FILES.nvfp4.file });
     } finally {
       g.__fuobeComfyReach = before;
       setSetting("demoMode", "auto");
