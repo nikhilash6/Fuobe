@@ -59,8 +59,8 @@ function frontmatter(text: string) {
 }
 
 describe("skills follow the Agent Skills spec", () => {
-  it("finds the 20 built-in skills and the agent skill", () => {
-    expect(skillFiles).toHaveLength(21);
+  it("finds the 21 built-in skills and the agent skill", () => {
+    expect(skillFiles).toHaveLength(22);
   });
 
   for (const file of skillFiles) {

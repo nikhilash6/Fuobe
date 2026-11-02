@@ -21,6 +21,7 @@ Some licences ask the app that runs their model to say so.
 - [BS-RoFormer, copyright (c) 2023 Phil Wang](https://github.com/lucidrains/BS-RoFormer). MIT. For dialogue, music and effects separation.
 - [Music-Source-Separation-Training, copyright (c) 2024 Roman Solovyev (ZFTurbo)](https://github.com/ZFTurbo/Music-Source-Separation-Training). MIT. For dialogue, music and effects separation.
 - [TIGER / Look2Hear, copyright (c) 2026 Kai Li](https://github.com/JusperLee/TIGER). MIT. For dialogue, music and effects separation.
+- [Adapted from MOSS-Image's prompt-enhancer skill and its layout reference (commit 2b46b1e), copyright OpenMOSS](https://github.com/OpenMOSS/MOSS-Image). Apache-2.0. For the Layout Poster skill and Plan layout.
 
 ## Open model licences
 

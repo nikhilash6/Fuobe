@@ -90,6 +90,9 @@ export type Operation =
   | "camera-path" // image + params.cameraPath (+ inputs.video: the open engine's render along the path) → the camera following the path
   // archive-restore
   | "restore-video" // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
+  // nm10-hosted-catchup
+  | "insert-moment" // video + params.startTime / params.endTime (+ prompt, reference images and clips, params.duration: the new scene's length) → the clip with a new scene between them
+  | "retexture-3d" // 3D model (inputs.model3d) + prompt or a style image → the same model with new textures
   // nm10-voice-design
   | "voice-design"; // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
 
@@ -165,6 +168,8 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   "camera-path": "Fly path",
   composite: "Character over the footage",
   "restore-video": "Restore & colourise",
+  "insert-moment": "Insert a moment",
+  "retexture-3d": "Retexture",
 };
 
 export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
@@ -240,6 +245,8 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   "camera-path": "video",
   composite: "video",
   "restore-video": "video",
+  "insert-moment": "video",
+  "retexture-3d": "model3d",
 };
 
 /**
@@ -524,6 +531,8 @@ export interface FieldMap {
   cameraPath?: { key: string; min: number; max: number; elevation: [number, number]; maxTurns: number; free?: { key: string; values: string[] } };
   /** An empty prompt is left out rather than sent as "" (APIs that read a missing prompt as "no words": Bria Expand). */
   omitEmptyPrompt?: boolean;
+  /** The most characters the API's prompt field takes (its schema's maxLength: Vidu Q4 5,000, Meshy retexture 600): a longer one is refused before it's paid for. */
+  promptMax?: number;
   /** params.extra keys this route has no field for (a model-wide control only its other routes read): left out. */
   ignore?: string[];
   /**
@@ -651,6 +660,11 @@ export interface ModelOptions {
   promptless?: boolean;
   /** The prompt box shows, but the model also runs without words (P-Video Replace, Genjutsu Lite object swap). */
   promptOptional?: boolean;
+  /**
+   * The light goes as a picture of a lit sphere (fal's H3 Max relight: reference_image_url), drawn in the browser from a light
+   * preset (src/lib/relight-sphere.ts) and sent as the run's image; no words.
+   */
+  lightSphere?: boolean;
   /** The words a run takes when none are given (Fuobe Try-On: its try-on LoRA's own instruction). */
   defaultPrompt?: string;
   /** The prompt box's placeholder for this model (Open-H3 Regenerate: describe the clip it redraws). */
@@ -661,8 +675,10 @@ export interface ModelOptions {
    * "minimax-h3" = MiniMax H3's layout: an alignment line for the start (and end) frame, then integrated_multimodal_description,
    * overall_soundscape and non_diegetic_music. The server wraps the words in it (src/lib/h3-prompt.ts) and keeps the result
    * as the run's prompt; words already in the layout pass through.
+   * "qma" = the QMA camera-angles LoRA's "<qma> {azimuth} {elevation} {distance}": the plan writes it from the run's pose
+   * (params.extra horizontal_angle / vertical_angle / zoom, src/lib/qma.ts), the words after it.
    */
-  promptFormat?: "ideogram4" | "minimax-h3";
+  promptFormat?: "ideogram4" | "minimax-h3" | "qma";
   /**
    * LoRAs the model's recipe always loads (Fuobe Try-On's try-on LoRA): every run carries them before the user's own
    * (an API's LoRA cap leaves out the user's first), their trigger words leading the prompt. A ComfyUI graph that loads
@@ -673,6 +689,10 @@ export interface ModelOptions {
   /** Max reference videos / audio clips it accepts (reference-to-video: inputs.videos / inputs.audios). */
   maxVideos?: number;
   maxAudios?: number;
+  /** The most references across its pictures, clips and sound clips together (fal's H3 Max Turbo references: 12 files). */
+  maxReferences?: number;
+  /** The one format its reference voices are read in (fal's Vidu Q4: mp3); a clip in another is refused before the run. */
+  referenceAudio?: string;
   /** Spoken languages it can be told (transcription, captions): sent as params.sourceLanguage; unset = its default. */
   sourceLanguages?: string[];
   /**
@@ -755,6 +775,11 @@ export interface Pricing {
    * rate of a run without clips).
    */
   clipInput?: { usd: number; byResolution?: Record<string, number>; plain?: true };
+  /**
+   * A per-second price multiplied by `factor` for a result longer than `over` seconds (fal's H3 Max lip sync: 1.2× for a video
+   * over 15 s, the whole video at the higher rate).
+   */
+  longFactor?: { over: number; factor: number };
   /** A fixed fee each request adds on top of its seconds (fal's H3 Max 3D to video: $0.50 processing). */
   perRequest?: number;
   /** The fewest seconds a per-second request bills (fal's H3 Max 3D to video: 5 s a shot). */
@@ -1419,6 +1444,11 @@ export interface Preset {
   promptPlaceholder?: string;
   cloud: PresetRoute | null;
   open: PresetRoute | null;
+  /**
+   * More routes on your GPU after the open one, each its own pick in the app's model picker (the Angles app's QMA · 96 views):
+   * a model the cloud has no hosted version of keeps its place on the open engine.
+   */
+  openAlso?: PresetRoute[];
   /** Research confidence / parity notes shown in docs and the UI. */
   parity?: string;
   /** Fuobe DoP's colour-grade effects: a src/lib/grade.ts preset the browser applies to the finished clip. */

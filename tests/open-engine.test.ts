@@ -139,6 +139,8 @@ describe("round-3 open models", () => {
             if (p === "quality" && H3_BEST_GRAPH[wid]) continue;
             // Qwen-Image 2.1's Speed and GPU pick the graph that runs too (src/lib/qwen21-speed.ts).
             if ((p === "speed" || p === "gpu") && QWEN21_SPEED_GRAPH[wid]) continue;
+            // QMA · 96 views' camera settings become its LoRA's words in the planner (src/lib/qma.ts, promptFormat "qma").
+            if (m.options.promptFormat === "qma" && ["horizontal_angle", "vertical_angle", "zoom"].includes(p)) continue;
             if (!PROVIDER_PARAMS.has(p) && p !== "cameraMotion" && !(m.id === ANGLES_ORIGINAL && (ANGLES_FIELDS as readonly string[]).includes(p))) expect(keys, `${m.id} → ${wid}: ${p}`).toContain(p);
           }
         }

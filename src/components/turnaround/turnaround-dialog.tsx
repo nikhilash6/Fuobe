@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { useEngine, useGenerations } from "@/lib/api";
 import { SOUL_ID_COPY } from "@/lib/catalog/training";
 import {
+  FILL_NAMES,
   SIDE_NAMES,
   SIDES_HINT,
   TURN_PATHS,
@@ -24,6 +25,7 @@ import {
   elementPictures,
   startingViews,
   type TurnPicture,
+  type TurnFill,
   type TurnRoute,
   type TurnSide,
   type TurnaroundPreview,
@@ -40,6 +42,7 @@ export interface TurnaroundBody {
   sheet?: string;
   route?: TurnRoute;
   fill?: boolean;
+  fillWith?: TurnFill;
   path?: string;
   duration?: number;
   aspectRatio?: "9:16" | "16:9";
@@ -68,6 +71,8 @@ interface Props {
   flyAround?: boolean;
   /** A person Fuobe made up (Soul Cast): no consent line to ask for. */
   fictional?: boolean;
+  /** The route the dialog starts on, on your GPU (the pre-flight board's "Turnaround stills · 8 views" link). */
+  route?: TurnRoute;
 }
 
 async function post<T>(url: string, body: unknown): Promise<T> {
@@ -77,7 +82,8 @@ async function post<T>(url: string, body: unknown): Promise<T> {
   return out;
 }
 
-type Run = { ids: string[]; filmId: string };
+/** A started run; `front`: a still set's own front picture (shown first with the drawn views). */
+type Run = { ids: string[]; filmId: string; front?: string };
 
 const runFeatures = (p: Pick<Props, "features" | "elementId">) => p.features ?? (p.elementId ? [`element:${p.elementId}`, "turnaround-step"] : ["turnaround", "turnaround-step"]);
 
@@ -114,7 +120,9 @@ export function TurnaroundButton({
   const [run, setRun] = useState<Run | null>(null);
   const state = useRunState(run, runFeatures(props));
   const text = label ?? (props.flyAround ? "Fly around this character" : "Turnaround video");
-  const status = !run ? undefined : state.video ? "ready" : state.failed ? "stopped" : `${state.done} of ${state.total}`;
+  // A still set has no film: it is ready once every picture is drawn.
+  const ready = !!state.video || (!!run && state.total > 0 && state.done === state.total);
+  const status = !run ? undefined : ready ? "ready" : state.failed ? "stopped" : `${state.done} of ${state.total}`;
   return (
     <>
       <Button
@@ -126,7 +134,7 @@ export function TurnaroundButton({
         onClick={() => setOpen(true)}
         aria-label={compact ? `${text}${status ? ` (${status})` : ""}` : undefined}
       >
-        {run && !state.video && !state.failed ? <Loader2 className="animate-spin" /> : <Rotate3d />}
+        {run && !ready && !state.failed ? <Loader2 className="animate-spin" /> : <Rotate3d />}
         <span className={cn(compact && "hidden sm:inline")}>{text}</span>
         {status && <span className={cn("font-mono text-[11px] text-muted-foreground", compact && "hidden sm:inline")}>· {status}</span>}
       </Button>
@@ -139,7 +147,7 @@ export function TurnaroundButton({
             (e.currentTarget as HTMLElement | null)?.focus();
           }}
         >
-          {open && (run ? <RunView heading={headingOf(props)} state={state} elementId={props.elementId} onAgain={() => setRun(null)} /> : <TurnaroundForm {...props} onStarted={setRun} />)}
+          {open && (run ? <RunView heading={headingOf(props)} state={state} front={run.front} elementId={props.elementId} onAgain={() => setRun(null)} /> : <TurnaroundForm {...props} onStarted={setRun} />)}
         </DialogContent>
       </Dialog>
     </>
@@ -156,15 +164,16 @@ function Thumb({ url, className }: { url?: string; className?: string }) {
   return url ? <img src={url} alt="" className={cn("size-full object-cover", className)} /> : null;
 }
 
-function TurnaroundForm({ pictures, name, realPerson: realDefault = false, elementId, engine: fixedEngine, onRun, title, flyAround, fictional, onStarted }: Props & { onStarted: (run: Run) => void }) {
+function TurnaroundForm({ pictures, name, realPerson: realDefault = false, elementId, engine: fixedEngine, onRun, title, flyAround, fictional, route: startRoute, onStarted }: Props & { onStarted: (run: Run) => void }) {
   const [appEngine, setAppEngine] = useEngine();
   const engine = fixedEngine ?? appEngine;
   const start = useMemo(() => startingViews(pictures), [pictures]);
   const [views, setViews] = useState<Partial<Record<TurnSide, string>>>(start.views);
   const [sheet, setSheet] = useState<string | undefined>(start.sheet);
   const [fill, setFill] = useState<boolean | undefined>(undefined);
+  const [fillWith, setFillWith] = useState<TurnFill>("angles");
   // The route and length picked hold for the engine they were picked on: another engine starts from its own defaults.
-  const [picked, setPicked] = useState<{ engine: Engine; route?: TurnRoute; duration?: number }>({ engine });
+  const [picked, setPicked] = useState<{ engine: Engine; route?: TurnRoute; duration?: number }>({ engine, ...(engine === "open" && startRoute && { route: startRoute }) });
   const route = picked.engine === engine ? picked.route : undefined;
   const duration = picked.engine === engine ? picked.duration : undefined;
   const setRoute = (r: TurnRoute) => setPicked({ engine, route: r });
@@ -182,6 +191,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
     ...(sheet && { sheet }),
     ...(route && { route }),
     ...(fill !== undefined && { fill }),
+    ...(engine === "open" && fillWith !== "angles" && { fillWith }),
     ...(path && { path }),
     ...(duration && { duration }),
     aspectRatio,
@@ -202,13 +212,19 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
     mutationFn: async ({ b, requestId }: { b: TurnaroundBody; requestId: string }): Promise<{ items: Generation[]; filmId?: string }> =>
       onRun ? { items: await onRun(b) } : post<{ items: Generation[]; filmId: string }>("/api/turnaround", { ...b, requestId }),
     // The film: the one the server names, else the joined clips, else the one video the run makes (drawn pictures are stills).
-    onSuccess: ({ items, filmId }) => onStarted({ ids: items.map((g) => g.id), filmId: filmId ?? (items.find((g) => g.op === "concat") ?? items.find((g) => g.kind === "video") ?? items[0])?.id }),
+    onSuccess: ({ items, filmId }) => {
+      const front = (p?.route ?? route) === "stills" ? p?.frames.find((f) => f.side === "front")?.url : undefined;
+      onStarted({ ids: items.map((g) => g.id), filmId: filmId ?? (items.find((g) => g.op === "concat") ?? items.find((g) => g.kind === "video") ?? items[0])?.id, ...(front && { front }) });
+    },
     onError: (e) => toastError(e),
   });
   const makeIt = () => void guard(JSON.stringify(body), (requestId) => make.mutateAsync({ b: body, requestId })).catch(() => {});
 
   const usedRoute = p?.route ?? route;
   const camera = usedRoute === "camera";
+  const stills = usedRoute === "stills";
+  // QMA · 96 views is offered on your GPU when this install has it (its Stills route is listed then).
+  const qmaHere = engine === "open" && !!p?.routes.includes("stills");
   const slotUrl = (k: SlotKey) => (k === "sheet" ? sheet : views[k]);
   const setSlot = (k: SlotKey, url: string | undefined) => {
     if (k === "sheet") setSheet(url);
@@ -292,7 +308,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
             );
           })}
         </div>
-        {!camera && (
+        {!camera && !stills && (
           <label className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
             <span className="min-w-0">
               <span className="block text-[13px] font-medium">Draw the missing sides</span>
@@ -301,16 +317,26 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
             <Switch checked={p?.fill ?? fill ?? true} onCheckedChange={(v) => setFill(v)} aria-label="Draw the missing sides" />
           </label>
         )}
+        {qmaHere && !camera && !stills && (p?.fill ?? fill ?? true) && (
+          <Chips
+            label="Drawn with"
+            value={fillWith}
+            options={(Object.keys(FILL_NAMES) as TurnFill[]).map((k) => ({ value: k, label: FILL_NAMES[k] }))}
+            onChange={(v) => setFillWith(v as TurnFill)}
+            hint={fillWith === "qma" ? "Turns the camera round the front view on your GPU, one of 96 set angles" : undefined}
+          />
+        )}
       </section>
 
       {p && p.routes.length > 1 && (
         <Chips label="Route" value={usedRoute} options={p.routes.map((r) => ({ value: r, label: TURN_ROUTES[r].name }))} onChange={(v) => setRoute(v as TurnRoute)} hint={usedRoute ? TURN_ROUTES[usedRoute].detail : undefined} />
       )}
       {p && p.routes.length === 1 && usedRoute && <p className="text-[12px] text-muted-foreground">{TURN_ROUTES[usedRoute].detail}.</p>}
+      {engine === "cloud" && <p className="text-[12px] text-muted-foreground">The 8-view still set, and sides drawn with QMA · 96 views, run on your GPU (open source).</p>}
       {camera && <Chips label="Path" value={path ?? TURN_PATHS[0].id} options={TURN_PATHS.map((x) => ({ value: x.id, label: x.name }))} onChange={setPath} hint={TURN_PATHS.find((x) => x.id === (path ?? TURN_PATHS[0].id))?.description} />}
       <div className="flex flex-wrap gap-x-6 gap-y-3">
-        {p && <Chips label="Length" value={String(p.duration)} options={p.durations.map((d) => ({ value: String(d), label: `${d} s` }))} onChange={(v) => setDuration(Number(v))} />}
-        {!camera && (
+        {p && p.durations.length > 0 && <Chips label="Length" value={String(p.duration)} options={p.durations.map((d) => ({ value: String(d), label: `${d} s` }))} onChange={(v) => setDuration(Number(v))} />}
+        {!camera && !stills && (
           <Chips
             label="Shape"
             value={aspectRatio}
@@ -377,7 +403,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
           {preview.isFetching && !p ? "Pricing…" : price}
         </span>
         <Button onClick={makeIt} disabled={!p || !!p.blocker || preview.isError || make.isPending || preview.isFetching}>
-          {make.isPending ? <Loader2 className="animate-spin" /> : <Rotate3d />} {flyAround ? "Fly around" : "Make turnaround"}
+          {make.isPending ? <Loader2 className="animate-spin" /> : <Rotate3d />} {stills ? "Make 8 views" : flyAround ? "Fly around" : "Make turnaround"}
         </Button>
       </div>
     </>
@@ -437,15 +463,33 @@ export function useCharacterPictures(urls: string[]): TurnPicture[] {
 }
 
 /** A run's progress, then the finished turnaround. */
-function RunView({ heading, state, elementId, onAgain }: { heading: string; state: ReturnType<typeof useRunState>; elementId?: string; onAgain: () => void }) {
+function RunView({ heading, state, front, elementId, onAgain }: { heading: string; state: ReturnType<typeof useRunState>; front?: string; elementId?: string; onAgain: () => void }) {
   const { video, failed, done, total, working } = state;
+  // A still set (Stills · 8 views): once every one is drawn, the front first, then the views in the run's order, each named.
+  const drawn =
+    !video && total > 0 && done === total
+      ? [...state.rows]
+          .sort((a, b) => (a.request.step?.index ?? 0) - (b.request.step?.index ?? 0))
+          .flatMap((g) => g.outputs.filter((o) => o.kind === "image").map((o) => ({ url: o.url, label: g.request.step?.label?.startsWith("Front view") ? "Front" : (g.request.step?.label ?? "") })))
+      : [];
+  const pictures = drawn.length ? [...(front ? [{ url: front, label: "Front" }] : []), ...drawn] : [];
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="font-heading text-[24px] font-normal">{heading}</DialogTitle>
-        <DialogDescription>{video ? "Your turnaround is ready." : failed ? "A step didn't finish." : "Making it now: you can close this, it carries on."}</DialogDescription>
+        <DialogTitle className="font-heading text-[24px] font-normal">{pictures.length ? "Turnaround stills" : heading}</DialogTitle>
+        <DialogDescription>{pictures.length ? "Your views are ready." : video ? "Your turnaround is ready." : failed ? "A step didn't finish." : "Making it now: you can close this, it carries on."}</DialogDescription>
       </DialogHeader>
-      {video ? (
+      {pictures.length > 0 ? (
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+          {pictures.map((o) => (
+            <a key={o.url} href={o.url} target="_blank" rel="noreferrer" className="group relative overflow-hidden rounded-lg bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={o.url} alt={o.label} className="aspect-[3/4] w-full object-cover" />
+              {o.label && <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1.5 py-0.5 text-[11.5px] font-medium text-white">{o.label}</span>}
+            </a>
+          ))}
+        </div>
+      ) : video ? (
         <video src={video.url} controls loop playsInline autoPlay muted className="max-h-[60svh] w-full rounded-xl bg-black object-contain" aria-label={`${heading}, the video`} />
       ) : failed ? (
         <p role="alert" className="rounded-xl border border-destructive/40 p-3 text-[13px] text-destructive">

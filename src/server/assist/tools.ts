@@ -8,6 +8,7 @@ import { offeredModels } from "../model-access";
 import { dualEngine, runsOn } from "@/lib/catalog/engines";
 import { pricingAt } from "@/lib/catalog/promo";
 import { currentModelId } from "@/lib/catalog/replaced";
+import { LAYOUT_PARAM, parseLayout } from "@/lib/layout-prompt";
 import { OPERATION_LABELS, type ChainSlot, type GenerationRequest, type MediaKind, type ModelDef, type Operation } from "@/lib/catalog/types";
 import { type PlannedJob, totalCost } from "@/lib/assist";
 import { STORYBOARD_MODELS } from "@/lib/catalog/storyboard";
@@ -22,6 +23,8 @@ import { engineMode } from "../settings";
 import { readRef } from "../storage";
 import { katanaTool } from "../katana";
 import { createStoryboard, estimateStoryboard } from "../storyboard";
+import { nearestAspect } from "../marketing";
+import { LAYOUT_NODE_LIMITS } from "@/lib/catalog/canvas";
 import { CONTEXT_TOOLS } from "./context-tools";
 import { defineTool, type JobPlace, type ResultContent, type ToolContext, type ToolDef, type ToolOutcome } from "./define";
 // Fills STUDIO_ROUTES with the studio modules (Layers, Shorts, dub, Faceless, Ads, Captions).
@@ -287,6 +290,12 @@ const Job = z.object({
   end_time: z.number().optional().describe("Trim: where the kept part ends, in seconds."),
   num_layers: z.number().int().optional().describe("Layers: how many layers to split the image into."),
   system: z.string().optional().describe("Write: extra instructions for the writer (tone, format, length)."),
+  layout: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe(
+      "Image models that place boxes (MOSS-Image, FLUX.3, Ideogram 4.5): a pixel layout draft {width, height, bbox_coord_space: \"abs\", bbox_format: \"xyxy\", summary: {caption, meta, canvas}, items: [{label: object|character|text, caption, text, bbox: [x_min, y_min, x_max, y_max]}]} (the layout-poster skill). Fuobe compiles it for the model at the size it renders; other models read it as sentences.",
+    ),
   after: z
     .number()
     .int()
@@ -331,7 +340,7 @@ function toRequest(job: JobInput, engine?: "cloud" | "open"): GenerationRequest 
 }
 
 /** A job as the request it names, before a retired model or operation is moved (toRequest). */
-function asRequest(j: JobInput): GenerationRequest {
+export function asRequest(j: JobInput): GenerationRequest {
   const inputs = {
     ...(j.images?.length && { images: j.images }),
     ...(j.end_image && { endImage: j.end_image }),
@@ -342,6 +351,17 @@ function asRequest(j: JobInput): GenerationRequest {
     ...(j.model3d && { model3d: j.model3d }),
   };
   const shots = j.shots && j.shots > 1 ? shotList(getModel(currentModelId(j.model_id)), j.shots) : undefined;
+  // A layout draft (the layout-poster skill): read on its own canvas, compiled by the plan for the model it runs on.
+  // Up to 64 boxes (as a Canvas Layout node); its own shape becomes the run's only as the nearest one the model lists.
+  const parsed = j.layout ? parseLayout(j.layout)?.draft : undefined;
+  const layout = parsed && { ...parsed, items: parsed.items.slice(0, LAYOUT_NODE_LIMITS.boxes) };
+  const layoutAspect = layout?.aspect && nearestAspect(layout.aspect, getModel(currentModelId(j.model_id))?.options.aspectRatios);
+  const extra = {
+    ...(j.system && { system: j.system }),
+    ...(layout && { [LAYOUT_PARAM]: layout }),
+    // Hi3D: the refine's own resolution, or on an image-to-3D model the refine step after it.
+    ...(j.mesh_resolution && { [j.model_id === HI3D_MODEL || j.op === HI3D_OP ? HI3D_PARAM : HI3D_CHAIN_PARAM]: j.mesh_resolution }),
+  };
   return {
     feature: "assist",
     modelId: j.model_id,
@@ -351,7 +371,7 @@ function asRequest(j: JobInput): GenerationRequest {
     negativePrompt: j.negative_prompt,
     inputs: Object.keys(inputs).length ? inputs : undefined,
     params: {
-      aspectRatio: j.aspect_ratio,
+      aspectRatio: j.aspect_ratio ?? layoutAspect,
       resolution: j.resolution,
       duration: shots ? undefined : j.duration,
       numOutputs: j.outputs ? Math.max(1, Math.min(4, j.outputs)) : undefined,
@@ -363,13 +383,7 @@ function asRequest(j: JobInput): GenerationRequest {
       endTime: j.end_time,
       numLayers: j.num_layers,
       ...(shots && { shots }),
-      ...((j.system || j.mesh_resolution) && {
-        extra: {
-          ...(j.system && { system: j.system }),
-          // Hi3D: the refine's own resolution, or on an image-to-3D model the refine step after it.
-          ...(j.mesh_resolution && { [j.model_id === HI3D_MODEL || j.op === HI3D_OP ? HI3D_PARAM : HI3D_CHAIN_PARAM]: j.mesh_resolution }),
-        },
-      }),
+      ...(Object.keys(extra).length && { extra }),
     },
   };
 }

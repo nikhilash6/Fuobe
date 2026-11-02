@@ -383,6 +383,12 @@
     "error": null,
     "at": "2026-10-21T16:25:18.796Z"
   },
+  "qwen-image-21-qma": {
+    "sha256": "dfafe7192f5f94796a4d9c3b6cfd9b2e42b4971dca91c0811fd5412fd6481e53",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:11:11.304Z"
+  },
   "qwen-image-2512-t2i": {
     "sha256": "c18da4a3488120bdcee722e4ae7d187385544ec4805753e7dae6946ddb6f6ba5",
     "validated": true,
@@ -496,6 +502,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-17T21:02:06.266Z"
+  },
+  "soundtrack-remix-dbs": {
+    "sha256": "8803a5ae3775ded826060cc936e43ff9634a5346f2cb74d807a7cb5e4036dd6f",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:03:50.001Z"
   },
   "speech-translate-gemma4": {
     "sha256": "baf609432b57514c43d2f91630b9ae3cb916e9fe8dab47ac02c6c9b64ded643a",

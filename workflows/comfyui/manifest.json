@@ -12762,6 +12762,123 @@
       "notes": "Storyboard's next frame on your GPU: the qwen-image-21-edit graph with akhaliq/Qwen-Image-2.1-Next-Scene-LoRA @ 67ce88cd (next_scene_step2500, the card's recommended diffusers/ComfyUI conversion) at 0.7, the card's clean-chain recipe: strength 0.7 or less and a 0.5 px Gaussian blur on each chained input (ImageBlur radius 1, sigma 0.5 on the previous panel), 28 steps (the card's usage), cfg 1, euler, simple. image = the previous panel, image2 = an optional character reference (left out when not given). The prompt starts \"Next Scene:\" with the camera move first (promptPrefix adds it when missing). Trained at 512 px on Sintel and Tears of Steel frame pairs: strongest on filmic scenes and establishing shots, static portraits are out of scope (card). storyboard-qwen-edit-2509-next-scene stays the classic choice on your GPU, and the cloud keeps Qwen-Image-Edit 2509 + its next-scene LoRA on fal (Qwen-Image 2.1 is not hosted). Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
     },
     {
+      "id": "qwen-image-21-qma",
+      "title": "QMA Camera Angles (Qwen-Image 2.1 + the QMA LoRA, 96 views)",
+      "capability": "edit",
+      "file": "qwen-image-21-qma.json",
+      "source": "hand-built (scripts/comfy/hand-built/qwen-image-21-qma.json)",
+      "bindings": {
+        "prompt": [
+          {
+            "node": "30",
+            "input": "prompt"
+          }
+        ],
+        "image": [
+          {
+            "node": "10",
+            "input": "image"
+          }
+        ],
+        "seed": [
+          {
+            "node": "32",
+            "input": "seed"
+          }
+        ],
+        "steps": [
+          {
+            "node": "32",
+            "input": "steps"
+          }
+        ],
+        "cfg": [
+          {
+            "node": "32",
+            "input": "cfg"
+          }
+        ],
+        "megapixels": [
+          {
+            "node": "20",
+            "input": "megapixels"
+          }
+        ],
+        "loraStrength": [
+          {
+            "node": "60",
+            "input": "strength_model"
+          }
+        ],
+        "vae": [
+          {
+            "node": "3",
+            "input": "vae_name"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "90",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "90",
+          "kind": "image"
+        }
+      ],
+      "defaults": {
+        "steps": 30,
+        "cfg": 3,
+        "loraStrength": 1,
+        "megapixels": 1
+      },
+      "limits": {
+        "maxWidth": 2048,
+        "maxHeight": 2048
+      },
+      "models": [
+        {
+          "file": "qwen_image_2.1_int8_convrot.safetensors",
+          "folder": "diffusion_models",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+          "sizeGb": 7.26
+        },
+        {
+          "file": "qwen3vl_8b_int8_convrot.safetensors",
+          "folder": "text_encoders",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+          "sizeGb": 9.35
+        },
+        {
+          "file": "qwen_image_2.1_vae_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+          "sizeGb": 0.68
+        },
+        {
+          "file": "qwen-image-2.1-qma-camera-angles.safetensors",
+          "folder": "loras",
+          "url": "https://huggingface.co/gribbliest/qwen-image-2.1-qma-camera-angles/resolve/13007eec2648c09529e930164c2ccc9c8c12428c/qwen-image-2.1-qma-camera-angles.safetensors",
+          "sizeGb": 0.32
+        },
+        {
+          "file": "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "folder": "vae",
+          "url": "https://huggingface.co/madebyollin/texture-fix-vae-for-qwen-image-2.1/resolve/9a10df811f183323e4e94d255c18add1924ce340/texture_fix_vae_for_qwen_image_2.1_bf16.safetensors",
+          "sizeGb": 0.68,
+          "optional": true
+        }
+      ],
+      "customNodes": [],
+      "vramGb": 20,
+      "license": "Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; QMA Camera Angles LoRA by gribbliest @ 13007eec: Apache-2.0 on its card (no LICENSE file), an adapter of Qwen-Image 2.1, so non-commercial through its base; Texture-Fix VAE (madebyollin @ 9a10df81, optional: Options → Decoder Clean): Qwen Research License (card: license_name qwen-research)",
+      "validated": true,
+      "notes": "Re-shoots a picture from one of 96 cameras: the qwen-image-21-edit graph with gribbliest/qwen-image-2.1-qma-camera-angles @ 13007eec (rank 64, 319 MB) at strength 1.0 and the card's settings: the source scaled to about 1 MP (ImageScaleToTotalPixels, lanczos, 32 px steps; megapixels 0.6 = the card's 768 px preview), one reference on TextEncodeQwenImage21 (resolution 0, its latent), QwenImage21Cache, KSampler 30 steps, CFG 3 (the card; the encoder's empty negative), euler, simple. Prompt: \"<qma> {azimuth} {elevation} {distance}\" then any edit words; Fuobe writes it from the run's camera (horizontal_angle / vertical_angle / zoom, snapped to the nearest view). Directions are the original camera's: \"right side view\" = the camera swings 90° to its own right. Open engine only: fal's Qwen-Image 2.1 takes no LoRAs. Options → Decoder \"Clean\" sets vae to the Texture-Fix VAE (madebyollin, a finetuned Qwen-Image 2.1 decoder, Qwen Research License; optional file, which the GPU pre-flight asks for when Clean is picked)."
+    },
+    {
       "id": "qwen-image-21-t2i-small",
       "title": "Qwen-Image 2.1 Text to Image on a 16 GB GPU (Zen Image Edit: Qwen3.5-0.8B encoder + fusion adapter)",
       "capability": "t2i",
@@ -16415,6 +16532,116 @@
       "license": "DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; bundled DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)",
       "validated": true,
       "notes": "CPU OK, about 1.7 GiB on CUDA. audio = an audio file or a video (LoadAudio reads a video's soundtrack without decoding frames). DBSLoader model DBS-BSRNN-DnR (fast: 18.9 MB, 9.07 dB SI-SDR on DnR v2, the CPU default) or DBS-TIGER-DnR (best: 4.1 MB, 10.13 dB, about 3x slower on a CPU, the CUDA default); device auto. Measured on a 4-CPU host (torch 2.14.1+cpu, 10-20 s clips): DBS-BSRNN 0.17-0.33x real time per channel, DBS-TIGER 0.08-0.09x. DBSSeparate channels mono (the mean of the channels, the official usage) or each channel (stereo stems: every channel separated on its own, 2x the time); output_sample_rate input. ComfyUI saves audio as mono or stereo only (a 5.1 waveform comes out as scrambled stereo three times as long), so the provider splits a file with more than 2 channels in mono and makes its background from music + effects (node 4 rewired to AudioMerge add) rather than the original minus the speech. Outputs in order: voice (speech), music, effects (sfx), background = original minus speech (AudioMerge subtract: with mono it keeps the original stereo image at mono cost; AudioMerge scales the whole result down when it peaks over 1.0), and the pack's JSON report (model, device, rates, windows, seconds, times real time). Voice + background add up to the source, except on a loud master where AudioMerge had to lower the background to fit under full scale (FLAC holds no more). Voice is first, so a chain without a stem takes the dialogue. Trained on synthetic English mixes (DnR v2): dialogue separates well (15-16 dB), music against effects less so (5.7-7.8 dB). Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved (recorded as information)."
+    },
+    {
+      "id": "soundtrack-remix-dbs",
+      "title": "Remix a soundtrack: dialogue, music and effects at set levels (DBS, ComfyUI-DBS)",
+      "capability": "separate-audio",
+      "file": "soundtrack-remix-dbs.json",
+      "source": "hand-built (scripts/comfy/hand-built/soundtrack-remix-dbs.json)",
+      "bindings": {
+        "audio": [
+          {
+            "node": "1",
+            "input": "audio"
+          }
+        ],
+        "separationModel": [
+          {
+            "node": "2",
+            "input": "model"
+          }
+        ],
+        "channels": [
+          {
+            "node": "3",
+            "input": "channels"
+          }
+        ],
+        "voiceDb": [
+          {
+            "node": "4",
+            "input": "volume"
+          }
+        ],
+        "musicDb": [
+          {
+            "node": "5",
+            "input": "volume"
+          }
+        ],
+        "effectsDb": [
+          {
+            "node": "6",
+            "input": "volume"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "9",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "9",
+          "kind": "audio",
+          "stem": "voice"
+        },
+        {
+          "node": "10",
+          "kind": "text",
+          "role": "report"
+        }
+      ],
+      "defaults": {
+        "separationModel": "DBS-BSRNN-DnR",
+        "channels": "mono",
+        "voiceDb": 0,
+        "musicDb": -18,
+        "effectsDb": -18
+      },
+      "limits": {},
+      "models": [
+        {
+          "file": "DBS-BSRNN-DnR/model.safetensors",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/model.safetensors",
+          "sizeGb": 0.02
+        },
+        {
+          "file": "DBS-BSRNN-DnR/config.json",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/config.json",
+          "sizeGb": 0
+        },
+        {
+          "file": "DBS-TIGER-DnR/model.safetensors",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/model.safetensors",
+          "sizeGb": 0.004
+        },
+        {
+          "file": "DBS-TIGER-DnR/config.json",
+          "folder": "dbs",
+          "url": "https://huggingface.co/JusperLee/DBS-TIGER-DnR/resolve/22da7d4cd3ea63f9365181008bff1c0d2ab6fb2b/config.json",
+          "sizeGb": 0
+        }
+      ],
+      "customNodes": [
+        {
+          "name": "ComfyUI-DBS",
+          "repo": "https://github.com/hiroki-abe-58/ComfyUI-DBS/tree/f656e53434b5485c148a2866fbd6ddc6b6152ed6"
+        }
+      ],
+      "vramGb": 0,
+      "license": "DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)",
+      "validated": true,
+      "notes": "CPU OK, about 1.7 GiB on CUDA. Graph A's split (LoadAudio reads a video's soundtrack too), then AudioAdjustVolume on the speech (voiceDb), music (musicDb) and sfx (effectsDb) stems (whole dB, -100..100; -100 leaves a stem at 1e-5, below 16-bit FLAC's floor) and AudioMerge add twice, saved as one FLAC with the input's length, starting at 0, so it goes back on a picture with video-mux-audio-replace. AudioMerge scales the whole mix down when it peaks over 1.0 (a crude limiter). channels mono gives a mono mix; each channel keeps stereo at twice the time. A source with more than 2 channels is split in mono (ComfyUI saves mono or stereo only). The output is tagged as the voice stem (the cleaned dialogue), so a chain takes it. DBS removes music and sound effects, not steady noise: hiss and hum stay with the dialogue or the effects (unmeasured, §11).",
+      "buildWarnings": [
+        "model DBS-BSRNN-DnR/config.json: https://huggingface.co/JusperLee/DBS-BSRNN-DnR/resolve/5af343f57f106fbb95efe8a60f1a3999eeb0aef8/config.json -> no size (HTTP 200)"
+      ]
     },
     {
       "id": "voice-clean-reuse",
