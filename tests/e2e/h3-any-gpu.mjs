@@ -72,7 +72,7 @@ const contextFor = async (engine, width = 1440, colorScheme = "light") => {
   const page = await context.newPage();
   page.setDefaultTimeout(60_000);
   page.on("console", (m) => {
-    if (m.type() === "error") errors.push(`${width} ${colorScheme}: ${m.text().slice(0, 200)}`);
+    if (m.type() === "error") errors.push(`${width} ${colorScheme} ${new URL(page.url()).pathname}: ${m.text().slice(0, 1500)}`);
   });
   page.on("pageerror", (e) => errors.push(`${width} ${colorScheme}: ${String(e).slice(0, 200)}`));
   return { context, page };
