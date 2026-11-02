@@ -82,6 +82,7 @@ import { offeredLoras, offeredRoutes, requireOffered } from "./model-access";
 import { llmBackends, llmLabel, llmMissing, llmUsesClaude, probeLocal } from "./providers/llm";
 import type { PollContext, PollResult, ProviderAdapter, RemoteOutput } from "./providers/types";
 import { mediaFacts } from "./media-facts";
+import { songFormat, songToolProblem } from "@/lib/lyrics";
 import { modelToFinish, startModelFinish, startTurntable, stopModelFinish, type OutputStore } from "./model3d-finish";
 import { cropPicture, isCropWindow } from "./crop-picture";
 import { convertMask, decodePng, encodePng } from "./png";
@@ -1565,6 +1566,9 @@ function submit(id: string, route: ModelRoute, providerId: ProviderId, plan: Ret
   return own.run(() => submitNow(id, route, providerId, plan, req, index));
 }
 
+/** A song's cloud tools (Mureka): the song's length and format are read before it's sent. */
+const SONG_TOOL_OPS = new Set<Operation>(["song-extend", "song-remix", "song-stems"]);
+
 async function submitNow(
   id: string,
   route: ModelRoute,
@@ -1641,6 +1645,19 @@ async function submitNow(
         return adapter.prepareFile(f.data, f.contentType, f.name, route);
       });
     };
+    // A song tool's song (Mureka): its length read as a voice's is, and one Mureka refuses (Stems: MP3 or M4A, 10 MB; Remix:
+    // 10 to 350 seconds) refused here, before it's sent to Mureka or paid for.
+    const prepSong = async (ref?: string) => {
+      if (!ref) return undefined;
+      return gate(async () => {
+        const f = await readRef(ref);
+        const facts = mediaFacts(f.data);
+        if (facts.duration && !source.sourceDuration) source = { ...source, sourceDuration: facts.duration };
+        const problem = providerId === "mock" ? null : songToolProblem(plan.op, { format: songFormat(f.contentType, f.name), bytes: f.data.length, seconds: facts.duration });
+        if (problem) throw new Error(problem);
+        return adapter.prepareFile(f.data, f.contentType, f.name, route);
+      });
+    };
     // Reference clips and clip elements a model bills with the output (Kling 4.0, Pricing.clipInput): their headers' lengths.
     // By the clip's place in inputs.videos, so a clip element (params.elements' video) finds its own length.
     const clipLengths: (number | undefined)[] = [];
@@ -1709,7 +1726,7 @@ async function submitNow(
       endImage: await prep(req.inputs?.endImage),
       mask: await prepMask(req.inputs?.mask),
       video: await prepVideo(req.inputs?.video),
-      audio: await (plan.op === "avatar" || plan.op === "song-extend" ? prepVoice : prep)(req.inputs?.audio),
+      audio: await (plan.op === "avatar" ? prepVoice : SONG_TOOL_OPS.has(plan.op) ? prepSong : prep)(req.inputs?.audio),
       audio2: await prep(req.inputs?.audio2),
       voiceAudio: await prep(req.inputs?.voiceAudio),
       voiceAudio2: await prep(req.inputs?.voiceAudio2),

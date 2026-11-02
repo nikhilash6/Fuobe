@@ -21,6 +21,8 @@ const { buildLicenceList, licenceInfo, workflowLicence } = await import("@/lib/l
 const { setSetting } = await import("@/server/settings");
 const { falProvider, stemsFromZip } = await import("@/server/providers/fal");
 const { zip } = await import("@/server/zip");
+const { saveFile } = await import("@/server/storage");
+const { createGenerations, getGeneration } = await import("@/server/generations");
 const { unzip } = await import("@/server/unzip");
 
 const requirements = JSON.parse(fs.readFileSync("workflows/comfyui/requirements.json", "utf8")) as { workflows: Record<string, { files: string[]; vramGb?: number | string }> };
@@ -162,6 +164,44 @@ describe("the fal provider's song tools", () => {
     const own = await falProvider.submit({ generationId: "g", model: m, route: m.routes[0], input: { prompt: "", audio: "https://files.test/song.mp3", startTime: 95, extra: { lyrics: "[Verse]\nmore", songId: "song_1" } } });
     expect(log.some((l) => l.path === "/mureka/api/files/upload")).toBe(false);
     expect(own.payload).toMatchObject({ song_id: "song_1" });
+  });
+
+  it("refuses a song Mureka's tools can't take before anything is sent or paid for", async () => {
+    /** A WAV header of `seconds` at 8 kHz mono 8-bit, its samples silent. */
+    const wav = (seconds: number) => {
+      const h = Buffer.alloc(44);
+      h.write("RIFF", 0);
+      h.writeUInt32LE(36 + seconds * 8000, 4);
+      h.write("WAVEfmt ", 8);
+      h.writeUInt32LE(16, 16);
+      h.writeUInt16LE(1, 20);
+      h.writeUInt16LE(1, 22);
+      h.writeUInt32LE(8000, 24);
+      h.writeUInt32LE(8000, 28);
+      h.writeUInt16LE(1, 32);
+      h.writeUInt16LE(8, 34);
+      h.write("data", 36);
+      h.writeUInt32LE(seconds * 8000, 40);
+      return Buffer.concat([h, Buffer.alloc(seconds * 8000, 128)]);
+    };
+    const file = (name: string, contentType: string, data: Buffer) => saveFile({ name, contentType, source: "upload", data }).url;
+    const run = async (modelId: string, audio: string, extra: Record<string, unknown> = {}, prompt = "") => {
+      const [g] = createGenerations({ feature: "song-tools", modelId, engine: "cloud", prompt, inputs: { audio }, params: { extra } });
+      for (let i = 0; i < 200 && !["failed", "succeeded"].includes(getGeneration(g.id)!.status); i++) await new Promise((r) => setTimeout(r, 10));
+      return getGeneration(g.id)!;
+    };
+    log.length = 0;
+    const stems = await run("mureka-stems", file("bed.wav", "audio/wav", wav(3)));
+    expect(stems.status).toBe("failed");
+    expect(stems.error).toBe("Stems take an MP3 or M4A song: this one is a WAV file. Save it as an MP3 and add it again");
+    const big = await run("mureka-stems", file("big.mp3", "audio/mpeg", Buffer.concat([Buffer.from("ID3"), Buffer.alloc(10_500_000)])));
+    expect(big.error).toBe("Stems take a song of up to 10 MB: this one is 10.6 MB. Save it as a smaller MP3 and add it again");
+    const long = await run("mureka-remix", file("long.wav", "audio/wav", wav(400)), { lyrics: "[Verse]\nla" }, "jazz");
+    expect(long.error).toBe("Remix takes a song of 0:10 to 5:50: this one is 6:40");
+    const short = await run("mureka-remix", file("short.wav", "audio/wav", wav(5)), { lyrics: "[Verse]\nla" }, "jazz");
+    expect(short.error).toBe("Remix takes a song of 0:10 to 5:50: this one is 0:05");
+    // Nothing reached fal: no upload to Mureka, no run.
+    expect(log).toEqual([]);
   });
 
   it("unpacks the stems' zip into one result per track, named by its file", async () => {

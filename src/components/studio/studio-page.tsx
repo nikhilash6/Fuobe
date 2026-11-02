@@ -138,6 +138,8 @@ function initialDraft(
   if (sp.get("audio")) slots.audio = slot(sp.get("audio"));
   // A Mureka song handed over (a music result's Extend, Remix or Stems): its id goes with it.
   const song = sp.get("audio") && sp.get("song") ? { id: sp.get("song")!, url: sp.get("audio")! } : undefined;
+  // A song's lyrics handed over with it (a sung result's Remix, which needs the whole song's words).
+  const lyrics = sp.get("lyrics") ?? undefined;
   // A voice sample handed over (Clean up voice → "Use as a voice sample"): the voice a cloning model speaks with.
   if (sp.get("voice")) slots.voiceAudio = slot(sp.get("voice"));
   // An output format handed over in the link (Export → "ProRes in the cloud"), when the model writes it.
@@ -154,6 +156,7 @@ function initialDraft(
     presetId: sp.get("preset") ?? config.preset?.id,
     presetOptions: {},
     ...(song && { song }),
+    ...(lyrics && { lyrics }),
   };
 }
 

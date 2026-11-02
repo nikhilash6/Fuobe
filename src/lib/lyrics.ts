@@ -159,3 +159,50 @@ export function songLength(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
+
+/**
+ * What Mureka's song tools take (fal's schemas, read 2026-11-02): Stems an MP3 or M4A song of up to 10 MB; Remix a song of
+ * 10 to 350 seconds with vocals (not an instrumental).
+ */
+export const STEMS_FORMATS = ["mp3", "m4a"];
+export const STEMS_MAX_BYTES = 10 * 1000 * 1000;
+export const REMIX_SECONDS = { min: 10, max: 350 } as const;
+
+const FORMAT_OF_TYPE: Record<string, string> = {
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/mp4": "m4a",
+  "audio/m4a": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/aac": "aac",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav",
+  "audio/flac": "flac",
+  "audio/x-flac": "flac",
+  "audio/ogg": "ogg",
+  "audio/webm": "webm",
+};
+
+/** A song file's format ("mp3", "wav"…) from its type, else its name; undefined when neither says. */
+export function songFormat(contentType: string | undefined, name: string | undefined): string | undefined {
+  const byType = contentType ? FORMAT_OF_TYPE[contentType.split(";")[0].trim().toLowerCase()] : undefined;
+  if (byType) return byType;
+  const ext = /\.([a-z0-9]{2,5})(?:[?#]|$)/i.exec(name?.split("/").pop() ?? "")?.[1]?.toLowerCase();
+  return ext === "mpeg" || ext === "mpga" ? "mp3" : ext;
+}
+
+/** Why a song tool can't take this song, in plain words; null when it can (what isn't known yet is not held against it). */
+export function songToolProblem(op: string, song: { format?: string; bytes?: number; seconds?: number }): string | null {
+  if (op === "song-stems") {
+    if (song.format && !STEMS_FORMATS.includes(song.format)) return `Stems take an MP3 or M4A song: this one is a ${song.format.toUpperCase()} file. Save it as an MP3 and add it again`;
+    if (song.bytes && song.bytes > STEMS_MAX_BYTES) {
+      return `Stems take a song of up to 10 MB: this one is ${Math.ceil(song.bytes / 100_000) / 10} MB. Save it as a smaller MP3 and add it again`;
+    }
+  }
+  if (op === "song-remix" && song.seconds && (song.seconds < REMIX_SECONDS.min || song.seconds > REMIX_SECONDS.max)) {
+    return `Remix takes a song of ${songLength(REMIX_SECONDS.min)} to ${songLength(REMIX_SECONDS.max)}: this one is ${songLength(song.seconds)}`;
+  }
+  return null;
+}
+

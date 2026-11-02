@@ -14,6 +14,7 @@ import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
 import { canRerender, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
+import { isInstrumental, lyricsOf, songFormat, STEMS_FORMATS } from "./lyrics";
 
 export type OutputActionId =
   | "animate"
@@ -160,12 +161,18 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
       link("voice-change", "Change voice", `/audio/voice-change?audio=${q(o.url)}`);
       link("loop-audio", "Loop / extend", `/audio/loop?audio=${q(o.url)}`);
       // A song's cloud tools (Mureka, Audio → Extend & remix): any song, one of Mureka's own by its id. Not on an install
-      // that runs open models only.
+      // that runs open models only. Remix only where there are vocals to keep (with the song's lyrics, which it needs whole),
+      // Stems only on an MP3 or M4A song (what Mureka separates).
       if (g.op && SONG_OPS.has(g.op) && ctx.engineMode !== "open") {
         const song = typeof o.meta?.songId === "string" ? `&song=${q(o.meta.songId)}` : "";
         link("extend-song", "Extend song", `/audio/song?model=mureka-extend&audio=${q(o.url)}${song}`);
-        link("remix-song", "Remix", `/audio/song?model=mureka-remix&audio=${q(o.url)}${song}`);
-        link("song-stems", "Stems", `/audio/song?model=mureka-stems&audio=${q(o.url)}`);
+        if (!instrumentalSong(g)) {
+          const words = lyricsOf(g.request?.params?.extra);
+          const lyrics = words && q(words).length <= HANDOVER_LYRICS_MAX ? `&lyrics=${q(words)}` : "";
+          link("remix-song", "Remix", `/audio/song?model=mureka-remix&audio=${q(o.url)}${song}${lyrics}`);
+        }
+        const format = songFormat(o.contentType, o.url);
+        if (!format || STEMS_FORMATS.includes(format)) link("song-stems", "Stems", `/audio/song?model=mureka-stems&audio=${q(o.url)}`);
       }
       link("split-soundtrack", "Split soundtrack", `/audio/split?audio=${q(o.url)}`);
       // Not on music or sound effects (it keeps only a voice), nor on a voice it already cleaned.
@@ -215,6 +222,21 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
 
 /** Results that are songs: made, extended or remixed. */
 const SONG_OPS = new Set<Generation["op"]>(["music", "song-extend", "song-remix"]);
+
+/** Music models that make instrumentals only, and those that make one when they're given no words to sing. */
+const INSTRUMENTAL_MODELS = new Set(["mureka-9-instrumental", "mureka-9-5-instrumental", "sonilo-music", "stable-audio-3-music", "stable-audio-2-5"]);
+const INSTRUMENTAL_WITHOUT_WORDS = new Set(["minimax-music-3", "oss-minimax-music-3", "oss-ace-step"]);
+
+/** A song with no vocals: an instrumental model's, one whose lyrics are only [Instrumental], or a model's own with no words. */
+export function instrumentalSong(g: Pick<Generation, "modelId" | "op" | "request">): boolean {
+  if (INSTRUMENTAL_MODELS.has(g.modelId)) return true;
+  const words = lyricsOf(g.request?.params?.extra);
+  if (words) return isInstrumental(words);
+  return g.op === "music" && INSTRUMENTAL_WITHOUT_WORDS.has(g.modelId);
+}
+
+/** The most of a song's lyrics a Remix link carries (encoded): longer ones are written again in the editor. */
+const HANDOVER_LYRICS_MAX = 6000;
 
 /** The hand-offs offered as next steps under a fresh result, best first (UX-18). */
 const NEXT_STEPS: Partial<Record<OutputFile["kind"], OutputActionId[]>> = {

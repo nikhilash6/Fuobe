@@ -10,6 +10,8 @@ import { buildPayload, extractOutputs } from "@/lib/catalog/payload";
 import { estimateCost, planGeneration } from "@/lib/catalog/plan";
 import type { GenerationRequest, ModelRoute, Operation } from "@/lib/catalog/types";
 import { nextSteps, outputActions } from "@/lib/output-actions";
+import { downloadName } from "@/lib/library";
+import { songFormat, songToolProblem } from "@/lib/lyrics";
 import type { Generation } from "@/lib/catalog/types";
 
 const route = (id: string, op?: Operation): ModelRoute => {
@@ -179,8 +181,44 @@ describe("a music result's song tools", () => {
     expect(acts.map((a) => a.label)).toEqual(["Extend song", "Remix", "Stems"]);
     expect(acts[0].href).toBe("/audio/song?model=mureka-extend&audio=%2Fapi%2Ffiles%2Fsong.mp3&song=song_1");
     expect(acts[2].href).toBe("/audio/song?model=mureka-stems&audio=%2Fapi%2Ffiles%2Fsong.mp3");
-    // Any song made in Fuobe (a song from your GPU too): sent to Mureka first.
-    expect(ids(gen({ modelId: "oss-minimax-music-3" }))[1].href).toBe("/audio/song?model=mureka-remix&audio=%2Fapi%2Ffiles%2Fsong.mp3");
+    // Any song made in Fuobe (a song from your GPU too): sent to Mureka first, with its lyrics for the remix.
+    const sung = gen({ modelId: "oss-minimax-music-3", request: { feature: "audio", modelId: "oss-minimax-music-3", params: { extra: { lyrics: "[Verse]\nla la" } } } });
+    expect(ids(sung)[1].href).toBe("/audio/song?model=mureka-remix&audio=%2Fapi%2Ffiles%2Fsong.mp3&lyrics=%5BVerse%5D%0Ala%20la");
+  });
+
+  it("Remix only on a song with vocals; Stems only on an MP3 or M4A song", () => {
+    const labels = (g: Generation) => ids(g).map((a) => a.label);
+    // Instrumentals: Mureka's instrumental model, lyrics that are only [Instrumental], a model's own with no words.
+    expect(labels(gen({ modelId: "mureka-9-instrumental" }))).toEqual(["Extend song", "Stems"]);
+    expect(labels(gen({ modelId: "mureka-9-5-instrumental" }))).toEqual(["Extend song", "Stems"]);
+    expect(labels(gen({ request: { feature: "audio", modelId: "mureka-song", params: { extra: { lyrics: "[Instrumental]" } } } }))).toEqual(["Extend song", "Stems"]);
+    expect(labels(gen({ modelId: "minimax-music-3" }))).toEqual(["Extend song", "Stems"]);
+    expect(labels(gen({ modelId: "oss-ace-step" }))).toEqual(["Extend song", "Stems"]);
+    // A song Mureka writes words for from a description keeps Remix.
+    expect(labels(gen())).toEqual(["Extend song", "Remix", "Stems"]);
+    // A WAV song (fal's MiniMax Music 3 answers with one): no Stems.
+    const wav = { ...gen({ request: { feature: "audio", modelId: "minimax-music-3", params: { extra: { lyrics: "[Verse]\nla" } } } }), outputs: [{ url: "/api/files/song.wav", kind: "audio", contentType: "audio/wav" }] } as unknown as Generation;
+    expect(labels(wav)).toEqual(["Extend song", "Remix"]);
+    expect(nextSteps(wav, 0).map((a) => a.label)).toEqual(["Extend song", "Remix", "Split soundtrack"]);
+  });
+
+  it("says in plain words which songs the tools take", () => {
+    expect(songFormat("audio/mpeg", "x")).toBe("mp3");
+    expect(songFormat(undefined, "/api/files/a/song.M4A?x=1")).toBe("m4a");
+    expect(songFormat(undefined, "/api/files/abc")).toBeUndefined();
+    expect(songToolProblem("song-stems", { format: "flac" })).toBe("Stems take an MP3 or M4A song: this one is a FLAC file. Save it as an MP3 and add it again");
+    expect(songToolProblem("song-stems", { format: "mp3", bytes: 9_000_000 })).toBeNull();
+    expect(songToolProblem("song-remix", { seconds: 351 })).toBe("Remix takes a song of 0:10 to 5:50: this one is 5:51");
+    expect(songToolProblem("song-remix", { seconds: 120, format: "wav" })).toBeNull();
+    expect(songToolProblem("song-extend", { seconds: 900, format: "wav" })).toBeNull();
+    // The remix of an instrumental is refused in the plan.
+    expect(planError({ modelId: "mureka-remix", prompt: "jazz", inputs: { audio: "/api/files/s.mp3" }, params: { extra: { lyrics: "[Instrumental]" } } })).toMatch(/^Write the remix's lyrics.*not instrumentals\)$/);
+  });
+
+  it("names a stem's card and download for its track", () => {
+    const g = { ...gen({ op: "song-stems" }), outputs: [{ url: "/api/files/a.mp3", kind: "audio", meta: { stem: "vocals" } }, { url: "/api/files/b.mp3", kind: "audio", meta: { stem: "bass guitar" } }] } as unknown as Generation;
+    expect(downloadName(g, g.outputs[0], 0)).toMatch(/-g1-vocals\.mp3$/);
+    expect(downloadName(g, g.outputs[1], 1)).toMatch(/-g1-bass-guitar\.mp3$/);
   });
 
   it("are a song's next steps", () => {

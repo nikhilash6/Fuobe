@@ -509,12 +509,12 @@ export function planGeneration(
   }
   // A model that needs words to sing: a song from lyrics (YuE2), the lyrics of a song's new part or of its remix (Mureka).
   const sung = lyricsOf(params.extra);
-  if (model.options.lyrics?.required && (!sung || (op === "music" && isInstrumental(sung)))) {
+  if (model.options.lyrics?.required && (!sung || ((op === "music" || op === "song-remix") && isInstrumental(sung)))) {
     throw new Error(
       op === "song-extend"
         ? "Write the lyrics of the new part"
         : op === "song-remix"
-          ? "Write the remix's lyrics: the whole song, with [Verse] and [Chorus] on lines of their own"
+          ? "Write the remix's lyrics: the whole song, with [Verse] and [Chorus] on lines of their own (Mureka remixes songs with vocals, not instrumentals)"
           : `${model.name} sings your lyrics: write them first, with [Verse] and [Chorus] on lines of their own`,
     );
   }

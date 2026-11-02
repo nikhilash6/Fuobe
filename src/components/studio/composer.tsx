@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useToday } from "@/hooks/use-today";
 import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
 import type { Engine, GenerationRequest, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
-import { LYRICS_PARAM, SONG_ID_PARAM, withSongId } from "@/lib/lyrics";
+import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } from "@/lib/lyrics";
 import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
@@ -678,6 +678,10 @@ export function Composer({ docked }: { docked: boolean }) {
   // an open tool that holds the whole clip in more RAM than the ComfyUI can spare.
   const clipProblem = config.clipFacts ? clipBlocker(studioOp ?? op, facts, draft.params, model, status?.providers.comfyui?.ramBytes) : null;
   if (clipProblem && !planError) planError = clipProblem;
+  // A song Mureka's tools refuse (Stems: MP3 or M4A; Remix: 10 s to 5:50), from its name and header, as the server does.
+  const songRef = config.voiceFacts && (op === "song-stems" || op === "song-remix") ? draft.slots.audio?.ref : undefined;
+  const songProblem = songRef ? songToolProblem(op!, { format: songFormat(undefined, songRef), seconds: voice?.duration }) : null;
+  if (songProblem && !planError) planError = songProblem;
   if (signed.blocker) planError = signed.blocker;
   // Models that take no prompt (try-on, 3D, transcription, upscalers), or can run without one, never ask for one.
   // A model that reads only words (Open-H3 Regenerate redraws from them) asks for them even in a tool that hides the box.
