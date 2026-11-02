@@ -393,10 +393,10 @@ describe("a skill on a schedule (Skills W4)", () => {
     return name;
   }
 
-  async function upload(name: string, createdAt: number) {
+  async function upload(name: string, createdAt: number, accountId?: string) {
     const { saveFile } = await import("@/server/storage");
     const { encodePng } = await import("@/server/png");
-    const a = saveFile({ data: encodePng({ width: 8, height: 8, data: Buffer.alloc(8 * 8 * 4, 200) }), contentType: "image/png", source: "upload", name });
+    const a = saveFile({ data: encodePng({ width: 8, height: 8, data: Buffer.alloc(8 * 8 * 4, 200) }), contentType: "image/png", source: "upload", name, ...(accountId && { accountId }) });
     db().prepare("UPDATE assets SET created_at = ? WHERE id = ?").run(createdAt, a.id);
     return a;
   }
@@ -444,8 +444,9 @@ describe("a skill on a schedule (Skills W4)", () => {
     const name = await promoSkill();
     const older = await upload("old.png", T("2026-10-26T08:00:00Z"));
     const s = sched.createSchedule({ ...base, prompt: "", title: "", skill: { name, values: { name: "Lumen lamp" }, sources: { product: "newest" } }, rule: daily }, at);
-    // Uploaded after the task was saved: the run uses it.
+    // Uploaded after the task was saved: the run uses it. A signed-up account's upload is never the studio's newest.
     const newer = await upload("new.png", T("2026-10-27T08:30:00Z"));
+    await upload("account.png", T("2026-10-27T08:50:00Z"), "acct-w4");
     const [id] = await sched.sweepSchedules(T("2026-10-27T09:00:00Z"), { model: noModel });
     const t = threadOf(id);
     expect(t).toMatchObject({ status: "waiting", agent: "offline", scheduleId: s.id });
