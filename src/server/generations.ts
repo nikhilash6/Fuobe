@@ -13,7 +13,7 @@ import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type Rev
 import { upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
 import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, sourceFrames } from "@/lib/catalog/clip-windows";
-import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, withoutTriggers } from "@/lib/catalog/plan";
+import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, sourceLengthProblem, withoutTriggers } from "@/lib/catalog/plan";
 import { framedLength, keepMatte, sizeValue } from "@/lib/catalog/payload";
 import { fitLoras, loraName, lorasFit } from "@/lib/catalog/loras";
 import { dualEngine, onEngine, pickEngine } from "@/lib/catalog/engines";
@@ -59,6 +59,7 @@ import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaic
 import { createRegenerateRun } from "./regenerate";
 import { REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
+import { kandinskyPrompt } from "@/lib/kandinsky-prompt";
 import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
 import { provider, PROVIDERS, RETIRED_PROVIDER_ERROR } from "./providers";
@@ -737,7 +738,7 @@ function prepare(original: GenerationRequest) {
   if (access.dropped.length) plan = { ...plan, loras: access.loras, prompt: withoutTriggers(plan.prompt, plan.loras.filter((l) => !access.loras.some((k) => k.file === l.file)), access.loras) };
   else if (access.loras.some((l, i) => l !== plan.loras[i])) plan = { ...plan, loras: access.loras };
   // A preset can route to another model than the one asked for: its routes that are on (or the switch that's off).
-  const { route, demo } = chooseRoute(offeredRoutes(plan.model, routesFor(plan.model, plan.op)), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
+  const { route, demo } = chooseRoute(offeredRoutes(plan.model, routesFor(plan.model, plan.op, plan.params)), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
   // Qwen-Image 2.1's Options → Speed loads its speed's LoRA in the graph: that LoRA switched off holds the speed.
   const tier = route.provider === "comfyui" ? speedLora(route.endpoint, plan.params.extra) : undefined;
   if (tier && offeredLoras([{ file: tier.file }]).dropped.length) {
@@ -1701,6 +1702,9 @@ async function submitNow(
         update(id, { prompt });
       }
     }
+    // Kandinsky 6.0 (both engines) reads spoken lines and the sound in tags of its own (src/lib/kandinsky-prompt.ts): quoted
+    // words and a "Sound:" line become them for this run; the run keeps the words as typed, so Reuse shows them.
+    if (plan.model.options.promptFormat === "kandinsky6" && prompt) prompt = kandinskyPrompt(prompt);
     const input: GenInput = {
       ...plan.params,
       prompt,
@@ -1777,6 +1781,15 @@ async function submitNow(
     }
     // An upscale that wouldn't enlarge the clip (a 1080p clip at a default 1080p; a 4K clip would even shrink):
     // a tier the model only defaulted to moves up to the next one it offers, one the caller picked is refused.
+    // A clip longer than the model takes (Kandinsky VSR: about 5 s) is refused, never cut short; one billed per output frame is
+    // priced again on its size and length.
+    if (plan.op === "upscale-video") {
+      const long = sourceLengthProblem(plan.model, input.sourceDuration);
+      if (long) throw new Error(long);
+      if (plan.model.pricing?.outputFrames && input.sourceSize && providerId !== "mock" && plan.model.engine !== "open") {
+        update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, sourceSize: input.sourceSize, sourceDuration: input.sourceDuration }, 1, plan.op) });
+      }
+    }
     if (plan.op === "upscale-video" && input.sourceSize) {
       const tier = upscaleTier(input.resolution, plan.model.options.resolutions, input.sourceSize, req.params?.resolution !== undefined);
       if ("error" in tier) throw new Error(tier.error);

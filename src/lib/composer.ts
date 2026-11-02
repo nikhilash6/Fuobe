@@ -8,7 +8,7 @@ import { fpsPlan, fpsSummary } from "./av/fps";
 import { targetShortEdge, upscaledSize, upscaleFactorFor, upscaleTier } from "./av/upscale";
 import { wholeClipProblem, wholeClipTool } from "./av/video-finish";
 import { clipFpsProblem, clipSizeProblem, clipWindowProblem } from "./catalog/clip-windows";
-import { clipBilling } from "./catalog/plan";
+import { clipBilling, sourceLengthProblem } from "./catalog/plan";
 import { addFrameAt, frameTimes, framesInputs, removeFrameAt, spread, type FrameSupport } from "./catalog/keyframes";
 import { FACE_MOSAIC_MODELS } from "./catalog/open-tools";
 import { pricingOn, type PriceClock } from "./catalog/promo";
@@ -310,6 +310,8 @@ export function clipBlocker(
       (facts.fps ? clipFpsProblem(named, facts.fps) : null)
     );
   }
+  const long = model && "name" in model && model.name ? sourceLengthProblem({ name: model.name, options: model.options }, facts?.duration) : null;
+  if (long) return long;
   if (!facts?.width || !facts.height || !model) return null;
   if (op === "upscale-video") {
     const tier = upscaleTier(params.resolution ?? model.defaults?.resolution, model.options.resolutions, { width: facts.width, height: facts.height }, params.resolution !== undefined);

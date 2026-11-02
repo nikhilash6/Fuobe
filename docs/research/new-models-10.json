@@ -3943,6 +3943,720 @@
    "notes": "Nine premade voices (voice enum) or a cloned voice (speaker_voice_embedding_file_url from clone-voice; voice is then ignored). Its own prompt field is a style hint for a premade voice, not a voice design.",
    "sourceUrl": "https://fal.ai/models/fal-ai/qwen-3-tts/text-to-speech/1.7b/api",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/qwen-3-tts/text-to-speech/1.7b"
+  },
+  {
+   "family": "kandinsky-6",
+   "model": "Kandinsky 6.0 Pro",
+   "title": "Kandinsky 6.0 Pro",
+   "vendor": "Kandinsky Lab",
+   "operation": "t2v",
+   "provider": "fal",
+   "endpoint": "fal-ai/kandinsky6-pro/text-to-video",
+   "variant": "pro",
+   "falCategory": "text-to-video",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "aspectRatio": "aspect_ratio",
+    "generateAudio": "generate_audio",
+    "seed": "seed",
+    "steps": "num_inference_steps",
+    "enhancePrompt": "enable_prompt_expansion",
+    "negativePrompt": "negative_prompt"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "The text prompt describing the video and its sound.",
+     "examples": [
+      "A cat and a dog baking a cake together in a kitchen. The cat whisks batter while the dog sniffs the flour; a kitchen timer ticks and a mixer hums in the background."
+     ]
+    },
+    "negative_prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "What to avoid in the video. Defaults to the model's built-in negative prompt."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "16:9",
+      "9:16",
+      "1:1",
+      "4:3",
+      "3:4"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "The aspect ratio of the generated video."
+    },
+    "generate_audio": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate a synchronized audio track."
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Whether to rewrite the prompt into a detailed video+audio description with the model's own Qwen2.5-VL text encoder before generating."
+    },
+    "upscale_factor": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      2,
+      2.25,
+      4,
+      null
+     ],
+     "valueType": "number",
+     "required": false,
+     "desc": "If set, upscale the generated video by this factor with Kandinsky 6 video super-resolution. One of 2, 2.25 or 4; 2.25 turns the 480p output into 1080p."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "The random seed used for the generation process."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 50,
+     "minimum": 8,
+     "maximum": 50,
+     "desc": "The number of denoising steps."
+    },
+    "guidance_scale": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 1,
+     "maximum": 10,
+     "desc": "Classifier-free guidance strength."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "video.url",
+   "price": "A 5-second 480p video costs $1.35 at the default 50 steps. 20 steps cost $0.56, 8 steps cost $0.24, and each step adds about $0.027. Upscaling (16:9) adds $0.14 for 2×, $0.18 for 1080p and $0.56 for 4×, so at 50 steps these cost $1.49, $1.53 and $1.91. For example, 8 steps with 4× upscaling costs about $0.79.",
+   "pricing": {
+    "usd": 1.35,
+    "unit": "video",
+    "seconds": 5,
+    "resolution": "480p",
+    "defaultSteps": 50,
+    "bySteps": {
+     "8": 0.24,
+     "20": 0.56,
+     "50": 1.35
+    },
+    "upscaleAdds": {
+     "2": 0.14,
+     "2.25": 0.18,
+     "4": 0.56
+    }
+   },
+   "license": "MIT (Kandinsky 6.0 weights, kandinskylab/Kandinsky-6.0-*-Diffusers model cards); the Qwen2.5-VL 7B text encoder is Apache-2.0, the BigVGAN v2 vocoder MIT (NVIDIA), the MMAudio audio VAE MIT",
+   "notes": "5 s at 24 fps, 480p; the sound is made with the picture (generate_audio). Spoken lines go in the prompt; enable_prompt_expansion rewrites a short prompt first (off by default). upscale_factor runs the VSR after it, at extra cost.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/fal-ai/kandinsky6-pro/text-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kandinsky6-pro/text-to-video",
+   "capability": "t2v",
+   "fetched": "2026-11-02"
+  },
+  {
+   "family": "kandinsky-6",
+   "model": "Kandinsky 6.0 Pro",
+   "title": "Kandinsky 6.0 Pro",
+   "vendor": "Kandinsky Lab",
+   "operation": "i2v",
+   "provider": "fal",
+   "endpoint": "fal-ai/kandinsky6-pro/image-to-video",
+   "variant": "pro",
+   "falCategory": "image-to-video",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "aspectRatio": "aspect_ratio",
+    "generateAudio": "generate_audio",
+    "seed": "seed",
+    "steps": "num_inference_steps",
+    "enhancePrompt": "enable_prompt_expansion",
+    "negativePrompt": "negative_prompt",
+    "image": "image_url"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "The text prompt describing the video and its sound.",
+     "examples": [
+      "A cat and a dog baking a cake together in a kitchen. The cat whisks batter while the dog sniffs the flour; a kitchen timer ticks and a mixer hums in the background."
+     ]
+    },
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "The image used as the first frame of the video.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_inputs/ltxv-2-i2v-input.jpg"
+     ]
+    },
+    "negative_prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "What to avoid in the video. Defaults to the model's built-in negative prompt."
+    },
+    "aspect_ratio": {
+     "type": "union",
+     "variants": [
+      {
+       "type": "enum",
+       "values": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4"
+       ],
+       "valueType": "string",
+       "required": false
+      },
+      {
+       "type": "string",
+       "required": false
+      }
+     ],
+     "default": "auto",
+     "desc": "The aspect ratio of the generated video. `auto` picks the supported ratio closest to the image's; the image is center-cropped to it."
+    },
+    "generate_audio": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate a synchronized audio track."
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Whether to rewrite the prompt into a detailed video+audio description with the model's own Qwen2.5-VL text encoder before generating."
+    },
+    "upscale_factor": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      2,
+      2.25,
+      4,
+      null
+     ],
+     "valueType": "number",
+     "required": false,
+     "desc": "If set, upscale the generated video by this factor with Kandinsky 6 video super-resolution. One of 2, 2.25 or 4; 2.25 turns the 480p output into 1080p."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "The random seed used for the generation process."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 50,
+     "minimum": 8,
+     "maximum": 50,
+     "desc": "The number of denoising steps."
+    },
+    "guidance_scale": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 1,
+     "maximum": 10,
+     "desc": "Classifier-free guidance strength."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "video.url",
+   "price": "A 5-second 480p video costs $1.40 at the default 50 steps. 20 steps cost $0.58, 8 steps cost $0.25, and each step adds about $0.027. Upscaling (16:9) adds $0.14 for 2×, $0.18 for 1080p and $0.58 for 4×, so at 50 steps these cost $1.54, $1.58 and $1.98 (square output at 4×: $1.97). For example, 8 steps with 4× upscaling costs about $0.82.",
+   "pricing": {
+    "usd": 1.4,
+    "unit": "video",
+    "seconds": 5,
+    "resolution": "480p",
+    "defaultSteps": 50,
+    "bySteps": {
+     "8": 0.25,
+     "20": 0.58,
+     "50": 1.4
+    },
+    "upscaleAdds": {
+     "2": 0.14,
+     "2.25": 0.18,
+     "4": 0.58
+    }
+   },
+   "license": "MIT (Kandinsky 6.0 weights, kandinskylab/Kandinsky-6.0-*-Diffusers model cards); the Qwen2.5-VL 7B text encoder is Apache-2.0, the BigVGAN v2 vocoder MIT (NVIDIA), the MMAudio audio VAE MIT",
+   "notes": "5 s at 24 fps, 480p; the sound is made with the picture (generate_audio). Spoken lines go in the prompt; enable_prompt_expansion rewrites a short prompt first (off by default). upscale_factor runs the VSR after it, at extra cost.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/fal-ai/kandinsky6-pro/image-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kandinsky6-pro/image-to-video",
+   "capability": "i2v",
+   "fetched": "2026-11-02"
+  },
+  {
+   "family": "kandinsky-6",
+   "model": "Kandinsky 6.0 Lite",
+   "title": "Kandinsky 6.0 Lite",
+   "vendor": "Kandinsky Lab",
+   "operation": "t2v",
+   "provider": "fal",
+   "endpoint": "fal-ai/kandinsky6-lite/text-to-video",
+   "variant": "lite",
+   "falCategory": "text-to-video",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "aspectRatio": "aspect_ratio",
+    "generateAudio": "generate_audio",
+    "seed": "seed",
+    "steps": "num_inference_steps",
+    "enhancePrompt": "enable_prompt_expansion"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "The text prompt describing the video and its sound.",
+     "examples": [
+      "A cat and a dog baking a cake together in a kitchen. The cat whisks batter while the dog sniffs the flour; a kitchen timer ticks and a mixer hums in the background."
+     ]
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "16:9",
+      "9:16",
+      "1:1",
+      "4:3",
+      "3:4"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "The aspect ratio of the generated video."
+    },
+    "generate_audio": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate a synchronized audio track."
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Whether to rewrite the prompt into a detailed video+audio description with the model's own Qwen2.5-VL text encoder before generating."
+    },
+    "upscale_factor": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      2,
+      2.25,
+      4,
+      null
+     ],
+     "valueType": "number",
+     "required": false,
+     "desc": "If set, upscale the generated video by this factor with Kandinsky 6 video super-resolution. One of 2, 2.25 or 4; 2.25 turns the 480p output into 1080p."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "The random seed used for the generation process."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 10,
+     "minimum": 4,
+     "maximum": 16,
+     "desc": "The number of denoising steps. Lite is tuned for 10."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "video.url",
+   "price": "A 5-second 480p video costs $0.16 at the default 10 steps. 4 steps cost $0.08, 16 steps cost $0.24, and each extra step adds about $0.013. Upscaling (16:9) adds $0.12 for 2×, $0.16 for 1080p and $0.49 for 4×, so at 10 steps these cost $0.28, $0.32 and $0.65. For example, 16 steps with 4× upscaling costs $0.73.",
+   "pricing": {
+    "usd": 0.16,
+    "unit": "video",
+    "seconds": 5,
+    "resolution": "480p",
+    "defaultSteps": 10,
+    "bySteps": {
+     "4": 0.08,
+     "10": 0.16,
+     "16": 0.24
+    },
+    "upscaleAdds": {
+     "2": 0.12,
+     "2.25": 0.16,
+     "4": 0.49
+    }
+   },
+   "license": "MIT (Kandinsky 6.0 weights, kandinskylab/Kandinsky-6.0-*-Diffusers model cards); the Qwen2.5-VL 7B text encoder is Apache-2.0, the BigVGAN v2 vocoder MIT (NVIDIA), the MMAudio audio VAE MIT",
+   "notes": "5 s at 24 fps, 480p; the sound is made with the picture (generate_audio). Spoken lines go in the prompt; enable_prompt_expansion rewrites a short prompt first (off by default). upscale_factor runs the VSR after it, at extra cost.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/fal-ai/kandinsky6-lite/text-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kandinsky6-lite/text-to-video",
+   "capability": "t2v",
+   "fetched": "2026-11-02"
+  },
+  {
+   "family": "kandinsky-6",
+   "model": "Kandinsky 6.0 Lite",
+   "title": "Kandinsky 6.0 Lite",
+   "vendor": "Kandinsky Lab",
+   "operation": "i2v",
+   "provider": "fal",
+   "endpoint": "fal-ai/kandinsky6-lite/image-to-video",
+   "variant": "lite",
+   "falCategory": "image-to-video",
+   "status": "active",
+   "keyFields": {
+    "prompt": "prompt",
+    "aspectRatio": "aspect_ratio",
+    "generateAudio": "generate_audio",
+    "seed": "seed",
+    "steps": "num_inference_steps",
+    "enhancePrompt": "enable_prompt_expansion",
+    "image": "image_url"
+   },
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "The text prompt describing the video and its sound.",
+     "examples": [
+      "A cat and a dog baking a cake together in a kitchen. The cat whisks batter while the dog sniffs the flour; a kitchen timer ticks and a mixer hums in the background."
+     ]
+    },
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "The image used as the first frame of the video.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_inputs/ltxv-2-i2v-input.jpg"
+     ]
+    },
+    "aspect_ratio": {
+     "type": "union",
+     "variants": [
+      {
+       "type": "enum",
+       "values": [
+        "16:9",
+        "9:16",
+        "1:1",
+        "4:3",
+        "3:4"
+       ],
+       "valueType": "string",
+       "required": false
+      },
+      {
+       "type": "string",
+       "required": false
+      }
+     ],
+     "default": "auto",
+     "desc": "The aspect ratio of the generated video. `auto` picks the supported ratio closest to the image's; the image is center-cropped to it."
+    },
+    "generate_audio": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate a synchronized audio track."
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Whether to rewrite the prompt into a detailed video+audio description with the model's own Qwen2.5-VL text encoder before generating."
+    },
+    "upscale_factor": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      2,
+      2.25,
+      4,
+      null
+     ],
+     "valueType": "number",
+     "required": false,
+     "desc": "If set, upscale the generated video by this factor with Kandinsky 6 video super-resolution. One of 2, 2.25 or 4; 2.25 turns the 480p output into 1080p."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "The random seed used for the generation process."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 10,
+     "minimum": 4,
+     "maximum": 16,
+     "desc": "The number of denoising steps. Lite is tuned for 10."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "video.url",
+   "price": "A 5-second 480p video costs $0.17 at the default 10 steps. 4 steps cost $0.085, 16 steps cost $0.25, and each extra step adds about $0.014. Upscaling (16:9) adds $0.13 for 2×, $0.17 for 1080p and $0.52 for 4×, so at 10 steps these cost $0.30, $0.34 and $0.69. For example, 16 steps with 4× upscaling costs $0.77.",
+   "pricing": {
+    "usd": 0.17,
+    "unit": "video",
+    "seconds": 5,
+    "resolution": "480p",
+    "defaultSteps": 10,
+    "bySteps": {
+     "4": 0.085,
+     "10": 0.17,
+     "16": 0.25
+    },
+    "upscaleAdds": {
+     "2": 0.13,
+     "2.25": 0.17,
+     "4": 0.52
+    }
+   },
+   "license": "MIT (Kandinsky 6.0 weights, kandinskylab/Kandinsky-6.0-*-Diffusers model cards); the Qwen2.5-VL 7B text encoder is Apache-2.0, the BigVGAN v2 vocoder MIT (NVIDIA), the MMAudio audio VAE MIT",
+   "notes": "5 s at 24 fps, 480p; the sound is made with the picture (generate_audio). Spoken lines go in the prompt; enable_prompt_expansion rewrites a short prompt first (off by default). upscale_factor runs the VSR after it, at extra cost.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/fal-ai/kandinsky6-lite/image-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kandinsky6-lite/image-to-video",
+   "capability": "i2v",
+   "fetched": "2026-11-02"
+  },
+  {
+   "family": "kandinsky-6",
+   "model": "Kandinsky 6.0 VSR",
+   "title": "Kandinsky 6.0 VSR",
+   "vendor": "Kandinsky Lab",
+   "operation": "upscale-video",
+   "provider": "fal",
+   "endpoint": "fal-ai/kandinsky6-vsr",
+   "variant": "vsr",
+   "falCategory": "video-to-video",
+   "status": "active",
+   "keyFields": {
+    "video": "video_url",
+    "scale": "upscale_factor",
+    "steps": "num_inference_steps",
+    "seed": "seed"
+   },
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "desc": "The input video to upscale. Clips are resampled to 24fps and capped at 121 frames (~5s). For 2x and 4x upscaling, width and height must be multiples of 16.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_inputs/seedvr-input.mp4"
+     ]
+    },
+    "upscale_factor": {
+     "type": "enum",
+     "values": [
+      2,
+      2.25,
+      4
+     ],
+     "valueType": "number",
+     "required": false,
+     "default": 2.25,
+     "desc": "Total upscale factor applied to the input resolution. One of 2, 2.25 or 4."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 2,
+     "maximum": 50,
+     "desc": "The number of denoising steps used for each tile."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "The random seed used for the generation process."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "video.url",
+   "price": "Your request will cost $0.00036 per output megapixel per frame at the default 5 steps. Upscaling a 5-second 480p video to 1080p costs about $0.09, so $1.00 covers 10 upscales. 4x upscaling costs about $0.29, and more steps cost more.",
+   "pricing": {
+    "usd": 0.00036,
+    "unit": "output megapixel per frame",
+    "defaultSteps": 5,
+    "maxFrames": 121,
+    "fps": 24
+   },
+   "license": "MIT (Kandinsky 6.0 weights, kandinskylab/Kandinsky-6.0-*-Diffusers model cards); the Qwen2.5-VL 7B text encoder is Apache-2.0, the BigVGAN v2 vocoder MIT (NVIDIA), the MMAudio audio VAE MIT",
+   "notes": "Clips are resampled to 24 fps and capped at 121 frames (about 5 s); 2x and 4x need sides that are multiples of 16.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/fal-ai/kandinsky6-vsr",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kandinsky6-vsr",
+   "capability": "upscale-video",
+   "fetched": "2026-11-02"
+  },
+  {
+   "family": "kandinsky-6",
+   "model": "Kandinsky 6.0 VSR Lite",
+   "title": "Kandinsky 6.0 VSR Lite",
+   "vendor": "Kandinsky Lab",
+   "operation": "upscale-video",
+   "provider": "fal",
+   "endpoint": "fal-ai/kandinsky6-vsr/lite",
+   "variant": "vsr-lite",
+   "falCategory": "video-to-video",
+   "status": "active",
+   "keyFields": {
+    "video": "video_url",
+    "scale": "upscale_factor",
+    "steps": "num_inference_steps",
+    "seed": "seed"
+   },
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "desc": "The input video to upscale. Clips are resampled to 24fps and capped at 121 frames (~5s). For 2x and 4x upscaling, width and height must be multiples of 16.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_inputs/seedvr-input.mp4"
+     ]
+    },
+    "upscale_factor": {
+     "type": "enum",
+     "values": [
+      2,
+      2.25,
+      4
+     ],
+     "valueType": "number",
+     "required": false,
+     "default": 2.25,
+     "desc": "Total upscale factor applied to the input resolution. One of 2, 2.25 or 4."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 2,
+     "maximum": 50,
+     "desc": "The number of denoising steps used for each tile."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "The random seed used for the generation process."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "If `True`, the media will be returned as a data URI and the output data won't be available in the request history."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "output": "video.url",
+   "price": "Your request will cost $0.00036 per output megapixel per frame, with a default of 2 steps. Upscaling a 5-second 480p video to 1080p costs about $0.08, so $1.00 covers 12 upscales. 4x upscaling costs about $0.24.",
+   "pricing": {
+    "usd": 0.00036,
+    "unit": "output megapixel per frame",
+    "defaultSteps": 2,
+    "maxFrames": 121,
+    "fps": 24
+   },
+   "license": "MIT (Kandinsky 6.0 weights, kandinskylab/Kandinsky-6.0-*-Diffusers model cards); the Qwen2.5-VL 7B text encoder is Apache-2.0, the BigVGAN v2 vocoder MIT (NVIDIA), the MMAudio audio VAE MIT",
+   "notes": "Clips are resampled to 24 fps and capped at 121 frames (about 5 s); 2x and 4x need sides that are multiples of 16.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/fal-ai/kandinsky6-vsr/lite",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/kandinsky6-vsr/lite",
+   "capability": "upscale-video",
+   "fetched": "2026-11-02"
   }
  ]
 }
