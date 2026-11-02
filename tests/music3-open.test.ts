@@ -2,6 +2,7 @@ import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import zlib from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { GenInput, ModelDef } from "@/lib/catalog/types";
 import type { MediaInfo } from "@/lib/media-probe";
@@ -18,7 +19,7 @@ const { getModel } = await import("@/lib/catalog");
 const { resolveWorkflowId } = await import("@/lib/comfy-variants");
 const { buildLicenceList, licenceInfo, workflowLicence } = await import("@/lib/licences");
 const { setSetting } = await import("@/server/settings");
-const { falProvider } = await import("@/server/providers/fal");
+const { falProvider, stemsFromZip } = await import("@/server/providers/fal");
 const { zip } = await import("@/server/zip");
 const { unzip } = await import("@/server/unzip");
 
@@ -170,10 +171,79 @@ describe("the fal provider's song tools", () => {
     expect(Buffer.from(r.outputs[0].url.split(",")[1], "base64").toString()).toBe("ID3vocals");
   });
 
-  it("reads an archive's files, and refuses a damaged or oversized one", () => {
-    expect(unzip(stems).map((f) => f.name)).toEqual(["stems/vocals.mp3", "stems/drums.wav", "readme.txt"]);
-    expect(() => unzip(Buffer.from("not a zip at all, just words"))).toThrow("Not a zip archive");
-    expect(() => unzip(stems, { maxFiles: 2 })).toThrow(/more than 2/);
-    expect(() => unzip(stems, { maxBytes: 4 })).toThrow(/more than Fuobe keeps/);
+  it("reads an archive's files, and refuses a damaged or oversized one", async () => {
+    expect((await unzip(stems)).map((f) => f.name)).toEqual(["stems/vocals.mp3", "stems/drums.wav", "readme.txt"]);
+    await expect(unzip(Buffer.from("not a zip at all, just words"))).rejects.toThrow("Not a zip archive");
+    await expect(unzip(stems, { maxFiles: 2 })).rejects.toThrow(/more than 2/);
+    await expect(unzip(stems, { maxBytes: 4 })).rejects.toThrow(/more than Fuobe keeps/);
+  });
+
+  it("counts the bytes it unpacks, not the sizes a crafted archive declares", async () => {
+    const MiB = 1024 * 1024;
+    // One deflated entry (8 MiB of zeros in about 8 KB), listed `copies` times in the directory, each claiming `declared` bytes.
+    const crafted = (copies: number, declared: number, opts: { offsets?: number[] } = {}) => {
+      const data = zlib.deflateRawSync(Buffer.alloc(8 * MiB));
+      const name = Buffer.from("stems/vocals.wav");
+      const local = Buffer.alloc(30);
+      local.writeUInt32LE(0x04034b50, 0);
+      local.writeUInt16LE(8, 8);
+      local.writeUInt32LE(data.length, 18);
+      local.writeUInt32LE(declared, 22);
+      local.writeUInt16LE(name.length, 26);
+      const head = Buffer.concat([local, name, data]);
+      const dir = Array.from({ length: copies }, (_, i) => {
+        const c = Buffer.alloc(46);
+        c.writeUInt32LE(0x02014b50, 0);
+        c.writeUInt16LE(8, 10);
+        c.writeUInt32LE(data.length, 20);
+        c.writeUInt32LE(declared, 24);
+        c.writeUInt16LE(name.length, 28);
+        c.writeUInt32LE(opts.offsets?.[i] ?? 0, 42);
+        return Buffer.concat([c, name]);
+      });
+      const cd = Buffer.concat(dir);
+      const end = Buffer.alloc(22);
+      end.writeUInt32LE(0x06054b50, 0);
+      end.writeUInt16LE(copies, 8);
+      end.writeUInt16LE(copies, 10);
+      end.writeUInt32LE(cd.length, 12);
+      end.writeUInt32LE(head.length, 16);
+      return Buffer.concat([head, cd, end]);
+    };
+    // Twenty directory entries over one local entry: refused before a second inflate, not 160 MiB unpacked.
+    await expect(unzip(crafted(20, 0))).rejects.toThrow("damaged");
+    await expect(unzip(crafted(2, 8 * MiB, { offsets: [0, 4] }))).rejects.toThrow("damaged");
+    // A size declared as 0 that unpacks to 8 MiB: refused, and never past what is left of the budget.
+    await expect(unzip(crafted(1, 0))).rejects.toThrow("damaged");
+    await expect(unzip(crafted(1, 0), { maxBytes: 2 * MiB })).rejects.toThrow(/more than Fuobe keeps/);
+    // An honest entry still reads.
+    expect((await unzip(crafted(1, 8 * MiB)))[0].data.length).toBe(8 * MiB);
+  });
+
+  it("stops a stems download past its byte limit, with or without a declared length, and past its time limit", async () => {
+    const big = http.createServer((req, res) => {
+      if (req.url === "/declared") {
+        res.writeHead(200, { "Content-Length": String(4096) });
+        return res.end(Buffer.alloc(4096));
+      }
+      if (req.url === "/streamed") {
+        res.writeHead(200);
+        res.write(Buffer.alloc(3000));
+        res.write(Buffer.alloc(3000));
+        return res.end();
+      }
+      res.writeHead(200);
+      res.write(Buffer.alloc(10)); // then nothing more
+    });
+    await new Promise<void>((r) => big.listen(0, "127.0.0.1", r));
+    const at = `http://127.0.0.1:${(big.address() as { port: number }).port}`;
+    try {
+      await expect(stemsFromZip(`${at}/declared`, { maxBytes: 1024 })).rejects.toThrow(/larger than Fuobe keeps/);
+      await expect(stemsFromZip(`${at}/streamed`, { maxBytes: 4000 })).rejects.toThrow(/larger than Fuobe keeps/);
+      await expect(stemsFromZip(`${at}/stalls`, { waitMs: 300 })).rejects.toThrow(/took too long/);
+    } finally {
+      big.closeAllConnections();
+      await new Promise<void>((r) => big.close(() => r()));
+    }
   });
 });

@@ -47,11 +47,51 @@ async function uploadSong(upload: { endpoint: string; purpose: string }, fileUrl
   return res.id;
 }
 
+/** The most a stems download may be, and how long it may take: past either, it stops and the run fails. */
+const STEMS_MAX_BYTES = 256 * 1024 * 1024;
+const STEMS_WAIT_MS = 3 * 60 * 1000;
+
+/** A download read with a byte count: past `max` bytes (declared or streamed) it stops at once, never held whole. */
+async function bytesWithin(res: Response, max: number): Promise<Buffer> {
+  const tooBig = () => new Error("The stems download is larger than Fuobe keeps from one result");
+  if (Number(res.headers.get("content-length")) > max) {
+    res.body?.cancel().catch(() => {});
+    throw tooBig();
+  }
+  const reader = res.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      reader.cancel().catch(() => {});
+      throw tooBig();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, total);
+}
+
 /** The stems a song tool answers with in one zip (Mureka's zip_url), one result each, named by their file (meta.stem). */
-async function stemsFromZip(zipUrl: string): Promise<{ url: string; kind: "audio"; contentType: string; meta: { stem: string } }[]> {
-  const res = await fetch(zipUrl);
-  if (!res.ok) throw new Error(`The stems couldn't be downloaded (${res.status})`);
-  const files = unzip(Buffer.from(await res.arrayBuffer())).filter((f) => AUDIO_FILE.test(f.name));
+export async function stemsFromZip(
+  zipUrl: string,
+  limits: { maxBytes?: number; waitMs?: number } = {},
+): Promise<{ url: string; kind: "audio"; contentType: string; meta: { stem: string } }[]> {
+  const maxBytes = limits.maxBytes ?? STEMS_MAX_BYTES;
+  let zipped: Buffer;
+  try {
+    const res = await fetch(zipUrl, { signal: AbortSignal.timeout(limits.waitMs ?? STEMS_WAIT_MS) });
+    if (!res.ok) throw new Error(`The stems couldn't be downloaded (${res.status})`);
+    zipped = await bytesWithin(res, maxBytes);
+  } catch (e) {
+    const name = (e as Error).name;
+    if (name === "TimeoutError" || name === "AbortError") throw new Error("The stems took too long to download. Try again.");
+    throw e;
+  }
+  const files = (await unzip(zipped, { maxBytes: 2 * maxBytes })).filter((f) => AUDIO_FILE.test(f.name));
   if (!files.length) throw new Error("The stems archive held no audio");
   return files.map((f) => {
     const ext = AUDIO_FILE.exec(f.name)![1].toLowerCase();
