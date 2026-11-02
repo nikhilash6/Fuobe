@@ -92,6 +92,14 @@ export function skillsFor(projectId: string | null): Skill[] {
   return own.length ? own : enabledSkills();
 }
 
+/** " (runs by itself: run_skill with product, name)": how a recipe skill is marked in the skills list. */
+export function runsByItself(name: string): string {
+  const recipe = skillRecipe(name);
+  if (!recipe) return "";
+  const ids = recipe.params.map((p) => p.id);
+  return ` (runs by itself: run_skill${ids.length ? ` with ${ids.join(", ")}` : ""})`;
+}
+
 export function canUseSkill(name: string, projectId: string | null): boolean {
   return skillsFor(projectId).some((s) => s.name === name);
 }
@@ -145,7 +153,9 @@ export function chatFacts(c: ChatInfo, now = new Date()): ContextFact[] {
   }
   const available = skillsFor(project?.id ?? null);
   for (const s of available.slice(0, SKILL_INDEX)) {
-    facts.push({ section: "skills", key: s.name, text: clip(`- /${s.name} — ${s.title}: ${s.description}${s.whenToUse ? ` Use when: ${s.whenToUse}` : ""}`, 520) });
+    // A skill with a recipe runs by itself: said first, so a long description can't cut it off.
+    const runs = s.recipe ? runsByItself(s.name) : "";
+    facts.push({ section: "skills", key: s.name, text: clip(`- /${s.name} — ${s.title}${runs}: ${s.description}${s.whenToUse ? ` Use when: ${s.whenToUse}` : ""}`, 520) });
   }
   for (const name of c.skills) {
     const s = getSkill(name);

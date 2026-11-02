@@ -135,7 +135,7 @@ describe("the pictures a sheet or a character offers", () => {
 describe("the open engine: Frames mode's chain", () => {
   it("films all four sides as keyframes at 0, ¼, ½, ¾ and the end, with the orbit words, free", () => {
     const plan = planTurnaround({ engine: "open", views: views("front", "right", "back", "left"), name: "Maya" });
-    expect(plan).toMatchObject({ route: "frames", routes: ["frames"], fills: [], duration: 8, costUsd: 0 });
+    expect(plan).toMatchObject({ route: "frames", routes: ["frames", "stills"], fills: [], duration: 8, costUsd: 0 });
     expect(plan.blocker).toBeUndefined();
     expect(plan.steps).toHaveLength(1);
     const { request } = plan.steps[0];

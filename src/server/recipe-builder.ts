@@ -17,6 +17,7 @@ import {
   skillBody,
   slugify,
   STEPS_REFUSAL,
+  studioForTool,
   studioOf,
   type DraftCandidate,
   type DraftRefusal,
@@ -29,7 +30,9 @@ import { db } from "./db";
 import { llmText, llmTextBackend, type LlmImage } from "./enhance";
 import { listElements } from "./elements";
 import { currentRequest, getGeneration, unfilledRequest } from "./generations";
-import { getSkill } from "./skills";
+import { declinedByUser, type AssistItem } from "@/lib/assist";
+import { cardTitle, getTool, planFor } from "./assist/tools";
+import { getSkill, SkillError } from "./skills";
 import { absolutePath, readRef } from "./storage";
 
 /**
@@ -710,10 +713,38 @@ export interface DraftResult {
  * runs now, chain-filled inputs taken out, server fields dropped), or a studio's result as its tool step, and propose
  * the inputs that could vary (all Fixed) and the checks. A pick that can't be used is a refusal with the reason.
  */
-export function draftFromGenerations(ids: string[]): DraftResult {
-  const refusals: DraftRefusal[] = [];
+export const draftFromGenerations = (ids: string[]): DraftResult => buildDraft(ids);
+
+/** Where a draft comes from besides picked results: an Assist chat, its studio calls as they ran, and what it left out. */
+interface Origin {
+  thread?: string;
+  /** Studio calls of the chat: each the tool's exact input, and the result that stands for it. */
+  calls?: { lifted: Lifted; pick: Generation }[];
+  refusals?: DraftRefusal[];
+  notes?: string[];
+  /** Every generation the kept calls started (the recipe's source). */
+  generations?: string[];
+}
+
+/** A studio's work as one tool step (W2's lifts and W3's chat calls). */
+function toolNode(walk: Walk, lifted: Lifted, g: Generation): Node {
+  const key = walk.key(lifted.tool.replace(/_/g, "-"));
+  return {
+    key,
+    gen: g,
+    rows: [g.id],
+    step: { key, kind: "tool", label: lifted.studio, tool: lifted.tool, input: lifted.input },
+    label: lifted.studio,
+    modelName: lifted.studio,
+    notes: [`Runs ${lifted.studio} again with the same settings`],
+    tool: { studio: lifted.studio, record: lifted.record, inputs: lifted.inputs, texts: lifted.texts },
+  };
+}
+
+function buildDraft(ids: string[], o: Origin = {}): DraftResult {
+  const refusals: DraftRefusal[] = [...(o.refusals ?? [])];
   const walk = new Walk();
-  const tools: { node: Node; pick: Generation }[] = [];
+  const tools: { node: Node; pick: Generation }[] = (o.calls ?? []).map((c) => ({ node: toolNode(walk, c.lifted, c.pick), pick: c.pick }));
   const generated: Generation[] = [];
   const unique = [...new Set(ids)].slice(0, 200);
   for (const id of unique) {
@@ -739,18 +770,7 @@ export function draftFromGenerations(ids: string[]): DraftResult {
         continue;
       }
       if (tools.some((t) => t.node.tool?.record === lifted.record)) continue;
-      const key = walk.key(lifted.tool.replace(/_/g, "-"));
-      const node: Node = {
-        key,
-        gen: g,
-        rows: [g.id],
-        step: { key, kind: "tool", label: lifted.studio, tool: lifted.tool, input: lifted.input },
-        label: lifted.studio,
-        modelName: lifted.studio,
-        notes: [`Runs ${lifted.studio} again with the same settings`],
-        tool: { studio: lifted.studio, record: lifted.record, inputs: lifted.inputs, texts: lifted.texts },
-      };
-      tools.push({ node, pick: g });
+      tools.push({ node: toolNode(walk, lifted, g), pick: g });
       continue;
     }
     // A plain result: its graph, all or nothing (a refused step refuses the result that needs it).
@@ -793,7 +813,8 @@ export function draftFromGenerations(ids: string[]): DraftResult {
   if (Object.keys(checks).length) recipe.checks = checks;
   const all = nodes.flatMap((n) => n.rows.map((id) => getGeneration(id, { includeDeleted: true }))).filter((g): g is Generation => !!g);
   const demo = all.length > 0 && all.every((g) => g.provider === "mock");
-  recipe.source = { from: "library", generations: unique.filter((id) => !refusals.some((r) => r.id === id)), at: today(), ...(demo && { demo: true }) };
+  const used = o.generations ?? unique.filter((id) => !refusals.some((r) => r.id === id));
+  recipe.source = { from: o.thread ? "assist" : "library", ...(o.thread && { thread: o.thread }), generations: used.slice(0, 200), at: today(), ...(demo && { demo: true }) };
 
   const labelOf = new Map(nodes.map((n) => [n.key, n.label]));
   const draftSteps: DraftStep[] = nodes.map((n) => {
@@ -817,8 +838,9 @@ export function draftFromGenerations(ids: string[]): DraftResult {
   const flow = nodes.map((n) => n.label).join(" → ");
   const models = [...new Set(nodes.map((n) => n.modelName))];
   const kinds = [...new Set(nodes.filter((n) => leaves.has(n.key)).map((n) => n.gen.kind))];
-  const description = cut(`${nodes.length === 1 ? flow : `${nodes.length} steps: ${flow}`}, with ${models.join(", ")}. Made from results in the Library and run again with new inputs.`, 1000);
-  const whenToUse = cut(`When you want another ${kinds.join(" and ")} made the way “${title}” was (${dayOf(lead.gen.createdAt)}), with new inputs.`, 1000);
+  const made = o.thread ? "Made in an Assist chat" : "Made from results in the Library";
+  const description = cut(`${nodes.length === 1 ? flow : `${nodes.length} steps: ${flow}`}, with ${models.join(", ")}. ${made} and run again with new inputs.`, 1000);
+  const whenToUse = cut(`When you want another ${kinds.join(" and ")} made the way “${title}” was${o.thread ? " in Assist" : ""} (${dayOf(lead.gen.createdAt)}), with new inputs.`, 1000);
   const draft: SkillDraft = {
     recipe,
     steps: draftSteps,
@@ -828,10 +850,246 @@ export function draftFromGenerations(ids: string[]): DraftResult {
     description,
     whenToUse,
     demo,
-    notes: [...(demo ? [DEMO_NOTE] : []), ...walk.notes],
+    notes: [...(demo ? [DEMO_NOTE] : []), ...(o.notes ?? []), ...walk.notes],
     llm: llmTextBackend(),
   };
   return { draft, refusals };
+}
+
+// ---------------------------------------------------------------------------
+// A skill from an Assist chat (W3)
+
+/** Why a chat's step can't join the others: a studio step's result feeding another step, or the other way round (W7). */
+export const STUDIO_WAIT = "Skills can't wait for a studio step yet: make a skill from each step on its own";
+
+/** Tools whose started generations are drafted as plain results (a run_skill pipeline is one too). */
+const GENERATE_TOOLS = new Set(["generate", "run_skill"]);
+const TERMINAL = new Set(["succeeded", "failed", "canceled"]);
+
+interface ChatCall {
+  order: number;
+  name: string;
+  input: Record<string, unknown>;
+  gens: Generation[];
+  /** File links in its input, and the outputs it made. */
+  inputs: Set<string>;
+  outputs: Set<string>;
+  /** What it makes: the kind of its last result (a generate call), or the tool itself (a studio call). */
+  makes: string;
+  studio: boolean;
+}
+
+type Block = { type: string; id?: string; name?: string; input?: unknown; tool_use_id?: string; is_error?: boolean; content?: unknown; text?: string };
+
+const textOf = (c: unknown): string =>
+  typeof c === "string" ? c : Array.isArray(c) ? c.map((b: Block) => (b?.type === "text" && typeof b.text === "string" ? b.text : "")).join("\n") : "";
+
+/** Every file link (a Fuobe file or an http(s) link) in a value, with its path. */
+function mediaIn(v: unknown, path: (string | number)[] = [], out: { path: (string | number)[]; url: string }[] = []) {
+  if (typeof v === "string") {
+    if (isMediaRef(v)) out.push({ path, url: v });
+  } else if (Array.isArray(v)) v.forEach((x, i) => mediaIn(x, [...path, i], out));
+  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) mediaIn(x, [...path, k], out);
+  return out;
+}
+
+/** Words in a value (a story, instructions, a scene: three words or more), with their paths. */
+function wordsIn(v: unknown, path: (string | number)[] = [], out: { path: (string | number)[]; text: string }[] = []) {
+  if (typeof v === "string") {
+    if (!isMediaRef(v) && v.trim().split(/\s+/).length >= 3) out.push({ path, text: v });
+  } else if (Array.isArray(v)) v.forEach((x, i) => wordsIn(x, [...path, i], out));
+  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) wordsIn(x, [...path, k], out);
+  return out;
+}
+
+const VIDEO_FILE = /\.(mp4|webm|mov|mkv)(\?|$)/i;
+const AUDIO_FILE = /\.(mp3|wav|ogg|m4a|flac|aac)(\?|$)/i;
+const FIELD_LABELS: Record<string, string> = {
+  video: "Video",
+  footage: "Footage",
+  reference: "Reference edit",
+  references: "Reference image",
+  photos: "Subject photo",
+  images: "Image",
+  image: "Image",
+  audio: "Audio",
+  product: "Product photo",
+  logo: "Logo",
+  story: "Story",
+  scenes: "Scene",
+  instructions: "What to keep in mind",
+  style: "Look",
+};
+
+/** A form label for a field of a tool's input ("photos", 1 of 2 → "Subject photo 2"). */
+function fieldLabel(path: (string | number)[], several: boolean): string {
+  const key = [...path].reverse().find((p): p is string => typeof p === "string") ?? "input";
+  const index = [...path].reverse().find((p): p is number => typeof p === "number");
+  const base = FIELD_LABELS[key] ?? capital(key.replace(/_/g, " ").replace(/([^s])s$/, "$1"));
+  return several && index !== undefined ? `${base} ${index + 1}` : base;
+}
+
+const fileType = (url: string, path: (string | number)[]): "image" | "video" | "audio" => {
+  if (VIDEO_FILE.test(url)) return "video";
+  if (AUDIO_FILE.test(url)) return "audio";
+  const key = path.filter((p): p is string => typeof p === "string").join(" ");
+  return /\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(url) ? "image" : /video|clip|footage|reference$/.test(key) ? "video" : /audio|voice|music|sound/.test(key) ? "audio" : "image";
+};
+
+/** A chat's studio call as a tool step: its exact input, its files and words as candidates. */
+function chatLift(c: ChatCall, useId: string): Lifted {
+  const files = mediaIn(c.input);
+  const count = (p: (string | number)[]) => files.filter((f) => f.path.length === p.length && f.path.slice(0, -1).join("/") === p.slice(0, -1).join("/")).length;
+  const words = wordsIn(c.input);
+  const wordCount = (p: (string | number)[]) => words.filter((w) => w.path.slice(0, -1).join("/") === p.slice(0, -1).join("/")).length;
+  let studio: string | undefined = studioForTool(c.name);
+  if (!studio) {
+    try {
+      studio = planFor(c.name, c.input, { engine: c.gens[0]?.engine ?? "cloud" }).studio;
+    } catch {
+      studio = undefined;
+    }
+  }
+  return {
+    tool: c.name,
+    studio: studio ?? cardTitle(c.name, c.input),
+    record: `chat:${useId}`,
+    input: JSON.parse(JSON.stringify(c.input)) as Record<string, unknown>,
+    inputs: files.map((f) => ({ path: f.path, type: fileType(f.url, f.path), label: fieldLabel(f.path, count(f.path) > 1) })),
+    texts: words.map((w) => ({ path: w.path, label: fieldLabel(w.path, typeof w.path.at(-1) === "number" && wordCount(w.path) > 1) })),
+  };
+}
+
+/** The words a user typed (the files they attached are listed after them), unless Fuobe wrote them for a lone /skill. */
+function userWords(text: string): string {
+  const [body] = text.split(/\n\nAttached files[^\n]*\n/);
+  return /^Use the .+ skills?(?: with the attached files)?\.$/.test(body.trim()) ? "" : body.trim();
+}
+
+/**
+ * The generation ids a tool result names, for a chat saved before its generations items said which call made them:
+ * each `started`, `results` and `final` (a generate call, a studio that opened, Katana), and each `id` (a pipeline's
+ * steps, a storyboard's frames). Ids that aren't generations are dropped by the caller.
+ */
+function idsInResult(text: string): string[] {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return [];
+  }
+  const out: string[] = [];
+  const walk = (v: unknown, key?: string) => {
+    if (typeof v === "string") {
+      if (key && ["started", "results", "final", "id"].includes(key) && /^[\w-]{4,40}$/.test(v)) out.push(v);
+    } else if (Array.isArray(v)) v.forEach((x) => walk(x, key));
+    else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, k);
+  };
+  walk(json);
+  return out;
+}
+
+export interface ThreadDraft extends DraftResult {
+  /** What the person asked for in the chat, for the naming pass. */
+  words: string[];
+}
+
+/**
+ * The draft of a skill from an Assist chat (W3): each assistant tool call paired with its result, keeping the gated
+ * calls that ran — approved on a card or started by auto-run, which has no card — and started something that didn't
+ * all fail. Declined calls and errors are left out; of calls that make the same thing again, the last is kept (a
+ * heuristic: a later try replaces an earlier one unless it used its result). Generate calls are drafted from the
+ * results they made, so a result passed on by hand to a later call becomes a step reference (linkByFile); a studio
+ * call is one tool step with the exact input it ran with, and a reference into or out of one is refused (W7).
+ */
+export function draftFromThread(threadId: string): ThreadDraft {
+  const r = db().prepare("SELECT messages_json, items_json FROM assist_threads WHERE id = ?").get(threadId) as { messages_json: string; items_json: string } | undefined;
+  if (!r) throw new SkillError("No such chat", 404);
+  const messages = JSON.parse(r.messages_json) as { role: string; content: unknown }[];
+  // The generations each call started, as the chat shows them (every tool's own list, whatever its result says).
+  const madeBy = new Map<string, string[]>();
+  for (const i of JSON.parse(r.items_json) as AssistItem[]) if (i.role === "generations" && i.use) madeBy.set(i.use, [...(madeBy.get(i.use) ?? []), ...i.ids]);
+  const uses: { id: string; name: string; input: Record<string, unknown> }[] = [];
+  const results = new Map<string, { error: boolean; text: string }>();
+  const words: string[] = [];
+  for (const m of messages) {
+    if (!Array.isArray(m.content)) continue;
+    for (const b of m.content as Block[]) {
+      if (m.role === "assistant" && b.type === "tool_use" && b.id && b.name) uses.push({ id: b.id, name: b.name, input: (b.input ?? {}) as Record<string, unknown> });
+      else if (m.role === "user" && b.type === "tool_result" && b.tool_use_id) results.set(b.tool_use_id, { error: !!b.is_error, text: textOf(b.content) });
+      else if (m.role === "user" && b.type === "text" && typeof b.text === "string") {
+        const said = userWords(b.text);
+        if (said) words.push(said);
+      }
+    }
+  }
+  let declined = 0;
+  let failed = 0;
+  const refusals: DraftRefusal[] = [];
+  const calls: (ChatCall & { use: string })[] = [];
+  uses.forEach((u, order) => {
+    const tool = getTool(u.name);
+    if (!tool?.gated || u.name === "remember") return;
+    const res = results.get(u.id);
+    if (!res) return;
+    if (res.error) {
+      if (declinedByUser(res.text.trim())) declined++;
+      else failed++;
+      return;
+    }
+    const gens = [...new Set(madeBy.get(u.id) ?? idsInResult(res.text))].map((id) => getGeneration(id, { includeDeleted: true })).filter((g): g is Generation => !!g);
+    const live = gens.filter((g) => g.status !== "failed" && g.status !== "canceled");
+    if (!live.length) {
+      if (gens.length) failed++;
+      return;
+    }
+    const outputs = new Set(live.flatMap((g) => g.outputs.map((o) => o.url)));
+    const studio = !GENERATE_TOOLS.has(u.name);
+    calls.push({ use: u.id, order, name: u.name, input: u.input, gens: live, inputs: new Set(mediaIn(u.input).map((f) => f.url)), outputs, makes: studio ? u.name : `${u.name}:${live.at(-1)!.kind}`, studio });
+  });
+  // The same tool making the same kind of thing again: the last try, unless a later call that is kept used an earlier
+  // one's result. Walked from the end, so a call is kept only for a kept call (A, B from A, A', B' from A' keeps A', B').
+  const keptSet = new Set<ChatCall>();
+  for (const c of [...calls].reverse()) {
+    const last = !calls.some((d) => d.order > c.order && d.makes === c.makes);
+    const used = [...keptSet].some((d) => [...c.outputs].some((u) => d.inputs.has(u)));
+    if (last || used) keptSet.add(c);
+  }
+  const kept = calls.filter((c) => keptSet.has(c));
+  const replaced = calls.length - kept.length;
+  // A studio step's result feeding a later step, or a step's result feeding a studio step: refused (W7).
+  const joined: typeof kept = [];
+  for (const c of kept) {
+    const from = joined.filter((d) => [...d.outputs].some((u) => c.inputs.has(u)));
+    if (from.length && (c.studio || from.some((d) => d.studio))) {
+      refusals.push({ id: c.gens[0].id, title: cut(cardTitle(c.name, c.input), 80), reason: STUDIO_WAIT });
+      continue;
+    }
+    joined.push(c);
+  }
+  const notes: string[] = [];
+  if (replaced) notes.push(replaced === 1 ? "An earlier try of a step was left out: the skill keeps the last one" : `${replaced} earlier tries of steps were left out: the skill keeps the last of each`);
+  if (declined || failed) notes.push(`Left out: ${[declined && `${declined} plan${declined === 1 ? "" : "s"} you declined`, failed && `${failed} that didn't run`].filter(Boolean).join(" and ")}`);
+  if (!joined.length) {
+    const reason = calls.length || declined || failed ? "Nothing it made can be repeated yet" : "Nothing in it has run yet: run a plan, then save the chat as a skill";
+    return { draft: null, refusals: refusals.length ? refusals : [{ id: threadId, title: "This chat", reason }], words };
+  }
+  const studioCalls: Origin["calls"] = [];
+  const ids: string[] = [];
+  for (const c of joined) {
+    if (!c.studio) {
+      ids.push(...c.gens.map((g) => g.id));
+      continue;
+    }
+    if (c.gens.some((g) => !TERMINAL.has(g.status))) {
+      refusals.push({ id: c.gens[0].id, title: cut(cardTitle(c.name, c.input), 80), reason: "It's still running: make the skill once it's done" });
+      continue;
+    }
+    const pick = c.gens.findLast((g) => g.status === "succeeded");
+    if (pick) studioCalls.push({ lifted: chatLift(c, c.use), pick });
+  }
+  const result = buildDraft(ids, { thread: threadId, calls: studioCalls, refusals, notes, generations: joined.flatMap((c) => c.gens.map((g) => g.id)) });
+  return { ...result, words };
 }
 
 /** The deterministic SKILL.md body of a draft as it stands (every input Fixed). */
@@ -851,6 +1109,7 @@ Rules:
 - Generalise a value only when the next run would really change it, and never lose counts, order, relationships between steps or selection rules. If the same words appear in several prompts, they are one input.
 - Suggest a slot only for words that appear verbatim in a step's prompt. Prefer few inputs: a skill with fewer inputs is easier to run.
 - Keep observable completion checks only (what kind of result, how many, its shape, length, sound). Never invent a success condition the record doesn't show.
+- "asked", when present, is what the person typed in the chat the steps came from: use it to name the skill and its inputs, never as a step of its own.
 - Prefer Fuobe's own tools in the body (run_skill, generate, the studio tools) over describing other software.
 Answer with one JSON object and nothing else:
 {"name": "kebab-case-name", "title": "Short Title", "description": "One sentence on what it makes and from what.", "when_to_use": "When to pick it.", "inputs": [{"candidate": "<candidate id>", "id": "snake_case_id", "label": "Form label"}], "slots": [{"step": "<step key>", "text": "exact words from that step's prompt", "id": "snake_case_id", "label": "Form label"}], "body": "A SKILL.md body in Markdown: a # title, what it makes, ## Inputs, ## Steps, ## Using Fuobe from an agent."}`;
@@ -876,7 +1135,7 @@ async function leafStills(draft: SkillDraft): Promise<LlmImage[]> {
  * The optional naming pass: Claude or Ollama (whichever this install allows; none, no pass) names the inputs, suggests
  * slots in the prompts, a title, a description, when to use it and a SKILL.md body. Malformed output is ignored (null).
  */
-export async function nameDraft(draft: SkillDraft): Promise<Naming | null> {
+export async function nameDraft(draft: SkillDraft, asked: string[] = []): Promise<Naming | null> {
   if (!llmTextBackend()) return null;
   const record = {
     steps: draft.recipe.steps.map((s) => {
@@ -888,6 +1147,8 @@ export async function nameDraft(draft: SkillDraft): Promise<Naming | null> {
     candidates: draft.candidates.filter((c) => !c.locked).map((c) => ({ candidate: c.id, kind: c.kind, type: c.type, label: c.label, example: typeof c.example === "string" && c.kind === "media" ? `(a ${c.type} file)` : c.example })),
     checks: draft.recipe.checks ?? {},
     current: { name: draft.name, title: draft.title, description: draft.description },
+    // What the person asked for in the chat the steps came from (W3): words to name things by, never a step.
+    ...(asked.length && { asked: asked.slice(-6).map((w) => cut(w, 600)) }),
   };
   const images = await leafStills(draft);
   const text = await llmText(NAMING_SYSTEM, `${images.length ? "The pictures are the results the person kept.\n" : ""}The record:\n${JSON.stringify(record, null, 2)}`, images);
