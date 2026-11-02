@@ -45,7 +45,8 @@ describe("requirements.json", () => {
       const iw = index.workflows[w.id];
       const placed = [...iw.core, ...Object.values(iw.packs).flat()];
       expect(new Set(placed).size, w.id).toBe(placed.length);
-      expect(placed.sort(), w.id).toEqual([...new Set(Object.values(graph).map((n) => n.class_type))].sort());
+      // Classes the app adds per run (runtimeNodes: the References clip loaders) count as the graph's.
+      expect(placed.sort(), w.id).toEqual([...new Set([...Object.values(graph).map((n) => n.class_type), ...(w.runtimeNodes ?? [])])].sort());
       expect(Object.keys(iw.packs).sort(), w.id).toEqual(w.customNodes.map((n) => n.name).sort());
       for (const [p, classes] of Object.entries(iw.packs)) for (const c of classes) expect(index.packs[p].classes, `${w.id}: ${c}`).toContain(c);
     }

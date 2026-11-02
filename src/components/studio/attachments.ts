@@ -166,6 +166,15 @@ export function useAttach(slots: InputSlot[], refMax: number) {
     [start, setDraft],
   );
 
+  /** A clip or voice picked from the library: appended the same way, up to `max`. */
+  const addToList = useCallback(
+    (list: "refClips" | "refAudios", v: SlotValue, max: number) => {
+      if ((latest.current[list]?.length ?? 0) >= max) return void toast(list === "refClips" ? `Up to ${max} reference clips` : `Up to ${max} voice or music clips`);
+      setDraft((d) => ({ [list]: [...(d[list] ?? []), v] }));
+    },
+    [setDraft],
+  );
+
   const removeFromList = useCallback(
     (list: "refClips" | "refAudios", r: SlotValue) => setDraft((d) => ({ [list]: (d[list] ?? []).filter((x) => (r.id ? x.id !== r.id : x !== r)) })),
     [setDraft],
@@ -184,8 +193,8 @@ export function useAttach(slots: InputSlot[], refMax: number) {
   const uploadToFrame = useCallback((i: number, file: File) => start(file, (v) => setFrameValue(i, v), "image"), [start, setFrameValue]);
 
   return useMemo(
-    () => ({ kinds, attach, attachFiles, setSlotValue, uploadToSlot, removeRef, addRefFile, addListFile, removeFromList, setFrameValue, uploadToFrame }),
-    [kinds, attach, attachFiles, setSlotValue, uploadToSlot, removeRef, addRefFile, addListFile, removeFromList, setFrameValue, uploadToFrame],
+    () => ({ kinds, attach, attachFiles, setSlotValue, uploadToSlot, removeRef, addRefFile, addListFile, addToList, removeFromList, setFrameValue, uploadToFrame }),
+    [kinds, attach, attachFiles, setSlotValue, uploadToSlot, removeRef, addRefFile, addListFile, addToList, removeFromList, setFrameValue, uploadToFrame],
   );
 }
 

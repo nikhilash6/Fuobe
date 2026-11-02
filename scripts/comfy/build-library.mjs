@@ -394,11 +394,12 @@ async function main() {
 
     // ---- custom nodes
     const custom = new Set();
-    for (const n of Object.values(graph)) {
-      const mod = objectInfo[n.class_type]?.python_module || '';
+    // Nodes the app adds per run (spec.runtimeNodes, e.g. the clip loaders of H3's references) count as the graph's own.
+    for (const cls of [...Object.values(graph).map((n) => n.class_type), ...(spec.runtimeNodes || [])]) {
+      const mod = objectInfo[cls]?.python_module || '';
       if (!mod.startsWith('custom_nodes.')) continue;
       try {
-        custom.add(packOfClass(n.class_type, mod, prevSubset[n.class_type]?.python_module));
+        custom.add(packOfClass(cls, mod, prevSubset[cls]?.python_module));
       } catch (e) {
         errs.push(e.message);
       }
@@ -437,6 +438,7 @@ async function main() {
     if (spec.worker) entry.worker = spec.worker;
     // The app rewrites the graph before submitting (e.g. "captions": one segment per caption cue).
     if (spec.expand) entry.expand = spec.expand;
+    if (spec.runtimeNodes) entry.runtimeNodes = spec.runtimeNodes;
     if (!validated && st && st.sha256 === hash && st.error) entry.validationError = st.error;
     if (errs.length) {
       errors.push(...errs.map((e) => `${spec.id}: ${e}`));

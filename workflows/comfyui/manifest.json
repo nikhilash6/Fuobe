@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-02T11:05:24.912Z",
+  "generatedAt": "2026-11-02T15:21:02.498Z",
   "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
   "comfyuiVersion": "0.41.0",
   "workflowTemplatesVersion": "0.11.86",
@@ -6460,12 +6460,20 @@
           "sizeGb": 1.96
         }
       ],
-      "customNodes": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI-VideoHelperSuite",
+          "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+        }
+      ],
       "vramGb": 32,
       "license": "MiniMax H3 Community License (the H3 FL2VA model, its video and audio VAEs, the packaged Qwen3-VL text encoder): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax's written authorization; show \"MiniMax H3\" on the product's interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · Pika H3 Flex FL2VA and Ref2VA adapters: Model Derivatives of MiniMax H3 under the MiniMax H3 Community License, Copyright © 2026 Mellis, Inc. (keep Pika's NOTICE and LICENSE with the files) · Pika's example code Apache-2.0",
       "validated": true,
-      "notes": "References to video with sound: core MiniMaxH3ReferenceToVideo on the ref2va pruned int8 model with Pika's Ref2VA adapter. The graph holds Image 1 (LoadImage 150 → ref_images.ref_image_0); the provider adds the rest per run (expandH3References): up to 9 images (LoadImage → ref_images.ref_image_N), 3 clips (VHS_LoadVideo at 24 fps, up to 15 s → ref_videos.ref_video_N, and the clip's own sound → ref_video_audios.ref_video_audio_N) and 3 standalone audio clips (LoadAudio → ref_audios.ref_audio_N), 12 files in all, at least one image or clip; a request with no image takes node 150 out. Each clip or audio clip 2-15 s, each group at most 15 s combined; a clip's own sound is not counted as an audio file. The prompt cites them in order: <Picture 1>, <Video 1>, <Audio 1> (the studio writes Image 1, Clip 1, Voice 1 and the server turns them into these tags). ref_image_size stays match (the template's; max keeps a 2048 px short edge for stronger identity and is several times slower). Pika H3 Flex's sampling contract, as Comfy-Org's video_pika_h3_flex templates: the adapter at a fixed 1.0 (LoraLoaderModelOnly), KSamplerSelect lcm (fresh noise at every step), ManualSigmas 1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0 (the knots 1000/750/500/250/100/40/0 at video shift 12, so no MiniMaxH3SigmaShift node; audio shift 3 is the model's own), BasicGuider (CFG 1). 6 steps; Pika: generic 6-step Euler is not equivalent, and stacking another speed LoRA (Turbo, Lightning) breaks the output. Native 480p or 768p in 11 aspect ratios (21:9 to 9:21), 24 fps, 5-15 s on the 17n+5 grid (124 frames = 5.17 s, 362 = 15.08 s), 32 kHz stereo. Pika: \"an end-to-end ComfyUI render has not been verified as part of this upload\"; tested by Pika on an H100 80 GB (consumer VRAM unpublished). The file names are Pika's (comfy/loras at 3ff16644); Comfy-Org's templates name a repack (pika_h3_flex_*_v1_bf16, 128 bytes larger) of the same adapters. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). Files: ref2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With Pika's Ref2VA adapter (1.96 GB). Needs VideoHelperSuite only when a clip is given.",
-      "expand": "references"
+      "notes": "References to video with sound: core MiniMaxH3ReferenceToVideo on the ref2va pruned int8 model with Pika's Ref2VA adapter. The graph holds Image 1 (LoadImage 150 → ref_images.ref_image_0); the provider adds the rest per run (expandH3References): up to 9 images (LoadImage → ref_images.ref_image_N), 3 clips (VHS_LoadVideo at 24 fps, up to 15 s → ref_videos.ref_video_N, and the clip's own sound → ref_video_audios.ref_video_audio_N) and 3 standalone audio clips (LoadAudio → ref_audios.ref_audio_N), 12 files in all, at least one image or clip; a request with no image takes node 150 out. Each clip or audio clip 2-15 s, each group at most 15 s combined; a clip's own sound is not counted as an audio file. The prompt cites them in order: <Picture 1>, <Video 1>, <Audio 1> (the studio writes Image 1, Clip 1, Voice 1 and the server turns them into these tags). ref_image_size stays match (the template's; max keeps a 2048 px short edge for stronger identity and is several times slower). Pika H3 Flex's sampling contract, as Comfy-Org's video_pika_h3_flex templates: the adapter at a fixed 1.0 (LoraLoaderModelOnly), KSamplerSelect lcm (fresh noise at every step), ManualSigmas 1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0 (the knots 1000/750/500/250/100/40/0 at video shift 12, so no MiniMaxH3SigmaShift node; audio shift 3 is the model's own), BasicGuider (CFG 1). 6 steps; Pika: generic 6-step Euler is not equivalent, and stacking another speed LoRA (Turbo, Lightning) breaks the output. Native 480p or 768p in 11 aspect ratios (21:9 to 9:21), 24 fps, 5-15 s on the 17n+5 grid (124 frames = 5.17 s, 362 = 15.08 s), 32 kHz stereo. Pika: \"an end-to-end ComfyUI render has not been verified as part of this upload\"; tested by Pika on an H100 80 GB (consumer VRAM unpublished). The file names are Pika's (comfy/loras at 3ff16644); Comfy-Org's templates name a repack (pika_h3_flex_*_v1_bf16, 128 bytes larger) of the same adapters. Canvas: 768 px on the short side, at most 768 x 1344, multiples of 32 (16:9 1344x768, 4:3 1024x768, 1:1 768x768, 9:16 768x1344). Files: ref2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB). With Pika's Ref2VA adapter (1.96 GB). VideoHelperSuite loads the clips (runtimeNodes, so the GPU pre-flight asks for it).",
+      "expand": "references",
+      "runtimeNodes": [
+        "VHS_LoadVideo"
+      ]
     },
     {
       "id": "infinitetalk-native",

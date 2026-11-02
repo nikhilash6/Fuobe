@@ -118,6 +118,8 @@ export interface ManifestWorkflow {
    * MiniMax H3's Ref2VA graph, src/lib/h3-references.ts).
    */
   expand?: "captions" | "timeline" | "videos" | "audios" | "references";
+  /** Classes the app adds to the graph per run (the References clip loaders): the GPU pre-flight counts them as the graph's. */
+  runtimeNodes?: string[];
   validated: boolean;
   /** What ComfyUI answered when it last refused this graph. */
   validationError?: string;

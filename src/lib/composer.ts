@@ -410,7 +410,7 @@ export function missingMessage(m: MissingSlot): string {
   return `Add ${orList(m.group.map((s) => slotMessage(s.label).replace(/^Add /, "")))}`;
 }
 
-const WRITE_PROMPT = "Write a prompt first";
+export const WRITE_PROMPT = "Write a prompt first";
 
 export interface Blocker {
   message: string;

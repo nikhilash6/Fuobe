@@ -6,6 +6,7 @@ import { getModel, getPreset } from "@/lib/catalog";
 import { planCinema, takesClips, type CinemaGenerateInput } from "@/lib/catalog/cinema";
 import { PIKA_FLEX_FL2VA, PIKA_FLEX_LORAS, PIKA_FLEX_NOTICE, PIKA_FLEX_REF2VA, pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
 import { planGeneration } from "@/lib/catalog/plan";
+import { controlsFor } from "@/lib/composer";
 import type { GenInput } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 import { H3_FLEX_GRAPH, resolveWorkflowId } from "@/lib/comfy-variants";
@@ -18,7 +19,9 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-pika-flex-"));
 process.env.FUOBE_DATA_DIR = tmp;
 process.env.COMFYUI_URL = "http://comfy.test:8188";
 const { prepareWorkflow } = await import("@/server/providers/comfyui");
-const { accessList, knownSwitch } = await import("@/server/model-access");
+const { accessList, knownSwitch, readAccess, saveAccess } = await import("@/server/model-access");
+const { previewGeneration } = await import("@/server/generations");
+const { runAsTenant } = await import("@/server/tenant");
 const { STUDIO_ROWS, studioTool, modelTool } = await import("@/server/gpu/tools");
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
@@ -243,5 +246,70 @@ describe("Settings → Models & licences and the GPU pre-flight", () => {
     expect(refs.workflows).toEqual(["minimax-h3-flex-ref2va"]);
     expect(refs.loras.map((l) => l.file)).toContain(PIKA_FLEX_REF2VA.file);
     expect(modelTool("oss-minimax-h3", "avatar")!.workflows).toEqual(["minimax-h3-flex-ref2va"]);
+  });
+});
+
+describe("What a References run can't carry is said, not dropped", () => {
+  const plan = (feature: string, inputs: GenerationRequestInputs) => () => planGeneration({ feature, modelId: "oss-minimax-h3", prompt: "friendly", inputs }, getModel, getPreset);
+  type GenerationRequestInputs = Parameters<typeof planGeneration>[0]["inputs"];
+
+  it("Lipsync & avatars on MiniMax H3: a clip to re-sync is refused (H3 makes a new clip), not run as words alone", () => {
+    expect(plan("lipsync", { video: "/api/files/uploads/c.mp4", audio: "/api/files/uploads/v.wav" })).toThrow(/doesn't re-sync an existing clip\. Add a portrait instead of the video/);
+    expect(plan("lipsync", { images: ["/api/files/uploads/a.png"], video: "/api/files/uploads/c.mp4", audio: "/api/files/uploads/v.wav" })).toThrow(/doesn't re-sync/);
+    // The portrait and the voice still make the talking clip; an asked op isn't second-guessed.
+    expect(plan("lipsync", { images: ["/api/files/uploads/a.png"], audio: "/api/files/uploads/v.wav" })().op).toBe("avatar");
+    // A model with a lip-sync route still re-syncs the clip.
+    expect(planGeneration({ feature: "lipsync", modelId: "oss-latentsync", prompt: "", inputs: { video: "/api/files/uploads/c.mp4", audio: "/api/files/uploads/v.wav" } }, getModel, getPreset).op).toBe("lipsync");
+  });
+
+  it("an end frame with reference clips or sound is refused (first and last frames carry neither)", () => {
+    expect(plan("video", { images: ["/api/files/uploads/a.png"], endImage: "/api/files/uploads/b.png", videos: ["/api/files/uploads/c.mp4"] })).toThrow(/can't go with an end frame/);
+    expect(plan("video", { images: ["/api/files/uploads/a.png"], endImage: "/api/files/uploads/b.png", audios: ["/api/files/uploads/v.wav"] })).toThrow(/can't go with an end frame/);
+    expect(plan("video", { images: ["/api/files/uploads/a.png"], endImage: "/api/files/uploads/b.png" })().op).toBe("flf2v");
+  });
+
+  it("the Quality chip shows on words and frames only: References and Talk always run Pika H3 Flex", () => {
+    const controls = getModel("oss-minimax-h3")!.options.controls!;
+    for (const op of ["t2v", "i2v", "flf2v"]) expect(controlsFor(controls, op).map((c) => c.param)).toEqual(["quality"]);
+    for (const op of ["ref2v", "avatar"]) expect(controlsFor(controls, op)).toEqual([]);
+  });
+
+  it("a run whose Pika adapter is switched off in Settings → Models & licences doesn't start (a visitor gets plain words)", () => {
+    const flex = { feature: "video", modelId: "oss-minimax-h3", prompt: "a fox", params: { extra: { quality: "flex" } } } as const;
+    const refs = { feature: "video", modelId: "oss-minimax-h3", prompt: "Image 1 walks", inputs: { images: ["/api/files/uploads/a.png"], videos: ["/api/files/uploads/c.mp4"] } } as const;
+    const talk = { feature: "lipsync", modelId: "oss-minimax-h3", prompt: "", inputs: { images: ["/api/files/uploads/a.png"], audio: "/api/files/uploads/v.wav" } } as const;
+    // A ComfyUI that answers (comfy.test, as the provider tests do).
+    const g = globalThis as unknown as { __fuobeComfyReach?: { ok: boolean; at: number; url: string } };
+    const reach = g.__fuobeComfyReach;
+    g.__fuobeComfyReach = { ok: true, at: Date.now(), url: "http://comfy.test:8188" };
+    const was = readAccess();
+    try {
+      expect(() => previewGeneration(flex as never)).not.toThrow();
+      saveAccess({ ...was, loras: [...was.loras, PIKA_FLEX_FL2VA.file] });
+      expect(() => previewGeneration(flex as never)).toThrow(/Fast · Pika Flex runs with .*switched off in Settings → Models & licences\. Pick Standard or Sharper/);
+      // Standard keeps running without the adapter.
+      expect(() => previewGeneration({ ...flex, params: { extra: { quality: "fast" } } } as never)).not.toThrow();
+      saveAccess({ ...was, loras: [...was.loras, PIKA_FLEX_REF2VA.file] });
+      expect(() => previewGeneration(refs as never)).toThrow(/References runs with .*switched off/);
+      expect(() => previewGeneration(talk as never)).toThrow(/Talk from a voice clip runs with .*switched off/);
+      runAsTenant({ kind: "account", id: "acct-a" } as never, () => {
+        let message = "";
+        try {
+          previewGeneration(refs as never);
+        } catch (e) {
+          message = (e as Error).message;
+        }
+        expect(message).toMatch(/^References isn't available here/);
+        expect(message).not.toMatch(/LoRA|Settings|safetensors/);
+      });
+    } finally {
+      saveAccess(was);
+      g.__fuobeComfyReach = reach;
+    }
+  });
+
+  it("the references graph asks the GPU pre-flight for the clip loader's pack", () => {
+    const req = JSON.parse(fs.readFileSync(path.join(DIR, "requirements.json"), "utf8")) as { workflows: Record<string, { packs: Record<string, string[]> }> };
+    expect(req.workflows["minimax-h3-flex-ref2va"].packs).toEqual({ "ComfyUI-VideoHelperSuite": ["VHS_LoadVideo"] });
   });
 });

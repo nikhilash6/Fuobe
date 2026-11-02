@@ -634,6 +634,8 @@ const open: ModelDef[] = [
           values: ["fast", "best", "flex"],
           default: "fast",
           labels: { fast: "Standard · 8 steps", best: "Sharper · 20 steps, about 2.3x longer", flex: "Fast · Pika Flex (6 steps)" },
+          // References and Talk from a voice clip always run Pika H3 Flex: the chip shows on words and frames only.
+          ops: { fast: ["t2v", "i2v", "flf2v"], best: ["t2v", "i2v", "flf2v"], flex: ["t2v", "i2v", "flf2v"] },
         },
       ],
     },

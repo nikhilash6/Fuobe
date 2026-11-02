@@ -67,6 +67,7 @@ export function ReferenceTiles({
   images,
   limits,
   onFile,
+  onPick,
   onRemove,
 }: {
   clips: SlotValue[];
@@ -74,6 +75,7 @@ export function ReferenceTiles({
   images: number;
   limits: { videos: number; audios: number };
   onFile: (list: List, f: File, max: number) => void;
+  onPick: (list: List, v: SlotValue, max: number) => void;
   onRemove: (list: List, v: SlotValue) => void;
 }) {
   const labels = h3ReferenceLabels({ images, videos: clips.length, audios: audios.length }).slice(images);
@@ -82,11 +84,11 @@ export function ReferenceTiles({
       {clips.map((v, i) => (
         <Tile key={v.id ?? v.ref} value={v} label={labels[i]} onRemove={() => onRemove("refClips", v)} />
       ))}
-      {limits.videos > clips.length && <MediaSlot slotKey="refClips" label="Add clip" kind="video" value={null} onFile={(f) => onFile("refClips", f, limits.videos)} onChange={() => {}} />}
+      {limits.videos > clips.length && <MediaSlot slotKey="refClips" label="Add clip" kind="video" value={null} onFile={(f) => onFile("refClips", f, limits.videos)} onChange={(v) => v && onPick("refClips", v, limits.videos)} />}
       {audios.map((v, i) => (
         <Tile key={v.id ?? v.ref} value={v} label={labels[clips.length + i]} onRemove={() => onRemove("refAudios", v)} />
       ))}
-      {limits.audios > audios.length && <MediaSlot slotKey="refAudios" label="Add voice" kind="audio" value={null} onFile={(f) => onFile("refAudios", f, limits.audios)} onChange={() => {}} />}
+      {limits.audios > audios.length && <MediaSlot slotKey="refAudios" label="Add voice" kind="audio" value={null} onFile={(f) => onFile("refAudios", f, limits.audios)} onChange={(v) => v && onPick("refAudios", v, limits.audios)} />}
     </>
   );
 }

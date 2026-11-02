@@ -75,7 +75,7 @@ import { missingFilesMessage, type MissingFiles } from "@/lib/missing-files";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { graphLoras as h3GraphLoras } from "@/lib/catalog/character-swap";
-import { pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
+import { PIKA_FLEX_REF_WORKFLOW, pikaFlexGraphLoras } from "@/lib/catalog/pika-flex";
 import { restoreGraphLoras } from "@/lib/restore-graph";
 import { ensureLorasOnComfy, prepareCloudLoras, withoutUnreachableCivitai } from "./loras";
 import { ACCESS_PLACE } from "@/lib/model-access";
@@ -745,6 +745,17 @@ function prepare(original: GenerationRequest) {
     const speed = QWEN21_SPEED.labels?.[tier.speed] ?? tier.speed;
     throw new Error(
       tenantAccount() ? `${speed} isn't available here. Pick another speed` : `${speed} runs with the LoRA “${loraName({ file: tier.file })}”, which is switched off in ${ACCESS_PLACE}. Pick another speed, or turn it back on there`,
+    );
+  }
+  // Pika H3 Flex (MiniMax H3's Fast · Pika Flex, References and Talk from a voice clip) loads Pika's adapter in the graph:
+  // that adapter switched off holds the run.
+  const flexOff = route.provider === "comfyui" ? offeredLoras(pikaFlexGraphLoras(route.endpoint, plan.params.extra)).dropped[0] : undefined;
+  if (flexOff) {
+    const refs = route.endpoint === PIKA_FLEX_REF_WORKFLOW;
+    const what = refs ? (plan.op === "avatar" ? "Talk from a voice clip" : "References") : "Fast · Pika Flex";
+    const instead = refs ? "Use one start frame, or pick another model" : "Pick Standard or Sharper";
+    throw new Error(
+      tenantAccount() ? `${what} isn't available here. ${instead}` : `${what} runs with “${loraName(flexOff)}”, which is switched off in ${ACCESS_PLACE}. ${instead}, or turn it back on there`,
     );
   }
   // "Fast · writes the details" edits with at most 3 pictures (its LoRA's card).

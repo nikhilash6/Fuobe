@@ -94,7 +94,7 @@
 // segment per caption cue before submitting), "timeline", "videos" / "audios" (one loader per clip in inputs.videos / audios),
 // optionalModels (files a model control can pick instead of the graph's own,
 // listed in the manifest with optional: true so missing-model help can name their download),
-// packs (node packs the validation server lacks, see PACK_CLASSES; listed in customNodes), modelUrls (a file's
+// runtimeNodes (classes the app adds per run, e.g. expandH3References' clip loaders, counted as the graph's for its packs), packs (node packs the validation server lacks, see PACK_CLASSES; listed in customNodes), modelUrls (a file's
 // download at a pinned revision for this workflow, over KNOWN_MODELS).
 // Keys added with Genjutsu's Character swap (O5, docs/research/openjutsu-6.md). * = the provider fills it:
 //   quality*                              (H3 PrepareVideo resolution "480" | "768": params.resolution 480p / 768p)
@@ -1775,6 +1775,8 @@ export const SPEC = [
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24 },
     limits: { maxFrames: 362, dimensionMultiple: 32, maxImages: 9, maxVideos: 3, maxAudios: 3, maxReferences: 12, maxReferenceGroupSec: 15 },
+    // The clips' loader is added per run (expandH3References), so the graph itself doesn't hold it.
+    runtimeNodes: ['VHS_LoadVideo'],
     vramGb: 32,
     license: H3_FLEX_LICENSE,
     notes:
@@ -1785,7 +1787,7 @@ export const SPEC = [
       'Each clip or audio clip 2-15 s, each group at most 15 s combined; a clip\'s own sound is not counted as an audio file. The prompt cites them in order: ' +
       '<Picture 1>, <Video 1>, <Audio 1> (the studio writes Image 1, Clip 1, Voice 1 and the server turns them into these tags). ref_image_size stays match ' +
       `(the template's; max keeps a 2048 px short edge for stronger identity and is several times slower). ${H3_FLEX_NOTES} ${H3_NOTES_SIZE} ${H3_NOTES_FILES.replace('fl2va', 'ref2va')} ` +
-      'With Pika\'s Ref2VA adapter (1.96 GB). Needs VideoHelperSuite only when a clip is given.',
+      'With Pika\'s Ref2VA adapter (1.96 GB). VideoHelperSuite loads the clips (runtimeNodes, so the GPU pre-flight asks for it).',
   },
   {
     id: 'infinitetalk-native',

@@ -79,6 +79,7 @@ import {
   startStep,
   viewerDefaults,
   writesCaptions,
+  WRITE_PROMPT,
 } from "@/lib/composer";
 import { qwen21Note } from "@/lib/qwen21-speed";
 import { formatCost } from "@/lib/format";
@@ -680,6 +681,11 @@ export function Composer({ docked }: { docked: boolean }) {
       ? h3ReferenceProblem({ images: refImages, videos: refSeconds.slice(0, refClips.length), audios: refSeconds.slice(refClips.length) })
       : null;
   if (refProblem && !planError) planError = refProblem;
+  // An end frame runs first and last frames only: References mode's extra images, clips and sound would be left out.
+  // It goes before "Write a prompt first": words won't fix it.
+  if (refMode && !framesOn && draft.slots.endImage?.ref && (draft.refs.length || refClips.length || refAudios.length) && (!planError || planError === WRITE_PROMPT)) {
+    planError = "References can't go with an end frame. Remove the end frame, or the references";
+  }
   // Models that take no prompt (try-on, 3D, transcription, upscalers), or can run without one, never ask for one.
   // A model that reads only words (Open-H3 Regenerate redraws from them) asks for them even in a tool that hides the box.
   const promptMissing =
@@ -1277,6 +1283,7 @@ export function Composer({ docked }: { docked: boolean }) {
               images={refImages}
               limits={refMode}
               onFile={attach.addListFile}
+              onPick={attach.addToList}
               onRemove={attach.removeFromList}
             />
           )}
