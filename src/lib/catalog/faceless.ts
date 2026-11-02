@@ -742,6 +742,8 @@ export const MUSIC_MAX: Record<string, number> = { "sonilo-music": 600, "oss-ace
 
 /** Longest bed a loop model makes (the open loop graph's limit; the cloud's whole plays go past any film). */
 export const LOOP_MAX: Record<string, number> = { "oss-audio-loop": 600 };
+/** Cuts a bed clip longer than the film before its split (your GPU; a CPU step). */
+export const BED_CUT_MODEL = "oss-trim";
 
 /** Seconds of crossfade at each seam of a looped bed (open engine): long enough to hide the restart. */
 export const BED_CROSSFADE = 3;
@@ -1168,19 +1170,30 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
   let bedStem: string | undefined;
   if (models.music && models.bedClip) {
     const clip = models.bedClip;
-    const clipSeconds = Math.max(1, clip.duration);
+    // A clip much longer than the film is cut to the film (and a second) first: only what plays is split.
+    const need = Math.ceil(length) + 1;
+    const cut = clip.duration > need + 1;
+    const clipSeconds = cut ? need : Math.max(1, clip.duration);
     bedStem = "background";
+    if (cut)
+      steps.push({
+        key: "music-cut",
+        part: "music",
+        label: "Music bed · cut to the film",
+        request: { ...base, modelId: BED_CUT_MODEL, op: "trim", inputs: { video: clip.url }, params: { startTime: 0, endTime: need }, step: { label: "Music bed cut", index: n, of: n } },
+      });
     steps.push({
       key: "music",
       part: "music",
       label: "Music bed · from your clip",
       seconds: clipSeconds,
+      ...(cut && { after: ["music-cut"], chain: [{ slot: "video" as const }] }),
       request: {
         ...base,
         modelId: models.music,
         op: "separate-audio",
         title: `Stems · ${clip.name?.trim() || "music bed"}`,
-        inputs: { video: clip.url },
+        ...(!cut && { inputs: { video: clip.url } }),
         params: { sourceDuration: Math.round(clipSeconds * 1000) / 1000, extra: { channels: "mono" } },
         step: { label: "Music bed", index: n, of: n },
       },

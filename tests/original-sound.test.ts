@@ -331,12 +331,23 @@ describe("Faceless clip bed", () => {
     expect(mix.chain?.[2]).toEqual({ slot: "audio2" });
     expect(mix.request.params?.extra).toEqual({ backgroundVolumeDb: -14 });
     expect(g.some((s) => s.request.op === "music")).toBe(false);
+    expect(g.some((s) => s.key === "music-cut")).toBe(false);
     expect(estimateGraph(g, getModel, ["music", "music-loop"]).parts.music ?? 0).toBe(0);
   });
 
-  it("a clip longer than the film needs no loop: the mix takes the stem itself", () => {
+  it("a clip longer than the film needs no loop and is cut to the film before its split: the mix takes the stem itself", () => {
     const g = graphFor({ engine: "open", music: true, musicClip: { ...musicClip, duration: 900 } }, blocks);
     expect(g.some((s) => s.key === "music-loop")).toBe(false);
+    const film = Math.ceil(blocks.reduce((n, b) => n + b.seconds, 0));
+    const cut = g.find((s) => s.key === "music-cut")!;
+    expect(cut.request).toMatchObject({ modelId: "oss-trim", op: "trim", inputs: { video: musicClip.url }, params: { startTime: 0 } });
+    const end = cut.request.params!.endTime!;
+    expect(end).toBeGreaterThanOrEqual(film);
+    expect(end).toBeLessThan(film + 3);
+    const music = g.find((s) => s.key === "music")!;
+    expect(music).toMatchObject({ after: ["music-cut"], chain: [{ slot: "video" }], seconds: end, request: { modelId: SPLIT_MODEL, params: { sourceDuration: end } } });
+    expect(music.request.inputs).toBeUndefined();
+    expect(estimateGraph(g, getModel, ["music-cut", "music"]).parts.music ?? 0).toBe(0);
     const mix = g.find((s) => s.key === "mix")!;
     expect(mix.after?.[2]).toBe("music");
     expect(mix.chain?.[2]).toEqual({ slot: "audio2", stem: "background" });
