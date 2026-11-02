@@ -242,6 +242,8 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/restore/prompt",
       // Character Swap Studio's Sharpen (n7-4): a studio job, like its assembly.
       "/api/swap-studio/projects/p1/sharpen",
+      // Plan layout (N7-8) plans with the studio's own AI helper.
+      "/api/layout/plan",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);

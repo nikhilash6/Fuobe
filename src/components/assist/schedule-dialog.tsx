@@ -34,18 +34,25 @@ import {
 import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
-import { useChats, useConnectors, useProjects, useScheduleActions, type ScheduleRuleInput } from "./hooks";
+import { useChats, useConnectors, useProjects, useRecipe, useScheduleActions, useSkills, type ScheduleRuleInput } from "./hooks";
 import { ModePicker } from "./mode-picker";
 import { ProjectDot } from "./project-dot";
+import { inputsFrom, SkillTaskFields, skillTask, type SkillInputs } from "./schedule-skill";
 
-/** What a new task starts from: a chat's request, a project. */
+/** What a new task starts from: a chat's request, a project, or a skill that runs by itself. */
 export interface ScheduleSeed {
   prompt?: string;
   attachments?: string[];
   projectId?: string | null;
   engine?: Engine;
   mode?: AssistModeChoice | null;
+  skill?: string;
 }
+
+const WHAT = [
+  { id: "request", label: "A request" },
+  { id: "skill", label: "A skill" },
+] as const;
 
 const KINDS: { id: ScheduleRule["kind"]; label: string }[] = [
   { id: "daily", label: "Daily" },
@@ -113,6 +120,25 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
   // Off unless the task opts in: connector tools run inside Claude's reply, where no approval reaches them.
   const [connectors, setConnectors] = useState(schedule?.connectors ?? false);
   const connectorNames = (useConnectors().data ?? []).filter((c) => c.enabled).map((c) => c.name);
+  // What runs: a request Assist plans each time, or a saved skill's steps with fixed inputs (no model plans it).
+  const [what, setWhat] = useState<"request" | "skill">(schedule?.skill || seed?.skill ? "skill" : "request");
+  const [skillName, setSkillName] = useState<string | null>(schedule?.skill?.name ?? seed?.skill ?? null);
+  const [inputs, setInputs] = useState<SkillInputs>(() => inputsFrom(schedule?.skill));
+  const [tried, setTried] = useState(false);
+  const allSkills = useSkills().data;
+  const runnable = allSkills ? allSkills.filter((s) => s.recipe && s.enabled) : null;
+  const recipe = useRecipe(what === "skill" ? skillName : null);
+  const skill = what === "skill" && recipe.data && runnable?.some((s) => s.name === recipe.data.name) ? recipe.data : undefined;
+  const task = skill ? skillTask(skill, inputs) : null;
+  // A skill runs only on the engines its steps run on: the task takes the one it was checked on.
+  const runEngine: Engine = skill?.engines.length && !skill.engines.includes(engine) ? (skill.ready.find((e) => skill.engines.includes(e)) ?? skill.engines[0]) : engine;
+  const pickSkill = (name: string) => {
+    setSkillName(name);
+    setInputs(inputsFrom(null));
+    setTried(false);
+    const picked = runnable?.find((s) => s.name === name)?.title;
+    if (!titleTouched && picked) setTitle(picked);
+  };
   const [busy, setBusy] = useState(false);
   const zones = useMemo(() => {
     const list = allZones();
@@ -130,25 +156,23 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prompt.trim()) return void toast.error("Write what Assist should do each time");
+    if (what === "request" && !prompt.trim()) return void toast.error("Write what Assist should do each time");
+    if (what === "skill") {
+      setTried(true);
+      if (!skill || !task) return void toast.error("Pick a skill to run");
+      if (!task.ok) return void toast.error(task.uploading ? "Wait for the upload to finish" : (Object.values(task.errors)[0] ?? "Check the skill's inputs"));
+    }
     if (problem) return void toast.error(problem);
     if (!next) return void toast.error(kind === "once" ? "That time has passed — pick a later one" : "This schedule never runs");
     if (capBad) return void toast.error(`Set a cap between $0 and $${MAX_SCHEDULE_CAP_USD}`);
     setBusy(true);
     try {
-      const body = {
-        title: title.trim() || threadTitle(prompt),
-        prompt: prompt.trim(),
-        attachments,
-        projectId,
-        rule,
-        tz,
-        approval,
-        capUsd: approval === "auto" ? capUsd : null,
-        engine,
-        mode,
-        connectors,
-      };
+      const when = { projectId, rule, tz, approval, capUsd: approval === "auto" ? capUsd : null };
+      // A skill task has no prompt, mode or connectors: no model plans its runs.
+      const body =
+        skill && task
+          ? { ...when, title: title.trim() || skill.title, prompt: "", attachments: [], engine: runEngine, mode: null, connectors: false, skill: task.task }
+          : { ...when, title: title.trim() || threadTitle(prompt), prompt: prompt.trim(), attachments, engine, mode, connectors, skill: null };
       const s = schedule ? await actions.update(schedule.id, body) : await actions.create(body);
       toast.success(schedule ? "Schedule saved" : "Scheduled", { description: s.nextRunAt ? `Next run ${formatWhen(s.nextRunAt, s.tz)}` : undefined, duration: 2500 });
       onDone();
@@ -173,34 +197,72 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
         {onComputer && <p className="text-[13px] text-muted-foreground">Runs on your computer: keep Fuobe open there at that time.</p>}
       </DialogHeader>
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5">
-        <div className="space-y-2">
-          <Label htmlFor={ids.prompt}>What should Assist do each time?</Label>
-          <Textarea
-            id={ids.prompt}
-            value={prompt}
-            onChange={(e) => {
-              setPrompt(e.target.value);
-              if (!titleTouched) setTitle(e.target.value.trim() ? threadTitle(e.target.value) : "");
-            }}
-            maxLength={MAX_SCHEDULE_PROMPT}
-            rows={4}
-            autoFocus={!schedule && !initialPrompt}
-            placeholder="e.g. “Make 3 new ad variations for my sneaker, vertical 9:16, in today's light”"
-            className="min-h-24 text-[14px]"
-          />
-          {attachments.length > 0 && (
-            <ul className="flex flex-wrap gap-1.5" aria-label="Files each run uses">
-              {attachments.map((a, i) => (
-                <li key={a} className="inline-flex h-7 items-center gap-1 rounded-full bg-muted pr-1 pl-2.5 text-[12px]">
-                  File {i + 1}
-                  <button type="button" onClick={() => setAttachments((xs) => xs.filter((x) => x !== a))} className="grid size-5 place-items-center rounded-full hover:bg-background" aria-label={`Don't use file ${i + 1}`}>
-                    <X className="size-3" />
-                  </button>
-                </li>
-              ))}
-            </ul>
+        <fieldset className="space-y-3">
+          <legend className="text-sm font-medium">What to run</legend>
+          <div role="radiogroup" aria-label="What to run" onKeyDown={radioKeys} className="flex flex-wrap gap-1.5">
+            {WHAT.map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                role="radio"
+                aria-checked={what === w.id}
+                tabIndex={radioTab(what === w.id)}
+                onClick={() => setWhat(w.id)}
+                className={cn(
+                  "inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition-colors",
+                  what === w.id ? "bg-brand-faint text-brand-text hover:bg-brand-faint-hover" : "bg-secondary text-secondary-foreground hover:bg-accent",
+                )}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
+          {what === "skill" && (
+            <SkillTaskFields
+              skills={runnable}
+              name={skillName}
+              onName={pickSkill}
+              view={skill}
+              failed={recipe.isError ? (recipe.error as Error).message : undefined}
+              inputs={inputs}
+              onInputs={setInputs}
+              engine={runEngine}
+              onEngine={setEngine}
+              tried={tried}
+            />
           )}
-        </div>
+        </fieldset>
+
+        {what === "request" && (
+          <div className="space-y-2">
+            <Label htmlFor={ids.prompt}>What should Assist do each time?</Label>
+            <Textarea
+              id={ids.prompt}
+              value={prompt}
+              onChange={(e) => {
+                setPrompt(e.target.value);
+                if (!titleTouched) setTitle(e.target.value.trim() ? threadTitle(e.target.value) : "");
+              }}
+              maxLength={MAX_SCHEDULE_PROMPT}
+              rows={4}
+              autoFocus={!schedule && !initialPrompt}
+              placeholder="e.g. “Make 3 new ad variations for my sneaker, vertical 9:16, in today's light”"
+              className="min-h-24 text-[14px]"
+            />
+            {attachments.length > 0 && (
+              <ul className="flex flex-wrap gap-1.5" aria-label="Files each run uses">
+                {attachments.map((a, i) => (
+                  <li key={a} className="inline-flex h-7 items-center gap-1 rounded-full bg-muted pr-1 pl-2.5 text-[12px]">
+                    File {i + 1}
+                    <button type="button" onClick={() => setAttachments((xs) => xs.filter((x) => x !== a))} className="grid size-5 place-items-center rounded-full hover:bg-background" aria-label={`Don't use file ${i + 1}`}>
+                      <X className="size-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -333,16 +395,18 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
           </p>
         </fieldset>
 
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">Assistant</legend>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <ModePicker value={mode} onChange={setMode} availability={can} />
-            <EngineSwitch value={engine} onChange={setEngine} size="sm" compact />
-          </div>
-          <p className="text-[12px] text-muted-foreground">
-            {engine === "open" ? "Open-source models run free on your GPU." : "Paid models cost what the approval card shows."} Smart plans with the best model you&apos;ve connected (a paid one bills each run); Free uses free models, then the offline planner.
-          </p>
-        </fieldset>
+        {what === "request" && (
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Assistant</legend>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <ModePicker value={mode} onChange={setMode} availability={can} />
+              <EngineSwitch value={engine} onChange={setEngine} size="sm" compact />
+            </div>
+            <p className="text-[12px] text-muted-foreground">
+              {engine === "open" ? "Open-source models run free on your GPU." : "Paid models cost what the approval card shows."} Smart plans with the best model you&apos;ve connected (a paid one bills each run); Free uses free models, then the offline planner.
+            </p>
+          </fieldset>
+        )}
 
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">Before anything runs</legend>
@@ -352,9 +416,19 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
                 {
                   id: "ask",
                   title: "Ask me first",
-                  body: "Each run plans the job, then waits in its chat for your OK — nothing is generated until you approve. A run on a paid model uses that provider's key to plan.",
+                  body:
+                    what === "skill"
+                      ? "Each run puts the skill's priced steps in its chat and waits for your OK — nothing is generated until you approve."
+                      : "Each run plans the job, then waits in its chat for your OK — nothing is generated until you approve. A run on a paid model uses that provider's key to plan.",
                 },
-                { id: "auto", title: "Run on its own, within a cap", body: "Plans start without asking while they fit the cap. A plan that would pass it, or has no known price, waits for you." },
+                {
+                  id: "auto",
+                  title: "Run on its own, within a cap",
+                  body:
+                    what === "skill"
+                      ? "The skill starts without asking when its price fits the cap. If it would pass the cap, or its price isn't known, it waits for you."
+                      : "Plans start without asking while they fit the cap. A plan that would pass it, or has no known price, waits for you.",
+                },
               ] as const
             ).map((o) => (
               <button
@@ -385,7 +459,7 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
           )}
         </fieldset>
 
-        {(connectorNames.length > 0 || connectors) && (
+        {what === "request" && (connectorNames.length > 0 || connectors) && (
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Connectors</legend>
             <label className="flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5">
@@ -405,7 +479,7 @@ function Form({ schedule, seed, onDone }: { schedule?: ScheduleView; seed?: Sche
         <Button type="button" variant="ghost" onClick={onDone}>
           Cancel
         </Button>
-        <Button type="submit" disabled={busy || !prompt.trim() || !!problem || !next || capBad}>
+        <Button type="submit" disabled={busy || (what === "request" ? !prompt.trim() : !skill) || !!problem || !next || capBad}>
           {busy && <Loader2 className="animate-spin" />} {schedule ? "Save" : "Schedule"}
         </Button>
       </DialogFooter>

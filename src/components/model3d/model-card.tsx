@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Clapperboard, Download, ImageIcon, Loader2, Pause, PersonStanding, Play, Rotate3d, Sparkles, Video } from "lucide-react";
+import { Box, Clapperboard, Download, ImageIcon, Loader2, Paintbrush, Pause, PersonStanding, Play, Rotate3d, Sparkles, Video } from "lucide-react";
 import Link from "next/link";
 import { createElement, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { loadModelViewer, TURNTABLE_BACKDROP, useViewerSrc, viewerLook } from "./model-viewer";
 import type { Model3dInfo } from "./model3d-studio";
+import { RetextureDialog } from "./retexture-dialog";
 import { RigDialog } from "./rig-dialog";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { recordableType, recordTurntable } from "./turntable";
@@ -49,6 +50,7 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
   const [recording, setRecording] = useState<number | null>(null);
   const [recorded, setRecorded] = useState<{ url: string; saved?: string } | null>(null);
   const [rigging, setRigging] = useState(false);
+  const [retexturing, setRetexturing] = useState(false);
   const pendingRecord = useRef(false);
   // "View in 3D" unmounts itself: focus moves to the viewer once it's there.
   const focusViewer = useRef(false);
@@ -326,6 +328,11 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
               <PersonStanding className="size-3.5" /> {view.rigged ? "Another animation" : "Rig & animate"}
             </Button>
           )}
+          {view.glb && !view.rigged && !view.splat && g.op !== "splat" && (
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => setRetexturing(true)}>
+              <Paintbrush className="size-3.5" /> Retexture
+            </Button>
+          )}
           {spin && (
             <Button asChild size="sm" className="rounded-full">
               <Link href={spin} prefetch={false}>
@@ -337,6 +344,7 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
         {notices.length > 0 && <p className="text-[11px] text-muted-foreground">{notices.join(" · ")}</p>}
       </div>
       {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} />}
+      {view.glb && retexturing && <RetextureDialog glb={view.glb} open={retexturing} onOpenChange={setRetexturing} cloudAllowed={cloudAllowed} />}
     </article>
   );
 }
