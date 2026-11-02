@@ -22,10 +22,10 @@ const { setSetting } = await import("@/server/settings");
 const { saveFile } = await import("@/server/storage");
 const gens = await import("@/server/generations");
 const route = await import("@/app/api/audio-tools/route");
-const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
+const { STUDIO_ROWS, studioOthers, studioTool } = await import("@/server/gpu/tools");
 const { outputActions } = await import("@/lib/output-actions");
 const { getModel } = await import("@/lib/catalog");
-const { NODE_PACKS } = await import("@/lib/licences");
+const { NODE_PACKS, licenceInfo } = await import("@/lib/licences");
 const { handleMcp } = await import("@/server/mcp");
 
 beforeAll(() => setSetting("demoMode", "on"));
@@ -194,8 +194,19 @@ describe("where Edit speech shows up", () => {
       ["tts", "speech-tts-auk"],
     ]);
     expect(NODE_PACKS.find((p) => p.name === "ComfyUI-AuK")?.licence).toMatchObject({ name: "MIT", class: "commercial" });
+    // The encoder's licence links to its own model's licence, not another Qwen model's.
+    expect(licenceInfo("AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (NON-COMMERCIAL)")).toMatchObject({
+      name: "Qwen Research License",
+      class: "non-commercial",
+      url: "https://huggingface.co/Qwen/Qwen2.5-Omni-3B/blob/main/LICENSE",
+    });
+    expect(licenceInfo("Qwen Research License (NON-COMMERCIAL)").url).toMatch(/Qwen-Image-2\.1/);
     const row = STUDIO_ROWS.find((r) => r.href === "/audio/edit-speech")!;
     expect(row).toMatchObject({ label: "Edit speech", group: "Audio" });
     expect(studioTool(row)!.workflows).toEqual(expect.arrayContaining(["speech-edit-auk"]));
+    // AuK's text to speech is one of Voice's other open models, on the board with its own graph, and its picker line names its languages.
+    const voice = STUDIO_ROWS.find((r) => r.href === "/audio")!;
+    expect(studioOthers(voice).find((t) => t.workflows.includes("speech-tts-auk"))).toBeTruthy();
+    expect(m.tagline).toMatch(/English and Chinese/);
   });
 });

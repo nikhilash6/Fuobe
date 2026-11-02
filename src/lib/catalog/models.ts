@@ -1293,7 +1293,7 @@ const open: ModelDef[] = [
     vendor: "Tencent",
     family: "auk",
     kind: "audio",
-    tagline: "Change what was said in a recording, or how it was said: words, pitch, pace, emotion, noise",
+    tagline: "Change what was said in a recording, or how it was said, or speak a line in a voice: English and Chinese",
     badges: ["new"],
     routes: [comfy("speech-edit", "speech-edit-auk", "every edit window in one job"), comfy("tts", "speech-tts-auk")],
     options: { voiceClone: true, seed: true },
