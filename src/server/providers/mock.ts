@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { cueText, parseCues, type Cue } from "@/lib/cues";
-import { HAND_OFF } from "@/lib/catalog/remove-object";
+import { H3_REMOVAL_WORKFLOW } from "@/lib/catalog/character-swap";
+import { HAND_OFF, windowArtifact } from "@/lib/catalog/remove-object";
 import { OPERATION_OUTPUT, type MediaKind, type Operation } from "@/lib/catalog/types";
 import { spectralColor } from "@/lib/scene3d";
 import type { ProviderAdapter, RemoteOutput } from "./types";
@@ -344,7 +345,7 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
       return [{ url: toDataUri(demoWav(clamp(3 * Number(meta.clips ?? 2), 4, 30), [330, 495]), "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { demo: true } }];
     case "remove-object":
       return [
-        { url: `sample:${sampleClip(ar)}`, kind: "video", contentType: "video/mp4", meta: { demo: true } },
+        { url: `sample:${sampleClip(ar)}`, kind: "video", contentType: "video/mp4", meta: { demo: true, ...(meta.h3Review ? demoRemovalReview(ar) : {}) } },
         // The painted eraser also hands the window's last tracked mask to the next window.
         ...(meta.lastMask ? [{ url: svgUri(demoMaskSvg(ar)), kind: "image" as const, contentType: "image/svg+xml", meta: { role: "mask", demo: true } }] : []),
       ];
@@ -387,6 +388,15 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
   return [{ url: `sample:${sampleClip(ar)}`, kind: "video", contentType: "video/mp4", ...(meta.draft ? { draftId: `demo_draft_${nanoid(8)}` } : {}) }];
 }
 
+/** A demo of H3 Relay's window review: three 22-frame windows, each with a still and a checkpoint. */
+function demoRemovalReview(ar: string): Record<string, unknown> {
+  const hex = (n: number, len: number) => String(n).repeat(len).slice(0, len);
+  const windows = [0, 1, 2].map((index) => ({ index, start: index * 22, frames: 22, seed: String(904234 + index), recordId: hex(index + 1, 32), poster: windowArtifact(index, "poster") }));
+  const artifacts: Record<string, string> = {};
+  for (const w of windows) artifacts[w.poster] = svgUri(demoSvg(`window ${w.index + 1}`, ar, w.index));
+  return { review: { runId: hex(9, 32), configKey: hex(8, 64), seed: "904234", total: 3, windows, reuse: { video: "fuobe_demo0001.mp4", image: "fuobe_demo0002.png", prefix: "fuobe/demo" } }, artifacts };
+}
+
 export const mockProvider: ProviderAdapter = {
   id: "mock",
   label: "Placeholder",
@@ -426,6 +436,8 @@ export const mockProvider: ProviderAdapter = {
         firstFrame: route.provider === "comfyui" && route.endpoint === "video-segment-resample",
         // Character Swap Studio's segment graph: the take and its lossless master (video-character-swap-h3-segment).
         master: route.provider === "comfyui" && route.endpoint === "video-character-swap-h3-segment",
+        // H3 Person Removal: each window's preview and checkpoint, so "Redo from here" can be tried (H3 Relay's review).
+        h3Review: route.provider === "comfyui" && route.endpoint === H3_REMOVAL_WORKFLOW,
         // A stem split that also transcribes (ComfyUI's dub-prepare-separate-transcribe).
         transcript: route.op === "separate-audio" && route.provider === "comfyui" && route.endpoint.includes("transcribe"),
         // A dialogue / music / effects split (ComfyUI's separate-soundtrack-dbs): four stems.

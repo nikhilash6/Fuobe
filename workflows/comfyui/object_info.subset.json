@@ -7767,19 +7767,946 @@
   "H3CharacterSwapSettings": null,
   "H3CharacterSwapShot": null,
   "H3CharacterSwapWindowPlan": null,
-  "H3RelayAppendWindow": null,
-  "H3RelayApplyEditMask": null,
-  "H3RelayApplyHistory": null,
-  "H3RelayExpandMask": null,
-  "H3RelayFinishWindows": null,
-  "H3RelayPrepareSource": null,
-  "H3RelayRecoverMasks": null,
-  "H3RelayReviewWindows": null,
-  "H3RelaySamplingMemory": null,
-  "H3RelaySelectMask": null,
-  "H3RelayTextMemory": null,
-  "H3RelayWindowInputs": null,
-  "H3RelayWindowPlan": null,
+  "H3RelayAppendWindow": {
+    "input": {
+      "required": {
+        "frames": [
+          "IMAGE"
+        ],
+        "window": [
+          "H3_RELAY_WINDOW"
+        ]
+      },
+      "optional": {
+        "previous": [
+          "H3_RELAY_WINDOW_STATE"
+        ],
+        "audio": [
+          "AUDIO"
+        ],
+        "initial_history": [
+          "IMAGE"
+        ],
+        "initial_history_audio": [
+          "AUDIO"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "frames",
+        "window"
+      ],
+      "optional": [
+        "previous",
+        "audio",
+        "initial_history",
+        "initial_history_audio"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "H3_RELAY_WINDOW_STATE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "H3_RELAY_WINDOW_STATE"
+    ],
+    "name": "H3RelayAppendWindow",
+    "display_name": "H3 · Append Window",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/timeline",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayApplyEditMask": {
+    "input": {
+      "required": {
+        "latent": [
+          "LATENT"
+        ],
+        "source_latent": [
+          "LATENT"
+        ],
+        "mask": [
+          "MASK"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "latent",
+        "source_latent",
+        "mask"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "LATENT"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "LATENT"
+    ],
+    "name": "H3RelayApplyEditMask",
+    "display_name": "H3 · Apply Edit Mask",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/conditioning",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayApplyHistory": {
+    "input": {
+      "required": {
+        "positive": [
+          "CONDITIONING"
+        ],
+        "latent": [
+          "LATENT"
+        ],
+        "vae": [
+          "VAE"
+        ],
+        "audio_vae": [
+          "VAE"
+        ],
+        "frames": [
+          "IMAGE"
+        ],
+        "history_frames": [
+          "INT"
+        ],
+        "first_frame_guide": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "target_audio_guide": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ]
+      },
+      "optional": {
+        "audio": [
+          "AUDIO"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "positive",
+        "latent",
+        "vae",
+        "audio_vae",
+        "frames",
+        "history_frames",
+        "first_frame_guide",
+        "target_audio_guide"
+      ],
+      "optional": [
+        "audio"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CONDITIONING",
+      "LATENT"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "CONDITIONING",
+      "LATENT"
+    ],
+    "name": "H3RelayApplyHistory",
+    "display_name": "H3 · Apply History",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/conditioning",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayExpandMask": {
+    "input": {
+      "required": {
+        "masks": [
+          "MASK"
+        ],
+        "images": [
+          "IMAGE"
+        ],
+        "source_frames": [
+          "INT",
+          {
+            "default": 120,
+            "min": 1
+          }
+        ],
+        "expansion_px": [
+          "INT",
+          {
+            "default": 64,
+            "min": 0,
+            "max": 256,
+            "tooltip": "Outward Euclidean radius in prepared-video pixels; identical to the app's mask expansion."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "masks",
+        "images",
+        "source_frames",
+        "expansion_px"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "IMAGE"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "generation_mask",
+      "mask_overlay"
+    ],
+    "name": "H3RelayExpandMask",
+    "display_name": "Prepare Mask Sequence (Euclidean Radius)",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/mask tools",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayFinishWindows": {
+    "input": {
+      "required": {
+        "state": [
+          "H3_RELAY_WINDOW_STATE"
+        ],
+        "audio_mode": [
+          [
+            "source",
+            "generated",
+            "none"
+          ],
+          {
+            "default": "source"
+          }
+        ]
+      },
+      "optional": {
+        "source_audio": [
+          "AUDIO"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "state",
+        "audio_mode"
+      ],
+      "optional": [
+        "source_audio"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "AUDIO",
+      "FLOAT",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "frames",
+      "audio",
+      "fps",
+      "report"
+    ],
+    "name": "H3RelayFinishWindows",
+    "display_name": "H3 · Finish Windows",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/timeline",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayPrepareSource": {
+    "input": {
+      "required": {
+        "video": [
+          "VIDEO"
+        ],
+        "resolution": [
+          [
+            "480",
+            "768"
+          ],
+          {
+            "default": "480",
+            "tooltip": "Preserve aligned sources within the pixel budget; otherwise fit the H3 canvas."
+          }
+        ]
+      },
+      "optional": {
+        "duration_seconds": [
+          "FLOAT",
+          {
+            "default": 0,
+            "min": 0,
+            "max": 149.66,
+            "step": 0.1,
+            "tooltip": "Keep the requested source duration. Model padding is excluded from the final output. Zero keeps the full source."
+          }
+        ],
+        "missing_audio": [
+          [
+            "silence",
+            "none"
+          ],
+          {
+            "default": "silence"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "video",
+        "resolution"
+      ],
+      "optional": [
+        "duration_seconds",
+        "missing_audio"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "AUDIO",
+      "INT",
+      "INT",
+      "INT",
+      "INT",
+      "FLOAT",
+      "STRING",
+      "VIDEO"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "reference_frames",
+      "source_audio",
+      "width",
+      "height",
+      "h3_length",
+      "source_frames",
+      "fps",
+      "summary",
+      "prepared_video"
+    ],
+    "name": "H3RelayPrepareSource",
+    "display_name": "H3 · Prepare Source",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/timeline",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayRecoverMasks": {
+    "input": {
+      "required": {
+        "masks": [
+          "MASK"
+        ],
+        "images": [
+          "IMAGE"
+        ],
+        "model": [
+          "MODEL"
+        ],
+        "conditioning": [
+          "CONDITIONING"
+        ],
+        "selection": [
+          "H3_SUBJECT_SELECTION"
+        ],
+        "source_frames": [
+          "INT"
+        ],
+        "recover_empty_frames": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "masks",
+        "images",
+        "model",
+        "conditioning",
+        "selection",
+        "source_frames",
+        "recover_empty_frames"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "recovered_masks",
+      "report"
+    ],
+    "name": "H3RelayRecoverMasks",
+    "display_name": "Recover Empty SAM Frames",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/mask tools",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayReviewWindows": {
+    "input": {
+      "required": {
+        "windows": [
+          "H3_RELAY_WINDOW"
+        ],
+        "source": [
+          "IMAGE",
+          {
+            "lazy": true
+          }
+        ],
+        "anchor": [
+          "IMAGE"
+        ],
+        "window_controls": [
+          "STRING",
+          {
+            "default": "{}"
+          }
+        ]
+      },
+      "hidden": {
+        "unique_id": "UNIQUE_ID",
+        "extra_pnginfo": "EXTRA_PNGINFO",
+        "execution_prompt": "PROMPT"
+      }
+    },
+    "input_order": {
+      "required": [
+        "windows",
+        "source",
+        "anchor",
+        "window_controls"
+      ],
+      "hidden": [
+        "unique_id",
+        "extra_pnginfo",
+        "execution_prompt"
+      ]
+    },
+    "is_input_list": true,
+    "output": [
+      "H3_RELAY_WINDOW",
+      "H3_RELAY_WINDOW_STATE",
+      "INT",
+      "H3_RELAY_WINDOWS",
+      "IMAGE"
+    ],
+    "output_is_list": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "pending_list",
+      "restored_prefix",
+      "count",
+      "windows",
+      "prepared_source"
+    ],
+    "name": "H3RelayReviewWindows",
+    "display_name": "H3 · Review Windows",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/timeline",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelaySamplingMemory": {
+    "input": {
+      "required": {
+        "model": [
+          "MODEL"
+        ],
+        "latent": [
+          "LATENT"
+        ],
+        "conditioning": [
+          "CONDITIONING"
+        ],
+        "activation_memory_gib": [
+          "FLOAT",
+          {
+            "default": 17,
+            "min": 0,
+            "max": 128,
+            "step": 0.5,
+            "tooltip": "Estimated sampling workspace used by native model placement; not a GPU memory cap."
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "model",
+        "latent",
+        "conditioning",
+        "activation_memory_gib"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MODEL"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "MODEL"
+    ],
+    "name": "H3RelaySamplingMemory",
+    "display_name": "H3 Sampling Workspace",
+    "description": "Supply H3's measured activation workspace to native sampling after guides are encoded.",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/Runtime",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelaySelectMask": {
+    "input": {
+      "required": {
+        "masks": [
+          "MASK"
+        ],
+        "selection": [
+          [
+            "largest",
+            "leftmost",
+            "rightmost",
+            "index"
+          ]
+        ],
+        "index": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "masks",
+        "selection",
+        "index"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "H3_SUBJECT_SELECTION"
+    ],
+    "output_is_list": [
+      false,
+      false
+    ],
+    "output_name": [
+      "selected_mask",
+      "selection"
+    ],
+    "name": "H3RelaySelectMask",
+    "display_name": "Select Mask by Area or Position",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/mask tools",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayTextMemory": {
+    "input": {
+      "required": {
+        "clip": [
+          "CLIP"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "clip"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "CLIP"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "CLIP"
+    ],
+    "name": "H3RelayTextMemory",
+    "display_name": "H3 Text Stage Memory",
+    "description": "Release inactive models around native text encoding. Respects ComfyUI high-VRAM mode.",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/Runtime",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayWindowInputs": {
+    "input": {
+      "required": {
+        "source": [
+          "IMAGE"
+        ],
+        "window": [
+          "H3_RELAY_WINDOWS"
+        ],
+        "reference_history": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "fps": [
+          "FLOAT",
+          {
+            "default": 24
+          }
+        ],
+        "history_audio_mode": [
+          [
+            "source",
+            "generated",
+            "none"
+          ],
+          {
+            "default": "source"
+          }
+        ]
+      },
+      "optional": {
+        "previous": [
+          "H3_RELAY_WINDOW_STATE"
+        ],
+        "source_audio": [
+          "AUDIO"
+        ],
+        "mask": [
+          "MASK"
+        ],
+        "anchor": [
+          "IMAGE"
+        ],
+        "initial_history": [
+          "IMAGE"
+        ],
+        "initial_history_audio": [
+          "AUDIO"
+        ],
+        "iteration_index": [
+          "INT",
+          {
+            "default": 0,
+            "min": 0
+          }
+        ],
+        "resize_anchor": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "source",
+        "window",
+        "reference_history",
+        "fps",
+        "history_audio_mode"
+      ],
+      "optional": [
+        "previous",
+        "source_audio",
+        "mask",
+        "anchor",
+        "initial_history",
+        "initial_history_audio",
+        "iteration_index",
+        "resize_anchor"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "AUDIO",
+      "IMAGE",
+      "AUDIO",
+      "IMAGE",
+      "AUDIO",
+      "INT",
+      "INT",
+      "INT",
+      "INT",
+      "IMAGE",
+      "H3_RELAY_WINDOW"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "source_window",
+      "edit_mask",
+      "target_audio",
+      "history",
+      "history_audio",
+      "reference_video",
+      "reference_audio",
+      "history_frames",
+      "conditioning_length",
+      "target_frames",
+      "seed",
+      "anchor",
+      "window"
+    ],
+    "name": "H3RelayWindowInputs",
+    "display_name": "H3 · Window Inputs",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/timeline",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "H3RelayWindowPlan": {
+    "input": {
+      "required": {
+        "source_frames": [
+          "INT",
+          {
+            "default": 120,
+            "min": 1
+          }
+        ],
+        "window_frames": [
+          [
+            "22",
+            "39",
+            "56",
+            "73",
+            "90",
+            "107",
+            "124",
+            "141",
+            "158",
+            "175",
+            "192",
+            "209",
+            "226",
+            "243",
+            "260",
+            "277",
+            "294",
+            "311",
+            "328",
+            "345",
+            "362"
+          ],
+          {
+            "default": "124"
+          }
+        ],
+        "history_frames": [
+          [
+            "0",
+            "1",
+            "18",
+            "35",
+            "52",
+            "69",
+            "86",
+            "103",
+            "120",
+            "137",
+            "154",
+            "171",
+            "188",
+            "205",
+            "222",
+            "239",
+            "256",
+            "273",
+            "290",
+            "307",
+            "324",
+            "341"
+          ],
+          {
+            "default": "18"
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 194731,
+            "min": 0,
+            "max": 18446744073709552000
+          }
+        ],
+        "schedule": [
+          [
+            "adaptive",
+            "removal_v1",
+            "segment"
+          ],
+          {
+            "default": "adaptive"
+          }
+        ],
+        "seed_mode": [
+          [
+            "fixed",
+            "increment"
+          ],
+          {
+            "default": "fixed"
+          }
+        ]
+      },
+      "optional": {
+        "seed_overrides": [
+          "STRING",
+          {
+            "default": "{}"
+          }
+        ],
+        "initial_history": [
+          "IMAGE"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "source_frames",
+        "window_frames",
+        "history_frames",
+        "seed",
+        "schedule",
+        "seed_mode"
+      ],
+      "optional": [
+        "seed_overrides",
+        "initial_history"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "H3_RELAY_WINDOW",
+      "STRING",
+      "INT",
+      "H3_RELAY_WINDOWS"
+    ],
+    "output_is_list": [
+      true,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "window_list",
+      "timeline",
+      "count",
+      "windows"
+    ],
+    "name": "H3RelayWindowPlan",
+    "display_name": "H3 · Plan Windows",
+    "description": "",
+    "python_module": "custom_nodes.h3-relay",
+    "category": "H3 Relay/timeline",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "H3SLAAttention": {
     "input": {
       "required": {
@@ -21421,7 +22348,7 @@
                         "default": 0.7,
                         "min": 0.01,
                         "max": 2,
-                        "step": 0.000001
+                        "step": 1e-06
                       }
                     ],
                     "top_k": [
@@ -25914,7 +26841,7 @@
             "default": 0.5,
             "min": 0,
             "max": 1,
-            "step": 1e-9
+            "step": 1e-09
           }
         ],
         "fy": [
@@ -25924,7 +26851,7 @@
             "default": 0.5,
             "min": 0,
             "max": 1,
-            "step": 1e-9
+            "step": 1e-09
           }
         ],
         "cx": [

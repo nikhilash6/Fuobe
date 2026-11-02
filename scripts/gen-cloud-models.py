@@ -730,6 +730,18 @@ model("fuobe-dop-ltx", "Fuobe DoP · LTX", "Fuobe Original", "fuobe-dop", "video
       original=True, api_defaults={"enable_prompt_expansion": False},
       pricing=("second", 0.036, "$0.001605 per megapixel of video: about $0.18 for 5 s at 720p ($0.20 with LoRAs)", {"withLoras": 0.04}),
       options={"durations": [3, 5]}, defaults={"aspectRatio": "auto", "duration": 5, "generateAudio": False}, frame_step=8)
+# ----- Fuobe Animation (package inbetweening): keyframe in-betweening's cloud half. fal's Wan 2.2 A14B image-to-video
+# takes an end frame, 17–161 frames and LoRAs per expert (schema read 2026-11-02): one hosted clip per gap with AniSora
+# 3.2 on the high-noise expert (models.ts sends it, options.loras), joined. fal makes every frame and plays it as made
+# (16 fps, interpolation off): the every-Nth speeds and 24 fps playback are the GPU graph's (src/lib/inbetween.ts).
+ANIMATION_FAL = {"interpolator_model": "none", "frames_per_second": 16}
+model("fuobe-animation", "Fuobe Animation", "Fuobe Original", "fuobe-animation", "video",
+      "Keyframes in, the in-betweens drawn, one finished animation, with timing per gap: Wan 2.2 + AniSora",
+      [("i2v", "fal-ai/wan/v2.2-a14b/image-to-video", "fal", {"loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora", "fixed": ANIMATION_FAL, "flf2v": True})],
+      original=True,
+      pricing=("second", 0.08, "720p on fal; 580p $0.06/s, 480p $0.04/s; with LoRAs $0.10/s, per gap's clip",
+               {"byResolution": {"720p": 0.08, "580p": 0.06, "480p": 0.04}, "withLoras": 0.1}),
+      defaults={"aspectRatio": "auto", "duration": 5, "resolution": "720p"}, frame_step=4, fit_values=True)
 # ----- Originals (O6): Fuobe Cinema's cloud half, Cinema Studio's Director on LTX-2.3 22B (research §8 cinema-studio →
 # studios[cinema-studio].original). Prompt expansion off so the compiled Director prompt is what runs; sound follows the
 # toggle; up to 481 frames at 24 fps (20 s; Cinema adds the rest with one extend); exact sizes per tier in multiples of
@@ -1352,6 +1364,15 @@ model("florence-2-ocr", "Florence-2 OCR", "Microsoft", "florence", "text", "Ever
 # ----- 3D: splats, objects in place, text to 3D, multi-view and rigging
 model("triposplat", "TripoSplat", "Tripo", "tripo", "model3d", "A Gaussian splat of the subject in one photo (background removed)",
       [("splat", "tripo3d/triposplat")], badges=["new"], fixed={"output_format": "ply"}, sliders=[("num_gaussians", "Gaussians")])
+# Idol 3D (package idol-1; research #10 §5, idol-9.md): Speridlabs' Idol, hosted on fal since 2026-10-30. Its own label, never
+# TripoSplat's. The splat is a .ply (model_mesh); model_glb, a point-cloud preview of the splat's centres, rides along in meta.formats.
+# image_type "real" is Idol's looser photo crop; the page sends it with its Best / Quick look steps and Gaussians as params.extra.
+IDOL_FAL = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == "speridlabs/idol")
+model("idol-3d", "Idol 3D", "Speridlabs", "idol", "model3d", "A Gaussian splat (.ply) of one object from one picture · TripoSplat's architecture, retrained",
+      [("splat", "speridlabs/idol")], badges=["new"], sliders=[("num_gaussians", "Gaussians", 32768), ("num_inference_steps", "Steps")],
+      controls=[("image_type", "Picture", {"synthetic": "A render or generated image", "real": "A photo"})],
+      licence={"licence": "Apache-2.0", "commercial": True,
+               "note": f"{IDOL_FAL['license']}. fal's safety checker reads the input image", "checked": IDOL_FAL["fetched"]})
 # Its prompt defaults to "car" at the API, so Fuobe always asks for one.
 model("sam-3d-objects", "SAM 3D Objects", "Meta", "sam", "model3d", "The objects you name, rebuilt in 3D where they stand in the photo",
       # export_textured_glb defaults to false (a grey mesh): the viewer shows the textured one.

@@ -100,8 +100,30 @@
    "comfy": "native templates since ComfyUI 0.36 (2026-09-15)",
    "released": "2026-09-15",
    "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-8-Step-V2",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "revision": "3da2ddfe1954d9cda4c05b643dc0f26007a655c5",
+   "comfyRepack": {
+    "repo": "FastVideo/FastVideo-FastH3-Comfy",
+    "revision": "ec1e3aa374a91c57b0b94a1623b7e657c0498cf2",
+    "files": {
+     "fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors": 22128378696,
+     "fastvideo_fasth3_8step_v2_pruned_bf16.safetensors": 44080000000
+    }
+   },
+   "comfyRepackNvfp4": {
+    "repo": "FastVideo/FastVideo-FastH3-8-Step-V2-NVFP4-Comfy",
+    "revision": "994a40beb8c8f15739e4f0fad96aec101bb7123c",
+    "files": {
+     "fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors": 13612462670
+    }
+   },
+   "scope": "FastVideo's card: t2va only, FL2VA and Ref2VA not distilled; Comfy-Org's video_fastvideo_fasth3_i2v template (workflow_templates c067929d) runs t2va and fl2va through the 'First Last Frame to Video (FastVideo FastH3)' subgraph",
+   "fuobeGraphs": [
+    "minimax-h3-fast-t2v",
+    "minimax-h3-fast-i2v",
+    "minimax-h3-fast-flf2v"
+   ]
   },
   {
    "name": "FastH3 Trim (42-block pruned H3, 8 steps)",
@@ -112,8 +134,19 @@
    "comfy": "native template 'FastVideo FastH3: Text to Video' (ComfyUI >= 0.36); T2V only named",
    "released": "2026-10-06",
    "url": "https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "revision": "f66c13dc17391dd4da99242a407918b92bf7d5fc",
+   "files": {
+    "fastvideo_fasth3_trim_8step_nvfp4.safetensors": 11894623166,
+    "fastvideo_fasth3_trim_8step_fp8.safetensors": 19683522390,
+    "fastvideo_fasth3_trim_8step_int8_convrot.safetensors": 18924757904,
+    "fastvideo_fasth3_trim_8step_bf16.safetensors": 37490000000
+   },
+   "frameConditioning": "not offered: the Trim cards (FastVideo-FastH3-Trim-8-Step @ 9edcb651, -NVFP4 @ cae9ceb6) name eight-step text-to-video only and no GPU here to test first-frame conditioning",
+   "fuobeGraphs": [
+    "minimax-h3-trim-t2v"
+   ]
   },
   {
    "name": "MiniMax H3 PTD LoRAs (Ref2VA 4 / 8 step) + RefAsymOPD",
@@ -447,14 +480,29 @@
   {
    "name": "Sol-H3-VAE (distilled H3 decoder)",
    "area": "decoder speed",
-   "licence": "unconfirmed (HF tag empty)",
+   "licence": "unconfirmed (HF tag empty); the card says code Apache-2.0 and weights under the MiniMax-H3 license",
    "vram": "2K decode 14.5 s -> 0.89 s on GB200",
    "hosted": [],
-   "comfy": "core loader, ComfyUI PR #17411 (merged 2026-10-28; master only)",
+   "comfy": "core VAELoader from master 0df1646a (#17411, 2026-10-28); no new node; not in v0.43.2",
    "released": "2026-10-16 (repo)",
    "url": "https://huggingface.co/Efficient-Large-Model/Sol-H3-VAE",
-   "inFuobe": false,
-   "confirmed": true
+   "inFuobe": true,
+   "confirmed": true,
+   "revision": "6a8a33fc61e092281f32bf28cde236760e2caaa4",
+   "files": {
+    "sol_h3_vae.safetensors": 6471256328
+   },
+   "sameBytesAs": "Efficient-Large-Model/Open-H3-Regenerate-2K vae_fast/fast_h3_vae_noncausal_24l.safetensors (sha256 8658f1e85b5997c4ba716406a2f148bfa36cf97d4d5fcd402c7bd341f54e77a1)",
+   "comfyRepack": {
+    "repo": "Comfy-Org/MiniMax-H3",
+    "revision": "912b6e38b2092ec4d2e86d24183e0d59ea059d48",
+    "files": {
+     "minimax_h3_sol_vae_int8_convrot.safetensors": 1988306504,
+     "minimax_h3_sol_vae_fp16.safetensors": 3600000000
+    }
+   },
+   "memory": "card: about 24 GiB at 720p and 48 GiB at 2K for 5 s with a CUDA graph",
+   "fuobeOption": "oss-minimax-h3 Options → Decoder 'Fast decode' (full model only, off by default): built (H3_DECODER, the full graphs' decode slot, the pinned int8 repack) but held back (H3_FAST_DECODE_OFFERED false) until the library validates on a ComfyUI with #17411"
   },
   {
    "name": "ComfyUI core H3 latent upscaler",
@@ -478,7 +526,8 @@
    "released": "2026-10-13",
    "url": "https://comfyui-wiki.com/en/news/2026-10-13-lightvae",
    "inFuobe": false,
-   "confirmed": false
+   "confirmed": false,
+   "note": "Not built: Sol-H3-VAE loads with the core VAELoader on the new pin, so no alternative was needed (nm10-h3-any-gpu)."
   },
   {
    "name": "Spark-H3 / Veda sparse attention",
@@ -490,7 +539,8 @@
    "released": "2026-10-03 / 2026-10-11",
    "url": "https://comfyui-wiki.com/en/news/2026-10-11-spark-h3",
    "inFuobe": false,
-   "confirmed": true
+   "confirmed": true,
+   "note": "Not built (nm10-h3-any-gpu): both are custom node packs not installed on the validation server; an \"Experimental speed\" switch waits for them. The FastH3 graphs already use the core BlockSparseAttention (vsa)."
   },
   {
    "name": "FLUX 3 Image Klein (+ Base, prompt upsampler)",
@@ -5787,6 +5837,95 @@
    "output": "model_mesh.url",
    "sourceUrl": "https://fal.ai/models/tripo3d/p2/image-to-3d",
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=tripo3d/p2/image-to-3d"
+  },
+  {
+   "family": "idol",
+   "model": "Idol",
+   "title": "Sperid Labs Idol",
+   "vendor": "Speridlabs",
+   "operation": "image-to-splat",
+   "provider": "fal",
+   "endpoint": "speridlabs/idol",
+   "falCategory": "image-to-3d",
+   "status": "active",
+   "keyFields": {
+    "image": "image_url",
+    "numGaussians": "num_gaussians",
+    "steps": "num_inference_steps",
+    "cfg": "guidance_scale",
+    "seed": "seed",
+    "imageType": "image_type"
+   },
+   "inputs": {
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL of the image of a single object to convert into a 3D Gaussian splat.",
+     "examples": [
+      "https://raw.githubusercontent.com/VAST-AI-Research/TripoSplat/36b6deb0a1613e43c6910de441cb57d50352e44a/static/example_inputs/building_stone_house.webp"
+     ]
+    },
+    "image_type": {
+     "type": "enum",
+     "values": [
+      "synthetic",
+      "real"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "synthetic",
+     "desc": "Kind of input image. `synthetic` for renders and generated images (tight crop), `real` for photographs (looser crop)."
+    },
+    "num_gaussians": {
+     "type": "integer",
+     "required": false,
+     "default": 262144,
+     "minimum": 32768,
+     "maximum": 1048576,
+     "desc": "Target number of Gaussians in the output splat. Rounded down to a multiple of 32."
+    },
+    "num_inference_steps": {
+     "type": "integer",
+     "required": false,
+     "default": 50,
+     "minimum": 1,
+     "maximum": 50,
+     "desc": "Number of sampling steps. Fewer are faster but lose some detail."
+    },
+    "guidance_scale": {
+     "type": "number",
+     "required": false,
+     "default": 3,
+     "minimum": 0,
+     "maximum": 10,
+     "desc": "Classifier-free guidance: how strictly the object follows the image."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for reproducibility. If None, a random seed is generated."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Enable safety checking of the input image."
+    }
+   },
+   "output": "model_mesh.url",
+   "price": "Price: $0.1 per generations",
+   "pricing": {
+    "usd": 0.1,
+    "unit": "request"
+   },
+   "license": "Apache-2.0 (speridlabs/idol weights); TripoSplat's architecture (MIT); DINOv3 image encoder under the DINOv3 License (\"Built with DINOv3\")",
+   "notes": "Idol (TripoSplat's architecture, retrained by Speridlabs): one image of one object -> model_mesh, a 3D Gaussian splat (.ply), model_glb (a coloured point cloud of the splat centres, for standard 3D viewers), preprocessed_image (the cut-out it saw) and the predicted camera. num_inference_steps 1-50 (default 50), num_gaussians 32,768-1,048,576 (default 262,144), guidance_scale 0-10 (default 3, Idol's own weight: ComfyUI cfg 4), image_type synthetic | real. No sampler choice and no output format choice.",
+   "verified": true,
+   "sourceUrl": "https://fal.ai/models/speridlabs/idol",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=speridlabs/idol",
+   "capability": "splat",
+   "fetched": "2026-11-02"
   }
  ]
 }

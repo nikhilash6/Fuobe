@@ -55,6 +55,8 @@ describe("research-driven route checks", () => {
     for (const m of MODELS) {
       for (const r of m.routes) {
         if (r.provider !== "fal" && r.provider !== "replicate") continue;
+        // A chained route sends nothing itself: its steps run on the model's own routes (Fuobe Animation's clip per gap).
+        if (r.chained) continue;
         const e = byId.get(`${r.provider}:${r.endpoint}`);
         if (!e) continue;
         const map = r.map ?? {};

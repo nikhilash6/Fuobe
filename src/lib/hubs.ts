@@ -32,6 +32,7 @@ export const HUB_MODES: Record<HubKind, { id: string; label: string }[]> = {
     { id: "matte", label: "Remove background" },
     { id: "remove-object", label: "Remove object" },
     { id: "remove-dialogue", label: "Remove dialogue" },
+    { id: "remove-person", label: "Remove a person" },
     { id: "evolution", label: "Evolution" },
     { id: "restore", label: "Restore & colourise" },
     { id: "relight", label: "Relight" },

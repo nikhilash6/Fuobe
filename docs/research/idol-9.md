@@ -15,7 +15,7 @@ _As of 2026-10-30. Machine-readable twin: [`idol-9.json`](idol-9.json) (`verdict
 - **The quality lead is the vendor's own and small.** On Speridlabs' benchmark Idol beats TripoSplat by +0.014 SSIM, +0.002 IoU and +0.038 DINOv2 similarity. There is no paper, no named test set and no independent check. The weights really are different from TripoSplat's (sampled cosine 0.02–0.26 in the denoiser), so a real difference is plausible (§2.3, §3).
 - **The raw output is hazy.** About half the Gaussians are nearly transparent and show as a fuzzy halo. Core ComfyUI can hide it in the orbit video (RenderSplat's opacity threshold) but cannot remove it from the saved file. The pack's `Idol Prune Splat` node can (§2.4, §5).
 - **Licences are clean.** Idol's weights are Apache-2.0 and not gated. The pack is Apache-2.0 with no Python dependencies. The DINOv3 encoder brings its "Built with DINOv3" notice, which Fuobe already shows for TripoSplat (§4).
-- **No cloud route.** Idol is not on fal or Replicate. fal's `tripo3d/triposplat` is a different model and must not be labelled Idol. Idol is open engine only, with no substitute (§6).
+- **Cloud route (corrected 2026-11-02).** On 2026-10-30 Idol was not on fal or Replicate. Since later that day fal hosts it as `speridlabs/idol` ($0.10 per generation), so idol-1 added a cloud half labelled Idol 3D (§6). fal's `tripo3d/triposplat` is a different model and must not be labelled Idol.
 - **My verdict.** Idol is not as good as the pitch: not 2 s, not low-VRAM, and its quality edge is unproven. It is still **worth adding, cheaply**: a second open splat model in Image to 3D → Splat, built from a copy of a graph Fuobe already ships, Apache-2.0, 1.32 GB of new weights. Make TripoSplat or Idol the default only after a blind A/B. The build plan has nine packages; one is P0 (§9).
 
 ## 2. What Idol is
@@ -176,7 +176,7 @@ A copy of `image-to-splat-triposplat.json` (same node ids) with these changes:
 | 75 | `RenderSplat` | **`opacity_threshold` 0.05** (the orbit video drops the haze; the saved file keeps it) |
 | 88:96 | `ComfySwitchNode` | both inputs are the same `UNETLoader` in the TripoSplat file; keep it as is, or wire 88:16 straight into 88:6 |
 
-**The photo crop with core nodes** (my analysis, not run). `TripoSplatPreprocessImage` at 1024 gives the object at 1/1.2 of the frame. Scaling that to 720 px and centring it on a black 1024 canvas puts the object at 720 / 1.2 = 600 px, where Idol's `real` mode puts it at 1024 / 1.7 ≈ 602 px. The background is black in both, the erosion is the same 1 px at 1024 scale, and the source detail is the same (both crop at the 1024 scale). Only the resampling differs. `ComfySwitchNode`'s inputs are lazy (`comfy_extras/nodes_logic.py` L98–111), so the branch not taken does not run. Check it against `IdolPreprocessImage` `real` before shipping (idol-1, "verify here").
+**The photo crop with core nodes** (my analysis, not run). `TripoSplatPreprocessImage` at 1024 gives the object at 1/1.2 of the frame. Scaling that to 720 px and centring it on a black 1024 canvas puts the object at 720 / 1.2 = 600 px, where Idol's `real` mode puts it at 1024 / 1.7 ≈ 602 px. The background is black in both, the erosion is the same 1 px at 1024 scale, and the source detail is the same (both crop at the 1024 scale). Only the resampling differs. `ComfySwitchNode`'s inputs are lazy (`comfy_extras/nodes_logic.py` L98–111), so the branch not taken does not run. Check it against `IdolPreprocessImage` `real` before shipping (idol-1, "verify here"). **idol-1 (2026-11-02):** shipped behind "It's a photo (looser crop)" and `/prompt`-validated on the CPU server only; the comparison with `IdolPreprocessImage` `real` is still to be done by the owner (the pack was not installed, by rule). idol-2 replaces the branch with `IdolPreprocessImage` where the pack is installed.
 
 **Bindings** (the TripoSplat set plus two): `image` 99.image; `cutout` 88:35.switch; `photoCrop` 88:104.switch (new key); `numGaussians` 88:55.num_gaussians; `steps`, `cfg` 88:6; **`sampler` 88:6.sampler_name** (new key); `seed` 88:6.seed and 88:55.seed; `splatFormat` 92.format; `orbitFrames` 75.frames; `filenamePrefix` 51 and 42. Outputs: 51 model3d role `splat`; 42 video role `turntable`.
 
@@ -208,7 +208,15 @@ The provider runs the clean graph when the server has the pack (`GET /object_inf
 
 ## 6. Cloud routes
 
-**None.** Idol is not hosted on fal or Replicate, so under the owner's rule it is open engine only, with no substitute recipe.
+**Correction (2026-11-02, package idol-1).** The check below (2026-10-30) was right that day, but fal published `speridlabs/idol` the same evening (catalog date 2026-10-30T20:19Z, status active; research #10 §5). Re-read at the primary source on 2026-11-02 (`https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=speridlabs/idol`, `api.fal.ai/v1/models`, the model page's billing): category image-to-3d, **$0.10 per generation**, licence type commercial.
+
+- **Inputs:** `image_url` (required); `image_type` `synthetic` (default, tight crop) | `real` (photos, looser crop); `num_gaussians` 32,768–1,048,576 (default 262,144); `num_inference_steps` 1–50 (default 50); `guidance_scale` 0–10 (default 3, Idol's own weight, i.e. ComfyUI cfg 4); `seed`; `enable_safety_checker` (default true). No sampler and no output-format choice.
+- **Outputs:** `model_mesh` (the splat, `.ply`), `model_glb` (a coloured point cloud of the splat centres), `preprocessed_image` (the cut-out it saw), `camera` (yaw, pitch, radius, fov), `num_gaussians`, `seed`, `timings`.
+- `fal-ai/idol` answers the same schema but has no catalog entry; Fuobe uses `speridlabs/idol`.
+
+So Idol now has a cloud half under the owner's rule: Fuobe's cloud model `idol-3d` ("Idol 3D", research record in `new-models-10.json` `endpointRecords`, FieldMap generated by `scripts/gen-cloud-models.py`). Best / Quick look map to `num_inference_steps` 50 / 20 and `num_gaussians` 262,144 / 65,536 (the sampler stays fal's), and "It's a photo" maps to `image_type` `real`. The open engine keeps what fal lacks: the `.spz` file, the orbit video and the sampler choice. Replicate still has no Idol (not re-checked with a token).
+
+The original check of 2026-10-30:
 
 | Where | What I checked | Result |
 |---|---|---|
@@ -251,7 +259,7 @@ At Idol's reference settings it samples 2.5× the steps of today's TripoSplat gr
 
 ## 8. Where it goes in Fuobe and why
 
-Idol goes where people already make 3D, on the open engine only.
+Idol goes where people already make 3D. (Written when Idol had no cloud route; idol-1 added fal's `speridlabs/idol` as the cloud half of the first row, see §6. The other rows stay open-engine work.)
 
 | Where | What the user gets | Open engine | Cloud engine | Why | Priority (package) |
 |---|---|---|---|---|---|
@@ -269,7 +277,7 @@ Settings → Models & licences, ⌘K, the Canvas model node, the demo provider a
 
 ## 9. Build plan
 
-Packages in priority order. The full brief of each one (goal, files, graph, bindings, UI, tests, what must not break, what this machine can verify, the cloud rule) is in the JSON twin, `plan.packages[].brief`; below is the short form. Every package: open engine only (Idol is not hosted; no cloud half and no substitute); never promise seconds; "Idol 3D" as the name; tests; a browser check at 1440 px and 390 px in light and dark with no horizontal scroll; `pnpm typecheck`, `pnpm lint`, the targeted tests and the full vitest run; a commit per step.
+Packages in priority order. The full brief of each one (goal, files, graph, bindings, UI, tests, what must not break, what this machine can verify, the cloud rule) is in the JSON twin, `plan.packages[].brief`; below is the short form. Every package: open engine first (since 2026-10-30 fal hosts Idol, so a package may add what `speridlabs/idol` supports on the cloud, labelled Idol, and never a substitute; §6); never promise seconds; "Idol 3D" as the name; tests; a browser check at 1440 px and 390 px in light and dark with no horizontal scroll; `pnpm typecheck`, `pnpm lint`, the targeted tests and the full vitest run; a commit per step.
 
 | # | Package | Priority | Depends on | Effort |
 |---|---|---|---|---|

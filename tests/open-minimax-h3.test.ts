@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { GenInput, ModelDef } from "@/lib/catalog/types";
 import type { Manifest } from "@/lib/comfy";
+import { H3_GPU_TIER } from "@/lib/gpu/h3-tier";
 
 // MiniMax H3 as an open video model (text, image and start + end frame to video with sound), the Video studio's first
 // model on both engines, the hosted H3's prices, and the studio defaults that changed with it.
@@ -78,6 +79,9 @@ describe("MiniMax H3 on your GPU: the catalog entry", () => {
     });
     expect(h3.options.controls).toEqual([
       { param: "quality", label: "Quality", values: ["fast", "best"], default: "fast", labels: { fast: "Fast · 8 steps", best: "Best · 20 steps, about 2.3x longer" } },
+      // nm10-h3-any-gpu: the GPU tier (FastH3 V2 / Trim on smaller cards); Fast decode is held back until it validates
+      // (tests/h3-any-gpu.test.ts).
+      H3_GPU_TIER,
     ]);
     expect(h3.options.negativePrompt).toBeUndefined();
     expect(h3.options.multiShot).toBeUndefined();

@@ -49,12 +49,12 @@ describe("the studio's graphs in the library", () => {
     expect(entry(MASK).license).toMatch(/SAM License/);
   });
 
-  it("use core nodes this server has and H3 Relay's, which it doesn't: /prompt names one", () => {
+  it("use core nodes and H3 Relay nodes this server has", () => {
     for (const id of [SEG, MASK]) {
       for (const c of new Set(Object.values(file(id)).map((n) => n.class_type))) {
         expect(Object.hasOwn(subset, c), c).toBe(true);
-        if (/^H3Relay/.test(c)) expect(subset[c], c).toBeNull();
-        else expect(subset[c], c).not.toBeNull();
+        // The subset was read from a server with H3 Relay (the person removal validates there).
+        expect(subset[c], c).not.toBeNull();
       }
       expect(entry(id).validated).toBe(false);
       expect((entry(id) as { validationError?: string }).validationError).toMatch(/missing_node_type: Node 'H3Relay/);

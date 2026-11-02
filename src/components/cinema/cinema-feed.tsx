@@ -23,6 +23,7 @@ import {
   Sparkles,
   Trash2,
   UserRoundPlus,
+  UserX,
   Video,
   X,
 } from "lucide-react";
@@ -247,6 +248,11 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handlers.onReference(o.url, "video")}>
               <ImagePlus /> Use as reference clip
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href={`/video-tools/remove-person?video=${encodeURIComponent(o.url)}`}>
+                <UserX /> Remove a person
+              </Link>
             </DropdownMenuItem>
             {finish && (
               <DropdownMenuItem

@@ -1,15 +1,16 @@
 import "server-only";
+import { FLY_MODELS } from "@/lib/catalog/fly-around";
 import { DUB_STEP_MODELS } from "@/lib/av/dub";
 import { SPLIT_MODEL } from "@/lib/av/split";
 import { CLEAN_DIALOGUE_PRESET, OPEN_MODEL as CLEAN_DIALOGUE_MODEL, OPEN_MUX_MODEL as CLEAN_DIALOGUE_MUX } from "@/lib/av/clean-dialogue";
 import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { CLEAN_MODEL } from "@/lib/av/clean-voice";
 import { getModel, getPreset, MODELS, modelsFor, PRESETS } from "@/lib/catalog";
-import { graphLoras } from "@/lib/catalog/character-swap";
+import { graphLoras, PERSON_REMOVER_LORA } from "@/lib/catalog/character-swap";
 import { BLOCKOUT_MODELS, PATH_MODELS } from "@/lib/catalog/cinema";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
-import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
+import { PERSON_REMOVAL_TOOLS, REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
 import { H3_LATENT_DRAFT_WORKFLOW, H3_OPEN_MODEL, REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_LATENT_WORKFLOW, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { COMPOSITE_MODEL } from "@/lib/catalog/sharpen";
@@ -181,6 +182,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   },
   { href: "/upscale", label: "Upscale", group: "Images", config: S.UPSCALE_STUDIO },
   { href: "/video", label: "Video", group: "Video", config: S.VIDEO_STUDIO },
+  // Keyframe animation (Fuobe Animation): Frames mode's Animation style, every gap in one graph on Wan 2.2 with AniSora.
+  { href: "/video?model=fuobe-animation", label: "Keyframe animation", group: "Video", steps: [{ modelId: "fuobe-animation", op: "keyframes" }] },
   { href: "/motion-control", label: "Motion control", group: "Video", config: S.MOTION_CONTROL_STUDIO },
   { href: "/video-edit", label: "Edit video", group: "Video", config: S.VIDEO_EDIT_STUDIO },
   { href: "/extend", label: "Extend", group: "Video", config: S.EXTEND_STUDIO },
@@ -189,6 +192,17 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/character-swap", label: "Character swap", group: "Video", workflows: [STUDIO_WORKFLOWS.mask, STUDIO_WORKFLOWS.segment] },
   // Cinema's 3D scene films a still along a keyframed camera path (N7-5).
   { href: "/cinema", label: "Fly path", group: "Video", steps: [{ modelId: PATH_MODELS.open, op: "camera-path" }] },
+  // Exact orbits (N7-7): Fuobe DoP's and Cinema's orbit moves by their numbers, Canvas's Fly around and Assist's fly_around:
+  // MoGe 2 measures the still's depth, the server renders the path, Uni3C films along it.
+  {
+    href: "/motions",
+    label: "Exact orbits and Fly around",
+    group: "Video",
+    steps: [
+      { modelId: FLY_MODELS.depth, op: "scene-3d" },
+      { modelId: FLY_MODELS.open, op: "camera-path" },
+    ],
+  },
   // Cinema's Blockout to film on your GPU: the first frame from the references, the depth cut into windows, each window
   // rendered by the blockout graph and handed over on its last frame, then joined. An upload without a depth pass (the
   // usual Blender render) runs the restyle graph instead, which reads the depth with Depth Anything 3. The projects list
@@ -303,6 +317,21 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     steps: [
       { modelId: REMOVE_DIALOGUE_MODELS.split, op: "separate-audio" },
       { modelId: REMOVE_DIALOGUE_MODELS.mux, op: "mux" },
+    ],
+  },
+  // Remove a person (o/person-remover-plus): the part fitted to 24 fps, its first frame cleaned by Qwen-Image 2.1, the green
+  // mask preview, H3 Relay's Person Removal with Akatz Labs' Person Remover LoRA, and the sound put back.
+  {
+    href: "/video-tools/remove-person",
+    label: "Remove a person",
+    group: "Video tools",
+    steps: [
+      { modelId: "oss-h3-person-remove", op: "remove-object", loras: [PERSON_REMOVER_LORA] },
+      { modelId: PERSON_REMOVAL_TOOLS.mask, op: "bg-remove-video" },
+      { modelId: PERSON_REMOVAL_TOOLS.fit, op: "trim" },
+      { modelId: PERSON_REMOVAL_TOOLS.frame, op: "frame" },
+      { modelId: PERSON_REMOVAL_TOOLS.clean, op: "edit" },
+      { modelId: REMOVE_TOOLS.open.mux, op: "mux" },
     ],
   },
   { href: "/video-tools/relight", label: "Relight", group: "Video tools", config: S.VIDEO_RELIGHT_STUDIO },

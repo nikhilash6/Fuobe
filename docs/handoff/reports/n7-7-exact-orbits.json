@@ -1,0 +1,166 @@
+{
+  "key": "n7-7-exact-orbits",
+  "impl": {
+    "branch": "o/n7-7-exact-orbits",
+    "summary": "Built exact orbits on both engines. An orbit's numbers (degrees 30-360, direction seen from above, tilt 0-20°, pulse none or 25%) become N7-5 camera-path keys. Cloud: H3 Max camera-controls with those keys (5 s at 768P = $0.40). With reference views it uses minimax-h3-max ref2v, with the path in words. Open engine: MoGe 2 depth (oss-scene-moge), then a new headless point-cloud renderer in the server (option B, no new node pack), then wan21-i2v-uni3c-path. These run through one shared planner (src/lib/catalog/fly-around.ts) and a new /api/fly-around route. That route and the planner serve the Exact switch in Fuobe DoP (360 Orbit, Arc Left, Arc Right, Lazy Orbit) and Cinema's move picker (drone-orbit, arc-left, arc-right, bullet-time), plus Image to 3D's 'Film it photoreal', Canvas's Camera path and Fly around nodes, Assist/MCP's fly_around tool, and a row on the GPU pre-flight board. No WorldCast or Regenerate route is used, and nothing goes to the cloud that isn't hosted. 3 commits, not pushed.",
+    "built": [
+      "src/lib/exact-orbit.ts: ExactOrbit settings, defaults per DoP preset and Cinema move, normalizeExact, exactOrbitKeys (at most 12 keys so H3 Max takes them unchanged; the tilt is a ring tilted about the line of sight and rises first in either direction; the pulse moves in and out twice), exactSummary and exactWords.",
+      "src/lib/catalog/fly-around.ts: planFlyAround / flyKeys. Open engine: depth step (oss-scene-moge, decimation 4), then oss-uni3c-path with chain [{slot:'video', render:'path'}]; with a render already made the depth step is skipped. Cloud: minimax-h3-max-camera with cameraPath. Cloud with views: minimax-h3-max ref2v. Each step is priced.",
+      "Option B server render: src/lib/path-splat.ts (pure z-buffered point splatting along camera-path framePoses; glTF→OpenCV axes) and src/server/path-render.ts. path-render.ts reads the still and the depth PNG with readRef (tenant-checked) at renderSize, builds the cloud with scene3d buildPointCloud, renders 81 frames at 16 fps with holes left black, encodes H.264 MP4 with ffmpeg into a scratch file, and stores it with adoptFile as a derived file.",
+      "New ChainSlot.render 'path' (types.ts). In generations.ts, pickOutput takes the scene step's depth image for it, and advanceDependents renders the path inside the step's run (asRun) after the other slots are filled. A demo depth step hands on a placeholder video.",
+      "src/server/fly-around.ts (zod schemas, preview, run) and POST /api/fly-around with ?preview=1 through priceAs. /api/fly-around was added to PREVIEWS in guest-access.ts. Accounts' runs get own-gpu-tool from the proxy, the same as main's other tool routes.",
+      "Cinema: CinemaGenerateInput.exact. planVideo calls planExactVideo when the first move is an orbit and the switch is on; the other moves and Director words stay words. Added to cinema-schemas, draft.ts (draftToInput) and prompt-bar.tsx (ExactOrbitControls under the move chips).",
+      "Fuobe DoP: the Video composer (src/components/studio/composer.tsx) shows ExactOrbitControls under the prompt for motion-360-orbit, motion-arc-left, motion-arc-right and motion-lazy-orbit. With Exact on, Generate posts /api/fly-around with the start frame, and the composer's price is the orbit's.",
+      "Shared UI: src/components/exact-orbit-controls.tsx (Switch, two Sliders and two ToggleGroups, plus a line on what each engine does) and src/components/fly-around-run.ts (live preview price and run).",
+      "Image to 3D: 'Film it photoreal' next to 'Animate the spin' on the model card. Cloud: H3 Max from the photo along a 360° orbit. Open engine: the GLB is recorded in the browser along the same orbit (recordTurntable now takes frames, fps and angle: 81 frames at 16 fps), uploaded, and used as Uni3C's render; a splat hands its own orbit video instead. Films are filed under image-to-3d-film and shown as a video card in Your 3D models (model3d.ts: PHOTOREAL_ORBIT, photorealAngle, photorealBody, MODEL3D_FILM_FEATURE).",
+      "Canvas: a 'camera-path' node (Inputs: a preset or 'Exact orbit…' with the controls; outputs the new PortType 'path') and a 'fly-around' node (Generate: Motion words, 'Still, then views' and Camera path in; video out; models H3 Max camera and Uni3C). flyAroundRequest compiles to NodeSteps, chaining a generated still into both steps. Phone Nodes tab gets a Camera path card. Server canvas validation takes both types and their data.",
+      "Assist/MCP: fly_around tool in studio-tools.ts (preset or degrees/direction/tilt/pulse, views, prompt, duration), run as a Library pipeline; named in the Assist system prompt (agent.ts).",
+      "GPU pre-flight board: STUDIO_ROWS row '/motions' 'Exact orbits and Fly around' on scene-mesh-moge and wan21-i2v-uni3c-path (graphs already in requirements.json; no new pack or model pins).",
+      "Already there and reused: N7-5's camera-path library, H3 Max camera model and pricing, oss-uni3c-path and its graph; N7-6's minimax-h3-max ref2v route; oss-scene-moge; scene3d buildPointCloud; the model3d turntable recorder."
+    ],
+    "tests": [
+      "New tests/fly-around.test.ts (21 tests) covers:",
+      "- Exact settings → keys (direction, tilt, pulse, ranges, which moves take the switch).",
+      "- The plan on both engines and with views, the $0.40 cloud price and blockers.",
+      "- The path render: frame 0 is the photo's view; 81 frames in the still's shape; a real MP4 written by ffmpeg.",
+      "- pickOutput for the render slot.",
+      "- /api/fly-around preview, schema limits and a demo open run as 2 chained steps.",
+      "- The Cinema plan with Exact on both engines, with the switch off and with no start frame.",
+      "- The Image to 3D plan and turn angles.",
+      "- Canvas node types, ports, outputs, default models, palette and compiled steps (cloud with a view; open with a generated still chained in).",
+      "- The fly_around schema and steps on both engines, and the GPU board row.",
+      "- An account's path render refuses the owner's files and renders its own (tenant).",
+      "tests/public-signup-tools.test.ts: 2 new tests. The fly-around price check is open to guests and accounts; the run answers own-gpu-tool; a visitor is priced for its own GPU, never a demo.",
+      "tests/assist-context.test.ts: fly_around samples added (every studio tool plans on both engines).",
+      "Targeted runs pass: 41 files / 656 tests across canvas*, cinema*, model3d*, assist*, gpu-*, mcp, public-signup*, request-body-limits, then fly-around, canvas, canvas-plus, canvas-editor-state, model3d and cinema-path again after the UI changes. No full suite and no pnpm build were run in this stage.",
+      "tsc --noEmit clean; eslint clean on the changed files. Prettier was not run: the base files don't pass it either.",
+      "Browser: new tests/e2e/exact-orbits.mjs passes against pnpm dev in demo mode at 1440 and 390 px, light and dark, with no page or console errors. It covers:",
+      "- DoP's 360 Orbit: switch, sliders and toggles, focus by Tab, mouse drag and touch drag of the degrees slider, the price (≈ $0.40 cloud / Free · on your GPU), nothing scrolls sideways.",
+      "- Cinema's move picker after picking Drone Orbit: the same checks.",
+      "- Image to 3D's 'Film it photoreal' with its price, focus, fits.",
+      "- Canvas: the Fly around ports, the Camera path's move list and exact controls (keyboard changes degrees), and on the phone its Nodes-tab card.",
+      "Screenshots were looked at. The server was stopped and .next deleted."
+    ],
+    "left": [
+      "Not verified here: GPU runs (Uni3C about 48 GB) and paid H3 Max calls. The server render was tested on synthetic depth only: run the depth step on a real still to confirm a MoGe 2 depth PNG reads the right way round. scene3d's nearIsBright guesses the direction from the picture, as the browser's point cloud does.",
+      "Option A (not built, for the owner to try): pin Camera H3 Bruxos (NyckM/3d-Camera-control-H3-Minimax @ 36c4218a2561328436d440fa9134631ee515471b, Apache-2.0) and use BruxosH3Camera Depth Warp from core MoGeInference; resample its Meridian-shaped output (73/90/107/124… frames at 24 fps, grey-128 holes) to 81 frames at 16 fps and turn grey holes black. It could not be /prompt-validated: the shared server lacks the pack and stage agents don't install packs.",
+      "The server render runs on the Node server's main thread inside the chain runner: a few seconds of CPU per run (about 300k points × 81 frames) plus ffmpeg. A worker thread would keep the server responsive under load. If ffmpeg is missing, the step fails with 'Rendering the camera path needs ffmpeg on the studio's server'.",
+      "Image to 3D's turn direction (PHOTOREAL_TURN_SIGN = -1: the model turns against the camera) and H3_AZIMUTH_SIGN are unverified until a real run. Each is one constant to flip.",
+      "Image to 3D's open route records the GLB as a level 360° turntable only (no tilt or pulse); the photoreal orbit is fixed at 360° ccw with no controls there.",
+      "Canvas Fly around doesn't run per Table row yet (the brief's 'batch 10 products' idea): a Table feeding it is not compiled row by row.",
+      "Accounts (public sign-up): /api/fly-around answers own-gpu-tool, like main's other tool routes. The open route starts with a 3D model (oss-scene-moge), and 3D models are closed to accounts, so Cinema/DoP Exact are owner-only for now. Not added to hosted runs (poolQuote).",
+      "No new ComfyUI graph, node pack, model pin, migration or research record. requirements.json and validation-state.json were not touched.",
+      "Cinema takes made with Exact don't record the orbit on the take (CinemaTakeInfo.path); only moves are stored.",
+      "Where the brief was out of date: the line numbers were stale (the Orbit category is around motions.ts L101-111; the cinema.ts orbit moves are at L418-427 and CINEMA_CAMERA_LORA at L650). The brief's 'Lazy Orbit' is motion-lazy-orbit (a separate 'Lazy Susan' preset exists and was left Loose). DoP runs from the Video studio (/video?preset=…), not from the Motions gallery page, so the switch sits in the Video composer. Image to 3D's photo route is now Pixal3D (handled, since it goes through the card's GLB). canvas.ts NODE_SPECS is at L225."
+    ],
+    "docsNotes": [
+      "STATUS/ARCHITECTURE (not edited here):",
+      "- Exact orbits (N7-7) are in DoP's orbit moves, Cinema's orbit moves, Image to 3D 'Film it photoreal', the Canvas Camera path / Fly around nodes and Assist's fly_around. They share src/lib/catalog/fly-around.ts and POST /api/fly-around (with ?preview=1).",
+      "- On the open engine: oss-scene-moge depth, then the server's headless point-cloud render (src/server/path-render.ts, ChainSlot.render 'path', which needs ffmpeg on the app server), then wan21-i2v-uni3c-path.",
+      "- On the cloud: H3 Max camera-controls keyframes, or minimax-h3-max ref2v when there are views.",
+      "- The GPU board has a row '/motions' Exact orbits and Fly around.",
+      "- In public sign-up: /api/fly-around is in PREVIEWS; runs answer own-gpu-tool for accounts.",
+      "SELF-HOSTING note for the docs pass: the app server needs ffmpeg for open-engine exact orbits started from DoP, Cinema, Canvas and Assist."
+    ],
+    "blocked": ""
+  },
+  "review": {
+    "findings": [
+      {
+        "severity": "medium",
+        "title": "The server's path render runs again on every runner sweep while ComfyUI isn't answering, leaving one stored MP4 behind each time",
+        "where": "src/server/generations.ts advanceDependents (the new render loop, about L1334-1346, runs before the ComfyUI probe at about L1350-1364)",
+        "detail": "renderPathVideo is awaited, and adoptFile stores its result, before the step checks that ComfyUI is reachable. When the probe misses, the step sets a COMFY_WAIT entry and `continue`s, so the rendered values are thrown away. The next tick (POLL_MS 1500 ms) renders again: several seconds of main-thread CPU, 300k points × 81 frames plus ffmpeg, and a new derived file. This can repeat for up to COMFY_WAIT (60 s). tick() awaits advanceDependents inside Promise.all behind state.busy, so the owner's other polls also stall for those sweeps. Traced in code; this needs real ComfyUI downtime, so it was not run. Fix: do the ComfyUI wait check (or a per-row cache of the render URL) before rendering, or render only once the step is about to be submitted.",
+        "verified": "code trace"
+      },
+      {
+        "severity": "medium",
+        "title": "Accounts are shown the Exact switch in Fuobe DoP (and Cinema), but their run is always refused",
+        "where": "src/components/studio/composer.tsx (exactId / ExactOrbitControls / submit), src/components/cinema/prompt-bar.tsx",
+        "detail": "The proxy answers POST /api/fly-around with 403 own-gpu-tool for accounts (tests/public-signup-tools.test.ts confirms this). The open route also starts with a 3D model, which is closed to accounts. Even so, the composer shows the switch to every viewer, and the price preview (open to visitors through priceAs) says 'Free · on your GPU'. Clicking Generate then gives the generic own-gpu-tool toast: 'This tool isn't available here. Try the Image, Video or Audio studio…', while the account is already in the Video studio. The implementer says DoP/Cinema Exact are owner-only for now, but the UI doesn't reflect that. The composer has no visitor check (useLikelyVisitor exists and model3d-studio uses it). Hide the switch, or say plainly why it can't run, for accounts.",
+        "verified": "code trace + proxy test"
+      },
+      {
+        "severity": "low",
+        "title": "Canvas Fly around with views on the cloud drops the Camera path's numbers from the words",
+        "where": "src/lib/catalog/canvas.ts flyAroundRequest → planFlyAround({ keys }) ; src/lib/catalog/fly-around.ts ref2v branch",
+        "detail": "flyAroundRequest always passes `keys`, never `orbit`. So when a Camera path set to 'Exact orbit…' (or any preset) feeds a Fly around that has views, the ref2v prompt is the generic 'The camera flies around the subject' instead of exactWords(orbit): degrees, direction, tilt and pulse are lost. Assist's fly_around with a preset plus views has the same problem. Pass the node's orbit through, or build words from the keys.",
+        "verified": "code trace"
+      },
+      {
+        "severity": "low",
+        "title": "At 390 px, the composer's full exact price squeezes the model chip down to 'M'",
+        "where": "src/components/studio/composer.tsx (the sm:hidden price span now shows costText when exactPrice is set)",
+        "detail": "On phones the composer normally shows the compact cost label. With Exact on it shows the full 'Free · on your GPU'. In the e2e screenshot (dop-390-dark) the model chip is cut to 'M' and the @ chip is clipped at the row's edge. The page doesn't scroll sideways, so the e2e passes, but the row reads badly. Use a compact form ('Free') on phones.",
+        "verified": "screenshot from tests/e2e/exact-orbits.mjs"
+      },
+      {
+        "severity": "low",
+        "title": "In Cinema, the Exact numbers don't follow a change of orbit move",
+        "where": "src/components/cinema/prompt-bar.tsx (MoveChips onChange only sets moves; draft.exact kept)",
+        "detail": "Turn Exact on for Drone Orbit (360°, tilt 15) and then switch the first move to Arc Left: the switch stays on with 360°/tilt 15 instead of Arc Left's 90° clockwise. The DoP composer keys its state by preset id and resets; Cinema doesn't. Reset draft.exact when moves[0] changes.",
+        "verified": "code trace"
+      },
+      {
+        "severity": "low",
+        "title": "The tilt wording says the camera 'rises and comes back level', but past 180° it also dips below eye level",
+        "where": "src/lib/exact-orbit.ts exactWords and the ExactOrbit.tilt doc; studio-tools fly_around tilt description",
+        "detail": "elevation = asin(sin tilt · sin turned), so for degrees > 180 the elevation goes negative (down to −tilt at 270°). The keys are correct; only the words sent to ref2v and Assist describe a different move.",
+        "verified": "code trace"
+      },
+      {
+        "severity": "info",
+        "title": "Every model card fires its own /api/fly-around?preview=1",
+        "where": "src/components/model3d/model-card.tsx useFlyAround",
+        "detail": "Your 3D models lists up to 24 cards, and each sends its own price preview POST on load. All the previews are the same, so one shared query would do.",
+        "verified": "code trace"
+      }
+    ],
+    "checks": [
+      "Read the review prompt, main-rules.md and the implementer report; reviewed git diff claude/fuobe-parity-4...o/n7-7-exact-orbits (3 commits, 32 files) with the surrounding code.",
+      "Cloud rule: no WorldCast or Regenerate route. Cloud uses hosted minimax-h3-max-camera (keyframes) or minimax-h3-max ref2v with views. No new model, LoRA or node pack, so no licence rows are needed. No Higgsfield API use or media.",
+      "Open engine: oss-scene-moge (manifest scene-mesh-moge: outputs a GLB plus an image of role depth, and the decimation binding exists), then the server render (pickOutput takes the first image, which is the depth PNG), then oss-uni3c-path with video set to the render. The local capability is kept.",
+      "Public sign-up: /api/fly-around is in PREVIEWS and priced through priceAs; runs answer own-gpu-tool for accounts and need sign-in for guests. The render reads its files with readRef inside asRun/asAccount, and a tenant test exists. Canvases are LIBRARY_CHANGES. The route takes file refs only, no large body.",
+      "GPU pre-flight board: STUDIO_ROWS has the /motions row on scene-3d plus camera-path, and the graphs are already in requirements.json.",
+      "Targeted vitest: 24 files / 415 tests pass (fly-around, public-signup*, assist-context, canvas, cinema*, model3d*, request-body-limits, gpu-*).",
+      "Full vitest: 305/311 files, 4970 pass, 7 fail. Six of the seven are known from main (comfy-reuse, dop-originals effect-acid, preset-featured, soul-runs ×2, split-soundtrack). preset-covers failed once under full-suite load and passes on its own; the branch doesn't touch it, so it's flaky.",
+      "tsc --noEmit clean (after next typegen, with 8 GB heap); eslint clean on the changed files.",
+      "Browser: ran tests/e2e/exact-orbits.mjs against next dev (demo mode, ComfyUI pointed at an unreachable address so nothing reached the shared server) at 1440/390 in light and dark. All checks passed and the screenshots were looked at. Dev server stopped, .next and the scratch data dirs deleted, worktree clean."
+    ],
+    "verdict": "approve-with-fixes: the core works on both engines, follows the cloud and sign-up rules, and the tests and browser checks pass. Before merging, fix the repeated path render while waiting for ComfyUI (medium) and hide or explain the Exact switch for accounts (medium). The low items are polish."
+  },
+  "fix": {
+    "applied": [
+      "Medium, repeated path render while waiting for ComfyUI: confirmed by code trace. In advanceDependents (src/server/generations.ts) the server's camera-path render now runs after the ComfyUI wait check, so a sweep that waits renders nothing and stores no MP4. New regression test in tests/comfy-reach.test.ts: a Uni3C path step after a real ComfyUI depth step stays queued at 'Waits for ComfyUI to answer'. It fails without the fix, because the old order rendered first and failed the step. Commit dd01fa16.",
+      "Medium, accounts shown an Exact switch they can't run: confirmed (the proxy answers own-gpu-tool, and the open route starts with a 3D model). The switch now shows only to the owner (useIsOwner) in the Fuobe DoP composer (src/components/studio/composer.tsx) and in Cinema's prompt bar (src/components/cinema/prompt-bar.tsx). Visitors no longer see it, and it doesn't flash before hydration.",
+      "Low, Canvas Fly around with views lost the path's numbers: confirmed. canvas.ts now passes the Camera path node's own input (orbit, preset or keys) to planFlyAround. The new pathWords in src/lib/catalog/fly-around.ts turns an orbit, a named preset or an orbit_<N>_cw/ccw sweep into words for the H3 Max ref2v prompt. Assist's preset-with-views case is fixed by the same change. Tests added in tests/fly-around.test.ts.",
+      "Low, the phone composer squeezed the model chip: confirmed in the screenshot. flyPrice takes a compact flag and useFlyAround returns compactPrice ('Free' / 'Placeholder'). The composer's sm:hidden price uses it. Unit test added; the e2e phone assertion was updated and the dop-390-dark screenshot looked at (the model chip reads 'MiniMax H3').",
+      "Low, Cinema's Exact numbers didn't follow a change of first move: confirmed. New withMoves in src/components/cinema/draft.ts resets exact to null when moves[0] changes. It is used by MoveChips, the move picker and the AI Director's shot fill (workspace.tsx). Unit test added.",
+      "Low, tilt wording: confirmed (elevation goes negative past 180 degrees). exactWords now describes the height by sweep: rises as it goes (90 degrees or less), comes back down (up to 180), dips below (under 360), a full rise and dip back to eye level (360). The ExactOrbit.tilt doc and the fly_around tool's tilt description were corrected. Tests check the words against the keys."
+    ],
+    "rejected": [
+      "Info, every model card fires its own /api/fly-around?preview=1: not changed. Each card's body differs (its own photo or render), so the queries are not identical. They are small, cached for 15 s, and only on the owner's own model list (accounts' lists are empty). Sharing one price would need a price-only route or a stand-in image, which isn't worth the risk at info severity."
+    ],
+    "checks": [
+      "Worktree /home/user/wt/o-n7-7-exact-orbits: branch holds only this package's commits; base is an ancestor; pnpm install --frozen-lockfile and next typegen ok.",
+      "pnpm typecheck: exit 0 (8 GB heap).",
+      "pnpm lint: exit 0 (1 warning in scripts/comfy/library.spec.mjs, not from this branch).",
+      "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: exit 1. 305/311 files, 4974 passed, 7 failed. Six are the known failures from main: comfy-reuse, dop-originals effect-acid, preset-featured, soul-runs x2, split-soundtrack. The seventh, moderation-hook ('an answer with no checkOutputs field'), failed under full-suite load and passes 9/9 alone; this branch doesn't touch it, so it looks flaky.",
+      "tests/fly-around.test.ts 24/24 and tests/comfy-reach.test.ts 11/11 pass. The new comfy-reach test was confirmed to fail without the generations.ts fix.",
+      "Browser: tests/e2e/exact-orbits.mjs passes against next dev in demo mode (ComfyUI pointed at an unreachable address) at 1440/390 px, light and dark: DoP, Cinema, Image to 3D and Canvas. The dop-390-dark screenshot was looked at. Dev server stopped, .next and scratch data deleted, git status clean.",
+      "Commits dd01fa16, 8f179bd5, b23d3659; not pushed."
+    ],
+    "finalSummary": "Exact orbits (N7-7) are finished on the branch, with the review's fixes in. Cloud engine: hosted H3 Max camera-controls with the orbit's keys (5 s at 768P = $0.40 at list price), or with views minimax-h3-max ref2v, whose prompt now carries the path in words (orbit numbers or the preset's move). Built and unit-tested; no paid call was made. Open engine: MoGe 2 depth (oss-scene-moge), then the server's headless point-cloud render of the path (it needs ffmpeg on the app server, and now runs only once ComfyUI answers), then wan21-i2v-uni3c-path. Built and tested on synthetic depth and in demo mode; a real GPU run (Uni3C needs about 48 GB) is not verified. Image to 3D's 'Film it photoreal' records the GLB in the browser (open engine) or uses H3 Max (cloud). Canvas has Camera path and Fly around nodes; Assist/MCP has fly_around. Public sign-up: guests and accounts can get the /api/fly-around price preview (PREVIEWS, through priceAs). Accounts' runs answer own-gpu-tool, and the Exact switch in DoP and Cinema now shows only to the owner, since the open route starts with a 3D model, which is closed to accounts.",
+    "left": [
+      "GPU runs (Uni3C, MoGe 2 depth on a real still: does the depth PNG read the right way round?) and paid H3 Max calls are unverified. PHOTOREAL_TURN_SIGN and H3_AZIMUTH_SIGN are unverified until a real run.",
+      "Option A (Camera H3 Bruxos @ 36c4218a2561328436d440fa9134631ee515471b, Apache-2.0, BruxosH3Camera Depth Warp, resampled to 81 frames at 16 fps with grey holes turned black) is not built; the owner can try it after installing the pinned pack.",
+      "The server path render runs on the main thread (a few seconds of CPU per run plus ffmpeg); a worker thread would keep the server responsive under load.",
+      "Exact in DoP and Cinema is owner-only until 3D models open to accounts; it is not on hosted runs (poolQuote).",
+      "Canvas Fly around does not run per Table row; Cinema takes don't record the orbit on the take; Image to 3D's photoreal orbit is fixed at 360 degrees ccw, level.",
+      "Each model card prices its own film (info, left as is).",
+      "Flaky under full-suite load: tests/moderation-hook (passes alone; not touched by this branch).",
+      "Docs (STATUS/ARCHITECTURE/self-hosting ffmpeg note) are for the docs pass, as in the impl report."
+    ],
+    "blocked": ""
+  }
+}

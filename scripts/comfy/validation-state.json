@@ -209,6 +209,12 @@
     "error": null,
     "at": "2026-10-26T00:46:07.467Z"
   },
+  "image-to-splat-idol": {
+    "sha256": "f5230e116764047049fd2b7f7dde07372c3c64b2967219e719ea5114599ba228",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:03:11.136Z"
+  },
   "image-to-splat-triposplat": {
     "sha256": "cb65f4660b4d5fef3c0544146ed51b7d3acf059f3190a102dccf8166908f5413",
     "validated": true,
@@ -857,11 +863,17 @@
     "error": null,
     "at": "2026-10-18T07:29:29.488Z"
   },
+  "video-person-remove-h3-mask": {
+    "sha256": "c8ce77df965d4b14506a3e2f437ffb2d540a4c83d0725483d814c183fcd7704c",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:07:56.582Z"
+  },
   "video-person-remove-h3-relay": {
     "sha256": "5ba6ab867836433b4af7b00e507c1bc031483afebb8680e10a9d41903c6de2f0",
-    "validated": false,
-    "error": "HTTP 400: missing_node_type: Node 'H3RelayAppendWindow' not found. The custom node may not be installed. (Node ID '#append')",
-    "at": "2026-10-27T09:34:44.790Z"
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:07:56.475Z"
   },
   "video-reframe-wan22-fun-vace": {
     "sha256": "3d97f02a5da7badd11df1f1334de2924b4fc930c8976597b25c231d342b629de",
@@ -988,6 +1000,12 @@
     "validated": true,
     "error": null,
     "at": "2026-10-16T20:57:21.514Z"
+  },
+  "wan22-inbetween-anisora": {
+    "sha256": "d39f4f7dd0eb49cf3369724ce11edc7c2b94f96342ea9b604d12625328f20d61",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:08:20.854Z"
   },
   "wan22-s2v-14b": {
     "sha256": "1b554529206f27dd9ebddf4a6ef60ad666e550fc64ed72c222f57bb1dacf7720",

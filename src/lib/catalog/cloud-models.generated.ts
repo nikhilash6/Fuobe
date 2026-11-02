@@ -17590,6 +17590,78 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "idol-3d",
+    "name": "Idol 3D",
+    "vendor": "Speridlabs",
+    "family": "idol",
+    "engine": "cloud",
+    "kind": "model3d",
+    "tagline": "A Gaussian splat (.ply) of one object from one picture \u00b7 TripoSplat's architecture, retrained",
+    "routes": [
+      {
+        "op": "splat",
+        "provider": "fal",
+        "endpoint": "speridlabs/idol",
+        "map": {
+          "prompt": false,
+          "image": "image_url",
+          "seed": "seed"
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "num_gaussians",
+          "label": "Gaussians",
+          "min": 32768,
+          "max": 1048576,
+          "step": 32768,
+          "default": 262144
+        },
+        {
+          "param": "num_inference_steps",
+          "label": "Steps",
+          "min": 1,
+          "max": 50,
+          "step": 1,
+          "default": 50
+        }
+      ],
+      "controls": [
+        {
+          "param": "image_type",
+          "label": "Picture",
+          "values": [
+            "synthetic",
+            "real"
+          ],
+          "default": "synthetic",
+          "labels": {
+            "synthetic": "A render or generated image",
+            "real": "A photo"
+          }
+        }
+      ],
+      "seed": true,
+      "maxImages": 1,
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "licence": {
+      "licence": "Apache-2.0",
+      "commercial": true,
+      "note": "Apache-2.0 (speridlabs/idol weights); TripoSplat's architecture (MIT); DINOv3 image encoder under the DINOv3 License (\"Built with DINOv3\"). fal's safety checker reads the input image",
+      "checked": "2026-11-02"
+    },
+    "pricing": {
+      "unit": "request",
+      "usd": 0.1
+    }
+  },
+  {
     "id": "sam-3d-objects",
     "name": "SAM 3D Objects",
     "vendor": "Meta",
@@ -20916,6 +20988,164 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
       "usd": 0.036,
       "note": "$0.001605 per megapixel of video: about $0.18 for 5 s at 720p ($0.20 with LoRAs)",
       "withLoras": 0.04
+    }
+  },
+  {
+    "id": "fuobe-animation",
+    "name": "Fuobe Animation",
+    "vendor": "Fuobe Original",
+    "family": "fuobe-animation",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Keyframes in, the in-betweens drawn, one finished animation, with timing per gap: Wan 2.2 + AniSora",
+    "routes": [
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "fal-ai/wan/v2.2-a14b/image-to-video",
+        "map": {
+          "negativePrompt": "negative_prompt",
+          "image": "image_url",
+          "endImage": "end_image_url",
+          "seed": "seed",
+          "numFrames": {
+            "key": "num_frames",
+            "fps": 16,
+            "min": 17,
+            "max": 161,
+            "step": 4
+          },
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "auto",
+              "16:9",
+              "9:16",
+              "1:1"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480p",
+              "580p",
+              "720p"
+            ]
+          },
+          "fixed": {
+            "interpolator_model": "none",
+            "frames_per_second": 16
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "range": {
+              "min": 0,
+              "max": 4
+            },
+            "transformer": "high",
+            "weightName": true
+          }
+        },
+        "loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+      },
+      {
+        "op": "flf2v",
+        "provider": "fal",
+        "endpoint": "fal-ai/wan/v2.2-a14b/image-to-video",
+        "map": {
+          "negativePrompt": "negative_prompt",
+          "image": "image_url",
+          "endImage": "end_image_url",
+          "seed": "seed",
+          "numFrames": {
+            "key": "num_frames",
+            "fps": 16,
+            "min": 17,
+            "max": 161,
+            "step": 4
+          },
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "auto",
+              "16:9",
+              "9:16",
+              "1:1"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480p",
+              "580p",
+              "720p"
+            ]
+          },
+          "fixed": {
+            "interpolator_model": "none",
+            "frames_per_second": 16
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "range": {
+              "min": 0,
+              "max": 4
+            },
+            "transformer": "high",
+            "weightName": true
+          }
+        },
+        "loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+      }
+    ],
+    "options": {
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10
+      ],
+      "negativePrompt": true,
+      "seed": true,
+      "endFrame": true,
+      "aspectRatios": [
+        "auto",
+        "16:9",
+        "9:16",
+        "1:1"
+      ],
+      "resolutions": [
+        "480p",
+        "580p",
+        "720p"
+      ],
+      "maxImages": 1
+    },
+    "licence": {
+      "licence": "Apache-2.0",
+      "commercial": true,
+      "note": "Wan 2.1 / 2.2 weights are Apache-2.0",
+      "checked": "2026-10-23"
+    },
+    "defaults": {
+      "aspectRatio": "auto",
+      "duration": 5,
+      "resolution": "720p"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "720p on fal; 580p $0.06/s, 480p $0.04/s; with LoRAs $0.10/s, per gap's clip",
+      "byResolution": {
+        "720p": 0.08,
+        "580p": 0.06,
+        "480p": 0.04
+      },
+      "withLoras": 0.1
     }
   },
   {
