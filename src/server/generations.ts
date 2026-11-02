@@ -849,9 +849,11 @@ export function previewGeneration(asked: GenerationRequest) {
   // "Clean the voice first" (voice-first.ts): its other steps are checked as the run checks them, and priced in.
   const voiced = moved.request.voiceFirst ? voiceFirstExtra(moved.request, plan.model) : null;
   if (voiced) {
-    post = cost === null || voiced.costUsd === null ? post : post + voiced.costUsd;
+    if (voiced.costUsd !== null) post += voiced.costUsd;
     notes.push(...voiced.notes);
   }
+  // A clean-voice step whose price isn't known leaves the run's price unknown too, never the main step's alone.
+  const priceUnknown = cost === null || voiced?.costUsd === null;
   return {
     model: plan.model,
     op: plan.op,
@@ -859,7 +861,9 @@ export function previewGeneration(asked: GenerationRequest) {
     outputs: plan.jobs * plan.perJobOutputs,
     demo,
     providerId,
-    costUsd: cost === null ? null : post ? Math.round((cost * plan.jobs + post) * 1000) / 1000 : cost * plan.jobs,
+    costUsd: priceUnknown || cost === null ? null : post ? Math.round((cost * plan.jobs + post) * 1000) / 1000 : cost * plan.jobs,
+    // The other steps the run makes beside its own model (Clean the voice first's), so a policy and a price see them all.
+    ...(voiced?.steps.length && { steps: voiced.steps }),
     // The engine it runs on (a Fuobe Original picks one per request).
     engine: plan.model.engine,
     // What the route runs (the evaluation harness records it): the provider endpoint, the final prompt and the LoRAs it loads.
@@ -874,10 +878,11 @@ export function previewGeneration(asked: GenerationRequest) {
 }
 
 /** The steps "Clean the voice first" adds to a run (all but the run itself), checked and priced as the run makes them. */
-function voiceFirstExtra(req: GenerationRequest, model: ModelDef): { costUsd: number | null; notes: string[] } | null {
+function voiceFirstExtra(req: GenerationRequest, model: ModelDef): { costUsd: number | null; notes: string[]; steps: { model: string; op: string }[] } | null {
   const vf = voiceFirstPlanFor(req, model);
   if (!vf) return null;
   let costUsd: number | null = 0;
+  const steps: { model: string; op: string }[] = [];
   for (const s of vf.steps) {
     if (s.key === "main") continue;
     let p: ReturnType<typeof previewChained>;
@@ -887,10 +892,11 @@ function voiceFirstExtra(req: GenerationRequest, model: ModelDef): { costUsd: nu
       throw new Error(`${VOICE_FIRST_LABEL} can't run: ${(e as Error).message}. Turn it off to run without it`);
     }
     costUsd = costUsd === null || p.costUsd === null ? null : costUsd + p.costUsd;
+    steps.push({ model: p.model.id, op: p.op });
   }
   const op = inferOperation(model, req);
   const notes = op === "lipsync" && req.inputs?.video ? [vf.bed ? BED_NOTES.open : model.engine === "cloud" ? BED_NOTES.cloud : null].filter((x): x is string => !!x) : [];
-  return { costUsd: costUsd === null ? null : Math.round(costUsd * 10000) / 10000, notes };
+  return { costUsd: costUsd === null ? null : Math.round(costUsd * 10000) / 10000, notes, steps };
 }
 
 /** Preview a step that will wait for `deps` earlier steps: validated with placeholders in its chain slots, as createGenerations does. */
