@@ -278,5 +278,14 @@
     "isolated": false,
     "subdir": null,
     "folders": []
+  },
+  "ComfyUI_Nvidia_VFX_Nodes": {
+    "repo": "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes",
+    "commit": "38d790ded00650681fa3645362efe28c8560cf40",
+    "registry": { "id": "comfyui_nvidia_rtx_nodes", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
   }
 }

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-01T22:02:19.203Z",
+  "generatedAt": "2026-11-02T10:55:13.457Z",
   "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
   "comfyuiVersion": "0.41.0",
   "workflowTemplatesVersion": "0.11.86",
@@ -21901,6 +21901,219 @@
       "license": "n/a (no model; ComfyUI core)",
       "validated": true,
       "notes": "params.format exr of the sdr-to-hdr operation (Higgsfield's \"EXR 16-bit: uncompressed frame sequence for compositing\"). The same ImageSDRToHDR expansion as video-sdr-to-hdr; SaveImageAdvanced writes each frame as a half-float EXR with input_color_space HDR, i.e. the inverse HLG curve: scene-linear light in Rec.2020 primaries, highlights above 1.0 kept. Node 6 saves the 10-bit HLG MP4 with the clip's sound as the result to watch (role preview); Fuobe zips the frames (role frames) and attaches the zip to it. Decodes the whole clip: RAM grows with the length (Fuobe refuses a clip too long for the memory it has). Tested through Fuobe on CPU (2 s 160x96 30 fps clip with sound): 60 half-float EXR frames zipped onto an H.264 High 10 HLG (arib-std-b67, bt2020) preview with AAC."
+    },
+    {
+      "id": "upscale-video-rtx",
+      "title": "Video Upscale on an NVIDIA RTX card: RTX Video Super Resolution (1-4x) in passes of a few frames, sound kept (ComfyUI Nvidia VFX Nodes)",
+      "capability": "upscale-video",
+      "file": "upscale-video-rtx.json",
+      "source": "hand-built (scripts/comfy/hand-built/upscale-video-rtx.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "1",
+            "input": "video"
+          }
+        ],
+        "framesPerBatch": [
+          {
+            "node": "2",
+            "input": "frames_per_batch"
+          }
+        ],
+        "shortSide": [
+          {
+            "node": "4",
+            "input": "value"
+          }
+        ],
+        "rtxQuality": [
+          {
+            "node": "6",
+            "input": "quality"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "8",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "8",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "framesPerBatch": 16,
+        "shortSide": 1080,
+        "rtxQuality": "ULTRA"
+      },
+      "limits": {
+        "maxWidth": 3840,
+        "maxHeight": 3840,
+        "maxScale": 4
+      },
+      "models": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI-VideoHelperSuite",
+          "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+        },
+        {
+          "name": "ComfyUI_Nvidia_VFX_Nodes",
+          "repo": "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40"
+        }
+      ],
+      "vramGb": 0,
+      "license": "NVIDIA Software License Agreement (2025-05-05) and Product-Specific Terms for NVIDIA AI Products: the nvidia-vfx 0.2.0.0 runtime (RTX Video SDK libraries and their models, bundled in the wheel; free, proprietary, runs only on NVIDIA GPUs, no redistributing or reverse engineering, no published benchmarks without NVIDIA's permission); the wheel also carries the NVIDIA Open Model License (models commercially usable; NVIDIA claims no outputs) · ComfyUI Nvidia VFX Nodes Apache-2.0 · VideoHelperSuite GPL-3.0 code",
+      "validated": false,
+      "notes": "Built like upscale-video-esrgan-chunked: VHS_LoadVideo decodes framesPerBatch frames per pass (VHS_BatchManager re-queues the prompt until the clip is done) and one H.264 encode stays open across passes; the last pass writes the file with the source's sound at the source frame rate. RTX Video Super Resolution (node 6) scales by min(4, max(1, shortSide / the clip's shorter edge)) (ComfyMathExpression 5 from VHS_VideoInfo's loaded size), rounds the size to 8 and splits its own work into chunks of at most 16 MP of output; ResizeImageMaskNode 7 then lands exactly on shortSide (the shape kept). rtxQuality: ULTRA (compressed sources, the default) or HIGHBITRATE_ULTRA (clean, high-bitrate sources); LOW-HIGH are faster. Needs an NVIDIA RTX card, ComfyUI on a CUDA PyTorch (cu130 or newer, the pack's README) and a graphics driver of 570.190+ / 580.82+ / 590.44+ on Linux (570.65+ on Windows); no CPU, Apple or AMD path. The runtime ships its models, so nothing downloads at run time. The node's inputs follow the pack's schema at 38d790d.",
+      "gpu": "nvidia-rtx",
+      "validationError": "HTTP 400: missing_node_type: Node 'RTX Video Super Resolution (quality: rtxQuality)' not found. The custom node may not be installed. (Node ID '#6')"
+    },
+    {
+      "id": "fps-rtx-framegen",
+      "title": "FPS Boost and slow motion on an RTX 40 series card or later: RTX Video Frame Generation by m, keep every n-th frame, cuts detected (ComfyUI Nvidia VFX Nodes)",
+      "capability": "interpolate",
+      "file": "fps-rtx-framegen.json",
+      "source": "hand-built (scripts/comfy/hand-built/fps-rtx-framegen.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "1",
+            "input": "file"
+          }
+        ],
+        "multiplier": [
+          {
+            "node": "6",
+            "input": "value"
+          }
+        ],
+        "every": [
+          {
+            "node": "8",
+            "input": "value"
+          }
+        ],
+        "slowdown": [
+          {
+            "node": "10",
+            "input": "value"
+          }
+        ],
+        "rtxQuality": [
+          {
+            "node": "7",
+            "input": "mode"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "13",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "13",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "multiplier": 2,
+        "every": 1,
+        "slowdown": 1,
+        "rtxQuality": "MEDIUM"
+      },
+      "limits": {
+        "maxMultiplier": 16
+      },
+      "models": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI-VideoHelperSuite",
+          "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+        },
+        {
+          "name": "ComfyUI_Nvidia_VFX_Nodes",
+          "repo": "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40"
+        }
+      ],
+      "vramGb": 0,
+      "license": "NVIDIA Software License Agreement (2025-05-05) and Product-Specific Terms for NVIDIA AI Products: the nvidia-vfx 0.2.0.0 runtime (RTX Video SDK libraries and their models, bundled in the wheel; free, proprietary, runs only on NVIDIA GPUs, no redistributing or reverse engineering, no published benchmarks without NVIDIA's permission); the wheel also carries the NVIDIA Open Model License (models commercially usable; NVIDIA claims no outputs) · ComfyUI Nvidia VFX Nodes Apache-2.0 · VideoHelperSuite GPL-3.0 code",
+      "validated": false,
+      "notes": "interpolate-rife-fps with RTX Video Frame Generation in place of FrameInterpolate (same node ids, no model loader): the provider picks m (2-16) and n from the clip's frame rate so that source fps x m / n = target x slowdown, and links node 7 out when m is 1. The node returns (N - 1) x m + 1 frames for N inputs; the last frame is held once more first, so N source frames become N x m + 1 (the RIFE graph's count, fpsFrames). automatic_shot_change_detection is on, so a cut is not blended across. rtxQuality = the node's mode (LOW, MEDIUM (default), HIGH). Decodes the whole clip and holds source frames x m (the provider's RAM check counts it like RIFE). Needs an NVIDIA RTX 40 series card or later (the pack's README), a CUDA PyTorch (cu130 or newer) and a recent graphics driver; no CPU path. The node's inputs follow the pack's schema at 38d790d.",
+      "gpu": "nvidia-rtx-40",
+      "validationError": "HTTP 400: missing_node_type: Node 'RTX Video Frame Generation: (N - 1) x m + 1 frames, cuts detected' not found. The custom node may not be installed. (Node ID '#7')"
+    },
+    {
+      "id": "sdr-to-hdr-rtx",
+      "title": "SDR to HDR on an NVIDIA RTX card: RTX Video HDR to BT.2020 HLG or PQ (HDR10), saved as 10-bit H.264 with matching colour tags (ComfyUI Nvidia VFX Nodes)",
+      "capability": "sdr-to-hdr",
+      "file": "sdr-to-hdr-rtx.json",
+      "source": "hand-built (scripts/comfy/hand-built/sdr-to-hdr-rtx.json)",
+      "bindings": {
+        "video": [
+          {
+            "node": "1",
+            "input": "file"
+          }
+        ],
+        "peakNits": [
+          {
+            "node": "3",
+            "input": "luminance"
+          }
+        ],
+        "colorSpace": [
+          {
+            "node": "3",
+            "input": "output_colorspace"
+          },
+          {
+            "node": "4",
+            "input": "color_space"
+          }
+        ],
+        "filenamePrefix": [
+          {
+            "node": "5",
+            "input": "filename_prefix"
+          }
+        ]
+      },
+      "outputs": [
+        {
+          "node": "5",
+          "kind": "video"
+        }
+      ],
+      "defaults": {
+        "peakNits": 650,
+        "colorSpace": "HDR"
+      },
+      "limits": {
+        "minPeakNits": 400,
+        "maxPeakNits": 2000
+      },
+      "models": [],
+      "customNodes": [
+        {
+          "name": "ComfyUI_Nvidia_VFX_Nodes",
+          "repo": "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40"
+        }
+      ],
+      "vramGb": 0,
+      "license": "NVIDIA Software License Agreement (2025-05-05) and Product-Specific Terms for NVIDIA AI Products: the nvidia-vfx 0.2.0.0 runtime (RTX Video SDK libraries and their models, bundled in the wheel; free, proprietary, runs only on NVIDIA GPUs, no redistributing or reverse engineering, no published benchmarks without NVIDIA's permission); the wheel also carries the NVIDIA Open Model License (models commercially usable; NVIDIA claims no outputs) · ComfyUI Nvidia VFX Nodes Apache-2.0",
+      "validated": false,
+      "notes": "The learned alternative to video-sdr-to-hdr's inverse tone map: RTX Video HDR (the SDK's TrueHDR, with its DL-Debander pass) at peakNits (400-2000, 650 by default), contrast 100, saturation 100, middle grey 50. A ComfyUI IMAGE carries no colour metadata, so colorSpace binds both the node's output_colorspace and CreateVideo's color_space to the same value: \"HDR\" = BT.2020 HLG (params.format hlg_10bit), \"HDR PQ\" = BT.2020 PQ, HDR10's transfer (pq_10bit); CreateVideo writes 10 bits and SaveVideo an H.264 High 10 MP4 tagged bt2020nc / bt2020 / arib-std-b67 or smpte2084 (the same encode as video-sdr-to-hdr). The sound is kept. EXR frames stay on video-sdr-to-hdr-exr. Decodes the whole clip: RAM grows with the length. Needs an NVIDIA RTX card and a CUDA PyTorch (cu130 or newer); no CPU path. The node's inputs follow the pack's schema at 38d790d.",
+      "gpu": "nvidia-rtx",
+      "validationError": "HTTP 400: missing_node_type: Node 'RTX Video HDR (peak nits; HDR = BT.2020 HLG, HDR PQ = BT.2020 PQ)' not found. The custom node may not be installed. (Node ID '#3')"
     }
   ]
 }

@@ -162,6 +162,8 @@ export const BINDING_KEYS = new Set([
   'invertDepth',
   // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
+  // nm10-rtx-video: the NVIDIA RTX Video nodes' quality (Super Resolution) or mode (Frame Generation)
+  'rtxQuality',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.
@@ -435,6 +437,8 @@ async function main() {
     if (spec.autoDownloads) entry.autoDownloads = spec.autoDownloads;
     // "isolated": the node pack has process-wide side effects; run it on a separate ComfyUI (see README).
     if (spec.worker) entry.worker = spec.worker;
+    // The card the graph's nodes need ("nvidia-rtx", "nvidia-rtx-40"): the GPU pre-flight checks it by the card's name.
+    if (spec.gpu) entry.gpu = spec.gpu;
     // The app rewrites the graph before submitting (e.g. "captions": one segment per caption cue).
     if (spec.expand) entry.expand = spec.expand;
     if (!validated && st && st.sha256 === hash && st.error) entry.validationError = st.error;

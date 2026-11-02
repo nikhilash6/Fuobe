@@ -15263,6 +15263,9 @@
     "has_intermediate_output": false,
     "search_aliases": []
   },
+  "RTXTrueHDR": null,
+  "RTXVideoFrameGeneration": null,
+  "RTXVideoSuperResolution": null,
   "RandomNoise": {
     "input": {
       "required": {

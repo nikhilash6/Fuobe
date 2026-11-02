@@ -142,6 +142,10 @@ describe("round-4 ComfyUI workflows", () => {
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
       "video-regenerate-h3",
+      // NVIDIA RTX Video: the pack needs an NVIDIA RTX card, so it isn't on the CPU validation server (tests/rtx-video.test.ts checks its inputs).
+      "upscale-video-rtx",
+      "fps-rtx-framegen",
+      "sdr-to-hdr-rtx",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);
   });

@@ -111,7 +111,7 @@ export function licenceTerms(text: string): { flags: LicenceFlag[]; excludes?: s
   const noWeights = /^(n\/a|no model)\b/i.test(text.trim());
   const nonCommercial = /NON-COMMERCIAL/.test(text) || /^CC-BY-NC/.test(text.trim());
   const excludes = /\bEXCLUDES\s+([^);]+)/.exec(text)?.[1].trim();
-  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Terms of Use|free below|below US\$/i.test(text);
+  const conditional = /Community License|Kommunity License|OpenRAIL|Model Use License|CogVideoX License|SAM License|DINOv3 License|Terms of Use|NVIDIA Software License|free below|below US\$/i.test(text);
   const flags: LicenceFlag[] = [];
   if (nonCommercial) flags.push("non-commercial");
   if (excludes) flags.push("territory");
@@ -300,6 +300,8 @@ const KNOWN: { re: RegExp; name: string; class: LicenceClass; url?: string }[] =
   { re: /Gemma Terms of Use/, name: "Gemma Terms of Use", class: "conditions", url: "https://ai.google.dev/gemma/terms" },
   // NVIDIA's open model licence (RE-USE): commercial use; the licence and NVIDIA's notices go with any copy of the weights.
   { re: /OpenMDW-1\.1/, name: "OpenMDW-1.1", class: "commercial", url: "https://huggingface.co/nvidia/NVIDIA-NemotronLabs-RE-USE/blob/31f82f2efad1095034492f236e8dac9239ba713b/LICENSE" },
+  // NVIDIA's RTX Video SDK (nvidia-vfx): free and proprietary, only on NVIDIA GPUs; no redistributing or published benchmarks.
+  { re: /NVIDIA Software License Agreement/, name: "NVIDIA Software License Agreement", class: "conditions", url: "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/" },
   { re: /Apache[- ]2\.0/, name: "Apache-2.0", class: "commercial", url: SPDX("Apache-2.0") },
   { re: /\bMIT\b/, name: "MIT", class: "commercial", url: SPDX("MIT") },
   { re: /BSD-3-Clause/, name: "BSD-3-Clause", class: "commercial", url: SPDX("BSD-3-Clause") },
@@ -530,6 +532,13 @@ export const NODE_PACKS: NodePack[] = [
     class: "commercial",
     url: SPDX("MIT"),
     note: "Fuobe's own pack. The network code is adapted from NVIDIA's RE-USE repository (OpenMDW-1.1, notices kept), and the Mamba layer is a plain-PyTorch rewrite (no mamba-ssm). It matches the reference maths numerically, but it is not NVIDIA's code path",
+  }),
+  // NVIDIA RTX Video (Quick · RTX, RTX Frame Generation, RTX Video HDR): an NVIDIA RTX card only; installed on RTX hosts.
+  pack("ComfyUI_Nvidia_VFX_Nodes", "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes/tree/38d790ded00650681fa3645362efe28c8560cf40", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Comfy-Org's NVIDIA VFX nodes 0.2.1; Apache-2.0 code. The nvidia-vfx runtime they load (the RTX Video SDK and its models) is NVIDIA's own, under the NVIDIA Software License Agreement: free, runs only on NVIDIA GPUs, no redistributing it",
   }),
 ];
 
