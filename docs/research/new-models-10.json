@@ -43,7 +43,7 @@
   "https://www.androidsage.com/2026/10/23/capcut-19-9-0-apk/",
   "https://letsdatascience.com/news/google-rolls-out-nano-banana-21-image-model-c6ac3b89",
   "https://globenewswire.com/news-release/2026/10/27/3389469/0/en/vidu-powers-china-s-first-ai-feature-length-film-demonstrating-its-full-cinematic-potential.html",
-  "Fuobe at claude/fuobe-parity-4 (read only): src/lib/catalog/models.ts, cloud-models.generated.ts, studios.ts, workflows/comfyui/manifest.json (ComfyUI 0.42.0 @ 5841c187), docs/FEATURES.md, docs/HANDOFF.md, docs/handoff/queue.json, docs/research/new-models-7.md, comfyui-oss*.md, paid-model-apis*.json"
+  "Fuobe (read only): src/lib/catalog/models.ts, cloud-models.generated.ts, studios.ts, workflows/comfyui/manifest.json (ComfyUI 0.42.0 @ 5841c187), docs/FEATURES.md, docs/HANDOFF.md, docs/handoff/queue.json, docs/research/new-models-7.md, comfyui-oss*.md, paid-model-apis*.json"
  ],
  "models": [
   {

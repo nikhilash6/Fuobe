@@ -212,10 +212,10 @@ export function planRemoveDialogue(i: RemoveDialogueInput): RemoveDialoguePlan {
     musicDb,
     summary:
       outcome === "no-dialogue"
-        ? "Takes the talking out and keeps the music and sound effects. The picture is not re-encoded."
+        ? "Takes the talking out and keeps the music and sound effects. The picture stays exactly as it was."
         : outcome === "dialogue-only"
-          ? "Keeps only the talking: the music and sound effects go. The picture is not re-encoded."
-          : `Keeps the talking and lowers the music and sound effects by ${Math.abs(musicDb!)} dB under it. The picture is not re-encoded.`,
+          ? "Keeps only the talking: the music and sound effects go. The picture stays exactly as it was."
+          : `Keeps the talking and lowers the music and sound effects by ${Math.abs(musicDb!)} dB under it. The picture stays exactly as it was.`,
     notes: [
       outcome === "dialogue-only"
         ? "Music or effects the model takes for speech (singing, a shout in a crowd) stay with the dialogue."

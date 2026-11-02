@@ -56,7 +56,7 @@ const ONE_SHOT: Record<OneShotModel, { name: string; note: string }> = {
 };
 
 // The Voice split menu (open engine): what each one does to the soundtrack.
-const SPLIT_LABEL: Record<VoiceSplit, string> = { dbs: "DBS: keeps music and effects, CPU-friendly", melband: "MelBand RoFormer" };
+const SPLIT_LABEL: Record<VoiceSplit, string> = { dbs: "Keep music and effects", melband: "Standard" };
 
 const ROUTE_LINE = {
   open: (split: VoiceSplit) =>
@@ -244,7 +244,7 @@ function NewDub({ onStarted }: { onStarted: (id: string) => void }) {
                   </Select>
                 ) : (
                   <p className="pt-1.5 text-[13px] font-medium">
-                    {VOICE_SPLITS[split].name}
+                    {SPLIT_LABEL[split]}
                   </p>
                 )}
                 <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground">{VOICE_SPLITS[split].note}.</p>

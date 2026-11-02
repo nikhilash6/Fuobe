@@ -17,7 +17,7 @@ import path from "node:path";
 import { DESKTOP, PHONE, chromiumPath, loadPlaywright } from "./_browser.mjs";
 
 const args = process.argv.slice(2);
-const app = (args.find((a) => !a.startsWith("--")) ?? "http://localhost:3000").replace(/\/$/, "");
+const app = (args.find((a) => !a.startsWith("--")) ?? "http://localhost:3440").replace(/\/$/, "");
 const shots = args.find((a) => a.startsWith("--shots="))?.slice(8);
 if (shots) fs.mkdirSync(shots, { recursive: true });
 const { chromium } = loadPlaywright();

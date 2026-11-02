@@ -102,7 +102,7 @@ const RUN_LABEL: Record<DialogueOutcome, string> = {
 };
 
 const COPY =
-  "Takes the talking out and keeps the music and sound effects. The picture is not re-encoded.";
+  "Takes the talking out and keeps the music and sound effects. The picture stays exactly as it was.";
 
 /**
  * Why a guest or an account can't run it: POST /api/audio-tools answers them own-gpu-tool (docs/public-signup.md), so

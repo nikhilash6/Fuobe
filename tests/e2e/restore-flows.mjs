@@ -11,7 +11,7 @@ import path from "node:path";
 import { launch, root } from "./_browser.mjs";
 
 const argv = process.argv.slice(2);
-const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
+const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3440").replace(/\/$/, "");
 const shots = argv.includes("--shots") ? argv[argv.indexOf("--shots") + 1] : undefined;
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
@@ -56,9 +56,9 @@ try {
   {
     const { context, page } = await contextFor("open");
     await page.goto(`${app}/video-tools/restore?video=${encodeURIComponent(clip)}`, { waitUntil: "load" });
-    await page.getByText(/Canvas \d+×\d+ · \d+ tiles of 960×544/).first().waitFor({ timeout: 30_000 });
+    await page.getByText(/\d+×\d+ · restored in \d+ parts?/).first().waitFor({ timeout: 30_000 });
     const t = await text(page);
-    check("GPU: canvas, tiles and windows read from the clip", /Canvas 1088×1920 · \d+ tiles of 960×544 · 3 windows of up to 97 frames/.test(t));
+    check("GPU: the size and the parts read from the clip", /1088×1920 · restored in 3 parts/.test(t));
     check("GPU: the gated-download step with its link to Settings", /Restore IC-LoRA is gated/.test(t) && (await page.locator('a[href="/settings#huggingface"]').count()) > 0);
     check("GPU: the hardware note", /24 GB|GPU/.test(t));
     check("GPU: priced before it runs", /Free|Demo · free/.test(t));
@@ -71,7 +71,7 @@ try {
     const four = page.getByRole("switch", { name: /Restore to 4K/ });
     check("Restore to 4K is offered on the GPU", (await four.count()) > 0 && !(await four.isDisabled()));
     await four.click();
-    await page.getByText(/then 2176×3840/).first().waitFor({ timeout: 20_000 });
+    await page.getByText(/finished at 2176×3840/).first().waitFor({ timeout: 20_000 });
     check("Restore to 4K adds the detail pass at twice the canvas", true);
     if (shots) await page.screenshot({ path: path.join(shots, "restore-open-1440.png"), fullPage: true });
     await four.click();

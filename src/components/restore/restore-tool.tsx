@@ -189,9 +189,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
                   />
                   {est && (
                     <p className="text-[12px] text-muted-foreground tabular-nums">
-                      {open
-                        ? `Canvas ${est.canvas.width}×${est.canvas.height} · ${est.tiles} tiles of 960×544 · ${est.pieces} window${est.pieces > 1 ? "s" : ""} of up to 97 frames${est.refined ? ` · then ${est.refined.width}×${est.refined.height}` : ""}`
-                        : `${est.canvas.width}×${est.canvas.height} in one pass a piece · ${est.pieces} piece${est.pieces > 1 ? "s" : ""} of up to 97 frames`}
+                      {`${est.canvas.width}×${est.canvas.height} · restored in ${est.pieces} part${est.pieces > 1 ? "s" : ""}${open && est.refined ? `, then finished at ${est.refined.width}×${est.refined.height}` : ""}`}
                       {est.dropped > 0 ? ` · the last ${est.dropped} frame${est.dropped > 1 ? "s" : ""} left out` : ""}
                     </p>
                   )}

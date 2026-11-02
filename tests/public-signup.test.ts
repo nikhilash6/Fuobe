@@ -237,7 +237,7 @@ describe("accounts never run on the owner's keys or GPU", () => {
       // A run route that ignores ?preview=1 isn't a price check.
       "/api/cinema/projects/p1/generate?preview=1",
       "/api/faceless/episodes/e1/estimate",
-      // Restore & colourise (o/archive-restore): its run and its prompt writer.
+      // Restore & colourise: its run and its prompt writer.
       "/api/restore",
       "/api/restore/prompt",
     ]) {

@@ -147,7 +147,7 @@ describe("the plan per outcome (open engine)", () => {
     expect(mux.chain).toEqual([{ slot: "audio", stem: "background" }]);
     expect(mux.request.params).toBeUndefined();
     expect(p.summary).toBe(
-      "Takes the talking out and keeps the music and sound effects. The picture is not re-encoded.",
+      "Takes the talking out and keeps the music and sound effects. The picture stays exactly as it was.",
     );
     expect(p.notes[0]).toMatch(
       /^Speech the model misses .* stays in the music and effects/,
@@ -187,7 +187,7 @@ describe("the plan per outcome (open engine)", () => {
     expect(mux.request.params).toEqual({ extra: { backgroundVolumeDb: -18 } });
     expect(p.musicDb).toBe(-18);
     expect(p.summary).toBe(
-      "Keeps the talking and lowers the music and sound effects by 18 dB under it. The picture is not re-encoded.",
+      "Keeps the talking and lowers the music and sound effects by 18 dB under it. The picture stays exactly as it was.",
     );
     // The default and the slider's ends.
     expect(
@@ -590,7 +590,7 @@ describe("POST /api/audio-tools remove-dialogue (demo mode)", () => {
       hostPick: "fast",
     });
     expect(preview.summary).toBe(
-      "Takes the talking out and keeps the music and sound effects. The picture is not re-encoded.",
+      "Takes the talking out and keeps the music and sound effects. The picture stays exactly as it was.",
     );
     expect(preview.estimate).toEqual(
       removeDialogueTime({

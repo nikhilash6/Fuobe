@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 
 /**
- * Restore & colourise (o/archive-restore) under the owner's public sign-up rules (docs/public-signup.md): its price
+ * Restore & colourise under the owner's public sign-up rules (docs/public-signup.md): its price
  * check is open to guests and accounts and priced for their own GPU, never a demo; its run and its prompt writer plan
  * with the studio's own AI helpers and chain on the server, so a guest or an account gets own-gpu-tool (with or
  * without a GPU); the owner's are unchanged. The GPU pre-flight board has its row, on graphs the requirement index knows.

@@ -12,7 +12,7 @@ import path from "node:path";
 import { DESKTOP, PHONE, launch, openRoute } from "./_browser.mjs";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
-const app = (args[0] ?? "http://localhost:3000").replace(/\/$/, "");
+const app = (args[0] ?? "http://localhost:3440").replace(/\/$/, "");
 const out = args[1] ?? fs.mkdtempSync("/tmp/fuobe-regenerate-");
 fs.mkdirSync(out, { recursive: true });
 

@@ -617,11 +617,10 @@ export function restoreTitle(prompt: string, clipName?: string): string {
 // Words for the page
 
 /** The hardware line under the GPU choice (no measurement here: the CPU server only checks the graph). */
-export const GPU_NOTE = "LTX-2.5 22B distilled with tiled latent fusion: a 24 GB GPU class, minutes per window. Free on your GPU.";
+export const GPU_NOTE = "Runs free on your GPU (24 GB or more). Takes a few minutes for every few seconds of film.";
 
 /** What the cloud does differently (said plainly: what runs where). */
-export const CLOUD_NOTE =
-  "The cloud runs LTX-2.3 22B on fal with the same Restore IC-LoRA, one untiled pass a piece at the tier's size. The card recommends tiles at every size, so your GPU's tiled run is the reference recipe.";
+export const CLOUD_NOTE = "Runs in the cloud. Your GPU gives the finest result.";
 
 /** The one-time gated download, as the page says it. */
 export const GATED_NOTE = "The Restore IC-LoRA (1.7 GB) is gated on Hugging Face: accept its licence there once, then add your Hugging Face token in Settings → LoRAs.";

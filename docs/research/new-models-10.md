@@ -690,5 +690,5 @@ Models (primary pages)
 - Freefield: https://github.com/neuregex/freefield (via https://comfyui-wiki.com/en/news/2026-10-27-freefield)
 - Competitors: https://www.androidsage.com/2026/10/23/capcut-19-9-0-apk/ , https://letsdatascience.com/news/google-rolls-out-nano-banana-21-image-model-c6ac3b89 , https://globenewswire.com/news-release/2026/10/27/3389469/0/en/vidu-powers-china-s-first-ai-feature-length-film-demonstrating-its-full-cinematic-potential.html
 
-Fuobe (read only, `claude/fuobe-parity-4`)
+Fuobe (read only)
 - `src/lib/catalog/models.ts`, `src/lib/catalog/cloud-models.generated.ts`, `src/lib/studios.ts`, `src/lib/layout-prompt.ts`, `src/lib/catalog/keyframes.ts`, `src/lib/catalog/training.ts`, `workflows/comfyui/manifest.json`, `docs/FEATURES.md`, `docs/HANDOFF.md`, `docs/handoff/queue.json`, `docs/research/README.md`, `new-models-7.md`, `comfyui-oss.md`, `comfyui-oss-4.md`, `paid-model-apis*.json`.

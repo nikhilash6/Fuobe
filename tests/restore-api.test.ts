@@ -70,7 +70,7 @@ describe("Restore: estimates", () => {
   it("the GPU is free: three windows, the canvas, the tiles, the gated download said while no HF token or file is there", async () => {
     const e = await (await estimateRoute.POST(json(body()))).json();
     expect(e).toMatchObject({ engine: "open", pieces: 3, costUsd: 0, canvas: { width: 1088, height: 1920 }, loraReady: false, dropped: 7 });
-    expect(e.notes.join(" ")).toMatch(/LTX-2.5 22B distilled with tiled latent fusion/);
+    expect(e.notes.join(" ")).toMatch(/Runs free on your GPU \(24 GB or more\)/);
     expect(e.notes.join(" ")).toMatch(/gated on Hugging Face/);
     const four = await (await estimateRoute.POST(json(body({ refine: true })))).json();
     expect(four.refined).toEqual({ width: 2176, height: 3840 });

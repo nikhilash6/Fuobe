@@ -15,7 +15,7 @@ const argv = process.argv.slice(2);
 const app = (
   argv.find(
     (a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots",
-  ) ?? "http://localhost:3000"
+  ) ?? "http://localhost:3440"
 ).replace(/\/$/, "");
 const shots = argv.includes("--shots")
   ? argv[argv.indexOf("--shots") + 1]

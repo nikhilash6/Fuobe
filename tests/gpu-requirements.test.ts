@@ -109,7 +109,7 @@ describe("requirements.json", () => {
     expect(index.packs["ComfyUI-ThinkSound_Wrapper"].isolated).toBe(true);
   });
 
-  // Raised together with Restore & colourise's graph and pack (o/archive-restore), which took the index from 202.1 to
+  // Raised together with Restore & colourise's graph and pack, which took the index from 202.1 to
   // 204.4 KB (24.9 to 25.3 KB gzipped), leaving the old 200 KB / 25 KB no room. Each graph adds about 1-2.5 KB raw and
   // 0.2-0.5 KB gzipped, so 216 KB / 27 KB leaves room for the next few graphs (n7-3's among them) while still catching a
   // build that bloats it. The server parses it once per change, and /api/gpu/requirements serves it compressed.
