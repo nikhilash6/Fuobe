@@ -19,13 +19,16 @@ function under(path: string, pathname: string): boolean {
 export function activePhoneTab(
   pathname: string,
   sheet: PhoneSheet | null,
-  entry?: { kind: string; group?: string } | null,
+  entry?: { id?: string; kind: string; group?: string } | null,
 ): PhoneTab | null {
   if (sheet) return sheet;
   if (!pathname) return null;
   if (pathname === "/") return "home";
   if (under("/library", pathname)) return "library";
   if (under("/settings", pathname) || under("/connect", pathname)) return "you";
+  // The area pages the Create and Studios sheets lead to ("See all") are theirs.
+  if (entry?.id === "area-studios") return "studios";
+  if (entry?.id === "area-create") return "create";
   if (entry?.group) return "studios";
   if (entry?.kind === "create") return "create";
   return null;

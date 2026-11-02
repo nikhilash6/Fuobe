@@ -4,10 +4,12 @@ import { ArrowRight, LayoutGrid, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CardPending, IntentLink } from "@/components/intent-link";
 import { CoverThumb } from "@/components/nav/cover-thumb";
-import { useNavUi, useViewerKind } from "@/components/nav/nav-ui";
+import { useViewerKind } from "@/components/nav/nav-ui";
+import { area } from "@/lib/nav-areas";
 import { NAV_ICONS } from "@/lib/nav-icons";
 import { GOALS, goalBand, isNew, tapHref, type GoalId, type NavEntry, type ViewerKind } from "@/lib/nav-model";
 import { cn } from "@/lib/utils";
+import { GOAL_STRIP, GOAL_TAB, GOAL_TAB_ON } from "./goal-tab";
 
 /**
  * Home's goal row: six goals under the hero, each a button that opens a band of that goal's studios, one-tap presets
@@ -240,7 +242,6 @@ export function GoalBand({ id, kind, names, onClose }: { id: GoalId; kind: Viewe
  */
 export function GoalRow({ names }: { names: Readonly<Record<string, string>> }) {
   const kind = useViewerKind();
-  const { openStudios } = useNavUi();
   const [open, setOpen] = useState<GoalId | null>(null);
   // The goal that holds the row's one tab stop (the last one focused or opened).
   const [stop, setStop] = useState(0);
@@ -285,7 +286,7 @@ export function GoalRow({ names }: { names: Readonly<Record<string, string>> }) 
         close();
       }}
     >
-      <div className="flex h-[52px] items-stretch border-y max-sm:-mx-4">
+      <div className={GOAL_STRIP}>
         {/* A phone scrolls the goals sideways inside the row, never the page. */}
         <div
           ref={scroller}
@@ -315,13 +316,7 @@ export function GoalRow({ names }: { names: Readonly<Record<string, string>> }) 
                   setOpen(on ? null : g.id);
                   if (!on) reveal(e.currentTarget);
                 }}
-                className={cn(
-                  "flex shrink-0 snap-start items-center gap-2 rounded-t-[10px] border-b-2 border-transparent px-4 text-[14px] whitespace-nowrap text-foreground/80 outline-none hover:bg-accent hover:text-foreground motion-safe:transition-colors",
-                  // A tablet's row holds all six as words alone (a phone's scrolls, with the icons).
-                  "md:max-lg:px-2.5 md:max-lg:text-[13.5px]",
-                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                  on && "border-primary bg-accent text-foreground",
-                )}
+                className={cn(GOAL_TAB, on && GOAL_TAB_ON)}
               >
                 <Icon aria-hidden className={cn("size-4 shrink-0 md:max-lg:hidden", on ? "text-brand-text" : "text-muted-foreground")} />
                 {/* The label's bold copy keeps its width, so opening a goal never moves the ones beside it. */}
@@ -335,9 +330,9 @@ export function GoalRow({ names }: { names: Readonly<Record<string, string>> }) 
             );
           })}
         </div>
-        <button
-          type="button"
-          onClick={() => openStudios()}
+        {/* Every studio and tool on one page, with covers (the bar's Studios menu is the quick way). */}
+        <IntentLink
+          href={area("studios").href}
           className={cn(
             "flex shrink-0 items-center justify-center gap-2 self-center rounded-[10px] text-[13.5px] font-medium text-brand-text hover:bg-brand-faint motion-safe:transition-colors",
             // Its words from xl; narrower, its icon (with the words for screen readers) leaves the goals the room.
@@ -347,7 +342,7 @@ export function GoalRow({ names }: { names: Readonly<Record<string, string>> }) 
         >
           <LayoutGrid aria-hidden className="size-[15px]" />
           <span className="max-xl:sr-only">All studios and tools</span>
-        </button>
+        </IntentLink>
       </div>
       {open && <GoalBand key={open} id={open} kind={kind} names={names} onClose={close} />}
     </div>

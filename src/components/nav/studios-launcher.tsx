@@ -1,12 +1,15 @@
 "use client";
 
-import { ChevronDown, Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { IntentLink } from "@/components/intent-link";
 import { Kbd } from "@/components/ui/kbd";
+import { area } from "@/lib/nav-areas";
 import { isNew, launcherActive, launcherColumns, studioCount, type NavEntry, type ViewerKind } from "@/lib/nav-model";
+import { isPlainClick } from "@/lib/use-tapped-tab";
 import { cn } from "@/lib/utils";
+import { BAR_CHEVRON, BAR_LABEL, BAR_SPLIT, BarChevron } from "./bar-split";
 import { CoverThumb } from "./cover-thumb";
 import { useNavUi, useViewerKind } from "./nav-ui";
 import { useSearchPalette } from "./search-context";
@@ -20,6 +23,9 @@ import { warmNav } from "./nav-prefetch";
  */
 
 export const LAUNCHER_ID = "studios-launcher";
+
+/** Every studio on one page, with covers and lines ("See all", the bar item's name). */
+export const STUDIOS_AREA_HREF = area("studios").href;
 
 export type LauncherKey = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight" | "Home" | "End";
 
@@ -163,6 +169,16 @@ export function LauncherPanel({ onClose, onSearch }: { onClose: () => void; onSe
     <div className="mx-auto max-w-[1440px] px-6 pt-5 pb-6 lg:px-10 lg:pt-6 lg:pb-7">
       <div className="flex items-center gap-3.5 pb-4">
         <p className="text-[13px] text-muted-foreground">{studioCount()} studios, grouped by what you want to make</p>
+        {/* A plain link in Tab order before the grid; the grid's arrow keys skip it (it has no data-col). */}
+        <IntentLink
+          href={STUDIOS_AREA_HREF}
+          aria-current={pathname === STUDIOS_AREA_HREF ? "page" : undefined}
+          aria-label="See all studios"
+          className={cn("group/all -ml-1 inline-flex h-9 items-center gap-1 rounded-[10px] px-2 text-[13px] font-medium text-brand-text hover:bg-brand-faint", LINK_FOCUS)}
+        >
+          See all
+          <ArrowRight aria-hidden className="size-3.5 motion-safe:transition-transform group-hover/all:translate-x-0.5" />
+        </IntentLink>
         <span className="flex-1" />
         <button
           type="button"
@@ -183,11 +199,12 @@ export function LauncherPanel({ onClose, onSearch }: { onClose: () => void; onSe
 }
 
 /**
- * The bar's Studios button and its panel. The panel hangs from the bar (the header is its positioned parent) and spans
- * it. It is mounted, hidden, the first time the pointer or focus comes to the button, so its covers are loading before
- * the click. `className`: the bar's item look; `active`: a studio's page is open.
+ * The bar's Studios item and its panel: its name goes to /studios, its chevron (or ArrowDown on the name) opens the
+ * panel. The panel hangs from the bar (the header is its positioned parent) and spans it. It
+ * is mounted, hidden, the first time the pointer or focus comes to the item, so its covers are loading before the click.
+ * `active`: a studio's page is open; `current`: /studios itself; `onTap`: the name was clicked.
  */
-export function StudiosLauncher({ className, active }: { className?: string; active?: boolean }) {
+export function StudiosLauncher({ active, current, onTap }: { active?: boolean; current?: boolean; onTap?: (href: string) => void }) {
   const { launcherOpen: open, setLauncherOpen, launcherGroup, launcherReturnTo } = useNavUi();
   const search = useSearchPalette();
   const [warm, setWarm] = useState(false);
@@ -264,30 +281,56 @@ export function StudiosLauncher({ className, active }: { className?: string; act
         if (open && to && !root.current?.contains(to)) close(false);
       }}
     >
-      <button
-        ref={trigger}
-        type="button"
-        aria-expanded={open}
-        // The panel is on the page once warmed (hover, focus) or open.
-        aria-controls={shown ? LAUNCHER_ID : undefined}
-        data-studios-trigger
+      <div
+        data-bar-split
         data-active={active || undefined}
-        data-state={open ? "open" : "closed"}
-        className={className}
+        data-open={open || undefined}
+        className={BAR_SPLIT}
+        // The panel mounts, hidden, so its covers load before a click (it opens by a click or a key only: it spans the
+        // page, so resting the pointer on the bar never covers it).
         onPointerEnter={() => setWarm(true)}
-        onFocus={() => setWarm(true)}
-        // Click, Enter and Space open it with focus on the first lead card (arrow keys and Tab go on from there).
-        onClick={toggle}
-        onKeyDown={(e) => {
-          if (e.key !== "ArrowDown" || open) return;
-          e.preventDefault();
-          toggle();
-        }}
       >
-        Studios
-        <span className="rounded-full bg-brand-faint px-1.5 py-px text-[11px] leading-4 font-semibold text-brand-text tabular-nums">{studioCount()}</span>
-        <ChevronDown aria-hidden className="size-3.5 text-muted-foreground group-data-[state=open]/bar-item:rotate-180 motion-safe:transition-transform" />
-      </button>
+        <IntentLink
+          href={STUDIOS_AREA_HREF}
+          aria-current={current ? "page" : undefined}
+          aria-label={`Studios, ${studioCount()} studios`}
+          className={BAR_LABEL}
+          onFocus={() => setWarm(true)}
+          onClick={(e) => {
+            if (open) close(false);
+            if (isPlainClick(e)) onTap?.(STUDIOS_AREA_HREF);
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowDown" || e.altKey || e.metaKey || e.ctrlKey || open) return;
+            e.preventDefault();
+            toggle();
+          }}
+        >
+          Studios
+          <span className="rounded-full bg-brand-faint px-1.5 py-px text-[11px] leading-4 font-semibold text-brand-text tabular-nums">{studioCount()}</span>
+        </IntentLink>
+        <button
+          ref={trigger}
+          type="button"
+          aria-label="Studios menu"
+          aria-expanded={open}
+          // The panel is on the page once warmed (hover, focus) or open.
+          aria-controls={shown ? LAUNCHER_ID : undefined}
+          data-studios-trigger
+          data-state={open ? "open" : "closed"}
+          className={BAR_CHEVRON}
+          onFocus={() => setWarm(true)}
+          // Click, Enter and Space open it with focus on the first lead card (arrow keys and Tab go on from there).
+          onClick={toggle}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowDown" || open) return;
+            e.preventDefault();
+            toggle();
+          }}
+        >
+          <BarChevron />
+        </button>
+      </div>
       {shown && (
         <section
           ref={panel}

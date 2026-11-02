@@ -2739,13 +2739,15 @@ export function recordLocalGeneration(input: {
   title?: string;
   inputs: GenerationRequest["inputs"];
   params?: GenerationRequest["params"];
-  output: { url: string; kind: OutputFile["kind"]; contentType?: string };
+  output: { url: string; kind: OutputFile["kind"]; contentType?: string; meta?: { poster: string } };
 }): Generation {
   const model = getModel(input.modelId);
   // A browser tool's own result: the model's local route for this very step (a grade is not recorded as a Relight blend).
   if (!model || !model.routes.some((r) => r.provider === "local" && r.op === input.op)) throw new Error("Not a browser tool");
   const now = Date.now();
-  const req: GenerationRequest = { feature: input.feature, modelId: input.modelId, op: input.op, prompt: input.prompt, ...(input.title && { title: input.title }), inputs: input.inputs, params: input.params };
+  // Inside an account's work (the route's runAsTenant) the result is the account's own, as its runs are (stampTenant).
+  const account = tenantAccount();
+  const req: GenerationRequest = { feature: input.feature, modelId: input.modelId, op: input.op, prompt: input.prompt, ...(input.title && { title: input.title }), inputs: input.inputs, params: input.params, ...(account && { account }) };
   const row: Row = {
     id: nanoid(12),
     batch_id: null,

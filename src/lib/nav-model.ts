@@ -9,7 +9,8 @@ import { HUB_MODES, modeHref, type HubKind } from "./hubs";
 import { navActive, NEW_CREATION_HREF } from "./nav";
 
 export type ViewerKind = "guest" | "account" | "owner";
-export type NavKind = "home" | "action" | "create" | "studio" | "presets" | "tool" | "library" | "settings";
+/** "area": a page that shows everything one of the bar's menus holds (/create, /studios, /motions-and-effects). */
+export type NavKind = "home" | "action" | "create" | "studio" | "presets" | "tool" | "library" | "settings" | "area";
 /** Launcher columns, the Studios sheet chips and the palette's "Every studio" chips. */
 export type LauncherGroupId = "film" | "social" | "sell" | "people" | "sound" | "finish";
 /** The goal row on Home. An entry can serve several goals. */
@@ -27,6 +28,11 @@ export interface NavEntry {
   short?: string;
   /** One line, 34 characters at most, sentence case, no full stop. */
   what: string;
+  /**
+   * The sentence under its cover card on an area page (/create, /studios): 64 characters at most, sentence case, a full
+   * stop at the end. Home's own line wins where Home has a card for the same page (HOME_STUDIOS).
+   */
+  line?: string;
   kind: NavKind;
   /** Set: it is in the launcher, the Studios sheet and "Every studio". */
   group?: LauncherGroupId;
@@ -108,7 +114,7 @@ const PAGES: NavEntry[] = [
   { id: "color-grade", href: "/color-grade", label: "Color grading", what: "Grade and match colors", kind: "create", goals: ["edit", "film"], keywords: "grade lut colour color", cover: "app-color-grading", icon: "SlidersHorizontal" },
   { id: "canvas", href: "/canvas", label: "Canvas", what: "Wire models together", kind: "create", goals: [], keywords: "nodes flow workflow graph", icon: "Network" },
   { id: "motions", href: "/motions", label: "Camera motions", what: "Crane and drone moves for any shot", kind: "presets", goals: ["film"], keywords: "camera moves presets dolly crane drone orbit", cover: "motion-crane-up", icon: "Film" },
-  { id: "effects", href: "/effects", label: "Effects", what: "Visual effects for any clip", kind: "presets", goals: ["film", "social"], keywords: "vfx presets visual effects", cover: "effect-nature-bloom", icon: "Sparkles" },
+  { id: "effects", href: "/effects", label: "Effects", what: "Cinematic effects from one photo", kind: "presets", goals: ["film", "social"], keywords: "vfx presets visual effects", cover: "effect-nature-bloom", icon: "Sparkles" },
   { id: "library", href: "/library", label: "All creations", what: "Everything you have made", kind: "library", goals: [], keywords: "library history results creations", icon: "Library", eager: true },
   { id: "favorites", href: "/library?tab=favorites", label: "Favorites", what: "The ones you starred", kind: "library", goals: [], keywords: "starred liked", icon: "Star" },
   { id: "settings", href: "/settings", label: "Settings", what: "Account, GPU and preferences", kind: "settings", goals: [], keywords: "account gpu preferences", icon: "Settings" },
@@ -216,7 +222,7 @@ const STUDIOS: NavEntry[] = [
 /** What each hub mode does, and the words people type for it. */
 const TOOL_COPY: Record<string, { what: string; keywords: string; cover?: string; label?: string; short?: string }> = {
   "upscale-image": { what: "Sharper, larger pictures", keywords: "photo picture enhance 4k 8k sharpen resolution" },
-  "upscale-video": { what: "Sharper, larger clips", keywords: "4k 8k enhance clip restore faces resolution" },
+  "upscale-video": { label: "Upscale video", what: "Sharper, larger clips", keywords: "4k 8k enhance clip restore faces resolution" },
   "upscale-fps": { what: "Smoother motion", keywords: "frame interpolation 60fps 120fps slow motion slowmo" },
   "upscale-hdr": { what: "10-bit HDR from any clip", keywords: "sdr hdr hdr10 exr prores 10 bit" },
   "upscale-export": { what: "ProRes and lossless files", keywords: "export prores h265 ffv1 exr codec deliver master" },
@@ -286,7 +292,56 @@ const SUB_TOOLS: NavEntry[] = [
   { id: "marketing-click-to-ad", href: "/marketing/click-to-ad", label: "Click to ad", what: "From a product link to an ad", kind: "tool", goals: [], keywords: "product link url to ad shop page amazon", icon: "Megaphone", parent: "marketing" },
   { id: "ads-multiplier", href: "/ads/multiplier", label: "Ad multiplier", what: "One ad in many versions", kind: "tool", goals: [], keywords: "variations versions sizes multiply", icon: "Target", parent: "ads" },
   { id: "assist-skills", href: "/assist/skills", label: "Skills", what: "Reusable recipes", kind: "tool", goals: [], keywords: "skill recipe playbook automation", icon: "MessageCircle", parent: "assist" },
+  // An app with a page of its own that Create lists: a tool of Apps, so the bar marks Apps on its page.
+  { id: "any-angle", href: "/apps/app-any-angle", label: "Any Angle", what: "See it from any angle", kind: "tool", goals: [], keywords: "angle rotate turn view camera viewpoint orbit 3d", cover: "app-any-angle", icon: "Rotate3d", parent: "apps" },
 ];
+
+/** The pages that show everything one of the bar's menus holds (src/lib/nav-areas.ts lays them out). */
+const AREA_PAGES: NavEntry[] = [
+  { id: "area-create", href: "/create", label: "All of Create", what: "Every way to make or edit", kind: "area", goals: [], keywords: "create make edit tools all overview", icon: "Sparkles" },
+  { id: "area-studios", href: "/studios", label: "All studios", what: "Every studio, with previews", kind: "area", goals: [], keywords: "studios all overview every studio", icon: "LayoutGrid" },
+  { id: "area-motions", href: "/motions-and-effects", label: "Motions & effects", what: "Camera moves and effects", kind: "area", goals: [], keywords: "motions effects camera moves vfx presets overview", icon: "Film" },
+];
+
+/**
+ * The sentence under each cover card on the area pages (NavEntry.line). Studios that have a card on Home use Home's
+ * line instead (HOME_STUDIOS), so a studio says the same thing in both places.
+ */
+const CARD_LINES: Record<string, string> = {
+  image: "Describe it and get a picture, from a portrait to a poster.",
+  video: "Turn words or a still into a moving shot.",
+  storyboard: "Plan a film frame by frame, then shoot each frame.",
+  canvas: "Wire models together into a flow you can run again.",
+  edit: "Change a picture with a sentence. The rest stays.",
+  "live-edit": "Type a change and watch the picture follow.",
+  inpaint: "Paint over one part and say what goes there.",
+  layers: "Split a picture into layers you can move and swap.",
+  "color-grade": "Grade a shot, or match the colors of another.",
+  "any-angle": "See the same subject from any angle you choose.",
+  upscale: "Make pictures and clips sharper and larger.",
+  "video-edit": "Restyle a clip with words and keep its motion.",
+  extend: "Make a clip longer, picking up where it ends.",
+  reframe: "Any shape from any shot: vertical, square or wide.",
+  "video-tools": "Trim, join, matte and caption any clip.",
+  katana: "Cut your clips into a story on a timeline.",
+  shorts: "Vertical reels from one idea, ready to post.",
+  faceless: "A whole channel of episodes, with no face on camera.",
+  "content-factory": "A series of posts and clips from one brief.",
+  lipsync: "Make a photo talk, sing or present in any voice.",
+  explainer: "Turn slides or a document into a narrated video.",
+  virality: "Score the first three seconds before you post.",
+  ads: "One campaign in every size and format.",
+  moodboards: "Lock a look from references and reuse it anywhere.",
+  photodump: "A whole photo pack of one person, in any setting.",
+  "fashion-factory": "Outfits, try-ons and lookbooks on real-looking models.",
+  influencer: "Build a character with a face that stays the same.",
+  "character-sheet": "One face from every angle, ready for any shot.",
+  elements: "Save your people, places and props to use anywhere.",
+  "audio-music": "A track from a few words, in any mood.",
+  "audio-sfx": "Any sound effect from a few words.",
+  "audio-translate": "Your video, dubbed into another language.",
+  "audio-clean": "Remove noise and echo from any voice.",
+};
 
 /**
  * Settings sections (ids as in settings-form.tsx). The install's own settings are its owner's; an account gets its
@@ -341,7 +396,18 @@ const ACTIONS: NavEntry[] = [
   { id: "login", href: "/login", label: "Log in", what: "Back to your account", kind: "action", goals: [], keywords: "log in login sign in account", icon: "LogIn", visibility: GUEST },
 ];
 
-export const NAV_ENTRIES: readonly NavEntry[] = [...PAGES, ...STUDIOS, ...HUB_TOOLS, ...SUB_TOOLS, ...SETTINGS, ...ACCOUNT_SETTINGS, ...ACTIONS];
+export const NAV_ENTRIES: readonly NavEntry[] = [...PAGES, ...STUDIOS, ...HUB_TOOLS, ...SUB_TOOLS, ...AREA_PAGES, ...SETTINGS, ...ACCOUNT_SETTINGS, ...ACTIONS].map((e) =>
+  CARD_LINES[e.id] ? { ...e, line: CARD_LINES[e.id] } : e,
+);
+
+/**
+ * The bar's Create menu and the phone's Create sheet, column by column (create-menu.tsx draws them; the /create page
+ * starts from them). Storyboard plans a film, so it sits with Make (its card is in the launcher's Film column).
+ */
+export const CREATE_COLUMNS = [
+  { label: "Make", ids: ["image", "video", "assist", "canvas", "storyboard"] },
+  { label: "Edit a picture", ids: ["edit", "live-edit", "inpaint", "layers", "color-grade"] },
+] as const;
 
 export const LAUNCHER_GROUPS: readonly LauncherGroup[] = [
   { id: "film", label: "Film & video", chip: "Film" },

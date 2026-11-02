@@ -73,15 +73,16 @@ try {
     await openRoute(p, `${app}/image`);
     const order = [];
     let rings = true;
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 15; i++) {
       await p.keyboard.press("Tab");
       const f = await focused(p);
       order.push(f?.name ?? "");
       if (i > 0 && !f?.ring) rings = false;
     }
-    const want = ["Skip to content", "Fuobe home", "Create", /^Studios/, "Apps", "Motions & effects", "Canvas", "Assist", "Library", /^Search/, "New creation"];
+    // Create, Studios and Motions & effects are a link to their page, then their menu's chevron.
+    const want = ["Skip to content", "Fuobe home", "Create", "Create menu", /^Studios, [0-9]+ studios$/, "Studios menu", "Apps", "Motions & effects", "Motions & effects menu", "Canvas", "Assist", "Library", /^Search/, "New creation"];
     const ok = want.every((w, i) => (typeof w === "string" ? order[i] === w : w.test(order[i])));
-    check(ok, "Tab order: Skip, wordmark, Create, Studios, Apps, Motions & effects, Canvas, Assist, Library, Search, New creation", order.join(" › "));
+    check(ok, "Tab order: Skip, wordmark, Create (+ menu), Studios (+ menu), Apps, Motions & effects (+ menu), Canvas, Assist, Library, Search, New creation", order.join(" › "));
     check(rings, "every bar stop shows a focus ring");
     // The search field is 280 px from 1440 (an lg rule must not win over it) and its name is the words it shows.
     const field = await p.locator('[data-top-bar] button[aria-keyshortcuts="/ Meta+K Control+K"]').evaluate((b) => ({ w: b.getBoundingClientRect().width, text: b.innerText.trim(), label: b.getAttribute("aria-label") }));
@@ -160,10 +161,10 @@ try {
       await p.setViewportSize({ width: w, height: h });
       await trigger.click();
       await panel.waitFor({ state: "visible" });
-      const links = panel.getByRole("link");
-      const seen = await inView(links);
+      const links = panel.locator("a[data-col]");
+      const seen = [...(await inView(links)), ...(await inView(panel.getByRole("link", { name: "See all studios", exact: true })))];
       const scrolls = await panel.evaluate((el) => el.scrollHeight > el.clientHeight + 1);
-      check(seen.length === 33 && seen.every(Boolean) && !scrolls, `launcher at ${w}x${h}: all 33 links on screen, no scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
+      check(seen.length === 34 && seen.every(Boolean) && !scrolls, `launcher at ${w}x${h}: all 33 studios and See all on screen, no scrolling`, `${seen.filter(Boolean).length}/${seen.length}`);
       await p.keyboard.press("Escape");
     }
     await p.setViewportSize(DESKTOP.viewport);
@@ -171,7 +172,7 @@ try {
     await panel.getByRole("link", { name: /^Marketing Studio/ }).click();
     const landed = await (p.waitForURL((u) => new URL(u).pathname === "/marketing", { timeout: 20_000 }).then(() => panel.waitFor({ state: "hidden" }))).then(() => true, () => false);
     check(landed, "launcher: Marketing Studio lands on /marketing and the launcher closes");
-    check((await trigger.getAttribute("data-active")) !== null, "on /marketing the Studios trigger is marked");
+    check((await trigger.locator("xpath=ancestor::*[@data-bar-split][1]").getAttribute("data-active")) !== null, "on /marketing the Studios item is marked");
     await trigger.click();
     check((await panel.getByRole("link", { name: /^Marketing Studio/ }).getAttribute("aria-current")) === "page", "…and Marketing Studio has aria-current=page");
     await p.keyboard.press("Escape");
@@ -184,7 +185,7 @@ try {
     const ctx = await as("guest");
     const p = await page(ctx);
     await openRoute(p, `${app}/`);
-    for (const name of ["Create", "Menu"]) {
+    for (const name of ["Create menu", "Menu"]) {
       const button = p.locator("[data-top-bar]").getByRole("button", { name, exact: true });
       await button.focus();
       await p.keyboard.press("Enter");

@@ -99,6 +99,8 @@ describe("the Mix picker", () => {
   it("shows the cover of every motion and effect that has one, small posters only", () => {
     const html = grid(mixable);
     for (const p of covered(mixable)) expect(html, p.id).toContain(`src="${presetCover(p.id)!.thumb}"`);
+    // A cover shown whole (cover-framing.ts) has one picture too: its blurred fill is a background drawn only in a
+    // frame that isn't 4:3, and a picker tile is 4:3.
     expect(count(html, "<img")).toBe(covered(mixable).length);
     expect(count(html, "linear-gradient")).toBe(mixable.length - covered(mixable).length);
     expect(html).not.toContain("<video");

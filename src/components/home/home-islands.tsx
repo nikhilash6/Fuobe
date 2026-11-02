@@ -3,7 +3,7 @@
 import { ArrowRight, Check, Copy, Pause, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CardPending, IntentLink } from "@/components/intent-link";
-import { useFadeEdges } from "@/components/preset-gallery";
+import { useFadeEdges } from "@/components/use-fade-edges";
 import { PresetPreview, setPreviewsPaused, usePreviewPlayback, usePreviewsPaused } from "@/components/preset-preview";
 import { CONNECT_GPU_EVENT, signInHref, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { copyWithToast } from "@/lib/clipboard";
@@ -36,7 +36,8 @@ export function PausePreviews() {
       onClick={() => setPreviewsPaused(!paused)}
       aria-label={label}
       title={label}
-      className="inline-flex size-7 shrink-0 items-center justify-center gap-1.5 rounded-full border text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:w-[8.5rem]"
+      // 44 px to tap: its hit area reaches past its 28 px circle.
+      className="relative inline-flex size-7 shrink-0 items-center justify-center gap-1.5 rounded-full border text-[12px] text-muted-foreground transition-colors after:absolute after:-inset-2 after:content-[''] hover:bg-accent hover:text-foreground sm:w-[8.5rem]"
     >
       <Icon className="size-3" />
       <span className="max-sm:hidden">{label}</span>

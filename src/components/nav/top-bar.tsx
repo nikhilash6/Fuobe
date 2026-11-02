@@ -1,15 +1,17 @@
 "use client";
 
-import { ChevronDown, MoreHorizontal, Plus, Search } from "lucide-react";
+import { ArrowRight, ChevronDown, MoreHorizontal, Plus, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
 import { IntentLink } from "@/components/intent-link";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { NEW_CREATION_HREF } from "@/lib/nav";
+import { area, areaOfPath, areaPageOf, type AreaId } from "@/lib/nav-areas";
 import { activeEntry, entry, type NavEntry } from "@/lib/nav-model";
 import { isPlainClick, useTappedTab } from "@/lib/use-tapped-tab";
 import { cn } from "@/lib/utils";
+import { BarSplitMenu } from "./bar-split";
 import { CoverThumb, NavIcon } from "./cover-thumb";
 import { CreateMenu, NAV_MENU_ITEM } from "./create-menu";
 import { useViewerKind } from "./nav-ui";
@@ -37,17 +39,32 @@ export { prefetchHrefs } from "./nav-prefetch";
 export const BAR_ITEM =
   "group/bar-item inline-flex h-10 shrink-0 [@media(pointer:coarse)]:h-11 items-center gap-1.5 rounded-[10px] px-2.5 text-[14px] whitespace-nowrap text-foreground/80 outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring motion-safe:transition-colors data-[active]:bg-accent data-[active]:font-semibold data-[active]:text-foreground aria-[current=page]:bg-accent aria-[current=page]:font-semibold aria-[current=page]:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground min-[1440px]:px-3.5";
 
-/** Which bar items hold the open page (Create for the create tools, Studios for a studio or one of its tools…). */
-export function barActive(pathname: string): { create: boolean; studios: boolean; apps: boolean; motions: boolean; canvas: boolean; assist: boolean; library: boolean } {
+/**
+ * Which bar item holds the open page, one item per page (areaOfPath): Create for the create tools, Studios for a studio
+ * or one of its tools, Apps for the apps, Motions & effects for both galleries, each for its own area page; Canvas,
+ * Assist and Library for theirs. `page`: the area whose own page this is (its name is marked aria-current).
+ */
+export function barActive(pathname: string): {
+  create: boolean;
+  studios: boolean;
+  apps: boolean;
+  motions: boolean;
+  canvas: boolean;
+  assist: boolean;
+  library: boolean;
+  page: AreaId | undefined;
+} {
   const e = pathname ? activeEntry(pathname, new URLSearchParams()) : undefined;
+  const area = pathname ? areaOfPath(pathname) : undefined;
   return {
-    create: e?.kind === "create",
-    studios: e?.kind === "studio",
-    apps: e?.id === "apps",
-    motions: e?.id === "motions" || e?.id === "effects",
+    create: area === "create",
+    studios: area === "studios",
+    apps: area === "apps",
+    motions: area === "motions",
     canvas: e?.id === "canvas",
     assist: e?.id === "assist",
     library: e?.kind === "library",
+    page: pathname ? areaPageOf(pathname) : undefined,
   };
 }
 
@@ -76,23 +93,49 @@ function useOn(): (e: NavEntry) => boolean {
   return (e) => pathname === e.href || pathname.startsWith(`${e.href}/`);
 }
 
-function MotionsItems() {
-  const on = useOn();
-  return pick(["motions", "effects"]).map((e) => <RichItem key={e.id} e={e} current={on(e)} />);
+/** "See all" at the foot of a menu: the area's own page (`name`: what it says to a screen reader). */
+function SeeAllItem({ href, name }: { href: string; name: string }) {
+  const pathname = usePathname();
+  return (
+    <DropdownMenuItem asChild className={cn("group/all mt-1 h-10 gap-2 rounded-lg px-2.5 text-[13.5px] font-medium text-brand-text", NAV_MENU_ITEM)}>
+      <IntentLink href={href} aria-current={pathname === href ? "page" : undefined} aria-label={name}>
+        See all
+        <ArrowRight aria-hidden className="size-4 motion-safe:transition-transform group-hover/all:translate-x-0.5" />
+      </IntentLink>
+    </DropdownMenuItem>
+  );
 }
 
-/** Motions & effects: the two preset galleries, with their covers. */
-function MotionsMenu({ active }: { active: Active }) {
+const MOTIONS_AREA_HREF = area("motions").href;
+
+function MotionsItems() {
+  const on = useOn();
   return (
-    <DropdownMenu modal={false} onOpenChange={(o) => o && warmNav("more")}>
-      <DropdownMenuTrigger className={cn(BAR_ITEM, "hidden xl:inline-flex")} data-active={active.motions || undefined}>
-        Motions &amp; effects
-        <ChevronDown aria-hidden className="size-3.5 text-muted-foreground group-data-[state=open]/bar-item:rotate-180 motion-safe:transition-transform" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={8} className="w-80 p-1.5">
-        <MotionsItems />
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      {pick(["motions", "effects"]).map((e) => (
+        <RichItem key={e.id} e={e} current={on(e)} />
+      ))}
+      <SeeAllItem href={MOTIONS_AREA_HREF} name="See all motions & effects" />
+    </>
+  );
+}
+
+/** Motions & effects: its name goes to the page with both; the menu holds the two preset galleries, with their covers. */
+function MotionsMenu({ active, onTap }: { active: Active; onTap?: (href: string) => void }) {
+  return (
+    <BarSplitMenu
+      href={MOTIONS_AREA_HREF}
+      label="Motions & effects"
+      name="Motions & effects menu"
+      active={active.motions}
+      current={active.page === "motions"}
+      panel="more"
+      onTap={onTap}
+      className="hidden xl:inline-flex"
+      contentClassName="w-80 p-1.5"
+    >
+      <MotionsItems />
+    </BarSplitMenu>
   );
 }
 
@@ -105,6 +148,10 @@ function MoreItems() {
           <RichItem e={e} current={on(e)} />
         </div>
       ))}
+      <div className="xl:hidden">
+        <SeeAllItem href={MOTIONS_AREA_HREF} name="See all motions & effects" />
+        <DropdownMenuSeparator className="my-1.5" />
+      </div>
       {pick(["canvas", "assist"]).map((e) => {
         return (
           <DropdownMenuItem key={e.id} asChild className={cn("min-h-12 gap-3 rounded-lg px-2 py-1.5 data-[current]:bg-brand-faint", NAV_MENU_ITEM)}>
@@ -154,12 +201,12 @@ function BarLinks({ active, onTap }: { active: Active; onTap?: (href: string) =>
   const tap = (href: string) => (e: React.MouseEvent) => isPlainClick(e) && onTap?.(href);
   return (
     <>
-      <CreateMenu className={BAR_ITEM} active={active.create} />
-      <StudiosLauncher className={BAR_ITEM} active={active.studios} />
+      <CreateMenu active={active.create} current={active.page === "create"} onTap={onTap} />
+      <StudiosLauncher active={active.studios} current={active.page === "studios"} onTap={onTap} />
       <IntentLink href="/apps" onClick={tap("/apps")} aria-current={cur(active.apps)} className={cn(BAR_ITEM, "hidden xl:inline-flex")}>
         Apps
       </IntentLink>
-      <MotionsMenu active={active} />
+      <MotionsMenu active={active} onTap={onTap} />
       <IntentLink href="/canvas" onClick={tap("/canvas")} aria-current={cur(active.canvas)} className={cn(BAR_ITEM, "hidden min-[1440px]:inline-flex")}>
         Canvas
       </IntentLink>

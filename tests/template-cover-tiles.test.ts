@@ -49,7 +49,7 @@ const { StyleTile } = await import("@/components/marketing/click-to-ad");
 const { TemplatePreview: FashionPreview } = await import("@/components/fashion/template-preview");
 const { PackCover } = await import("@/components/photodump/covers");
 const { LookCard } = await import("@/components/shorts/preset-card");
-const { TemplateCard: CanvasCard } = await import("@/components/canvas/canvas-list");
+const { TemplateCard: CanvasCard } = await import("@/components/canvas/template-card");
 const { PresetTile } = await import("@/components/content-factory/parts");
 const { StyleArt } = await import("@/components/faceless/style-art");
 const { AD_STYLES, TEMPLATES } = await import("@/lib/catalog/marketing");
@@ -184,13 +184,14 @@ describe("Canvas templates", () => {
   const card = (id: string) => {
     const t = by(CANVAS_TEMPLATES, id);
     const engine = { outline: outline(t.build("cloud")), models: [] };
-    return html(CanvasCard, { t: { id: t.id, name: t.name, description: t.description, icon: t.icon, hue: t.hue, byEngine: { cloud: engine, open: engine } }, engine: "cloud", busy: false });
+    return html(CanvasCard, { t: { id: t.id, name: t.name, description: t.description, icon: t.icon, hue: t.hue, section: t.group ?? "", rank: t.rank, flow: t.flow, byEngine: { cloud: engine, open: engine } }, engine: "cloud", busy: false });
   };
 
-  it("show the cover's frames side by side with the board in a corner, or its still and clip, else the board", () => {
+  it("show the cover's frames side by side with its steps in a corner, or its still and clip, else the board", () => {
     const angles = card("product-angles");
     for (const f of ["product-angles.jpg?v=e7f8091a", "product-angles-2.jpg?v=f8091a2b", "product-angles-3.jpg?v=091a2b3c"]) expect(angles).toContain(`src="/previews/templates/canvas/${f}"`);
-    expect(angles).toContain("<svg viewBox=");
+    expect(angles).toContain("3 angles");
+    expect(angles).not.toContain("<svg viewBox=");
     const chain = card("effect-chain-fallen-angel");
     expect(chain).toContain('src="/previews/presets/effect-fallen-angel.jpg?v=1a2b3c4e"');
     expect(chain).not.toContain("<video");

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import {
   CAMERA_MOVES,
   isCover,
@@ -16,6 +16,7 @@ import {
   type PreviewLayer,
   type PreviewScene,
 } from "@/lib/preset-cards";
+import { coverFraming } from "@/lib/cover-framing";
 import { releaseVideo } from "@/lib/media-release";
 import { glyphFor } from "@/lib/move-glyphs";
 import { autoplays, browserPlaybackEnv, createPlaybackStore, playsWhenAsked, previewKind, untilPlace, type AutoPlay } from "@/lib/preview-playback";
@@ -297,7 +298,7 @@ let cycleStart: number | undefined;
  * however long each one takes to load, so they never loop in step. The clock starts with the first
  * clip ready, which plays at once. A hover or tap never waits.
  */
-function Clip({ src, rest, asked, place }: { src: string; rest?: Preview["rest"]; asked: boolean; place?: number }) {
+function Clip({ src, rest, asked, place, focus }: { src: string; rest?: Preview["rest"]; asked: boolean; place?: number; focus?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
   // Where it starts, fixed when it mounts: asked for, where the change starts; by itself, the frame the card rests on.
@@ -350,6 +351,7 @@ function Clip({ src, rest, asked, place }: { src: string; rest?: Preview["rest"]
           : undefined
       }
       className={cn("absolute inset-0 size-full object-cover", rest && "transition-opacity duration-150", !ready && "opacity-0")}
+      style={focus ? { objectPosition: focus } : undefined}
       aria-hidden
     />
   );
@@ -395,7 +397,10 @@ export const PresetPreview = memo(function PresetPreview({
   // mirroring (and no move glyph: the picture shows the preset itself), with its clip over it while it plays.
   if (preview.video || isCover(preview)) {
     const still = preview.rest?.src ?? preview.poster;
-    return (
+    // How the cover sits in a frame of another shape (cover-framing.ts): a focus point, or the whole picture.
+    const framing = coverFraming(still);
+    const focus = framing?.focus;
+    const cover = (
       <>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -410,10 +415,26 @@ export const PresetPreview = memo(function PresetPreview({
           fetchPriority={fetchPriority}
           decoding={fetchPriority ? undefined : "async"}
           className="absolute inset-0 size-full object-cover"
+          style={focus ? { objectPosition: focus } : undefined}
           aria-hidden
         />
-        {preview.video && playing && <Clip src={preview.video} rest={preview.rest} asked={asked} place={place} />}
+        {preview.video && playing && <Clip src={preview.video} rest={preview.rest} asked={asked} place={place} focus={focus} />}
       </>
+    );
+    if (framing?.fit !== "whole") return cover;
+    // The whole 4:3 picture, as large as the frame allows and centred (the frame's size in container units), over
+    // the still filling the frame, blurred and dimmed. That backdrop is a background only a frame of another shape
+    // draws (.cover-whole in globals.css): in a 4:3 frame the picture covers it, and it is neither fetched nor painted.
+    return (
+      <span className="cover-whole absolute inset-0 grid place-items-center" aria-hidden>
+        <span
+          className="cover-whole-backdrop absolute inset-0 scale-125 bg-cover bg-center blur-xl brightness-[0.7] saturate-[1.3]"
+          style={{ "--cover-bg": `url(${sizes ? thumbOf(still) : still})` } as CSSProperties}
+        />
+        <span className="relative aspect-[4/3] w-[min(100cqw,133.334cqh)] overflow-hidden shadow-[0_10px_30px_-6px_rgb(0_0_0/0.6)] ring-1 ring-white/10">
+          {cover}
+        </span>
+      </span>
     );
   }
 

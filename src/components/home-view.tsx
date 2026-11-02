@@ -11,7 +11,7 @@ import { PageShell } from "@/components/page-shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HadItemsScript, useHadItems } from "@/components/use-had-items";
 import { IntentLink } from "@/components/intent-link";
-import { useFadeEdges } from "@/components/preset-gallery";
+import { useFadeEdges } from "@/components/use-fade-edges";
 import { MediaThumb } from "@/components/studio/result-media";
 import { CONNECT_GPU_EVENT, signInHref, useEngine, useGenerations, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { EngineSwitch } from "@/components/studio/engine-switch";

@@ -587,7 +587,8 @@ export const CLICK_TO_AD = { aspect: "9:16", maxSeconds: 12, shots: 3 } as const
 /**
  * The card is drawn in the browser (brand colour, logo, product name, CTA; components/marketing/end-card.ts)
  * at the ad's 9:16 size, then held for 2–3 s: a gentle push-in on the cloud (fal image-to-video, zoom 1 → 1.05),
- * a still on the open engine. Without a drawn card the cloud puts the logo on the brand colour itself.
+ * a still on the open engine. Without a drawn card the cloud puts the logo on the brand colour itself. An animated
+ * card (Kinetic Motion's end-card styles, rendered in the browser) arrives as a clip and is joined as it is.
  */
 export const END_CARD = { seconds: 2.5, minSeconds: 2, maxSeconds: 3, zoomTo: 1.05, fps: 24, size: { w: 720, h: 1280 }, cta: "Shop now" } as const;
 
@@ -610,6 +611,11 @@ export interface EndCardInput {
   ad: string;
   /** The card the page drew (/api/files/…). */
   card?: string;
+  /**
+   * The animated card the page rendered (/api/files/… MP4, or WebM on the open engine): used as it is, in place of
+   * the still and its push-in.
+   */
+  clip?: string;
   /** Cloud, no drawn card: the brand-colour background and the logo overlay-image puts on it. */
   background?: string;
   logo?: string;
@@ -634,15 +640,33 @@ export interface EndCardInput {
  * The steps that make the end card and put it after the ad, and the key of the finished video. Cloud:
  * [overlay-image: the logo on the brand colour →] ken-burns (zoom 1 → 1.05) → a silent sound track under it
  * (merge-audio-video) → merge-videos after the ad. Open: video-append-endcard (the ad's sound kept, padded with
- * silence under the card), or still-to-clip + oss-join-sound1 for a clip the open engine didn't make.
+ * silence under the card), or still-to-clip + oss-join-sound1 for a clip the open engine didn't make. An animated card
+ * (a clip rendered in the page) goes through oss-join-sound1 with the ad, which re-encodes the ad at 25 fps.
  */
 export function endCardSteps(o: EndCardInput): { steps: EndCardStep[]; final: string } {
   const seconds = Math.max(END_CARD.minSeconds, Math.min(END_CARD.maxSeconds, o.seconds ?? END_CARD.seconds));
   const result = { feature: o.feature, title: o.title, batchTitle: o.title };
   const helper = { feature: `${o.feature}-step` };
   if (o.engine === "open") {
-    if (!o.card) throw new Error("The open engine needs the end card drawn on the page — turn End card off, or make the ad from Click to Ad");
     const M = END_CARD_MODELS.open;
+    // The animated card: joined after the ad (put first by the chain), keeping the ad's sound with silence under the card.
+    // Unlike the still card's append (which copies the ad's picture), this join re-encodes the ad too, at 25 fps and the
+    // run's resolution: a small generation loss on the ad itself. Not yet run end to end on a GPU (unit-tested plan only).
+    if (o.clip) {
+      return {
+        final: "endcard",
+        steps: [
+          {
+            key: "endcard",
+            label: "Adding the end card",
+            request: { ...result, modelId: M.join, op: "concat", prompt: o.title, inputs: { videos: [o.clip] }, params: { aspectRatio: o.aspectRatio, ...(o.resolution && { resolution: o.resolution }) } },
+            after: [o.ad],
+            chain: [{ slot: "videos", position: "first" }],
+          },
+        ],
+      };
+    }
+    if (!o.card) throw new Error("The open engine needs the end card drawn on the page — turn End card off, or make the ad from Click to Ad");
     if ((o.adEncodedBy ?? "comfyui") === "comfyui") {
       return {
         final: "endcard",
@@ -674,6 +698,18 @@ export function endCardSteps(o: EndCardInput): { steps: EndCardStep[]; final: st
   const M = END_CARD_MODELS.cloud;
   if (!o.silence) throw new Error("The end card needs its silent sound track");
   const steps: EndCardStep[] = [];
+  if (o.clip) {
+    // The animated card is the clip: it only needs its silent track (it can start at once, beside the ad), then the join.
+    steps.push({ key: "endcardSound", label: "End card sound", request: { ...helper, modelId: M.sound, op: "mux", inputs: { video: o.clip, audio: o.silence } } });
+    steps.push({
+      key: "endcard",
+      label: "Adding the end card",
+      request: { ...result, modelId: M.join, op: "concat", prompt: o.title, params: { aspectRatio: o.aspectRatio } },
+      after: [o.ad, "endcardSound"],
+      chain: [{ slot: "videos" }, { slot: "videos" }],
+    });
+    return { steps, final: "endcard" };
+  }
   if (!o.card) {
     if (!o.background || !o.logo) throw new Error("Add a logo to the brand kit for the end card, or turn End card off");
     steps.push({ key: "endcardArt", label: "End card", request: { ...helper, modelId: M.art, op: "overlay", inputs: { images: [o.background, o.logo] }, params: { position: { x: 0.5, y: 0.45 }, scale: 1 } } });
@@ -1149,6 +1185,9 @@ export interface MarketingRunMeta {
   input?: Record<string, unknown>;
   /** Click to Ad: the logo end card it ends on (the card the page drew; null: the kit's logo on its colour). */
   endCard?: string | null;
+  /** Click to Ad: the animated end card it ends on, and its style (none: the still card). */
+  endCardClip?: string | null;
+  endCardVariant?: string | null;
 }
 
 export interface MarketingRun {

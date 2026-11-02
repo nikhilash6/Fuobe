@@ -121,6 +121,13 @@ describe("nav model: entries", () => {
         expect(fs.existsSync(path.join(root, "src/app/login/page.tsx")), e.id).toBe(true);
         continue;
       }
+      // An app's own page (/apps/<id>) is the dynamic /apps/[id] route, for an app the catalog has.
+      const app = /^\/apps\/(app-[\w-]+)$/.exec(pathOf(e.href));
+      if (app) {
+        expect(routes.patterns, e.id).toContain("/apps/[id]");
+        expect(APPS.some((a) => a.id === app[1]), `${e.id}: ${app[1]}`).toBe(true);
+        continue;
+      }
       expect(routes.paths.has(pathOf(e.href)), `${e.id} → ${e.href}`).toBe(true);
       const hash = e.href.split("#")[1];
       if (hash) expect(form, `${e.id}: section #${hash}`).toContain(`id="${hash}"`);

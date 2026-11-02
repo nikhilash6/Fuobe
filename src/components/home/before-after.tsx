@@ -271,7 +271,7 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
               onPointerEnter={() => preload(p)}
               onFocus={() => preload(p)}
               className={cn(
-                "flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg p-1 text-[12px] font-medium text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-sm:h-9 sm:justify-start sm:pr-2 xl:flex-col xl:items-stretch xl:gap-1 xl:pr-1 xl:pb-1.5",
+                "relative flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg p-1 text-[12px] after:absolute after:inset-x-0 after:-inset-y-1 after:content-[''] font-medium text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-sm:h-9 sm:justify-start sm:pr-2 xl:flex-col xl:items-stretch xl:gap-1 xl:pr-1 xl:pb-1.5",
                 i === tab && "bg-muted text-foreground",
               )}
             >
@@ -287,7 +287,11 @@ export function BeforeAfter({ pairs }: { pairs: BeforeAfterPair[] }) {
         </div>
         <div className="mt-2 flex items-center justify-between gap-3 text-[12px] text-muted-foreground lg:max-xl:mt-4 lg:max-xl:flex-col lg:max-xl:items-start lg:max-xl:gap-1.5 lg:max-xl:px-1">
           <span>Drag to compare</span>
-          <IntentLink href={pair.href} className="inline-flex items-center gap-1 font-medium text-brand-text hover:underline underline-offset-2">
+          <IntentLink
+            href={pair.href}
+            // 44 px to tap: its hit area reaches past the words.
+            className="relative inline-flex items-center gap-1 font-medium text-brand-text underline-offset-2 after:absolute after:-inset-x-1 after:-inset-y-3.5 after:content-[''] hover:underline"
+          >
             Try {pair.name} <ArrowRight className="size-3.5" />
           </IntentLink>
         </div>

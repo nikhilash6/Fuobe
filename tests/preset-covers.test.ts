@@ -182,6 +182,7 @@ describe("the preset covers manifest", () => {
       "components/cinema/move-list.tsx",
       "components/preset-header.tsx",
       "components/studio/preset-chips.tsx",
+      "lib/canvas-template-cards.ts",
       "lib/nav-covers.ts",
       "lib/palette-index.ts",
     ]);

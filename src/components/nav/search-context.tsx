@@ -13,10 +13,17 @@ import type { LauncherGroupId } from "@/lib/nav-model";
  * a pointer rests on the search field.
  */
 
+/** A search inside one area page (/create, /studios): only its pages, named on a chip that removes it. */
+export interface PaletteScope {
+  label: string;
+  /** NavEntry ids. */
+  ids: string[];
+}
+
 export interface SearchPaletteApi {
   isOpen: boolean;
-  /** Open on a query, or on "Every studio" filtered to one group. */
-  open(opts?: { query?: string; group?: LauncherGroupId }): void;
+  /** Open on a query, on "Every studio" filtered to one group, or inside one area (`scope`). */
+  open(opts?: { query?: string; group?: LauncherGroupId; scope?: PaletteScope }): void;
   close(): void;
   /** Load the palette and its catalog now, before it's opened (hover or focus on a search control). */
   warm(): void;
@@ -28,6 +35,7 @@ export interface PaletteSession {
   id: number;
   query?: string;
   group?: LauncherGroupId;
+  scope?: PaletteScope;
 }
 
 /** The apps, motions, effects and models the palette searches (prerendered: GET /api/search-index). */
@@ -87,11 +95,11 @@ export function SearchPaletteProvider({ children }: { children: React.ReactNode 
   }, [client]);
 
   const open = useCallback(
-    (opts?: { query?: string; group?: LauncherGroupId }) => {
+    (opts?: { query?: string; group?: LauncherGroupId; scope?: PaletteScope }) => {
       if (!openRef.current) returnTo.current = typeof document === "undefined" ? null : document.activeElement;
       openRef.current = true;
       warm();
-      setSession((s) => ({ open: true, id: s.id + 1, query: opts?.query, group: opts?.group }));
+      setSession((s) => ({ open: true, id: s.id + 1, query: opts?.query, group: opts?.group, scope: opts?.scope }));
     },
     [warm],
   );

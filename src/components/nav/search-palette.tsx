@@ -13,11 +13,11 @@ import { signInHref, useEngineMode, useGenerations, useModelAccess } from "@/lib
 import type { Generation } from "@/lib/catalog/types";
 import { indexEntries, KIND_LABELS, skillEntries } from "@/lib/command-search";
 import { useModKey } from "@/lib/keys";
-import { entriesFor, LAUNCHER_GROUPS, launcherEntries, studioCount, type LauncherGroupId, type NavEntry } from "@/lib/nav-model";
+import { entriesFor, entry, LAUNCHER_GROUPS, launcherEntries, studioCount, visibleTo, type LauncherGroupId, type NavEntry } from "@/lib/nav-model";
 import { isExternal, isThemeAction, navSearchEntries, searchNav, type NavHit, type SearchResult } from "@/lib/nav-search";
 import { cn } from "@/lib/utils";
 import { useViewerKind } from "./nav-ui";
-import { fetchPaletteIndex, PALETTE_INDEX_KEY, type PaletteSession } from "./search-context";
+import { fetchPaletteIndex, PALETTE_INDEX_KEY, type PaletteScope, type PaletteSession } from "./search-context";
 import { AlsoTile, BestRow, HitRow, RecentRow, sectionHeading, StudioTile } from "./search-results";
 
 /*
@@ -120,7 +120,7 @@ export function SearchPalette({ session, onClose, takeReturn }: { session: Palet
             <DialogPrimitive.Description className="sr-only">
               Find a studio, a tool, an app, a camera motion, an effect, a model, a setting or a recent creation, or browse every studio.
             </DialogPrimitive.Description>
-            <PaletteBody key={session.id} initialQuery={session.query ?? ""} initialGroup={session.group} onPick={pick} onOpenRecent={openRecent} onClose={onClose} />
+            <PaletteBody key={session.id} initialQuery={session.query ?? ""} initialGroup={session.group} initialScope={session.scope} onPick={pick} onOpenRecent={openRecent} onClose={onClose} />
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
@@ -175,18 +175,22 @@ export function startValue(searching: boolean, result: SearchResult, recents: Pi
 export function PaletteBody({
   initialQuery,
   initialGroup,
+  initialScope,
   onPick,
   onOpenRecent,
   onClose,
 }: {
   initialQuery: string;
   initialGroup?: LauncherGroupId;
+  /** Search only these pages (an area's), until its chip is removed. */
+  initialScope?: PaletteScope;
   onPick: (href: string, id?: string) => void;
   onOpenRecent: (g: Generation) => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState(initialQuery);
   const [group, setGroup] = useState<Group>(initialGroup ?? "all");
+  const [scope, setScope] = useState(initialScope);
   const dq = useDebounced(q.trim(), 200);
   const kind = useViewerKind();
   const mode = useEngineMode();
@@ -200,16 +204,19 @@ export function PaletteBody({
   useActiveDescendant(input, list);
 
   // Nothing a viewer can't see is searched (and before the viewer is known: what a guest may see).
-  const nav = useMemo(() => navSearchEntries(entriesFor(kind)), [kind]);
+  // Inside an area: its pages only (no apps, models or skills), until the chip is removed.
+  const scoped = useMemo(() => (scope ? scope.ids.map(entry).filter((e): e is NavEntry => !!e && visibleTo(e, kind)) : undefined), [scope, kind]);
+  const nav = useMemo(() => navSearchEntries(scoped ?? entriesFor(kind)), [scoped, kind]);
   const entries = useMemo(
-    () => [...nav, ...skillEntries(skills.data ?? []), ...(index.data ? indexEntries(index.data, mode, access, { owner: kind === "owner" }) : [])],
-    [nav, skills.data, index.data, mode, access, kind],
+    () =>
+      scoped ? nav : [...nav, ...skillEntries(skills.data ?? []), ...(index.data ? indexEntries(index.data, mode, access, { owner: kind === "owner" }) : [])],
+    [scoped, nav, skills.data, index.data, mode, access, kind],
   );
   // Not deferred: ranking every entry takes a millisecond or two, and Enter must act on what was typed.
   const result = useMemo(() => searchNav(q, entries), [q, entries]);
   const searching = !!q.trim();
   const recentItems = (recent.data ?? []).filter((g) => g.outputs[0]);
-  const tiles = useMemo(() => launcherEntries(kind, group === "all" ? undefined : group), [kind, group]);
+  const tiles = useMemo(() => scoped ?? launcherEntries(kind, group === "all" ? undefined : group), [scoped, kind, group]);
 
   const best = startValue(searching, result, recentItems, tiles);
   const [moved, setMoved] = useState<{ q: string; group: Group; value: string } | null>(null);
@@ -233,6 +240,24 @@ export function PaletteBody({
     >
       <div className="flex h-[68px] shrink-0 items-center gap-3.5 border-b border-brand-text/25 pr-3.5 pl-[22px] max-md:pl-4">
         <Search aria-hidden className="size-5 shrink-0 text-brand-text" />
+        {scope && (
+          <button
+            type="button"
+            onKeyDown={keepKeys}
+            onClick={() => {
+              setScope(undefined);
+              input.current?.focus();
+            }}
+            aria-label={`Searching in ${scope.label}. Search everything instead`}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-brand-text/40 bg-brand-faint pr-1.5 pl-2.5 text-[13px] font-medium text-brand-text hover:bg-brand-faint/70 [@media(pointer:coarse)]:h-11",
+              focusRing,
+            )}
+          >
+            In {scope.label}
+            <X aria-hidden className="size-3.5" />
+          </button>
+        )}
         <CommandPrimitive.Input
           ref={input}
           value={q}
@@ -279,7 +304,7 @@ export function PaletteBody({
 
       {/* The goal chips: buttons, so outside the list (a listbox holds options only). With nothing typed they head the
           studios right under them; while searching the studios come last, under their own heading. */}
-      {!searching && (
+      {!searching && !scoped && (
         <div className="shrink-0 px-5 pt-2.5 max-md:px-3">
           <div className="flex flex-wrap items-center gap-x-2.5 py-1 md:h-10 md:flex-nowrap md:py-0">
             <span aria-hidden className="ml-1.5 text-[11px] leading-[14px] font-semibold tracking-[.08em] text-brand-text uppercase">
@@ -365,8 +390,8 @@ export function PaletteBody({
           </>
         )}
         <CommandPrimitive.Group
-          heading={groupLabel ? `Every studio · ${tiles.length} in ${groupLabel}` : "Every studio"}
-          className={cn(searching ? cn("border-t pt-3", sectionHeading) : "**:[[cmdk-group-heading]]:sr-only")}
+          heading={scope ? `In ${scope.label} · ${tiles.length}` : groupLabel ? `Every studio · ${tiles.length} in ${groupLabel}` : "Every studio"}
+          className={cn(searching ? cn("border-t pt-3", sectionHeading) : scoped ? cn("pt-3", sectionHeading) : "**:[[cmdk-group-heading]]:sr-only")}
         >
           <div className="grid grid-cols-2 gap-x-2 min-[420px]:grid-cols-3 md:grid-cols-4">
             {tiles.map((e) => (

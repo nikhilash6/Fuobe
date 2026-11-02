@@ -10,6 +10,7 @@
 import type { CanvasComment, CanvasGroup, CanvasPage, CanvasShape } from "./canvas-board";
 import { EXAMPLE_SCENE, EXAMPLE_WORDS, beatsFrom, blockoutFramePrompt, compileBlockoutPrompt, type BlockoutRef } from "@/lib/blockout";
 import { QMA_MODEL } from "@/lib/qma";
+import type { TemplateSectionKey } from "@/lib/canvas-sections";
 import { getModel, getPreset, MODELS, supportsOp } from "./index";
 import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
@@ -196,6 +197,8 @@ export interface OutlineBox {
   x: number;
   y: number;
   type: CanvasNodeType;
+  /** The node's own label, short (a template page's diagram names its steps). */
+  label?: string;
 }
 
 /** The board in miniature: node boxes and the edges between them (as indexes into `boxes`). */
@@ -1971,7 +1974,7 @@ export function outline(graph: CanvasGraph): Outline {
   const nodes = graph.nodes.filter((n) => n.type !== "note").slice(0, 40);
   const index = new Map(nodes.map((n, i) => [n.id, i]));
   return {
-    boxes: nodes.map((n) => ({ x: Math.round(n.position.x), y: Math.round(n.position.y), type: n.type })),
+    boxes: nodes.map((n) => ({ x: Math.round(n.position.x), y: Math.round(n.position.y), type: n.type, ...(n.data.label && { label: n.data.label.slice(0, 24) }) })),
     links: graph.edges.flatMap((e) => (index.has(e.source) && index.has(e.target) ? [[index.get(e.source)!, index.get(e.target)!] as [number, number]] : [])),
   };
 }
@@ -1993,8 +1996,27 @@ export interface CanvasTemplate {
   /** lucide icon name. */
   icon: string;
   hue: number;
-  /** The picker's section ("Effects 2.0 chains"); none: the workflows. */
-  group?: string;
+  /** The section's key (TEMPLATE_SECTIONS: "effect-films"); none: the films and campaigns. */
+  group?: TemplateSectionKey;
+  /** Its place in its section, ascending: the most premium first. */
+  rank: number;
+  /** false: no ready board of its own (Blockout → film): only the owner sees it, under "More templates". */
+  starter?: false;
+  /** What the board makes, in plain words (its page's "What comes out"): no model names. */
+  makes: string;
+  /** The steps in order, in plain words (its page's "The steps"): no model names. */
+  steps: string[];
+  /** Plain words for an input node, by node id (its page's "What goes in"), where its label alone doesn't say it. */
+  inputs?: Record<string, string>;
+  /** The studio that makes the same in one step: an effect film's Video effect. */
+  oneStep?: { href: string; label: string };
+  /** The steps as a word or two each, for the small flow over a card's cover ("Photo", "Scene", "Film"). */
+  flow: string[];
+  /**
+   * Files the board starts with, by input node id: a public file Fuobe ships (a published example input, a sample),
+   * copied into the owner's storage when the board is made (src/server/canvas-samples.ts), so the board runs as it is.
+   */
+  samples?: Record<string, { src: string; name: string }>;
   /** `offered`: whether the install offers a model (Settings → Models & licences); a node falls back when it doesn't. */
   build: (engine: Engine, offered?: (id: string) => boolean) => CanvasGraph;
 }
@@ -2151,6 +2173,11 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "Your keyframes in, the in-betweens drawn, one animation: a table times each gap",
     icon: "Sparkles",
     hue: 320,
+    rank: 99,
+    starter: false,
+    makes: "One animation through your keyframes, each gap timed as the table says.",
+    flow: ["Keyframes", "Timing", "Animation"],
+    steps: ["Your keyframes go in, in order.", "A table gives each gap its length, speed and what happens in it.", "An animation model draws the in-betweens and joins them into one animation."],
     // Fuobe Animation runs on both engines: the node takes the template's.
     build: (engine) => {
       const g = keyframesAnimation(engine);
@@ -2164,11 +2191,15 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "Write a prompt, make a still, bring it to life",
     icon: "Clapperboard",
     hue: 282,
+    rank: 5,
+    makes: "A 5-second film of the still, in 16:9.",
+    flow: ["Words", "Still", "Film"],
+    steps: ["Your prompt says what the picture shows.", "An image model makes a still from it.", "A video model brings the still to life as a 5-second shot."],
     build: tpl(
       [
-        { id: "prompt", type: "prompt", x: 0, y: 80, data: { label: "Prompt", text: "A lighthouse on a sea cliff at golden hour, waves crashing below, cinematic wide shot" } },
+        { id: "prompt", type: "prompt", x: 0, y: 80, data: { label: "Prompt", text: "A fashion model in a long crimson silk gown on an Icelandic black-sand beach, the silk train lifting in the sea wind, basalt sea stacks behind her, soft overcast light, cinematic wide shot" } },
         { id: "still", type: "model", x: COL, y: 40, data: { mediaKind: "image", label: "Still", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
-        { id: "animate", type: "model", x: COL * 2, y: 40, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in as the waves roll and the beam sweeps across the sea", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
+        { id: "animate", type: "model", x: COL * 2, y: 40, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in as the silk train lifts in the sea wind and she turns her face towards the light", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
         { id: "out", type: "output", x: COL * 3, y: 60, data: { label: "Film" } },
       ],
       [
@@ -2184,6 +2215,12 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "One product photo, three studio angles, one ad clip",
     icon: "Package",
     hue: 30,
+    rank: 1,
+    makes: "Three studio angles of the product and a 5-second ad clip.",
+    steps: ["Your product photo goes in.", "Three edits show it from the front, from the side and from above, on a clean studio background.", "A video model turns the three angles into a 5-second ad clip with a slow orbit."],
+    inputs: { product: "A photo of your product on its own." },
+    flow: ["Product", "3 angles", "Ad"],
+    samples: { product: { src: "/examples/app-product-360/1/in-image.jpg", name: "Red patent heel.jpg" } },
     build: tpl(
       [
         { id: "product", type: "image-input", x: 0, y: ROW, data: { label: "Product photo" } },
@@ -2210,12 +2247,16 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
   {
     id: "script-film",
     name: "Script → storyboard → film",
-    description: "A text model breaks a short script into three shots: three frames, three clips, one film",
+    description: "A short script becomes three frames, three clips and one film",
     icon: "GalleryHorizontal",
     hue: 200,
+    rank: 6,
+    makes: "Three frames, three clips and one film.",
+    flow: ["Script", "Frames", "Film"],
+    steps: ["Your script goes in.", "A writing model splits it into three shots: the opening, the turning point and the ending.", "Each shot becomes a still frame, all in one look.", "Each frame becomes a 5-second clip.", "The three clips are joined into one film."],
     build: tpl(
       [
-        { id: "script", type: "prompt", x: 0, y: FILM_ROW, data: { label: "Script", text: "A paper boat sails down a rain-soaked city gutter, rides a little waterfall into a storm drain and comes out on a sunny canal." } },
+        { id: "script", type: "prompt", x: 0, y: FILM_ROW, data: { label: "Script", text: "On a candlelit night, a woman in an emerald silk ball gown walks down the grand marble staircase of a palace. At the bottom she turns, and her face catches the candlelight. Then she pushes open tall gilded doors onto a moonlit garden." } },
         // The script reaches every shot through a text model: edit the script and all three shots follow.
         ...[0, 1, 2].map((i) => ({
           id: `beat${i + 1}`,
@@ -2275,11 +2316,15 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "One prompt, three models, side by side",
     icon: "Columns3",
     hue: 150,
+    rank: 7,
+    makes: "Three pictures of the same prompt, side by side.",
+    flow: ["Prompt", "3 pictures"],
+    steps: ["Your prompt goes in.", "Three image models each make a picture from it.", "The three pictures sit side by side, so you can keep the best."],
     build: (engine) => {
       const models = engine === "open" ? ["oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism"] : ["nano-banana-pro", "seedream-5-pro", "flux-3"];
       return tpl(
         [
-          { id: "prompt", type: "prompt", x: 0, y: ROW - 60, data: { label: "Prompt", text: "Portrait of an elderly fisherman mending a net at dawn, soft window light, film grain" } },
+          { id: "prompt", type: "prompt", x: 0, y: ROW - 60, data: { label: "Prompt", text: "Editorial beauty portrait of a Senegalese fashion model in a gold silk headwrap and gold earrings, warm studio light, film grain" } },
           ...models.map((m, i) => ({ id: `m${i + 1}`, type: "model" as const, x: COL, y: i * (ROW - 60), data: { mediaKind: "image" as const, modelId: m, params: { aspectRatio: "3:4" } } })),
           { id: "out", type: "output", x: COL * 2, y: ROW - 120, data: { label: "Compare" }, width: 560 },
         ],
@@ -2293,13 +2338,19 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "A photo, a short voice sample and a script make a talking clip",
     icon: "Mic2",
     hue: 340,
+    rank: 8,
+    makes: "A talking clip of the portrait in the cloned voice.",
+    steps: ["A portrait, a short voice sample and a script go in.", "The script is read in the cloned voice.", "The portrait speaks the lines, with natural head movement."],
+    inputs: { portrait: "A photo of a face, looking at the camera.", sample: "10 to 30 seconds of the voice to copy." },
+    flow: ["Portrait", "Voice", "Talk"],
+    samples: { portrait: { src: "/examples/effect-pearl-earring/1/in-image.jpg", name: "Portrait.jpg" }, sample: { src: "/samples/clean-voice/clean.m4a", name: "Voice sample.m4a" } },
     build: tpl(
       [
         { id: "portrait", type: "image-input", x: 0, y: 0, data: { label: "Portrait" } },
         { id: "sample", type: "clone-voice", x: 0, y: 340, data: { label: "Your voice (10–30 s sample)" } },
-        { id: "script", type: "prompt", x: 0, y: 540, data: { label: "Script", text: "Hi! This whole clip was made on a Fuobe canvas from one photo and a few seconds of my voice." } },
+        { id: "script", type: "prompt", x: 0, y: 540, data: { label: "Script", text: "Welcome to the new collection. Every piece is cut by hand in our Milan atelier, and made to last a lifetime." } },
         { id: "voice", type: "tts", x: COL, y: 400, data: { label: "Cloned voice" }, models: { cloud: "chatterbox-cloud", open: "oss-chatterbox" } },
-        { id: "avatar", type: "model", x: COL * 2, y: 80, data: { mediaKind: "video", label: "Talking avatar", op: "avatar", prompt: "A friendly presenter talking to the camera, natural head movement" }, models: { cloud: "kling-avatar-2", open: "oss-infinitetalk" } },
+        { id: "avatar", type: "model", x: COL * 2, y: 80, data: { mediaKind: "video", label: "Talking avatar", op: "avatar", prompt: "A model talking warmly to the camera, natural head movement" }, models: { cloud: "kling-avatar-2", open: "oss-infinitetalk" } },
         { id: "out", type: "output", x: COL * 3, y: 100, data: { label: "Clip" } },
       ],
       [
@@ -2314,14 +2365,18 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
   {
     id: "table-film",
     name: "Table → shots → film",
-    description: "One row per shot: each row makes a still and animates it, then every row is joined into one film",
+    description: "Each row is a shot: a still, then a clip, all joined into one film",
     icon: "Table",
     hue: 160,
+    rank: 3,
+    makes: "One film with a shot for every row.",
+    flow: ["Table", "Stills", "Film"],
+    steps: ["Each row of the table is one shot.", "Every row becomes a still.", "Every still becomes a 5-second clip.", "The clips are joined into one film."],
     build: tpl(
       [
-        { id: "cast", type: "table", x: 0, y: 40, data: { label: "Shots", columns: ["Animal", "Place"], rows: [["red fox", "a snowy pine forest"], ["barn owl", "an old wooden barn at dusk"], ["sea otter", "a kelp forest at sunrise"]] } },
-        { id: "still", type: "model", x: COL + 140, y: 0, data: { mediaKind: "image", label: "Still", prompt: "A {Animal} in {Place}, wildlife photography, soft natural light", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
-        { id: "animate", type: "model", x: COL * 2 + 140, y: 0, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow push-in, the animal turns its head", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
+        { id: "cast", type: "table", x: 0, y: 40, data: { label: "Shots", columns: ["Shot", "Scene"], rows: [["Opening", "a fashion model in a white linen dress at the bow of a classic wooden yacht off Capri, morning sun"], ["Middle", "the model on the teak deck in a navy silk scarf, the cliffs of the Amalfi coast behind her"], ["Ending", "the model at the stern at golden hour, the sea glittering behind her"]] } },
+        { id: "still", type: "model", x: COL + 140, y: 0, data: { mediaKind: "image", label: "Still", prompt: "{Scene}, a luxury yacht campaign, cinematic light", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        { id: "animate", type: "model", x: COL * 2 + 140, y: 0, data: { mediaKind: "video", label: "Animate", op: "i2v", prompt: "Slow cinematic camera move, the sea glittering, fabric moving in the wind", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
         { id: "film", type: "concat", x: COL * 3 + 140, y: 0, data: { label: "Film", params: { aspectRatio: "16:9" } }, models: { cloud: CONCAT_MODELS.cloud, open: CONCAT_MODELS.open } },
       ],
       [
@@ -2337,6 +2392,11 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "A grey-box blockout sets the camera and timing; reference stills and timed beats say what it becomes",
     icon: "Box",
     hue: 210,
+    rank: 99,
+    starter: false,
+    makes: "A film that follows the blockout's camera and timing.",
+    flow: ["Blockout", "Film"],
+    steps: ["A grey-box blockout sets the camera and timing.", "Reference stills and timed beats say what it becomes.", "A video model renders the film."],
     build: (engine) => (engine === "cloud" ? BLOCKOUT_CLOUD(engine) : BLOCKOUT_OPEN(engine)),
   },
   {
@@ -2345,6 +2405,11 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     description: "Trim, mute and join clips into one film, at 30 fps",
     icon: "Film",
     hue: 250,
+    rank: 9,
+    makes: "One film made of the three clips.",
+    flow: ["Clips", "Film"],
+    samples: Object.fromEntries(["pearl-earring", "superstar", "blue-depth"].map((e, i) => [`clip${i + 1}`, { src: `/previews/presets/effect-${e}.mp4`, name: `Clip ${i + 1}.mp4` }])),
+    steps: ["Three clips go in.", "Each one is trimmed, muted and set to 30 frames a second.", "They are joined into one film."],
     build: tpl(
       [
         ...[0, 1, 2].map((i) => ({ id: `clip${i + 1}`, type: "video-input" as const, x: 0, y: i * 320, data: { label: `Clip ${i + 1}` } })),
@@ -2368,23 +2433,25 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
 // Qwen-Image 2.1 Turbo on your GPU (Qwen-Image-Edit 2511 hosted on fal) and Fuobe DoP (Wan 2.2 14B on your GPU, or hosted on fal).
 // The edit prompts are Fuobe's own words; the motion is the effect's own prompt from the effects catalog.
 
-export const EFFECT_CHAIN_GROUP = "Effects 2.0 chains";
+/** The effect films' section (TEMPLATE_SECTIONS). */
+export const EFFECT_CHAIN_GROUP = "effect-films" satisfies TemplateSectionKey;
 
 /** Image edit, then image to video: the models per engine (Fuobe DoP is an Original, run on the template's engine). */
 export const EFFECT_CHAIN_MODELS = { edit: { cloud: "qwen-image-edit-2511-cloud", open: "oss-qwen-image-21-turbo" }, video: "fuobe-dop" } as const;
 
 /** The researched Effects 2.0 chains with a scene to set first: the effect (its name in the effects catalog) and the edit. */
-export const EFFECT_CHAINS: { effect: string; edit: string; icon: string; hue: number }[] = [
-  { effect: "Agamemnon", icon: "Swords", hue: 35, edit: "Dress the person as an ancient Greek warrior king in polished bronze armour and a red cape, a sword in hand, a vast army on a dusty battlefield behind them at golden hour. Keep their face and pose." },
-  { effect: "Fallen Angel", icon: "Feather", hue: 270, edit: "Give the person large dark ragged wings and put them on a storm-lit rooftop at night, black feathers drifting in the air. Keep their face, clothes and pose." },
-  { effect: "Pearl Earring", icon: "Gem", hue: 220, edit: "Repaint the picture as a Dutch Golden Age oil portrait: a blue and gold head wrap, a pearl earring, a dark background and soft window light. Keep the person's face." },
-  { effect: "Monet Muse", icon: "Palette", hue: 150, edit: "Repaint the scene as an impressionist oil painting of a garden pond with water lilies, soft dabs of light and colour. Keep the person and their pose." },
-  { effect: "Fairytale Castle", icon: "Castle", hue: 300, edit: "Put a magical fairytale castle on a hill far behind the person under a twilight sky with the first fireworks. Keep the person exactly as they are." },
-  { effect: "Blue Depth", icon: "Waves", hue: 210, edit: "Place the person underwater in deep blue ocean light, rays shimmering down from the surface, hair and clothes floating. Keep their face." },
-  { effect: "Superstar", icon: "Star", hue: 50, edit: "Put the person on a glittering concert stage under bright spotlights, a cheering crowd in silhouette and confetti in the air. Keep their face and outfit." },
-  { effect: "Street Colossus", icon: "Building2", hue: 15, edit: "Make the person a giant standing in the middle of a city street, as tall as the buildings, with tiny cars and people around their feet. Keep their face and clothes." },
-  { effect: "Dolphin Ride", icon: "Fish", hue: 190, edit: "Put the person on the back of a dolphin leaping over sparkling ocean waves in bright sunshine. Keep their face." },
-  { effect: "Skatedog", icon: "Dog", hue: 95, edit: "Add a happy dog riding a skateboard next to the person on a sunny street. Keep the person exactly as they are." },
+/** `line`: what it does for you, in one short line (cards and pages). `photo`: another effect's example photo, where its own has none yet. */
+export const EFFECT_CHAINS: { effect: string; line: string; edit: string; icon: string; hue: number; rank: number; photo?: string }[] = [
+  { effect: "Agamemnon", line: "You become a bronze-armoured king before a vast army at golden hour.", rank: 6, icon: "Swords", hue: 35, edit: "Dress the person as an ancient Greek warrior king in polished bronze armour and a red cape, a sword in hand, a vast army on a dusty battlefield behind them at golden hour. Keep their face and pose." },
+  { effect: "Fallen Angel", photo: "superstar", line: "You get dark wings on a storm-lit rooftop, feathers in the air.", rank: 10, icon: "Feather", hue: 270, edit: "Give the person large dark ragged wings and put them on a storm-lit rooftop at night, black feathers drifting in the air. Keep their face, clothes and pose." },
+  { effect: "Pearl Earring", line: "You become a Dutch Golden Age portrait with a pearl earring.", rank: 1, icon: "Gem", hue: 220, edit: "Repaint the picture as a Dutch Golden Age oil portrait: a blue and gold head wrap, a pearl earring, a dark background and soft window light. Keep the person's face." },
+  { effect: "Monet Muse", line: "You step into an impressionist painting of a water-lily pond.", rank: 2, icon: "Palette", hue: 150, edit: "Repaint the scene as an impressionist oil painting of a garden pond with water lilies, soft dabs of light and colour. Keep the person and their pose." },
+  { effect: "Fairytale Castle", line: "A fairytale castle rises behind you under a twilight sky.", rank: 4, icon: "Castle", hue: 300, edit: "Put a magical fairytale castle on a hill far behind the person under a twilight sky with the first fireworks. Keep the person exactly as they are." },
+  { effect: "Blue Depth", line: "You drift in deep blue water, light rays falling from above.", rank: 5, icon: "Waves", hue: 210, edit: "Place the person underwater in deep blue ocean light, rays shimmering down from the surface, hair and clothes floating. Keep their face." },
+  { effect: "Superstar", line: "You take the stage under bright spotlights as confetti falls.", rank: 3, icon: "Star", hue: 50, edit: "Put the person on a glittering concert stage under bright spotlights, a cheering crowd in silhouette and confetti in the air. Keep their face and outfit." },
+  { effect: "Street Colossus", photo: "blue-depth", line: "You stand as tall as the buildings in a busy city street.", rank: 9, icon: "Building2", hue: 15, edit: "Make the person a giant standing in the middle of a city street, as tall as the buildings, with tiny cars and people around their feet. Keep their face and clothes." },
+  { effect: "Dolphin Ride", line: "You ride a dolphin over sparkling waves in bright sunshine.", rank: 7, icon: "Fish", hue: 190, edit: "Put the person on the back of a dolphin leaping over sparkling ocean waves in bright sunshine. Keep their face." },
+  { effect: "Skatedog", line: "A dog on a skateboard rolls along right beside you.", rank: 8, icon: "Dog", hue: 95, edit: "Add a happy dog riding a skateboard next to the person on a sunny street. Keep the person exactly as they are." },
 ];
 
 const slugOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -2400,11 +2467,19 @@ function effectChainTemplate(c: (typeof EFFECT_CHAINS)[number]): CanvasTemplate 
   return {
     id: `effect-chain-${slugOf(c.effect)}`,
     name: c.effect,
-    // What the effect does, in the catalog's words (the section's note says how the chain works).
-    description: getPreset(`effect-${slugOf(c.effect)}`)?.description ?? "A photo, its scene set by an image edit, then animated with the effect",
+    description: c.line,
     icon: c.icon,
     hue: c.hue,
     group: EFFECT_CHAIN_GROUP,
+    rank: c.rank,
+    makes: `A 5-second moving shot of you in the ${c.effect} scene.`,
+    flow: ["Photo", "Scene", "Film"],
+    // The photo its Video effect's own example starts from (a published example input: example-files.ts).
+    samples: { photo: { src: `/examples/effect-${c.photo ?? slugOf(c.effect)}/1/in-image.jpg`, name: "Your photo.jpg" } },
+    steps: ["Your photo goes in.", `An edit sets the scene: ${c.edit}`, `The ${c.effect} effect brings it to life as a 5-second moving shot.`],
+    inputs: { photo: "A photo of a person, facing the camera." },
+    // canvas-template-cards.ts adds the effect's own example, when it has one.
+    oneStep: { href: `/video?preset=effect-${slugOf(c.effect)}`, label: "Try this effect in Video" },
     build: (engine) => {
       const graph = tpl(
         [
@@ -2417,7 +2492,7 @@ function effectChainTemplate(c: (typeof EFFECT_CHAINS)[number]): CanvasTemplate 
             y: 0,
             data: { mediaKind: "video", label: c.effect, op: "i2v", modelId: EFFECT_CHAIN_MODELS.video, engine, prompt: words, params: { aspectRatio: "auto", duration: 5 } },
           },
-          { id: "out", type: "output", x: COL * 3, y: 40, data: { label: c.effect } },
+          { id: "out", type: "output", x: COL * 3, y: 40, data: { label: "Your film" } },
         ],
         [
           ["photo", "scene", "images"],

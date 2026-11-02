@@ -69,6 +69,8 @@ An account is signed in, but it sees the owner's studio as a guest does:
   So does Split soundtrack's **Export mix** (`POST /api/audio-tools/export`), which saves into the
   owner's Library, with or without a GPU. Accounts have their own uploads and runs (below), but no
   projects yet.
+  Canvas shows its ready boards to guests and accounts as read-only pages (`/canvas/start/<id>`):
+  what goes in, the steps and what comes out. Only the owner makes boards.
 - **Settings, keys and tokens are the owner's.** Changing settings or model switches, the password,
   API tokens, Public sign-up, LoRA downloads, Assist connectors and the MCP endpoint answer 403 for
   an account.
@@ -84,6 +86,20 @@ An account is signed in, but it sees the owner's studio as a guest does:
   back at once. The live-updates stream isn't sent to accounts: their studios poll instead.
 - **Its own uploads are its own.** Only the account that uploaded a file can use it in a run, and
   no other account can open it. See [Uploads](#uploads).
+- **Results made in the browser (Kinetic Motion) are its own runs too.** A motion clip rendered in
+  the page (an animated end card, a text template) is saved with an upload and
+  `POST /api/generations/local` (`op: "motion"`, model `local-motion`). It needs the same own GPU or
+  own key as any upload, and counts as the account's own runs and files: the clip and every file it
+  names (its pictures, and the recipe's logo, product and pictures) must be the account's own (403
+  otherwise), a clip is never made from a video (400), the stored file must be the MP4 or WebM it
+  claims to be (400), and it shares the account's hourly run budget (60 an hour with its other runs,
+  429). The words drawn on the clip (the recipe's fields and brand name) and its title go through the
+  studio's checks when they are on, whatever the page sends as the prompt, and are what the run keeps
+  (a refusal answers 422; a result the checks want to see waits for them). It shows in the account's
+  own runs, never the owner's Library. Nothing
+  is downloaded straight from the page: the clip is downloaded from the saved result. A guest's
+  call answers 401 with the sign-up card. Colour grades and Relight blends stay the owner's
+  (403, `code: "library"`).
 
 ## Managing accounts
 

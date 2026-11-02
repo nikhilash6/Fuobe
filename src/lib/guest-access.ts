@@ -123,7 +123,6 @@ const LIBRARY_CHANGES: [methods: string, path: RegExp][] = [
   ["PATCH DELETE", /^\/api\/folders\/[^/]+$/],
   ["PATCH DELETE", /^\/api\/generations\/[^/]+$/],
   // (POST /api/generations/bulk goes to the route, which takes an account's likes, pins and reviews of its own runs only.)
-  ["POST", /^\/api\/generations\/local$/],
   ["POST", /^\/api\/generations\/[^/]+\/(cancel|finish)$/],
   ["DELETE", /^\/api\/generations\/trash$/],
   ["DELETE", /^\/api\/assets\/[^/]+$/],
@@ -190,7 +189,8 @@ const GPU_READS = new Set(["/api/gpu/readiness", "/api/gpu/badges", "/api/gpu/pl
 /**
  * A change an account may send: signing out, its own GPU and its check, its own fal.ai and Replicate keys, price checks
  * (reads go by guestRead, as a guest's), an upload (the route checks it: src/app/api/uploads, which the proxy's matcher
- * leaves out) and a look at its own clip's header (the route reads only its own files).
+ * leaves out), a look at its own clip's header (the route reads only its own files), and a result it made in its
+ * browser (POST /api/generations/local: the route takes its own Kinetic Motion clips only).
  */
 export function accountMayChange(method: string, pathname: string, search: string): boolean {
   if (method === "POST" && pathname === "/api/auth/logout") return true;
@@ -206,6 +206,9 @@ export function accountMayChange(method: string, pathname: string, search: strin
   if (method === "POST" && (pathname === "/api/reports" || pathname === "/api/billing/interest")) return true;
   // Like, pin or review many of its own runs at once (the route checks each is its own, and refuses the rest).
   if (method === "POST" && pathname === "/api/generations/bulk") return true;
+  // A Kinetic Motion clip it rendered in its browser and uploaded, recorded as its own run (the route checks the files
+  // are its own, its run rate and the studio's checks; a grade or a Relight blend stays the owner's there).
+  if (method === "POST" && pathname === "/api/generations/local") return true;
   return isPriceCheck(method, pathname, search);
 }
 
