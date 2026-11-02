@@ -57,7 +57,8 @@ import { H3_TIER_PARAM, H3_UNET_PARAM } from "@/lib/gpu/h3-tier";
 import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qwen21-speed";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
-import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
+import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRefinedModel, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
+import { chainedRefine } from "@/lib/av/hi3d";
 import { createRegenerateRun } from "./regenerate";
 import { REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
@@ -950,6 +951,11 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   // Its frames can come from earlier steps (framesWait): each clip then waits for the frames it starts and ends on.
   if (filmRoute && inferOperation(shotModel, original) === "keyframes" && (!opts.dependsOn || framesWait(original))) {
     return createKeyframeFilm(original, shotModel, filmRoute, { batchId: opts.batchId, dependsOn: opts.dependsOn });
+  }
+  // Image to 3D's "Refine detail" (open engine): the model, then Hi3D's refine of its mesh with the same photo.
+  // Its photo may come from an earlier step (a Canvas image node, an Assist plan's still): the refine then waits for it too.
+  if (shotModel && shotModel.kind === "model3d" && original.op !== "refine-3d" && chainedRefine(original) !== null) {
+    return createRefinedModel(original, shotModel, { batchId: opts.batchId, dependsOn: opts.dependsOn });
   }
   // Text to 3D on the open engine: a still first, then the 3D model of it. The operation is read as the planner
   // reads it (Assist, MCP and API clients usually leave op out).

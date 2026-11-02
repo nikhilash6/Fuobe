@@ -305,5 +305,14 @@
     "isolated": false,
     "subdir": null,
     "folders": []
+  },
+  "Comfyui-Hi3d-T8": {
+    "repo": "https://github.com/T8mars/Comfyui-Hi3d-T8",
+    "commit": "73848490976e6a9b0c735ce02984c03866a495e7",
+    "registry": { "id": "hi3d-t8", "version": "" },
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
   }
 }
