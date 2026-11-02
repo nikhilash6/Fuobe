@@ -4725,6 +4725,41 @@ export const SPEC = [
       'length, which CreateVideo muxes back at 24 fps. Measured by the pack\'s author: about 3 min per 5 s at 2K on a 72 GB RTX PRO 5000 (9.5 min with dense attention); 22 s on a B200 (NVIDIA); ' +
       'a community run reached about 1080p on 32 GB with a lossy LoRA. The packs were tested by their author on ComfyUI 0.42.0.',
   },
+  // ---- Character swap in 2K (package n7-4-character-swap-2k; docs/research/new-models-7.md §2.10 rows 4-5): only the swapped
+  // character comes from the regenerate, over the original footage, with the footage's own sound.
+  {
+    id: 'video-composite-mask',
+    title: 'Put only the swapped character back over the original footage: the 768p swap, then the regenerated one, each through the approved mask (grown, feathered), with the footage\'s sound (core nodes, no model)',
+    capability: 'composite',
+    handBuilt: 'hand-built/video-composite-mask.json',
+    bindings: {
+      video: [b('source', 'file')], video2: [b('regen', 'file')], video3: [b('take', 'file')], mask: [b('mask', 'file')],
+      startTime: [b('source_slice', 'start_time')], windowStart: [b('regen_slice', 'start_time')], takeStart: [b('take_slice', 'start_time')], maskStart: [b('mask_slice', 'start_time')],
+      duration: [b('source_slice', 'duration'), b('regen_slice', 'duration'), b('take_slice', 'duration'), b('mask_slice', 'duration')],
+      canvasWidth: [b('take_scaled', 'width'), b('take_mask_img', 'width')], canvasHeight: [b('take_scaled', 'height'), b('take_mask_img', 'height')],
+      takeX: [b('base', 'x')], takeY: [b('base', 'y')],
+      regionWidth: [b('regen_mask_img', 'width')], regionHeight: [b('regen_mask_img', 'height')],
+      regenWidth: [b('regen_scaled', 'width'), b('regen_trim', 'width')], regenHeight: [b('regen_scaled', 'height'), b('regen_trim', 'height')],
+      trimX: [b('regen_trim', 'x')], trimY: [b('regen_trim', 'y')],
+      regenX: [b('composite', 'x')], regenY: [b('composite', 'y')],
+      maskGrow: [b('take_grow', 'expand'), b('regen_grow', 'expand')],
+      feather: [b('take_feather', 'left'), b('take_feather', 'top'), b('take_feather', 'right'), b('take_feather', 'bottom'), b('regen_feather', 'left'), b('regen_feather', 'top'), b('regen_feather', 'right'), b('regen_feather', 'bottom')],
+      filenamePrefix: [b('save', 'filename_prefix')],
+    },
+    outputs: [{ node: 'save', kind: 'video' }],
+    defaults: { startTime: 0, windowStart: 0, takeStart: 0, maskStart: 0, duration: 3, canvasWidth: 320, canvasHeight: 180, takeX: 0, takeY: 0, regionWidth: 316, regionHeight: 180, regenWidth: 316, regenHeight: 179, trimX: 0, trimY: 0, regenX: 2, regenY: 0, maskGrow: 8, feather: 12 },
+    vramGb: 0,
+    license: 'n/a (no model; ComfyUI core)',
+    notes:
+      'Character Swap Studio\'s Sharpen and Genjutsu\'s Character swap at 1080p / 2K / 4K on your GPU: a swap was redrawn by video-regenerate-h3, and only the character goes back over the footage, so the background and the sound stay as filmed. ' +
+      'video = the footage at 24 fps and the film\'s size (the studio\'s 24 fps copy, or Genjutsu\'s part fitted by video-fit-clip), video3 = the 768p swap (H3\'s canvas), video2 = its regenerate, mask = the approved whole-shot mask from video-mask-h3-relay (H3\'s canvas, white = the person). ' +
+      'Each LoadVideo goes through a Video Slice of the same duration (one composite window of at most 3 s, because every stream is decoded as float32, about 25 MB a frame at 1080p) from its own start (startTime, takeStart, windowStart, maskStart). ' +
+      'Two layers, each through the mask scaled to it, grown (maskGrow) and feathered (feather): first the swap stretched back over the region of the footage its canvas covers (canvasWidth x canvasHeight at takeX, takeY), ' +
+      'then the regenerate over the centre region its 16:9 / 9:16 draft kept (regionWidth x regionHeight; the mask is centre-cropped to it), less the rows its finish trims at 1080p and 4K (1080 of 1088, 2160 of 2176; the columns for a tall clip): ' +
+      'the regenerate is laid over regenWidth x regenHeight at regenX, regenY and the mask cut to the same rows (CropMask at trimX, trimY), so a character reaching past that region keeps the 768p swap there rather than the original person. ' +
+      'Fuobe works the regions out from the film\'s size and H3\'s canvas. CreateVideo takes the footage\'s own sound and rate (a silent clip stays silent). ' +
+      'Run end to end on ComfyUI 0.41.0 (CPU): a 320x180 24 fps clip with sound, a 224x128 swap, a 384x216 regenerate and a 224x128 box mask, a 1.5 s window from 0.5 s: 36 frames and 1.5 s of AAC, the regenerate only inside the feathered box; the same with a silent clip gives video only.',
+  },
   {
     id: 'video-sdr-to-hdr-exr',
     title: 'SDR to HDR as OpenEXR frames (scene-linear Rec.2020, half float) plus a 10-bit HLG preview (core, no model)',
