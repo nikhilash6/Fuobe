@@ -50,7 +50,9 @@ export function TemplateGallery({ category, onCategory, media, onMedia, selected
   const list = useMemo(() => {
     const base = templatesFor(category, media);
     const found = query ? base.filter((t) => `${t.name} ${FORMATS[t.format].cardLabel} ${FORMATS[t.format].name} ${t.prompt}`.toLowerCase().includes(query)) : base;
-    return category === "all" && !query ? interleaved(found) : found;
+    const ordered = category === "all" && !query ? interleaved(found) : found;
+    // Templates with a real cover lead; the rest keep their order after them.
+    return [...ordered].sort((a, b) => Number(!templateCover("marketing", a.id)) - Number(!templateCover("marketing", b.id)));
   }, [category, media, query]);
   const [fadeRef, fadeStyle] = useEdgeFade<HTMLDivElement>();
   return (
