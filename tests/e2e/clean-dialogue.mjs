@@ -4,7 +4,8 @@
 // clip in, the open engine offers the level under the dialogue (−18 dB picked), says what it removes and how it relates
 // to Clean up voice, and prices it Free; the cloud engine offers VEED, DeepFilterNet 3 and ElevenLabs with a price and
 // says it gives the voice alone; no sideways scroll and no console errors. Then one demo run on the open engine gives a
-// result, "Fine-tune in the mixer" switches to Split into stems, and a split's mixer opens on the Clean dialogue preset;
+// result, "Fine-tune in the mixer" switches to Split into stems, and a split's mixer opens on the Clean dialogue preset
+// (and back on Original once Split into stems is picked by hand after visiting Clean up dialogue);
 // last, a result's actions menu in the Library offers "Clean up dialogue". Screenshots go to outDir.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -93,6 +94,14 @@ try {
   await page.getByRole("heading", { name: "Stems and mixer" }).waitFor({ timeout: 40_000 });
   check((await page.getByRole("radio", { checked: true, name: "Clean dialogue (−18 dB)" }).count()) === 1, "run: the mixer opens on the Clean dialogue preset");
   await page.screenshot({ path: path.join(out, "clean-mixer.png"), fullPage: true });
+  // Visiting Clean up dialogue and then picking Split into stems yourself puts the mixer back on the original mix.
+  await page.getByRole("radio", { name: "Clean up dialogue" }).click();
+  await page.getByRole("radio", { name: "Split into stems" }).click();
+  await page.getByRole("heading", { name: "Stems and mixer" }).waitFor({ timeout: 40_000 });
+  check(
+    await page.getByRole("radio", { checked: true, name: "Original", exact: true }).waitFor({ timeout: 20_000 }).then(() => true, () => false),
+    "run: Split into stems picked after Clean up dialogue opens the mixer on Original",
+  );
 
   // ---- The hand-off on a result: the Library's actions menu (a phone's ⋯ button on each tile).
   const phone = await setup(browser, PHONE, "dark", "open");

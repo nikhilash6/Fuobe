@@ -9,6 +9,7 @@ import {
   cleanDialogueHref,
   cleanDialogueProblem,
   CLEANERS,
+  mixPresetFor,
   CLOUD_NOTE,
   deepFilterNetPrice,
   OFF_DB,
@@ -20,6 +21,7 @@ import {
 import { buildPayload, extractOutputs } from "@/lib/catalog/payload";
 import { estimateCost } from "@/lib/catalog/plan";
 import { getModel } from "@/lib/catalog";
+import { defaultModelForNode, modelChoices } from "@/lib/catalog/canvas";
 import type { Generation, GenInput } from "@/lib/catalog/types";
 
 // Clean up dialogue (DBS D5): the plan per engine and cleaner, the cloud cleaners' prices and payloads against their
@@ -232,6 +234,20 @@ describe("hand-offs and the GPU pre-flight board", () => {
     for (const g of [gen("audio", "music"), gen("audio", "sfx"), gen("audio", "separate-audio", CLEAN_DIALOGUE_FEATURE)]) expect(outputActions(g, 0).some((x) => x.id === "clean-dialogue")).toBe(false);
   });
 
+  it("opens the mixer on Clean dialogue only from that task, and on the original mix for a plain split", () => {
+    expect(mixPresetFor("clean")).toBe(CLEAN_DIALOGUE_PRESET);
+    // "Fine-tune in the mixer" switches to Split into stems and keeps the preset.
+    expect(mixPresetFor("split", true)).toBe(CLEAN_DIALOGUE_PRESET);
+    // Picking Split into stems after visiting Clean up dialogue clears it.
+    expect(mixPresetFor("split")).toBeNull();
+  });
+
+  it("leaves the Canvas Clean up voice node on your GPU: the hosted cleaners aren't in its picker", () => {
+    const node = { type: "clean-voice" as const, data: {} };
+    expect(defaultModelForNode(node, "cloud")).toBeUndefined();
+    expect(modelChoices(node).map((m) => m.id)).toEqual(["oss-reuse-voice"]);
+  });
+
   it("has a row on the board: graph C and the mux", () => {
     const row = STUDIO_ROWS.find((r) => r.href === `/audio/split?preset=${CLEAN_DIALOGUE_PRESET}`)!;
     expect(row).toMatchObject({ label: "Clean up dialogue", group: "Audio" });
@@ -282,12 +298,19 @@ describe("POST /api/audio-tools clean-dialogue (demo mode)", () => {
   it("prices each cloud cleaner on the file's length", async () => {
     const media = wav();
     const priced = async (cleaner: string) => (await (await post({ tool: "clean-dialogue", engine: "cloud", media, kind: "audio", cleaner }, true)).json()) as { costUsd: number | null; demo: boolean; steps: number };
-    const veed = await priced("veed");
-    const dfn = await priced("deepfilternet");
-    const iso = await priced("isolation");
-    expect([veed.steps, dfn.steps, iso.steps]).toEqual([1, 1, 1]);
-    // Demo mode runs the placeholder, but the price shown is the cleaner's.
-    if (!veed.demo) expect([veed.costUsd, dfn.costUsd, iso.costUsd]).toEqual([0.013, 0.002, 0.003]);
+    // With a fal.ai key the price check takes the real route (a check never calls fal): the 2 s file at each cleaner's
+    // price. VEED bills at least a minute ($0.0125), DeepFilterNet 3 $0.001/s, ElevenLabs $0.10/min of the clip.
+    setSetting("falKey", "fal-test-key");
+    try {
+      const veed = await priced("veed");
+      const dfn = await priced("deepfilternet");
+      const iso = await priced("isolation");
+      expect([veed.steps, dfn.steps, iso.steps]).toEqual([1, 1, 1]);
+      expect([veed.demo, dfn.demo, iso.demo]).toEqual([false, false, false]);
+      expect([veed.costUsd, dfn.costUsd, iso.costUsd]).toEqual([0.013, 0.002, 0.003]);
+    } finally {
+      setSetting("falKey", "");
+    }
   });
 
   it("an install set to paid APIs only keeps the cloud cleaners and refuses the open remix", async () => {

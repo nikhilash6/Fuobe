@@ -26,6 +26,8 @@ export const EXTRACT_MODEL = "extract-soundtrack";
 
 /** The page's address for the tool (Split soundtrack, opened on Clean up dialogue). */
 export const CLEAN_DIALOGUE_PRESET = "clean-dialogue";
+/** The preset Split soundtrack's mixer opens on for a task: Clean dialogue for that task or its "Fine-tune in the mixer". */
+export const mixPresetFor = (goal: "split" | "clean", fromClean = false): string | null => (goal === "clean" || fromClean ? CLEAN_DIALOGUE_PRESET : null);
 export const cleanDialogueHref = (kind: "audio" | "video", url: string): string => `/audio/split?${kind}=${encodeURIComponent(url)}&preset=${CLEAN_DIALOGUE_PRESET}`;
 
 // ---------------------------------------------------------------------------

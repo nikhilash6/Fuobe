@@ -474,7 +474,10 @@ export function modelChoices(n: Pick<CanvasNode, "type" | "data">): ModelDef[] {
   }
   if (n.type === "concat") return Object.values(CONCAT_MODELS).flatMap((id) => getModel(id) ?? []);
   const ops = nodeOps(n);
-  return MODELS.filter((m) => ops.some((op) => supportsOp(m, op)) && (!m.hidden || ops.includes("frame")) && !needsMarks(m));
+  // Clean up voice offers only what runs on your GPU (RE-USE): the hosted cleaners share its op but are Clean up
+  // dialogue's cloud engine (defaultModelForNode).
+  const own = (m: ModelDef) => n.type !== "clean-voice" || runsOn(m, "open");
+  return MODELS.filter((m) => ops.some((op) => supportsOp(m, op)) && (!m.hidden || ops.includes("frame")) && !needsMarks(m) && own(m));
 }
 
 // ---------------------------------------------------------------------------

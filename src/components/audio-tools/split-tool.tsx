@@ -60,7 +60,7 @@ import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
 import { useAudioToolPreview, useAudioToolRun, useSettled, type AudioToolBody } from "./hooks";
 import { CleanDialoguePanel } from "./clean-dialogue-panel";
-import { CLEAN_DIALOGUE_PRESET } from "@/lib/av/clean-dialogue";
+import { CLEAN_DIALOGUE_PRESET, mixPresetFor } from "@/lib/av/clean-dialogue";
 
 /**
  * Audio → Split soundtrack (DBS D1). Drop a song, podcast, film clip or video; DBS splits it into Dialogue, Music,
@@ -712,9 +712,11 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
     setMixPreset(CLEAN_DIALOGUE_PRESET);
   }, []);
   useHandoff(take, arrive);
+  // The mixer opens on the Clean dialogue preset only from Clean up dialogue ("Fine-tune in the mixer", or arriving
+  // on the preset); picking Split into stems yourself opens it on the original mix.
   const pickGoal = (next: "split" | "clean") => {
     setGoal(next);
-    if (next === "clean") setMixPreset(CLEAN_DIALOGUE_PRESET);
+    setMixPreset(mixPresetFor(next));
   };
   const ready = source && !source.uploading && source.ref ? source : null;
   const readyRef = ready?.ref;
@@ -808,7 +810,10 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
             engine={engine}
             visitor={visitor}
             blocker={visitor ? SELF_HOSTED : !source ? "Add a soundtrack to clean" : source.uploading ? "Uploading…" : null}
-            onMixer={() => pickGoal("split")}
+            onMixer={() => {
+              setGoal("split");
+              setMixPreset(mixPresetFor("split", true));
+            }}
           />
         )}
         {goal === "split" && source && engine === "cloud" && (
