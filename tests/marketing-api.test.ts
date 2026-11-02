@@ -634,7 +634,9 @@ describe("Ads Studio", () => {
     // In the cloud Nano Banana Pro and GPT Image 2.5 stay choices; a model the studio doesn't offer runs the Original.
     expect((await (await adsEstimate.POST(json("POST", { brandId, engine: "cloud", items }))).json()).modelId).toBe("fuobe-marketing-image");
     expect((await (await adsEstimate.POST(json("POST", { brandId, engine: "cloud", items, modelId: "nano-banana-pro" }))).json()).modelId).toBe("nano-banana-pro");
-    expect((await (await adsEstimate.POST(json("POST", { brandId, engine: "cloud", items, modelId: "flux-3" }))).json()).modelId).toBe("fuobe-marketing-image");
+    expect((await (await adsEstimate.POST(json("POST", { brandId, engine: "cloud", items, modelId: "recraft-4-1" }))).json()).modelId).toBe("fuobe-marketing-image");
+    // FLUX.3 is a choice too (N7-8): it reads a "keep clear" layout that keeps the product out of the words' space.
+    expect((await (await adsEstimate.POST(json("POST", { brandId, engine: "cloud", items, modelId: "flux-3" }))).json()).modelId).toBe("flux-3");
     const { batchId, creatives, run } = ads.createBatch({ brandId, engine: "open", items });
     expect(creatives).toHaveLength(5);
     expect(creatives.every((c) => c.status === "writing")).toBe(true);
