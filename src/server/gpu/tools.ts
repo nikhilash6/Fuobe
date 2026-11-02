@@ -12,6 +12,8 @@ import { FRAMES_MODELS } from "@/lib/catalog/keyframes";
 import { REMOVE_TOOLS } from "@/lib/catalog/remove-object";
 import { RESTORE, RESTORE_OPEN_JOIN } from "@/lib/catalog/restore";
 import { REGEN_DEFAULT_TIER, REGEN_JOIN, REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { COMPOSITE_MODEL } from "@/lib/catalog/sharpen";
+import { ORIGINALS, SHARPEN_TOOLS } from "@/lib/catalog/genjutsu";
 import { libraryEntry, loraEntry, loraRef, needsToken } from "@/lib/catalog/loras";
 import { ANGLES_2511_LORA } from "@/lib/catalog/open-tools";
 import { presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipes";
@@ -229,6 +231,8 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/audio", label: "Voice", group: "Audio", config: S.AUDIO_STUDIO },
   { href: "/audio/dialogue", label: "Dialogue", group: "Audio", config: S.DIALOGUE_STUDIO },
   { href: "/audio/voice-change", label: "Voice change", group: "Audio", config: S.VOICE_CHANGE_STUDIO },
+  // Design a voice (nm10-voice-design): Qwen3-TTS designs the takes and clones the one saved (VoxCPM2 is the other choice).
+  { href: "/audio/design", label: "Design a voice", group: "Audio", steps: [{ modelId: "oss-qwen3-tts", op: "voice-design" }, { modelId: "oss-qwen3-tts", op: "tts" }] },
   { href: "/audio/transcribe", label: "Transcribe", group: "Audio", config: S.TRANSCRIBE_STUDIO },
   // DBS soundtrack separation (D1): dialogue, music and effects.
   { href: "/audio/split", label: "Split soundtrack", group: "Audio", steps: [{ modelId: SPLIT_MODEL, op: "separate-audio" }] },
@@ -262,6 +266,23 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     steps: [
       { modelId: REGEN_MODEL, op: "upscale-video" },
       { modelId: REGEN_JOIN, op: "concat" },
+    ],
+  },
+  // n7-4: the Character swap at 1080p / 2K / 4K (Genjutsu, and Sharpen in Character Swap Studio's Finish): the 768p swap,
+  // the person's mask (SAM 3.1 on H3 Relay's graph), the part at 24 fps, the swap regenerated, only the character
+  // composited over the footage, the windows joined and the part's sound put back.
+  {
+    href: "/genjutsu?mode=character",
+    label: "Character swap in 2K",
+    group: "Video tools",
+    steps: [
+      { modelId: ORIGINALS.character, op: "video-swap" },
+      { modelId: SHARPEN_TOOLS.mask, op: "bg-remove-video" },
+      { modelId: SHARPEN_TOOLS.fit, op: "trim" },
+      { modelId: REGEN_MODEL, op: "upscale-video" },
+      { modelId: COMPOSITE_MODEL, op: "composite" },
+      { modelId: REGEN_JOIN, op: "concat" },
+      { modelId: SHARPEN_TOOLS.mux, op: "mux" },
     ],
   },
   { href: "/upscale/fps", label: "FPS boost", group: "Video tools", config: S.FPS_BOOST_STUDIO },

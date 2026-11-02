@@ -16,8 +16,9 @@ export function applySketch(req: GenerationRequest, model: ModelDef): { request:
   const images = [...(i.images ?? [])];
   const { mask, sketch, ...rest } = i;
 
-  // Video erasers, swaps and inserts read the mask themselves (a first-frame PNG or a mask video): it stays as it is.
-  if (mask && model.kind === "video" && (["remove-object", "video-swap", "video-insert"] as const).some(has)) return { request: req };
+  // Video erasers, swaps and inserts read the mask themselves (a first-frame PNG or a mask video), as does the Character
+  // swap's composite (the person's mask video): it stays as it is.
+  if (mask && model.kind === "video" && (["remove-object", "video-swap", "video-insert", "composite"] as const).some(has)) return { request: req };
   // Inpaint: a mask (white = change) and, for models without a mask input, a red-tinted copy.
   if (mask) {
     if (model.kind === "image" && has("inpaint")) {

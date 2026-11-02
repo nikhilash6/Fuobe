@@ -155,6 +155,12 @@ export function studioOf(feature: string): StudioInfo | undefined {
   return { name: HELPER_STUDIOS[base] ?? "another studio" };
 }
 
+/** The studio an Assist tool makes its work in ("dub_video" → "Translate & dub"; a storyboard is the Storyboard's). */
+export function studioForTool(tool: string): string | undefined {
+  if (tool === "create_storyboard") return "Storyboard";
+  return STUDIOS.find(([, s]) => s.tool === tool)?.[1].name;
+}
+
 export const notSupported = (studio: string) => `Made in ${studio}: making a skill from it isn't supported yet`;
 
 /**

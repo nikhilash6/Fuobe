@@ -16,7 +16,7 @@ import { enabledSkills, getSkill, skillRecipe } from "./skills";
  */
 
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
-const SERVER_INFO = { name: "fuobe", title: "Fuobe studio", version: "1.2.0" };
+const SERVER_INFO = { name: "fuobe", title: "Fuobe studio", version: "1.3.0" };
 const INSTRUCTIONS =
   "Fuobe is an AI image, video and audio studio (paid cloud models and open-source ComfyUI workflows); it also transcribes, translates and writes text and turns images into 3D models. " +
   "Look up models with search_models (kinds image, video, audio, text, model3d), price a plan with estimate_cost and tell the user the cost before you call generate or create_storyboard. " +
@@ -24,6 +24,7 @@ const INSTRUCTIONS =
   "Whole studio jobs have their own tools (split_layers, restyle_footage, dub_video, faceless_episode, create_ads, add_captions, restore_video, and katana, which rebuilds a 1–30 s reference edit shot for shot with the user's own subject from 1–5 photos): price them with estimate_job first. " +
   "Each studio job opens in that Fuobe studio (a Layers project, a Shorts session, a dub to review, a Faceless episode, an Ads Studio batch, the Captions editor, Katana): the result's href is its page on this Fuobe server, so give the user that link; a call the studio can't take runs as plain steps and says why. " +
   "Skills are playbooks for kinds of jobs (product photos, UGC videos, thumbnails…): list_skills, then load_skill to read one — they're also offered as prompts. " +
+  "A skill that runs by itself (list_skills marks it and names its inputs) runs with run_skill and values for those inputs, the same steps every time: price it with estimate_job first. " +
   "Generations run in the background: poll check_generations (wait_seconds up to 120) for output URLs; text results come back inline. Output URLs are paths on this Fuobe server.";
 
 interface JsonRpcRequest {
