@@ -9,6 +9,8 @@ import { getSetting } from "@/server/settings";
 import { RUNS_ON_COMPUTER_NOTE } from "@/lib/relay";
 import { OPERATION_LABELS } from "@/lib/catalog/types";
 import { ANY_ANGLE } from "@/lib/catalog/any-angle";
+import { directRunFeatures } from "@/lib/catalog/genjutsu";
+import { genjutsuLive } from "@/server/genjutsu-live";
 import { relightRunTitle } from "@/lib/relight/engine";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
@@ -92,6 +94,16 @@ export async function POST(request: Request) {
   const asked = relightTitle ? { ...sent, title: relightTitle } : sent;
   // Public sign-up: an account runs on its own ComfyUI or its own fal.ai or Replicate key, never the install's providers.
   // Without a key of its own it stays on the open engine; with one, the engine it asked for.
+  // Genjutsu's new makers open one by one (src/server/genjutsu-live.ts): sent here directly, a maker that hasn't opened
+  // runs for the owner only, as on the Genjutsu page.
+  if (viewer.kind !== "owner") {
+    const extra = asked.params?.extra?.openjutsu;
+    const needs = directRunFeatures(asked.modelId, extra && typeof extra === "object" ? (extra as Record<string, unknown>) : {});
+    if (needs) {
+      const live = genjutsuLive();
+      if (needs.some((f) => !live[f])) return refuse(403, OWN_GPU_TOOL_MESSAGE, { code: "own-gpu-tool" });
+    }
+  }
   let req = account ? { ...asked, account: account.id, engine: accountEngineMode(account.id) === "open" ? ("open" as const) : asked.engine } : { ...asked, account: undefined };
   const onOwn = <T,>(fn: () => T): T => (account ? asAccount(account.id, fn) : fn());
   // A visitor's price check: priced as it would run, as that visitor (an account: its own GPU and keys; a guest: the open

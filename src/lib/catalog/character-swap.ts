@@ -161,6 +161,28 @@ export interface CharacterOptions {
   historyFrames?: number;
   /** 1080p / 2K / 4K on your GPU: the regenerate's start noise (sharpen.ts; for evaluations, the page leaves it). */
   sharpenSigma?: number;
+  /**
+   * Group swap (2–4 characters): who each character replaces, in words (index = the character), and where they were
+   * tapped on the part's first frame (0–1 of its width and height; only an aid for writing the words).
+   */
+  people?: { role: string; pin?: { x: number; y: number } }[];
+  /** Group swap with exactly 2 characters: a pass for each person (sharper, about twice as long). */
+  onePerPerson?: boolean;
+  /** Group swap: hats and big hair are masked too (a little slower). */
+  hats?: boolean;
+  /** Group swap: mouths follow the sound (on by default; off for music clips where nobody sings). */
+  mouthsFollowSound?: boolean;
+  /** Group swap: how far the redrawn area reaches past each person. */
+  edge?: "tight" | "normal" | "loose";
+  /** Group swap: the motion reference's long edge (512 standard, 768 high). */
+  motionDetail?: 512 | 768;
+}
+
+/** Who becomes who: the words a tap on the part's first frame writes (where the person stands). */
+export function roleFromPin(pin: { x: number; y: number }): string {
+  const side = pin.x < 1 / 3 ? "on the left" : pin.x > 2 / 3 ? "on the right" : "in the centre";
+  const depth = pin.y > 2 / 3 ? " in front" : pin.y < 1 / 3 ? " at the back" : "";
+  return `the person ${side}${depth}`;
 }
 
 // ---------------------------------------------------------------------------

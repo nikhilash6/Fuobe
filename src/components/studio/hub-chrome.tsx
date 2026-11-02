@@ -155,7 +155,7 @@ function HubTabs({
               onClick={(e) => isPlainClick(e) && tap(m.id)}
               aria-current={on ? "page" : undefined}
               className={cn(
-                "relative flex h-10 shrink-0 items-center rounded-md px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                "relative flex h-11 shrink-0 items-center rounded-md px-2.5 text-[13px] font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 "after:absolute after:inset-x-2.5 after:bottom-0 after:h-0.5 after:rounded-full focus-visible:after:bg-ring",
                 on && "text-foreground after:bg-foreground",
               )}

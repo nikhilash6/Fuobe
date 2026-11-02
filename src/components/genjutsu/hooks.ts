@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CharacterOptions } from "@/lib/catalog/character-swap";
-import type { GenjutsuLook, GenjutsuMode, GenjutsuTarget, GenjutsuTier, MakerSource } from "@/lib/catalog/genjutsu";
+import type { FinishOptions, GenjutsuLook, GenjutsuMode, GenjutsuTarget, GenjutsuTier, MakerSource, ObjectEdit, PictureOptions } from "@/lib/catalog/genjutsu";
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
 import { useDebounced } from "@/components/faceless/hooks";
 import { send } from "@/components/shorts/hooks";
@@ -30,6 +30,10 @@ export interface GenjutsuBody {
   character?: CharacterOptions;
   /** Hard cuts the browser found in the clip (seconds): the server warns when the part has one. */
   cuts?: number[];
+  /** Object swap on Scene edit, From picture, Finish. */
+  object?: ObjectEdit;
+  picture?: PictureOptions;
+  finish?: FinishOptions;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }
@@ -80,6 +84,14 @@ export function useGenjutsuRun() {
 /** "Describe my character": the engine's text model writes the description from the character picture. */
 export function useDescribeCharacter() {
   return useMutation({ mutationFn: (b: { engine: Engine; image: string }) => send<{ description: string }>("/api/genjutsu/describe", "POST", b) });
+}
+
+/** From picture's "What happens": the describer starts on the part (the page waits for its text). */
+export function useDescribeScene() {
+  return useMutation({
+    mutationFn: (b: { engine: "open"; source: { url: string; duration?: number }; range: { start: number; end: number }; frame?: string; ownPerson?: boolean }) =>
+      send<{ id: string; modelId: string }>("/api/genjutsu/scene", "POST", b),
+  });
 }
 
 /** The clip's words (one transcription; the page takes the part's lines from its cues). */

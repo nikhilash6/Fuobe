@@ -36,6 +36,15 @@ export const H3_ORBIT_GRAPH: Record<string, string> = { "minimax-h3-i2v": "minim
  */
 export const REUSE_BED_GRAPH: Record<string, string> = { "voice-clean-reuse": "voice-clean-bed-reuse" };
 
+/**
+ * Genjutsu's Openjutsu graphs (params.extra.openjutsu): Group swap one by one (exactly 2 characters, a pass each) and From
+ * picture on native H3 (the owner's renderer) run graphs of their own.
+ */
+export const OPENJUTSU_VARIANTS: Record<string, { key: string; value: unknown; graph: string }> = {
+  "video-group-swap-h3": { key: "onePerPerson", value: true, graph: "video-group-swap-h3-one-by-one" },
+  "video-from-picture-solar": { key: "renderer", value: "h3", graph: "video-from-picture-h3" },
+};
+
 export interface VariantRequest {
   op: string;
   /** Clips a join takes ("video-concat-{n}"). */
@@ -73,6 +82,9 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   const best = H3_BEST_GRAPH[endpoint];
   if (orbit && r.extra.orbit === true && r.has(orbit)) endpoint = orbit;
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
+  const oj = OPENJUTSU_VARIANTS[endpoint];
+  const ojSettings = r.extra.openjutsu as Record<string, unknown> | undefined;
+  if (oj && ojSettings?.[oj.key] === oj.value && r.has(oj.graph)) endpoint = oj.graph;
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
   return endpoint;

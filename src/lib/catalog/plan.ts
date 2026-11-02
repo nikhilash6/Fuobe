@@ -800,6 +800,14 @@ const NEEDS: Partial<
   composite: { videos: 3, mask: true, msg: "Add the footage, the redrawn clip, the swap and the person's mask to put the character back over it" },
   // N7-5 (the open engine also needs the browser's render along the path: its model's options.requires.video)
   "camera-path": { images: 1, msg: "Add the still to film along the path" },
+  // Genjutsu's Openjutsu modes
+  "group-swap": { video: true, images: 1, msg: "Add the clip and your characters" },
+  "scene-edit": { video: true, msg: "Add the clip to edit" },
+  "picture-frame": { video: true, msg: "Add the clip whose first frame sets the pose" },
+  "picture-video": { video: true, images: 1, msg: "Add the clip and the first frame" },
+  "face-fix-video": { video: true, images: 1, msg: "Add the video and the character photo" },
+  "tone-video": { video: true, msg: "Add the video to finish" },
+  "describe-video": { video: true, msg: "Add the clip to describe" },
 };
 
 const given = (v: unknown) => (Array.isArray(v) ? v.length > 0 : !!v);

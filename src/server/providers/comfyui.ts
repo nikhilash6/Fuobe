@@ -61,6 +61,7 @@ import { CHARACTER_SWAP, packResolution, samCoords, swapPrompt, SWAP_LORAS, wind
 import { maskMemoryProblem } from "@/lib/catalog/swap-studio";
 import { STUDIO_WORKFLOWS } from "@/lib/catalog/swap-studio-plan";
 import { maskGraph, segmentGraph, type MaskGraphOptions, type SegmentGraphOptions } from "@/lib/swap-studio-graphs";
+import { CONTEXT_LOOP_IDS, OPENJUTSU_IDS, openjutsuGraph, openjutsuLeftOut, runName, type OpenjutsuSettings } from "@/lib/openjutsu-graphs";
 import { RESTORE_EXTRA_KEYS, restoreGraph, restoreJob, type RestoreJob } from "@/lib/restore-graph";
 import { getMaker, makerPrompt, OPEN_TARGET_PROBLEM, ORIGINALS, swapTarget } from "@/lib/catalog/genjutsu";
 import { CLICK_OPEN_PROBLEM, HAND_OFF, REMOVE_SCENE, targetPhrase } from "@/lib/catalog/remove-object";
@@ -1122,6 +1123,7 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
   // Graphs that decode the whole clip (src/lib/av/video-finish.ts wholeClipTool says how many copies they hold).
   if (manifest.capability === "sdr-to-hdr") out.wholeClip = wholeClipTool("sdr-to-hdr", input.format);
   if (manifest.id === "video-export-exr") out.wholeClip = wholeClipTool("export-video", "exr");
+  if (manifest.capability === "video-fix-faces") out.wholeClip = wholeClipTool("face-fix-video", undefined);
   // FPS Boost: interpolate by m, keep every n-th frame (the graph computes the output frame rate itself).
   if (b.every && b.multiplier) {
     const target = input.targetFps;
@@ -1163,6 +1165,9 @@ function videoFinishValues(manifest: ManifestWorkflow, input: GenInput, clip: Me
     }
   } else if (b.framesPerBatch && manifest.capability === "export-video" && extra.framesPerBatch === undefined) {
     values.framesPerBatch = framesPerPass(facts, { min: 8, max: 256, fallback: Number(d.framesPerBatch ?? 64) });
+  } else if (b.framesPerBatch && manifest.capability === "video-tone" && extra.framesPerBatch === undefined) {
+    // Fix colours: a pass holds three frame-sized copies (the decoded frames, the softened ones, the toned ones).
+    values.framesPerBatch = framesPerPass(facts, { modelScale: 1, min: 8, max: 128, fallback: Number(d.framesPerBatch ?? 48) });
   }
   return out;
 }
@@ -1469,6 +1474,10 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     }
     if (b.prompt) values.prompt = REMOVE_SCENE;
   }
+  // Genjutsu's Openjutsu modes (src/lib/openjutsu-graphs.ts): the settings travel as params.extra.openjutsu and are written
+  // into the graph by node title after the media are bound; the pictures a request leaves out go with their branches.
+  const openjutsu = OPENJUTSU_IDS.has(manifest.id) ? ((extra.openjutsu && typeof extra.openjutsu === "object" ? extra.openjutsu : {}) as OpenjutsuSettings) : null;
+  delete extra.openjutsu;
   // Genjutsu's Character swap (MiniMax H3 on the h3_character_swap / H3 Relay packs): the part, the quality as the
   // unpatched pack's string, who to swap (SAM words, largest / leftmost / rightmost / index, or clicks moved into H3's
   // canvas), the swap LoRA's release, the window plan; the anchor first frame is images[1] (absent: its nodes go).
@@ -1706,7 +1715,7 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // optional inputs, else the previous image again where that's harmless (style boards, multi-reference edits), else a
   // clear "add …" message.
   let graph = workflow;
-  const left: string[] = [...studioLeft];
+  const left: string[] = [...studioLeft, ...(openjutsu ? openjutsuLeftOut(manifest.id, openjutsu) : [])];
   // A side nobody photographed is left out (its cut-out and crop with it); the front is needed.
   if (rules.views) {
     for (const k of IMAGE_SLOTS.slice(1)) {
@@ -1771,6 +1780,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   // The prompt helper (FLUX 3 Image Klein's upsampler) off, or a layout with boxes it would rewrite: the words as typed.
   if (PROMPT_HELPER_GRAPHS.has(manifest.id) && (helper === "off" || laidOut)) wf = skipPromptHelper(wf, outputIds);
   if (dropAnchor) wf = withoutAnchor(wf, b.image2![0].node);
+  if (openjutsu) {
+    try {
+      const seed = typeof openjutsu.seed === "number" ? openjutsu.seed : typeof values.seed === "number" ? values.seed : randomSeed();
+      wf = openjutsuGraph(manifest.id, wf, { ...openjutsu, seed }, { generationId: ctx.generationId, clip: clip ? { width: clip.width, height: clip.height } : undefined });
+    } catch (e) {
+      throw new ProviderError((e as Error).message, 400);
+    }
+  }
   // LoRA "none": the swap LoRA's loader is linked out (H3 runs with the Turbo LoRA alone).
   if (dropSwapLora && b.lora?.length === 1) wf = bypassNode(wf, b.lora[0].node, "model", outputIds);
   if (studioSegment) wf = segmentGraph(wf, { ...studioSegment, outputs: outputIds });
@@ -1979,6 +1996,29 @@ async function uploadTo(worker: ComfyWorker, data: Buffer, contentType: string, 
   // Remember a clip's / track's header facts (length, size, fps, audio) for prepareWorkflow.
   rememberSent(uploaded, data, contentType, name);
   return uploaded;
+}
+
+/**
+ * Deletes a finished Context Loop job's run folder (output/h3_chains/<run>) through the pack's own routes: a preview gives
+ * the folder's snapshot, the delete names it and the run again. A failure is logged and the run goes on.
+ */
+export async function deleteRunFolder(run: string, worker: ComfyWorker = "main"): Promise<boolean> {
+  try {
+    const preview = await comfyFetch("/minimax_h3_context_loop/run-folder/delete-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_name: run }) }, worker);
+    const p = (await preview.json().catch(() => ({}))) as { snapshot?: string };
+    if (!preview.ok || !p.snapshot) return false;
+    const done = await comfyFetch(
+      "/minimax_h3_context_loop/run-folder/delete",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ run_name: run, snapshot: p.snapshot, confirmation: run }) },
+      worker,
+    );
+    discardBody(done);
+    if (!done.ok) console.warn(`Couldn't delete the H3 run folder ${run} (HTTP ${done.status})`);
+    return done.ok;
+  } catch (e) {
+    console.warn(`Couldn't delete the H3 run folder ${run}: ${(e as Error).message}`);
+    return false;
+  }
 }
 
 type QueueEntry = unknown[];
@@ -2252,6 +2292,9 @@ export const comfyProvider: ProviderAdapter = {
       return serverScope.run(true, () => comfyProvider.poll({ externalId, meta, model, ...rest }));
     }
     const finished = async (entry: HistoryEntry) => {
+      // A Context Loop job (Group swap, Scene edit): its clips and checkpoints under output/h3_chains go once it ends (the
+      // final video is copied out of that folder first).
+      if (manifest && CONTEXT_LOOP_IDS.has(manifest.id) && typeof meta.generationId === "string") void deleteRunFolder(runName(meta.generationId), worker);
       if (entry.status?.status_str === "error") {
         forget(externalId);
         return { state: "failed" as const, error: explainExecutionError(executionError(entry), manifest) };

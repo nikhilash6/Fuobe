@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { GenjutsuStudio } from "@/components/genjutsu/genjutsu-studio";
 import { studioExamples } from "@/lib/studio-examples";
+import { genjutsuLive } from "@/server/genjutsu-live";
 
 export const metadata: Metadata = { title: "Genjutsu" };
 
 export default function Page() {
-  return <GenjutsuStudio examples={studioExamples("genjutsu")} />;
+  // Which Openjutsu modes are open to everyone (two committed files, read as the page is built; the owner sees them all).
+  return <GenjutsuStudio examples={studioExamples("genjutsu")} live={genjutsuLive()} />;
 }

@@ -21,9 +21,19 @@ import {
 import { ACCESS_PLACE } from "@/lib/model-access";
 import { openCapNote, SHARPEN_COPY, SHARPEN_SIGMA_RANGE } from "@/lib/catalog/sharpen";
 import {
+  ALL_FEATURES,
   chooseMaker,
   cutsInPart,
+  faceChunkCount,
   GENJUTSU,
+  getMaker,
+  modeOpen,
+  OPENJUTSU_LIMITS,
+  requestFeatures,
+  type FeatureCheck,
+  type FinishOptions,
+  type ObjectEdit,
+  type PictureOptions,
   genjutsuProblem,
   genjutsuTitle,
   makersFor,
@@ -49,6 +59,10 @@ import { silenceWriter } from "./canvas";
 import { createPipeline } from "./chains";
 import { llmText, llmTextBackend } from "./enhance";
 import { ConnectComfyError, createGenerations, previewChained } from "./generations";
+import { db } from "./db";
+import { genjutsuLive } from "./genjutsu-live";
+import { decodePng } from "./png";
+import { LOOK_IDS, paintKeyframe, type LookId, type PaintKeyframe } from "@/lib/openjutsu-graphs";
 import { localLabel } from "./llm";
 import { isOffered, offeredLoras, offeredModel } from "./model-access";
 import { provider } from "./providers";
@@ -93,7 +107,23 @@ export interface GenjutsuBody {
   character?: CharacterOptions;
   /** Hard cuts the browser found in the clip (seconds), for the "one continuous shot" warning. */
   cuts?: number[];
+  /** Object swap on Scene edit. */
+  object?: ObjectEdit;
+  /** From picture: the first frame, or the video from an approved one. */
+  picture?: PictureOptions;
+  /** Finish: Fix faces or Fix colours. */
+  finish?: FinishOptions;
 }
+
+/** Who is asking: the owner sees and runs every feature; others only what has opened (src/server/genjutsu-live.ts). */
+export interface GenjutsuViewer {
+  owner: boolean;
+}
+
+const OWNER: GenjutsuViewer = { owner: true };
+
+/** The words a visitor gets for a feature that hasn't opened. */
+export const NOT_HERE = "That isn't available here.";
 
 const fileUrl = z.string().startsWith("/api/files/").max(500);
 const seconds = z.number().finite().min(0).max(3600);
@@ -120,12 +150,49 @@ const character = z.object({
   historyFrames: z.number().int().min(0).max(341).optional(),
   /** 1080p / 2K / 4K on your GPU: the regenerate's start noise (an evaluation knob; the page doesn't set it). */
   sharpenSigma: z.number().min(SHARPEN_SIGMA_RANGE.min).max(SHARPEN_SIGMA_RANGE.max).optional(),
+  people: z
+    .array(z.object({ role: z.string().max(OPENJUTSU_LIMITS.roleChars), pin: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) }).optional() }))
+    .max(OPENJUTSU_LIMITS.maxCharacters)
+    .optional(),
+  onePerPerson: z.boolean().optional(),
+  hats: z.boolean().optional(),
+  mouthsFollowSound: z.boolean().optional(),
+  edge: z.enum(["tight", "normal", "loose"]).optional(),
+  motionDetail: z.union([z.literal(512), z.literal(768)]).optional(),
+});
+const objectEdit = z.object({
+  action: z.enum(["change", "remove", "background"]),
+  target: z.string().max(120).optional(),
+  becomes: z.string().max(300).optional(),
+  biggestOnly: z.boolean().optional(),
+  keepShape: z.boolean().optional(),
+  edge: z.enum(["tight", "normal", "loose"]).optional(),
+  motionDetail: z.union([z.literal(512), z.literal(768)]).optional(),
+});
+const picture = z.object({
+  stage: z.enum(["frame", "video"]),
+  light: z.union([z.object({ look: z.enum(LOOK_IDS as [LookId, ...LookId[]]) }), z.object({ words: z.string().max(OPENJUTSU_LIMITS.lightChars) })]).optional(),
+  ownPerson: z.boolean().optional(),
+  keepCrop: z.boolean().optional(),
+  adjust: z.string().max(300).optional(),
+  frame: fileUrl.optional(),
+  scene: z.string().max(OPENJUTSU_LIMITS.sceneChars).optional(),
+  renderer: z.enum(["solar", "h3"]).optional(),
+  motionDetail: z.union([z.literal(0), z.literal(512), z.literal(768)]).optional(),
+});
+const finish = z.object({
+  tool: z.enum(["faces", "colours"]),
+  faceStyle: z.enum(["photo", "mouth"]).optional(),
+  chunkSeconds: z.union([z.literal(4), z.literal(6.5), z.literal(10)]).optional(),
+  finish: z.enum(["soft", "filmic", "rich", "off"]).optional(),
+  strength: z.number().min(0).max(1).optional(),
+  soften: z.number().min(0).max(1).optional(),
 });
 
 /** The body of /api/genjutsu (and /estimate). */
 export const GenjutsuBodySchema = z.object({
   engine: z.enum(["cloud", "open"]),
-  mode: z.enum(["motion", "character", "swap", "restyle", "insert"]),
+  mode: z.enum(["motion", "character", "swap", "restyle", "insert", "picture", "finish"]),
   modelId: z.string().max(80).optional(),
   tier: z.enum(["standard", "high"]).optional(),
   quality: z.enum(["480p", "720p", "768p", "1080p", "2K", "4K"]).optional(),
@@ -149,6 +216,9 @@ export const GenjutsuBodySchema = z.object({
   range: z.object({ start: seconds, end: seconds }).optional(),
   seed: z.number().int().min(0).max(2 ** 48).optional(),
   character: character.optional(),
+  object: objectEdit.optional(),
+  picture: picture.optional(),
+  finish: finish.optional(),
   cuts: z.array(seconds).max(200).optional(),
   /** A client nonce for one submit: a repeat gets the first answer (see once()). */
   requestId: z.string().trim().min(8).max(64).optional(),
@@ -174,19 +244,41 @@ interface Planned {
   notes: string[];
 }
 
-async function planInput(body: GenjutsuBody, opts: { probe: boolean }): Promise<Planned> {
+/** What this viewer may use: everything for the owner; for a guest or an account, what has opened. */
+function openFor(viewer: GenjutsuViewer): FeatureCheck {
+  if (viewer.owner) return ALL_FEATURES;
+  const live = genjutsuLive();
+  return (f) => live[f];
+}
+
+async function planInput(body: GenjutsuBody, opts: { probe: boolean; viewer?: GenjutsuViewer }): Promise<Planned> {
   mustMatchMode(body.engine);
-  const picked = chooseMaker({
+  const open = openFor(opts.viewer ?? OWNER);
+  if (!modeOpen(body.mode, open)) throw new ShortsError(NOT_HERE, 422);
+  // A model named that hasn't opened yet: the owner's alone.
+  const named = body.modelId ? getMaker(body.modelId, body.engine) : undefined;
+  if (named?.features && !named.features.some(open)) throw new ShortsError(NOT_HERE, 422);
+  const ask = {
     engine: body.engine,
     mode: body.mode,
     target: body.target,
     tier: body.tier,
     look: body.look,
     modelId: body.modelId,
-    offered: (id) => isOffered(id, body.engine),
-  });
-  if ("problem" in picked) throw new ShortsError(picked.problem, 422);
+    offered: (id: string) => isOffered(id, body.engine),
+    refs: body.references?.length ?? 0,
+    action: body.mode === "swap" ? body.object?.action : undefined,
+    tool: body.mode === "finish" ? (body.finish?.tool ?? "colours") : undefined,
+  };
+  const picked = chooseMaker({ ...ask, open });
+  if ("problem" in picked) {
+    // Something only a feature that hasn't opened yet does (Remove it, say): the owner's alone.
+    if (open !== ALL_FEATURES && "maker" in chooseMaker({ ...ask, open: ALL_FEATURES })) throw new ShortsError(NOT_HERE, 422);
+    throw new ShortsError(picked.problem, 422);
+  }
   const maker = picked.maker;
+  // A setting that hasn't opened (one by one, a light, the clip's own person…): the owner's alone.
+  if (requestFeatures({ mode: body.mode, maker, character: body.character, object: body.object, picture: body.picture, finish: body.finish }).some((f) => !open(f))) throw new ShortsError(NOT_HERE, 422);
   // The header's facts win over what the browser read (the estimate runs before the upload is read).
   const info = opts.probe ? await probeSource(body.source.url) : {};
   const source: RemoveSource = {
@@ -198,15 +290,21 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean }): Promise<
     // Sound we couldn't read counts as none (putting it back would fail after the work was paid for).
     hasAudio: opts.probe ? (info.hasAudio ?? false) : (body.source.hasAudio ?? false),
   };
-  // Character swap's part defaults to the first 15 s (Openjutsu's Length); the other modes take up to 30 s.
-  const longest = body.mode === "character" ? CHARACTER_SWAP.maxSeconds : GENJUTSU.maxSeconds;
+  // Character swap's part defaults to the first 15 s (Openjutsu's Length); From picture's to the first 6 s; Finish takes
+  // the whole video (up to its limit); the other modes up to 30 s.
+  const longest = maker.review ? 6 : maker.part ? maker.part.max : body.mode === "character" ? CHARACTER_SWAP.maxSeconds : GENJUTSU.maxSeconds;
   const range = body.range ?? (source.duration ? { start: 0, end: Math.min(source.duration, longest) } : null);
   if (!range) throw new ShortsError("Reading the clip… try again in a moment");
   const target = MODE_TARGETS[body.mode].length ? (body.target ?? MODE_TARGETS[body.mode][0]) : undefined;
   const references = body.references ?? [];
   const clicks = (body.points ?? []).filter((p) => p.label !== "negative").length;
-  const problem = genjutsuProblem({ mode: body.mode, maker, source, range, references: references.length, target, subject: body.subject, prompt: body.prompt, points: clicks, mask: !!body.mask, look: body.look, seed: body.seed, character: body.character });
+  const problem = genjutsuProblem({ mode: body.mode, maker, source, range, references: references.length, target, subject: body.subject, prompt: body.prompt, points: clicks, mask: !!body.mask, look: body.look, seed: body.seed, character: body.character, object: body.object, picture: body.picture, finish: body.finish });
   if (problem) throw new ShortsError(problem, 422);
+  // From picture's video starts from a first frame this install made (the review step can't be skipped).
+  if (maker.review && body.picture?.stage === "video" && opts.probe && !madeFrame(body.picture.frame)) throw new ShortsError("Make and pick the first frame first", 422);
+  // Scene edit's painted area, as the pack's keyframe (one, on the part's first frame).
+  let paint: PaintKeyframe[] | undefined;
+  if (maker.actions && (body.object?.action ?? "change") === "change" && target === "paint" && body.mask && opts.probe) paint = [await paintFrom(body.mask)];
   const switched = body.mode === "character" && maker.h3 ? characterSwitches(maker, body.character ?? {}) : { character: body.character, notes: [] };
 
   // Clicks on the first frame, in the clip's pixels; paint is followed from its deepest points (SAM 3.1 on fal).
@@ -243,8 +341,42 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean }): Promise<
       look: body.look,
       ...(body.seed !== undefined ? { seed: body.seed } : {}),
       ...(body.mode === "character" ? { character: switched.character ?? {} } : {}),
+      ...(body.object ? { object: body.object } : {}),
+      ...(body.picture ? { picture: body.picture } : {}),
+      ...(body.finish ? { finish: body.finish } : {}),
+      ...(paint ? { paint } : {}),
     },
   };
+}
+
+/** Whether a first frame is one this install's From picture made (and finished). */
+function madeFrame(url: string | undefined): boolean {
+  if (!url) return false;
+  // Looked up by its address, however old (not in the Trash, not an account's run).
+  const row = db()
+    .prepare(
+      `SELECT 1 FROM generations g
+        WHERE g.model_id = 'oss-from-picture-frame' AND g.status = 'succeeded'
+          AND json_extract(g.request_json, '$.account') IS NULL
+          AND NOT EXISTS (SELECT 1 FROM generation_trash t WHERE t.generation_id = g.id)
+          AND EXISTS (SELECT 1 FROM json_each(g.outputs_json) o WHERE json_extract(o.value, '$.url') = ?)
+        LIMIT 1`,
+    )
+    .get(url);
+  return !!row;
+}
+
+/** The painted mask as Scene edit's keyframe (run-length, at most 256 px a side). */
+async function paintFrom(mask: string): Promise<PaintKeyframe> {
+  let png: ReturnType<typeof decodePng>;
+  try {
+    png = decodePng((await readRef(mask)).data);
+  } catch {
+    throw new ShortsError("Couldn't read the painted area — paint it again", 400);
+  }
+  const k = paintKeyframe({ width: png.width, height: png.height, data: png.data, channels: 4 });
+  if (!k.runs.length) throw new ShortsError("Paint over what changes", 422);
+  return k;
 }
 
 /**
@@ -279,6 +411,10 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
   const fps = source.fps ?? 30;
   const fuobeLook = body.mode === "restyle" && m.looks === "fuobe";
   const len = range.end - range.start;
+  if (m.group || m.actions || m.review || m.tool) {
+    notes.push(...openjutsuNotes(body, m, range));
+    return notes;
+  }
   if (body.mode === "character" && m.h3) {
     const c = body.character ?? {};
     if (m.engine === "open") {
@@ -349,6 +485,31 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
     else if (m.window) notes.push("Wan 2.1 VACE 14B needs a 24 GB GPU");
   }
   if (!wholeClip(range, source.duration)) notes.push("Only the selected part comes out (the rest of the clip isn't kept)");
+  return notes;
+}
+
+/** The Openjutsu makers' notes: the time on your GPU, the sound, and what to expect. */
+function openjutsuNotes(body: GenjutsuBody, m: Maker, range: RemoveRange): string[] {
+  const len = range.end - range.start;
+  const notes: string[] = [];
+  const minutes = (perSecond: number) => Math.max(1, Math.round((len * perSecond) / 60));
+  if (m.group) {
+    const n = body.references?.length ?? 1;
+    const twice = body.character?.onePerPerson && n === 2;
+    notes.push(`About ${minutes(twice ? 120 : 60)} min on your GPU · keeps the clip's sound`);
+    if (n > 1) notes.push("Say who each character replaces, or leave it blank and the people with the most screen time are picked in order");
+    const warn = cutWarning(cutsInPart(body.cuts, range));
+    if (warn) notes.push(warn);
+  } else if (m.actions) {
+    notes.push(`About ${minutes(50)} min on your GPU · keeps the clip's sound`);
+    if (body.object?.action === "background") notes.push("The people stay exactly as filmed");
+  } else if (m.review) {
+    notes.push(body.picture?.stage === "video" ? `About ${minutes(60)} min on your GPU · keeps the clip's sound` : "The first frame takes about a minute: check it before the video is made");
+  } else if (m.tool === "faces") {
+    const chunks = faceChunkCount(len, body.finish?.chunkSeconds ?? 6.5);
+    notes.push(`${chunks} section${chunks > 1 ? "s" : ""} · about ${minutes(60)} min on your GPU · keeps the sound`);
+    notes.push("Faces that already fill the frame are left as they are");
+  } else if (m.tool === "colours") notes.push("Takes seconds · keeps the sound");
   return notes;
 }
 
@@ -485,8 +646,8 @@ export interface GenjutsuEstimate {
   gpu?: { weightsGb: number; tested: string; advice: string; speed: string };
 }
 
-export async function estimateGenjutsu(body: GenjutsuBody): Promise<GenjutsuEstimate> {
-  const { input, maker, notes } = await planInput(body, { probe: false });
+export async function estimateGenjutsu(body: GenjutsuBody, viewer: GenjutsuViewer = OWNER): Promise<GenjutsuEstimate> {
+  const { input, maker, notes } = await planInput(body, { probe: false, viewer });
   let plan: ReturnType<typeof planGenjutsu>;
   try {
     plan = planGenjutsu(input);
@@ -514,8 +675,8 @@ export async function estimateGenjutsu(body: GenjutsuBody): Promise<GenjutsuEsti
 }
 
 /** Start it; returns the finished video's generation (the other steps wait for each other). */
-export async function createGenjutsu(body: GenjutsuBody): Promise<{ final: Generation; items: Generation[] }> {
-  const { input } = await planInput(body, { probe: true });
+export async function createGenjutsu(body: GenjutsuBody, viewer: GenjutsuViewer = OWNER): Promise<{ final: Generation; items: Generation[] }> {
+  const { input } = await planInput(body, { probe: true, viewer });
   try {
     const plan = planGenjutsu(input);
     // The same check as the estimate: nothing starts when only some of the steps have a provider.
@@ -572,6 +733,45 @@ export async function describeCharacter(body: z.infer<typeof DescribeSchema>): P
     .slice(0, CHARACTER_SWAP.maxDescriptionChars);
   if (!description) throw new ShortsError(body.engine === "open" ? `${cap(localLabel())} didn't describe the picture — it needs a vision model (qwen3-vl, gemma3…)` : "The text model didn't answer — try again, or describe your character in your own words", 422);
   return { description };
+}
+
+export const SceneSchema = z.object({
+  engine: z.literal("open"),
+  source: z.object({ url: fileUrl, duration: z.number().finite().positive().max(3600).optional() }),
+  range: z.object({ start: seconds, end: seconds }),
+  /** The approved first frame (left out for the clip's own person). */
+  frame: fileUrl.optional(),
+  ownPerson: z.boolean().optional(),
+});
+
+/**
+ * From picture's "What happens": the describer reads the part at 2 frames a second and writes it for the approved first
+ * frame (a step of its own; the page waits for its text and puts it in an editable box). Owner-only, like the runs.
+ */
+export function describeScene(body: z.infer<typeof SceneSchema>, viewer: GenjutsuViewer = OWNER): { id: string; modelId: string } {
+  mustMatchMode("open");
+  if (!openFor(viewer)("picture")) throw new ShortsError(NOT_HERE, 422);
+  const len = body.range.end - body.range.start;
+  if (!(len >= OPENJUTSU_LIMITS.minSeconds - 0.05 && len <= OPENJUTSU_LIMITS.maxSeconds + 0.05)) throw new ShortsError(`Pick a part between ${OPENJUTSU_LIMITS.minSeconds} and ${OPENJUTSU_LIMITS.maxSeconds} seconds`, 422);
+  if (!body.ownPerson && !body.frame) throw new ShortsError("Make and pick the first frame first", 422);
+  if (!body.ownPerson && !madeFrame(body.frame)) throw new ShortsError("Make and pick the first frame first", 422);
+  const modelId = "oss-scene-describe";
+  if (!isOffered(modelId, "open")) throw new ShortsError(`Describing is switched off in ${ACCESS_PLACE} — write what happens in your own words`, 422);
+  try {
+    const [g] = createGenerations({
+      feature: GENJUTSU.stepFeature,
+      batchTitle: "Genjutsu · what happens",
+      modelId,
+      op: "describe-video",
+      inputs: { video: body.source.url, ...(body.ownPerson ? {} : { images: [body.frame!] }) },
+      params: { startTime: body.range.start, extra: { openjutsu: { seconds: len, ownPerson: !!body.ownPerson } } },
+      step: { label: "What happens in the part", index: 0, of: 1 },
+    });
+    return { id: g.id, modelId };
+  } catch (e) {
+    if (e instanceof ConnectComfyError) throw e;
+    throw new ShortsError((e as Error).message, 422);
+  }
 }
 
 /** The transcriber per engine (Fuobe's Transcribe studio's defaults). */

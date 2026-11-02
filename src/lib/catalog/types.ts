@@ -91,7 +91,15 @@ export type Operation =
   // archive-restore
   | "restore-video" // archive video (+ prompt: period, place, light; negative: what not to invent) → the same shot clean, in colour, larger
   // Design a voice
-  | "voice-design"; // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  | "voice-design" // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  // Genjutsu's Openjutsu modes
+  | "face-fix-video" // video + face photo → the same video with small or soft faces redrawn to match the photo
+  | "tone-video" // video → the same video with a film finish (detail softened, tone-mapped)
+  | "describe-video" // video part (+ a picture) → what happens in it, in words (text)
+  | "group-swap" // video part + 1–4 character pictures + roles → each named person replaced by their character
+  | "scene-edit" // video part (+ a picture) + params.extra (change / remove / new background) → the scene edited, the rest kept
+  | "picture-frame" // video part (+ a character picture) → its first frame with the character in that pose (or relit)
+  | "picture-video"; // video part + an approved first frame (+ what happens) → the frame animated with the part's motion
 
 export const OPERATION_LABELS: Record<Operation, string> = {
   t2i: "Text to image",
@@ -165,6 +173,13 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   "camera-path": "Fly path",
   composite: "Character over the footage",
   "restore-video": "Restore & colourise",
+  "face-fix-video": "Fix faces",
+  "tone-video": "Fix colours",
+  "describe-video": "Describe a video",
+  "group-swap": "Group swap",
+  "scene-edit": "Scene edit",
+  "picture-frame": "First frame from a picture",
+  "picture-video": "Video from a picture",
 };
 
 export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
@@ -240,6 +255,13 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   "camera-path": "video",
   composite: "video",
   "restore-video": "video",
+  "face-fix-video": "video",
+  "tone-video": "video",
+  "describe-video": "text",
+  "group-swap": "video",
+  "scene-edit": "video",
+  "picture-frame": "image",
+  "picture-video": "video",
 };
 
 /**
