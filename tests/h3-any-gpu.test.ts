@@ -250,6 +250,10 @@ describe("the GPU pre-flight", () => {
   it("asks for Sol-H3-VAE only when Fast decode is picked", async () => {
     const full = index.workflows["minimax-h3-t2v"].files;
     checked({ gb: 32, name: RTX4090, files: full });
+    // Fast decode is held back (H3_FAST_DECODE_OFFERED): the control is put on the model here as it will be once it validates.
+    const options = getModel("oss-minimax-h3")!.options;
+    const controls = options.controls;
+    options.controls = [...(controls ?? []), T.H3_DECODER];
     try {
       expect(await gate({}, { gpuTier: "standard" })).toEqual({ ok: true });
       expect(await gate({ vae: T.SOL_VAE }, { gpuTier: "standard" })).toMatchObject({ ok: true, warning: expect.stringMatching(/1 more thing/) });
@@ -257,6 +261,7 @@ describe("the GPU pre-flight", () => {
       expect(await gate({ decoder: "fast" }, { gpuTier: "standard" })).toMatchObject({ ok: true, warning: expect.stringMatching(/1 more thing/) });
       expect(await gate({ decoder: "standard" }, { gpuTier: "standard" })).toEqual({ ok: true });
     } finally {
+      options.controls = controls;
       dropSnapshots("install");
     }
   });
@@ -314,10 +319,12 @@ describe("Models & licences", () => {
     expect(T.H3_TIER_MODEL).toEqual({ fast: "oss-minimax-h3-fast", trim: "oss-minimax-h3-trim" });
   });
 
-  it("offers Fast decode on the full model only, off by default", () => {
+  it("holds Fast decode back until a ComfyUI with Sol's loader validates it, and keeps it off by default when offered", () => {
     const controls = getModel("oss-minimax-h3")!.options.controls!;
-    expect(controls.map((c) => c.param)).toEqual(["quality", "gpuTier", "decoder"]);
-    expect(controls.find((c) => c.param === "decoder")).toMatchObject({ default: "standard", sets: { fast: { vae: T.SOL_VAE } } });
+    expect(T.H3_FAST_DECODE_OFFERED).toBe(false);
+    expect(controls.map((c) => c.param)).toEqual(["quality", "gpuTier"]);
+    expect(T.H3_DECODER).toMatchObject({ param: "decoder", default: "standard", sets: { standard: {}, fast: { vae: T.SOL_VAE } } });
     expect(controls.find((c) => c.param === "gpuTier")?.default).toBeUndefined();
+    for (const id of ["oss-minimax-h3-fast", "oss-minimax-h3-trim"]) expect(getModel(id)!.options.controls, id).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 // nm10-h3-any-gpu in the browser (no run reaches a GPU): MiniMax H3's Options in the Video studio on your GPU (GPU tier with
-// Auto, 32 GB, FastH3 V2 and Trim; Decoder with Fast decode), the composer's note for a picked tier and for Auto on the card the
+// Auto, 32 GB, FastH3 V2 and Trim; no Decoder until Fast decode validates), the composer's note for a picked tier and for Auto on the card the
 // last GPU check read, and the Connect board's Video row naming the build that card gets. Each at 1440 and 390 px, light and
 // dark, without sideways scroll, failing on console errors.
 // Usage: FUOBE_DATA_DIR=<the dev server's data dir> node tests/e2e/h3-any-gpu.mjs [appUrl] [--shots <dir>] (on a dev server started fresh,
@@ -184,10 +184,8 @@ try {
         await tier.waitFor({ timeout: 10_000 });
         const tiers = await listOf(page, tier);
         check(`${tag} video: GPU tier offers Auto, 32 GB, FastH3 V2 and Trim`, tiers[0] === "Auto" && tiers.some((t) => /FastH3 V2/.test(t)) && tiers.some((t) => /FastH3 Trim, experimental, text to video only/.test(t)), tiers.join(" | "));
-        const decoder = page.getByRole("combobox", { name: "Decoder" });
-        check(`${tag} video: Decoder starts on Standard`, /Standard/.test(flat(await decoder.innerText())), flat(await decoder.innerText()));
-        const decoders = await listOf(page, decoder);
-        check(`${tag} video: Decoder offers Fast decode for 32 GB GPUs`, decoders.includes("Fast decode · 32 GB GPU"), decoders.join(" | "));
+        // Fast decode is held back until it validates on a ComfyUI with Sol's loader (H3_FAST_DECODE_OFFERED).
+        check(`${tag} video: no Decoder option yet`, (await page.getByRole("combobox", { name: "Decoder" }).count()) === 0);
         // FastH3 V2 picked: the composer says what it changes.
         await tier.focus();
         await page.keyboard.press("Enter");

@@ -3,7 +3,7 @@ import { DEFAULT_FPS_TARGET, FPS_TARGETS, SLOW_MOTION } from "@/lib/av/fps";
 import { ASR_LANGUAGES, WHISPER_LANGUAGES } from "../speech-languages";
 import { PROMPT_HELPER_PARAM } from "@/lib/comfy";
 import { QWEN21_DECODER, QWEN21_GPU, QWEN21_SPEED } from "@/lib/qwen21-speed";
-import { H3_DECODER, H3_GPU_TIER } from "@/lib/gpu/h3-tier";
+import { H3_DECODER, H3_FAST_DECODE_OFFERED, H3_GPU_TIER } from "@/lib/gpu/h3-tier";
 import { loraEntry, loraRef } from "./loras";
 import { ANGLES_LORA, MOSAIC_SCALE, MOSAIC_TARGET, SPEAK_GRAPH, SPEAK_LORA, SPEAK_PROMPT } from "./open-tools";
 import { CINEMA_CROP, SOUL_ASPECTS, SOUL_TIERS } from "./soul";
@@ -630,7 +630,8 @@ const open: ModelDef[] = [
         },
         // On a card under 32 GB the run picks FastH3 V2 or Trim by itself (src/server/h3-gpu.ts); this picks one on any card.
         H3_GPU_TIER,
-        H3_DECODER,
+        // Options → Decoder (Fast decode, Sol-H3-VAE) joins here once a ComfyUI with its loader (#17411) has validated it: see H3_DECODER.
+        ...(H3_FAST_DECODE_OFFERED ? [H3_DECODER] : []),
       ],
     },
     defaults: { aspectRatio: "auto", duration: 5, resolution: "768p" },

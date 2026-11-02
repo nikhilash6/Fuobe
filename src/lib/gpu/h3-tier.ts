@@ -218,6 +218,14 @@ export const H3_GPU_TIER: NonNullable<ModelOptions["controls"]>[number] = {
 export const SOL_VAE = "minimax_h3_sol_vae_int8_convrot.safetensors";
 
 /**
+ * Whether MiniMax H3 offers Options → Decoder (Fast decode). Held back: Sol-H3-VAE loads only with the core loader merged into
+ * ComfyUI master on 2026-10-28 (#17411), which no release has, the pinned ComfyUI (fc04da91) lacks, and the GPU check can't tell
+ * from a version string; no ComfyUI has accepted a run with it yet. Turn it on after the library validates on a pin with #17411
+ * (install-comfyui.sh names one as an opt-in). The full graphs already carry the decode slot and Sol's pinned file (optional).
+ */
+export const H3_FAST_DECODE_OFFERED = false;
+
+/**
  * Options → Decoder: Fast decode swaps in Sol-H3-VAE, NVIDIA's 24-layer whole-clip decoder distilled from H3's (its card: a 5 s
  * 768p clip decodes in 5.0 s instead of 12.5 s on an RTX 5090). Off by default; the full model only (it needs ComfyUI from
  * 2026-10-28 on, and its memory grows with the clip).

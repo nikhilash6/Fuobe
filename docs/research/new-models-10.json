@@ -502,7 +502,7 @@
     }
    },
    "memory": "card: about 24 GiB at 720p and 48 GiB at 2K for 5 s with a CUDA graph",
-   "fuobeOption": "oss-minimax-h3 Options → Decoder 'Fast decode' (full model only, off by default)"
+   "fuobeOption": "oss-minimax-h3 Options → Decoder 'Fast decode' (full model only, off by default): built (H3_DECODER, the full graphs' decode slot, the pinned int8 repack) but held back (H3_FAST_DECODE_OFFERED false) until the library validates on a ComfyUI with #17411"
   },
   {
    "name": "ComfyUI core H3 latent upscaler",
