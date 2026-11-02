@@ -155,8 +155,7 @@ describe("the studios' examples", () => {
     expect(mixed).toMatch(/<How onStart=\{[^}]+\} cloud=\{[^}]+\} reveal=\{how\} \/>/);
     expect(mixed).toMatch(/\{!!reveal\?\.tiles\.length && <HowReveal row=\{reveal\} \/>\}/);
     // A hub hands its row to its first mode's studio (the hub's own URL), as the Studio pages do.
-    expect(read("components", "studio", "mode-switch-studio.tsx")).toMatch(/<ModeStudio [^>]*examples=\{examples\} \/>/);
-    expect(read("components", "studio", "mode-studio.tsx")).toMatch(/<StudioPage .*examples=\{examples\} \/>/);
+    expect(read("components", "studio", "mode-switch-studio.tsx")).toMatch(/<StudioPage [^>]*examples=\{examples\} \/>/);
   });
 
   it("shows only once the feed is known to be empty, and a Video tile picks its move through the composer", () => {
