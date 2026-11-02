@@ -1,5 +1,5 @@
 import "server-only";
-import { originalSoundProblem, separates, soundSummary, type SoundChoice } from "@/lib/av/original-sound";
+import { originalSoundProblem, separates, soundLine, type SoundChoice } from "@/lib/av/original-sound";
 import { getModel } from "@/lib/catalog";
 import {
   clampFps,
@@ -179,7 +179,7 @@ async function planInput(body: MixedBody, opts: { probe: boolean }): Promise<{ i
   const soundProblem = originalSoundProblem(body.engine, body.sound);
   if (soundProblem) throw new ShortsError(soundProblem, 422);
   const split = separates(body.engine, body.sound) && info.hasAudio !== false;
-  if (split) notes.push(`Original sound: ${soundSummary(body.sound).toLowerCase()} — your GPU splits the clip's sound first (free)`);
+  if (split) notes.push(`Original sound: ${soundLine(body.sound)} — your GPU splits the clip's sound first (free)`);
   const name = (body.source.name ?? "").replace(/\.[a-z0-9]{2,4}$/i, "").trim().slice(0, 40);
   return {
     frames,

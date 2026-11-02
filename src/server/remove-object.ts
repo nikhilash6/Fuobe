@@ -1,5 +1,5 @@
 import "server-only";
-import { originalSoundProblem, separates, soundSummary, type SoundChoice } from "@/lib/av/original-sound";
+import { originalSoundProblem, separates, soundLine, type SoundChoice } from "@/lib/av/original-sound";
 import { SoundChoiceSchema } from "./shorts-schemas";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
@@ -228,7 +228,7 @@ async function planInput(body: RemovalBody, opts: { probe: boolean; preview?: bo
   const soundProblem = originalSoundProblem(eraser.engine, body.sound);
   if (soundProblem) throw new ShortsError(soundProblem, 422);
   const split = separates(eraser.engine, body.sound) && !!source.hasAudio;
-  if (split) notes.push(`Original sound: ${soundSummary(body.sound).toLowerCase()} — your GPU splits the clip's sound first (free)`);
+  if (split) notes.push(`Original sound: ${soundLine(body.sound)} — your GPU splits the clip's sound first (free)`);
 
   const name = (body.source.name ?? "").replace(/\.[a-z0-9]{2,4}$/i, "").trim().slice(0, 40);
   const title = removalTitle({ mode: body.mode, prompt: body.prompt, everyone: eraser.everyone });

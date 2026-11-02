@@ -35,7 +35,7 @@ import {
   type TakeKeys,
 } from "@/lib/catalog/shorts";
 import type { Engine, Generation } from "@/lib/catalog/types";
-import { originalSoundProblem, separates, soundSummary, type SoundChoice } from "@/lib/av/original-sound";
+import { originalSoundProblem, separates, soundLine, type SoundChoice } from "@/lib/av/original-sound";
 import { createPipeline } from "./chains";
 import { db } from "./db";
 import { getGeneration, previewChained } from "./generations";
@@ -336,7 +336,7 @@ function notesFor(input: ShortsPlanInput, segments: number): string[] {
       if (vaceDownsample(fps)) notes.push(`Wan 2.2 Fun VACE works this ${Math.round(fps!)} fps clip at ${Math.round(fps! / (vaceDownsample(fps) + 1))} fps and brings it back to its own rate`);
     } else notes.push("Fuobe Shorts on your GPU renders 480p at 16 fps, 5 s a segment");
   }
-  if (separates(input.engine, input.sound) && input.source.hasAudio !== false) notes.push(`Original sound: ${soundSummary(input.sound).toLowerCase()} — your GPU splits the clip's sound first (DBS, free)`);
+  if (separates(input.engine, input.sound)) notes.push(`Original sound: ${soundLine(input.sound)} — your GPU splits the clip's sound first (free)`);
   if (input.engine === "cloud") {
     const { width: w, height: h } = input.source;
     if (!input.reframes && w && h && needsFit(input.source, input.aspectRatio)) notes.push(`Your ${w}×${h} clip is centre-cropped to ${input.aspectRatio} before the restyle`);

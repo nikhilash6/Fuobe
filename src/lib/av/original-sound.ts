@@ -74,6 +74,12 @@ export function soundSummary(c?: SoundChoice | null): string {
   return originalSoundLabel(s);
 }
 
+/** The same, lower-cased for the middle of a sentence ("music & effects only"; dB keeps its case). */
+export const soundLine = (c?: SoundChoice | null): string => {
+  const s = soundSummary(c);
+  return s[0].toLowerCase() + s.slice(1);
+};
+
 /** The mux's sound: what it waits on (after/chain), the file it reads (inputs.audio) and its extra settings. */
 export interface SoundBack {
   after: string[];

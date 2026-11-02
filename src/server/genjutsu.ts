@@ -1,5 +1,5 @@
 import "server-only";
-import { originalSoundProblem, separates, soundSummary, type SoundChoice } from "@/lib/av/original-sound";
+import { originalSoundProblem, separates, soundLine, type SoundChoice } from "@/lib/av/original-sound";
 import { SoundChoiceSchema } from "./shorts-schemas";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
@@ -225,7 +225,7 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean }): Promise<
 
   const notes = [...switched.notes, ...notesFor({ ...body, character: switched.character }, maker, source, range, n, references.length)];
   const split = separates(maker.engine, body.sound) && source.hasAudio;
-  if (split) notes.push(`Original sound: ${soundSummary(body.sound).toLowerCase()} — your GPU splits the clip's sound first (free)`);
+  if (split) notes.push(`Original sound: ${soundLine(body.sound)} — your GPU splits the clip's sound first (free)`);
   const name = (body.source.name ?? "").replace(/\.[a-z0-9]{2,4}$/i, "").trim().slice(0, 40);
   const title = genjutsuTitle({ mode: body.mode, subject: body.subject, look: body.look });
   return {
