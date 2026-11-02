@@ -287,8 +287,8 @@ export const newestWords = (type: "image" | "video" | "audio"): string => `your 
 export function skillTaskLine(skill: ScheduleSkill, params: { id: string; label: string; type: string }[], files?: (url: string) => string): string {
   const parts = params.flatMap((p) => {
     const v = skill.values[p.id];
-    const file = p.type === "image" || p.type === "video" || p.type === "audio";
-    if (skill.sources?.[p.id] === "newest" && file) return [`${p.label}: ${newestWords(p.type)}${files && v ? ` (${files(v)})` : ""}`];
+    const file = p.type === "image" || p.type === "video" || p.type === "audio" ? p.type : null;
+    if (skill.sources?.[p.id] === "newest" && file) return [`${p.label}: ${newestWords(file)}${files && v ? ` (${files(v)})` : ""}`];
     if (v === undefined || v === "") return [];
     if (file && /^(\/api\/files\/|https?:\/\/)/i.test(v)) return [`${p.label}: ${files ? files(v) : "a file you picked"}`];
     return [`${p.label}: ${v.length > 80 ? `${v.slice(0, 79).trimEnd()}…` : v}`];
