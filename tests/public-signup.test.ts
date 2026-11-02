@@ -284,6 +284,7 @@ describe("accounts never see or change the owner's library", () => {
     shares: { lists: ["/api/shares"], records: ["/api/shares/s1"], changes: [["POST", "/api/shares"], ["PATCH", "/api/shares/s1"], ["DELETE", "/api/shares/s1"]] },
     layers: { lists: ["/api/layers"], records: ["/api/layers/l1"], changes: [["POST", "/api/layers"], ["PATCH", "/api/layers/l1"], ["DELETE", "/api/layers/l1"], ["POST", "/api/layers/l1/versions"]] },
     elements: { lists: ["/api/elements"], records: ["/api/elements/e1"], changes: [["POST", "/api/elements"], ["PATCH", "/api/elements/e1"], ["DELETE", "/api/elements/e1"]] },
+    // POST /api/canvases is also Open as canvas ({ skill }, W5): a new canvas in the owner's library.
     canvases: { lists: ["/api/canvases"], records: ["/api/canvases/c1"], changes: [["POST", "/api/canvases"], ["PATCH", "/api/canvases/c1"], ["DELETE", "/api/canvases/c1"], ["POST", "/api/canvases/c1/duplicate"]] },
     cinema: { lists: ["/api/cinema/projects"], records: ["/api/cinema/projects/p1", "/api/cinema/projects/p1/items"], changes: [["POST", "/api/cinema/projects"], ["PATCH", "/api/cinema/projects/p1"], ["DELETE", "/api/cinema/projects/p1"]] },
     storyboards: { lists: [], records: ["/api/storyboards"], changes: [["POST", "/api/storyboards"]] },

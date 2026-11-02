@@ -3,7 +3,7 @@ import { SkillBody } from "@/server/assist/schemas";
 import { badBody, recipeFailure } from "@/server/recipe-routes";
 import { saveDraft } from "@/server/recipes";
 
-const Body = SkillBody.extend({ recipe: z.unknown() });
+const Body = SkillBody.extend({ recipe: z.unknown(), replace: z.boolean().optional() });
 
 /** Save a drafted skill: its SKILL.md and recipe.json, once its plan passes on an engine (checked again here, free). */
 export async function POST(request: Request) {

@@ -119,7 +119,7 @@ describe("what isn't drawn", () => {
   it("a settings input (a number or a choice)", () => {
     const r = recipe({
       params: [{ id: "takes", label: "Takes", type: "number", default: 1, min: 1, max: 4 }],
-      steps: [{ key: "a", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "a lamp", params: { numOutputs: "{{takes}}" } } }],
+      steps: [{ key: "a", kind: "generate", request: { feature: "skill", modelId: "nano-banana-pro", op: "t2i", prompt: "a lamp", params: { numOutputs: "{{takes}}" as unknown as number } } }],
     });
     expect(refused(r)).toMatch(/no node for Takes/);
   });

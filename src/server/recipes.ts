@@ -900,6 +900,8 @@ export interface DraftSave {
   body: string;
   icon?: string;
   recipe: unknown;
+  /** Put the steps back into this existing user skill (a skill opened as a canvas, W5): its SKILL.md stays as it is. */
+  replace?: boolean;
 }
 
 /**
@@ -914,6 +916,13 @@ export async function saveDraft(input: DraftSave): Promise<RecipeView> {
   const known = draftChecks().get(key)?.verified;
   const { checks, verified } = await checkEngines({ name: input.name, title: input.title }, recipe, "plan", engines, known);
   if (!checks.some((c) => c.plan.ok)) throw new RecipeError([...new Set(checks.flatMap((c) => c.plan.errors))]);
+  if (input.replace) {
+    // saveRecipe refuses a built-in ("Duplicate it first") and a skill that's gone.
+    saveRecipe(input.name, { ...recipe, verified }, { keepVerified: true });
+    draftChecks().delete(key);
+    draftChecks().set(key, { verified: { ...known, ...verified }, at: Date.now(), saved: input.name });
+    return recipeView(input.name);
+  }
   createSkill({ name: input.name, title: input.title, description: input.description, whenToUse: input.whenToUse, body: input.body, ...(input.icon && { icon: input.icon }) });
   try {
     saveRecipe(input.name, { ...recipe, verified }, { keepVerified: true });
