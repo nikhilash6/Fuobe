@@ -1779,7 +1779,7 @@ export const SPEC = [
     license: H3_FLEX_LICENSE,
     notes:
       'References to video with sound: core MiniMaxH3ReferenceToVideo on the ref2va pruned int8 model with Pika\'s Ref2VA adapter. The graph holds Image 1 ' +
-      '(LoadImage 150 → ref_images.ref_image_0); the provider adds the rest per run (expandH3References, src/lib/h3-references.ts): up to 9 images (LoadImage → ' +
+      '(LoadImage 150 → ref_images.ref_image_0); the provider adds the rest per run (expandH3References): up to 9 images (LoadImage → ' +
       'ref_images.ref_image_N), 3 clips (VHS_LoadVideo at 24 fps, up to 15 s → ref_videos.ref_video_N, and the clip\'s own sound → ref_video_audios.ref_video_audio_N) ' +
       'and 3 standalone audio clips (LoadAudio → ref_audios.ref_audio_N), 12 files in all, at least one image or clip; a request with no image takes node 150 out. ' +
       'Each clip or audio clip 2-15 s, each group at most 15 s combined; a clip\'s own sound is not counted as an audio file. The prompt cites them in order: ' +
