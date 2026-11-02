@@ -90,7 +90,9 @@ export interface ManifestOutput {
     | "matte"
     | "preview"
     | "master"
-    | "report";
+    | "report"
+    /** originals (o/dbs-d9): a server-side remix of a split's stems (soundtrack-remix-dbs). */
+    | "mix";
 }
 
 export interface ManifestWorkflow {

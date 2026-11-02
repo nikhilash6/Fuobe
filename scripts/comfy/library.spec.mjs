@@ -116,6 +116,8 @@
 // Keys added with MOSS-Image (docs/research/new-models-7.md §4.6). Model settings (params.extra; MOSS-Image's Quality control writes them):
 //   sampler, scheduler                    (KSampler sampler_name / scheduler)
 //   unet                                  (UNETLoader file: the Fast tier's drop-in 8-step DMD file, listed in optionalModels)
+// Keys added with Assist's split_soundtrack (o/dbs-d9, graph C soundtrack-remix-dbs), model settings (params.extra):
+//   voiceDb, musicDb, effectsDb           (Adjust Audio Volume on the speech, music and sfx stems, whole dB -100..100; -100 = left out)
 // Entry field requiredModels: files a loader reads by a name with no extension (DBSLoader's model folder), listed in the
 // manifest like any model (KNOWN_MODELS keys are the path under the folder, e.g. 'DBS-BSRNN-DnR/model.safetensors'), so the
 // Workflows page's presence check and its install commands cover them.
@@ -3416,6 +3418,32 @@ export const SPEC = [
       'Voice + background add up to the source, except on a loud master where AudioMerge had to lower the background to fit under full scale (FLAC holds no more). ' +
       'Voice is first, so a chain without a stem takes the dialogue. Trained on synthetic English mixes (DnR v2): dialogue separates well (15-16 dB), music against effects less so (5.7-7.8 dB). ' +
       'Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved (recorded as information).',
+  },
+  // originals (o/dbs-d9): graph C of docs/research/dbs-separation-7.md §4.4, the server-side remix behind Assist's and MCP's
+  // split_soundtrack with levels: separate-soundtrack-dbs runs it for params.extra.remix (src/lib/comfy-variants.ts).
+  {
+    id: 'soundtrack-remix-dbs',
+    title: 'Remix a soundtrack: dialogue, music and effects each at their own level (DBS, ComfyUI-DBS)',
+    capability: 'separate-audio',
+    handBuilt: 'hand-built/soundtrack-remix-dbs.json',
+    packs: ['ComfyUI-DBS'],
+    requiredModels: ['DBS-BSRNN-DnR/model.safetensors', 'DBS-BSRNN-DnR/config.json', 'DBS-TIGER-DnR/model.safetensors', 'DBS-TIGER-DnR/config.json'],
+    bindings: {
+      audio: [b('1', 'audio')],
+      separationModel: [b('2', 'model')],
+      channels: [b('3', 'channels')],
+      voiceDb: [b('4', 'volume')],
+      musicDb: [b('5', 'volume')],
+      effectsDb: [b('6', 'volume')],
+    },
+    outputs: [{ node: '9', kind: 'audio', role: 'mix' }],
+    defaults: { separationModel: 'DBS-BSRNN-DnR', channels: 'mono', voiceDb: 0, musicDb: 0, effectsDb: 0 },
+    vramGb: 0,
+    license: 'DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)',
+    notes:
+      'CPU OK, about 1.7 GiB on CUDA. Graph A\'s split (LoadAudio, DBSLoader, DBSSeparate) with each stem through core Adjust Audio Volume (whole dB, -100..100; -100 takes a stem out) ' +
+      'and added back with two AudioMerge add nodes: one FLAC, the mix. AudioMerge scales the whole sum down when it peaks over 1.0 (a crude limiter), so a loud mix comes out a little quieter than asked. ' +
+      'With channels mono the mix is mono: the provider asks for each channel on a stereo source (2x the time), and a source with more than 2 channels runs in mono (ComfyUI saves mono or stereo only).',
   },
   // Clean up voice (NVIDIA NemotronLabs RE-USE, universal speech enhancement): Fuobe's own ComfyUI-RE-USE pack (no mamba-ssm).
   // Not on the validation server: checked statically there (core nodes) and run through the pack's own tests.

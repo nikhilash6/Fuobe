@@ -162,6 +162,8 @@ export const BINDING_KEYS = new Set([
   'invertDepth',
   // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
+  // originals (o/dbs-d9): graph C's stem levels (soundtrack-remix-dbs, Adjust Audio Volume in whole dB)
+  'voiceDb', 'musicDb', 'effectsDb',
 ]);
 
 // Sizes in GB: two decimals, and three where two would read 0 (a 4 MB DBS model), so no other entry's size changes.

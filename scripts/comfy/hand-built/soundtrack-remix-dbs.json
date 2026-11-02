@@ -1,0 +1,126 @@
+{
+  "1": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "input.wav"
+    },
+    "_meta": {
+      "title": "Soundtrack to remix (audio, or a video with sound)"
+    }
+  },
+  "2": {
+    "class_type": "DBSLoader",
+    "inputs": {
+      "model": "DBS-BSRNN-DnR",
+      "device": "auto"
+    },
+    "_meta": {
+      "title": "DBS Loader"
+    }
+  },
+  "3": {
+    "class_type": "DBSSeparate",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "audio": [
+        "1",
+        0
+      ],
+      "channels": "mono",
+      "output_sample_rate": "input"
+    },
+    "_meta": {
+      "title": "DBS Separate (music / sfx / speech)"
+    }
+  },
+  "4": {
+    "class_type": "AudioAdjustVolume",
+    "inputs": {
+      "audio": [
+        "3",
+        2
+      ],
+      "volume": 0
+    },
+    "_meta": {
+      "title": "Dialogue level (dB)"
+    }
+  },
+  "5": {
+    "class_type": "AudioAdjustVolume",
+    "inputs": {
+      "audio": [
+        "3",
+        0
+      ],
+      "volume": 0
+    },
+    "_meta": {
+      "title": "Music level (dB)"
+    }
+  },
+  "6": {
+    "class_type": "AudioAdjustVolume",
+    "inputs": {
+      "audio": [
+        "3",
+        1
+      ],
+      "volume": 0
+    },
+    "_meta": {
+      "title": "Effects level (dB)"
+    }
+  },
+  "7": {
+    "class_type": "AudioMerge",
+    "inputs": {
+      "audio1": [
+        "4",
+        0
+      ],
+      "audio2": [
+        "5",
+        0
+      ],
+      "merge_method": "add"
+    },
+    "_meta": {
+      "title": "Dialogue + music"
+    }
+  },
+  "8": {
+    "class_type": "AudioMerge",
+    "inputs": {
+      "audio1": [
+        "7",
+        0
+      ],
+      "audio2": [
+        "6",
+        0
+      ],
+      "merge_method": "add"
+    },
+    "_meta": {
+      "title": "+ effects"
+    }
+  },
+  "9": {
+    "class_type": "SaveAudioAdvanced",
+    "inputs": {
+      "audio": [
+        "8",
+        0
+      ],
+      "filename_prefix": "fuobe/dbs/mix",
+      "format": "flac"
+    },
+    "_meta": {
+      "title": "The remix"
+    }
+  }
+}

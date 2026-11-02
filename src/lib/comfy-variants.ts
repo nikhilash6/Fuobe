@@ -36,6 +36,12 @@ export const H3_ORBIT_GRAPH: Record<string, string> = { "minimax-h3-i2v": "minim
  */
 export const REUSE_BED_GRAPH: Record<string, string> = { "voice-clean-reuse": "voice-clean-bed-reuse" };
 
+/**
+ * originals (o/dbs-d9): a split with levels (params.extra.remix, Assist's and MCP's split_soundtrack): graph C makes one
+ * mix of the dialogue, music and effects at params.extra.voiceDb / musicDb / effectsDb instead of four stems.
+ */
+export const DBS_REMIX_GRAPH: Record<string, string> = { "separate-soundtrack-dbs": "soundtrack-remix-dbs" };
+
 export interface VariantRequest {
   op: string;
   /** Clips a join takes ("video-concat-{n}"). */
@@ -75,5 +81,7 @@ export function resolveWorkflowId(endpointTemplate: string, r: VariantRequest): 
   else if (best && r.extra.quality === "best" && r.has(best)) endpoint = best;
   const bed = REUSE_BED_GRAPH[endpoint];
   if (bed && r.extra.background === "keep" && r.has(bed)) endpoint = bed;
+  const remix = DBS_REMIX_GRAPH[endpoint];
+  if (remix && r.extra.remix === true && r.has(remix)) endpoint = remix;
   return endpoint;
 }
