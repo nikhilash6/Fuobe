@@ -13,13 +13,17 @@ import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToday } from "@/hooks/use-today";
 import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
-import type { Engine, GenerationRequest, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
+import type { Engine, GenerationRequest, GenParams, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
+import { LYRICS_PARAM, SONG_ID_PARAM, songFormat, songToolProblem, withSongId } from "@/lib/lyrics";
 import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
 import { formatsOf } from "@/lib/av/formats";
 import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted";
-import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useStatus } from "@/lib/api";
+import { ExactOrbitControls } from "@/components/exact-orbit-controls";
+import { useFlyAround } from "@/components/fly-around-run";
+import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
+import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
@@ -38,6 +42,7 @@ import {
   OPEN_MIN_GAP,
   type FrameSupport,
 } from "@/lib/catalog/keyframes";
+import { timingFor, timingFromTimes, timingProblem, type InbetweenTiming } from "@/lib/inbetween";
 import { appModels, presetGpuKey, presetRoutes, recipeRoute } from "@/lib/catalog/preset-recipe-routes";
 import {
   appRoute,
@@ -82,6 +87,7 @@ import {
   writesCaptions,
 } from "@/lib/composer";
 import { qwen21Note } from "@/lib/qwen21-speed";
+import { H3_TIER_PARAM, h3TierNote } from "@/lib/gpu/h3-tier";
 import { formatCost } from "@/lib/format";
 import { toastError } from "@/lib/refusals";
 import { addKeyLabel, billedTo, CLOUD_KEY, needsKey, paidThrough, startingModel } from "@/lib/your-keys";
@@ -106,6 +112,7 @@ import { ELEMENT_ICONS, PromptInput, type PromptInputHandle } from "./prompt-inp
 import { radioKeys, radioTab } from "./radio-keys";
 import { SettingsChip } from "./settings-panel";
 import { ShotsEditor } from "./shots-editor";
+import { LyricsEditor } from "./lyrics-editor";
 import { SketchTools } from "./sketch-tools";
 import { RECENT_MODELS, useStoredList } from "./stored-list";
 import { usePresetUrl, useStartRequest, useStudio, type Draft } from "./studio-context";
@@ -153,6 +160,19 @@ interface FramesContext {
   support: FrameSupport;
   duration: number;
   chained: boolean;
+  /** Keyframe animation (Fuobe Animation): each gap's timing, fitted to the frames and the engine. */
+  animation?: { timing: InbetweenTiming };
+}
+
+/**
+ * The draft's keyframe-animation settings (params.extra.inbetween, stillMouth) go only with an animation: after Animation
+ * is turned off or another model is picked they stay in the draft (to come back to) but are not sent to that model.
+ */
+function withoutAnimation(params: GenParams, animating: boolean): GenParams {
+  const extra = params.extra;
+  if (animating || !extra || !("inbetween" in extra || "stillMouth" in extra)) return params;
+  const { inbetween: _i, stillMouth: _s, ...rest } = extra;
+  return { ...params, extra: Object.keys(rest).length ? rest : undefined };
 }
 
 function buildRequest(
@@ -173,14 +193,14 @@ function buildRequest(
   let images = [s.image, s.image2, s.image3].filter((x): x is SlotValue => !!x?.ref).map((x) => x.ref).concat(refKind === "image" ? refs : []);
   const videos = refKind === "video" ? refs : [];
   let endImage = s.endImage?.ref || undefined;
-  let params = draft.params;
+  let params = withoutAnimation(draft.params, !!(draft.frames && frames?.animation));
   let pinned = op;
   // Frames mode: the stills in order at their times (or the first and last as start and end frame), at the strip's length.
   if (draft.frames && frames) {
     const sent = framesRequest(draft.frames, frames);
     images = sent.images;
     endImage = sent.endImage;
-    params = { ...params, ...sent.params };
+    params = { ...params, ...sent.params, ...(frames.animation && { extra: { ...params.extra, inbetween: frames.animation.timing } }) };
     pinned = op ?? sent.op;
   }
   // Layout mode: the boxes ride as params.extra.layout, captioned with the prompt; the plan compiles them for the model.
@@ -227,6 +247,25 @@ function useRecipeMade(preset: Preset | undefined, engine: Engine, recipeModel: 
     };
   }, [key, preset, engine, made]);
   return !!key && !!made[key];
+}
+
+/** Operations whose models sing lyrics (the lyrics editor): a song, and a song extended or remixed. */
+const SUNG_OPS = new Set<Operation>(["music", "song-extend", "song-remix"]);
+
+/**
+ * Audio → Music: the lyrics go to a model that sings them (params.extra.lyrics), and a song to cover only to a model that
+ * covers one (the slot is hidden for the others, so a song left there from YuE2 is never sent to them).
+ */
+function songDraft<D extends Pick<Draft, "lyrics" | "params" | "slots" | "song">>(d: D, model: ModelDef | undefined, slots: InputSlot[]): D {
+  let out = d;
+  if (d.lyrics?.trim() && model?.options.lyrics) out = { ...out, params: { ...out.params, extra: { ...out.params.extra, [LYRICS_PARAM]: d.lyrics } } };
+  // One of Mureka's own songs, still the one attached: its tools take it by id (no upload). Any other song goes as itself.
+  if (d.song || (out.params.extra && SONG_ID_PARAM in out.params.extra)) {
+    out = { ...out, params: { ...out.params, extra: withSongId(out.params.extra, d.song, d.slots.audio?.ref, model?.family === "mureka") } };
+  }
+  const hidden = slots.filter((s) => s.cover && !model?.options.cover && out.slots[s.key]).map((s) => s.key);
+  if (hidden.length) out = { ...out, slots: Object.fromEntries(Object.entries(out.slots).filter(([k]) => !hidden.includes(k as InputSlot["key"]))) };
+  return out;
 }
 
 /** Leaving a model that takes looks (Fuobe Soul) for one that doesn't: the look (its presetId) doesn't come along. */
@@ -347,6 +386,14 @@ export function Composer({ docked }: { docked: boolean }) {
   const takesLook = !!model?.options.looks;
   const preset: Preset | undefined = draft.presetId && !takesLook ? catalog.getPreset(draft.presetId) : config.preset;
   const lockedModel = preset?.type === "app";
+  // Fuobe DoP's orbit moves (N7-7): the Exact switch films the orbit by its numbers through /api/fly-around.
+  // It starts with a 3D depth step and runs on the studio's own GPU: the owner's for now.
+  const owner = useIsOwner();
+  const exactId = owner && preset?.type === "motion" && takesExact(preset.id) ? preset.id : undefined;
+  const [exactBy, setExactBy] = useState<{ id: string; orbit: ExactOrbit } | null>(null);
+  const exact = exactId && exactBy?.id === exactId ? exactBy.orbit : null;
+  const exactImage = draft.slots.image?.ref;
+  const fly = useFlyAround(exact ? { engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature } : null);
   const presetLoading = !!draft.presetId && !takesLook && !preset && !catalog.complete;
   // The models the viewer's catalog has (the studio's slice, or the full catalog once it's loaded), and the ones this
   // viewer can run now: offered in Settings → Models & licences, and a key for its provider when it's an account's paid run.
@@ -544,7 +591,8 @@ export function Composer({ docked }: { docked: boolean }) {
     () => namedImageSlots(baseSlots, model?.options.imageLabels, config.multiRef?.label, draft.refs.length),
     [baseSlots, model?.options.imageLabels, config.multiRef?.label, draft.refs.length],
   );
-  const slots = named.slots;
+  // A song to cover (Audio → Music) shows only for a model that covers one (YuE2).
+  const slots = useMemo(() => named.slots.filter((s) => !s.cover || !!model?.options.cover), [named.slots, model?.options.cover]);
   const hasCleanVoice = slots.some((s) => s.cleanVoice && s.accept === "audio");
   // Clips: ComfyUI joins 4 at a time. Images: what the model takes beyond the fixed image slots, for the operation the run
   // will be (a painted mask makes it an inpaint, which Qwen-Image 2.1 runs on the picture alone).
@@ -558,11 +606,30 @@ export function Composer({ docked }: { docked: boolean }) {
 
   // Frames mode (Video studio): up to 10 stills at their times, as the picked model can take them.
   const framesOn = !!config.frames && !!draft.frames;
+  // Style: Animation (Fuobe Animation): keyframes with a timing per gap, the in-betweens drawn by AniSora.
+  const animationOn = framesOn && !!model?.options.inbetween;
+  // Until a gap is timed, the frames' places on the strip give the timing (Frames mode's times, at the playback rate).
+  const savedTiming = draft.params.extra?.inbetween as Partial<InbetweenTiming> | undefined;
+  const animationTiming =
+    animationOn && model && draft.frames
+      ? savedTiming?.gaps
+        ? timingFor(draft.frames.length, savedTiming, model.engine)
+        : timingFromTimes(frameTimes(draft.frames.map((f) => f.at), framesDuration(model, draft.params.duration)), { engine: model.engine })
+      : undefined;
   const framesCtx: FramesContext | undefined =
-    framesOn && model ? { support: frameSupport(model), duration: framesDuration(model, draft.params.duration), chained: !!keyframeChain(model) } : undefined;
+    framesOn && model
+      ? { support: frameSupport(model), duration: framesDuration(model, draft.params.duration), chained: !!keyframeChain(model), ...(animationTiming && { animation: { timing: animationTiming } }) }
+      : undefined;
   const framesAt = framesCtx && draft.frames ? frameTimes(draft.frames.map((f) => f.at), framesCtx.duration) : [];
   // The open chain's gaps (and one frame's clip) must be clips its model makes; the planner checks two or more frames too.
-  const framesGap = framesCtx?.chained && model && framesAt.length ? chainGapProblem(framesAt, framesCtx.duration, chainTiming(model)) : null;
+  // An animation's gaps are its own timing (two keyframes at least).
+  const framesGap = animationTiming
+    ? draft.frames!.length > 0 && draft.frames!.length < 2
+      ? "Add a second keyframe: the in-betweens go between them"
+      : timingProblem(animationTiming, draft.frames!.length, model!.engine)
+    : framesCtx?.chained && model && framesAt.length
+      ? chainGapProblem(framesAt, framesCtx.duration, chainTiming(model))
+      : null;
   // Layout mode (Image studio): boxes on the picture, one row each, compiled for the model at the size it renders.
   const layoutOn = !!config.layout && !!draft.layout;
   const [layoutEditing, setLayoutEditing] = useState(false);
@@ -578,7 +645,8 @@ export function Composer({ docked }: { docked: boolean }) {
 
   // A picked palette / moodboard routes the request (and can move it to another model) before anything else.
   const signature = useSignature(!!config.signature, draft.signature);
-  const prepare = (d: typeof draft) => {
+  const prepare = (draftIn: typeof draft) => {
+    const d = songDraft(draftIn, catalog.getModel(draftIn.modelId), config.slots);
     const signed = signature.apply(buildRequest(config.feature, d, studioOp, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(d.modelId)));
     // Planned with the signature's sentences in the prompt (as the server runs it); sent with them apart.
     const raw = signed.worded;
@@ -663,6 +731,10 @@ export function Composer({ docked }: { docked: boolean }) {
   // A voice outside what a hosted talking-avatar model takes (H3 Max lip sync: 5 s to 15 min), as the server would say.
   const voiceProblem = op === "avatar" && voiceRef && voice?.duration && model ? voiceWindowProblem(model, voice.duration) : null;
   if (voiceProblem && !planError) planError = voiceProblem;
+  // A song Mureka's tools refuse (Stems: MP3 or M4A; Remix: 10 s to 5:50), from its name and header, as the server does.
+  const songRef = config.voiceFacts && (op === "song-stems" || op === "song-remix") ? draft.slots.audio?.ref : undefined;
+  const songProblem = songRef ? songToolProblem(op!, { format: songFormat(undefined, songRef), seconds: voice?.duration }) : null;
+  if (songProblem && !planError) planError = songProblem;
   if (signed.blocker) planError = signed.blocker;
   // Models that take no prompt (try-on, 3D, transcription, upscalers), or can run without one, never ask for one.
   // A model that reads only words (Open-H3 Regenerate redraws from them) asks for them even in a tool that hides the box.
@@ -718,6 +790,15 @@ export function Composer({ docked }: { docked: boolean }) {
   // `skip` is true only from the guided fix's "Run anyway" (a click handler passes its event here).
   const submit = (skip?: unknown) => {
     const skipGpu = skip === true;
+    if (exact) {
+      // An exact orbit: the still filmed along the orbit's numbers (Fly around), priced in its panel.
+      const stop = !exactImage ? "Add a start frame to film an exact orbit" : fly.preview.data?.blocker;
+      if (stop) return void toast(stop, { id: "composer-blocker" });
+      if (fly.run.isPending) return;
+      toast.dismiss("composer-blocker");
+      fly.run.mutate({ engine, image: exactImage, orbit: exact, prompt: draft.prompt.trim() || undefined, feature: config.feature });
+      return;
+    }
     if (keyToAdd && model && !create.isPending) return openAddKey(keyToAdd, model.id);
     if (!blocker && gpuSetup && !skipGpu && !create.isPending) return openGpuFix();
     if (blocker || create.isPending || signature.lock.isPending) {
@@ -736,7 +817,9 @@ export function Composer({ docked }: { docked: boolean }) {
     setRecent((r) => pushRecent(r, draft.modelId));
     // The server resolves @mentions and drawings itself; only pin the operation when there are none.
     // No "Queued" toast: the new card (and the "1 generating ↑" pill when it's off-screen) says it.
-    const sent = signature.apply(buildRequest(config.feature, draft, resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)));
+    const sent = signature.apply(
+      buildRequest(config.feature, songDraft(draft, model, config.slots), resolvesOnServer ? studioOp : op, config.promptSuffix, config.multiRef?.kind, framesCtx, targetFor(draft.modelId)),
+    );
     // Open palette lock: the images are recoloured to the palette by a chained step (POST /api/palettes/lock).
     if (sent.lock) return signature.lock.mutate({ request: sent.request, colors: sent.lock.colors }, { onError: (e) => toastError(e) });
     // If the server's pre-flight stops it (409 gpu-setup), the guided fix that opens can try again, or run it anyway.
@@ -825,7 +908,9 @@ export function Composer({ docked }: { docked: boolean }) {
   );
   const effectiveOp = studioOp ?? op;
   // Qwen-Image 2.1's Options → GPU on Small: what the small encoder can't do (or that a speed with its own graph wins).
-  const smallGpuNote = qwen21Note(opts.controls, p.extra, effectiveOp);
+  // MiniMax H3's GPU tier: what FastH3 V2 or Trim changes, picked or as Auto runs it on the card the GPU check read.
+  const h3Note = opts.controls?.some((c) => c.param === H3_TIER_PARAM) ? h3TierNote(p.extra, effectiveOp, gpuBadges?.h3Tier) : undefined;
+  const smallGpuNote = qwen21Note(opts.controls, p.extra, effectiveOp) ?? h3Note;
   // A setting an app's choices already set (the Angles app's angle, height and distance on QMA · 96 views) isn't asked twice.
   const presetSets = new Set((preset?.options ?? []).flatMap((o) => o.choices.flatMap((c) => Object.keys(c.extra ?? {}))));
   const shownControls = (opts.controls ?? []).filter((c) => !presetSets.has(c.param));
@@ -861,7 +946,9 @@ export function Composer({ docked }: { docked: boolean }) {
   const missingKey = needsKey(model, status)?.[0];
   const ownPayerText = payer && cost ? ` · ${billedTo(payer)}` : missingKey ? ` · ${addKeyLabel(missingKey).toLowerCase()}` : "";
   // On this studio's GPUs: the quote's words (none from the server: free, as the open engine always is).
-  const costText = poolPrice ? (priceUnavailable ? "Price unavailable" : hostedQuote?.text || ownCostText) : ownCostText;
+  // An exact orbit runs as a fly-around: its own price (N7-7).
+  const exactPrice = exact ? fly.price : "";
+  const costText = exactPrice || (poolPrice ? (priceUnavailable ? "Price unavailable" : hostedQuote?.text || ownCostText) : ownCostText);
   const payerText = poolPrice ? "" : ownPayerText;
 
   // Attachments: only when something is attached, a required slot is still empty, or none of a "one of these" group is filled (U8).
@@ -1026,7 +1113,19 @@ export function Composer({ docked }: { docked: boolean }) {
     if (framesCtx.support === "start" || framesCtx.support === "none") framesNotice = { text: `${framesBlocker(model, count)!.message}.`, tone: "warn", action };
     else if (framesGap) framesNotice = { text: `${framesGap}.`, tone: "warn" };
     else if (note) framesNotice = { text: note, tone: "info", action };
+    else if (animationTiming && model.engine === "cloud")
+      framesNotice = { text: "In the cloud each gap is one clip with every frame kept, played at 16 fps. Faster speeds and 24 fps playback are on your GPU, free.", tone: "info" };
   }
+  // Style: Animation, in Frames mode: Fuobe Animation (when it's on in this install), and back to the engine's frames model.
+  const animationModel = config.frames && catalog.offered("fuobe-animation", engine) ? catalog.getModel("fuobe-animation") : undefined;
+  const plainFramesModel = catalog.getModel(FRAMES_MODELS[engine].id);
+  const switchStyle = (on: boolean) => {
+    const to = on ? animationModel : plainFramesModel;
+    if (!to) return;
+    setDraft((d) => ({ modelId: to.id, params: { ...to.defaults, ...d.params, resolution: to.defaults?.resolution ?? d.params.resolution, aspectRatio: to.defaults?.aspectRatio ?? d.params.aspectRatio } }));
+  };
+  const setTiming = (t: InbetweenTiming) => setDraft((d) => ({ params: { ...d.params, extra: { ...d.params.extra, inbetween: t } } }));
+  const stillMouth = draft.params.extra?.stillMouth === true;
   const framesChip = config.frames ? (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -1177,6 +1276,18 @@ export function Composer({ docked }: { docked: boolean }) {
           onAddPick={attach.attach}
           onClose={toggleFrames}
           notice={framesNotice}
+          style={animationModel ? { on: animationOn, onChange: switchStyle, engine } : undefined}
+          animation={
+            animationTiming && model
+              ? {
+                  timing: animationTiming,
+                  engine: model.engine,
+                  onTiming: setTiming,
+                  stillMouth,
+                  onStillMouth: (on) => setDraft((d) => ({ params: { ...d.params, extra: { ...d.params.extra, stillMouth: on || undefined } } })),
+                }
+              : undefined
+          }
         />
       )}
       {layoutOn && !collapsed && draft.layout && (
@@ -1288,6 +1399,22 @@ export function Composer({ docked }: { docked: boolean }) {
           collapsed={collapsed}
           elementsNote={elementsNote(model)}
         />
+      )}
+
+      {/* Fuobe DoP's orbit moves: the Exact switch and its numbers (N7-7). */}
+      {exactId && !collapsed && (
+        <ExactOrbitControls
+          className="mx-2 mb-2"
+          engine={engine}
+          value={exact}
+          defaults={exactDefaults(exactId)}
+          onChange={(orbit) => setExactBy(orbit ? { id: exactId, orbit } : null)}
+          footer={exact && exactImage && fly.preview.data?.blocker ? <span>{fly.preview.data.blocker}</span> : undefined}
+        />
+      )}
+
+      {model?.options.lyrics && (effectiveOp ? SUNG_OPS.has(effectiveOp) : model.routes.some((r) => SUNG_OPS.has(r.op))) && !collapsed && (
+        <LyricsEditor model={model} value={draft.lyrics ?? ""} onChange={(lyrics) => setDraft({ lyrics })} idea={draft.prompt} seconds={p.duration ?? model.defaults?.duration} />
       )}
 
       {model && effectiveOp === "dialogue" && <DialogueEditor model={model} lines={p.dialogue ?? defaultLines(model)} onChange={(dialogue) => setP({ dialogue })} />}
@@ -1500,7 +1627,7 @@ export function Composer({ docked }: { docked: boolean }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums">
-                <span className="sm:hidden">{poolPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
+                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
                 <span className="hidden sm:inline">
                   {costText}
                   {payerText}

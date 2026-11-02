@@ -107,5 +107,15 @@
    "Known pre-existing test failures (rules item 8) remain: comfy-reuse, dop-originals, preset-featured, soul-runs x2, split-soundtrack 'has no cloud route'."
   ],
   "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/dbs-d5"
+  ],
+  "notMerged": [],
+  "conflicts": "requirements.json rebuilt",
+  "checks": "batch of 4 (n7-8, dbs-d5, hosted-catchup, w2s-w4): typecheck 0, lint 0, vitest 5159 passed, 6 failed (main known)",
+  "pushed": true,
+  "head": "85be87db"
  }
 }

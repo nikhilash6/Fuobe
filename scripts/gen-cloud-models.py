@@ -730,6 +730,18 @@ model("fuobe-dop-ltx", "Fuobe DoP · LTX", "Fuobe Original", "fuobe-dop", "video
       original=True, api_defaults={"enable_prompt_expansion": False},
       pricing=("second", 0.036, "$0.001605 per megapixel of video: about $0.18 for 5 s at 720p ($0.20 with LoRAs)", {"withLoras": 0.04}),
       options={"durations": [3, 5]}, defaults={"aspectRatio": "auto", "duration": 5, "generateAudio": False}, frame_step=8)
+# ----- Fuobe Animation (package inbetweening): keyframe in-betweening's cloud half. fal's Wan 2.2 A14B image-to-video
+# takes an end frame, 17–161 frames and LoRAs per expert (schema read 2026-11-02): one hosted clip per gap with AniSora
+# 3.2 on the high-noise expert (models.ts sends it, options.loras), joined. fal makes every frame and plays it as made
+# (16 fps, interpolation off): the every-Nth speeds and 24 fps playback are the GPU graph's (src/lib/inbetween.ts).
+ANIMATION_FAL = {"interpolator_model": "none", "frames_per_second": 16}
+model("fuobe-animation", "Fuobe Animation", "Fuobe Original", "fuobe-animation", "video",
+      "Keyframes in, the in-betweens drawn, one finished animation, with timing per gap: Wan 2.2 + AniSora",
+      [("i2v", "fal-ai/wan/v2.2-a14b/image-to-video", "fal", {"loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora", "fixed": ANIMATION_FAL, "flf2v": True})],
+      original=True,
+      pricing=("second", 0.08, "720p on fal; 580p $0.06/s, 480p $0.04/s; with LoRAs $0.10/s, per gap's clip",
+               {"byResolution": {"720p": 0.08, "580p": 0.06, "480p": 0.04}, "withLoras": 0.1}),
+      defaults={"aspectRatio": "auto", "duration": 5, "resolution": "720p"}, frame_step=4, fit_values=True)
 # ----- Originals (O6): Fuobe Cinema's cloud half, Cinema Studio's Director on LTX-2.3 22B (research §8 cinema-studio →
 # studios[cinema-studio].original). Prompt expansion off so the compiled Director prompt is what runs; sound follows the
 # toggle; up to 481 frames at 24 fps (20 s; Cinema adds the rest with one extend); exact sizes per tier in multiples of
@@ -1096,10 +1108,58 @@ model("minimax-music-2-5", "MiniMax Music 2.5", "MiniMax", "minimax-music", "aud
       [("music", "fal-ai/minimax-music/v2.5")], fixed={"lyrics_optimizer": True})
 model("stable-audio-3-music", "Stable Audio 3 Music", "Stability AI", "stable-audio", "audio", "Quick loops and beds up to 2 minutes",
       [("music", "fal-ai/stable-audio-3/small/music/text-to-audio")], badges=["fast"], defaults={"duration": 30}, options={"durations": [10, 30, 60, 120]})
-model("mureka-song", "Mureka 9.5", "Mureka", "mureka", "audio", "Full songs with vocals in many genres",
-      [("music", "mureka/api/generate/song")], pricing=("request", 0.75, "prompt-to-song on mureka-9.5; with lyrics $0.225"),
-      # Its vocal gender only applies to lyrics-to-song, which Fuobe doesn't send yet.
-      controls=[("model", "Version")])
+# Full songs (nm10-music3, research #10 endpointRecords): lyrics go in params.extra.lyrics with Fuobe's section tags
+# (src/lib/lyrics.ts); FieldMap.lyrics sends them in the API's own field. Mureka 9.5 moved from the versioned route
+# (mureka/api/generate/song, whose fal catalog entry lost its metadata) to its own; a past run's Version (params.extra.model)
+# is no field there, so it's left out (a saved run on another version moves to the model that runs it: replaced.ts
+# murekaVersion). Mureka prices a song by whether lyrics come with it (Pricing.withLyrics). Its songs sing words: an
+# instrumental is its own model (ModelOptions.lyrics.instrumentalModel).
+model("mureka-song", "Mureka 9.5", "Mureka", "mureka", "audio", "Full songs with vocals in many genres, 2 to 5 minutes",
+      [("music", "mureka/v9.5/generate/song", "fal", {"ignore": ["model"]})],
+      pricing=("request", 0.50, "a song from a prompt; with your lyrics $0.15", {"withLyrics": 0.15}),
+      defaults={"duration": 180}, options={"durations": [120, 180, 240, 300], "lyrics": {"instrumentalModel": "mureka-9-5-instrumental"}})
+model("mureka-9", "Mureka 9", "Mureka", "mureka", "audio", "Songs with vocals at a lower price, sung from your lyrics or written for you",
+      [("music", "mureka/v9/generate/song")], badges=["new"], pricing=("request", 0.30, "a song from a prompt; with your lyrics $0.045", {"withLyrics": 0.045}),
+      options={"lyrics": {"instrumentalModel": "mureka-9-instrumental"}})
+model("mureka-9-5-instrumental", "Mureka 9.5 Instrumental", "Mureka", "mureka", "audio", "Mureka's newest instrumental tracks and beds, no vocals",
+      [("music", "mureka/v9.5/generate/instrumental")], badges=["new"], pricing=("request", 0.15))
+model("mureka-9-instrumental", "Mureka 9 Instrumental", "Mureka", "mureka", "audio", "Instrumental tracks and beds, no vocals",
+      [("music", "mureka/v9/generate/instrumental")], badges=["new"], pricing=("request", 0.045))
+# Mureka's earlier versions stay on the versioned route (fal serves 7.6, O2 and 8 there; 9 and 9.5 have routes of their own).
+# Its duration is a 9.5 field only, and its Version is always sent (the route's own default is 9.5). With lyrics 7.6 costs
+# $0.03, O2 and 8 $0.045; from a prompt all three $0.30.
+model("mureka-8", "Mureka 8", "Mureka", "mureka", "audio", "Mureka's earlier versions (8, O2, 7.6), for songs made with them",
+      [("music", "mureka/api/generate/song", "fal", {"drop": ["duration"]})],
+      pricing=("request", 0.30, "a song from a prompt; with your lyrics $0.045 ($0.03 on 7.6)", {"withLyrics": 0.045}),
+      options={"controls": [{"param": "model", "label": "Version", "values": ["mureka-8", "mureka-o2", "mureka-7.6"], "default": "mureka-8",
+                             "labels": {"mureka-8": "Mureka 8", "mureka-o2": "Mureka O2", "mureka-7.6": "Mureka 7.6"}}],
+               "lyrics": {"instrumentalModel": "mureka-9-instrumental"}},
+      api_defaults={"model": "mureka-8"})
+# MiniMax Music 3 is the open model the open engine runs too (oss-minimax-music-3): the same weights, hosted. Its lyrics are
+# required: a run with none asks for an instrumental.
+model("minimax-music-3", "MiniMax Music 3 · both engines", "MiniMax", "minimax-music", "audio", "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
+      [("music", "minimax/music-3")], badges=["new", "top"], defaults={"duration": 120}, options={"durations": [30, 60, 120, 180, 240, 300], "seed": True},
+      api_defaults={"lyrics": "[instrumental]"},
+      licence={"licence": "MiniMax-Music3 Community License", "commercial": True,
+               "note": "MIT-style grant with notice and an Acceptable Use Policy; commercial products show \"MiniMax-Music3\" in their interface; "
+                       "above US$20M yearly revenue needs MiniMax's written authorisation. The Comfy-Org repack is tagged Apache-2.0.", "checked": "2026-11-01"})
+# Its seed only goes with a composition plan (its schema says so), which Fuobe doesn't send: a prompt and a length.
+model("elevenlabs-music-2-5", "ElevenLabs Music v2.5", "ElevenLabs", "elevenlabs", "audio", "Studio-quality songs and scores up to 10 minutes",
+      [("music", "elevenlabs/music/v2.5", "fal", {"drop": ["seed"]})], badges=["new"], pricing=("minute", 0.6, "billed per started minute", {"roundUp": True}),
+      defaults={"duration": 60}, options={"durations": [15, 30, 60, 120, 180, 300, 600]})
+# Mureka's song tools (Audio → Extend & remix, and a music result's Extend, Remix and Stems): the song is one of Mureka's own
+# (params.extra.songId, kept on its results) or a file sent first through Mureka's files/upload ($0.01, Pricing.uploadUsd).
+model("mureka-extend", "Mureka Extend", "Mureka", "mureka", "audio", "Makes a song longer with new lyrics, after its end or before its start",
+      [("song-extend", "mureka/v8/song/extend")], badges=["new"], pricing=("request", 0.004, "plus $0.01 to send a song Mureka didn't make", {"uploadUsd": 0.01}),
+      controls=[("extend_type", "Where", {"tail": "After the end", "head": "Before the start"})])
+model("mureka-remix", "Mureka Remix", "Mureka", "mureka", "audio", "A new arrangement of a song in the style you describe, with its lyrics",
+      [("song-remix", "mureka/v8/song/remix")], badges=["new"], pricing=("request", 0.20, "plus $0.01 to send a song Mureka didn't make", {"uploadUsd": 0.01}))
+# Its stems come back as a zip (zip_url): the fal provider opens it and keeps each track as a result of its own.
+model("mureka-stems", "Mureka Stems", "Mureka", "mureka", "audio", "A song split into its vocal and instrument tracks",
+      [("song-stems", "mureka/api/song/stem")], badges=["new"], pricing=("request", 0.20, "audio-separation-3, the default"))
+# "Negative prompting is not supported by Lyria 3.5" (its schema): no negative prompt.
+model("lyria-3-5", "Lyria 3.5", "Google", "lyria", "audio", "Google DeepMind's newest music model: full songs from words or a picture",
+      [("music", "google/lyria-3.5", "fal", {"drop": ["negativePrompt"]})], badges=["new"])
 model("stable-audio-2-5", "Stable Audio 2.5", "Stability AI", "stable-audio", "audio", "Sound design and music beds up to 3 minutes",
       [("sfx", "fal-ai/stable-audio-25/text-to-audio"), ("music", "fal-ai/stable-audio-25/text-to-audio"),
        ("sfx", "stability-ai/stable-audio-2.5", "replicate"), ("music", "stability-ai/stable-audio-2.5", "replicate")],
@@ -1352,6 +1412,15 @@ model("florence-2-ocr", "Florence-2 OCR", "Microsoft", "florence", "text", "Ever
 # ----- 3D: splats, objects in place, text to 3D, multi-view and rigging
 model("triposplat", "TripoSplat", "Tripo", "tripo", "model3d", "A Gaussian splat of the subject in one photo (background removed)",
       [("splat", "tripo3d/triposplat")], badges=["new"], fixed={"output_format": "ply"}, sliders=[("num_gaussians", "Gaussians")])
+# Idol 3D (package idol-1; research #10 §5, idol-9.md): Speridlabs' Idol, hosted on fal since 2026-10-30. Its own label, never
+# TripoSplat's. The splat is a .ply (model_mesh); model_glb, a point-cloud preview of the splat's centres, rides along in meta.formats.
+# image_type "real" is Idol's looser photo crop; the page sends it with its Best / Quick look steps and Gaussians as params.extra.
+IDOL_FAL = next(e for e in NEW_MODELS_10["endpointRecords"] if e["endpoint"] == "speridlabs/idol")
+model("idol-3d", "Idol 3D", "Speridlabs", "idol", "model3d", "A Gaussian splat (.ply) of one object from one picture · TripoSplat's architecture, retrained",
+      [("splat", "speridlabs/idol")], badges=["new"], sliders=[("num_gaussians", "Gaussians", 32768), ("num_inference_steps", "Steps")],
+      controls=[("image_type", "Picture", {"synthetic": "A render or generated image", "real": "A photo"})],
+      licence={"licence": "Apache-2.0", "commercial": True,
+               "note": f"{IDOL_FAL['license']}. fal's safety checker reads the input image", "checked": IDOL_FAL["fetched"]})
 # Its prompt defaults to "car" at the API, so Fuobe always asks for one.
 model("sam-3d-objects", "SAM 3D Objects", "Meta", "sam", "model3d", "The objects you name, rebuilt in 3D where they stand in the photo",
       # export_textured_glb defaults to false (a grey mesh): the viewer shows the textured one.
@@ -2244,6 +2313,34 @@ def build_route(op, ep, provider, m, opts, ropts=None):
                 opts["durations"] = union(opts.get("durations", []), picks)
         if key.endswith("_ms"):
             fmap["duration"]["multiplier"] = 1000
+    # Song lyrics (params.extra.lyrics, nm10-music3): the API's lyrics field and the most characters it takes, or after the
+    # prompt for an API that reads them there (Lyria 3.5); the composer's lyrics editor follows ModelOptions.lyrics.
+    if op in ("music", "song-extend", "song-remix") and "lyrics" in kf and (inputs.get(kf["lyrics"]) or {}).get("type") == "string":
+        spec = inputs.get(kf["lyrics"]) or {}
+        most = num(spec.get("maxLength"))
+        # An API with an instrumental switch (MiniMax Music 2.5's is_instrumental) gets it for lyrics that are only
+        # [Instrumental], with its own lyrics writer (lyrics_optimizer) off.
+        fmap["lyrics"] = {"key": kf["lyrics"], **({"max": most} if most else {}),
+                          **({"instrumental": kf["instrumental"]} if kf.get("instrumental") in inputs else {}),
+                          **({"autoLyrics": kf["autoLyrics"]} if kf.get("autoLyrics") in inputs else {})}
+        # Required by the API with no fallback of Fuobe's (MiniMax Music 3 asks for an instrumental when there are none).
+        needed = spec.get("required") and kf["lyrics"] not in (m.get("api_defaults") or {})
+        opts["lyrics"] = {**({"max": most} if most else {}), **({"required": True} if needed else {})}
+    # A song tool's source (Mureka): its own song by id, else the file sent first through the provider's files/upload with
+    # the purpose the id field names ("Audio ID returned by /files/upload with purpose='audio'").
+    if op in ("song-extend", "song-remix") and "songId" in kf and "uploadId" in kf:
+        purpose = re.search(r"purpose='([\w-]+)'", (inputs.get(kf["uploadId"]) or {}).get("desc") or "")
+        upload = next((ep2 for (p2, ep2) in EPS if p2 == provider and ep2.startswith(ep.split("/")[0] + "/") and ep2.endswith("/files/upload")), None)
+        if purpose and upload:
+            fmap["songSource"] = {"songId": kf["songId"], "uploadId": kf["uploadId"], "upload": {"endpoint": upload, "purpose": purpose.group(1)}}
+        else:
+            warn(f"{m['id']}: {ep} has no upload route or purpose for its song")
+    if "extendAt" in kf:
+        fmap["startTime"] = {"key": kf["extendAt"], "type": "number", "multiplier": 1000}
+    elif op == "music" and "lyricsInPrompt" in kf:
+        most = num((inputs.get(kf["lyricsInPrompt"]) or {}).get("maxLength"))
+        fmap["lyrics"] = {"inPrompt": True, **({"max": most} if most else {})}
+        opts["lyrics"] = {"inPrompt": True, **({"max": most} if most else {})}
     part4_ranges(op, inputs, fmap)
     # Text-to-speech etc. carry the prompt in "text".
     if ropts.get("fixed"):
@@ -2312,6 +2409,9 @@ def build_route(op, ep, provider, m, opts, ropts=None):
     # Inpaint routes say what the mask's paint means (edit routes get theirs when the inpaint route is derived).
     if op == "inpaint" and "mask" in fmap and mask_format(ep):
         fmap["maskFormat"] = mask_format(ep)
+    # Fields a past request may carry that this endpoint has no use for (Mureka 9.5's old Version).
+    if ropts.get("ignore"):
+        fmap["ignore"] = list(ropts["ignore"])
     route = {"op": op, "provider": provider, "endpoint": f"{ep}:{version}" if ropts.get("pin") else ep, "map": fmap}
     if ropts.get("note"):
         route["note"] = ropts["note"]
@@ -2383,7 +2483,8 @@ for m in M:
     # No route sends a prompt (try-on, 3D, transcription): planning and the composer don't ask for one.
     if all(r["map"].get("prompt") is False for r in routes):
         opts["promptless"] = True
-    opts.update(m["options"])
+    # The lyrics options read from the schema (max, required) keep what the model adds to them (its instrumental model).
+    opts.update({k: ({**opts[k], **v} if k == "lyrics" and isinstance(opts.get(k), dict) else v) for k, v in m["options"].items()})
     # A model-wide control or slider goes only to the routes whose schema has its field (Ideogram Vector's
     # quality is a text-to-vector setting; image-to-vector has none).
     offered = [c["param"] for c in opts.get("controls", [])] + [x["param"] for x in opts.get("sliders", [])]
@@ -2391,7 +2492,7 @@ for m in M:
         inputs = (EPS.get((route["provider"], route["endpoint"])) or {}).get("inputs") or {}
         missing = [x for x in offered if x.split(".")[0] not in inputs]
         if missing:
-            route["map"] = {**route["map"], "ignore": missing}
+            route["map"] = {**route["map"], "ignore": union(route["map"].get("ignore", []), missing)}
     pricing = None
     if m["pricing"]:
         u, usd, *rest = m["pricing"]

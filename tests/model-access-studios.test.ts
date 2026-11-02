@@ -22,7 +22,7 @@ const { changeAccess, firstOn, isOffered } = await import("@/server/model-access
 const { toolModel } = await import("@/server/layers");
 const { planKatana } = await import("@/server/katana");
 const { multiplierModel } = await import("@/server/marketing");
-const { withOfferedVideo } = await import("@/server/faceless");
+const { withOfferedMusic, withOfferedVideo } = await import("@/server/faceless");
 const { setSetting } = await import("@/server/settings");
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -94,5 +94,16 @@ describe("a studio's default on the server", () => {
     expect(withOfferedVideo(settings).videoModel).toBe("minimax-h3");
     // A pick stays the pick.
     expect(withOfferedVideo({ ...settings, videoModel: "gemini-omni-flash" }).videoModel).toBe("gemini-omni-flash");
+  });
+
+  it("Faceless's music bed gives way when the one picked is switched off, as its picker shows", () => {
+    const settings = { engine: "cloud" as const, animation: "animated", music: true, musicModel: "minimax-music-3" } as Parameters<typeof withOfferedMusic>[0];
+    expect(withOfferedMusic(settings)).toBe(settings);
+    changeAccess([{ kind: "model", id: "minimax-music-3", on: false }]);
+    expect(withOfferedMusic(settings).musicModel).toBe("sonilo-music");
+    changeAccess([{ kind: "model", id: "sonilo-music", on: false }]);
+    expect(withOfferedMusic(settings).musicModel).toBe("elevenlabs-music-2-5");
+    // No bed, nothing to change.
+    expect(withOfferedMusic({ ...settings, music: false })).toEqual({ ...settings, music: false });
   });
 });

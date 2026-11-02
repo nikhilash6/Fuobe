@@ -1,0 +1,142 @@
+{
+ "key": "inbetweening",
+ "impl": {
+  "branch": "o/inbetweening (worktree /home/user/wt/o-inbetweening, 8 commits on claude/fuobe-parity-4 fdad177c, not pushed)",
+  "summary": "Fuobe Animation, a new dual-engine Original for keyframe in-betweening: 2-10 keyframes in, the in-betweens drawn, one animation with timing per gap. On your GPU one ComfyUI graph (wan22-inbetween-anisora) runs every gap on ONE shared set of loaders (Wan 2.2 I2V 14B fp8 high + AniSora 3.2 LoRA, low + lightx2v 4-step LoRA, shift 5, 4 steps CFG 1, high 0-2 / low 2-end), each gap with its own length, words and seed, every-Nth selection counted back from the next keyframe (joint frame dropped, every pose on screen), keyframe 1 in front, batched, CreateVideo at 24 or 16 fps. In the cloud fal's Wan 2.2 A14B image-to-video (end frame + LoRA on the high-noise expert, schema re-read 2026-11-02) runs one clip per gap with AniSora, every frame at 16 fps, joined. Frames mode gets an Animation style switch with a timing chip per gap (frames ±4, speed ×1-×4, words), live total length, playback 24/16 fps and Keep mouth still; Storyboard 'Animate these panels', a character's 'Animate between poses' (Character Sheet + element page), a Canvas 'Keyframes → animation' template (table = per-gap timing), Assist/MCP generate with gaps, a GPU-board row and an eval suite.",
+  "built": [
+   "Research: adapterLoras records for AniSora 3.2 high (Kijai/WanVideo_comfy LoRAs/AniSora/Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors, 630,695,648 bytes, sha256 bdc68451…, pinned at 8260d429; upstream bilibili Index-AniSora V3.2 Apache-2.0, Kijai's extraction repo states no licence) and the lightx2v 4-step I2V low-noise LoRA (Comfy-Org repack, 1,226,977,424 bytes, pinned ee6f4a40) in docs/research/fuobe-originals-recipes-5.json; lora-library.generated.ts regenerated; AniSora added to workflows/comfyui/model-pins.json (the Wan weights, VAE, umt5 and lightx2v were already pinned)",
+   "src/lib/inbetween.ts: pure timing model (4n+1 17-81 frames, speed 1-4 with VHS skip/every, kept frames, joint drop, 24/16 fps, per-gap and total seconds, keyframe times, mapping from Frames-mode times, moveKey, per-engine limits, request parsing/validation, gap prompts incl. 'mouth does not move', animateHref)",
+   "src/lib/av/inbetween-graph.ts expandInbetweenWorkflow + scripts/comfy/hand-built/wan22-inbetween-anisora.json + library.spec.mjs entry (expand: 'keyframes', KNOWN_MODELS for the files) → workflows/comfyui/wan22-inbetween-anisora.json, manifest (validated, sizes kept), requirements.json rebuilt; provider binding in src/server/providers/comfyui.ts (params.extra.inbetween / stillMouth)",
+   "Catalog: fuobe-animation in scripts/gen-cloud-models.py (cloud half, fal Wan 2.2 A14B i2v/flf2v LoRA endpoint, interpolation off, 16 fps) + models.ts Original (open keyframes route, cloud chained keyframes route, options.inbetween, AniSora as recipe LoRA, engineNote saying what each engine does); ModelOptions.inbetween; planner check (plan.ts checkKeyframes); cloud chain in src/server/chains.ts createKeyframeFilm uses the gap timing and per-gap words",
+   "UI: frames-strip.tsx Animation switch, gap chips with popover, live length, playback and Keep mouth still; composer.tsx animation timing (from frame places until edited), cloud note, blockers; framesRequest sends keyframeTimes/duration/extra.inbetween; '?frames=a,b,c' hand-off param (composer.ts HANDOFF_PARAMS, studio-page initialDraft, mergeHandoff); Storyboard 'Animate these panels'; src/components/turnaround/animate-poses.tsx on the Character Sheet and character element pages",
+   "Canvas template 'keyframes-animation' (3 image inputs + Gaps table Frames/Speed/Words → one In-between node); canvas.ts reads a table wired into an inbetween model as timing, not per-row",
+   "Assist/MCP generate: keyframe_times, gaps[{frames,speed,words}], playback_fps, still_mouth",
+   "GPU pre-flight board row 'Keyframe animation' (/video?model=fuobe-animation) in STUDIO_ROWS",
+   "scripts/eval/cases/animation.json (five poses with the workflow's timing on GPU/demo, a true-time case for both engines, a plain Wan chain variant; hardware note: ~24 GB VRAM at 720p, RAM grows with total length)",
+   "tests/e2e/inbetweening.mjs browser check"
+  ],
+  "tests": [
+   "New: tests/inbetween.test.ts (9: timing maths, selection indices, workflow timing 37/17/17/45 ×1/3/4/1 → 91 frames 3.79 s, mapping, moveKey, validation), tests/inbetween-graph.test.ts (8: template sampling, expansion for 2, 5 and 10 keyframes through prepareWorkflow, words/still mouth, refusals, catalog routes, planner on both engines), tests/inbetween-runs.test.ts (4: demo run on GPU one row, cloud clip-per-gap chain + join with per-gap words, cloud refusal of ×3 before anything starts, Assist generate tool), tests/inbetween-canvas.test.ts (3) — all pass",
+   "Live CPU ComfyUI (127.0.0.1:8188): node validate-workflows.mjs wan22-inbetween-anisora --shared → validated; the expanded 2/5/10-keyframe prompts (21/42/77 nodes) POSTed to /prompt behind a Sleep blocker and deleted: all valid, no node_errors (placeholder weights; nothing ran)",
+   "Related suites run green: catalog/cloud-catalog*/comfy-library*/gpu-*/model-access*/originals/keyframes/chains/lora*/licences/hosted-runs/assist*/mcp/public-signup*/canvas*/template-covers/eval-*/composer/storyboard/turnaround/elements/plan etc. (~2,300 tests)",
+   "Updated pinned expectations (counts, not behaviour): cloud-catalog-4 keyframes pickers now include fuobe-animation; cloud-catalog-fixes skips chained routes (they send nothing themselves); model-access-listings LoRAs 181→183; template-covers tiles 229→230",
+   "Pre-existing failures seen (per rules): dop-originals effect-acid, preset-featured, soul-runs (2); preset-covers failed once under load and passes alone",
+   "Browser (pnpm dev -p 3412, FUOBE_DEMO_MODE=on, FUOBE_DATA_DIR=/tmp/fuobe-o-inbetweening-data): node tests/e2e/inbetweening.mjs — all passed at 1440 and 390 px, light and dark, no console errors, no sideways scroll: Frames with handed-over keyframes, Animation on, gap chips, ×3 and frames edit, live length, 16 fps longer, Keep mouth still, Free on GPU, style off; cloud: note shown, 16 fps only, ×2-×4 disabled; Storyboard 'Animate these panels' → Frames with the panels; element 'Animate between poses' → Frames; Character Sheet page. Server stopped, .next deleted",
+   "tsc --noEmit clean (after next typegen); eslint clean on changed files"
+  ],
+  "left": [
+   "No GPU run: the graph and the hosted route are validated/planned, not rendered. Quality of AniSora in-betweens, VRAM (~24 GB at 720p claimed from Wan 2.2 14B fp8 two-expert) and RAM with long totals need a real GPU; cloud runs need a fal key",
+   "Character Sheet: the button shows only when the sheet has cut pose views (sheetPictures tiles); a demo sheet has none, so the browser check verified it on a character element page instead",
+   "Canvas template not browser-checked (planner tests only); no template cover image (public/previews is a hot file)",
+   "Hosted runs (FUOBE_HOSTED_RUNS) not specifically tested for fuobe-animation (poolQuote uses the generic path; the AniSora recipe LoRA is options.loras, not an extra LoRA)",
+   "Engine mode 'Paid APIs only' does not hide Animation: the hosted fal Wan 2.2 A14B LoRA endpoint takes an end frame and a high-noise LoRA, so the cloud route was built (speeds ×2-×4 and 24 fps stay GPU-only and the UI says so)",
+   "tests/comfy-library-4.test.ts not edited (the new graph is validated, so no unvalidated-list change)",
+   "Optional: the brief's 'Pika H3 Flex FL2VA' in-between route (new-models-10.md) was not built"
+  ],
+  "docsNotes": [
+   "STATUS.md / ARCHITECTURE.md not edited. Suggested: Fuobe Animation (fuobe-animation) — keyframe in-betweening on both engines; timing model src/lib/inbetween.ts; graph expander src/lib/av/inbetween-graph.ts (manifest expand 'keyframes'); cloud = createKeyframeFilm chain with per-gap timing; '?frames=' hand-off param for the Video studio; Canvas 'Keyframes → animation' (a table into an inbetween model is timing, not per-row); generate tool's gaps/playback_fps/still_mouth/keyframe_times",
+   "Brief out of date: Comfy-Org/Wan_2.2_ComfyUI_Repackaged now redirects to Comfy-Org/Wan-2.2 (URLs still resolve; pins unchanged). The Wan weights, VAE, umt5 and lightx2v LoRAs were already pinned in model-pins.json; VHS already pinned; Frames mode, the keyframe chain and video joins already existed (extended, not duplicated). AniSora's source found: Kijai/WanVideo_comfy LoRAs/AniSora (only a HIGH file exists)",
+   "The owner's workflow JSON (/home/user/ext/inbetweening/Animation5-In-Betweening.json) was not available; built from the brief's description",
+   "Unlike the uploaded graph, Fuobe's selection is anchored on the next keyframe (skip = ((length-2) mod N)+1) so every pose lands on screen and joints never repeat a frame; the workflow's own 37/17/17/45 ×1/3/4/1 timing gives 91 frames, 3.79 s at 24 fps",
+   "Research JSON correction/addition: two adapterLoras entries (anisora-3-2-i2v-high, wan22-i2v-lightx2v-4step-low)"
+  ],
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "medium",
+    "file": "src/components/studio/frames-strip.tsx",
+    "line": 498,
+    "title": "You can't type a space in a gap's words box",
+    "detail": "The words box in GapChip is controlled by `gap.prompt`. That value comes from the composer's `animationTiming`, which is `timingFor(draft.frames.length, savedTiming, engine)` (composer.tsx:565). `timingFor` trims every gap's prompt (src/lib/inbetween.ts:138). So when someone types 'she ', the draft saves 'she ', the next render shows 'she', and the space is lost. The next letter makes 'shej'. Words with more than one word can only be pasted, never typed. I checked this with a scratch test: timingFor(3, {gaps:[{frames:33,speed:1,prompt:'she '},…]}).gaps[0].prompt === 'she'. tests/e2e/inbetweening.mjs did not catch it because Playwright's fill() sets the whole value at once.",
+    "fix": "Keep the untrimmed words in the draft and the box, and trim only when the request is built: in framesRequest/requestTiming, or in a timingFor option the UI path skips."
+   },
+   {
+    "severity": "medium",
+    "file": "src/components/studio/composer.tsx",
+    "line": 1036,
+    "title": "Turning Animation off, or switching to another model, still sends extra.inbetween and extra.stillMouth to that model's API",
+    "detail": "setTiming and the Keep mouth still switch write params.extra.inbetween and params.extra.stillMouth into the draft. switchStyle(false) keeps d.params, extra included, and so does any later model pick. buildRequest sends draft.params as it is, and buildPayload copies every params.extra key into the API body (payload.ts:529). I checked this with a scratch test: a cloud Frames run on FLUX 3 Max (FRAMES_MODELS.cloud) whose draft still held them produced the fal body {…,\"inbetween\":{\"gaps\":[…],\"fps\":16},\"stillMouth\":true} for blackforestlabs/flux-3-max/keyframes-to-video. Endpoints that check their inputs strictly will refuse it, and the rest receive keys they don't know. On the open engine, Wan 2.2's chain happens to delete these keys (createKeyframeFilm), but a non-chained model or another studio model does not.",
+    "fix": "In switchStyle, and whenever the model changes away from an inbetween model, remove inbetween and stillMouth from params.extra. Or let buildRequest drop them unless model.options.inbetween is set. Add a test."
+   },
+   {
+    "severity": "low",
+    "file": "src/components/studio/frames-strip.tsx",
+    "line": 146,
+    "title": "The last keyframe of an animation is labelled 'Middle frame'",
+    "detail": "With animation on, the role is `i === 0 ? 'Start frame' : 'Middle frame'`, so the final keyframe, which the film ends on, shows 'Middle frame' visibly (line 285) and to screen readers. It should read 'End frame'."
+   },
+   {
+    "severity": "low",
+    "file": "src/server/assist/tools.ts",
+    "line": 375,
+    "title": "Assist/MCP drops playback_fps without a word when no gaps are given",
+    "detail": "animationOf only builds `inbetween` when gaps are present. A job with playback_fps: 16 and no gaps runs at the engine's default (24 on the GPU). Also, when the job carries no engine of its own and the context engine is cloud, keyframeTimes are computed at 24 fps. The server re-derives the timing from extra.inbetween, so the second point is cosmetic."
+   },
+   {
+    "severity": "info",
+    "file": "src/lib/av/inbetween-graph.ts",
+    "line": 263,
+    "title": "Memory with long animations has no cap",
+    "detail": "One prompt holds every gap's decoded frames plus the batched copy. Ten keyframes at 81 frames and 720p is about 8 GB of float frames held twice, so roughly 16 GB+ of system RAM. The eval hardware note mentions that RAM grows with length, but nothing caps or warns in the UI. Leave it as is until a real GPU run, but keep it in mind."
+   }
+  ],
+  "checks": [
+   "Read the review prompt, main-rules, the implementer report, and the full diff claude/fuobe-parity-4...o/inbetweening (40 files, 8 commits)",
+   "Timing model (src/lib/inbetween.ts): traced the gapSelection maths against VHS images[skip::every]. Examples: 17f ×3 keeps 1,4,…,16 (6 frames); 17f ×4 keeps 4,8,12,16; 37/17/17/45 ×1/3/4/1 gives 91 frames. The joint frame is dropped and keyframe 1 is added once. Correct",
+   "Graph: the template's nodes (first=ImageFromBatch d1[0], batch=BatchImagesNode autogrow images.imageN, s1 VHS_SelectEveryNthImage skip_first_images, LoRA loaders, shift 5) match the live CPU ComfyUI's object_info: VHS_SelectEveryNthImage has skip_first_images, and BatchImagesNode is autogrow with max 50 (≥10). The expander shares one set of loaders; the user's extra LoRAs dedupe against AniSora in injectLoras (lib/comfy.ts), so the recipe LoRA is not loaded twice on the open engine",
+   "Re-read fal's schema live for fal-ai/wan/v2.2-a14b/image-to-video/lora: image_url, end_image_url, num_frames 17–161, frames_per_second, interpolator_model none, and loras[{path,transformer high|low|both,scale,weight_name}] all match the generated map",
+   "Scratch probe (vitest, outside the repo): a cloud fuobe-animation flf2v clip plans AniSora with target high, and the body has loras [{path:<pinned HF url>,scale:1,transformer:'high'}], num_frames 21 for 1.25 s, end_image_url, interpolator none, 16 fps",
+   "Checked the AniSora pin live on Hugging Face at revision 8260d429: x-linked-size 630695648 and sha256 bdc68451…, matching model-pins, requirements.json and the research JSON. Licences for AniSora and lightx2v-low are recorded as data in the research JSON / LoRA library",
+   "requirements.json carries wan22-inbetween-anisora (VHS pack, files, 24 GB VRAM) and the GPU board has a 'Keyframe animation' STUDIO_ROWS row. validation-state.json only gains an entry; the manifest only gains an entry plus generatedAt",
+   "Public sign-up: no new API routes. Account runs use the existing POST /api/generations path, with inputs.images checked as for every keyframes run. The hosted-run path refuses only req.loras (the recipe LoRA is options.loras), as the implementer said. The '?frames=' hand-off accepts only /api/files/ or https URLs and only fills the draft",
+   "No Higgsfield API use, Higgsfield media or LoRA files committed. Hot files untouched",
+   "Ran the targeted tests: inbetween, inbetween-graph, inbetween-runs, inbetween-canvas, keyframes and fal-lora (6 files, 57 tests), all passing",
+   "Not re-run: browser checks (the implementer's e2e passed; its fill() is what hides the first finding), the full suite, and GPU or fal runs"
+  ],
+  "verdict": "changes requested: two medium UI/payload bugs (spaces can't be typed in a gap's words; leftover animation timing sent to other models' APIs after Animation is turned off), both small to fix. The graph, timing maths, cloud payload, pins, licences and GPU-board/requirements wiring are sound."
+ },
+ "fix": {
+  "applied": [
+   "Medium (frames-strip words box loses spaces): confirmed. timingFor in src/lib/inbetween.ts now keeps a gap's words as typed if they contain anything besides whitespace, so the box keeps 'she ' and the next letter follows the space. Words are still trimmed when the request is made (requestTiming, gapPrompt). Tests in tests/inbetween.test.ts. The e2e now types the words key by key (pressSequentially) and checks that 'he leaps high' keeps its spaces.",
+   "Medium (extra.inbetween/stillMouth sent to other models): confirmed. buildRequest in src/components/studio/composer.tsx now runs withoutAnimation, which removes inbetween and stillMouth from params.extra unless Frames mode has an animation. The draft keeps them, so turning Animation back on restores them. An extra left empty is dropped. New tests/inbetween-request.test.ts covers flux-3-max (stripped, other extra keys kept) and fuobe-animation (sent).",
+   "Low (last keyframe labelled 'Middle frame'): the last keyframe of an animation is now 'End frame' in the tooltip and the aria-label. The e2e checks it.",
+   "Low (Assist playback_fps dropped without gaps): animationOf now sends { fps } when there are no gaps. requestTiming in src/lib/inbetween.ts accepts a rate on its own: gaps come from the keyframe times (or the default) at that rate, and a rate the engine can't play is refused (24 fps in the cloud → '16 fps' message). keyframeTimes are computed only when gaps are given. Tests in tests/inbetween.test.ts and tests/inbetween-runs.test.ts."
+  ],
+  "rejected": [
+   "Low, second half (Assist keyframeTimes computed at 24 fps when the context engine is cloud and the job names none): cosmetic, as the review says. The server works the timing out again from extra.inbetween (requestTiming) on the engine it runs on, so the run is unaffected.",
+   "Info (no RAM cap for long animations): left as the review advised until a real GPU run gives measurements. The eval hardware note already says RAM grows with total length."
+  ],
+  "checks": [
+   "Worktree /home/user/wt/o-inbetweening on o/inbetweening: only this package's commits, base claude/fuobe-parity-4 is an ancestor",
+   "Targeted: tests/inbetween*.test.ts, 5 files, 27 tests, pass (after the container restart too)",
+   "pnpm typecheck (after npx next typegen): exit 0. pnpm lint: exit 0",
+   "FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: 315 files, 4977 passed, 7 failed, 4 skipped, exit 1. Six of the failures are the known pre-existing ones from the rules: comfy-reuse (pack licence), dop-originals (effect-acid), preset-featured, soul-runs (2), split-soundtrack (no cloud route). The seventh, preset-covers, failed under load and passes alone (11/11), as the implementer also saw",
+   "Browser: FUOBE_DEMO_MODE=on pnpm dev -p 3412, then node tests/e2e/inbetweening.mjs. All passed at 1440 and 390 px, light and dark, with no console errors, including the 2 new checks per configuration (words typed key by key keep their spaces; the last keyframe is 'end frame'). Server stopped with fuser -k, .next deleted",
+   "Committed 7025a85b; git status clean; not pushed"
+  ],
+  "finalSummary": "Fuobe Animation (keyframe in-betweening) is finished on o/inbetweening. Open engine (your ComfyUI): one graph, wan22-inbetween-anisora, runs 2-10 keyframes on one shared set of loaders: Wan 2.2 I2V 14B fp8 high + AniSora 3.2, low + lightx2v 4-step. Each gap has its own length, words and seed, every-Nth selection ×1-×4, and the joint frame dropped; the film plays at 24 or 16 fps. The graph is validated against the live CPU ComfyUI and expanded prompts for 2, 5 and 10 keyframes are accepted by /prompt, but it has never been rendered: quality, VRAM (about 24 GB at 720p) and RAM on long films need a real GPU. Cloud: fal's hosted Wan 2.2 A14B image-to-video LoRA endpoint makes one clip per gap, with an end frame and AniSora on the high-noise expert, every frame kept at 16 fps, then joins the clips. The payload is verified by tests and the schema was re-read, but no run has been made, which needs a fal key. The UI says plainly that ×2-×4 and 24 fps run on your GPU only. This fix stage made the gap words box typeable with spaces, keeps animation settings out of other models' requests, labels the last keyframe 'End frame', and makes a playback rate given on its own (Assist/MCP) take effect. Public sign-up: there are no new routes. Guests can browse the studio but every run answers 401. Accounts run fuobe-animation through POST /api/generations on their own GPU only (connect-gpu otherwise), with the keyframe images checked by account-inputs like every keyframes run. The install's fal key stays the owner's.",
+  "left": [
+   "No GPU render and no fal run yet: AniSora in-between quality, VRAM and RAM with long totals, and the hosted route all need a GPU or a fal key",
+   "Character Sheet 'Animate between poses' shows only when a sheet has cut pose views; it was browser-checked on a character element page",
+   "Canvas 'Keyframes → animation' template is checked by planner tests only, not in the browser; it has no cover image (public/previews is a hot file)",
+   "Hosted runs (FUOBE_HOSTED_RUNS) not specifically tested for fuobe-animation",
+   "No RAM cap or warning for very long animations (review info finding), pending GPU measurements",
+   "tests/comfy-library-4.test.ts not edited (the new graph is validated)",
+   "Optional Pika in-between route from the brief not built",
+   "STATUS.md / ARCHITECTURE.md notes as suggested in the implementer's docsNotes"
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/inbetweening"
+  ],
+  "notMerged": [],
+  "conflicts": "resolved keeping both sides; generated files regenerated",
+  "checks": "batch of 6 (inbetweening, idol-1, person-remover-plus, nm10-h3-any-gpu, n7-7-exact-orbits, nm10-music3): typecheck 0, lint 0, vitest 5340 passed, 6 known + a blockout ffmpeg timeout (fixed in this push)",
+  "pushed": true,
+  "head": "c73f3218"
+ }
+}

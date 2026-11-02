@@ -1,0 +1,13 @@
+{
+ "key": "person-remover-plus",
+ "merge": {
+  "merged": [
+   "o/person-remover-plus"
+  ],
+  "notMerged": [],
+  "conflicts": "resolved keeping both sides; generated files regenerated",
+  "checks": "batch of 6 (inbetweening, idol-1, person-remover-plus, nm10-h3-any-gpu, n7-7-exact-orbits, nm10-music3): typecheck 0, lint 0, vitest 5340 passed, 6 known + a blockout ffmpeg timeout (fixed in this push)",
+  "pushed": true,
+  "head": "c73f3218"
+ }
+}

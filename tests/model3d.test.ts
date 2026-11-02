@@ -337,6 +337,103 @@ describe("open engine: TripoSplat (image-to-splat-triposplat)", () => {
   });
 });
 
+describe("Idol 3D (image-to-splat-idol on the open engine, speridlabs/idol on fal)", () => {
+  const file = (filename: string) => ({ filename, subfolder: "fuobe", type: "output" });
+
+  it("takes an upload for a photo and a result made here for a render; a repeat or an upload's second report keeps the switch", () => {
+    // Dropped or uploaded here: on, as soon as it starts uploading.
+    expect(m3d.idolPhotoFor({ ref: "", uploading: true }, null)).toBe(true);
+    // The same upload's second report (done) keeps what the person may have set meanwhile.
+    expect(m3d.idolPhotoFor({ ref: "/api/files/a.png" }, { ref: "", uploading: true })).toBeUndefined();
+    // From the library: an earlier upload is a photo; a result made here is not.
+    expect(m3d.idolPhotoFor({ ref: "/api/files/up.jpg", source: "upload" }, { ref: "/api/files/a.png" })).toBe(true);
+    expect(m3d.idolPhotoFor({ ref: "/api/files/gen.png", source: "generation" }, null)).toBe(false);
+    expect(m3d.idolPhotoFor({ ref: "/api/files/x.png" }, null)).toBe(false);
+    // The same picture again, or a cleared slot: unchanged.
+    expect(m3d.idolPhotoFor({ ref: "/api/files/a.png", source: "upload" }, { ref: "/api/files/a.png" })).toBeUndefined();
+    expect(m3d.idolPhotoFor(null, { ref: "/api/files/a.png" })).toBeUndefined();
+  });
+
+  it("routes oss-idol to its graph and idol-3d to fal; TripoSplat stays first on both engines", () => {
+    expect(getModel("oss-idol")!.routes).toEqual([expect.objectContaining({ op: "splat", provider: "comfyui", endpoint: "image-to-splat-idol" })]);
+    expect(getModel("idol-3d")!.routes).toEqual([expect.objectContaining({ op: "splat", provider: "fal", endpoint: "speridlabs/idol" })]);
+    expect(m3d.MODELS_3D.splat.open.map((m) => m.id)).toEqual(["oss-triposplat", "oss-idol"]);
+    expect(m3d.MODELS_3D.splat.cloud.map((m) => m.id)).toEqual(["triposplat", "idol-3d"]);
+    expect(m3d.modeOf("oss-idol")).toEqual({ mode: "splat", engine: "open" });
+    expect(m3d.modeOf("idol-3d")).toEqual({ mode: "splat", engine: "cloud" });
+    expect(m3d.ALL_MODELS_3D.some((m) => m.id === "oss-idol")).toBe(true);
+    // Idol encodes with DINOv3 on fal too; cloud TripoSplat is never labelled Idol.
+    expect(m3d.CLOUD_NOTICES["idol-3d"]).toEqual(["Built with DINOv3"]);
+    expect(getModel("triposplat")!.name).toBe("TripoSplat");
+    expect(plan(m3d.model3dRequest({ engine: "cloud", mode: "splat", photo, modelId: "idol-3d" })).model.id).toBe("idol-3d");
+  });
+
+  it("sends Best by default and Quick look when asked; TripoSplat's requests are unchanged", () => {
+    const open = (more: Partial<Parameters<typeof m3d.model3dRequest>[0]>) => m3d.model3dRequest({ engine: "open", mode: "splat", photo, modelId: "oss-idol", ...more });
+    expect(open({}).params).toEqual({ extra: { steps: 50, sampler: "euler", cfg: 4, numGaussians: 262144, photoCrop: false } });
+    expect(open({ quality: "quick", photoCrop: true }).params).toEqual({ extra: { steps: 20, sampler: "dpmpp_2m", cfg: 4, numGaussians: 65536, photoCrop: true } });
+    expect(m3d.IDOL_PRESETS).toEqual({ best: { steps: 50, sampler: "euler", cfg: 4, numGaussians: 262144 }, quick: { steps: 20, sampler: "dpmpp_2m", cfg: 4, numGaussians: 65536 } });
+    // fal takes the steps, the Gaussians and the kind of picture; its guidance stays its own (Idol's weight 3).
+    expect(m3d.model3dRequest({ engine: "cloud", mode: "splat", photo, modelId: "idol-3d", quality: "quick", photoCrop: true }).params).toEqual({
+      extra: { num_inference_steps: 20, num_gaussians: 65536, image_type: "real" },
+    });
+    // The Idol settings never reach TripoSplat.
+    expect(m3d.model3dRequest({ engine: "open", mode: "splat", photo, quality: "quick", photoCrop: true })).toEqual({ feature: "image-to-3d", modelId: "oss-triposplat", op: "splat", inputs: { images: [photo] } });
+    expect(m3d.model3dRequest({ engine: "cloud", mode: "splat", photo, quality: "quick" })).toEqual({ feature: "image-to-3d", modelId: "triposplat", op: "splat", inputs: { images: [photo] } });
+  });
+
+  it("binds the photo, the Gaussians, steps / cfg / sampler, the seed on both nodes and the photo crop; cut-out on, .spz", async () => {
+    const extra = m3d.model3dRequest({ engine: "open", mode: "splat", photo, modelId: "oss-idol", quality: "quick", photoCrop: true }).params!.extra!;
+    const { workflow } = await prepareWorkflow("image-to-splat-idol", { prompt: "", images: ["p.png"], seed: 7, extra }, { generationId: "gen-idol", op: "splat", upload: async () => "x" });
+    expect(workflow["99"].inputs.image).toBe("p.png");
+    expect(workflow["88:55"].inputs).toMatchObject({ num_gaussians: 65536, seed: 7 });
+    expect(workflow["88:6"].inputs).toMatchObject({ steps: 20, cfg: 4, sampler_name: "dpmpp_2m", seed: 7 });
+    expect(workflow["88:104"].inputs.switch).toBe(true);
+    expect(workflow["88:35"].inputs.switch).toBe(true);
+    expect(workflow["92"].inputs.format).toBe("spz");
+    const best = await prepareWorkflow("image-to-splat-idol", { prompt: "", images: ["p.png"] }, { generationId: "gen-idol2", op: "splat", upload: async () => "x" });
+    expect(best.workflow["88:6"].inputs).toMatchObject({ steps: 50, cfg: 4, sampler_name: "euler" });
+    expect(best.workflow["88:104"].inputs.switch).toBe(false);
+  });
+
+  it("gives the .spz as the splat and the orbit as the turntable; a chain into a video slot takes the orbit", () => {
+    const outs = collectOutputs(
+      { status: { status_str: "success", completed: true }, outputs: { "51": { "3d": [file("gen-idol_00001_.spz")] }, "42": { images: [file("gen-idol_00001_.mp4")], animated: [true] } } },
+      getWorkflow("image-to-splat-idol").manifest,
+    );
+    expect(outs.map((o) => [o.kind, o.contentType, o.meta])).toEqual([
+      ["model3d", "model/x-spz", { role: "splat", format: "spz" }],
+      ["video", undefined, { role: "turntable" }],
+    ]);
+    expect(gens.pickOutput(outs as never, { slot: "video" } as never)?.kind).toBe("video");
+  });
+
+  it("fal: the .ply splat with the cut-out as its preview and the point-cloud GLB as a download", () => {
+    const route = getModel("idol-3d")!.routes[0];
+    expect(buildPayload(route.map!, { prompt: "", images: ["https://fal.test/p.png"], seed: 3, extra: { num_inference_steps: 20, num_gaussians: 65536, image_type: "real" } })).toEqual({
+      image_url: "https://fal.test/p.png",
+      seed: 3,
+      num_inference_steps: 20,
+      num_gaussians: 65536,
+      image_type: "real",
+    });
+    const outs = extractOutputs(
+      {
+        model_mesh: { url: "https://fal.media/s.ply", content_type: "application/octet-stream" },
+        model_glb: { url: "https://fal.media/p.glb" },
+        preprocessed_image: { url: "https://fal.media/cut.png" },
+        camera: { yaw: 0.1, pitch: 0.2, radius: 2, fov: 40 },
+        num_gaussians: 65536,
+        seed: 3,
+        timings: {},
+      },
+      "splat",
+    );
+    expect(outs).toEqual([{ url: "https://fal.media/s.ply", kind: "model3d", contentType: "model/ply", meta: { format: "ply", preview: "https://fal.media/cut.png", formats: { points: "https://fal.media/p.glb" } } }]);
+    expect(estimateCost(getModel("idol-3d")!, {}, 1, "splat")).toBe(0.1);
+  });
+});
+
 describe("open engine: text to 3D as a Qwen-Image 2.1 still, then TRELLIS.2", () => {
   async function settle(id: string, ms = 40_000) {
     const until = Date.now() + ms;

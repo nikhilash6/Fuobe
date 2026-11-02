@@ -117,7 +117,7 @@ export interface ManifestWorkflow {
    * per clip of a join, src/lib/av/joins.ts; "speech": every Edit speech window of params.extra.speechWindows,
    * src/lib/av/speech-edit-graph.ts).
    */
-  expand?: "captions" | "timeline" | "videos" | "audios" | "speech";
+  expand?: "captions" | "timeline" | "videos" | "audios" | "speech" | "keyframes";
   validated: boolean;
   /** What ComfyUI answered when it last refused this graph. */
   validationError?: string;
