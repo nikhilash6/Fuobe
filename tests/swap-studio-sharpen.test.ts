@@ -31,6 +31,8 @@ const sharpen = await import("@/app/api/swap-studio/projects/[id]/sharpen/route"
 const assemble = await import("@/app/api/swap-studio/projects/[id]/assemble/route");
 const estimate = await import("@/app/api/swap-studio/projects/[id]/estimate/route");
 const stop = await import("@/app/api/swap-studio/projects/[id]/stop/route");
+const masks = await import("@/app/api/swap-studio/projects/[id]/masks/route");
+const genjutsuEstimate = await import("@/app/api/genjutsu/estimate/route");
 
 const req = (method: string, body?: unknown) => new Request("http://x/api", { method, headers: { "Content-Type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
@@ -63,10 +65,12 @@ function mp4(seconds: number, width: number, height: number): Buffer {
 }
 
 let clip = "";
+let square = "";
 let hero = "";
 beforeAll(() => {
   setSetting("demoMode", "auto");
   clip = saveFile({ data: mp4(6, 1920, 1080), contentType: "video/mp4", source: "upload", name: "street.mp4" }).url;
+  square = saveFile({ data: mp4(6, 2048, 2048), contentType: "video/mp4", source: "upload", name: "square.mp4" }).url;
   hero = saveFile({ data: encodePng({ width: 64, height: 64, data: Buffer.alloc(64 * 64 * 4, 200) }), contentType: "image/png", source: "upload", name: "hero.png" }).url;
 });
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -163,6 +167,92 @@ describe("Sharpen on the cloud (demo mode)", () => {
     await expect(patch(id, { type: "take", clipId: c.id, shotId: shot.id, segmentId: seg.id, takeId: "take-nope", finishUse: true })).rejects.toThrow(/422/);
     const r = await post(stop, id, { kind: "finish", clipId: c.id }, 200);
     expect(r.id).toBe(id);
+  });
+});
+
+describe("Sharpen on your GPU (demo mode)", () => {
+  it("a version still being made keeps its take; Sharpen at another size stops it before replacing it", async () => {
+    const id = (await post(projects, "", { name: "Square", engine: "open", character: { image: hero, description: "a knight" } })).id;
+    let p: SwapProject = await post(clips, id, { url: square, name: "square.mp4" });
+    const c = p.clips[0];
+    const shot = c.shots[0];
+    await until(id, (x) => !!x.project.clips[0].normalized?.url);
+    p = await patch(id, { type: "shot", clipId: c.id, shotId: shot.id, patch: { settings: { useAnchor: false } } });
+    p = await patch(id, { type: "layout", clipId: c.id, shotId: shot.id, op: { op: "partition", frames: 144 } });
+    const seg = p.clips[0].shots[0].segments![0];
+    p = await patch(id, { type: "segment", clipId: c.id, shotId: shot.id, segmentId: seg.id, patch: { anchorMode: "none" } });
+    // Who to swap: a tracked mask, approved.
+    p = await post(masks, id, { clipId: c.id, shotId: shot.id, kind: "track", frame: 0, points: [{ x: 1024, y: 1024, label: "positive" }] });
+    const m = p.clips[0].shots[0].masks[0];
+    await until(id, (x) => !!x.project.clips[0].shots[0].masks[0].pieces[0]?.url);
+    await patch(id, { type: "shot", clipId: c.id, shotId: shot.id, patch: { approvedMask: m.id } });
+    await post(queue, id, { clipId: c.id, shotId: shot.id, segmentId: seg.id, mode: "all" });
+    let v = await until(id, (x) => x.project.clips[0].shots[0].segments!.every((g) => !!g.selectedTake && x.gens[g.takes[0].genId!]?.status === "succeeded"));
+    const take = v.project.clips[0].shots[0].segments![0].takes[0];
+    const ref = { clipId: c.id, shotId: shot.id, segmentId: seg.id, takeId: take.id };
+
+    // A 2048 square: 2K adds a little over 1080p (a 2048 × 1170 part is redrawn), and 1080p is the default; 4K adds nothing.
+    const est = await (await estimate.GET(req("GET"), ctx(id) as never)).json();
+    expect(Object.keys(est.sharpen[c.id].costUsd)).toEqual(["1080p", "2K"]);
+    p = await post(sharpen, id, { clipId: c.id, tier: "1080p" });
+    const first = p.clips[0].shots[0].segments![0].takes[0].finish!;
+    expect(first).toMatchObject({ engine: "open", tier: "1080p" });
+    const firstIds = [...first.stepIds!, first.genId!];
+    expect(firstIds.map((g) => gens.getGeneration(g)!.modelId)).toEqual(expect.arrayContaining(["oss-h3-regenerate", "oss-composite-mask"]));
+
+    // While it is being made, its take stays, and so does the shot's layout.
+    await expect(patch(id, { type: "take", ...ref, remove: true })).rejects.toThrow(/sharper version is still being made/);
+    await expect(patch(id, { type: "layout", clipId: c.id, shotId: shot.id, op: { op: "partition", frames: 72 } })).rejects.toThrow(/409/);
+
+    // Sharpen again at 2K: the 1080p version still being made is stopped first, then replaced.
+    p = await post(sharpen, id, { clipId: c.id, tier: "2K" });
+    const second = p.clips[0].shots[0].segments![0].takes[0].finish!;
+    expect(second).toMatchObject({ tier: "2K", asked: "2K" });
+    expect(second.id).not.toBe(first.id);
+    expect(firstIds.map((g) => gens.getGeneration(g)!.status).filter((st) => st === "queued" || st === "running")).toEqual([]);
+    expect(gens.getGeneration(first.genId!)!.status).toBe("canceled");
+    // The 2K version's regenerate is drawn at 1440p.
+    expect(second.stepIds!.map((g) => gens.getGeneration(g)!).find((g) => g.modelId === "oss-h3-regenerate")!.request.params).toMatchObject({ resolution: "1440p" });
+
+    // Stop reaches it; then the take can go.
+    await post(stop, id, { kind: "finish", clipId: c.id }, 200);
+    v = await until(id, (x) => !["queued", "running"].includes(x.gens[x.project.clips[0].shots[0].segments![0].takes[0].finish!.genId!]?.status ?? ""), 20_000);
+    expect(v.gens[second.genId!].status).toBe("canceled");
+    const after = await patch(id, { type: "take", ...ref, remove: true });
+    expect(after.clips[0].shots[0].segments![0].takes.find((t) => t.id === take.id)).toBeUndefined();
+  });
+});
+
+describe("Genjutsu's notes for a finishing size", () => {
+  const est = async (body: unknown) => {
+    const res = await genjutsuEstimate.POST(req("POST", body) as never);
+    const out = await res.json();
+    if (res.status !== 200) throw new Error(`${res.status}: ${out.error}`);
+    return out as { notes: string[]; quality?: string };
+  };
+  const base = (engine: string, quality: string, over: Record<string, unknown> = {}) => ({
+    engine,
+    mode: "character",
+    references: [hero],
+    quality,
+    source: { url: clip, name: "street.mp4", duration: 30, fps: 30, width: 3840, height: 2160, hasAudio: true },
+    range: { start: 0, end: 10 },
+    ...over,
+  });
+
+  it("your GPU names the clip's own size and the 2048 px join when it sharpens at a smaller size", async () => {
+    const e = await est(base("open", "4K"));
+    expect(e.notes).toContain("Your clip is 3840×2160, joined at 2048×1152 (up to 2048 px a side), and your character is redrawn in a 1964×1122 part of it, so it is sharpened at 2K");
+    expect(e.notes.join(" ")).not.toMatch(/never above the clip's own size/);
+  });
+
+  it("the cloud's 4K over 15 s says its pieces are joined at up to 2048 px a side; a single piece doesn't", async () => {
+    const long = await est(base("cloud", "4K", { range: { start: 0, end: 20 } }));
+    expect(long.notes).toContain("A part over 15 s is made in pieces, and the pieces are joined at up to 2048 px a side");
+    const short = await est(base("cloud", "4K"));
+    expect(short.notes.join(" ")).not.toMatch(/joined at up to 2048/);
+    const k2 = await est(base("cloud", "2K", { range: { start: 0, end: 20 } }));
+    expect(k2.notes.join(" ")).not.toMatch(/joined at up to 2048/);
   });
 });
 

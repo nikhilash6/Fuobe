@@ -52,14 +52,21 @@ export const REGEN_MINUTES_PER_5S = 3;
 
 export const SHARPEN_COPY = {
   title: "Sharpen to 1080p / 2K / 4K",
-  /** Your GPU: only the character is redrawn. */
-  card: "Redraws each chosen take at 2K, then puts only your character back over the original footage. The background and the sound stay as filmed. Faces can change slightly; compare before you keep it.",
+  /** Your GPU: only the character is redrawn, at the size picked. */
+  card: (tier: string) =>
+    `Redraws each chosen take at ${tier} with Open-H3 Regenerate, then puts only your character back over the original footage. The background and the sound stay as filmed. Faces can change slightly; compare before you keep it.`,
   /** The cloud: a new render of the take (no regenerate is hosted). */
-  cardCloud:
-    "Makes each chosen take again at 2K on MiniMax H3, with the same words, references and seed, as a new version beside the first. The whole frame is redrawn, so compare before you keep it.",
+  cardCloud: (tier: string) =>
+    `Makes each chosen take again at ${tier} on MiniMax H3, with the same words, references and seed, as a new version beside the first. The whole frame is redrawn, so compare before you keep it.`,
+  /** The model each engine sharpens with, for the takes line. */
+  model: (engine: Engine, tier: string) => (engine === "open" ? `Open-H3 Regenerate at ${tier}` : `MiniMax H3 at ${tier}`),
   /** Genjutsu's Quality hint for a finishing size. */
   hint: "2K and 4K redraw the 768p swap at the higher size.",
-  hintOpen: "1080p, 2K and 4K redraw the 768p swap at the higher size.",
+  hintOpen: "1080p and 2K redraw the 768p swap at the higher size.",
+  /** Your GPU's limit, in Genjutsu's Quality hint. */
+  joinOpen: `Your GPU joins the clip at up to ${FILM_MAX} px a side, so 2K needs a clip larger than 1080p.`,
+  /** fal's 4K made in pieces: merge-videos joins them at up to 2048 px a side. */
+  joinCloud4k: `A part over 15 s is made in pieces, and the pieces are joined at up to ${FILM_MAX} px a side`,
   /** The version beside a take, and its switch. */
   version: (tier: string) => `${tier} version`,
   pick: (tier: string) => `Use the ${tier} version`,
@@ -95,36 +102,92 @@ export interface SharpenOption {
 }
 
 const sizeWords = (f: { width: number; height: number }) => `${f.width}×${f.height}`;
+const below = (tier: SharpenTier): SharpenTier | null => SHARPEN_TIERS[SHARPEN_TIERS.indexOf(tier) - 1] ?? null;
 
 /**
- * What each tier does for a film of this size on an engine. The film is joined at most 2048 px a side, so a tier larger
- * than the film's shorter edge adds nothing: your GPU offers the tiers that fit (never above the footage), the cloud
- * offers what fal makes (2K, 4K) where the join keeps it.
+ * The part of the film your GPU redraws the character in: the centre the regenerate's 16:9 / 9:16 draft keeps of H3's
+ * canvas (compositeGeometry's region). Without the canvas, the film's own shape stands in for it (H3's canvas is the
+ * clip's shape on a 32 px grid).
  */
-export function sharpenOptions(engine: Engine, film: { width: number; height: number } | null): SharpenOption[] {
+export function redrawnRegion(film: { width: number; height: number }, canvas?: { width: number; height: number }): { width: number; height: number } {
+  const { region } = compositeGeometry(film, canvas ?? film);
+  return { width: region.width, height: region.height };
+}
+
+/** The longest shorter side that part can have: the draft's 1.75 shape inside a film of at most 2048 px a side. */
+const REGION_MAX_SHORT = Math.floor((FILM_MAX * 768) / 1344);
+
+/**
+ * The tiers your GPU can never make worth it, whatever the clip: the part redrawn is at most 2048 × 1170, so 4K adds
+ * nothing over 2K. With the reason, in words.
+ */
+export const OPEN_TIER_OFF: Partial<Record<SharpenTier, string>> = Object.fromEntries(
+  SHARPEN_TIERS.filter((t) => below(t) && REGION_MAX_SHORT <= SHARPEN_SHORT_EDGE[below(t)!]).map((t) => [
+    t,
+    `Your GPU joins the clip at up to ${FILM_MAX} px a side, so ${t} adds nothing over ${below(t)}`,
+  ]),
+);
+
+/**
+ * What each tier does for a film of this size on an engine. The cloud redraws the whole frame and offers what fal makes
+ * (2K, 4K) where the join keeps it. Your GPU redraws only the character, inside the part of the frame the regenerate
+ * keeps (`canvas`: H3's canvas the swap was made at): 1080p is its base size, and a larger size is offered when that
+ * part is taller than the size below it (so it adds detail the smaller one can't).
+ */
+export function sharpenOptions(engine: Engine, film: { width: number; height: number } | null, canvas?: { width: number; height: number }): SharpenOption[] {
   const short = film ? Math.min(film.width, film.height) : 0;
+  const region = film ? redrawnRegion(film, canvas) : null;
+  const regionShort = region ? Math.min(region.width, region.height) : 0;
   return SHARPEN_TIERS.map((tier) => {
     if (engine === "cloud" && !CLOUD_TIERS.includes(tier)) return { tier, available: false, reason: "The cloud makes 2K or 4K" };
+    if (engine === "open" && OPEN_TIER_OFF[tier]) return { tier, available: false, reason: OPEN_TIER_OFF[tier] };
     if (!film) return { tier, available: engine === "cloud" && tier === "2K", ...(engine === "cloud" && tier === "2K" ? {} : { reason: SHARPEN_COPY.noSize }) };
     if (short < SHARPEN_SHORT_EDGE["1080p"]) return { tier, available: false, reason: SHARPEN_COPY.small };
-    // The cloud's 2K is the smallest it makes: always worth it over 768p, joined at the film's size.
-    if (engine === "cloud" && tier === "2K") return { tier, available: true };
-    if (SHARPEN_SHORT_EDGE[tier] <= short) return { tier, available: true };
-    return { tier, available: false, reason: `Joined at ${sizeWords(film)}, so ${tier} adds nothing to the film` };
+    if (engine === "cloud") {
+      // The cloud's 2K is the smallest it makes: always worth it over 768p, joined at the film's size.
+      if (tier === "2K" || SHARPEN_SHORT_EDGE[tier] <= short) return { tier, available: true };
+      return { tier, available: false, reason: `Joined at ${sizeWords(film)}, so ${tier} adds nothing to the film` };
+    }
+    const lower = below(tier);
+    if (!lower || regionShort > SHARPEN_SHORT_EDGE[lower]) return { tier, available: true };
+    return {
+      tier,
+      available: false,
+      reason: `Your character is redrawn in a ${sizeWords(region!)} part of the frame (the clip is joined at up to ${FILM_MAX} px a side), so ${tier} adds nothing over ${lower}`,
+    };
   });
 }
 
 /** The tier made when `asked` is picked: the largest available one not above it (null: none is). */
-export function sharpenTierFor(engine: Engine, asked: SharpenTier, film: { width: number; height: number } | null): SharpenTier | null {
-  const ok = sharpenOptions(engine, film).filter((o) => o.available).map((o) => o.tier);
+export function sharpenTierFor(engine: Engine, asked: SharpenTier, film: { width: number; height: number } | null, canvas?: { width: number; height: number }): SharpenTier | null {
+  const ok = sharpenOptions(engine, film, canvas).filter((o) => o.available).map((o) => o.tier);
   const at = SHARPEN_TIERS.indexOf(asked);
   return [...ok].reverse().find((t) => SHARPEN_TIERS.indexOf(t) <= at) ?? null;
 }
 
-/** The tier picked first: 2K where it is available, else the largest that is. */
-export function defaultSharpenTier(engine: Engine, film: { width: number; height: number } | null): SharpenTier | null {
-  const ok = sharpenOptions(engine, film).filter((o) => o.available);
-  return ok.find((o) => o.tier === "2K")?.tier ?? ok.at(-1)?.tier ?? null;
+/**
+ * The tier picked first. The cloud: 2K where it is available, else the largest that is. Your GPU: the largest the
+ * redrawn part holds in full (a larger one costs GPU time for little more), else the smallest available.
+ */
+export function defaultSharpenTier(engine: Engine, film: { width: number; height: number } | null, canvas?: { width: number; height: number }): SharpenTier | null {
+  const ok = sharpenOptions(engine, film, canvas).filter((o) => o.available);
+  if (engine === "cloud" || !film) return ok.find((o) => o.tier === "2K")?.tier ?? ok.at(-1)?.tier ?? null;
+  const r = redrawnRegion(film, canvas);
+  const short = Math.min(r.width, r.height);
+  return [...ok].reverse().find((o) => SHARPEN_SHORT_EDGE[o.tier] <= short)?.tier ?? ok[0]?.tier ?? null;
+}
+
+/**
+ * Why your GPU sharpens a clip at a smaller size than asked: the clip's own size, the 2048 px join, and the part the
+ * character is redrawn in. Null when it makes what was asked.
+ */
+export function openCapNote(source: { width?: number; height?: number }, asked: SharpenTier, canvas?: { width: number; height: number }): string | null {
+  const film = filmSize(source.width, source.height);
+  const made = sharpenTierFor("open", asked, film, canvas);
+  if (!film || !made || made === asked) return null;
+  const r = redrawnRegion(film, canvas);
+  const joined = film.width !== source.width || film.height !== source.height ? `, joined at ${sizeWords(film)} (up to ${FILM_MAX} px a side)` : ` (clips are joined at up to ${FILM_MAX} px a side)`;
+  return `Your clip is ${source.width}×${source.height}${joined}, and your character is redrawn in a ${sizeWords(r)} part of it, so it is sharpened at ${made}`;
 }
 
 /** The join's note: what a sharper take is joined at. */
@@ -165,17 +228,34 @@ function centre(frame: { width: number; height: number }, aspect: number): { wid
 const DRAFT = { width: 1344, height: 768 };
 
 /**
- * Where each layer goes in the film: the swap covers the part of the footage its canvas was cut from (H3 cover-crops the
- * clip to its canvas), the regenerate the centre of that its 16:9 or 9:16 draft kept (it stretches the draft to its
- * 16:9 grid and crops a few rows, so it is laid back over the draft's own part). Both are centred.
+ * The rows (columns, for a tall clip) each tier keeps of the grid it is drawn on: the draft is stretched to 1920 × 1088,
+ * 2560 × 1440 or 3840 × 2176, and the regenerate's finish keeps the centre 1080 of 1088 (2160 of 2176) rows.
  */
-export function compositeGeometry(film: { width: number; height: number }, canvas: { width: number; height: number }): { take: Box; region: Box } {
+const REGEN_TRIM: Record<SharpenTier, { kept: number; drawn: number }> = { "1080p": { kept: 1080, drawn: 1088 }, "2K": { kept: 1440, drawn: 1440 }, "4K": { kept: 2160, drawn: 2176 } };
+
+/**
+ * Where each layer goes in the film: the swap covers the part of the footage its canvas was cut from (H3 cover-crops the
+ * clip to its canvas), the regenerate the centre of that its 16:9 or 9:16 draft kept (`region`: it stretches the draft
+ * to its grid and keeps the centre rows of it, so at 1080p and 4K it covers the centre 1080 / 1088 of the region's
+ * height, or width for a tall clip: `regen`, at `trim` inside the region). All centred.
+ */
+export function compositeGeometry(
+  film: { width: number; height: number },
+  canvas: { width: number; height: number },
+  tier: SharpenTier = "2K",
+): { take: Box; region: Box; regen: Box; trim: { x: number; y: number } } {
   const t = centre(film, canvas.width / canvas.height);
-  const draft = canvas.height > canvas.width ? DRAFT.height / DRAFT.width : DRAFT.width / DRAFT.height;
+  const tall = canvas.height > canvas.width;
+  const draft = tall ? DRAFT.height / DRAFT.width : DRAFT.width / DRAFT.height;
   const r = centre(t, draft);
   const tx = Math.floor((film.width - t.width) / 2);
   const ty = Math.floor((film.height - t.height) / 2);
-  return { take: { ...t, x: tx, y: ty }, region: { ...r, x: tx + Math.floor((t.width - r.width) / 2), y: ty + Math.floor((t.height - r.height) / 2) } };
+  const region = { ...r, x: tx + Math.floor((t.width - r.width) / 2), y: ty + Math.floor((t.height - r.height) / 2) };
+  const k = REGEN_TRIM[tier].kept / REGEN_TRIM[tier].drawn;
+  const width = tall ? Math.round(r.width * k) : r.width;
+  const height = tall ? r.height : Math.round(r.height * k);
+  const trim = { x: Math.floor((r.width - width) / 2), y: Math.floor((r.height - height) / 2) };
+  return { take: { ...t, x: tx, y: ty }, region, regen: { width, height, x: region.x + trim.x, y: region.y + trim.y }, trim };
 }
 
 /** The mask's grown and feathered edge, in the region's pixels (about 0.8 % and 1.2 % of its shorter side). */
@@ -257,7 +337,7 @@ const fill = (input: StepInput, slot: ChainSlot): { after?: string; chain?: Chai
  */
 export function sharpenSteps(s: SharpenStepsInput): { steps: PlanStep[]; final: string } {
   const steps: PlanStep[] = [];
-  const geo = compositeGeometry(s.film, s.canvas);
+  const geo = compositeGeometry(s.film, s.canvas, s.tier);
   const edge = maskEdge(geo.region);
   const regen = frameWindows(s.frames, REGEN_WINDOW_SECONDS * FPS);
   const parts: string[] = [];
@@ -320,10 +400,15 @@ export function sharpenSteps(s: SharpenStepsInput): { steps: PlanStep[]; final: 
               canvasHeight: geo.take.height,
               takeX: geo.take.x,
               takeY: geo.take.y,
+              // The mask is cut to the region the draft kept, then to the rows the regenerate kept of it.
               regionWidth: geo.region.width,
               regionHeight: geo.region.height,
-              regionX: geo.region.x,
-              regionY: geo.region.y,
+              regenWidth: geo.regen.width,
+              regenHeight: geo.regen.height,
+              regenX: geo.regen.x,
+              regenY: geo.regen.y,
+              trimX: geo.trim.x,
+              trimY: geo.trim.y,
               maskGrow: edge.grow,
               feather: edge.feather,
             },

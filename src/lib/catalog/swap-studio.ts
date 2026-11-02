@@ -15,7 +15,7 @@
  */
 import { CHARACTER_SWAP, h3Canvas, HISTORY_CHOICES, WINDOW_CHOICES, whoWords, type SwapLora, type SwapWho } from "./character-swap";
 import { STUDIO_FPS } from "@/lib/av/scene-cuts";
-import type { SharpenTier } from "./sharpen";
+import { filmSize, type SharpenTier } from "./sharpen";
 import { wholeClipBudget } from "@/lib/av/video-finish";
 import type { Engine, PixelPoint } from "./types";
 
@@ -412,24 +412,13 @@ export function clipProblem(c: { name?: string; duration?: number; bytes?: numbe
  * The size the normaliser keeps: the clip's own, on even numbers, at most 2048 px a side (the fit graph's limit;
  * H3 works at 1 MP at most anyway).
  */
-export function normalizedSize(width?: number, height?: number): { width: number; height: number } | null {
-  if (!width || !height) return null;
-  const k = Math.min(1, 2048 / width, 2048 / height);
-  const even = (n: number) => Math.max(2, Math.floor((n * k) / 2) * 2);
-  return { width: even(width), height: even(height) };
-}
+export const normalizedSize = (width?: number, height?: number) => filmSize(width, height, "open");
 
 /**
  * The cloud assembly's frame: the clip's own shape on even numbers within fal merge-videos' 512–2048 px (every piece,
  * the clip's own and H3's 480p / 768p takes, is scaled to it before the join). Null when the clip's size is unknown.
  */
-export function cloudFilmSize(width?: number, height?: number): { width: number; height: number } | null {
-  if (!width || !height) return null;
-  // Down to 2048 on the long side; up towards 512 on the short side (as far as the long side allows).
-  const scale = Math.min(2048 / Math.max(width, height), Math.max(1, 512 / Math.min(width, height)));
-  const even = (n: number) => Math.max(2, Math.round((n * scale) / 2) * 2);
-  return { width: even(width), height: even(height) };
-}
+export const cloudFilmSize = (width?: number, height?: number) => filmSize(width, height, "cloud");
 
 /** Whether the page needs a copy of a clip to play it (the cloud keeps the upload as filmed; your GPU makes its 24 fps copy anyway). */
 export const clipNeedsPreview = (engine: Engine, clip: Pick<SwapClip, "source">) => engine === "cloud" && (clip.source.playable === false || clipExtension(clip.source.name ?? clip.source.url) === "avi");
@@ -1339,18 +1328,6 @@ export const assemblyTakes = (pieces: AssemblyPiece[]) => pieces.flatMap((p) => 
 
 /** The chosen takes Sharpen works on: every swapped segment's, in the assembly's order. */
 export const chosenTakes = (pieces: AssemblyPiece[]) => pieces.flatMap((p) => (p.kind === "take" ? [p] : []));
-
-// ---------------------------------------------------------------------------
-// Assemble → Finish
-
-/**
- * Akatz Labs' other Finish (a clean background plate and alpha mattes of the source and the character): their public
- * release can't run it (docs/research/openjutsu-6.md §4.2), so it stays on the page as not available.
- */
-export const FINISH_UNAVAILABLE = {
-  title: "Clean backplate + alpha",
-  reason: "Rebuilds the background without the person and gives your character as a layer of its own, for compositing in an editor. Not available yet.",
-} as const;
 
 // ---------------------------------------------------------------------------
 // From Genjutsu

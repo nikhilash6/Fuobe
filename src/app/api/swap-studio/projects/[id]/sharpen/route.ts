@@ -5,6 +5,6 @@ import { SharpenSchema, sharpenClip } from "@/server/swap-studio";
 export async function POST(request: Request, ctx: RouteContext<"/api/swap-studio/projects/[id]/sharpen">) {
   return handle(async () => {
     const { id } = await ctx.params;
-    return Response.json(sharpenClip(id, await body(request, SharpenSchema, "Pick a clip and a size")), { status: 201 });
+    return Response.json(await sharpenClip(id, await body(request, SharpenSchema, "Pick a clip and a size")), { status: 201 });
   }, request);
 }

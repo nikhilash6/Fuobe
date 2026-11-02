@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import type { PlanStep } from "@/lib/catalog/shorts";
-import type { GenInput } from "@/lib/catalog/types";
+import type { GenerationRequest, GenInput } from "@/lib/catalog/types";
 
 // Character swap in 2K (package n7-4-character-swap-2k): Genjutsu's 1080p / 2K / 4K and Character Swap Studio's Sharpen,
 // on both engines. Your GPU: the 768p swap regenerated (sigma 0.8, never above the footage's size), then only the
@@ -16,7 +16,8 @@ afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 const S = await import("@/lib/catalog/sharpen");
 const C = await import("@/lib/catalog/character-swap");
 const G = await import("@/lib/catalog/genjutsu");
-const { DEFAULT_SETTINGS, newShot, assemblyTakes, chosenTakes, usedFinish, FINISH_UNAVAILABLE } = await import("@/lib/catalog/swap-studio");
+const { DEFAULT_SETTINGS, newShot, assemblyTakes, chosenTakes, usedFinish, normalizedSize, cloudFilmSize } = await import("@/lib/catalog/swap-studio");
+const { applyEdit, shotBusy } = await import("@/lib/catalog/swap-studio-edit");
 type SwapClip = import("@/lib/catalog/swap-studio").SwapClip;
 type SwapProject = import("@/lib/catalog/swap-studio").SwapProject;
 type SwapTake = import("@/lib/catalog/swap-studio").SwapTake;
@@ -101,28 +102,84 @@ describe("prices", () => {
     expect(qualityShort("cloud", "768p")).toBe("H3's native top");
     expect(qualityHint("cloud", "2K")).toBe("2K and 4K redraw the 768p swap at the higher size. $0.81 for 5 s, $2.44 for 15 s.");
     expect(qualityHint("cloud", "4K")).toBe("2K and 4K redraw the 768p swap at the higher size. $1.00 for 5 s, $3.00 for 15 s.");
-    expect(qualityHint("open", "2K")).toMatch(/^1080p, 2K and 4K redraw the 768p swap at the higher size\. Free on your GPU, about 3 min more per 5 s on a 72 GB GPU/);
+    expect(qualityHint("open", "2K")).toBe(
+      "1080p and 2K redraw the 768p swap at the higher size. Free on your GPU, about 3 min more per 5 s on a 72 GB GPU. Your GPU joins the clip at up to 2048 px a side, so 2K needs a clip larger than 1080p.",
+    );
     expect(qualityHint("open", "480p")).toBe("Faster and cheaper");
+  });
+
+  it("your GPU's 4K is turned off with the reason (it joins at up to 2048 px a side); the cloud's isn't", async () => {
+    const { qualityOff } = await import("@/components/genjutsu/character-panel");
+    expect(S.OPEN_TIER_OFF).toEqual({ "4K": "Your GPU joins the clip at up to 2048 px a side, so 4K adds nothing over 2K" });
+    expect(qualityOff("open", "4K")).toBe(S.OPEN_TIER_OFF["4K"]);
+    expect(["480p", "768p", "1080p", "2K"].map((q) => qualityOff("open", q as never))).toEqual([null, null, null, null]);
+    expect(qualityOff("cloud", "4K")).toBeNull();
+    // The picker says why as text the page shows (and links it to the group), not only in a tooltip.
+    const panel = fs.readFileSync(path.join(ROOT, "src/components/genjutsu/character-panel.tsx"), "utf8");
+    expect(panel).toMatch(/describedBy=\{offReasons\.length \? "character-quality-off"/);
+    expect(panel).toMatch(/id="character-quality-off"/);
   });
 });
 
 describe("what each engine makes of a size", () => {
-  it("your GPU: never above the footage (joined at most 2048 px a side)", () => {
+  it("your GPU: tiers gated and defaulted by the part the character is redrawn in (joined at most 2048 px a side)", () => {
     const film = S.filmSize(1920, 1080)!;
     expect(film).toEqual({ width: 1920, height: 1080 });
-    expect(S.sharpenOptions("open", film).map((o) => [o.tier, o.available])).toEqual([
+    const canvas = C.h3Canvas(1920, 1080, "768p");
+    expect(S.redrawnRegion(film, canvas)).toEqual({ width: 1842, height: 1052 });
+    expect(S.sharpenOptions("open", film, canvas).map((o) => [o.tier, o.available])).toEqual([
       ["1080p", true],
       ["2K", false],
       ["4K", false],
     ]);
-    expect(S.sharpenOptions("open", film)[1].reason).toBe("Joined at 1920×1080, so 2K adds nothing to the film");
-    expect(S.sharpenTierFor("open", "4K", film)).toBe("1080p");
-    expect(S.defaultSharpenTier("open", film)).toBe("1080p");
-    // A 4K square is kept at 2048 × 2048: 2K fits, 4K doesn't.
-    expect(S.sharpenTierFor("open", "4K", S.filmSize(4096, 4096))).toBe("2K");
+    expect(S.sharpenOptions("open", film, canvas)[1].reason).toBe("Your character is redrawn in a 1842×1052 part of the frame (the clip is joined at up to 2048 px a side), so 2K adds nothing over 1080p");
+    expect(S.sharpenOptions("open", film, canvas)[2].reason).toBe(S.OPEN_TIER_OFF["4K"]);
+    expect(S.sharpenTierFor("open", "4K", film, canvas)).toBe("1080p");
+    expect(S.defaultSharpenTier("open", film, canvas)).toBe("1080p");
+    // A 1440 square: the regenerate's 16:9 draft keeps a 1440 × 822 band of it, so 2K adds nothing there.
+    const sq1440 = S.filmSize(1440, 1440)!;
+    expect(S.redrawnRegion(sq1440, C.h3Canvas(1440, 1440, "768p"))).toEqual({ width: 1440, height: 822 });
+    expect(S.sharpenTierFor("open", "2K", sq1440, C.h3Canvas(1440, 1440, "768p"))).toBe("1080p");
+    // 4:3 at 2048 × 1536 (2048 × 1170 redrawn) and a 4K square (kept at 2048 × 2048): 2K adds a little and can be
+    // picked, but 1080p is the default, since neither part is 1440 tall.
+    for (const [w, h] of [
+      [2048, 1536],
+      [4096, 4096],
+    ]) {
+      const f = S.filmSize(w, h)!;
+      const c = C.h3Canvas(w, h, "768p");
+      expect(Math.min(S.redrawnRegion(f, c).width, S.redrawnRegion(f, c).height)).toBe(1170);
+      expect(S.sharpenTierFor("open", "4K", f, c)).toBe("2K");
+      expect(S.defaultSharpenTier("open", f, c)).toBe("1080p");
+    }
+    // Without the canvas, the film's own shape stands in for it.
+    expect(S.redrawnRegion(film)).toEqual({ width: 1890, height: 1080 });
     // Below 1080p the 768p takes already match it.
     expect(S.sharpenTierFor("open", "2K", S.filmSize(1280, 720))).toBeNull();
     expect(S.sharpenOptions("open", S.filmSize(1280, 720))[0].reason).toBe(S.SHARPEN_COPY.small);
+  });
+
+  it("Genjutsu's note names the clip's own size, the 2048 px join and the part redrawn when a size is capped", () => {
+    expect(S.openCapNote({ width: 3840, height: 2160 }, "4K", C.h3Canvas(3840, 2160, "768p"))).toBe(
+      "Your clip is 3840×2160, joined at 2048×1152 (up to 2048 px a side), and your character is redrawn in a 1964×1122 part of it, so it is sharpened at 2K",
+    );
+    expect(S.openCapNote({ width: 1920, height: 1080 }, "2K", C.h3Canvas(1920, 1080, "768p"))).toBe(
+      "Your clip is 1920×1080 (clips are joined at up to 2048 px a side), and your character is redrawn in a 1842×1052 part of it, so it is sharpened at 1080p",
+    );
+    expect(S.openCapNote({ width: 1920, height: 1080 }, "1080p", C.h3Canvas(1920, 1080, "768p"))).toBeNull();
+  });
+
+  it("the studio's film sizes are sharpen.ts's (one copy of the rule)", () => {
+    for (const [w, h] of [
+      [3840, 2160],
+      [72, 128],
+      [1080, 1920],
+    ]) {
+      expect(normalizedSize(w, h)).toEqual(S.filmSize(w, h, "open"));
+      expect(cloudFilmSize(w, h)).toEqual(S.filmSize(w, h, "cloud"));
+    }
+    expect(normalizedSize(3840, 2160)).toEqual({ width: 2048, height: 1152 });
+    expect(cloudFilmSize(72, 128)).toEqual({ width: 512, height: 910 });
   });
 
   it("the cloud: 2K and 4K only (no 1080P on fal); 4K adds nothing to a film joined at 2048 px", () => {
@@ -166,6 +223,27 @@ describe("the composite's geometry and windows", () => {
     expect(sq.region).toMatchObject({ width: 2048, x: 0 });
     expect(sq.region.y).toBe(Math.floor((2048 - sq.region.height) / 2));
     expect(S.maskEdge({ width: 1888, height: 1080 })).toEqual({ grow: 9, feather: 13 });
+  });
+
+  it("at 1080p and 4K the regenerate covers the centre 1080 / 1088 (2160 / 2176) of the region: its finish trims the grid's rows", () => {
+    const film = { width: 1920, height: 1080 };
+    const canvas = C.h3Canvas(1920, 1080, "768p");
+    const hd = S.compositeGeometry(film, canvas, "1080p");
+    expect(hd.region).toEqual({ width: 1842, height: 1052, x: 39, y: 14 });
+    // 1052 × 1080 / 1088 = 1044.3 rows, 4 above and 4 below.
+    expect(hd.regen).toEqual({ width: 1842, height: 1044, x: 39, y: 18 });
+    expect(hd.trim).toEqual({ x: 0, y: 4 });
+    // 2K is drawn on 1440 rows and keeps them all.
+    const k2 = S.compositeGeometry(film, canvas, "2K");
+    expect(k2.regen).toEqual({ ...k2.region });
+    expect(k2.trim).toEqual({ x: 0, y: 0 });
+    // 4K keeps 2160 of 2176 rows.
+    expect(S.compositeGeometry(film, canvas, "4K").regen.height).toBe(Math.round((1052 * 2160) / 2176));
+    // A tall clip: the columns are trimmed.
+    const tall = S.compositeGeometry({ width: 1080, height: 1920 }, C.h3Canvas(1080, 1920, "768p"), "1080p");
+    expect(tall.regen.height).toBe(tall.region.height);
+    expect(tall.regen.width).toBe(Math.round((tall.region.width * 1080) / 1088));
+    expect(tall.regen.x - tall.region.x).toBe(tall.trim.x);
   });
 
   it("windows: equal, never a sliver, every frame once", () => {
@@ -347,15 +425,33 @@ describe("Character Swap Studio: Sharpen", () => {
     expect(plan.steps.find((s) => s.request.inputs?.video === "/api/files/outputs/x/sharp.mp4")).toBeTruthy();
   });
 
-  it("Finish keeps Clean backplate + alpha on the page, not available", () => {
-    expect(FINISH_UNAVAILABLE.title).toBe("Clean backplate + alpha");
+  it("Finish is Sharpen alone: its card names the size picked and the model, and says why a size can't be picked", () => {
     const page = fs.readFileSync(path.join(ROOT, "src/components/swap-studio/stage-review.tsx"), "utf8");
-    expect(page).toMatch(/FINISH_UNAVAILABLE\.title/);
-    expect(page).toMatch(/Not available/);
     expect(page).toMatch(/SHARPEN_COPY\.title/);
-    expect(S.SHARPEN_COPY.card).toBe(
-      "Redraws each chosen take at 2K, then puts only your character back over the original footage. The background and the sound stay as filmed. Faces can change slightly; compare before you keep it.",
+    expect(page).not.toMatch(/backplate|Not available/i);
+    expect(page).toMatch(/describedBy=\{off\.length \? offId : undefined\}/);
+    expect(S.SHARPEN_COPY.card("1080p")).toBe(
+      "Redraws each chosen take at 1080p with Open-H3 Regenerate, then puts only your character back over the original footage. The background and the sound stay as filmed. Faces can change slightly; compare before you keep it.",
     );
+    expect(S.SHARPEN_COPY.cardCloud("2K")).toMatch(/^Makes each chosen take again at 2K on MiniMax H3/);
+    expect(S.SHARPEN_COPY.model("open", "1080p")).toBe("Open-H3 Regenerate at 1080p");
+    expect(S.SHARPEN_COPY.model("cloud", "2K")).toBe("MiniMax H3 at 2K");
+  });
+
+  it("a take's sharper version still being made keeps its take and its shot's layout from changing", () => {
+    const x = studio("open");
+    const finish = { id: "finish-1", createdAt: 2, engine: "open" as const, asked: "1080p" as const, tier: "1080p" as const, genId: "g-fin", stepIds: ["g-regen", "g-fin"], use: false };
+    const shot = { ...x.shot, segments: [{ ...x.seg, takes: [{ ...x.take, finish }] }] };
+    const project = { ...x.project, clips: [{ ...x.clip, shots: [shot] }] };
+    const running = (id: string) => id === "g-regen";
+    expect(shotBusy(shot, running)).toBe(true);
+    expect(shotBusy(shot, () => false)).toBe(false);
+    const ref = { clipId: x.clip.id, shotId: shot.id, segmentId: x.seg.id, takeId: x.take.id };
+    expect(() => applyEdit(project, { type: "take", ...ref, remove: true }, { active: running })).toThrow(/sharper version is still being made/);
+    expect(() => applyEdit(project, { type: "remove-clip", clipId: x.clip.id } as never, { active: running })).toThrow(/Wait for this clip's takes/);
+    // Done: the take can go (with its version).
+    const out = applyEdit(project, { type: "take", ...ref, remove: true }, { active: () => false });
+    expect(out.clips[0].shots[0].segments![0].takes).toHaveLength(0);
   });
 });
 
@@ -363,12 +459,17 @@ describe("Character Swap Studio: Sharpen", () => {
 // The graph
 
 describe("the GPU pre-flight", () => {
-  it("has a Character swap in 2K row on the regenerate, the composite and the join", async () => {
+  it("has a Character swap in 2K row on every graph Genjutsu's GPU run takes: the swap, the mask, the fit, the regenerate, the composite, the join and the mux", async () => {
     const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
     const row = STUDIO_ROWS.find((r) => r.label === "Character swap in 2K")!;
     expect(row).toMatchObject({ href: "/genjutsu?mode=character", group: "Video tools" });
+    // Every model the open 2K plan runs has its step on the row.
+    // (The optional anchor frame has its own models and rows.)
+    const planned = character("open", "2K").steps.filter((s) => s.key !== "frame" && s.key !== "anchor");
+    const listed = row.steps!.map((s) => `${s.modelId}#${s.op}`);
+    expect([...new Set(planned.map((s) => `${s.request.modelId}#${s.request.op}`))].sort()).toEqual([...listed].sort());
     const t = studioTool(row)!;
-    expect(t.workflows).toEqual(expect.arrayContaining(["video-regenerate-h3", "video-composite-mask", "video-concat-encoded"]));
+    expect(t.workflows).toEqual(expect.arrayContaining(["video-regenerate-h3", "video-composite-mask", "video-concat-encoded", "video-mask-h3-relay"]));
     expect(t.loras.map((l) => l.file)).toContain("open_h3_regenerate_2k_lora.safetensors");
   });
 });
@@ -379,13 +480,30 @@ describe("video-composite-mask", () => {
   it("is core nodes only, validated, with the bindings the plan fills", () => {
     expect(manifest).toMatchObject({ capability: "composite", vramGb: 0, validated: true });
     expect(Object.keys(manifest.bindings).sort()).toEqual(
-      ["video", "video2", "video3", "mask", "startTime", "windowStart", "takeStart", "maskStart", "duration", "canvasWidth", "canvasHeight", "takeX", "takeY", "regionWidth", "regionHeight", "regionX", "regionY", "maskGrow", "feather", "filenamePrefix"].sort(),
+      [
+        ...["video", "video2", "video3", "mask", "startTime", "windowStart", "takeStart", "maskStart", "duration", "canvasWidth", "canvasHeight", "takeX", "takeY"],
+        ...["regionWidth", "regionHeight", "regenWidth", "regenHeight", "regenX", "regenY", "trimX", "trimY", "maskGrow", "feather", "filenamePrefix"],
+      ].sort(),
     );
     const graph = JSON.parse(fs.readFileSync(path.join(ROOT, "workflows/comfyui/video-composite-mask.json"), "utf8")) as Record<string, { class_type: string }>;
     expect(new Set(Object.values(graph).map((n) => n.class_type))).toEqual(
-      new Set(["LoadVideo", "Video Slice", "GetVideoComponents", "ImageScale", "ImageToMask", "GrowMask", "FeatherMask", "ImageCompositeMasked", "CreateVideo", "SaveVideo"]),
+      new Set(["LoadVideo", "Video Slice", "GetVideoComponents", "ImageScale", "ImageToMask", "CropMask", "GrowMask", "FeatherMask", "ImageCompositeMasked", "CreateVideo", "SaveVideo"]),
     );
     expect(getModel(S.COMPOSITE_MODEL)).toMatchObject({ engine: "open", hidden: true });
+  });
+
+  it("a run keeps the person's mask (it isn't taken for a painted one) and needs the three clips and the mask", async () => {
+    const { applySketch } = await import("@/lib/catalog/sketch");
+    const { missingInputs } = await import("@/lib/catalog/plan");
+    const m = getModel(S.COMPOSITE_MODEL)!;
+    const req = { feature: "genjutsu-step", modelId: m.id, op: "composite" as const, inputs: { videos: ["/s.mp4", "/r.mp4", "/t.mp4"], mask: "/m.mp4" } } as GenerationRequest;
+    const kept = applySketch(req, m);
+    expect(kept.request.inputs).toEqual(req.inputs);
+    expect(kept.note).toBeUndefined();
+    expect(missingInputs("composite", req)).toBeNull();
+    const msg = "Add the footage, the redrawn clip, the swap and the person's mask to put the character back over it";
+    expect(missingInputs("composite", { inputs: { videos: ["/s.mp4", "/r.mp4"], mask: "/m.mp4" } })).toBe(msg);
+    expect(missingInputs("composite", { inputs: { videos: ["/s.mp4", "/r.mp4", "/t.mp4"] } })).toBe(msg);
   });
 
   it("the provider puts the footage, the regenerate, the swap, the mask and the composite's places on their nodes", async () => {
@@ -404,8 +522,12 @@ describe("video-composite-mask", () => {
     expect([at("source_slice", "duration"), at("regen_slice", "duration"), at("take_slice", "duration"), at("mask_slice", "duration")]).toEqual([2.5, 2.5, 2.5, 2.5]);
     expect([at("regen_slice", "start_time"), at("take_slice", "start_time"), at("mask_slice", "start_time")]).toEqual([0, 0, 0]);
     expect([at("take_scaled", "width"), at("take_scaled", "height"), at("base", "x"), at("base", "y")]).toEqual([extra.canvasWidth, extra.canvasHeight, extra.takeX, extra.takeY]);
-    expect([at("regen_scaled", "width"), at("regen_mask_img", "height"), at("composite", "x"), at("composite", "y")]).toEqual([extra.regionWidth, extra.regionHeight, extra.regionX, extra.regionY]);
+    expect([at("regen_mask_img", "width"), at("regen_mask_img", "height")]).toEqual([extra.regionWidth, extra.regionHeight]);
     expect(at("regen_mask_img", "crop")).toBe("center");
+    // The regenerate and its mask: the rows its finish kept (1044 of the region's 1052 at 1080p), 4 rows down.
+    expect([at("regen_scaled", "width"), at("regen_scaled", "height"), at("composite", "x"), at("composite", "y")]).toEqual([extra.regenWidth, extra.regenHeight, extra.regenX, extra.regenY]);
+    expect([at("regen_trim", "x"), at("regen_trim", "y"), at("regen_trim", "width"), at("regen_trim", "height")]).toEqual([extra.trimX, extra.trimY, extra.regenWidth, extra.regenHeight]);
+    expect(extra).toMatchObject({ regionWidth: 1842, regionHeight: 1052, regenWidth: 1842, regenHeight: 1044, regenX: 39, regenY: 18, trimX: 0, trimY: 4 });
     expect([at("take_grow", "expand"), at("regen_feather", "bottom")]).toEqual([extra.maskGrow, extra.feather]);
   });
 });

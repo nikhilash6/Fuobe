@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Download, Film, Library, Loader2, Play, Sparkles, Star } from "lucide-react";
+import { Download, Film, Library, Loader2, Play, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -9,8 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Panel } from "@/components/av/tool-shell";
 import { Segmented } from "@/components/faceless/controls";
 import { Segmented as SizePicker } from "@/components/shorts/ui";
-import { useIsOwner } from "@/lib/api";
-import { characterLicenceLine } from "@/lib/catalog/character-swap";
+import { characterLicenceLine, h3Canvas } from "@/lib/catalog/character-swap";
 import { defaultSharpenTier, filmSize, gpuMinutes, joinNote, SHARPEN_COPY, sharpenOptions, type SharpenTier } from "@/lib/catalog/sharpen";
 import {
   assemblyPieces,
@@ -18,7 +17,6 @@ import {
   chosenTakes,
   currentSegments,
   DECISION_LABELS,
-  FINISH_UNAVAILABLE,
   jobState,
   secondsLabel,
   SWAP_STUDIO,
@@ -146,25 +144,23 @@ function FinishVersion({ take, gens, onUse }: { take: SwapTake; gens: Record<str
   );
 }
 
-/**
- * Assemble → Finish: "Sharpen to 1080p / 2K / 4K" (runnable: the size, its price or GPU time, Run) beside Akatz Labs'
- * "Clean backplate + alpha", which stays not available (shown to the owner).
- */
+/** Assemble → Finish: "Sharpen to 1080p / 2K / 4K" (runnable: the size, its price or GPU time, Run). */
 function FinishPanel({ id, project, clip, gens, estimate }: Pick<StageProps, "id" | "project" | "clip" | "gens" | "estimate">) {
-  const owner = useIsOwner();
   const sharpen = useSharpen(id);
   const stop = useStopJob(id);
   const engine = project.engine;
   const film = filmSize(clip.source.width, clip.source.height, engine);
-  const options = sharpenOptions(engine, film);
-  const fallback = defaultSharpenTier(engine, film);
+  // Your GPU redraws the character inside the part of H3's canvas the regenerate keeps.
+  const canvas = film ? h3Canvas(film.width, film.height, "768p") : undefined;
+  const options = sharpenOptions(engine, film, canvas);
+  const fallback = defaultSharpenTier(engine, film, canvas);
   const [picked, setPicked] = useState<SharpenTier | null>(null);
   const tier = picked && options.some((o) => o.tier === picked && o.available) ? picked : fallback;
   const found = assemblyPieces(project, clip);
   const chosen = "pieces" in found ? chosenTakes(found.pieces) : [];
   const finishes = chosen.map((p) => p.take.finish).filter((f) => !!f && (!tier || f.tier === tier));
   const states = finishes.map((f) => jobState(f!.genId, f!.stepIds, gens).status);
-  const busy = states.some((x) => x === "queued" || x === "running");
+  const busy = chosen.some((p) => p.take.finish && ["queued", "running"].includes(jobState(p.take.finish.genId, p.take.finish.stepIds, gens).status));
   // Every chosen take has a version at this size made or on its way: nothing for Sharpen to do.
   const allMade = chosen.length > 0 && finishes.length === chosen.length && states.every((x) => x !== "failed" && x !== "canceled" && x !== "missing");
   const ready = states.filter((x) => x === "succeeded").length;
@@ -174,64 +170,63 @@ function FinishPanel({ id, project, clip, gens, estimate }: Pick<StageProps, "id
   const problem = "problem" in found ? SHARPEN_COPY.none : !tier ? (options.find((o) => o.reason)?.reason ?? SHARPEN_COPY.small) : null;
   const priceLine = engine === "open" ? (estimate?.demo ? priceText(0, { demo: true, engine }) : `Free on your GPU · ${gpuMinutes(seconds)}`) : priceText(cost, { demo: estimate?.demo, engine });
   const join = joinNote(film);
+  const shownTier = tier ?? (engine === "cloud" ? "2K" : "1080p");
+  // Why a size can't be picked, said under the picker (a turned-off button can't take focus or show a tooltip on touch).
+  const off = problem ? [] : options.filter((o) => !o.available && o.reason);
+  const offId = `sharpen-off-${clip.id}`;
   return (
     <Panel title="Finish">
-      <div className="grid gap-3 lg:grid-cols-2">
-        <section aria-labelledby="sharpen-title" className="min-w-0 space-y-3 rounded-xl border p-3">
-          <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h3 id="sharpen-title" className="text-[13px] font-semibold">
-              {SHARPEN_COPY.title}
-            </h3>
-            <span className="font-mono text-[11px] text-muted-foreground">{priceLine}</span>
-          </div>
-          <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{engine === "open" ? SHARPEN_COPY.card : SHARPEN_COPY.cardCloud}</p>
-          <SizePicker
-            label="Sharpen to"
-            value={tier ?? "2K"}
-            onChange={setPicked}
-            options={options.map((o) => ({ value: o.tier, label: o.tier, disabled: !o.available, title: o.reason }))}
-          />
-          {chosen.length > 0 && (
-            <p className="text-[12px] text-muted-foreground">
-              {chosen.length} chosen take{chosen.length === 1 ? "" : "s"} · {Math.round(seconds * 10) / 10} s{engine === "cloud" && tier ? ` · MiniMax H3 at ${tier}` : engine === "open" ? " · MiniMax H3 regenerate" : ""}
-            </p>
-          )}
-          {problem ? <Note tone="warn">{problem}</Note> : join ? <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{join}</p> : null}
-          {est?.problem && !problem && <Note tone="warn">{est.problem}</Note>}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              className="h-9 rounded-full"
-              disabled={!!problem || !tier || sharpen.isPending || busy || allMade}
-              onClick={() => tier && sharpen.mutate({ clipId: clip.id, tier }, { onSuccess: () => toast(`Sharpening the chosen takes to ${tier}`), onError: (e) => toastError(e) })}
-            >
-              {sharpen.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Sharpen{tier ? ` to ${tier}` : ""}
-            </Button>
-            {finishes.length > 0 && (
-              <span className="text-[12px] text-muted-foreground">
-                {ready} of {chosen.length} ready{ready ? " · compare and pick them in Takes & review" : ""}
-              </span>
-            )}
-            {busy && (
-              <Button size="sm" variant="ghost" className="h-8 rounded-full" onClick={() => stop.mutate({ kind: "finish", clipId: clip.id })}>
-                Stop
-              </Button>
-            )}
-          </div>
-        </section>
-        {owner && (
-          <section aria-labelledby="backplate-title" className="min-w-0 space-y-2 rounded-xl border border-dashed p-3">
-            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-              <h3 id="backplate-title" className="text-[13px] font-semibold">
-                {FINISH_UNAVAILABLE.title}
-              </h3>
-              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                <Ban className="size-3" /> Not available
-              </span>
-            </div>
-            <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{FINISH_UNAVAILABLE.reason}</p>
-          </section>
+      <section aria-labelledby="sharpen-title" className="min-w-0 space-y-3 rounded-xl border p-3">
+        <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <h3 id="sharpen-title" className="text-[13px] font-semibold">
+            {SHARPEN_COPY.title}
+          </h3>
+          <span className="font-mono text-[11px] text-muted-foreground">{priceLine}</span>
+        </div>
+        <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{engine === "open" ? SHARPEN_COPY.card(shownTier) : SHARPEN_COPY.cardCloud(shownTier)}</p>
+        <SizePicker
+          label="Sharpen to"
+          value={shownTier}
+          onChange={setPicked}
+          describedBy={off.length ? offId : undefined}
+          options={options.map((o) => ({ value: o.tier, label: o.tier, disabled: !o.available, title: o.reason }))}
+        />
+        {off.length > 0 && (
+          <ul id={offId} className="space-y-0.5 text-[12px] leading-snug text-pretty text-muted-foreground">
+            {off.map((o) => (
+              <li key={o.tier}>
+                <span className="font-medium text-foreground">{o.tier}:</span> {o.reason}
+              </li>
+            ))}
+          </ul>
         )}
-      </div>
+        {chosen.length > 0 && (
+          <p className="text-[12px] text-muted-foreground">
+            {chosen.length} chosen take{chosen.length === 1 ? "" : "s"} · {Math.round(seconds * 10) / 10} s{tier ? ` · ${SHARPEN_COPY.model(engine, tier)}` : ""}
+          </p>
+        )}
+        {problem ? <Note tone="warn">{problem}</Note> : join ? <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{join}</p> : null}
+        {est?.problem && !problem && <Note tone="warn">{est.problem}</Note>}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            className="h-9 rounded-full"
+            disabled={!!problem || !tier || sharpen.isPending || busy || allMade}
+            onClick={() => tier && sharpen.mutate({ clipId: clip.id, tier }, { onSuccess: () => toast(`Sharpening the chosen takes to ${tier}`), onError: (e) => toastError(e) })}
+          >
+            {sharpen.isPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Sharpen{tier ? ` to ${tier}` : ""}
+          </Button>
+          {finishes.length > 0 && (
+            <span className="text-[12px] text-muted-foreground">
+              {ready} of {chosen.length} ready{ready ? " · compare and pick them in Takes & review" : ""}
+            </span>
+          )}
+          {busy && (
+            <Button size="sm" variant="ghost" className="h-8 rounded-full" onClick={() => stop.mutate({ kind: "finish", clipId: clip.id })}>
+              Stop
+            </Button>
+          )}
+        </div>
+      </section>
     </Panel>
   );
 }
@@ -318,7 +313,7 @@ export function ReviewStage(props: StageProps) {
   );
 }
 
-/** Assemble: the chosen takes over the original timeline with the clip's own sound, and Finish (Sharpen; the backplate not available). */
+/** Assemble: the chosen takes over the original timeline with the clip's own sound, and Finish (Sharpen). */
 export function AssembleStage({ id, project, clip, gens, estimate }: StageProps) {
   const assemble = useAssemble(id);
   const stop = useStopJob(id);

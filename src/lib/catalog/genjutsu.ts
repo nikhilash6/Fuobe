@@ -1221,8 +1221,10 @@ export function h3Extra(c: CharacterOptions | undefined): Record<string, unknown
  */
 function openFinish(input: GenjutsuPlanInput, asked: SharpenTier, quality: string) {
   const film = filmSize(input.source.width, input.source.height);
-  const tier = sharpenTierFor("open", asked, film);
   if (!film) throw new Error(SHARPEN_COPY.noSize);
+  // H3's canvas the swap is made at: your character is redrawn inside the part of it the regenerate keeps.
+  const canvas = h3Canvas(input.source.width!, input.source.height!, quality);
+  const tier = sharpenTierFor("open", asked, film, canvas);
   if (!tier) throw new Error(SHARPEN_COPY.small);
   const c = input.character ?? {};
   const helper = { feature: GENJUTSU.stepFeature, batchTitle: input.title };
@@ -1236,7 +1238,7 @@ function openFinish(input: GenjutsuPlanInput, asked: SharpenTier, quality: strin
       key: "mask",
       request: {
         ...helper,
-        modelId: FINISH_TOOLS.mask,
+        modelId: SHARPEN_TOOLS.mask,
         op: "bg-remove-video",
         prompt: (typeof h3.maskPrompt === "string" && h3.maskPrompt) || "person",
         inputs: { video: input.source.url },
@@ -1260,7 +1262,7 @@ function openFinish(input: GenjutsuPlanInput, asked: SharpenTier, quality: strin
     });
     steps.push({
       key: "fit",
-      request: { ...helper, modelId: FINISH_TOOLS.fit, op: "trim", inputs: { video: input.source.url }, params: { startTime: start, endTime: end, fps: 24, extra: { ...film } }, step: { label: "The part at 24 fps", index: 0, of: 1 } },
+      request: { ...helper, modelId: SHARPEN_TOOLS.fit, op: "trim", inputs: { video: input.source.url }, params: { startTime: start, endTime: end, fps: 24, extra: { ...film } }, step: { label: "The part at 24 fps", index: 0, of: 1 } },
     });
     const sound = !!input.source.hasAudio;
     const made = sharpenSteps({
@@ -1277,14 +1279,14 @@ function openFinish(input: GenjutsuPlanInput, asked: SharpenTier, quality: strin
       source: { after: "fit", start: 0 },
       mask: { after: "mask", start: 0 },
       film,
-      canvas: h3Canvas(input.source.width!, input.source.height!, quality),
+      canvas,
     });
     steps.push(...made.steps);
     if (!sound) return { final: made.final, sound: false };
     // The part's own sound over the whole of it (the composites' slices of it would meet at every window).
     steps.push({
       key: "sound",
-      request: { ...base, modelId: FINISH_TOOLS.mux, op: "mux", step: { label: "Put the clip's sound back", index: 1200, of: 1000 } },
+      request: { ...base, modelId: SHARPEN_TOOLS.mux, op: "mux", step: { label: "Put the clip's sound back", index: 1200, of: 1000 } },
       after: [made.final, "fit"],
       chain: [{ slot: "video" }, { slot: "audio" }],
     });
@@ -1293,7 +1295,7 @@ function openFinish(input: GenjutsuPlanInput, asked: SharpenTier, quality: strin
 }
 
 /** Your GPU's finishing helpers: SAM 3.1's mask of a shot (H3 Relay), the 24 fps fit, the soundtrack. */
-const FINISH_TOOLS = { mask: "oss-h3-person-mask", fit: "oss-fit-clip", mux: "oss-mux" } as const;
+export const SHARPEN_TOOLS = { mask: "oss-h3-person-mask", fit: "oss-fit-clip", mux: "oss-mux" } as const;
 
 /**
  * Character swap on MiniMax H3. Open: one job on the upload (the graph trims the part, finds the person with SAM 3.1,

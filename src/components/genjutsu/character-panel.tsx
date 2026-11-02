@@ -30,7 +30,7 @@ import {
   type SwapWho,
 } from "@/lib/catalog/character-swap";
 import type { GenjutsuTarget, Maker } from "@/lib/catalog/genjutsu";
-import { cloudSharpenUsd, SHARPEN_COPY } from "@/lib/catalog/sharpen";
+import { cloudSharpenUsd, OPEN_TIER_OFF, SHARPEN_COPY, type SharpenTier } from "@/lib/catalog/sharpen";
 import type { Engine } from "@/lib/catalog/types";
 
 /** The Quality field's short hint: H3's own sizes in words, a finishing size's price (cloud) or "Free · your GPU". */
@@ -44,10 +44,13 @@ export function qualityShort(engine: Engine, q: CharacterChoice): string {
 export function qualityHint(engine: Engine, q: CharacterChoice): string {
   const finish = characterFinish(q);
   if (!finish) return qualityShort(engine, q);
-  if (engine === "open") return `${SHARPEN_COPY.hintOpen} Free on your GPU, about 3 min more per 5 s on a 72 GB GPU, never above your clip's own size.`;
+  if (engine === "open") return `${SHARPEN_COPY.hintOpen} Free on your GPU, about 3 min more per 5 s on a 72 GB GPU. ${SHARPEN_COPY.joinOpen}`;
   const usd = (s: number) => `$${(cloudSharpenUsd(finish, s) ?? 0).toFixed(2)}`;
   return `${SHARPEN_COPY.hint} ${usd(5)} for 5 s, ${usd(15)} for 15 s.`;
 }
+
+/** Why a quality can't be picked on this engine (your GPU's 4K: it joins the clip at up to 2048 px a side), or null. */
+export const qualityOff = (engine: Engine, q: CharacterChoice): string | null => (engine === "open" ? (OPEN_TIER_OFF[q as SharpenTier] ?? null) : null);
 
 /** A helper the panel offers (Describe my character, the clip's words): its action, whether it's running or can run. */
 export interface PanelHelper {
@@ -96,7 +99,9 @@ export function CharacterControls({
   const h3 = !!maker?.h3;
   // Each engine's sizes (the cloud has no 1080p); a size the other engine offered shows as the swap's own.
   const offered = (maker?.qualities as CharacterChoice[] | undefined) ?? CHARACTER_QUALITIES[engine];
-  const shown: CharacterChoice = offered.includes(quality) ? quality : characterQuality(quality);
+  // A size this engine can't make worth it (your GPU's 4K) shows as the largest below it that it can.
+  const shown: CharacterChoice = !offered.includes(quality) ? characterQuality(quality) : qualityOff(engine, quality) ? ([...offered].reverse().find((q) => q !== quality && !qualityOff(engine, q) && characterFinish(q)) ?? "768p") : quality;
+  const offReasons = offered.flatMap((q) => (qualityOff(engine, q) ? [{ q, reason: qualityOff(engine, q)! }] : []));
   const open = engine === "open";
   const anchors = ANCHOR_MODELS[engine];
   const who: SwapWho = value.who ?? "largest";
@@ -153,8 +158,19 @@ export function CharacterControls({
 
       {h3 && (
         <Field label="Quality" hint={qualityShort(engine, shown)}>
-          <Segmented label="Quality" value={shown} onChange={onQuality} options={offered.map((q) => ({ value: q, label: q }))} />
+          <Segmented
+            label="Quality"
+            value={shown}
+            onChange={onQuality}
+            describedBy={offReasons.length ? "character-quality-off" : undefined}
+            options={offered.map((q) => ({ value: q, label: q, disabled: !!qualityOff(engine, q), title: qualityOff(engine, q) ?? undefined }))}
+          />
           {characterFinish(shown) && <p className="text-[12px] leading-snug text-pretty text-muted-foreground">{qualityHint(engine, shown)}</p>}
+          {offReasons.length > 0 && (
+            <p id="character-quality-off" className="text-[12px] leading-snug text-pretty text-muted-foreground">
+              {offReasons.map((o) => `${o.q}: ${o.reason}.`).join(" ")}
+            </p>
+          )}
         </Field>
       )}
 

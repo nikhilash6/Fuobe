@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
-import { ANCHOR_MODELS, anchorModel, characterLicenceLine, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
+import { ANCHOR_MODELS, anchorModel, CHARACTER_SWAP, characterLicenceLine, h3Canvas, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
 import { scalePoints } from "@/lib/catalog/remove-object";
 import type { PlanStep } from "@/lib/catalog/shorts";
 import {
@@ -1036,6 +1036,12 @@ export function assemble(projectId: string, clipId: string): SwapProject {
 
 export const SharpenSchema = z.object({ clipId: id, tier: z.enum(SHARPEN_TIERS) });
 
+/** The generations of a take's sharper version (its steps and its result). */
+const finishIds = (f: TakeFinish | null | undefined): string[] => (f ? [...(f.stepIds ?? []), ...(f.genId ? [f.genId] : [])] : []);
+
+/** H3's canvas a film's takes are made at: your GPU redraws the character inside the part of it the regenerate keeps. */
+const sharpenCanvas = (film: { width: number; height: number } | null) => (film ? h3Canvas(film.width, film.height, CHARACTER_SWAP.defaultQuality) : undefined);
+
 /** A take's sharper version being made, or made: a new Sharpen at the same size doesn't make it again. */
 const finishLive = (t: SwapTake, tier: SharpenTier, look: Look) => {
   const st = look(t.finish?.genId)?.status;
@@ -1068,14 +1074,15 @@ function finishPlans(p: SwapProject, clip: SwapClip, tier: SharpenTier, look: Lo
  * picked in Takes & review. Your GPU: regenerated and composited, never above the size the clip is joined at; the cloud:
  * made again at 2K or 4K on fal's H3. Everything is checked (and priced) before the first one starts.
  */
-export function sharpenClip(projectId: string, body: z.infer<typeof SharpenSchema>): SwapProject {
+export async function sharpenClip(projectId: string, body: z.infer<typeof SharpenSchema>): Promise<SwapProject> {
   const p = advanceProject(projectId);
   mustMatchMode(p.engine);
   const clip = mustClip(p, body.clipId);
   const look = lookup();
   const film = filmSize(clip.source.width, clip.source.height, p.engine);
-  const tier = sharpenTierFor(p.engine, body.tier, film);
-  if (!tier) throw new ShortsError(sharpenOptions(p.engine, film).find((o) => o.tier === body.tier)?.reason ?? SHARPEN_COPY.small, 422);
+  const canvas = sharpenCanvas(film);
+  const tier = sharpenTierFor(p.engine, body.tier, film, canvas);
+  if (!tier) throw new ShortsError(sharpenOptions(p.engine, film, canvas).find((o) => o.tier === body.tier)?.reason ?? SHARPEN_COPY.small, 422);
   if (p.engine === "open") {
     mustOffer(REGEN_MODEL, "open");
     mustOffer(COMPOSITE_MODEL, "open");
@@ -1097,6 +1104,8 @@ export function sharpenClip(projectId: string, body: z.infer<typeof SharpenSchem
     if (demo !== null && demo !== priced.demo) throw new ShortsError("Some takes would run as a demo and others for real — connect the missing provider in Settings", 422);
     demo = priced.demo;
   }
+  // A version still being made at another size is replaced: it is stopped first (nothing would show it or stop it after).
+  for (const x of todo) for (const gid of finishIds(x.take.finish)) if (ACTIVE.has(look(gid)?.status ?? "")) await cancelGeneration(gid).catch(() => undefined);
   const made = new Map<string, TakeFinish>();
   for (const x of todo) {
     const pipe = run(x.plan.steps);
@@ -1120,7 +1129,7 @@ function sharpenEstimate(p: SwapProject, clip: SwapClip, look: Look): { estimate
   const costUsd: Partial<Record<SharpenTier, number | null>> = {};
   let demo = false;
   let problem: string | undefined;
-  for (const o of sharpenOptions(p.engine, film)) {
+  for (const o of sharpenOptions(p.engine, film, sharpenCanvas(film))) {
     if (!o.available) continue;
     try {
       let cost: number | null = 0;
@@ -1152,7 +1161,7 @@ export async function stopJob(projectId: string, body: z.infer<typeof StopSchema
   if (body.kind === "normalize") ids = [clip.normalized?.genId];
   if (body.kind === "transcribe") ids = [clip.transcript?.genId];
   // Sharpen: every sharper version of the clip still being made.
-  if (body.kind === "finish") ids = clip.shots.flatMap((s) => currentSegments(s).flatMap((g) => g.takes.flatMap((t) => [...(t.finish?.stepIds ?? []), t.finish?.genId])));
+  if (body.kind === "finish") ids = clip.shots.flatMap((s) => currentSegments(s).flatMap((g) => g.takes.flatMap((t) => finishIds(t.finish))));
   if (body.kind === "mask" || body.kind === "anchor") {
     const shot = mustShot(clip, body.shotId ?? "");
     const seg = body.segmentId ? currentSegments(shot).find((g) => g.id === body.segmentId) : undefined;

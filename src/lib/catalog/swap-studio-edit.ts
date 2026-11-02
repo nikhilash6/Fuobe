@@ -33,6 +33,7 @@ import {
   type SwapSegment,
   type SwapSettings,
   type SwapShot,
+  type SwapTake,
   type WhoToSwap,
 } from "./swap-studio";
 import type { Engine } from "./types";
@@ -144,9 +145,12 @@ function mustShot(c: SwapClip, id: string): SwapShot {
   return s;
 }
 
-/** Whether a shot has a take still being made (or waiting to be). */
+/** Whether a take's sharper version (Assemble → Finish → Sharpen) is still being made. */
+export const finishBusy = (t: SwapTake, active: (genId: string) => boolean): boolean => !!t.finish && [...(t.finish.stepIds ?? []), t.finish.genId].some((id) => !!id && active(id));
+
+/** Whether a shot has a take still being made (or waiting to be), or a take's sharper version still being made. */
 export function shotBusy(shot: SwapShot, active: (genId: string) => boolean): boolean {
-  return (shot.segments ?? []).some((g) => g.takes.some((t) => t.state === "waiting" || (t.state === "launched" && !!t.genId && active(t.genId))));
+  return (shot.segments ?? []).some((g) => g.takes.some((t) => t.state === "waiting" || (t.state === "launched" && !!t.genId && active(t.genId)) || finishBusy(t, active)));
 }
 
 const mapClip = (p: SwapProject, id: string, f: (c: SwapClip) => SwapClip): SwapProject => ({ ...p, clips: p.clips.map((c) => (c.id === id ? f(c) : c)) });
@@ -315,6 +319,7 @@ export function applyEdit(project: SwapProject, edit: SwapEdit, o: { active: (ge
           if (edit.remove) {
             const t = next.takes.find((k) => k.id === edit.takeId);
             if (t && (t.state === "waiting" || (t.genId && o.active(t.genId)))) throw new Error("Stop the take before removing it");
+            if (t && finishBusy(t, o.active)) throw new Error("Its sharper version is still being made — stop it in Assemble first");
             return removeTake(next, edit.takeId);
           }
           if (edit.select) next = selectTake(next, edit.takeId);

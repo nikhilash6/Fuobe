@@ -9,6 +9,7 @@ import {
   CHARACTER_LIMITS,
   CHARACTER_SWAP,
   characterFinish,
+  h3Canvas,
   characterLicenceLine,
   cutWarning,
   h3Windows,
@@ -19,7 +20,7 @@ import {
   type CharacterOptions,
 } from "@/lib/catalog/character-swap";
 import { ACCESS_PLACE } from "@/lib/model-access";
-import { filmSize, SHARPEN_SIGMA_RANGE, sharpenTierFor } from "@/lib/catalog/sharpen";
+import { openCapNote, SHARPEN_COPY, SHARPEN_SIGMA_RANGE } from "@/lib/catalog/sharpen";
 import {
   chooseMaker,
   cutsInPart,
@@ -300,12 +301,16 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
     if (m.engine === "cloud") notes.push("On fal, H3 has no mask: who to swap is said in words, and the whole frame is regenerated around them");
     // 1080p / 2K / 4K (sharpen.ts): what each engine does with the 768p swap.
     const finish = characterFinish(qualityFor(m, body.quality ?? CHARACTER_SWAP.defaultQuality));
-    if (finish && m.engine === "cloud") notes.push(`fal's H3 makes ${finish} from a 768P base: the whole frame is drawn at the higher size`);
+    if (finish && m.engine === "cloud") {
+      notes.push(`fal's H3 makes ${finish} from a 768P base: the whole frame is drawn at the higher size`);
+      // Pieces are joined by fal's merge-videos, at up to 2048 px a side: only a single piece keeps its 4K.
+      if (finish === "4K" && n > 1) notes.push(SHARPEN_COPY.joinCloud4k);
+    }
     if (finish && m.engine === "open") {
-      const film = filmSize(source.width, source.height);
-      const made = sharpenTierFor("open", finish, film);
       notes.push("The 768p swap is redrawn by Open-H3 Regenerate and only your character is put back over your clip: the background and the sound stay as filmed. Faces can change slightly");
-      if (made && made !== finish && film) notes.push(`Your clip is ${film.width}×${film.height}, so it is sharpened at ${made} (never above the clip's own size)`);
+      const canvas = source.width && source.height ? h3Canvas(source.width, source.height, CHARACTER_SWAP.defaultQuality) : undefined;
+      const capped = openCapNote(source, finish, canvas);
+      if (capped) notes.push(capped);
     }
     if (m.engine === "open" && c.who === "index" && !body.points?.length) notes.push("Person numbers follow SAM 3.1's detections, the one it is surest of first — not left to right");
     if (m.engine === "open" && !m.h3.maskSwitch && c.useMask === false) notes.push(`${name} always regenerates only the person: its graph has no switch for the whole frame`);

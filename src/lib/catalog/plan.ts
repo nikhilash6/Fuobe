@@ -791,8 +791,8 @@ const NEEDS: Partial<
   "extract-frames": { video: true, msg: "Add the video to take frames from" },
   "images-to-video": { images: 1, msg: "Add the images, in order" },
   overlay: { images: 2, msg: "Add the picture and the overlay to put on it" },
-  // Character swap in 2K: the footage, the redrawn swap and the swap (the person's mask goes in inputs.mask).
-  composite: { videos: 2, msg: "Add the footage and the redrawn clip to put the character back over it" },
+  // Character swap in 2K: the footage, the redrawn swap and the swap, and the person's mask (video-composite-mask).
+  composite: { videos: 3, mask: true, msg: "Add the footage, the redrawn clip, the swap and the person's mask to put the character back over it" },
   // N7-5 (the open engine also needs the browser's render along the path: its model's options.requires.video)
   "camera-path": { images: 1, msg: "Add the still to film along the path" },
 };

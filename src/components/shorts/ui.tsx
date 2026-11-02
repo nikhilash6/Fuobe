@@ -16,18 +16,21 @@ export function Segmented<T extends string | number>({
   options,
   onChange,
   className,
+  describedBy,
 }: {
   label: string;
   value: T;
   options: { value: T; label: string; hint?: string; disabled?: boolean; title?: string }[];
   onChange: (v: T) => void;
   className?: string;
+  /** The id of text that says more (why some options are turned off). */
+  describedBy?: string;
 }) {
   // The Tab stop is the checked option, or the first one that can be picked when it's turned off
   // (a disabled button can't take focus, and the whole group would be skipped).
   const stop = options.some((o) => o.value === value && !o.disabled) ? value : options.find((o) => !o.disabled)?.value;
   return (
-    <div role="radiogroup" aria-label={label} onKeyDown={radioKeys} className={cn("flex w-full rounded-full bg-muted p-0.5", className)}>
+    <div role="radiogroup" aria-label={label} aria-describedby={describedBy} onKeyDown={radioKeys} className={cn("flex w-full rounded-full bg-muted p-0.5", className)}>
       {options.map((o) => (
         <button
           key={String(o.value)}

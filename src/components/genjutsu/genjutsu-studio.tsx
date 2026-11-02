@@ -59,7 +59,7 @@ import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
-import { CharacterControls, CharacterFacts } from "./character-panel";
+import { CharacterControls, CharacterFacts, qualityOff } from "./character-panel";
 import { useDescribeCharacter, useGenjutsuEstimate, useGenjutsuRun, useTranscribeClip, waitForGeneration, type GenjutsuBody } from "./hooks";
 import { LookPicker, type LookSource } from "./look-picker";
 import { SetupCode } from "./setup-code";
@@ -188,7 +188,8 @@ export function GenjutsuStudio() {
   const cut = cutWarning(partCuts);
   const seedNumber = seedOf(seed);
   // Character swap's H3 makers take H3's two qualities; the other makers (Recast, P-Video…) Genjutsu's own.
-  const askedQuality = isCharacter && maker?.h3 ? charQuality : quality;
+  // A size this engine can't make worth it (your GPU's 4K) is asked as 2K, as the picker shows it.
+  const askedQuality = isCharacter && maker?.h3 ? (qualityOff(engine, charQuality) ? "2K" : charQuality) : quality;
 
   // "Describe my character" (the engine's text model) and "Use the clip's words" (one transcription of the clip; any
   // part takes its own lines from it, so it is kept per clip).
