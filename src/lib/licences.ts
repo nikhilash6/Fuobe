@@ -474,6 +474,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("Apache-2.0"),
     note: "VoxCPM2 text to speech (voice design) and voice clone nodes; Apache-2.0 code. The VoxCPM2 weights it downloads are Apache-2.0",
   }),
+  // Edit speech (nm10-speech-edit), pinned in workflows/comfyui/packs.json: the LICENSE file read at the pinned commit.
+  pack("ComfyUI-AuK", "https://github.com/Tencent-Hunyuan/AuK/tree/0d40366b1039e37c6cad008ab4713f6ad6d954b7/comfyui/ComfyUI-AuK", {
+    name: "MIT",
+    class: "commercial",
+    url: SPDX("MIT"),
+    note: "Tencent AuK's own nodes (speech editing and text to speech); MIT code and weights. The Qwen2.5-Omni-3B encoder AuK loads is under the Qwen Research License (non-commercial)",
+  }),
   // Genjutsu's Character swap (docs/research/openjutsu-6.md §7): Akatz Labs' packs, pinned in install-comfyui.sh.
   pack("h3_character_swap", "https://github.com/akatz-labs/h3-character-swap-tool/tree/0670e4fdf95adf2262caa4b81afed2a9c4ae4b7b/worker_nodes/h3_character_swap", {
     ...GPL,

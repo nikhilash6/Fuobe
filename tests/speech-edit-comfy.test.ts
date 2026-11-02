@@ -122,7 +122,7 @@ describe("what the ComfyUI provider binds", () => {
     op,
     upload: async (_b: Buffer, _t: string, name: string) => name,
     device: async () => device,
-    media: () => ({ duration }),
+    media: () => ({ duration, container: "wav" as const, hasVideo: false, hasAudio: true }),
   });
 
   it("rebuilds the windows from params.extra, on the GPU's device, with the fade-in it writes", async () => {

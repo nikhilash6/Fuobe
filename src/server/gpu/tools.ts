@@ -227,6 +227,9 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   // Design a voice (nm10-voice-design): Qwen3-TTS designs the takes and clones the one saved (VoxCPM2 is the other choice).
   { href: "/audio/design", label: "Design a voice", group: "Audio", steps: [{ modelId: "oss-qwen3-tts", op: "voice-design" }, { modelId: "oss-qwen3-tts", op: "tts" }] },
   { href: "/audio/transcribe", label: "Transcribe", group: "Audio", config: S.TRANSCRIBE_STUDIO },
+  // Edit speech (nm10-speech-edit): Qwen3-ASR times the words, AuK re-speaks the changed parts (a video's sound goes back on
+  // the picture with the stream-copy mux).
+  { href: "/audio/edit-speech", label: "Edit speech", group: "Audio", steps: [{ modelId: "oss-qwen3-asr", op: "transcribe" }, { modelId: "oss-auk", op: "speech-edit" }] },
   // DBS soundtrack separation (D1): dialogue, music and effects.
   { href: "/audio/split", label: "Split soundtrack", group: "Audio", steps: [{ modelId: SPLIT_MODEL, op: "separate-audio" }] },
   // Clean up dialogue (DBS D5, Split soundtrack's preset): graph C's remix, and the stream-copy mux for a video.

@@ -18,6 +18,8 @@ import { db } from "../db";
 import { chooseRoute, ConnectComfyError, createGenerations, outputKind, previewChained } from "../generations";
 import { isOffered } from "../model-access";
 import { engineMode } from "../settings";
+import { storedMedia } from "../storage";
+import { EMOTIONS, PACES, PITCH_STEPS, planSpeechEdit, VOLUME_STEPS, CLOUD_ONLY_SPEECH_EDIT_PROBLEM, type SpeechEffect } from "@/lib/speech-edit";
 import { fileUrl, saveFile } from "../storage";
 import { defineTool, type JobPlace, type ToolContext, type ToolOutcome } from "./define";
 
@@ -771,7 +773,95 @@ const blockoutFilm = defineTool({
   },
 });
 
-export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, blockoutFilm];
+// ---------------------------------------------------------------------------
+// Edit speech (nm10-speech-edit): Tencent AuK on your GPU
+
+const SpeechEditInput = z.object({
+  media: ref.describe("The recording (or video) whose speech to change."),
+  kind: z.enum(["audio", "video"]).describe("audio, or video (its sound is edited and put back on the picture, copied as it is)."),
+  transcript: z
+    .array(z.object({ start: z.number().min(0), end: z.number().min(0), text: z.string() }))
+    .min(1)
+    .max(2000)
+    .describe("Its transcript as timed lines (seconds), e.g. the cues of a transcribe result on this file."),
+  changes: z
+    .array(z.object({ line: z.number().int().min(0).describe("The line's index in transcript."), text: z.string().describe("What the line should say now.") }))
+    .optional()
+    .describe("Word edits: the lines that should say something else. Only the changed words are re-spoken, in the same voice."),
+  effect: z
+    .object({
+      kind: z.enum(["pitch", "pace", "volume", "emotion", "whisper", "unwhisper", "clean", "isolate"]),
+      semitones: z.number().int().optional().describe(`pitch: one of ${PITCH_STEPS.join(", ")}.`),
+      speed: z.number().optional().describe(`pace: one of ${PACES.join(", ")}.`),
+      db: z.number().int().optional().describe(`volume: one of ${VOLUME_STEPS.join(", ")}.`),
+      emotion: z.enum(EMOTIONS as [string, ...string[]]).optional().describe("emotion: the new mood."),
+    })
+    .optional()
+    .describe("Instead of word edits: change how a range sounds (clean = remove noise and room echo; isolate = keep only the speaker of that range)."),
+  range: z.object({ start: z.number().min(0), end: z.number().min(0) }).optional().describe("The range (seconds) the effect changes."),
+  quality: z.enum(["fast", "best"]).optional().describe("fast (default): AuK-Flash, 4 steps; best: the full AuK model, 32 steps."),
+});
+export type SpeechEditToolInput = z.infer<typeof SpeechEditInput>;
+
+/** The tool's arguments as an Edit speech run (one AuK job; on a video, the stream-copy mux too). Throws what's missing. */
+export function speechEditSteps(i: SpeechEditToolInput): PipelineStep[] {
+  if (engineMode() === "cloud") throw new Error(CLOUD_ONLY_SPEECH_EDIT_PROBLEM);
+  // The file's length from its header when it can be read (the run checks the file itself); else the transcript's.
+  const info = storedMedia(i.media, { allContainers: true });
+  const seconds = info?.info?.duration && info.info.duration > 0 ? info.info.duration : undefined;
+  const cues = i.transcript;
+  const edited = i.changes?.length ? cues.map((c, k) => i.changes!.filter((x) => x.line === k).pop()?.text ?? c.text) : undefined;
+  let effect: SpeechEffect | undefined;
+  if (i.effect) {
+    const e = i.effect;
+    const bad = (what: string) => new Error(`Pick ${what} for the ${e.kind} effect`);
+    if (e.kind === "pitch") {
+      if (!(PITCH_STEPS as readonly number[]).includes(e.semitones ?? NaN)) throw bad(`semitones (${PITCH_STEPS.join(", ")})`);
+      effect = { kind: "pitch", semitones: e.semitones as (typeof PITCH_STEPS)[number] };
+    } else if (e.kind === "pace") {
+      if (!(PACES as readonly number[]).includes(e.speed ?? NaN)) throw bad(`a speed (${PACES.join(", ")})`);
+      effect = { kind: "pace", speed: e.speed as (typeof PACES)[number] };
+    } else if (e.kind === "volume") {
+      if (!(VOLUME_STEPS as readonly number[]).includes(e.db ?? NaN)) throw bad(`decibels (${VOLUME_STEPS.join(", ")})`);
+      effect = { kind: "volume", db: e.db as (typeof VOLUME_STEPS)[number] };
+    } else if (e.kind === "emotion") {
+      if (!e.emotion) throw bad("an emotion");
+      effect = { kind: "emotion", emotion: e.emotion as Extract<SpeechEffect, { kind: "emotion" }>["emotion"] };
+    } else effect = { kind: e.kind };
+  }
+  const plan = planSpeechEdit({ engine: "open", media: i.media, kind: i.kind, cues, edited: effect ? undefined : edited, effect, range: i.range, quality: i.quality, seconds, hasAudio: info?.info?.hasAudio });
+  return plan.steps.map((s) => ({ key: s.key, request: s.request, ...(s.after && { after: s.after }), ...(s.chain && { chain: s.chain }) }));
+}
+
+const editSpeech = defineTool({
+  name: "edit_speech",
+  description:
+    "Change what was said in a recording or a video without re-recording it — Fuobe's Edit speech (Audio → Edit speech), with Tencent AuK on your GPU (open source; it isn't hosted in the cloud). " +
+    "Pass the file, its transcript (timed lines, e.g. a transcribe result's cues) and either changes (lines that should say something else: only the changed words are re-spoken, in the same voice, and crossfaded back) " +
+    "or an effect on a range (pitch, pace, volume, emotion, whisper, clean up noise and echo, keep only one speaker). A video gets its new sound back with the picture copied. English and Chinese speech. Gated by the same approval card as generate.",
+  schema: SpeechEditInput,
+  gated: true,
+  title: (i) => (i.effect ? `Edit speech: ${i.effect.kind}` : "Edit speech"),
+  place: () => ({ studio: "Edit speech", href: "/audio/edit-speech" }),
+  plan: (i) => {
+    try {
+      return planSteps("edit_speech", speechEditSteps(i));
+    } catch (e) {
+      return [{ tool: "edit_speech", modelId: "oss-auk", modelName: "AuK", kind: "audio", op: "speech-edit", prompt: "Edit speech", note: "Edit speech", count: 0, costUsd: 0, demo: false, atomic: true, error: (e as Error).message }];
+    }
+  },
+  async run(i) {
+    let steps: PipelineStep[];
+    try {
+      steps = speechEditSteps(i);
+    } catch (e) {
+      return { content: JSON.stringify({ error: (e as Error).message }), isError: true };
+    }
+    return startPipeline("Edit speech", steps, String(steps[0].request.batchTitle ?? "Edit speech"));
+  },
+});
+
+export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, blockoutFilm, editSpeech];
 
 /** For tests: the fallback pipelines, as they would be created. */
 export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests, blockout: blockoutSteps };

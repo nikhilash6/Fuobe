@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-02T15:31:11.087Z",
+  "generatedAt": "2026-11-02T15:38:23.909Z",
   "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
   "comfyuiVersion": "0.41.0",
   "workflowTemplatesVersion": "0.11.86",
@@ -7302,7 +7302,7 @@
         }
       ],
       "vramGb": 24,
-      "license": "AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (non-commercial)",
+      "license": "AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (NON-COMMERCIAL)",
       "validated": false,
       "notes": "The recording (a video upload works: LoadAudio reads its soundtrack) and the edit windows Fuobe plans (params.extra.speechWindows: start, end, instruction, seconds). The graph is rebuilt for every window in one prompt: each window is cut with TrimAudioDuration, edited by AuKGenerateEdit (one shared AuKModelLoader) and crossfaded back over its first and last 0.12 s as a + (b − a) × fade-in, with the linear fade-in Fuobe writes (fadeCurve: the ramp, then a flat tail AudioMerge trims off). The recording and each edit are first brought to one rate (merged with silence at the other's: AuK speaks at 24 kHz), so no seam piece is resampled at its edges (a resampled piece tapers there: a click). Windows hold at least 1 s of untouched speech each side and are cut at silences. AuK takes a window plus its new audio up to 30 s per call (its node refuses more and does not split), so a window is at most about 14.7 s for a same-length effect. AuK-Flash by default (checkpoint ckpts/AuK-Flash/auk_flash.safetensors, 4 steps, CFG 0, sway -1); params.extra.quality \"best\" loads ckpts/AuK/auk_base.safetensors at 32 steps, CFG 2. The Prompt Enhancer is off: Fuobe writes the Cookbook instruction (Replace 'X' with 'Y'. / Add … after … / Remove …; pitch, speed, volume, emotion, whisper, enhancement and speaker extraction) and sets generation_seconds itself. device is bound to the server's first torch device (cuda:0, or cpu with fp32). AuK outputs mono, so edited windows are duplicated into a stereo recording. Peak VRAM ~25 GiB (AuK's README, A800, bf16), ~17 GiB with cpu_offload. Languages: English and Chinese (the technical report, arXiv 2609.08936: a bilingual corpus). Saves FLAC.",
       "autoDownloads": [
@@ -7367,7 +7367,7 @@
         }
       ],
       "vramGb": 24,
-      "license": "AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (non-commercial)",
+      "license": "AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (NON-COMMERCIAL)",
       "validated": false,
       "notes": "Zero-shot TTS: the voice sample (audio) and the line as AuK's instruction (Say the following with the same voice: \"…\"), written by Fuobe; without a sample the loader is removed and AuK is asked for instruct TTS (Generate speech based on the following description: \"…\". The content to speak is: \"…\".) with params.voiceDescription. generation_seconds is the line's length at a speaking rate (the Prompt Enhancer that would estimate it is off). The sample plus the line fit in 30 s. AuK-Flash, 4 steps, CFG 0. Get consent for cloned voices. Saves FLAC.",
       "autoDownloads": [

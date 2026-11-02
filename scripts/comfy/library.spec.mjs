@@ -2086,7 +2086,7 @@ export const SPEC = [
     defaults: { crossfade: 0.12 },
     limits: { maxDurationSec: 1200 },
     vramGb: 24,
-    license: 'AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (non-commercial)',
+    license: 'AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (NON-COMMERCIAL)',
     autoDownloads: [
       'install-comfyui.sh with AUK=1 AUK_WEIGHTS=1 downloads into the AuK checkout\'s ckpts/ (relative paths resolve there, not in a ComfyUI models folder): tencent/AuK-Flash at 575b92f0895f75180bf2cbd35f2e176c5732b8ed (auk_flash.safetensors 6.12 GB, vae.safetensors 0.64 GB, config.yaml) and Qwen/Qwen2.5-Omni-3B at f75b40e3da2003cdd6e1829b1f420ca70797c34e (3 safetensors shards, 11.97 GB, plus config and tokenizer files); AUK_BASE=1 adds tencent/AuK at 790742b71a4430120daf2b2099192abae449eb9f (auk_base.safetensors 6.12 GB) for the Best setting',
     ],
@@ -2115,7 +2115,7 @@ export const SPEC = [
     outputs: [{ node: '4', kind: 'audio' }],
     limits: { maxDurationSec: 30 },
     vramGb: 24,
-    license: 'AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (non-commercial)',
+    license: 'AuK code and weights MIT (Tencent); its Qwen2.5-Omni-3B encoder Qwen Research License (NON-COMMERCIAL)',
     autoDownloads: [
       'install-comfyui.sh with AUK=1 AUK_WEIGHTS=1 downloads into the AuK checkout\'s ckpts/ (relative paths resolve there, not in a ComfyUI models folder): tencent/AuK-Flash at 575b92f0895f75180bf2cbd35f2e176c5732b8ed (auk_flash.safetensors 6.12 GB, vae.safetensors 0.64 GB, config.yaml) and Qwen/Qwen2.5-Omni-3B at f75b40e3da2003cdd6e1829b1f420ca70797c34e (3 safetensors shards, 11.97 GB, plus config and tokenizer files); AUK_BASE=1 adds tencent/AuK at 790742b71a4430120daf2b2099192abae449eb9f (auk_base.safetensors 6.12 GB) for the Best setting',
     ],

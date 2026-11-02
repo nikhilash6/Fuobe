@@ -396,7 +396,7 @@ export function planTextWindows(input: PlanInput, changes: TextChange[]): Speech
     const w = windowAround(s, e, cuts, duration, budget);
     return { c, s, e, w, delta };
   };
-  let list = [...changes].sort((a, b) => a.from - b.from || a.to - b.to).map(build);
+  const list = [...changes].sort((a, b) => a.from - b.from || a.to - b.to).map(build);
   // Merge neighbours whose windows overlap or leave no room for two seams between them.
   for (let k = 0; k < list.length - 1; ) {
     const [p, n] = [list[k], list[k + 1]];
