@@ -3,6 +3,7 @@
  * client chunk carries the covers map for the bar, the launcher, the sheets, the goal row or the next steps.
  */
 import "server-only";
+import { coverFraming, type CoverFraming } from "./cover-framing";
 import { coverIds } from "./nav-model";
 import { presetCover } from "./preset-covers";
 
@@ -11,6 +12,8 @@ export interface NavCover {
   thumb: string;
   /** The full still, for the 4:3 cards. */
   poster: string;
+  /** How it sits in a square tile or pill (cover-framing.ts), when it isn't centred there. */
+  framing?: CoverFraming;
 }
 
 /** Keyed by preset id. */
@@ -25,7 +28,8 @@ export function navCovers(): NavCovers {
   for (const id of coverIds()) {
     const c = presetCover(id);
     if (!c) throw new Error(`The navigation names ${id}, which has no cover`);
-    out[id] = { thumb: c.thumb, poster: c.poster };
+    const framing = coverFraming(c.poster);
+    out[id] = { thumb: c.thumb, poster: c.poster, ...(framing && { framing }) };
   }
   cached = out;
   return out;

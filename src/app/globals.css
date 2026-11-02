@@ -699,6 +699,13 @@ html {
   [data-live-stage] img, [data-live-demo] img { animation: none !important; transition: none !important; }
 }
 
+/* A preset cover shown whole (cover-framing.ts) sits over a blurred copy of itself, drawn only when the frame isn't
+   the cover's own 4:3 shape: in a 4:3 frame the picture covers it, so it is neither fetched nor painted. */
+.cover-whole { container-type: size; }
+@container (aspect-ratio < 33/25) or (aspect-ratio > 27/20) {
+  .cover-whole-backdrop { background-image: var(--cover-bg); }
+}
+
 /* Menus and popovers open and close without their fade, zoom and slide when the system asks for less motion. */
 @media (prefers-reduced-motion: reduce) {
   [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"] { animation: none !important; }

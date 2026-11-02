@@ -62,22 +62,36 @@ export function CoverThumb({
 }) {
   const cover = useNavCover(id);
   const s = COVER_SIZES[size];
+  // How the cover sits in a box of another shape (cover-framing.ts): a square keeps its top part by default, where faces are.
+  const whole = cover?.framing?.fit === "whole";
+  const img = cover && (
+    // eslint-disable-next-line @next/next/no-img-element -- versioned static covers, sized by the box (no optimizer round trip)
+    <img
+      src={cover.thumb}
+      srcSet={s.src === "both" ? `${cover.thumb} 320w, ${cover.poster} 512w` : undefined}
+      sizes={s.src === "both" ? s.sizes : undefined}
+      width={s.w}
+      height={s.h}
+      alt=""
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+      draggable={false}
+      className="absolute inset-0 size-full object-cover"
+      style={{ objectPosition: cover.framing?.focus ?? "50% 25%" }}
+    />
+  );
   return (
     <span aria-hidden data-cover={cover ? id : undefined} className={cn("relative block shrink-0 overflow-hidden bg-muted", s.box, className)}>
-      {cover ? (
-        // eslint-disable-next-line @next/next/no-img-element -- versioned static covers, sized by the box (no optimizer round trip)
-        <img
-          src={cover.thumb}
-          srcSet={s.src === "both" ? `${cover.thumb} 320w, ${cover.poster} 512w` : undefined}
-          sizes={s.src === "both" ? s.sizes : undefined}
-          width={s.w}
-          height={s.h}
-          alt=""
-          loading={eager ? "eager" : "lazy"}
-          decoding="async"
-          draggable={false}
-          className="absolute inset-0 size-full object-cover object-[50%_25%]"
-        />
+      {cover && whole ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element -- the same small copy, blurred behind the whole picture */}
+          <img src={cover.thumb} alt="" loading={eager ? "eager" : "lazy"} decoding="async" draggable={false} className="absolute inset-0 size-full scale-125 object-cover blur-md brightness-[0.7] saturate-[1.3]" />
+          <span className="absolute inset-0 grid place-items-center [container-type:size]">
+            <span className="relative aspect-[4/3] w-[min(100cqw,133.334cqh)] overflow-hidden">{img}</span>
+          </span>
+        </>
+      ) : cover ? (
+        img
       ) : icon ? (
         <NavIcon name={icon} className="absolute inset-0 m-auto size-[42%] max-h-6 max-w-6 text-muted-foreground" />
       ) : null}
