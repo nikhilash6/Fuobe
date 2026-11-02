@@ -295,11 +295,8 @@ function FileInput({
       </div>
       {source === "newest" ? (
         <p className="text-[12px] text-muted-foreground">
-          Each run takes the newest {kind} in{" "}
-          <Link href="/library?tab=uploads" className="font-medium text-brand-text underline-offset-2 hover:underline">
-            Library → Uploads
-          </Link>{" "}
-          at that moment, whatever put it there: upload a new one before it runs, and that&apos;s the one it takes.
+          Each run takes the newest {kind} in <span className="font-medium text-foreground">Library → Uploads</span> at that moment, whatever put it there: upload a new one
+          before it runs, and that&apos;s the one it takes.
           {needed(p) ? "" : p.default !== undefined ? ` With no ${kind} there yet, it uses the skill's own.` : ` With no ${kind} there yet, the run goes ahead without one.`}
         </p>
       ) : source === "none" ? (
