@@ -1,4 +1,4 @@
-// Browser check of Green screen and fine hair (nm10-keying): Video tools → Green screen (CorridorKey on your GPU, Bria
+// Browser check of Green screen and fine hair (nm10-keying): Video tools → Green screen (CorridorKey 2.0 on your GPU, Bria
 // green screen in the cloud) with its outputs and formats, Remove background with Bria VRMBG 3.0 on the open engine, and
 // Layers → Remove background with FeyNoBg (open) and Bria's guided cut-out and its what-to-keep box (cloud).
 // Usage: node tests/e2e/keying.mjs [appUrl] [outDir]
@@ -62,7 +62,7 @@ try {
         check(await page.getByRole("heading", { name: "Key out a green screen" }).isVisible(), `${label}: Green screen's heading`);
         // The composer settles on the engine's model once it has hydrated (the engine is the browser's choice).
         const shows = (t) => page.locator(`:text-is("${t}"):visible`).first().waitFor({ timeout: 20_000 }).then(() => true, () => false);
-        check(await shows(engine === "open" ? "CorridorKey" : "Bria green screen"), `${label}: opens on ${engine === "open" ? "CorridorKey" : "Bria green screen"}`);
+        check(await shows(engine === "open" ? "CorridorKey 2.0" : "Bria green screen"), `${label}: opens on ${engine === "open" ? "CorridorKey 2.0" : "Bria green screen"}`);
         // "Free" when the app reaches a ComfyUI; "Placeholder" when it doesn't (demo mode with no GPU).
         check(engine === "cloud" || /\bFree\b|Placeholder/.test(await page.locator("form, main, body").first().innerText()), `${label}: the price says Free on your GPU (or Placeholder with none connected)`);
         await noSideScroll(page, `${label} green screen`);
