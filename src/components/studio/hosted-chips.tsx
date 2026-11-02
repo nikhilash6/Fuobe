@@ -106,10 +106,10 @@ export function InsertRangeChip({
   onChange: (start: number, resume: number) => void;
 }) {
   const h = insertHandles(clip, [start, resume]);
-  // The run always carries both points: they start around the middle of the clip.
+  // The run carries both points once the clip's length is read: they start around its middle.
   useEffect(() => {
-    if (start !== h.start || resume !== h.resume) onChange(h.start, h.resume);
-  }, [start, resume, h.start, h.resume, onChange]);
+    if (clip && (start !== h.start || resume !== h.resume)) onChange(h.start, h.resume);
+  }, [clip, start, resume, h.start, h.resume, onChange]);
   return (
     <Popover>
       <PopoverTrigger asChild>
