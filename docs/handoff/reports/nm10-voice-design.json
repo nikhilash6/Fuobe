@@ -137,5 +137,15 @@
    "Full vitest suite not re-run in this stage; the targeted runs pass."
   ],
   "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/nm10-voice-design"
+  ],
+  "notMerged": [],
+  "conflicts": "none",
+  "checks": "typecheck 0, lint 0; merged tree identical to origin/o/nm10-voice-design 072ef12f (builder full vitest: 4996 passed, 6 failed = main known)",
+  "pushed": true,
+  "head": "8f2fa6f7"
  }
 }
