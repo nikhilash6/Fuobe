@@ -23,7 +23,7 @@ import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted"
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
-import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useStatus } from "@/lib/api";
+import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useLikelyVisitor, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
@@ -229,6 +229,7 @@ export function Composer({ docked }: { docked: boolean }) {
   const catalog = useCatalog();
   const presetUrl = usePresetUrl();
   const [engine, setEngine, engineMode] = useEngine();
+  const visitor = useLikelyVisitor();
   const create = useCreateGeneration();
   const [enhancing, setEnhancing] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -1036,7 +1037,10 @@ export function Composer({ docked }: { docked: boolean }) {
     else if (framesGap) framesNotice = { text: `${framesGap}.`, tone: "warn" };
     else if (note) framesNotice = { text: note, tone: "info", action };
     else if (animationTiming && model.engine === "cloud")
-      framesNotice = { text: "In the cloud each gap is one clip with every frame kept, played at 16 fps. Faster speeds and 24 fps playback are on your GPU, free.", tone: "info" };
+      framesNotice = {
+        text: `In the cloud each gap is one clip with every frame kept, played at 16 fps.${!visitor && engineMode === "both" ? " Faster speeds and 24 fps playback are on your GPU, free." : ""}`,
+        tone: "info",
+      };
   }
   // Style: Animation, in Frames mode: Fuobe Animation (when it's on in this install), and back to the engine's frames model.
   const animationModel = config.frames && catalog.offered("fuobe-animation", engine) ? catalog.getModel("fuobe-animation") : undefined;

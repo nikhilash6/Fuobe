@@ -25,7 +25,7 @@ import {
   type PlaybackFps,
 } from "@/lib/inbetween";
 import type { Engine } from "@/lib/catalog/types";
-import { useAskBeforeUpload } from "@/lib/api";
+import { useAskBeforeUpload, useEngine, useLikelyVisitor } from "@/lib/api";
 import { FRAMES_HINT, frameRange, frameRole, frameTimes, KEYFRAME_SNAP, MAX_KEYFRAMES, secondsLabel } from "@/lib/catalog/keyframes";
 import type { FrameAttachment } from "@/lib/composer";
 import { cn } from "@/lib/utils";
@@ -437,6 +437,10 @@ function Ruler({
 function GapChip({ index, gap, fps, engine, onChange }: { index: number; gap: GapTiming; fps: PlaybackFps; engine: Engine; onChange: (g: GapTiming) => void }) {
   const can = ENGINE_TIMING[engine];
   const name = `keyframes ${index + 1} and ${index + 2}`;
+  // The GPU-only speeds are pointed out only where the GPU is there to switch to (the owner, both engines on).
+  const visitor = useLikelyVisitor();
+  const engineMode = useEngine()[2];
+  const gpuHint = !visitor && engineMode === "both";
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -479,7 +483,7 @@ function GapChip({ index, gap, fps, engine, onChange }: { index: number; gap: Ga
                     role="radio"
                     aria-checked={gap.speed === sp}
                     disabled={!allowed}
-                    title={allowed ? undefined : "On your GPU"}
+                    title={allowed || !gpuHint ? undefined : "On your GPU"}
                     onClick={() => onChange({ ...gap, speed: sp })}
                     className={cn("h-6 min-w-8 rounded-full px-1.5 text-[12px] font-medium tabular-nums disabled:opacity-40", gap.speed === sp ? "bg-background shadow-soft" : "hover:bg-background/60")}
                   >
@@ -490,7 +494,7 @@ function GapChip({ index, gap, fps, engine, onChange }: { index: number; gap: Ga
             </div>
           </div>
           <p className="text-[11px] leading-snug text-muted-foreground">
-            {engine === "open" ? "Faster keeps every 2nd, 3rd or 4th frame, for a snappier move." : "In the cloud every frame is kept. ×2–×4 are on your GPU."} This gap plays for {lengthLabel(gapSeconds(gap, fps))}.
+            {engine === "open" ? "Faster keeps every 2nd, 3rd or 4th frame, for a snappier move." : `In the cloud every frame is kept.${gpuHint ? " ×2–×4 are on your GPU." : ""}`} This gap plays for {lengthLabel(gapSeconds(gap, fps))}.
           </p>
         </div>
         <label className="block space-y-1">

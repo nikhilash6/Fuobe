@@ -204,8 +204,9 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   video (`POST /api/turnaround`), though their price checks work, priced for the account's own
   GPU. Split soundtrack's and Remove dialogue's pages say so up front ("Split soundtrack isn't
   available here", "Remove dialogue isn't available here"), with their upload and run off. Result
-  menus don't offer Remove dialogue to a guest or an account. Restore & colourise is left out of the
-  Video tools tabs and the result menus for them.
+  menus don't offer Remove dialogue or Clean up dialogue to a guest or an account. Restore & colourise
+  and Remove a person (its mask preview and "Redo from here", `POST /api/remove-object/preview` and
+  `/reroll`, answer `own-gpu-tool` too) are left out of the Video tools tabs and the result menus for them.
 - **Files a run takes.** A run on your GPU takes only files you uploaded here, or your own results.
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.

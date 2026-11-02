@@ -98,7 +98,7 @@ export interface ActionContext {
 }
 
 /** Hand-offs to tools a guest or an account can't open (they run on a self-hosted Fuobe only). */
-const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(["restore-video", "remove-dialogue"]);
+const OWNER_ONLY_ACTIONS: ReadonlySet<OutputActionId> = new Set<OutputActionId>(["restore-video", "remove-dialogue", "remove-person", "clean-dialogue"]);
 
 const q = (url: string) => encodeURIComponent(url);
 

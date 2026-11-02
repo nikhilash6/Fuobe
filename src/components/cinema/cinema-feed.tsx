@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useLikelyVisitor } from "@/lib/api";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -189,6 +190,8 @@ export function deleteLabel(g: CinemaGeneration): string {
 
 function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; folders: CinemaFolder[]; projectId: string; handlers: FeedHandlers; onDelete: (ids: string[]) => void }) {
   const actions = useItemActions(projectId);
+  // Remove a person runs on a self-hosted Fuobe only: a guest or an account isn't sent there.
+  const visitor = useLikelyVisitor();
   const o = u.output;
   const elsewhere = foreign(u.g, projectId);
   return (
@@ -241,11 +244,13 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
             <DropdownMenuItem onClick={() => handlers.onReference(o.url, "video")}>
               <ImagePlus /> Use as reference clip
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`/video-tools/remove-person?video=${encodeURIComponent(o.url)}`}>
-                <UserX /> Remove a person
-              </Link>
-            </DropdownMenuItem>
+            {!visitor && (
+              <DropdownMenuItem asChild>
+                <Link href={`/video-tools/remove-person?video=${encodeURIComponent(o.url)}`}>
+                  <UserX /> Remove a person
+                </Link>
+              </DropdownMenuItem>
+            )}
           </>
         )}
         {u.scene
