@@ -128,6 +128,42 @@ describe("the chain per engine", () => {
     expect(refined.request.inputs?.images).toEqual(["/api/files/f.png"]);
   });
 
+  const deps = (id: string) => {
+    const v = (db().prepare("SELECT depends_on FROM generations WHERE id = ?").get(id) as { depends_on: string | null }).depends_on;
+    return !v ? [] : v.startsWith("[") ? (JSON.parse(v) as string[]) : [v];
+  };
+
+  it("open, with the photo from an earlier step: the model waits for it, and Hi3D waits for the model and the same photo", async () => {
+    const [still] = gens.createGenerations({ feature: "image", modelId: "oss-z-image-turbo", prompt: "A brass desk lamp" });
+    const asked = { feature: "canvas", modelId: "oss-pixal3d", op: "image-to-3d" as const, params: { extra: { hi3dRefine: 512 } } };
+    const [refined, built] = gens.createGenerations(asked, { batchId: "b-hi3d-up", dependsOn: [still.id] });
+    expect(built).toMatchObject({ modelId: "oss-pixal3d", op: "image-to-3d", batchId: "b-hi3d-up" });
+    expect(built.request.params?.extra?.hi3dRefine).toBeUndefined();
+    expect(deps(built.id)).toEqual([still.id]);
+    expect(refined).toMatchObject({ modelId: "oss-hi3d-refine", op: "refine-3d", batchId: "b-hi3d-up" });
+    expect(refined.request.chain).toEqual([{ slot: "model3d" }, { slot: "images" }]);
+    expect(refined.request.inputs?.images ?? []).toEqual([]);
+    expect(refined.request.params?.extra).toEqual({ meshResolution: 512 });
+    expect(deps(refined.id)).toEqual([built.id, still.id]);
+    // Demo mode runs the three steps through: Hi3D gets the model's mesh and the still.
+    const until = Date.now() + 40_000;
+    while (!["succeeded", "failed", "canceled"].includes(gens.getGeneration(refined.id)!.status) && Date.now() < until) await new Promise((r) => setTimeout(r, 300));
+    const done = gens.getGeneration(refined.id)!;
+    expect(done.status, done.message ?? "").toBe("succeeded");
+    expect(done.request.inputs?.model3d).toBe(gens.getGeneration(built.id)!.outputs[0].url);
+    expect(done.request.inputs?.images).toEqual([gens.getGeneration(still.id)!.outputs[0].url]);
+  }, 60_000);
+
+  it("open, with its own photo and an earlier step feeding something else: Hi3D reads the photo it was given", () => {
+    const [still] = gens.createGenerations({ feature: "image", modelId: "oss-z-image-turbo", prompt: "A brass desk lamp, side" });
+    const asked = { feature: "canvas", modelId: "oss-pixal3d", op: "image-to-3d" as const, inputs: { images: [photo] }, params: { extra: { hi3dRefine: 1024 } } };
+    const [refined, built] = gens.createGenerations(asked, { dependsOn: [still.id] });
+    expect(deps(built.id)).toEqual([still.id]);
+    expect(refined.request.chain).toEqual([{ slot: "model3d" }]);
+    expect(refined.request.inputs?.images).toEqual([photo]);
+    expect(deps(refined.id)).toEqual([built.id]);
+  });
+
   it("off: one step, as before", () => {
     const steps = gens.createGenerations({ ...m3d.model3dRequest({ engine: "open", mode: "image", photo }), params: { extra: { hi3dRefine: "off" } } });
     expect(steps.map((g) => g.modelId)).toEqual(["oss-pixal3d"]);
@@ -352,5 +388,28 @@ describe("Assist and MCP", () => {
     expect(out.isError, String(out.content)).toBeFalsy();
     const [r] = JSON.parse(out.content as string) as { started: string[] }[];
     expect(r.started.map((id) => gens.getGeneration(id)!.modelId).sort()).toEqual(["oss-hi3d-refine", "oss-trellis2"]);
+  });
+
+  it("a still, then an open image-to-3D job with mesh_resolution: the refine still runs, on the still", async () => {
+    const tools = await import("@/server/assist/tools");
+    const out = await tools.executeTool(
+      "generate",
+      { summary: "Lamp", jobs: [{ model_id: "oss-z-image-turbo", prompt: "A brass desk lamp" }, { model_id: "oss-pixal3d", prompt: "", mesh_resolution: 1536, after: 0 }] },
+      { engine: "open" },
+    );
+    expect(out.isError, String(out.content)).toBeFalsy();
+    const { results } = JSON.parse(out.content as string) as { results: { started: string[] }[] };
+    const still = gens.getGeneration(results[0].started[0])!;
+    // The job's result is the refined model; the model it refines is the step before it.
+    const refined = gens.getGeneration(results[1].started[0])!;
+    expect(still.modelId).toBe("oss-z-image-turbo");
+    expect(refined).toMatchObject({ modelId: "oss-hi3d-refine", op: "refine-3d" });
+    expect(refined.request.params?.extra).toEqual({ meshResolution: 1536 });
+    expect(refined.request.chain).toEqual([{ slot: "model3d" }, { slot: "images" }]);
+    const dep = (id: string) => (db().prepare("SELECT depends_on FROM generations WHERE id = ?").get(id) as { depends_on: string }).depends_on;
+    const [builtId, photoId] = JSON.parse(dep(refined.id)) as string[];
+    expect(photoId).toBe(still.id);
+    expect(gens.getGeneration(builtId)).toMatchObject({ modelId: "oss-pixal3d", op: "image-to-3d" });
+    expect(dep(builtId)).toBe(still.id);
   });
 });

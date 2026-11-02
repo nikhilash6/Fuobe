@@ -924,8 +924,9 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
     return createKeyframeFilm(original, shotModel, filmRoute, { batchId: opts.batchId, dependsOn: opts.dependsOn });
   }
   // Image to 3D's "Refine detail" (open engine): the model, then Hi3D's refine of its mesh with the same photo.
-  if (!opts.dependsOn && shotModel && shotModel.kind === "model3d" && original.op !== "refine-3d" && chainedRefine(original) !== null) {
-    return createRefinedModel(original, shotModel);
+  // Its photo may come from an earlier step (a Canvas image node, an Assist plan's still): the refine then waits for it too.
+  if (shotModel && shotModel.kind === "model3d" && original.op !== "refine-3d" && chainedRefine(original) !== null) {
+    return createRefinedModel(original, shotModel, { batchId: opts.batchId, dependsOn: opts.dependsOn });
   }
   // Text to 3D on the open engine: a still first, then the 3D model of it. The operation is read as the planner
   // reads it (Assist, MCP and API clients usually leave op out).
