@@ -1242,6 +1242,9 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     values.prompt = (input.dialogue ?? []).filter((l) => l.text.trim()).map((l) => `SPEAKER ${l.voice === "B" ? "B" : "A"}: ${l.text.trim()}`).join("\n");
   }
   if (ctx.op === "voice-change") values.audio2 = input.voiceAudio;
+  // Design a voice (Qwen3-TTS, VoxCPM2): the voice in words; a clone reads what its sample says (VoxCPM2's "ultimate" clone).
+  if (ctx.op === "voice-design") values.voiceDescription = input.voiceDescription?.trim();
+  if (ctx.op === "tts" && b.voiceTranscript && input.voiceTranscript?.trim()) values.voiceTranscript = input.voiceTranscript.trim();
   // A join of audio clips takes them in order: the graph binds the first two, expandAudioJoinWorkflow the rest.
   const audios = input.audios ?? [];
   if (manifest.expand === "audios" && audios.length) {

@@ -47,6 +47,7 @@ import {
   type ProviderId,
 } from "@/lib/catalog/types";
 import { db } from "./db";
+import { keepVoiceEmbedding, savedVoiceFor } from "./voices";
 import { listElements } from "./elements";
 import { markStale } from "./gpu/snapshots";
 import { loadIndex } from "./gpu/index-file";
@@ -1719,6 +1720,13 @@ async function submitNow(
       // Vary seeds across a batch so N jobs don't return N identical results.
       seed: plan.params.seed !== undefined && plan.params.seed >= 0 ? plan.params.seed + index : undefined,
     };
+    // A saved voice (Design a voice; src/server/voices.ts): what its clip says makes a closer clone, and a cloud route that
+    // speaks with an embedding gets the one fal made from it before, so the clip isn't cloned again.
+    const savedVoice = req.account ? null : savedVoiceFor(req.inputs?.voiceAudio);
+    if (savedVoice) {
+      if (!input.voiceTranscript?.trim() && savedVoice.voice.transcript) input.voiceTranscript = savedVoice.voice.transcript;
+      if (route.map?.voiceEmbedding && savedVoice.voice.embedding) input.voiceEmbedding = await prep(savedVoice.voice.embedding);
+    }
     // What the caller said about the clip's length wins; the header fills the rest.
     Object.assign(input, { ...source, ...(plan.params.sourceDuration !== undefined && { sourceDuration: plan.params.sourceDuration }) });
     // A talking avatar renders as long as its voice: priced for it once its header is read (an API call that didn't say).
@@ -1788,6 +1796,8 @@ async function submitNow(
       await ensureLorasOnComfy([...(input.loras ?? []), ...graphLoras(route.endpoint, input.extra)], await comfyLoraFiles(route), (message) => update(id, { message }));
     }
     const res = await adapter.submit({ generationId: id, model: plan.model, route, input });
+    // A saved voice the cloud just cloned keeps the embedding (the owner's runs only), so its next line skips the clone.
+    if (typeof res.meta?.voiceEmbedding === "string" && !req.account) void keepVoiceEmbedding(req.inputs?.voiceAudio, res.meta.voiceEmbedding).catch(() => {});
     const now = Date.now();
     const status = statusOf(id);
     if (!status || status === "canceled") {

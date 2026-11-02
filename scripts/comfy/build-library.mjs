@@ -160,6 +160,8 @@ export const BINDING_KEYS = new Set([
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
   // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
   'invertDepth',
+  // Design a voice (nm10-voice-design): the voice in words, and what a voice sample says (Qwen3-TTS / VoxCPM2 clones)
+  'voiceDescription', 'voiceTranscript',
   // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size
   'vae', 'sigmas',
 ]);
