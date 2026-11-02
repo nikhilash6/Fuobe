@@ -1,0 +1,147 @@
+{
+  "key": "o12-training-kit",
+  "impl": {
+    "branch": "o/o12-training-kit",
+    "summary": "Built the O12 training kit: everything up to a training run for Fuobe's own LoRAs and the motion library. That covers 13 job specs, each with both routes; a data-licence log format and a checker that refuses to start a job; planned LoRA library entries that no preset may use; a motion-library manifest and its checker for the 13 sports moves; and publishing to a Fuobe Hugging Face org, dry-run by default. None of it has been trained or uploaded: there is no GPU, no fal key and no owned dataset here. Already on the base before this package: the hosted trainer fields, prices and outputs (trainers.generated.ts), aiToolkitJob for Z-Image Turbo, which the kit reuses, the research's fuobeTrainedLoras list (10 rows for section 6, not used by any code), the 'train' flags on 16 Soul looks, the WORDS_ONLY handling for the train-own and motion-library rows in dop.ts, and a library test that checks licence fields. The generator had no refusal for a missing licence until this package added one.",
+    "built": [
+      "scripts/train/specs/*.json: 13 job specs. They are the 10 LoRAs in section 6 (fuobe-soul-core, fuobe-cctv and fuobe-ultrawide-05 first) plus three Wan 2.2 I2V motion LoRAs: fuobe-push-in (Eyes In, Mouth In, Eating Zoom), fuobe-timelapse and fuobe-drone-reveal. Each spec has dataset size and caption rules, steps, rank, learning rate, trigger, the fal trainer (with extra fields such as training_type), the AI-Toolkit arch (zimage:turbo, zimage, wan22_14b_i2v) and the target file and Hugging Face repo.",
+      "src/lib/training-kit.ts (pure): specProblems checks each spec against the research's trainer fields, step limits, field enums, media, base and planned entry. falTrainingPayload builds the fal request from the trainer's own fields (number_of_steps on Wan, default_caption or trigger_phrase where the schema has them). aiToolkitConfig builds the AI-Toolkit job; Z-Image Turbo reuses aiToolkitJob, and Z-Image base and Wan 2.2 I2V 14B take AI-Toolkit's own defaults, read at main e9c72b7 on 2026-11-02. specCostUsd gives the fal price.",
+      "Data-licence log (scripts/train/data-logs/<id>.json, shipped empty, so every job is refused today). Each item has file, sha256, a source (own-shoot, licensed, cc0 or public-domain), licence, proof, author and date. A licensed item also needs aiTraining:true. A file with people in it needs a signed release covering ai-training, from adults only. dataLogProblems also checks a dataset folder: every file is logged, unchanged by SHA256 and captioned, and the count is within the spec's range, and the log must be reviewed. publicLog removes release references before publishing.",
+      "LoRA library: gen-lora-library.py now refuses any entry without a licence snapshot (licence, commercial and hostedOk), and refuses any preset, motion or effect row, or Mixed Media look that uses a planned LoRA. It emits PLANNED_LORAS (13 entries with status 'planned' and a licence snapshot). A research row with a 'trained' block (pinned URL, SHA256, size, licence) becomes an ordinary LORA_LIBRARY entry the next time gen:catalog runs. PlannedLora type added in loras.ts.",
+      "Motion library: src/lib/catalog/motion-library.json lists the 13 sports moves with their DoP preset ids and no clips yet. motionLibraryProblems checks that each clip is CC0, public domain or own-shot, 2-10 s, at least 480 px, https, with a release where people appear. motionLibraryClip(presetId) returns a move's first clip that passes, and undefined until then, so the moves keep their current route.",
+      "scripts/train/kit.mjs, a command line with five commands: list (log counts and fal price per spec); check <id>|--all [--dataset]; job <id> --dataset [--zip-url] [--out], which writes .aitk.json and .fal.json under .train/ (git-ignored), refuses while the log fails, and submits nothing; motions; and publish <id> --file [--org] [--upload] [--write-research], a dry run by default. --upload uses 'hf' with HF_TOKEN, and --write-research writes the trained block into the research JSON before pnpm gen:catalog. FUOBE_TRAIN_LOGS can point at a private log folder.",
+      "scripts/train/README.md: a short guide covering data, log format, check, job, publish and the motion library.",
+      "Research: added the three Wan rows to fuobeTrainedLoras in the JSON, and to the section 6 table in the markdown with a dated note. Every row now has group and status 'planned'. Re-checked at source: fal's three trainer schemas (z-image-trainer, z-image-turbo-trainer-v2, wan-22-trainer/i2v-a14b) match the JSON, and AI-Toolkit's arch names and defaults for these bases."
+    ],
+    "tests": "tests/training-kit.test.ts adds 17 tests (16 after the fix commit dropped one assertion), all passing. They cover specs, payloads, AI-Toolkit configs, every log gap, folder matching, release rules, the public log, planned entries, generator refusals and the trained-block publish path, the motion library, and the command line end to end: refusal, a ready dataset writing both configs, a changed file refused, and a dry-run publish. lora-library and oss-loras tests pass. npx next typegen, pnpm typecheck: OK. pnpm lint: 0 errors, 1 warning that was already on the base (WAN_NEG_EN). One full Vitest run (FUOBE_ACCOUNT_DISK_FREE_GB=1, --maxWorkers=2): 4963 passed, 8 failed. 6 of the 8 are rule 8's known failures: comfy-reuse, dop-originals, preset-featured, soul-runs x2 and split-soundtrack. picker-covers timed out under load and passes alone (rule 12). no-higgsfield was mine: the provider's name appeared in the data checker and the README. Fixed in cbe62a22: the checker now relies on its four allowed sources instead of matching a name. no-higgsfield and training-kit pass after the fix.",
+    "left": [
+      "Nothing is trained. Each LoRA needs an owned or licensed dataset, a completed and reviewed data-licence log, and then a GPU (AI-Toolkit; Wan 2.2 14B needs 24 GB) or a fal key (prices in kit.mjs list: about $1.0-5.7 per LoRA).",
+      "The Fuobe Hugging Face org ('fuobe' by default, or FUOBE_HF_ORG) has to be created by the owner, with a write HF_TOKEN. The --upload path (hf repo create, hf upload, then reading the commit through the HF API) has never been run.",
+      "The motion library has no clips. The step that runs a move from its clip (Fuobe Genjutsu motion transfer on both engines, 'maker' in the manifest) is not wired into dopPreset or the generation path; only motionLibraryClip exists, and today it leaves every move on its current route.",
+      "fuobe-beauty-details stands for four concept LoRAs (grillz, bleached brows, long legs, creatures). Its spec says to copy it once per concept and add each to fuobeTrainedLoras before the first run.",
+      "Unverified until the first run: whether a LoRA trained on Z-Image base (fal z-image-trainer, used by soul-core, scale-surreal, frutiger-aero and paper-collage) behaves the same on Z-Image Turbo, and whether fal's single Wan 2.2 I2V lora_file works loaded on both experts.",
+      "Planned entries are not shown in Settings → Models & licences. Once a file is published it appears there like any library LoRA.",
+      "Brief out of date: 'the library test rejects an entry without a licence snapshot' was only partly there. The test checked the generated fields, but the generator fell back silently when a licence was missing; the generator now refuses."
+    ],
+    "docsNotes": "STATUS.md (O12): the training kit is built and nothing is trained. It has 13 specs with both routes, data-licence logs with a checker that blocks jobs, PLANNED_LORAS in the library, a motion-library manifest for the 13 sports moves (no clips, current routes kept), and a dry-run publish to a Fuobe HF org followed by gen:catalog. ARCHITECTURE.md: src/lib/training-kit.ts (pure) and scripts/train/kit.mjs; gen-lora-library.py now emits PLANNED_LORAS and turns research fuobeTrainedLoras[].trained into library entries; src/lib/catalog/motion-library.json. The guide is scripts/train/README.md. No routes, pages, migrations or ComfyUI graphs were added, so there is nothing to change for public sign-up or the GPU pre-flight.",
+    "blocked": ""
+  },
+  "review": {
+    "findings": [
+      {
+        "severity": "medium",
+        "verdict": "CONFIRMED",
+        "file": "scripts/train/kit.mjs",
+        "line": 62,
+        "summary": "The data-licence check only sees files that match its own extension list, so unlogged files in the dataset folder pass and still get trained. The fal zip is not checked at all.",
+        "detail": "readDataset() keeps only /\\.(jpe?g|png|webp)$/ for image specs and /\\.(mp4|mov|webm)$/ for video specs. Any other file in the folder never reaches dataLogProblems. That includes a .mkv/.avi/.m4v clip, which AI-Toolkit's video loader reads, and a .jpg in a Wan dataset, which AI-Toolkit trains as a one-frame item. Yet the .aitk.json points AI-Toolkit at that whole folder. Reproduced: a valid 20-clip log for fuobe-push-in plus an unlogged stray.mkv and still.jpg in the same folder. `kit.mjs job fuobe-push-in --dataset <dir> --zip-url https://example.com/anything.zip` printed 'the data-licence log passes' and wrote both configs. The fal route also takes any --zip-url, and nothing ties it to the checked folder, so the hosted path skips the log check in practice. Fix: refuse any file in the folder that is not logged media or a caption, or at least any extension AI-Toolkit reads. For fal, have the kit build the zip from the checked files and record its SHA256.",
+        "brief": "item 2: 'a checker script that refuses to start a job whose dataset log is incomplete'"
+      },
+      {
+        "severity": "medium",
+        "verdict": "PLAUSIBLE",
+        "file": "scripts/train/kit.mjs",
+        "line": 143,
+        "summary": "The published model card has `base_model: z-image-turbo` / `wan2.2-i2v-a14b`. Those are not Hugging Face repo ids, and the Hub rejects commits whose README base_model metadata is not a valid model id.",
+        "detail": "From memory of how the Hub behaves: it refuses such a commit with 'Invalid metadata in README.md … \"base_model\" with value … is not valid. Use a model id from https://hf.co/models'. Not run here; the implementer says --upload has never been run. If so, the first `hf upload` fails. The value is also wrong in substance for the four specs on fal z-image-trainer and the AI-Toolkit 'zimage' arch, which train on Tongyi-MAI/Z-Image (base), not Turbo. Use the real repo ids, e.g. Tongyi-MAI/Z-Image-Turbo, Tongyi-MAI/Z-Image, or the Wan-AI Wan2.2-I2V-A14B repo, chosen by the route actually used, or leave the field out."
+      },
+      {
+        "severity": "low",
+        "verdict": "CONFIRMED",
+        "file": "scripts/train/kit.mjs",
+        "line": 151,
+        "summary": "The trained block and the HF card hard-code `license: apache-2.0`, `commercial: true` and `hostedOk: true`, whatever the data log's sources or licences say.",
+        "detail": "Licences are information to be recorded, not assumed. A dataset with 'licensed' stock items can carry redistribution or hosting limits, and publish copies none of that into the snapshot Settings → Models & licences will show. Derive the snapshot from the log (e.g. list the distinct item licences, and flag non-own sources), or at least let the operator set it, rather than asserting Apache-2.0 / commercial / hostedOk."
+      },
+      {
+        "severity": "low",
+        "verdict": "CONFIRMED",
+        "file": "src/lib/training-kit.ts",
+        "line": 283,
+        "summary": "publicLog() goes up publicly to Hugging Face with each item's `proof` and `author`. Per the format's own docs, those can be receipts, contracts, shoot folders and call sheets.",
+        "detail": "Only `consent` is stripped. proof is documented as 'the receipt or contract, the shoot's folder or call sheet', and the README example is 'call sheet 2026-11-12, raw folder cctv/2026-11-12'. That is internal material, and people's names in author/proof go public too. Consider publishing only source, licence, sha256, date and a has-proof flag, or a separate publicProof field."
+      },
+      {
+        "severity": "low",
+        "verdict": "CONFIRMED",
+        "file": "src/lib/training-kit.ts",
+        "line": 260,
+        "summary": "The caption check only tests that <stem>.txt exists. An empty caption, or one without the trigger, passes, though every spec's caption rules require the trigger.",
+        "detail": "folder.captions is a list of names; the content is never read. specProblems insists that the caption rules mention the trigger, but the dataset check never enforces it."
+      },
+      {
+        "severity": "low",
+        "verdict": "CONFIRMED",
+        "file": "scripts/gen-lora-library.py",
+        "line": 21,
+        "summary": "The generator docstring and comment cite scripts/train/publish.mjs, which does not exist (publishing is `scripts/train/kit.mjs publish`).",
+        "detail": "Lines 21 and 235."
+      },
+      {
+        "severity": "low",
+        "verdict": "CONFIRMED",
+        "file": "src/lib/training-kit.ts",
+        "line": 317,
+        "summary": "The motion library has no pick-up point: motionLibraryClip() is used by nothing in src/, so a clip added to the manifest changes nothing for the 13 moves.",
+        "detail": "Brief item 4 asks for 'where those moves would pick the clips up once present'. The helper exists and the README says honestly that it is not wired. The moves keeping their current route is correct for now, but the hook into dopPreset / the generation path, which would ask for the clip and fall back, is not there. The implementer reports this under 'left'."
+      },
+      {
+        "severity": "info",
+        "verdict": "CONFIRMED",
+        "file": "src/lib/training-kit.ts",
+        "line": 71,
+        "summary": "BASE_OF accepts the AI-Toolkit 'zimage' (base) arch for a spec whose base is z-image-turbo. So soul-core, scale-surreal, frutiger-aero and paper-collage train on Z-Image base on both routes, though the library entry and Soul run on Turbo.",
+        "detail": "The soul-core note says to 'compare it with the AI-Toolkit Turbo run', but the spec's AI-Toolkit route is base, not Turbo, so no Turbo run is configured. The base-vs-Turbo question is acknowledged in 'left'. Consider making AI-Toolkit train on zimage:turbo (with the training adapter) for these, so one of the two routes matches the runtime model."
+      }
+    ],
+    "checks": [
+      "Read review prompt, main rules and the implementer report; reviewed git diff claude/fuobe-parity-4...o/o12-training-kit (2 commits, 37 files: specs, empty data logs, kit.mjs, training-kit.ts, gen-lora-library.py, PlannedLora type, motion-library.json, research rows, tests).",
+      "No routes, pages, migrations, ComfyUI graphs, node packs or server paths added: nothing to check against public sign-up, tenant/account-inputs, the proxy body limits or the GPU pre-flight board. training-kit.ts is imported by nothing in src/ (only scripts/tests).",
+      "No binary/LoRA/Higgsfield media committed; no Higgsfield API use; tests/no-higgsfield passes.",
+      "fal payloads checked against trainers.generated.ts: z-image-trainer (image_data_url, steps 100-10000, learning_rate, default_caption, training_type enum), z-image-turbo-trainer-v2 (steps 10-40000), wan-22-trainer/i2v-a14b (training_data_url, number_of_steps 100-20000, learning_rate, trigger_phrase). falTrainingPayload only sends fields in the schema; the step counts are in range.",
+      "Motion library presetIds (13) all exist in the catalog (preset-recipe-book.json / oss-loras.generated.ts), and the test checks getPreset for each.",
+      "python3 scripts/gen-lora-library.py regenerates lora-library.generated.ts with no diff (124 LoRAs, 13 planned); the tree stays clean.",
+      "Generator: refuses an entry with no licence snapshot, and refuses a preset, motion/effect row or Mixed Media look that uses a planned LoRA; a trained block goes through entry(), which pins resolve/main to the revision and needs sha256. Research JSON rewrite in --write-research keeps the file's indent-1 format byte-for-byte.",
+      "vitest tests/training-kit, lora-library, oss-loras, no-higgsfield: 4 files, 69 tests passed. No full Vitest run (the implementer's covered it; the targeted runs were enough).",
+      "pnpm typecheck (after next typegen): OK. eslint on the changed TS/MJS files: clean.",
+      "kit.mjs list / check --all / motions run: every spec is planned, every job refused for an empty log, and all 13 moves keep their current route.",
+      "Reproduced finding 1 in the scratchpad: with a valid 20-clip log plus an unlogged .mkv and .jpg in the dataset, `job` passed and wrote both configs; also took an arbitrary --zip-url. Scratch files removed; no edits or commits to the worktree."
+    ],
+    "verdict": "approve-with-fixes: the kit is a solid, honestly labelled build of brief items 1-6, matches the research's trainer fields and touches no runtime route. Before merge, fix the data-licence checker so unlogged files in the dataset folder (any extension the trainer reads) and an unchecked fal zip cannot slip past it (finding 1), and the HF model card's base_model (finding 2). The rest are low-severity follow-ups."
+  },
+  "fix": {
+    "applied": [
+      "Finding 1 (medium, confirmed): the dataset check now reads the whole folder (scripts/train/kit.mjs readDataset). Every file that is not a caption is hashed, whatever its extension, and anything that is not a plain file is listed. dataLogProblems (src/lib/training-kit.ts) refuses any file that is not the spec's media ('stray.mkv is not a clip the spec trains on', a .jpg in a Wan set, notes.pdf), any sub-folder or link, and every unlogged or changed file, as before. For fal, `job` now zips exactly the checked files (datasetZipNames: the logged media plus captions) into .train/<id>/<id>.dataset.zip and prints its SHA256. It writes <id>.fal.json only with --zip-url, after downloading that URL and finding the same SHA256 as the zip it built, and it records datasetZip {file, sha256} in the request file. Tests: unit cases for a stray .mkv, a still in a clip set, a .pdf and a sub-folder; CLI cases for a stray .webm refusing the job, a served zip with the wrong bytes refused, and the right zip accepted (local http server).",
+      "Finding 2 (medium, plausible; fixed): checked at the primary source. Per the Hub model-card docs (huggingface.co/docs/hub/model-cards) and the spec (hub-docs modelcard.md), base_model takes Hub model identifiers. The real repo ids were read from the HF API on 2026-11-02, all Apache-2.0: Tongyi-MAI/Z-Image-Turbo, Tongyi-MAI/Z-Image, Wan-AI/Wan2.2-I2V-A14B. Neither source confirms that the Hub rejects an invalid value; the review gave that from memory. A library base name is wrong either way. Fix: hfBaseModel(spec, route) maps the route's trainer to the repo it trains on: fal z-image-trainer and AI-Toolkit zimage to Z-Image, the Turbo trainer and zimage:turbo to Z-Image-Turbo, and both Wan routes to Wan-AI/Wan2.2-I2V-A14B. `publish` now requires --route fal|ai-toolkit, and the card gets base_model plus base_model_relation: adapter.",
+      "Finding 3 (low): the licence snapshot comes from the data-licence log (trainedLicence). Data that is all own-shoot, CC0 or public domain defaults to Apache-2.0, commercial and hostable. With any 'licensed' item, publish refuses until the operator passes --licence, --commercial yes|no and --hosted-ok yes|no. The snapshot text names the data's sources and licences. The card's license is the SPDX id, or 'other' with license_name.",
+      "Finding 4 (low): publicLog publishes only file, sha256, source, licence, date, aiTraining (licensed items), people and a consent flag. Proof becomes 'on file', and author and the release reference are dropped. A CC0 or public-domain original with an https proof keeps it as `original` with its author, as a credit.",
+      "Finding 5 (low): captions are read. The folder passes caption text by name, and the check refuses a missing caption, an empty one, or one without the trigger as a whole word.",
+      "Finding 6 (low): gen-lora-library.py now points to `scripts/train/kit.mjs publish` instead of the nonexistent scripts/train/publish.mjs (both places).",
+      "Finding 7 (info): soul-core, scale-surreal, frutiger-aero and paper-collage now take AI-Toolkit zimage:turbo (with the training adapter), not zimage. fal's z-image-trainer stays the base route, so one route matches Soul's runtime model, and the spec notes now describe the comparison that is actually configured. This matches the research row ('AI-Toolkit on Z-Image base / Turbo + ostris training adapter v2'). The zimage arch path stays tested through a spec override.",
+      "README (scripts/train/README.md) updated: the folder rule, the zip-then-URL job flow, --route and base_model, the licence options and the public log's fields. Tests: tests/training-kit.test.ts has 19 tests, all passing."
+    ],
+    "rejected": [
+      "Finding 8 (low, motionLibraryClip not wired into dopPreset): not wired. No clip exists, so wiring would change no behaviour today. Running a move from a fixed driving clip needs the clip passed as the video input of fuobe-genjutsu-motion (op motion-transfer) through the generation path, which means touching the recipe-fidelity files (dop.ts routes, generations.ts and plan.ts per rule 2), and it can only be verified with a GPU or fal run. The pick-up point the brief asks for exists: motionLibraryClip(presetId) returns a checked clip or undefined, and the README and the manifest's `maker` name the step. Kept under 'left'."
+    ],
+    "checks": [
+      "Worktree /home/user/wt/o-o12-training-kit on o/o12-training-kit: git log claude/fuobe-parity-4..HEAD lists only this package's two commits, and the base is an ancestor, so nothing was merged. Local claude/fuobe-parity-4 (fdad177c) is behind origin (85be87db); the base merge was left to the later stage as instructed.",
+      "Primary sources for finding 2: https://huggingface.co/docs/hub/model-cards (base_model = 'base model Hub identifier'; base_model_relation adapter); https://github.com/huggingface/hub-docs/blob/main/modelcard.md ('base_model: {base_model} # Example: stabilityai/stable-diffusion-xl-base-1.0'); https://huggingface.co/api/models/Tongyi-MAI/Z-Image-Turbo, /Tongyi-MAI/Z-Image, /Wan-AI/Wan2.2-I2V-A14B (all exist, cardData license apache-2.0, read 2026-11-02). A web search found no primary source quoting the Hub's 'Invalid metadata' rejection.",
+      "npx next typegen: exit 0. pnpm typecheck: exit 0. pnpm lint: exit 0, 0 errors, 1 warning that was already on the base (WAN_NEG_EN in scripts/comfy/library.spec.mjs).",
+      "Targeted: vitest tests/training-kit, lora-library, oss-loras, no-higgsfield: 4 files and 71 tests passed (training-kit is 19/19 after the last edit).",
+      "python3 scripts/gen-lora-library.py regenerates with no diff. kit.mjs list shows every Z-Image spec on AI-Toolkit zimage:turbo, with fal prices unchanged.",
+      "One full run, FUOBE_ACCOUNT_DISK_FREE_GB=1 pnpm vitest run --maxWorkers=2: 4966 passed, 7 failed, 4 skipped. Six are rule 8's known failures (comfy-reuse, dop-originals effect-acid, preset-featured, soul-runs x2, split-soundtrack). preset-covers timed out at 5000 ms under load (rule 12) and passes alone (11/11).",
+      "No browser check was needed (no UI change). .next was removed, git status is clean, and 6dc2cf50 is pushed to origin/o/o12-training-kit."
+    ],
+    "finalSummary": "The fixes close the review's two medium findings and its low and info notes. The data-licence check now covers everything in the dataset folder, and the caption text must have the trigger. The fal route trains only on a zip the kit built from the checked files, accepted only when the uploaded URL has that zip's SHA256. Publishing takes the route, writes a real Hugging Face base_model (Tongyi-MAI/Z-Image, Tongyi-MAI/Z-Image-Turbo or Wan-AI/Wan2.2-I2V-A14B) with base_model_relation adapter, takes the licence snapshot from the log (licensed data needs an explicit licence, commercial and hosting decision), and keeps proof, authors and release references off the public log. The Z-Image specs now train on Turbo on the GPU route, so one route matches Soul. Per engine: the open engine (the user's GPU) gets AI-Toolkit configs for all 13 specs (Z-Image Turbo with the training adapter; Wan 2.2 I2V 14B, which needs a 24 GB card). Built and unit-tested, never run: no GPU here. The cloud engine gets fal trainer requests for the same 13 specs, built from the trainers' schema fields, with the dataset zip pinned by SHA256. Built and tested against a local server, never submitted: no fal key, no owned dataset. Publishing to the Fuobe HF org is tested as a dry run; --upload needs HF_TOKEN, the hf CLI and the org, and has never run. Nothing is trained; all 13 LoRAs stay PLANNED_LORAS that no preset uses. Public sign-up: the kit is scripts and pure library code with no routes, pages or runs, so guests and accounts see no change. Planned LoRAs are not shown to anyone, and a published one would appear like any library LoRA under the owner's Models & licences.",
+    "left": [
+      "Nothing is trained: each LoRA needs an owned or licensed dataset, a complete reviewed data-licence log, and a GPU (AI-Toolkit; Wan 2.2 14B needs 24 GB) or a fal key.",
+      "The Fuobe Hugging Face org and a write HF_TOKEN have to come from the owner. The --upload path (hf repo create, hf upload, reading the commit) has never run, so whether the Hub accepts the new card is confirmed only on the first upload.",
+      "The motion library has no clips, and running a move from its clip (fuobe-genjutsu-motion with the clip as the driving video) is not wired into dopPreset or the generation path. motionLibraryClip is the pick-up point (finding 8, deferred).",
+      "Unverified until the first run: how a Z-Image base LoRA (fal z-image-trainer) behaves on Turbo compared with the AI-Toolkit Turbo file, and whether fal's single Wan 2.2 I2V file works loaded on both experts.",
+      "The `job` zip uses python3's zipfile module, so python3 must be on the machine that makes the job (gen:catalog already needs it).",
+      "fuobe-beauty-details is to be copied into four concept specs before its first run. Planned entries are not shown in Settings → Models & licences.",
+      "The base branch still has to be merged (later stage). The local claude/fuobe-parity-4 is behind origin."
+    ],
+    "blocked": ""
+  }
+}
