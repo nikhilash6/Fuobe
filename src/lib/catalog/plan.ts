@@ -1,5 +1,5 @@
 import { FORMAT_INFO, formatList } from "@/lib/av/formats";
-import { factorTier } from "@/lib/av/upscale";
+import { factorTier, factorTierProblem } from "@/lib/av/upscale";
 import type {
   Engine,
   GenerationRequest,
@@ -555,6 +555,8 @@ export function planGeneration(
   if (tooMany) throw new Error(tooMany);
   const tooLong = sourceLengthProblem(model, params.sourceDuration);
   if (tooLong) throw new Error(tooLong);
+  const tier = op === "upscale-video" ? factorTierProblem(model.name, model.options.resolutions, params.resolution) : null;
+  if (tier) throw new Error(tier);
 
   // Soul Cinema's 21:9 (research §4.5: a crop option): made at 16:9 on both engines, then cropped to 21:9 with
   // its grade after generation (meta.crop).

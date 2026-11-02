@@ -394,8 +394,12 @@ async function main() {
     // Files a loader reads by a name with no extension (DBSLoader: models/dbs/<model>/config.json + model.safetensors), which the
     // loop above can't see: listed like any model, so install help and the presence check (GET /models/<folder>) know them.
     // Then files a model control can pick instead (FILM for RIFE): listed as optional, so missing-model help names them.
+    // A file the graph loads can be optional too: one its nodes load only when a control asks (Kandinsky 6.0's Prompt helper).
     for (const [file, optional] of [...(spec.requiredModels || []).map((f) => [f, false]), ...(spec.optionalModels || []).map((f) => [f, true])]) {
-      if (models.has(file)) continue;
+      if (models.has(file)) {
+        if (optional) models.get(file).optional = true;
+        continue;
+      }
       const known = KNOWN_MODELS[file];
       if (!known?.url) {
         errs.push(`${optional ? 'optional' : 'required'} model ${file}: no download URL known`);

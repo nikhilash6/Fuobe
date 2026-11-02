@@ -5,7 +5,7 @@
  */
 import { FORMAT_INFO } from "./av/formats";
 import { fpsPlan, fpsSummary } from "./av/fps";
-import { targetShortEdge, upscaledSize, upscaleFactorFor, upscaleTier } from "./av/upscale";
+import { sideMultipleProblem, targetShortEdge, upscaledSize, upscaleFactorFor, upscaleTier } from "./av/upscale";
 import { wholeClipProblem, wholeClipTool } from "./av/video-finish";
 import { clipFpsProblem, clipSizeProblem, clipWindowProblem } from "./catalog/clip-windows";
 import { clipBilling, sourceLengthProblem } from "./catalog/plan";
@@ -315,7 +315,8 @@ export function clipBlocker(
   if (!facts?.width || !facts.height || !model) return null;
   if (op === "upscale-video") {
     const tier = upscaleTier(params.resolution ?? model.defaults?.resolution, model.options.resolutions, { width: facts.width, height: facts.height }, params.resolution !== undefined);
-    return "error" in tier ? tier.error : null;
+    if ("error" in tier) return tier.error;
+    return sideMultipleProblem(model.name ?? "This model", model.options.sideMultiple, model.options.resolutions, tier.resolution, { width: facts.width, height: facts.height });
   }
   if (model.engine !== "open" || !ramBytes || !facts.duration || !facts.fps) return null;
   const target = params.targetFps ?? model.defaults?.targetFps;

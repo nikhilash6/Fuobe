@@ -16858,9 +16858,9 @@ export const CLOUD_MODELS: ModelDef[] = [
             "pro-fast": "Pro \u00b7 Fast, 8 steps",
             "pro-standard": "Pro \u00b7 Standard, 20 steps",
             "pro-best": "Pro \u00b7 Best, 50 steps",
-            "lite-fast": "Lite \u00b7 Fast, 4 steps",
-            "lite-standard": "Lite \u00b7 Standard, 10 steps",
-            "lite-best": "Lite \u00b7 Best, 16 steps"
+            "lite-fast": "Lite \u00b7 Fast, 4 steps \u00b7 no negative prompt",
+            "lite-standard": "Lite \u00b7 Standard, 10 steps \u00b7 no negative prompt",
+            "lite-best": "Lite \u00b7 Best, 16 steps \u00b7 no negative prompt"
           },
           "sets": {
             "pro-fast": {
@@ -16989,7 +16989,14 @@ export const CLOUD_MODELS: ModelDef[] = [
       ],
       "seed": true,
       "promptless": true,
-      "maxSourceSeconds": 5
+      "maxSourceSeconds": 5,
+      "sideMultiple": {
+        "of": 16,
+        "factors": [
+          "2x",
+          "4x"
+        ]
+      }
     },
     "badges": [
       "new",

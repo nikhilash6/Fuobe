@@ -26,12 +26,13 @@ export function kandinskyPrompt(words: string): string {
   let picture = text;
   let sound = "";
   const m = SOUND.exec(text);
-  if (m && m.index > 0) {
+  if (m) {
     sound = m[1].trim();
     picture = text.slice(0, m.index).trim();
   }
   picture = picture.replace(QUOTED, (_, a, b, c, d) => `<S>${String(a ?? b ?? c ?? d).trim()}<E>`);
-  return sound ? `${picture} <AUDCAP>${sound}<ENDAUDCAP>` : picture;
+  // A prompt that is only a sound line ("Sound: rain") is the sound caption alone.
+  return sound ? `${picture ? `${picture} ` : ""}<AUDCAP>${sound}<ENDAUDCAP>` : picture;
 }
 
 /** The prompt box's hint for Kandinsky 6.0: how to give a character words, and the shot its sound. */

@@ -1,10 +1,13 @@
 import "server-only";
 import crypto from "node:crypto";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
+import { PROMPT_HELPER_FILES, PROMPT_HELPER_PARAM } from "@/lib/comfy";
+import { getModel } from "@/lib/catalog";
+import { controlSets } from "@/lib/catalog/plan";
 import { fixPlan } from "@/lib/gpu/plan";
 import { CLEAN_VAE, DECODER_PARAM, GPU_PARAM } from "@/lib/qwen21-speed";
 import { deviceLabel, needTargets, toolReadiness } from "@/lib/gpu/readiness";
-import type { FixPlan, ToolReadiness, ToolRef } from "@/lib/gpu/types";
+import type { FileKey, FixPlan, ToolReadiness, ToolRef } from "@/lib/gpu/types";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { authEnabled, crossSite, hostAllowed, validToken } from "../auth";
 import { loadIndex, preflightOn } from "./index-file";
@@ -56,21 +59,28 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
     has,
   });
   if (!has(id)) return { ok: true };
-  // Qwen-Image 2.1's Options → Decoder "Clean" loads the Texture-Fix VAE, an optional file of the graph: this run needs it.
-  const vae = `vae/${CLEAN_VAE}`;
-  if ((extra[DECODER_PARAM] === "clean" || extra.vae === CLEAN_VAE) && idx.files[vae] && !idx.workflows[id].files.includes(vae)) {
-    idx = { ...idx, workflows: { ...idx.workflows, [id]: { ...idx.workflows[id], files: [...idx.workflows[id].files, vae] } } };
-  }
+  // Optional files of the graph this run picks are needed too: Qwen-Image 2.1's Options → Decoder "Clean" (the Texture-Fix
+  // VAE), a file a control's setting names (Kandinsky 6.0's Quality "pro" sets unet to the Pro transformer), and the file
+  // an opt-in Prompt helper loads when it is on.
+  const runFiles = new Set<FileKey>();
+  if (extra[DECODER_PARAM] === "clean" || extra.vae === CLEAN_VAE) runFiles.add(`vae/${CLEAN_VAE}`);
+  const model = getModel(g.modelId);
+  const set = model ? (controlSets(model, { ...req.params, extra }).extra ?? {}) : extra;
+  const named = new Set(Object.values(set).filter((v): v is string => typeof v === "string"));
+  for (const k of idx.workflows[id].optional ?? []) if (idx.files[k] && named.has(idx.files[k].file)) runFiles.add(k);
+  if (PROMPT_HELPER_FILES[id] && extra[PROMPT_HELPER_PARAM] === "on") runFiles.add(PROMPT_HELPER_FILES[id] as FileKey);
+  const add = [...runFiles].filter((k) => idx.files[k] && !idx.workflows[id].files.includes(k));
+  if (add.length) idx = { ...idx, workflows: { ...idx.workflows, [id]: { ...idx.workflows[id], files: [...idx.workflows[id].files, ...add] } } };
   // The preset's route on the run's model (the one its preview was made with, or its own): its LoRAs are checked too.
   const preset = req.presetId ? presetTool(req.presetId, { modelId: g.modelId }) : null;
-  const model = modelTool(g.modelId, g.op);
-  const ref: ToolRef = preset?.ref ?? model?.ref ?? `workflow:${id}`;
-  const name = preset?.name ?? model?.name ?? id;
-  const loras = preset?.loras ?? model?.loras ?? [];
-  const ctx = { ...contextFor(t), kind: model?.kind };
+  const tool = modelTool(g.modelId, g.op);
+  const ref: ToolRef = preset?.ref ?? tool?.ref ?? `workflow:${id}`;
+  const name = preset?.name ?? tool?.name ?? id;
+  const loras = preset?.loras ?? tool?.loras ?? [];
+  const ctx = { ...contextFor(t), kind: tool?.kind };
   let snap = readSnapshot(t);
   if (!snap?.inventory.reachable) return { ok: true };
-  let r = toolReadiness(ref, name, [id], loras, snap.inventory, idx, ctx, model?.cloud);
+  let r = toolReadiness(ref, name, [id], loras, snap.inventory, idx, ctx, tool?.cloud);
   if (!blocks(r)) return { ok: true };
   // A ComfyUI on the person's computer is read by their tab, which checks the tool right before the run: only a check
   // from the last 10 s counts as confirmed (an older one never blocks; ComfyUI's own answer has the last word).
@@ -82,7 +92,7 @@ export async function gateGeneration(t: GpuTarget, g: GateInput): Promise<GateRe
     if (!fresh?.reachable) return { ok: true };
     snap = readSnapshot(t);
     if (!snap?.inventory.reachable) return { ok: true };
-    r = toolReadiness(ref, name, [id], loras, snap.inventory, idx, ctx, model?.cloud);
+    r = toolReadiness(ref, name, [id], loras, snap.inventory, idx, ctx, tool?.cloud);
     if (!blocks(r)) return { ok: true };
   }
   const dev = snap.inventory.devices[0];

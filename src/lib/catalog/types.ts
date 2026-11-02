@@ -675,6 +675,11 @@ export interface ModelOptions {
    */
   maxSourceSeconds?: number;
   /**
+   * Factors that need the clip's sides in multiples of a number (fal's Kandinsky VSR: 16 at 2x and 4x; the open pack pads
+   * the clip itself): such a clip is refused before it runs, with the factor that takes it.
+   */
+  sideMultiple?: { of: number; factors: string[] };
+  /**
    * LoRAs the model's recipe always loads (Fuobe Try-On's try-on LoRA): every run carries them before the user's own
    * (an API's LoRA cap leaves out the user's first), their trigger words leading the prompt. A ComfyUI graph that loads
    * one itself isn't given it twice (injectLoras), and a run is refused while Settings → Models & licences has one

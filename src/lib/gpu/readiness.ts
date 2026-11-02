@@ -33,7 +33,7 @@ export type FileState = "present" | "partial" | "missing" | "unknown" | "unobser
 /** Is this index file on that ComfyUI: by its loader's combo list first, then the folder listing. */
 export function filePresence(f: IndexFile, inv: GpuInventory): FileState {
   if (f.presence === "unobservable") return "unobservable";
-  const listing = inv.models[f.folder];
+  const listing = inv.models[f.listFolder ?? f.folder];
   const size = listing && !listing.folderMissing ? listing.have[f.file] : undefined;
   const short = typeof size === "number" && f.sizeBytes > 0 && size < 0.99 * f.sizeBytes;
   if (f.presence === "loader") {
@@ -339,7 +339,7 @@ export function needTargets(needs: Need[], idx: RequirementIndex): { classes: st
     if (n.file) {
       const f = idx.files[n.file];
       const { folder } = splitKey(n.file);
-      folders.add(folder);
+      folders.add(f?.listFolder ?? folder);
       for (const [cls] of f?.loaders ?? []) classes.add(cls);
     }
     if (n.lora) folders.add("loras");

@@ -595,6 +595,12 @@ export const PROMPT_HELPER_GRAPHS: ReadonlySet<string> = new Set(["flux3-klein-t
  */
 export const PROMPT_HELPER_OPT_IN: ReadonlySet<string> = new Set(["kandinsky6-t2av", "kandinsky6-i2av"]);
 
+/** The file an opt-in helper loads (an optional file of its graph): a run with the helper on needs it on that ComfyUI. */
+export const PROMPT_HELPER_FILES: Readonly<Record<string, string>> = {
+  "kandinsky6-t2av": "text_encoders/qwen3.5_9b_bf16.safetensors",
+  "kandinsky6-i2av": "text_encoders/qwen3.5_9b_bf16.safetensors",
+};
+
 /** params.extra.promptHelper: "on" (the graph's default) or "off". */
 export const PROMPT_HELPER_PARAM = "promptHelper";
 

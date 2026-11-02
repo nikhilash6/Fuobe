@@ -116,6 +116,10 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
   }
   const packFolder = new Map();
   for (const [name, p] of Object.entries(packs)) for (const f of p.folders ?? []) packFolder.set(f, name);
+  // A pack that registers models/<folder> under another name (kandinsky6: models/audio_vae as kandinsky6_audio_vae):
+  // ComfyUI lists the folder only under that name, so the presence check reads that listing.
+  const listAs = new Map();
+  for (const p of Object.values(packs)) for (const [f, as] of Object.entries(p.listAs ?? {})) listAs.set(f, as);
 
   const files = {};
   for (const key of [...refs.keys()].sort()) {
@@ -149,6 +153,7 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       ...(pin?.sha256 && (ext !== '.safetensors' || !hfParts(url)) && { sha256: pin.sha256 }),
       gated: r.gated,
       ...(packFolder.has(r.folder) && { packFolder: packFolder.get(r.folder) }),
+      ...(listAs.has(r.folder) && { listFolder: listAs.get(r.folder) }),
       presence,
       ...(loaders.size && { loaders: [...loaders.values()].sort((a, b) => (a[0] + a[1]).localeCompare(b[0] + b[1])) }),
     };
@@ -223,7 +228,7 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
     v: 1,
     hash: '',
     comfyui: { min: manifest.comfyuiVersion, testedCommit: String(manifest.comfyuiCommit ?? '').slice(0, 8) },
-    folders: uniq(Object.values(files).map((f) => f.folder)),
+    folders: uniq(Object.values(files).map((f) => f.listFolder ?? f.folder)),
     sentinels,
     packs: indexPacks,
     files,

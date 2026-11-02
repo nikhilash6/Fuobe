@@ -10,7 +10,7 @@ import { withSignatureWords } from "@/lib/catalog/palettes";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
 import { cueText, type Cue } from "@/lib/cues";
 import { HELPER_FEATURES, HELPER_SUFFIX, isReviewStatus, type AssetUse, type ReviewFilter } from "@/lib/library";
-import { upscaleTier } from "@/lib/av/upscale";
+import { sideMultipleProblem, upscaleTier } from "@/lib/av/upscale";
 import { chainedWaitMessage, framesWait, keyframeChain } from "@/lib/catalog/keyframes";
 import { clipFpsProblem, clipSizeProblem, clipTotalProblem, clipWindowProblem, elementClipProblem, sourceFrames } from "@/lib/catalog/clip-windows";
 import { avatarSeconds, clipEditSeconds, estimateCost, inferOperation, movedAppRequest, planGeneration, presetRoute, routeLoras, routesFor, sourceLengthProblem, withoutTriggers } from "@/lib/catalog/plan";
@@ -1707,6 +1707,9 @@ async function submitNow(
     if (plan.model.options.promptFormat === "kandinsky6" && prompt) prompt = kandinskyPrompt(prompt);
     const input: GenInput = {
       ...plan.params,
+      // The clip's size is only ever its header's (below): a size the request states (params.sourceSize) prices the run
+      // before it starts, never what an upscaler's factor is made from.
+      sourceSize: undefined,
       prompt,
       negativePrompt: req.negativePrompt,
       images: (await Promise.all((req.inputs?.images ?? []).map((ref, i) => (i === 0 ? prepCropped(ref) : prep(ref))))).filter(Boolean) as string[],
@@ -1797,6 +1800,8 @@ async function submitNow(
         input.resolution = tier.resolution;
         if (providerId !== "mock" && plan.model.engine !== "open") update(id, { cost_usd: estimateCost(plan.model, { ...plan.params, resolution: tier.resolution }, 1, plan.op) });
       }
+      const sides = sideMultipleProblem(plan.model.name, plan.model.options.sideMultiple, plan.model.options.resolutions, input.resolution, input.sourceSize);
+      if (sides) throw new Error(sides);
     }
     // LoRA files: ComfyUI gets the ones it lacks downloaded into its loras folder; a cloud run gets a civitai
     // file mirrored once to the provider's storage (the civitai key never leaves this server).

@@ -8,7 +8,7 @@ import { estimateCost, planGeneration, routesFor, sourceLengthProblem } from "@/
 import type { GenerationRequest, GenInput, ModelDef, ModelRoute, Operation } from "@/lib/catalog/types";
 import { PROMPT_HELPER_GRAPHS, PROMPT_HELPER_OPT_IN, skipPromptHelper, type ComfyWorkflow, type Manifest } from "@/lib/comfy";
 import { clipBlocker, clipOutcome, relatedHref } from "@/lib/composer";
-import { factorTier, upscaleFactorFor, upscaledSize } from "@/lib/av/upscale";
+import { factorTier, factorTierProblem, sideMultipleProblem, upscaleFactorFor, upscaledSize } from "@/lib/av/upscale";
 import { inKandinskyForm, kandinskyPrompt } from "@/lib/kandinsky-prompt";
 import { NODE_PACKS } from "@/lib/licences";
 import type { MediaInfo } from "@/lib/media-probe";
@@ -81,7 +81,12 @@ describe("Kandinsky 6.0's graphs in the library", () => {
     expect(pro).toMatchObject({ folder: "diffusion_models", optional: true, sizeGb: 60.34 });
     expect(t2v.models.find((m) => m.file === "v1-44.pth")).toMatchObject({ folder: "audio_vae" });
     expect(t2v.models.map((m) => m.file)).toEqual(expect.arrayContaining(["bigvgan_vocoder/bigvgan_generator.pt", "bigvgan_vocoder/config.json", "qwen_2.5_vl_7b.safetensors", "clip_l.safetensors", "hunyuan_video_vae_bf16.safetensors"]));
-    expect(requirements.workflows["kandinsky6-t2av"].optional).toEqual(["diffusion_models/Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors"]);
+    // Pro and the Prompt helper's 19 GB Qwen3.5 9B are needed only when picked (Quality "pro", Prompt helper "on").
+    for (const id of ["kandinsky6-t2av", "kandinsky6-i2av"]) {
+      expect(requirements.workflows[id].optional, id).toEqual(["diffusion_models/Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors", "text_encoders/qwen3.5_9b_bf16.safetensors"]);
+      expect(requirements.workflows[id].files, id).not.toContain("text_encoders/qwen3.5_9b_bf16.safetensors");
+    }
+    expect(t2v.models.find((m) => m.file === "qwen3.5_9b_bf16.safetensors")).toMatchObject({ optional: true });
     const g = graph("kandinsky6-t2av");
     expect(g["8"].inputs).toMatchObject({ steps: 10, cfg: 1, denoise: 1 });
     expect(g["2"].inputs).toMatchObject({ clip_name1: "qwen_2.5_vl_7b.safetensors", clip_name2: "clip_l.safetensors", type: "kandinsky5" });
@@ -249,6 +254,38 @@ describe("Kandinsky VSR on both engines", () => {
   });
 });
 
+describe("Kandinsky VSR's factors and clip sizes", () => {
+  it("refuses a resolution that isn't one of its factors before the run, on both engines", () => {
+    for (const m of [vsrOpen, vsrCloud]) {
+      expect(() => plan({ modelId: m.id, prompt: "", inputs: { video: "/api/files/c.mp4" }, params: { resolution: "1080p" } }), m.id).toThrow("Kandinsky VSR upscales by 2x, 2.25x or 4x: pick one of those");
+      expect(() => plan({ modelId: m.id, prompt: "", inputs: { video: "/api/files/c.mp4" }, params: { resolution: "4x" } }), m.id).not.toThrow();
+      expect(() => plan({ modelId: m.id, prompt: "", inputs: { video: "/api/files/c.mp4" } }), m.id).not.toThrow();
+    }
+    // Upscalers that take sizes are unchanged.
+    expect(factorTierProblem("SeedVR2", ["720p", "1080p", "1440p", "2160p"], "4x")).toBeNull();
+  });
+
+  it("in the cloud, 2x and 4x take sides in multiples of 16 and say to pick 2.25x; your GPU pads the clip itself", () => {
+    expect(vsrCloud.options.sideMultiple).toEqual({ of: 16, factors: ["2x", "4x"] });
+    expect(vsrOpen.options.sideMultiple).toBeUndefined();
+    const clip = { width: 854, height: 480, duration: 5 };
+    expect(clipBlocker("upscale-video", clip, { resolution: "2x" }, vsrCloud, undefined)).toBe(
+      "Kandinsky VSR at 2x needs a clip whose width and height are multiples of 16 (this one is 854×480): pick 2.25x, or resize the clip first",
+    );
+    expect(clipBlocker("upscale-video", clip, { resolution: "4x" }, vsrCloud, undefined)).toMatch(/at 4x needs .* multiples of 16/);
+    expect(clipBlocker("upscale-video", clip, { resolution: "2.25x" }, vsrCloud, undefined)).toBeNull();
+    expect(clipBlocker("upscale-video", clip, {}, vsrCloud, undefined)).toBeNull(); // the default, 2.25x
+    expect(clipBlocker("upscale-video", { width: 848, height: 480, duration: 5 }, { resolution: "2x" }, vsrCloud, undefined)).toBeNull();
+    expect(clipBlocker("upscale-video", clip, { resolution: "2x" }, vsrOpen, undefined)).toBeNull();
+    expect(sideMultipleProblem("X", undefined, [], "2x", { width: 854, height: 480 })).toBeNull();
+  });
+
+  it("the cloud's Lite says it takes no negative prompt", () => {
+    const labels = cloud.options.controls!.find((c) => c.param === "quality")!.labels!;
+    for (const [k, v] of Object.entries(labels)) expect(v.includes("no negative prompt"), k).toBe(k.startsWith("lite"));
+  });
+});
+
 describe("Kandinsky's spoken lines and sound", () => {
   it("turns quoted words into spoken lines and a closing Sound: line into the sound caption", () => {
     expect(kandinskyPrompt("She smiles and says “Look over there!” Sound: rain on the window")).toBe("She smiles and says <S>Look over there!<E> <AUDCAP>rain on the window<ENDAUDCAP>");
@@ -258,8 +295,8 @@ describe("Kandinsky's spoken lines and sound", () => {
     const tagged = "He says <S>Hi<E> <AUDCAP>wind<ENDAUDCAP>";
     expect(inKandinskyForm(tagged)).toBe(true);
     expect(kandinskyPrompt(tagged)).toBe(tagged);
-    // A prompt that is only a sound line keeps its words.
-    expect(kandinskyPrompt("Sound: thunder")).toBe("Sound: thunder");
+    // A prompt that is only a sound line is the sound caption alone.
+    expect(kandinskyPrompt("Sound: thunder")).toBe("<AUDCAP>thunder<ENDAUDCAP>");
   });
 });
 
@@ -281,5 +318,73 @@ describe("Where Kandinsky shows up", () => {
     expect(vsr).toMatchObject({ label: "Kandinsky VSR", group: "Video tools" });
     for (const id of GRAPHS) expect(requirements.workflows[id], id).toBeTruthy();
     expect(new Set(STUDIO_ROWS.map((r) => r.href)).size).toBe(STUDIO_ROWS.length);
+  });
+});
+
+describe("the GPU pre-flight on Kandinsky 6.0", () => {
+  const SITE = "http://127.0.0.1:3370";
+  const T2V = "kandinsky6-t2av";
+  const AUDIO = ["audio_vae/v1-44.pth", "audio_vae/bigvgan_vocoder/bigvgan_generator.pt", "audio_vae/bigvgan_vocoder/config.json"];
+
+  it("reads the audio files where the pack lists them (kandinsky6_audio_vae), so a ComfyUI with the pack reads Ready", async () => {
+    const { parseIndex } = await import("@/lib/gpu/requirements");
+    const { gatherInventory } = await import("@/lib/gpu/gather");
+    const { fetchTransport } = await import("@/lib/gpu/transport");
+    const { filePresence, workflowReadiness } = await import("@/lib/gpu/readiness");
+    const { startLocalComfy } = await import("./helpers/fake-local-comfy");
+    const idx = parseIndex(read("requirements.json"));
+    for (const k of AUDIO) expect(idx.files[k as `${string}/${string}`], k).toMatchObject({ folder: "audio_vae", listFolder: "kandinsky6_audio_vae" });
+    expect(idx.folders).toContain("kandinsky6_audio_vae");
+    expect(idx.folders).not.toContain("audio_vae"); // ComfyUI has no folder of that name
+    const fake = await startLocalComfy({ cors: SITE, has: idx as never });
+    try {
+      const t = fetchTransport("browser", fake.url, (url, init = {}) => fetch(url, { ...init, headers: { ...(init.headers as Record<string, string>), origin: SITE, "sec-fetch-site": "cross-site" } }), { decodes: true });
+      const inv = await gatherInventory(t, idx, { where: "computer" });
+      expect(Object.keys(inv.models.kandinsky6_audio_vae.have).sort()).toEqual(["bigvgan_vocoder/bigvgan_generator.pt", "bigvgan_vocoder/config.json", "v1-44.pth"]);
+      expect(filePresence(idx.files["audio_vae/bigvgan_vocoder/bigvgan_generator.pt"], inv)).toBe("present");
+      for (const id of [T2V, "kandinsky6-i2av"]) expect(workflowReadiness(id, inv, idx, { account: true }).state, id).toBe("ready");
+      // The vocoder gone from that listing: the one thing it needs.
+      delete inv.models.kandinsky6_audio_vae.have["bigvgan_vocoder/bigvgan_generator.pt"];
+      const r = workflowReadiness(T2V, inv, idx, { account: true });
+      expect(r.needs.map((n) => n.file)).toEqual(["audio_vae/bigvgan_vocoder/bigvgan_generator.pt"]);
+      expect(r.needs[0].detail).toBe("bigvgan_vocoder/bigvgan_generator.pt → models/audio_vae"); // downloaded where the pack reads it
+    } finally {
+      await fake.close();
+    }
+  });
+
+  it("asks for Pro's file only on Quality Pro and the helper's only with the Prompt helper on", async () => {
+    const { parseIndex } = await import("@/lib/gpu/requirements");
+    const { writeSnapshot, dropSnapshots } = await import("@/server/gpu/snapshots");
+    const { gateGeneration } = await import("@/server/gpu/gate");
+    const idx = parseIndex(read("requirements.json"));
+    const INSTALL = { kind: "install", key: "install", via: "server" } as const;
+    const at = Date.now();
+    const models: Record<string, { have: Record<string, number | null>; total: number }> = {};
+    for (const folder of idx.folders) models[folder] = { have: {}, total: 0 };
+    const combos: Record<string, string[]> = {};
+    for (const k of idx.workflows[T2V].files) {
+      const f = idx.files[k];
+      models[f.listFolder ?? f.folder].have[f.file] = f.sizeBytes;
+      for (const [cls, input] of f.loaders ?? []) (combos[`${cls}.${input}`] ??= []).push(f.file);
+    }
+    for (const f of Object.values(idx.files)) for (const [cls, input] of f.loaders ?? []) combos[`${cls}.${input}`] ??= [];
+    writeSnapshot(INSTALL, {
+      v: 1, via: "server", checkedAt: at, tookMs: 5, reachable: true,
+      devices: [{ name: "GPU", type: "cuda", index: 0, vramTotal: 24 * 2 ** 30, vramFree: 24 * 2 ** 30 }],
+      manager: { api: "none" }, nodes: { have: [], missing: [], total: 1, readAt: at, how: "object_info" },
+      combos, packs: {}, models, loras: {}, fingerprint: "x", errors: [],
+    } as never);
+    const gate = (extra: Record<string, unknown>) =>
+      gateGeneration(INSTALL, { request: { feature: "video", modelId: open.id, prompt: "a fox", params: { extra } }, route: { provider: "comfyui", endpoint: T2V }, op: "t2v", modelId: open.id, actor: "owner" });
+    try {
+      expect(await gate({})).toEqual({ ok: true });
+      expect(await gate({ quality: "lite", promptHelper: "off" })).toEqual({ ok: true });
+      expect(await gate({ quality: "pro" })).toMatchObject({ ok: true, warning: expect.stringMatching(/needs 1 more thing/) });
+      expect(await gate({ promptHelper: "on" })).toMatchObject({ ok: true, warning: expect.stringMatching(/needs 1 more thing/) });
+      expect(await gate({ quality: "pro", promptHelper: "on" })).toMatchObject({ ok: true, warning: expect.stringMatching(/needs 2 more things/) });
+    } finally {
+      dropSnapshots("install");
+    }
   });
 });

@@ -1303,7 +1303,8 @@ K6_PRICES = {v: {op: K6_REC[f"fal-ai/kandinsky6-{v}/{kind}"]["pricing"]["bySteps
 K6_QUALITY = {
     "param": "quality", "label": "Quality",
     "values": [f"{v}-{t}" for v in K6_STEPS for t in K6_STEPS[v]], "default": "pro-standard",
-    "labels": {f"{v}-{t}": f"{'Pro' if v == 'pro' else 'Lite'} · {t.capitalize()}, {n} steps" for v in K6_STEPS for t, n in K6_STEPS[v].items()},
+    # fal's Lite endpoints take no negative prompt: their labels say so, as the field stays for Pro.
+    "labels": {f"{v}-{t}": f"{'Pro' if v == 'pro' else 'Lite'} · {t.capitalize()}, {n} steps{'' if v == 'pro' else ' · no negative prompt'}" for v in K6_STEPS for t, n in K6_STEPS[v].items()},
     "sets": {f"{v}-{t}": {"variant": v, "num_inference_steps": n} for v in K6_STEPS for t, n in K6_STEPS[v].items()},
 }
 for _v, _tiers in K6_STEPS.items():
@@ -1333,7 +1334,8 @@ model("kandinsky-vsr", "Kandinsky VSR", "Kandinsky Lab", "kandinsky", "video",
       [("upscale-video", "fal-ai/kandinsky6-vsr")], badges=["new", "fast"], defaults={"resolution": "2.25x"}, upscale_tiers=["2x", "2.25x", "4x"],
       pricing=("video", 0.09, "$0.00036 per output megapixel per frame: about $0.09 for 5 s of 480p to 1080p, $0.29 at 4x",
                {"outputFrames": {"usd": K6_REC["fal-ai/kandinsky6-vsr"]["pricing"]["usd"], "fps": 24, "maxFrames": 121, "assume": {"width": 848, "height": 480}}}),
-      options={"maxSourceSeconds": 5}, licence=K6_LICENCE)
+      # fal's page: "For 2x and 4x upscaling, width and height must be multiples of 16" (2.25x pads the clip itself).
+      options={"maxSourceSeconds": 5, "sideMultiple": {"of": 16, "factors": ["2x", "4x"]}}, licence=K6_LICENCE)
 # Its routes take different values (fal's reference-to-video stops at 720p), so each lists its own (fit_values).
 model("grok-imagine-video-1-5", "Grok Imagine Video 1.5", "xAI", "grok", "video", "xAI's video model with references and audio",
       [("t2v", "xai/grok-imagine-video/v1.5/text-to-video"), ("i2v", "xai/grok-imagine-video/v1.5/image-to-video"),

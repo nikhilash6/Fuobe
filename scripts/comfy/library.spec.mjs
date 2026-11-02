@@ -4836,7 +4836,8 @@ export const SPEC = [
     outputs: [{ node: '12', kind: 'video' }],
     defaults: { width: 864, height: 480, frames: 121, fps: 24, frameStep: 4, unet: 'Kandinsky-6.0-Lite-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors' },
     limits: { maxFrames: 121, dimensionMultiple: 16, maxWidth: 2048, maxHeight: 2048 },
-    optionalModels: ['Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors'],
+    // Pro (Quality) and the Prompt helper's Qwen3.5 9B (off by default: its nodes are taken out) are needed only when picked.
+    optionalModels: ['Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors', 'qwen3.5_9b_bf16.safetensors'],
     requiredModels: ['bigvgan_vocoder/bigvgan_generator.pt', 'bigvgan_vocoder/config.json'],
     vramGb: 24,
     license: K6_LICENSE,
@@ -4857,7 +4858,8 @@ export const SPEC = [
     outputs: [{ node: '12', kind: 'video' }],
     defaults: { width: 864, height: 480, frames: 121, fps: 24, frameStep: 4, unet: 'Kandinsky-6.0-Lite-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors' },
     limits: { maxFrames: 121, dimensionMultiple: 16, maxWidth: 2048, maxHeight: 2048 },
-    optionalModels: ['Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors'],
+    // Pro (Quality) and the Prompt helper's Qwen3.5 9B (off by default: its nodes are taken out) are needed only when picked.
+    optionalModels: ['Kandinsky-6.0-Pro-distill-5s-Diffusers/transformer/diffusion_pytorch_model.safetensors', 'qwen3.5_9b_bf16.safetensors'],
     requiredModels: ['bigvgan_vocoder/bigvgan_generator.pt', 'bigvgan_vocoder/config.json'],
     vramGb: 24,
     license: K6_LICENSE,

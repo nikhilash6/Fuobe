@@ -23,6 +23,33 @@ export function factorTier(resolution: string | undefined): number | undefined {
 }
 
 /**
+ * A model that upscales by factors only (Kandinsky VSR's 2x, 2.25x and 4x, on both engines) and a resolution that isn't one of
+ * them (an API call, a chain, Reuse from another upscaler): refused before the run, in the words the server answers with.
+ */
+export function factorTierProblem(name: string, offered: string[] | undefined, resolution: string | undefined): string | null {
+  if (!offered?.length || resolution === undefined || offered.includes(resolution)) return null;
+  if (!offered.every((r) => factorTier(r) !== undefined)) return null;
+  return `${name} upscales by ${offered.slice(0, -1).join(", ")} or ${offered.at(-1)}: pick one of those`;
+}
+
+/**
+ * A clip whose sides a factor can't take (ModelOptions.sideMultiple: fal's Kandinsky VSR needs widths and heights in
+ * multiples of 16 at 2x and 4x), with the factor that can, in the words the composer shows and the server refuses with.
+ */
+export function sideMultipleProblem(
+  name: string,
+  rule: { of: number; factors: string[] } | undefined,
+  offered: string[] | undefined,
+  resolution: string | undefined,
+  source: { width: number; height: number } | undefined,
+): string | null {
+  if (!rule || !resolution || !rule.factors.includes(resolution) || !source?.width || !source.height) return null;
+  if (source.width % rule.of === 0 && source.height % rule.of === 0) return null;
+  const other = (offered ?? []).find((r) => !rule.factors.includes(r));
+  return `${name} at ${resolution} needs a clip whose width and height are multiples of ${rule.of} (this one is ${source.width}×${source.height})${other ? `: pick ${other}, or resize the clip first` : ": resize the clip first"}`;
+}
+
+/**
  * The factor an upscaler that takes one needs to reach `resolution` from a clip of `source` size: target ÷
  * shorter edge, kept within the API's min–max and rounded to 3 decimals (1080p → 1440p is 1.333, which lands on
  * 2560×1440; 1.33 would make 2554×1436). "Original" is 1 (enhance only).
