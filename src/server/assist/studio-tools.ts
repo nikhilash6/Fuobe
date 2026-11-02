@@ -785,7 +785,7 @@ export const FlyAroundToolInput = z.object({
     .describe(`A ready move: ${PATH_PRESETS.map((p) => `${p.id} (${p.name})`).join(", ")}. Leave it out to give the orbit's numbers instead.`),
   degrees: z.number().min(30).max(360).optional().describe("An exact orbit: how far round the subject, 30–360° (default 360)."),
   direction: z.enum(["cw", "ccw"]).optional().describe("An exact orbit's direction seen from above: cw moves the camera round to the left, ccw to the right (default ccw)."),
-  tilt: z.number().min(0).max(20).optional().describe("An exact orbit's height tilt, 0–20°: the ring rises on the way round and comes back level."),
+  tilt: z.number().min(0).max(20).optional().describe("An exact orbit's height tilt, 0–20°: the ring rises over the first half turn and dips below eye level over the second."),
   pulse: z.boolean().optional().describe("An exact orbit moves 25% in and out twice on the way round."),
   prompt: z.string().max(1500).optional().describe("Motion words: what the subject does while the camera moves (the camera's own move is set by the path)."),
   duration: z.number().min(1).max(15).optional().describe("Cloud only: seconds (default 5). Your GPU always films about 5 s."),

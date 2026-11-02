@@ -17,7 +17,7 @@ export interface ExactOrbit {
   degrees: number;
   /** Seen from above: counter-clockwise moves the camera round to the right (camera-path's + azimuth). */
   direction: OrbitDirection;
-  /** Degrees the ring is tilted (0 = level): it rises on the way round and comes back level. */
+  /** Degrees the ring is tilted (0 = level) about the line of sight: it rises over the first half turn and dips below over the second. */
   tilt: number;
   /** How far the camera moves in and out on the way round (0 or 0.25 = 25% closer, twice). */
   pulse: number;
@@ -99,12 +99,20 @@ export function exactSummary(input: Partial<ExactOrbit>): string {
   return [`${o.degrees}° ${DIRECTION_NAMES[o.direction].toLowerCase()}`, o.tilt ? `tilt ${o.tilt}°` : "level", ...(o.pulse ? [`pulse ${Math.round(o.pulse * 100)}%`] : [])].join(" · ");
 }
 
+/** Where a tilted ring takes the camera's height over `degrees` (elevation = asin(sin tilt · sin turned)). */
+function tiltPath(degrees: number): string {
+  if (degrees <= 90) return "rises as it goes";
+  if (degrees <= 180) return "rises above eye level and comes back down";
+  if (degrees < 360) return "rises above eye level, then dips below it";
+  return "rises above eye level, dips as far below it and comes back to eye level";
+}
+
 /** Words for a model that reads the path from the prompt (the cloud's reference route): where the camera goes. */
 export function exactWords(input: Partial<ExactOrbit>): string {
   const o = normalizeExact(input);
   const way = o.direction === "ccw" ? "to the right" : "to the left";
   const how = o.degrees >= 360 ? "a full 360-degree orbit" : `a ${o.degrees}-degree arc`;
-  const tilt = o.tilt ? `, the ring tilted ${o.tilt} degrees so the camera rises and comes back to eye level` : ", at a constant height";
+  const tilt = o.tilt ? `, the ring tilted ${o.tilt} degrees so the camera ${tiltPath(o.degrees)}` : ", at a constant height";
   const pulse = o.pulse ? ", moving in and out twice on the way" : "";
   return `The camera makes ${how} around the subject, moving ${way}${tilt}${pulse}, keeping the subject centered`;
 }

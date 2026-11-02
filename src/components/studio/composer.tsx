@@ -21,7 +21,7 @@ import { quoteBody, useHostedQuote, useSettled, type RunOn } from "@/lib/hosted"
 import { ExactOrbitControls } from "@/components/exact-orbit-controls";
 import { useFlyAround } from "@/components/fly-around-run";
 import { exactDefaults, takesExact, type ExactOrbit } from "@/lib/exact-orbit";
-import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useStatus } from "@/lib/api";
+import { CONNECT_GPU_EVENT, enhance, useClipFacts, useCreateGeneration, useElements, useEngine, useHydrated, useIsOwner, useStatus } from "@/lib/api";
 import { usePagePlace } from "@/components/gpu/use-page-place";
 import { applyMentions, elementsNote, type StudioElement } from "@/lib/catalog/elements";
 import { applySketch, stripMotionPaths } from "@/lib/catalog/sketch";
@@ -348,7 +348,9 @@ export function Composer({ docked }: { docked: boolean }) {
   const preset: Preset | undefined = draft.presetId && !takesLook ? catalog.getPreset(draft.presetId) : config.preset;
   const lockedModel = preset?.type === "app";
   // Fuobe DoP's orbit moves (N7-7): the Exact switch films the orbit by its numbers through /api/fly-around.
-  const exactId = preset?.type === "motion" && takesExact(preset.id) ? preset.id : undefined;
+  // It starts with a 3D depth step and runs on the studio's own GPU: the owner's for now.
+  const owner = useIsOwner();
+  const exactId = owner && preset?.type === "motion" && takesExact(preset.id) ? preset.id : undefined;
   const [exactBy, setExactBy] = useState<{ id: string; orbit: ExactOrbit } | null>(null);
   const exact = exactId && exactBy?.id === exactId ? exactBy.orbit : null;
   const exactImage = draft.slots.image?.ref;
@@ -1507,7 +1509,7 @@ export function Composer({ docked }: { docked: boolean }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0 text-[12px] font-medium text-muted-foreground tabular-nums">
-                <span className="sm:hidden">{poolPrice || exactPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
+                <span className="sm:hidden">{exactPrice ? fly.compactPrice : poolPrice ? costText : costLabel({ demo, cost, compact: true, unknown: loraPriceUnknown }, formatCost)}</span>
                 <span className="hidden sm:inline">
                   {costText}
                   {payerText}

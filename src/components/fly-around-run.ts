@@ -44,10 +44,10 @@ async function post<T>(url: string, body: unknown): Promise<T> {
 }
 
 /** The price line: "Free · on your GPU" on the open engine, the list price in the cloud. */
-export function flyPrice(p: FlyAroundPreview | undefined): string {
+export function flyPrice(p: FlyAroundPreview | undefined, compact = false): string {
   if (!p) return "";
-  if (p.demo) return "Placeholder · free";
-  if (p.engine === "open") return "Free · on your GPU";
+  if (p.demo) return compact ? "Placeholder" : "Placeholder · free";
+  if (p.engine === "open") return compact ? "Free" : "Free · on your GPU";
   return p.costUsd != null ? `≈ ${formatCost(p.costUsd)}` : "";
 }
 
@@ -69,5 +69,5 @@ export function useFlyAround(body: FlyAroundBody | null) {
     },
     onError: (e) => toastError(e),
   });
-  return { preview, run, price: flyPrice(preview.data) };
+  return { preview, run, price: flyPrice(preview.data), compactPrice: flyPrice(preview.data, true) };
 }

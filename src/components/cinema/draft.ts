@@ -4,6 +4,11 @@ import { takesExact, type ExactOrbit } from "@/lib/exact-orbit";
 
 /** The prompt bar's state (lifted into the workspace so the AI Director and tiles can fill it). */
 
+/** A new move list: the Exact numbers belong to the first move, so a different first move starts from its own defaults. */
+export function withMoves(d: Pick<CinemaDraft, "moves">, moves: string[]): Pick<CinemaDraft, "moves" | "exact"> | Pick<CinemaDraft, "moves"> {
+  return moves[0] === d.moves[0] ? { moves } : { moves, exact: null };
+}
+
 export interface RefItem {
   id: string;
   /** /api/files URL once uploaded ("" while uploading). */

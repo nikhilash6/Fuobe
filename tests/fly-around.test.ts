@@ -124,6 +124,18 @@ describe("the fly-around plan", () => {
     expect(p.steps[0].request.prompt).toMatch(/180-degree arc around the subject, moving to the left/);
   });
 
+  it("puts a preset or a sweep into words for the reference route, and says where a tilted ring takes the camera", () => {
+    expect(fly.pathWords({ preset: "orbit_90_cw" })).toMatch(/^The camera moves: Arc 90° left/);
+    expect(fly.pathWords({ preset: "orbit_45_ccw" })).toMatch(/45-degree arc around the subject, moving to the right/);
+    expect(fly.pathWords({})).toBe("The camera flies around the subject");
+    expect(exact.exactWords({ degrees: 90, tilt: 10 })).toMatch(/camera rises as it goes/);
+    expect(exact.exactWords({ degrees: 180, tilt: 10 })).toMatch(/rises above eye level and comes back down/);
+    expect(exact.exactWords({ degrees: 270, tilt: 10 })).toMatch(/then dips below it/);
+    expect(exact.exactWords({ degrees: 360, tilt: 10 })).toMatch(/dips as far below it and comes back to eye level/);
+    // The keys agree: below eye level past half a turn.
+    expect(Math.min(...exact.exactOrbitKeys({ degrees: 270, tilt: 10 }).map((k) => k.elevation))).toBeLessThan(0);
+  });
+
   it("asks for the still and a path", () => {
     expect(fly.planFlyAround({ engine: "cloud", orbit }).blocker).toBe("Add the still to film");
     expect(fly.planFlyAround({ engine: "open", image }).blocker).toBe("Pick a path first");
@@ -231,6 +243,22 @@ describe("Cinema's Director: an orbit move with the Exact switch", () => {
   });
 });
 
+describe("the prompt bars", () => {
+  it("Cinema starts a new first move from its own numbers, and keeps them when only later moves change", async () => {
+    const { withMoves } = await import("@/components/cinema/draft");
+    expect(withMoves({ moves: ["drone-orbit"] }, ["arc-left"])).toEqual({ moves: ["arc-left"], exact: null });
+    expect(withMoves({ moves: ["drone-orbit"] }, ["drone-orbit", "dolly-in"])).toEqual({ moves: ["drone-orbit", "dolly-in"] });
+  });
+
+  it("a phone's price line is short", async () => {
+    const { flyPrice } = await import("@/components/fly-around-run");
+    const open = { engine: "open", demo: false, costUsd: 0 } as never;
+    expect(flyPrice(open)).toBe("Free · on your GPU");
+    expect(flyPrice(open, true)).toBe("Free");
+    expect(flyPrice({ engine: "cloud", demo: true } as never, true)).toBe("Placeholder");
+  });
+});
+
 describe("Image to 3D: Film it photoreal", () => {
   it("films the photo round the model: the model's render on your GPU, H3 Max's keyframes in the cloud", async () => {
     const m3d = await import("@/lib/av/model3d");
@@ -289,6 +317,11 @@ describe("Canvas: the Camera path and Fly around nodes", () => {
     expect(cloud.error).toBeUndefined();
     expect(cloud.steps!.map((s) => [s.request.modelId, s.request.op])).toEqual([["minimax-h3-max", "ref2v"]]);
     expect(cloud.steps![0].request.inputs?.images).toEqual(["/api/files/uploads/still.png", "/api/files/uploads/back.png"]);
+    // The Camera path's own numbers reach the words H3 Max turns the camera from.
+    expect(cloud.steps![0].request.prompt).toMatch(/180-degree arc around the subject, moving to the right/);
+    const preset = graph("minimax-h3-max-camera", {});
+    preset.nodes[2] = node("path", "camera-path", 0, 200, { pathPreset: "orbit_tilt_20" });
+    expect(c.describeNode(preset as never, preset.nodes[3] as never).steps![0].request.prompt).toMatch(/^The camera moves: Tilted ring, a full ring tilted 20°/);
     const g = graph("oss-uni3c-path", { type: "model" });
     const open = c.describeNode(g as never, g.nodes[3] as never);
     expect(open.error).toBeUndefined();

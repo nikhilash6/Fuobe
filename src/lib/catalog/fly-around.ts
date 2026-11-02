@@ -12,7 +12,7 @@
  * Pure: the browser prices it, the server runs the same steps (src/server/fly-around.ts).
  */
 
-import { DEFAULT_MOTION, MAX_KEYS, PATH_FPS, PATH_FRAMES, normalizeKeys, presetKeys, toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
+import { DEFAULT_MOTION, MAX_KEYS, PATH_FPS, PATH_FRAMES, PATH_PRESETS, normalizeKeys, presetKeys, toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { exactOrbitKeys, exactSummary, exactWords, type ExactOrbit } from "@/lib/exact-orbit";
 import { getModel, getPreset } from "./index";
 import { onEngine } from "./engines";
@@ -78,6 +78,16 @@ export function flyKeys(input: Pick<FlyAroundInput, "orbit" | "preset" | "keys">
 
 const tidy = (p: string | undefined) => (p ?? "").trim();
 
+/** The path in words, for a model that turns the camera from words (H3 Max reference-to-video): the orbit's numbers or the move. */
+export function pathWords(input: Pick<FlyAroundInput, "orbit" | "preset">): string {
+  if (input.orbit) return exactWords(input.orbit);
+  const move = input.preset && PATH_PRESETS.find((p) => p.id === input.preset);
+  if (move) return `The camera moves: ${move.name}, ${move.description.charAt(0).toLowerCase()}${move.description.slice(1)}`;
+  const sweep = input.preset && /^orbit_(\d+(?:\.\d+)?)(?:_(cw|ccw))?$/.exec(input.preset);
+  if (sweep) return exactWords({ degrees: Number(sweep[1]), direction: sweep[2] === "cw" ? "cw" : "ccw" });
+  return "The camera flies around the subject";
+}
+
 function stepCost(req: GenerationRequest, engine: Engine): number | null {
   const lookup = (id: string) => {
     const m = getModel(id);
@@ -134,7 +144,7 @@ export function planFlyAround(input: FlyAroundInput): FlyAroundPlan {
     const max = model.options.maxImages ?? 9;
     const images = image ? [image, ...views].slice(0, max) : views.slice(0, max);
     if (1 + views.length > max) notes.push(`${model.name} takes up to ${max} pictures: the rest are left out`);
-    const words = input.orbit ? exactWords(input.orbit) : "The camera flies around the subject";
+    const words = pathWords(input);
     steps.push({
       key: "main",
       request: {

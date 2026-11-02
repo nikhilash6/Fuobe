@@ -1338,8 +1338,13 @@ function concatRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef): Node
 
 /** A Camera path node's keys (a preset, an exact orbit or keys) and their words; none when it has nothing set. */
 export function cameraPathOf(n: Pick<CanvasNode, "data">): { keys: CameraKey[]; label: string } {
+  return flyKeys(pathInputOf(n));
+}
+
+/** What a Camera path node holds, as the planner takes it: the orbit's numbers, a preset, or keys. */
+function pathInputOf(n: Pick<CanvasNode, "data">) {
   const d = n.data;
-  return flyKeys(d.orbit ? { orbit: d.orbit } : d.pathPreset ? { preset: d.pathPreset } : { keys: d.keys });
+  return d.orbit ? { orbit: d.orbit } : d.pathPreset ? { preset: d.pathPreset } : { keys: d.keys };
 }
 
 /**
@@ -1379,7 +1384,8 @@ function flyAroundRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef): N
     engine: model.engine,
     image: urlOf(pictures[0]),
     views: pictures.slice(1).map(urlOf),
-    keys,
+    // The node's own numbers or move (not only its keys): with views, the cloud turns the camera from their words.
+    ...pathInputOf(pathNode),
     prompt: words.join(". ") || undefined,
     duration: n.data.duration,
     resolution: n.data.params?.resolution,
