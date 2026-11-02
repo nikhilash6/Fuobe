@@ -114,7 +114,7 @@ export const HOME_OWN_SECTIONS = ["/assist", "/motions", "/effects", "/apps", "/
 export const HOME_LIVE = {
   href: "/live-edit?from=home",
   title: "Change it as you type",
-  line: "Type a change and watch the picture follow. Keep what you like; nothing blurs, however many changes you stack.",
+  line: "Type a change and watch the picture follow, then keep adding to the words. Nothing blurs, however many changes you make.",
 };
 
 /** Assist's starter skills, as its empty chat lists them first (assist-view.tsx). */

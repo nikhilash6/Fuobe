@@ -71,7 +71,7 @@ export function useLiveTransport(): LiveAccess {
 
 /**
  * Live edit inside the Edit studio (its Live switch): the same editor, seeded with the composer's picture. "Use in
- * Edit" hands the kept picture back to the composer, so the full model can finish the job.
+ * Edit" hands the picture on screen (full quality) back to the composer, so the full model can finish the job.
  */
 export function LiveEditPanel({ image, text, onUse, onClose }: { image?: string; text?: string; onUse: (url: string) => void; onClose: () => void }) {
   const live = useLiveTransport();
@@ -142,10 +142,10 @@ function LiveShowcase({ kind }: { kind: "guest" | "connect" | "unsupported" }) {
         <div className="max-w-md">
           <p className="font-heading text-[34px] leading-[1.08] text-balance sm:text-[40px]">Change a picture as you type</p>
           <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground text-pretty">
-            Type a change and watch the picture follow. Press Enter to keep it, then type the next. Every kept step is a lossless full-size master, so nothing blurs, however many changes you stack.
+            Type a change and watch the picture follow, then keep adding to the same words. Every frame renders all of them on your original, so nothing blurs, however many changes you make.
           </p>
           <ul className="mt-4 space-y-1.5 text-[13.5px]">
-            {["Live frames as you type, on your own GPU", "Keep, undo and redo every step", "Paint a region to change only that", "Compare with the step before or the original"].map((t) => (
+            {["Live frames as you type, on your own GPU", "One prompt that keeps growing", "Undo a change, or start fresh from the picture", "Paint a region to change only that"].map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <Sparkles className="size-3.5 shrink-0 text-primary" />
                 {t}

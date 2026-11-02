@@ -1,8 +1,9 @@
 /**
  * The recorded live edit session that guests, Home and the Apps card see (public/previews/live-edit/demo.json), and
  * the pure parts of its player: how long each step takes, where a paused loop picks up again, which frames are the
- * before and after, where the camera sits when it zooms in on a change, and which kept steps the trail shows. The
- * player itself is src/components/live/live-demo.tsx.
+ * before and after, and where the camera sits when it zooms in on a change. The session is one prompt that keeps
+ * growing: every frame renders all the words so far on the original. The player itself is
+ * src/components/live/live-demo.tsx.
  */
 
 export const LIVE_DEMO = "/previews/live-edit/demo.json";
@@ -10,12 +11,8 @@ export const LIVE_DEMO = "/previews/live-edit/demo.json";
  * The file's content version: the first 8 hex digits of the SHA-256 of demo.json (line endings as \n). The player
  * fetches the file with it (?v=), so a new session reaches returning visitors at once; a test keeps it in step.
  */
-export const LIVE_DEMO_V = "61b6e096";
+export const LIVE_DEMO_V = "78c8fd0c";
 
-/** A trail chip's label stays readable on a phone: the longer instruction is the typed text. */
-export const CHIP_MAX = 18;
-/** The Keep button's pulse, before the step joins the trail. */
-export const KEEP_PULSE_MS = 380;
 /** A typed character never goes faster than this. */
 export const TYPE_MIN_CHAR_MS = 28;
 /** A space waits a little longer, the way people type. */
@@ -48,7 +45,8 @@ export type DemoStep =
   /** live: a live frame (the pill says Live); it is drawn across the picture rather than faded in. */
   | { type: "frame"; frame: string; live?: boolean; ms: number }
   | { type: "type"; text: string; ms: number }
-  | { type: "keep"; label: string; ms: number }
+  /** The words so far are one more change (its settled picture is on screen): the count goes up, the words stay. */
+  | { type: "change"; ms: number }
   /** from/to: the frames to compare (the script's first and last frames when left out). */
   | { type: "compare"; ms: number; from?: string; to?: string }
   | { type: "pause"; ms: number }
@@ -76,7 +74,6 @@ export function typeDelays(text: string, ms: number): number[] {
 
 export function stepMs(s: DemoStep): number {
   if (s.type === "type") return typeDelays(s.text, s.ms).reduce((a, b) => a + b, 0);
-  if (s.type === "keep") return Math.max(KEEP_PULSE_MS, s.ms);
   return s.ms;
 }
 
@@ -106,10 +103,9 @@ export interface DemoView {
   /** The frame on top is drawn across the picture (a live frame) rather than faded in. */
   sweep: boolean;
   typed: string;
-  steps: string[];
-  keepPulse: boolean;
+  /** How many changes the words hold so far. */
+  changes: number;
   compare: number | null;
-  pill: "Live" | "Kept ✓";
   /** The area the camera is on; null is the whole picture. */
   zoom: Box | null;
 }
@@ -120,10 +116,8 @@ export const startView = (frame: string, under: string | null = null): DemoView 
   fade: under ? REWIND_MS : FADE_MS,
   sweep: false,
   typed: "",
-  steps: [],
-  keepPulse: false,
+  changes: 0,
   compare: null,
-  pill: "Live",
   zoom: null,
 });
 
@@ -134,9 +128,9 @@ export const startView = (frame: string, under: string | null = null): DemoView 
 export function viewBefore(d: Demo, at: number): DemoView {
   const v = { ...startView(demoEnds(d).before), fade: 0 };
   for (const s of d.script.slice(0, at)) {
-    if (s.type === "frame") Object.assign(v, { frame: s.frame, sweep: false, ...(s.live ? { pill: "Live" } : {}) });
+    if (s.type === "frame") Object.assign(v, { frame: s.frame, sweep: false });
     else if (s.type === "type") v.typed += s.text;
-    else if (s.type === "keep") Object.assign(v, { typed: "", steps: [...v.steps, s.label], pill: "Kept ✓" });
+    else if (s.type === "change") v.changes++;
     else if (s.type === "zoom") v.zoom = s.box;
   }
   return v;
@@ -180,22 +174,18 @@ export function sweepPath(cam: { s: number; x: number }) {
 const isBox = (b: unknown): b is Box =>
   Array.isArray(b) && b.length === 4 && b.every((n) => typeof n === "number" && n >= 0 && n <= 1) && b[0] < b[2] && b[1] < b[3];
 
-/** The pill's words: compact cards add the step count after a keep. */
-export function pillText(v: Pick<DemoView, "pill" | "steps">, compact = false) {
-  const count = compact && v.pill === "Kept ✓" && v.steps.length > 1 ? String(v.steps.length) : null;
-  return { main: v.pill, count };
+/** The pill's words: compact cards add the change count once there are two. */
+export function pillText(v: Pick<DemoView, "changes">, compact = false) {
+  return { main: "Live", count: compact && v.changes > 1 ? String(v.changes) : null };
 }
 
 /** A frame's file, without the ?v= content version. */
 export const framePath = (src: string) => src.split("?")[0];
 
-/** The trail: Original, how many earlier steps are folded away, then the newest `keep` steps (numbered from 1). */
-export function trailWindow(steps: readonly string[], keep: number) {
-  const from = Math.max(0, steps.length - keep);
-  return { hidden: from, shown: steps.slice(from).map((label, i) => ({ n: from + i + 1, label })) };
-}
+export const changesWord = (n: number) => `${n} ${n === 1 ? "change" : "changes"}`;
 
-export const stepsWord = (n: number) => `${n} ${n === 1 ? "step" : "steps"}`;
+/** How many changes a session makes. */
+export const countChanges = (d: Pick<Demo, "script">) => d.script.filter((s) => s.type === "change").length;
 
 /** What is wrong with a demo file, in words; empty when it plays. `exists` checks that a frame's file is there. */
 export function demoProblems(d: Demo, exists?: (src: string) => boolean): string[] {
@@ -225,12 +215,9 @@ export function demoProblems(d: Demo, exists?: (src: string) => boolean): string
       if (!d.frames[s.frame]) out.push(`step ${i}: no frame ${s.frame}`);
     } else if (s.type === "type") {
       if (!s.text) out.push(`step ${i}: nothing to type`);
-    } else if (s.type === "keep") {
-      if (!s.label || s.label.length > CHIP_MAX) out.push(`step ${i}: a keep label is 1 to ${CHIP_MAX} characters`);
-      if (s.ms < KEEP_PULSE_MS) out.push(`step ${i}: a keep lasts at least ${KEEP_PULSE_MS} ms`);
     } else if (s.type === "compare") {
       for (const f of [s.from, s.to]) if (f && !d.frames[f]) out.push(`step ${i}: no frame ${f}`);
-    } else if (s.type !== "pause") out.push(`step ${i}: unknown step`);
+    } else if (s.type !== "pause" && s.type !== "change") out.push(`step ${i}: unknown step`);
   });
   for (const id of ids) if (!used.has(id)) out.push(`frame ${id} is never shown`);
   if (loopMs(d) > LOOP_MAX_MS) out.push(`one round takes ${loopMs(d)} ms, over ${LOOP_MAX_MS}`);

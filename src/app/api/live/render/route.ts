@@ -1,9 +1,9 @@
 import { connection } from "next/server";
 import { eventFrame, imageFrame, LIVE_STREAM_TYPE, type LiveEvent } from "@/lib/live/frames";
-import { MAX_GRAPH_PROMPT, slotBindings, type LiveGraphParams } from "@/lib/live/graph";
+import { slotBindings, type LiveGraphParams } from "@/lib/live/graph";
 import { LIVE_INPUT, pictureExt, pngSize } from "@/lib/live/names";
 import { isAspect, isKeepRes, isLiveSize, editSize, MAX_MASTER_SIDE } from "@/lib/live/sizes";
-import { METHODS, type Method } from "@/lib/live/steps";
+import { DEFAULT_METHOD, METHODS, type Method } from "@/lib/live/steps";
 import { MAX_LIVE_TEXT, normalize, renderKey } from "@/lib/live/text";
 import { ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { asWho, liveWho } from "@/server/live/access";
@@ -20,8 +20,6 @@ interface Body {
   slot?: unknown;
   urgent?: unknown;
   text?: unknown;
-  /** compose (an owner's lab method): the kept texts and the live text as one instruction. */
-  compose?: unknown;
   seed?: unknown;
   size?: unknown;
   keepRes?: unknown;
@@ -58,10 +56,9 @@ export async function POST(request: Request) {
 
   // What to render: every value checked against the session and the size tables.
   if (b.method !== undefined && !METHODS.includes(b.method as Method)) return Response.json({ error: "Bad method" }, { status: 400 });
-  const method: Method = (b.method as Method | undefined) ?? "hybrid";
+  const method: Method = (b.method as Method | undefined) ?? DEFAULT_METHOD;
   const text = typeof b.text === "string" ? b.text : "";
-  const compose = who.kind === "owner" && method === "compose" && typeof b.compose === "string" ? b.compose : null;
-  const prompt = compose !== null ? compose.slice(0, MAX_GRAPH_PROMPT) : normalize(text.slice(0, MAX_LIVE_TEXT * 2));
+  const prompt = normalize(text.slice(0, MAX_LIVE_TEXT * 2));
   const seed = Number(b.seed);
   if (!Number.isSafeInteger(seed) || seed < 0) return Response.json({ error: "Bad seed" }, { status: 400 });
   const base = b.base === undefined || b.base === null ? undefined : b.base;

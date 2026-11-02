@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Fragment } from "react";
-import { ArrowRight, AudioLines, Box, CalendarClock, CornerDownLeft, ImageIcon, ListChecks, Plug, ScanEye, Sparkles, Undo2, Video, Zap, type LucideIcon } from "lucide-react";
+import { ArrowRight, AudioLines, Box, CalendarClock, ImageIcon, ListChecks, Plug, ScanEye, Sparkles, TextCursorInput, Undo2, Video, Zap, type LucideIcon } from "lucide-react";
 import { GitHubMark } from "@/components/github-mark";
 import { BeforeAfter } from "@/components/home/before-after";
 import {
@@ -169,8 +169,8 @@ export function AppsSection({ facts, beforeAfter, reveals }: Pick<HomeShowcase, 
 export function LiveEditSection() {
   const points: [LucideIcon, string][] = [
     [Zap, "Live frames as you type, on your own GPU"],
-    [CornerDownLeft, "Enter keeps a change; typing never does"],
-    [Undo2, "Undo, redo and compare every step"],
+    [TextCursorInput, "One prompt that keeps growing, always on your original"],
+    [Undo2, "Undo a change, or start fresh from the picture"],
   ];
   return (
     <section aria-labelledby="home-live" className={cn(SECTION, "[--cv:720px] sm:[--cv:860px] md:[--cv:820px] lg:[--cv:470px] xl:[--cv:500px]")}>

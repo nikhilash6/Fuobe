@@ -97,7 +97,7 @@ async function session(method: Method | "preview") {
   let previewBase: { name: string; bytes: Buffer } | null = null;
   for (const [k, text] of EDITS.entries()) {
     const seed = 1000 + k;
-    const baseName = method === "preview" && previewBase ? previewBase.name : stack.base(method === "preview" ? "hybrid" : method)!.name;
+    const baseName = method === "preview" && previewBase ? previewBase.name : stack.base()!.name;
     const paste = method === "chain" ? ("off" as const) : ("auto" as const);
     // Two live frames while typing: small WebP, never a base.
     let lastLive: Buffer | null = null;

@@ -1,23 +1,22 @@
 "use client";
 
-import { Check, CornerDownLeft, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   cameraFor,
+  changesWord,
+  countChanges,
   type Demo,
   type DemoView,
   demoEnds,
   FADE_MS,
   frameOrder,
-  KEEP_PULSE_MS,
   LIVE_DEMO,
   LIVE_DEMO_V,
   pillText,
   startView,
-  stepsWord,
   SWEEP_MS,
   sweepPath,
-  trailWindow,
   typeDelays,
   viewBefore,
   ZOOM_MAX,
@@ -26,12 +25,12 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * A recorded live edit session, played back: the camera moves in on the area the step changes, the text types itself
- * into the dock, each live frame is drawn across the picture as it arrives, the full-quality picture settles, the
- * camera pulls back out, Keep pulses, a step joins the trail, and a compare sweep shows the original against the last
- * step. It loops, pauses off screen and
- * in a hidden tab and picks up where it stopped, and under reduced motion it is a still before/after. Frames load
- * only once the player is in view. No GPU, no requests beyond the files: guests, Home and the Apps card see it.
+ * A recorded live edit session, played back: one prompt that keeps growing. The camera moves in on the area a change
+ * touches, the words type themselves onto the end of the prompt in the dock, each live frame is drawn across the
+ * picture as it arrives, the full-quality picture settles, the camera pulls back out and the change count goes up;
+ * at the end a compare sweep shows the original against the last picture. It loops, pauses off screen and in a hidden
+ * tab and picks up where it stopped, and under reduced motion it is a still before/after. Frames load only once the
+ * player is in view. No GPU, no requests beyond the files: guests, Home and the Apps card see it.
  */
 
 export { LIVE_DEMO };
@@ -174,7 +173,6 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
                   frame: s.frame,
                   fade: v.frame === s.frame ? v.fade : FADE_MS,
                   sweep: !!s.live,
-                  ...(s.live ? { pill: "Live" as const } : {}),
                 },
             );
             await wait(s.ms);
@@ -191,12 +189,9 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
               await wait(delays[c]);
             }
             typed = base + s.text;
-          } else if (s.type === "keep") {
-            setView((v) => v && { ...v, keepPulse: true });
-            await wait(KEEP_PULSE_MS);
-            typed = "";
-            setView((v) => v && { ...v, keepPulse: false, typed: "", steps: [...v.steps, s.label], pill: "Kept ✓" });
-            await wait(s.ms - KEEP_PULSE_MS);
+          } else if (s.type === "change") {
+            setView((v) => v && { ...v, changes: v.changes + 1 });
+            await wait(s.ms);
           } else if (s.type === "compare") {
             const t0 = performance.now();
             while (alive && performance.now() - t0 < s.ms) {
@@ -226,7 +221,7 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
   const v = ends && (reduced || !view) ? startView(ends.before) : view;
   const ratio = demo ? `${demo.size[0]} / ${demo.size[1]}` : "4 / 3";
   const pill = v ? pillText(v, compact) : { main: "Live", count: null };
-  const kept = v?.steps.length ?? 0;
+  const changes = v?.changes ?? 0;
   const showImages = visible || view !== null;
   // The small card keeps the whole picture: zoomed in, the typing bar would cover the change.
   const cam = cameraFor(v?.zoom ?? null, compact ? 1 : ZOOM_MAX);
@@ -245,7 +240,7 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
   return (
     <div ref={box} className={cn("@container relative isolate overflow-hidden rounded-2xl bg-media text-white", className)} style={{ aspectRatio: compact ? ratio : undefined }} data-live-demo>
       {demo && ends && v && showImages && (reduced ? (
-        <StillCompare before={src(ends.before)} after={src(ends.after)} steps={countKeeps(demo)} />
+        <StillCompare before={src(ends.before)} after={src(ends.after)} changes={countChanges(demo)} />
       ) : (
         // The camera: it glides in on the area a step changes while the live frames arrive, and back out to keep.
         <div
@@ -308,12 +303,12 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
         {pill.main}
         {pill.count && <span className="text-white/75">· {pill.count}</span>}
       </span>
-      {/* The compare sweep has its own labels; the trail steps aside while it plays. */}
-      {!compact && v && <DemoTrail steps={v.steps} hidden={v.compare !== null} />}
+      {/* The compare sweep has its own labels; the count steps aside while it plays. */}
+      {!compact && v && <ChangeCount changes={v.changes} hidden={v.compare !== null} />}
       {v && v.compare !== null && (
         <div className={cn("pointer-events-none absolute inset-x-3 flex justify-between text-[11px] font-medium", compact ? "inset-x-2 bottom-12" : "bottom-16")} data-live-compare>
           <span className="rounded-full bg-black/45 px-2 py-0.5 backdrop-blur">Original</span>
-          <span className="rounded-full bg-white/90 px-2 py-0.5 text-black">{stepsWord(kept)}</span>
+          <span className="rounded-full bg-white/90 px-2 py-0.5 text-black">{changesWord(changes)}</span>
         </div>
       )}
       <div className={cn("absolute inset-x-3 bottom-3 flex items-center gap-2", compact && "inset-x-2 bottom-2")}>
@@ -336,82 +331,33 @@ export function LiveDemo({ compact, className, onTypeAttempt }: { compact?: bool
                 {v.typed}
               </span>
             ) : (
-              <span className="truncate text-white/55">Type a change…</span>
+              <span className="truncate text-white/55">Type a change, then keep adding…</span>
             )}
           </span>
           <span className="-ml-1.5 h-4 w-px shrink-0 bg-white/80 motion-safe:animate-[live-caret_1s_steps(1)_infinite]" />
         </button>
-        <span className={cn("inline-flex shrink-0 items-center justify-center gap-1 rounded-xl bg-white font-medium text-black transition-transform", compact ? "size-8" : "h-11 px-3.5 text-[13px]", v?.keepPulse && "scale-95 ring-4 ring-primary/60")} aria-label={compact ? "Keep" : undefined}>
-          {kept && !v?.typed ? <Check className="size-3.5" /> : <CornerDownLeft className="size-3.5" />}
-          {!compact && "Keep"}
-        </span>
       </div>
     </div>
   );
 }
 
-const countKeeps = (d: Demo) => d.script.filter((s) => s.type === "keep").length;
-
 /**
- * The kept steps, as the editor shows them: Original › +N › the newest step(s), the newest one whole and lit. One step
- * fits a phone-width player; three from a wider one. The player's own width decides (a container query), not the
- * window's, so Home's half-width player and a full-width phone each get the right count.
+ * How many changes the one prompt holds so far: "One prompt" and the count, which pops each time a change settles. The
+ * words themselves are in the dock.
  */
-export function DemoTrail({ steps, hidden }: { steps: readonly string[]; hidden?: boolean }) {
-  if (!steps.length) return null;
-  const wide = trailWindow(steps, 3);
-  const narrow = trailWindow(steps, 1);
-  const sep = <span className="shrink-0 text-white/70">›</span>;
+export function ChangeCount({ changes, hidden }: { changes: number; hidden?: boolean }) {
+  if (!changes) return null;
   return (
-    <div
-      className={cn("pointer-events-none absolute top-3 right-3 flex max-w-[calc(100%-6.5rem)] min-w-0 items-center gap-1 text-[11px] transition-opacity duration-300", hidden && "opacity-0")}
-      aria-hidden={hidden || undefined}
-      data-live-trail
-    >
-      {/* On a narrow player, once earlier steps fold into a count, Original steps aside to keep the picture clear. */}
-      <span className={cn("shrink-0 rounded-full bg-black/45 px-2 py-0.5 backdrop-blur", narrow.hidden > 0 && "@max-md:hidden")} data-live-original>
-        Original
+    <div className={cn("pointer-events-none absolute top-3 right-3 flex items-center gap-1 text-[11px] transition-opacity duration-300", hidden && "opacity-0")} aria-hidden={hidden || undefined} data-live-count={changes}>
+      <span className="shrink-0 rounded-full bg-black/45 px-2 py-0.5 backdrop-blur max-[420px]:hidden">One prompt</span>
+      <span key={changes} className="shrink-0 rounded-full bg-white/95 px-2 py-0.5 font-medium text-black tabular-nums ring-2 ring-primary/60 animate-[live-chip_260ms_ease-out]">
+        {changesWord(changes)}
       </span>
-      {narrow.hidden > 0 && (
-        <span className="contents @md:hidden">
-          <span className="shrink-0 rounded-full bg-black/45 px-1.5 py-0.5 tabular-nums backdrop-blur" title={`${stepsWord(narrow.hidden)} before`} data-live-more={narrow.hidden}>
-            +{narrow.hidden}
-          </span>
-        </span>
-      )}
-      {wide.hidden > 0 && (
-        <span className="contents @max-md:hidden">
-          {sep}
-          <span className="shrink-0 rounded-full bg-black/45 px-1.5 py-0.5 tabular-nums backdrop-blur" title={`${stepsWord(wide.hidden)} before`} data-live-more={wide.hidden}>
-            +{wide.hidden}
-          </span>
-        </span>
-      )}
-      {wide.shown.map(({ n, label }) => {
-        const newest = n === steps.length;
-        return (
-          <span key={n} className={cn("contents", !newest && "@max-md:hidden")}>
-            {sep}
-            <span
-              className={cn(
-                "min-w-0 truncate rounded-full px-2 py-0.5",
-                newest ? "max-w-[12rem] bg-white/95 font-medium text-black ring-2 ring-primary/60 animate-[live-chip_260ms_ease-out]" : "max-w-[8rem] shrink-[3] bg-white/70 text-black/80",
-              )}
-              title={label}
-              data-live-chip={n}
-              data-newest={newest || undefined}
-              aria-current={newest ? "step" : undefined}
-            >
-              {n} · {label}
-            </span>
-          </span>
-        );
-      })}
     </div>
   );
 }
 
-function StillCompare({ before, after, steps }: { before: string; after: string; steps: number }) {
+function StillCompare({ before, after, changes }: { before: string; after: string; changes: number }) {
   const [pos, setPos] = useState(50);
   return (
     <div className="absolute inset-0">
@@ -421,10 +367,10 @@ function StillCompare({ before, after, steps }: { before: string; after: string;
       <img src={before} alt="Before" className="absolute inset-0 size-full object-cover" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }} />
       <input type="range" min={0} max={100} value={pos} onChange={(e) => setPos(Number(e.target.value))} aria-label="Compare before and after" className="absolute inset-x-6 top-1/2 opacity-0" />
       <span className="pointer-events-none absolute inset-y-0 w-0.5 bg-white" style={{ left: `${pos}%` }} />
-      {steps > 0 && (
+      {changes > 0 && (
         <div className="pointer-events-none absolute inset-x-3 top-12 flex justify-between text-[11px] font-medium">
           <span className="rounded-full bg-black/45 px-2 py-0.5 backdrop-blur">Original</span>
-          <span className="rounded-full bg-white/90 px-2 py-0.5 text-black">{stepsWord(steps)}</span>
+          <span className="rounded-full bg-white/90 px-2 py-0.5 text-black">{changesWord(changes)}</span>
         </div>
       )}
     </div>
