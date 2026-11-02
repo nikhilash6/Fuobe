@@ -24,7 +24,10 @@ const STILL_PX = 768;
 const CLIP_PX = 512;
 const CLIP_SECONDS = 4;
 const CLIP_FPS = 24;
-/** Longest a clip that rests on its last frame keeps (s): a reveal is cut at its own end, not at CLIP_SECONDS. */
+/**
+ * Longest a clip that rests on its last frame keeps (s): a reveal is cut at its own end, not at CLIP_SECONDS. A clip
+ * that keeps its whole length (`length: "full"`) is cut here too.
+ */
 const REST_CLIP_SECONDS = 8;
 /** Frames at a clip's end crossfaded into its first ones: the cards play clips with `loop`, and this hides the jump. */
 const LOOP_FADE = 6;
@@ -307,22 +310,27 @@ export function seamless(frames, fade) {
  * With `rest: "end"` (a reveal that ends on its result), the clip keeps its own end (up to REST_CLIP_SECONDS) and
  * is not crossfaded; its poster is its last frame, whose time comes back as `at`: a card shows that frame at rest
  * and starts the clip there, so nothing jumps.
+ *
+ * With `length: "full"` (an effect whose end matters), the clip keeps its whole length (up to REST_CLIP_SECONDS)
+ * instead of its first CLIP_SECONDS, and loops as any other: crossfaded, with its first frame as the poster.
  * @param {string} src
  * @param {"image" | "video"} kind
  * @param {string} destBase
- * @param {{ rest?: "start" | "end" }} [opts]
+ * @param {{ rest?: "start" | "end", length?: "full" }} [opts]
  * @returns {{ poster: string, video?: string, at?: number }}
  */
 export function encode(src, kind, destBase, opts = {}) {
   const fit = (px) => `scale='if(gt(iw,ih),min(${px},iw),-2)':'if(gt(iw,ih),-2,min(${px},ih))'`;
   if (kind === "video") {
     const atEnd = opts.rest === "end";
-    // Decoded at CLIP_FPS: CLIP_SECONDS, plus the frames the crossfade takes back from the start (a reveal: all of it).
-    const seconds = atEnd ? REST_CLIP_SECONDS : CLIP_SECONDS + LOOP_FADE / CLIP_FPS;
+    // How much of the clip its loop keeps: the first CLIP_SECONDS, or all of it (up to REST_CLIP_SECONDS).
+    const keep = opts.length === "full" ? REST_CLIP_SECONDS : CLIP_SECONDS;
+    // Decoded at CLIP_FPS: what it keeps, plus the frames the crossfade takes back from the start (a reveal: all of it).
+    const seconds = atEnd ? REST_CLIP_SECONDS : keep + LOOP_FADE / CLIP_FPS;
     const y4m = run(["-i", src, "-t", String(seconds), "-an", "-sn", "-dn", "-vf", `${fit(CLIP_PX)},fps=${CLIP_FPS},format=yuv420p`, "-f", "yuv4mpegpipe", "-"]);
     const { header, frames, luma } = readY4m(y4m);
     if (frames.length < 2) throw new Error(`${src} has no frames to make a clip of`);
-    const cut = frames.slice(0, CLIP_SECONDS * CLIP_FPS);
+    const cut = frames.slice(0, keep * CLIP_FPS);
     const looped = atEnd ? frames : loopsAlready(cut, luma) ? cut : seamless(frames, Math.min(LOOP_FADE, Math.floor(frames.length / 4)));
     const stream = (list) => Buffer.concat([Buffer.from(`${header}\n`, "latin1"), ...list.flatMap((fr) => [Buffer.from("FRAME\n"), fr])]);
     run(["-f", "yuv4mpegpipe", "-i", "-", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "28", "-map_metadata", "-1", "-movflags", "+faststart", `${destBase}.mp4`], stream(looped));
@@ -443,8 +451,10 @@ function readMeta(folder) {
  * Covers from rendered masters that aren't a run's (pnpm eval:covers --from-masters <dir>), such as the
  * preview renders made in ComfyUI for the gallery. One folder per preset id: its clip.mp4 becomes a clip
  * cover (the first 4 s, the first frame as its poster), else its start.png a still cover; the encoding is
- * makeCovers'. Each cover records the provenance it's given: the run, engine, model (`videoModel` for a
- * clip) and variant; a folder's meta.json can name its own `model` and `variant`. The manifest is merged:
+ * makeCovers'. A folder's meta.json `{"length": "full"}` makes its clip cover keep the clip's whole length (up to
+ * REST_CLIP_SECONDS) instead of its first 4 s, for an effect whose end matters. Each cover records the provenance
+ * it's given: the run, engine, model (`videoModel` for a clip) and variant; a folder's meta.json can name its own
+ * `model` and `variant`. The manifest is merged:
  * entries other runs wrote stay, and only the ids found here are replaced. An id whose cover another run
  * made elsewhere (a measured eval cover, another suite's) is skipped, so a later masters run never undoes it;
  * `replace` takes it over (and removes its files). Run it again as masters land: a cover newer than its master
@@ -478,7 +488,8 @@ export function coversFromMasters(dir, opts) {
     }
     const meta = readMeta(folder);
     const model = typeof meta.model === "string" ? meta.model : ((kind === "video" ? opts.videoModel : opts.model) ?? "");
-    picked.push({ id, kind, src: kind === "video" ? clip : path.join(folder, MASTER_STILL), model, variant: typeof meta.variant === "string" ? meta.variant : variant });
+    const full = kind === "video" && meta.length === "full";
+    picked.push({ id, kind, src: kind === "video" ? clip : path.join(folder, MASTER_STILL), meta: path.join(folder, "meta.json"), ...(full && { length: "full" }), model, variant: typeof meta.variant === "string" ? meta.variant : variant });
   }
   for (const id of only ?? []) if (!picked.some((p) => p.id === id) && !skipped.some((s) => s.id === id)) skipped.push({ id, why: "no folder" });
   const result = { run: opts.run, engine, covers: [], skipped, manifest: opts.manifest ?? MANIFEST_FILE, folder: outDir };
@@ -495,19 +506,20 @@ export function coversFromMasters(dir, opts) {
   for (const p of ours) {
     const base = path.join(outDir, safeName(p.id));
     const files = { poster: `${base}.jpg`, ...(p.kind === "video" && { video: `${base}.mp4` }) };
-    // Up to date: the cover is newer than its master (and a clip's poster than the clip it's taken from).
-    const kept = !opts.force && (p.kind === "video" ? newer(files.video, p.src) && newer(files.poster, files.video) : newer(files.poster, p.src) && !fs.existsSync(`${base}.mp4`));
+    // Up to date: the cover is newer than its master and any meta.json (and a clip's poster than the clip it's taken from).
+    const fresh = (file) => newer(file, p.src) && (!fs.existsSync(p.meta) || newer(file, p.meta));
+    const kept = !opts.force && (p.kind === "video" ? fresh(files.video) && newer(files.poster, files.video) : fresh(files.poster) && !fs.existsSync(`${base}.mp4`));
     const entry = { poster: web(files.poster), ...(files.video && { video: web(files.video) }), run: opts.run, engine, model: p.model, variant: p.variant };
     if (!opts.dryRun) {
       if (!kept) {
-        encode(p.src, p.kind, base);
+        encode(p.src, p.kind, base, p.length ? { length: p.length } : {});
         if (p.kind === "image") fs.rmSync(`${base}.mp4`, { force: true });
       }
       const before = manifest[p.id];
       manifest[p.id] = entry;
       dropReplaced(before, manifest, publicDir);
     }
-    result.covers.push({ key: p.id, kind: p.kind, from: p.src, ...(kept && { kept: true }), ...entry });
+    result.covers.push({ key: p.id, kind: p.kind, from: p.src, ...(p.length && { length: p.length }), ...(kept && { kept: true }), ...entry });
   }
   if (ours.length && !opts.dryRun) {
     writeThumbs(manifest, publicDir);

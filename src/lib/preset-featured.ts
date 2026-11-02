@@ -34,7 +34,7 @@ const ORDER: Record<"app" | "motion" | "effect", string[]> = {
       app-3d-figure app-idol app-60s-cafe app-hook-frame app-kick-ad app-graffiti-ad app-volcano-ad app-simlife
       app-pixel-game app-brick-cube app-micro-beasts app-paint-app app-social-media-icon app-victory-card app-comic-book
       app-glitter-sticker app-mukbang app-roller-coaster app-banana-eating app-sticker-pack app-plushies
-      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi app-clean-up-voice
+      app-meme-generator app-cloud-surf app-game-dump app-japanese-show app-skibidi
     `,
   ],
   motion: [

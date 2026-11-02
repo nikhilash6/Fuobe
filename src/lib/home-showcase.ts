@@ -45,13 +45,13 @@ export const HOME_EFFECTS = [
   { id: "effect-lens-flare", caption: "An anamorphic flare sweeps the frame" },
   { id: "effect-dirty-lens", caption: "Rain beads on the lens as it drifts" },
   { id: "effect-levitation", caption: "They float up off the dune" },
-  { id: "effect-splash-transition", caption: "A splash carries it to the open sea" },
-  { id: "effect-architecture-wave", caption: "The city folds up behind them" },
+  { id: "effect-pearl-earring", caption: "Dressed as the Girl with a Pearl Earring" },
+  { id: "effect-aquarium", caption: "The room floods into an aquarium" },
   { id: "effect-shadow-smoke", caption: "Ink-dark smoke rises around them" },
   { id: "effect-car-drive", caption: "A drive along the coast road" },
-  { id: "effect-water-splash", caption: "A huge wave crashes over them" },
+  { id: "effect-building-explosion", caption: "The building behind them explodes" },
   { id: "effect-flood", caption: "Water and candles rise around them" },
-  { id: "effect-pool-jump", caption: "A backward leap into the pool" },
+  { id: "effect-northern-lights", caption: "An aurora ripples across the sky" },
 ];
 
 /** A phone's rail shows all twelve; a wider screen shows the first six (four from lg to xl), one row (home-sections.tsx). */
@@ -63,7 +63,7 @@ export const HOME_MOTIONS = [
   { id: "motion-crash-zoom-in", caption: "A crash zoom into the face" },
   { id: "motion-helicopter-shot", caption: "Circles high over the castle" },
   { id: "motion-super-dolly-out", caption: "From a close-up out to the whole valley" },
-  { id: "motion-360-orbit", caption: "A full circle around them" },
+  { id: "motion-aerial-pullback", caption: "Pulls back to reveal the hedge maze" },
   { id: "motion-car-chasing", caption: "Chasing the car at speed" },
   { id: "motion-crane-over-the-head", caption: "Rises over their head to the view" },
   { id: "motion-lazy-susan", caption: "They turn as if on a turntable" },
@@ -97,7 +97,7 @@ export const HOME_REVEALS = [
  */
 export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => string }[] = [
   { href: "/cinema", id: "motion-arc-left", line: (f) => `Direct a film shot by shot: camera, lens, light and ${f.cinemaMoves} moves.` },
-  { href: "/genjutsu", id: "effect-seamless-transition", line: () => "Keep a clip’s motion. Change what’s in it." },
+  { href: "/genjutsu", id: "effect-turning-metal", line: () => "Keep a clip’s motion. Change what’s in it." },
   { href: "/character-swap", id: "app-character-swap", line: () => "Put your character into whole clips, shot by shot." },
   { href: "/marketing", id: "app-macroshot-product", line: (f) => `From a product link to a finished ad. ${f.adTemplates} ad templates.` },
   { href: "/mixed-media", id: "effect-magazine", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },

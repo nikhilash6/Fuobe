@@ -12,6 +12,7 @@ import { PRESET_BEFORE_AFTER } from "@/lib/preset-before-after.generated";
 import { PRESET_COVERS } from "@/lib/preset-covers.generated";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
+import { mp4Seconds } from "./helpers/mp4-length";
 
 /*
  * The real covers manifest (src/lib/preset-previews.generated.ts, written by pnpm eval:covers) against the files
@@ -52,6 +53,17 @@ describe("the preset covers manifest", () => {
       expect(typeof e.run === "string" && e.run.length > 0, `${id} names its run`).toBe(true);
       expect(typeof e.engine === "string" && e.engine.length > 0, `${id} names its engine`).toBe(true);
     }
+  });
+
+  // The cards play a clip in a loop, from its start (or its peak) to its end, however long it is.
+  it("keeps every clip short enough for a card's loop: its first 4 s, or its whole length up to 8 s", () => {
+    const lengths = entries.flatMap(([id, e]) => (e.video ? [[id, mp4Seconds(fileOf(e.video))] as const] : []));
+    for (const [id, s] of lengths) {
+      expect(s, id).toBeGreaterThan(2.5);
+      expect(s, id).toBeLessThanOrEqual(8);
+    }
+    // Most are cut at 4 s; a few keep their whole length (a meta.json {"length": "full"} in their masters folder).
+    expect(lengths.filter(([, s]) => Math.abs(s - 4) < 0.01).length).toBeGreaterThan(lengths.length / 2);
   });
 
   // A file made again under its old name gets a new URL only when its version is made again too (pnpm eval:covers and

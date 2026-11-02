@@ -59,7 +59,7 @@ const MATCH = 6;
 
 describe("Home's before/after stills", () => {
   it("gives every app whose cover is a reveal clip an HD before and after, with its version", () => {
-    expect(REVEALS.length).toBeGreaterThan(20);
+    expect(REVEALS.length).toBeGreaterThan(40);
     for (const id of REVEALS) expect(PRESET_BEFORE_AFTER[id], `${id}: node scripts/gen-before-after.mjs --masters <dir> ${id}`).toMatch(/^[0-9a-f]{8}$/);
     // Any other pair is an app whose cover is a clip too.
     for (const [id, v] of Object.entries(PRESET_BEFORE_AFTER)) {
