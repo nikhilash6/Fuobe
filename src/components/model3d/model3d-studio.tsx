@@ -38,7 +38,7 @@ import {
 } from "@/lib/av/model3d";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { keepOffered, offered } from "@/lib/model-access";
-import type { StudioExampleRow } from "@/lib/studio-examples";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { priceLine, useRunPreview } from "./hooks";
@@ -124,7 +124,7 @@ function ModePicker({ mode, onChange }: { mode: Model3dMode; onChange: (m: Model
  * Image to 3D: a photo, several photos, words, an object in a photo or a splat → a model to spin, download, rig and animate.
  * examples: "See what it makes" (studioExamples("image-to-3d"), from the page), where the models go until there is one.
  */
-export function Model3dStudio({ info, examples }: { info: Record<string, Model3dInfo>; examples?: StudioExampleRow }) {
+export function Model3dStudio({ info, examples }: { info: Record<string, Model3dInfo>; examples?: ExampleRowData | null }) {
   const [engine, setEngine, engineMode] = useEngine();
   // A 3D model is finished on this server, so accounts don't get Image to 3D yet, even on their own GPU or key: said up
   // front, and the uploads and Make it 3D are off, instead of a run the server refuses.

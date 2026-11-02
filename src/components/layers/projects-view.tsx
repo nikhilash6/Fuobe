@@ -20,7 +20,7 @@ import { SelfHostNote } from "@/components/self-host-note";
 import { uploadFile, useHydrated, useIsOwner, useLikelyVisitor, useViewer } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { LayerProject } from "@/lib/layers";
-import type { StudioExampleRow } from "@/lib/studio-examples";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { loadImage, sizeOf } from "./render";
@@ -187,7 +187,7 @@ function Capabilities() {
   );
 }
 
-function ProjectsInner({ examples }: { examples?: StudioExampleRow }) {
+function ProjectsInner({ examples }: { examples?: ExampleRowData | null }) {
   const params = useSearchParams();
   const projects = useLayerProjects();
   const { rename, remove } = useLayerActions();
@@ -441,8 +441,8 @@ function ProjectsInner({ examples }: { examples?: StudioExampleRow }) {
   );
 }
 
-/** examples: "See what it makes" (studioExamples("layers"), from the page). */
-export function LayersProjects({ examples }: { examples?: StudioExampleRow }) {
+/** examples: "More to try" (exampleRow(), from the page). */
+export function LayersProjects({ examples }: { examples?: ExampleRowData | null }) {
   return (
     <Suspense fallback={null}>
       <ProjectsInner examples={examples} />

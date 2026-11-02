@@ -35,7 +35,7 @@ Marketing…). The pages of those tools say so up front and turn off their uploa
 checks (the estimate routes, and `?preview=1` on the run routes that support it) stay open, so the
 studios can show prices. A guest may send 120 price checks a minute (per visitor behind a trusted
 reverse proxy; see below), and so may each account. A price check reads only the header of a file
-it names, and only of the asker's own files: a guest owns none. Nor does a price check reveal the
+it names, and only of the asker's own files (a guest owns none) or of Fuobe's published example files. Nor does a price check reveal the
 owner's library: the turnaround video's price check (`/api/turnaround/estimate`, or
 `/api/turnaround?preview=1`) answers 404 "Character not found" for any character a visitor names,
 whether it exists or not. A price check never calls a GPU either: Split soundtrack's price check
@@ -210,7 +210,10 @@ cloudflared tunnel --url http://localhost:8188   # or: ngrok http 8188
   A link or a `data:` URI answers 400 with `code: "input-not-allowed"`, someone else's file 403
   (`input-not-yours`), and a file that has expired 404 (`input-gone`, "That file has expired.
   Upload it again."). A file bigger than an upload of its kind may be (one of your own results,
-  too) answers 413 (`input-too-big`). The server never fetches a link for an account.
+  too) answers 413 (`input-too-big`). The server never fetches a link for an account. The one
+  exception is Fuobe's published example files ("Start from an example" on a page): a run may read
+  them by their exact path, the same for everyone, from the server's own disk, with no upload and no
+  space used. Nothing else outside your own files. A published example file is never removed or renamed.
 - **LoRAs and model files.** The server never downloads anything onto your machine. A LoRA a run
   adds (a camera motion's, an effect's, a look's) must already be in your ComfyUI's `models/loras`
   folder. When one is missing, the run answers 409 with `code: "comfy_missing_model"` and a `fix`

@@ -15,7 +15,7 @@ import { useIsVisitor } from "@/lib/api";
 import { ResearchLabel } from "@/components/brand/research-progress";
 import type { BrandKit } from "@/lib/catalog/marketing";
 import { timeAgo } from "@/lib/format";
-import type { StudioExampleRow } from "@/lib/studio-examples";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useBrandActions, useBrands } from "@/components/marketing/hooks";
@@ -99,9 +99,9 @@ function DeleteBrand({ brand, onClose }: { brand: BrandKit | null; onClose: () =
 
 /**
  * Ads Studio home: start from a website (or by hand), and the brand shelf.
- * examples: "See what it makes" (studioExamples("ads"), from the page), while there are no brands of one's own.
+ * examples: "More to try" (exampleRow(), from the page), while there are no brands of one's own.
  */
-export function AdsHome({ examples }: { examples?: StudioExampleRow }) {
+export function AdsHome({ examples }: { examples?: ExampleRowData | null }) {
   const router = useRouter();
   const { engine, setEngine } = useMarketingEngine();
   const brands = useBrands();

@@ -160,12 +160,14 @@ describe("other tab bars switch without a round trip", () => {
     expect(src("src/app/(studio)/loading.tsx")).toMatch(/<StudioRouteSkeleton /);
   });
 
-  it("example covers (a lazy chunk) load under their own placeholder, so a tapped page never waits for them", () => {
-    // Without it the chunk's load suspends the whole page up to the route's skeleton after the tap.
-    const row = src("src/components/studio/example-row.tsx");
-    expect(row).toMatch(/export function ExampleTilesSuspense/);
-    expect(row).toMatch(/<ExampleTilesSuspense count=\{row\.tiles\.length\}>/);
-    expect(src("src/components/studio/studio-page.tsx")).toMatch(/<ExampleTilesSuspense count=\{row\.tiles\.length\}>\s*<ExampleTiles /);
+  it("example cards (a lazy chunk) load under their own placeholder, so a tapped page never waits for them", () => {
+    // Without a loading option next/dynamic adds no Suspense boundary, and the chunk's load suspends the whole page up to
+    // the route's skeleton after the tap.
+    const page = src("src/components/studio/studio-page.tsx");
+    const lazy = page.split("\n").filter((l) => /^const \w+ = dynamic\(\(\) => import\("@\/components\/examples\/example-cards"\)/.test(l));
+    expect(lazy.length).toBe(3);
+    for (const line of lazy) expect(line).toMatch(/\{ loading: /);
+    expect(page).toMatch(/loading: ExampleCardsPlaceholder \}/);
   });
 });
 

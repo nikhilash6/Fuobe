@@ -15,7 +15,7 @@ import { ExampleRow } from "@/components/studio/example-row";
 import { useEngine, useLikelyVisitor } from "@/lib/api";
 import { SWAP_STUDIO, type SwapProjectCard } from "@/lib/catalog/swap-studio";
 import { toastError } from "@/lib/refusals";
-import type { StudioExampleRow } from "@/lib/studio-examples";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { useCreateSwapProject, useDeleteSwapProject, useSwapProjects } from "./hooks";
 
@@ -34,8 +34,8 @@ const ago = (t: number) => {
   return new Date(t).toLocaleDateString();
 };
 
-/** examples: "See what it makes" (studioExamples("character-swap"), from the page), while there are no projects of one's own. */
-export function SwapStudioHome({ examples }: { examples?: StudioExampleRow }) {
+/** examples: "More to try" (exampleRow(), from the page), while there are no projects of one's own. */
+export function SwapStudioHome({ examples }: { examples?: ExampleRowData | null }) {
   const router = useRouter();
   const [engine, setEngine] = useEngine();
   const projects = useSwapProjects();

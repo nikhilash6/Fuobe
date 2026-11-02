@@ -4,48 +4,52 @@ import { ArrowRight, ArrowUp, Loader2, Upload, Zap } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { nanoid } from "nanoid";
+import { createContext, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PhoneNavButton } from "@/components/nav/phone-nav-button";
 import { HeaderPill } from "@/components/gpu/readiness-chip";
 import { badgeFor, openGpuSetup, useGpuBadges } from "@/hooks/use-gpu";
-import type { Generation, MediaKind, ModelDef, Preset } from "@/lib/catalog/types";
+import type { Generation } from "@/lib/catalog/types";
 import { GUEST_PROMPT_EVENT, useEngine, useGenerations, useIsGuest, useLikelyVisitor } from "@/lib/api";
-import {
-  claimStartToken,
-  followEngineDefault,
-  handoffKey,
-  mergeHandoff,
-  presetModel,
-  presetParams,
-  promptShown,
-  routeParams,
-  START_PARAM,
-  withoutLayout,
-  withoutStart,
-  withPreset,
-} from "@/lib/composer";
-import { presetGpuKey, presetRoutes } from "@/lib/catalog/preset-recipe-routes";
+import { claimStartToken, followEngineDefault, handoffKey, mergeHandoff, promptShown, START_PARAM, withoutStart, withPreset } from "@/lib/composer";
+import { presetGpuKey } from "@/lib/catalog/preset-recipe-routes";
 import { editableLayout, EDIT_LAYOUT_PARAM, readEditLayoutParam } from "@/lib/output-actions";
-import { positionsFrom } from "@/lib/catalog/keyframes";
-import { reuseSignature, withSignatureWords } from "@/lib/catalog/palettes";
 import { movedAppRequest } from "@/lib/catalog/plan";
-import { currentModelId, migrateRequest } from "@/lib/catalog/replaced";
-import { matchSpokenLanguage } from "@/lib/speech-languages";
+import { migrateRequest } from "@/lib/catalog/replaced";
 import { SoulPresetCards } from "@/components/moodboards/soul-preset-cards";
 import type { StudioCatalog } from "@/lib/studio-catalog";
-import type { StudioExample, StudioExampleRow } from "@/lib/studio-examples";
+import { EXAMPLE_PARAM, exampleFits, exampleKey, type ExampleCard, type ExampleRowData } from "@/lib/examples/types";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { ComposerBridgeCtx, useComposerBridge, type ComposerBridge } from "./attachments";
 import { CatalogProvider, useCatalog } from "./catalog";
 import { Composer } from "./composer";
 import { EngineSwitch } from "./engine-switch";
-import { ExampleTilesSuspense } from "./example-row";
 import { HubHeaderExtras, useInHub } from "./hub-chrome";
 import { Feed } from "./feed";
-import type { SlotValue } from "./media-slot";
+import { applyExample, draftFromGeneration, initialDraft, slot } from "./draft";
 import { PresetUrlCtx, StartRequestCtx, StudioProvider, usePresetUrl, useStudio, useStudioActions, type Draft, type StudioConfig } from "./studio-context";
+
+/**
+ * The example cards while their chunk loads (a page reached by a tap): empty covers in the row's place, so the rest of the
+ * page draws at once. A `loading` option is what gives a dynamic() its own Suspense boundary: without it the chunk's load
+ * suspends the whole page up to the route's skeleton.
+ */
+function ExampleCardsPlaceholder() {
+  return (
+    <div aria-hidden className="mx-auto grid w-full max-w-[1000px] grid-cols-2 gap-3 px-3 pb-10 sm:grid-cols-4 sm:gap-4 sm:px-6">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className={cn("aspect-[4/5] rounded-xl bg-muted", i >= 2 && "max-sm:hidden")} />
+      ))}
+    </div>
+  );
+}
+
+// The example cards (and the clip player they bring) are their own chunk: a page with no examples never loads them.
+const ExampleRow = dynamic(() => import("@/components/examples/example-cards").then((m) => m.ExampleRow), { loading: ExampleCardsPlaceholder });
+const ExampleStrip = dynamic(() => import("@/components/examples/example-cards").then((m) => m.ExampleStrip), { loading: () => null });
+const ExamplesButton = dynamic(() => import("@/components/examples/example-cards").then((m) => m.ExamplesButton), { loading: () => null });
 
 // Live edit's panel (the Edit studio's Live switch) loads on the first switch.
 const LiveEditPanel = dynamic(() => import("@/components/live/live-edit-app").then((m) => m.LiveEditPanel), { ssr: false });
@@ -87,120 +91,6 @@ function LiveArea({ onClose }: { onClose: () => void }) {
       }}
     />
   );
-}
-
-function kindOfUrl(url: string): MediaKind {
-  if (/\.(mp4|webm|mov)(\?|$)/i.test(url)) return "video";
-  if (/\.(mp3|wav|ogg|flac|m4a)(\?|$)/i.test(url)) return "audio";
-  return "image";
-}
-
-const slot = (url: string | null | undefined): SlotValue | null =>
-  url ? { ref: url, preview: url, kind: kindOfUrl(url), id: nanoid(6) } : null;
-
-function initialDraft(
-  config: StudioConfig,
-  sp: URLSearchParams,
-  engine: "cloud" | "open",
-  lookup: { getModel: (id: string) => ModelDef | undefined; getPreset: (id: string) => Preset | undefined },
-): Draft {
-  const preset = sp.get("preset") ? lookup.getPreset(sp.get("preset")!) : config.preset;
-  // A link or Assist hand-off that names a model Fuobe retired opens on the one that replaced it (replaced.ts).
-  const requested = sp.get("model") && currentModelId(sp.get("model")!);
-  const has = (id: string) => !!lookup.getModel(id);
-  // An app starts on the model its preview was made with on this engine, else its own route (else the other engine's,
-  // for an app with no version here); opened on one of its models (?model=, from ⌘K), on that model's route.
-  const other = engine === "open" ? "cloud" : "open";
-  const appRoutes = preset?.type === "app" ? [...presetRoutes(preset, engine, has), ...presetRoutes(preset, other, has)] : [];
-  const appRoute = appRoutes.find((r) => !!requested && r.modelId === requested) ?? appRoutes[0];
-  // A camera motion or effect starts on the model its preview was made with (MiniMax H3), else its Original (Fuobe DoP),
-  // when the studio has it.
-  const presetOwn = presetModel(preset, engine, has);
-  const modelId =
-    (requested && lookup.getModel(requested)?.id) ||
-    appRoute?.modelId ||
-    (presetOwn && lookup.getModel(presetOwn)?.id) ||
-    config.defaultModels[engine] ||
-    config.defaultModels.cloud ||
-    // Open-only tools (Match colors) keep their open model under the Cloud switch, like cloud-only ones do under Open.
-    config.defaultModels.open;
-  const model = lookup.getModel(modelId);
-  // The route's own settings (Wan 2.2 at 480p; a recipe on H3 at the Quality its cover was made at) on its own model.
-  const routeSettings = appRoute && modelId === appRoute.modelId ? routeParams(appRoute, "app") : presetOwn && modelId === presetOwn ? presetParams(preset, engine, has) : {};
-  const slots: Draft["slots"] = {};
-  const imageSlot = config.slots.find((s) => s.accept === "image")?.key ?? preset?.inputs.find((s) => s.accept === "image")?.key;
-  const refs: SlotValue[] = [];
-  if (sp.get("image") && imageSlot) slots[imageSlot] = slot(sp.get("image"));
-  if (sp.get("ref")) {
-    if (config.multiRef) refs.push(slot(sp.get("ref"))!);
-    else if (imageSlot) slots[imageSlot] = slot(sp.get("ref"));
-  }
-  if (sp.get("video")) slots.video = slot(sp.get("video"));
-  if (sp.get("audio")) slots.audio = slot(sp.get("audio"));
-  // A voice sample handed over (Clean up voice → "Use as a voice sample"): the voice a cloning model speaks with.
-  if (sp.get("voice")) slots.voiceAudio = slot(sp.get("voice"));
-  // An output format handed over in the link (Export → "ProRes in the cloud"), when the model writes it.
-  const format = model?.options.formats?.find((f) => f === sp.get("format"));
-  // A size handed over (Regenerate in 2K → 1440p), when the model offers it.
-  const resolution = model?.options.resolutions?.find((r) => r === sp.get("resolution"));
-  return {
-    prompt: sp.get("prompt") ?? "",
-    negativePrompt: "",
-    modelId,
-    params: { ...model?.defaults, ...routeSettings, ...(format && { format }), ...(resolution && { resolution }) },
-    slots,
-    refs,
-    presetId: sp.get("preset") ?? config.preset?.id,
-    presetOptions: {},
-  };
-}
-
-/** Rebuild a composer draft from a past generation ("Reuse"). */
-function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id: string) => ModelDef | undefined, getPreset: (id: string) => Preset | undefined): Partial<Draft> {
-  // A run styled by the Color signature / Moodboard chips comes back as it was before they routed it,
-  // with the picks on the chips (studios without the chips get the styled prompt instead).
-  const signed = config.signature ? reuseSignature(g.request) : null;
-  const asked = signed ? { ...g.request, modelId: signed.modelId, params: signed.params } : config.signature ? g.request : withSignatureWords(g.request);
-  // A run on a model Fuobe retired comes back on the one that replaced it (src/lib/catalog/replaced.ts): a Soul style
-  // becomes its Fuobe look, the retired API's own settings are dropped. An app run on the model its app ran on before comes
-  // back on the app's model now (movedAppRequest).
-  const r = movedAppRequest(migrateRequest(asked).request, getModel, getPreset).request;
-  const imgs = signed ? signed.images : (r.inputs?.images ?? []);
-  const imageKeys = config.slots.filter((s) => s.accept === "image" && s.key !== "endImage" && s.key !== "mask").map((s) => s.key);
-  const slots: Draft["slots"] = {};
-  imageKeys.forEach((k, i) => (slots[k] = slot(imgs[i])));
-  const refs = config.multiRef ? imgs.slice(imageKeys.length).map((u) => slot(u)!).filter(Boolean) : [];
-  if (r.inputs?.endImage) slots.endImage = slot(r.inputs.endImage);
-  if (r.inputs?.video) slots.video = slot(r.inputs.video);
-  if (r.inputs?.audio) slots.audio = slot(r.inputs.audio);
-  const params = { ...r.params };
-  // A keyframes run comes back in Frames mode, each still at its place in the clip.
-  const times = params.keyframeTimes;
-  const frames =
-    config.frames && times?.length && times.length === imgs.length && imgs.length > 1
-      ? positionsFrom(times, params.duration ?? times[times.length - 1]).map((at, i) => ({ value: slot(imgs[i])!, at }))
-      : undefined;
-  delete params.keyframeTimes;
-  // A spoken language stored as a name (Assist's "Spanish") or a locale comes back as the model's own code.
-  const languages = getModel(r.modelId)?.options.sourceLanguages;
-  if (languages?.length && params.sourceLanguage) params.sourceLanguage = matchSpokenLanguage(params.sourceLanguage, languages) ?? params.sourceLanguage;
-  // A layout run comes back in Layout mode (studios that have it): its boxes in the editor, the prompt as their caption.
-  const laid = config.layout ? withoutLayout(params) : { params, layout: undefined };
-  return {
-    prompt: r.prompt ?? "",
-    negativePrompt: r.negativePrompt ?? "",
-    modelId: r.modelId,
-    params: laid.params,
-    layout: laid.layout,
-    slots: frames ? {} : slots,
-    refs: frames ? [] : refs,
-    frames,
-    presetId: r.presetId,
-    presetOptions: r.presetOptions ?? {},
-    presetStrength: r.presetStrength,
-    mix: r.mix,
-    signature: signed?.signature,
-  };
 }
 
 /**
@@ -263,10 +153,168 @@ function inView(id: string): boolean {
 
 const EMPTY: Generation[] = [];
 
+// ---------------------------------------------------------------------------
+// "Start from an example": one tap puts an example's files, words and settings into this composer
+
+interface ExamplesApi {
+  /** The page's own cards (its studio's, or its app's). */
+  cards: ExampleCard[];
+  /** The page's own surface ("studio:video", "app:<id>"…): a linked example loads only when it belongs here. */
+  surface?: string;
+  /** The example last loaded (exampleKey), while the draft is still its. */
+  activeId?: string;
+  /** Load a card, asking first when the draft holds the visitor's own words or files. */
+  use: (card: ExampleCard) => void;
+  /** Load a card at once (`quiet`: no message, no scroll: the page opened on it). */
+  apply: (card: ExampleCard, quiet?: boolean) => void;
+}
+
+const ExamplesCtx = createContext<ExamplesApi | null>(null);
+const NO_CARDS: ExampleCard[] = [];
+
+/** The surface of a preset's examples: an app's page, or a motion's or effect's in the Video studio. */
+const surfaceOf = (presetId: string) => (presetId.startsWith("app-") ? `app:${presetId}` : `preset:${presetId}`);
+
+/**
+ * A preset's examples: on its own page, the page's cards; a motion or effect picked in the Video studio fetches its own
+ * when picked (the page doesn't carry every preset's).
+ */
+function usePresetExamples(presetId: string | undefined): ExampleCard[] {
+  const { config } = useStudioActions();
+  const loader = useContext(ExamplesCtx);
+  const own = !!presetId && presetId === config.preset?.id;
+  const fetched = useQuery({
+    queryKey: ["examples", presetId],
+    enabled: !!presetId && !own,
+    staleTime: Infinity,
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch(`/api/examples?surface=${encodeURIComponent(surfaceOf(presetId!))}`);
+      return res.ok ? ((await res.json()) as { cards: ExampleCard[] }).cards : [];
+    },
+  });
+  if (!presetId) return NO_CARDS;
+  if (own) return loader?.cards.filter((c) => c.load.via !== "look") ?? NO_CARDS;
+  return fetched.data ?? NO_CARDS;
+}
+
+/** What the visitor put in themselves: their words and their files (an example's own don't count). */
+const ownContent = (d: Draft) => JSON.stringify([d.prompt.trim(), Object.entries(d.slots).flatMap(([k, v]) => (v?.ref ? [[k, v.ref]] : [])), d.refs.map((r) => r.ref)]);
+const isEmpty = (d: Draft) => !d.prompt.trim() && !Object.values(d.slots).some((v) => v?.ref) && !d.refs.length;
+
+/** Loads examples into the composer for every card on the page (the row, a preset's strip, the sheet, `?example=`). */
+function ExampleLoader({ cards, surface, baseFor, children }: { cards: ExampleCard[]; surface?: string; baseFor: (presetId?: string) => Draft; children: React.ReactNode }) {
+  const { config, draft, setDraft } = useStudio();
+  const catalog = useCatalog();
+  const presetUrl = usePresetUrl();
+  const [loadedAs, setLoadedAs] = useState<{ id: string; content: string } | null>(null);
+  const [pending, setPending] = useState<ExampleCard | null>(null);
+  const latest = useRef(draft);
+  useLayoutEffect(() => {
+    latest.current = draft;
+  });
+  // The ring stays while the draft is still the example's own.
+  const activeId = loadedAs && ownContent(draft) === loadedAs.content ? loadedAs.id : undefined;
+  const baseRef = useRef(baseFor);
+  useLayoutEffect(() => {
+    baseRef.current = baseFor;
+  });
+  const apply = useCallback(
+    (card: ExampleCard, quiet = false) => {
+      if (card.load.via !== "draft") return;
+      const req = card.load.request;
+      const next = applyExample(req, baseRef.current(req.presetId), config, catalog);
+      setDraft(next);
+      setLoadedAs({ id: exampleKey(card), content: ownContent(next) });
+      // A motion or effect goes into the address, as picking it does; one that isn't the example's comes out.
+      if (!config.preset && (req.presetId || latest.current.presetId)) presetUrl(req.presetId);
+      if (quiet) return;
+      toast("Example loaded. Change anything, then Generate.", { id: "example-loaded" });
+      requestAnimationFrame(() => {
+        // This studio's composer: a studio left earlier stays in the page, hidden, with a composer of its own.
+        const composer = [...document.querySelectorAll<HTMLElement>("[data-studio] [data-composer]")].find((el) => el.offsetParent !== null);
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        composer?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+        // A desktop types next; a phone keeps its keyboard down so the example stays in view.
+        if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) composer?.querySelector("textarea")?.focus({ preventScroll: true });
+      });
+    },
+    [config, catalog, setDraft, presetUrl],
+  );
+  const loadedRef = useRef(loadedAs);
+  useLayoutEffect(() => {
+    loadedRef.current = loadedAs;
+  });
+  const use = useCallback(
+    (card: ExampleCard) => {
+      if (card.load.via !== "draft") return;
+      const d = latest.current;
+      const was = loadedRef.current;
+      // An empty composer is replaced at once; one with words or files the visitor added asks first.
+      const own = !isEmpty(d) && (!was || ownContent(d) !== was.content);
+      if (own) setPending(card);
+      else apply(card);
+    },
+    [apply],
+  );
+  const value = useMemo<ExamplesApi>(() => ({ cards, surface, activeId, use, apply }), [cards, surface, activeId, use, apply]);
+  return (
+    <ExamplesCtx.Provider value={value}>
+      {children}
+      <AlertDialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace what&apos;s in the composer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pending?.inputs.length ? "The example's files, words and settings take the place of yours." : "The example's words and settings take the place of yours."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep mine</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pending) apply(pending);
+                setPending(null);
+              }}
+            >
+              Replace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </ExamplesCtx.Provider>
+  );
+}
+
+/**
+ * `?example=<id>`: the page opens with that example loaded (once per id), the page's own card or a fetched one that
+ * belongs here (exampleFits: an effect's example never lands in the Image composer).
+ */
+function ExampleHandoff() {
+  const sp = useSearchParams();
+  const id = sp.get(EXAMPLE_PARAM);
+  const loader = useContext(ExamplesCtx);
+  const catalog = useCatalog();
+  const done = useRef<string | null>(null);
+  useEffect(() => {
+    if (!id || !loader || !catalog.ready || done.current === id) return;
+    done.current = id;
+    const go = (c: ExampleCard | undefined | null) => {
+      // After the link's other hand-off params are in (HandoffSync), so they don't land over it.
+      if (c?.load.via === "draft") setTimeout(() => loader.apply(c, true), 0);
+    };
+    const local = loader.cards.find((c) => c.id === id);
+    if (local) return go(local);
+    void fetch(`/api/examples?id=${encodeURIComponent(id)}`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ card?: ExampleCard; surface?: string }>) : null))
+      .then((j) => go(j && exampleFits(j.surface, loader.surface) ? j.card : null))
+      .catch(() => {});
+  }, [id, loader, catalog.ready]);
+  return null;
+}
+
 /** The preset card (U23) is its own chunk: only app pages and studios with a motion or effect picked load it. */
 const PresetHeader = dynamic(() => import("@/components/preset-header").then((m) => m.PresetHeader));
-/** The example covers are one too: only the studios that show them (Image, Video, Edit) load it. */
-const ShowcaseTile = dynamic(() => import("@/components/home/showcase-tile").then((m) => m.ShowcaseTile));
 
 /** While a preset (app, camera motion, effect) is active and the feed is empty: what it does and what to add, above the composer. */
 function ActivePresetHeader() {
@@ -274,11 +322,14 @@ function ActivePresetHeader() {
   const catalog = useCatalog();
   const presetUrl = usePresetUrl();
   const preset = draft.presetId ? catalog.getPreset(draft.presetId) : config.preset;
+  const examples = usePresetExamples(preset?.id);
+  const loader = useContext(ExamplesCtx);
   if (!preset) return null;
   return (
     <PresetHeader
       preset={preset}
       className="mb-3"
+      examples={examples.length ? <ExampleStrip cards={examples} activeId={loader?.activeId} onPick={(c) => loader?.use(c)} /> : undefined}
       modelName={(id) => catalog.getModel(id)?.name}
       gpuKey={presetGpuKey(
         preset,
@@ -324,68 +375,27 @@ function PromptSuggestions({ suggestions }: { suggestions: string[] }) {
   );
 }
 
-/** A row tile's width: half a phone, else a quarter of the row (1000 px at most). */
-const EXAMPLE_SIZES = "(min-width: 640px) 240px, 50vw";
-
-/** The row's tiles. Memoized: the row reads the draft (below), and typing shouldn't re-render four playing covers. */
-const ExampleTiles = memo(function ExampleTiles({ tiles }: { tiles: StudioExample[] }) {
-  const bridge = useComposerBridge();
-  const grid = useRef<HTMLDivElement>(null);
-  // A tile that picks a camera motion or effect in this same studio (/video?preset=…) picks it the way the composer's
-  // own picker does: a photo already attached, the model and its settings stay, where opening the link anew would
-  // start a fresh draft. Its link still opens in a new tab, and is the way in when the composer isn't there.
-  const pickHere = (href: string) => (e: { preventDefault: () => void }) => {
-    const url = new URL(href, window.location.href);
-    const id = url.searchParams.get("preset");
-    if (!id || url.pathname !== window.location.pathname || !bridge?.pick) return;
-    e.preventDefault();
-    // The row goes once a move is picked, and the tile with it: a tile picked from the keyboard hands its focus to this
-    // studio's composer, so the next key types the prompt instead of starting again from the top of the page.
-    const keyboard = !!grid.current?.querySelector(":focus-visible");
-    const composer = grid.current?.closest("[data-studio]")?.querySelector<HTMLElement>("[data-composer]");
-    bridge.pick(id);
-    // The move's card shows above the composer: back up to it, as the link's navigation would have.
-    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-    if (keyboard) requestAnimationFrame(() => (composer?.querySelector("textarea") ?? composer?.querySelector("button"))?.focus({ preventScroll: true }));
-  };
-  return (
-    <div ref={grid} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {tiles.map((e, i) => (
-        <ShowcaseTile
-          key={e.card.id}
-          card={e.card}
-          kind={e.kind}
-          caption={e.caption}
-          href={e.href}
-          index={i}
-          sizes={EXAMPLE_SIZES}
-          small
-          onNavigate={pickHere(e.href)}
-        />
-      ))}
-    </div>
-  );
-});
-
 /**
- * Real covers from the studio's own presets (src/lib/studio-examples.ts) under the empty composer, each opening its
- * app or picking its motion or effect. Hidden while a preset is picked: its own card is above the composer then.
+ * "Start from an example" under the empty composer (src/lib/examples): each card loads its own files, words and settings
+ * into this composer. Hidden while a motion or effect is picked: its own examples are in its card above the composer.
  */
-function StudioExamples({ row }: { row: StudioExampleRow }) {
-  const { draft } = useStudio();
-  // Its own id: a studio left earlier stays in the page, hidden, with a row of its own.
-  const heading = useId();
-  if (draft.presetId) return null;
-  return (
-    <section aria-labelledby={heading} className="mx-auto w-full max-w-[1000px] px-3 pb-10 sm:px-6">
-      <h2 id={heading} className="mb-2 text-center text-[12.5px] font-medium text-muted-foreground">
-        {row.heading}
-      </h2>
-      <ExampleTilesSuspense count={row.tiles.length}>
-        <ExampleTiles tiles={row.tiles} />
-      </ExampleTilesSuspense>
-    </section>
-  );
+function StudioExamples({ row }: { row: ExampleRowData }) {
+  const { draft, config } = useStudio();
+  const loader = useContext(ExamplesCtx);
+  if (draft.presetId && draft.presetId !== config.preset?.id) return null;
+  // An app's page shows its examples in its card above the composer.
+  if (config.preset && row.cards.some((c) => c.load.via !== "look")) return null;
+  return <ExampleRow row={row} activeId={loader?.activeId} onPick={(c) => loader?.use(c)} className="px-3 pb-10 sm:px-6" />;
+}
+
+/** Once there are results, "Examples" beside the composer opens the cards: a picked motion's or effect's, else the page's. */
+function DockedExamples() {
+  const { draft, config } = useStudio();
+  const loader = useContext(ExamplesCtx);
+  const presetCards = usePresetExamples(draft.presetId && draft.presetId !== config.preset?.id ? draft.presetId : undefined);
+  const cards = presetCards.length ? presetCards : (loader?.cards ?? []).filter((c) => c.load.via !== "look");
+  if (!loader || !cards.length) return null;
+  return <ExamplesButton cards={cards} activeId={loader.activeId} onPick={loader.use} />;
 }
 
 /**
@@ -442,7 +452,7 @@ function StudioHeader({ title, header, tabs }: { title: string; header?: React.R
   );
 }
 
-function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs?: React.ReactNode; examples?: StudioExampleRow }) {
+function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs?: React.ReactNode; examples?: ExampleRowData }) {
   // Config and actions only: the draft lives in the composer, so typing doesn't re-render the page or the feed.
   const { config, setDraft } = useStudioActions();
   const [engine, setEngine, engineMode] = useEngine();
@@ -595,6 +605,11 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
             <ActivePresetHeader />
           </Suspense>
         )}
+        {hasItems && (
+          <div className="mx-auto -mt-2 mb-1 flex w-full max-w-[800px] justify-start">
+            <DockedExamples />
+          </div>
+        )}
         <div data-composer className={cn("mx-auto w-full", hasItems ? "max-w-[800px]" : "max-w-[760px]")}>
           <Composer docked={hasItems} />
         </div>
@@ -602,10 +617,11 @@ function StudioBody({ header, tabs, examples }: { header?: React.ReactNode; tabs
 
       {/* Hidden, not unmounted, while Live is on: the page around the panel keeps its state. */}
       <div className={live ? "hidden" : "contents"}>
-        {!hasItems && config.suggestions && <PromptSuggestions suggestions={config.suggestions} />}
+        {/* Examples that load into the composer take the suggestions' place: they come first on a phone. */}
+        {!hasItems && config.suggestions && !examples?.cards.some((c) => c.load.via !== "look") && <PromptSuggestions suggestions={config.suggestions} />}
         {!hasItems && config.signature && <SoulPresetCards />}
         {/* Only once the feed is known to be empty: a studio with results would show the row, fetch its covers, then drop it. */}
-        {feed.isSuccess && !hasItems && !!examples?.tiles.length && <StudioExamples row={examples} />}
+        {feed.isSuccess && !hasItems && !!examples?.cards.length && <StudioExamples row={examples} />}
       </div>
 
       {dragging && (
@@ -635,8 +651,11 @@ interface StudioPageProps {
   initialRefs?: string[];
   /** Prompt to start with when the URL doesn't carry one (e.g. "@Maya "). */
   initialPrompt?: string;
-  /** Real covers of what the studio makes, under the empty composer (`studioExamples()` in a server component). */
-  examples?: StudioExampleRow;
+  /**
+   * "Start from an example" under the empty composer, or on an app's page inside its card (`exampleRow()` from
+   * src/lib/examples/catalog.ts, in a server component).
+   */
+  examples?: ExampleRowData | null;
 }
 
 type DraftProps = Omit<StudioPageProps, "catalog">;
@@ -776,7 +795,7 @@ function StudioSession({
 }: {
   header?: React.ReactNode;
   tabs?: React.ReactNode;
-  examples?: StudioExampleRow;
+  examples?: ExampleRowData | null;
   sync: Omit<React.ComponentProps<typeof HandoffSync>, "onStart">;
 }) {
   const [startRequest, setStartRequest] = useState(0);
@@ -787,8 +806,11 @@ function StudioSession({
   }, [guest]);
   return (
     <StartRequestCtx.Provider value={startRequest}>
-      <StudioBody header={header} tabs={tabs} examples={examples} />
+      <StudioBody header={header} tabs={tabs} examples={examples ?? undefined} />
       <HandoffSync {...sync} onStart={onStart} />
+      <Suspense fallback={null}>
+        <ExampleHandoff />
+      </Suspense>
       <Suspense fallback={null}>
         <LayoutHandoff />
       </Suspense>
@@ -846,11 +868,15 @@ function StudioDraft({ config, header, tabs, initialRefs, initialPrompt, example
     ownRef.current(handoffKey(new URL(href).searchParams));
     window.history.replaceState(null, "", href);
   }, []);
+  // An example starts from the page's own draft, opened on its motion or effect (that preset's route on this engine).
+  const baseFor = useCallback((presetId?: string) => buildRef.current(presetId && presetId !== config.preset?.id ? new URLSearchParams({ preset: presetId }).toString() : ""), [config.preset?.id]);
   return (
     <ComposerBridgeCtx.Provider value={bridge}>
       <PresetUrlCtx.Provider value={presetUrl}>
         <StudioProvider key={start.epoch} config={config} initial={initial}>
-          <StudioSession header={header} tabs={tabs} examples={examples} sync={{ startKey: start.key, start: initial, build: buildRef, adopt: adoptRef, follow: followRef, ownRef, ready: catalog.ready, onNavigate }} />
+          <ExampleLoader cards={examples?.cards ?? NO_CARDS} surface={examples?.surface} baseFor={baseFor}>
+            <StudioSession header={header} tabs={tabs} examples={examples} sync={{ startKey: start.key, start: initial, build: buildRef, adopt: adoptRef, follow: followRef, ownRef, ready: catalog.ready, onNavigate }} />
+          </ExampleLoader>
         </StudioProvider>
       </PresetUrlCtx.Provider>
     </ComposerBridgeCtx.Provider>

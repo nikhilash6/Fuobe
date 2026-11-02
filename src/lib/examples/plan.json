@@ -1,0 +1,4709 @@
+[
+ {
+  "id": "app-headshot-generator.1",
+  "surface": "app:app-headshot-generator",
+  "rank": 1,
+  "caption": "A café snap to a studio headshot",
+  "options": {
+   "style": "corporate"
+  },
+  "inputs": {
+   "image": "/examples/app-headshot-generator/1/in-image.jpg"
+  },
+  "output": "ba:app-headshot-generator"
+ },
+ {
+  "id": "app-skin-enhancer.1",
+  "surface": "app:app-skin-enhancer",
+  "rank": 1,
+  "caption": "A dewy glow, same face and light",
+  "options": {
+   "level": "soft-glow"
+  },
+  "inputs": {
+   "image": "/examples/app-skin-enhancer/1/in-image.jpg"
+  },
+  "output": "ba:app-skin-enhancer"
+ },
+ {
+  "id": "app-age-shift.1",
+  "surface": "app:app-age-shift",
+  "rank": 1,
+  "caption": "Fifty years older in one photo",
+  "options": {
+   "age": "70s"
+  },
+  "inputs": {
+   "image": "/examples/app-age-shift/1/in-image.jpg"
+  },
+  "output": "ba:app-age-shift"
+ },
+ {
+  "id": "app-hairstyle-try-on.1",
+  "surface": "app:app-hairstyle-try-on",
+  "rank": 1,
+  "caption": "Long waves to a copper-red bob",
+  "words": "A sleek copper-red jaw-length bob",
+  "inputs": {
+   "image": "/examples/app-hairstyle-try-on/1/in-image.jpg"
+  },
+  "output": "ba:app-hairstyle-try-on"
+ },
+ {
+  "id": "app-makeup-studio.1",
+  "surface": "app:app-makeup-studio",
+  "rank": 1,
+  "caption": "A bare face to full glam",
+  "options": {
+   "look": "glam"
+  },
+  "inputs": {
+   "image": "/examples/app-makeup-studio/1/in-image.jpg"
+  },
+  "output": "ba:app-makeup-studio"
+ },
+ {
+  "id": "app-commercial-faces.1",
+  "surface": "app:app-commercial-faces",
+  "rank": 1,
+  "caption": "A selfie to a fitness campaign",
+  "options": {
+   "ad": "fitness"
+  },
+  "inputs": {
+   "image": "/examples/app-commercial-faces/1/in-image.jpg"
+  },
+  "output": "ba:app-commercial-faces"
+ },
+ {
+  "id": "app-relight.1",
+  "surface": "app:app-relight",
+  "rank": 1,
+  "caption": "Grey skies to golden hour",
+  "options": {
+   "light": "golden-hour"
+  },
+  "inputs": {
+   "image": "/examples/app-relight/1/in-image.jpg"
+  },
+  "output": "ba:app-relight"
+ },
+ {
+  "id": "app-packshot.1",
+  "surface": "app:app-packshot",
+  "rank": 1,
+  "caption": "A handbag, cut out on clean white",
+  "options": {
+   "bg": "pure-white"
+  },
+  "inputs": {
+   "image": "/examples/app-packshot/1/in-image.jpg"
+  },
+  "output": "ba:app-packshot"
+ },
+ {
+  "id": "app-product-shot.1",
+  "surface": "app:app-product-shot",
+  "rank": 1,
+  "caption": "Your product, relit in a new scene",
+  "options": {
+   "scene": "nature"
+  },
+  "inputs": {
+   "image": "/examples/app-product-shot/1/in-image.jpg"
+  },
+  "output": "ba:app-product-shot"
+ },
+ {
+  "id": "app-style-snap.1",
+  "surface": "app:app-style-snap",
+  "rank": 1,
+  "caption": "Cashmere knit to black tie",
+  "options": {
+   "style": "black-tie"
+  },
+  "inputs": {
+   "image": "/examples/app-style-snap/1/in-image.jpg"
+  },
+  "output": "ba:app-style-snap"
+ },
+ {
+  "id": "app-outfit-vending.1",
+  "surface": "app:app-outfit-vending",
+  "rank": 1,
+  "caption": "Her look, sold from a vending machine",
+  "inputs": {
+   "image": "/examples/app-outfit-vending/1/in-image.jpg"
+  },
+  "output": "ba:app-outfit-vending"
+ },
+ {
+  "id": "app-outfit-shot.1",
+  "surface": "app:app-outfit-shot",
+  "rank": 1,
+  "caption": "From a flat lay to a model shoot",
+  "inputs": {
+   "image": "/examples/app-outfit-shot/1/in-image.jpg"
+  },
+  "output": "ba:app-outfit-shot"
+ },
+ {
+  "id": "app-sketch-to-real.1",
+  "surface": "app:app-sketch-to-real",
+  "rank": 1,
+  "caption": "A pencil sketch, made a real photo",
+  "inputs": {
+   "image": "/examples/app-sketch-to-real/1/in-image.jpg"
+  },
+  "output": "ba:app-sketch-to-real"
+ },
+ {
+  "id": "app-style-transfer.1",
+  "surface": "app:app-style-transfer",
+  "rank": 1,
+  "caption": "Redrawn as an anime film still",
+  "options": {
+   "style": "anime"
+  },
+  "inputs": {
+   "image": "/examples/app-style-transfer/1/in-image.jpg"
+  },
+  "output": "ba:app-style-transfer"
+ },
+ {
+  "id": "app-color-grading.1",
+  "surface": "app:app-color-grading",
+  "rank": 1,
+  "caption": "A cinematic grade in one click",
+  "options": {
+   "grade": "teal-orange",
+   "grain": "fine"
+  },
+  "inputs": {
+   "image": "/examples/app-color-grading/1/in-image.jpg"
+  },
+  "output": "ba:app-color-grading"
+ },
+ {
+  "id": "app-colorize.1",
+  "surface": "app:app-colorize",
+  "rank": 1,
+  "caption": "A black and white beach, in color",
+  "inputs": {
+   "image": "/examples/app-colorize/1/in-image.jpg"
+  },
+  "output": "ba:app-colorize"
+ },
+ {
+  "id": "app-restore-photo.1",
+  "surface": "app:app-restore-photo",
+  "rank": 1,
+  "caption": "A creased wedding portrait, restored",
+  "inputs": {
+   "image": "/examples/app-restore-photo/1/in-image.jpg"
+  },
+  "output": "ba:app-restore-photo"
+ },
+ {
+  "id": "app-sticker-pack.1",
+  "surface": "app:app-sticker-pack",
+  "rank": 1,
+  "caption": "A selfie turned into six stickers",
+  "inputs": {
+   "image": "/examples/app-sticker-pack/1/in-image.jpg"
+  },
+  "output": "ba:app-sticker-pack"
+ },
+ {
+  "id": "app-glitter-sticker.1",
+  "surface": "app:app-glitter-sticker",
+  "rank": 1,
+  "caption": "A holographic glitter sticker of her",
+  "inputs": {
+   "image": "/examples/app-glitter-sticker/1/in-image.jpg"
+  },
+  "output": "ba:app-glitter-sticker"
+ },
+ {
+  "id": "app-plushies.1",
+  "surface": "app:app-plushies",
+  "rank": 1,
+  "caption": "A plush doll of himself",
+  "options": {
+   "kind": "plush"
+  },
+  "inputs": {
+   "image": "/examples/app-plushies/1/in-image.jpg"
+  },
+  "output": "ba:app-plushies"
+ },
+ {
+  "id": "app-game-dump.1",
+  "surface": "app:app-game-dump",
+  "rank": 1,
+  "caption": "Into an open-world game screenshot",
+  "options": {
+   "game": "open-world"
+  },
+  "inputs": {
+   "image": "/examples/app-game-dump/1/in-image.jpg"
+  },
+  "output": "ba:app-game-dump"
+ },
+ {
+  "id": "app-meme-generator.1",
+  "surface": "app:app-meme-generator",
+  "rank": 1,
+  "caption": "A dinner photo made a classic meme",
+  "words": "Top caption: 200 EURO DINNER. Bottom caption: ONE SCALLOP",
+  "inputs": {
+   "image": "/examples/app-meme-generator/1/in-image.jpg"
+  },
+  "output": "ba:app-meme-generator"
+ },
+ {
+  "id": "app-micro-beasts.1",
+  "surface": "app:app-micro-beasts",
+  "rank": 1,
+  "caption": "Tiny kittens climbing all over her",
+  "options": {
+   "animal": "kittens"
+  },
+  "inputs": {
+   "image": "/examples/app-micro-beasts/1/in-image.jpg"
+  },
+  "output": "ba:app-micro-beasts"
+ },
+ {
+  "id": "app-paint-app.1",
+  "surface": "app:app-paint-app",
+  "rank": 1,
+  "caption": "His photo in a 90s paint program",
+  "inputs": {
+   "image": "/examples/app-paint-app/1/in-image.jpg"
+  },
+  "output": "ba:app-paint-app"
+ },
+ {
+  "id": "app-japanese-show.1",
+  "surface": "app:app-japanese-show",
+  "rank": 1,
+  "caption": "A guest on a Japanese TV show",
+  "inputs": {
+   "image": "/examples/app-japanese-show/1/in-image.jpg"
+  },
+  "output": "ba:app-japanese-show"
+ },
+ {
+  "id": "app-remove-background.1",
+  "surface": "app:app-remove-background",
+  "rank": 1,
+  "caption": "Cut out clean, every curl kept",
+  "inputs": {
+   "image": "/examples/app-remove-background/1/in-image.jpg"
+  },
+  "output": "ba:app-remove-background"
+ },
+ {
+  "id": "app-object-remover.1",
+  "surface": "app:app-object-remover",
+  "rank": 1,
+  "caption": "The selfie-stick tourists, gone",
+  "words": "Clear the terrace so she stands alone with the palace",
+  "inputs": {
+   "image": "/examples/app-object-remover/1/in-image.jpg"
+  },
+  "output": "ba:app-object-remover"
+ },
+ {
+  "id": "app-change-background.1",
+  "surface": "app:app-change-background",
+  "rank": 1,
+  "caption": "From a grey studio to the Himalaya",
+  "words": "Move him to the high Himalaya at golden hour, pink light on the snow peaks behind him",
+  "inputs": {
+   "image": "/examples/app-change-background/1/in-image.jpg"
+  },
+  "output": "ba:app-change-background"
+ },
+ {
+  "id": "app-vectorize.1",
+  "surface": "app:app-vectorize",
+  "rank": 1,
+  "caption": "A painted emblem made a crisp vector",
+  "inputs": {
+   "image": "/examples/app-vectorize/1/in-image.jpg"
+  },
+  "output": "ba:app-vectorize"
+ },
+ {
+  "id": "app-text-edit.1",
+  "surface": "app:app-text-edit",
+  "rank": 1,
+  "caption": "The shop sign now reads BELLE",
+  "words": "Change the sign to read BELLE in the same gold serif lettering",
+  "inputs": {
+   "image": "/examples/app-text-edit/1/in-image.jpg"
+  },
+  "output": "ba:app-text-edit"
+ },
+ {
+  "id": "app-breakdown.1",
+  "surface": "app:app-breakdown",
+  "rank": 1,
+  "caption": "Her outfit, broken down piece by piece",
+  "inputs": {
+   "image": "/examples/app-breakdown/1/in-image.jpg"
+  },
+  "output": "ba:app-breakdown"
+ },
+ {
+  "id": "app-hook-frame.1",
+  "surface": "app:app-hook-frame",
+  "rank": 1,
+  "caption": "A calm frame made a scroll-stopper",
+  "inputs": {
+   "image": "/examples/app-hook-frame/1/in-image.jpg"
+  },
+  "output": "ba:app-hook-frame"
+ },
+ {
+  "id": "app-similarity-score.1",
+  "surface": "app:app-similarity-score",
+  "rank": 1,
+  "caption": "Logos and marks cleared from the look",
+  "inputs": {
+   "image": "/examples/app-similarity-score/1/in-image.jpg"
+  },
+  "output": "ba:app-similarity-score"
+ },
+ {
+  "id": "app-upscale.1",
+  "surface": "app:app-upscale",
+  "rank": 1,
+  "caption": "Soft to sharp, down to every strand",
+  "inputs": {
+   "image": "/examples/app-upscale/1/in-image.jpg"
+  },
+  "output": "ba:app-upscale"
+ },
+ {
+  "id": "app-face-swap.1",
+  "surface": "app:app-face-swap",
+  "rank": 1,
+  "caption": "A new face, same suit and light",
+  "inputs": {
+   "image": "/examples/app-face-swap/1/in-image.jpg",
+   "image2": "/examples/app-face-swap/1/in-image2.jpg"
+  },
+  "output": "ba:app-face-swap"
+ },
+ {
+  "id": "app-match-colors.1",
+  "surface": "app:app-match-colors",
+  "rank": 1,
+  "caption": "A summer avenue in autumn's palette",
+  "inputs": {
+   "image": "/examples/app-match-colors/1/in-image.jpg",
+   "image2": "/examples/app-match-colors/1/in-image2.jpg"
+  },
+  "output": "ba:app-match-colors"
+ },
+ {
+  "id": "app-behind-the-scenes.1",
+  "surface": "app:app-behind-the-scenes",
+  "rank": 1,
+  "caption": "Reveals the film set",
+  "inputs": {
+   "image": "/examples/app-behind-the-scenes/1/in-image.jpg"
+  },
+  "output": "cover:app-behind-the-scenes"
+ },
+ {
+  "id": "app-product-360.1",
+  "surface": "app:app-product-360",
+  "rank": 1,
+  "caption": "A red heel on a turntable",
+  "inputs": {
+   "image": "/examples/app-product-360/1/in-image.jpg"
+  },
+  "output": "cover:app-product-360"
+ },
+ {
+  "id": "app-billboard-ad.1",
+  "surface": "app:app-billboard-ad",
+  "rank": 1,
+  "caption": "A perfume ad over the skyline",
+  "inputs": {},
+  "output": "cover:app-billboard-ad",
+  "load": "look"
+ },
+ {
+  "id": "app-truck-ad.1",
+  "surface": "app:app-truck-ad",
+  "rank": 1,
+  "caption": "A campaign print rolls through town",
+  "inputs": {},
+  "output": "cover:app-truck-ad",
+  "load": "look",
+  "rest": {
+   "src": "/examples/app-truck-ad/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "app-bullet-time-scene.1",
+  "surface": "app:app-bullet-time-scene",
+  "rank": 1,
+  "caption": "A spin frozen in a Siena piazza",
+  "inputs": {
+   "image": "/examples/app-bullet-time-scene/1/in-image.jpg"
+  },
+  "output": "cover:app-bullet-time-scene",
+  "rest": {
+   "src": "/examples/app-bullet-time-scene/1/out-peak.jpg",
+   "at": 2.6042,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "app-bullet-time-splash.1",
+  "surface": "app:app-bullet-time-splash",
+  "rank": 1,
+  "caption": "A hair flip, frozen mid-splash",
+  "inputs": {
+   "image": "/examples/app-bullet-time-splash/1/in-image.jpg"
+  },
+  "output": "cover:app-bullet-time-splash",
+  "rest": {
+   "src": "/examples/app-bullet-time-splash/1/out-peak.jpg",
+   "at": 2.6042,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "app-poster.1",
+  "surface": "app:app-poster",
+  "rank": 1,
+  "caption": "A headphones ad, poster by poster",
+  "inputs": {},
+  "output": "cover:app-poster",
+  "load": "look",
+  "rest": {
+   "src": "/examples/app-poster/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "app-chameleon.1",
+  "surface": "app:app-chameleon",
+  "rank": 1,
+  "caption": "Emerald ripples through every colour",
+  "inputs": {
+   "image": "/examples/app-chameleon/1/in-image.jpg"
+  },
+  "output": "cover:app-chameleon"
+ },
+ {
+  "id": "app-macro-scene.1",
+  "surface": "app:app-macro-scene",
+  "rank": 1,
+  "caption": "A macro glide, then the whole scene",
+  "inputs": {},
+  "output": "cover:app-macro-scene",
+  "load": "look",
+  "rest": {
+   "src": "/examples/app-macro-scene/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2292
+  }
+ },
+ {
+  "id": "app-macroshot-product.1",
+  "surface": "app:app-macroshot-product",
+  "rank": 1,
+  "caption": "A macro glide over a diamond ring",
+  "inputs": {
+   "image": "/examples/app-macroshot-product/1/in-image.jpg"
+  },
+  "output": "cover:app-macroshot-product",
+  "rest": {
+   "src": "/examples/app-macroshot-product/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2292
+  }
+ },
+ {
+  "id": "app-magic-button.1",
+  "surface": "app:app-magic-button",
+  "rank": 1,
+  "caption": "One press restores a barn-find classic",
+  "inputs": {},
+  "output": "cover:app-magic-button",
+  "load": "look",
+  "rest": {
+   "src": "/examples/app-magic-button/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "app-giant-product.1",
+  "surface": "app:app-giant-product",
+  "rank": 1,
+  "caption": "A lipstick towers over the city",
+  "inputs": {},
+  "output": "cover:app-giant-product",
+  "load": "look"
+ },
+ {
+  "id": "app-graffiti-ad.1",
+  "surface": "app:app-graffiti-ad",
+  "rank": 1,
+  "caption": "A spray-paint outline comes to life",
+  "inputs": {},
+  "output": "cover:app-graffiti-ad",
+  "load": "look",
+  "rest": {
+   "src": "/examples/app-graffiti-ad/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.3125
+  }
+ },
+ {
+  "id": "app-asmr-classic.1",
+  "surface": "app:app-asmr-classic",
+  "rank": 1,
+  "caption": "Soft taps on a glazed pink vase",
+  "inputs": {
+   "image": "/examples/app-asmr-classic/1/in-image.jpg"
+  },
+  "output": "cover:app-asmr-classic"
+ },
+ {
+  "id": "app-asmr-add-on.1",
+  "surface": "app:app-asmr-add-on",
+  "rank": 1,
+  "caption": "A face-cream jar, turned slowly",
+  "inputs": {
+   "image": "/examples/app-asmr-add-on/1/in-image.jpg"
+  },
+  "output": "cover:app-asmr-add-on"
+ },
+ {
+  "id": "app-hug.1",
+  "surface": "app:app-hug",
+  "rank": 1,
+  "caption": "A couple in the vines turns to embrace",
+  "inputs": {
+   "image": "/examples/app-hug/1/in-image.jpg"
+  },
+  "output": "cover:app-hug",
+  "rest": {
+   "src": "/examples/app-hug/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "app-dance.1",
+  "surface": "app:app-dance",
+  "rank": 1,
+  "caption": "A dance across a gilded ballroom",
+  "options": {
+   "dance": "hip-hop"
+  },
+  "inputs": {
+   "image": "/examples/app-dance/1/in-image.jpg"
+  },
+  "output": "cover:app-dance"
+ },
+ {
+  "id": "app-clipcut.1",
+  "surface": "app:app-clipcut",
+  "rank": 1,
+  "caption": "A new outfit on every beat",
+  "options": {
+   "vibe": "glam"
+  },
+  "inputs": {
+   "image": "/examples/app-clipcut/1/in-image.jpg"
+  },
+  "output": "cover:app-clipcut"
+ },
+ {
+  "id": "app-urban-cuts.1",
+  "surface": "app:app-urban-cuts",
+  "rank": 1,
+  "caption": "New looks down a neon street",
+  "inputs": {
+   "image": "/examples/app-urban-cuts/1/in-image.jpg"
+  },
+  "output": "cover:app-urban-cuts"
+ },
+ {
+  "id": "app-sticker-match-cut.1",
+  "surface": "app:app-sticker-match-cut",
+  "rank": 1,
+  "caption": "She pops out as a glossy sticker",
+  "inputs": {
+   "image": "/examples/app-sticker-match-cut/1/in-image.jpg"
+  },
+  "output": "cover:app-sticker-match-cut"
+ },
+ {
+  "id": "app-simlife.1",
+  "surface": "app:app-simlife",
+  "rank": 1,
+  "caption": "She becomes a life-sim avatar",
+  "inputs": {
+   "image": "/examples/app-simlife/1/in-image.jpg"
+  },
+  "output": "cover:app-simlife",
+  "rest": {
+   "src": "/examples/app-simlife/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.8542
+  }
+ },
+ {
+  "id": "app-3d-render.1",
+  "surface": "app:app-3d-render",
+  "rank": 1,
+  "caption": "He turns into a polished 3D render",
+  "inputs": {
+   "image": "/examples/app-3d-render/1/in-image.jpg"
+  },
+  "output": "cover:app-3d-render",
+  "rest": {
+   "src": "/examples/app-3d-render/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3125
+  }
+ },
+ {
+  "id": "app-3d-figure.1",
+  "surface": "app:app-3d-figure",
+  "rank": 1,
+  "caption": "You as a boxed collectible figure",
+  "inputs": {},
+  "output": "cover:app-3d-figure",
+  "load": "look"
+ },
+ {
+  "id": "app-mukbang.1",
+  "surface": "app:app-mukbang",
+  "rank": 1,
+  "caption": "A table piled high, and the feast",
+  "inputs": {},
+  "output": "cover:app-mukbang",
+  "load": "look",
+  "rest": {
+   "src": "/examples/app-mukbang/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "app-yes-kiss.1",
+  "surface": "app:app-yes-kiss",
+  "rank": 1,
+  "caption": "A quick kiss, and his wide eyes",
+  "inputs": {
+   "image": "/examples/app-yes-kiss/1/in-image.jpg"
+  },
+  "output": "cover:app-yes-kiss",
+  "rest": {
+   "src": "/examples/app-yes-kiss/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "app-latex.1",
+  "surface": "app:app-latex",
+  "rank": 1,
+  "caption": "Glossy latex flows over her suit",
+  "inputs": {
+   "image": "/examples/app-latex/1/in-image.jpg"
+  },
+  "output": "cover:app-latex",
+  "rest": {
+   "src": "/examples/app-latex/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.7708
+  }
+ },
+ {
+  "id": "app-roller-coaster.1",
+  "surface": "app:app-roller-coaster",
+  "rank": 1,
+  "caption": "Over the crest, front-seat view",
+  "inputs": {},
+  "output": "cover:app-roller-coaster",
+  "load": "look",
+  "rest": {
+   "src": "/examples/app-roller-coaster/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "app-60s-cafe.1",
+  "surface": "app:app-60s-cafe",
+  "rank": 1,
+  "caption": "A milkshake in a 1960s diner",
+  "inputs": {},
+  "output": "cover:app-60s-cafe",
+  "load": "look",
+  "rest": {
+   "src": "/examples/app-60s-cafe/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "app-victory-card.1",
+  "surface": "app:app-victory-card",
+  "rank": 1,
+  "caption": "A trophy raised, a card is printed",
+  "inputs": {},
+  "output": "cover:app-victory-card",
+  "load": "look",
+  "rest": {
+   "src": "/examples/app-victory-card/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "app-sand-worm.1",
+  "surface": "app:app-sand-worm",
+  "rank": 1,
+  "caption": "A colossal sandworm breaks the dune",
+  "inputs": {
+   "image": "/examples/app-sand-worm/1/in-image.jpg"
+  },
+  "output": "cover:app-sand-worm",
+  "rest": {
+   "src": "/examples/app-sand-worm/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2292
+  }
+ },
+ {
+  "id": "app-j-poster.1",
+  "surface": "app:app-j-poster",
+  "rank": 1,
+  "caption": "A stance below Fuji, made a poster",
+  "inputs": {
+   "image": "/examples/app-j-poster/1/in-image.jpg"
+  },
+  "output": "cover:app-j-poster",
+  "rest": {
+   "src": "/examples/app-j-poster/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "app-storm-creature.1",
+  "surface": "app:app-storm-creature",
+  "rank": 1,
+  "caption": "Lightning reveals a giant on the ridge",
+  "inputs": {
+   "image": "/examples/app-storm-creature/1/in-image.jpg"
+  },
+  "output": "cover:app-storm-creature"
+ },
+ {
+  "id": "app-burning-sunset.1",
+  "surface": "app:app-burning-sunset",
+  "rank": 1,
+  "caption": "The evening sky ignites behind him",
+  "inputs": {
+   "image": "/examples/app-burning-sunset/1/in-image.jpg"
+  },
+  "output": "cover:app-burning-sunset",
+  "rest": {
+   "src": "/examples/app-burning-sunset/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "app-comic-book.1",
+  "surface": "app:app-comic-book",
+  "rank": 1,
+  "caption": "She snaps into a comic book panel",
+  "inputs": {
+   "image": "/examples/app-comic-book/1/in-image.jpg"
+  },
+  "output": "cover:app-comic-book",
+  "rest": {
+   "src": "/examples/app-comic-book/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3958
+  }
+ },
+ {
+  "id": "app-melting-doodle.1",
+  "surface": "app:app-melting-doodle",
+  "rank": 1,
+  "caption": "He melts into a marker doodle",
+  "inputs": {
+   "image": "/examples/app-melting-doodle/1/in-image.jpg"
+  },
+  "output": "cover:app-melting-doodle",
+  "rest": {
+   "src": "/examples/app-melting-doodle/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.5208
+  }
+ },
+ {
+  "id": "app-giallo-horror.1",
+  "surface": "app:app-giallo-horror",
+  "rank": 1,
+  "caption": "A slow turn in 1970s red and green",
+  "inputs": {
+   "image": "/examples/app-giallo-horror/1/in-image.jpg"
+  },
+  "output": "cover:app-giallo-horror",
+  "rest": {
+   "src": "/examples/app-giallo-horror/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.4375
+  }
+ },
+ {
+  "id": "app-renaissance.1",
+  "surface": "app:app-renaissance",
+  "rank": 1,
+  "caption": "He becomes a Renaissance portrait",
+  "inputs": {
+   "image": "/examples/app-renaissance/1/in-image.jpg"
+  },
+  "output": "cover:app-renaissance",
+  "rest": {
+   "src": "/examples/app-renaissance/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.8542
+  }
+ },
+ {
+  "id": "app-rap-god.1",
+  "surface": "app:app-rap-god",
+  "rank": 1,
+  "caption": "A full verse on a neon stage",
+  "inputs": {
+   "image": "/examples/app-rap-god/1/in-image.jpg"
+  },
+  "output": "cover:app-rap-god"
+ },
+ {
+  "id": "app-3d-rotation.1",
+  "surface": "app:app-3d-rotation",
+  "rank": 1,
+  "caption": "A black gown turns full circle",
+  "inputs": {
+   "image": "/examples/app-3d-rotation/1/in-image.jpg"
+  },
+  "output": "cover:app-3d-rotation"
+ },
+ {
+  "id": "app-ghoulgao.1",
+  "surface": "app:app-ghoulgao",
+  "rank": 1,
+  "caption": "The candles flicker, her skin drains",
+  "inputs": {
+   "image": "/examples/app-ghoulgao/1/in-image.jpg"
+  },
+  "output": "cover:app-ghoulgao",
+  "rest": {
+   "src": "/examples/app-ghoulgao/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2292
+  }
+ },
+ {
+  "id": "effect-building-explosion.1",
+  "surface": "preset:effect-building-explosion",
+  "rank": 5,
+  "caption": "The building behind them explodes",
+  "inputs": {
+   "image": "/examples/effect-building-explosion/1/in-image.jpg"
+  },
+  "output": "cover:effect-building-explosion"
+ },
+ {
+  "id": "effect-head-explosion.1",
+  "surface": "preset:effect-head-explosion",
+  "rank": 1,
+  "caption": "Her head bursts into pastel confetti",
+  "inputs": {
+   "image": "/examples/effect-head-explosion/1/in-image.jpg"
+  },
+  "output": "cover:effect-head-explosion",
+  "rest": {
+   "src": "/examples/effect-head-explosion/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.1458
+  }
+ },
+ {
+  "id": "effect-car-explosion.1",
+  "surface": "preset:effect-car-explosion",
+  "rank": 1,
+  "caption": "A vintage coupé erupts on the pass",
+  "inputs": {
+   "image": "/examples/effect-car-explosion/1/in-image.jpg"
+  },
+  "output": "cover:effect-car-explosion"
+ },
+ {
+  "id": "effect-powder-explosion.1",
+  "surface": "preset:effect-powder-explosion",
+  "rank": 1,
+  "caption": "Colour powder blooms on a salt flat",
+  "inputs": {
+   "image": "/examples/effect-powder-explosion/1/in-image.jpg"
+  },
+  "output": "cover:effect-powder-explosion"
+ },
+ {
+  "id": "effect-head-off.1",
+  "surface": "preset:effect-head-off",
+  "rank": 1,
+  "caption": "His head floats up off his collar",
+  "inputs": {
+   "image": "/examples/effect-head-off/1/in-image.jpg"
+  },
+  "output": "cover:effect-head-off",
+  "rest": {
+   "src": "/examples/effect-head-off/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 2.6042
+  }
+ },
+ {
+  "id": "effect-fire-breath.1",
+  "surface": "preset:effect-fire-breath",
+  "rank": 1,
+  "caption": "He breathes fire over Marrakech",
+  "inputs": {
+   "image": "/examples/effect-fire-breath/1/in-image.jpg"
+  },
+  "output": "cover:effect-fire-breath"
+ },
+ {
+  "id": "effect-freezing.1",
+  "surface": "preset:effect-freezing",
+  "rank": 1,
+  "caption": "Frost turns her to blue-white ice",
+  "inputs": {
+   "image": "/examples/effect-freezing/1/in-image.jpg"
+  },
+  "output": "cover:effect-freezing"
+ },
+ {
+  "id": "effect-thunder-god.1",
+  "surface": "preset:effect-thunder-god",
+  "rank": 1,
+  "caption": "Lightning crackles, his eyes ignite",
+  "inputs": {
+   "image": "/examples/effect-thunder-god/1/in-image.jpg"
+  },
+  "output": "cover:effect-thunder-god"
+ },
+ {
+  "id": "effect-flood.1",
+  "surface": "preset:effect-flood",
+  "rank": 1,
+  "caption": "Water and candles rise around them",
+  "inputs": {
+   "image": "/examples/effect-flood/1/in-image.jpg"
+  },
+  "output": "cover:effect-flood"
+ },
+ {
+  "id": "effect-sand-storm.1",
+  "surface": "preset:effect-sand-storm",
+  "rank": 1,
+  "caption": "A wall of red sand",
+  "inputs": {
+   "image": "/examples/effect-sand-storm/1/in-image.jpg"
+  },
+  "output": "cover:effect-sand-storm"
+ },
+ {
+  "id": "effect-wind-to-face.1",
+  "surface": "preset:effect-wind-to-face",
+  "rank": 1,
+  "caption": "A gale sweeps back hair and coat",
+  "inputs": {
+   "image": "/examples/effect-wind-to-face/1/in-image.jpg"
+  },
+  "output": "cover:effect-wind-to-face"
+ },
+ {
+  "id": "effect-fire-element.1",
+  "surface": "preset:effect-fire-element",
+  "rank": 1,
+  "caption": "Flames spiral from her open palms",
+  "inputs": {
+   "image": "/examples/effect-fire-element/1/in-image.jpg"
+  },
+  "output": "cover:effect-fire-element"
+ },
+ {
+  "id": "effect-flame-on.1",
+  "surface": "preset:effect-flame-on",
+  "rank": 1,
+  "caption": "He ignites into a figure of flame",
+  "inputs": {
+   "image": "/examples/effect-flame-on/1/in-image.jpg"
+  },
+  "output": "cover:effect-flame-on"
+ },
+ {
+  "id": "effect-firelava.1",
+  "surface": "preset:effect-firelava",
+  "rank": 1,
+  "caption": "Molten lava spreads across her skin",
+  "inputs": {
+   "image": "/examples/effect-firelava/1/in-image.jpg"
+  },
+  "output": "cover:effect-firelava",
+  "rest": {
+   "src": "/examples/effect-firelava/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.3542
+  }
+ },
+ {
+  "id": "effect-earth-element.1",
+  "surface": "preset:effect-earth-element",
+  "rank": 5,
+  "caption": "Marble rises and locks on as armour",
+  "inputs": {
+   "image": "/examples/effect-earth-element/1/in-image.jpg"
+  },
+  "output": "cover:effect-earth-element",
+  "rest": {
+   "src": "/examples/effect-earth-element/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3125
+  }
+ },
+ {
+  "id": "effect-water-bending.1",
+  "surface": "preset:effect-water-bending",
+  "rank": 1,
+  "caption": "She draws a ribbon of water from a lake",
+  "inputs": {
+   "image": "/examples/effect-water-bending/1/in-image.jpg"
+  },
+  "output": "cover:effect-water-bending",
+  "rest": {
+   "src": "/examples/effect-water-bending/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3542
+  }
+ },
+ {
+  "id": "effect-ice-rose.1",
+  "surface": "preset:effect-ice-rose",
+  "rank": 1,
+  "caption": "Ice blooms into a frozen rose",
+  "inputs": {
+   "image": "/examples/effect-ice-rose/1/in-image.jpg"
+  },
+  "output": "cover:effect-ice-rose"
+ },
+ {
+  "id": "effect-levitation.1",
+  "surface": "preset:effect-levitation",
+  "rank": 1,
+  "caption": "They float up off the dune",
+  "inputs": {
+   "image": "/examples/effect-levitation/1/in-image.jpg"
+  },
+  "output": "cover:effect-levitation"
+ },
+ {
+  "id": "effect-clone-explosion.1",
+  "surface": "preset:effect-clone-explosion",
+  "rank": 1,
+  "caption": "Dozens of copies burst out of him",
+  "inputs": {
+   "image": "/examples/effect-clone-explosion/1/in-image.jpg"
+  },
+  "output": "cover:effect-clone-explosion"
+ },
+ {
+  "id": "effect-duplicate.1",
+  "surface": "preset:effect-duplicate",
+  "rank": 1,
+  "caption": "Five of her, side by side in Bologna",
+  "inputs": {
+   "image": "/examples/effect-duplicate/1/in-image.jpg"
+  },
+  "output": "cover:effect-duplicate"
+ },
+ {
+  "id": "effect-angel-wings.1",
+  "surface": "preset:effect-angel-wings",
+  "rank": 1,
+  "caption": "White wings unfold above the clouds",
+  "inputs": {
+   "image": "/examples/effect-angel-wings/1/in-image.jpg"
+  },
+  "output": "cover:effect-angel-wings"
+ },
+ {
+  "id": "effect-super-saiyan.1",
+  "surface": "preset:effect-super-saiyan",
+  "rank": 5,
+  "caption": "His hair blazes into golden spikes",
+  "inputs": {
+   "image": "/examples/effect-super-saiyan/1/in-image.jpg"
+  },
+  "output": "cover:effect-super-saiyan",
+  "rest": {
+   "src": "/examples/effect-super-saiyan/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.9375
+  }
+ },
+ {
+  "id": "effect-glowshift.1",
+  "surface": "preset:effect-glowshift",
+  "rank": 1,
+  "caption": "A glow, and she becomes someone new",
+  "inputs": {
+   "image": "/examples/effect-glowshift/1/in-image.jpg"
+  },
+  "output": "cover:effect-glowshift",
+  "rest": {
+   "src": "/examples/effect-glowshift/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.1042
+  }
+ },
+ {
+  "id": "effect-innerlight.1",
+  "surface": "preset:effect-innerlight",
+  "rank": 1,
+  "caption": "Warm light shines out from within",
+  "inputs": {
+   "image": "/examples/effect-innerlight/1/in-image.jpg"
+  },
+  "output": "cover:effect-innerlight",
+  "rest": {
+   "src": "/examples/effect-innerlight/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.4375
+  }
+ },
+ {
+  "id": "effect-soul-jump.1",
+  "surface": "preset:effect-soul-jump",
+  "rank": 1,
+  "caption": "His glowing soul leaps from his body",
+  "inputs": {
+   "image": "/examples/effect-soul-jump/1/in-image.jpg"
+  },
+  "output": "cover:effect-soul-jump"
+ },
+ {
+  "id": "effect-luminous-gaze.1",
+  "surface": "preset:effect-luminous-gaze",
+  "rank": 1,
+  "caption": "Her eyes ignite with silver light",
+  "inputs": {
+   "image": "/examples/effect-luminous-gaze/1/in-image.jpg"
+  },
+  "output": "cover:effect-luminous-gaze",
+  "rest": {
+   "src": "/examples/effect-luminous-gaze/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.3125
+  }
+ },
+ {
+  "id": "effect-objects-around.1",
+  "surface": "preset:effect-objects-around",
+  "rank": 1,
+  "caption": "Breakfast lifts off and orbits her",
+  "inputs": {
+   "image": "/examples/effect-objects-around/1/in-image.jpg"
+  },
+  "output": "cover:effect-objects-around"
+ },
+ {
+  "id": "effect-shadow-smoke.1",
+  "surface": "preset:effect-shadow-smoke",
+  "rank": 1,
+  "caption": "Ink-dark smoke rises around them",
+  "inputs": {
+   "image": "/examples/effect-shadow-smoke/1/in-image.jpg"
+  },
+  "output": "cover:effect-shadow-smoke"
+ },
+ {
+  "id": "effect-turning-metal.1",
+  "surface": "preset:effect-turning-metal",
+  "rank": 1,
+  "caption": "His skin turns to liquid chrome",
+  "inputs": {
+   "image": "/examples/effect-turning-metal/1/in-image.jpg"
+  },
+  "output": "cover:effect-turning-metal"
+ },
+ {
+  "id": "effect-morphskin.1",
+  "surface": "preset:effect-morphskin",
+  "rank": 1,
+  "caption": "His skin ripples into iridescence",
+  "inputs": {
+   "image": "/examples/effect-morphskin/1/in-image.jpg"
+  },
+  "output": "cover:effect-morphskin"
+ },
+ {
+  "id": "effect-turn-into-statue.1",
+  "surface": "preset:effect-turn-into-statue",
+  "rank": 5,
+  "caption": "He turns to polished white marble",
+  "inputs": {
+   "image": "/examples/effect-turn-into-statue/1/in-image.jpg"
+  },
+  "output": "cover:effect-turn-into-statue",
+  "rest": {
+   "src": "/examples/effect-turn-into-statue/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 2.5625
+  }
+ },
+ {
+  "id": "effect-melting.1",
+  "surface": "preset:effect-melting",
+  "rank": 1,
+  "caption": "He melts into glossy pink wax",
+  "inputs": {
+   "image": "/examples/effect-melting/1/in-image.jpg"
+  },
+  "output": "cover:effect-melting",
+  "rest": {
+   "src": "/examples/effect-melting/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 2.8125
+  }
+ },
+ {
+  "id": "effect-medusa-gorgona.1",
+  "surface": "preset:effect-medusa-gorgona",
+  "rank": 1,
+  "caption": "She hardens into cracked grey stone",
+  "inputs": {
+   "image": "/examples/effect-medusa-gorgona/1/in-image.jpg"
+  },
+  "output": "cover:effect-medusa-gorgona",
+  "rest": {
+   "src": "/examples/effect-medusa-gorgona/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2292
+  }
+ },
+ {
+  "id": "effect-diamond.1",
+  "surface": "preset:effect-diamond",
+  "rank": 1,
+  "caption": "She crystallizes into a diamond",
+  "inputs": {
+   "image": "/examples/effect-diamond/1/in-image.jpg"
+  },
+  "output": "cover:effect-diamond"
+ },
+ {
+  "id": "effect-agent-reveal.1",
+  "surface": "preset:effect-agent-reveal",
+  "rank": 1,
+  "caption": "A glitch, and he's a secret agent",
+  "inputs": {
+   "image": "/examples/effect-agent-reveal/1/in-image.jpg"
+  },
+  "output": "cover:effect-agent-reveal",
+  "rest": {
+   "src": "/examples/effect-agent-reveal/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.2292
+  }
+ },
+ {
+  "id": "effect-werewolf.1",
+  "surface": "preset:effect-werewolf",
+  "rank": 1,
+  "caption": "A full moon, and he turns wolf",
+  "inputs": {
+   "image": "/examples/effect-werewolf/1/in-image.jpg"
+  },
+  "output": "cover:effect-werewolf",
+  "rest": {
+   "src": "/examples/effect-werewolf/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.6458
+  }
+ },
+ {
+  "id": "effect-cyborg.1",
+  "surface": "preset:effect-cyborg",
+  "rank": 1,
+  "caption": "Panels open to reveal a cyborg",
+  "inputs": {
+   "image": "/examples/effect-cyborg/1/in-image.jpg"
+  },
+  "output": "cover:effect-cyborg"
+ },
+ {
+  "id": "effect-polygon.1",
+  "surface": "preset:effect-polygon",
+  "rank": 1,
+  "caption": "He breaks into a low-poly model",
+  "inputs": {
+   "image": "/examples/effect-polygon/1/in-image.jpg"
+  },
+  "output": "cover:effect-polygon",
+  "rest": {
+   "src": "/examples/effect-polygon/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 2.4375
+  }
+ },
+ {
+  "id": "effect-wireframe.1",
+  "surface": "preset:effect-wireframe",
+  "rank": 1,
+  "caption": "A scan line turns it all to wireframe",
+  "inputs": {
+   "image": "/examples/effect-wireframe/1/in-image.jpg"
+  },
+  "output": "cover:effect-wireframe"
+ },
+ {
+  "id": "effect-gas-transformation.1",
+  "surface": "preset:effect-gas-transformation",
+  "rank": 1,
+  "caption": "She dissolves into scarlet smoke",
+  "inputs": {
+   "image": "/examples/effect-gas-transformation/1/in-image.jpg"
+  },
+  "output": "cover:effect-gas-transformation",
+  "rest": {
+   "src": "/examples/effect-gas-transformation/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "effect-floral-eyes.1",
+  "surface": "preset:effect-floral-eyes",
+  "rank": 1,
+  "caption": "Peonies and orchids bloom from her eyes",
+  "inputs": {
+   "image": "/examples/effect-floral-eyes/1/in-image.jpg"
+  },
+  "output": "cover:effect-floral-eyes"
+ },
+ {
+  "id": "effect-garden-bloom.1",
+  "surface": "preset:effect-garden-bloom",
+  "rank": 5,
+  "caption": "Moss and roses grow all over him",
+  "inputs": {
+   "image": "/examples/effect-garden-bloom/1/in-image.jpg"
+  },
+  "output": "cover:effect-garden-bloom",
+  "rest": {
+   "src": "/examples/effect-garden-bloom/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.8542
+  }
+ },
+ {
+  "id": "effect-nature-bloom.1",
+  "surface": "preset:effect-nature-bloom",
+  "rank": 1,
+  "caption": "Flowers overgrow the old station",
+  "inputs": {
+   "image": "/examples/effect-nature-bloom/1/in-image.jpg"
+  },
+  "output": "cover:effect-nature-bloom"
+ },
+ {
+  "id": "effect-sakura-petals.1",
+  "surface": "preset:effect-sakura-petals",
+  "rank": 1,
+  "caption": "Cherry blossom swirls around him",
+  "inputs": {
+   "image": "/examples/effect-sakura-petals/1/in-image.jpg"
+  },
+  "output": "cover:effect-sakura-petals",
+  "rest": {
+   "src": "/examples/effect-sakura-petals/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.4375
+  }
+ },
+ {
+  "id": "effect-floating-fish.1",
+  "surface": "preset:effect-floating-fish",
+  "rank": 1,
+  "caption": "Sky-blue fish drift through the room",
+  "inputs": {
+   "image": "/examples/effect-floating-fish/1/in-image.jpg"
+  },
+  "output": "cover:effect-floating-fish",
+  "rest": {
+   "src": "/examples/effect-floating-fish/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3542
+  }
+ },
+ {
+  "id": "effect-black-tears.1",
+  "surface": "preset:effect-black-tears",
+  "rank": 1,
+  "caption": "Glossy black tears roll down",
+  "inputs": {
+   "image": "/examples/effect-black-tears/1/in-image.jpg"
+  },
+  "output": "cover:effect-black-tears"
+ },
+ {
+  "id": "effect-tentacles.1",
+  "surface": "preset:effect-tentacles",
+  "rank": 1,
+  "caption": "Dark tentacles slide from his eyes",
+  "inputs": {
+   "image": "/examples/effect-tentacles/1/in-image.jpg"
+  },
+  "output": "cover:effect-tentacles",
+  "rest": {
+   "src": "/examples/effect-tentacles/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.5625
+  }
+ },
+ {
+  "id": "effect-spiders-from-mouth.1",
+  "surface": "preset:effect-spiders-from-mouth",
+  "rank": 1,
+  "caption": "Black spiders pour from her lips",
+  "inputs": {
+   "image": "/examples/effect-spiders-from-mouth/1/in-image.jpg"
+  },
+  "output": "cover:effect-spiders-from-mouth",
+  "rest": {
+   "src": "/examples/effect-spiders-from-mouth/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3542
+  }
+ },
+ {
+  "id": "effect-horror-face.1",
+  "surface": "preset:effect-horror-face",
+  "rank": 5,
+  "caption": "A calm face twists into horror",
+  "inputs": {
+   "image": "/examples/effect-horror-face/1/in-image.jpg"
+  },
+  "output": "cover:effect-horror-face",
+  "rest": {
+   "src": "/examples/effect-horror-face/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2708
+  }
+ },
+ {
+  "id": "effect-datamosh.1",
+  "surface": "preset:effect-datamosh",
+  "rank": 1,
+  "caption": "Saffron silk melts into a datamosh",
+  "inputs": {
+   "image": "/examples/effect-datamosh/1/in-image.jpg"
+  },
+  "output": "cover:effect-datamosh",
+  "rest": {
+   "src": "/examples/effect-datamosh/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "effect-lens-flare.1",
+  "surface": "preset:effect-lens-flare",
+  "rank": 1,
+  "caption": "An anamorphic flare sweeps the frame",
+  "inputs": {
+   "image": "/examples/effect-lens-flare/1/in-image.jpg"
+  },
+  "output": "cover:effect-lens-flare"
+ },
+ {
+  "id": "effect-glitch.1",
+  "surface": "preset:effect-glitch",
+  "rank": 1,
+  "caption": "A digital glitch tears her apart",
+  "inputs": {
+   "image": "/examples/effect-glitch/1/in-image.jpg"
+  },
+  "output": "cover:effect-glitch",
+  "rest": {
+   "src": "/examples/effect-glitch/1/out-peak.jpg",
+   "at": 2.6042,
+   "from": 0.9375
+  }
+ },
+ {
+  "id": "effect-dirty-lens.1",
+  "surface": "preset:effect-dirty-lens",
+  "rank": 1,
+  "caption": "Rain beads on the lens as it drifts",
+  "inputs": {
+   "image": "/examples/effect-dirty-lens/1/in-image.jpg"
+  },
+  "output": "cover:effect-dirty-lens"
+ },
+ {
+  "id": "effect-x-ray.1",
+  "surface": "preset:effect-x-ray",
+  "rank": 1,
+  "caption": "A scan line turns him to an x-ray",
+  "inputs": {
+   "image": "/examples/effect-x-ray/1/in-image.jpg"
+  },
+  "output": "cover:effect-x-ray",
+  "rest": {
+   "src": "/examples/effect-x-ray/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.3542
+  }
+ },
+ {
+  "id": "effect-pixelated-face.1",
+  "surface": "preset:effect-pixelated-face",
+  "rank": 1,
+  "caption": "Only his face pixelates",
+  "inputs": {
+   "image": "/examples/effect-pixelated-face/1/in-image.jpg"
+  },
+  "output": "cover:effect-pixelated-face"
+ },
+ {
+  "id": "effect-censorship.1",
+  "surface": "preset:effect-censorship",
+  "rank": 5,
+  "caption": "Comically censored, bar by bar",
+  "inputs": {
+   "image": "/examples/effect-censorship/1/in-image.jpg"
+  },
+  "output": "cover:effect-censorship",
+  "rest": {
+   "src": "/examples/effect-censorship/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-glow-trace.1",
+  "surface": "preset:effect-glow-trace",
+  "rank": 1,
+  "caption": "Neon light traces every move",
+  "inputs": {
+   "image": "/examples/effect-glow-trace/1/in-image.jpg"
+  },
+  "output": "cover:effect-glow-trace",
+  "rest": {
+   "src": "/examples/effect-glow-trace/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3542
+  }
+ },
+ {
+  "id": "effect-visor-x.1",
+  "surface": "preset:effect-visor-x",
+  "rank": 1,
+  "caption": "A holographic visor lights up",
+  "inputs": {
+   "image": "/examples/effect-visor-x/1/in-image.jpg"
+  },
+  "output": "cover:effect-visor-x",
+  "rest": {
+   "src": "/examples/effect-visor-x/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.4375
+  }
+ },
+ {
+  "id": "effect-squish.1",
+  "surface": "preset:effect-squish",
+  "rank": 1,
+  "caption": "A porcelain rabbit, squished like dough",
+  "inputs": {
+   "image": "/examples/effect-squish/1/in-image.jpg"
+  },
+  "output": "cover:effect-squish",
+  "rest": {
+   "src": "/examples/effect-squish/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-deflate.1",
+  "surface": "preset:effect-deflate",
+  "rank": 1,
+  "caption": "A cherry-red coupe deflates",
+  "inputs": {
+   "image": "/examples/effect-deflate/1/in-image.jpg"
+  },
+  "output": "cover:effect-deflate",
+  "rest": {
+   "src": "/examples/effect-deflate/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.6875
+  }
+ },
+ {
+  "id": "effect-cakeify.1",
+  "surface": "preset:effect-cakeify",
+  "rank": 1,
+  "caption": "A handbag sliced open: it's cake",
+  "inputs": {
+   "image": "/examples/effect-cakeify/1/in-image.jpg"
+  },
+  "output": "cover:effect-cakeify",
+  "rest": {
+   "src": "/examples/effect-cakeify/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-crush.1",
+  "surface": "preset:effect-crush",
+  "rank": 1,
+  "caption": "A press crushes a disco ball flat",
+  "inputs": {
+   "image": "/examples/effect-crush/1/in-image.jpg"
+  },
+  "output": "cover:effect-crush",
+  "rest": {
+   "src": "/examples/effect-crush/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "effect-muscle-up.1",
+  "surface": "preset:effect-muscle-up",
+  "rank": 1,
+  "caption": "He flexes up to bodybuilder size",
+  "inputs": {
+   "image": "/examples/effect-muscle-up/1/in-image.jpg"
+  },
+  "output": "cover:effect-muscle-up"
+ },
+ {
+  "id": "effect-push-to-glass.1",
+  "surface": "preset:effect-push-to-glass",
+  "rank": 5,
+  "caption": "Pressed flat against the glass",
+  "inputs": {
+   "image": "/examples/effect-push-to-glass/1/in-image.jpg"
+  },
+  "output": "cover:effect-push-to-glass",
+  "rest": {
+   "src": "/examples/effect-push-to-glass/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.6875
+  }
+ },
+ {
+  "id": "effect-starship-troopers.1",
+  "surface": "preset:effect-starship-troopers",
+  "rank": 1,
+  "caption": "She suits up in white armour",
+  "inputs": {
+   "image": "/examples/effect-starship-troopers/1/in-image.jpg"
+  },
+  "output": "cover:effect-starship-troopers",
+  "rest": {
+   "src": "/examples/effect-starship-troopers/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3542
+  }
+ },
+ {
+  "id": "effect-wonderland.1",
+  "surface": "preset:effect-wonderland",
+  "rank": 1,
+  "caption": "The garden warps into wonderland",
+  "inputs": {
+   "image": "/examples/effect-wonderland/1/in-image.jpg"
+  },
+  "output": "cover:effect-wonderland"
+ },
+ {
+  "id": "effect-earth-zoom-out.1",
+  "surface": "preset:effect-earth-zoom-out",
+  "rank": 1,
+  "caption": "From a poppy field out to space",
+  "inputs": {
+   "image": "/examples/effect-earth-zoom-out/1/in-image.jpg"
+  },
+  "output": "cover:effect-earth-zoom-out",
+  "rest": {
+   "src": "/examples/effect-earth-zoom-out/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-tiny-planet.1",
+  "surface": "preset:effect-tiny-planet",
+  "rank": 1,
+  "caption": "The tea fields curl into a tiny planet",
+  "inputs": {
+   "image": "/examples/effect-tiny-planet/1/in-image.jpg"
+  },
+  "output": "cover:effect-tiny-planet"
+ },
+ {
+  "id": "effect-aquarium.1",
+  "surface": "preset:effect-aquarium",
+  "rank": 5,
+  "caption": "The room floods into an aquarium",
+  "inputs": {
+   "image": "/examples/effect-aquarium/1/in-image.jpg"
+  },
+  "output": "cover:effect-aquarium"
+ },
+ {
+  "id": "effect-atomic.1",
+  "surface": "preset:effect-atomic",
+  "rank": 1,
+  "caption": "A mushroom cloud blooms behind her",
+  "inputs": {
+   "image": "/examples/effect-atomic/1/in-image.jpg"
+  },
+  "output": "cover:effect-atomic"
+ },
+ {
+  "id": "effect-attack-of-clones.1",
+  "surface": "preset:effect-attack-of-clones",
+  "rank": 1,
+  "caption": "Dozens of her fill the plaza",
+  "inputs": {
+   "image": "/examples/effect-attack-of-clones/1/in-image.jpg"
+  },
+  "output": "cover:effect-attack-of-clones"
+ },
+ {
+  "id": "effect-beach-ride.1",
+  "surface": "preset:effect-beach-ride",
+  "rank": 1,
+  "caption": "A grey horse canters through the surf",
+  "inputs": {
+   "image": "/examples/effect-beach-ride/1/in-image.jpg"
+  },
+  "output": "cover:effect-beach-ride",
+  "rest": {
+   "src": "/examples/effect-beach-ride/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-beast-appearance.1",
+  "surface": "preset:effect-beast-appearance",
+  "rank": 1,
+  "caption": "A dragon emerges from the mist",
+  "inputs": {
+   "image": "/examples/effect-beast-appearance/1/in-image.jpg"
+  },
+  "output": "cover:effect-beast-appearance",
+  "rest": {
+   "src": "/examples/effect-beast-appearance/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.2708
+  }
+ },
+ {
+  "id": "effect-boiling-point.1",
+  "surface": "preset:effect-boiling-point",
+  "rank": 1,
+  "caption": "Red-faced, steam jets from his ears",
+  "inputs": {
+   "image": "/examples/effect-boiling-point/1/in-image.jpg"
+  },
+  "output": "cover:effect-boiling-point",
+  "rest": {
+   "src": "/examples/effect-boiling-point/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.9375
+  }
+ },
+ {
+  "id": "effect-buddy.1",
+  "surface": "preset:effect-buddy",
+  "rank": 1,
+  "caption": "A fluffy companion snuggles in",
+  "inputs": {
+   "image": "/examples/effect-buddy/1/in-image.jpg"
+  },
+  "output": "cover:effect-buddy",
+  "rest": {
+   "src": "/examples/effect-buddy/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1875
+  }
+ },
+ {
+  "id": "effect-car-drive.1",
+  "surface": "preset:effect-car-drive",
+  "rank": 5,
+  "caption": "A drive along the coast road",
+  "inputs": {
+   "image": "/examples/effect-car-drive/1/in-image.jpg"
+  },
+  "output": "cover:effect-car-drive"
+ },
+ {
+  "id": "effect-clothes-rain.1",
+  "surface": "preset:effect-clothes-rain",
+  "rank": 1,
+  "caption": "Silk and blazers rain from the sky",
+  "inputs": {
+   "image": "/examples/effect-clothes-rain/1/in-image.jpg"
+  },
+  "output": "cover:effect-clothes-rain"
+ },
+ {
+  "id": "effect-color-rain.1",
+  "surface": "preset:effect-color-rain",
+  "rank": 1,
+  "caption": "Paint pours over him in white",
+  "inputs": {
+   "image": "/examples/effect-color-rain/1/in-image.jpg"
+  },
+  "output": "cover:effect-color-rain",
+  "rest": {
+   "src": "/examples/effect-color-rain/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.0208
+  }
+ },
+ {
+  "id": "effect-cotton-cloud.1",
+  "surface": "preset:effect-cotton-cloud",
+  "rank": 1,
+  "caption": "Pink cotton-candy clouds fill the room",
+  "inputs": {
+   "image": "/examples/effect-cotton-cloud/1/in-image.jpg"
+  },
+  "output": "cover:effect-cotton-cloud"
+ },
+ {
+  "id": "effect-crying.1",
+  "surface": "preset:effect-crying",
+  "rank": 1,
+  "caption": "He bursts into dramatic tears",
+  "inputs": {
+   "image": "/examples/effect-crying/1/in-image.jpg"
+  },
+  "output": "cover:effect-crying",
+  "rest": {
+   "src": "/examples/effect-crying/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.3125
+  }
+ },
+ {
+  "id": "effect-dream-date.1",
+  "surface": "preset:effect-dream-date",
+  "rank": 1,
+  "caption": "A candlelit date appears around him",
+  "inputs": {
+   "image": "/examples/effect-dream-date/1/in-image.jpg"
+  },
+  "output": "cover:effect-dream-date",
+  "rest": {
+   "src": "/examples/effect-dream-date/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1875
+  }
+ },
+ {
+  "id": "effect-drunk-master.1",
+  "surface": "preset:effect-drunk-master",
+  "rank": 1,
+  "caption": "He sways like a drunken master",
+  "inputs": {
+   "image": "/examples/effect-drunk-master/1/in-image.jpg"
+  },
+  "output": "cover:effect-drunk-master",
+  "rest": {
+   "src": "/examples/effect-drunk-master/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-explosion.1",
+  "surface": "preset:effect-explosion",
+  "rank": 1,
+  "caption": "She walks on as the boathouse blows",
+  "inputs": {
+   "image": "/examples/effect-explosion/1/in-image.jpg"
+  },
+  "output": "cover:effect-explosion"
+ },
+ {
+  "id": "effect-fairies-around.1",
+  "surface": "preset:effect-fairies-around",
+  "rank": 1,
+  "caption": "Tiny glowing fairies flutter around",
+  "inputs": {
+   "image": "/examples/effect-fairies-around/1/in-image.jpg"
+  },
+  "output": "cover:effect-fairies-around"
+ },
+ {
+  "id": "effect-firework.1",
+  "surface": "preset:effect-firework",
+  "rank": 5,
+  "caption": "Fireworks burst over Prague Castle",
+  "inputs": {
+   "image": "/examples/effect-firework/1/in-image.jpg"
+  },
+  "output": "cover:effect-firework",
+  "rest": {
+   "src": "/examples/effect-firework/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.5625
+  }
+ },
+ {
+  "id": "effect-giant-grab.1",
+  "surface": "preset:effect-giant-grab",
+  "rank": 1,
+  "caption": "A giant hand plucks her from the dunes",
+  "inputs": {
+   "image": "/examples/effect-giant-grab/1/in-image.jpg"
+  },
+  "output": "cover:effect-giant-grab",
+  "rest": {
+   "src": "/examples/effect-giant-grab/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1875
+  }
+ },
+ {
+  "id": "effect-group-photo.1",
+  "surface": "preset:effect-group-photo",
+  "rank": 1,
+  "caption": "Four friends squeeze into his photo",
+  "inputs": {
+   "image": "/examples/effect-group-photo/1/in-image.jpg"
+  },
+  "output": "cover:effect-group-photo",
+  "rest": {
+   "src": "/examples/effect-group-photo/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.8542
+  }
+ },
+ {
+  "id": "effect-look-boom.1",
+  "surface": "preset:effect-look-boom",
+  "rank": 1,
+  "caption": "He points, and the harbour explodes",
+  "inputs": {
+   "image": "/examples/effect-look-boom/1/in-image.jpg"
+  },
+  "output": "cover:effect-look-boom",
+  "rest": {
+   "src": "/examples/effect-look-boom/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-money-rain.1",
+  "surface": "preset:effect-money-rain",
+  "rank": 1,
+  "caption": "Banknotes rain in a gilded lobby",
+  "inputs": {
+   "image": "/examples/effect-money-rain/1/in-image.jpg"
+  },
+  "output": "cover:effect-money-rain",
+  "rest": {
+   "src": "/examples/effect-money-rain/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3542
+  }
+ },
+ {
+  "id": "effect-mystification.1",
+  "surface": "preset:effect-mystification",
+  "rank": 1,
+  "caption": "Golden runes flicker around him",
+  "inputs": {
+   "image": "/examples/effect-mystification/1/in-image.jpg"
+  },
+  "output": "cover:effect-mystification"
+ },
+ {
+  "id": "effect-northern-lights.1",
+  "surface": "preset:effect-northern-lights",
+  "rank": 1,
+  "caption": "An aurora ripples across the sky",
+  "inputs": {
+   "image": "/examples/effect-northern-lights/1/in-image.jpg"
+  },
+  "output": "cover:effect-northern-lights"
+ },
+ {
+  "id": "effect-oni-mask.1",
+  "surface": "preset:effect-oni-mask",
+  "rank": 1,
+  "caption": "Smoke swirls into a red oni mask",
+  "inputs": {
+   "image": "/examples/effect-oni-mask/1/in-image.jpg"
+  },
+  "output": "cover:effect-oni-mask",
+  "rest": {
+   "src": "/examples/effect-oni-mask/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.5625
+  }
+ },
+ {
+  "id": "effect-outfit-switch.1",
+  "surface": "preset:effect-outfit-switch",
+  "rank": 1,
+  "caption": "Jeans to a ball gown",
+  "inputs": {
+   "image": "/examples/effect-outfit-switch/1/in-image.jpg"
+  },
+  "output": "cover:effect-outfit-switch"
+ },
+ {
+  "id": "effect-pizza-fall.1",
+  "surface": "preset:effect-pizza-fall",
+  "rank": 1,
+  "caption": "Pizza slices rain over Naples",
+  "inputs": {
+   "image": "/examples/effect-pizza-fall/1/in-image.jpg"
+  },
+  "output": "cover:effect-pizza-fall",
+  "rest": {
+   "src": "/examples/effect-pizza-fall/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "effect-raven-transition.1",
+  "surface": "preset:effect-raven-transition",
+  "rank": 1,
+  "caption": "She bursts into a flock of ravens",
+  "inputs": {
+   "image": "/examples/effect-raven-transition/1/in-image.jpg"
+  },
+  "output": "cover:effect-raven-transition"
+ },
+ {
+  "id": "effect-red-carpet.1",
+  "surface": "preset:effect-red-carpet",
+  "rank": 5,
+  "caption": "He strikes a pose on the red carpet",
+  "inputs": {
+   "image": "/examples/effect-red-carpet/1/in-image.jpg"
+  },
+  "output": "cover:effect-red-carpet",
+  "rest": {
+   "src": "/examples/effect-red-carpet/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-spirit-animal.1",
+  "surface": "preset:effect-spirit-animal",
+  "rank": 1,
+  "caption": "A glowing spirit wolf gathers",
+  "inputs": {
+   "image": "/examples/effect-spirit-animal/1/in-image.jpg"
+  },
+  "output": "cover:effect-spirit-animal"
+ },
+ {
+  "id": "effect-tattoo-animation.1",
+  "surface": "preset:effect-tattoo-animation",
+  "rank": 1,
+  "caption": "Ink koi draw themselves on his arms",
+  "inputs": {
+   "image": "/examples/effect-tattoo-animation/1/in-image.jpg"
+  },
+  "output": "cover:effect-tattoo-animation",
+  "rest": {
+   "src": "/examples/effect-tattoo-animation/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.6875
+  }
+ },
+ {
+  "id": "effect-train-rush.1",
+  "surface": "preset:effect-train-rush",
+  "rank": 1,
+  "caption": "A train rushes past",
+  "inputs": {
+   "image": "/examples/effect-train-rush/1/in-image.jpg"
+  },
+  "output": "cover:effect-train-rush"
+ },
+ {
+  "id": "effect-turning-monkey.1",
+  "surface": "preset:effect-turning-monkey",
+  "rank": 1,
+  "caption": "Mid-turn, he becomes a monkey",
+  "inputs": {
+   "image": "/examples/effect-turning-monkey/1/in-image.jpg"
+  },
+  "output": "cover:effect-turning-monkey",
+  "rest": {
+   "src": "/examples/effect-turning-monkey/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.2708
+  }
+ },
+ {
+  "id": "effect-ballet.1",
+  "surface": "preset:effect-ballet",
+  "rank": 1,
+  "caption": "Two clean pirouettes on pointe",
+  "inputs": {
+   "image": "/examples/effect-ballet/1/in-image.jpg"
+  },
+  "output": "cover:effect-ballet"
+ },
+ {
+  "id": "effect-eating.1",
+  "surface": "preset:effect-eating",
+  "rank": 1,
+  "caption": "One bite, and pure bliss",
+  "inputs": {
+   "image": "/examples/effect-eating/1/in-image.jpg"
+  },
+  "output": "cover:effect-eating",
+  "rest": {
+   "src": "/examples/effect-eating/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "effect-handheld-run.1",
+  "surface": "preset:effect-handheld-run",
+  "rank": 1,
+  "caption": "A handheld run along Copacabana",
+  "inputs": {
+   "image": "/examples/effect-handheld-run/1/in-image.jpg"
+  },
+  "output": "cover:effect-handheld-run",
+  "rest": {
+   "src": "/examples/effect-handheld-run/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-happy.1",
+  "surface": "preset:effect-happy",
+  "rank": 5,
+  "caption": "A calm face breaks into a laugh",
+  "inputs": {
+   "image": "/examples/effect-happy/1/in-image.jpg"
+  },
+  "output": "cover:effect-happy",
+  "rest": {
+   "src": "/examples/effect-happy/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.4375
+  }
+ },
+ {
+  "id": "effect-happy-mode.1",
+  "surface": "preset:effect-happy-mode",
+  "rank": 1,
+  "caption": "He bounces, shimmies and cheers",
+  "inputs": {
+   "image": "/examples/effect-happy-mode/1/in-image.jpg"
+  },
+  "output": "cover:effect-happy-mode",
+  "rest": {
+   "src": "/examples/effect-happy-mode/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-angry-mode.1",
+  "surface": "preset:effect-angry-mode",
+  "rank": 1,
+  "caption": "Arms crossed, then a comic rant",
+  "inputs": {
+   "image": "/examples/effect-angry-mode/1/in-image.jpg"
+  },
+  "output": "cover:effect-angry-mode",
+  "rest": {
+   "src": "/examples/effect-angry-mode/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3125
+  }
+ },
+ {
+  "id": "effect-morning-routine.1",
+  "surface": "preset:effect-morning-routine",
+  "rank": 1,
+  "caption": "A sunlit morning above the harbour",
+  "inputs": {
+   "image": "/examples/effect-morning-routine/1/in-image.jpg"
+  },
+  "output": "cover:effect-morning-routine",
+  "rest": {
+   "src": "/examples/effect-morning-routine/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-motor-ride.1",
+  "surface": "preset:effect-motor-ride",
+  "rank": 1,
+  "caption": "A vintage motorbike along Big Sur",
+  "inputs": {
+   "image": "/examples/effect-motor-ride/1/in-image.jpg"
+  },
+  "output": "cover:effect-motor-ride",
+  "rest": {
+   "src": "/examples/effect-motor-ride/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-peak-moment.1",
+  "surface": "preset:effect-peak-moment",
+  "rank": 1,
+  "caption": "Arms up on an alpine summit",
+  "inputs": {
+   "image": "/examples/effect-peak-moment/1/in-image.jpg"
+  },
+  "output": "cover:effect-peak-moment",
+  "rest": {
+   "src": "/examples/effect-peak-moment/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-plate-check.1",
+  "surface": "preset:effect-plate-check",
+  "rank": 1,
+  "caption": "The phone tilts down to the plate",
+  "inputs": {
+   "image": "/examples/effect-plate-check/1/in-image.jpg"
+  },
+  "output": "cover:effect-plate-check",
+  "rest": {
+   "src": "/examples/effect-plate-check/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "effect-saint-glow.1",
+  "surface": "preset:effect-saint-glow",
+  "rank": 1,
+  "caption": "A golden halo kindles behind her",
+  "inputs": {
+   "image": "/examples/effect-saint-glow/1/in-image.jpg"
+  },
+  "output": "cover:effect-saint-glow"
+ },
+ {
+  "id": "effect-selfie.1",
+  "surface": "preset:effect-selfie",
+  "rank": 1,
+  "caption": "A selfie chat at the canyon's edge",
+  "inputs": {
+   "image": "/examples/effect-selfie/1/in-image.jpg"
+  },
+  "output": "cover:effect-selfie"
+ },
+ {
+  "id": "effect-selfie-outfit.1",
+  "surface": "preset:effect-selfie-outfit",
+  "rank": 1,
+  "caption": "An outfit check, phone at arm's length",
+  "inputs": {
+   "image": "/examples/effect-selfie-outfit/1/in-image.jpg"
+  },
+  "output": "cover:effect-selfie-outfit",
+  "rest": {
+   "src": "/examples/effect-selfie-outfit/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-selfie-posing.1",
+  "surface": "preset:effect-selfie-posing",
+  "rank": 1,
+  "caption": "Quick selfie poses in a blue alley",
+  "inputs": {
+   "image": "/examples/effect-selfie-posing/1/in-image.jpg"
+  },
+  "output": "cover:effect-selfie-posing"
+ },
+ {
+  "id": "effect-sunglasses.1",
+  "surface": "preset:effect-sunglasses",
+  "rank": 5,
+  "caption": "Shades on, and a slow cool smile",
+  "inputs": {
+   "image": "/examples/effect-sunglasses/1/in-image.jpg"
+  },
+  "output": "cover:effect-sunglasses",
+  "rest": {
+   "src": "/examples/effect-sunglasses/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-yacht.1",
+  "surface": "preset:effect-yacht",
+  "rank": 1,
+  "caption": "Lounging on a yacht's sun deck",
+  "inputs": {
+   "image": "/examples/effect-yacht/1/in-image.jpg"
+  },
+  "output": "cover:effect-yacht",
+  "rest": {
+   "src": "/examples/effect-yacht/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "effect-balloon.1",
+  "surface": "preset:effect-balloon",
+  "rank": 1,
+  "caption": "Balloons carry a handbag away",
+  "inputs": {
+   "image": "/examples/effect-balloon/1/in-image.jpg"
+  },
+  "output": "cover:effect-balloon"
+ },
+ {
+  "id": "effect-column-wipe.1",
+  "surface": "preset:effect-column-wipe",
+  "rank": 1,
+  "caption": "Columns flip midday into night",
+  "inputs": {
+   "image": "/examples/effect-column-wipe/1/in-image.jpg",
+   "endImage": "/examples/effect-column-wipe/1/in-end-image.jpg"
+  },
+  "output": "cover:effect-column-wipe",
+  "rest": {
+   "src": "/examples/effect-column-wipe/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2708
+  }
+ },
+ {
+  "id": "effect-display-transition.1",
+  "surface": "preset:effect-display-transition",
+  "rank": 1,
+  "caption": "Into the screen, out into the sun",
+  "inputs": {
+   "image": "/examples/effect-display-transition/1/in-image.jpg",
+   "endImage": "/examples/effect-display-transition/1/in-end-image.jpg"
+  },
+  "output": "cover:effect-display-transition",
+  "rest": {
+   "src": "/examples/effect-display-transition/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1875
+  }
+ },
+ {
+  "id": "effect-flame-transition.1",
+  "surface": "preset:effect-flame-transition",
+  "rank": 1,
+  "caption": "Flames burn away to a new scene",
+  "inputs": {
+   "image": "/examples/effect-flame-transition/1/in-image.jpg",
+   "endImage": "/examples/effect-flame-transition/1/in-end-image.jpg"
+  },
+  "output": "cover:effect-flame-transition",
+  "rest": {
+   "src": "/examples/effect-flame-transition/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.5208
+  }
+ },
+ {
+  "id": "effect-hand-transition.1",
+  "surface": "preset:effect-hand-transition",
+  "rank": 1,
+  "caption": "A hand sweep reveals a new place",
+  "inputs": {
+   "image": "/examples/effect-hand-transition/1/in-image.jpg",
+   "endImage": "/examples/effect-hand-transition/1/in-end-image.jpg"
+  },
+  "output": "cover:effect-hand-transition",
+  "rest": {
+   "src": "/examples/effect-hand-transition/1/out-peak.jpg",
+   "at": 2.3542,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-hole-transition.1",
+  "surface": "preset:effect-hole-transition",
+  "rank": 1,
+  "caption": "Through a hole in the lake",
+  "inputs": {
+   "image": "/examples/effect-hole-transition/1/in-image.jpg",
+   "endImage": "/examples/effect-hole-transition/1/in-end-image.jpg"
+  },
+  "output": "cover:effect-hole-transition",
+  "rest": {
+   "src": "/examples/effect-hole-transition/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.8958
+  }
+ },
+ {
+  "id": "effect-jump-transition.1",
+  "surface": "preset:effect-jump-transition",
+  "rank": 1,
+  "caption": "One jump from Rio to the dunes",
+  "inputs": {
+   "image": "/examples/effect-jump-transition/1/in-image.jpg",
+   "endImage": "/examples/effect-jump-transition/1/in-end-image.jpg"
+  },
+  "output": "cover:effect-jump-transition"
+ },
+ {
+  "id": "effect-smoke-transition.1",
+  "surface": "preset:effect-smoke-transition",
+  "rank": 1,
+  "caption": "Smoke clears on a new scene",
+  "inputs": {
+   "image": "/examples/effect-smoke-transition/1/in-image.jpg",
+   "endImage": "/examples/effect-smoke-transition/1/in-end-image.jpg"
+  },
+  "output": "cover:effect-smoke-transition",
+  "rest": {
+   "src": "/examples/effect-smoke-transition/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "effect-studio-slide.1",
+  "surface": "preset:effect-studio-slide",
+  "rank": 1,
+  "caption": "One long slide across the studio",
+  "inputs": {
+   "image": "/examples/effect-studio-slide/1/in-image.jpg"
+  },
+  "output": "cover:effect-studio-slide",
+  "rest": {
+   "src": "/examples/effect-studio-slide/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-selfception.1",
+  "surface": "preset:effect-selfception",
+  "rank": 1,
+  "caption": "Into the phone, and into it again",
+  "inputs": {
+   "image": "/examples/effect-selfception/1/in-image.jpg"
+  },
+  "output": "cover:effect-selfception",
+  "rest": {
+   "src": "/examples/effect-selfception/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-act-natural.1",
+  "surface": "preset:effect-act-natural",
+  "rank": 1,
+  "caption": "Chaos erupts, he acts natural",
+  "inputs": {
+   "image": "/examples/effect-act-natural/1/in-image.jpg"
+  },
+  "output": "cover:effect-act-natural",
+  "rest": {
+   "src": "/examples/effect-act-natural/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "effect-world-morphing.1",
+  "surface": "preset:effect-world-morphing",
+  "rank": 1,
+  "caption": "The world flows around him",
+  "inputs": {
+   "image": "/examples/effect-world-morphing/1/in-image.jpg"
+  },
+  "output": "cover:effect-world-morphing",
+  "rest": {
+   "src": "/examples/effect-world-morphing/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "effect-lacewalker.1",
+  "surface": "preset:effect-lacewalker",
+  "rank": 1,
+  "caption": "Black lace trails her clifftop walk",
+  "inputs": {
+   "image": "/examples/effect-lacewalker/1/in-image.jpg"
+  },
+  "output": "cover:effect-lacewalker",
+  "rest": {
+   "src": "/examples/effect-lacewalker/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3125
+  }
+ },
+ {
+  "id": "effect-monster-dab.1",
+  "surface": "preset:effect-monster-dab",
+  "rank": 1,
+  "caption": "A friendly monster dabs behind her",
+  "inputs": {
+   "image": "/examples/effect-monster-dab/1/in-image.jpg"
+  },
+  "output": "cover:effect-monster-dab",
+  "rest": {
+   "src": "/examples/effect-monster-dab/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "effect-lidar-transition.1",
+  "surface": "preset:effect-lidar-transition",
+  "rank": 1,
+  "caption": "A laser sweep scans the nave",
+  "inputs": {
+   "image": "/examples/effect-lidar-transition/1/in-image.jpg"
+  },
+  "output": "cover:effect-lidar-transition",
+  "rest": {
+   "src": "/examples/effect-lidar-transition/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "effect-clones.1",
+  "surface": "preset:effect-clones",
+  "rank": 1,
+  "caption": "Three copies step out of him",
+  "inputs": {
+   "image": "/examples/effect-clones/1/in-image.jpg"
+  },
+  "output": "cover:effect-clones",
+  "rest": {
+   "src": "/examples/effect-clones/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2708
+  }
+ },
+ {
+  "id": "effect-scrapbook-collage.1",
+  "surface": "preset:effect-scrapbook-collage",
+  "rank": 1,
+  "caption": "A harbour torn into a scrapbook",
+  "inputs": {
+   "image": "/examples/effect-scrapbook-collage/1/in-image.jpg"
+  },
+  "output": "cover:effect-scrapbook-collage"
+ },
+ {
+  "id": "effect-stop-world.1",
+  "surface": "preset:effect-stop-world",
+  "rank": 1,
+  "caption": "A snap, and the whole square freezes",
+  "inputs": {
+   "image": "/examples/effect-stop-world/1/in-image.jpg"
+  },
+  "output": "cover:effect-stop-world",
+  "rest": {
+   "src": "/examples/effect-stop-world/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3542
+  }
+ },
+ {
+  "id": "effect-agamemnon.1",
+  "surface": "preset:effect-agamemnon",
+  "rank": 1,
+  "caption": "He becomes a bronze warrior king",
+  "inputs": {
+   "image": "/examples/effect-agamemnon/1/in-image.jpg"
+  },
+  "output": "cover:effect-agamemnon"
+ },
+ {
+  "id": "effect-cyclope.1",
+  "surface": "preset:effect-cyclope",
+  "rank": 1,
+  "caption": "Two eyes merge into one",
+  "inputs": {
+   "image": "/examples/effect-cyclope/1/in-image.jpg"
+  },
+  "output": "cover:effect-cyclope",
+  "rest": {
+   "src": "/examples/effect-cyclope/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.0208
+  }
+ },
+ {
+  "id": "effect-mighty-fighter.1",
+  "surface": "preset:effect-mighty-fighter",
+  "rank": 1,
+  "caption": "A flurry of strikes on the Great Wall",
+  "inputs": {
+   "image": "/examples/effect-mighty-fighter/1/in-image.jpg"
+  },
+  "output": "cover:effect-mighty-fighter",
+  "rest": {
+   "src": "/examples/effect-mighty-fighter/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.6875
+  }
+ },
+ {
+  "id": "effect-pigeons.1",
+  "surface": "preset:effect-pigeons",
+  "rank": 1,
+  "caption": "Pigeons burst up across San Marco",
+  "inputs": {
+   "image": "/examples/effect-pigeons/1/in-image.jpg"
+  },
+  "output": "cover:effect-pigeons"
+ },
+ {
+  "id": "effect-fairytale-castle.1",
+  "surface": "preset:effect-fairytale-castle",
+  "rank": 1,
+  "caption": "A castle rises across the loch",
+  "inputs": {
+   "image": "/examples/effect-fairytale-castle/1/in-image.jpg"
+  },
+  "output": "cover:effect-fairytale-castle"
+ },
+ {
+  "id": "effect-superstar.1",
+  "surface": "preset:effect-superstar",
+  "rank": 1,
+  "caption": "Stage lights blast, a star appears",
+  "inputs": {
+   "image": "/examples/effect-superstar/1/in-image.jpg"
+  },
+  "output": "cover:effect-superstar"
+ },
+ {
+  "id": "effect-pearl-earring.1",
+  "surface": "preset:effect-pearl-earring",
+  "rank": 1,
+  "caption": "Dressed as the Girl with a Pearl Earring",
+  "inputs": {
+   "image": "/examples/effect-pearl-earring/1/in-image.jpg"
+  },
+  "output": "cover:effect-pearl-earring"
+ },
+ {
+  "id": "effect-skatedog.1",
+  "surface": "preset:effect-skatedog",
+  "rank": 1,
+  "caption": "A bulldog skates in beside her",
+  "inputs": {
+   "image": "/examples/effect-skatedog/1/in-image.jpg"
+  },
+  "output": "cover:effect-skatedog"
+ },
+ {
+  "id": "effect-blue-depth.1",
+  "surface": "preset:effect-blue-depth",
+  "rank": 1,
+  "caption": "A villa terrace sinks into the blue",
+  "inputs": {
+   "image": "/examples/effect-blue-depth/1/in-image.jpg"
+  },
+  "output": "cover:effect-blue-depth"
+ },
+ {
+  "id": "effect-dolphin-ride.1",
+  "surface": "preset:effect-dolphin-ride",
+  "rank": 1,
+  "caption": "She rides a leaping dolphin",
+  "inputs": {
+   "image": "/examples/effect-dolphin-ride/1/in-image.jpg"
+  },
+  "output": "cover:effect-dolphin-ride"
+ },
+ {
+  "id": "effect-monet-muse.1",
+  "surface": "preset:effect-monet-muse",
+  "rank": 1,
+  "caption": "She melts into a living Monet",
+  "inputs": {
+   "image": "/examples/effect-monet-muse/1/in-image.jpg"
+  },
+  "output": "cover:effect-monet-muse"
+ },
+ {
+  "id": "effect-acid.1",
+  "surface": "preset:effect-acid",
+  "rank": 1,
+  "caption": "A poolside portrait trips out in neon",
+  "inputs": {
+   "image": "/examples/effect-acid/1/in-image.jpg"
+  },
+  "output": "cover:effect-acid"
+ },
+ {
+  "id": "effect-akrill.1",
+  "surface": "preset:effect-akrill",
+  "rank": 1,
+  "caption": "Repainted in thick acrylic strokes",
+  "inputs": {
+   "image": "/examples/effect-akrill/1/in-image.jpg"
+  },
+  "output": "cover:effect-akrill"
+ },
+ {
+  "id": "effect-bubbles.1",
+  "surface": "preset:effect-bubbles",
+  "rank": 1,
+  "caption": "Iridescent bubbles drift around her",
+  "inputs": {
+   "image": "/examples/effect-bubbles/1/in-image.jpg"
+  },
+  "output": "cover:effect-bubbles"
+ },
+ {
+  "id": "effect-cannabis.1",
+  "surface": "preset:effect-cannabis",
+  "rank": 1,
+  "caption": "A hazy green glow in the glasshouse",
+  "inputs": {
+   "image": "/examples/effect-cannabis/1/in-image.jpg"
+  },
+  "output": "cover:effect-cannabis"
+ },
+ {
+  "id": "effect-canvas.1",
+  "surface": "preset:effect-canvas",
+  "rank": 1,
+  "caption": "He becomes an oil painting on canvas",
+  "inputs": {
+   "image": "/examples/effect-canvas/1/in-image.jpg"
+  },
+  "output": "cover:effect-canvas"
+ },
+ {
+  "id": "effect-cold-vision.1",
+  "surface": "preset:effect-cold-vision",
+  "rank": 1,
+  "caption": "Flipped into a thermal camera view",
+  "inputs": {
+   "image": "/examples/effect-cold-vision/1/in-image.jpg"
+  },
+  "output": "cover:effect-cold-vision"
+ },
+ {
+  "id": "effect-comic.1",
+  "surface": "preset:effect-comic",
+  "rank": 1,
+  "caption": "She snaps into a comic book panel",
+  "inputs": {
+   "image": "/examples/effect-comic/1/in-image.jpg"
+  },
+  "output": "cover:effect-comic"
+ },
+ {
+  "id": "effect-fragments.1",
+  "surface": "preset:effect-fragments",
+  "rank": 1,
+  "caption": "A portrait breaks into fragments",
+  "inputs": {
+   "image": "/examples/effect-fragments/1/in-image.jpg"
+  },
+  "output": "cover:effect-fragments"
+ },
+ {
+  "id": "effect-lava.1",
+  "surface": "preset:effect-lava",
+  "rank": 1,
+  "caption": "He glows into a molten restyle",
+  "inputs": {
+   "image": "/examples/effect-lava/1/in-image.jpg"
+  },
+  "output": "cover:effect-lava"
+ },
+ {
+  "id": "effect-marble.1",
+  "surface": "preset:effect-marble",
+  "rank": 1,
+  "caption": "She turns to living veined marble",
+  "inputs": {
+   "image": "/examples/effect-marble/1/in-image.jpg"
+  },
+  "output": "cover:effect-marble"
+ },
+ {
+  "id": "effect-modern.1",
+  "surface": "preset:effect-modern",
+  "rank": 1,
+  "caption": "Reborn as a modern-art painting",
+  "inputs": {
+   "image": "/examples/effect-modern/1/in-image.jpg"
+  },
+  "output": "cover:effect-modern"
+ },
+ {
+  "id": "effect-multiverse.1",
+  "surface": "preset:effect-multiverse",
+  "rank": 1,
+  "caption": "Three of her, from three universes",
+  "inputs": {
+   "image": "/examples/effect-multiverse/1/in-image.jpg"
+  },
+  "output": "cover:effect-multiverse"
+ },
+ {
+  "id": "effect-noir.1",
+  "surface": "preset:effect-noir",
+  "rank": 1,
+  "caption": "Drained into black-and-white noir",
+  "inputs": {
+   "image": "/examples/effect-noir/1/in-image.jpg"
+  },
+  "output": "cover:effect-noir"
+ },
+ {
+  "id": "effect-overexposed.1",
+  "surface": "preset:effect-overexposed",
+  "rank": 1,
+  "caption": "A dreamy, overexposed haze",
+  "inputs": {
+   "image": "/examples/effect-overexposed/1/in-image.jpg"
+  },
+  "output": "cover:effect-overexposed"
+ },
+ {
+  "id": "effect-paper.1",
+  "surface": "preset:effect-paper",
+  "rank": 1,
+  "caption": "Whale and sea, redrawn in cut paper",
+  "inputs": {
+   "image": "/examples/effect-paper/1/in-image.jpg"
+  },
+  "output": "cover:effect-paper"
+ },
+ {
+  "id": "effect-particles.1",
+  "surface": "preset:effect-particles",
+  "rank": 1,
+  "caption": "She streams away in golden particles",
+  "inputs": {
+   "image": "/examples/effect-particles/1/in-image.jpg"
+  },
+  "output": "cover:effect-particles"
+ },
+ {
+  "id": "effect-random-glow.1",
+  "surface": "preset:effect-random-glow",
+  "rank": 1,
+  "caption": "Random coloured glows wash the club",
+  "inputs": {
+   "image": "/examples/effect-random-glow/1/in-image.jpg"
+  },
+  "output": "cover:effect-random-glow"
+ },
+ {
+  "id": "effect-sketch.1",
+  "surface": "preset:effect-sketch",
+  "rank": 1,
+  "caption": "Redrawn as a pencil sketch",
+  "inputs": {
+   "image": "/examples/effect-sketch/1/in-image.jpg"
+  },
+  "output": "cover:effect-sketch"
+ },
+ {
+  "id": "effect-toxic.1",
+  "surface": "preset:effect-toxic",
+  "rank": 1,
+  "caption": "A sickly neon-green glow engulfs him",
+  "inputs": {
+   "image": "/examples/effect-toxic/1/in-image.jpg"
+  },
+  "output": "cover:effect-toxic"
+ },
+ {
+  "id": "effect-tracking.1",
+  "surface": "preset:effect-tracking",
+  "rank": 1,
+  "caption": "A grand tourer locked in a tracking HUD",
+  "inputs": {
+   "image": "/examples/effect-tracking/1/in-image.jpg"
+  },
+  "output": "cover:effect-tracking"
+ },
+ {
+  "id": "effect-vintage.1",
+  "surface": "preset:effect-vintage",
+  "rank": 1,
+  "caption": "Faded 8mm holiday footage",
+  "inputs": {
+   "image": "/examples/effect-vintage/1/in-image.jpg"
+  },
+  "output": "cover:effect-vintage"
+ },
+ {
+  "id": "effect-windows.1",
+  "surface": "preset:effect-windows",
+  "rank": 1,
+  "caption": "He ends up inside retro windows",
+  "inputs": {
+   "image": "/examples/effect-windows/1/in-image.jpg"
+  },
+  "output": "cover:effect-windows"
+ },
+ {
+  "id": "effect-silhouette.1",
+  "surface": "preset:effect-silhouette",
+  "rank": 1,
+  "caption": "A tree pose turns to silhouette",
+  "inputs": {
+   "image": "/examples/effect-silhouette/1/in-image.jpg"
+  },
+  "output": "cover:effect-silhouette"
+ },
+ {
+  "id": "effect-practicals.1",
+  "surface": "preset:effect-practicals",
+  "rank": 1,
+  "caption": "Lit only by the lamps in the room",
+  "inputs": {
+   "image": "/examples/effect-practicals/1/in-image.jpg"
+  },
+  "output": "cover:effect-practicals"
+ },
+ {
+  "id": "effect-contre-jour.1",
+  "surface": "preset:effect-contre-jour",
+  "rank": 1,
+  "caption": "The sun flares right behind her",
+  "inputs": {
+   "image": "/examples/effect-contre-jour/1/in-image.jpg"
+  },
+  "output": "cover:effect-contre-jour"
+ },
+ {
+  "id": "effect-soft-cross.1",
+  "surface": "preset:effect-soft-cross",
+  "rank": 1,
+  "caption": "Relit by two big softboxes",
+  "inputs": {
+   "image": "/examples/effect-soft-cross/1/in-image.jpg"
+  },
+  "output": "cover:effect-soft-cross",
+  "rest": {
+   "src": "/examples/effect-soft-cross/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "effect-film-colors.1",
+  "surface": "preset:effect-film-colors",
+  "rank": 5,
+  "caption": "Digital to a 35mm film frame",
+  "inputs": {
+   "image": "/examples/effect-film-colors/1/in-image.jpg"
+  },
+  "output": "cover:effect-film-colors"
+ },
+ {
+  "id": "effect-black-gloss.1",
+  "surface": "preset:effect-black-gloss",
+  "rank": 5,
+  "caption": "A glossy black grade on a grand tourer",
+  "inputs": {
+   "image": "/examples/effect-black-gloss/1/in-image.jpg"
+  },
+  "output": "cover:effect-black-gloss"
+ },
+ {
+  "id": "effect-candy-pink.1",
+  "surface": "preset:effect-candy-pink",
+  "rank": 1,
+  "caption": "A beach washed in candy pink",
+  "inputs": {
+   "image": "/examples/effect-candy-pink/1/in-image.jpg"
+  },
+  "output": "cover:effect-candy-pink"
+ },
+ {
+  "id": "effect-lime-jam.1",
+  "surface": "preset:effect-lime-jam",
+  "rank": 1,
+  "caption": "A zesty lime grade in Miami",
+  "inputs": {
+   "image": "/examples/effect-lime-jam/1/in-image.jpg"
+  },
+  "output": "cover:effect-lime-jam"
+ },
+ {
+  "id": "effect-nostalgic-blue.1",
+  "surface": "preset:effect-nostalgic-blue",
+  "rank": 1,
+  "caption": "Golden hour fades to nostalgic blue",
+  "inputs": {
+   "image": "/examples/effect-nostalgic-blue/1/in-image.jpg"
+  },
+  "output": "cover:effect-nostalgic-blue"
+ },
+ {
+  "id": "effect-soft-palette.1",
+  "surface": "preset:effect-soft-palette",
+  "rank": 1,
+  "caption": "Harsh noon softened to pastel",
+  "inputs": {
+   "image": "/examples/effect-soft-palette/1/in-image.jpg"
+  },
+  "output": "cover:effect-soft-palette"
+ },
+ {
+  "id": "effect-crimson-vigil.1",
+  "surface": "preset:effect-crimson-vigil",
+  "rank": 1,
+  "caption": "Deep crimson bleeds into every shadow",
+  "inputs": {
+   "image": "/examples/effect-crimson-vigil/1/in-image.jpg"
+  },
+  "output": "cover:effect-crimson-vigil"
+ },
+ {
+  "id": "effect-bleach-bypass.1",
+  "surface": "preset:effect-bleach-bypass",
+  "rank": 1,
+  "caption": "Colour drained to bleach bypass",
+  "inputs": {
+   "image": "/examples/effect-bleach-bypass/1/in-image.jpg"
+  },
+  "output": "cover:effect-bleach-bypass"
+ },
+ {
+  "id": "effect-bleached-warm.1",
+  "surface": "preset:effect-bleached-warm",
+  "rank": 1,
+  "caption": "A road trip baked bleached and warm",
+  "inputs": {
+   "image": "/examples/effect-bleached-warm/1/in-image.jpg"
+  },
+  "output": "cover:effect-bleached-warm"
+ },
+ {
+  "id": "effect-classic-bw.1",
+  "surface": "preset:effect-classic-bw",
+  "rank": 1,
+  "caption": "Candy colours to classic black and white",
+  "inputs": {
+   "image": "/examples/effect-classic-bw/1/in-image.jpg"
+  },
+  "output": "cover:effect-classic-bw"
+ },
+ {
+  "id": "effect-cold-steel.1",
+  "surface": "preset:effect-cold-steel",
+  "rank": 1,
+  "caption": "A warm hall turned to cold steel",
+  "inputs": {
+   "image": "/examples/effect-cold-steel/1/in-image.jpg"
+  },
+  "output": "cover:effect-cold-steel"
+ },
+ {
+  "id": "effect-hyper-neon.1",
+  "surface": "preset:effect-hyper-neon",
+  "rank": 1,
+  "caption": "A Bangkok night in hyper neon",
+  "inputs": {
+   "image": "/examples/effect-hyper-neon/1/in-image.jpg"
+  },
+  "output": "cover:effect-hyper-neon"
+ },
+ {
+  "id": "effect-naturalistic-clean.1",
+  "surface": "preset:effect-naturalistic-clean",
+  "rank": 5,
+  "caption": "A flat log frame, graded clean",
+  "inputs": {
+   "image": "/examples/effect-naturalistic-clean/1/in-image.jpg"
+  },
+  "output": "cover:effect-naturalistic-clean"
+ },
+ {
+  "id": "effect-sodium-decay.1",
+  "surface": "preset:effect-sodium-decay",
+  "rank": 1,
+  "caption": "Blue hour sinks into sodium orange",
+  "inputs": {
+   "image": "/examples/effect-sodium-decay/1/in-image.jpg"
+  },
+  "output": "cover:effect-sodium-decay"
+ },
+ {
+  "id": "effect-teal-orange-epic.1",
+  "surface": "preset:effect-teal-orange-epic",
+  "rank": 1,
+  "caption": "The blockbuster teal and orange",
+  "inputs": {
+   "image": "/examples/effect-teal-orange-epic/1/in-image.jpg"
+  },
+  "output": "cover:effect-teal-orange-epic"
+ },
+ {
+  "id": "motion-zoom-in.1",
+  "surface": "preset:motion-zoom-in",
+  "rank": 5,
+  "caption": "The lens slowly tightens on him",
+  "inputs": {
+   "image": "/examples/motion-zoom-in/1/in-image.jpg"
+  },
+  "output": "cover:motion-zoom-in",
+  "rest": {
+   "src": "/examples/motion-zoom-in/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-zoom-out.1",
+  "surface": "preset:motion-zoom-out",
+  "rank": 5,
+  "caption": "The lens widens to the ice cliffs",
+  "inputs": {
+   "image": "/examples/motion-zoom-out/1/in-image.jpg"
+  },
+  "output": "cover:motion-zoom-out",
+  "rest": {
+   "src": "/examples/motion-zoom-out/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-zoom.1",
+  "surface": "preset:motion-zoom",
+  "rank": 1,
+  "caption": "A zoom from Monument Valley's track",
+  "inputs": {
+   "image": "/examples/motion-zoom/1/in-image.jpg"
+  },
+  "output": "cover:motion-zoom",
+  "rest": {
+   "src": "/examples/motion-zoom/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-dolly-in.1",
+  "surface": "preset:motion-dolly-in",
+  "rank": 1,
+  "caption": "A slow push in through the library",
+  "inputs": {
+   "image": "/examples/motion-dolly-in/1/in-image.jpg"
+  },
+  "output": "cover:motion-dolly-in",
+  "rest": {
+   "src": "/examples/motion-dolly-in/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-dolly-out.1",
+  "surface": "preset:motion-dolly-out",
+  "rank": 5,
+  "caption": "The camera glides back down the vines",
+  "inputs": {
+   "image": "/examples/motion-dolly-out/1/in-image.jpg"
+  },
+  "output": "cover:motion-dolly-out",
+  "rest": {
+   "src": "/examples/motion-dolly-out/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-super-dolly-in.1",
+  "surface": "preset:motion-super-dolly-in",
+  "rank": 1,
+  "caption": "A long dolly in through the hangar",
+  "inputs": {
+   "image": "/examples/motion-super-dolly-in/1/in-image.jpg"
+  },
+  "output": "cover:motion-super-dolly-in",
+  "rest": {
+   "src": "/examples/motion-super-dolly-in/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-super-dolly-out.1",
+  "surface": "preset:motion-super-dolly-out",
+  "rank": 5,
+  "caption": "From a close-up out to the whole valley",
+  "inputs": {
+   "image": "/examples/motion-super-dolly-out/1/in-image.jpg"
+  },
+  "output": "cover:motion-super-dolly-out",
+  "rest": {
+   "src": "/examples/motion-super-dolly-out/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-rapid-zoom-in.1",
+  "surface": "preset:motion-rapid-zoom-in",
+  "rank": 1,
+  "caption": "A rapid zoom onto a cheetah",
+  "inputs": {
+   "image": "/examples/motion-rapid-zoom-in/1/in-image.jpg"
+  },
+  "output": "cover:motion-rapid-zoom-in",
+  "rest": {
+   "src": "/examples/motion-rapid-zoom-in/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "motion-rapid-zoom-out.1",
+  "surface": "preset:motion-rapid-zoom-out",
+  "rank": 1,
+  "caption": "From a kayak straight up and out",
+  "inputs": {
+   "image": "/examples/motion-rapid-zoom-out/1/in-image.jpg"
+  },
+  "output": "cover:motion-rapid-zoom-out",
+  "rest": {
+   "src": "/examples/motion-rapid-zoom-out/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-yoyo-zoom.1",
+  "surface": "preset:motion-yoyo-zoom",
+  "rank": 5,
+  "caption": "In to his grin, and back out",
+  "inputs": {
+   "image": "/examples/motion-yoyo-zoom/1/in-image.jpg"
+  },
+  "output": "cover:motion-yoyo-zoom",
+  "rest": {
+   "src": "/examples/motion-yoyo-zoom/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-eyes-in.1",
+  "surface": "preset:motion-eyes-in",
+  "rank": 1,
+  "caption": "A rush in to the eagle hunter's eyes",
+  "inputs": {
+   "image": "/examples/motion-eyes-in/1/in-image.jpg"
+  },
+  "output": "cover:motion-eyes-in",
+  "rest": {
+   "src": "/examples/motion-eyes-in/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-mouth-in.1",
+  "surface": "preset:motion-mouth-in",
+  "rank": 1,
+  "caption": "A rush in to the singer's lips",
+  "inputs": {
+   "image": "/examples/motion-mouth-in/1/in-image.jpg"
+  },
+  "output": "cover:motion-mouth-in",
+  "rest": {
+   "src": "/examples/motion-mouth-in/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "motion-eating-zoom.1",
+  "surface": "preset:motion-eating-zoom",
+  "rank": 1,
+  "caption": "A punch-in on one perfect bite",
+  "inputs": {
+   "image": "/examples/motion-eating-zoom/1/in-image.jpg"
+  },
+  "output": "cover:motion-eating-zoom"
+ },
+ {
+  "id": "motion-through-object-in.1",
+  "surface": "preset:motion-through-object-in",
+  "rank": 1,
+  "caption": "Through the moon gate and beyond",
+  "inputs": {
+   "image": "/examples/motion-through-object-in/1/in-image.jpg"
+  },
+  "output": "cover:motion-through-object-in",
+  "rest": {
+   "src": "/examples/motion-through-object-in/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-through-object-out.1",
+  "surface": "preset:motion-through-object-out",
+  "rank": 1,
+  "caption": "Back out through the salon window",
+  "inputs": {
+   "image": "/examples/motion-through-object-out/1/in-image.jpg"
+  },
+  "output": "cover:motion-through-object-out",
+  "rest": {
+   "src": "/examples/motion-through-object-out/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-earth-zoom-out.1",
+  "surface": "preset:motion-earth-zoom-out",
+  "rank": 1,
+  "caption": "From a city crossing out to space",
+  "inputs": {
+   "image": "/examples/motion-earth-zoom-out/1/in-image.jpg"
+  },
+  "output": "cover:motion-earth-zoom-out",
+  "rest": {
+   "src": "/examples/motion-earth-zoom-out/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-arc-left.1",
+  "surface": "preset:motion-arc-left",
+  "rank": 1,
+  "caption": "Circles her on the baobab road",
+  "inputs": {
+   "image": "/examples/motion-arc-left/1/in-image.jpg"
+  },
+  "output": "cover:motion-arc-left",
+  "rest": {
+   "src": "/examples/motion-arc-left/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-arc-right.1",
+  "surface": "preset:motion-arc-right",
+  "rank": 1,
+  "caption": "An arc around him above Mykonos",
+  "inputs": {
+   "image": "/examples/motion-arc-right/1/in-image.jpg"
+  },
+  "output": "cover:motion-arc-right",
+  "rest": {
+   "src": "/examples/motion-arc-right/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-lazy-susan.1",
+  "surface": "preset:motion-lazy-susan",
+  "rank": 1,
+  "caption": "They turn as if on a turntable",
+  "inputs": {
+   "image": "/examples/motion-lazy-susan/1/in-image.jpg"
+  },
+  "output": "cover:motion-lazy-susan",
+  "rest": {
+   "src": "/examples/motion-lazy-susan/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 1.8542
+  }
+ },
+ {
+  "id": "motion-3d-rotation.1",
+  "surface": "preset:motion-3d-rotation",
+  "rank": 1,
+  "caption": "A master violin turns full circle",
+  "inputs": {
+   "image": "/examples/motion-3d-rotation/1/in-image.jpg"
+  },
+  "output": "cover:motion-3d-rotation",
+  "rest": {
+   "src": "/examples/motion-3d-rotation/1/out-peak.jpg",
+   "at": 2.6042,
+   "from": 0.3958
+  }
+ },
+ {
+  "id": "motion-lazy-orbit.1",
+  "surface": "preset:motion-lazy-orbit",
+  "rank": 1,
+  "caption": "A slow, lazy orbit in Hallstatt",
+  "inputs": {
+   "image": "/examples/motion-lazy-orbit/1/in-image.jpg"
+  },
+  "output": "cover:motion-lazy-orbit",
+  "rest": {
+   "src": "/examples/motion-lazy-orbit/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-glam.1",
+  "surface": "preset:motion-glam",
+  "rank": 1,
+  "caption": "A slow arc in gold",
+  "inputs": {
+   "image": "/examples/motion-glam/1/in-image.jpg"
+  },
+  "output": "cover:motion-glam",
+  "rest": {
+   "src": "/examples/motion-glam/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-crane-up.1",
+  "surface": "preset:motion-crane-up",
+  "rank": 1,
+  "caption": "Rises over a pink lake",
+  "inputs": {
+   "image": "/examples/motion-crane-up/1/in-image.jpg"
+  },
+  "output": "cover:motion-crane-up",
+  "rest": {
+   "src": "/examples/motion-crane-up/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-crane-down.1",
+  "surface": "preset:motion-crane-down",
+  "rank": 1,
+  "caption": "Down from the blue rooftops of Jodhpur",
+  "inputs": {
+   "image": "/examples/motion-crane-down/1/in-image.jpg"
+  },
+  "output": "cover:motion-crane-down",
+  "rest": {
+   "src": "/examples/motion-crane-down/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "motion-crane-over-the-head.1",
+  "surface": "preset:motion-crane-over-the-head",
+  "rank": 5,
+  "caption": "Rises over their head to the view",
+  "inputs": {
+   "image": "/examples/motion-crane-over-the-head/1/in-image.jpg"
+  },
+  "output": "cover:motion-crane-over-the-head",
+  "rest": {
+   "src": "/examples/motion-crane-over-the-head/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-jib-up.1",
+  "surface": "preset:motion-jib-up",
+  "rank": 1,
+  "caption": "A jib up over the Ronda gorge",
+  "inputs": {
+   "image": "/examples/motion-jib-up/1/in-image.jpg"
+  },
+  "output": "cover:motion-jib-up",
+  "rest": {
+   "src": "/examples/motion-jib-up/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "motion-jib-down.1",
+  "surface": "preset:motion-jib-down",
+  "rank": 1,
+  "caption": "Down through the lanterns of Hoi An",
+  "inputs": {
+   "image": "/examples/motion-jib-down/1/in-image.jpg"
+  },
+  "output": "cover:motion-jib-down",
+  "rest": {
+   "src": "/examples/motion-jib-down/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-pedestal-down.1",
+  "surface": "preset:motion-pedestal-down",
+  "rank": 1,
+  "caption": "Straight down a Procida harbour house",
+  "inputs": {
+   "image": "/examples/motion-pedestal-down/1/in-image.jpg"
+  },
+  "output": "cover:motion-pedestal-down",
+  "rest": {
+   "src": "/examples/motion-pedestal-down/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-tilt-up.1",
+  "surface": "preset:motion-tilt-up",
+  "rank": 1,
+  "caption": "From patent shoes up to the face",
+  "inputs": {
+   "image": "/examples/motion-tilt-up/1/in-image.jpg"
+  },
+  "output": "cover:motion-tilt-up"
+ },
+ {
+  "id": "motion-tilt-down.1",
+  "surface": "preset:motion-tilt-down",
+  "rank": 1,
+  "caption": "Down from a vast Atlantic sky",
+  "inputs": {
+   "image": "/examples/motion-tilt-down/1/in-image.jpg"
+  },
+  "output": "cover:motion-tilt-down",
+  "rest": {
+   "src": "/examples/motion-tilt-down/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "motion-overhead.1",
+  "surface": "preset:motion-overhead",
+  "rank": 1,
+  "caption": "Straight down on a boat among lotuses",
+  "inputs": {
+   "image": "/examples/motion-overhead/1/in-image.jpg"
+  },
+  "output": "cover:motion-overhead",
+  "rest": {
+   "src": "/examples/motion-overhead/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-buckle-up.1",
+  "surface": "preset:motion-buckle-up",
+  "rank": 1,
+  "caption": "Under a glass skywalk as she strides",
+  "inputs": {
+   "image": "/examples/motion-buckle-up/1/in-image.jpg"
+  },
+  "output": "cover:motion-buckle-up",
+  "rest": {
+   "src": "/examples/motion-buckle-up/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1875
+  }
+ },
+ {
+  "id": "motion-pan.1",
+  "surface": "preset:motion-pan",
+  "rank": 1,
+  "caption": "A sweep across a glacier lagoon",
+  "inputs": {
+   "image": "/examples/motion-pan/1/in-image.jpg"
+  },
+  "output": "cover:motion-pan",
+  "rest": {
+   "src": "/examples/motion-pan/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-pan-left.1",
+  "surface": "preset:motion-pan-left",
+  "rank": 1,
+  "caption": "A pan left across the Amboseli plain",
+  "inputs": {
+   "image": "/examples/motion-pan-left/1/in-image.jpg"
+  },
+  "output": "cover:motion-pan-left",
+  "rest": {
+   "src": "/examples/motion-pan-left/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-pan-right.1",
+  "surface": "preset:motion-pan-right",
+  "rank": 1,
+  "caption": "A pan right over the Li River",
+  "inputs": {
+   "image": "/examples/motion-pan-right/1/in-image.jpg"
+  },
+  "output": "cover:motion-pan-right",
+  "rest": {
+   "src": "/examples/motion-pan-right/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-truck-left.1",
+  "surface": "preset:motion-truck-left",
+  "rank": 1,
+  "caption": "Past granite pillars to a dancer",
+  "inputs": {
+   "image": "/examples/motion-truck-left/1/in-image.jpg"
+  },
+  "output": "cover:motion-truck-left",
+  "rest": {
+   "src": "/examples/motion-truck-left/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-double-dolly.1",
+  "surface": "preset:motion-double-dolly",
+  "rank": 1,
+  "caption": "Glides along with them, as if floating",
+  "inputs": {
+   "image": "/examples/motion-double-dolly/1/in-image.jpg"
+  },
+  "output": "cover:motion-double-dolly",
+  "rest": {
+   "src": "/examples/motion-double-dolly/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "motion-whip-pan.1",
+  "surface": "preset:motion-whip-pan",
+  "rank": 5,
+  "caption": "A whip pan down a frontier street",
+  "inputs": {
+   "image": "/examples/motion-whip-pan/1/in-image.jpg"
+  },
+  "output": "cover:motion-whip-pan",
+  "rest": {
+   "src": "/examples/motion-whip-pan/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.5625
+  }
+ },
+ {
+  "id": "motion-dutch-angle.1",
+  "surface": "preset:motion-dutch-angle",
+  "rank": 5,
+  "caption": "The submarine slowly rolls off level",
+  "inputs": {
+   "image": "/examples/motion-dutch-angle/1/in-image.jpg"
+  },
+  "output": "cover:motion-dutch-angle",
+  "rest": {
+   "src": "/examples/motion-dutch-angle/1/out-peak.jpg",
+   "at": 4.9792,
+   "from": 0.1875
+  }
+ },
+ {
+  "id": "motion-incline.1",
+  "surface": "preset:motion-incline",
+  "rank": 1,
+  "caption": "The whole beach tips into a slope",
+  "inputs": {
+   "image": "/examples/motion-incline/1/in-image.jpg"
+  },
+  "output": "cover:motion-incline",
+  "rest": {
+   "src": "/examples/motion-incline/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-handheld.1",
+  "surface": "preset:motion-handheld",
+  "rank": 5,
+  "caption": "Handheld in a sunlit pottery studio",
+  "inputs": {
+   "image": "/examples/motion-handheld/1/in-image.jpg"
+  },
+  "output": "cover:motion-handheld",
+  "rest": {
+   "src": "/examples/motion-handheld/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "motion-bts.1",
+  "surface": "preset:motion-bts",
+  "rank": 1,
+  "caption": "Behind the scenes on a rooftop shoot",
+  "inputs": {
+   "image": "/examples/motion-bts/1/in-image.jpg"
+  },
+  "output": "cover:motion-bts",
+  "rest": {
+   "src": "/examples/motion-bts/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-pov.1",
+  "surface": "preset:motion-pov",
+  "rank": 1,
+  "caption": "Through her eyes, a toast in Rome",
+  "inputs": {
+   "image": "/examples/motion-pov/1/in-image.jpg"
+  },
+  "output": "cover:motion-pov",
+  "rest": {
+   "src": "/examples/motion-pov/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-snorricam.1",
+  "surface": "preset:motion-snorricam",
+  "rank": 1,
+  "caption": "Her face locked as Paris rushes by",
+  "inputs": {
+   "image": "/examples/motion-snorricam/1/in-image.jpg"
+  },
+  "output": "cover:motion-snorricam",
+  "rest": {
+   "src": "/examples/motion-snorricam/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2292
+  }
+ },
+ {
+  "id": "motion-head-tracking.1",
+  "surface": "preset:motion-head-tracking",
+  "rank": 5,
+  "caption": "Close on her through the bazaar",
+  "inputs": {
+   "image": "/examples/motion-head-tracking/1/in-image.jpg"
+  },
+  "output": "cover:motion-head-tracking",
+  "rest": {
+   "src": "/examples/motion-head-tracking/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-object-pov.1",
+  "surface": "preset:motion-object-pov",
+  "rank": 1,
+  "caption": "From the bow of a boat in Annecy",
+  "inputs": {
+   "image": "/examples/motion-object-pov/1/in-image.jpg"
+  },
+  "output": "cover:motion-object-pov",
+  "rest": {
+   "src": "/examples/motion-object-pov/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-action-run.1",
+  "surface": "preset:motion-action-run",
+  "rank": 1,
+  "caption": "A tuxedo sprint down a ginkgo avenue",
+  "inputs": {
+   "image": "/examples/motion-action-run/1/in-image.jpg"
+  },
+  "output": "cover:motion-action-run",
+  "rest": {
+   "src": "/examples/motion-action-run/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-catwalk.1",
+  "surface": "preset:motion-catwalk",
+  "rank": 1,
+  "caption": "Down the runway",
+  "inputs": {
+   "image": "/examples/motion-catwalk/1/in-image.jpg"
+  },
+  "output": "cover:motion-catwalk",
+  "rest": {
+   "src": "/examples/motion-catwalk/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-rap-flex.1",
+  "surface": "preset:motion-rap-flex",
+  "rank": 5,
+  "caption": "A low push-in by an LA pool",
+  "inputs": {
+   "image": "/examples/motion-rap-flex/1/in-image.jpg"
+  },
+  "output": "cover:motion-rap-flex",
+  "rest": {
+   "src": "/examples/motion-rap-flex/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-downhill-pov.1",
+  "surface": "preset:motion-downhill-pov",
+  "rank": 1,
+  "caption": "A downhill bike run on a ridge",
+  "inputs": {
+   "image": "/examples/motion-downhill-pov/1/in-image.jpg"
+  },
+  "output": "cover:motion-downhill-pov",
+  "rest": {
+   "src": "/examples/motion-downhill-pov/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-wiggle.1",
+  "surface": "preset:motion-wiggle",
+  "rank": 1,
+  "caption": "Small, playful shakes as she dances",
+  "inputs": {
+   "image": "/examples/motion-wiggle/1/in-image.jpg"
+  },
+  "output": "cover:motion-wiggle",
+  "rest": {
+   "src": "/examples/motion-wiggle/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-drone-reveal.1",
+  "surface": "preset:motion-drone-reveal",
+  "rank": 1,
+  "caption": "Rises over a seaplane on the reef",
+  "inputs": {
+   "image": "/examples/motion-drone-reveal/1/in-image.jpg"
+  },
+  "output": "cover:motion-drone-reveal",
+  "rest": {
+   "src": "/examples/motion-drone-reveal/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-aerial-pullback.1",
+  "surface": "preset:motion-aerial-pullback",
+  "rank": 1,
+  "caption": "Pulls back to reveal the hedge maze",
+  "inputs": {
+   "image": "/examples/motion-aerial-pullback/1/in-image.jpg"
+  },
+  "output": "cover:motion-aerial-pullback",
+  "rest": {
+   "src": "/examples/motion-aerial-pullback/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-helicopter-shot.1",
+  "surface": "preset:motion-helicopter-shot",
+  "rank": 1,
+  "caption": "Circles high over the castle",
+  "inputs": {
+   "image": "/examples/motion-helicopter-shot/1/in-image.jpg"
+  },
+  "output": "cover:motion-helicopter-shot",
+  "rest": {
+   "src": "/examples/motion-helicopter-shot/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "motion-car-grip.1",
+  "surface": "preset:motion-car-grip",
+  "rank": 1,
+  "caption": "Locked to the side of a white coupé",
+  "inputs": {
+   "image": "/examples/motion-car-grip/1/in-image.jpg"
+  },
+  "output": "cover:motion-car-grip",
+  "rest": {
+   "src": "/examples/motion-car-grip/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-car-chasing.1",
+  "surface": "preset:motion-car-chasing",
+  "rank": 1,
+  "caption": "Chasing the car at speed",
+  "inputs": {
+   "image": "/examples/motion-car-chasing/1/in-image.jpg"
+  },
+  "output": "cover:motion-car-chasing",
+  "rest": {
+   "src": "/examples/motion-car-chasing/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-robo-arm.1",
+  "surface": "preset:motion-robo-arm",
+  "rank": 1,
+  "caption": "A robot-arm swoop around a dessert",
+  "inputs": {
+   "image": "/examples/motion-robo-arm/1/in-image.jpg"
+  },
+  "output": "cover:motion-robo-arm",
+  "rest": {
+   "src": "/examples/motion-robo-arm/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-flying.1",
+  "surface": "preset:motion-flying",
+  "rank": 1,
+  "caption": "Flying just behind a bald eagle",
+  "inputs": {
+   "image": "/examples/motion-flying/1/in-image.jpg"
+  },
+  "output": "cover:motion-flying",
+  "rest": {
+   "src": "/examples/motion-flying/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "motion-general.1",
+  "surface": "preset:motion-general",
+  "rank": 1,
+  "caption": "A slow, smooth cinematic glide",
+  "inputs": {
+   "image": "/examples/motion-general/1/in-image.jpg"
+  },
+  "output": "cover:motion-general",
+  "rest": {
+   "src": "/examples/motion-general/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0625
+  }
+ },
+ {
+  "id": "motion-static.1",
+  "surface": "preset:motion-static",
+  "rank": 1,
+  "caption": "Flamenco in a Moorish courtyard",
+  "inputs": {
+   "image": "/examples/motion-static/1/in-image.jpg"
+  },
+  "output": "cover:motion-static",
+  "rest": {
+   "src": "/examples/motion-static/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-hyperlapse.1",
+  "surface": "preset:motion-hyperlapse",
+  "rank": 1,
+  "caption": "A hyperlapse to the Louvre pyramid",
+  "inputs": {
+   "image": "/examples/motion-hyperlapse/1/in-image.jpg"
+  },
+  "output": "cover:motion-hyperlapse",
+  "rest": {
+   "src": "/examples/motion-hyperlapse/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-timelapse.1",
+  "surface": "preset:motion-timelapse",
+  "rank": 1,
+  "caption": "Clouds race over the moai",
+  "inputs": {
+   "image": "/examples/motion-timelapse/1/in-image.jpg"
+  },
+  "output": "cover:motion-timelapse",
+  "rest": {
+   "src": "/examples/motion-timelapse/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2708
+  }
+ },
+ {
+  "id": "motion-timelapse-human.1",
+  "surface": "preset:motion-timelapse-human",
+  "rank": 1,
+  "caption": "A painter at work, in timelapse",
+  "inputs": {
+   "image": "/examples/motion-timelapse-human/1/in-image.jpg"
+  },
+  "output": "cover:motion-timelapse-human",
+  "rest": {
+   "src": "/examples/motion-timelapse-human/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-timelapse-landscape.1",
+  "surface": "preset:motion-timelapse-landscape",
+  "rank": 1,
+  "caption": "Clouds stream over Yosemite Valley",
+  "inputs": {
+   "image": "/examples/motion-timelapse-landscape/1/in-image.jpg"
+  },
+  "output": "cover:motion-timelapse-landscape",
+  "rest": {
+   "src": "/examples/motion-timelapse-landscape/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 2.5625
+  }
+ },
+ {
+  "id": "motion-timelapse-glam.1",
+  "surface": "preset:motion-timelapse-glam",
+  "rank": 1,
+  "caption": "Hair and makeup, in timelapse",
+  "inputs": {
+   "image": "/examples/motion-timelapse-glam/1/in-image.jpg"
+  },
+  "output": "cover:motion-timelapse-glam"
+ },
+ {
+  "id": "motion-slow-motion.1",
+  "surface": "preset:motion-slow-motion",
+  "rank": 1,
+  "caption": "Every droplet in slow motion",
+  "inputs": {
+   "image": "/examples/motion-slow-motion/1/in-image.jpg"
+  },
+  "output": "cover:motion-slow-motion",
+  "rest": {
+   "src": "/examples/motion-slow-motion/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-low-shutter.1",
+  "surface": "preset:motion-low-shutter",
+  "rank": 1,
+  "caption": "A carousel smeared into light trails",
+  "inputs": {
+   "image": "/examples/motion-low-shutter/1/in-image.jpg"
+  },
+  "output": "cover:motion-low-shutter",
+  "rest": {
+   "src": "/examples/motion-low-shutter/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-roll-transition.1",
+  "surface": "preset:motion-roll-transition",
+  "rank": 1,
+  "caption": "The frame barrel-rolls to a new scene",
+  "inputs": {
+   "image": "/examples/motion-roll-transition/1/in-image.jpg",
+   "endImage": "/examples/motion-roll-transition/1/in-end-image.jpg"
+  },
+  "output": "cover:motion-roll-transition",
+  "rest": {
+   "src": "/examples/motion-roll-transition/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1875
+  }
+ },
+ {
+  "id": "motion-flying-cam-transition.1",
+  "surface": "preset:motion-flying-cam-transition",
+  "rank": 1,
+  "caption": "Up into the fog and down somewhere new",
+  "inputs": {
+   "image": "/examples/motion-flying-cam-transition/1/in-image.jpg"
+  },
+  "output": "cover:motion-flying-cam-transition",
+  "rest": {
+   "src": "/examples/motion-flying-cam-transition/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-baseball-kick.1",
+  "surface": "preset:motion-baseball-kick",
+  "rank": 1,
+  "caption": "A high roundhouse kick in Kyoto",
+  "inputs": {
+   "image": "/examples/motion-baseball-kick/1/in-image.jpg"
+  },
+  "output": "cover:motion-baseball-kick",
+  "rest": {
+   "src": "/examples/motion-baseball-kick/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.6042
+  }
+ },
+ {
+  "id": "motion-basketball-dunks.1",
+  "surface": "preset:motion-basketball-dunks",
+  "rank": 1,
+  "caption": "A rooftop slam dunk at blue hour",
+  "inputs": {
+   "image": "/examples/motion-basketball-dunks/1/in-image.jpg"
+  },
+  "output": "cover:motion-basketball-dunks",
+  "rest": {
+   "src": "/examples/motion-basketball-dunks/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-boxing.1",
+  "surface": "preset:motion-boxing",
+  "rank": 1,
+  "caption": "Jabs and hooks in a sunlit gym",
+  "inputs": {
+   "image": "/examples/motion-boxing/1/in-image.jpg"
+  },
+  "output": "cover:motion-boxing",
+  "rest": {
+   "src": "/examples/motion-boxing/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-face-punch.1",
+  "surface": "preset:motion-face-punch",
+  "rank": 1,
+  "caption": "A slow-motion punch lands",
+  "inputs": {
+   "image": "/examples/motion-face-punch/1/in-image.jpg"
+  },
+  "output": "cover:motion-face-punch",
+  "rest": {
+   "src": "/examples/motion-face-punch/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.2708
+  }
+ },
+ {
+  "id": "motion-kiss.1",
+  "surface": "preset:motion-kiss",
+  "rank": 5,
+  "caption": "A tender kiss on Lake Como",
+  "inputs": {
+   "image": "/examples/motion-kiss/1/in-image.jpg"
+  },
+  "output": "cover:motion-kiss",
+  "rest": {
+   "src": "/examples/motion-kiss/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-skate-cruise.1",
+  "surface": "preset:motion-skate-cruise",
+  "rank": 1,
+  "caption": "A skate cruise down a Paris avenue",
+  "inputs": {
+   "image": "/examples/motion-skate-cruise/1/in-image.jpg"
+  },
+  "output": "cover:motion-skate-cruise",
+  "rest": {
+   "src": "/examples/motion-skate-cruise/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-skateboard-glide.1",
+  "surface": "preset:motion-skateboard-glide",
+  "rank": 1,
+  "caption": "Lazy carves along a seaside esplanade",
+  "inputs": {
+   "image": "/examples/motion-skateboard-glide/1/in-image.jpg"
+  },
+  "output": "cover:motion-skateboard-glide",
+  "rest": {
+   "src": "/examples/motion-skateboard-glide/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-skateboard-ollie.1",
+  "surface": "preset:motion-skateboard-ollie",
+  "rank": 1,
+  "caption": "A clean ollie across a Lisbon square",
+  "inputs": {
+   "image": "/examples/motion-skateboard-ollie/1/in-image.jpg"
+  },
+  "output": "cover:motion-skateboard-ollie",
+  "rest": {
+   "src": "/examples/motion-skateboard-ollie/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-ski-carving.1",
+  "surface": "preset:motion-ski-carving",
+  "rank": 1,
+  "caption": "Clean carves beneath the Dolomites",
+  "inputs": {
+   "image": "/examples/motion-ski-carving/1/in-image.jpg"
+  },
+  "output": "cover:motion-ski-carving",
+  "rest": {
+   "src": "/examples/motion-ski-carving/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-ski-powder.1",
+  "surface": "preset:motion-ski-powder",
+  "rank": 1,
+  "caption": "Thigh-deep powder in Hokkaido",
+  "inputs": {
+   "image": "/examples/motion-ski-powder/1/in-image.jpg"
+  },
+  "output": "cover:motion-ski-powder",
+  "rest": {
+   "src": "/examples/motion-ski-powder/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-snowboard-carving.1",
+  "surface": "preset:motion-snowboard-carving",
+  "rank": 1,
+  "caption": "A deep carve throws a wall of snow",
+  "inputs": {
+   "image": "/examples/motion-snowboard-carving/1/in-image.jpg"
+  },
+  "output": "cover:motion-snowboard-carving",
+  "rest": {
+   "src": "/examples/motion-snowboard-carving/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-classic-static.1",
+  "surface": "preset:motion-classic-static",
+  "rank": 1,
+  "caption": "Locked off, framed like a painting",
+  "inputs": {
+   "image": "/examples/motion-classic-static/1/in-image.jpg"
+  },
+  "output": "cover:motion-classic-static",
+  "rest": {
+   "src": "/examples/motion-classic-static/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-documentary-snap.1",
+  "surface": "preset:motion-documentary-snap",
+  "rank": 1,
+  "caption": "Handheld at a Kyoto omakase counter",
+  "inputs": {
+   "image": "/examples/motion-documentary-snap/1/in-image.jpg"
+  },
+  "output": "cover:motion-documentary-snap",
+  "rest": {
+   "src": "/examples/motion-documentary-snap/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1042
+  }
+ },
+ {
+  "id": "motion-dreamy-flow.1",
+  "surface": "preset:motion-dreamy-flow",
+  "rank": 1,
+  "caption": "Floating around her in lavender",
+  "inputs": {
+   "image": "/examples/motion-dreamy-flow/1/in-image.jpg"
+  },
+  "output": "cover:motion-dreamy-flow",
+  "rest": {
+   "src": "/examples/motion-dreamy-flow/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-epic-scale.1",
+  "surface": "preset:motion-epic-scale",
+  "rank": 1,
+  "caption": "Soaring up from a lone man",
+  "inputs": {
+   "image": "/examples/motion-epic-scale/1/in-image.jpg"
+  },
+  "output": "cover:motion-epic-scale",
+  "rest": {
+   "src": "/examples/motion-epic-scale/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.1458
+  }
+ },
+ {
+  "id": "motion-impossible-camera.1",
+  "surface": "preset:motion-impossible-camera",
+  "rank": 1,
+  "caption": "Through the decanters, through the glass",
+  "inputs": {
+   "image": "/examples/motion-impossible-camera/1/in-image.jpg"
+  },
+  "output": "cover:motion-impossible-camera",
+  "rest": {
+   "src": "/examples/motion-impossible-camera/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-intimate-observer.1",
+  "surface": "preset:motion-intimate-observer",
+  "rank": 5,
+  "caption": "Behind his shoulder at a Paris window",
+  "inputs": {
+   "image": "/examples/motion-intimate-observer/1/in-image.jpg"
+  },
+  "output": "cover:motion-intimate-observer",
+  "rest": {
+   "src": "/examples/motion-intimate-observer/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.3542
+  }
+ },
+ {
+  "id": "motion-one-take.1",
+  "surface": "preset:motion-one-take",
+  "rank": 1,
+  "caption": "One unbroken Steadicam move",
+  "inputs": {
+   "image": "/examples/motion-one-take/1/in-image.jpg"
+  },
+  "output": "cover:motion-one-take",
+  "rest": {
+   "src": "/examples/motion-one-take/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "motion-silent-machine.1",
+  "surface": "preset:motion-silent-machine",
+  "rank": 1,
+  "caption": "A slow, symmetrical close-in",
+  "inputs": {
+   "image": "/examples/motion-silent-machine/1/in-image.jpg"
+  },
+  "output": "cover:motion-silent-machine",
+  "rest": {
+   "src": "/examples/motion-silent-machine/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "video.1",
+  "surface": "studio:video",
+  "rank": 1,
+  "caption": "They float up off the dune",
+  "presetId": "effect-levitation",
+  "inputs": {
+   "image": "/examples/effect-levitation/1/in-image.jpg"
+  },
+  "output": "cover:effect-levitation"
+ },
+ {
+  "id": "video.2",
+  "surface": "studio:video",
+  "rank": 2,
+  "caption": "A slow push in through the library",
+  "presetId": "motion-dolly-in",
+  "inputs": {
+   "image": "/examples/motion-dolly-in/1/in-image.jpg"
+  },
+  "output": "cover:motion-dolly-in",
+  "rest": {
+   "src": "/examples/motion-dolly-in/1/out-peak.jpg",
+   "at": 3.5625,
+   "from": 0.0208
+  }
+ },
+ {
+  "id": "video.3",
+  "surface": "studio:video",
+  "rank": 3,
+  "caption": "A wall of red sand",
+  "presetId": "effect-sand-storm",
+  "inputs": {
+   "image": "/examples/effect-sand-storm/1/in-image.jpg"
+  },
+  "output": "cover:effect-sand-storm"
+ },
+ {
+  "id": "video.4",
+  "surface": "studio:video",
+  "rank": 4,
+  "caption": "Flowers overgrow the old station",
+  "presetId": "effect-nature-bloom",
+  "inputs": {
+   "image": "/examples/effect-nature-bloom/1/in-image.jpg"
+  },
+  "output": "cover:effect-nature-bloom"
+ },
+ {
+  "id": "image.1",
+  "surface": "studio:image",
+  "rank": 1,
+  "caption": "A white gown on a Namib dune",
+  "words": "A model in a long white silk gown, barefoot on the crest of an apricot dune in the Namib desert just after sunrise, small under a clear sky",
+  "params": {
+   "aspect": "4:3"
+  },
+  "inputs": {},
+  "output": "/examples/image/1/out.jpg"
+ },
+ {
+  "id": "image.2",
+  "surface": "studio:image",
+  "rank": 2,
+  "caption": "Crimson velvet in a grand library",
+  "words": "A model in a tailored crimson velvet suit in the long aisle of a vast eighteenth-century library, white marble busts in the foreground",
+  "params": {
+   "aspect": "4:3"
+  },
+  "inputs": {},
+  "output": "/examples/image/2/out.jpg"
+ },
+ {
+  "id": "image.3",
+  "surface": "studio:image",
+  "rank": 3,
+  "caption": "Yellow silk between pink lagoons",
+  "words": "A model in a sunflower-yellow silk slip dress on a white salt path between two bright pink lagoons at Las Coloradas on a clear morning",
+  "params": {
+   "aspect": "4:3"
+  },
+  "inputs": {},
+  "output": "/examples/image/3/out.jpg"
+ },
+ {
+  "id": "image.4",
+  "surface": "studio:image",
+  "rank": 4,
+  "caption": "Gold paillettes on a Corsican cliff",
+  "words": "A model in an antique-gold paillette gown with a gold chiffon cape, her hair lifting in the wind, on a white limestone clifftop in Corsica at sunset",
+  "params": {
+   "aspect": "4:3"
+  },
+  "inputs": {},
+  "output": "/examples/image/4/out.jpg"
+ },
+ {
+  "id": "edit.1",
+  "surface": "studio:edit",
+  "rank": 1,
+  "caption": "Grey skies to golden hour",
+  "words": "Relight it with warm golden-hour sun and long soft shadows on the grass",
+  "inputs": {
+   "image": "/examples/app-relight/1/in-image.jpg"
+  },
+  "output": "ba:app-relight"
+ },
+ {
+  "id": "edit.2",
+  "surface": "studio:edit",
+  "rank": 2,
+  "caption": "The shop sign now reads BELLE",
+  "words": "Change the gold sign to read BELLE in the same serif lettering and gilding",
+  "inputs": {
+   "image": "/examples/app-text-edit/1/in-image.jpg"
+  },
+  "output": "ba:app-text-edit"
+ },
+ {
+  "id": "edit.3",
+  "surface": "studio:edit",
+  "rank": 3,
+  "caption": "The selfie-stick tourists, gone",
+  "words": "Remove the tourist with the selfie stick and the man beside him, keep the terrace and the palace",
+  "inputs": {
+   "image": "/examples/app-object-remover/1/in-image.jpg"
+  },
+  "output": "ba:app-object-remover"
+ },
+ {
+  "id": "edit.4",
+  "surface": "studio:edit",
+  "rank": 4,
+  "caption": "From a grey studio to the Himalaya",
+  "words": "Place him in the high Himalaya at golden hour, pink light on the snow peaks behind him",
+  "inputs": {
+   "image": "/examples/app-change-background/1/in-image.jpg"
+  },
+  "output": "ba:app-change-background"
+ },
+ {
+  "id": "inpaint.1",
+  "surface": "studio:inpaint",
+  "rank": 1,
+  "caption": "A painted area, filled with the palace",
+  "words": "The colourful palace wall and an open sunlit terrace",
+  "inputs": {
+   "image": "/examples/app-object-remover/1/in-image.jpg",
+   "mask": "/examples/inpaint/1/in-mask.png",
+   "sketch": "/examples/inpaint/1/in-sketch.jpg"
+  },
+  "output": "ba:app-object-remover"
+ },
+ {
+  "id": "inpaint.2",
+  "surface": "studio:inpaint",
+  "rank": 2,
+  "caption": "Paint the sign, and it reads BELLE",
+  "words": "Gold-leaf lettering that reads BELLE, in the same serif and gilding",
+  "inputs": {
+   "image": "/examples/app-text-edit/1/in-image.jpg",
+   "mask": "/examples/inpaint/2/in-mask.png",
+   "sketch": "/examples/inpaint/2/in-sketch.jpg"
+  },
+  "output": "ba:app-text-edit"
+ },
+ {
+  "id": "inpaint.3",
+  "surface": "studio:inpaint",
+  "rank": 3,
+  "caption": "Paint the wall, get the Himalaya",
+  "words": "The snow peaks of the high Himalaya at golden hour, pink light on the snow",
+  "inputs": {
+   "image": "/examples/app-change-background/1/in-image.jpg",
+   "mask": "/examples/inpaint/3/in-mask.png",
+   "sketch": "/examples/inpaint/3/in-sketch.jpg"
+  },
+  "output": "ba:app-change-background"
+ },
+ {
+  "id": "upscale.1",
+  "surface": "hub:upscale",
+  "rank": 1,
+  "caption": "Soft to sharp, down to every strand",
+  "inputs": {
+   "image": "/examples/app-upscale/1/in-image.jpg"
+  },
+  "output": "ba:app-upscale"
+ }
+]

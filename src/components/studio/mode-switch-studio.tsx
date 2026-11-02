@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import type { StudioExampleRow } from "@/lib/studio-examples";
+import { exampleRow } from "@/lib/examples/catalog";
 import {
   AUDIO_STUDIO,
   DIALOGUE_STUDIO,
@@ -85,12 +85,14 @@ const TOOLS: Partial<Record<HubKind, Record<string, () => React.ReactNode>>> = {
  * mode's hero and composer, and ships only that mode's models. The hub's title bar and tabs are its layout's
  * (HubFrame). `mode` omitted = the first mode (the hub's own URL).
  */
-export function ModeSwitchStudio({ kind, mode, examples }: { kind: HubKind; mode?: string; examples?: StudioExampleRow }) {
+export function ModeSwitchStudio({ kind, mode }: { kind: HubKind; mode?: string }) {
   const current = mode ?? HUB_MODES[kind][0].id;
   const Tool = TOOLS[kind]?.[current];
   if (Tool) return <Tool />;
   const config = CONFIGS[kind][current];
   if (!config) notFound();
+  // A composer mode's own examples ("hub:upscale", "hub:upscale/video"…), else the hub's covers that fit it.
+  const examples = exampleRow(current === HUB_MODES[kind][0].id ? `hub:${kind}` : `hub:${kind}/${current}`);
   return <StudioPage config={config} catalog={studioCatalog(config)} examples={examples} />;
 }
 

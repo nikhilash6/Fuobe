@@ -18,7 +18,7 @@ import { formatCost } from "@/lib/format";
 import { probeBlob, probeUrl } from "@/lib/media-probe";
 import { useAskBeforeUpload, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
-import type { StudioExampleRow } from "@/lib/studio-examples";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { addRuns, send, useEstimate } from "@/components/marketing/hooks";
@@ -180,9 +180,9 @@ function MentionImages({ value, onChange, onMention, max }: { value: string[]; o
 
 /**
  * Ad Multiplier: a reference ad (4–30 s) → new versions: recreated from a prompt, or with a new hook / CTA.
- * examples: "See what it makes" (studioExamples("ads"), from the page), under the empty list of versions.
+ * examples: "More to try" (exampleRow(), from the page), under the empty list of versions.
  */
-export function AdMultiplier({ models, examples }: { models: Record<string, ModelInfo>; examples?: StudioExampleRow }) {
+export function AdMultiplier({ models, examples }: { models: Record<string, ModelInfo>; examples?: ExampleRowData | null }) {
   const qc = useQueryClient();
   const { engine, setEngine } = useMarketingEngine();
   const access = useModelAccess();

@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { CinemaProject } from "@/lib/catalog/cinema";
 import { formatUsd } from "./money";
 import { timeAgo } from "@/lib/format";
-import type { StudioExampleRow } from "@/lib/studio-examples";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { useCinemaProjects, useUpdateProject } from "./hooks";
@@ -165,8 +165,8 @@ function EmptyProjects({ loading, onCreate, className }: { loading?: boolean; on
   );
 }
 
-/** examples: "See what it makes" (studioExamples("cinema"), from the page), under a guest's or an account's empty list. */
-export function CinemaProjects({ examples }: { examples?: StudioExampleRow }) {
+/** examples: "More to try" (exampleRow(), from the page), under a guest's or an account's empty list. */
+export function CinemaProjects({ examples }: { examples?: ExampleRowData | null }) {
   const { data, isLoading } = useCinemaProjects();
   const router = useRouter();
   const [creating, setCreating] = useState(false);

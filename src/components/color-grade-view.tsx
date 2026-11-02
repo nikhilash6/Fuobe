@@ -131,6 +131,23 @@ function loseContext(r: GradeRenderer | null | undefined) {
 /** Bundled still the looks are previewed on before anything is loaded. */
 const SAMPLE = "/samples/grade-sample.jpg";
 
+/**
+ * "Start from an example" on the empty stage: a photo or a clip with a look, opened with that look picked. Graded in
+ * this browser like any file, so anyone can try them.
+ */
+const GRADE_EXAMPLES: { id: string; url: string; thumb: string; kind: "image" | "video"; look: string; label: string }[] = [
+  { id: "grade.1", url: SAMPLE, thumb: SAMPLE, kind: "image", look: "portra", label: "Portra 400 at sunset" },
+  {
+    id: "grade.2",
+    url: "/previews/presets/ba/1280/app-color-grading-before.jpg",
+    thumb: "/previews/presets/ba/512/app-color-grading-before.jpg",
+    kind: "image",
+    look: "teal-orange",
+    label: "Teal & Orange",
+  },
+  { id: "grade.3", url: "/previews/presets/motion-catwalk.mp4", thumb: "/previews/presets/thumbs/motion-catwalk.jpg", kind: "video", look: "film-colors", label: "Film Colors on a runway clip" },
+];
+
 /** What is being graded: a file on the server (a library pick, ?image=, the sample), or one picked here (`file`, read from this browser). */
 type Input = { url: string; kind: "image" | "video"; file?: File };
 
@@ -449,13 +466,34 @@ function Grader() {
                 <MediaSlot label="Image" kind="image" value={null} onChange={pick} onFile={pickFile} local size="lg" />
                 <MediaSlot label="Video" kind="video" value={null} onChange={pick} onFile={pickFile} local size="lg" />
               </div>
-              <button
-                type="button"
-                onClick={() => open({ url: SAMPLE, kind: "image" })}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full bg-white/10 px-3 text-[13px] font-medium text-white transition-colors hover:bg-white/20"
-              >
-                <Sparkles className="size-3.5" /> Try it on the sample photo
-              </button>
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-[12px] font-medium text-white/70">
+                  <Sparkles className="mr-1 inline size-3.5 align-[-2px]" />
+                  Start from an example
+                </p>
+                <div className="flex max-w-[560px] flex-wrap justify-center gap-2 px-2">
+                  {GRADE_EXAMPLES.map((ex) => (
+                    <button
+                      key={ex.url}
+                      type="button"
+                      data-example={ex.id}
+                      onClick={() => {
+                        const look = PRESETS.find((p) => p.id === ex.look);
+                        open({ url: ex.url, kind: ex.kind });
+                        if (look) {
+                          setPreset(look.id);
+                          setGrade(applyPreset(look));
+                        }
+                      }}
+                      className="inline-flex h-11 items-center gap-2 rounded-full bg-white/10 py-1 pr-4 pl-1 text-[13px] font-medium text-white transition-colors hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={ex.thumb} alt="" loading="lazy" decoding="async" className="h-9 w-12 rounded-full object-cover" />
+                      {ex.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : !source ? (
             <Loader2 className="size-5 animate-spin text-white/70" />

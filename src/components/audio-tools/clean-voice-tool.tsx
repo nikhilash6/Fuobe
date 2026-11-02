@@ -14,7 +14,7 @@ import { VoiceRecorder } from "@/components/studio/voice-recorder";
 import { Segmented } from "@/components/faceless/controls";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
-import { useAskBeforeUpload, useEngine, useGenerations, useHydrated, useViewer } from "@/lib/api";
+import { GUEST_PROMPT_EVENT, useAskBeforeUpload, useEngine, useGenerations, useHydrated, useIsGuest, useViewer } from "@/lib/api";
 import type { AudioToolPreview } from "@/lib/av/audio-tools";
 import {
   BACKGROUND_LABELS,
@@ -40,6 +40,7 @@ import {
   type ReuseModel,
 } from "@/lib/av/clean-voice";
 import { clock } from "@/lib/av/audio-tools";
+import { DEMO_MEDIA } from "@/lib/av/clean-voice-demo";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { downloadHref } from "@/lib/library";
 import { cn } from "@/lib/utils";
@@ -199,6 +200,9 @@ const reportOf = (g?: Generation | null): string | undefined => g?.outputs.find(
 
 export function CleanVoiceTool({ app }: { app?: { name: string; description: string } }) {
   const [engine, setEngine, mode] = useEngine();
+  // A guest hears the demo and loads its recording; cleaning one is for an account: Clean up voice opens the free
+  // account card, and the setup words (which model, which install) stay out of a guest's way.
+  const guest = useIsGuest();
   const run = useAudioToolRun();
   const [source, setSource] = useState<Source | null>(null);
   const [model, setModel] = useState<ReuseModel>("voice");
@@ -263,6 +267,7 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
   const g = result.data;
   const busy = run.isPending || g?.status === "queued" || g?.status === "running" || onVideo.data?.status === "queued" || onVideo.data?.status === "running";
   const go = () => {
+    if (guest && source && !source.uploading) return void window.dispatchEvent(new CustomEvent(GUEST_PROMPT_EVENT, { detail: { action: "run" } }));
     if (blocker) return void toast(blocker);
     if (error) return void toast.error(error);
     run.mutate(body!, {
@@ -291,7 +296,7 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
 
   return (
     <ToolShell
-      title={app ? "Apps" : "Audio"}
+      title={app ? app.name : "Audio"}
       header={
         app ? (
           <nav aria-label="Breadcrumb" className="hidden items-center gap-1 text-[13px] text-muted-foreground sm:flex">
@@ -312,6 +317,15 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
             <CleanVoiceDemo name={app?.name ?? "Clean up voice"} ready={known} />
             {/* The tool's one line leads into the upload box under the demo. */}
             <p className="pt-8 text-[13px] text-pretty text-muted-foreground">{TOOL_SUBTITLE}</p>
+            {/* The demo's own recording, loaded as the source: its price shows, and it runs with no upload. */}
+            <Button
+              variant="outline"
+              className="h-11 rounded-full px-5"
+              onClick={() => take({ ref: DEMO_MEDIA.noisy, preview: DEMO_MEDIA.noisy, kind: "audio", id: nanoid(6), name: "Brasserie recording.m4a" })}
+            >
+              <Sparkles className="size-4" />
+              Try it on this recording
+            </Button>
           </>
         )}
         {!source ? (
@@ -327,7 +341,7 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
             }}
           />
         )}
-        {source && engine === "cloud" && (
+        {source && engine === "cloud" && !guest && (
           <Panel>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">
@@ -344,12 +358,13 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
             </div>
           </Panel>
         )}
-        {source && engine === "open" && (
+        {source && (engine === "open" || guest) && (
           <Panel title="Options">
             <div className="space-y-3">
               <Row label="Strength" hint={pickedStrength === "full" ? CLEAN_NOTES.gaps : "Leaves a little of the room under the voice, so pauses sound natural."}>
                 <Segmented label="Strength" value={pickedStrength} onChange={setStrength} options={(["full", "natural", "light"] as const).map((s) => ({ value: s, label: STRENGTH_LABELS[s] }))} />
               </Row>
+              {!guest && (
               <Row label="Model" hint={model === "laughter" ? "Keep laughter keeps laughs and breaths a little more." : laughterMissing ? "Keep laughter isn't installed on your ComfyUI (models/reuse/NemotronLabs-RE-USE-laughter.safetensors)." : undefined}>
                 <Segmented
                   label="Model"
@@ -358,6 +373,7 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
                   options={(["voice", "laughter"] as const).map((m) => ({ value: m, label: `${REUSE_LABELS[m]}${m === "laughter" && laughterMissing ? " · not installed" : ""}` }))}
                 />
               </Row>
+              )}
               <Row label="Quality" hint={QUALITY_HINTS[quality]}>
                 <Segmented label="Quality" value={quality} onChange={setQuality} options={(["auto", "full", "fast"] as const).map((q) => ({ value: q, label: QUALITY_LABELS[q] }))} />
               </Row>
@@ -380,7 +396,7 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
         )}
         {source && (
           <div className="space-y-2">
-            {!blocker && !error && p && (
+            {!guest && !blocker && !error && p && (
               <div className="space-y-1 text-[13px] text-muted-foreground" aria-live="polite">
                 <p>{p.summary}</p>
                 {p.notes.map((n) => (
@@ -392,7 +408,9 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
             )}
             <div className="flex flex-wrap items-center gap-3">
               <p className={cn("min-w-0 flex-1 text-[13px]", error && !blocker ? "text-destructive" : "text-muted-foreground")} aria-live="polite">
-                {blocker && engine !== "cloud" ? (
+                {guest && !source.uploading ? (
+                  "Free with an account: create one to clean your own recordings"
+                ) : blocker && engine !== "cloud" ? (
                   blocker
                 ) : engine === "cloud" ? (
                   mode === "cloud" ? (
@@ -412,7 +430,7 @@ export function CleanVoiceTool({ app }: { app?: { name: string; description: str
                   "Checking…"
                 )}
               </p>
-              <Button size="lg" className={cn("rounded-full", (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={busy}>
+              <Button size="lg" className={cn("rounded-full", !guest && (blocker || error) && "bg-muted text-subtle-foreground hover:bg-muted")} onClick={go} disabled={busy}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Clean up voice
               </Button>
             </div>

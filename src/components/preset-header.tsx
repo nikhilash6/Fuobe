@@ -28,6 +28,7 @@ export function PresetHeader({
   modelName,
   gpuKey,
   onClear,
+  examples,
   className,
 }: {
   preset: Preset;
@@ -40,6 +41,8 @@ export function PresetHeader({
   gpuKey?: string;
   /** Clear the preset (motions/effects picked in a general studio); omit on a preset's own page. */
   onClear?: () => void;
+  /** Its examples ("Start from an example"), shown in the card in place of its small cover. */
+  examples?: React.ReactNode;
   className?: string;
 }) {
   // Its gallery card's cover (coverPreview, from the slim map), on its clip's peak frame when it has one, as Home's
@@ -54,28 +57,24 @@ export function PresetHeader({
   const badges = useGpuBadges().data;
   const [engine] = useEngine();
   const gpu = gpuKey && engine === "open" ? (badges?.presets[gpuKey] ?? null) : null;
-  // The model its live preview was made with, said in words on the card (the composer marks it with a sparkle).
-  const made = routes.find((r) => r.made && !r.alt && r.engine === engine) ?? routes.find((r) => r.made);
   return (
-    <div className={cn("mx-auto flex w-full max-w-[760px] items-center gap-3 rounded-2xl border bg-background p-2 pr-3 text-left shadow-soft", className)}>
-      <div
-        ref={ref}
-        onPointerEnter={handlers.onPointerEnter}
-        onPointerLeave={handlers.onPointerLeave}
-        onPointerUp={onTap}
-        className="relative aspect-[4/3] w-24 shrink-0 overflow-hidden rounded-xl bg-muted sm:w-32"
-      >
-        <PresetPreview preview={card.preview} hue={card.hue} playing={playing} asked={asked} flip={previewFlip(card)} />
-      </div>
+    <div className={cn("mx-auto w-full max-w-[760px] rounded-2xl border bg-background p-2 pr-3 text-left shadow-soft", examples && "p-3", className)}>
+    <div className="flex w-full items-center gap-3">
+      {/* With examples of its own, they show what it makes: the small cover makes way. */}
+      {!examples && (
+        <div
+          ref={ref}
+          onPointerEnter={handlers.onPointerEnter}
+          onPointerLeave={handlers.onPointerLeave}
+          onPointerUp={onTap}
+          className="relative aspect-[4/3] w-24 shrink-0 overflow-hidden rounded-xl bg-muted sm:w-32"
+        >
+          <PresetPreview preview={card.preview} hue={card.hue} playing={playing} asked={asked} flip={previewFlip(card)} />
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <p className="truncate font-heading text-[19px] leading-snug">{preset.name}</p>
         <p className="line-clamp-2 text-[13px] text-muted-foreground max-sm:line-clamp-3">{presetHowTo(preset)}</p>
-        {made?.model && (
-          <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] font-medium text-brand-text">
-            <Sparkles className="size-3 shrink-0" aria-hidden />
-            <span className="truncate">Preview made with {made.model}</span>
-          </p>
-        )}
       </div>
       {gpu && <HeaderPill badge={gpu} gpu={badges?.gpu} compact onOpen={() => openGpuSetup({ ref: `preset:${gpuKey}`, name: preset.name })} />}
       <Popover>
@@ -130,6 +129,8 @@ export function PresetHeader({
           <X className="size-4" />
         </button>
       )}
+    </div>
+    {examples && <div className="mt-3">{examples}</div>}
     </div>
   );
 }

@@ -24,7 +24,7 @@ import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { formatCueTime } from "@/lib/av/cue-edit";
 import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
 import { keepOffered, offered } from "@/lib/model-access";
-import type { StudioExampleRow } from "@/lib/studio-examples";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useKatanaActions, useKatanaJobs, useKatanaPreview, type KatanaBody } from "./hooks";
@@ -63,9 +63,9 @@ const money = (usd: number | null | undefined, demo?: boolean, open?: boolean, v
 
 /**
  * Katana: rebuild a reference edit with your subject, shot for shot.
- * examples: "See what it makes" (studioExamples("katana"), from the page), where the runs go until there is one.
+ * examples: "More to try" (exampleRow(), from the page), where the runs go until there is one.
  */
-export function KatanaStudio({ examples }: { examples?: StudioExampleRow }) {
+export function KatanaStudio({ examples }: { examples?: ExampleRowData | null }) {
   const [engine] = useEngine();
   // An edit doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // uploads and Recreate are off, instead of a run the server refuses.

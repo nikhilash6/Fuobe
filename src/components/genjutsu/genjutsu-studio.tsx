@@ -64,7 +64,7 @@ import { withoutOwnGpu } from "@/lib/catalog/engines";
 import type { Generation, PixelPoint } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
-import type { StudioExampleRow } from "@/lib/studio-examples";
+import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
 import { CharacterControls, CharacterFacts, qualityOff } from "./character-panel";
@@ -108,9 +108,9 @@ const seedOf = (s: string): number | undefined => (s.trim() === "" ? undefined :
  * and your references, say what changes, see the price (or "Free" on your ComfyUI), get the result with a before /
  * after wipe. Fuobe's Originals run by default on both engines; open weights and partners are labelled alternatives.
  * Setups copy and paste as a short code. The plan: src/lib/catalog/genjutsu.ts; the server: src/server/genjutsu.ts.
- * examples: "See what it makes" (studioExamples("genjutsu"), from the page), under the clip drop until there is a run of one's own.
+ * examples: "More to try" (exampleRow(), from the page), under the clip drop until there is a run of one's own.
  */
-export function GenjutsuStudio({ examples, live }: { examples?: StudioExampleRow; live?: Partial<Record<GenjutsuFeature, boolean>> }) {
+export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData | null; live?: Partial<Record<GenjutsuFeature, boolean>> }) {
   const [engine, setEngine, engineMode] = useEngine();
   // The Openjutsu modes open one by one, each after its GPU test (src/server/genjutsu-live.ts); the owner sees them all.
   const owner = useIsOwner();

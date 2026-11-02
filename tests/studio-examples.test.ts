@@ -125,21 +125,18 @@ describe("the studios' examples", () => {
     for (const e of studioExamples("video").tiles) expect(["motion", "effect"], e.card.id).toContain(getPreset(e.card.id)!.type);
   });
 
-  it("stays on the server: the pages take only its type, and load the tiles in their own chunk", () => {
+  it("stays on the server: the pages and the rows take only the examples' types", () => {
     expect(read("lib", "studio-examples.ts")).toMatch(/^import "server-only";$/m);
+    expect(read("lib", "examples", "catalog.ts")).toMatch(/^import "server-only";$/m);
     const page = read("components", "studio", "studio-page.tsx");
-    expect(page).toMatch(/^import type \{ StudioExample, StudioExampleRow \} from "@\/lib\/studio-examples";$/m);
-    expect(page).toMatch(/dynamic\(\(\) => import\("@\/components\/home\/showcase-tile"\)/);
-    expect(page).not.toMatch(/^import [^;]*from "@\/components\/home\/showcase-tile";$/m);
+    expect(page).not.toMatch(/from "@\/lib\/(studio-examples|examples\/catalog)"/);
     const row = read("components", "studio", "example-row.tsx");
-    expect(row).toMatch(/^import type \{ StudioExampleRow \} from "@\/lib\/studio-examples";$/m);
-    expect(row).toMatch(/dynamic\(\(\) => import\("@\/components\/home\/showcase-tile"\)/);
-    expect(row).not.toMatch(/^import [^;]*from "@\/components\/home\/showcase-tile";$/m);
+    expect(row).toMatch(/^import type \{ ExampleRowData \} from "@\/lib\/examples\/types";$/m);
     for (const [s, files] of Object.entries(ROW_IN)) {
       for (const f of files) {
         const code = read(...f);
-        expect(code, f.join("/")).toMatch(/^import type \{ StudioExampleRow \} from "@\/lib\/studio-examples";$/m);
-        expect(code, f.join("/")).not.toMatch(/^import (?!type )[^;]*from "@\/lib\/studio-examples";$/m);
+        expect(code, f.join("/")).toMatch(/^import type \{ ExampleRowData \} from "@\/lib\/examples\/types";$/m);
+        expect(code, f.join("/")).not.toMatch(/from "@\/lib\/(studio-examples|examples\/catalog)"/);
         expect(code, `${s}: ${f.join("/")}`).toContain("<ExampleRow row={examples}");
       }
     }
@@ -147,9 +144,13 @@ describe("the studios' examples", () => {
 
   it("is passed on by every page that shows a row", () => {
     const pageOf = (...p: string[]) => read("app", "(studio)", ...p, "page.tsx");
-    for (const s of [...COMPOSER, ...HUBS, ...Object.keys(ROW_IN)]) expect(pageOf(s), s).toContain(`examples={studioExamples("${s}")}`);
+    const surface = (s: string) => ((COMPOSER as readonly string[]).includes(s) ? `studio:${s}` : s === "cinema" || s === "ads" ? `suite:${s}` : `tool:${s}`);
+    for (const s of [...COMPOSER, ...Object.keys(ROW_IN)]) expect(pageOf(s), s).toContain(`examples={exampleRow("${surface(s)}")}`);
+    // Every hub mode finds its own row (its examples, else its hub's covers) and hands it to its studio.
+    for (const s of HUBS) expect(pageOf(s), s).toContain(`<ModeSwitchStudio kind="${s}" />`);
+    expect(read("components", "studio", "mode-switch-studio.tsx")).toMatch(/const examples = exampleRow\(/);
     // Ad Multiplier shows Ads Studio's row; Mixed Media's reveal opens "How it works".
-    expect(pageOf("ads", "multiplier")).toContain('examples={studioExamples("ads")}');
+    expect(pageOf("ads", "multiplier")).toContain('examples={exampleRow("suite:ads")}');
     expect(pageOf("mixed-media")).toContain('how={studioExamples("mixed-media")}');
     const mixed = read("components", "mixed-media", "mixed-studio.tsx");
     expect(mixed).toMatch(/<How onStart=\{[^}]+\} cloud=\{[^}]+\} reveal=\{how\} \/>/);
@@ -158,14 +159,12 @@ describe("the studios' examples", () => {
     expect(read("components", "studio", "mode-switch-studio.tsx")).toMatch(/<StudioPage [^>]*examples=\{examples\} \/>/);
   });
 
-  it("shows only once the feed is known to be empty, and a Video tile picks its move through the composer", () => {
+  it("shows only once the feed is known to be empty, and a loaded example goes to its own studio's composer", () => {
     const page = read("components", "studio", "studio-page.tsx");
-    expect(page).toMatch(/\{feed\.isSuccess && !hasItems && !!examples\?\.tiles\.length && <StudioExamples /);
-    expect(page).toMatch(/onNavigate=\{pickHere\(e\.href\)\}/);
+    expect(page).toMatch(/\{feed\.isSuccess && !hasItems && !!examples\?\.cards\.length && <StudioExamples /);
     expect(read("components", "studio", "composer.tsx")).toMatch(/bridgeRef\.pick = pickPreset;/);
-    // A tile picked from the keyboard hands its focus to its own studio's composer, not to a hidden studio's.
-    expect(page).toMatch(/closest\("\[data-studio\]"\)\?\.querySelector<HTMLElement>\("\[data-composer\]"\)/);
-    expect(page).toMatch(/if \(keyboard\) requestAnimationFrame\(\(\) => \(composer\?\.querySelector\("textarea"\) \?\? composer\?\.querySelector\("button"\)\)\?\.focus\(\{ preventScroll: true \}\)\)/);
+    // Its own studio's composer, not a hidden studio's (one left earlier stays in the page).
+    expect(page).toMatch(/document\.querySelectorAll<HTMLElement>\("\[data-studio\] \[data-composer\]"\)\]\.find\(\(el\) => el\.offsetParent !== null\)/);
     expect(page).toMatch(/^\s+data-studio$/m);
     // The first pick loads the move's card: only the card waits for its code, so the studio (and the focus) stays.
     expect(page).toMatch(/<Suspense fallback=\{null\}>\s*<ActivePresetHeader \/>\s*<\/Suspense>/);

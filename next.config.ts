@@ -47,6 +47,10 @@ const nextConfig: NextConfig = {
       // the background.
       { source: "/previews/:path*", has: [COVER_VERSION], headers: [{ key: "Cache-Control", value: "public, max-age=31536000, s-maxage=86400, immutable" }] },
       { source: "/previews/:path*", missing: [COVER_VERSION], headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
+      // The pages' examples (public/examples): a published file is never replaced, and its display URL carries its
+      // version too. The same rules as the covers.
+      { source: "/examples/:path*", has: [COVER_VERSION], headers: [{ key: "Cache-Control", value: "public, max-age=31536000, s-maxage=86400, immutable" }] },
+      { source: "/examples/:path*", missing: [COVER_VERSION], headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }] },
     ];
   },
   async redirects() {

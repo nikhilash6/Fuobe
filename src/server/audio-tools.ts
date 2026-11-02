@@ -10,6 +10,7 @@ import { createPipeline } from "./chains";
 import { ConnectComfyError, previewChained } from "./generations";
 import { comfyDbsModels, comfyDevice, comfyReuseModels, ownGpu } from "./providers/comfyui";
 import { engineMode } from "./settings";
+import { isExampleRef } from "./example-files";
 import { storedMedia } from "./storage";
 import { tenant, tenantAccount } from "./tenant";
 
@@ -22,7 +23,11 @@ import { tenant, tenantAccount } from "./tenant";
  * on either engine.
  */
 
-const FileUrl = z.string().startsWith("/api/files/").max(500);
+/** A stored file, or one of Fuobe's published example inputs (a page's example, loaded as the source: example-files.ts). */
+const FileUrl = z
+  .string()
+  .max(500)
+  .refine((v) => v.startsWith("/api/files/") || isExampleRef(v), { message: "Invalid input: expected a stored file" });
 const Engine = z.enum(["cloud", "open"]);
 const Curve = z.enum(["equal-power", "linear"]).optional();
 const Crossfade = z.number().min(0).max(CROSSFADE_MAX).optional();

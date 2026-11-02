@@ -1,56 +1,13 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { Suspense, useId } from "react";
-import type { StudioExampleRow } from "@/lib/studio-examples";
-import { cn } from "@/lib/utils";
-
-/** The covers are their own chunk, as in the studios (studio-page.tsx): only a page that shows the row loads them. */
-const ShowcaseTile = dynamic(() => import("@/components/home/showcase-tile").then((m) => m.ShowcaseTile));
+import { ExampleRow as Row } from "@/components/examples/example-cards";
+import type { ExampleRowData } from "@/lib/examples/types";
 
 /**
- * The row's tiles while their chunk loads (a page reached by a tap, whose covers weren't loaded yet): the same grid of
- * empty covers, so the rest of the page draws at once instead of waiting for the row, and nothing moves when it lands.
+ * A tool's or a project list's examples (Layers, Genjutsu, Katana, Cinema, Ads Studio…), from the page's exampleRow()
+ * (src/lib/examples/catalog.ts): until the tool has examples of its own, "More to try", covers that each open their own
+ * page; an example of the tool's own opens a sheet with what went in and what came out.
  */
-export function ExampleTilesSuspense({ count, children }: { count: number; children: React.ReactNode }) {
-  return (
-    <Suspense
-      fallback={
-        <div aria-hidden className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {Array.from({ length: count }, (_, i) => (
-            <div key={i} className={cn("aspect-[4/3] rounded-xl bg-muted", i >= 4 && "max-sm:hidden md:max-lg:hidden")} />
-          ))}
-        </div>
-      }
-    >
-      {children}
-    </Suspense>
-  );
-}
-
-/** A tile's width: half a phone, else a quarter of the row (1000 px at most). */
-const SIZES = "(min-width: 640px) 240px, 50vw";
-
-/**
- * "See what it makes" on a tool or a project list (Layers, Genjutsu, Katana, Cinema, Ads Studio…), from the page's
- * studioExamples() (src/lib/studio-examples.ts): real covers, each opening its app, or its motion or effect in the
- * Video studio. The studios' own row (studio-page.tsx) is the same, and picks a move in place.
- */
-export function ExampleRow({ row, className }: { row: StudioExampleRow; className?: string }) {
-  const heading = useId();
-  if (!row.tiles.length) return null;
-  return (
-    <section aria-labelledby={heading} className={cn("mx-auto w-full max-w-[1000px]", className)}>
-      <h2 id={heading} className="mb-2 text-center text-[12.5px] font-medium text-muted-foreground">
-        {row.heading}
-      </h2>
-      <ExampleTilesSuspense count={row.tiles.length}>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {row.tiles.map((e, i) => (
-            <ShowcaseTile key={e.card.id} card={e.card} kind={e.kind} caption={e.caption} href={e.href} index={i} sizes={SIZES} small />
-          ))}
-        </div>
-      </ExampleTilesSuspense>
-    </section>
-  );
+export function ExampleRow({ row, className }: { row: ExampleRowData; className?: string }) {
+  return <Row row={row} className={className} />;
 }
