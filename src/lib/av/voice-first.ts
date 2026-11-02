@@ -197,11 +197,20 @@ export function planVoiceFirst(i: VoiceFirstInput): VoiceFirstPlan {
 // ---------------------------------------------------------------------------
 // What the switch says: the time it adds on the open engine, the price in the cloud
 
-/** The price the clean voice adds in the cloud (USD; ElevenLabs Voice Isolation per minute of speech), 0 on the open engine. */
-export function voiceFirstCost(engine: Engine, seconds: number | undefined, getModel: (id: string) => ModelDef | undefined): number {
+/**
+ * ElevenLabs Voice Isolation on fal: $0.10 a minute (the catalog's price, which a test keeps this equal to). Pages that
+ * don't load the catalog (Captions, Genjutsu) price the step with it.
+ */
+export const ISOLATION_USD_PER_MINUTE = 0.1;
+
+/**
+ * The price the clean voice adds in the cloud (USD; ElevenLabs Voice Isolation per minute of speech, a minute when the
+ * length isn't known), 0 on the open engine. With the catalog, its price; without, ISOLATION_USD_PER_MINUTE.
+ */
+export function voiceFirstCost(engine: Engine, seconds: number | undefined, getModel?: (id: string) => ModelDef | undefined): number {
   if (engine === "open") return 0;
-  const m = getModel(VOICE_FIRST_MODELS.cloud);
-  if (!m) return 0;
+  const m = getModel?.(VOICE_FIRST_MODELS.cloud);
+  if (!m) return Math.round(ISOLATION_USD_PER_MINUTE * ((seconds && seconds > 0 ? seconds : 60) / 60) * 10000) / 10000;
   return estimateCost(m, seconds && seconds > 0 ? { sourceDuration: seconds } : {}, 1, "separate-audio") ?? 0;
 }
 
@@ -217,7 +226,7 @@ export function voiceFirstTime(o: { seconds: number; device?: string | null; bed
 }
 
 /** The switch's time or price line: "Free · adds about 1–2 min", "+$0.05", "+$0.10 a minute". */
-export function voiceFirstLine(o: { engine: Engine; seconds?: number; device?: string | null; bed?: boolean; getModel: (id: string) => ModelDef | undefined }): string {
+export function voiceFirstLine(o: { engine: Engine; seconds?: number; device?: string | null; bed?: boolean; getModel?: (id: string) => ModelDef | undefined }): string {
   if (o.engine === "open") {
     if (!o.seconds || o.seconds <= 0) return "Free · adds a little time";
     const t = voiceFirstTime({ seconds: o.seconds, device: o.device, bed: o.bed });

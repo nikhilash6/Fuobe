@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   BED_DB,
   BED_NOTES,
+  ISOLATION_USD_PER_MINUTE,
   planVoiceFirst,
   putsBedBack,
   VOICE_FIRST_MODELS,
@@ -152,6 +153,10 @@ describe("what the switch says", () => {
     expect(voiceFirstCost("open", 120, getModel)).toBe(0);
     expect(voiceFirstLine({ engine: "cloud", seconds: 30, getModel })).toBe("+$0.05");
     expect(voiceFirstLine({ engine: "cloud", getModel })).toBe("+$0.10 a minute");
+    // Pages without the catalog price it at the list price, which is the catalog's.
+    expect(ISOLATION_USD_PER_MINUTE).toBe(getModel("elevenlabs-voice-isolation")?.pricing?.usd);
+    expect(voiceFirstCost("cloud", 30)).toBe(voiceFirstCost("cloud", 30, getModel));
+    expect(voiceFirstLine({ engine: "cloud", seconds: 90 })).toBe("+$0.15");
   });
 
   it("times the open step as one Fast mono split (two and the mux with the put-back)", () => {
