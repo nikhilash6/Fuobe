@@ -41,6 +41,7 @@ import {
   type ManifestOutput,
   type ManifestWorkflow,
 } from "@/lib/comfy";
+import { HI3D_PARAM, strictHi3dResolution } from "@/lib/av/hi3d";
 import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
@@ -1238,6 +1239,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     video3: clips[2],
     video4: clips[3],
     audio: input.audio,
+    // A 3D model to work on (Hi3D's refine reads the coarse GLB from ComfyUI's input folder, where it was uploaded).
+    model3d: input.model3d,
     seed: input.seed !== undefined && input.seed >= 0 ? input.seed : randomSeed(),
   };
   // A multi-view 3D model: each photo goes to its side.
@@ -1698,6 +1701,13 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   if (b.sigmas && LIGHTNING_GRAPHS.has(manifest.id) && extra.sigmas === undefined) {
     const canvas = lightningCanvas(manifest.capability, values, ctx.media?.(String(values.image ?? "")));
     if (canvas) values.sigmas = lightningSigmas(canvas.width, canvas.height);
+  }
+  // Hi3D's refine: the mesh to refine is needed, and the resolution is one the model takes (512, 1024, 1536).
+  if (b.model3d && !values.model3d) throw new ProviderError("Add the 3D model to refine");
+  if (b.meshResolution && extra[HI3D_PARAM] !== undefined) {
+    const r = strictHi3dResolution(extra[HI3D_PARAM]);
+    if (r === null) throw new ProviderError("Hi3D refines at 512, 1024 or 1536");
+    extra[HI3D_PARAM] = r;
   }
   // H3 Person Removal's window review (H3 Relay's Review Windows): "Redo from here" sends the same graph again with
   // window controls that lock the windows before it to their checkpoints. The Relay keeps those only while the graph,

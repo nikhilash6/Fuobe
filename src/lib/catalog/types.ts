@@ -79,6 +79,7 @@ export type Operation =
   | "splat" // image → a Gaussian splat of the subject (meta.format "ply" | "spz")
   | "text-to-3d" // prompt → 3D model
   | "rig-3d" // 3D model (+ params.animation) → rigged / animated model
+  | "refine-3d" // 3D model + the photo it was made from (+ params.extra.meshResolution) → the same model with finer geometry (Hi3D)
   | "extract-frames" // video → an image every params.frameInterval frames (meta.index)
   | "images-to-video" // images in order → a video at params.fps
   | "overlay" // image + a second image (logo) → composited (params.position, params.scale)
@@ -163,6 +164,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   splat: "Gaussian splat",
   "text-to-3d": "Text to 3D",
   "rig-3d": "Rig 3D model",
+  "refine-3d": "Refine 3D model",
   "extract-frames": "Extract frames",
   "images-to-video": "Images to video",
   overlay: "Overlay image",
@@ -242,6 +244,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   splat: "model3d",
   "text-to-3d": "model3d",
   "rig-3d": "model3d",
+  "refine-3d": "model3d",
   "extract-frames": "image",
   "images-to-video": "video",
   overlay: "image",
@@ -1141,7 +1144,7 @@ export interface GenerationRequest {
     videos?: string[];
     /** Reference audio clips (reference-to-video: voices, music or sound the clip should follow). */
     audios?: string[];
-    /** A 3D model file (.glb) to work on (rig-3d). */
+    /** A 3D model file (.glb) to work on (rig-3d, refine-3d). */
     model3d?: string;
   };
   params?: GenParams;

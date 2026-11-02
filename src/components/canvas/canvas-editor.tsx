@@ -44,6 +44,7 @@ import { Viewer } from "@/components/studio/viewer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useElements, useEngine, useStatus, type EngineMode } from "@/lib/api";
 import { getModel } from "@/lib/catalog";
+import { stemLabel, type StemId } from "@/lib/av/split";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import {
   BOARD_LIMITS,
@@ -77,6 +78,8 @@ import {
   nodeLabel,
   OPEN_DUB_HINT,
   OUT,
+  outputPorts,
+  stemOutput,
   outputType,
   paletteItems,
   planCanvas,
@@ -598,9 +601,9 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
         const g = toGraph([...latest.current.nodes, node], latest.current.edges);
         const c: Connection =
           connect.from === "source"
-            ? { source: connect.nodeId, sourceHandle: OUT, target: node.id, targetHandle: item.type === "output" ? PREVIEW_IN : (inputPorts(toGraph([node], []).nodes[0]).find((p) => acceptsType(p, connect.type))?.id ?? null) }
+            ? { source: connect.nodeId, sourceHandle: connect.handleId ?? OUT, target: node.id, targetHandle: item.type === "output" ? PREVIEW_IN : (inputPorts(toGraph([node], []).nodes[0]).find((p) => acceptsType(p, connect.type))?.id ?? null) }
             : { source: node.id, sourceHandle: OUT, target: connect.nodeId, targetHandle: connect.handleId };
-        if (c.targetHandle && !connectionError(g, c)) {
+        if (c.targetHandle && !connectionError(g, c, mode)) {
           setEdges((es) => [...(singleInput(g, c.target, c.targetHandle) ? es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle)) : es), { id: newId("e"), ...c }]);
         }
       }
@@ -652,17 +655,17 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     },
     [touch],
   );
-  const isValidConnection = useCallback((c: Connection | Edge) => !connectionError(toGraph(latest.current.nodes, latest.current.edges), c), []);
+  const isValidConnection = useCallback((c: Connection | Edge) => !connectionError(toGraph(latest.current.nodes, latest.current.edges), c, mode), [mode]);
   const onConnect = useCallback(
     (c: Connection) => {
       const g = toGraph(latest.current.nodes, latest.current.edges);
-      const err = connectionError(g, c);
+      const err = connectionError(g, c, mode);
       if (err) return void toast.error(err);
       // A single input (start frame, video, audio…) takes the new edge instead of the old one.
       setEdges((es) => [...(singleInput(g, c.target, c.targetHandle) ? es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle)) : es), { id: newId("e"), ...c }]);
       touch();
     },
-    [touch],
+    [touch, mode],
   );
   const disconnect = useCallback(
     (edgeId: string) => {
@@ -692,11 +695,12 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
       const from = g.nodes.find((n) => n.id === state.fromNode!.id);
       if (!from) return;
       const fromSource = state.fromHandle?.type === "source";
-      const type = fromSource ? outputType(g, from) : inputPorts(from).find((p) => p.id === state.fromHandle?.id)?.type;
+      // A Split soundtrack stem (or any node's OUT): the type of the handle the drag started from.
+      const type = fromSource ? outputPorts(g, from, mode).find((p) => p.id === (state.fromHandle?.id ?? OUT) && !p.disabled)?.type : inputPorts(from).find((p) => p.id === state.fromHandle?.id)?.type;
       if (!type) return;
       openMenuAt(pt.clientX, pt.clientY, { nodeId: from.id, handleId: state.fromHandle?.id ?? null, from: fromSource ? "source" : "target", type });
     },
-    [openMenuAt],
+    [openMenuAt, mode],
   );
 
   const palette = useMemo(() => paletteItems(mode, engine), [mode, engine]);
@@ -793,9 +797,12 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
     touch();
     toast(moved ? `Added as an input, connected where “${nodeLabel(toGraph([src], []).nodes[0])}” was` : "Added as an input — connect it anywhere");
   };
-  const toInput = (nodeId: string) => {
-    const out = results.get(nodeId)?.outputs.find((x) => KIND_INPUT[x.o.kind]);
-    if (out) addInput(nodeId, { url: out.o.url, kind: out.o.kind });
+  /** `stem`: one of a Split soundtrack's stems, named on the new input ("Music from Split soundtrack"). */
+  const toInput = (nodeId: string, stem?: StemId) => {
+    const outputs = results.get(nodeId)?.outputs ?? [];
+    const o = stem ? stemOutput(outputs.map((x) => x.o), stem) : outputs.find((x) => KIND_INPUT[x.o.kind])?.o;
+    const src = latest.current.nodes.find((n) => n.id === nodeId);
+    if (o && src) addInput(nodeId, { url: o.url, kind: o.kind, ...(stem && { label: `${stemLabel(stem)} from ${nodeLabel(toGraph([src], []).nodes[0])}` }) });
   };
 
   /** One clip of a Video concatenator: merged into what the node holds now (several clips report their lengths at once). */

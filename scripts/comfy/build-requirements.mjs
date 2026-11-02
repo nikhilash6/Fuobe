@@ -25,6 +25,12 @@ export const LIBRARY = path.join(REPO, 'workflows', 'comfyui');
 
 /** ComfyUI's folder_paths.supported_pt_extensions: the files a folder listing shows. */
 export const PT_EXTENSIONS = ['.ckpt', '.pt', '.pt2', '.bin', '.pth', '.safetensors', '.pkl', '.sft'];
+/**
+ * Model folders a pack reads straight from disk without registering them with ComfyUI, so GET /models never lists them
+ * and a folder listing can't tell whether their files are there: their files are 'unobservable' rather than missing.
+ * Hi3D: Comfyui-Hi3d-T8 reads folder_paths.models_dir/Hi3D (a 'hi3d' folder only exists when extra_model_paths.yaml adds one).
+ */
+export const UNLISTED_FOLDERS = new Set(['Hi3D']);
 
 /** Core classes of the newest families, read one by one when /object_info can't be: an older ComfyUI lacks them first. */
 const NEWEST_CORE = /^(SeedVR2|Trellis2|SAM3|LTXV|LTXAV|ComfyMathExpression|TextEncodeQwenImage21|QwenImage21Cache|Ideogram4|TextEncodeFibo2|DualModelGuider|CFGOverride)/;
@@ -140,7 +146,7 @@ export function buildIndex({ manifest, graphs, subset, packs, pins, packClasses 
       }
     }
     const ext = path.extname(r.file).toLowerCase();
-    const presence = loaders.size ? 'loader' : PT_EXTENSIONS.includes(ext) ? 'list' : 'unobservable';
+    const presence = loaders.size ? 'loader' : PT_EXTENSIONS.includes(ext) && !UNLISTED_FOLDERS.has(r.folder) ? 'list' : 'unobservable';
     files[key] = {
       folder: r.folder,
       file: r.file,
