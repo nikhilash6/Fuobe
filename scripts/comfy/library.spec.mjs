@@ -1189,7 +1189,7 @@ export const SPEC = [
     autoDownloads: ['AILab_FeyNoBg downloads config.json, FeyNobg.safetensors (1.05 GB) and preprocessor_config.json from 1038lab/FeyNobg into models/RMBG/FeyNoBg/ on first run'],
     notes:
       'AILab_FeyNoBg (ComfyUI-RMBG 3.3.0): a 263M Swin-L matting model for hair, fur, glass and lace, no trimap; refine_foreground on (sub-pixel edge refinement), background Alpha -> RGBA PNG. ' +
-      'Needs the nobg Python package (the pack\'s requirements.txt: nobg>=0.3.1). Not validated here: the server has ComfyUI-RMBG 3.2.0, so the class is checked against the pack\'s source (object_info.subset.json).',
+      'Needs the nobg Python package (the pack\'s requirements.txt: nobg>=0.3.1). The class is recorded from ComfyUI-RMBG\'s source at the pinned commit.',
   },
   {
     id: 'face-swap-reactor',
@@ -2452,13 +2452,13 @@ export const SPEC = [
     vramGb: 6,
     license: 'Bria VRMBG-3.0 licence: NON-COMMERCIAL (the card: non-commercial use only, commercial use needs an agreement with Bria AI; gated, Bria approves access by hand); ComfyUI-RMBG code GPL-3.0',
     notes:
-      'AILab_VRMBG (ComfyUI-RMBG 3.3.0, 2026-10-20): Bria\'s VRMBG 3.0, the model behind fal\'s bria/video/background-removal/v3, so the open matte is the cloud\'s model when the owner has access. ' +
-      'Each frame is inferred at 1024x1024 paired with the previous frame\'s RGB times its alpha (reset_state true: the clip starts clean), and the alpha is scaled back to the frame. ' +
+      'AILab_VRMBG (ComfyUI-RMBG 3.3.0, 2026-10-20): Bria\'s VRMBG 3.0, the model behind fal\'s bria/video/background-removal/v3, so the open matte is the cloud\'s model once Bria grants access. ' +
+      'Each frame is read at 1024x1024 paired with the previous frame\'s RGB times its alpha (reset_state true: the clip starts clean), and the alpha is scaled back to the frame. ' +
       'Output 0 is the straight RGBA cut-out -> VHS_VideoCombine (video/webm yuva420p, crf 20, the source\'s fps and sound; params.format prores_4444 switches it to video/ProRes profile 4444, ' +
       'yuva444p10le with alpha): role cutout; output 2 (the matte as an image) -> CreateVideo -> SaveVideo: role matte; node 7 writes the RGBA as half-float OpenEXR frames (input sRGB -> scene-linear): role frames, ' +
       'kept only for params.format exr (zipped onto the cut-out). params.matteOutput keeps one of cutout / matte (the provider drops the other save node). The whole clip is decoded at once (GetVideoComponents): RAM grows with the length. ' +
       'The weights are gated: request access at huggingface.co/briaai/VRMBG-3.0, then put config.json, model.safetensors, model.py and vrmbg3_config.py (revision 59716e19) in models/RMBG/VRMBG-3.0/. ' +
-      'model.py is Bria\'s own model code, loaded by the node. Not validated here: the server has ComfyUI-RMBG 3.2.0, so the class is checked against the pack\'s source (object_info.subset.json).',
+      'model.py is Bria\'s own model code, loaded by the node. The class is recorded from ComfyUI-RMBG\'s source at the pinned commit.',
   },
   {
     id: 'video-key-corridorkey',
@@ -2477,13 +2477,12 @@ export const SPEC = [
     outputs: [
       { node: '7', kind: 'video', role: 'cutout' },
       { node: '9', kind: 'video', role: 'matte' },
-      { node: '10', kind: 'video', role: 'foreground' },
       { node: '11', kind: 'image', role: 'frames' },
     ],
     defaults: { framesPerBatch: 32, screenColor: 'green', despill: 1, format: 'video/webm', profile: '4444' },
     limits: { maxWidth: 3840, maxHeight: 2160 },
     vramGb: 6,
-    license: 'CorridorKey v1.0 weights: Corridor Key Licence 1.0 (CC BY-NC-SA 4.0 with added terms: free for any lawful use including commercial projects, and what you make is yours; it may NOT be offered as a paid API or inference service, nor repackaged or sold; a commercial software package needs a written agreement with Corridor Digital); the Hugging Face repo tags cc-by-nc-sa-4.0. The wrapper has no LICENSE file.',
+    license: 'CorridorKey v1.0 weights: Corridor Key Licence 1.0 (CC BY-NC-SA 4.0 with added terms: free for any lawful use including commercial projects, and what you make is yours; it may NOT be offered as a paid API or inference service, nor repackaged or sold; a commercial software package needs a written agreement with Corridor Digital); its Hugging Face repo is tagged CC BY-NC-SA 4.0, the licence the added terms build on. The wrapper has no LICENSE file.',
     autoDownloads: [
       'LoadCorridorKeyModel downloads CorridorKey_v1.0.pth (0.40 GB, nikopueringer/CorridorKey_v1.0) into models/corridorkey/ as CorridorKey.pth on first run',
       'LoadCorridorKeyModel pip-installs Corridor\'s v1 engine (corridorkey @ git+https://github.com/nikopueringer/CorridorKey.git) the first time it loads, when it is missing',
@@ -2493,10 +2492,11 @@ export const SPEC = [
       'ChromaKeyPrepass makes a coarse alpha hint from the screen colour (screenColor green | blue; threshold 0.3, softness 0.1, erode 2, blur 5), then CorridorKeyGreenscreen (despill 1.0, refiner on, ' +
       'auto-despeckle 400 px, input sRGB) gives the alpha, the despilled sRGB foreground and the straight RGBA. ' +
       'Roles: node 7 cutout (the RGBA as a transparent WebM, VP9 yuva420p, with the clip\'s sound; params.format prores_4444 switches it to video/ProRes profile 4444, which VHS writes as yuva444p10le with alpha), ' +
-      'node 9 matte (the alpha as an H.264 MP4), node 10 foreground (the despilled foreground as H.264 with sound), node 11 frames (the RGBA as half-float OpenEXR, input sRGB -> scene-linear, one file a frame). ' +
-      'params.matteOutput keeps one of cutout / matte / foreground; node 11 stays only for params.format exr, with the cut-out as its preview, and Fuobe zips the frames onto it. ' +
+      'node 9 matte (the alpha as an H.264 MP4), node 11 frames (the RGBA as half-float OpenEXR, input sRGB -> scene-linear, one file a frame). ' +
+      'params.matteOutput keeps cutout or matte; "foreground" keeps node 7 fed from the keyer\'s despilled foreground (output 1) as H.264 with sound instead. ' +
+      'Node 11 stays only for params.format exr, with the cut-out as its preview, and Fuobe zips the frames onto it. ' +
       'CorridorKey 2.0 (nikopueringer/CorridorKey2.0, corridorkey_v2.safetensors 2.66 GB, cf44a8db) runs only in Corridor\'s own engine: no ComfyUI wrapper loads it yet (checked 2026-11-02), so this graph runs v1.0 and 2.0 waits for a wrapper. ' +
-      'NVIDIA RTX 30-series or newer; Corridor gives 4 GB up to 1440p and 6 GB for 4K for 2.0. Not validated here: the server lacks the wrapper, so its classes are checked against its source (object_info.subset.json).',
+      'NVIDIA RTX 30-series or newer; Corridor gives 4 GB up to 1440p and 6 GB for 4K for 2.0. The wrapper\'s classes are recorded from its source at the pinned commit.',
   },
   {
     id: 'video-depth-da3',

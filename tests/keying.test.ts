@@ -39,7 +39,7 @@ const { licenceTerms } = await import("@/lib/licences");
 const { keyFormatValues } = await import("@/lib/av/keying");
 
 const GRAPHS = {
-  "video-key-corridorkey": { capability: "bg-remove-video", packs: ["ComfyUI-CorridorKeyWrapper", "ComfyUI-VideoHelperSuite"], roles: ["cutout", "matte", "foreground", "frames"] },
+  "video-key-corridorkey": { capability: "bg-remove-video", packs: ["ComfyUI-CorridorKeyWrapper", "ComfyUI-VideoHelperSuite"], roles: ["cutout", "matte", "frames"] },
   "video-matte-vrmbg3": { capability: "bg-remove-video", packs: ["ComfyUI-RMBG", "ComfyUI-VideoHelperSuite"], roles: ["cutout", "matte", "frames"] },
   "image-matte-feynobg": { capability: "bg-remove", packs: ["ComfyUI-RMBG"], roles: [] },
 } as const;
@@ -112,7 +112,7 @@ describe("the green-screen key on your GPU", () => {
   it("runs in passes: the loader and every encoder share one meta batch", async () => {
     const g = graph("video-key-corridorkey");
     const batched = Object.entries(g).filter(([, n]) => n.inputs.meta_batch).map(([id]) => id);
-    expect(batched.sort()).toEqual(["1", "10", "7", "9"]);
+    expect(batched.sort()).toEqual(["1", "7", "9"]);
     const prepared = await prepareWorkflow("video-key-corridorkey", { video: "/clip.mp4", matteOutput: "cutout" } as GenInput, ctx("bg-remove-video"));
     expect(prepared.meta.metaBatch).toBe(true);
     expect(prepared.workflow["2"].inputs.frames_per_batch).toBe(32);
@@ -120,16 +120,19 @@ describe("the green-screen key on your GPU", () => {
 
   it("keeps the output asked for, and writes the cut-out as WebM, ProRes 4444 with alpha or EXR frames", async () => {
     const webm = await prepare("video-key-corridorkey", { matteOutput: "cutout" });
-    expect(Object.keys(webm).filter((k) => ["7", "9", "10", "11"].includes(k))).toEqual(["7"]);
+    expect(Object.keys(webm).filter((k) => ["7", "9", "11"].includes(k))).toEqual(["7"]);
     expect(webm["7"].inputs).toMatchObject({ format: "video/webm", pix_fmt: "yuva420p" });
     const prores = await prepare("video-key-corridorkey", { matteOutput: "cutout", format: "prores_4444" });
     expect(prores["7"].inputs).toMatchObject({ format: "video/ProRes", profile: "4444" });
     expect(prores["11"]).toBeUndefined();
     const exr = await prepare("video-key-corridorkey", { matteOutput: "cutout", format: "exr" });
-    expect(Object.keys(exr).filter((k) => ["7", "9", "10", "11"].includes(k)).sort()).toEqual(["11", "7"]);
+    expect(Object.keys(exr).filter((k) => ["7", "9", "11"].includes(k)).sort()).toEqual(["11", "7"]);
     expect(exr["11"].inputs).toMatchObject({ format: "exr", "format.bit_depth": "16-bit float", "format.input_color_space": "sRGB" });
+    // The clean foreground leaves through the cut-out's encoder: the keyer's despilled colours as H.264 with the sound.
     const fg = await prepare("video-key-corridorkey", { matteOutput: "foreground", extra: { despill: 2, screenColor: "blue" } });
-    expect(Object.keys(fg).filter((k) => ["7", "9", "10", "11"].includes(k))).toEqual(["10"]);
+    expect(Object.keys(fg).filter((k) => ["7", "9", "11"].includes(k))).toEqual(["7"]);
+    expect(fg["7"].inputs).toMatchObject({ images: ["6", 1], format: "video/h264-mp4", pix_fmt: "yuv420p", audio: ["1", 2] });
+    await expect(prepare("video-matte-vrmbg3", { matteOutput: "foreground" })).rejects.toThrow(/doesn't make a clean foreground/);
     expect(fg["6"].inputs.despill_strength).toBe(2);
     expect(fg["5"].inputs.screen_color).toBe("blue");
     // ProRes and EXR carry the cut-out with its alpha, not the mask.

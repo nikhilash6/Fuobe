@@ -166,39 +166,6 @@
       "title": "Alpha mask MP4"
     }
   },
-  "10": {
-    "class_type": "VHS_VideoCombine",
-    "inputs": {
-      "images": [
-        "6",
-        1
-      ],
-      "audio": [
-        "1",
-        2
-      ],
-      "frame_rate": [
-        "3",
-        5
-      ],
-      "loop_count": 0,
-      "filename_prefix": "fuobe/video-key-corridorkey",
-      "format": "video/h264-mp4",
-      "pix_fmt": "yuv420p",
-      "crf": 19,
-      "save_metadata": true,
-      "trim_to_audio": false,
-      "pingpong": false,
-      "save_output": true,
-      "meta_batch": [
-        "2",
-        0
-      ]
-    },
-    "_meta": {
-      "title": "Clean foreground MP4 (green spill removed)"
-    }
-  },
   "11": {
     "class_type": "SaveImageAdvanced",
     "inputs": {

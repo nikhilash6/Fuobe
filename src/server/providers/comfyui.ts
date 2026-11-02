@@ -1604,7 +1604,9 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     loras = [];
   }
   // Matte graphs save a cut-out and a black-and-white matte: params.matteOutput keeps one.
-  const keepRole: string | undefined = ctx.op === "bg-remove-video" ? input.matteOutput : undefined;
+  // The green-screen key's clean foreground leaves through the cut-out's encoder (below), so the cut-out's node is kept.
+  const keyForeground = ctx.op === "bg-remove-video" && input.matteOutput === "foreground";
+  const keepRole: string | undefined = ctx.op === "bg-remove-video" ? (keyForeground ? "cutout" : input.matteOutput) : undefined;
   // The green-screen key (video-key-corridorkey) writes its cut-out as a transparent WebM, ProRes 4444 with alpha, or EXR
   // frames beside the WebM (params.format; src/lib/av/keying.ts).
   const keyExr = ctx.op === "bg-remove-video" && !!b.format && input.format === "exr";
@@ -1836,6 +1838,13 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   }
   // The output not asked for isn't saved (nor encoded: ComfyUI runs only what an output node needs).
   if (keepRole && manifest.outputs.some((o) => o.role === keepRole)) for (const o of manifest.outputs) if (o.role && o.role !== keepRole && !(keyExr && o.role === "frames")) delete wf[o.node];
+  // The clean foreground (CorridorKey's despilled colours, output 1): the cut-out's encoder takes it as a plain H.264 with sound.
+  if (keyForeground) {
+    const keyer = Object.entries(wf).find(([, n]) => n.class_type === "CorridorKeyGreenscreen")?.[0];
+    const cut = manifest.outputs.find((o) => o.role === "cutout")?.node;
+    if (!keyer || !cut || !wf[cut]) throw new ProviderError(`${manifest.title} doesn't make a clean foreground — CorridorKey in Green screen does`, 400);
+    wf[cut] = { ...wf[cut], inputs: { ...wf[cut].inputs, images: [keyer, 1], format: "video/h264-mp4", pix_fmt: "yuv420p", crf: 19 } };
+  }
   // A key's EXR frames are written only when asked for (they ride on the cut-out, zipped).
   if (ctx.op === "bg-remove-video" && !keyExr) for (const o of manifest.outputs) if (o.role === "frames") delete wf[o.node];
   if (ctx.op === "remove-object" && !handOff) for (const o of manifest.outputs) if (o.role === "mask") delete wf[o.node];
