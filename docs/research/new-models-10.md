@@ -100,7 +100,7 @@ Columns: licence as written by the publisher; VRAM as published (guesses are mar
 
 | Model (date) | What | Licence | ComfyUI | Hosted | In Fuobe |
 |---|---|---|---|---|---|
-| **NVIDIA RTX Video nodes 0.2.1** (10-13) | RTX VSR (1-4x), RTX Video HDR (HLG / PQ), RTX Frame Generation (2-16x, RTX 40+) | not stated (NVIDIA SDK terms) | Comfy-Org official pack, template "RTX Video Enhance" | no | no |
+| **NVIDIA RTX Video nodes 0.2.1** (10-13) | RTX VSR (1-4x), RTX Video HDR (HLG / PQ), RTX Frame Generation (2-16x, RTX 40+) | pack Apache-2.0 (its LICENSE; corrected 11-02); the `nvidia-vfx` 0.2.0.0 runtime it loads is NVIDIA proprietary (NVIDIA Software License Agreement + Product-Specific Terms for AI Products, models under the NVIDIA Open Model License), wheels on pypi.nvidia.com for Linux x86_64 and Windows only | Comfy-Org official pack, template "RTX Video Enhance" | no | yes (`nm10-rtx-video`) |
 | Kandinsky 6 VSR (09-28) | x2 / x2.25 / x4 video SR, 2-5 steps | MIT | `kandinsky6-sr` pack | fal | no |
 | Open-H3-Regenerate-2K + Sol-H3-VAE + core H3 latent upscaler (10-27/28) | 2K / 4K H3 redraw; fast decode | see new-models-7 | core (master) + packs | no | queued `n7-3` |
 | LTX-2.5 native-resolution Tiled Fusion + Restore / Refine IC-LoRAs (09-29) | 4K-8K tiled video edits, archive restore | LTX-2.x Community | ComfyUI-LTXVideo | — | queued `archive-restore` |
