@@ -93,7 +93,11 @@ export type Operation =
   | "insert-moment" // video + params.startTime / params.endTime (+ prompt, reference images and clips, params.duration: the new scene's length) → the clip with a new scene between them
   | "retexture-3d" // 3D model (inputs.model3d) + prompt or a style image → the same model with new textures
   // nm10-voice-design
-  | "voice-design"; // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  | "voice-design" // params.voiceDescription (who is speaking) + prompt (the line) → the line in a new voice made from the words
+  // nm10-music3: a song's cloud tools (Mureka). The song is inputs.audio, or one of Mureka's own (params.extra.songId)
+  | "song-extend" // song + lyrics for the new part (+ params.startTime: where it begins; params.extra.extend_type tail | head) → the song, longer
+  | "song-remix" // song + a style (prompt) + the whole song's lyrics → a new arrangement of it
+  | "song-stems"; // song → its vocal and instrument tracks (meta.stem), one file each
 
 export const OPERATION_LABELS: Record<Operation, string> = {
   t2i: "Text to image",
@@ -168,6 +172,9 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   "restore-video": "Restore & colourise",
   "insert-moment": "Insert a moment",
   "retexture-3d": "Retexture",
+  "song-extend": "Extend a song",
+  "song-remix": "Remix a song",
+  "song-stems": "Song stems",
 };
 
 export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
@@ -244,6 +251,9 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   "restore-video": "video",
   "insert-moment": "video",
   "retexture-3d": "model3d",
+  "song-extend": "audio",
+  "song-remix": "audio",
+  "song-stems": "audio",
 };
 
 /**
@@ -533,6 +543,20 @@ export interface FieldMap {
   /** params.extra keys this route has no field for (a model-wide control only its other routes read): left out. */
   ignore?: string[];
   /**
+   * Song lyrics (params.extra.lyrics, section tags such as [Verse] on lines of their own: src/lib/lyrics.ts): the API's lyrics
+   * field and the most characters it takes, or (`inPrompt`) written after the prompt for an API that reads them there
+   * (Lyria 3.5). A route without it never sends params.extra.lyrics. `instrumental`: the API's switch for a song with no
+   * vocals (MiniMax Music 2.5's is_instrumental), sent in place of lyrics that are only [Instrumental], with its own lyrics
+   * writer (`autoLyrics`) off.
+   */
+  lyrics?: { key?: string; inPrompt?: true; max?: number; instrumental?: string; autoLyrics?: string };
+  /**
+   * A song tool's source song (Mureka extend / remix): one of the provider's own songs by id (params.extra.songId, kept on a
+   * result as meta.songId) in `songId`, else the song file (inputs.audio) sent first to `upload` (Mureka's files/upload with
+   * its `purpose`), whose id goes in `uploadId`.
+   */
+  songSource?: { songId: string; uploadId: string; upload: { endpoint: string; purpose: string } };
+  /**
    * An upscaler that takes a factor, not a size (Topaz, FLUX Upscale): params.resolution ("1080p", "4K",
    * "Original" = 1) becomes target ÷ the clip's shorter edge (GenInput.sourceSize), kept within min–max.
    * Nothing is sent when the clip's size is unknown (the API's default factor applies).
@@ -597,6 +621,11 @@ export interface ModelRoute {
 export type Badge = "new" | "top" | "fast" | "audio" | "4k" | "hd" | "pro" | "open" | "uncensored" | "beta" | "30s";
 
 export interface ModelOptions {
+  /**
+   * Keyframe animation (Fuobe Animation): its keyframes run with per-gap timing (params.extra.inbetween: frames, every Nth
+   * frame, words; the playback rate), src/lib/inbetween.ts. The film is as long as its gaps, not params.duration.
+   */
+  inbetween?: true;
   aspectRatios?: string[];
   resolutions?: string[];
   durations?: number[];
@@ -617,6 +646,15 @@ export interface ModelOptions {
    * way to make the provider's voice ids yet, so voices aren't sent).
    */
   elements?: { max: number; views: number; videos: number; voices: false; ops: Operation[] };
+  /**
+   * The model sings lyrics (Audio → Music's lyrics editor, params.extra.lyrics): the most characters it takes, and whether they
+   * go after the prompt (Lyria 3.5) rather than in a field of their own. Section tags ([Verse], [Chorus]) on lines of their own.
+   * `instrumentalModel`: the model sings words only, and its maker's instrumental model is this one (Mureka 9.5 → Mureka 9.5
+   * Instrumental): the editor offers no Instrumental, and lyrics that are only [Instrumental] are refused with its name.
+   */
+  lyrics?: { max?: number; inPrompt?: true; required?: true; instrumentalModel?: string };
+  /** Takes a song to cover (inputs.audio: YuE2 sings its melody with the new style and lyrics). */
+  cover?: true;
   /** Draft mode (cheap preview, then a full render of the take you like). */
   draft?: boolean;
   /**
@@ -760,8 +798,12 @@ export interface Pricing {
    * count, rather than on `usd` / `byResolution` (one shape's per-second rate). `withLoras`: the LoRA endpoint's rate.
    */
   videoMegapixel?: { usd: number; withLoras?: number };
-  /** Per-megapixel prices billed on whole megapixels (fal's Qwen-Image 2512). */
+  /** Per-megapixel prices billed on whole megapixels (fal's Qwen-Image 2512); per-minute prices on started minutes (ElevenLabs Music v2.5). */
   roundUp?: true;
+  /** The price per request when the run brings its own lyrics (params.extra.lyrics): Mureka bills a song from lyrics less than one it writes. */
+  withLyrics?: number;
+  /** What sending the song first costs when it isn't one of the provider's own (params.extra.songId): Mureka's files/upload, $0.01. */
+  uploadUsd?: number;
   /** What an animation preset adds to a run (params.animation: Meshy rigging +$0.12). */
   animationUsd?: number;
   /**
@@ -1207,6 +1249,12 @@ export interface ChainSlot {
    * with a look makes each next frame from the previous one, and every frame gets the look's grade on its own.
    */
   raw?: boolean;
+  /**
+   * "path" (build plan N7-7, a video slot): the server renders the step's camera path (params.cameraPath) through the
+   * scene the dependency made from the step's still (MoGe 2's depth picture), and that render is the input: Uni3C's guide
+   * when no browser has drawn one (Canvas, Assist, Fuobe DoP, Cinema's exact orbits). src/server/path-render.ts.
+   */
+  render?: "path";
 }
 
 /** How many outputs a planned list (ChainSlot.of) may be short of before the steps reading it fail. */
@@ -1337,6 +1385,8 @@ export interface InputSlot {
   required?: boolean;
   /** A voice slot: offers "Clean up voice" (RE-USE on the open engine) under it, which cleans the file as it lands. */
   cleanVoice?: boolean;
+  /** Shown only for a model that covers a song (ModelOptions.cover: YuE2 in Audio → Music); others never read it. */
+  cover?: boolean;
 }
 
 export interface PresetChoice {

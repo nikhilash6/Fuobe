@@ -1,4 +1,6 @@
 import "server-only";
+import { MAX_KEYS } from "@/lib/camera-path";
+import { CameraKeySchema, ExactOrbitSchema } from "./fly-around";
 import fs from "node:fs";
 import { nanoid } from "nanoid";
 import { z } from "zod";
@@ -107,6 +109,8 @@ const NODE_TYPES = [
   "concat",
   "table",
   "layout",
+  "camera-path",
+  "fly-around",
   "output",
   "note",
 ] as const satisfies readonly CanvasNodeType[];
@@ -190,6 +194,11 @@ const NodeData = z.object({
   dubId: z.string().max(40).optional(),
   // Layout: its boxes (read as a Fuobe draft, anything else dropped).
   layout: LayoutData.optional(),
+  // Camera path (N7-7): a preset, an exact orbit or keys; Fly around: the clip's length.
+  pathPreset: z.string().max(40).optional(),
+  orbit: ExactOrbitSchema.optional(),
+  keys: z.array(CameraKeySchema).min(1).max(MAX_KEYS).optional(),
+  duration: z.number().min(1).max(15).optional(),
 });
 
 const Num = z.number().finite();

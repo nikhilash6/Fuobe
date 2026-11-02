@@ -406,6 +406,8 @@ export interface EpisodeSettings {
   elements: string[];
   /** Advanced: the video model and its quality ("" = the mode's default). */
   videoModel?: string;
+  /** Advanced: the music bed's model (ENGINE_MODELS.musicChoices; none = the engine's default). */
+  musicModel?: string;
   resolution?: string;
   /** Reference images that show the subject (Explainer sources). */
   sourceImages?: string[];
@@ -605,6 +607,8 @@ export interface EngineModels {
   longNarration: string;
   narrationMaxChars: number;
   music: string;
+  /** Other music models the settings offer for the bed (nm10-music3), each with the longest bed it makes (MUSIC_MAX). */
+  musicChoices: string[];
   /** Extends a bed the music model can't make long enough (crossfaded on the open engine, whole plays on the cloud). */
   loop: string;
   /** Frame by frame: the camera move over each still (Ken Burns). */
@@ -645,6 +649,7 @@ export const ENGINE_MODELS: Record<Engine, EngineModels> = {
     longNarration: "elevenlabs-multilingual-v2",
     narrationMaxChars: 5000,
     music: "sonilo-music",
+    musicChoices: ["sonilo-music", "minimax-music-3", "elevenlabs-music-2-5"],
     loop: "join-audio",
     kenBurns: "ken-burns",
     join: "join-clips",
@@ -671,6 +676,7 @@ export const ENGINE_MODELS: Record<Engine, EngineModels> = {
     longNarration: "oss-chatterbox",
     narrationMaxChars: Infinity,
     music: "oss-ace-step",
+    musicChoices: ["oss-ace-step", "oss-minimax-music-3"],
     loop: "oss-audio-loop",
     kenBurns: "oss-ken-burns",
     join: "oss-join-clips",
@@ -717,8 +723,11 @@ export const PRICE_PER_SECOND: Record<string, Record<string, number>> = {
   "seedance-2-5": { "480p": 0.2205, "720p": 0.473, "1080p": 1.164 },
 };
 
-/** Music models that make any whole length up to this (Sonilo: up to 600 s; ACE-Step's workflow: up to 240 s). */
-export const MUSIC_MAX: Record<string, number> = { "sonilo-music": 600, "oss-ace-step": 240 };
+/**
+ * Music models that make any whole length up to this (Sonilo: up to 600 s; ACE-Step's workflow: up to 240 s; MiniMax Music 3
+ * on either engine: 300 s; ElevenLabs Music v2.5: 600 s).
+ */
+export const MUSIC_MAX: Record<string, number> = { "sonilo-music": 600, "oss-ace-step": 240, "minimax-music-3": 300, "oss-minimax-music-3": 300, "elevenlabs-music-2-5": 600 };
 
 /** Longest bed a loop model makes (the open loop graph's limit; the cloud's whole plays go past any film). */
 export const LOOP_MAX: Record<string, number> = { "oss-audio-loop": 600 };
@@ -867,7 +876,7 @@ export function resolveModels(settings: EpisodeSettings, narrationChars: number,
     video,
     resolution: wanted,
     narration,
-    music: settings.music ? m.music : null,
+    music: settings.music ? (settings.musicModel && m.musicChoices.includes(settings.musicModel) ? settings.musicModel : m.music) : null,
     loop: settings.music ? m.loop : null,
     level: settings.music ? (m.levelMusic ?? null) : null,
     mux: settings.music ? m.mixMusic : m.mux,
@@ -1154,7 +1163,8 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
         modelId: models.music,
         op: "music",
         prompt: musicPrompt(input.genre, style, settings.brief?.music),
-        params: { duration: bed, numOutputs: 1, ...(settings.engine === "open" && { extra: { lyrics: "[Instrumental]" } }) },
+        // A model that sings is asked for an instrumental (ACE-Step, MiniMax Music 3).
+        params: { duration: bed, numOutputs: 1, ...(musicDef.options.lyrics && { extra: { lyrics: "[Instrumental]" } }) },
         step: { label: "Music", index: n, of: n },
       },
     });
@@ -1946,6 +1956,8 @@ export function defaultSettings(engine: Engine, genre: GenreInfo, o: { explainer
 export interface PickerData {
   voices: { id: string; name: string; hint?: string }[];
   videoModels: { id: string; name: string; engine: Engine; resolutions: string[] }[];
+  /** The music bed's models per engine, each with the longest bed it makes in one go (seconds; longer films loop it). */
+  musicModels?: { id: string; name: string; engine: Engine; maxSeconds: number }[];
   /** Frame by frame's camera move per engine (Ken Burns) and the qualities it renders at (none: the still's own size). */
   cameraMoves?: Record<Engine, { id: string; name: string; resolutions: string[] }>;
   /** How many style references each engine's picture model reads (the open one takes 2). */
@@ -1963,6 +1975,13 @@ export function pickerData(lookup: ModelLookup): PickerData {
       return m ? [{ id, name: m.name, engine, resolutions: m.options.resolutions ?? [] }] : [];
     }),
   );
+  const musicModels = (["cloud", "open"] as const).flatMap((engine) =>
+    ENGINE_MODELS[engine].musicChoices.flatMap((id) => {
+      const m = lookup(id);
+      const max = MUSIC_MAX[id] ?? Math.max(...(m?.options.durations ?? [0]));
+      return m && max > 0 ? [{ id, name: m.name.replace(/ · both engines$/, ""), engine, maxSeconds: max }] : [];
+    }),
+  );
   const camera = (engine: Engine) => {
     const id = ENGINE_MODELS[engine].kenBurns;
     return { id, name: lookup(id)?.name ?? "Ken Burns", resolutions: lookup(id)?.options.resolutions ?? [] };
@@ -1970,6 +1989,7 @@ export function pickerData(lookup: ModelLookup): PickerData {
   return {
     voices: voices.map((v) => ({ id: v.id, name: v.name, ...(v.hint && { hint: v.hint }) })),
     videoModels,
+    musicModels,
     cameraMoves: { cloud: camera("cloud"), open: camera("open") },
     maxStyleRefs: { cloud: styleRefLimit("cloud", lookup), open: styleRefLimit("open", lookup) },
   };

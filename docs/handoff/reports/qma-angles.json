@@ -1,152 +1,162 @@
 {
-  "key": "qma-angles",
-  "impl": {
-    "branch": "o/qma-angles",
-    "summary": "QMA camera angles (gribbliest's Qwen-Image 2.1 QMA LoRA, 96 views, pinned to 13007eec) are built on the open engine. There is a pure pose-to-view mapper, a validated ComfyUI graph and the model 'QMA · 96 views'. It appears in the Angles app (with an orbit pad), Cinema location views and 3D re-shoots, the turnaround's missing sides plus a new 'Stills · 8 views' route, and the Canvas product-angles template. Research finding: fal now hosts Qwen-Image 2.1 t2i and edit, but with no LoRA input, and Replicate has none. So QMA stays GPU-only and there is no cloud route.",
-    "built": [
-      "Already on the base, not rebuilt: Qwen-Image 2.1 as an open text-to-image, edit, inpaint and expand model with Speed, GPU and Decoder options (oss-qwen-image-21, nm10-qwen21-fast). Plan item 5 was therefore already done. The Angles app's 2511 Multiple-Angles route uses the same 8/4/3 words as QMA. Cinema location views, recompose and the turnaround fill all run on 2511 + ANGLES_2511_LORA.",
-      "Research: QMA added to fuobe-originals-recipes-5.json adapterLoras (key qwen21-qma-angles: revision, sha256, 318820224 bytes, licence 'Apache-2.0 on card, non-commercial through its base', hostedOk false) and lora-library.generated.ts regenerated. new-models-10.json gets a QMA record, and its Qwen-Image 2.1 record now lists fal's hosted endpoints plus the Comfy-Org file sizes @ aacf31a6. new-models-10.md gets a correction section.",
-      "src/lib/qma.ts (pure): vocabulary tables, qmaView(pose) (azimuth snapped to 45° steps, elevation bands at -15/15/45, distance bands at 2.5/7.5), qmaPose (the reverse), qmaPrompt/parseQmaPrompt/qmaRunPrompt, qmaLabel, orbitDrag, QMA_TURN_SET, QMA_MODEL/QMA_WORKFLOW.",
-      "Graph qwen-image-21-qma: hand-built from the 2.1 edit graph. Source scaled to about 1 MP (ImageScaleToTotalPixels), QMA LoRA at 1.0, KSampler 30 steps / CFG 3 / euler / simple. Bindings include megapixels (0.6 = preview), cfg, loraStrength and vae. Added to library.spec.mjs, model URL table and model-pins.json. Built, then validated against the live CPU ComfyUI (validated: true); manifest sizes kept and requirements.json updated. It uses the int8 DiT (7.26 GB) and int8 encoder (9.35 GB) like every other Fuobe 2.1 graph; the brief's 14.2/17.5 GB are the bf16 files (verified on HF).",
-      "Model oss-qwen-image-21-qma 'QMA · 96 views' (open, edit): controls Angle/Height/Distance using the same params as the Angles app (horizontal_angle, vertical_angle, zoom), plus Size (full / 768 preview) and Decoder. It uses the new promptFormat 'qma': planGeneration writes '<qma> {azimuth} {elevation} {distance} {words}' from the pose, and a prompt that is already a QMA prompt passes unchanged. options.loras ties the model to the LoRA's switch in Settings → Models & licences.",
-      "Angles app: new Preset.openAlso routes. presetRoutes appends them on the open engine when the catalog has the model, so QMA becomes a third model pick on your GPU and is absent in the cloud. The app's chips set the pose. New OrbitPad component (drag to orbit and raise, arrow keys, snaps to the nearest view, kept in sync with the chips). The composer hides a model control already set by the app's choices, so QMA's Angle/Height/Distance aren't asked twice.",
-      "Cinema: location views take modelId QMA on the open engine. Soul Location gets a 'QMA · 96 views' switch on the open engine. RECOMPOSE_MODELS.open adds QMA, which re-shoots the still from the flown pose snapped to the nearest view.",
-      "Turnaround: qmaHorizontal(side). QMA turns the camera, so the person's right side is QMA's 270°. New input fillWith 'qma' (open) draws the missing sides with QMA; the dialog shows a 'Drawn with' choice. New route 'stills' (open, QMA): 7 views at eye level drawn from the front, or chained from a front drawn from the sheet, in one batch with no film. The dialog hides length and shape for it, and shows the pictures and 'ready' when done. The API schema accepts route 'stills' and fillWith.",
-      "Canvas product-angles: on the open engine the three angle nodes run QMA with their pose in params.extra. TplNode gets a per-engine 'on' data override. The cloud keeps Nano Banana Pro unchanged.",
-      "GPU pre-flight board: STUDIO_ROWS row 'Turnaround stills · 8 views' (/character-sheet?stills=1) → qwen-image-21-qma. The model and the Angles app's QMA route get their chips from the existing model and preset rows.",
-      "Qwen-Image 2.1 RGBA note for Layers (not built): the 2.1 VAE decodes four channels (every 2.1 graph ends in SplitImageWithAlpha to drop alpha), and fal's 2.1 says PNG/WebP keep transparency. A Layers route could keep the alpha output by saving before SplitImageWithAlpha. This is untested: alpha quality is unknown."
-    ],
-    "tests": "New: tests/qma-prompt.test.ts (all 96 views round-trip, snapping edges, orbit drag, turn set) and tests/qma-angles.test.ts (model, licence and pins, graph bindings with steps 30 / cfg 3 / megapixels 1 and 0.6, the LoRA loaded once, app routes on open only, all 96 app choice combos to 96 distinct prompts, Cinema location view and recompose, turnaround QMA fill and stills including the sheet chain, blockers, no cloud stills, API schema, Canvas template, GPU board row). Updated for the new features: model-access-listings (182 LoRAs), open-engine (QMA camera params are planner params), turnaround and turnaround-api (open routes now frames + stills). Targeted run of 34 suites (canvas*, catalog, cinema*, comfy-library-4/7/notes, comfy-lora, gpu-requirements, licences, lora-library, model-access*, open-engine, open-tools, oss-loras, preset-recipe*, public-signup*, qwen21-fast, studio-pickers, turnaround*, qma*) all pass; tsc clean. ComfyUI: qwen-image-21-qma validated on the live CPU ComfyUI (graph check only; no weights on that server, so nothing was run). Browser: new tests/e2e/qma-angles.mjs in demo mode, all checks passing at 1440 and 390 px, light and dark, with no console errors and no sideways scroll. It covers the Angles app on QMA (orbit pad drag and keys, chips follow, no duplicate controls) and the Character Sheet Turnaround dialog (Stills · 8 views, Drawn with QMA, Free price, no length or shape; a still-set run shows its pictures). Full suite and pnpm build not run (per stage rules).",
-    "left": [
-      "A real GPU run of QMA, to judge quality and to confirm the camera-relative side convention used in turnaround qmaHorizontal (person's right side = QMA 'left side view', from the card's wording). Needs the 4 files: qwen_image_2.1_int8_convrot 7.26 GB, qwen3vl_8b_int8_convrot 9.35 GB, the 2.1 VAE 0.68 GB, and the QMA LoRA 0.32 GB (downloaded by the pre-flight from the pinned URL). The CPU ComfyUI has no model files.",
-      "Cloud: fal-ai/qwen-image-2.1 and fal-ai/qwen-image-2.1/edit are hosted (no LoRAs, $0.02 and $0.0367 per MP). A plain cloud Qwen-Image 2.1 model is now possible as its own package (endpoint records + gen-cloud-models.py). It was not built here, and the base's comments saying 'Qwen-Image 2.1 isn't hosted' (preset-recipe-routes.ts, qwen21-speed.ts, the library notes) are now out of date.",
-      "Hosted runs (FUOBE_HOSTED_RUNS): QMA carries its LoRA in options.loras like the 2.1 Next-Scene model, so it is treated the way that model is on the hosted path. No dedicated poolQuote test was added.",
-      "The Fuobe Angles (O11) and Cinema's default stays the 2511 route; QMA is a choice, not a default (no evaluation yet). The scripts/eval angles suite could add QMA as a candidate.",
-      "Brief out of date: Qwen-Image 2.1 itself was already built (nm10-qwen21-fast). The brief's encoder and DiT sizes are the bf16 files, while Fuobe uses int8. 'No hosted Qwen-Image 2.1' is no longer true on fal (still no LoRA input). The QMA card has no LICENSE file; its card says Apache-2.0.",
-      "object_info.subset.json was not refreshed: the parent's CPU ComfyUI rewrote it with unrelated churn, so I reverted it. The QMA graph uses only classes already in the subset."
-    ],
-    "docsNotes": "STATUS.md: move 'QMA camera angles' from Lane R's not-built list to built. QMA · 96 views is on your GPU only: Angles app pick with an orbit pad, Cinema location views and 3D re-shoot, Turnaround missing sides (Drawn with) and 'Stills · 8 views', Canvas product angles. ARCHITECTURE.md: src/lib/qma.ts (pose ↔ 96 views); promptFormat 'qma' written in planGeneration; Preset.openAlso (extra open routes, appended by presetRoutes); TurnRoute 'stills' and TurnaroundInput.fillWith; TplNode.on per-engine data in canvas templates; OrbitPad in the composer for apps whose choices set horizontal_angle/vertical_angle/zoom. Research: fal now hosts Qwen-Image 2.1 (t2i, edit) without LoRAs, recorded in new-models-10.json/.md. Comments elsewhere saying 2.1 isn't hosted need a pass. CREDITS.md: QMA Camera Angles LoRA by gribbliest (Apache-2.0 card).",
-    "blocked": ""
-  },
-  "review": {
-    "findings": [
-      {
-        "severity": "medium",
-        "verdict": "CONFIRMED",
-        "file": "src/lib/catalog/turnaround.ts",
-        "line": 516,
-        "summary": "The Stills · 8 views set names each picture by QMA's camera-relative words, but those names don't match the person's sides. The same package's fill step uses the opposite convention.",
-        "detail": "planTurnaround's stills branch sends horizontal_angle 90 and titles the result 'Turnaround stills · Right side' (the step label is 'Right side'). The QMA card (read at 13007eec) says 'right side view' means the camera swings 90° to its own right, which shows the person's LEFT side. The implementer's own qmaHorizontal('right') = 270 encodes exactly this, and the fill step labels 'Right side (QMA)' at 270. So inside one turnaround dialog a still called 'Right side' shows the person's left side, while the fill called 'Right side' shows their right. Character Sheet / SIDE_NAMES use the person's sides. Verified with a probe of planTurnaround({engine:'open', route:'stills', views:{front}}): still-90 → 'Right side', still-270 → 'Left side'; the fill run gives fill-right → 270, fill-left → 90.",
-        "fix": "Label the stills by the person's side (map each azimuth through 360-h, or reuse SIDE_NAMES/qmaHorizontal) and keep the camera's words only in the prompt."
-      },
-      {
-        "severity": "medium",
-        "verdict": "CONFIRMED",
-        "file": "src/lib/catalog/canvas.ts",
-        "line": 1921,
-        "summary": "Canvas 'product-angles' on the open engine gives all three angle nodes the same prompt (QMA_STUDIO). Switching that board to the cloud gives Nano Banana Pro three identical prompts with no angle words: three identical shots.",
-        "detail": "The open variant writes on.open.prompt = 'on a seamless studio background, soft key light, sharp details' for front, side and top, and puts the angle only in params.extra. convertEngine(graph, 'cloud') keeps n.data.prompt and runs sanitizeParams, which deletes params.extra. The probe shows front/side/top → nano-banana-pro, each with the same prompt and params undefined. On the base, the open nodes kept their 'three-quarter front' / 'side profile' / 'top-down' words, so converting kept each shot's meaning. A board started on your GPU and later switched to the cloud now silently loses its three angles.",
-        "fix": "Keep each node's angle words in the open prompt (QMA tolerates edit words after the camera words). Or have convertEngine / counterpart restore the template's cloud prompt when it leaves QMA."
-      },
-      {
-        "severity": "low",
-        "verdict": "CONFIRMED",
-        "file": "src/components/turnaround/turnaround-dialog.tsx",
-        "line": 462,
-        "summary": "The finished 'Stills · 8 views' set shows only 7 pictures: the front is missing. They come in reverse order (front-left first, front-right last) and have no side labels.",
-        "detail": "RunView builds the pictures from state.rows outputs, which hold only the 7 generated turns, in newest-first order. The user's front picture isn't shown, and nothing names each view. Seen in the e2e screenshot stills-done.png at 1440 light. The route and button promise 8 views ('Make 8 views').",
-        "fix": "Put the front source first, sort by step index, and caption each picture with its side."
-      },
-      {
-        "severity": "low",
-        "verdict": "PLAUSIBLE",
-        "file": "src/lib/catalog/canvas.ts",
-        "line": 1921,
-        "summary": "The open Canvas template always uses QMA_MODEL, without the offered check the other placements make.",
-        "detail": "Turnaround (has(QMA_MODEL) through isOffered), Cinema location view (getModel), the Angles app (presetRoutes has()) and Soul Location (getModel) all check that the model is there. tpl() picks QMA unconditionally. When the admin switches the QMA LoRA off in Settings → Models & licences, isOffered is false (recipeLoraOff), yet a new open product-angles board still gets three QMA nodes, and their runs are refused for the switched-off LoRA. The base used oss-qwen-image-21, which isn't tied to that switch. Traced in code, not run.",
-        "fix": "Fall back to oss-qwen-image-21 (with the old angle prompts) when QMA isn't offered, or resolve template models against the offered catalog."
-      },
-      {
-        "severity": "low",
-        "verdict": "CONFIRMED",
-        "file": "src/server/gpu/tools.ts",
-        "line": 220,
-        "summary": "The GPU board row 'Turnaround stills · 8 views' links to /character-sheet?stills=1, but no page reads 'stills', so the link just opens the Character Sheet.",
-        "detail": "grep for 'stills' across src/app and src/components finds only the turnaround dialog's route handling. Nothing reads the query param, so the row's link doesn't open the dialog or pre-select the Stills route. It is harmless, but the link promises more than it does.",
-        "fix": "Either read ?stills=1 on the Character Sheet to open the Turnaround dialog on Stills, or link to plain /character-sheet."
-      },
-      {
-        "severity": "low",
-        "verdict": "CONFIRMED",
-        "file": "src/lib/qma.ts",
-        "line": 165,
-        "summary": "qmaRunPrompt mangles a partial QMA prompt: it strips the trigger and puts the default view's camera words in front, so the camera words conflict.",
-        "detail": "qmaRunPrompt('<qma> back view', {}) returns '<qma> front-right quarter view eye-level shot medium shot back view' (probe). A user who types a partial QMA prompt directly on the model gets two conflicting azimuths. It could honour the parts given, or at least not leave the stray camera words behind.",
-        "fix": "Parse a leading partial view (azimuth and optional elevation/distance) and fill only the missing parts from the pose."
-      },
-      {
-        "severity": "low",
-        "verdict": "CONFIRMED",
-        "file": "src/components/turnaround/turnaround-dialog.tsx",
-        "line": 221,
-        "summary": "On the cloud, nothing tells the user that QMA (Stills · 8 views, Drawn with QMA, Cinema's QMA switch, the Canvas QMA angles) exists on their GPU.",
-        "detail": "These choices are simply absent on the cloud. The brief asks that 'the cloud engine says plainly that it runs on your GPU (open source)'. The Angles app is covered by the composer's other-engine routes. The turnaround dialog, Cinema's Soul Location and the Canvas template card show nothing on the cloud.",
-        "fix": "Add a one-line note on the cloud ('8-view stills and QMA angles run on your GPU') where these choices would appear."
-      },
-      {
-        "severity": "low",
-        "verdict": "CONFIRMED",
-        "file": "tests/qma-angles.test.ts",
-        "line": 1,
-        "summary": "No hosted-runs test (poolQuote / decidePlace) for the new QMA model, though public-signup.md asks that a model added on the hosted path plans and prices there, tested in the style of tests/hosted-runs.test.ts.",
-        "detail": "QMA's recipe LoRA lives in options.loras, not req.loras, so hosted-run.ts line 102 lets it through to the install's ComfyUI. That matches the 2.1 Next-Scene model, but no test pins it. The implementer flagged this in 'left'.",
-        "fix": "Add a hosted-runs case for oss-qwen-image-21-qma (an account's Angles run under FUOBE_HOSTED_RUNS=1 is priced and placed)."
-      }
-    ],
-    "checks": [
-      "Read the stage prompt, main-rules.md and the implementer's report. Reviewed git diff claude/fuobe-parity-4...o/qma-angles (5 commits, 33 files) along with the surrounding code: plan.ts, preset-recipe-routes.ts, composer.tsx, canvas.ts, cinema.ts, turnaround.ts and the dialog, gpu/tools.ts, model-access.ts, hosted-run.ts, server/turnaround.ts.",
-      "Targeted vitest run, 60 files and 1014 tests, all pass: qma*, turnaround*, canvas*, cinema*, open-engine, model-access*, comfy-library*, gpu*, licences, lora-library, public-signup*, preset-recipe*, catalog, hosted-runs, account*. The full suite was not run, per the stage scope.",
-      "npx next typegen, then tsc --noEmit: clean.",
-      "Probe tests (scratchpad config, nothing written to the worktree). Angles app choices → '<qma> …' prompt and the LoRA. A direct model run with Size preview → megapixels 0.6. Snapping edges (337.5° → front, -15° → eye level, zoom 2.5 → wide). Canvas open template and convertEngine to the cloud (finding 2). Turnaround stills and QMA fill labels and angles (finding 1). Cloud stills fall back to camera.",
-      "Checked whether hiding the composer controls drops any capability. Across all presets, only app-angles on QMA has controls hidden. The cloud qwen-multiple-angles uses 'sliders', not controls, so it is unaffected.",
-      "HF API for gribbliest/qwen-image-2.1-qma-camera-angles @ 13007eec: file size 318820224 and sha256 ad2c20e0… match model-pins.json and the research JSON. Card licence apache-2.0. The card's side convention confirms qmaHorizontal (camera-relative).",
-      "fal OpenAPI for fal-ai/qwen-image-2.1 and fal-ai/qwen-image-2.1/edit: neither has a loras field, so QMA staying open-only matches the owner's rule. No Higgsfield API, code or media found. No LoRA weights committed.",
-      "Live CPU ComfyUI object_info: ImageScaleToTotalPixels (megapixels, resolution_steps) and TextEncodeQwenImage21 (images, vae) match the graph. The bindings (prompt 30, image 10, seed/steps/cfg 32, megapixels 20, loraStrength 60, vae 3) match the spec. requirements.json lists the workflow with all 4 files and validated:true. The model-pins entry is present.",
-      "Public sign-up: no new API routes. TurnaroundSchema only gains route 'stills' and fillWith, both on the existing /api/turnaround path (createGenerations / chain runner), so the existing tenant and account-input checks apply. Visitor copy has no jargon beyond the model's name.",
-      "Browser: ran tests/e2e/qma-angles.mjs against next dev (FUOBE_DEMO_MODE=on, COMFYUI_URL unreachable, a scratch FUOBE_DATA_DIR) at 1440 and 390, light and dark. All checks pass, with no console errors and no sideways scroll. Viewed the 390 Angles screenshot (orbit pad and chips fit) and the stills-done screenshot (finding 3). Stopped the server, deleted .next, worktree clean."
-    ],
-    "verdict": "approve-with-fixes: the core work is sound (pure mapper, validated graph, model and licence data, open-only placements, tests, tsc, e2e all pass) and nothing is blocking. Fix finding 1 (stills side labels contradict the person's sides and the package's own fill convention) and finding 2 (the open Canvas template loses its angles when converted to the cloud) before merge. The rest are low-priority polish and tests."
-  },
-  "fix": {
-    "applied": [
-      "MEDIUM, src/lib/catalog/turnaround.ts: the Stills · 8 views set now names each picture by the person's own side, the same way the fill step does. A new helper qmaStillName(h) maps the camera angle to the person's side (360-h), and QMA_STILL_ANGLES goes round to the person's right [315,270,225,180,135,90,45]. The still called 'Right side' now runs at horizontal_angle 270, which equals qmaHorizontal('right'). The camera words stay in the prompt only. Tests pin the 'Right side'/'Left side' stills to qmaHorizontal and check the step titles.",
-      "MEDIUM, src/lib/catalog/canvas.ts: the open product-angles nodes keep their own angle words ('three-quarter front', 'side profile', 'top-down'). QMA's camera words come first and these words follow, as the card allows. The QMA_STUDIO override is removed, so a board switched to the cloud with convertEngine keeps three different prompts. Tested.",
-      "LOW, Canvas offered check: ModelPair takes fallback.open = oss-qwen-image-21, and template.build(engine, offered) uses it, without the QMA pose, when the model isn't offered. createCanvas in src/server/canvas.ts passes isOffered(id, engine). Tested.",
-      "LOW, src/components/turnaround/turnaround-dialog.tsx: the finished still set shows the front first (the user's front picture, which Run.front now carries, or the front drawn from the sheet), then the views sorted by step index. Each picture has a side caption and alt text. The browser check confirms 8 pictures named Front, Front right, Right side, Back right, Back, Back left, Left side, Front left.",
-      "LOW, the GPU board link /character-sheet?stills=1 now works. The Character Sheet reads the stills param through useSearchParams inside a Suspense boundary (SheetTurnaround), and TurnaroundButton/TurnaroundForm take a new route prop, so the dialog opens on Stills · 8 views on your GPU. Checked in the browser at 1440 and 390.",
-      "LOW, src/lib/qma.ts: qmaRunPrompt keeps the camera words a partial QMA prompt gives ('<qma> back view …') and fills only the missing azimuth, elevation or distance from the pose. Tested in tests/qma-prompt.test.ts.",
-      "LOW, cloud copy: on the cloud the Turnaround dialog says 'The 8-view still set, and sides drawn with QMA · 96 views, run on your GPU (open source).' Cinema's Soul Location location-view row says '(QMA · 96 views runs on your GPU)'. Checked in the browser on the cloud engine with no console errors.",
-      "LOW, tests/hosted-runs.test.ts: new case. With FUOBE_HOSTED_RUNS=1 and the fake billing service, an account's QMA edit with an uploaded image is placed by decidePlace with kind 'pool' on comfyui, and poolQuote returns a quote.",
-      "tests/e2e/qma-angles.mjs: checks the 8 named still pictures and the ?stills=1 link."
-    ],
-    "rejected": [
-      "Low finding 7, the Canvas template card on the cloud: I added no separate note there. The template card already lists each engine's models, and on your GPU it shows QMA · 96 views. A cloud board uses Nano Banana Pro for the same three angles, so the cloud has nothing it can't do here."
-    ],
-    "checks": [
-      "Worktree /home/user/wt/o-qma-angles on o/qma-angles. Its commits are only this package's own, and the base is an ancestor, so no merge was needed. pnpm install --frozen-lockfile and npx next typegen both succeeded.",
-      "Each finding was confirmed in code before the fix (stills angle and label mismatch, convertEngine dropping params.extra, tpl with no offered check, nothing reading ?stills=1, RunView missing the front, qmaRunPrompt on a partial prompt).",
-      "Targeted vitest run with FUOBE_ACCOUNT_DISK_FREE_GB=1 and --maxWorkers=2: 34 files, 528 tests, all pass. Suites covered: qma*, turnaround*, canvas*, cinema*, hosted-runs, open-engine, template-cover*, gpu-*, model-access*, public-signup*. The full suite was not run, per the parent's instruction.",
-      "npx next typegen, then tsc --noEmit: exit 0. eslint on every changed file: clean.",
-      "Browser: tests/e2e/qma-angles.mjs against next dev (FUOBE_DEMO_MODE=on, COMFYUI_URL unreachable, a scratch data dir, http://localhost:3471) at 1440 and 390 px, light and dark: all 60 checks pass, with no console errors and no sideways scroll. I viewed the stills-done screenshot: front first, each view captioned by the person's side. A separate cloud-engine check showed the GPU note in the dialog, with 0 console errors.",
-      "Stopped the dev server, deleted .next, git status clean. Committed 3db8bfb4 and pushed to origin o/qma-angles; local HEAD matches the remote."
-    ],
-    "finalSummary": "Open engine (your ComfyUI): QMA · 96 views runs in the Angles app (with the orbit pad), Cinema location views and 3D re-shoots, the turnaround's missing sides ('Drawn with') and 'Stills · 8 views', and the Canvas product angles. The still set is now named by the person's own sides, the same way the fill step does it. The finished set shows all 8 pictures, front first and captioned. The board link opens the dialog on Stills. Canvas product-angles boards keep each angle's words, so switching a board to the cloud keeps three distinct shots. When the admin switches QMA off, new boards fall back to Qwen-Image 2.1. Verified: the logic in unit tests, the UI in demo mode, and the graph against the CPU ComfyUI (from the implementer's stage). Not verified: picture quality and the camera-relative side convention on a real GPU; the CPU ComfyUI has no weights. That needs the int8 Qwen-Image 2.1 DiT (7.26 GB), the int8 encoder (9.35 GB), the VAE (0.68 GB) and the QMA LoRA (0.32 GB). Cloud: there is no QMA route. fal hosts Qwen-Image 2.1 but without LoRA input, and Replicate doesn't host it. The cloud now says plainly that the still set and QMA run on your GPU, and it keeps its own routes (Nano Banana Pro angles, the 2511 Multiple-Angles app). Public sign-up: there are no new routes. Guests browse read-only. Accounts run QMA only on their own GPU. Under FUOBE_HOSTED_RUNS, an account's QMA run is placed and priced on the install's ComfyUI (now tested). Account inputs go through the existing /api/generations and /api/turnaround checks.",
-    "left": [
-      "A real GPU run of QMA, to judge quality and to confirm the side convention (the person's right side = QMA 270°). Both the still labels and the fill now depend on it.",
-      "The template card on /canvas lists models without the offered check: it still names QMA · 96 views on your GPU even when the admin switched it off. Only boards actually created fall back. The page is statically rendered, so I didn't make it read install settings.",
-      "From the implementer, still open: a plain cloud Qwen-Image 2.1 model through fal (no LoRAs) as its own package; out-of-date 'Qwen-Image 2.1 isn't hosted' comments on the base; adding QMA as a candidate in the scripts/eval angles suite; and the docs notes (STATUS, ARCHITECTURE, CREDITS) from the implementer's report.",
-      "The full vitest suite and the base merge are left to the parent."
-    ],
-    "blocked": ""
-  }
+ "key": "qma-angles",
+ "impl": {
+  "branch": "o/qma-angles",
+  "summary": "QMA camera angles (gribbliest's Qwen-Image 2.1 QMA LoRA, 96 views, pinned to 13007eec) are built on the open engine. There is a pure pose-to-view mapper, a validated ComfyUI graph and the model 'QMA · 96 views'. It appears in the Angles app (with an orbit pad), Cinema location views and 3D re-shoots, the turnaround's missing sides plus a new 'Stills · 8 views' route, and the Canvas product-angles template. Research finding: fal now hosts Qwen-Image 2.1 t2i and edit, but with no LoRA input, and Replicate has none. So QMA stays GPU-only and there is no cloud route.",
+  "built": [
+   "Already on the base, not rebuilt: Qwen-Image 2.1 as an open text-to-image, edit, inpaint and expand model with Speed, GPU and Decoder options (oss-qwen-image-21, nm10-qwen21-fast). Plan item 5 was therefore already done. The Angles app's 2511 Multiple-Angles route uses the same 8/4/3 words as QMA. Cinema location views, recompose and the turnaround fill all run on 2511 + ANGLES_2511_LORA.",
+   "Research: QMA added to fuobe-originals-recipes-5.json adapterLoras (key qwen21-qma-angles: revision, sha256, 318820224 bytes, licence 'Apache-2.0 on card, non-commercial through its base', hostedOk false) and lora-library.generated.ts regenerated. new-models-10.json gets a QMA record, and its Qwen-Image 2.1 record now lists fal's hosted endpoints plus the Comfy-Org file sizes @ aacf31a6. new-models-10.md gets a correction section.",
+   "src/lib/qma.ts (pure): vocabulary tables, qmaView(pose) (azimuth snapped to 45° steps, elevation bands at -15/15/45, distance bands at 2.5/7.5), qmaPose (the reverse), qmaPrompt/parseQmaPrompt/qmaRunPrompt, qmaLabel, orbitDrag, QMA_TURN_SET, QMA_MODEL/QMA_WORKFLOW.",
+   "Graph qwen-image-21-qma: hand-built from the 2.1 edit graph. Source scaled to about 1 MP (ImageScaleToTotalPixels), QMA LoRA at 1.0, KSampler 30 steps / CFG 3 / euler / simple. Bindings include megapixels (0.6 = preview), cfg, loraStrength and vae. Added to library.spec.mjs, model URL table and model-pins.json. Built, then validated against the live CPU ComfyUI (validated: true); manifest sizes kept and requirements.json updated. It uses the int8 DiT (7.26 GB) and int8 encoder (9.35 GB) like every other Fuobe 2.1 graph; the brief's 14.2/17.5 GB are the bf16 files (verified on HF).",
+   "Model oss-qwen-image-21-qma 'QMA · 96 views' (open, edit): controls Angle/Height/Distance using the same params as the Angles app (horizontal_angle, vertical_angle, zoom), plus Size (full / 768 preview) and Decoder. It uses the new promptFormat 'qma': planGeneration writes '<qma> {azimuth} {elevation} {distance} {words}' from the pose, and a prompt that is already a QMA prompt passes unchanged. options.loras ties the model to the LoRA's switch in Settings → Models & licences.",
+   "Angles app: new Preset.openAlso routes. presetRoutes appends them on the open engine when the catalog has the model, so QMA becomes a third model pick on your GPU and is absent in the cloud. The app's chips set the pose. New OrbitPad component (drag to orbit and raise, arrow keys, snaps to the nearest view, kept in sync with the chips). The composer hides a model control already set by the app's choices, so QMA's Angle/Height/Distance aren't asked twice.",
+   "Cinema: location views take modelId QMA on the open engine. Soul Location gets a 'QMA · 96 views' switch on the open engine. RECOMPOSE_MODELS.open adds QMA, which re-shoots the still from the flown pose snapped to the nearest view.",
+   "Turnaround: qmaHorizontal(side). QMA turns the camera, so the person's right side is QMA's 270°. New input fillWith 'qma' (open) draws the missing sides with QMA; the dialog shows a 'Drawn with' choice. New route 'stills' (open, QMA): 7 views at eye level drawn from the front, or chained from a front drawn from the sheet, in one batch with no film. The dialog hides length and shape for it, and shows the pictures and 'ready' when done. The API schema accepts route 'stills' and fillWith.",
+   "Canvas product-angles: on the open engine the three angle nodes run QMA with their pose in params.extra. TplNode gets a per-engine 'on' data override. The cloud keeps Nano Banana Pro unchanged.",
+   "GPU pre-flight board: STUDIO_ROWS row 'Turnaround stills · 8 views' (/character-sheet?stills=1) → qwen-image-21-qma. The model and the Angles app's QMA route get their chips from the existing model and preset rows.",
+   "Qwen-Image 2.1 RGBA note for Layers (not built): the 2.1 VAE decodes four channels (every 2.1 graph ends in SplitImageWithAlpha to drop alpha), and fal's 2.1 says PNG/WebP keep transparency. A Layers route could keep the alpha output by saving before SplitImageWithAlpha. This is untested: alpha quality is unknown."
+  ],
+  "tests": "New: tests/qma-prompt.test.ts (all 96 views round-trip, snapping edges, orbit drag, turn set) and tests/qma-angles.test.ts (model, licence and pins, graph bindings with steps 30 / cfg 3 / megapixels 1 and 0.6, the LoRA loaded once, app routes on open only, all 96 app choice combos to 96 distinct prompts, Cinema location view and recompose, turnaround QMA fill and stills including the sheet chain, blockers, no cloud stills, API schema, Canvas template, GPU board row). Updated for the new features: model-access-listings (182 LoRAs), open-engine (QMA camera params are planner params), turnaround and turnaround-api (open routes now frames + stills). Targeted run of 34 suites (canvas*, catalog, cinema*, comfy-library-4/7/notes, comfy-lora, gpu-requirements, licences, lora-library, model-access*, open-engine, open-tools, oss-loras, preset-recipe*, public-signup*, qwen21-fast, studio-pickers, turnaround*, qma*) all pass; tsc clean. ComfyUI: qwen-image-21-qma validated on the live CPU ComfyUI (graph check only; no weights on that server, so nothing was run). Browser: new tests/e2e/qma-angles.mjs in demo mode, all checks passing at 1440 and 390 px, light and dark, with no console errors and no sideways scroll. It covers the Angles app on QMA (orbit pad drag and keys, chips follow, no duplicate controls) and the Character Sheet Turnaround dialog (Stills · 8 views, Drawn with QMA, Free price, no length or shape; a still-set run shows its pictures). Full suite and pnpm build not run (per stage rules).",
+  "left": [
+   "A real GPU run of QMA, to judge quality and to confirm the camera-relative side convention used in turnaround qmaHorizontal (person's right side = QMA 'left side view', from the card's wording). Needs the 4 files: qwen_image_2.1_int8_convrot 7.26 GB, qwen3vl_8b_int8_convrot 9.35 GB, the 2.1 VAE 0.68 GB, and the QMA LoRA 0.32 GB (downloaded by the pre-flight from the pinned URL). The CPU ComfyUI has no model files.",
+   "Cloud: fal-ai/qwen-image-2.1 and fal-ai/qwen-image-2.1/edit are hosted (no LoRAs, $0.02 and $0.0367 per MP). A plain cloud Qwen-Image 2.1 model is now possible as its own package (endpoint records + gen-cloud-models.py). It was not built here, and the base's comments saying 'Qwen-Image 2.1 isn't hosted' (preset-recipe-routes.ts, qwen21-speed.ts, the library notes) are now out of date.",
+   "Hosted runs (FUOBE_HOSTED_RUNS): QMA carries its LoRA in options.loras like the 2.1 Next-Scene model, so it is treated the way that model is on the hosted path. No dedicated poolQuote test was added.",
+   "The Fuobe Angles (O11) and Cinema's default stays the 2511 route; QMA is a choice, not a default (no evaluation yet). The scripts/eval angles suite could add QMA as a candidate.",
+   "Brief out of date: Qwen-Image 2.1 itself was already built (nm10-qwen21-fast). The brief's encoder and DiT sizes are the bf16 files, while Fuobe uses int8. 'No hosted Qwen-Image 2.1' is no longer true on fal (still no LoRA input). The QMA card has no LICENSE file; its card says Apache-2.0.",
+   "object_info.subset.json was not refreshed: the parent's CPU ComfyUI rewrote it with unrelated churn, so I reverted it. The QMA graph uses only classes already in the subset."
+  ],
+  "docsNotes": "STATUS.md: move 'QMA camera angles' from Lane R's not-built list to built. QMA · 96 views is on your GPU only: Angles app pick with an orbit pad, Cinema location views and 3D re-shoot, Turnaround missing sides (Drawn with) and 'Stills · 8 views', Canvas product angles. ARCHITECTURE.md: src/lib/qma.ts (pose ↔ 96 views); promptFormat 'qma' written in planGeneration; Preset.openAlso (extra open routes, appended by presetRoutes); TurnRoute 'stills' and TurnaroundInput.fillWith; TplNode.on per-engine data in canvas templates; OrbitPad in the composer for apps whose choices set horizontal_angle/vertical_angle/zoom. Research: fal now hosts Qwen-Image 2.1 (t2i, edit) without LoRAs, recorded in new-models-10.json/.md. Comments elsewhere saying 2.1 isn't hosted need a pass. CREDITS.md: QMA Camera Angles LoRA by gribbliest (Apache-2.0 card).",
+  "blocked": ""
+ },
+ "review": {
+  "findings": [
+   {
+    "severity": "medium",
+    "verdict": "CONFIRMED",
+    "file": "src/lib/catalog/turnaround.ts",
+    "line": 516,
+    "summary": "The Stills · 8 views set names each picture by QMA's camera-relative words, but those names don't match the person's sides. The same package's fill step uses the opposite convention.",
+    "detail": "planTurnaround's stills branch sends horizontal_angle 90 and titles the result 'Turnaround stills · Right side' (the step label is 'Right side'). The QMA card (read at 13007eec) says 'right side view' means the camera swings 90° to its own right, which shows the person's LEFT side. The implementer's own qmaHorizontal('right') = 270 encodes exactly this, and the fill step labels 'Right side (QMA)' at 270. So inside one turnaround dialog a still called 'Right side' shows the person's left side, while the fill called 'Right side' shows their right. Character Sheet / SIDE_NAMES use the person's sides. Verified with a probe of planTurnaround({engine:'open', route:'stills', views:{front}}): still-90 → 'Right side', still-270 → 'Left side'; the fill run gives fill-right → 270, fill-left → 90.",
+    "fix": "Label the stills by the person's side (map each azimuth through 360-h, or reuse SIDE_NAMES/qmaHorizontal) and keep the camera's words only in the prompt."
+   },
+   {
+    "severity": "medium",
+    "verdict": "CONFIRMED",
+    "file": "src/lib/catalog/canvas.ts",
+    "line": 1921,
+    "summary": "Canvas 'product-angles' on the open engine gives all three angle nodes the same prompt (QMA_STUDIO). Switching that board to the cloud gives Nano Banana Pro three identical prompts with no angle words: three identical shots.",
+    "detail": "The open variant writes on.open.prompt = 'on a seamless studio background, soft key light, sharp details' for front, side and top, and puts the angle only in params.extra. convertEngine(graph, 'cloud') keeps n.data.prompt and runs sanitizeParams, which deletes params.extra. The probe shows front/side/top → nano-banana-pro, each with the same prompt and params undefined. On the base, the open nodes kept their 'three-quarter front' / 'side profile' / 'top-down' words, so converting kept each shot's meaning. A board started on your GPU and later switched to the cloud now silently loses its three angles.",
+    "fix": "Keep each node's angle words in the open prompt (QMA tolerates edit words after the camera words). Or have convertEngine / counterpart restore the template's cloud prompt when it leaves QMA."
+   },
+   {
+    "severity": "low",
+    "verdict": "CONFIRMED",
+    "file": "src/components/turnaround/turnaround-dialog.tsx",
+    "line": 462,
+    "summary": "The finished 'Stills · 8 views' set shows only 7 pictures: the front is missing. They come in reverse order (front-left first, front-right last) and have no side labels.",
+    "detail": "RunView builds the pictures from state.rows outputs, which hold only the 7 generated turns, in newest-first order. The user's front picture isn't shown, and nothing names each view. Seen in the e2e screenshot stills-done.png at 1440 light. The route and button promise 8 views ('Make 8 views').",
+    "fix": "Put the front source first, sort by step index, and caption each picture with its side."
+   },
+   {
+    "severity": "low",
+    "verdict": "PLAUSIBLE",
+    "file": "src/lib/catalog/canvas.ts",
+    "line": 1921,
+    "summary": "The open Canvas template always uses QMA_MODEL, without the offered check the other placements make.",
+    "detail": "Turnaround (has(QMA_MODEL) through isOffered), Cinema location view (getModel), the Angles app (presetRoutes has()) and Soul Location (getModel) all check that the model is there. tpl() picks QMA unconditionally. When the admin switches the QMA LoRA off in Settings → Models & licences, isOffered is false (recipeLoraOff), yet a new open product-angles board still gets three QMA nodes, and their runs are refused for the switched-off LoRA. The base used oss-qwen-image-21, which isn't tied to that switch. Traced in code, not run.",
+    "fix": "Fall back to oss-qwen-image-21 (with the old angle prompts) when QMA isn't offered, or resolve template models against the offered catalog."
+   },
+   {
+    "severity": "low",
+    "verdict": "CONFIRMED",
+    "file": "src/server/gpu/tools.ts",
+    "line": 220,
+    "summary": "The GPU board row 'Turnaround stills · 8 views' links to /character-sheet?stills=1, but no page reads 'stills', so the link just opens the Character Sheet.",
+    "detail": "grep for 'stills' across src/app and src/components finds only the turnaround dialog's route handling. Nothing reads the query param, so the row's link doesn't open the dialog or pre-select the Stills route. It is harmless, but the link promises more than it does.",
+    "fix": "Either read ?stills=1 on the Character Sheet to open the Turnaround dialog on Stills, or link to plain /character-sheet."
+   },
+   {
+    "severity": "low",
+    "verdict": "CONFIRMED",
+    "file": "src/lib/qma.ts",
+    "line": 165,
+    "summary": "qmaRunPrompt mangles a partial QMA prompt: it strips the trigger and puts the default view's camera words in front, so the camera words conflict.",
+    "detail": "qmaRunPrompt('<qma> back view', {}) returns '<qma> front-right quarter view eye-level shot medium shot back view' (probe). A user who types a partial QMA prompt directly on the model gets two conflicting azimuths. It could honour the parts given, or at least not leave the stray camera words behind.",
+    "fix": "Parse a leading partial view (azimuth and optional elevation/distance) and fill only the missing parts from the pose."
+   },
+   {
+    "severity": "low",
+    "verdict": "CONFIRMED",
+    "file": "src/components/turnaround/turnaround-dialog.tsx",
+    "line": 221,
+    "summary": "On the cloud, nothing tells the user that QMA (Stills · 8 views, Drawn with QMA, Cinema's QMA switch, the Canvas QMA angles) exists on their GPU.",
+    "detail": "These choices are simply absent on the cloud. The brief asks that 'the cloud engine says plainly that it runs on your GPU (open source)'. The Angles app is covered by the composer's other-engine routes. The turnaround dialog, Cinema's Soul Location and the Canvas template card show nothing on the cloud.",
+    "fix": "Add a one-line note on the cloud ('8-view stills and QMA angles run on your GPU') where these choices would appear."
+   },
+   {
+    "severity": "low",
+    "verdict": "CONFIRMED",
+    "file": "tests/qma-angles.test.ts",
+    "line": 1,
+    "summary": "No hosted-runs test (poolQuote / decidePlace) for the new QMA model, though public-signup.md asks that a model added on the hosted path plans and prices there, tested in the style of tests/hosted-runs.test.ts.",
+    "detail": "QMA's recipe LoRA lives in options.loras, not req.loras, so hosted-run.ts line 102 lets it through to the install's ComfyUI. That matches the 2.1 Next-Scene model, but no test pins it. The implementer flagged this in 'left'.",
+    "fix": "Add a hosted-runs case for oss-qwen-image-21-qma (an account's Angles run under FUOBE_HOSTED_RUNS=1 is priced and placed)."
+   }
+  ],
+  "checks": [
+   "Read the stage prompt, main-rules.md and the implementer's report. Reviewed git diff claude/fuobe-parity-4...o/qma-angles (5 commits, 33 files) along with the surrounding code: plan.ts, preset-recipe-routes.ts, composer.tsx, canvas.ts, cinema.ts, turnaround.ts and the dialog, gpu/tools.ts, model-access.ts, hosted-run.ts, server/turnaround.ts.",
+   "Targeted vitest run, 60 files and 1014 tests, all pass: qma*, turnaround*, canvas*, cinema*, open-engine, model-access*, comfy-library*, gpu*, licences, lora-library, public-signup*, preset-recipe*, catalog, hosted-runs, account*. The full suite was not run, per the stage scope.",
+   "npx next typegen, then tsc --noEmit: clean.",
+   "Probe tests (scratchpad config, nothing written to the worktree). Angles app choices → '<qma> …' prompt and the LoRA. A direct model run with Size preview → megapixels 0.6. Snapping edges (337.5° → front, -15° → eye level, zoom 2.5 → wide). Canvas open template and convertEngine to the cloud (finding 2). Turnaround stills and QMA fill labels and angles (finding 1). Cloud stills fall back to camera.",
+   "Checked whether hiding the composer controls drops any capability. Across all presets, only app-angles on QMA has controls hidden. The cloud qwen-multiple-angles uses 'sliders', not controls, so it is unaffected.",
+   "HF API for gribbliest/qwen-image-2.1-qma-camera-angles @ 13007eec: file size 318820224 and sha256 ad2c20e0… match model-pins.json and the research JSON. Card licence apache-2.0. The card's side convention confirms qmaHorizontal (camera-relative).",
+   "fal OpenAPI for fal-ai/qwen-image-2.1 and fal-ai/qwen-image-2.1/edit: neither has a loras field, so QMA staying open-only matches the owner's rule. No Higgsfield API, code or media found. No LoRA weights committed.",
+   "Live CPU ComfyUI object_info: ImageScaleToTotalPixels (megapixels, resolution_steps) and TextEncodeQwenImage21 (images, vae) match the graph. The bindings (prompt 30, image 10, seed/steps/cfg 32, megapixels 20, loraStrength 60, vae 3) match the spec. requirements.json lists the workflow with all 4 files and validated:true. The model-pins entry is present.",
+   "Public sign-up: no new API routes. TurnaroundSchema only gains route 'stills' and fillWith, both on the existing /api/turnaround path (createGenerations / chain runner), so the existing tenant and account-input checks apply. Visitor copy has no jargon beyond the model's name.",
+   "Browser: ran tests/e2e/qma-angles.mjs against next dev (FUOBE_DEMO_MODE=on, COMFYUI_URL unreachable, a scratch FUOBE_DATA_DIR) at 1440 and 390, light and dark. All checks pass, with no console errors and no sideways scroll. Viewed the 390 Angles screenshot (orbit pad and chips fit) and the stills-done screenshot (finding 3). Stopped the server, deleted .next, worktree clean."
+  ],
+  "verdict": "approve-with-fixes: the core work is sound (pure mapper, validated graph, model and licence data, open-only placements, tests, tsc, e2e all pass) and nothing is blocking. Fix finding 1 (stills side labels contradict the person's sides and the package's own fill convention) and finding 2 (the open Canvas template loses its angles when converted to the cloud) before merge. The rest are low-priority polish and tests."
+ },
+ "fix": {
+  "applied": [
+   "MEDIUM, src/lib/catalog/turnaround.ts: the Stills · 8 views set now names each picture by the person's own side, the same way the fill step does. A new helper qmaStillName(h) maps the camera angle to the person's side (360-h), and QMA_STILL_ANGLES goes round to the person's right [315,270,225,180,135,90,45]. The still called 'Right side' now runs at horizontal_angle 270, which equals qmaHorizontal('right'). The camera words stay in the prompt only. Tests pin the 'Right side'/'Left side' stills to qmaHorizontal and check the step titles.",
+   "MEDIUM, src/lib/catalog/canvas.ts: the open product-angles nodes keep their own angle words ('three-quarter front', 'side profile', 'top-down'). QMA's camera words come first and these words follow, as the card allows. The QMA_STUDIO override is removed, so a board switched to the cloud with convertEngine keeps three different prompts. Tested.",
+   "LOW, Canvas offered check: ModelPair takes fallback.open = oss-qwen-image-21, and template.build(engine, offered) uses it, without the QMA pose, when the model isn't offered. createCanvas in src/server/canvas.ts passes isOffered(id, engine). Tested.",
+   "LOW, src/components/turnaround/turnaround-dialog.tsx: the finished still set shows the front first (the user's front picture, which Run.front now carries, or the front drawn from the sheet), then the views sorted by step index. Each picture has a side caption and alt text. The browser check confirms 8 pictures named Front, Front right, Right side, Back right, Back, Back left, Left side, Front left.",
+   "LOW, the GPU board link /character-sheet?stills=1 now works. The Character Sheet reads the stills param through useSearchParams inside a Suspense boundary (SheetTurnaround), and TurnaroundButton/TurnaroundForm take a new route prop, so the dialog opens on Stills · 8 views on your GPU. Checked in the browser at 1440 and 390.",
+   "LOW, src/lib/qma.ts: qmaRunPrompt keeps the camera words a partial QMA prompt gives ('<qma> back view …') and fills only the missing azimuth, elevation or distance from the pose. Tested in tests/qma-prompt.test.ts.",
+   "LOW, cloud copy: on the cloud the Turnaround dialog says 'The 8-view still set, and sides drawn with QMA · 96 views, run on your GPU (open source).' Cinema's Soul Location location-view row says '(QMA · 96 views runs on your GPU)'. Checked in the browser on the cloud engine with no console errors.",
+   "LOW, tests/hosted-runs.test.ts: new case. With FUOBE_HOSTED_RUNS=1 and the fake billing service, an account's QMA edit with an uploaded image is placed by decidePlace with kind 'pool' on comfyui, and poolQuote returns a quote.",
+   "tests/e2e/qma-angles.mjs: checks the 8 named still pictures and the ?stills=1 link."
+  ],
+  "rejected": [
+   "Low finding 7, the Canvas template card on the cloud: I added no separate note there. The template card already lists each engine's models, and on your GPU it shows QMA · 96 views. A cloud board uses Nano Banana Pro for the same three angles, so the cloud has nothing it can't do here."
+  ],
+  "checks": [
+   "Worktree /home/user/wt/o-qma-angles on o/qma-angles. Its commits are only this package's own, and the base is an ancestor, so no merge was needed. pnpm install --frozen-lockfile and npx next typegen both succeeded.",
+   "Each finding was confirmed in code before the fix (stills angle and label mismatch, convertEngine dropping params.extra, tpl with no offered check, nothing reading ?stills=1, RunView missing the front, qmaRunPrompt on a partial prompt).",
+   "Targeted vitest run with FUOBE_ACCOUNT_DISK_FREE_GB=1 and --maxWorkers=2: 34 files, 528 tests, all pass. Suites covered: qma*, turnaround*, canvas*, cinema*, hosted-runs, open-engine, template-cover*, gpu-*, model-access*, public-signup*. The full suite was not run, per the parent's instruction.",
+   "npx next typegen, then tsc --noEmit: exit 0. eslint on every changed file: clean.",
+   "Browser: tests/e2e/qma-angles.mjs against next dev (FUOBE_DEMO_MODE=on, COMFYUI_URL unreachable, a scratch data dir, http://localhost:3471) at 1440 and 390 px, light and dark: all 60 checks pass, with no console errors and no sideways scroll. I viewed the stills-done screenshot: front first, each view captioned by the person's side. A separate cloud-engine check showed the GPU note in the dialog, with 0 console errors.",
+   "Stopped the dev server, deleted .next, git status clean. Committed 3db8bfb4 and pushed to origin o/qma-angles; local HEAD matches the remote."
+  ],
+  "finalSummary": "Open engine (your ComfyUI): QMA · 96 views runs in the Angles app (with the orbit pad), Cinema location views and 3D re-shoots, the turnaround's missing sides ('Drawn with') and 'Stills · 8 views', and the Canvas product angles. The still set is now named by the person's own sides, the same way the fill step does it. The finished set shows all 8 pictures, front first and captioned. The board link opens the dialog on Stills. Canvas product-angles boards keep each angle's words, so switching a board to the cloud keeps three distinct shots. When the admin switches QMA off, new boards fall back to Qwen-Image 2.1. Verified: the logic in unit tests, the UI in demo mode, and the graph against the CPU ComfyUI (from the implementer's stage). Not verified: picture quality and the camera-relative side convention on a real GPU; the CPU ComfyUI has no weights. That needs the int8 Qwen-Image 2.1 DiT (7.26 GB), the int8 encoder (9.35 GB), the VAE (0.68 GB) and the QMA LoRA (0.32 GB). Cloud: there is no QMA route. fal hosts Qwen-Image 2.1 but without LoRA input, and Replicate doesn't host it. The cloud now says plainly that the still set and QMA run on your GPU, and it keeps its own routes (Nano Banana Pro angles, the 2511 Multiple-Angles app). Public sign-up: there are no new routes. Guests browse read-only. Accounts run QMA only on their own GPU. Under FUOBE_HOSTED_RUNS, an account's QMA run is placed and priced on the install's ComfyUI (now tested). Account inputs go through the existing /api/generations and /api/turnaround checks.",
+  "left": [
+   "A real GPU run of QMA, to judge quality and to confirm the side convention (the person's right side = QMA 270°). Both the still labels and the fill now depend on it.",
+   "The template card on /canvas lists models without the offered check: it still names QMA · 96 views on your GPU even when the admin switched it off. Only boards actually created fall back. The page is statically rendered, so I didn't make it read install settings.",
+   "From the implementer, still open: a plain cloud Qwen-Image 2.1 model through fal (no LoRAs) as its own package; out-of-date 'Qwen-Image 2.1 isn't hosted' comments on the base; adding QMA as a candidate in the scripts/eval angles suite; and the docs notes (STATUS, ARCHITECTURE, CREDITS) from the implementer's report.",
+   "The full vitest suite and the base merge are left to the parent."
+  ],
+  "blocked": ""
+ },
+ "merge": {
+  "merged": [
+   "o/qma-angles"
+  ],
+  "notMerged": [],
+  "conflicts": "requirements.json rebuilt",
+  "checks": "typecheck 0, lint 0, vitest 5058 passed, 6 failed (main known)",
+  "pushed": true,
+  "head": "3afb3bce"
+ }
 }

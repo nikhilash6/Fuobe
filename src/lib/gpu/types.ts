@@ -242,6 +242,8 @@ export interface StudioRow {
   tool: ToolReadiness;
   /** That studio's other open models that are ready or one step away. */
   others: { ref: ToolRef; name: string; state: Readiness }[];
+  /** MiniMax H3's build on this card (FastH3 V2 or Trim, src/lib/gpu/h3-tier.ts), or why the full model is still needed. */
+  gpuTier?: { label: string; note?: string };
 }
 
 export interface ReadinessReport {
@@ -263,6 +265,8 @@ export interface BadgeMap {
   checkedAt?: number;
   gpu?: string;
   vramGb?: number;
+  /** MiniMax H3's smaller build this card runs on Auto ("fast" | "trim"; src/lib/gpu/h3-tier.ts), when the card is under 32 GB. */
+  h3Tier?: "fast" | "trim";
   /** "<modelId>#<op>" → badge, for open models. A missing key means no chip. */
   models: Record<string, Badge>;
   presets: Record<string, Badge>;

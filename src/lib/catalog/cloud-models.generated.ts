@@ -13858,13 +13858,23 @@ export const CLOUD_MODELS: ModelDef[] = [
         "provider": "fal",
         "endpoint": "fal-ai/minimax-music/v2.5",
         "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 3500,
+            "instrumental": "is_instrumental",
+            "autoLyrics": "lyrics_optimizer"
+          },
           "fixed": {
             "lyrics_optimizer": true
           }
         }
       }
     ],
-    "options": {},
+    "options": {
+      "lyrics": {
+        "max": 3500
+      }
+    },
     "pricing": {
       "unit": "request",
       "usd": 0.15
@@ -13921,35 +13931,472 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "mureka",
     "engine": "cloud",
     "kind": "audio",
-    "tagline": "Full songs with vocals in many genres",
+    "tagline": "Full songs with vocals in many genres, 2 to 5 minutes",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9.5/generate/song",
+        "map": {
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          },
+          "ignore": [
+            "model"
+          ]
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "max": 5000,
+        "instrumentalModel": "mureka-9-5-instrumental"
+      },
+      "durations": [
+        120,
+        180,
+        240,
+        300
+      ]
+    },
+    "defaults": {
+      "duration": 180
+    },
+    "pricing": {
+      "unit": "request",
+      "usd": 0.5,
+      "note": "a song from a prompt; with your lyrics $0.15",
+      "withLyrics": 0.15
+    }
+  },
+  {
+    "id": "mureka-9",
+    "name": "Mureka 9",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Songs with vocals at a lower price, sung from your lyrics or written for you",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9/generate/song",
+        "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "max": 5000,
+        "instrumentalModel": "mureka-9-instrumental"
+      }
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.3,
+      "note": "a song from a prompt; with your lyrics $0.045",
+      "withLyrics": 0.045
+    }
+  },
+  {
+    "id": "mureka-9-5-instrumental",
+    "name": "Mureka 9.5 Instrumental",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Mureka's newest instrumental tracks and beds, no vocals",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9.5/generate/instrumental",
+        "map": {}
+      }
+    ],
+    "options": {},
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.15
+    }
+  },
+  {
+    "id": "mureka-9-instrumental",
+    "name": "Mureka 9 Instrumental",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Instrumental tracks and beds, no vocals",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "mureka/v9/generate/instrumental",
+        "map": {}
+      }
+    ],
+    "options": {},
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.045
+    }
+  },
+  {
+    "id": "mureka-8",
+    "name": "Mureka 8",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Mureka's earlier versions (8, O2, 7.6), for songs made with them",
     "routes": [
       {
         "op": "music",
         "provider": "fal",
         "endpoint": "mureka/api/generate/song",
-        "map": {}
+        "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          },
+          "defaults": {
+            "model": "mureka-8"
+          }
+        }
       }
     ],
     "options": {
+      "lyrics": {
+        "max": 5000,
+        "instrumentalModel": "mureka-9-instrumental"
+      },
       "controls": [
         {
           "param": "model",
           "label": "Version",
           "values": [
-            "mureka-7.6",
-            "mureka-o2",
             "mureka-8",
-            "mureka-9",
-            "mureka-9.5"
+            "mureka-o2",
+            "mureka-7.6"
           ],
-          "default": "mureka-9.5"
+          "default": "mureka-8",
+          "labels": {
+            "mureka-8": "Mureka 8",
+            "mureka-o2": "Mureka O2",
+            "mureka-7.6": "Mureka 7.6"
+          }
         }
       ]
     },
     "pricing": {
       "unit": "request",
-      "usd": 0.75,
-      "note": "prompt-to-song on mureka-9.5; with lyrics $0.225"
+      "usd": 0.3,
+      "note": "a song from a prompt; with your lyrics $0.045 ($0.03 on 7.6)",
+      "withLyrics": 0.045
+    }
+  },
+  {
+    "id": "minimax-music-3",
+    "name": "MiniMax Music 3 \u00b7 both engines",
+    "vendor": "MiniMax",
+    "family": "minimax-music",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Full songs with expressive vocals up to 5 minutes, from your lyrics and a style",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "minimax/music-3",
+        "map": {
+          "seed": "seed",
+          "duration": {
+            "key": "duration",
+            "type": "number"
+          },
+          "lyrics": {
+            "key": "lyrics"
+          },
+          "defaults": {
+            "lyrics": "[instrumental]"
+          }
+        }
+      }
+    ],
+    "options": {
+      "seed": true,
+      "lyrics": {},
+      "durations": [
+        30,
+        60,
+        120,
+        180,
+        240,
+        300
+      ]
+    },
+    "badges": [
+      "new",
+      "top"
+    ],
+    "licence": {
+      "licence": "MiniMax-Music3 Community License",
+      "commercial": true,
+      "note": "MIT-style grant with notice and an Acceptable Use Policy; commercial products show \"MiniMax-Music3\" in their interface; above US$20M yearly revenue needs MiniMax's written authorisation. The Comfy-Org repack is tagged Apache-2.0.",
+      "checked": "2026-11-01"
+    },
+    "defaults": {
+      "duration": 120
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.002
+    }
+  },
+  {
+    "id": "elevenlabs-music-2-5",
+    "name": "ElevenLabs Music v2.5",
+    "vendor": "ElevenLabs",
+    "family": "elevenlabs",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Studio-quality songs and scores up to 10 minutes",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "elevenlabs/music/v2.5",
+        "map": {
+          "duration": {
+            "key": "music_length_ms",
+            "type": "number",
+            "multiplier": 1000
+          }
+        }
+      }
+    ],
+    "options": {
+      "durations": [
+        15,
+        30,
+        60,
+        120,
+        180,
+        300,
+        600
+      ]
+    },
+    "badges": [
+      "new"
+    ],
+    "defaults": {
+      "duration": 60
+    },
+    "pricing": {
+      "unit": "minute",
+      "usd": 0.6,
+      "note": "billed per started minute",
+      "roundUp": true
+    }
+  },
+  {
+    "id": "mureka-extend",
+    "name": "Mureka Extend",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Makes a song longer with new lyrics, after its end or before its start",
+    "routes": [
+      {
+        "op": "song-extend",
+        "provider": "fal",
+        "endpoint": "mureka/v8/song/extend",
+        "map": {
+          "prompt": false,
+          "lyrics": {
+            "key": "lyrics",
+            "max": 3000
+          },
+          "songSource": {
+            "songId": "song_id",
+            "uploadId": "upload_audio_id",
+            "upload": {
+              "endpoint": "mureka/api/files/upload",
+              "purpose": "audio"
+            }
+          },
+          "startTime": {
+            "key": "extend_at",
+            "type": "number",
+            "multiplier": 1000
+          }
+        }
+      }
+    ],
+    "options": {
+      "controls": [
+        {
+          "param": "extend_type",
+          "label": "Where",
+          "values": [
+            "tail",
+            "head"
+          ],
+          "default": "tail",
+          "labels": {
+            "tail": "After the end",
+            "head": "Before the start"
+          }
+        }
+      ],
+      "lyrics": {
+        "max": 3000,
+        "required": true
+      },
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.004,
+      "note": "plus $0.01 to send a song Mureka didn't make",
+      "uploadUsd": 0.01
+    }
+  },
+  {
+    "id": "mureka-remix",
+    "name": "Mureka Remix",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "A new arrangement of a song in the style you describe, with its lyrics",
+    "routes": [
+      {
+        "op": "song-remix",
+        "provider": "fal",
+        "endpoint": "mureka/v8/song/remix",
+        "map": {
+          "lyrics": {
+            "key": "lyrics",
+            "max": 5000
+          },
+          "songSource": {
+            "songId": "song_id",
+            "uploadId": "upload_audio_id",
+            "upload": {
+              "endpoint": "mureka/api/files/upload",
+              "purpose": "remix"
+            }
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "max": 5000,
+        "required": true
+      }
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.2,
+      "note": "plus $0.01 to send a song Mureka didn't make",
+      "uploadUsd": 0.01
+    }
+  },
+  {
+    "id": "mureka-stems",
+    "name": "Mureka Stems",
+    "vendor": "Mureka",
+    "family": "mureka",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "A song split into its vocal and instrument tracks",
+    "routes": [
+      {
+        "op": "song-stems",
+        "provider": "fal",
+        "endpoint": "mureka/api/song/stem",
+        "map": {
+          "prompt": false,
+          "audio": "audio_url"
+        }
+      }
+    ],
+    "options": {
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.2,
+      "note": "audio-separation-3, the default"
+    }
+  },
+  {
+    "id": "lyria-3-5",
+    "name": "Lyria 3.5",
+    "vendor": "Google",
+    "family": "lyria",
+    "engine": "cloud",
+    "kind": "audio",
+    "tagline": "Google DeepMind's newest music model: full songs from words or a picture",
+    "routes": [
+      {
+        "op": "music",
+        "provider": "fal",
+        "endpoint": "google/lyria-3.5",
+        "map": {
+          "image": "image_url",
+          "lyrics": {
+            "inPrompt": true,
+            "max": 5000
+          }
+        }
+      }
+    ],
+    "options": {
+      "lyrics": {
+        "inPrompt": true,
+        "max": 5000
+      },
+      "maxImages": 1
+    },
+    "badges": [
+      "new"
+    ],
+    "pricing": {
+      "unit": "request",
+      "usd": 0.1
     }
   },
   {
@@ -17590,6 +18037,78 @@ export const CLOUD_MODELS: ModelDef[] = [
     }
   },
   {
+    "id": "idol-3d",
+    "name": "Idol 3D",
+    "vendor": "Speridlabs",
+    "family": "idol",
+    "engine": "cloud",
+    "kind": "model3d",
+    "tagline": "A Gaussian splat (.ply) of one object from one picture \u00b7 TripoSplat's architecture, retrained",
+    "routes": [
+      {
+        "op": "splat",
+        "provider": "fal",
+        "endpoint": "speridlabs/idol",
+        "map": {
+          "prompt": false,
+          "image": "image_url",
+          "seed": "seed"
+        }
+      }
+    ],
+    "options": {
+      "sliders": [
+        {
+          "param": "num_gaussians",
+          "label": "Gaussians",
+          "min": 32768,
+          "max": 1048576,
+          "step": 32768,
+          "default": 262144
+        },
+        {
+          "param": "num_inference_steps",
+          "label": "Steps",
+          "min": 1,
+          "max": 50,
+          "step": 1,
+          "default": 50
+        }
+      ],
+      "controls": [
+        {
+          "param": "image_type",
+          "label": "Picture",
+          "values": [
+            "synthetic",
+            "real"
+          ],
+          "default": "synthetic",
+          "labels": {
+            "synthetic": "A render or generated image",
+            "real": "A photo"
+          }
+        }
+      ],
+      "seed": true,
+      "maxImages": 1,
+      "promptless": true
+    },
+    "badges": [
+      "new"
+    ],
+    "licence": {
+      "licence": "Apache-2.0",
+      "commercial": true,
+      "note": "Apache-2.0 (speridlabs/idol weights); TripoSplat's architecture (MIT); DINOv3 image encoder under the DINOv3 License (\"Built with DINOv3\"). fal's safety checker reads the input image",
+      "checked": "2026-11-02"
+    },
+    "pricing": {
+      "unit": "request",
+      "usd": 0.1
+    }
+  },
+  {
     "id": "sam-3d-objects",
     "name": "SAM 3D Objects",
     "vendor": "Meta",
@@ -20916,6 +21435,164 @@ export const ORIGINAL_CLOUD: ModelDef[] = [
       "usd": 0.036,
       "note": "$0.001605 per megapixel of video: about $0.18 for 5 s at 720p ($0.20 with LoRAs)",
       "withLoras": 0.04
+    }
+  },
+  {
+    "id": "fuobe-animation",
+    "name": "Fuobe Animation",
+    "vendor": "Fuobe Original",
+    "family": "fuobe-animation",
+    "engine": "cloud",
+    "kind": "video",
+    "tagline": "Keyframes in, the in-betweens drawn, one finished animation, with timing per gap: Wan 2.2 + AniSora",
+    "routes": [
+      {
+        "op": "i2v",
+        "provider": "fal",
+        "endpoint": "fal-ai/wan/v2.2-a14b/image-to-video",
+        "map": {
+          "negativePrompt": "negative_prompt",
+          "image": "image_url",
+          "endImage": "end_image_url",
+          "seed": "seed",
+          "numFrames": {
+            "key": "num_frames",
+            "fps": 16,
+            "min": 17,
+            "max": 161,
+            "step": 4
+          },
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "auto",
+              "16:9",
+              "9:16",
+              "1:1"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480p",
+              "580p",
+              "720p"
+            ]
+          },
+          "fixed": {
+            "interpolator_model": "none",
+            "frames_per_second": 16
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "range": {
+              "min": 0,
+              "max": 4
+            },
+            "transformer": "high",
+            "weightName": true
+          }
+        },
+        "loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+      },
+      {
+        "op": "flf2v",
+        "provider": "fal",
+        "endpoint": "fal-ai/wan/v2.2-a14b/image-to-video",
+        "map": {
+          "negativePrompt": "negative_prompt",
+          "image": "image_url",
+          "endImage": "end_image_url",
+          "seed": "seed",
+          "numFrames": {
+            "key": "num_frames",
+            "fps": 16,
+            "min": 17,
+            "max": 161,
+            "step": 4
+          },
+          "aspectRatio": {
+            "key": "aspect_ratio",
+            "accepts": [
+              "auto",
+              "16:9",
+              "9:16",
+              "1:1"
+            ]
+          },
+          "resolution": {
+            "key": "resolution",
+            "accepts": [
+              "480p",
+              "580p",
+              "720p"
+            ]
+          },
+          "fixed": {
+            "interpolator_model": "none",
+            "frames_per_second": 16
+          },
+          "loras": {
+            "shape": "items",
+            "key": "loras",
+            "range": {
+              "min": 0,
+              "max": 4
+            },
+            "transformer": "high",
+            "weightName": true
+          }
+        },
+        "loraEndpoint": "fal-ai/wan/v2.2-a14b/image-to-video/lora"
+      }
+    ],
+    "options": {
+      "durations": [
+        3,
+        4,
+        5,
+        6,
+        8,
+        10
+      ],
+      "negativePrompt": true,
+      "seed": true,
+      "endFrame": true,
+      "aspectRatios": [
+        "auto",
+        "16:9",
+        "9:16",
+        "1:1"
+      ],
+      "resolutions": [
+        "480p",
+        "580p",
+        "720p"
+      ],
+      "maxImages": 1
+    },
+    "licence": {
+      "licence": "Apache-2.0",
+      "commercial": true,
+      "note": "Wan 2.1 / 2.2 weights are Apache-2.0",
+      "checked": "2026-10-23"
+    },
+    "defaults": {
+      "aspectRatio": "auto",
+      "duration": 5,
+      "resolution": "720p"
+    },
+    "pricing": {
+      "unit": "second",
+      "usd": 0.08,
+      "note": "720p on fal; 580p $0.06/s, 480p $0.04/s; with LoRAs $0.10/s, per gap's clip",
+      "byResolution": {
+        "720p": 0.08,
+        "580p": 0.06,
+        "480p": 0.04
+      },
+      "withLoras": 0.1
     }
   },
   {
