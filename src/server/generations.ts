@@ -375,7 +375,7 @@ export interface AssetRef {
  */
 export const ASSET_REFS: AssetRef[] = [
   { table: "generations", cols: ["request_json", "outputs_json"], except: "id", what: "result" },
-  { table: "characters", cols: ["reference_asset_ids_json", "loras_json", "lora_file"], what: "element", name: "name" },
+  { table: "characters", cols: ["reference_asset_ids_json", "loras_json", "lora_file", "voice_json"], what: "element", name: "name" },
   { table: "trainings", cols: ["meta_json"], what: "element", key: "element_id", name: "(SELECT name FROM characters WHERE id = element_id)" },
   { table: "assist_threads", cols: ["messages_json", "items_json", "pending_json"], what: "Assist chat", name: "title" },
   // A chat's frozen context names its project's sources; a project's file sources are uploads.
