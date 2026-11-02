@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useLinkStatus } from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
-import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronRight, ChevronsUpDown, Clapperboard, Cpu, LogIn, LogOut, Moon, Plus, Search, Settings2, Sun, UserPlus, X } from "lucide-react";
 import {
   Sidebar,
@@ -49,6 +49,7 @@ import { deviceLabel } from "@/lib/gpu/readiness";
 import { safeLink, useInterest } from "@/lib/hosted";
 import { useModKey } from "@/lib/keys";
 import { fullScreenStudio, groupId, NAV_CLOSED_KEY, navActive, NEW_CREATION_HREF, parseClosed, scrollFades, sidebarCookie, SIDEBAR_STATE_SCRIPT, sidebarOpenFromCookie } from "@/lib/nav";
+import { isPlainClick } from "@/lib/use-tapped-tab";
 import { cn } from "@/lib/utils";
 
 // The note of a tab that runs the person's jobs on their own computer's ComfyUI (only for someone whose runs go there).
@@ -75,10 +76,41 @@ function NavLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * The row just clicked: the open page's row from the next frame on, while its route loads, in every group at once (the
+ * address says again once the route has moved: TappedRowReset).
+ */
+let tappedRow: string | null = null;
+const tappedListeners = new Set<() => void>();
+
+function setTappedRow(href: string | null) {
+  if (tappedRow === href) return;
+  tappedRow = href;
+  for (const l of tappedListeners) l();
+}
+
+function subscribeTapped(cb: () => void) {
+  tappedListeners.add(cb);
+  return () => {
+    tappedListeners.delete(cb);
+  };
+}
+
+/** Clears the clicked row once the address changes (the route moved, or Back / Forward). Inside Suspense: runtime data. */
+function TappedRowReset() {
+  const pathname = usePathname();
+  const search = useSearchParams().toString();
+  useLayoutEffect(() => setTappedRow(null), [pathname, search]);
+  return null;
+}
+
 function Items({ group, pathname, search }: { group: NavGroupDef; pathname: string; search: URLSearchParams }) {
   const hrefs = group.items.map((i) => i.href);
+  const tapped = useSyncExternalStore(subscribeTapped, () => tappedRow, () => null);
+  const [at, query] = tapped ? tapped.split("?") : [pathname];
+  const where = tapped ? new URLSearchParams(query ?? "") : search;
   return group.items.map((item) => {
-    const active = navActive(item.href, pathname, search, hrefs);
+    const active = navActive(item.href, at, where, hrefs);
     return (
       <SidebarMenuItem key={item.href} className={cn(group.compact && "min-w-0")}>
         <SidebarMenuButton
@@ -90,7 +122,14 @@ function Items({ group, pathname, search }: { group: NavGroupDef; pathname: stri
             group.compact && "h-7 gap-1.5 px-2 text-[12px]",
           )}
         >
-          <IntentLink href={item.href} eager={item.eager} settled aria-current={active ? "page" : undefined} title={group.compact && item.short ? item.label : undefined}>
+          <IntentLink
+            href={item.href}
+            eager={item.eager}
+            settled
+            onClick={(e) => isPlainClick(e) && setTappedRow(item.href)}
+            aria-current={active ? "page" : undefined}
+            title={group.compact && item.short ? item.label : undefined}
+          >
             <item.icon />
             <NavLabel>{group.compact ? (item.short ?? item.label) : item.label}</NavLabel>
           </IntentLink>
@@ -701,6 +740,7 @@ export function AppSidebar() {
             })}
             <Suspense fallback={null}>
               <RevealActive box={content} />
+              <TappedRowReset />
             </Suspense>
           </SidebarContent>
           <SidebarFooter className="gap-1 border-t border-sidebar-border" onClick={closeOnLink}>

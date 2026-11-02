@@ -5,12 +5,14 @@
 // desktop, over Chrome's "Fast 4G" preset, so a switch that waits for the server shows up as frames:
 // 1. Hub tabs (Audio, Video tools, Upscale): the title and the tab row are on screen in every frame, the tapped tab is the
 //    current one within two frames, and the area under the tabs always shows a page or its skeleton, never nothing.
-//    Both after the page has settled (the tabs prefetched) and straight after load (nothing prefetched yet).
+//    Both after the page has settled (every mode prefetched: no request on the tap, no skeleton) and straight after load
+//    (nothing prefetched yet: the skeleton under the tabs may show).
 // 2. Going back to a mode shows that mode's header controls once (the hidden pages kept for Back add none), and Back marks
 //    the tab of the page it returns to (Audio, the Marketing suite).
 // 2b. Marketing suite tabs: the tapped tab is current within two frames and the tab row never leaves.
 // 3. Library sections: the tapped section is selected within two frames, with no request to the server.
-// 4. Sidebar (desktop): Image → Audio never blanks the content area, and the hub's tabs are there when it lands.
+// 4. Sidebar (desktop): Image → Audio never blanks the content area, the clicked row is marked within two frames, and the
+//    hub's tabs are there when it lands.
 import assert from "node:assert/strict";
 import { DESKTOP, launch, openRoute, PHONE } from "./_browser.mjs";
 
@@ -134,7 +136,7 @@ try {
     for (const settled of [true, false]) {
       for (const sw of SWITCHES) {
         if (!step(`${device}${settled ? "" : ", straight after load"}: ${sw.from} → ${sw.tab}`)) continue;
-        const { ctx, page } = await context(device);
+        const { ctx, page, rsc } = await context(device);
         if (settled) await openRoute(page, app + sw.from, { settleMs: 4000 });
         // Straight after load: the page has hydrated (a tap before that is a full page load) and the tabs' prefetches are
         // still on their way over the throttled network.
@@ -142,6 +144,7 @@ try {
         const tab = page.locator(HUB.bar).getByRole("link", { name: sw.tab, exact: true });
         await tab.waitFor({ timeout: 30_000 });
         await tab.scrollIntoViewIfNeeded();
+        const before = rsc.length;
         const frames = await sampleSwitch(page, tab, device, HUB, (f) => f.path === sw.to && f.body > 0 && !f.skeleton);
         const last = frames[frames.length - 1];
         check(last.path === sw.to && last.body > 0 && !last.skeleton, `never reached ${sw.to} with its page drawn (last frame ${JSON.stringify(last)})`);
@@ -153,6 +156,14 @@ try {
         check(!blank.length, `the page under the tabs was blank in ${blank.length} frame(s), ${blank[0]?.ms}–${blank[blank.length - 1]?.ms} ms`);
         const moved = frames.findIndex((f) => f.current === sw.tab);
         check(moved >= 0 && moved <= 1, `the tapped tab became current only at frame ${moved} (${frames[moved]?.ms} ms)`);
+        if (settled) {
+          // Once the page has settled every mode is prefetched (ahead of the sidebar's routes): the switch is drawn from the
+          // client cache, with no request and no skeleton.
+          const asked = rsc.slice(before).filter((r) => !r.prefetch);
+          check(!asked.length, `the switch waited for the server: ${asked.map((r) => r.url.replace(app, "")).join(", ")}`);
+          const skeleton = frames.filter((f) => f.skeleton);
+          check(!skeleton.length, `the skeleton showed in ${skeleton.length} frame(s) though the page had settled`);
+        }
         await ctx.close();
       }
     }
@@ -231,9 +242,12 @@ try {
     const { ctx, page } = await context("desktop");
     await openRoute(page, `${app}/image`, { settleMs: 4000 });
     const audio = page.locator('[data-sidebar="sidebar"]').getByRole("link", { name: /^Audio$/ }).first();
-    const frames = await sampleSwitch(page, audio, "desktop", { bar: HUB.bar, body: HUB.body }, (f) => f.path === "/audio" && f.bar && f.body > 0 && !f.skeleton);
+    const row = '[data-sidebar="sidebar"] [data-active="true"]';
+    const frames = await sampleSwitch(page, audio, "desktop", { bar: HUB.bar, body: HUB.body, current: row }, (f) => f.path === "/audio" && f.bar && f.body > 0 && !f.skeleton);
     const blank = frames.filter((f) => f.content === 0);
     check(!blank.length, `the content area was blank in ${blank.length} frame(s), from ${blank[0]?.ms} ms`);
+    const moved = frames.findIndex((f) => f.current === "Audio");
+    check(moved >= 0 && moved <= 1, `the Audio row became the open page's only at frame ${moved} (${frames[moved]?.ms} ms)`);
     const last = frames[frames.length - 1];
     check(last.path === "/audio" && last.bar, `Audio did not land with its tabs (last frame ${JSON.stringify(last)})`);
     await ctx.close();

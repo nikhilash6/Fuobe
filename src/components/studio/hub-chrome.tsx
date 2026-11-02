@@ -4,14 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { PrefetchOptions } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { useEngine, useLikelyVisitor } from "@/lib/api";
 import { HUB_MODES, HUB_TITLE, hubOfPath, modeHref, modeOfPath, type HubKind } from "@/lib/hubs";
+import { prefetchOptions, useIdlePrefetch } from "@/lib/idle-prefetch";
 import { cn } from "@/lib/utils";
 import { isPlainClick, useTappedTab } from "@/lib/use-tapped-tab";
-import { whenIdle } from "@/lib/when-idle";
 import { useEdgeFade } from "./use-edge-fade";
 
 /**
@@ -33,9 +32,6 @@ export function HubHeaderExtras({ children }: { children: React.ReactNode }) {
   const slot = useContext(HubCtx)?.slot;
   return slot ? createPortal(children, slot) : null;
 }
-
-/** `<Link prefetch={true}>` for a link that isn't on screen: the per-link prefetch of a whole (prerendered) mode page. */
-const FULL = { kind: "full" } as unknown as PrefetchOptions;
 
 /**
  * The hub's mode tabs: underline tabs on their own row under the title; they scroll sideways (with faded edges) on
@@ -69,10 +65,13 @@ function HubTabs({ kind, pathname, onActive }: { kind: HubKind; pathname: string
     if (left < row.scrollLeft || left + el.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left - 12;
   }, [active, ref]);
 
-  // Every mode, also the ones scrolled out of the row, once the page is idle (a tab on screen already prefetches itself).
-  // Once per hub and audience: the client cache keeps what was fetched.
-  const hrefs = modes.map((m) => modeHref(kind, m.id)).join(" ");
-  useEffect(() => whenIdle(() => hrefs.split(" ").forEach((href) => router.prefetch(href, FULL))), [hrefs, router]);
+  // Every mode's whole page, also the ones scrolled out of the row, once the page is idle (a tab on screen already
+  // prefetches itself), ahead of the sidebar's routes: the "page" lane.
+  useIdlePrefetch(
+    modes.map((m) => modeHref(kind, m.id)),
+    "page",
+    true,
+  );
 
   return (
     <nav aria-label="Modes" className="border-b">
@@ -88,7 +87,7 @@ function HubTabs({ kind, pathname, onActive }: { kind: HubKind; pathname: string
               prefetch
               scroll={false}
               data-mode={m.id}
-              onTouchStart={() => router.prefetch(href, FULL)}
+              onTouchStart={() => router.prefetch(href, prefetchOptions(true))}
               // A new tab or window (modifier, middle button) leaves this page as it is.
               onClick={(e) => isPlainClick(e) && tap(m.id)}
               aria-current={on ? "page" : undefined}

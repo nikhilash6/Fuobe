@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HUB_MODES, hubOfPath, modeHref, modeOfPath, type HubKind } from "@/lib/hubs";
 
 const src = (p: string) => fs.readFileSync(path.join(__dirname, "..", p), "utf8");
@@ -45,7 +45,7 @@ describe("hub tabs never leave the screen during a switch", () => {
     // The tab's <Link> has a bare `prefetch` (prefetch={true}: the whole mode page, not only the route's shared shell).
     const link = chrome.slice(chrome.indexOf("<Link"), chrome.indexOf("</Link>"));
     expect(link).toMatch(/^ +prefetch\r?$/m);
-    expect(chrome).toMatch(/whenIdle\(/);
+    expect(chrome).toMatch(/useIdlePrefetch\(\s*modes\.map\(\(m\) => modeHref\(kind, m\.id\)\),\s*"page",\s*true,?\s*\)/);
     // The tapped tab is marked at once, before the route commits.
     expect(chrome).toMatch(/useTappedTab<string>\(pathname\)/);
     expect(chrome).toMatch(/onClick=\{\(e\) => isPlainClick\(e\) && tap\(m\.id\)\}/);
@@ -80,11 +80,16 @@ describe("other tab bars switch without a round trip", () => {
   });
 
   it("sidebar rows prefetch once the page is idle, not only on hover or touch", () => {
-    expect(src("src/components/app-sidebar.tsx")).toMatch(/<IntentLink href=\{item\.href\} eager=\{item\.eager\} settled /);
+    const sidebar = src("src/components/app-sidebar.tsx");
+    expect(sidebar).toMatch(/<IntentLink\s+href=\{item\.href\}\s+eager=\{item\.eager\}\s+settled\s/);
+    // The clicked row is the open page's row from the next frame on, in every group; the address takes over once it moves.
+    expect(sidebar).toMatch(/onClick=\{\(e\) => isPlainClick\(e\) && setTappedRow\(item\.href\)\}/);
+    expect(sidebar).toMatch(/useLayoutEffect\(\(\) => setTappedRow\(null\), \[pathname, search\]\);/);
+    expect(sidebar).toMatch(/const active = navActive\(item\.href, at, where, hrefs\);/);
     const link = src("src/components/intent-link.tsx");
-    expect(link).toMatch(/const now = eager \|\| \(settled && idle\);/);
-    // Also the rows scrolled out of view: prefetched on idle, not when a scroll brings them in front of the tap.
-    expect(link).toMatch(/if \(settled && idle && href\) router\.prefetch\(href\);/);
+    // Also the rows scrolled out of view, in the "nav" lane (after the page's own tabs), not the Link's viewport prefetch.
+    expect(link).toMatch(/useIdlePrefetch\(settled && href \? \[href\] : null, "nav"\);/);
+    expect(link).toMatch(/prefetch=\{eager \|\| intent \? null : false\}/);
   });
 
   it("a tapped tab is marked before the route commits, and dropped once the route moves or the page is hidden", () => {
@@ -122,5 +127,105 @@ describe("other tab bars switch without a round trip", () => {
 
   it("the studio's route skeleton keeps a hub's bar and tabs on the way in", () => {
     expect(src("src/app/(studio)/loading.tsx")).toMatch(/<StudioRouteSkeleton /);
+  });
+});
+
+describe("idle prefetches: the page's own tabs go before the sidebar's routes", () => {
+  let clock = 0;
+  let idle: (() => void)[] = [];
+  let observed: ((list: { getEntries(): unknown[] }) => void) | null = null;
+  let order: string[] = [];
+
+  async function load() {
+    vi.useFakeTimers();
+    clock = 0;
+    idle = [];
+    observed = null;
+    order = [];
+    vi.stubGlobal("document", { readyState: "complete" });
+    vi.stubGlobal("performance", { now: () => clock });
+    vi.stubGlobal("window", {
+      location: { href: "http://app.test/audio" },
+      requestIdleCallback: (fn: () => void) => idle.push(fn),
+      cancelIdleCallback: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
+      clearTimeout: (t: number) => clearTimeout(t),
+    });
+    vi.stubGlobal(
+      "PerformanceObserver",
+      class {
+        constructor(cb: (list: { getEntries(): unknown[] }) => void) {
+          observed = cb;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    return import("@/lib/idle-prefetch");
+  }
+  const tick = (ms: number) => {
+    for (let i = 0; i < ms; i += 10) {
+      clock += 10;
+      vi.advanceTimersByTime(10);
+    }
+  };
+  const answered = (path: string) => observed!({ getEntries: () => [{ name: `http://app.test${path}?_rsc=x`, responseEnd: clock }] });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("issues the page's tabs first, and the sidebar's rows once the server has answered every tab and gone quiet", async () => {
+    const { queueIdlePrefetch } = await load();
+    queueIdlePrefetch("nav", "/image", () => order.push("row image"));
+    queueIdlePrefetch("page", "/audio/music", () => order.push("tab music"));
+    queueIdlePrefetch("page", "/audio/sfx", () => order.push("tab sfx"));
+    const cancel = queueIdlePrefetch("nav", "/gone", () => order.push("row gone"));
+    cancel();
+    expect(order).toEqual([]);
+    expect(idle).toHaveLength(1);
+    idle[0]();
+    expect(order).toEqual(["tab music", "tab sfx"]);
+    answered("/audio/music");
+    tick(1000);
+    expect(order).toEqual(["tab music", "tab sfx"]);
+    answered("/audio/sfx");
+    tick(400);
+    expect(order).toHaveLength(2);
+    tick(200);
+    expect(order).toEqual(["tab music", "tab sfx", "row image"]);
+    // A page that mounts later (a client navigation into a hub) gets its own idle moment.
+    queueIdlePrefetch("page", "/audio/loop", () => order.push("tab loop"));
+    expect(idle).toHaveLength(2);
+    idle[1]();
+    expect(order.at(-1)).toBe("tab loop");
+  });
+
+  it("lets the sidebar's rows go after 8 s at the latest", async () => {
+    const { queueIdlePrefetch } = await load();
+    queueIdlePrefetch("page", "/audio/music", () => order.push("tab music"));
+    queueIdlePrefetch("nav", "/image", () => order.push("row image"));
+    idle[0]();
+    tick(7900);
+    expect(order).toEqual(["tab music"]);
+    tick(200);
+    expect(order).toEqual(["tab music", "row image"]);
+  });
+
+  it("with no tabs on the page, prefetches the sidebar's rows at the first idle moment", async () => {
+    const { queueIdlePrefetch } = await load();
+    queueIdlePrefetch("nav", "/image", () => order.push("row image"));
+    idle[0]();
+    expect(order).toEqual(["row image"]);
+  });
+
+  it("relies on Next serving route trees and shells before any URL-specific part (the phase order of its prefetch queue)", () => {
+    const scheduler = fs.readFileSync(path.join(__dirname, "..", "node_modules/next/dist/client/components/segment-cache/scheduler.js"), "utf8");
+    const compare = scheduler.slice(scheduler.indexOf("function compareQueuePriority"), scheduler.indexOf("function heapPush"));
+    expect(compare).toMatch(/const phaseDiff = b\.phase - a\.phase;/);
   });
 });
