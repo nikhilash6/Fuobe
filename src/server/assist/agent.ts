@@ -706,6 +706,7 @@ How you work:
 - For multi-step work (an image, then animate it; transcribe, translate, then voice it), put the steps in one generate call and set "after" on each later job: it starts by itself when the earlier job finishes and gets its result as input. When you need to judge a result before deciding the next step, wait with check_generations instead (look=true to see images) and pass the output URL into the next call.
 - Besides images, video and audio, models can transcribe speech, translate or write text (scripts, captions, ad copy), split images into layers, separate voice from background, trim, caption or re-sound clips, and turn an image into a 3D model: search_models with kind "text" or "model3d" finds the text and 3D ones.
 - Whole studio jobs have their own tools, and each job opens in its studio, where the user can carry on: split_layers (a Layers project), restyle_footage (a Shorts Studio session), dub_video (a dub the user reviews line by line in Translate & dub), faceless_episode (a Faceless Studio episode), create_ads (an Ads Studio batch), add_captions (the Captions editor), restore_video (old or black-and-white footage restored and colourised, in Restore & colourise), blockout_film (a grey-box 3D blockout from Blender or any 3D app filmed from reference stills and timed beats, as Cinema's Blockout does; in the Library) and katana (a reference edit — a 1–30 s video — rebuilt shot for shot with the user's own subject from 1–5 photos, when they want "this edit, but with me / my product"). Use them instead of chaining those steps by hand; once one starts, say which studio it's in (the chat links to it).
+- Soundtracks: split_soundtrack splits audio or a video's sound into dialogue, music and effects (all stems, one stem such as "just the music", or one remix at given levels), and remove_dialogue takes the talking out of a video, keeps only it, or lowers the music under it, with the picture untouched. Both run on the user's GPU (free); the cloud engine can't do them.
 - Use the user's files by the URLs listed in their message. Earlier outputs are found with list_recent. Saved characters and products are Elements: check list_elements and write their @handle in prompts.
 - Results show up in the chat by themselves, so don't repeat URLs back. After starting jobs, say briefly what's coming; after they finish, give a short take and suggest a next step.
 - Be brief and friendly. Plain sentences, no headings. Prices are estimates in USD; open-source models run free on the user's own GPU.
@@ -888,6 +889,9 @@ export const offline: ModelCall = async ({ messages, ctx, skills, named }) => {
       "tool_use",
     );
   }
+  // originals (o/dbs-d9): "remove the dialogue" or "just the music" with no file attached asks for one (never a new clip).
+  const soundtrack = offlineSoundtrack(said);
+  if (soundtrack && !("tool" in soundtrack)) return reply([text(soundtrack.say)], "end_turn");
   const hint = skills?.find((s) => s.offline)?.offline;
   const plan = offlinePlan(said, ctx.engine, hint);
   if (!plan) return reply([text("Tell me what to make — an image, a video, a voice-over or a storyboard — and attach any photos to use.")], "end_turn");
@@ -1080,6 +1084,10 @@ export function offlinePlan(message: string, preferred: Engine, hint?: SkillMeta
     return { tool: "remember", input: { text: sentence, category: guessCategory(what) }, say: "I'll remember that for every chat." };
   }
 
+  // originals (o/dbs-d9): "remove the dialogue from this video", "just the music" on an attached clip.
+  const soundtrack = offlineSoundtrack(message);
+  if (soundtrack && "tool" in soundtrack) return soundtrack;
+
   // Any count: a storyboard's frames ("a 6-frame heist"). The take count: how many pictures to make.
   const counted = COUNT.exec(t);
   const count = counted ? num(counted[1]) : hint?.outputs;
@@ -1212,6 +1220,61 @@ export function offlinePlan(message: string, preferred: Engine, hint?: SkillMeta
       ? "edit your image"
       : `make ${n} take${n === 1 ? "" : "s"}`;
   return { tool: "generate", input: { summary: `${isVideo ? "Video" : images.length ? "Edit" : "Image"}: ${text.slice(0, 80)}`, jobs: [job] }, say: `I'll ${what} with the default ${isVideo ? "video" : "image"} model.` };
+}
+
+// ---------------------------------------------------------------------------
+// originals (o/dbs-d9): soundtrack requests (split_soundtrack, remove_dialogue)
+
+const SPEECH = "(?:dialog(?:ue)?s?|talking|speech|speaking|voices?|vocals?|narration|conversation)";
+const REMOVE_SPEECH = new RegExp(`\\b(?:remove|take out|strip|cut out|drop|delete|get rid of|mute|erase|lose|kill)\\b[^.?!]*\\b${SPEECH}\\b|\\bwithout (?:the |any )?${SPEECH}\\b|\\bno ${SPEECH}\\b`);
+const ONLY = "(?:just|only|isolate|extract|keep|pull out|separate)";
+const ONLY_SPEECH = new RegExp(`\\b${ONLY}\\b(?: the| its)? ${SPEECH}\\b|\\b${SPEECH} only\\b`);
+const ONLY_MUSIC = new RegExp(`\\b${ONLY}\\b(?: the| its)? (?:music|score|song)\\b|\\b(?:music|score) only\\b`);
+const ONLY_EFFECTS = new RegExp(`\\b${ONLY}\\b(?: the| its)? (?:sound effects|effects|sfx|ambience)\\b|\\b(?:sfx|effects) only\\b`);
+const LOWER_MUSIC = /\b(?:lower|turn down|quieter|duck|soften|reduce)\b[^.?!]*\b(?:music|background|score|bed)\b/;
+const SPLIT_WORDS = /\b(?:split|separate|unmix|demix)\b[^.?!]*\b(?:soundtrack|audio|sound|stems?|tracks?)\b|\bstems\b/;
+
+/**
+ * A soundtrack request read without an LLM: "remove the dialogue from this video" (remove_dialogue; on an audio file the
+ * music and effects stem), "just the dialogue", "just the music", "only the sound effects", "lower the music under the
+ * talking" (by 12 dB unless a number says how far), "split the soundtrack" (all four stems). The last attached video or
+ * audio file is the source; without one, a question asking for it. Null for anything else.
+ */
+export function offlineSoundtrack(message: string): { tool: string; input: Record<string, unknown>; say: string } | { say: string } | null {
+  const [body, attached = ""] = message.split(/\n\nAttached files[^\n]*\n/);
+  const t = body.trim().toLowerCase();
+  if (!t) return null;
+  const remove = REMOVE_SPEECH.test(t);
+  const speech = ONLY_SPEECH.test(t);
+  const music = ONLY_MUSIC.test(t);
+  const effects = ONLY_EFFECTS.test(t);
+  const lower = LOWER_MUSIC.test(t) && new RegExp(`\\b${SPEECH}\\b`).test(t);
+  const split = SPLIT_WORDS.test(t);
+  if (!remove && !speech && !music && !effects && !lower && !split) return null;
+  const media = [...attached.matchAll(/^- (video|audio) \d+: (\S+)$/gm)].map((m) => ({ kind: m[1], url: m[2] })).at(-1);
+  if (!media) {
+    // "write a song with no vocals", "a narration with music only": a new piece, not a split.
+    if (/\b(?:make|create|generate|write|compose|record)\b/.test(t)) return null;
+    if (!/\b(?:this|the|my|that|our)\s+(?:video|clip|audio|soundtrack|song|track|recording|file|film|movie|podcast|interview|footage)\b/.test(t)) return null;
+    return { say: "Attach the video or audio file (or drop it from your Library) and I'll do that — it runs on your GPU." };
+  }
+  const video = media.kind === "video";
+  if (lower && video) {
+    const db = /\b(\d{1,2})\s*db\b/.exec(t);
+    const musicDb = -Math.min(30, db ? Number(db[1]) : 12);
+    return { tool: "remove_dialogue", input: { video: media.url, music_db: musicDb }, say: `I'll keep the talking and lower the music and effects ${Math.abs(musicDb)} dB under it — the picture stays untouched.` };
+  }
+  if (remove && !speech) {
+    if (video) return { tool: "remove_dialogue", input: { video: media.url }, say: "I'll take the dialogue out and keep the music and sound effects — the picture stays untouched." };
+    return { tool: "split_soundtrack", input: { media: media.url, keep: ["music", "effects"] }, say: "I'll take the dialogue out and keep the music and sound effects." };
+  }
+  if (speech && video && !music && !effects) return { tool: "remove_dialogue", input: { video: media.url, keep: "dialogue" }, say: "I'll keep only the dialogue on the video — the picture stays untouched." };
+  const keep = [speech && "dialogue", music && "music", effects && "effects"].filter(Boolean) as string[];
+  if (keep.length) {
+    const words = keep.map((k) => (k === "effects" ? "sound effects" : k)).join(" and ");
+    return { tool: "split_soundtrack", input: { media: media.url, keep }, say: `I'll split the soundtrack and give you just the ${words}.` };
+  }
+  return { tool: "split_soundtrack", input: { media: media.url }, say: "I'll split the soundtrack into dialogue, music, effects, and music & effects." };
 }
 
 // ---------------------------------------------------------------------------

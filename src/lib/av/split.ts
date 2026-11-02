@@ -193,11 +193,65 @@ export interface SplitInput {
   channels?: number;
   /** Seconds the soundtrack runs, when known. */
   seconds?: number;
+  /** originals (o/dbs-d9): one mix at these levels (graph C, soundtrack-remix-dbs) instead of four stems. */
+  remix?: RemixLevels;
 }
 
 export interface SplitPlan extends ToolPlan {
   quality: SplitQuality | null;
   mode: DbsChannels;
+}
+
+// ---------------------------------------------------------------------------
+// originals (o/dbs-d9): what Assist's and MCP's split_soundtrack returns, from its keep and levels_db
+
+/** The stems a caller names (Assist / MCP words), and the stem each one is. */
+export type KeepStem = "dialogue" | "music" | "effects";
+export const KEEP_STEMS: readonly KeepStem[] = ["dialogue", "music", "effects"];
+export const KEEP_STEM_ID: Record<KeepStem, StemId> = { dialogue: "voice", music: "music", effects: "effects" };
+
+/** A remix's levels (graph C's Adjust Audio Volume: whole dB); a stem left out goes to REMIX_OUT_DB. */
+export const REMIX_MIN_DB = -60;
+export const REMIX_MAX_DB = 12;
+export const REMIX_OUT_DB = -100;
+export interface RemixLevels {
+  voiceDb: number;
+  musicDb: number;
+  effectsDb: number;
+}
+const LEVEL_KEY: Record<KeepStem, keyof RemixLevels> = { dialogue: "voiceDb", music: "musicDb", effects: "effectsDb" };
+
+/**
+ * What a split returns: all four stems; one stem (one kept, or music + effects, which is the Music & effects stem); or one
+ * mix (graph C) when levels are given or the stems kept aren't one stem (dialogue with music, dialogue with effects).
+ */
+export type SplitOutcome = { kind: "stems" } | { kind: "stem"; stem: StemId } | { kind: "mix"; levels: RemixLevels };
+
+/** Throws when nothing is kept. Levels are whole dB, REMIX_MIN_DB…REMIX_MAX_DB; a stem with no level stays at 0 dB. */
+export function splitOutcome(keep?: readonly KeepStem[], levels?: Partial<Record<KeepStem, number>>): SplitOutcome {
+  const kept = keep ? KEEP_STEMS.filter((s) => keep.includes(s)) : [...KEEP_STEMS];
+  if (!kept.length) throw new Error("Keep at least one of dialogue, music or effects");
+  const leveled = !!levels && KEEP_STEMS.some((s) => kept.includes(s) && typeof levels[s] === "number" && Number.isFinite(levels[s]));
+  if (!leveled) {
+    if (kept.length === KEEP_STEMS.length) return { kind: "stems" };
+    if (kept.length === 1) return { kind: "stem", stem: KEEP_STEM_ID[kept[0]] };
+    if (!kept.includes("dialogue")) return { kind: "stem", stem: "background" };
+  }
+  const level = (s: KeepStem): number => {
+    if (!kept.includes(s)) return REMIX_OUT_DB;
+    const v = levels?.[s];
+    return typeof v === "number" && Number.isFinite(v) ? Math.min(REMIX_MAX_DB, Math.max(REMIX_MIN_DB, Math.round(v))) : 0;
+  };
+  return { kind: "mix", levels: { voiceDb: level("dialogue"), musicDb: level("music"), effectsDb: level("effects") } };
+}
+
+/** "Dialogue −6 dB + Music" — a remix in words (stems left out aren't named). */
+export function remixWords(l: RemixLevels): string {
+  const parts = KEEP_STEMS.filter((s) => l[LEVEL_KEY[s]] > REMIX_OUT_DB).map((s) => {
+    const db = l[LEVEL_KEY[s]];
+    return `${stemLabel(KEEP_STEM_ID[s])}${db ? ` ${dbLabel(db)}` : ""}`;
+  });
+  return parts.join(" + ") || "Silence";
 }
 
 const STEP_LABEL: Record<DbsChannels, string> = {
@@ -209,10 +263,12 @@ const STEP_LABEL: Record<DbsChannels, string> = {
 export function planSplit(i: SplitInput): SplitPlan {
   if (i.engine === "cloud") throw new Error(CLOUD_SPLIT_PROBLEM);
   if (!i.media) throw new Error(`Add the ${i.kind === "video" ? "video" : "audio"} to split`);
-  const mode = dbsChannelsFor(i.stereo ? "each channel" : "mono", i.channels);
+  // A remix is one file: in mono it would lose a stereo source's image, so it splits every channel unless told otherwise.
+  const remix = i.remix;
+  const mode = dbsChannelsFor((i.stereo ?? !!remix) ? "each channel" : "mono", i.channels);
   const name = i.name?.trim();
-  const title = `Split · ${name || (i.kind === "video" ? "video soundtrack" : "soundtrack")}`;
-  const extra: Record<string, unknown> = { channels: mode };
+  const title = `${remix ? `Mix (${remixWords(remix)})` : "Split"} · ${name || (i.kind === "video" ? "video soundtrack" : "soundtrack")}`;
+  const extra: Record<string, unknown> = { channels: mode, ...(remix && { remix: true, ...remix }) };
   if (i.quality) extra.separationModel = DBS_MODELS[i.quality];
   if (i.channels && i.channels > 0) extra.sourceChannels = Math.round(i.channels);
   const request: GenerationRequest = {
@@ -229,7 +285,7 @@ export function planSplit(i: SplitInput): SplitPlan {
           sourceDuration: Math.round(i.seconds * 1000) / 1000,
         }),
     },
-    step: { label: STEP_LABEL[mode], index: 0, of: 1 },
+    step: { label: remix ? `${remixWords(remix)} · one mix` : STEP_LABEL[mode], index: 0, of: 1 },
   };
   const surround = surroundSource(i.channels);
   const passes = separationPasses(mode, i.channels);
@@ -238,9 +294,12 @@ export function planSplit(i: SplitInput): SplitPlan {
     length: i.seconds && i.seconds > 0 ? i.seconds : null,
     quality: i.quality ?? null,
     mode,
-    summary: `Splits ${i.kind === "video" ? "the video's soundtrack" : "it"} into dialogue, music, effects and music & effects${mode === "each channel" ? `, every channel on its own (${passes} passes)` : ""}.`,
+    summary: remix
+      ? `Splits ${i.kind === "video" ? "the video's soundtrack" : "it"} and mixes it back as ${remixWords(remix)}, in one file${mode === "each channel" ? `, every channel on its own (${passes} passes)` : ""}.`
+      : `Splits ${i.kind === "video" ? "the video's soundtrack" : "it"} into dialogue, music, effects and music & effects${mode === "each channel" ? `, every channel on its own (${passes} passes)` : ""}.`,
     notes: [
-      ...(surround ? [`This file has ${i.channels} channels. ComfyUI saves audio in mono or stereo only, so the stems come out in mono (all channels mixed), and Music & effects is the music and effects stems added up.`] : []),
+      ...(surround ? [`This file has ${i.channels} channels. ComfyUI saves audio in mono or stereo only, so the ${remix ? "mix comes" : "stems come"} out in mono (all channels mixed)${remix ? "" : ", and Music & effects is the music and effects stems added up"}.`] : []),
+      ...(remix ? ["A mix that would go over full scale is turned down as a whole to fit, so it can come out a little quieter than asked."] : []),
       "Dialogue comes out clean; music and effects can bleed into each other.",
     ],
   };

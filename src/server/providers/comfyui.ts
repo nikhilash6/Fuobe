@@ -722,6 +722,15 @@ declare global {
  * The connected ComfyUI's first torch device type ("cuda" for NVIDIA and ROCm, "cpu", "mps"…), from GET /system_stats
  * (devices[0], as Settings' test reads it), kept for a minute; undefined when the server doesn't say or can't be reached.
  */
+/**
+ * originals (o/dbs-d9): the device comfyDevice last read for the main ComfyUI, without asking it (an Assist card is planned
+ * synchronously); undefined when it hasn't been asked yet.
+ */
+export function comfyDeviceSeen(): string | undefined {
+  const url = baseUrl("main");
+  return url ? globalThis.__fuobeComfyDevice?.get(url)?.type : undefined;
+}
+
 export async function comfyDevice(worker: ComfyWorker = "main"): Promise<string | undefined> {
   // On someone's computer: what its Fuobe tab last said ("cuda:0 NVIDIA …").
   const computer = computerScope();
