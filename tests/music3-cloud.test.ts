@@ -9,7 +9,7 @@ import { getModel, getPreset } from "@/lib/catalog";
 import { buildPayload, extractOutputs } from "@/lib/catalog/payload";
 import { estimateCost, planGeneration } from "@/lib/catalog/plan";
 import type { GenerationRequest, ModelRoute, Operation } from "@/lib/catalog/types";
-import { outputActions } from "@/lib/output-actions";
+import { nextSteps, outputActions } from "@/lib/output-actions";
 import type { Generation } from "@/lib/catalog/types";
 
 const route = (id: string, op?: Operation): ModelRoute => {
@@ -181,6 +181,11 @@ describe("a music result's song tools", () => {
     expect(acts[2].href).toBe("/audio/song?model=mureka-stems&audio=%2Fapi%2Ffiles%2Fsong.mp3");
     // Any song made in Fuobe (a song from your GPU too): sent to Mureka first.
     expect(ids(gen({ modelId: "oss-minimax-music-3" }))[1].href).toBe("/audio/song?model=mureka-remix&audio=%2Fapi%2Ffiles%2Fsong.mp3");
+  });
+
+  it("are a song's next steps", () => {
+    expect(nextSteps(gen(), 0).map((a) => a.label)).toEqual(["Extend song", "Remix", "Stems"]);
+    expect(nextSteps(gen(), 0, 3, { engineMode: "open" }).map((a) => a.id)).toEqual(["lipsync", "voice-change", "split-soundtrack"]);
   });
 
   it("not on sound effects or speech, nor on an install that runs open models only", () => {

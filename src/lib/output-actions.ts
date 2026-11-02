@@ -252,7 +252,14 @@ export function nextSteps(g: Generation, index: number, max = 3, ctx: Pick<Actio
     const at = ids.indexOf("upscale");
     return at < 0 ? [...regen, ...ids] : [...ids.slice(0, at + 1), ...regen, ...ids.slice(at + 1)];
   };
-  const order: OutputActionId[] = o.kind === "video" ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(withRegen(video) ?? [])] : (NEXT_STEPS[o.kind] ?? []);
+  // A song: its song tools first (where they're offered), then Split soundtrack.
+  const song: OutputActionId[] = ["extend-song", "remix-song", "song-stems", "split-soundtrack"];
+  const order: OutputActionId[] =
+    o.kind === "video"
+      ? [...(gradeOf(o) ? (["grade"] as const) : []), ...(withRegen(video) ?? [])]
+      : o.kind === "audio" && g.op && SONG_OPS.has(g.op) && all.some((a) => a.id === "extend-song")
+        ? song
+        : (NEXT_STEPS[o.kind] ?? []);
   return order
     .map((id) => all.find((a) => a.id === id && a.href))
     .filter((a): a is OutputAction => !!a)
