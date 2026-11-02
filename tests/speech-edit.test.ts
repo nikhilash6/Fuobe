@@ -45,17 +45,17 @@ const fits = (w: SpeechWindow) => w.end - w.start + w.seconds <= AUK_SEQUENCE_MA
 describe("Edit speech: the diff", () => {
   it("finds the smallest changed span, ignoring case and punctuation around words", () => {
     const old = splitWords("We open the new studio on Tuesday morning.");
-    expect(diffWords(old, splitWords("we open the new studio, on Thursday morning"))).toEqual([{ from: 6, to: 7, words: ["Thursday"] }]);
+    expect(diffWords(old, splitWords("we open the new studio, on Thursday morning"))).toEqual([{ from: 6, to: 7, words: ["Thursday"], at: 6 }]);
     expect(diffWords(old, old)).toEqual([]);
   });
 
   it("tells insertions, removals and replacements apart, and keeps far-apart edits separate", () => {
     const old = splitWords("one two three four five six seven eight");
-    expect(diffWords(old, splitWords("one two really three four five six seven eight"))).toEqual([{ from: 2, to: 2, words: ["really"] }]);
-    expect(diffWords(old, splitWords("one two four five six seven eight"))).toEqual([{ from: 2, to: 3, words: [] }]);
+    expect(diffWords(old, splitWords("one two really three four five six seven eight"))).toEqual([{ from: 2, to: 2, words: ["really"], at: 2 }]);
+    expect(diffWords(old, splitWords("one two four five six seven eight"))).toEqual([{ from: 2, to: 3, words: [], at: 2 }]);
     expect(diffWords(old, splitWords("uno two three four five six seven ocho"))).toEqual([
-      { from: 0, to: 1, words: ["uno"] },
-      { from: 7, to: 8, words: ["ocho"] },
+      { from: 0, to: 1, words: ["uno"], at: 0 },
+      { from: 7, to: 8, words: ["ocho"], at: 7 },
     ]);
   });
 
@@ -64,7 +64,7 @@ describe("Edit speech: the diff", () => {
       { start: 0, end: 2, text: "Hello there" },
       { start: 2.5, end: 4, text: "how are you" },
     ];
-    expect(diffLines(cues, ["Hello there", "how were you"])).toEqual([{ from: 3, to: 4, words: ["were"] }]);
+    expect(diffLines(cues, ["Hello there", "how were you"])).toEqual([{ from: 3, to: 4, words: ["were"], at: 3 }]);
   });
 });
 
@@ -85,8 +85,10 @@ describe("Edit speech: AuK's instructions", () => {
 
   it("writes the effects in AuK's words", () => {
     expect(effectInstruction({ kind: "pitch", semitones: 2 })).toBe("Raise the pitch by 2 semitones.");
-    expect(effectInstruction({ kind: "pitch", semitones: -1 })).toBe("Lower the pitch by 1 semitone.");
+    // The Cookbook's templates as they are: "by {1/2/3} semitones", "to {0.5/0.75/1.25/1.5/2.0}x".
+    expect(effectInstruction({ kind: "pitch", semitones: -1 })).toBe("Lower the pitch by 1 semitones.");
     expect(effectInstruction({ kind: "pace", speed: 1.5 })).toBe("Adjust the speech speed to 1.5x.");
+    expect(effectInstruction({ kind: "pace", speed: 2 })).toBe("Adjust the speech speed to 2.0x.");
     expect(effectInstruction({ kind: "volume", db: -10 })).toBe("Decrease the volume by 10 dB.");
     expect(effectInstruction({ kind: "emotion", emotion: "happy" })).toBe("Change the emotion to happy.");
     expect(effectInstruction({ kind: "clean" })).toMatch(/remove noise and reverberation/);
@@ -99,6 +101,9 @@ describe("Edit speech: AuK's instructions", () => {
     expect(ttsLength("Hello there")).toBeGreaterThan(1);
     expect(() => ttsLength("x".repeat(600))).toThrow(SpeechEditError);
     expect(() => ttsLength("Hello", 29.5)).toThrow(/voice sample is too long/);
+    // The limit it states is the limit it keeps.
+    expect(() => ttsLength("Hello", 21)).toThrow(/under 20 seconds/);
+    expect(ttsLength("Hello", 19)).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -252,5 +257,33 @@ describe("Edit speech: a run", () => {
     expect(() => planSpeechEdit({ engine: "cloud", media: "/api/files/a.wav", kind: "audio", cues, edited: ["x"], seconds: 8 })).toThrow(/Runs on your GPU|runs on your GPU/);
     expect(() => planSpeechEdit({ engine: "open", media: "/api/files/a.wav", kind: "audio", cues, edited: cues.map((c) => c.text), seconds: 8 })).toThrow(/Nothing changed/);
     expect(() => planSpeechEdit({ engine: "open", media: "/api/files/a.wav", kind: "audio", cues, edited: ["x"], seconds: 8, hasAudio: false })).toThrow(/no sound/);
+  });
+
+  it("keeps a video's sound in step with the picture: every change keeps its length, and Pace is refused", () => {
+    const edited = [cues[0].text, "on a very sunny Wednesday morning in late October.", cues[2].text];
+    const audio = planSpeechEdit({ engine: "open", media: "/api/files/a.wav", kind: "audio", cues, edited, seconds: 9 });
+    expect(audio.length).toBeGreaterThan(10);
+    const video = planSpeechEdit({ engine: "open", media: "/api/files/v.mp4", kind: "video", cues, edited, seconds: 9 });
+    expect(video.length).toBe(9);
+    for (const w of video.windows) expect(w.seconds).toBeCloseTo(w.end - w.start, 6);
+    expect(video.notes.join(" ")).toMatch(/keeps its length/);
+    // A removal on a video keeps its length too.
+    const removed = planSpeechEdit({ engine: "open", media: "/api/files/v.mp4", kind: "video", cues, edited: [cues[0].text, "on morning.", cues[2].text], seconds: 9 });
+    expect(removed.length).toBe(9);
+    expect(() => planSpeechEdit({ engine: "open", media: "/api/files/v.mp4", kind: "video", cues, range: { start: 0, end: 9 }, effect: { kind: "pace", speed: 2 }, seconds: 9 })).toThrow(/drift from the picture/);
+    // Same-length effects still run on a video; Pace still runs on audio.
+    expect(planSpeechEdit({ engine: "open", media: "/api/files/v.mp4", kind: "video", cues, range: { start: 0, end: 9 }, effect: { kind: "volume", db: 5 }, seconds: 9 }).length).toBe(9);
+    expect(planSpeechEdit({ engine: "open", media: "/api/files/a.wav", kind: "audio", cues, range: { start: 0, end: 9 }, effect: { kind: "pace", speed: 2 }, seconds: 9 }).length).toBeLessThan(5);
+  });
+
+  it("merges two nearby changes with the edited words between them, not the old punctuation", () => {
+    const plan = planSpeechEdit({ engine: "open", media: "/api/files/a.wav", kind: "audio", cues, edited: [cues[0].text, "on a very sunny Wednesday morning in late October.", cues[2].text], seconds: 9 });
+    expect(plan.windows).toHaveLength(1);
+    expect(plan.windows[0].instruction).toBe("Replace 'Tuesday morning.' with 'a very sunny Wednesday morning in late October.'.");
+  });
+
+  it("writes no model names or step counts in what the page shows", () => {
+    const plan = planSpeechEdit({ engine: "open", media: "/api/files/a.wav", kind: "audio", cues, edited: [cues[0].text, "on Thursday morning.", cues[2].text], seconds: 9 });
+    expect(plan.notes.join(" ")).not.toMatch(/Flash|steps/);
   });
 });

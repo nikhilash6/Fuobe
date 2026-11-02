@@ -778,7 +778,7 @@ const blockoutFilm = defineTool({
 
 const SpeechEditInput = z.object({
   media: ref.describe("The recording (or video) whose speech to change."),
-  kind: z.enum(["audio", "video"]).describe("audio, or video (its sound is edited and put back on the picture, copied as it is)."),
+  kind: z.enum(["audio", "video"]).describe("audio, or video (its sound is edited and put back on the picture, copied as it is; each change keeps its length so the sound stays in step, and pace is for audio only)."),
   transcript: z
     .array(z.object({ start: z.number().min(0), end: z.number().min(0), text: z.string() }))
     .min(1)
@@ -792,7 +792,7 @@ const SpeechEditInput = z.object({
     .object({
       kind: z.enum(["pitch", "pace", "volume", "emotion", "whisper", "unwhisper", "clean", "isolate"]),
       semitones: z.number().int().optional().describe(`pitch: one of ${PITCH_STEPS.join(", ")}.`),
-      speed: z.number().optional().describe(`pace: one of ${PACES.join(", ")}.`),
+      speed: z.number().optional().describe(`pace (audio only): one of ${PACES.join(", ")}.`),
       db: z.number().int().optional().describe(`volume: one of ${VOLUME_STEPS.join(", ")}.`),
       emotion: z.enum(EMOTIONS as [string, ...string[]]).optional().describe("emotion: the new mood."),
     })

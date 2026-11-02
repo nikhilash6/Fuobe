@@ -32,6 +32,7 @@ import {
   PACES,
   PITCH_STEPS,
   PROMPT_HELPER_NOTE,
+  QUALITY_HINTS,
   SPEECH_EDIT_FEATURE,
   VOLUME_STEPS,
   type AukQuality,
@@ -277,6 +278,8 @@ export function SpeechEditTool({ tabs }: { tabs?: React.ReactNode }) {
   const take = useCallback(
     (s: Source, given?: Cue[], line?: number) => {
       setSource(s);
+      // A video keeps its length (Pace would put the sound out of step with the picture).
+      if (s.kind === "video") setEffect((e) => (e.kind === "pace" ? defaultEffect("pitch") : e));
       setResultId(null);
       setVideoId(null);
       setTranscriptId(null);
@@ -419,7 +422,7 @@ export function SpeechEditTool({ tabs }: { tabs?: React.ReactNode }) {
             </p>
             {view === "sound" && (
               <div className="mb-3 space-y-2 rounded-xl bg-muted/50 p-2.5">
-                <Segmented label="Effect" value={effect.kind} onChange={(k) => setEffect(defaultEffect(k))} options={EFFECTS.map((k) => ({ value: k, label: EFFECT_LABELS[k] }))} />
+                <Segmented label="Effect" value={effect.kind} onChange={(k) => setEffect(defaultEffect(k))} options={EFFECTS.filter((k) => k !== "pace" || source.kind !== "video").map((k) => ({ value: k, label: EFFECT_LABELS[k] }))} />
                 <EffectOptions effect={effect} onChange={setEffect} />
               </div>
             )}
@@ -446,8 +449,8 @@ export function SpeechEditTool({ tabs }: { tabs?: React.ReactNode }) {
             </ol>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="w-16 shrink-0 text-[13px]">Quality</span>
-              <Segmented label="Quality" value={quality} onChange={setQuality} options={(["fast", "best"] as const).map((q) => ({ value: q, label: AUK_SETTINGS[q].label.replace(/ \(.*\)$/, "") }))} />
-              <span className="text-[12px] text-muted-foreground">{quality === "fast" ? "AuK-Flash, 4 steps" : "Full AuK, 32 steps: slower, a little closer to the voice"}</span>
+              <Segmented label="Quality" value={quality} onChange={setQuality} options={(["fast", "best"] as const).map((q) => ({ value: q, label: AUK_SETTINGS[q].label }))} />
+              <span className="text-[12px] text-muted-foreground">{QUALITY_HINTS[quality]}</span>
             </div>
           </Panel>
         )}

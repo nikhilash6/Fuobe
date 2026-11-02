@@ -107,6 +107,8 @@ export interface TextChange {
   from: number;
   to: number;
   words: string[];
+  /** Where `words` start in the new text (set by diffWords; lets merged changes take the words between them as edited). */
+  at?: number;
 }
 
 /**
@@ -143,11 +145,11 @@ export function diffWords(old: string[], next: string[]): TextChange[] {
       i++;
       j++;
     } else if (j < m && (i >= n || dp[i][j + 1] >= dp[i + 1][j])) {
-      open ??= { from: head + i, to: head + i, words: [] };
+      open ??= { from: head + i, to: head + i, words: [], at: head + j };
       open.words.push(next[head + j]);
       j++;
     } else {
-      open ??= { from: head + i, to: head + i, words: [] };
+      open ??= { from: head + i, to: head + i, words: [], at: head + j };
       open.to = head + i + 1;
       i++;
     }
@@ -244,13 +246,15 @@ export const EFFECT_LABELS: Record<EffectKind, string> = {
   isolate: "Keep only this speaker",
 };
 
-/** AuK's instruction for an effect on a window (Cookbook §3–§5); `said` is what the window's speaker says (Keep only this speaker). */
+/**
+ * AuK's instruction for an effect on a window, worded exactly as its Cookbook's templates (§3–§5: "by {1/2/3} semitones",
+ * "to {0.5/0.75/1.25/1.5/2.0}x"); `said` is what the window's speaker says (Keep only this speaker). */
 export function effectInstruction(e: SpeechEffect, said = ""): string {
   switch (e.kind) {
     case "pitch":
-      return `${e.semitones > 0 ? "Raise" : "Lower"} the pitch by ${Math.abs(e.semitones)} semitone${Math.abs(e.semitones) === 1 ? "" : "s"}.`;
+      return `${e.semitones > 0 ? "Raise" : "Lower"} the pitch by ${Math.abs(e.semitones)} semitones.`;
     case "pace":
-      return `Adjust the speech speed to ${e.speed}x.`;
+      return `Adjust the speech speed to ${Number.isInteger(e.speed) ? e.speed.toFixed(1) : e.speed}x.`;
     case "volume":
       return `${e.db > 0 ? "Increase" : "Decrease"} the volume by ${Math.abs(e.db)} dB.`;
     case "emotion":
@@ -337,6 +341,13 @@ export interface PlanInput {
   words: Word[];
   /** Seconds the recording runs. */
   duration: number;
+  /** The edited text's words (lets two merged changes keep the edited words between them, with their punctuation). */
+  next?: string[];
+  /**
+   * Every window keeps its old length (a video's sound, which must stay in step with the picture): AuK fits the new words
+   * into the same time, and Pace, which only changes the length, is refused.
+   */
+  keepLength?: boolean;
 }
 
 /**
@@ -368,19 +379,22 @@ function spanOf(words: Word[], c: TextChange, duration: number): [number, number
 }
 
 /** Merge two changes into one that spans both (the words between them unchanged on both sides). */
-function mergeChanges(words: Word[], a: TextChange, b: TextChange): TextChange {
+function mergeChanges(words: Word[], a: TextChange, b: TextChange, next?: string[]): TextChange {
   const [x, y] = a.from <= b.from ? [a, b] : [b, a];
-  const between = words.slice(x.to, y.from).map((w) => w.text);
-  return { from: x.from, to: Math.max(x.to, y.to), words: [...x.words, ...between, ...y.words] };
+  // The words between, as edited (they match the old ones but for case and punctuation, which the new text decides).
+  const edited = next && x.at !== undefined && y.at !== undefined ? next.slice(x.at + x.words.length, y.at) : null;
+  const between = edited && edited.length === y.from - x.to ? edited : words.slice(x.to, y.from).map((w) => w.text);
+  return { from: x.from, to: Math.max(x.to, y.to), words: [...x.words, ...between, ...y.words], ...(x.at !== undefined && { at: x.at }) };
 }
 
 /**
  * Text edits → AuK windows, one per change (changes whose windows would overlap or nearly touch become one), in time
  * order. Each window's new length is its old length plus the change in the words' time: the difference in characters at the
- * speaker's rate for a replacement, the new words' time for an insertion, the old words' time for a removal. Throws (in words the page shows) when a change is too long for one AuK call or there are too many.
+ * speaker's rate for a replacement, the new words' time for an insertion, the old words' time for a removal (with
+ * keepLength, a video's, the old length as it is). Throws (in words the page shows) when a change is too long for one AuK call or there are too many.
  */
 export function planTextWindows(input: PlanInput, changes: TextChange[]): SpeechWindow[] {
-  const { words, duration } = input;
+  const { words, duration, keepLength } = input;
   if (!changes.length) return [];
   const rate = speakingRate(words);
   const cuts = cutsOf(words, duration);
@@ -390,7 +404,7 @@ export function planTextWindows(input: PlanInput, changes: TextChange[]): Speech
     // A replacement keeps the old words' real length and adds or takes the difference in characters at the speaker's
     // rate; an insertion adds the new words' time, a removal takes the old words' time away.
     const oldText = texts.slice(c.from, c.to).join(" ");
-    const delta = c.from === c.to ? sayLength(c.words.join(" "), rate) : c.words.length ? round3((c.words.join(" ").length - oldText.length) * rate) : -(e - s);
+    const delta = keepLength ? 0 : c.from === c.to ? sayLength(c.words.join(" "), rate) : c.words.length ? round3((c.words.join(" ").length - oldText.length) * rate) : -(e - s);
     // The window's old length L and new length L + delta must fit together: 2L + delta ≤ max.
     const budget = windowBudget(1, Math.max(0, delta));
     const w = windowAround(s, e, cuts, duration, budget);
@@ -401,7 +415,7 @@ export function planTextWindows(input: PlanInput, changes: TextChange[]): Speech
   for (let k = 0; k < list.length - 1; ) {
     const [p, n] = [list[k], list[k + 1]];
     if (p.w && n.w && n.w.start - p.w.end < 2 * SPEECH_CROSSFADE) {
-      list.splice(k, 2, build(mergeChanges(words, p.c, n.c)));
+      list.splice(k, 2, build(mergeChanges(words, p.c, n.c, input.next)));
       if (k > 0) k--;
     } else k++;
   }
@@ -420,6 +434,9 @@ export function planTextWindows(input: PlanInput, changes: TextChange[]): Speech
   return out;
 }
 
+/** Why a video has no Pace: a faster or slower line changes the sound's length, and the picture would no longer match it. */
+export const PACE_ON_VIDEO_PROBLEM = "Pace changes how long the line runs, so on a video the sound would drift from the picture. Change the pace on the audio alone, or pick another effect.";
+
 /**
  * An effect on [start, end] → AuK windows: the range widened to the nearest silence (within half a second, else a word
  * boundary), then split at silences into pieces short enough for one call each (same-length effects up to about 14.7 s,
@@ -427,6 +444,7 @@ export function planTextWindows(input: PlanInput, changes: TextChange[]): Speech
  */
 export function planEffectWindows(input: PlanInput, range: { start: number; end: number }, effect: SpeechEffect): SpeechWindow[] {
   const { words, duration } = input;
+  if (input.keepLength && effect.kind === "pace") throw new SpeechEditError(PACE_ON_VIDEO_PROBLEM);
   const s0 = Math.max(0, Math.min(range.start, range.end));
   const e0 = Math.min(duration, Math.max(range.start, range.end));
   if (!(e0 - s0 >= 0.3)) throw new SpeechEditError("Pick at least a third of a second to change");
@@ -515,8 +533,8 @@ export function mapTime(windows: SpeechWindow[], t: number): number {
 /** AuK checkpoints: Flash (distilled, 4 steps, no guidance) by default, the base model for the best take. */
 export type AukQuality = "fast" | "best";
 export const AUK_SETTINGS: Record<AukQuality, { checkpoint: string; steps: number; cfg: number; label: string }> = {
-  fast: { checkpoint: "ckpts/AuK-Flash/auk_flash.safetensors", steps: 4, cfg: 0, label: "Fast (AuK-Flash)" },
-  best: { checkpoint: "ckpts/AuK/auk_base.safetensors", steps: 32, cfg: 2, label: "Best (AuK)" },
+  fast: { checkpoint: "ckpts/AuK-Flash/auk_flash.safetensors", steps: 4, cfg: 0, label: "Fast" },
+  best: { checkpoint: "ckpts/AuK/auk_base.safetensors", steps: 32, cfg: 2, label: "Best" },
 };
 
 /** Why the cloud engine has no Edit speech (and what Engine mode "Paid APIs only" says). */
@@ -531,6 +549,12 @@ export const PROMPT_HELPER_NOTE =
 /** AuK's languages, from its technical report (arXiv 2609.08936: a bilingual Chinese and English corpus). */
 export const AUK_LANGUAGES = ["English", "Chinese"];
 
+/** What each quality setting means, in the page's words. */
+export const QUALITY_HINTS: Record<AukQuality, string> = {
+  fast: "The quickest take, in the same voice",
+  best: "Slower, a little closer to the voice",
+};
+
 export const engineProblem = (engine: Engine): string | null => (engine === "cloud" ? CLOUD_SPEECH_EDIT_PROBLEM : null);
 
 /** A changed word shown on camera: the result can say so and offer Lipsync, with the times it should cover. */
@@ -544,6 +568,8 @@ export function onCameraWarning(kind: "audio" | "video", windows: SpeechWindow[]
 
 /** The longest line AuK says in one call: its 30 s holds a voice sample and the line together. */
 export const AUK_TTS_MAX_SECONDS = 30;
+/** The longest voice sample taken: it leaves about 9.5 s for the line. */
+export const AUK_TTS_MAX_SAMPLE = 20;
 
 /**
  * AuK's text-to-speech instruction (Cookbook §1): with a voice sample, "Say the following with the same voice"; without
@@ -559,8 +585,8 @@ export function ttsInstruction(text: string, o: { hasVoice: boolean; voiceDescri
 /** How long AuK should make a line, and the room its 30 s leaves (a voice sample of `sample` seconds takes the rest). */
 export function ttsLength(text: string, sample = 0): number {
   const want = Math.max(1, sayLength(text, DEFAULT_SECONDS_PER_CHAR) + 0.4);
+  if (sample > AUK_TTS_MAX_SAMPLE) throw new SpeechEditError(`That voice sample is too long: use one under ${AUK_TTS_MAX_SAMPLE} seconds`);
   const room = AUK_SEQUENCE_MAX - SEQUENCE_MARGIN - sample;
-  if (room < 1) throw new SpeechEditError("That voice sample is too long for AuK: use one under 20 seconds");
   if (want > room) throw new SpeechEditError(`AuK says up to about ${Math.floor(room)} s per line${sample ? " with this voice sample" : ""}: split the line`);
   return round3(want);
 }
@@ -595,18 +621,20 @@ export interface SpeechEditPlan extends ToolPlan {
 }
 
 /** The windows a request makes (word edits, else an effect on a range); throws what's in the way, in words the page shows. */
-export function speechWindowsFor(i: Pick<SpeechEditInput, "cues" | "edited" | "range" | "effect" | "seconds">): SpeechWindow[] {
+export function speechWindowsFor(i: Pick<SpeechEditInput, "cues" | "edited" | "range" | "effect" | "seconds"> & { kind?: SpeechEditInput["kind"] }): SpeechWindow[] {
   const duration = i.seconds ?? Math.max(0, ...i.cues.map((c) => c.end));
   if (!(duration > 0)) throw new SpeechEditError("Couldn't tell how long the recording runs: add it again");
   const words = wordsFromCues(i.cues);
+  // A video's sound must keep its length: the picture is copied as it is, so every word after a change stays in step.
+  const keepLength = i.kind === "video";
   if (i.effect) {
     if (!i.range) throw new SpeechEditError("Pick the part to change");
-    return planEffectWindows({ words, duration }, i.range, i.effect);
+    return planEffectWindows({ words, duration, keepLength }, i.range, i.effect);
   }
   if (!i.edited) throw new SpeechEditError("Edit the words, or pick a range and an effect");
   const changes = diffLines(i.cues, i.edited);
   if (!changes.length) throw new SpeechEditError("Nothing changed yet: edit a line's words first");
-  return planTextWindows({ words, duration }, changes);
+  return planTextWindows({ words, duration, keepLength, next: i.edited.flatMap(splitWords) }, changes);
 }
 
 /** One AuK job for every window (and, on a video, the stream-copy mux that puts the new sound on the picture). */
@@ -662,7 +690,8 @@ export function planSpeechEdit(i: SpeechEditInput): SpeechEditPlan {
     summary: `${windows.length === 1 ? "One part" : `${windows.length} parts`} of the ${video ? "video's sound" : "recording"} ${i.effect ? "changed" : "re-spoken"} by AuK in the same voice and crossfaded back${video ? ", then put back on the picture (copied as it is)" : ""}.`,
     notes: [
       "Each part keeps at least a second of the untouched recording around it, so the new words match the voice and the room.",
-      ...(i.quality === "best" ? [] : ["Fast uses AuK-Flash (4 steps). Best uses the full AuK model: slower, a little closer to the voice."]),
+      ...(video ? ["On a video every changed part keeps its length, so the sound stays in step with the picture: the new words are fitted into the same time."] : []),
+      ...(i.quality === "best" ? [] : ["Best quality is slower and a little closer to the voice."]),
       ...(warning ? [warning] : []),
     ],
   };
