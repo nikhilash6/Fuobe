@@ -26,11 +26,15 @@ export const MAX_LABEL = 80;
 export const MAX_SIDE = 4096;
 /** Marks the scan was less sure of are shown off (kept) at first. */
 export const SURE = 0.65;
+/** A mark whose repair box covers more of the picture than this is shown off at first: repairing it would redraw most of the photo. */
+export const BIG_SHARE = 0.4;
 /**
  * The scan's own margin around a mark (the scan graph's QWMDetect: expand 20, padding 0.35, capped per kind as the pack
  * caps it). The sure marks come back with it; the less sure ones come back tight and get it here.
  */
 export const SCAN_EXPAND = 20;
+/** The repair margin added around the kept marks: a scan box can stop a few pixels short of a soft mark edge. */
+export const KEPT_EXPAND = 32;
 const PAD: Record<(typeof OVERLAY_TYPES)[number], number> = {
   text_logo: 0.12,
   translucent_text_logo: 0.35,
@@ -184,7 +188,8 @@ export function parseScanReport(text: string | undefined | null): ScanResult | n
       const tight = (box4(it.source_bbox) && ordered(box4(it.source_bbox)!, width, height)) || given;
       const repair = on ? given : padBox(tight, type, width, height);
       const label = cleanLabel(it.label);
-      const sure = on && (!finite(it.confidence) || it.confidence >= SURE);
+      const big = (repair[2] - repair[0]) * (repair[3] - repair[1]) > BIG_SHARE * width * height;
+      const sure = on && !big && (!finite(it.confidence) || it.confidence >= SURE);
       regions.push({ id: `r${regions.length + 1}`, type, label, chip: chipFor(type, label), box: tight, repair, on: sure, background: cleanLabel(it.background) });
     }
   };

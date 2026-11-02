@@ -17359,6 +17359,641 @@
     "essentials_category": "Basics",
     "has_intermediate_output": false
   },
+  "QWMComposite": {
+    "input": {
+      "required": {
+        "original": [
+          "IMAGE"
+        ],
+        "edited_crop": [
+          "IMAGE"
+        ],
+        "mask": [
+          "MASK"
+        ],
+        "geometry": [
+          "QWM_GEOMETRY"
+        ],
+        "feather": [
+          "INT",
+          {
+            "default": 6,
+            "min": 0,
+            "max": 64,
+            "tooltip": "贴回边缘的颜色过渡宽度（原图像素）。只缓和边界色差，不能补齐漏选范围；残影应调 expand/dilation。"
+          }
+        ],
+        "align": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "根据遮罩外上下文估计小幅位移并对齐。报告出现 warning 时应人工检查。"
+          }
+        ]
+      },
+      "optional": {
+        "color_match": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "用遮罩外配对像素做有限 RGB 校正，减少局部色漂；不把原遮挡像素混回生成结果。"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "original",
+        "edited_crop",
+        "mask",
+        "geometry",
+        "feather",
+        "align"
+      ],
+      "optional": [
+        "color_match"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "restored_image",
+      "comparison",
+      "report"
+    ],
+    "name": "QWMComposite",
+    "display_name": "06 对齐 / 保色贴回",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMDetect": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE"
+        ],
+        "mode": [
+          [
+            "auto_qwen",
+            "manual_boxes",
+            "manual_mask"
+          ]
+        ],
+        "boxes_json": [
+          "STRING",
+          {
+            "default": "{\"coordinate_space\":\"pixels\",\"boxes\":[]}",
+            "multiline": true,
+            "tooltip": "手动框 JSON。坐标可用像素、xyxy_1000 或 normalized；auto_qwen 模式会用模型输出覆盖它。"
+          }
+        ],
+        "detection_side": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 256,
+            "max": 2048,
+            "step": 32,
+            "tooltip": "送入 Qwen3-VL 的定位图最长边。越大越容易看清小 Logo，显存和耗时也随之增加。"
+          }
+        ],
+        "expand": [
+          "INT",
+          {
+            "default": 8,
+            "min": 0,
+            "max": 64,
+            "tooltip": "矩形框向外扩的像素数，用于覆盖描边、阴影和接缝。它只影响 box 范围，不负责羽化。"
+          }
+        ],
+        "max_tokens": [
+          "INT",
+          {
+            "default": 512,
+            "min": 64,
+            "max": 2048,
+            "tooltip": "定位模型输出 JSON 的最大 token 数。多水印或复杂描述时增加；普通图片保持 512。"
+          }
+        ],
+        "hint": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "给定位模型的补充线索，例如“左下角灰色文字”和“右下角圆形 Logo”；不改变编辑指令。"
+          }
+        ],
+        "edit_prompt": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "给 Qwen Image 的补充编辑要求。写保留结构、材质和位置约束；不要只写“去水印”。"
+          }
+        ],
+        "padding_ratio": [
+          "FLOAT",
+          {
+            "default": 0.35,
+            "min": 0,
+            "max": 1,
+            "step": 0.05,
+            "tooltip": "自动检测框按比例扩边；程序会按水印类型设上限。手动框模式不使用此比例。"
+          }
+        ]
+      },
+      "optional": {
+        "clip": [
+          "CLIP"
+        ],
+        "manual_mask": [
+          "MASK"
+        ],
+        "min_confidence": [
+          "FLOAT",
+          {
+            "default": 0.65,
+            "min": 0,
+            "max": 1,
+            "tooltip": "保留自动候选的最低置信度。调高可减少误检，调低可减少低对比水印漏检；低于 0.65 的结果应人工确认。"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "mode",
+        "boxes_json",
+        "detection_side",
+        "expand",
+        "max_tokens",
+        "hint",
+        "edit_prompt",
+        "padding_ratio"
+      ],
+      "optional": [
+        "clip",
+        "manual_mask",
+        "min_confidence"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "STRING",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "watermark_mask",
+      "boxes_json",
+      "preview",
+      "edit_prompt"
+    ],
+    "name": "QWMDetect",
+    "display_name": "02 自动定位 / 手动改框",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMFinal": {
+    "input": {
+      "required": {
+        "original": [
+          "IMAGE"
+        ],
+        "initial_mask": [
+          "MASK"
+        ],
+        "detection_report": [
+          "STRING"
+        ]
+      },
+      "optional": {
+        "first_pass": [
+          "IMAGE",
+          {
+            "lazy": true
+          }
+        ],
+        "first_report": [
+          "STRING",
+          {
+            "lazy": true
+          }
+        ],
+        "residual_report": [
+          "STRING",
+          {
+            "lazy": true
+          }
+        ],
+        "second_pass": [
+          "IMAGE",
+          {
+            "lazy": true
+          }
+        ],
+        "second_report": [
+          "STRING",
+          {
+            "lazy": true
+          }
+        ],
+        "residual_mask": [
+          "MASK",
+          {
+            "lazy": true
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "original",
+        "initial_mask",
+        "detection_report"
+      ],
+      "optional": [
+        "first_pass",
+        "first_report",
+        "residual_report",
+        "second_pass",
+        "second_report",
+        "residual_mask"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "final_image",
+      "comparison",
+      "quality_report"
+    ],
+    "name": "QWMFinal",
+    "display_name": "12 质量检查 / 选择最终结果",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMPrepare": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE"
+        ],
+        "mask": [
+          "MASK"
+        ],
+        "context_pixels": [
+          "INT",
+          {
+            "default": 96,
+            "min": 0,
+            "max": 2048,
+            "tooltip": "裁剪区四周保留的原图上下文像素。普通文字用 96；贴近人体或建筑结构用 256~384。"
+          }
+        ],
+        "max_side": [
+          "INT",
+          {
+            "default": 768,
+            "min": 256,
+            "max": 2048,
+            "step": 32,
+            "tooltip": "局部裁剪送入编辑模型的最长边。8GB 显存建议 768；细节复杂且显存足够时用 1024。"
+          }
+        ],
+        "pre_inpaint": [
+          [
+            "auto",
+            "none",
+            "telea",
+            "ns"
+          ]
+        ],
+        "inpaint_radius": [
+          "INT",
+          {
+            "default": 3,
+            "min": 1,
+            "max": 15,
+            "tooltip": "Telea / NS 预清理的半径，仅作用于遮罩内。色块或贴纸用 3~5；纹理复杂时可关闭预清理。"
+          }
+        ]
+      },
+      "optional": {
+        "edit_prompt": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "裁剪节点接收的编辑要求；通常由“02 自动定位 / 手动改框”连线，不需手动填写。"
+          }
+        ],
+        "boxes_json": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "检测报告 JSON，用于按 overlay_type 选择预清理策略；通常由定位或残留节点连线。"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "mask",
+        "context_pixels",
+        "max_side",
+        "pre_inpaint",
+        "inpaint_radius"
+      ],
+      "optional": [
+        "edit_prompt",
+        "boxes_json"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "IMAGE",
+      "MASK",
+      "QWM_GEOMETRY",
+      "STRING",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "reference_crop",
+      "crop_mask",
+      "geometry",
+      "status",
+      "edit_prompt"
+    ],
+    "name": "QWMPrepare",
+    "display_name": "04 裁剪并记录坐标",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMRefineMask": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE"
+        ],
+        "mask": [
+          "MASK"
+        ],
+        "boxes_json": [
+          "STRING",
+          {
+            "multiline": true
+          }
+        ],
+        "method": [
+          [
+            "auto",
+            "sam",
+            "box"
+          ]
+        ],
+        "sam_model": [
+          "STRING",
+          {
+            "default": "sam_vit_b_01ec64.pth",
+            "tooltip": "SAM 权重文件名；放在 ComfyUI/models/sams/。"
+          }
+        ],
+        "device": [
+          [
+            "auto",
+            "cpu",
+            "cuda"
+          ]
+        ],
+        "dilation": [
+          "INT",
+          {
+            "default": 12,
+            "min": 0,
+            "max": 64,
+            "tooltip": "SAM 或手绘遮罩向外扩的基础像素数，用于覆盖白边、透明边和投影。不规则贴纸开启自适应时会按短边再扩大安全边，最多 64px；它不等于 feather。"
+          }
+        ],
+        "adaptive_dilation": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "按大型贴纸短边自动增加外扩，最多 64px。人物、头发或建筑边缘敏感时可关闭。"
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "mask",
+        "boxes_json",
+        "method",
+        "sam_model",
+        "device",
+        "dilation",
+        "adaptive_dilation"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "refined_mask",
+      "preview",
+      "status"
+    ],
+    "name": "QWMRefineMask",
+    "display_name": "03 不规则轮廓细化（SAM）",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
+  "QWMResidualDetect": {
+    "input": {
+      "required": {
+        "image": [
+          "IMAGE"
+        ],
+        "clip": [
+          "CLIP"
+        ],
+        "detection_side": [
+          "INT",
+          {
+            "default": 1024,
+            "min": 256,
+            "max": 2048,
+            "step": 32,
+            "tooltip": "残留分区送入 Qwen3-VL 的最长边。小残片漏检时提高到 1280；8GB 显存保持 1024。"
+          }
+        ],
+        "expand": [
+          "INT",
+          {
+            "default": 24,
+            "min": 0,
+            "max": 96,
+            "tooltip": "残留候选向外扩的安全边，随后与第一次修复范围取交集。它不会扩大到原遮罩之外。"
+          }
+        ],
+        "max_tokens": [
+          "INT",
+          {
+            "default": 384,
+            "min": 64,
+            "max": 2048,
+            "tooltip": "残留复检 JSON 的最大 token 数。只检查残片，通常 384 足够。"
+          }
+        ],
+        "edit_prompt": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": true,
+            "tooltip": "二采追加的局部修复要求。只描述残留和需要保持的结构；留空使用自动提示词。"
+          }
+        ]
+      },
+      "optional": {
+        "allowed_mask": [
+          "MASK"
+        ],
+        "enabled": [
+          "BOOLEAN",
+          {
+            "default": true,
+            "tooltip": "是否运行第一次修复后的残留复检。关闭后不会触发二采，最终报告会保留 needs_review。"
+          }
+        ],
+        "first_report": [
+          "STRING",
+          {
+            "default": ""
+          }
+        ],
+        "min_confidence": [
+          "FLOAT",
+          {
+            "default": 0.8,
+            "min": 0,
+            "max": 1,
+            "tooltip": "触发二采的残留置信度阈值。默认 0.8，只处理高置信度残片，避免把自然纹理再次生成。"
+          }
+        ],
+        "original_image": [
+          "IMAGE"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "clip",
+        "detection_side",
+        "expand",
+        "max_tokens",
+        "edit_prompt"
+      ],
+      "optional": [
+        "allowed_mask",
+        "enabled",
+        "first_report",
+        "min_confidence",
+        "original_image"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "MASK",
+      "STRING",
+      "IMAGE",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "residual_mask",
+      "boxes_json",
+      "preview",
+      "edit_prompt"
+    ],
+    "name": "QWMResidualDetect",
+    "display_name": "07 第一次修复后检查残留",
+    "description": "",
+    "python_module": "custom_nodes.ComfyUI-Qwen-Watermark",
+    "category": "Qwen Watermark",
+    "output_node": false,
+    "has_intermediate_output": false,
+    "search_aliases": []
+  },
   "QuadrupleCLIPLoader": {
     "input": {
       "required": {

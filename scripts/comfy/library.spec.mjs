@@ -2843,7 +2843,7 @@ export const SPEC = [
     license: 'Qwen3-VL 8B Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
     notes:
       'The pack\'s detect-only workflow (qwen_watermark_detection.api.json) without its preview and save nodes: QWMDetect auto_qwen reads the picture once with ' +
-      'Qwen3-VL 8B (int8, detection side 1024, expand 20, padding 0.35, min confidence 0.65) and PreviewAny shows its report, the only output: JSON ' +
+      'Qwen3-VL 8B (int8, detection side 1536, up to 2048 tokens so a mark tiled over the photo comes back one box per copy, expand 20, padding 0.35, min confidence 0.65) and PreviewAny shows its report, the only output: JSON ' +
       '{coordinate_space: "pixels", image_size, boxes: [{label, bbox (padded repair box), source_bbox (tight), overlay_type, mask_method, confidence}], ' +
       'rejected_boxes (below 0.65), status}. The app draws source_bbox and sends the kept boxes to image-watermark-remove-qwen21. ' +
       'The GPU pre-flight also checks image-watermark-remove-qwen21 for a scan (its companion graph).',
@@ -2868,9 +2868,9 @@ export const SPEC = [
     license: 'Qwen Research License Agreement (Qwen-Image 2.1): NON-COMMERCIAL, research and evaluation only; Qwen3-VL 8B Apache-2.0; SAM ViT-B (segment-anything) Apache-2.0; ComfyUI-Qwen-Watermark nodes MIT',
     notes:
       'The pack\'s main workflow (qwen21_watermark.api.json, plain settings) with the int8 UNET (qwen_image_2.1_int8_convrot, as Live edit) and without its ' +
-      'debug save and preview nodes. QWMDetect (manual_boxes with the kept boxes and no extra margin, since the scan\'s boxes carry it; auto_qwen with ' +
+      'debug save and preview nodes. QWMDetect (manual_boxes with the kept boxes and a 32 px repair margin past the scan\'s box; auto_qwen with ' +
       'expand 20 for API callers) -> QWMRefineMask (a rectangle for text, logos, ' +
-      'blocks and mosaics, a SAM ViT-B outline for stickers) -> QWMPrepare (context 96, max side maxSize, OpenCV pre-fill) -> Qwen-Image 2.1 edit, 20 steps, ' +
+      'blocks and mosaics, a SAM ViT-B outline for stickers) -> QWMPrepare (context 96, max side maxSize, no pre-fill: the OpenCV pre-fill smeared the pattern of a mosaic into a large box) -> Qwen-Image 2.1 edit, 20 steps, ' +
       'cfg 1 -> QWMComposite (feather 6, align, colour match) -> QWMResidualDetect (Qwen3-VL looks for leftovers inside the first mask) -> one more pass ' +
       'when it finds some -> QWMFinal keeps the better pass and raises when any pixel outside the mask changed. Outputs: the picture (SaveImage, PNG) and ' +
       'the quality report (PreviewAny, role quality: folded into the picture\'s meta, never a result of its own). Seeds are random per run. ' +

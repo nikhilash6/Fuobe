@@ -108,6 +108,10 @@ function sampleValue(key, entry, uploads) {
     case 'lora': return 'fuobe_validate_lora.safetensors';
     case 'loraStrength': return 0.8;
     case 'cameraMotion': return 'Pan Left';
+    // Watermark remover: the kept marks the app sends (manual_boxes), with the repair margin.
+    case 'detectMode': return 'manual_boxes';
+    case 'boxes': return JSON.stringify({ coordinate_space: 'pixels', boxes: [{ bbox: [8, 8, 40, 24], overlay_type: 'text_logo', label: 'text' }] });
+    case 'detectExpand': return 32;
     case 'filenamePrefix': return `fuobe/validate/${entry.id}`;
     default:
       if (entry.defaults && entry.defaults[key] !== undefined) return entry.defaults[key];

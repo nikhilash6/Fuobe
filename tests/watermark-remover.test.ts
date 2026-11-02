@@ -230,8 +230,8 @@ describe("8. how the provider fills the removal", () => {
     expect(wf["1"].inputs.image).toBe("a.png");
     expect(wf["3"].inputs.mode).toBe("manual_boxes");
     expect(JSON.parse(String(wf["3"].inputs.boxes_json))).toEqual({ coordinate_space: "pixels", boxes: [{ bbox: [0, 20, 1200, 120], overlay_type: "unknown", label: "caption" }] });
-    // The kept boxes carry the scan's margin already: no second one.
-    expect(wf["3"].inputs.expand).toBe(0);
+    // The kept boxes get the repair margin past the scan's box.
+    expect(wf["3"].inputs.expand).toBe(W.KEPT_EXPAND);
   });
 
   it("kept marks keep the scan's words for what is around them, for the repair", async () => {
@@ -342,6 +342,13 @@ describe("10. the scan report, read into regions", () => {
     expect(W.parseScanReport("not json")).toBeNull();
     expect(W.parseScanReport(JSON.stringify({ coordinate_space: "xyxy_1000", image_size: [10, 10], boxes: [] }))).toBeNull();
     expect(W.parseScanReport(JSON.stringify({ coordinate_space: "pixels", image_size: [10, 10], boxes: [] }))!.regions).toEqual([]);
+  });
+
+  it("starts a mark that covers most of the picture kept, since its repair would redraw the photo", () => {
+    const report = (bbox: number[]) => JSON.stringify({ coordinate_space: "pixels", image_size: [1000, 800], boxes: [{ bbox, source_bbox: bbox, overlay_type: "text_logo", label: "text", confidence: 0.9 }] });
+    expect(W.parseScanReport(report([0, 0, 1000, 800]))!.regions[0].on).toBe(false);
+    expect(W.parseScanReport(report([0, 0, 1000, 500]))!.regions[0].on).toBe(false);
+    expect(W.parseScanReport(report([100, 100, 600, 600]))!.regions[0].on).toBe(true);
   });
 
   it("names the chips from the type and the scan's words", () => {

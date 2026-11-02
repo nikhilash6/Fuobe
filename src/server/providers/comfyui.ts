@@ -45,7 +45,7 @@ import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { MOTION_GRAPHS, motionTransferPrompt, neutralPrompt, WORDS_NEEDED } from "@/lib/comfy-prompts";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
-import { checkWatermarkBoxes, COPY as WATERMARK_COPY, MAX_SIDE as MAX_WATERMARK_SIDE, maxSideFor, qualityOf, SCAN_EXPAND as WATERMARK_SCAN_EXPAND } from "@/lib/watermark";
+import { checkWatermarkBoxes, COPY as WATERMARK_COPY, MAX_SIDE as MAX_WATERMARK_SIDE, maxSideFor, qualityOf, SCAN_EXPAND as WATERMARK_SCAN_EXPAND, KEPT_EXPAND as WATERMARK_KEPT_EXPAND } from "@/lib/watermark";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
 import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -1760,8 +1760,8 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
       }
       values.detectMode = "manual_boxes";
     } else if (b.detectMode) values.detectMode = brushed ? "manual_mask" : "auto_qwen";
-    // The kept marks already carry the scan's margin; marks the pack finds itself (an API caller's run) get it here.
-    if (b.detectExpand) values.detectExpand = values.detectMode === "manual_boxes" ? 0 : WATERMARK_SCAN_EXPAND;
+    // The kept marks get a repair margin past the scan's box; marks the pack finds itself (an API caller's run) get the scan's.
+    if (b.detectExpand) values.detectExpand = values.detectMode === "manual_boxes" ? WATERMARK_KEPT_EXPAND : WATERMARK_SCAN_EXPAND;
     if (b.maxSize) values.maxSize = maxSideFor(still?.width, still?.height, await ctx.vram?.().catch(() => undefined));
     for (const k of ["boxes", "detectMode", "detectExpand", "maxSize", "image", "mask", "seed", "filenamePrefix"]) delete extra[k];
   }
