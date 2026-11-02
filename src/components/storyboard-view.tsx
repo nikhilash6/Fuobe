@@ -443,7 +443,9 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
   // Your GPU only: the next frames' model (Qwen-Image 2.1 unless the classic recipe is picked).
   const [nextScene, setNextScene] = useState<StoryboardNextScene | undefined>();
   // One sheet: every panel on one MOSS-Image page, offered up to the panels a GPU render showed (the owner's until then).
-  const owner = !!useViewer().data?.owner;
+  // Known once the page has hydrated: the server renders it without the viewer.
+  const viewer = useViewer().data;
+  const owner = hydrated && !!viewer?.owner;
   const sheetLimit = sheetPanelLimit(owner);
   const [sheetPicked, setSheet] = useState(false);
   const sheet = sheetPicked && sheetLimit > 0;
@@ -552,8 +554,10 @@ export function StoryboardView({ modelNames = {} }: { /** Display names of the s
         <div className="mx-auto max-w-[820px] pt-6 text-center">
           <h2 className="font-heading text-display text-balance">Tell it frame by frame</h2>
           <p className="mt-2 text-[13px] text-muted-foreground">
-            Up to {MAX_FRAMES} consistent frames. Each one is made from the one before, so faces, wardrobe and light carry through.
-            {lookName && !refs.length ? ` Frame 1 sets the ${lookName} look.` : ""}
+            {sheet
+              ? `Up to ${sheetLimit} panels drawn together on one page, so faces, wardrobe and light match, then cut into frames.`
+              : `Up to ${MAX_FRAMES} consistent frames. Each one is made from the one before, so faces, wardrobe and light carry through.`}
+            {!sheet && lookName && !refs.length ? ` Frame 1 sets the ${lookName} look.` : ""}
           </p>
           <div className="mt-6 rounded-[20px] border bg-background p-3 text-left shadow-soft focus-within:border-primary focus-within:ring-4 focus-within:ring-brand-faint sm:rounded-composer">
             <div role="radiogroup" aria-label="How to write it" className="mb-2 flex items-center gap-1 rounded-full bg-muted p-0.5 text-[13px] font-medium sm:w-fit">
