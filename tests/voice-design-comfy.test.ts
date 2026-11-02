@@ -56,6 +56,12 @@ describe("what the ComfyUI provider binds", () => {
     const plain = await prepareWorkflow("tts-voxcpm2-clone", { prompt: "New line.", voiceAudio: "data:audio/wav;base64,UklGRg==" }, ctx("tts"));
     expect(plain.workflow["2"].inputs).toMatchObject({ prompt_text: "", device: "cuda" });
     const qclone = await prepareWorkflow("tts-qwen3-clone", { prompt: "New line.", voiceAudio: "data:audio/wav;base64,UklGRg==", voiceTranscript: "Hello there." }, ctx("tts"));
-    expect(qclone.workflow["2"].inputs).toMatchObject({ target_text: "New line.", reference_text: "Hello there." });
+    expect(qclone.workflow["2"].inputs).toMatchObject({ target_text: "New line.", reference_text: "Hello there.", x_vector_only: false });
+    // A sample with no transcript (a recorded or uploaded voice): the pack refuses an empty reference_text unless
+    // it clones from the voice's timbre alone, so x_vector_only goes on.
+    for (const voiceTranscript of [undefined, "   "]) {
+      const bare = await prepareWorkflow("tts-qwen3-clone", { prompt: "New line.", voiceAudio: "data:audio/wav;base64,UklGRg==", voiceTranscript }, ctx("tts"));
+      expect(bare.workflow["2"].inputs).toMatchObject({ target_text: "New line.", reference_text: "", x_vector_only: true });
+    }
   });
 });

@@ -16,7 +16,7 @@ process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
 const { setSetting } = await import("@/server/settings");
 const { createElement, getElement, updateElement } = await import("@/server/elements");
-const { saveFile } = await import("@/server/storage");
+const { listAssets, saveFile } = await import("@/server/storage");
 const { keepVoiceEmbedding, savedVoiceFor } = await import("@/server/voices");
 const { runAsTenant } = await import("@/server/tenant");
 const { buildPayload } = await import("@/lib/catalog/payload");
@@ -159,6 +159,32 @@ describe("a clone in two steps on fal", () => {
     expect(fs.readFileSync(path.join(dir, "files", kept!.slice("/api/files/".length)), "utf8")).toBe("safetensors-bytes");
     // Kept once: a second clone doesn't replace it.
     expect(await keepVoiceEmbedding(clip, "https://v3.fal.media/files/other.safetensors", file)).toBeNull();
+  });
+
+  it("two lines cloning at once keep one embedding and store no spare file; fal's storage bucket is accepted, the rest of the host is not", async () => {
+    const clip = wav();
+    const el = createElement({ name: "Raced", kind: "voice", references: [clip], voice: { modelId: "qwen-3-tts", engine: "cloud", transcript: "Hi." } });
+    const derived = () => listAssets({ source: "derived", limit: 1000 }).length;
+    const bytes = async () => ({ data: Buffer.from("emb"), contentType: "application/octet-stream", url: "" });
+    // Another bucket on the same host is not fal's.
+    expect(await keepVoiceEmbedding(clip, "https://storage.googleapis.com/someone-else/voice.safetensors", bytes)).toBeNull();
+    const before = derived();
+    // The first download finishes after the second one has kept its file.
+    let release!: () => void;
+    const slow = (async () => {
+      await new Promise<void>((r) => (release = r));
+      return bytes();
+    }) as typeof bytes;
+    const first = keepVoiceEmbedding(clip, "https://storage.googleapis.com/falserverless/files/a.safetensors", slow);
+    const second = await keepVoiceEmbedding(clip, "https://v3.fal.media/files/b.safetensors", bytes);
+    release();
+    expect(await first).toBeNull();
+    expect(second).toMatch(/^\/api\/files\//);
+    expect(getElement(el.id)!.voice!.embedding).toBe(second);
+    expect(derived()).toBe(before + 1);
+    // On its own, fal's bucket is kept like its CDN.
+    const other = createElement({ name: "Bucket", kind: "voice", references: [wav()], voice: { modelId: "qwen-3-tts", engine: "cloud" } });
+    expect(await keepVoiceEmbedding(other.references[0], "https://storage.googleapis.com/falserverless/files/c.safetensors", bytes)).toMatch(/^\/api\/files\//);
   });
 
   it("a run with a saved voice sends its kept embedding and its line, and makes no clone", async () => {

@@ -1746,6 +1746,14 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
   const realMissing = bound.missing.filter((m) => !/^maxDimension\b/.test(m));
   if (realMissing.length) throw new ProviderError(`Workflow ${manifest.id} bindings point at missing nodes: ${realMissing.join(", ")}`);
   let wf = bound.workflow;
+  // Qwen3-TTS's clone needs the sample's words unless it clones from the voice's timbre alone (x_vector_only):
+  // a sample with no transcript clones that way instead of failing.
+  for (const t of b.voiceTranscript ?? []) {
+    const inputs = wf[t.node]?.inputs;
+    if (!inputs || !("x_vector_only" in inputs)) continue;
+    const words = inputs[t.input];
+    inputs.x_vector_only = !(typeof words === "string" && words.trim());
+  }
   const outputIds = manifest.outputs.map((o) => o.node);
   // The prompt helper (FLUX 3 Image Klein's upsampler) off, or a layout with boxes it would rewrite: the words as typed.
   if (PROMPT_HELPER_GRAPHS.has(manifest.id) && (helper === "off" || laidOut)) wf = skipPromptHelper(wf, outputIds);

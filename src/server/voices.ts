@@ -27,6 +27,8 @@ export function savedVoiceFor(sample: string | undefined): (StudioElement & { vo
 
 /** Hosts fal answers a clone with (its CDN and storage). The file is fetched from nowhere else. */
 const FAL_FILE_HOST = /(^|\.)(fal\.media|fal\.run|fal\.ai)$/i;
+/** fal's own bucket on Google Cloud Storage (its schema examples answer from it): that bucket only, not the whole host. */
+const isFalFile = (u: URL) => FAL_FILE_HOST.test(u.hostname) || (u.hostname === "storage.googleapis.com" && u.pathname.startsWith("/falserverless/"));
 /** A Qwen3-TTS speaker embedding is a few kilobytes; anything near this is not one. */
 const MAX_EMBEDDING_BYTES = 8 * 2 ** 20;
 
@@ -38,20 +40,19 @@ const MAX_EMBEDDING_BYTES = 8 * 2 ** 20;
 export async function keepVoiceEmbedding(sample: string | undefined, url: string | undefined, fetchFile = fetchRemote): Promise<string | null> {
   const saved = savedVoiceFor(sample);
   if (!saved || saved.voice.embedding || !url) return null;
-  let host: string;
+  let u: URL;
   try {
-    const u = new URL(url);
-    if (u.protocol !== "https:") return null;
-    host = u.hostname;
+    u = new URL(url);
   } catch {
     return null;
   }
-  if (!FAL_FILE_HOST.test(host)) return null;
+  if (u.protocol !== "https:" || !isFalFile(u)) return null;
   const file = await fetchFile(url, { maxBytes: MAX_EMBEDDING_BYTES, timeoutMs: 60_000 });
-  const asset = saveFile({ data: file.data, contentType: "application/octet-stream", name: `${saved.handle}-voice.safetensors`, source: "derived" });
-  // The clip may have changed while the file came down: only the clip it was cloned from keeps it.
+  // The clip may have changed while the file came down, or another line kept its embedding first: only the clip it was
+  // cloned from keeps it, and nothing is stored that the element wouldn't keep.
   const now = savedVoiceFor(sample);
   if (!now || now.id !== saved.id || now.voice.embedding) return null;
+  const asset = saveFile({ data: file.data, contentType: "application/octet-stream", name: `${saved.handle}-voice.safetensors`, source: "derived" });
   updateElement(saved.id, { voice: { ...now.voice, embedding: asset.url } });
   return asset.url;
 }

@@ -7104,7 +7104,7 @@
       "vramGb": 8,
       "license": "Qwen3-TTS weights Apache-2.0 (Qwen); ComfyUI-QwenTTS code GPL-3.0",
       "validated": false,
-      "notes": "AILab_Qwen3TTSVoiceClone_Advanced(target_text = the line, reference_audio = the voice sample, reference_text = what the sample says (optional: closer clone; empty = the pack allows it), x_vector_only false, model_size 1.7B, do_sample true, the same sampling as the design graph). A saved voice from Design a voice passes its take and the take's line. Output MP3 V0. Get consent for cloned voices.",
+      "notes": "AILab_Qwen3TTSVoiceClone_Advanced(target_text = the line, reference_audio = the voice sample, reference_text = what the sample says (a closer clone), x_vector_only false with a transcript; the pack refuses an empty reference_text otherwise, so without one the provider turns x_vector_only on (a timbre-only clone), model_size 1.7B, do_sample true, the same sampling as the design graph). A saved voice from Design a voice passes its take and the take's line. Output MP3 V0. Get consent for cloned voices.",
       "autoDownloads": [
         "ComfyUI-QwenTTS downloads Qwen/Qwen3-TTS-12Hz-1.7B-Base (whole repository at its current revision; fd4b254389122332181a7c3db7f27e918eec64e3 when this was written: model.safetensors 3.86 GB + speech_tokenizer 0.68 GB) into models/tts/Qwen3-TTS/Qwen3-TTS-12Hz-1.7B-Base on first run (models/TTS/Qwen3-TTS when no tts folder is registered: ComfyUI-VoxCPM2 registers models/tts)"
       ],
