@@ -10,7 +10,7 @@ import { canUseSkill, skillsFor } from "./context";
 import { defineTool, type ToolContext, type ToolOutcome } from "./define";
 
 /**
- * run_skill (package W3): a saved skill whose files hold a recipe runs by itself with values for its inputs — the
+ * run_skill: a saved skill whose files hold a recipe runs by itself with values for its inputs — the
  * same steps, priced first, no planning. Gated like generate, so Assist shows one priced card (an atomic pipeline,
  * or a studio's tool call that opens in its studio), MCP lists it and estimate_job prices it.
  */

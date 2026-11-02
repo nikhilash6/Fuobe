@@ -1,4 +1,4 @@
-// nm10-qwen21-fast in the browser (no run reaches a GPU): Qwen-Image 2.1's Options in the Image and Edit studios on your GPU
+// Qwen-Image 2.1 speed options in the browser (no run reaches a GPU): Qwen-Image 2.1's Options in the Image and Edit studios on your GPU
 // (Speed with Draft, Fast, "writes the details", Turbo for edits only and Full as Auto; GPU; Decoder), and Storyboard's choice
 // of next-frame model on your GPU (Qwen-Image 2.1 by default, Classic), absent in the cloud. Each page at 1440 and 390 px,
 // light and dark, without sideways scroll. The price on your GPU is checked through the preview route (Free).
@@ -9,7 +9,7 @@ import path from "node:path";
 import { launch } from "./_browser.mjs";
 
 const argv = process.argv.slice(2);
-const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3000").replace(/\/$/, "");
+const app = (argv.find((a) => !a.startsWith("--") && argv[argv.indexOf(a) - 1] !== "--shots") ?? "http://localhost:3440").replace(/\/$/, "");
 const shots = argv.includes("--shots") ? argv[argv.indexOf("--shots") + 1] : undefined;
 if (shots) fs.mkdirSync(shots, { recursive: true });
 
@@ -142,8 +142,8 @@ try {
           await group.waitFor({ timeout: 20_000 });
           const radios = group.getByRole("radio");
           const names = (await radios.allInnerTexts()).map(flat);
-          check(`${tag} storyboard open: next frames on Qwen-Image 2.1 or Classic`, names.join("|") === "Qwen-Image 2.1|Classic", names.join("|"));
-          check(`${tag} storyboard open: Qwen-Image 2.1 is picked`, (await radios.first().getAttribute("aria-checked")) === "true");
+          check(`${tag} storyboard open: next frames on Latest or Classic`, names.join("|") === "Latest|Classic", names.join("|"));
+          check(`${tag} storyboard open: Latest is picked`, (await radios.first().getAttribute("aria-checked")) === "true");
           await radios.nth(1).click();
           check(`${tag} storyboard open: Classic can be picked`, (await radios.nth(1).getAttribute("aria-checked")) === "true");
           await shoot(page, `storyboard-${width}-${scheme}.png`);

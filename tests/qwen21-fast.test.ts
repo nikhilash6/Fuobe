@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import type { GenInput, Operation } from "@/lib/catalog/types";
 import type { ComfyWorkflow, ManifestWorkflow } from "@/lib/comfy";
 
-// Package nm10-qwen21-fast (docs/research/new-models-10.md §6.7): Qwen-Image 2.1 in 2-6 steps (Options → Speed), on 16 GB
+// docs/research/new-models-10.md §6.7: Qwen-Image 2.1 in 2-6 steps (Options → Speed), on 16 GB
 // cards (Options → GPU, Zen Image Edit's small encoder), with the Texture-Fix VAE (Options → Decoder) and the 2.1
 // Next-Scene LoRA for Storyboard's next frames. All on the open engine: Qwen-Image 2.1 isn't hosted on fal or Replicate.
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fuobe-qwen21-fast-"));
@@ -136,7 +136,7 @@ describe("Qwen-Image 2.1's speed graphs", () => {
       expect(ofClass(wf, "KSampler"), t.id).toHaveLength(0);
       expect(ofClass(wf, "CFGGuider")[0][1].inputs.cfg).toBe(1);
       expect(ofClass(wf, "KSamplerSelect")[0][1].inputs.sampler_name).toBe("euler");
-      // The rest of the owner's graph is as it was (models, encoder, decoder, the pictures' handling).
+      // The rest of the base graph is as it was (models, encoder, decoder, the pictures' handling).
       for (const [id, n] of Object.entries(base)) {
         if (n.class_type === "KSampler" || n.class_type === "SaveImage" || n.class_type === "QwenImage21Cache") continue;
         expect(wf[id], `${t.id} ${id}`).toEqual(n);
@@ -159,7 +159,7 @@ describe("Qwen-Image 2.1's speed graphs", () => {
       expect(e.bindings.seed).toEqual([{ node: "70", input: "noise_seed" }]);
       expect(e.bindings.steps).toBeUndefined();
       expect(e.license).toMatch(/Qwen Research License/);
-      // Unvalidated like the owner's Qwen-Image 2.1 graphs until it runs on a GPU (the CPU server's graph check isn't that bar).
+      // Unvalidated like the base Qwen-Image 2.1 graphs until it runs on a GPU (the CPU server's graph check isn't that bar).
       expect(e.validated, t.id).toBe(false);
       if (/-(inpaint|outpaint)-/.test(t.id)) expect(e.customNodes.map((c) => c.name)).toEqual(["ausboss-nodes"]);
       // The licence names the optional clean decoder's own.
@@ -186,7 +186,7 @@ describe("Qwen-Image 2.1's speed graphs", () => {
 });
 
 describe("Options → Speed, GPU and Decoder", () => {
-  it("picks the speed's graph per operation, and Full (the default) keeps the owner's", () => {
+  it("picks the speed's graph per operation, and Full (the default) keeps the base graph", () => {
     expect(variant("qwen-image-21-t2i", "t2i", {})).toBe("qwen-image-21-t2i");
     expect(variant("qwen-image-21-t2i", "t2i", { speed: "full" })).toBe("qwen-image-21-t2i");
     expect(variant("qwen-image-21-t2i", "t2i", { speed: "draft" })).toBe("qwen-image-21-t2i-draft");

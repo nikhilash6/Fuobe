@@ -117,11 +117,11 @@ function PartnerPill({ value, onChange, names }: { value?: StoryboardPartner; on
   );
 }
 
-/** What a GPU board's next frames are made on: Qwen-Image 2.1 (the default), or the classic recipe boards used before. */
+/** What a GPU board's next frames are made on: Qwen-Image 2.1 (Latest, the default), or the classic recipe boards used before. */
 function NextScenePill({ value, onChange }: { value?: StoryboardNextScene; onChange: (v?: StoryboardNextScene) => void }) {
   const options: { v?: StoryboardNextScene; label: string; title: string }[] = [
-    { label: "Qwen-Image 2.1", title: "Each next frame continues the last one on Qwen-Image 2.1" },
-    { v: "classic", label: "Classic", title: "Each next frame on Qwen-Image-Edit 2509, the recipe boards used before" },
+    { label: "Latest", title: "Each next frame continues the last one on the newest model" },
+    { v: "classic", label: "Classic", title: "Each next frame on the model boards used before" },
   ];
   return (
     <div role="radiogroup" aria-label="Next frames made on" className="flex flex-wrap gap-1 rounded-full bg-muted p-0.5">

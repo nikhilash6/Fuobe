@@ -1,13 +1,13 @@
 import type { ModelOptions } from "@/lib/catalog/types";
 
 /**
- * Qwen-Image 2.1 on your GPU in 2–8 steps and on 16 GB cards (research #10 §6.7, package nm10-qwen21-fast). Pure: the
+ * Qwen-Image 2.1 on your GPU in 2–8 steps and on 16 GB cards (research #10 §6.7). Pure: the
  * provider (src/server/providers/comfyui.ts) and the GPU pre-flight's gate both resolve a run's graph through
  * resolveWorkflowId (src/lib/comfy-variants.ts), which reads these tables.
  *
  * - Options → Speed: Draft (2 steps, linoyts' DMD2 LoRA v1.5), Fast (4 steps, LightX2V's Lightning LoRA), "Fast · writes
  *   the details" (6 steps, Pruna's P-Q-Image v0.2 upsampled LoRA), Turbo (the official 8-step Turbo checkpoint, edits
- *   only) and Full (the owner's 25-step graphs, the default). Each tier is its own graph: the base graph with one LoRA and
+ *   only) and Full (the hand-built 25-step graphs, the default). Each tier is its own graph: the base graph with one LoRA and
  *   a ManualSigmas schedule (scripts/comfy/library.spec.mjs, qwen21Tier).
  * - Options → GPU: Zen Image Edit's 0.8B encoder in place of the 17.5 GB Qwen3-VL 8B for text to image and edits at Full
  *   speed: when asked (Small), or on Auto when the GPU check reads a graphics card under 20 GB and the small route is ready
@@ -59,7 +59,7 @@ export const ZEN_ENCODER = { id: "Qwen/Qwen3.5-0.8B", revision: "2fc06364715b967
 /** The Texture-Fix VAE (madebyollin), an optional file every Qwen-Image 2.1 graph lists. */
 export const CLEAN_VAE = "texture_fix_vae_for_qwen_image_2.1_bf16.safetensors";
 
-/** The operations each speed is offered on (Turbo is the owner's 8-step edit; "writes the details" text to image and edits). */
+/** The operations each speed is offered on (Turbo is the 8-step edit graph; "writes the details" text to image and edits). */
 export const SPEED_OPS: Record<Qwen21Speed, string[]> = {
   full: ["t2i", "edit", "inpaint", "outpaint"],
   turbo: ["edit"],
@@ -70,7 +70,7 @@ export const SPEED_OPS: Record<Qwen21Speed, string[]> = {
 
 type Control = NonNullable<ModelOptions["controls"]>[number];
 
-/** Options → Speed (the default stays Full: the owner's graphs). */
+/** Options → Speed (the default stays Full: the hand-built graphs). */
 export const QWEN21_SPEED: Control = {
   param: SPEED_PARAM,
   label: "Speed",

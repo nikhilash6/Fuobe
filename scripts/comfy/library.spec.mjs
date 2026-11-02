@@ -2732,7 +2732,7 @@ export const SPEC = [
   },
   // ---- nm10-qwen21-fast: Qwen-Image 2.1 in 2-6 steps (Options → Speed), the 2.1 Next-Scene LoRA, and a 16 GB route ---------
   // Each speed graph is its base graph with one LoRA + ManualSigmas branch (qwen21Tier above); the provider picks it from
-  // params.extra.speed (src/lib/comfy-variants.ts). Turbo is the owner's qwen-image-21-turbo-edit; Full is the base graph.
+  // params.extra.speed (src/lib/comfy-variants.ts). Turbo is qwen-image-21-turbo-edit; Full is the base graph.
   qwen21Tier('t2i', 'draft', { title: 'Qwen-Image 2.1 Text to Image', capability: 't2i', bindings: { prompt: [b('4', 'prompt')], width: [b('5', 'width')], height: [b('5', 'height')] }, output: '9', limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 32 } }),
   qwen21Tier('t2i', 'fast', { title: 'Qwen-Image 2.1 Text to Image', capability: 't2i', bindings: { prompt: [b('4', 'prompt')], width: [b('5', 'width')], height: [b('5', 'height')] }, output: '9', limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 32 } }),
   qwen21Tier('t2i', 'details', { title: 'Qwen-Image 2.1 Text to Image', capability: 't2i', bindings: { prompt: [b('4', 'prompt')], width: [b('5', 'width')], height: [b('5', 'height')] }, output: '9', limits: { maxWidth: 2048, maxHeight: 2048, dimensionMultiple: 32 } }),
