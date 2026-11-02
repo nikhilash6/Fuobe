@@ -12,7 +12,7 @@ import { PRESETS as GRADE_PRESETS } from "./grade";
 import { storedPath } from "./share";
 import { decodeMoss, LAYOUT_PARAM, readLayout, type LayoutDraft } from "./layout-prompt";
 import { REMOVE_DIALOGUE_FEATURE } from "./av/remove-dialogue";
-import { canRerender, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
+import { canEnhance, canRerender, ENHANCE_LABEL, regenerateFamily, regenerateHref, rerenderLabel } from "./catalog/regenerate";
 import { CLEAN_FEATURE } from "./av/clean-voice";
 
 export type OutputActionId =
@@ -47,6 +47,7 @@ export type OutputActionId =
   | "finalize"
   | "regenerate"
   | "rerender-2k"
+  | "enhance-h3"
   | "compare"
   | "reuse"
   | "make-skill"
@@ -188,6 +189,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
   if (o.kind === "video" && g.status === "succeeded") {
     if (canRerender(g, ctx.engineMode)) out.push({ id: "rerender-2k", label: rerenderLabel(g.modelId), placement: "menu" });
     else if ((g.engine === "open" || g.feature === "upload") && ctx.engineMode !== "cloud") out.push({ id: "regenerate", label: "Regenerate in 2K", placement: "menu", href: regenerateHref(o.url, g.feature === "upload" ? null : g.request.prompt) });
+    // An Edit video result (up to 15 s): redrawn at 1080p on your GPU, from the edit's own words.
+    if (canEnhance(g, o, ctx.engineMode)) out.push({ id: "enhance-h3", label: ENHANCE_LABEL, placement: "menu" });
   }
   if (ctx.compare) out.push({ id: "compare", label: "Compare with original", placement: "menu" });
   if (ctx.reuse) out.push({ id: "reuse", label: "Reuse settings", placement: "menu" });

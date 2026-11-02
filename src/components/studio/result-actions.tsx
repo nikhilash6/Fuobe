@@ -76,7 +76,7 @@ import { toSrt, toVtt } from "@/lib/cues";
 import { cuesOf, outputActions, textOf, type ActionContext, type OutputAction, type OutputActionId } from "@/lib/output-actions";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
-import { rerenderRequest } from "@/lib/catalog/regenerate";
+import { enhanceRequest, rerenderRequest } from "@/lib/catalog/regenerate";
 import { toastError } from "@/lib/refusals";
 
 export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
@@ -111,6 +111,7 @@ export const ACTION_ICONS: Record<OutputActionId, LucideIcon> = {
   finalize: Sparkles,
   regenerate: Sparkles,
   "rerender-2k": Sparkles,
+  "enhance-h3": Sparkles,
   compare: Columns2,
   reuse: RotateCcw,
   "make-skill": BookmarkPlus,
@@ -249,6 +250,9 @@ export function useActionRunner(opts: RunnerOptions = {}) {
       case "rerender-2k":
         // fal's H3 at 2K: the same inputs, words and seed, a new render on the same hosted model (priced per second).
         return create.mutate(rerenderRequest(g), { onSuccess: () => toast.success("Rendering it again at 2K"), onError: (e) => toastError(e) });
+      case "enhance-h3":
+        // Open-H3 Regenerate at 1080p on your GPU (RIFE first for a 16 fps edit), from the edit's own words.
+        return create.mutate(enhanceRequest(g, o.url), { onSuccess: () => toast.success("Enhancing at 1080p on your GPU"), onError: (e) => toastError(e) });
       case "reuse":
         return opts.onReuse?.(g);
       case "make-skill":
