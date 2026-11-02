@@ -63,7 +63,6 @@ try {
           .catch(() => {});
         return (await chip.getAttribute("aria-label")) ?? "";
       };
-      const composerText = () => page.locator(".group\\/composer").first().innerText();
       // On a phone the model's own chips sit in the Settings sheet.
       const chips = async () => {
         if (width < 500) {
