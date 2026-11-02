@@ -160,6 +160,8 @@ export const BINDING_KEYS = new Set([
   'takeStart', 'maskStart', 'takeX', 'takeY', 'regionWidth', 'regionHeight', 'regenWidth', 'regenHeight', 'regenX', 'regenY', 'trimX', 'trimY', 'feather',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
+  // Clean up dialogue (DBS graph C, docs/research/dbs-separation-7.md §4.4): each stem's level in the remix
+  'voiceDb', 'musicDb', 'effectsDb',
   // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
   'invertDepth',
   // Design a voice (nm10-voice-design): the voice in words, and what a voice sample says (Qwen3-TTS / VoxCPM2 clones)

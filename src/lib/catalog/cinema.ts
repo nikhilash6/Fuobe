@@ -638,7 +638,8 @@ export const CAST_SHEET_MODEL = "oss-zimage-soul-cast";
 export const CINEMA_MODELS: Record<CinemaMode, Record<Engine, string[]>> = {
   video: {
     // Kling 4.0: a 30 s take (up to 6 shots) in one call, with @Elements and reference clips.
-    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-4", "kling-3", "veo-3-1", "minimax-h3-max"],
+    // H3 Max Turbo: the cheap draft take (about $0.14 for 5 s at 768P in November), with sound.
+    cloud: [CINEMA_MODEL, "minimax-h3", "seedance-2-5", "kling-4", "kling-3", "veo-3-1", "minimax-h3-max", "minimax-h3-max-turbo"],
     open: [CINEMA_MODEL, "oss-minimax-h3", "oss-ltx25", "oss-wan22-14b"],
   },
   image: { cloud: [CINEMA_STILL_MODEL, "nano-banana-pro", "seedream-5-pro"], open: [CINEMA_STILL_MODEL, "oss-ideogram-4", "oss-qwen-image-21", "oss-krea2-realism", "oss-moss-image"] },

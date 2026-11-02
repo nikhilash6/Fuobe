@@ -303,14 +303,17 @@ describe("the mixer", () => {
     ]);
   });
 
-  it("has the presets: no dialogue, dialogue only, music only, music under dialogue at −12 dB", () => {
+  it("has the presets: no dialogue, dialogue only, music only, music under dialogue at −12 dB, clean dialogue at −18 dB", () => {
     const gains = Object.fromEntries(PRESETS.map((p) => [p.id, stemGains(p.mix)]));
     expect(gains["no-dialogue"]).toEqual({ voice: 0, music: 0, effects: 0, background: 1 });
     expect(gains["dialogue-only"]).toEqual({ voice: 1, music: 0, effects: 0, background: 0 });
     expect(gains["music-only"]).toEqual({ voice: 0, music: 1, effects: 0, background: 0 });
     expect(gains["music-under"].voice).toBe(1);
     expect(gains["music-under"].background).toBeCloseTo(0.251, 3);
-    expect(PRESETS.map((p) => p.label)).toEqual(["Original", "No dialogue", "Dialogue only", "Music only", "Music under dialogue (−12 dB)"]);
+    // Clean up dialogue (D5): the dialogue with the music and effects 18 dB down.
+    expect(gains["clean-dialogue"].voice).toBe(1);
+    expect(gains["clean-dialogue"].background).toBeCloseTo(0.126, 3);
+    expect(PRESETS.map((p) => p.label)).toEqual(["Original", "No dialogue", "Dialogue only", "Music only", "Music under dialogue (−12 dB)", "Clean dialogue (−18 dB)"]);
     for (const p of PRESETS) expect(presetOf(p.mix)).toBe(p.id);
   });
 

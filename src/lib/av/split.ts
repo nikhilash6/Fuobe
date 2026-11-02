@@ -341,7 +341,15 @@ export const PRESETS: { id: string; label: string; mix: Mix }[] = [
     label: "Music under dialogue (−12 dB)",
     mix: { voice: on(), music: off(), effects: off(), background: on(-12) },
   },
+  // Clean up dialogue (D5): the dialogue clear, the music and effects kept quietly under it.
+  {
+    id: "clean-dialogue",
+    label: "Clean dialogue (−18 dB)",
+    mix: { voice: on(), music: off(), effects: off(), background: on(-18) },
+  },
 ];
+/** The mix a preset id names, or the original. */
+export const presetMix = (id: string | null | undefined): Mix => PRESETS.find((p) => p.id === id)?.mix ?? ORIGINAL_MIX;
 
 /** The preset a mix is, if any (levels within 0.5 dB, solo off). */
 export function presetOf(mix: Mix): string | null {
