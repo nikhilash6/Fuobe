@@ -503,11 +503,23 @@
     "error": null,
     "at": "2026-11-02T01:03:50.001Z"
   },
+  "speech-edit-auk": {
+    "sha256": "e38704387a1473e0e72ca81b4b2e586849e69425ec57a53820574323d595baf1",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'AuK Model Loader (AuK-Flash; paths under the AuK checkout)' not found. The custom node may not be installed. (Node ID '#4')",
+    "at": "2026-11-02T15:31:23.430Z"
+  },
   "speech-translate-gemma4": {
     "sha256": "baf609432b57514c43d2f91630b9ae3cb916e9fe8dab47ac02c6c9b64ded643a",
     "validated": true,
     "error": null,
     "at": "2026-10-22T23:27:26.367Z"
+  },
+  "speech-tts-auk": {
+    "sha256": "7dc1ef8affcbcfaf5670ebc9cf2a16755dd7ae5c7acf696e8b1c84a7ea226ab4",
+    "validated": false,
+    "error": "HTTP 400: missing_node_type: Node 'AuK Model Loader (AuK-Flash)' not found. The custom node may not be installed. (Node ID '#2')",
+    "at": "2026-11-02T15:31:23.452Z"
   },
   "still-to-clip": {
     "sha256": "cd21914faa22195c7cf3fd4346c20ba1306d434bf565456ac6bfaa24743d08e3",

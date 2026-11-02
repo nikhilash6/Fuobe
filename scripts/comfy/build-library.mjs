@@ -81,7 +81,9 @@ export const LOADER_FOLDERS = {
 };
 // Nodes that fetch their own weights at runtime (no manual download needed; listed in the entry's autoDownloads).
 // Zen Image Edit's adapter loader reads paths (nm10-qwen21-fast): its adapter is a requiredModels file, Qwen3.5-0.8B its autoDownloads.
-const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader']);
+// AuKModelLoader (nm10-speech-edit) reads its checkpoints by path inside the AuK checkout (ckpts/…), not from a ComfyUI
+// models folder: install-comfyui.sh AUK_WEIGHTS=1 downloads them there (the entries' autoDownloads say what and where).
+const SELF_DOWNLOADING = new Set(['RIFE VFI', 'DownloadAndLoadWav2VecModel', 'RMBG', 'AILab_Qwen3ASRSubtitle', 'Apply Whisper', 'ClothesSegment', 'LatentSyncNode', 'ZenImage21AdapterLoader', 'AuKModelLoader']);
 // Binding keys whose input is a user-supplied model file (not part of "models").
 const USER_MODEL_KEYS = new Set(['lora', 'loraHigh', 'loraLow', 'upscaleModel']);
 const MODEL_EXT = /\.(safetensors|sft|gguf|ckpt|pt|pth|bin|onnx)$/i;

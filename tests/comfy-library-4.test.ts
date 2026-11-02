@@ -105,6 +105,9 @@ describe("round-4 ComfyUI workflows", () => {
       "tts-qwen3-clone",
       "tts-voxcpm2",
       "tts-voxcpm2-clone",
+      // Edit speech (nm10-speech-edit): ComfyUI-AuK isn't on the validation server (tests/speech-edit-comfy.test.ts checks its node list).
+      "speech-edit-auk",
+      "speech-tts-auk",
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",

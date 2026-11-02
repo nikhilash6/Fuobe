@@ -1646,6 +1646,198 @@
     "essentials_category": null,
     "has_intermediate_output": false
   },
+  "AuKGenerateEdit": {
+    "input": {
+      "required": {
+        "engine": [
+          "AUK_ENGINE"
+        ],
+        "instruction": [
+          "STRING",
+          {
+            "multiline": true,
+            "default": "Generate speech based on the following description: \"a calm, warm female voice\". The content to speak is: \"Hello, welcome to AuK.\"."
+          }
+        ],
+        "generation_seconds": [
+          "FLOAT",
+          {
+            "default": 0.0,
+            "min": 0.0,
+            "max": 30.0,
+            "step": 0.1
+          }
+        ],
+        "use_prompt_enhancer": [
+          "BOOLEAN",
+          {
+            "default": true
+          }
+        ],
+        "seed": [
+          "INT",
+          {
+            "default": 42,
+            "min": 0,
+            "max": 9223372036854775807
+          }
+        ],
+        "nfe_steps": [
+          "INT",
+          {
+            "default": 32,
+            "min": 4,
+            "max": 64,
+            "step": 1
+          }
+        ],
+        "cfg_strength": [
+          "FLOAT",
+          {
+            "default": 2.0,
+            "min": 0.0,
+            "max": 5.0,
+            "step": 0.1
+          }
+        ],
+        "sway_sampling_coef": [
+          "FLOAT",
+          {
+            "default": -1.0,
+            "min": -1.0,
+            "max": 1.0,
+            "step": 0.1
+          }
+        ]
+      },
+      "optional": {
+        "input_audio": [
+          "AUDIO"
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "engine",
+        "instruction",
+        "generation_seconds",
+        "use_prompt_enhancer",
+        "seed",
+        "nfe_steps",
+        "cfg_strength",
+        "sway_sampling_coef"
+      ],
+      "optional": [
+        "input_audio"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "AUDIO",
+      "STRING",
+      "STRING"
+    ],
+    "output_is_list": [
+      false,
+      false,
+      false
+    ],
+    "output_name": [
+      "generated_audio",
+      "enhanced_instruction",
+      "prompt_enhancer_info"
+    ],
+    "name": "AuKGenerateEdit",
+    "display_name": "AuK Generate / Edit",
+    "description": "Run instruction TTS, zero-shot TTS, or speech editing. The source/reference and generated target share one 30-second sequence budget.",
+    "python_module": "custom_nodes.ComfyUI-AuK",
+    "category": "AuK",
+    "output_node": false,
+    "_fuobe_note": "Written from comfyui/ComfyUI-AuK/nodes.py at Tencent-Hunyuan/AuK 0d40366b (the pack is not on the validation server)."
+  },
+  "AuKModelLoader": {
+    "input": {
+      "required": {
+        "checkpoint_path": [
+          "STRING",
+          {
+            "default": "ckpts/AuK/auk_base.safetensors",
+            "multiline": false
+          }
+        ],
+        "config_path": [
+          "STRING",
+          {
+            "default": "",
+            "multiline": false
+          }
+        ],
+        "qwen_path": [
+          "STRING",
+          {
+            "default": "ckpts/Qwen2.5-Omni-3B",
+            "multiline": false
+          }
+        ],
+        "device": [
+          [
+            "cuda:0",
+            "cpu"
+          ],
+          {
+            "default": "cuda:0"
+          }
+        ],
+        "dtype": [
+          [
+            "bf16",
+            "fp16",
+            "fp32"
+          ],
+          {
+            "default": "bf16"
+          }
+        ]
+      },
+      "optional": {
+        "cpu_offload": [
+          "BOOLEAN",
+          {
+            "default": false
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": [
+        "checkpoint_path",
+        "config_path",
+        "qwen_path",
+        "device",
+        "dtype"
+      ],
+      "optional": [
+        "cpu_offload"
+      ]
+    },
+    "is_input_list": false,
+    "output": [
+      "AUK_ENGINE"
+    ],
+    "output_is_list": [
+      false
+    ],
+    "output_name": [
+      "engine"
+    ],
+    "name": "AuKModelLoader",
+    "display_name": "AuK Model Loader",
+    "description": "Load AuK or AuK-Flash and reuse the same engine for identical settings. Engines remain cached until ComfyUI exits; changing settings can load another copy.",
+    "python_module": "custom_nodes.ComfyUI-AuK",
+    "category": "AuK",
+    "output_node": false,
+    "_fuobe_note": "Written from comfyui/ComfyUI-AuK/nodes.py at Tencent-Hunyuan/AuK 0d40366b (the pack is not on the validation server); device lists the server's CUDA devices, then cpu."
+  },
   "AudioAdjustVolume": {
     "input": {
       "required": {
