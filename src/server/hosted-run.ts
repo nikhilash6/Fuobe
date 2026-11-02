@@ -18,6 +18,7 @@ import {
   type Policy,
   type Quote,
   type RefuseCode,
+  type RunFacts,
 } from "./billing";
 import { outputKind, previewGeneration } from "./generations";
 import { HOSTED_WORDS, inputCounts, poolAllows, poolReady, queueFacts, runFacts, runOnPool } from "./hosted";
@@ -138,16 +139,23 @@ async function inputFacts(accountId: string, req: GenerationRequest): Promise<{ 
  * The moderation service's check of an account's run (no service: allowed, nothing to stamp). A refusal costs nothing:
  * it comes before any hold.
  */
-export async function moderateRun(account: Account, req: GenerationRequest, planned: Planned | null, place: "pool" | "own"): Promise<{ ok: true; checkOutputs: boolean } | { ok: false; refusal: Refusal }> {
+export async function moderateRun(
+  account: Account,
+  req: GenerationRequest,
+  planned: Planned | null,
+  place: "pool" | "own",
+  /** A result made in the browser (no plan): what it is and where the account works. */
+  browser?: { kind: RunFacts["kind"]; place: RunFacts["place"] },
+): Promise<{ ok: true; checkOutputs: boolean } | { ok: false; refusal: Refusal }> {
   if (!moderationConfigured()) return { ok: true, checkOutputs: false };
-  const kind = planned ? outputKind(planned.op, planned.model) : "image";
+  const kind = planned ? outputKind(planned.op, planned.model) : (browser?.kind ?? "image");
   const run = planned
     ? { ...runFacts(req, planned, kind), place: place === "pool" ? ("pool" as const) : planned.route.provider === "comfyui" ? ("own-gpu" as const) : ("own-key" as const) }
     : null;
   const a = await checkRun({
     requestId: nanoid(16),
     account: { id: account.id },
-    run: run ?? { ...runFacts(req, { model: { id: req.modelId, kind: "image", engine: "open" }, op: req.op ?? "", jobs: 1, outputs: 1, providerId: "", costUsd: null, loras: { applied: [] } }, "image"), place: "own-gpu" },
+    run: run ?? { ...runFacts(req, { model: { id: req.modelId, kind, engine: "open" }, op: req.op ?? "", jobs: 1, outputs: 1, providerId: browser ? "local" : "", costUsd: null, loras: { applied: [] } }, kind), place: browser?.place ?? "own-gpu" },
     prompt: req.prompt ?? "",
     negative: req.negativePrompt ?? null,
     inputs: await inputFacts(account.id, req),

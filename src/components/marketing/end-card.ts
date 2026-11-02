@@ -1,21 +1,17 @@
 import { END_CARD } from "@/lib/catalog/marketing";
-import { containIn, contrast, fitText, fontString, readableOn, textBox, type AdPlan, type AdTheme, type Measure, type Rect, type TextBox } from "../ads/layout";
-import { drawPlan, ensureFont, loadImage, measureText } from "../ads/render";
+import { endCardRest, restNodes, type EndCardContent, type TextBlock } from "@/lib/motion/scenes/end-card/shared";
+import { designSize } from "@/lib/motion/sizes";
+import type { AdPlan, AdTheme, Measure, TextBox } from "../ads/layout";
+import { ensureFont, loadImage, measureText } from "../ads/render";
+import { drawDisplayList } from "../motion/draw";
 
 /**
- * Click to Ad's logo end card: the brand colour, the logo (or the brand's name), the product name and a
- * call-to-action pill, centred on a 9:16 card. Laid out here (pure, tested) and drawn with the Ads Studio
- * compositor's drawPlan, so the preview on the page and the PNG the ad ends on are the same picture.
+ * Click to Ad's logo end card: the brand colour, the logo (or the brand's name), the product name, a call-to-action
+ * pill and the address, centred on a 9:16 card in the kit's colours. Laid out by the animated end card's own rest
+ * layout and drawn by the same drawer, so the still card and every style's last frame are the same picture.
  */
 
-export interface EndCardContent {
-  /** Shown when the kit has no logo. */
-  brand: string;
-  product: string;
-  cta?: string;
-  /** A small line at the bottom (the shop's address). */
-  website?: string;
-}
+export type { EndCardContent } from "@/lib/motion/scenes/end-card/shared";
 
 export interface EndCardLayoutInput {
   theme: AdTheme;
@@ -24,6 +20,8 @@ export interface EndCardLayoutInput {
   logo?: { w: number; h: number } | null;
   measure: Measure;
   size?: { w: number; h: number };
+  /** The kit's colours (the words and the pill take one that reads on the brand colour). */
+  colors?: readonly string[];
 }
 
 /** "yourshop.com" from "https://www.yourshop.com/products/x". */
@@ -36,56 +34,35 @@ export function siteLabel(url: string | undefined): string | undefined {
   }
 }
 
-/** Where everything goes on the card: one centred block (logo or name, product, CTA), the address at the foot. */
-export function planEndCard(p: EndCardLayoutInput): AdPlan {
-  const { w: W, h: H } = p.size ?? END_CARD.size;
-  const t = p.theme;
-  const m = Math.round(W * 0.1);
-  const inner = W - 2 * m;
-  const ink = t.onAccent;
-  const gap = H * 0.04;
-  // Measure the block first, then centre it a little above the middle.
-  const logoH = H * 0.15;
-  const name = !p.logo && p.content.brand.trim() ? fitText(p.content.brand.trim().toUpperCase(), inner, 2, t.heading, 800, W * 0.1, W * 0.06, p.measure) : null;
-  const head = fitText(p.content.product.trim() || " ", inner, 2, t.heading, 700, W * 0.068, W * 0.045, p.measure);
-  const ctaSize = W * 0.045;
-  const label = p.content.cta?.trim() ? fitText(p.content.cta.trim(), inner - ctaSize * 2.4, 1, t.body, 700, ctaSize, W * 0.03, p.measure) : null;
-  const ctaH = label ? label.size * 2.3 : 0;
-  const top = p.logo ? logoH : name ? name.lines.length * name.size * 1.05 : 0;
-  const headH = head.lines.length * head.size * 1.12;
-  const total = top + (top ? gap : 0) + headH + (label ? gap * 1.4 + ctaH : 0);
-  let y = Math.max(m, (H - total) / 2 - H * 0.03);
-
-  let logo: Rect | undefined;
-  let brand: TextBox | undefined;
-  if (p.logo) {
-    logo = containIn(p.logo.w, p.logo.h, { x: m, y, w: inner, h: logoH }, "center");
-    y += logoH + gap;
-  } else if (name) {
-    brand = textBox(name, W / 2, y, t.heading, 800, ink, "center", inner, 1.05);
-    y += top + gap;
-  }
-  const headline = textBox(head, W / 2, y, t.heading, 700, ink, "center", inner);
-  y += headH;
-  let cta: AdPlan["cta"];
-  if (label) {
-    y += gap * 1.4;
-    const tw = p.measure(label.lines[0], fontString(t.body, label.size, 700));
-    const bw = Math.min(inner, tw + label.size * 2.4);
-    const bx = (W - bw) / 2;
-    // The pill is the text colour; its words the brand colour, or whatever reads on the pill.
-    const onPill = contrast(t.accent, ink) >= 3 ? t.accent : readableOn(ink);
-    cta = { x: bx, y, w: bw, h: ctaH, radius: ctaH / 2, color: ink, text: textBox(label, bx + bw / 2, y + (ctaH - label.size * 1.12) / 2, t.body, 700, onPill, "center", bw) };
-  }
-  const site = p.content.website?.trim() ? fitText(p.content.website.trim(), inner, 1, t.body, 500, W * 0.032, W * 0.024, p.measure) : null;
-  const body = site ? textBox(site, W / 2, H - m - site.size * 1.12, t.body, 500, ink, "center", inner) : undefined;
-  return { w: W, h: H, bg: t.accent, image: null, logo, brand, headline, body, cta };
+/**
+ * Where everything goes on the card: one centred block (logo or name, product, CTA), the address at the foot. The
+ * animated end cards end on this same layout (lib/motion/scenes/end-card/shared.ts endCardRest), so the still card,
+ * the poster and every style's last frame match. Words are set exactly as typed (no capitals added, nothing cut);
+ * `overflow` names a field too long to fit even at its smallest size.
+ */
+export function planEndCard(p: EndCardLayoutInput): AdPlan & { overflow: (keyof EndCardContent)[] } {
+  const size = p.size ?? END_CARD.size;
+  const r = endCardRest({ theme: p.theme, content: p.content, logo: p.logo ?? null, measure: p.measure, size, letters: false, colors: p.colors });
+  const box = (b: TextBlock, width = r.inner): TextBox => ({ lines: b.layout.lines.map((l) => l.text), x: b.cx, y: b.y, size: b.layout.size, lineHeight: b.layout.lineHeight, font: b.layout.font, color: b.color, align: "center", width });
+  return {
+    w: size.w,
+    h: size.h,
+    bg: p.theme.accent,
+    image: null,
+    logo: r.logo,
+    brand: r.brand && box(r.brand),
+    headline: box(r.headline),
+    body: r.site && box(r.site),
+    cta: r.cta && { x: r.cta.x, y: r.cta.y, w: r.cta.w, h: r.cta.h, radius: r.cta.r, color: r.cta.color, text: box(r.cta.label, r.cta.w) },
+    overflow: r.overflow,
+  };
 }
 
 export interface EndCardInput {
   theme: AdTheme;
   content: EndCardContent;
   logo?: string | null;
+  colors?: readonly string[];
 }
 
 /**
@@ -98,11 +75,14 @@ export async function renderEndCard(canvas: HTMLCanvasElement, input: EndCardInp
   const { w, h } = END_CARD.size;
   canvas.width = Math.round(w * scale);
   canvas.height = Math.round(h * scale);
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) return;
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  const plan = planEndCard({ theme: input.theme, content: input.content, logo: logo ? { w: logo.naturalWidth || 400, h: logo.naturalHeight || 120 } : null, measure: measureText });
-  drawPlan(ctx, plan, null, logo);
+  // Laid out in the animated card's design units (1080 on the short side) and scaled by the drawer, as its frames are.
+  const size = designSize(END_CARD.size);
+  const rest = endCardRest({ theme: input.theme, content: input.content, logo: logo ? { w: logo.naturalWidth || 400, h: logo.naturalHeight || 120 } : null, measure: measureText, size, colors: input.colors });
+  const images = new Map<string, CanvasImageSource>();
+  if (logo) images.set("logo", logo);
+  drawDisplayList(ctx, { w: size.w, h: size.h, background: input.theme.accent, nodes: restNodes(rest) }, { images });
 }
 
 /** The full-size card as a PNG, ready to upload. */

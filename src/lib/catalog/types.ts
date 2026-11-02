@@ -40,6 +40,7 @@ export type Operation =
   | "extend" // video → the same clip, continued
   | "grade" // colour grade, rendered in the browser
   | "relight" // the Relight tool's blend of a photo and its relit picture, rendered in the browser
+  | "motion" // motion graphics, rendered in the browser
   | "reframe" // video → same video at a new aspect ratio (AI-filled edges)
   | "finalize" // draft video → full-quality render of the same take
   | "dialogue" // several speakers → one audio track
@@ -126,6 +127,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   extend: "Extend video",
   grade: "Color grade",
   relight: "Relight",
+  motion: "Motion graphics",
   reframe: "Reframe",
   finalize: "Final render",
   dialogue: "Dialogue",
@@ -207,6 +209,7 @@ export const OPERATION_OUTPUT: Record<Operation, MediaKind> = {
   extend: "video",
   grade: "image",
   relight: "image",
+  motion: "video",
   reframe: "video",
   finalize: "video",
   dialogue: "audio",

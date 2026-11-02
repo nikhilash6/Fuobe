@@ -2689,6 +2689,20 @@ const local: ModelDef[] = [
     options: {},
     hidden: true,
   },
+  // Kinetic Motion: motion graphics (an animated end card, text templates) drawn by code in the brand's fonts and
+  // colours, rendered and encoded in the browser, then saved like any result.
+  {
+    id: "local-motion",
+    name: "Kinetic Motion",
+    vendor: "Fuobe",
+    family: "local",
+    engine: "open",
+    kind: "video",
+    tagline: "Motion graphics drawn in your browser in your brand fonts",
+    routes: [{ op: "motion", provider: "local", endpoint: "canvas" }],
+    options: {},
+    hidden: true,
+  },
   // Marketing joins that keep the voice (UGC presenter, Click to Ad, Ad Multiplier): oss-join-clips drops every
   // soundtrack and plays all frames at one rate, so a 25 fps presenter joined to 16 fps Wan clips came out silent
   // and slowed down. These resample every clip to 25 fps and keep one clip's own sound.

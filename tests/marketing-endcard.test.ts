@@ -30,7 +30,12 @@ const { planEndCard, siteLabel } = await import("@/components/marketing/end-card
 const { themeFrom } = await import("@/components/ads/layout");
 
 beforeAll(() => setSetting("demoMode", "auto"));
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+afterAll(() => {
+  // The database stays open until the worker exits (Windows won't delete it before).
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {}
+});
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(400, 7)]);
 const upload = (name = "p.png") => saveFile({ data: PNG, contentType: "image/png", name, source: "upload" }).url;
@@ -254,10 +259,10 @@ describe("the end card the page draws", () => {
     for (const r of [logo!, cta!, { x: 0, y: body!.y, h: body!.lineHeight }]) inside(r);
   });
 
-  it("writes the brand's name when there is no logo, and leaves out a CTA nobody wrote", () => {
+  it("writes the brand's name as typed when there is no logo, and leaves out a CTA nobody wrote", () => {
     const plan = planEndCard({ theme, content: { brand: "Dermaco", product: "A very long product name that keeps going and going for a while" }, logo: null, measure });
     expect(plan.logo).toBeUndefined();
-    expect(plan.brand!.lines).toEqual(["DERMACO"]);
+    expect(plan.brand!.lines).toEqual(["Dermaco"]);
     expect(plan.cta).toBeUndefined();
     expect(plan.headline.lines.length).toBeLessThanOrEqual(2);
     for (const l of plan.headline.lines) expect(measure(l, plan.headline.font)).toBeLessThanOrEqual(720 - 144 + 1);

@@ -725,9 +725,9 @@ describe("where Relight lives", () => {
     expect(acts[i + 1].id).toBe("live-edit");
   });
 
-  it("the local result route takes a Relight blend and nothing else new", () => {
+  it("the local result route takes a Relight blend (and Kinetic Motion clips)", () => {
     const route = fs.readFileSync(path.join(ROOT, "src/app/api/generations/local/route.ts"), "utf8");
-    expect(route).toContain('op: z.enum(["grade", "relight"])');
+    expect(route).toContain('op: z.enum(["grade", "relight", "motion"])');
   });
 });
 

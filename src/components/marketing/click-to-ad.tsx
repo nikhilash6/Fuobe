@@ -20,7 +20,9 @@ import { formatCost } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { templateCover } from "@/lib/template-covers";
-import { endCardPng, renderEndCard, siteLabel, type EndCardInput } from "./end-card";
+import { recipeKey } from "@/lib/motion/recipe";
+import { endCardPng, siteLabel, type EndCardInput } from "./end-card";
+import { EndCardMotionPanel, renderRecipe, useEndCardMotion, type EndCardChoice } from "./end-card-motion";
 import { addRuns, send, useBrand, useEstimate, useProductActions, useProducts, useReadingProduct, useUpdateBrand } from "./hooks";
 import type { ModelInfo } from "./model-info";
 import { AvatarSlot, VoiceControl } from "./pickers";
@@ -65,6 +67,9 @@ function KitProgress() {
   );
 }
 
+/** The end card shown before a product is picked: a sample kit to try the styles on, with the visitor's own words. */
+const SAMPLE_CARD = { brand: "Aurèle", product: "Le Sérum Nuit", colors: ["#0e3b2f", "#cfae6e"], fonts: { heading: "Cormorant Garamond", body: "Manrope" } } as const;
+
 const styleScene = (presenter: boolean, dark?: boolean) => (presenter ? "selfie" : dark ? "noir" : "orbit");
 
 /** One ad style: its real cover when it has one (a clip plays as the template cards' do), else its drawn preview. */
@@ -87,22 +92,6 @@ export function StyleTile({ style: s, selected, onPick }: { style: AdStyle; sele
       <p className="line-clamp-2 text-[11px] text-muted-foreground">{s.description}</p>
     </button>
   );
-}
-
-/** The end card as the ad will end on it, drawn small (the same drawing as the full-size PNG). */
-function EndCardPreview({ input, className }: { input: EndCardInput; className?: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const key = JSON.stringify(input);
-  useEffect(() => {
-    // The logo and fonts load at their own pace: only the latest look is drawn.
-    let live = true;
-    if (ref.current) void renderEndCard(ref.current, JSON.parse(key) as EndCardInput, 0.3, () => live);
-    return () => {
-      live = false;
-    };
-  }, [key]);
-  const words = [input.content.brand, input.content.product, input.content.cta].filter(Boolean).join(", ");
-  return <canvas ref={ref} role="img" aria-label={`End card preview: ${words}`} className={cn("aspect-[9/16] rounded-lg border bg-muted", className)} />;
 }
 
 /**
@@ -191,14 +180,26 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
   const [cta, setCta] = useState<string>(END_CARD.cta);
   const logo = brand?.logo || brandBits?.logo || null;
   const withEndCard = endCardOn ?? !!logo;
+  // Before a product is picked the card previews on a sample kit, with the words typed here.
+  const [sampleBrand, setSampleBrand] = useState<string>(SAMPLE_CARD.brand);
+  const [sampleProduct, setSampleProduct] = useState<string>(SAMPLE_CARD.product);
+  const kitColors = useMemo<string[]>(() => (product ? (brand?.colors ?? brandBits?.colors ?? []) : [...SAMPLE_CARD.colors]), [product, brand, brandBits]);
+  // The card's style: animated (Draw-on by default) or Still.
+  const [cardChoice, setCardChoice] = useState<EndCardChoice>("draw-on");
+  const [renderLine, setRenderLine] = useState<string | null>(null);
   const card = useMemo<EndCardInput>(
-    () => ({
-      theme: themeFrom(brand ?? (brandBits ? { colors: brandBits.colors } : null)),
-      content: { brand: brand?.name ?? "", product: name.trim() || product?.name || "", cta: cta.trim() || undefined, website: siteLabel(brand?.website ?? product?.url) },
-      logo,
-    }),
-    [brand, brandBits, name, product, cta, logo],
+    () =>
+      product
+        ? {
+            theme: themeFrom(brand ?? (brandBits ? { colors: brandBits.colors } : null)),
+            content: { brand: brand?.name ?? "", product: name.trim() || product.name || "", cta: cta.trim() || undefined, website: siteLabel(brand?.website ?? product.url) },
+            logo,
+            colors: kitColors,
+          }
+        : { theme: themeFrom({ colors: [...SAMPLE_CARD.colors], fonts: SAMPLE_CARD.fonts }), content: { brand: sampleBrand, product: sampleProduct, cta: cta.trim() || undefined }, logo: null, colors: kitColors },
+    [brand, brandBits, name, product, cta, logo, kitColors, sampleBrand, sampleProduct],
   );
+  const motion = useEndCardMotion(card, kitColors, engine, cardChoice);
   // The drawn card is uploaded once per look (a second Generate with the same card reuses it).
   const uploadedCard = useRef<{ key: string; url: string } | null>(null);
   const cardUrl = async () => {
@@ -208,6 +209,26 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
     const { url } = await uploadFile(new File([blob], "end-card.png", { type: "image/png" }));
     uploadedCard.current = { key, url };
     return url;
+  };
+  // The animated card: rendered here at the ad's size and the join's frame rate, uploaded with its last frame (the run's
+  // poster), once per look and engine.
+  const uploadedClip = useRef<{ key: string; body: { image: string; clip: string; seconds: number; variant: string } } | null>(null);
+  const endCardBody = async () => {
+    if (!motion.animated) return { image: await cardUrl() };
+    const key = `${engine}:${recipeKey(motion.recipe)}`;
+    if (uploadedClip.current?.key === key) return uploadedClip.current.body;
+    setRenderLine("Rendering the end card");
+    try {
+      const out = await renderRecipe(motion.recipe, motion.inputs, { formats: engine === "open" ? ["mp4", "webm"] : ["mp4"], onProgress: (d, n) => setRenderLine(`Rendering ${d} of ${n}`) });
+      setRenderLine("Saving…");
+      const ext = out.type === "video/webm" ? "webm" : "mp4";
+      const [clip, poster] = await Promise.all([uploadFile(new File([out.blob], `end-card.${ext}`, { type: out.type })), uploadFile(new File([out.poster], "end-card.png", { type: "image/png" }))]);
+      const body = { image: poster.url, clip: clip.url, seconds: motion.recipe.duration, variant: cardChoice };
+      uploadedClip.current = { key, body };
+      return body;
+    } finally {
+      setRenderLine(null);
+    }
   };
 
   const choose = (p: Product, bits?: { logo?: string; colors: string[] }) => {
@@ -238,14 +259,22 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
             voice,
             voiceSample: sample?.ref,
             avatar: withPresenter ? avatar?.ref : undefined,
-            // Priced with a stand-in; the card itself is drawn and uploaded when you generate.
-            endCard: withEndCard ? { image: "/api/files/placeholder.png" } : undefined,
+            // Priced with a stand-in; the card itself is drawn (or rendered) and uploaded when you generate.
+            endCard: withEndCard ? { image: "/api/files/placeholder.png", ...(motion.animated && { clip: "/api/files/placeholder.mp4" }) } : undefined,
           }
         : null,
-    [engine, productId, styleId, picked, withPresenter, script, mode, instructions, quality, voice, sample, avatar, withEndCard],
+    [engine, productId, styleId, picked, withPresenter, script, mode, instructions, quality, voice, sample, avatar, withEndCard, motion.animated],
   );
   const est = useEstimate<RunEstimate>("/api/marketing/click-to-ad/estimate", body);
-  const blocker = !product ? "Select a product or enter a product URL" : !product.images.length ? `${product.name} has no images` : !desc.trim() ? "Add a description" : est.data?.blocker;
+  const blocker = !product
+    ? "Select a product or enter a product URL"
+    : !product.images.length
+      ? `${product.name} has no images`
+      : !desc.trim()
+        ? "Add a description"
+        : withEndCard && motion.overflow.length
+          ? motion.overflow[0]
+          : est.data?.blocker;
   const cost = est.data && !est.data.blocker ? (visitor && (est.data.demo || est.data.costUsd === 0) ? "Not available here" : est.data.demo ? "Placeholder · free" : est.data.costUsd == null ? "" : `≈ ${formatCost(est.data.costUsd)}`) : "";
 
   const writeScript = async () => {
@@ -266,7 +295,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
     if (blocker) return void toast(blocker, { id: "c2a-blocker" });
     setBusy(true);
     try {
-      const endCard = withEndCard ? { image: await cardUrl() } : undefined;
+      const endCard = withEndCard ? await endCardBody() : undefined;
       const r = await send<{ run: MarketingRun; script: string }>("/api/marketing/click-to-ad", "POST", { ...body, endCard });
       addRuns(qc, "click-to-ad", [r.run]);
       setScript(r.script);
@@ -312,6 +341,22 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
             )}
           </div>
         </Step>
+
+        {!product && (
+          <section aria-labelledby="c2a-end-card-try" className="min-w-0 space-y-3 rounded-2xl border p-4 sm:p-5">
+            <div>
+              <h3 id="c2a-end-card-try" className="text-[15px] font-semibold">
+                Your ad ends on your brand
+              </h3>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">An animated end card in your brand&apos;s colours and fonts, in five styles. Try one with your words.</p>
+            </div>
+            <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+              <input value={sampleBrand} onChange={(e) => setSampleBrand(e.target.value.slice(0, 40))} className="h-11 w-full min-w-0 rounded-xl border bg-background px-3 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Brand name on the end card" placeholder="Brand name" />
+              <input value={sampleProduct} onChange={(e) => setSampleProduct(e.target.value.slice(0, 60))} className="h-11 w-full min-w-0 rounded-xl border bg-background px-3 text-[14px] outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Product name on the end card" placeholder="Product name" />
+            </div>
+            <EndCardMotionPanel card={card} colors={kitColors} motion={motion} choice={cardChoice} onChoice={setCardChoice} cta={cta} onCta={setCta} />
+          </section>
+        )}
 
         {product && (
           <Step n={2} title="Your product kit" hint="Review the details we extracted — edit anything before generating your video." done={!!desc.trim() && picked.length > 0}>
@@ -384,7 +429,7 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
               ))}
             </div>
             <div className="mt-5 grid min-w-0 gap-4 md:grid-cols-2">
-              <div className="space-y-3">
+              <div className="min-w-0 space-y-3">
                 <div>
                   <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Who&apos;s in it</p>
                   <div role="radiogroup" aria-label="Presenter" className="inline-flex rounded-full bg-muted p-0.5">
@@ -399,21 +444,18 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
                   {withPresenter && <AvatarSlot value={avatar} onChange={setAvatar} />}
                   <VoiceControl engine={engine} models={models} voice={voice} sample={sample} onVoice={setVoice} onSample={setSample} />
                 </div>
-                <div className="flex items-start gap-3 rounded-xl border p-3">
-                  <EndCardPreview input={card} className={cn("w-[72px] shrink-0 transition-opacity", !withEndCard && "opacity-40")} />
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <label htmlFor="c2a-end-card" className="text-[13px] font-medium">
-                        End card
-                      </label>
-                      <Switch id="c2a-end-card" checked={withEndCard} onCheckedChange={setEndCardOn} />
-                    </div>
-                    <p className="text-[12px] text-muted-foreground">
-                      {withEndCard ? `The ad ends on your ${logo ? "logo" : "brand name"} for ${END_CARD.seconds} s, in your brand colours.` : "The ad ends on its last shot."}
-                      {!logo && " Add a logo in the product kit to show it."}
-                    </p>
-                    {withEndCard && <input value={cta} onChange={(e) => setCta(e.target.value.slice(0, 30))} className={inputCls} aria-label="Call to action on the end card" placeholder="Call to action, e.g. Shop now" />}
+                <div className="min-w-0 space-y-2 rounded-xl border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor="c2a-end-card" className="text-[13px] font-medium">
+                      End card
+                    </label>
+                    <Switch id="c2a-end-card" checked={withEndCard} onCheckedChange={setEndCardOn} />
                   </div>
+                  <p className="text-[12px] text-muted-foreground">
+                    {withEndCard ? `The ad ends on your ${logo ? "logo" : "brand name"} for ${END_CARD.seconds} s, in your brand colours and fonts.` : "The ad ends on its last shot."}
+                    {!logo && " Add a logo in the product kit to show it."}
+                  </p>
+                  {withEndCard && <EndCardMotionPanel card={card} colors={kitColors} motion={motion} choice={cardChoice} onChoice={setCardChoice} cta={cta} onCta={setCta} rendering={renderLine} />}
                 </div>
                 <div>
                   <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Video quality</p>
