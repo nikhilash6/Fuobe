@@ -582,6 +582,8 @@ export const TRANSCRIBERS: Record<Engine, string> = { cloud: "scribe-v2", open: 
 export const TranscribeSchema = z.object({
   engine: z.enum(["cloud", "open"]),
   source: z.object({ url: z.string().startsWith("/api/files/").max(500), duration: z.number().finite().positive().max(3600).optional() }),
+  // "Clean the voice first" (src/lib/av/voice-first.ts): the words are read from the speech alone.
+  voiceFirst: z.boolean().optional(),
 });
 
 /**
@@ -601,6 +603,7 @@ export function transcribeClip(body: z.infer<typeof TranscribeSchema>): { id: st
       op: "transcribe",
       inputs: { video: body.source.url },
       ...(seconds ? { params: { duration: seconds, sourceDuration: seconds } } : {}),
+      ...(body.voiceFirst && { voiceFirst: true }),
       step: { label: "The clip's words", index: 0, of: 1 },
     });
     return { id: g.id, modelId };

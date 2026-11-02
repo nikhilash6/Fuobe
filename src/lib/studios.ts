@@ -127,6 +127,7 @@ export const LIPSYNC_STUDIO: StudioConfig = {
   defaultModels: { cloud: "kling-avatar-2", open: "oss-infinitetalk" },
   promptOptional: true,
   voiceFacts: true,
+  voiceFirst: true,
 };
 
 export const UPSCALE_STUDIO: StudioConfig = {
@@ -297,6 +298,7 @@ export const TRANSCRIBE_STUDIO: StudioConfig = {
   defaultModels: { cloud: "scribe-v2", open: "oss-qwen3-asr" },
   promptOptional: true,
   hidePrompt: true,
+  voiceFirst: true,
 };
 
 export const SFX_STUDIO: StudioConfig = {

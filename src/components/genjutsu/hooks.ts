@@ -84,7 +84,7 @@ export function useDescribeCharacter() {
 
 /** The clip's words (one transcription; the page takes the part's lines from its cues). */
 export function useTranscribeClip() {
-  return useMutation({ mutationFn: (b: { engine: Engine; source: { url: string; duration?: number } }) => send<{ id: string; modelId: string }>("/api/genjutsu/transcribe", "POST", b) });
+  return useMutation({ mutationFn: (b: { engine: Engine; source: { url: string; duration?: number }; voiceFirst?: boolean }) => send<{ id: string; modelId: string }>("/api/genjutsu/transcribe", "POST", b) });
 }
 
 /** Waits for one generation to finish (polling; the page's helpers that fill a field from it). */

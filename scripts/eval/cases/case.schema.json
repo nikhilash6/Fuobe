@@ -542,7 +542,9 @@
               "lipsync",
               "continuity",
               "palette",
-              "background"
+              "background",
+              "separation",
+              "wer"
             ]
           }
         },
@@ -721,6 +723,9 @@
                 "cloud"
               ]
             }
+          },
+          "op": {
+            "type": "string"
           },
           "params": {
             "type": "object",
@@ -1287,7 +1292,9 @@
                 "lipsync",
                 "continuity",
                 "palette",
-                "background"
+                "background",
+                "separation",
+                "wer"
               ]
             }
           },
