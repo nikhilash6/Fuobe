@@ -416,13 +416,12 @@ const routedTo = (c: Choice) => {
   return suffix ? (ROUTED[suffix] ?? suffix) : undefined;
 };
 
-/** "Open weights · MIT · runs on DeepSeek's servers", "… · runs on DeepInfra, through Hugging Face"; undefined for a closed (or not confirmed open) model. */
+/** "Open weights · runs on DeepSeek's servers", "… · runs on DeepInfra, through Hugging Face"; undefined for a closed (or not confirmed open) model. */
 export function openLabel(c: Choice): string | undefined {
   if (c.local) return "Open weights · on this machine";
   if (!c.licence) return undefined;
-  const licence = c.nonCommercial ? `${c.licence} (non-commercial)` : c.licence;
   const host = routedTo(c);
   const where =
     c.provider === "openrouter" ? (c.free ? "free through OpenRouter" : "runs through OpenRouter") : host ? `runs on ${host}, through ${c.providerLabel}` : `runs on ${c.providerShort}'s servers`;
-  return `Open weights · ${licence} · ${where}`;
+  return `Open weights · ${where}`;
 }

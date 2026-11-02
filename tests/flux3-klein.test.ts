@@ -370,7 +370,7 @@ describe("FLUX 3 Klein as a Soul ID training target", () => {
     expect(fal.price).toBe("≈ $4.30 (1,000 steps)");
     expect(fal.licence).toMatch(/^FLUX Kommunity License v1\.0/);
     expect(fal.commercial).toBeNull();
-    expect(fal.description).toMatch(/not blanket permission for commercial fine-tuning/);
+    expect(fal.description).not.toMatch(/licen[cs]e/i);
     const tr = getTrainer(fal.trainer)!;
     expect(tr).toMatchObject({ usdPerStep: 0.0043, minBilledSteps: 100, dataField: "images_data_url", loraOutput: ["lora_file"], status: "active" });
     expect(falTrainingInput(fal, "https://x/data.zip", "photo of mayafz", "mayafz")).toEqual({

@@ -46,7 +46,7 @@ describe("FIBO 2 models", () => {
     expect(m.kind).toBe("image");
     expect(m.family).toBe("bria");
     expect(m.badges).toEqual(expect.arrayContaining(["open", "new", "top"]));
-    expect(m.tagline).toMatch(/GB GPU · non-commercial weights$/);
+    expect(m.tagline).toMatch(/GB GPU$/);
     expect(m.options.maxImages).toBe(4);
     for (const [op, wid] of Object.entries(routes)) {
       const route = m.routes.find((r) => r.op === op);

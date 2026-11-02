@@ -195,7 +195,7 @@ export interface AssistModelOption {
   /** "$2 in, $10 out per million tokens", "Free · 20 a minute, 50 a day". */
   price: string;
   note?: string;
-  /** "Open weights · MIT · runs on DeepSeek's servers". */
+  /** "Open weights · runs on DeepSeek's servers". */
   open?: string;
   caveat?: string;
   sees: boolean;

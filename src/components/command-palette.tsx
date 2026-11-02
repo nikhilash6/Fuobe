@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AudioLines, Bell, Clapperboard, Code, Cpu, Film, GraduationCap, Image as ImageIcon, KeyRound, Layers, LayoutGrid, Loader2, LogIn, Play, Plug, Plus, Scale, Server, Settings2, ShieldCheck, Sparkles, SunMoon, UserPlus, UserRound, Wand2, type LucideIcon } from "lucide-react";
+import { AudioLines, Bell, Clapperboard, Code, Cpu, Film, GraduationCap, Heart, Image as ImageIcon, KeyRound, Layers, LayoutGrid, Loader2, LogIn, Play, Plug, Plus, Scale, Server, Settings2, ShieldCheck, Sparkles, SunMoon, UserPlus, UserRound, Wand2, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -63,6 +63,13 @@ const SETTINGS: { id: string; label: string; icon: LucideIcon; keywords: string;
     keywords: "licence license commercial non-commercial switch off turn on admin providers node packs allow block",
     href: "/settings/models",
   },
+  {
+    id: "about",
+    label: "Thanks & licences",
+    icon: Heart,
+    keywords: "about credits thanks licence license open source models loras node packs libraries attribution",
+    href: "/settings/licences",
+  },
   { id: "text-ai", label: "AI helper", icon: Sparkles, keywords: "claude ollama lm studio unsloth local llm model enhancer prompt enhancement context" },
   { id: "assist-connectors", label: "Assist connectors", icon: Plug, keywords: "mcp connector claude tools notion linear slack server token" },
   { id: "notifications", label: "Notifications", icon: Bell, keywords: "browser done alerts" },
@@ -91,18 +98,18 @@ const visitorSetting = (key: string, label: string, href: string, icon: LucideIc
   keywords,
   icon,
 });
-const LICENCES = SETTING_ENTRIES.find((e) => e.key === "setting:models")!;
+const THANKS = SETTING_ENTRIES.find((e) => e.key === "setting:about")!;
 /**
  * The install's settings are its owner's: an account (public sign-up) gets its own GPU and account, a guest the way to
- * connect a GPU; both get the licences, which they may read.
+ * connect a GPU; both get Thanks & licences, which they may read.
  */
 const ACCOUNT_SETTINGS = [
   visitorSetting("your-gpu", "Your GPU", "/settings#your-gpu", Cpu, "comfyui gpu connect own server open source"),
   visitorSetting("your-keys", "Your keys", "/settings#your-keys", KeyRound, "fal fal.ai replicate api key token paid models nano banana kling veo billing"),
   visitorSetting("account", "Account", "/settings#account", UserRound, "email sign out delete account"),
-  LICENCES,
+  THANKS,
 ];
-const GUEST_SETTINGS = [visitorSetting("connect", "Connect your GPU", "/connect", Cpu, "comfyui gpu own server sign up account open source"), LICENCES];
+const GUEST_SETTINGS = [visitorSetting("connect", "Connect your GPU", "/connect", Cpu, "comfyui gpu own server sign up account open source"), THANKS];
 
 /** The settings the palette offers this viewer (none of the install's to anyone but its owner). */
 export function settingEntries(viewer: Pick<ViewerInfo, "owner" | "account"> | undefined): (PaletteEntry & { icon: LucideIcon })[] {

@@ -68,7 +68,7 @@ describe("Qwen-Image 2.1 in the catalog", () => {
         expect(byId.get(wid)?.validated, `${wid} stays unvalidated until it runs on the GPU`).toBe(false);
       }
       expect(m.options.maxImages).toBe(4);
-      expect(m.tagline).toMatch(/20 GB GPU · non-commercial weights$/);
+      expect(m.tagline).toMatch(/20 GB GPU$/);
     }
     expect(getModel("oss-qwen-image-21-turbo")!.badges).toContain("fast");
     // Turbo has no text to image: none of the owner's workflows runs it that way.

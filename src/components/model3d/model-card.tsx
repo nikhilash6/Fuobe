@@ -12,7 +12,6 @@ import type { Generation } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { loadModelViewer, TURNTABLE_BACKDROP, useViewerSrc, viewerLook } from "./model-viewer";
-import type { Model3dInfo } from "./model3d-studio";
 import { RigDialog } from "./rig-dialog";
 import { PlaceholderChip } from "@/components/demo-mode";
 import { recordableType, recordTurntable } from "./turntable";
@@ -38,7 +37,7 @@ function rigClips(g: Generation, view: Model3dView): { key: string; label: strin
  * plays its animation). A splat shows its orbit video or picture with the file to download. Then the turntable,
  * Animate the spin and Rig & animate.
  */
-export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean }) {
+export function ModelCard({ g, cloudAllowed }: { g: Generation; cloudAllowed: boolean }) {
   const view = model3dView(g);
   // "preview": the turntable or the still (a splat with an orbit video: the video). "3d": the viewer (a splat: its picture).
   const [show, setShow] = useState<"preview" | "3d">("preview");
@@ -145,7 +144,6 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
     setShow("3d");
   };
   const spin = view.rigged ? null : animateSpinHref(view, recorded?.saved);
-  const notices = info[g.modelId]?.notices ?? [];
   // A rigged result rigs its source model again with another animation.
   const rigSource = view.rigged ? (g.request.inputs?.model3d ?? view.glb) : view.glb;
   // The radio buttons in the corner: the preview and the 3D view, a rig's clips, or a splat's video and picture.
@@ -352,7 +350,6 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
             </Button>
           )}
         </div>
-        {notices.length > 0 && <p className="text-[11px] text-muted-foreground">{notices.join(" · ")}</p>}
       </div>
       {rigSource && rigging && g.op !== "splat" && <RigDialog glb={rigSource} open={rigging} onOpenChange={setRigging} cloudAllowed={cloudAllowed} />}
     </article>

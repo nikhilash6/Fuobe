@@ -587,10 +587,3 @@ export const CHARACTER_LORAS: { file: string; name: string; url: string; licence
 ];
 
 export const characterLora = (file: string) => CHARACTER_LORAS.find((l) => l.file === file);
-
-/** One line for a model picker: the licence that matters most for the route, as information. */
-export function characterLicenceLine(engine: Engine, modelId: string): string {
-  if (modelId === "h3-max-recast") return "MiniMax's closed H3 Max through fal: pay per second, under fal's and MiniMax's terms";
-  const h3 = `MiniMax H3 Community License — not licensed in ${MINIMAX_H3_LICENCE.excludes}; commercial use over US$20M revenue needs MiniMax's OK; show "MiniMax H3"`;
-  return engine === "open" ? `${h3} · nodes GPL-3.0 · SAM License` : `${h3} · on fal, pay per second`;
-}

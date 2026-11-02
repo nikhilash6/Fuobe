@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Panel } from "@/components/av/tool-shell";
 import { Segmented } from "@/components/faceless/controls";
 import { Segmented as SizePicker } from "@/components/shorts/ui";
-import { characterLicenceLine, h3Canvas } from "@/lib/catalog/character-swap";
+import { h3Canvas } from "@/lib/catalog/character-swap";
 import { defaultSharpenTier, filmSize, gpuMinutes, joinNote, SHARPEN_COPY, sharpenOffered, sharpenOptions, type SharpenTier } from "@/lib/catalog/sharpen";
 import {
   assemblyPieces,
@@ -26,7 +26,6 @@ import {
   type GenSummary,
   type SwapTake,
 } from "@/lib/catalog/swap-studio";
-import { STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
 import { downloadHref } from "@/lib/library";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
@@ -394,7 +393,6 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
           {(estimate?.notes ?? []).filter((n) => n !== WORKERS_NOTE).map((n) => (
             <li key={n}>{n}</li>
           ))}
-          {!estimate && <li>{characterLicenceLine(project.engine, STUDIO_MODELS[project.engine].swap)}</li>}
         </ul>
       </Panel>
     </div>

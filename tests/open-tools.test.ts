@@ -382,9 +382,9 @@ describe("Fuobe Speak", () => {
 });
 
 describe("Depth Map and Upscale routes", () => {
-  it("offers Video Depth Anything Large on your GPU, labelled non-commercial, without making it the default", async () => {
+  it("offers Video Depth Anything Large on your GPU, its licence recorded as non-commercial, without making it the default", async () => {
     const m = getModel("oss-video-depth-vda-large")!;
-    expect(m.tagline).toMatch(/non-commercial/);
+    expect(m.tagline).not.toMatch(/non-commercial/);
     const wf = await prepare("video-depth-vda-large", { video: "clip.mp4", colormap: "inferno" }, "depth-video");
     expect(Object.values(wf).find((n) => n.class_type === "LoadVideoDepthAnythingModel")?.inputs.model).toBe("video_depth_anything_vitl.pth");
     expect(licenceInfo(getWorkflow("video-depth-vda-large").manifest.license ?? "").class).toBe("non-commercial");

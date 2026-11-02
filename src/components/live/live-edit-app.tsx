@@ -185,12 +185,7 @@ function LiveShowcase({ kind }: { kind: "guest" | "connect" | "unsupported" }) {
               </>
             )}
           </div>
-          <p className="mt-4 text-[12px] text-muted-foreground">
-            Runs on your own GPU ·{" "}
-            <Link href="/settings/about" className="underline-offset-2 hover:underline">
-              licence
-            </Link>
-          </p>
+          <p className="mt-4 text-[12px] text-muted-foreground">Runs on your own GPU</p>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, LegalSection } from "@/components/legal-page";
-import { FUOBE_CREDITS, FUOBE_REPO } from "@/lib/connections";
+import { FUOBE_REPO } from "@/lib/connections";
 
 export const metadata: Metadata = { title: "Terms", description: "The few rules for using Fuobe." };
 
@@ -20,10 +20,7 @@ export default function Page() {
       <LegalSection title="What you make">
         <p>
           What you make is yours, within the licence of the model that made it. Some open models don&apos;t allow commercial use, so check{" "}
-          <a href={FUOBE_CREDITS} target="_blank" rel="noopener">
-            the credits
-          </a>{" "}
-          before you sell your work.
+          <Link href="/settings/licences">Thanks &amp; licences</Link> before you sell your work.
         </p>
       </LegalSection>
       <LegalSection title="Fair use">

@@ -27,7 +27,6 @@ import {
   CHARACTER_SWAP,
   CLOUD_NO_LORA,
   characterFinish,
-  characterLicenceLine,
   characterQuality,
   h3Canvas,
   partFrames,
@@ -611,31 +610,6 @@ export const LEGACY_MAKERS: Record<string, string> = {
 };
 
 const SOURCE_RANK: Record<MakerSource, number> = { original: 0, open: 1, partner: 2 };
-
-/** The open weights under each model that isn't MiniMax H3 (docs/research/fuobe-originals-recipes-5.json, studios.genjutsu). */
-const WEIGHTS: Record<string, string> = {
-  [ORIGINALS.motion]: "Wan Animate weights: Apache-2.0",
-  [ORIGINALS.motionLite]: "Wan Animate weights: Apache-2.0",
-  [ORIGINALS.swap]: "Wan VACE weights: Apache-2.0 · SAM 3.1: Meta's SAM License",
-  [ORIGINALS.swapLite]: "Wan VACE weights: Apache-2.0 · SAM 3.1: Meta's SAM License",
-  [ORIGINALS.restyle]: "Wan 2.2 Fun VACE weights: Apache-2.0",
-  "scail-2": "SCAIL-2 weights: MIT",
-  "wan-motion": "Wan Animate weights: Apache-2.0",
-  "wan-22-animate-replace": "Wan 2.2 Animate weights: Apache-2.0",
-  "wan-22-vace-inpaint": "Wan 2.2 Fun VACE weights: Apache-2.0",
-  "oss-vace-insert": "Wan 2.1 VACE weights: Apache-2.0",
-};
-
-/**
- * A model's licence in one line, as information for the picker (the admin decides what runs, in Settings), with where
- * it runs unless the line it goes in already says (`where` false).
- */
-export function makerLicence(m: Maker, where = true): string {
-  if (m.h3 || m.id === "h3-max-recast") return characterLicenceLine(m.engine, m.id);
-  if (m.source === "partner") return "Closed model: pay per use, under its provider's terms";
-  const weights = WEIGHTS[m.id] ?? "Open weights";
-  return where ? `${weights} · ${m.engine === "open" ? "free on your GPU" : "on fal, pay per use"}` : weights;
-}
 
 /**
  * Whether Settings → Models & licences offers a picker entry: Lite and the full Original are one entry, offered while

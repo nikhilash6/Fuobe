@@ -232,14 +232,14 @@ KLEIN_LICENCE = {"licence": KLEIN_REC["license"].split(":")[0], "commercial": No
 KLEIN_HELPER = {"param": "promptHelper", "label": "Prompt helper", "values": ["on", "off"], "default": "on",
                 "labels": {"on": "On · full caption (not with boxes)", "off": "Off · your words as typed"}}
 model("flux-3-klein", "FLUX 3 Klein", "Black Forest Labs", "flux", "image",
-      "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper · FLUX Kommunity licence",
+      "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper",
       [("t2i", f"{KLEIN_FAL}/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/text-to-image/lora"}),
        ("edit", f"{KLEIN_FAL}/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/edit-image/lora", "followsImage": True})],
       badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
       pricing=("image", KLEIN_REC["pricing"]["usd"], "per image at 1K (fal's planned rates by size)", {"byResolution": KLEIN_REC["pricing"]["byResolution"]}),
       licence=KLEIN_LICENCE)
 model("flux-3-klein-base", "FLUX 3 Klein Base", "Black Forest Labs", "flux", "image",
-      "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them · FLUX Kommunity licence",
+      "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them",
       [("t2i", f"{KLEIN_FAL}/base/text-to-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/text-to-image/lora"}),
        ("edit", f"{KLEIN_FAL}/base/edit-image", "fal", {"loraEndpoint": f"{KLEIN_FAL}/base/edit-image/lora", "followsImage": True})],
       badges=["new"], defaults={"aspectRatio": "1:1", "resolution": "1K"}, tier_size=f"{KLEIN_FAL}/text-to-image", options={"layout": "flux3", "controls": [KLEIN_HELPER]},
@@ -273,7 +273,7 @@ model("qwen-image-edit-2509-cloud", "Qwen-Image-Edit 2509 (hosted)", "Alibaba Qw
       "Open-weights Qwen-Image-Edit 2509 with its LoRAs (relight, next scene, angles)",
       [("edit", "fal-ai/qwen-image-edit-plus-lora", "fal")], hidden=True)
 model("flux-2-klein-4b-cloud", "FLUX.2 [klein] 4B (hosted)", "Black Forest Labs", "flux", "image",
-      "The Apache-2.0 FLUX.2: quick drafts and edits",
+      "The open FLUX.2: quick drafts and edits",
       [("t2i", "fal-ai/flux-2/klein/4b", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/lora"}),
        ("edit", "fal-ai/flux-2/klein/4b/edit", "fal", {"loraEndpoint": "fal-ai/flux-2/klein/4b/edit/lora"})],
       badges=["fast"], defaults={"aspectRatio": "1:1"})
@@ -281,23 +281,23 @@ model("wan-2-2-a14b-image-cloud", "Wan 2.2 A14B Image (hosted)", "Alibaba Wan", 
       "Open-weights Wan 2.2 stills that take Wan LoRAs",
       [("t2i", "fal-ai/wan/v2.2-a14b/text-to-image/lora", "fal")], defaults={"aspectRatio": "16:9"})
 # Soul ID on every base fal trains (O3, o/soul-id): a character or style LoRA trained on FLUX.1 [dev], FLUX.2 [dev],
-# Krea 2 or FLUX.2 [klein] 9B runs on these. The weights' licences are information shown with the model, never a gate
+# Krea 2 or FLUX.2 [klein] 9B runs on these. The weights' licences are information on Thanks & licences, never a gate
 # (the owner's decision of 2026-10-27): FLUX [dev] and klein 9B weights are non-commercial (fal clears its own hosted
 # outputs), Krea 2 has revenue tiers. The admin turns models on or off in Settings.
 model("flux-1-dev-lora-cloud", "FLUX.1 [dev] with LoRAs (hosted)", "Black Forest Labs", "flux", "image",
-      "FLUX.1 [dev] with your trained characters and styles · non-commercial weights",
+      "FLUX.1 [dev] with your trained characters and styles",
       [("t2i", "fal-ai/flux-lora", "fal")], defaults={"aspectRatio": "3:4"})
 model("flux-1-krea-lora-cloud", "FLUX.1 Krea [dev] with LoRAs (hosted)", "Black Forest Labs × Krea", "flux", "image",
-      "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs · non-commercial weights",
+      "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs",
       [("t2i", "fal-ai/flux-krea-lora", "fal")], defaults={"aspectRatio": "3:4"})
 model("flux-2-dev-lora-cloud", "FLUX.2 [dev] with LoRAs (hosted)", "Black Forest Labs", "flux", "image",
-      "FLUX.2 [dev] with your trained characters and styles · non-commercial weights",
+      "FLUX.2 [dev] with your trained characters and styles",
       [("t2i", "fal-ai/flux-2/lora", "fal")], defaults={"aspectRatio": "3:4"})
 model("flux-2-klein-9b-lora-cloud", "FLUX.2 [klein] 9B with LoRAs (hosted)", "Black Forest Labs", "flux", "image",
-      "The 9B FLUX.2 [klein] with your LoRAs · non-commercial weights",
+      "The 9B FLUX.2 [klein] with your LoRAs",
       [("t2i", "fal-ai/flux-2/klein/9b/lora", "fal")], badges=["fast"], defaults={"aspectRatio": "3:4"})
 model("krea-2-turbo-lora-cloud", "Krea 2 Turbo with LoRAs (hosted)", "Krea", "krea", "image",
-      "Krea 2's aesthetic with your trained characters and styles · Krea 2 Community licence (revenue tiers)",
+      "Krea 2's aesthetic with your trained characters and styles",
       [("t2i", "fal-ai/krea-2/turbo/lora", "fal")], badges=["fast"], defaults={"aspectRatio": "3:4"})
 # ----- Originals (O2): Fuobe Soul's cloud halves on hosted open weights (docs/research/fuobe-originals-recipes-5.md §4).
 # models.ts joins each to its ComfyUI routes as one model that runs on both engines (ModelDef.engines). Sizes are

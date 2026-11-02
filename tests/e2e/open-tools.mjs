@@ -255,7 +255,7 @@ try {
   }
 
   // ---------------------------------------------------------------------------
-  // 4. The Depth map tool: Video Depth Anything Large, with its non-commercial licence as information.
+  // 4. The Depth map tool: Video Depth Anything Large (its licence is on Thanks & licences).
   {
     const { context, page } = await contextFor("open");
     await open(page, "/video-tools/depth");
@@ -264,7 +264,7 @@ try {
     const listed = await pickModel(page, "Video Depth Anything");
     const large = listed.find((l) => /Video Depth Anything \(large\)/.test(l)) ?? "";
     check("open: Video Depth Anything (large) is a choice", !!large, listed.join(" | ").slice(0, 200));
-    check("open: and says its weights are non-commercial", /non-commercial/i.test(large), large.slice(0, 160));
+    check("open: with no licence note in the picker", !/non-commercial/i.test(large), large.slice(0, 160));
     await shoot(page, "depth-open-1440.png");
     await context.close();
   }

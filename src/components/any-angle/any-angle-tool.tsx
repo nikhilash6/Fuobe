@@ -736,8 +736,6 @@ export function AnyAngleTool({ app }: { app?: { name: string } }) {
 
         {view && ref && <DragView view={view} onUse={takeView} />}
 
-        {/* The 3D view's image encoder asks for this notice (DINOv3 License). */}
-        {photo && !cloudOnly && <p className="text-[11px] text-muted-foreground">Built with DINOv3</p>}
 
         {sheetIds && ref && <ContactSheet ids={sheetIds} original={ref} />}
 

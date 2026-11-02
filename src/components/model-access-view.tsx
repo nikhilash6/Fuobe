@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, CheckCircle2, CircleHelp, CreditCard, ExternalLink, FlaskConical, Globe, Info, RotateCcw, Search } from "lucide-react";
-import { FUOBE_CREDITS } from "@/lib/connections";
+import Link from "next/link";
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -207,10 +207,10 @@ export function ModelAccessIntro() {
       {known && v.owner
         ? "Every model, LoRA and node pack Fuobe can run, with its licence: paid and open, commercial or not. Licences are information here; you decide what this install offers. Everything is on until you switch it off, and what is off leaves every picker and is refused on the server. "
         : "Every model and style Fuobe runs, with its licence. "}
-      Credits and notices are{" "}
-      <a href={FUOBE_CREDITS} target="_blank" rel="noopener" className="text-brand-text underline-offset-2 hover:underline">
-        on GitHub
-      </a>
+      Who made each one, and the credits, are on{" "}
+      <Link href="/settings/licences" className="text-brand-text underline-offset-2 hover:underline">
+        Thanks &amp; licences
+      </Link>
       .
     </>
   );

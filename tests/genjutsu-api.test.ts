@@ -117,7 +117,7 @@ describe("Genjutsu: estimates", () => {
       expect(sun.costUsd).toBeGreaterThanOrEqual(0.525);
       expect(sun.costUsd).toBeLessThan(0.535);
       expect(sun.notes.join(" ")).toMatch(/billed by tokens .* isn't in the price/);
-      expect(sun.notes.join(" ")).toMatch(/MiniMax H3 Community License — not licensed in the US, the EU, the UK and South Korea/);
+      expect(sun.notes.join(" ")).not.toMatch(/licen[cs]e/i);
       expect(sun.limits).toContain("One continuous shot: a hard cut breaks the swap");
       expect(sun.gpu).toBeUndefined();
       const nbp = await (await estimateRoute.POST(json(body({ ...part, character: { anchorModel: "nano-banana-pro" } })))).json();
@@ -134,11 +134,11 @@ describe("Genjutsu: estimates", () => {
     });
   });
 
-  it("Character swap on the open engine: free on your GPU, the windows, the GPU it was tested on and the licences", async () => {
+  it("Character swap on the open engine: free on your GPU, the windows, the GPU it was tested on, and no licence line", async () => {
     const e = await (await estimateRoute.POST(json(body({ engine: "open", mode: "character", source: { url: clip, ...src }, range: { start: 2, end: 9 } })))).json();
     expect(e).toMatchObject({ modelId: "fuobe-character-swap", source: "original", costUsd: 0, anchors: 1, gpu: { weightsGb: 46.33 } });
     expect(e.notes.join(" ")).toMatch(/2 windows of up to 124 frames at 24 fps, each continuing from the 18 frames before it/);
-    expect(e.notes.join(" ")).toMatch(/nodes GPL-3\.0 · SAM License/);
+    expect(e.notes.join(" ")).not.toMatch(/licen[cs]e|GPL/i);
     expect(e.notes.join(" ")).toMatch(/Qwen-Image 2.1 first puts your character into the part's first frame/);
   });
 

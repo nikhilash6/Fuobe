@@ -272,10 +272,9 @@ try {
         await klein.scrollIntoViewIfNeeded();
         const k = flat(await klein.innerText());
         check(`${tag} train: Klein Base LoRA on both engines`, /FLUX 3 Image Klein Base LoRA/.test(k), k.slice(0, 120));
-        check(`${tag} train: the licence is information`, /Licence: FLUX Kommunity License v1\.0 .*check its revenue tiers/.test(k), (k.match(/Licence:[^·]*·[^·]*/) ?? [""])[0]);
+        check(`${tag} train: no licence line (Thanks & licences lists it)`, !/Licence:/.test(k), (k.match(/Licence:[^·]*/) ?? [""])[0]);
         check(`${tag} train: Cloud at $4.30, 1,000 steps`, /Cloud \$4\.30/.test(k) && /1,000 steps/.test(k), k.match(/Cloud[^]*?steps/)?.[0]?.slice(0, 120));
         check(`${tag} train: Your GPU is Free`, /Your GPU Free/.test(k));
-        check(`${tag} train: says it is not blanket permission for commercial fine-tuning`, /not blanket permission for commercial fine-tuning/.test(k));
         const box = await klein.boundingBox();
         check(`${tag} train: the section fits the screen`, !!box && box.x >= 0 && box.x + box.width <= width + 1, box ? `${Math.round(box.x)}+${Math.round(box.width)}` : "no box");
         check(`${tag} train: no sideways scroll`, await noSideways(page));

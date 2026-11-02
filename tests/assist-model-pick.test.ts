@@ -157,15 +157,15 @@ describe("Open source only", () => {
     expect(choices(world({ providers: [{ id: "google", freeTick: true }], openOnly: true })).find((c) => c.model === "gemma-4-31b-it")!.disabled).toBeUndefined();
     // AI helper set to Claude is still the owner's way to use Claude on an open-source-only install.
     expect(smartPick({ ...w, helper: "anthropic" }).plan).toMatchObject({ provider: "anthropic" });
-    expect(openLabel(all.find((c) => c.model === "deepseek-v4-pro")!)).toBe("Open weights · MIT · runs on DeepSeek's servers");
-    expect(openLabel(all.find((c) => c.model === "google/gemma-4-31b-it:free")!)).toBe("Open weights · Apache-2.0 · free through OpenRouter");
+    expect(openLabel(all.find((c) => c.model === "deepseek-v4-pro")!)).toBe("Open weights · runs on DeepSeek's servers");
+    expect(openLabel(all.find((c) => c.model === "google/gemma-4-31b-it:free")!)).toBe("Open weights · free through OpenRouter");
     expect(openLabel(all.find((c) => c.local)!)).toBe("Open weights · on this machine");
     const r7b = choices(world({ providers: [{ id: "cohere" }] })).find((c) => c.model === "command-r7b-12-2024")!;
-    expect(openLabel(r7b)).toBe("Open weights · CC-BY-NC-4.0 (non-commercial) · runs on Cohere's servers");
+    expect(openLabel(r7b)).toBe("Open weights · runs on Cohere's servers");
     // Hugging Face routes each id to the provider its suffix names: that provider runs it.
     const hf = choices(world({ providers: [{ id: "huggingface" }] }));
-    expect(openLabel(hf.find((c) => c.model === "zai-org/GLM-5.3:deepinfra")!)).toBe("Open weights · GLM licence (other) · runs on DeepInfra, through Hugging Face");
-    expect(openLabel(hf.find((c) => c.model === "deepseek-ai/DeepSeek-V4.1-Flash-1017:novita")!)).toBe("Open weights · MIT · runs on Novita, through Hugging Face");
+    expect(openLabel(hf.find((c) => c.model === "zai-org/GLM-5.3:deepinfra")!)).toBe("Open weights · runs on DeepInfra, through Hugging Face");
+    expect(openLabel(hf.find((c) => c.model === "deepseek-ai/DeepSeek-V4.1-Flash-1017:novita")!)).toBe("Open weights · runs on Novita, through Hugging Face");
     expect(openLabel(hf.find((c) => c.model.endsWith(":baseten"))!)).toMatch(/runs on Baseten, through Hugging Face$/);
   });
 });

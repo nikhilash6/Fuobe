@@ -290,9 +290,9 @@ describe("the app", () => {
     // What a visitor reads: text between tags, and strings and templates that start with a capital (class names and ids don't).
     const shown = [...page.matchAll(/>\s*([A-Z][^<>{}=;]*)/g), ...page.matchAll(/"([A-Z][^"]*)"/g), ...page.matchAll(/`([A-Z][^`]*)`/g)].map((m) => m[1]);
     expect(shown.length).toBeGreaterThan(20);
-    // The one name allowed is the notice the 3D view's image encoder asks for.
-    const words = [...shown, app.description, app.parity ?? "", ...ANGLE_PRESETS.map((p) => p.label)].join(" \n ").replace("Built with DINOv3", "");
-    expect(page).toContain("Built with DINOv3");
+    // The 3D view's image encoder's notice is on Thanks & licences, not here.
+    const words = [...shown, app.description, app.parity ?? "", ...ANGLE_PRESETS.map((p) => p.label)].join(" \n ");
+    expect(page).not.toContain("Built with DINOv3");
     for (const banned of [/qwen/i, /tripo/i, /lora/i, /splat/i, /\.spz/i, /comfy/i, /\bbeta\b/i, /\bdino/i, /birefnet/i, /unverified|not checked|placeholder/i]) expect(words).not.toMatch(banned);
     expect(words).toContain("Build 3D view");
     expect(words).toContain("Use this view");

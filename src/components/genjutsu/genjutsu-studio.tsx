@@ -36,7 +36,6 @@ import {
   GENJUTSU_MODES,
   genjutsuProblem,
   getMode,
-  makerLicence,
   makerOffered,
   makersFor,
   qualityFor,
@@ -714,7 +713,7 @@ export function GenjutsuStudio({ examples }: { examples?: StudioExampleRow }) {
               )}
               {maker && options.length <= 1 && (
                 <p className="text-[12px] text-muted-foreground">
-                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {visitor ? withoutOwnGpu(maker.note) : maker.note} · {makerLicence(maker, !(visitor && maker.engine === "open") && !/your GPU|on fal/.test(maker.note ?? ""))}
+                  <SourceBadge source={maker.source} /> <span className="font-medium text-foreground">{maker.label}</span> · {visitor ? withoutOwnGpu(maker.note) : maker.note}
                 </p>
               )}
 
@@ -939,7 +938,7 @@ function SourceBadge({ source }: { source: Maker["source"] }) {
   );
 }
 
-/** The models for this mode and engine, one line each (where it comes from, what it's good at, its limits, its licence). */
+/** The models for this mode and engine, one line each (where it comes from, what it's good at, its limits). */
 function MakerList({ options, value, onChange }: { options: Maker[]; value: string; onChange: (id: string) => void }) {
   // A guest or an account: open weights run on a self-hosted Fuobe only, not on their own GPU yet.
   const visitor = useLikelyVisitor();
@@ -964,7 +963,6 @@ function MakerList({ options, value, onChange }: { options: Maker[]; value: stri
               {m.label} <SourceBadge source={m.source} />
             </span>
             <span className="block text-[12px] leading-snug text-muted-foreground">{visitor ? withoutOwnGpu(m.note) : m.note}</span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground/90">{makerLicence(m, !(visitor && m.engine === "open"))}</span>
           </span>
         </button>
       ))}

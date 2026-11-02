@@ -140,7 +140,7 @@ describe("Remove object: estimates", () => {
     expect((await small.json()).error).toMatch(/720 px on each side/);
   });
 
-  it("open engine: free, in windows, with the GPU and licence said", async () => {
+  it("open engine: free, in windows, with the GPU said", async () => {
     const e = await (await estimateRoute.POST(json(body({ engine: "open", source: { url: clip, duration: 12, fps: 16, width: 72, height: 128, hasAudio: true } })))).json();
     expect(e).toMatchObject({ modelId: "oss-vace-remove", pieces: 3, costUsd: 0 });
     expect(e.notes.join(" ")).toMatch(/81 frames at a time/);
@@ -152,7 +152,8 @@ describe("Remove object: estimates", () => {
     expect(painted.notes.join(" ")).toMatch(/runs as 3 windows/);
     const effects = await (await estimateRoute.POST(json(body({ engine: "open", effects: true, source: { url: clip, duration: 12, fps: 16 } })))).json();
     expect(effects.modelId).toBe("oss-void-remove");
-    expect(effects.notes.join(" ")).toMatch(/CogVideoX/);
+    expect(effects.notes.join(" ")).toMatch(/VOID needs a 24–40 GB GPU/);
+    expect(effects.notes.join(" ")).not.toMatch(/licen[cs]e/i);
   });
 
   it("open engine, H3 person removal: the clean first frame, H3 Relay and the GPU said; the LoRA switched off refuses", async () => {
@@ -163,7 +164,7 @@ describe("Remove object: estimates", () => {
     expect(notes).toMatch(/clean copy of the part's first frame with the person gone/);
     expect(notes).toMatch(/H3_RELAY=1/);
     expect(notes).toMatch(/People only/);
-    expect(notes).toMatch(/MiniMax H3 Community License — not licensed in the US, the EU, the UK and South Korea/);
+    expect(notes).not.toMatch(/licen[cs]e/i);
     expect((await (await h3({ prompt: " " })).json()).error).toMatch(/Say who to remove/);
     const { changeAccess } = await import("@/server/model-access");
     changeAccess([{ kind: "lora", id: "H3-Person-Remover-V1.safetensors", on: false }]);

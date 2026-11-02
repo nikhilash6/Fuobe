@@ -10,7 +10,6 @@ import {
   CHARACTER_SWAP,
   characterFinish,
   h3Canvas,
-  characterLicenceLine,
   cutWarning,
   h3Windows,
   swapLoraRef,
@@ -316,9 +315,8 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
     if (m.engine === "open" && !m.h3.maskSwitch && c.useMask === false) notes.push(`${name} always regenerates only the person: its graph has no switch for the whole frame`);
     const warn = cutWarning(cutsInPart(body.cuts, range));
     if (warn) notes.push(warn);
-    notes.push(characterLicenceLine(m.engine, m.id));
   } else if (body.mode === "character") {
-    notes.push(m.id === "h3-max-recast" ? characterLicenceLine(m.engine, m.id) : `${SOURCE_LABELS[m.source]}: ${m.note}`);
+    notes.push(`${SOURCE_LABELS[m.source]}: ${m.note}`);
     const warn = m.id === "h3-max-recast" ? null : cutWarning(cutsInPart(body.cuts, range));
     if (warn) notes.push(warn);
   }
@@ -347,8 +345,8 @@ function notesFor(body: GenjutsuBody, m: Maker, source: RemoveSource, range: Rem
   if (m.id === "oss-vace-insert") notes.push("The spot stays where you painted it for the whole shot — best with a still or slow camera");
   if (m.people && body.mode === "swap") notes.push(`${name} swaps the person on camera — for objects, pick Fuobe Genjutsu or Kling O3`);
   if (m.engine === "open" && body.mode !== "character") {
-    if (m.modes.includes("motion")) notes.push("Wan Animate 2 needs a 24 GB GPU · Apache-2.0");
-    else if (m.window) notes.push(`Wan 2.1 VACE 14B needs a 24 GB GPU · Apache-2.0${body.mode === "swap" ? " (SAM 3.1: Meta's SAM License)" : ""}`);
+    if (m.modes.includes("motion")) notes.push("Wan Animate 2 needs a 24 GB GPU");
+    else if (m.window) notes.push("Wan 2.1 VACE 14B needs a 24 GB GPU");
   }
   if (!wholeClip(range, source.duration)) notes.push("Only the selected part comes out (the rest of the clip isn't kept)");
   return notes;

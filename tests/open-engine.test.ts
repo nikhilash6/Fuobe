@@ -105,16 +105,12 @@ describe("round-3 open models", () => {
     for (const p of [...(m!.options.sliders ?? []), ...(m!.options.controls ?? [])].map((s) => s.param)) {
       if (!PROVIDER_PARAMS.has(p)) expect(Object.keys(wf!.bindings), `${id}: ${p} is not a binding of ${want.workflow}`).toContain(p);
     }
-    // Taglines tell people what the GPU and the licence ask of them.
+    // Taglines tell people what the GPU asks of them (licences are on Thanks & licences).
     expect(m!.tagline, id).toMatch(/GB|CPU/);
   });
 
-  it("flags the licences people have to know about", () => {
-    expect(getModel("oss-style-uso")!.tagline).toMatch(/non-commercial/);
-    expect(getModel("oss-mmaudio-sfx")!.tagline).toMatch(/non-commercial/);
-    expect(getModel("oss-captions-whisper")!.tagline).toMatch(/non-commercial/);
-    expect(getModel("oss-hunyuan-foley")!.tagline).toMatch(/EU, UK and South Korea/);
-    expect(getModel("oss-stable-audio-3")!.tagline).toMatch(/US\$1M/);
+  it("keeps licences out of the taglines (Thanks & licences lists them)", () => {
+    for (const id of ["oss-style-uso", "oss-mmaudio-sfx", "oss-captions-whisper", "oss-hunyuan-foley", "oss-stable-audio-3"]) expect(getModel(id)!.tagline, id).not.toMatch(/licen[cs]e|non-commercial|Apache|Community|US\$1M|South Korea/i);
     // Offered in their studios, and marked as running on the isolated worker.
     for (const id of ["oss-thinksound", "oss-latentsync"]) {
       expect(getModel(id)!.worker, id).toBe("isolated");

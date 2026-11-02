@@ -284,7 +284,7 @@ describe("Krea 2 files, packs and licences", () => {
     for (const id of ["krea2-realism-t2i", "krea2-turbo-t2i", "krea2-turbo-i2i", "krea2-inpaint", "krea2-outpaint"]) {
       expect(licenceTerms(workflowLicence(entry(id))).flags, id).toEqual(["conditions"]);
     }
-    expect(getModel("oss-krea2-edit")!.tagline).toMatch(/non-commercial/);
+    expect(getModel("oss-krea2-edit")!.tagline).not.toMatch(/non-commercial/);
     expect(NODE_PACKS.find((p) => p.name === "comfyui-krea2edit")!.licence.name).toBe("Apache-2.0");
     expect(NODE_PACKS.find((p) => p.name === "ComfyUI-Krea2-Ostris-Edit")!.licence.name).toBe("MIT");
   });

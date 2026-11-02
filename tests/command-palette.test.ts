@@ -208,15 +208,15 @@ describe("palette settings by viewer", () => {
   it("offers the install's settings to its owner only; an account gets its own GPU, its own keys, its account and the licences", async () => {
     const { settingEntries } = await import("@/components/command-palette");
     const hrefs = (v: Parameters<typeof settingEntries>[0]) => settingEntries(v).map((e) => e.href);
-    expect(hrefs({ owner: true })).toEqual(expect.arrayContaining(["/settings#engine", "/settings#cloud", "/settings#security", "/settings/models"]));
-    expect(hrefs({ owner: false, account: { email: "a@example.com" } })).toEqual(["/settings#your-gpu", "/settings#your-keys", "/settings#account", "/settings/models"]);
+    expect(hrefs({ owner: true })).toEqual(expect.arrayContaining(["/settings#engine", "/settings#cloud", "/settings#security", "/settings/models", "/settings/licences"]));
+    expect(hrefs({ owner: false, account: { email: "a@example.com" } })).toEqual(["/settings#your-gpu", "/settings#your-keys", "/settings#account", "/settings/licences"]);
     // "api key", "fal", "nano banana": an account finds where its own key goes.
     const keys = settingEntries({ owner: false, account: { email: "a@example.com" } }).find((e) => e.href === "/settings#your-keys");
     expect(keys?.keywords).toMatch(/api key/);
     expect(keys?.keywords).toMatch(/nano banana/);
-    expect(hrefs({ owner: false })).toEqual(["/connect", "/settings/models"]);
+    expect(hrefs({ owner: false })).toEqual(["/connect", "/settings/licences"]);
     // Not known yet: nothing of the owner's.
-    expect(hrefs(undefined)).toEqual(["/connect", "/settings/models"]);
+    expect(hrefs(undefined)).toEqual(["/connect", "/settings/licences"]);
   });
 });
 

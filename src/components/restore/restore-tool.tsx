@@ -202,7 +202,7 @@ export function RestoreTool({ tabs }: { tabs?: React.ReactNode }) {
                     <div className="min-w-0 space-y-1.5 text-[13px]">
                       <p className="font-medium">One-time setup: the Restore IC-LoRA is gated</p>
                       <p className="text-muted-foreground">
-                        Accept its licence on Hugging Face with your account (it&apos;s free under the LTX-2.x Community License below US$10M a year), then add a Hugging Face token. Fuobe
+                        Accept its licence on Hugging Face with your account, then add a Hugging Face token. Fuobe
                         downloads the 1.7 GB file once{open ? " into ComfyUI's LoRA folder" : " and gives fal its own copy, never your token"}.
                       </p>
                       <div className="flex flex-wrap gap-2 pt-0.5">

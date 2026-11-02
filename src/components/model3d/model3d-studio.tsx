@@ -42,14 +42,9 @@ import { toastError } from "@/lib/refusals";
 import { priceLine, useRunPreview } from "./hooks";
 import { ModelCard } from "./model-card";
 
-/**
- * A model's name, the notices its results carry ("Built with DINOv3") and, for open models, the licence the
- * picker shows (the page reads them from the catalog and the manifest).
- */
+/** A model's name, as the picker shows it (the page reads it from the catalog). */
 export interface Model3dInfo {
   name: string;
-  notices: string[];
-  licence?: { name: string; flags: string[]; notices: string[] };
 }
 
 /** What a mode's input looks like before anything is uploaded (the price is asked for with these). */
@@ -187,7 +182,6 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
       onError: (e) => toastError(e),
     });
   };
-  const licence = modelId ? info[modelId]?.licence : undefined;
   const items = (results.data ?? []).filter((g) => g.feature !== "image-to-3d-step");
   const setSide = (s: ViewSide) => (v: SlotValue | null) => setViews((cur) => ({ ...cur, [s]: v }));
   return (
@@ -320,8 +314,6 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
                   </SelectContent>
                 </Select>
                 <p className="text-[12px] text-muted-foreground">{choices.find((m) => m.id === modelId)?.note}</p>
-                {!licence && info[modelId]?.notices.length > 0 && <p className="text-[12px] font-medium">{info[modelId].notices.join(" · ")}</p>}
-                {licence && licence.notices.length > 0 && <p className="text-[12px] text-muted-foreground">{licence.notices.join(" · ")}</p>}
               </div>
               <Button size="lg" className={cn("mt-4 w-full rounded-full", blocker && "bg-muted text-muted-foreground hover:bg-muted")} onClick={go} disabled={create.isPending || visitor}>
                 {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Box className="size-4" />} {mode === "splat" ? "Make the splat" : "Make it 3D"}
@@ -357,7 +349,7 @@ export function Model3dStudio({ info, examples }: { info: Record<string, Model3d
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {items.map((g) => (
-              <ResultCard key={g.id} g={g} info={info} cloudAllowed={cloudAllowed} />
+              <ResultCard key={g.id} g={g} cloudAllowed={cloudAllowed} />
             ))}
           </div>
         )}
@@ -375,9 +367,9 @@ function retryOf(g: Generation): GenerationRequest {
   return r;
 }
 
-function ResultCard({ g, info, cloudAllowed }: { g: Generation; info: Record<string, Model3dInfo>; cloudAllowed: boolean }) {
+function ResultCard({ g, cloudAllowed }: { g: Generation; cloudAllowed: boolean }) {
   const create = useCreateGeneration();
   if (g.status === "queued" || g.status === "running") return <PendingTile g={g} ratio={4 / 3} />;
   if (g.status !== "succeeded") return <FailedTile g={g} ratio={4 / 3} onRetry={() => create.mutate(retryOf(g), { onError: (e) => toastError(e) })} />;
-  return <ModelCard g={g} info={info} cloudAllowed={cloudAllowed} />;
+  return <ModelCard g={g} cloudAllowed={cloudAllowed} />;
 }

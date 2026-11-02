@@ -308,7 +308,7 @@ describe("Ideogram 4 on the open engine", () => {
     expect(m).toMatchObject({ engine: "open", kind: "image", family: "ideogram", options: { promptFormat: "ideogram4", seed: true } });
     expect(m.badges).toEqual(expect.arrayContaining(["open", "new", "top"]));
     expect(m.routes.map((r) => [r.op, r.provider, r.endpoint])).toEqual([["t2i", "comfyui", "ideogram4-t2i"]]);
-    expect(m.tagline).toMatch(/24 GB GPU · non-commercial weights/);
+    expect(m.tagline).toMatch(/24 GB GPU/);
     // First among the open-source text-to-image models, after the Originals (the owner's order: Ideogram 4, Qwen-Image 2.1,
     // Krea 2, MOSS, FIBO 2).
     expect(MODELS.find((x) => x.id.startsWith("oss-") && x.routes.some((r) => r.op === "t2i"))?.id).toBe("oss-ideogram-4");

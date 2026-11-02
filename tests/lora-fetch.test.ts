@@ -285,7 +285,7 @@ describe("Before a cloud run", () => {
     const route = { provider: "fal" as const, loraEndpoint: "fal-ai/wan/v2.2-a14b/image-to-video/lora" };
     const sent = fitLoras([bare], route);
     expect(sent.loras).toEqual([bare]);
-    expect(sent.notes[0]).toMatch(/^Wiggle Redmond: its licence allows your GPU only \(civitai lists no “Rent”\); it runs in the cloud because Settings → Models & licences lets such LoRAs go there/);
+    expect(sent.notes).toEqual([]);
     const kept = fitLoras([{ ...bare, keepOnGpu: true }], route);
     expect(kept.loras).toEqual([]);
     expect(kept.notes[0]).toMatch(/^Wiggle Redmond is licensed for your GPU only and Settings → Models & licences keeps such LoRAs off the cloud, so this run leaves it out/);

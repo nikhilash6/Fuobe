@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
-import { ANCHOR_MODELS, anchorModel, CHARACTER_SWAP, characterLicenceLine, h3Canvas, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
+import { ANCHOR_MODELS, anchorModel, CHARACTER_SWAP, h3Canvas, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
 import { scalePoints } from "@/lib/catalog/remove-object";
 import type { PlanStep } from "@/lib/catalog/shorts";
 import {
@@ -1323,14 +1323,13 @@ function assemblyPiecesForPrice(p: SwapProject, clip: SwapClip) {
   return out;
 }
 
-/** What the page says about each engine (licences as information). */
+/** What the page says about each engine. */
 export function studioNotes(engine: Engine): string[] {
   if (engine === "open") {
     return [
       WORKERS_NOTE,
       "Needs H3 Relay 2.0's nodes on your ComfyUI (scripts/comfy/install-comfyui.sh with H3_RELAY=1) and a 24 GB GPU with offloading; the masks need SAM 3.1",
       "Each segment is one H3 Relay pass with the approved mask, its anchor and the previous take's last frames as continuation history (a lossless 16-bit FFV1 master, about 3 MB a frame at 1 MP: ComfyUI takes uploads up to 100 MB unless started with a higher --max-upload-size, so keep history to about 30 frames or raise it)",
-      characterLicenceLine("open", STUDIO_MODELS.open.swap),
     ];
   }
   return [
@@ -1338,7 +1337,6 @@ export function studioNotes(engine: Engine): string[] {
     "fal's H3 reads 2–15 s of the clip a call and bills whole seconds (5–15 s): a segment runs 2–15 s",
     "A continuing segment starts from the previous take's last frame — fal's H3 takes no continuation history. H3 makes whole seconds (at least 5), so each take is trimmed back to its segment",
     "SAM 3.1 on fal marks the person from your clicks or words, for review; the swap itself doesn't read the mask",
-    characterLicenceLine("cloud", STUDIO_MODELS.cloud.swap),
   ];
 }
 

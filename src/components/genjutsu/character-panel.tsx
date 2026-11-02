@@ -332,7 +332,7 @@ function FrameSelect({ id, label, value, choices, onChange }: { id: string; labe
 }
 
 /**
- * The limits, the cut warning, the GPU it was tested on (open) and the licence, as information under the settings; and
+ * The limits, the cut warning and the GPU it was tested on (open), as information under the settings; and
  * the way to Character Swap Studio for the whole clip (`onOpenStudio` takes the clip and character along).
  */
 export function CharacterFacts({

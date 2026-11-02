@@ -13,9 +13,7 @@ import { EngineSwitch } from "@/components/studio/engine-switch";
 import { SelfHostNote } from "@/components/self-host-note";
 import { ExampleRow } from "@/components/studio/example-row";
 import { useEngine, useLikelyVisitor } from "@/lib/api";
-import { characterLicenceLine } from "@/lib/catalog/character-swap";
 import { SWAP_STUDIO, type SwapProjectCard } from "@/lib/catalog/swap-studio";
-import { STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
 import { toastError } from "@/lib/refusals";
 import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
@@ -156,15 +154,7 @@ export function SwapStudioHome({ examples }: { examples?: StudioExampleRow }) {
       </section>
 
       <Panel className="mt-8">
-        <details>
-          <summary className="cursor-pointer text-[13px] font-semibold">Models and licences</summary>
-          <ul className="mt-2 space-y-1 text-[12px] text-pretty text-muted-foreground">
-            <li>Built on Akatz Labs&apos; H3 Character Swap tool (MIT).</li>
-            <li>Your GPU: {characterLicenceLine("open", STUDIO_MODELS.open.swap)}</li>
-            <li>Cloud: {characterLicenceLine("cloud", STUDIO_MODELS.cloud.swap)}</li>
-          </ul>
-        </details>
-        <Link href="/genjutsu?mode=character" className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
+        <Link href="/genjutsu?mode=character" className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-text hover:underline">
           <Sparkles className="size-3.5" /> One quick swap of one part instead? Genjutsu → Character swap <ArrowRight className="size-3.5" />
         </Link>
       </Panel>

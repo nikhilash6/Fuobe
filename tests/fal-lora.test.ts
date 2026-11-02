@@ -90,7 +90,7 @@ describe("fal LoRA payloads (generated FieldMap.loras)", () => {
     const keep = hf("squish_18.safetensors", { target: "both" });
     const sent = fitLoras([wiggle, keep], r);
     expect(sent.loras).toEqual([wiggle, keep]);
-    expect(sent.notes[0]).toMatch(/^Wiggle Redmond: its licence allows your GPU only/);
+    expect(sent.notes).toEqual([]);
     expect(loraFields(r.map!.loras!, [{ ...wiggle, hostedUrl: "https://v3.fal.media/x" }])).toMatchObject({ loras: [{ path: "https://v3.fal.media/x" }] });
     // Settings → Models & licences keeps GPU-only LoRAs on the GPU: the run's LoRAs come marked.
     const kept = fitLoras([{ ...wiggle, keepOnGpu: true }, keep], r);

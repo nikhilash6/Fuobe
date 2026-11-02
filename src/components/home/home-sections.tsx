@@ -23,7 +23,7 @@ import { NAV } from "@/components/nav-items";
 import { PresetCard } from "@/components/preset-gallery";
 import { ASSIST_SUGGESTIONS } from "@/lib/assist";
 import { WORKFLOWS_ON_GITHUB } from "@/lib/comfy-install";
-import { FUOBE_CREDITS, FUOBE_REPO } from "@/lib/connections";
+import { FUOBE_REPO } from "@/lib/connections";
 import { HOME_LIVE, presetHref, type HomeShowcase } from "@/lib/home-showcase";
 import { staggered } from "@/lib/preview-playback";
 import { cn } from "@/lib/utils";
@@ -457,10 +457,11 @@ export function StartSection() {
   );
 }
 
-/** The footer's own pages; the credits and the code are on GitHub. */
+/** The footer's own pages; the code is on GitHub. */
 const FOOTER_PAGES = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
+  { href: "/settings/licences", label: "Thanks & licences" },
 ];
 
 export function HomeFooter() {
@@ -477,9 +478,6 @@ export function HomeFooter() {
             {i.label}
           </Link>
         ))}
-        <a href={FUOBE_CREDITS} target="_blank" rel="noopener" className={link}>
-          Credits
-        </a>
         <a href={FUOBE_REPO} target="_blank" rel="noopener" className={link}>
           GitHub
         </a>

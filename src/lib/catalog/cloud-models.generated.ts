@@ -1766,7 +1766,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper \u00b7 FLUX Kommunity licence",
+    "tagline": "BFL's open 5.6B model, hosted: up to 4K, edits with up to 10 references in image 1's shape, layout boxes, Prompt helper",
     "routes": [
       {
         "op": "t2i",
@@ -1921,7 +1921,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them \u00b7 FLUX Kommunity licence",
+    "tagline": "The undistilled Klein your FLUX 3 Klein LoRAs are trained on, hosted: up to 3 of them",
     "routes": [
       {
         "op": "t2i",
@@ -2534,7 +2534,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "The Apache-2.0 FLUX.2: quick drafts and edits",
+    "tagline": "The open FLUX.2: quick drafts and edits",
     "routes": [
       {
         "op": "t2i",
@@ -2722,7 +2722,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "FLUX.1 [dev] with your trained characters and styles \u00b7 non-commercial weights",
+    "tagline": "FLUX.1 [dev] with your trained characters and styles",
     "routes": [
       {
         "op": "t2i",
@@ -2794,7 +2794,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs \u00b7 non-commercial weights",
+    "tagline": "Natural photoreal FLUX.1 Krea with FLUX.1 LoRAs",
     "routes": [
       {
         "op": "t2i",
@@ -2866,7 +2866,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "FLUX.2 [dev] with your trained characters and styles \u00b7 non-commercial weights",
+    "tagline": "FLUX.2 [dev] with your trained characters and styles",
     "routes": [
       {
         "op": "t2i",
@@ -2939,7 +2939,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "flux",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "The 9B FLUX.2 [klein] with your LoRAs \u00b7 non-commercial weights",
+    "tagline": "The 9B FLUX.2 [klein] with your LoRAs",
     "routes": [
       {
         "op": "t2i",
@@ -3015,7 +3015,7 @@ export const CLOUD_MODELS: ModelDef[] = [
     "family": "krea",
     "engine": "cloud",
     "kind": "image",
-    "tagline": "Krea 2's aesthetic with your trained characters and styles \u00b7 Krea 2 Community licence (revenue tiers)",
+    "tagline": "Krea 2's aesthetic with your trained characters and styles",
     "routes": [
       {
         "op": "t2i",

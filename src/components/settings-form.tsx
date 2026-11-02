@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, Cloud, Cpu, ExternalLink, Info, Layers, Link2, Loader2, RefreshCw, Scale } from "lucide-react";
+import { CheckCircle2, CircleAlert, Cloud, Cpu, ExternalLink, Heart, Info, Layers, Link2, Loader2, RefreshCw, Scale } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ import { LlmProviderSettings } from "@/components/llm-provider-settings";
 import { LoraSettings } from "@/components/lora-settings";
 import { useStatus, type StatusInfo } from "@/lib/api";
 import { WORKFLOWS_ON_GITHUB } from "@/lib/comfy-install";
-import { AI_TOOLKIT_REPO, connectionSummary, DEFAULT_AI_TOOLKIT_URL, ENGINE_MODE_LABEL, FAL_KEYS_URL, FUOBE_CREDITS, showFirstRun } from "@/lib/connections";
+import { AI_TOOLKIT_REPO, connectionSummary, DEFAULT_AI_TOOLKIT_URL, ENGINE_MODE_LABEL, FAL_KEYS_URL, showFirstRun } from "@/lib/connections";
 import { cn } from "@/lib/utils";
 import { ConnectorSettings } from "@/components/assist/connectors-settings";
 import { NotificationSettings } from "@/components/notification-settings";
@@ -765,15 +765,10 @@ export function SettingsForm({ prices }: { prices?: string }) {
         </Link>
       </Section>
 
-      <Section id="about" title="Credits" description="The licence notices and credits of the open models and code Fuobe runs.">
-        <a
-          href={FUOBE_CREDITS}
-          target="_blank"
-          rel="noopener"
-          className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors hover:bg-accent"
-        >
-          <Info className="size-4 text-muted-foreground" /> Credits on GitHub
-        </a>
+      <Section id="about" title="About" description="The open models, LoRAs and code Fuobe is built on, who made them, and their licences.">
+        <Link href="/settings/licences" className="inline-flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-medium transition-colors hover:bg-accent">
+          <Heart className="size-4 text-muted-foreground" /> Thanks &amp; licences
+        </Link>
       </Section>
     </div>
   );

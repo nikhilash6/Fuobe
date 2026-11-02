@@ -297,12 +297,7 @@ function Loaded({ view, onClose, examples, intro }: { view: RecipeView; onClose:
                   {est?.place?.fallback && <p>{est.place.fallback}.</p>}
                   {view.models.filter((m) => m.engine === engine).length > 0 && (
                     <p>
-                      Licences (for your information):{" "}
-                      {view.models
-                        .filter((m) => m.engine === engine)
-                        .map((m) => `${m.name} — ${m.licence}`)
-                        .join("; ")}
-                      . Turn models on or off in{" "}
+                      Turn models on or off in{" "}
                       <Link href="/settings/models" className="underline underline-offset-2">
                         Models &amp; licences
                       </Link>
