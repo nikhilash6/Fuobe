@@ -164,8 +164,8 @@ describe("the Canvas Layout node", () => {
       expect(d.request?.params?.extra?.layout, modelId).toBeTruthy();
       return d.plan!;
     };
-    // MOSS-Image on your GPU: its JSON at the canvas the picture takes (the layout's own 3:4, then 16:9 when the node picks it).
-    const tall = at("oss-moss-image");
+    // MOSS-Image on your GPU: its JSON at the canvas the node's picture takes (3:4, then 16:9).
+    const tall = at("oss-moss-image", { aspectRatio: "3:4" });
     expect(tall.layout).toMatchObject({ format: "moss", boxes: 2 });
     expect(tall.prompt).toBe(compileMoss({ ...poster, summary: { ...poster.summary, caption: "A warm candle sale poster" } }, tall.layout!.width!, tall.layout!.height!));
     expect(tall.layout!.height!).toBeGreaterThan(tall.layout!.width!);

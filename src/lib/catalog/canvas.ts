@@ -1050,11 +1050,8 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
 
   const params: GenParams = { ...n.data.params };
   for (const k of Object.keys(params) as (keyof GenParams)[]) if (params[k] === undefined || params[k] === "") delete params[k];
-  if (layout) {
-    params.extra = { ...params.extra, [LAYOUT_PARAM]: layout };
-    // The boxes were drawn on a shape: the picture takes it unless the node picks its own.
-    if (!params.aspectRatio && layout.aspect && model.options.aspectRatios?.includes(layout.aspect)) params.aspectRatio = layout.aspect;
-  }
+  // The node's aspect ratio is the picture's (the Layout editor draws on it and sets it), so the boxes land where drawn.
+  if (layout) params.extra = { ...params.extra, [LAYOUT_PARAM]: layout };
   const request: GenerationRequest = {
     feature: "canvas",
     modelId: model.id,

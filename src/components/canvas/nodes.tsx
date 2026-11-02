@@ -1769,12 +1769,12 @@ const LayoutEditor = dynamic(() => import("@/components/studio/layout-editor").t
 const LAYOUT_ASPECTS = ["1:1", "4:5", "3:4", "2:3", "9:16", "16:9", "3:2", "4:3"];
 const EMPTY_LAYOUT: LayoutDraft = { summary: { caption: "", meta: [], canvas: "single" }, items: [], aspect: "1:1" };
 
-/** The first model a node feeds ("model id|aspect ratio"), so the editor sizes the canvas as that model renders. */
+/** The first model a node feeds ("node id|model id|aspect ratio"), so the editor draws on the shape that model renders. */
 const downstreamOf = (s: EditorSnapshot, id: string): string => {
   for (const e of s.graph.edges) {
     if (e.source !== id) continue;
     const t = s.byId.get(e.target);
-    if (t?.data.modelId) return `${t.data.modelId}|${t.data.params?.aspectRatio ?? ""}`;
+    if (t?.data.modelId) return `${t.id}|${t.data.modelId}|${t.data.params?.aspectRatio ?? getModel(t.data.modelId)?.defaults?.aspectRatio ?? ""}`;
   }
   return "";
 };
@@ -1793,20 +1793,73 @@ const ratioNum = (aspect: string | undefined) => {
   return a > 0 && b > 0 ? a / b : 1;
 };
 
-const LayoutNode = memo(function LayoutNode({ id, data, selected }: NodeProps<FlowNode>) {
-  const actions = useEditorActions();
-  const { readOnly } = useEditorGlobals();
-  const [open, setOpen] = useState(false);
+/** What a Layout node's card and its row in the Nodes list need: the draft, the model it feeds and the shape. */
+function useLayoutNode(id: string, data: CanvasNodeData) {
   const draft = readLayout(data.layout) ?? EMPTY_LAYOUT;
   const feeds = useEditorSelector(downstreamOf, id);
-  const [modelId, nodeAspect] = feeds.split("|");
+  const [target, modelId, auto] = feeds.split("|");
   const found = modelId ? getModel(modelId) : undefined;
-  const model = found?.kind === "image" ? found : undefined;
-  const aspects = model?.options.aspectRatios?.filter((a) => a !== "auto") ?? LAYOUT_ASPECTS;
-  const aspect = nodeAspect || draft.aspect || "1:1";
-  const canvasFor = (a: string | undefined): EditorCanvas => (model ? layoutCanvas(model, { ...(a && { aspectRatio: a }) }, "t2i") : plainCanvas(a));
   const texts = draft.items.filter((it) => it.label === "text").length;
-  const summary = draft.items.length ? `${draft.items.length} box${draft.items.length === 1 ? "" : "es"}${texts ? ` · ${texts} with words` : ""}` : "No boxes yet";
+  // The picture's shape is the model's (its node's aspect ratio): a square canvas when the model leaves it to "auto".
+  const nodeAspect = auto === "auto" ? "1:1" : auto;
+  return {
+    draft,
+    found,
+    target,
+    model: found?.kind === "image" ? found : undefined,
+    aspect: nodeAspect || draft.aspect || "1:1",
+    summary: draft.items.length ? `${draft.items.length} box${draft.items.length === 1 ? "" : "es"}${texts ? ` · ${texts} with words` : ""}` : "No boxes yet",
+  };
+}
+
+/** The Layout editor for a node (Image studio's editor), sized as the model it feeds renders. */
+function LayoutNodeEditor({ id, data, open, onOpenChange }: { id: string; data: CanvasNodeData; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const actions = useEditorActions();
+  const { draft, model, aspect, target } = useLayoutNode(id, data);
+  const params = useEditorSelector((s, key) => (key ? s.byId.get(key)?.data.params : undefined), target ?? "");
+  if (!open) return null;
+  const aspects = model?.options.aspectRatios?.filter((a) => a !== "auto") ?? LAYOUT_ASPECTS;
+  const canvasFor = (a: string | undefined): EditorCanvas => (model ? layoutCanvas(model, { ...(a && { aspectRatio: a }) }, "t2i") : plainCanvas(a));
+  return (
+    <LayoutEditor
+      open={open}
+      onOpenChange={onOpenChange}
+      layout={draft}
+      caption={draft.summary.caption}
+      aspect={aspect}
+      aspects={aspects}
+      canvasFor={canvasFor}
+      model={model}
+      onDone={(r) => {
+        actions.update(id, { layout: { ...r.layout, summary: { ...r.layout.summary, caption: r.caption.trim() }, ...(r.aspect && { aspect: r.aspect }) } });
+        // A new shape picked in the editor is the picture's: the model it feeds renders it.
+        if (target && model && r.aspect && r.aspect !== aspect) actions.update(target, { params: { ...params, aspectRatio: r.aspect } });
+      }}
+    />
+  );
+}
+
+/** Phones edit in the Nodes list (the board is read-only there): the Layout node's row, with Edit layout. */
+export function LayoutNodeRow({ id, data, className }: { id: string; data: CanvasNodeData; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const { summary, aspect } = useLayoutNode(id, data);
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <p className="min-w-0 truncate text-[13px] text-muted-foreground">
+        {aspect} · {summary}
+      </p>
+      <button type="button" className={className} onClick={() => setOpen(true)}>
+        <LayoutDashboard className="size-3.5" /> Edit layout
+      </button>
+      <LayoutNodeEditor id={id} data={data} open={open} onOpenChange={setOpen} />
+    </div>
+  );
+}
+
+const LayoutNode = memo(function LayoutNode({ id, data, selected }: NodeProps<FlowNode>) {
+  const { readOnly } = useEditorGlobals();
+  const [open, setOpen] = useState(false);
+  const { draft, found, aspect, summary } = useLayoutNode(id, data);
   return (
     <>
       <NodeShell id={id} type="layout" data={data} selected={!!selected} out="text" width={260}>
@@ -1854,19 +1907,7 @@ const LayoutNode = memo(function LayoutNode({ id, data, selected }: NodeProps<Fl
         </div>
       </NodeShell>
       {/* Beside the card, not in it: the card's menus and clicks stay out of the editor. */}
-      {open && (
-        <LayoutEditor
-          open={open}
-          onOpenChange={setOpen}
-          layout={draft}
-          caption={draft.summary.caption}
-          aspect={aspect}
-          aspects={aspects}
-          canvasFor={canvasFor}
-          model={model}
-          onDone={(r) => actions.update(id, { layout: { ...r.layout, summary: { ...r.layout.summary, caption: r.caption.trim() }, ...(r.aspect && { aspect: r.aspect }) } })}
-        />
-      )}
+      <LayoutNodeEditor id={id} data={data} open={open} onOpenChange={setOpen} />
     </>
   );
 }, sameNodeProps);

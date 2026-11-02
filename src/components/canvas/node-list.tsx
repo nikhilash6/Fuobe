@@ -9,7 +9,7 @@ import type { MediaKind } from "@/lib/catalog/types";
 import { fileToSlot } from "@/components/studio/media-slot";
 import { cn } from "@/lib/utils";
 import { EMPTY_VIEW, NodeIcon, useEditorActions, useEditorSnapshot } from "./canvas-context";
-import { costLabel, ElementPicker, EngineBadge, LibraryButton, MediaPreview, OutputThumb, Results } from "./nodes";
+import { costLabel, ElementPicker, EngineBadge, LayoutNodeRow, LibraryButton, MediaPreview, OutputThumb, Results } from "./nodes";
 
 const KIND: Partial<Record<CanvasNode["type"], MediaKind>> = { "image-input": "image", "video-input": "video", "audio-input": "audio", "clone-voice": "audio" };
 
@@ -107,6 +107,7 @@ function NodeCard({ node, index }: { node: CanvasNode; index: number }) {
             />
           </>
         )}
+        {node.type === "layout" && <LayoutNodeRow id={node.id} data={node.data} className={pill} />}
         {node.type === "table" && (
           <p className="text-[13px] text-muted-foreground">
             {(() => {
