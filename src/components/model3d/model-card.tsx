@@ -320,7 +320,7 @@ export function ModelCard({ g, info, cloudAllowed }: { g: Generation; info: Reco
         {/* Idol 3D on your GPU: how clean the file is. Only the owner reads how to make it cleaner (it's their ComfyUI). */}
         {view.clean?.cleaned && <p className="text-[12px] font-medium">{view.clean.text}</p>}
         {view.clean && !view.clean.cleaned && owner && (
-          <p className="text-[12px] text-muted-foreground">Not cleaned: install ComfyUI-Idol on your ComfyUI for cleaner splat files.</p>
+          <p className="text-[12px] text-muted-foreground">Not cleaned: this run used the core nodes. With ComfyUI-Idol installed and switched on, splat files come out cleaner.</p>
         )}
         <div className="flex flex-wrap gap-1.5">
           {view.splat ? (

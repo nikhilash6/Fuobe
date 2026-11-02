@@ -16,7 +16,7 @@ import { MediaSlot, type SlotValue } from "@/components/studio/media-slot";
 import { MediaDrop } from "@/components/av/media-drop";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useCreateGeneration, useEngine, useGenerations, useHydrated, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
+import { useCreateGeneration, useEngine, useGenerations, useHydrated, useIsOwner, useLikelyVisitor, useModelAccess, useStatus } from "@/lib/api";
 import {
   IDOL_QUALITIES,
   MAX_3D_PROMPT,
@@ -102,6 +102,8 @@ function IdolSettings({
   onPhoto: (v: boolean) => void;
   trim?: { on: boolean; onChange: (v: boolean) => void };
 }) {
+  // Only the owner reads what trimming needs on the ComfyUI (it's theirs to set up).
+  const owner = useIsOwner();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const move = (from: number, by: number) => {
     const i = (from + by + IDOL_QUALITIES.length) % IDOL_QUALITIES.length;
@@ -149,7 +151,7 @@ function IdolSettings({
       {trim && (
         <details className="group rounded-xl border px-3 py-2 [&_summary::-webkit-details-marker]:hidden">
           <summary className="cursor-pointer list-none text-[13px] font-medium outline-none select-none focus-visible:ring-2 focus-visible:ring-ring">
-            Advanced <span className="text-[12px] font-normal text-muted-foreground">· {trim.on ? "trimming spikes" : "edges"}</span>
+            Advanced{trim.on && <span className="text-[12px] font-normal text-muted-foreground"> · trimming spikes</span>}
           </summary>
           <div className="flex items-center justify-between gap-3 pt-3">
             <div className="min-w-0">
@@ -159,6 +161,9 @@ function IdolSettings({
               <p id="m3d-idol-trim-hint" className="mt-0.5 text-[12px] text-muted-foreground">
                 Drops the thin, needle-like bits around the edges of the 3D file.
               </p>
+              {owner && (
+                <p className="mt-0.5 text-[12px] text-muted-foreground">Needs the ComfyUI-Idol nodes on your ComfyUI; without them the file is saved untrimmed.</p>
+              )}
             </div>
             <Switch id="m3d-idol-trim" aria-describedby="m3d-idol-trim-hint" checked={trim.on} onCheckedChange={trim.onChange} />
           </div>

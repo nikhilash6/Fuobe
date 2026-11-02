@@ -19,7 +19,8 @@ process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
 const root = process.cwd();
 const { setSetting } = await import("@/server/settings");
-const { collectOutputs, comfyHasClass, forgetComfyClass, getWorkflow, prepareWorkflow } = await import("@/server/providers/comfyui");
+const { collectOutputs, comfyHasClass, comfyProvider, forgetComfyClass, getWorkflow, prepareWorkflow } = await import("@/server/providers/comfyui");
+const { changeAccess } = await import("@/server/model-access");
 const m3d = await import("@/lib/av/model3d");
 const { licenceTerms, NODE_PACKS, workflowLicence } = await import("@/lib/licences");
 
@@ -33,10 +34,23 @@ const read = (id: string) => JSON.parse(fs.readFileSync(path.join(root, "workflo
 const graph = read("image-to-splat-idol-clean");
 const coreGraph = read("image-to-splat-idol");
 
-// A stand-in ComfyUI that answers GET /object_info/<class> (the pack's classes when `pack` is on) and counts the asks.
+// A stand-in ComfyUI that answers GET /object_info/<class> (the pack's classes when `pack` is on) and counts the asks,
+// and takes POST /prompt (or refuses it, as a ComfyUI without the pack does), keeping the graphs it was sent.
 let pack = true;
 let asks = 0;
+let refuse = false;
+const prompts: Record<string, Node>[] = [];
 const server = http.createServer((req, res) => {
+  if (req.method === "POST" && req.url === "/prompt") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      prompts.push((JSON.parse(body) as { prompt: Record<string, Node> }).prompt);
+      res.writeHead(refuse ? 400 : 200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(refuse ? { error: { type: "missing_node_type", message: "Node 'IdolPruneSplat' not found" }, node_errors: {} } : { prompt_id: `p-${prompts.length}` }));
+    });
+    return;
+  }
   const m = /^\/object_info\/(\w+)$/.exec(req.url ?? "");
   if (!m) {
     res.writeHead(404).end();
@@ -229,6 +243,60 @@ describe("the provider: the clean graph where the server has the pack, idol-1's 
     pack = true;
     expect(await comfyHasClass("IdolPruneSplat", "main", 0)).toBe(true);
     expect(asks).toBe(3);
+  });
+});
+
+describe("the provider's submit: Settings and a refused prompt", () => {
+  // No progress socket here: the run is only sent.
+  const realWs = globalThis.WebSocket;
+  class NoSocket {
+    readyState = 1;
+    onmessage = null;
+    onerror = null;
+    close() {}
+  }
+  beforeAll(() => {
+    globalThis.WebSocket = NoSocket as unknown as typeof WebSocket;
+  });
+  afterAll(() => {
+    globalThis.WebSocket = realWs;
+    changeAccess([{ kind: "pack", id: "ComfyUI-Idol", on: true }]);
+  });
+  const route = { op: "splat", provider: "comfyui", endpoint: "image-to-splat-idol" } as never;
+  const model = { id: "oss-idol", routes: [route] } as never;
+  const submit = (generationId: string) =>
+    comfyProvider.submit({ generationId, model, route, input: { prompt: "", images: ["p.png"], seed: 7, extra: m3d.idolExtra("open", "best", false, true) } });
+  const classes = (g: Record<string, Node>) => Object.values(g).map((n) => n.class_type);
+
+  it("with ComfyUI-Idol switched off in Settings, sends the core graph without asking the server about the pack", async () => {
+    pack = true;
+    forgetComfyClass("IdolPruneSplat");
+    changeAccess([{ kind: "pack", id: "ComfyUI-Idol", on: false }]);
+    asks = 0;
+    prompts.length = 0;
+    const res = await submit("gen-off");
+    expect(res.meta).toMatchObject({ workflowId: "image-to-splat-idol" });
+    expect(asks).toBe(0);
+    expect(classes(prompts[0]).some((c) => c.startsWith("Idol"))).toBe(false);
+    changeAccess([{ kind: "pack", id: "ComfyUI-Idol", on: true }]);
+  });
+
+  it("switched on with the pack there, sends the clean graph; a refused prompt makes the next run ask again", async () => {
+    pack = true;
+    forgetComfyClass("IdolPruneSplat");
+    asks = 0;
+    prompts.length = 0;
+    expect((await submit("gen-on")).meta).toMatchObject({ workflowId: "image-to-splat-idol-clean" });
+    expect(asks).toBe(1);
+    expect(prompts[0]["88:111"].inputs).toMatchObject({ max_scale: 0.05 });
+    // The pack went: ComfyUI refuses the clean graph, and the cached answer is dropped.
+    pack = false;
+    refuse = true;
+    await expect(submit("gen-gone")).rejects.toThrow();
+    expect(asks).toBe(1);
+    refuse = false;
+    expect((await submit("gen-after")).meta).toMatchObject({ workflowId: "image-to-splat-idol" });
+    expect(asks).toBe(2);
   });
 });
 
