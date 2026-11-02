@@ -40,6 +40,7 @@ import {
   partFrames,
   presetOf,
   PRESETS,
+  presetMix,
   QUALITY_LABELS,
   REMUX_FEATURE,
   setLevel,
@@ -58,6 +59,8 @@ import { probeUrl } from "@/lib/media-probe";
 import { cn } from "@/lib/utils";
 import { responseError, toastError } from "@/lib/refusals";
 import { useAudioToolPreview, useAudioToolRun, useSettled, type AudioToolBody } from "./hooks";
+import { CleanDialoguePanel } from "./clean-dialogue-panel";
+import { CLEAN_DIALOGUE_PRESET } from "@/lib/av/clean-dialogue";
 
 /**
  * Audio → Split soundtrack (DBS D1). Drop a song, podcast, film clip or video; DBS splits it into Dialogue, Music,
@@ -72,10 +75,15 @@ type Stem = { id: StemId; url: string; name: string };
 
 const baseName = (s: { name?: string }) => (s.name ?? "Soundtrack").replace(/\.[a-z0-9]{2,4}$/i, "");
 
-/** ?audio= / ?video= from a result's "Split soundtrack", read once after hydration. */
-function useHandoff(take: (s: Source) => void) {
+/**
+ * ?audio= / ?video= from a result's "Split soundtrack" (or "Clean up dialogue": ?preset=clean-dialogue), read once after
+ * hydration.
+ */
+function useHandoff(take: (s: Source) => void, preset?: (id: string) => void) {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
+    const p = q.get("preset");
+    if (p && preset) preset(p);
     for (const kind of ["video", "audio"] as const) {
       const url = q.get(kind);
       if (url?.startsWith("/api/files/")) return take({ ref: url, preview: url, kind, id: nanoid(8), name: decodeURIComponent(url.split("/").pop() ?? "") });
@@ -524,9 +532,9 @@ async function exportWav(stems: Stem[], buffers: Partial<Record<StemId, AudioBuf
   }
 }
 
-function Mixer({ stems, source, engine }: { stems: Stem[]; source: Source; engine: Engine }) {
+function Mixer({ stems, source, engine, initial = ORIGINAL_MIX }: { stems: Stem[]; source: Source; engine: Engine; initial?: Mix }) {
   const player = useStemPlayer(stems);
-  const [mix, setMixState] = useState<Mix>(ORIGINAL_MIX);
+  const [mix, setMixState] = useState<Mix>(initial);
   const [busy, setBusy] = useState<null | "export" | "remux">(null);
   const exported = useRef<{ key: string; url: string } | null>(null);
   const remux = useAudioToolRun();
@@ -691,11 +699,23 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
   const [resultId, setResultId] = useState<string | null>(null);
   const result = useGeneration(resultId);
   const stereoId = useId();
+  // Split into stems, or Clean up dialogue (D5: one run, or the mixer opened on its preset).
+  const [goal, setGoal] = useState<"split" | "clean">("split");
+  const [mixPreset, setMixPreset] = useState<string | null>(null);
   const take = useCallback((s: Source) => {
     setSource(s);
     setResultId(null);
   }, []);
-  useHandoff(take);
+  const arrive = useCallback((id: string) => {
+    if (id !== CLEAN_DIALOGUE_PRESET) return;
+    setGoal("clean");
+    setMixPreset(CLEAN_DIALOGUE_PRESET);
+  }, []);
+  useHandoff(take, arrive);
+  const pickGoal = (next: "split" | "clean") => {
+    setGoal(next);
+    if (next === "clean") setMixPreset(CLEAN_DIALOGUE_PRESET);
+  };
   const ready = source && !source.uploading && source.ref ? source : null;
   const readyRef = ready?.ref;
   const body: AudioToolBody | null = useMemo(
@@ -715,7 +735,7 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
         : null,
     [ready, engine, quality, stereo],
   );
-  const preview = useAudioToolPreview(useSettled(engine === "open" ? body : null));
+  const preview = useAudioToolPreview(useSettled(engine === "open" && goal === "split" ? body : null));
   const p = preview.data;
   // A file whose header the server couldn't read (Ogg and the like): the browser counts the channels, if it's small.
   const headerKnown = p?.channels !== undefined;
@@ -752,13 +772,24 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
     <ToolShell title="Audio" tabs={tabs} selfHostedOnly>
       {!source && (
         <ToolHero
-          title="Split any soundtrack"
-          subtitle="Dialogue, music and effects from a song, podcast, film clip or video, with a free live mixer."
+          title={goal === "clean" ? "Clean up dialogue" : "Split any soundtrack"}
+          subtitle={goal === "clean" ? "Clear speech from a noisy or musical recording or video: the music and effects out from under it, or kept quietly." : "Dialogue, music and effects from a song, podcast, film clip or video, with a free live mixer."}
         >
           {visitor && <SelfHostNote className="mt-3 max-w-xl">{SELF_HOSTED}.</SelfHostNote>}
         </ToolHero>
       )}
       <div className={cn("mx-auto max-w-[860px] space-y-3", source ? "pt-4" : "mt-8")}>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Segmented
+            label="What to do"
+            value={goal}
+            onChange={pickGoal}
+            options={[
+              { value: "split", label: "Split into stems", hint: "Dialogue, music and effects, with a live mixer" },
+              { value: "clean", label: "Clean up dialogue", hint: "The speech made clear, in one run" },
+            ]}
+          />
+        </div>
         {!source ? (
           <AddMedia onPick={take} onUpdate={setSource} disabled={visitor} />
         ) : (
@@ -771,7 +802,16 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
             }}
           />
         )}
-        {source && engine === "cloud" && (
+        {goal === "clean" && (
+          <CleanDialoguePanel
+            source={ready ? { ref: ready.ref, kind: ready.kind, name: baseName(ready), duration: ready.duration, channels: ready.channels } : null}
+            engine={engine}
+            visitor={visitor}
+            blocker={visitor ? SELF_HOSTED : !source ? "Add a soundtrack to clean" : source.uploading ? "Uploading…" : null}
+            onMixer={() => pickGoal("split")}
+          />
+        )}
+        {goal === "split" && source && engine === "cloud" && (
           <Panel>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">
@@ -786,7 +826,7 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
             </div>
           </Panel>
         )}
-        {source && engine === "open" && (
+        {goal === "split" && source && engine === "open" && (
           <Panel title="Options">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -813,7 +853,7 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
             </div>
           </Panel>
         )}
-        {source && (
+        {goal === "split" && source && (
           <div className="space-y-2">
             {!blocker && !error && p && (
               <div className="space-y-1 text-[13px] text-muted-foreground" aria-live="polite">
@@ -856,19 +896,19 @@ export function SplitSoundtrackTool({ tabs }: { tabs?: React.ReactNode }) {
             </div>
           </div>
         )}
-        {g && (g.status === "queued" || g.status === "running") && (
+        {goal === "split" && g && (g.status === "queued" || g.status === "running") && (
           <Panel>
             <p className="inline-flex items-center gap-2 text-[13px] text-muted-foreground" role="status">
               <Loader2 className="size-3.5 animate-spin" /> {g.message ?? "Splitting"}…{g.progress ? ` ${Math.round(g.progress * 100)}%` : ""}
             </p>
           </Panel>
         )}
-        {g?.status === "failed" && (
+        {goal === "split" && g?.status === "failed" && (
           <p className="text-[13px] text-destructive" role="alert">
             {g.error ?? "The split failed"}
           </p>
         )}
-        {source && stems.length > 0 && <Mixer key={g!.id} stems={stems} source={source} engine={engine} />}
+        {goal === "split" && source && stems.length > 0 && <Mixer key={`${g!.id}:${mixPreset ?? ""}`} stems={stems} source={source} engine={engine} initial={presetMix(mixPreset)} />}
       </div>
       <Results
         open={resultId}

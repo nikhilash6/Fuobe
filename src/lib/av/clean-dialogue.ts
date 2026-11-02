@@ -37,7 +37,7 @@ export const BED_LEVELS: BedLevel[] = ["off", -24, -18, -12];
 export const DEFAULT_BED: BedLevel = -18;
 /** What "off" sends: AudioAdjustVolume's floor, 1e-5, under a 16-bit FLAC's smallest step. */
 export const OFF_DB = -100;
-export const bedLabel = (b: BedLevel): string => (b === "off" ? "Dialogue only" : `Music & effects ${b} dB`);
+export const bedLabel = (b: BedLevel): string => (b === "off" ? "Dialogue only" : `Music & effects −${Math.abs(b)} dB`);
 /** A bed level from what a request or the page sent: a whole number from −40 to 0, or off. */
 export function bedOf(v: unknown): BedLevel {
   if (v === "off" || v === null || v === false) return "off";
@@ -149,7 +149,7 @@ export function planCleanDialogue(i: CleanDialogueInput): CleanDialoguePlan {
         title: remux ? `${title} · soundtrack` : title,
         inputs,
         params: { extra, ...timed },
-        step: { label: bed === "off" ? "Dialogue only" : `Dialogue, music & effects at ${bed} dB`, index: 0, of },
+        step: { label: bed === "off" ? "Dialogue only" : `Dialogue, music & effects at −${Math.abs(bed)} dB`, index: 0, of },
       },
     });
     if (remux) {
@@ -168,7 +168,7 @@ export function planCleanDialogue(i: CleanDialogueInput): CleanDialoguePlan {
       cleaner: null,
       mode,
       remux,
-      summary: `Takes the music and sound effects ${bed === "off" ? "out" : `down to ${bed} dB under the dialogue`}${mode === "each channel" ? `, every channel on its own (${separationPasses(mode, i.channels)} passes)` : ""}${remux ? ", then puts it back on the picture (copied as it is)" : ""}.`,
+      summary: `Takes the music and sound effects ${bed === "off" ? "out" : `down to −${Math.abs(bed)} dB under the dialogue`}${mode === "each channel" ? `, every channel on its own (${separationPasses(mode, i.channels)} passes)` : ""}${remux ? ", then puts it back on the picture (copied as it is)" : ""}.`,
       notes: [
         OPEN_NOTE,
         ...(mode === "mono" && i.channels !== 1 && !surround ? ["The result is mono. Turn on Stereo to keep it stereo."] : []),
