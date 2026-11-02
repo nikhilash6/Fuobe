@@ -18,6 +18,7 @@ import { scenePoster, type PresetPreview, type PreviewFx, type PreviewScene } fr
 import { templateCover, templatePreview } from "../template-covers";
 import { planShorts, SHORTS_ORIGINAL, type PlanStep, type ShortsLook } from "./shorts";
 import type { Engine, GenerationRequest, LoraRef } from "./types";
+import { originalSoundOn, withOriginalSound, type OriginalSound } from "../av/original-sound";
 
 export const MIXED = {
   minSeconds: 1,
@@ -55,7 +56,8 @@ export const MIXED_MODELS: Record<Engine, string[]> = {
 };
 export const MIXED_TOOLS = {
   cloud: { cut: "trim-video", mux: "merge-audio-video", preview: "nano-banana-2-1", frames: "extract-frames", assemble: "images-to-video", join: "join-clips" },
-  open: { preview: MIXED_ORIGINAL },
+  // Original sound other than Everything on your GPU: the selection's sound cut, split and put back under the render.
+  open: { preview: MIXED_ORIGINAL, cut: "oss-trim", mux: "oss-mux" },
 } as const;
 
 /**
@@ -668,6 +670,8 @@ export interface MixedPlanInput {
    * one without the key). None: the look runs on its words.
    */
   loras?: LoraRef[];
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts; the cloud: Everything only). */
+  originalSound?: OriginalSound;
 }
 
 /**
@@ -685,7 +689,7 @@ export function planMixed(input: MixedPlanInput): { steps: PlanStep[]; final: st
   const seed = input.seed !== undefined ? { seed: input.seed } : original ? { seed: FRAME_SEED } : {};
   if (input.engine === "open") {
     const loras = original ? (input.loras ?? []) : [];
-    return {
+    const plan: { steps: PlanStep[]; final: string } = {
       final: "render",
       steps: [
         {
@@ -714,6 +718,17 @@ export function planMixed(input: MixedPlanInput): { steps: PlanStep[]; final: st
         },
       ],
     };
+    // Original sound other than Everything: the selection's sound cut, then put back under the render as chosen.
+    const pick = originalSoundOn(input.originalSound, "open");
+    if (pick === "everything" || !input.source.hasAudio) return plan;
+    const o = MIXED_TOOLS.open;
+    const render = plan.steps[0];
+    render.request = { ...render.request, feature: MIXED_STEP_FEATURE, title: undefined };
+    plan.steps.push(
+      { key: "cut", request: { ...base, feature: MIXED_STEP_FEATURE, modelId: o.cut, op: "trim", inputs: { video: input.source.url }, params: { startTime: input.range.start, endTime: input.range.end }, step: { label: "Cut", index: 1, of: 4 } } },
+      { key: "final", request: { ...base, feature: MIXED_FEATURE, title: input.title, modelId: o.mux, op: "mux", step: { label: "Original sound", index: 3, of: 4 } }, after: ["render", "cut"], chain: [{ slot: "video" }, { slot: "audio" }] },
+    );
+    return { steps: withOriginalSound(plan.steps, "final", pick, "open", { seconds: input.range.end - input.range.start }), final: "final" };
   }
   const t = MIXED_TOOLS.cloud;
   const sound = !!input.source.hasAudio;
@@ -912,6 +927,7 @@ export function planMixedSmooth(input: MixedPlanInput): { steps: PlanStep[]; fin
     maxRefs: 0,
     ...(input.engine === "cloud" && { resolution: "720p" }),
     seed: input.seed ?? FRAME_SEED,
+    ...(input.originalSound && { originalSound: input.originalSound }),
   });
   const final = plan.final ?? plan.takes[0].look;
   const frame = originalFrameRequest({ ...input, resolution: smoothFrameResolution(input.resolution) });

@@ -1,5 +1,7 @@
 "use client";
 
+import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
+import type { OriginalSound } from "@/lib/av/original-sound";
 import { ArrowDown, Cloud, Cpu, Download, ImageIcon, Info, Loader2, Search, Sparkles, Wand2, X } from "lucide-react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -398,6 +400,8 @@ function Editor({
   // Original needs no anchor: frame 1 is drawn exactly as the preview was (same look, LoRA and seed).
   const anchor = cloud && !original && (frameMode || (fast && model?.image)) && previewImage && !anchorOff ? previewImage.url : undefined;
   const size = clipSize(clip);
+  // What of the clip's sound goes back (the cloud: all of it).
+  const [originalSound, setOriginalSound] = useState<OriginalSound>("everything");
 
   const body: MixedBody | null =
     preset && mmRange && !problem
@@ -420,6 +424,7 @@ function Editor({
           modelId,
           mode,
           ...(anchor ? { anchor } : {}),
+          ...(!cloud && originalSound !== "everything" && { originalSound }),
         }
       : null;
   const estimate = useMixedEstimate(body);
@@ -697,6 +702,8 @@ function Editor({
           {preview ? "Generate another preview frame" : "Generate preview frame"}
         </button>
       </div>
+
+      {clip && clip.info?.hasAudio !== false && <OriginalSoundPicker engine={engine} value={originalSound} onChange={setOriginalSound} />}
 
       <div className="space-y-3 border-t pt-4">
         <div className="flex items-baseline justify-between gap-2">

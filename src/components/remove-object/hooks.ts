@@ -1,5 +1,6 @@
 "use client";
 
+import type { OriginalSound } from "@/lib/av/original-sound";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RemoveMode } from "@/lib/catalog/remove-object";
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
@@ -21,6 +22,8 @@ export interface RemovalBody {
   range?: { start: number; end: number };
   /** H3 Person Removal: the person's mask grown by this many pixels. */
   maskGrow?: number;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }

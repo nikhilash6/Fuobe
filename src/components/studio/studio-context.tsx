@@ -81,6 +81,11 @@ export interface StudioConfig {
    * seconds and the request carries them (params.sourceDuration). Not while a video is attached (lip re-sync).
    */
   voiceFacts?: boolean;
+  /**
+   * "Clean the voice first" beside the voice or recording (src/lib/av/voice-first.ts): the speech apart from the music and
+   * effects before the model hears it (params.extra.cleanVoiceFirst); after a lip re-sync on your GPU, they go back.
+   */
+  voiceFirst?: boolean;
   /** Offer every output format of the studio's models on this engine; picking one another model writes moves the request there (SDR to HDR, Export). */
   formatPicker?: boolean;
   /** The models' enum settings chip ("Director" by default; "Options" for a tool's settings such as Topaz's model). */

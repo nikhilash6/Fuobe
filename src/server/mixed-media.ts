@@ -1,4 +1,5 @@
 import "server-only";
+import { originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { getModel } from "@/lib/catalog";
 import {
   clampFps,
@@ -63,6 +64,8 @@ export interface MixedBody {
   /** Cloud preview: the frame the browser grabbed at the start of the selection. */
   frameUrl?: string;
   seed?: number;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
 }
 
 /**
@@ -198,6 +201,8 @@ async function planInput(body: MixedBody, opts: { probe: boolean }): Promise<{ i
       // LTX follows the clip's outlines, like the open engine's canny ControlNet.
       extra: modelId === "ltx-2-3-restyle" ? { preprocessor: "canny" } : undefined,
       ...(body.seed !== undefined ? { seed: body.seed } : {}),
+      // What of the clip's sound goes back: the cloud puts it all back (DBS runs on your GPU).
+      ...(body.originalSound && { originalSound: originalSoundOn(body.originalSound, body.engine) }),
     },
   };
 }

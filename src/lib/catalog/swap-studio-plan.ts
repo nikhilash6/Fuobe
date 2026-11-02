@@ -39,6 +39,7 @@ import {
 import { silenceRef } from "./canvas";
 import { getModel } from "./index";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
+import { withOriginalSound, type OriginalSound } from "../av/original-sound";
 
 /** The models each job runs on. */
 export const STUDIO_MODELS = {
@@ -122,7 +123,7 @@ export function planPreview(clip: SwapClip): PlanStep[] | null {
 // ---------------------------------------------------------------------------
 // Transcript
 
-export function planTranscribe(clip: SwapClip, engine: Engine): PlanStep[] {
+export function planTranscribe(clip: SwapClip, engine: Engine, opts: { cleanVoiceFirst?: boolean } = {}): PlanStep[] {
   const s = clip.source.duration;
   return [
     {
@@ -133,7 +134,8 @@ export function planTranscribe(clip: SwapClip, engine: Engine): PlanStep[] {
         modelId: STUDIO_MODELS[engine].transcribe,
         op: "transcribe",
         inputs: { video: workingClip(clip, engine) },
-        params: { duration: s, sourceDuration: s },
+        // "Clean the voice first" (src/lib/av/voice-first.ts): the speech apart from the music and effects before it's read.
+        params: { duration: s, sourceDuration: s, ...(opts.cleanVoiceFirst && { extra: { cleanVoiceFirst: true } }) },
         step: { label: "The clip's words", index: 0, of: 1 },
       },
     },
@@ -533,6 +535,8 @@ export interface AssemblyPlanInput {
   pieces: AssemblyPiece[];
   /** Each take's finished video. */
   videoOf: (piece: Extract<AssemblyPiece, { kind: "take" }>) => string;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts; the cloud: Everything only). */
+  originalSound?: OriginalSound;
 }
 
 /** Fold `keys` into joins of at most `max` (the last join is "join"). */
@@ -614,5 +618,6 @@ export function planAssembly(a: AssemblyPlanInput): { steps: PlanStep[]; final: 
     after: [picture],
     chain: [{ slot: "video" }],
   });
-  return { steps, final: "final" };
+  // Original sound: the replaced person's speech is new, so Music & effects only is offered first (DBS on your GPU).
+  return { steps: withOriginalSound(steps, "final", a.originalSound, a.engine, { seconds: clip.source.duration }), final: "final" };
 }

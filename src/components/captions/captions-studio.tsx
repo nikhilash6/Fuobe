@@ -15,6 +15,8 @@ import { StepList } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { useGeneration } from "@/components/av/use-generation";
 import { useCreateGeneration, useEngine, useGenerations } from "@/lib/api";
+import { useVoiceFirstLive, useVoiceFirstShown, VoiceFirstSwitch } from "@/components/audio-tools/voice-first-switch";
+import { voiceFirstDefault } from "@/lib/av/voice-first";
 import { cueProblems } from "@/lib/av/cue-edit";
 import {
   BURN_CAPS,
@@ -147,6 +149,11 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
   const [transcriptId, setTranscriptId] = useState<string | undefined>(restored?.transcriptId);
   const [source, setSource] = useState("auto");
   const [quick, setQuick] = useState(false);
+  // "Clean the voice first": on for a video's speech on your GPU, off in the cloud (it adds a paid step there).
+  const voiceFirstShown = useVoiceFirstShown();
+  const voiceFirstLive = useVoiceFirstLive();
+  const [voiceFirst, setVoiceFirst] = useState<boolean | null>(null);
+  const cleanFirst = voiceFirstShown && (voiceFirst ?? (engine === "open" && voiceFirstDefault("video", voiceFirstLive)));
   const transcript = useGeneration(transcriptId);
   const player = useRef<HTMLVideoElement>(null);
   const [time, setTime] = useState<number | undefined>(undefined);
@@ -179,7 +186,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
   }, [video, cues, look, transcriptId]);
 
   const transcribe = () =>
-    create.mutate(transcribeRequest({ engine, video: video.ref, sourceLanguage: source }), {
+    create.mutate(transcribeRequest({ engine, video: video.ref, sourceLanguage: source, cleanVoiceFirst: cleanFirst, seconds: duration }), {
       onSuccess: (items) => {
         loaded.current = null;
         setTranscriptId(items[0].id);
@@ -257,6 +264,7 @@ function Editor({ video, restored, onReplace }: { video: SlotValue; restored: Sa
                 {transcribing ? "Transcribing…" : "Transcribe the speech"}
               </Button>
               <p className="mt-2 text-[12px] text-muted-foreground">{engine === "open" ? "Detects 30 languages." : "ElevenLabs Scribe v2 (word timings, ≈ $0.008 per minute)."}</p>
+              {voiceFirstShown && <VoiceFirstSwitch className="mt-3" engine={engine} on={cleanFirst} onChange={setVoiceFirst} seconds={duration} />}
               {t && <StepList className="mt-3" steps={[{ key: "t", label: "Transcript", g: t }]} />}
             </div>
           )}

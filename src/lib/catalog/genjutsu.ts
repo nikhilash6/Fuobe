@@ -65,6 +65,7 @@ import { LOOK_IDS, lightWords, type LookId, type PaintKeyframe } from "../openju
 import { soulLook } from "./soul";
 import { filmSize, SHARPEN_COPY, sharpenPrompt, sharpenSteps, sharpenTierFor, type SharpenTier } from "./sharpen";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
+import { withOriginalSound, type OriginalSound } from "../av/original-sound";
 
 export type GenjutsuMode = "motion" | "character" | "swap" | "restyle" | "insert" | "picture" | "finish";
 /** How you say what changes (Object swap and Insert) or who (Character swap): words, clicks on the first frame, or paint on it. */
@@ -1294,6 +1295,8 @@ export interface GenjutsuPlanInput {
   finish?: FinishOptions;
   /** Scene edit's painted area, as the pack's keyframe (the server reads it from the paint). */
   paint?: PaintKeyframe[];
+  /** What of the clip's sound goes back where it is put back (src/lib/av/original-sound.ts; the cloud: Everything only). */
+  originalSound?: OriginalSound;
 }
 
 export interface GenjutsuPlan {
@@ -1335,7 +1338,9 @@ function pinEngines(steps: PlanStep[], engine: Engine): PlanStep[] {
  */
 export function planGenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
   const plan = planSteps(input);
-  return { ...plan, steps: pinEngines(plan.steps, input.maker.engine) };
+  // Original sound: where the clip's sound is put back (a maker that drops it, or several pieces), the part chosen.
+  const steps = plan.sound ? withOriginalSound(plan.steps, plan.final, input.originalSound, input.maker.engine, { seconds: input.range.end - input.range.start }) : plan.steps;
+  return { ...plan, steps: pinEngines(steps, input.maker.engine) };
 }
 
 function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {

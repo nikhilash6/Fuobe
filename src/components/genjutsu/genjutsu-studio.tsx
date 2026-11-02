@@ -27,7 +27,7 @@ import { openInStudio } from "@/components/swap-studio/hooks";
 import { SelfHostNote } from "@/components/self-host-note";
 import { ExampleRow } from "@/components/studio/example-row";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { useEngine, useGenerations, useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useIsOwner, useLikelyVisitor, useModelAccess, useSoundLive } from "@/lib/api";
 import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterChoice, type CharacterOptions } from "@/lib/catalog/character-swap";
 import {
   chooseMaker,
@@ -68,6 +68,10 @@ import type { ExampleRowData } from "@/lib/examples/types";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
 import { CharacterControls, CharacterFacts, qualityOff } from "./character-panel";
+import { voiceFirstDefault } from "@/lib/av/voice-first";
+import { useVoiceFirstLive, useVoiceFirstShown } from "@/components/audio-tools/voice-first-switch";
+import { ORIGINAL_SOUND_FEATURE, originalSoundDefault, originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
+import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
 import { useDescribeCharacter, useDescribeScene, useGenjutsuEstimate, useGenjutsuRun, useTranscribeClip, waitForGeneration, type GenjutsuBody } from "./hooks";
 import { FinishFields, FrameCompare, LightPicker, More, OnlyYou, PERSON_COLOURS, PictureSteps, roleForTap, SceneEditFields, WhoBecomesWho } from "./openjutsu-panels";
 import { LookPicker, type LookSource } from "./look-picker";
@@ -259,7 +263,13 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
   };
   const describeMutation = useDescribeCharacter();
   const transcribeMutation = useTranscribeClip();
-  const [clipWords, setClipWords] = useState<{ url: string; g: Generation } | null>(null);
+  const [clipWords, setClipWords] = useState<{ url: string; clean: boolean; g: Generation } | null>(null);
+  // "Clean the voice first" for the clip's words: off until the chain has passed a real run, then on (the switch is under
+  // "Use the clip's words").
+  const voiceFirstShown = useVoiceFirstShown();
+  const voiceFirstLive = useVoiceFirstLive();
+  const [voiceFirst, setVoiceFirst] = useState<boolean | null>(null);
+  const cleanFirst = voiceFirstShown && (voiceFirst ?? (engine === "open" && voiceFirstDefault("video", voiceFirstLive)));
   const [listening, setListening] = useState(false);
   const alive = useRef<AbortController | null>(null);
   useEffect(() => () => alive.current?.abort(), []);
@@ -280,11 +290,12 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
     const ctl = new AbortController();
     alive.current = ctl;
     try {
-      let g = clipWords?.url === url ? clipWords.g : null;
+      let g = clipWords?.url === url && clipWords.clean === cleanFirst ? clipWords.g : null;
       if (!g) {
-        const { id } = await transcribeMutation.mutateAsync({ engine, source: { url, ...(duration ? { duration } : {}) } });
+        // The clip's speech apart from its music and effects first, when "Clean the voice first" is on.
+        const { id } = await transcribeMutation.mutateAsync({ engine, source: { url, ...(duration ? { duration } : {}) }, ...(cleanFirst && { cleanVoiceFirst: true }) });
         g = await waitForGeneration(id, { signal: ctl.signal });
-        setClipWords({ url, g });
+        setClipWords({ url, clean: cleanFirst, g });
       }
       const out = g.outputs.find((o) => o.kind === "text");
       const cues = Array.isArray(out?.meta?.cues) ? (out.meta.cues as { start: number; end: number; text: string }[]) : undefined;
@@ -502,6 +513,11 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
           ...(mode === "finish" ? { finish } : {}),
         })
       : null;
+  // What of the clip's sound goes back where it's put back: Everything until the split has passed a real run, then Music & effects only when a character is swapped on your GPU.
+  const [soundAsked, setOriginalSound] = useState<OriginalSound | null>(null);
+  const soundEngine = maker?.engine ?? engine;
+  const soundLiveNow = useSoundLive(ORIGINAL_SOUND_FEATURE);
+  const originalSound = originalSoundOn(soundAsked ?? originalSoundDefault({ replacesPerson: isCharacter, engine: soundEngine, live: soundLiveNow }), soundEngine);
   const body: GenjutsuBody | null =
     uploaded && maker && !problem && !refs.some((r) => r.uploading) && !custom.some((r) => r.uploading)
       ? {
@@ -525,6 +541,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
           ...(sceneEdit ? { object: { ...objectEdit, action } } : {}),
           ...(mode === "picture" ? { picture: { ...picture, stage: pictureStage, ...(frameUrl ? { frame: frameUrl } : {}), ...(scene.trim() ? { scene: scene.trim() } : {}) } } : {}),
           ...(mode === "finish" ? { finish } : {}),
+          ...(originalSound !== "everything" && { originalSound }),
         }
       : null;
   const estimate = useGenjutsuEstimate(body);
@@ -937,6 +954,7 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
                   seedProblem={seedProblem(seedNumber)}
                   describe={{ run: describeCharacter, busy: describeMutation.isPending, blocked: refs.some((r) => !r.uploading) ? null : "Add your character's picture to describe it" }}
                   words={{ run: () => void fillClipWords(), busy: listening, blocked: clip?.url && !clip.uploading && range ? null : "Add the clip first" }}
+                  voiceFirst={voiceFirstShown ? { on: cleanFirst, onChange: setVoiceFirst, seconds: duration } : undefined}
                 />
               )}
 
@@ -1000,6 +1018,8 @@ export function GenjutsuStudio({ examples, live }: { examples?: ExampleRowData |
                   />
                 </Field>
               )}
+
+              {clip?.info?.hasAudio !== false && mode !== "picture" && <OriginalSoundPicker engine={soundEngine} value={originalSound} onChange={setOriginalSound} />}
 
               <div className="space-y-3 border-t pt-3">
                 <div className="flex items-center gap-2">

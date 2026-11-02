@@ -182,7 +182,9 @@ function TailSteps({ steps, onOpen }: { steps: StepView[]; onOpen: (g: Generatio
         const last = list[list.length - 1];
         const g = last.generation;
         const all = list.filter((s) => done(s.generation)).length;
-        const audio = part === "narration" || part === "music" ? g?.outputs.find((o) => o.kind === "audio") : undefined;
+        // A bed split from a clip's soundtrack plays its music and effects (the background stem), not the talking.
+        const sounds = part === "narration" || part === "music" ? (g?.outputs ?? []).filter((o) => o.kind === "audio") : [];
+        const audio = sounds.find((o) => o.meta?.stem === "background") ?? sounds[0];
         return (
           <button
             key={part}

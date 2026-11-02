@@ -1,4 +1,5 @@
 import "server-only";
+import { originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import { ANCHOR_MODELS, anchorModel, CHARACTER_SWAP, h3Canvas, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
@@ -728,7 +729,7 @@ function prepareClipQuietly(projectId: string, clipId: string): void {
 // ---------------------------------------------------------------------------
 // Transcript
 
-export function transcribe(projectId: string, clipId: string): SwapProject {
+export function transcribe(projectId: string, clipId: string, opts: { cleanVoiceFirst?: boolean } = {}): SwapProject {
   const p = advanceProject(projectId);
   mustMatchMode(p.engine);
   const clip = mustClip(p, clipId);
@@ -737,7 +738,7 @@ export function transcribe(projectId: string, clipId: string): SwapProject {
   mustOffer(modelId, p.engine, "type each shot's words instead");
   const busy = look1(clip.transcript?.genId);
   if (busy && ACTIVE.has(busy.status)) throw new ShortsError("The clip is being transcribed", 409);
-  const pipe = run(planTranscribe(clip, p.engine));
+  const pipe = run(planTranscribe(clip, p.engine, opts));
   const genId = pipe.byKey.transcribe.id;
   return mutate(projectId, (cur) => mapClip(cur, clipId, (c) => ({ ...c, transcript: { genId, modelId, cues: null, voices: c.transcript?.voices ?? {} } })));
 }
@@ -996,7 +997,7 @@ export async function stopTake(projectId: string, body: z.infer<typeof TakeRefSc
 // Assembly
 
 /** The clip with its chosen takes over the original timeline and its own sound (the result goes to the Library). */
-export function assemble(projectId: string, clipId: string): SwapProject {
+export function assemble(projectId: string, clipId: string, opts: { originalSound?: OriginalSound } = {}): SwapProject {
   const p = advanceProject(projectId);
   mustMatchMode(p.engine);
   const clip = mustClip(p, clipId);
@@ -1004,8 +1005,10 @@ export function assemble(projectId: string, clipId: string): SwapProject {
   const found = assemblyPieces(p, clip);
   if ("problem" in found) throw new ShortsError(found.problem, 422);
   const takes = assemblyTakes(found.pieces);
+  // What of the clip's sound goes back: the cloud puts it all back (DBS runs on your GPU).
+  const sound = originalSoundOn(opts.originalSound, p.engine);
   const last = look(clip.assembly?.genId);
-  if (clip.assembly && last && last.status !== "failed" && last.status !== "canceled" && JSON.stringify(clip.assembly.takes) === JSON.stringify(takes)) {
+  if (clip.assembly && last && last.status !== "failed" && last.status !== "canceled" && JSON.stringify(clip.assembly.takes) === JSON.stringify(takes) && (clip.assembly.originalSound ?? "everything") === sound) {
     throw new ShortsError(ACTIVE.has(last.status) ? "This clip is being assembled" : "Already assembled with these takes — download it below", 409);
   }
   if (p.engine === "open" && !clip.normalized?.url) throw new ShortsError("The clip is still being prepared at 24 fps — wait for it", 409);
@@ -1019,7 +1022,7 @@ export function assemble(projectId: string, clipId: string): SwapProject {
     existing[`take-${piece.take.id}`] = g!.id;
     return url;
   };
-  const plan = planAssembly({ engine: p.engine, clip, pieces: found.pieces, videoOf });
+  const plan = planAssembly({ engine: p.engine, clip, pieces: found.pieces, videoOf, originalSound: sound });
   // A silent clip's cloud assembly ends on its silence: the WAV is written now (silenceRef, as Genjutsu and Canvas do).
   const withSilence = silenceWriter();
   // The takes count as steps already made: a demo join of real takes is refused.
@@ -1027,7 +1030,7 @@ export function assemble(projectId: string, clipId: string): SwapProject {
     plan.steps.map((s) => ({ ...s, request: withSilence(s.request) })),
     existing,
   );
-  const assembly = { genId: pipe.byKey[plan.final].id, stepIds: pipe.items.map((g) => g.id), takes, createdAt: Date.now() };
+  const assembly = { genId: pipe.byKey[plan.final].id, stepIds: pipe.items.map((g) => g.id), takes, ...(sound !== "everything" && { originalSound: sound }), createdAt: Date.now() };
   return mutate(projectId, (cur) => mapClip(cur, clipId, (c) => ({ ...c, assembly })));
 }
 

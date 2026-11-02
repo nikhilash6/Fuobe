@@ -1,5 +1,7 @@
 "use client";
 
+import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
+import { ORIGINAL_SOUND_FEATURE, originalSoundDefault, type OriginalSound } from "@/lib/av/original-sound";
 import { Brush, Cloud, Cpu, Dices, Download, Eraser as EraserIcon, Eye, Loader2, RotateCcw, Sparkles, Type, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -19,7 +21,7 @@ import { Feed } from "@/components/studio/feed";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { SketchEditor, type Stroke } from "@/components/studio/sketch-editor";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
-import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
+import { useEngine, useGenerations, useLikelyVisitor, useModelAccess, useSoundLive } from "@/lib/api";
 import {
   CLICK_OPEN_PROBLEM,
   chooseEraser,
@@ -204,6 +206,10 @@ export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) 
   const ready = !!clip?.url && !clip.uploading && !clip.error && !!duration && !!range;
   const marked =
     mode === "type" ? everyone || !!prompt.trim() : mode === "click" ? points.some((p) => p.label !== "negative") : !!paint;
+  // What of the clip's sound goes back: Everything until the split has passed a real run, then Music & effects only when a person is removed on your GPU.
+  const [soundAsked, setOriginalSound] = useState<OriginalSound | null>(null);
+  const soundLiveNow = useSoundLive(ORIGINAL_SOUND_FEATURE);
+  const originalSound = soundAsked ?? originalSoundDefault({ replacesPerson: !!eraser?.cleanFrame, engine, live: soundLiveNow });
   const body: RemovalBody | null =
     ready && eraser && marked
       ? {
@@ -218,6 +224,7 @@ export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) 
           ...(h3 ? { maskGrow } : {}),
           source: { url: clip.url!, name: clip.name, duration, fps: clip.info?.fps, width: size.width, height: size.height, hasAudio: clip.info?.hasAudio },
           range: { start: range.startTime, end: range.endTime },
+          ...(engine === "open" && originalSound !== "everything" && { originalSound }),
         }
       : null;
   const estimate = useRemovalEstimate(body);
@@ -522,6 +529,7 @@ export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) 
                   </div>
                 </Field>
               )}
+              {clip?.info?.hasAudio !== false && <OriginalSoundPicker engine={engine} value={originalSound} onChange={setOriginalSound} />}
 
               <div className="space-y-3 border-t pt-3">
                 {body && est?.previewUsd != null && (

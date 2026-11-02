@@ -11,6 +11,8 @@ import { OPERATION_LABELS } from "@/lib/catalog/types";
 import { ANY_ANGLE } from "@/lib/catalog/any-angle";
 import { directRunFeatures } from "@/lib/catalog/genjutsu";
 import { genjutsuLive } from "@/server/genjutsu-live";
+import { soundLive } from "@/server/sound-live";
+import { wantsVoiceFirst } from "@/lib/av/voice-first";
 import { relightRunTitle } from "@/lib/relight/engine";
 import { ACCOUNT_LIMITS, ACCOUNT_MESSAGES, accountTotalBytes, accountUsage, diskHasRoom, filesFullMessage } from "@/server/account-files";
 import { accountInputProblem } from "@/server/account-inputs";
@@ -97,6 +99,8 @@ export async function POST(request: Request) {
   // Genjutsu's new makers open one by one (src/server/genjutsu-live.ts): sent here directly, a maker that hasn't opened
   // runs for the owner only, as on the Genjutsu page.
   if (viewer.kind !== "owner") {
+    // "Clean the voice first" opens to visitors once it has passed a real run (src/server/sound-live.ts).
+    if (wantsVoiceFirst(asked) && !soundLive()["clean-voice-first"]) return refuse(403, OWN_GPU_TOOL_MESSAGE, { code: "own-gpu-tool" });
     const extra = asked.params?.extra?.openjutsu;
     const needs = directRunFeatures(asked.modelId, extra && typeof extra === "object" ? (extra as Record<string, unknown>) : {});
     if (needs) {

@@ -1,5 +1,6 @@
 "use client";
 
+import type { OriginalSound } from "@/lib/av/original-sound";
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDeferredValue } from "react";
 import type { MixedMode, MixedResolution, MixedValues } from "@/lib/catalog/mixed-media";
@@ -22,6 +23,8 @@ export interface MixedBody {
   mode?: MixedMode;
   anchor?: string;
   frameUrl?: string;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }

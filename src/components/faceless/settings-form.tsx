@@ -20,6 +20,7 @@ import {
   type PickerData,
 } from "@/lib/catalog/faceless";
 import { cn } from "@/lib/utils";
+import { ClipBed } from "./clip-bed";
 import { Section, Segmented, ToggleRow } from "./controls";
 import { NarratorList } from "./narrator";
 import { StyleGrid } from "./style-art";
@@ -198,6 +199,7 @@ export function EpisodeSettingsForm({
         <div className="grid gap-3 rounded-xl border p-3 sm:grid-cols-2">
           <ToggleRow label="Subtitles" hint="Burned into the video, timed to the voice" checked={value.subtitles} onChange={(subtitles) => onChange({ subtitles })} />
           <ToggleRow label="Background music" hint={MUSIC_HINT[value.engine]} checked={value.music} onChange={(music) => onChange({ music })} />
+          {kind === "faceless" && value.music && <ClipBed engine={value.engine} value={value.bedClip} onChange={(bedClip) => onChange({ bedClip })} />}
         </div>
       </Section>
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { nanoid } from "nanoid";
 import { getModel } from "@/lib/catalog";
 import { maxRefsFor, reframes, resolutionFor, sourceSeconds } from "@/lib/catalog/shorts-models";
@@ -211,6 +212,8 @@ export interface ShortsBody {
   modelId?: string;
   /** A look of its own instead of a preset (Assist's words), kept on the session like a preset's. Server-side only. */
   look?: ShortsLook;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
 }
 
 function lookFor(presetId: string): ShortsLook {
@@ -287,6 +290,8 @@ function planWith(body: ShortsBody, info: SourceInfo): { input: ShortsPlanInput;
       maxRefs: maxRefsFor(modelId, body.engine),
       resolution: resolutionFor(modelId, body.engine),
       reframes: body.engine === "open" || reframes(modelId, body.engine),
+      // What of the clip's sound goes back: the cloud puts it all back (DBS runs on your GPU).
+      ...(body.originalSound && { originalSound: originalSoundOn(body.originalSound, body.engine) }),
     },
   };
 }
@@ -401,7 +406,7 @@ export async function createSession(body: ShortsBody, known?: SourceInfo): Promi
       ...(input.source.fps ? { fps: input.source.fps } : {}),
     },
     range: input.range,
-    settings: { aspectRatio: input.aspectRatio, language: input.language, modelId: input.modelId, resolution: input.resolution, maxRefs: input.maxRefs, reframes: input.reframes },
+    settings: { aspectRatio: input.aspectRatio, language: input.language, modelId: input.modelId, resolution: input.resolution, maxRefs: input.maxRefs, reframes: input.reframes, ...(input.originalSound && input.originalSound !== "everything" && { originalSound: input.originalSound }) },
     segments,
     stitches: [stitch],
     createdAt: now,

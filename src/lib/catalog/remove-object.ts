@@ -13,6 +13,7 @@
 import { h3Canvas } from "./character-swap";
 import { joinGroups, type PlanStep } from "./shorts";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
+import { originalSoundOn, withOriginalSound, type OriginalSound } from "../av/original-sound";
 
 export type RemoveMode = "type" | "click" | "paint";
 
@@ -572,6 +573,8 @@ export interface RemovalPlanInput {
   seed?: number;
   /** H3 Person Removal: how far the person's mask is grown, in pixels (default REMOVE.maskGrow.default). */
   maskGrow?: number;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts; the cloud: Everything only). */
+  originalSound?: OriginalSound;
 }
 
 export interface RemovalPlan {
@@ -633,7 +636,9 @@ export function planRemoval(input: RemovalPlanInput): RemovalPlan {
   const steps: PlanStep[] = [];
   const op = "remove-object" as const;
   const tracked = e.engine === "cloud" && (e.id === "bria-video-erase-mask" || (e.id === "bria-video-erase-points" && n > 1));
-  const sound = !!input.source.hasAudio && (n > 1 || !e.keepsSound);
+  // An eraser that keeps the clip's sound needs no sound step, unless only part of the sound goes back (Original sound).
+  const partSound = originalSoundOn(input.originalSound, input.engine) !== "everything";
+  const sound = !!input.source.hasAudio && (n > 1 || !e.keepsSound || partSound);
   const eraseFeature = (one: boolean) => (one && !sound ? { ...base, title: input.title } : helper);
 
   // What each piece's join input is: its erased window, or (an overlapping window) the window less its first frames.
@@ -732,7 +737,7 @@ export function planRemoval(input: RemovalPlanInput): RemovalPlan {
   // except on the open engine, whose mux trims the sound to the picture itself.
   const end = e.window && e.engine === "cloud" ? pieces[n - 1].end : input.range.end;
   const final = joinWithSound(steps, { engine: input.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: joined, sound, end });
-  return { steps, final, pieces, sound, tracked };
+  return { steps: withOriginalSound(steps, final, input.originalSound, input.engine, { seconds: end - input.range.start }), final, pieces, sound, tracked };
 }
 
 /**
@@ -817,7 +822,7 @@ function planPersonRemoval(input: RemovalPlanInput): RemovalPlan {
   ];
   const piece: Piece = { index: 0, start: input.range.start, end: input.range.end };
   const final = joinWithSound(steps, { engine: "open", title: input.title, base, helper, source: input.source, range: input.range, pieces: ["erase0"], sound });
-  return { steps, final, pieces: [piece], sound, tracked: false };
+  return { steps: withOriginalSound(steps, final, input.originalSound, "open", { seconds: input.range.end - input.range.start }), final, pieces: [piece], sound, tracked: false };
 }
 
 export interface JoinInput {

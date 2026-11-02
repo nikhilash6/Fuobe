@@ -19,6 +19,9 @@ import {
   MAX_SCRIPT,
   MAX_SOURCES,
   musicPlan,
+  clipBedFor,
+  CLIP_BED_MAX,
+  CLIP_BED_MIN,
   narrationText,
   normalizeBlocks,
   OFFLINE_NOTE,
@@ -1370,9 +1373,12 @@ function notesFor(settings: EpisodeSettings, seconds: number): { notes?: string[
   if (settings.styleRefs.length > limit) notes.push(`The open-source picture model follows the first ${limit} style references.`);
   if (settings.engine === "open" && settings.styleRefs.length && settings.sourceImages?.length) notes.push("Your style references set the look; the attached images aren't used for the open-source pictures.");
   if (m.music) {
-    const plan = musicPlan(getModel(m.music), m.loop ? getModel(m.loop) : undefined, seconds);
-    const minutes = (s: number) => `${Math.floor(s / 60)} min${s % 60 ? ` ${s % 60} s` : ""}`;
-    if (plan.loop?.crossfade) notes.push(`The music is made ${minutes(plan.bed)} long, then looped with a ${plan.loop.crossfade}-second crossfade to cover the film.`);
+    const clip = clipBedFor(settings);
+    const plan = musicPlan(getModel(m.music), m.loop ? getModel(m.loop) : undefined, seconds, clip?.seconds);
+    const minutes = (s: number) => (s < 60 ? `${Math.round(s)} s` : `${Math.floor(s / 60)} min${Math.round(s % 60) ? ` ${Math.round(s % 60)} s` : ""}`);
+    if (clip) notes.push("The music bed is your clip's soundtrack with the talking taken out.");
+    if (clip && plan.loop?.crossfade) notes.push(`Your clip is ${minutes(plan.bed)} long, so its soundtrack loops with a ${plan.loop.crossfade}-second crossfade to cover the film.`);
+    else if (plan.loop?.crossfade) notes.push(`The music is made ${minutes(plan.bed)} long, then looped with a ${plan.loop.crossfade}-second crossfade to cover the film.`);
     else if (plan.loop) notes.push(`The music is made ${minutes(plan.bed)} long and plays again to cover the film.`);
     if (plan.short) notes.push(`The music bed goes up to ${minutes(plan.loop?.duration ?? plan.bed)}, so the last ${plan.short} s play without music.`);
   }
@@ -1530,6 +1536,14 @@ export const SettingsSchema = z.object({
   resolution: z.string().max(10).optional(),
   auto: z.boolean().optional(),
   brief: BriefLookSchema.optional(),
+  /** A clip whose soundtrack is the music bed (open engine; the cloud makes the music). */
+  bedClip: z
+    .object({
+      url: FileUrl,
+      seconds: z.number().min(CLIP_BED_MIN, `Pick a clip of at least ${CLIP_BED_MIN} seconds for the music bed`).max(CLIP_BED_MAX, "Pick a clip of up to 10 minutes for the music bed"),
+      name: z.string().max(200).optional(),
+    })
+    .optional(),
 });
 
 export const BlockSchema = z.object({

@@ -1,5 +1,6 @@
 "use client";
 
+import { VoiceFirstSwitch } from "@/components/audio-tools/voice-first-switch";
 import { AudioLines, Cpu, Drama, Loader2, Sparkles, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,7 @@ export function CharacterControls({
   seedProblem,
   describe,
   words,
+  voiceFirst,
 }: {
   engine: Engine;
   maker: Maker | null;
@@ -94,6 +96,8 @@ export function CharacterControls({
   describe?: PanelHelper;
   /** "Use the clip's words": the part's lines from a transcription of the clip. */
   words?: PanelHelper;
+  /** "Clean the voice first" for that transcription (shown when given). */
+  voiceFirst?: { on: boolean; onChange: (on: boolean) => void; seconds?: number };
 }) {
   const set = (patch: Partial<CharacterOptions>) => onChange({ ...value, ...patch });
   const h3 = !!maker?.h3;
@@ -255,6 +259,7 @@ export function CharacterControls({
                     {words.busy ? <Loader2 className="size-3.5 animate-spin" /> : <AudioLines className="size-3.5" />} {words.busy ? "Listening to the clip…" : "Use the clip's words"}
                   </Button>
                 )}
+                {words && voiceFirst && <VoiceFirstSwitch className="mt-2" engine={engine} on={voiceFirst.on} onChange={voiceFirst.onChange} seconds={voiceFirst.seconds} />}
               </Field>
             )}
             <Field label="Swap style" hint="How the swap is drawn">

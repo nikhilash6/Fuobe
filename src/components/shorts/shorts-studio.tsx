@@ -1,5 +1,7 @@
 "use client";
 
+import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
+import type { OriginalSound } from "@/lib/av/original-sound";
 import { ArrowDown, ArrowRight, Cloud, Cpu, Info, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
@@ -335,6 +337,8 @@ function SetupPanel({
   const { clip } = source;
   const [ratio, setRatio] = useState<ShortsRatio>("9:16");
   const [language, setLanguage] = useState("auto");
+  // What of the clip's sound goes back (the cloud: all of it).
+  const [originalSound, setOriginalSound] = useState<OriginalSound>("everything");
   const [pickedModel, setModel] = useState<Record<Engine, string>>({ cloud: "", open: "" });
   // A custom preset is its reference images: on cloud, start on the first model that reads them
   // (Kling O3 4K Edit, then Happy Horse) unless a model was picked.
@@ -368,6 +372,7 @@ function SetupPanel({
           aspectRatio: ratio,
           language,
           modelId,
+          ...(engine === "open" && originalSound !== "everything" && { originalSound }),
         }
       : null;
   const estimate = useShortsEstimate(estimateBody);
@@ -474,6 +479,8 @@ function SetupPanel({
           options={SHORTS_RATIOS.map((r) => ({ value: r.value, label: r.label, hint: r.hint }))}
         />
       </Field>
+
+      {clip && clip.info?.hasAudio !== false && <OriginalSoundPicker engine={engine} value={originalSound} onChange={setOriginalSound} />}
 
       <Field label="Language" hint={presetType ? "for the on-screen words" : "used by type presets"}>
         <Select value={language} onValueChange={setLanguage}>

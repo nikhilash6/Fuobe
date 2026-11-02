@@ -1,4 +1,5 @@
 import "server-only";
+import { ORIGINAL_SOUND_IDS } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { MIXED } from "@/lib/catalog/mixed-media";
 import { SHORTS } from "@/lib/catalog/shorts";
@@ -29,6 +30,8 @@ export const ShortsBodySchema = z.object({
   aspectRatio: z.enum(["9:16", "16:9"]).default("9:16"),
   language: z.string().max(40).default("auto"),
   modelId: z.string().max(80).optional(),
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound: z.enum(ORIGINAL_SOUND_IDS).optional(),
   requestId,
 });
 
@@ -57,6 +60,8 @@ export const MixedBodySchema = z.object({
   anchor: fileUrl.optional(),
   frameUrl: fileUrl.optional(),
   seed: z.number().int().min(0).max(2 ** 48).optional(),
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound: z.enum(ORIGINAL_SOUND_IDS).optional(),
   requestId,
 });
 

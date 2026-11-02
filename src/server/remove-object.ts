@@ -1,4 +1,5 @@
 import "server-only";
+import { ORIGINAL_SOUND_IDS, originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import { PERSON_REMOVER_LORA } from "@/lib/catalog/character-swap";
@@ -70,6 +71,8 @@ export interface RemovalBody {
   seed?: number;
   /** H3 Person Removal: how far the person's mask is grown, in pixels. */
   maskGrow?: number;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
 }
 
 const fileUrl = z.string().startsWith("/api/files/").max(500);
@@ -99,6 +102,8 @@ export const RemovalBodySchema = z.object({
   range: z.object({ start: seconds, end: seconds }).optional(),
   seed: z.number().int().min(0).max(2 ** 48).optional(),
   maskGrow: z.number().int().min(REMOVE.maskGrow.min).max(REMOVE.maskGrow.max).optional(),
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts). */
+  originalSound: z.enum(ORIGINAL_SOUND_IDS).optional(),
   /** A client nonce for one submit: a repeat gets the first answer (see once()). */
   requestId: z.string().trim().min(8).max(64).optional(),
 });
@@ -256,6 +261,8 @@ function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boole
       mask: body.mode === "paint" && eraser.engine === "open" ? body.mask : undefined,
       ...(body.seed !== undefined ? { seed: body.seed } : {}),
       ...(eraser.cleanFrame && body.maskGrow !== undefined ? { maskGrow: body.maskGrow } : {}),
+      // What of the clip's sound goes back: the cloud puts it all back (DBS runs on your GPU).
+      ...(body.originalSound && { originalSound: originalSoundOn(body.originalSound, body.engine) }),
     },
   };
 }

@@ -16,6 +16,7 @@
 import { scenePoster, type PresetPreview, type PreviewFx, type PreviewScene } from "../preset-cards";
 import { templateCover, templatePreview } from "../template-covers";
 import type { ChainSlot, Engine, Generation, GenerationRequest } from "./types";
+import { withOriginalSound, type OriginalSound } from "../av/original-sound";
 
 // ---------------------------------------------------------------------------
 // Limits (Higgsfield's, from the upload dialog) and engine shapes
@@ -465,6 +466,8 @@ export interface ShortsPlanInput {
   resolution?: string;
   /** Extra params for the restyle model (e.g. a seed for a new take). */
   seed?: number;
+  /** What of the clip's sound goes back (src/lib/av/original-sound.ts; the cloud: Everything only). */
+  originalSound?: OriginalSound;
 }
 
 export const SHORTS_FEATURE = "shorts";
@@ -775,7 +778,8 @@ export function planStitch(input: ShortsPlanInput, clips: ClipRef[], suffix = ""
     request: { ...base, title: input.title, modelId: t.mux, op: "mux", inputs: Object.keys(inputs).length ? inputs : undefined, step: { label: "Final video", index: 1200, of: 1000 } },
     ...(after.length ? { after, chain } : {}),
   });
-  return { steps, final: key };
+  // Original sound: the music and effects, the dialogue, or the dialogue over lower music (DBS on your GPU).
+  return { steps: withOriginalSound(steps, key, input.originalSound, input.engine, { seconds: input.range.end - input.range.start }), final: key };
 }
 
 /** The whole session: every segment's first take, the stitch and the soundtrack. */
@@ -828,7 +832,7 @@ export interface ShortsSession {
   look: ShortsLook;
   source: { url: string; name?: string; duration?: number; hasAudio?: boolean; width?: number; height?: number; fps?: number };
   range: ShortsRange;
-  settings: { aspectRatio: ShortsRatio; language: string; modelId: string; resolution?: string; maxRefs: number; reframes?: boolean };
+  settings: { aspectRatio: ShortsRatio; language: string; modelId: string; resolution?: string; maxRefs: number; reframes?: boolean; originalSound?: OriginalSound };
   segments: ShortsSessionSegment[];
   stitches: ShortsStitch[];
   createdAt: number;
@@ -849,6 +853,7 @@ export function sessionPlanInput(s: ShortsSession, seed?: number): ShortsPlanInp
     maxRefs: s.settings.maxRefs,
     resolution: s.settings.resolution,
     reframes: s.settings.reframes,
+    ...(s.settings.originalSound && { originalSound: s.settings.originalSound }),
     ...(seed !== undefined ? { seed } : {}),
   };
 }

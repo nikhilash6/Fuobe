@@ -1,5 +1,8 @@
 "use client";
 
+import { useSoundLive } from "@/lib/api";
+import { OriginalSoundPicker } from "@/components/av/original-sound-picker";
+import { ORIGINAL_SOUND_FEATURE, originalSoundDefault, originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { Download, Film, Library, Loader2, Play, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -320,7 +323,11 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
   const a = clip.assembly;
   const state = jobState(a?.genId, a?.stepIds, gens);
   const result = state.status === "succeeded" && a?.genId ? gens[a.genId]?.url : undefined;
-  const current = "pieces" in found && !!a && JSON.stringify(a.takes) === JSON.stringify(assemblyTakes(found.pieces));
+  // What of the clip's sound goes back: Everything until the split has passed a real run, then Music & effects only on your GPU (the new speech).
+  const [soundAsked, setOriginalSound] = useState<OriginalSound | null>(null);
+  const soundLiveNow = useSoundLive(ORIGINAL_SOUND_FEATURE);
+  const originalSound = originalSoundOn(soundAsked ?? a?.originalSound ?? originalSoundDefault({ replacesPerson: true, engine: project.engine, live: soundLiveNow }), project.engine);
+  const current = "pieces" in found && !!a && JSON.stringify(a.takes) === JSON.stringify(assemblyTakes(found.pieces)) && (a.originalSound ?? "everything") === originalSound;
   return (
     <div className="space-y-3">
       <Panel title="Assemble the clip" aside={<span className="font-mono text-[11px] text-muted-foreground">{priceText(estimate?.assembly[clip.id], { demo: estimate?.demo, engine: project.engine })}</span>}>
@@ -348,11 +355,12 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
               ? "Each piece is fitted to the clip's size at 24 fps, joined packet by packet, and the clip's own sound goes back on."
               : "The clip's pieces are cut to their frames, every piece is scaled to one frame size, they're joined at 24 fps (H3's rate), and the clip's own sound — or its silence — goes back on."}
           </p>
+          {clip.source.hasAudio && <OriginalSoundPicker engine={project.engine} value={originalSound} onChange={setOriginalSound} />}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               className="h-9 rounded-full"
               disabled={"problem" in found || assemble.isPending || state.status === "queued" || state.status === "running" || (current && state.status === "succeeded")}
-              onClick={() => assemble.mutate({ clipId: clip.id }, { onSuccess: () => toast("Assembling the clip"), onError: (e) => toastError(e) })}
+              onClick={() => assemble.mutate({ clipId: clip.id, ...(originalSound !== "everything" && { originalSound }) }, { onSuccess: () => toast("Assembling the clip"), onError: (e) => toastError(e) })}
             >
               {assemble.isPending ? <Loader2 className="size-4 animate-spin" /> : <Film className="size-4" />} {a ? "Assemble again" : "Assemble clip"}
             </Button>
@@ -362,7 +370,7 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
                 Stop
               </Button>
             )}
-            {a && !current && state.status === "succeeded" && <span className="text-[12px] text-muted-foreground">The chosen takes changed since — assemble again for the new ones.</span>}
+            {a && !current && state.status === "succeeded" && <span className="text-[12px] text-muted-foreground">The chosen takes or the sound changed since — assemble again for the new ones.</span>}
           </div>
           <JobError genId={a?.genId} stepIds={a?.stepIds} gens={gens} />
           {result && (

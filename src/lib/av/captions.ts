@@ -208,13 +208,19 @@ export function burnRequest(o: { route: BurnRoute; video: string; cues: Cue[]; l
 }
 
 /** The transcription job: the engine's transcriber, the spoken language if known. */
-export function transcribeRequest(o: { engine: Engine; video: string; modelId?: string; sourceLanguage?: string }): GenerationRequest {
+export function transcribeRequest(o: { engine: Engine; video: string; modelId?: string; sourceLanguage?: string; cleanVoiceFirst?: boolean; seconds?: number }): GenerationRequest {
+  const params = {
+    ...(o.sourceLanguage && o.sourceLanguage !== "auto" && { sourceLanguage: o.sourceLanguage }),
+    ...(o.seconds && o.seconds > 0 && { sourceDuration: o.seconds }),
+    // "Clean the voice first" (src/lib/av/voice-first.ts): the speech apart from the music and effects before it's read.
+    ...(o.cleanVoiceFirst && { extra: { cleanVoiceFirst: true } }),
+  };
   return {
     feature: CAPTIONS_FEATURE,
     modelId: o.modelId ?? (o.engine === "open" ? "oss-qwen3-asr" : "scribe-v2"),
     op: "transcribe",
     inputs: { video: o.video },
-    ...(o.sourceLanguage && o.sourceLanguage !== "auto" && { params: { sourceLanguage: o.sourceLanguage } }),
+    ...(Object.keys(params).length && { params }),
   };
 }
 

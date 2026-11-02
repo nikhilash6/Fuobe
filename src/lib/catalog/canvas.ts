@@ -11,6 +11,7 @@ import type { CanvasComment, CanvasGroup, CanvasPage, CanvasShape } from "./canv
 import { EXAMPLE_SCENE, EXAMPLE_WORDS, beatsFrom, blockoutFramePrompt, compileBlockoutPrompt, type BlockoutRef } from "@/lib/blockout";
 import { QMA_MODEL } from "@/lib/qma";
 import type { TemplateSectionKey } from "@/lib/canvas-sections";
+import { CLOUD_SPLIT_PROBLEM, SPLIT_MODEL } from "@/lib/av/split";
 import { getModel, getPreset, MODELS, supportsOp } from "./index";
 import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
@@ -66,6 +67,7 @@ export type CanvasNodeType =
   | "tts"
   | "voice-change"
   | "clean-voice"
+  | "split-soundtrack"
   | "clone-voice"
   | "translate"
   | "concat"
@@ -259,6 +261,8 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   "voice-change": { type: "voice-change", label: "Change voice", group: "Utilities", icon: "AudioWaveform", ops: ["voice-change"], description: "Say a recording again in another voice, keeping its timing" },
   // NVIDIA RE-USE on the open engine only (nothing like it is hosted on fal or Replicate): hidden on a cloud-only install.
   "clean-voice": { type: "clean-voice", label: "Clean up voice", group: "Utilities", icon: "AudioLines", ops: ["enhance-voice"], description: "Remove noise, echo and room sound from speech" },
+  // DBS on the open engine only (hosted nowhere): its four outputs wire each part of a soundtrack on (SPLIT_OUTPUTS).
+  "split-soundtrack": { type: "split-soundtrack", label: "Split soundtrack", group: "Utilities", icon: "AudioWaveform", ops: ["separate-audio"], description: "Dialogue, music and effects of a soundtrack, each its own output" },
   "clone-voice": { type: "clone-voice", label: "Clone voice", group: "Inputs", icon: "UserRound", description: "A voice sample (or one of your saved voices) to speak with" },
   translate: { type: "translate", label: "Translate", group: "Utilities", icon: "Languages", ops: ["translate", "dub"], variants: ["text", "video"], description: "Translate a text, or dub a video into another language" },
   concat: { type: "concat", label: "Assemble film", group: "Utilities", icon: "Film", ops: ["concat"], description: "Up to 50 clips in one film: trim and mute each, pick the frame" },
@@ -271,7 +275,7 @@ export const NODE_SPECS: Record<CanvasNodeType, NodeSpec> = {
   note: { type: "note", label: "Sticky note", group: "Output", icon: "StickyNote", description: "A note on the board (not run)" },
 };
 
-export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "clean-voice", "translate", "concat", "restore", "fly-around"]);
+export const GENERATOR_TYPES = new Set<CanvasNodeType>(["model", "join", "frame", "upscale", "bg-remove", "tts", "voice-change", "clean-voice", "split-soundtrack", "translate", "concat", "restore", "fly-around"]);
 export const isGenerator = (n: Pick<CanvasNode, "type">) => GENERATOR_TYPES.has(n.type);
 
 /** Entries of the Add-node palette (several entries can make the same node type). */
@@ -315,6 +319,7 @@ export const PALETTE: PaletteItem[] = [
   { ...pick("tts"), id: "tts", keywords: "voice speech narration clone" },
   { ...pick("voice-change"), id: "voice-change", keywords: "voice changer speech to speech revoice convert" },
   { ...pick("clean-voice"), id: "clean-voice", keywords: "denoise enhance speech noise clean up voice echo reverb podcast" },
+  { ...pick("split-soundtrack"), id: "split-soundtrack", keywords: "stems separate dialogue music effects remove voice isolate soundtrack dbs" },
   { ...pick("clone-voice"), id: "clone-voice", keywords: "voice sample clone my voice speaker" },
   { ...pick("translate"), id: "translate", data: { mediaKind: "text" }, keywords: "language translate dub localize subtitles" },
   { ...pick("concat"), id: "concat", keywords: "concatenate join merge stitch edit trim mute film assemble" },
@@ -351,6 +356,8 @@ export function paletteItems(mode: "both" | "open" | "cloud" = "both", engine?: 
   const items = PALETTE.filter((p) => (p.id !== "model-text" || MODELS.some((m) => m.kind === "text" && !m.hidden)) && !(mode === "cloud" && p.id === "clean-voice") && (p.id !== "upscale-regenerate" || REGEN_OFFERED)).map((p): PaletteItem => {
     const fixed = p.data?.modelId ? getModel(p.data.modelId) : undefined;
     if (fixed && !runsOn(fixed, "cloud") && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: mode === "cloud" ? GPU_ONLY_INSTALL : GPU_ONLY_ENTRY };
+    // Split soundtrack: DBS runs on the open engine only, and no other model stands in for it.
+    if (p.type === "split-soundtrack" && (mode === "cloud" || engine === "cloud")) return { ...p, disabled: CLOUD_SPLIT_PROBLEM };
     if (mode === "both" || !isGenerator(p) || defaultModelForNode({ type: p.type, data: p.data ?? {} }, mode)) return p;
     return { ...p, disabled: `No ${mode === "open" ? "open-source" : "cloud"} model for ${p.label.toLowerCase()} yet` };
   });
@@ -476,6 +483,8 @@ export function defaultModelForNode(n: Pick<CanvasNode, "type" | "data">, engine
   // Clean up voice is RE-USE, on your GPU only: the hosted cleaners (VEED, DeepFilterNet 3: Clean up dialogue's cloud
   // engine) share its op but are other tools, so the node doesn't take one of them on the cloud.
   if (n.type === "clean-voice" && engine === "cloud") return undefined;
+  // Split soundtrack runs DBS, on the open engine only (never Demucs or a cloud isolation in its place).
+  if (n.type === "split-soundtrack") return engine === "open" ? getModel(SPLIT_MODEL) : undefined;
   const op = nodeOps(n)[0];
   // The Upscale node's Regenerate choice starts on Open-H3 Regenerate (on the cloud the entry is disabled: paletteItems).
   const fixed = n.data.modelId === REGEN_MODEL ? getModel(REGEN_MODEL) : undefined;
@@ -507,6 +516,7 @@ export function modelChoices(n: Pick<CanvasNode, "type" | "data">): ModelDef[] {
   }
   if (n.type === "concat") return Object.values(CONCAT_MODELS).flatMap((id) => getModel(id) ?? []);
   if (n.type === "fly-around") return [FLY_MODELS.cloud, FLY_MODELS.open].flatMap((id) => getModel(id) ?? []);
+  if (n.type === "split-soundtrack") return [getModel(SPLIT_MODEL)!];
   const ops = nodeOps(n);
   // Clean up voice offers only what runs on your GPU (RE-USE): the hosted cleaners share its op but are Clean up
   // dialogue's cloud engine (defaultModelForNode).
@@ -529,6 +539,34 @@ export interface PortDef {
 /** Output handle id of every node that has one; the Output node's input handle id. */
 export const OUT = "out";
 export const PREVIEW_IN = "in";
+
+/**
+ * Split soundtrack's four output handles, each the stem it carries on (ChainSlot.stem). OUT, every other node's one output,
+ * stands for Dialogue, so an edge saved before the node had four outputs keeps working.
+ */
+export const SPLIT_OUTPUTS: { id: "voice" | "music" | "effects" | "background"; label: string }[] = [
+  { id: "voice", label: "Dialogue" },
+  { id: "music", label: "Music" },
+  { id: "effects", label: "Effects" },
+  { id: "background", label: "Music & effects" },
+];
+
+/** The output handles a node has: Split soundtrack's four (and OUT, as Dialogue), else OUT. */
+export function outputHandles(n: Pick<CanvasNode, "type">): string[] {
+  return n.type === "split-soundtrack" ? [OUT, ...SPLIT_OUTPUTS.map((o) => o.id)] : [OUT];
+}
+
+/** The stem an edge out of a node carries (Split soundtrack: its handle's; OUT is Dialogue), or undefined. */
+export function edgeStem(source: Pick<CanvasNode, "type"> | undefined, sourceHandle: string | null | undefined): string | undefined {
+  if (source?.type !== "split-soundtrack") return undefined;
+  return SPLIT_OUTPUTS.find((o) => o.id === sourceHandle)?.id ?? "voice";
+}
+
+/** "Music & effects": what an output handle is called ("" for a plain OUT). */
+export function outputLabel(source: Pick<CanvasNode, "type"> | undefined, sourceHandle: string | null | undefined): string {
+  const stem = edgeStem(source, sourceHandle);
+  return stem ? SPLIT_OUTPUTS.find((o) => o.id === stem)!.label : "";
+}
 
 const INPUT_ORDER: InputPortId[] = ["prompt", "elements", "images", "endImage", "video", "videos", "audio", "voice", "path"];
 
@@ -778,7 +816,7 @@ export function connectionError(graph: CanvasGraph, c: Connection): string | nul
   if (!s || !t) return "That node no longer exists";
   if (s.id === t.id) return "A node can't feed itself";
   const type = outputType(graph, s);
-  if (!type || (c.sourceHandle && c.sourceHandle !== OUT)) return `${nodeLabel(s)} has no output`;
+  if (!type || (c.sourceHandle && !outputHandles(s).includes(c.sourceHandle))) return `${nodeLabel(s)} has no output`;
   if (t.type === "output") {
     if (c.targetHandle && c.targetHandle !== PREVIEW_IN) return "Unknown input";
     if (!acceptsType("preview", type)) return "Elements go into a model's Elements input";
@@ -1024,6 +1062,8 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
       .sort((a, b) => byPosition(nodes.get(a.source)!, nodes.get(b.source)!));
     if (!port.multiple && edges.length > 1) return { error: `${port.label} takes one input — remove a connection` };
     const list: Source[] = [];
+    // The stem each edge carries (Split soundtrack's outputs), in the order of `list`.
+    const stems: (string | undefined)[] = [];
     for (const e of edges) {
       const s = nodes.get(e.source)!;
       const type = outputType(graph, s);
@@ -1031,6 +1071,7 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
       const src = sourceOf(graph, s);
       if ("error" in src) return src;
       list.push(src);
+      stems.push(edgeStem(s, e.sourceHandle));
     }
     if (port.id === "prompt") {
       for (const src of list) {
@@ -1069,7 +1110,7 @@ function buildRequest(graph: CanvasGraph, n: CanvasNode, model: ModelDef, single
     if (!field || !src) continue;
     if (src.kind === "media") inputs[field] = src.url;
     else if (src.kind === "node") {
-      chain.push({ slot: SLOT[port.id]! });
+      chain.push({ slot: SLOT[port.id]!, ...(stems[0] && { stem: stems[0] }) });
       deps.push(src.nodeId);
     }
   }

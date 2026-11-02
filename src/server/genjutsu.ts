@@ -1,4 +1,5 @@
 import "server-only";
+import { ORIGINAL_SOUND_IDS, originalSoundOn, type OriginalSound } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import { onEngine } from "@/lib/catalog/engines";
@@ -107,6 +108,8 @@ export interface GenjutsuBody {
   character?: CharacterOptions;
   /** Hard cuts the browser found in the clip (seconds), for the "one continuous shot" warning. */
   cuts?: number[];
+  /** What of the clip's sound goes back where it is put back (src/lib/av/original-sound.ts). */
+  originalSound?: OriginalSound;
   /** Object swap on Scene edit. */
   object?: ObjectEdit;
   /** From picture: the first frame, or the video from an approved one. */
@@ -220,6 +223,8 @@ export const GenjutsuBodySchema = z.object({
   picture: picture.optional(),
   finish: finish.optional(),
   cuts: z.array(seconds).max(200).optional(),
+  /** What of the clip's sound goes back where it is put back (src/lib/av/original-sound.ts). */
+  originalSound: z.enum(ORIGINAL_SOUND_IDS).optional(),
   /** A client nonce for one submit: a repeat gets the first answer (see once()). */
   requestId: z.string().trim().min(8).max(64).optional(),
 });
@@ -345,6 +350,8 @@ async function planInput(body: GenjutsuBody, opts: { probe: boolean; viewer?: Ge
       ...(body.picture ? { picture: body.picture } : {}),
       ...(body.finish ? { finish: body.finish } : {}),
       ...(paint ? { paint } : {}),
+      // What of the clip's sound goes back: the cloud puts it all back (DBS runs on your GPU).
+      ...(body.originalSound && { originalSound: originalSoundOn(body.originalSound, maker.engine) }),
     },
   };
 }
@@ -780,6 +787,8 @@ export const TRANSCRIBERS: Record<Engine, string> = { cloud: "scribe-v2", open: 
 export const TranscribeSchema = z.object({
   engine: z.enum(["cloud", "open"]),
   source: z.object({ url: z.string().startsWith("/api/files/").max(500), duration: z.number().finite().positive().max(3600).optional() }),
+  /** The speech apart from the music and effects before it's read (src/lib/av/voice-first.ts). */
+  cleanVoiceFirst: z.boolean().optional(),
 });
 
 /**
@@ -798,7 +807,7 @@ export function transcribeClip(body: z.infer<typeof TranscribeSchema>): { id: st
       modelId,
       op: "transcribe",
       inputs: { video: body.source.url },
-      ...(seconds ? { params: { duration: seconds, sourceDuration: seconds } } : {}),
+      ...((seconds || body.cleanVoiceFirst) && { params: { ...(seconds && { duration: seconds, sourceDuration: seconds }), ...(body.cleanVoiceFirst && { extra: { cleanVoiceFirst: true } }) } }),
       step: { label: "The clip's words", index: 0, of: 1 },
     });
     return { id: g.id, modelId };

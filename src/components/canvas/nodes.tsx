@@ -95,12 +95,14 @@ import {
   nodeOps,
   OPEN_DUB_HINT,
   OUT,
+  outputLabel,
   TABLE_LIMITS,
   tableRows,
   outputType,
   PORT_TYPE_LABEL,
   PREVIEW_IN,
   promptPlaceholder,
+  SPLIT_OUTPUTS,
   sanitizeParams,
   type CanvasEdge,
   type CanvasGraph,
@@ -182,6 +184,32 @@ function OutPort({ type }: { type: PortType }) {
   );
 }
 
+/**
+ * Split soundtrack's four outputs, one row each, every one carrying its stem on. A hidden OUT sits on Dialogue: an edge
+ * saved before the node had four outputs (or made by "Connect output to…") draws from there and carries the dialogue.
+ */
+function StemOutPorts() {
+  return (
+    <div className="border-t py-1" role="group" aria-label="Outputs">
+      {SPLIT_OUTPUTS.map((o, k) => (
+        <div key={o.id} className="relative flex h-6 items-center justify-end gap-1.5 pr-3.5 pl-3 text-[11px] text-muted-foreground">
+          <span className="font-medium">{o.label}</span>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={o.id}
+            className="canvas-handle canvas-handle-out"
+            style={{ "--port": PORT_COLOR.audio } as React.CSSProperties}
+            aria-label={`${o.label} output (Audio)`}
+            title={`${o.label} out — drag to connect`}
+          />
+          {k === 0 && <Handle type="source" position={Position.Right} id={OUT} isConnectable={false} className="canvas-handle pointer-events-none opacity-0" aria-hidden tabIndex={-1} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Menus: the ⋯ button and right-click show the same items (keyboard users get Rename, Connect and Disconnect)
 
@@ -260,7 +288,8 @@ function DisconnectItems({ id, kit }: { id: string; kit: MenuKit }) {
       {edges.map((e) => {
         const incoming = e.target === id;
         const other = byId.get(incoming ? e.source : e.target);
-        const label = incoming ? `${portLabel(self, e.targetHandle)} ← ${other ? nodeLabel(other) : "?"}` : `→ ${other ? nodeLabel(other) : "?"} · ${portLabel(other, e.targetHandle)}`;
+        const from = incoming ? "" : outputLabel(self, e.sourceHandle);
+        const label = incoming ? `${portLabel(self, e.targetHandle)} ← ${other ? nodeLabel(other) : "?"}` : `${from ? `${from} ` : ""}→ ${other ? nodeLabel(other) : "?"} · ${portLabel(other, e.targetHandle)}`;
         return (
           <kit.Item key={e.id} onSelect={() => actions.disconnect(e.id)}>
             {label}
@@ -451,9 +480,10 @@ function NodeShell({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            {out && <OutPort type={out} />}
+            {out && type !== "split-soundtrack" && <OutPort type={out} />}
           </div>
           {children}
+          {type === "split-soundtrack" && <StemOutPorts />}
           {footer}
         </div>
       </ContextMenuTrigger>
@@ -1979,6 +2009,7 @@ export const NODE_TYPES = {
   tts: GeneratorNode,
   "voice-change": GeneratorNode,
   "clean-voice": GeneratorNode,
+  "split-soundtrack": GeneratorNode,
   "clone-voice": CloneVoiceNode,
   translate: GeneratorNode,
   concat: GeneratorNode,

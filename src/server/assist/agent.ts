@@ -705,7 +705,7 @@ How you work:
 - Call generate (or create_storyboard) directly. The app shows the user a plan card with the cost and runs it when they approve — never ask "shall I go ahead?" in text.
 - For multi-step work (an image, then animate it; transcribe, translate, then voice it), put the steps in one generate call and set "after" on each later job: it starts by itself when the earlier job finishes and gets its result as input. When you need to judge a result before deciding the next step, wait with check_generations instead (look=true to see images) and pass the output URL into the next call.
 - Besides images, video and audio, models can transcribe speech, translate or write text (scripts, captions, ad copy), split images into layers, separate voice from background, trim, caption or re-sound clips, and turn an image into a 3D model: search_models with kind "text" or "model3d" finds the text and 3D ones.
-- Whole studio jobs have their own tools, and each job opens in its studio, where the user can carry on: split_layers (a Layers project), restyle_footage (a Shorts Studio session), dub_video (a dub the user reviews line by line in Translate & dub), faceless_episode (a Faceless Studio episode), create_ads (an Ads Studio batch), add_captions (the Captions editor), restore_video (old or black-and-white footage restored and colourised, in Restore & colourise), remove_person (a person removed from a video and the scene rebuilt behind them, on the user's own GPU, in Remove a person), blockout_film (a grey-box 3D blockout from Blender or any 3D app filmed from reference stills and timed beats, as Cinema's Blockout does; in the Library), fly_around (a still filmed along an exact camera path: an orbit by its degrees, direction, tilt and pulse, or a ready move; in the Library) and katana (a reference edit — a 1–30 s video — rebuilt shot for shot with the user's own subject from 1–5 photos, when they want "this edit, but with me / my product"). Use them instead of chaining those steps by hand; once one starts, say which studio it's in (the chat links to it).
+- Whole studio jobs have their own tools, and each job opens in its studio, where the user can carry on: split_layers (a Layers project), restyle_footage (a Shorts Studio session), dub_video (a dub the user reviews line by line in Translate & dub), faceless_episode (a Faceless Studio episode), create_ads (an Ads Studio batch), add_captions (the Captions editor), restore_video (old or black-and-white footage restored and colourised, in Restore & colourise), remove_person (a person removed from a video and the scene rebuilt behind them, on the user's own GPU, in Remove a person), blockout_film (a grey-box 3D blockout from Blender or any 3D app filmed from reference stills and timed beats, as Cinema's Blockout does; in the Library), split_soundtrack (a soundtrack split into dialogue, music and effects, or remixed at set levels; on the open engine only), remove_dialogue (a video's talking taken out or kept alone, the picture copied; open engine only), fly_around (a still filmed along an exact camera path: an orbit by its degrees, direction, tilt and pulse, or a ready move; in the Library) and katana (a reference edit — a 1–30 s video — rebuilt shot for shot with the user's own subject from 1–5 photos, when they want "this edit, but with me / my product"). Use them instead of chaining those steps by hand; once one starts, say which studio it's in (the chat links to it).
 - Use the user's files by the URLs listed in their message. Earlier outputs are found with list_recent. Saved characters and products are Elements: check list_elements and write their @handle in prompts.
 - Results show up in the chat by themselves, so don't repeat URLs back. After starting jobs, say briefly what's coming; after they finish, give a short take and suggest a next step.
 - Be brief and friendly. Plain sentences, no headings. Prices are estimates in USD; open-source models run free on the user's own GPU.
@@ -1056,6 +1056,52 @@ const engineFor = (preferred: Engine): Engine => {
   return mode === "both" ? preferred : mode;
 };
 
+const TALK = "(?:dialogue|dialog|talking|speech|voices?|speaking|narration)";
+const REMOVE_TALK = new RegExp(`\\b(?:remove|take out|strip|cut|get rid of|mute|drop|delete|without)\\b[^.?!]*\\b${TALK}\\b|\\bno ${TALK}\\b`);
+const ONLY_TALK = new RegExp(`\\b(?:just|only|isolate|extract|keep)\\b[^.?!]*\\b${TALK}\\b|\\b${TALK} only\\b`);
+const ONLY_MUSIC = /\b(?:just|only|isolate|extract|keep)\b[^.?!]*\bmusic\b|\bmusic only\b/;
+const AND_EFFECTS = /\b(?:and|&|plus)\s+(?:the\s+)?(?:effects|sfx|sound effects)\b/;
+const LOWER_MUSIC = /\b(?:lower|turn down|duck|quieter|reduce)\b[^.?!]*\b(?:music|background|score)\b/;
+/**
+ * Another studio's job owns the sentence ("dub this and keep the music", "restyle it as anime, keep the music", "transcribe
+ * just the speech", "cut it down to 10 seconds and keep the speech"): the sound words describe that job, not a split.
+ */
+const OTHER_JOB =
+  /\b(?:dub(?:bed|bing)?|translate|restyle|anime|cartoon|style|transcri(?:be|ption|pt)|subtitles?|captions?|lip ?sync|trim|shorten|upscale|animate|extend|loop)\b|\bcut\b[^.?!]*\bdown\b|\b\d+(?:\.\d+)?\s*(?:s|secs?|seconds?|minutes?|mins?)\b/;
+/** A recording's own faults (noise, echo, hiss, hum, a clean-up) are Clean up voice's, not a split's. */
+const VOICE_REPAIR = /\b(?:noise|noisy|echo|reverb|hiss|hum|crackle|clean(?:er|ed|up)?|denoise|muffled)\b/;
+const SPLIT_SOUND = /\b(?:split|separate)\b[^.?!]*\b(?:soundtrack|audio|sound|stems?|dialogue|music|effects)\b|\bstems\b/;
+
+/**
+ * An attached clip's sound taken apart (split_soundtrack, remove_dialogue): the talking taken out or kept alone, just the
+ * music, the music lowered, or the four stems. Null when the words ask for none of that or no audio or video is attached.
+ */
+export function soundPlan(t: string, files: { kind: string; url: string }[]): { tool: string; input: Record<string, unknown>; say: string } | null {
+  const media = files.find((f) => f.kind === "video") ?? files.find((f) => f.kind === "audio");
+  if (!media) return null;
+  if (OTHER_JOB.test(t) || VOICE_REPAIR.test(t)) return null;
+  const video = media.kind === "video";
+  const removeTalk = REMOVE_TALK.test(t);
+  const onlyTalk = ONLY_TALK.test(t);
+  const db = /(-?\d{1,2})\s*db\b/.exec(t);
+  const by = db ? -Math.min(30, Math.abs(Number(db[1]))) : -12;
+  if (LOWER_MUSIC.test(t) && !removeTalk) {
+    if (video) return { tool: "remove_dialogue", input: { video: media.url, keep: "dialogue", music_db: by }, say: `I'll keep the talking and lower the music and effects by ${-by} dB under it. The picture stays exactly as it is.` };
+    return { tool: "split_soundtrack", input: { media: media.url, levels_db: { music: by, effects: by } }, say: `I'll remix it with the music and effects ${-by} dB lower under the talking.` };
+  }
+  if (removeTalk && !onlyTalk) {
+    if (video) return { tool: "remove_dialogue", input: { video: media.url, keep: "bed" }, say: "I'll take the talking out and keep the music and sound effects. The picture stays exactly as it is." };
+    return { tool: "split_soundtrack", input: { media: media.url, keep: ["music", "effects"] }, say: "I'll take the talking out and keep the music and sound effects." };
+  }
+  if (ONLY_MUSIC.test(t) && !AND_EFFECTS.test(t)) return { tool: "split_soundtrack", input: { media: media.url, keep: ["music"] }, say: "I'll pull out just the music." };
+  if (onlyTalk) {
+    if (video) return { tool: "remove_dialogue", input: { video: media.url, keep: "dialogue" }, say: "I'll keep only the talking: the music and effects go. The picture stays exactly as it is." };
+    return { tool: "split_soundtrack", input: { media: media.url, keep: ["dialogue"] }, say: "I'll keep just the talking." };
+  }
+  if (SPLIT_SOUND.test(t)) return { tool: "split_soundtrack", input: { media: media.url }, say: "I'll split it into dialogue, music, effects and music & effects." };
+  return null;
+}
+
 /**
  * Read a request into one tool call: counts ("3 vertical videos", "4 portraits"), formats, lengths,
  * attachments, multi-shot ("a 3-shot ad"), a still that is then animated (two chained jobs), several
@@ -1170,6 +1216,9 @@ export function offlinePlan(message: string, preferred: Engine, hint?: SkillMeta
       say: `I'll translate that into ${language}.`,
     };
   }
+  // A soundtrack taken apart (DBS on the open engine): "remove the dialogue from this video", "just the music".
+  const sound = soundPlan(t, files);
+  if (sound) return sound;
   const isMusic = /\b(music|song|soundtrack|beat|jingle)\b/.test(t);
   const isWriting =
     !isMusic &&

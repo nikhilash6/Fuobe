@@ -48,6 +48,8 @@ import {
   filmSeconds,
   musicLength,
   musicPlan,
+  clipBedFor,
+  CLIP_BED_MIN,
   plannedTiming,
   resolveModels,
   sameCameraMove,
@@ -708,6 +710,53 @@ describe("pictures from sources, style references, music length, frame pricing",
     expect(estimateGraph(cloud, getModel, ["music-loop"]).total).toBeLessThan(0.01);
     // Short films need no loop.
     expect(graphFor({ engine: "open", music: true, voice: null }, six).some((s) => s.key === "music-loop")).toBe(false);
+  });
+
+  it("uses a clip's soundtrack as the bed on the open engine: split, the music and effects looped, mixed at -14 dB", () => {
+    const clip = { url: "/api/files/uploads/beach.mp4", seconds: 42.5, name: "beach.mp4" };
+    expect(musicPlan(getModel("oss-ace-step"), getModel("oss-audio-loop"), 300, 42.5)).toEqual({ bed: 42.5, loop: { duration: 301, crossfade: 3 }, short: 0 });
+    expect(clipBedFor({ engine: "open", music: true, bedClip: clip })).toBe(clip);
+    expect(clipBedFor({ engine: "open", music: false, bedClip: clip })).toBeNull();
+    expect(clipBedFor({ engine: "cloud", music: true, bedClip: clip })).toBeNull();
+    expect(clipBedFor({ engine: "open", music: true, bedClip: { ...clip, seconds: CLIP_BED_MIN - 1 } })).toBeNull();
+
+    const open = graphFor({ engine: "open", music: true, voice: null, bedClip: clip }, placeholderBlocks(300));
+    const length = open.filter((s) => s.part === "clip").reduce((n, s) => n + s.seconds!, 0);
+    const split = open.find((s) => s.key === "music")!;
+    expect(split).toMatchObject({ part: "music", seconds: 42.5 });
+    expect(split.after).toBeUndefined();
+    expect(split.request).toMatchObject({ modelId: "oss-dbs-separate", op: "separate-audio", inputs: { video: clip.url }, params: { sourceDuration: 42.5, extra: { channels: "mono" } } });
+    expect(split.request.prompt).toBeUndefined();
+    expect(open.some((s) => s.request.modelId === "oss-ace-step")).toBe(false);
+    const loop = open.find((s) => s.key === "music-loop")!;
+    expect(loop).toMatchObject({ after: ["music"], chain: [{ slot: "audio", stem: "background" }] });
+    expect(loop.request).toMatchObject({ modelId: "oss-audio-loop", params: { duration: length + 1, sourceDuration: 42.5, crossfade: 3 } });
+    const mix = open.find((s) => s.key === "mix")!;
+    expect(mix.after).toEqual(["join", "narration", "music-loop"]);
+    expect(mix.chain).toEqual([{ slot: "video" }, { slot: "audio" }, { slot: "audio2" }]);
+    expect(mix.request.params?.extra).toEqual({ backgroundVolumeDb: -14 });
+
+    // A clip longer than the film: no loop, the mix takes the background stem straight from the split.
+    const long = graphFor({ engine: "open", music: true, voice: null, bedClip: { url: "/api/files/uploads/song.mp3", seconds: 400 } }, six);
+    // The clip is cut to the film and a second first, so DBS separates only what's played.
+    const film = long.filter((s) => s.part === "clip").reduce((n, s) => n + s.seconds!, 0);
+    const cut = long.find((s) => s.key === "music-cut")!;
+    expect(cut.request).toMatchObject({ modelId: "oss-audio-timeline", op: "timeline", inputs: { audio: "/api/files/uploads/song.mp3" }, params: { duration: Math.ceil(film) + 1 } });
+    expect(long.find((s) => s.key === "music")).toMatchObject({ after: ["music-cut"], chain: [{ slot: "audio" }], seconds: Math.ceil(film) + 1 });
+    expect(long.find((s) => s.key === "music")!.request.inputs).toEqual({});
+    expect(long.some((s) => s.key === "music-loop")).toBe(false);
+    // A clip about as long as the film is split whole.
+    const near = graphFor({ engine: "open", music: true, voice: null, bedClip: { url: "/api/files/uploads/song.mp3", seconds: Math.ceil(film) + 1 } }, six);
+    expect(near.some((s) => s.key === "music-cut")).toBe(false);
+    expect(near.find((s) => s.key === "music")!.request.inputs).toEqual({ audio: "/api/files/uploads/song.mp3" });
+    expect(long.find((s) => s.key === "mix")!.chain).toEqual([{ slot: "video" }, { slot: "audio" }, { slot: "audio2", stem: "background" }]);
+
+    // The cloud makes the music as before; so does an open episode without a clip.
+    const cloud = graphFor({ engine: "cloud", music: true, animation: "frames", bedClip: clip }, six);
+    expect(cloud.find((s) => s.key === "music")!.request).toMatchObject({ modelId: "sonilo-music", op: "music" });
+    const plain = graphFor({ engine: "open", music: true, voice: null }, six);
+    expect(plain.find((s) => s.key === "music")!.request).toMatchObject({ modelId: "oss-ace-step", op: "music" });
+    expect(plain.find((s) => s.key === "mix")!.chain).toEqual([{ slot: "video" }, { slot: "audio" }, { slot: "audio2" }]);
   });
 });
 

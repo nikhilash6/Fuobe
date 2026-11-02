@@ -237,7 +237,7 @@ describe("planSplit", () => {
 
   it("has no cloud route: DBS isn't hosted, and no other model stands in for it", () => {
     expect(() => planSplit({ engine: "cloud", media: "/api/files/a.wav", kind: "audio" })).toThrow(CLOUD_SPLIT_PROBLEM);
-    expect(CLOUD_SPLIT_PROBLEM).toMatch(/runs on your GPU \(open source\)/);
+    expect(CLOUD_SPLIT_PROBLEM).toMatch(/works with open-source models/);
     expect(() => planSplit({ engine: "open", media: "", kind: "video" })).toThrow("Add the video to split");
   });
 

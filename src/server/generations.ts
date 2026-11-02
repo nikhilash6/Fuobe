@@ -59,7 +59,8 @@ import { H3_TIER_PARAM, H3_UNET_PARAM } from "@/lib/gpu/h3-tier";
 import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qwen21-speed";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
-import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
+import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d, createVoiceFirst, joinClips } from "./chains";
+import { wantsVoiceFirst } from "@/lib/av/voice-first";
 import { createRegenerateRun } from "./regenerate";
 import { REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
@@ -981,6 +982,8 @@ export function createGenerations(sent: GenerationRequest, opts: CreateOptions =
   // Fuobe DoP's relight effects: the start frame is relit first, then animated.
   const relight = !opts.dependsOn && shotModel ? relightStep(original, shotModel) : undefined;
   if (relight) return createRelitClip(original, relight);
+  // "Clean the voice first": the speech apart from the music and effects before a transcriber or a lip sync hears it.
+  if (!opts.dependsOn && shotModel && wantsVoiceFirst(original)) return createVoiceFirst(original, shotModel.engine, { batchId: opts.batchId });
   // Fuobe Soul's PixeletedFace look: the picture, then its faces pixelated (SAM 3.1 + a mosaic), also as a pipeline step or a
   // Canvas node (it waits for what they wait for). The picture made inside that run (postMade) runs as it is.
   if (!original.postMade && shotModel && soulPostStep(shotModel.id, original.presetId) === "face-mosaic") {

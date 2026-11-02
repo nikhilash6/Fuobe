@@ -116,6 +116,8 @@ import { RECENT_MODELS, useStoredList } from "./stored-list";
 import { usePresetUrl, useStartRequest, useStudio, type Draft } from "./studio-context";
 import { useEdgeFade } from "./use-edge-fade";
 import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning } from "@/components/audio-tools/clean-voice-switch";
+import { useVoiceFirstLive, useVoiceFirstShown, VoiceFirstSwitch } from "@/components/audio-tools/voice-first-switch";
+import { VOICE_FIRST_PARAM, voiceFirstDefault } from "@/lib/av/voice-first";
 import { useSignature } from "../palettes/use-signature";
 import { placeholdersOn } from "@/lib/demo-mode";
 
@@ -276,6 +278,12 @@ export function Composer({ docked }: { docked: boolean }) {
   // video is attached (lip re-sync keeps the clip's length).
   const voiceRef = config.voiceFacts && !typed.slots.video?.ref && !typed.slots.audio?.uploading ? typed.slots.audio?.ref : undefined;
   const voice = useClipFacts(voiceRef).data;
+  // "Clean the voice first" (Transcribe, Lipsync): the recording or the video's speech apart from its music and effects
+  // before the model hears it. On for a video's speech on your GPU, off for a recording (src/lib/av/voice-first.ts).
+  const voiceFirstShown = useVoiceFirstShown();
+  const voiceFirstLive = useVoiceFirstLive();
+  const [voiceFirstAsked, setVoiceFirstAsked] = useState<boolean | null>(null);
+  const voiceFirstKind: "audio" | "video" | null = !config.voiceFirst ? null : typed.slots.audio?.ref ? "audio" : typed.slots.video?.ref && config.ops.includes("transcribe") ? "video" : null;
   const draft = useMemo(
     () =>
       config.clipFacts
@@ -753,7 +761,8 @@ export function Composer({ docked }: { docked: boolean }) {
     );
     // Hosted runs: where it should go, and the price shown (the server checks both; a higher price comes back to confirm).
     const hosted = viewerInfo?.hosted ? { place: runOn, ...(poolPrice && hostedQuote && { shown: { amount: hostedQuote.amount, priceVersion: hostedQuote.priceVersion } }) } : {};
-    const body = { ...sent.request, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
+    const withVoiceFirst = cleanFirst ? { ...sent.request, params: { ...sent.request.params, extra: { ...sent.request.params?.extra, [VOICE_FIRST_PARAM]: true } } } : sent.request;
+    const body = { ...withVoiceFirst, ...hosted, ...(skipGpu && { gpuCheck: "skip" }) } as typeof sent.request;
     create.mutate(body, {
       // Accepted: nothing to try again (a card opened later never starts this run a second time).
       onSuccess: () => dropGpuRetry(),
@@ -823,6 +832,8 @@ export function Composer({ docked }: { docked: boolean }) {
   }, [lightLeft, setSlot]);
   const setInsertRange = useCallback((startTime: number, endTime: number) => setDraft((d) => ({ params: { ...d.params, startTime, endTime } })), [setDraft]);
   const opNote = op && model ? routesFor(model, op)[0]?.note : undefined;
+  const voiceFirstEngine: Engine = model?.engine ?? engine;
+  const cleanFirst = voiceFirstShown && !!voiceFirstKind && (voiceFirstAsked ?? (voiceFirstEngine === "open" && voiceFirstDefault(voiceFirstKind, voiceFirstLive)));
   // Booleans in, not the model's options object: the React Compiler keeps the memos above.
   const showPrompt = showsPrompt(
     { hidePrompt: config.hidePrompt, modelPrompt: config.modelPrompt },
@@ -1309,6 +1320,9 @@ export function Composer({ docked }: { docked: boolean }) {
       )}
       {/* On a phone the slot row scrolls sideways, so the switch gets its own line under it. */}
       {showAttachments && !collapsed && !framesOn && hasCleanVoice && <CleanVoiceSwitch status className="px-3 pb-2 sm:hidden" hint="first, free on your GPU" />}
+      {showAttachments && !collapsed && !framesOn && voiceFirstShown && voiceFirstKind && (
+        <VoiceFirstSwitch className="px-3 pb-2" engine={voiceFirstEngine} on={cleanFirst} onChange={setVoiceFirstAsked} seconds={voice?.duration} lip={!config.ops.includes("transcribe")} />
+      )}
 
       {showPrompt && (
         <PromptInput

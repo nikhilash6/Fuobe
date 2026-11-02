@@ -105,6 +105,7 @@ const NODE_TYPES = [
   "tts",
   "voice-change",
   "clean-voice",
+  "split-soundtrack",
   "clone-voice",
   "translate",
   "concat",

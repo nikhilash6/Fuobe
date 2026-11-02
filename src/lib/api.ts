@@ -1136,6 +1136,8 @@ export interface ViewerInfo {
   computer?: boolean;
   /** The port their computer's tab last found ComfyUI on (a browser that remembers none starts there). */
   comfyPort?: number;
+  /** The sound features that have passed a real run (src/server/sound-live.ts), e.g. "clean-voice-first". */
+  soundLive?: string[];
 }
 
 export function useViewer() {
@@ -1156,6 +1158,11 @@ export function useIsGuest(): boolean {
 export function useIsAccount(): boolean {
   const v = useViewer().data;
   return !!v?.account && !v.owner;
+}
+
+/** Whether a sound feature has passed a real run (src/server/sound-live.ts; the viewer's soundLive). */
+export function useSoundLive(feature: string): boolean {
+  return !!useViewer().data?.soundLive?.includes(feature);
 }
 
 /** This browser's tabs hear on it that who is signed in changed (src/app/providers.tsx asks again). */
