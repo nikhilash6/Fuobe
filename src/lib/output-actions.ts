@@ -167,7 +167,8 @@ export function outputActions(g: Generation, index: number, ctx: ActionContext =
         const song = typeof o.meta?.songId === "string" ? `&song=${q(o.meta.songId)}` : "";
         link("extend-song", "Extend song", `/audio/song?model=mureka-extend&audio=${q(o.url)}${song}`);
         if (!instrumentalSong(g)) {
-          const words = lyricsOf(g.request?.params?.extra);
+          // The whole song's words: an extension's run holds only its new part's.
+          const words = g.op === "song-extend" ? "" : lyricsOf(g.request?.params?.extra);
           const lyrics = words && q(words).length <= HANDOVER_LYRICS_MAX ? `&lyrics=${q(words)}` : "";
           link("remix-song", "Remix", `/audio/song?model=mureka-remix&audio=${q(o.url)}${song}${lyrics}`);
         }
@@ -230,6 +231,8 @@ const INSTRUMENTAL_WITHOUT_WORDS = new Set(["minimax-music-3", "oss-minimax-musi
 /** A song with no vocals: an instrumental model's, one whose lyrics are only [Instrumental], or a model's own with no words. */
 export function instrumentalSong(g: Pick<Generation, "modelId" | "op" | "request">): boolean {
   if (INSTRUMENTAL_MODELS.has(g.modelId)) return true;
+  // An extension's lyrics are its new part's only: the song it extends may sing.
+  if (g.op === "song-extend") return false;
   const words = lyricsOf(g.request?.params?.extra);
   if (words) return isInstrumental(words);
   return g.op === "music" && INSTRUMENTAL_WITHOUT_WORDS.has(g.modelId);

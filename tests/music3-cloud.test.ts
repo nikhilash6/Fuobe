@@ -241,6 +241,9 @@ describe("a music result's song tools", () => {
     expect(labels(gen({ modelId: "oss-ace-step" }))).toEqual(["Extend song", "Stems"]);
     // A song Mureka writes words for from a description keeps Remix.
     expect(labels(gen())).toEqual(["Extend song", "Remix", "Stems"]);
+    // An extension: its run's lyrics are the new part's only, so Remix stays and carries none.
+    const extended = gen({ op: "song-extend", modelId: "mureka-extend", request: { feature: "song-tools", modelId: "mureka-extend", params: { extra: { lyrics: "[Instrumental]" } } } });
+    expect(ids(extended).find((a) => a.id === "remix-song")!.href).toBe("/audio/song?model=mureka-remix&audio=%2Fapi%2Ffiles%2Fsong.mp3");
     // A WAV song (fal's MiniMax Music 3 answers with one): no Stems.
     const wav = { ...gen({ request: { feature: "audio", modelId: "minimax-music-3", params: { extra: { lyrics: "[Verse]\nla" } } } }), outputs: [{ url: "/api/files/song.wav", kind: "audio", contentType: "audio/wav" }] } as unknown as Generation;
     expect(labels(wav)).toEqual(["Extend song", "Remix"]);
