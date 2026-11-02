@@ -112,7 +112,7 @@ import { SketchTools } from "./sketch-tools";
 import { RECENT_MODELS, useStoredList } from "./stored-list";
 import { usePresetUrl, useStartRequest, useStudio, type Draft } from "./studio-context";
 import { useEdgeFade } from "./use-edge-fade";
-import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning } from "@/components/audio-tools/clean-voice-switch";
+import { CleanVoiceSlot, CleanVoiceSwitch, useVoiceCleaning, type CleanedSlot } from "@/components/audio-tools/clean-voice-switch";
 import { useSignature } from "../palettes/use-signature";
 import { placeholdersOn } from "@/lib/demo-mode";
 
@@ -590,13 +590,15 @@ export function Composer({ docked }: { docked: boolean }) {
     return { mentions, sketched, signed, request: m ? stripMotionPaths(sketched.request, m) : sketched.request };
   };
   const { mentions, sketched, signed } = prepare(draft);
-  // "Clean the voice first" (Transcribe, Lipsync): on by default for a video, off for an audio upload; a pick holds
+  // "Clean the voice first" (Transcribe, Lipsync): on by default for a video's soundtrack, off for an audio upload; a pick holds
   // while the same speech file stays attached. The speech's header times or prices the step.
   const vfOp = studioOp ?? (model ? inferOperation(model, signed.request) : undefined);
   const vfSource = config.voiceFirst ? voiceSource(signed.request, vfOp) : null;
   const vfApplies = !!config.voiceFirst && voiceFirstApplies(signed.request, vfOp) && !draft.slots.audio?.uploading && !draft.slots.video?.uploading;
   const [vfPick, setVfPick] = useState<{ ref: string; on: boolean } | null>(null);
-  const voiceFirstOn = vfApplies && (vfPick && vfPick.ref === vfSource?.url ? vfPick.on : voiceFirstDefault(signed.request, vfOp));
+  // A voice "Clean up voice" already cleaned as it was added starts off and says so: it isn't cleaned twice unless asked.
+  const vfCleaned = !!vfSource && !!(draft.slots[vfSource.slot] as CleanedSlot | undefined)?.original;
+  const voiceFirstOn = vfApplies && (vfPick && vfPick.ref === vfSource?.url ? vfPick.on : !vfCleaned && voiceFirstDefault(signed.request, vfOp));
   const vfFacts = useClipFacts(vfApplies ? vfSource?.url : undefined).data;
   const vfClip = useClipFacts(vfApplies && vfOp === "lipsync" ? signed.request.inputs?.video : undefined).data;
   const vfEngine = model?.engine ?? engine;
@@ -1297,6 +1299,7 @@ export function Composer({ docked }: { docked: boolean }) {
           device={ownGpuOf(status)?.device}
           bed={vfBed}
           clip={vfOp === "lipsync" && !!signed.request.inputs?.video && vfClip?.hasAudio !== false}
+          cleaned={vfCleaned}
           getModel={catalog.getModel}
         />
       )}

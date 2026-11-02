@@ -35,6 +35,8 @@ const { createPipeline } = await import("@/server/chains");
 const { transcribeClip } = await import("@/server/genjutsu");
 const { changeAccess } = await import("@/server/model-access");
 const { planTranscribe } = await import("@/lib/catalog/swap-studio-plan");
+const { STUDIO_ROWS, studioTool, toolFor } = await import("@/server/gpu/tools");
+const { loadIndex } = await import("@/server/gpu/index-file");
 
 beforeAll(() => setSetting("demoMode", "auto"));
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -57,12 +59,14 @@ describe("where it applies, and its default", () => {
     expect(voiceFirstApplies({ inputs: {} }, "transcribe")).toBe(false);
   });
 
-  it("is on for a video and off for an audio upload", () => {
+  it("is on for a video's soundtrack and off for an audio upload, a lip sync's voice included", () => {
     expect(voiceFirstDefault({ inputs: { video: VIDEO } }, "transcribe")).toBe(true);
     expect(voiceFirstDefault({ inputs: { audio: AUDIO } }, "transcribe")).toBe(false);
-    expect(voiceFirstDefault({ inputs: { video: VIDEO, audio: AUDIO } }, "lipsync")).toBe(true);
+    // A lip re-sync's voice is an audio upload: off, though turned on it puts the clip's music and effects back on your GPU.
+    expect(voiceFirstDefault({ inputs: { video: VIDEO, audio: AUDIO } }, "lipsync")).toBe(false);
+    expect(putsBedBack({ inputs: { video: VIDEO, audio: AUDIO } }, "lipsync", "open")).toBe(true);
     expect(voiceFirstDefault({ inputs: { images: ["/api/files/a.png"], audio: AUDIO } }, "avatar")).toBe(false);
-    expect(voiceFirstDefault({ inputs: { video: VIDEO, audio: AUDIO } }, "avatar")).toBe(true);
+    expect(voiceFirstDefault({ inputs: { video: VIDEO, audio: AUDIO } }, "avatar")).toBe(false);
   });
 
   it("puts the music and effects back only after a lip re-sync on your GPU of a clip with sound", () => {
@@ -318,6 +322,25 @@ describe("previewGeneration with voiceFirst", () => {
     expect(open.costUsd).toBe(0);
   });
 
+  it("leaves the price unknown when the clean voice's price isn't known, never the main step's alone", () => {
+    const iso = getModel("elevenlabs-voice-isolation")!;
+    const pricing = iso.pricing;
+    const audio = voice();
+    // Priced as paid (the demo is free): a key on the install, demo mode off.
+    setSetting("demoMode", "off");
+    setSetting("falKey", "test-fal-key");
+    try {
+      expect(gens.previewGeneration({ ...transcript({ audio }, "scribe-v2"), voiceFirst: true }).costUsd).toBeGreaterThan(gens.previewGeneration(transcript({ audio }, "scribe-v2")).costUsd!);
+      (iso as { pricing?: unknown }).pricing = undefined;
+      expect(gens.previewGeneration(transcript({ audio }, "scribe-v2")).costUsd).not.toBeNull();
+      expect(gens.previewGeneration({ ...transcript({ audio }, "scribe-v2"), voiceFirst: true }).costUsd).toBeNull();
+    } finally {
+      (iso as { pricing?: unknown }).pricing = pricing;
+      setSetting("falKey", "");
+      setSetting("demoMode", "auto");
+    }
+  });
+
   it("says what a lip re-sync does with the clip's music and effects on each engine", () => {
     const req = (modelId: string) => ({ ...lipsync({ video: clip(), audio: voice() }, modelId), voiceFirst: true });
     expect(gens.previewGeneration(req("oss-infinitetalk-v2v")).notes).toContain(BED_NOTES.open);
@@ -341,5 +364,25 @@ describe("the studios that transcribe a clip", () => {
     expect(planTranscribe(c, "open")[0].request.voiceFirst).toBeUndefined();
     expect(planTranscribe(c, "open", true)[0].request.voiceFirst).toBe(true);
     expect(planTranscribe(c, "cloud", true)[0].request).toMatchObject({ modelId: "scribe-v2", voiceFirst: true });
+  });
+});
+
+describe("the GPU pre-flight board", () => {
+  it("lists the clean voice's graph for Captions and a lip re-sync with its music put back", () => {
+    const idx = loadIndex();
+    const want: Record<string, string[]> = {
+      "/video-tools/captions": ["separate-soundtrack-dbs"],
+      "/lipsync?model=oss-infinitetalk-v2v": ["separate-soundtrack-dbs", "video-mux-audio"],
+    };
+    for (const [href, workflows] of Object.entries(want)) {
+      const row = STUDIO_ROWS.find((r) => r.href === href);
+      expect(row, href).toBeDefined();
+      const t = studioTool(row!)!;
+      expect(t, href).not.toBeNull();
+      for (const wf of workflows) expect(t.workflows, href).toContain(wf);
+      for (const wf of t.workflows) expect(idx.workflows[wf], `${href}: ${wf}`).toBeDefined();
+      expect(toolFor(`studio:${href}`)?.workflows).toEqual(t.workflows);
+    }
+    expect(new Set(STUDIO_ROWS.map((r) => r.href)).size).toBe(STUDIO_ROWS.length);
   });
 });

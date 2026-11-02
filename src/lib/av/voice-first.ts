@@ -17,8 +17,9 @@ import { durationWords, splitTime, SPLIT_MODEL, type SplitQuality } from "./spli
  *   nowhere, and SAM Audio in its place is the owner's call, not taken (docs/handoff/owner-decisions.json
  *   samAudioCloud: false), so the music and effects don't go back under a cloud lip sync, and the switch says so.
  *
- * Default on for a video (a soundtrack usually has music or effects under the speech), off for an audio upload (usually
- * speech alone): a guess until the separation evaluation (D4) measures transcripts with and without it.
+ * Default on for a video's soundtrack (it usually has music or effects under the speech), off for an audio upload (a
+ * recording, a lip sync's voice: usually speech alone): a guess until the separation evaluation (D4) measures transcripts
+ * with and without it.
  */
 
 export const VOICE_FIRST_LABEL = "Clean the voice first";
@@ -42,6 +43,12 @@ export const VOICE_FIRST_HINTS: Record<Engine, string> = {
   cloud: "ElevenLabs isolates the voice first: music and noise are taken out",
 };
 
+/** The hint when the voice was already cleaned as it was added ("Clean up voice" beside the slot). */
+export const VOICE_FIRST_CLEANED_HINT = "Your voice was already cleaned when you added it";
+
+/** On your GPU with the switch off: what turning it on does for a lip re-sync of a clip with sound. */
+export const BED_OFF_NOTE = "Turn it on to put the clip's music and effects back under it.";
+
 /** What a lip re-sync on a video does with the clip's own music and effects, per engine. */
 export const BED_NOTES: Record<Engine, string> = {
   open: "The clip's music and effects go back under the new lip movement.",
@@ -62,14 +69,12 @@ export function voiceSource(req: Pick<GenerationRequest, "inputs">, op: Operatio
 }
 
 /**
- * The switch's default: on when the speech comes with a picture (a video to transcribe, a clip in Lipsync), off for an
- * audio upload with a portrait, or a recording to transcribe, which is usually speech alone.
+ * The switch's default: on when the speech is a video's soundtrack (a video to transcribe), off when it is an audio
+ * upload (a recording to transcribe, a lip sync's or avatar's voice), which is usually speech alone. A lip re-sync's
+ * voice is an audio upload too, so it starts off; turned on, on your GPU it also puts the clip's music and effects back.
  */
 export function voiceFirstDefault(req: Pick<GenerationRequest, "inputs">, op: Operation | undefined): boolean {
-  const src = voiceSource(req, op);
-  if (!src) return false;
-  if (op === "transcribe") return src.slot === "video";
-  return !!req.inputs?.video;
+  return voiceSource(req, op)?.slot === "video";
 }
 
 /** Whether a run puts the clip's music and effects back after the lip sync (open engine, a clip with sound). */

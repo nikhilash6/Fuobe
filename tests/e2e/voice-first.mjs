@@ -2,7 +2,7 @@
 // Usage: node tests/e2e/voice-first.mjs [appUrl] [outDir]   (the app in demo mode: no keys, no ComfyUI)
 // Checks, at 1440 px and 390 px in light and dark: Transcribe with a video shows the switch on with its hint and "Free ·
 // adds …" on the open engine, and its price on the cloud; with a recording only, off. Lipsync with a clip and a voice
-// shows it on and says the clip's music and effects go back (open) or don't (cloud). Captions shows it on under
+// shows it off (the voice is an upload); turned on, it says the clip's music and effects go back (open) or don't (cloud). Captions shows it on under
 // "Transcribe the speech". Toggling never changes the composer's height, nothing scrolls sideways, no console errors.
 // Screenshots go to outDir.
 import { spawnSync } from "node:child_process";
@@ -87,7 +87,7 @@ try {
         await page.waitForTimeout(500);
         check(!(await switchOn(page)), `${l} Transcribe: off for a recording`);
 
-        // Lipsync: a clip and a voice → on, and what happens to the clip's music and effects.
+        // Lipsync: a clip and a voice → off, then on, and what happens to the clip's music and effects.
         // A lip re-sync model on each engine (the studio opens on a talking-avatar model).
         await openRoute(page, `${app}/lipsync?model=${engine === "open" ? "oss-infinitetalk-v2v" : "sync-lipsync-3"}`);
         await page.locator('[data-slot-key="video"] input[type="file"]').setInputFiles(mp4);
@@ -95,7 +95,13 @@ try {
         await sw(page).waitFor({ timeout: 60_000 });
         // The voice's header times or prices the step (a moment after the upload).
         await sw(page).getByText(engine === "open" ? /Free · adds (under|about)/ : /\+\$0\.0\d$/).waitFor({ timeout: 30_000 }).catch(() => {});
-        check(await switchOn(page), `${l} Lipsync: on for a re-sync of a clip`);
+        // The voice is an audio upload: off, and on your GPU it says turning it on puts the clip's music and effects back.
+        check(!(await switchOn(page)), `${l} Lipsync: off for an uploaded voice`);
+        const offNote = engine === "open" ? "Turn it on to put the clip's music and effects back" : "keeps the clean voice only";
+        await sw(page).getByText(offNote).waitFor({ timeout: 30_000 }).catch(() => {});
+        check(await sw(page).getByText(offNote).isVisible(), `${l} Lipsync: says what turning it on does for the clip's music and effects`);
+        await sw(page).getByRole("switch").click();
+        check(await switchOn(page), `${l} Lipsync: turns on`);
         const note = engine === "open" ? "go back under the new lip movement" : "keeps the clean voice only";
         await sw(page).getByText(note).waitFor({ timeout: 30_000 }).catch(() => {});
         check(await sw(page).getByText(note).isVisible(), `${l} Lipsync: says what happens to the clip's music and effects`);
