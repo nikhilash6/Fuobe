@@ -44,11 +44,13 @@ export function ExampleRow({ row, className }: { row: StudioExampleRow; classNam
       <h2 id={heading} className="mb-2 text-center text-[12.5px] font-medium text-muted-foreground">
         {row.heading}
       </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {row.tiles.map((e, i) => (
-          <ShowcaseTile key={e.card.id} card={e.card} kind={e.kind} caption={e.caption} href={e.href} index={i} sizes={SIZES} small />
-        ))}
-      </div>
+      <ExampleTilesSuspense count={row.tiles.length}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {row.tiles.map((e, i) => (
+            <ShowcaseTile key={e.card.id} card={e.card} kind={e.kind} caption={e.caption} href={e.href} index={i} sizes={SIZES} small />
+          ))}
+        </div>
+      </ExampleTilesSuspense>
     </section>
   );
 }

@@ -130,6 +130,14 @@ describe("other tab bars switch without a round trip", () => {
   it("the studio's route skeleton keeps a hub's bar and tabs on the way in", () => {
     expect(src("src/app/(studio)/loading.tsx")).toMatch(/<StudioRouteSkeleton /);
   });
+
+  it("example covers (a lazy chunk) load under their own placeholder, so a tapped page never waits for them", () => {
+    // Without it the chunk's load suspends the whole page up to the route's skeleton after the tap.
+    const row = src("src/components/studio/example-row.tsx");
+    expect(row).toMatch(/export function ExampleTilesSuspense/);
+    expect(row).toMatch(/<ExampleTilesSuspense count=\{row\.tiles\.length\}>/);
+    expect(src("src/components/studio/studio-page.tsx")).toMatch(/<ExampleTilesSuspense count=\{row\.tiles\.length\}>\s*<ExampleTiles /);
+  });
 });
 
 describe("idle prefetches: the page's own tabs go before the sidebar's routes", () => {
