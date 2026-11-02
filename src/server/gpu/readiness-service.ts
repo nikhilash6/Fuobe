@@ -55,7 +55,7 @@ export function buildViews(inv: GpuInventory, idx: RequirementIndex, ctx: Readin
       .filter((o) => o.state === "ready" || o.state === "almost")
       .sort((a, b) => rankOf(b.state) - rankOf(a.state))
       .slice(0, 4);
-    const tier = tierRowNote(tool.workflows, onCard(tool, inv, idx).choice, inv);
+    const tier = tierRowNote(tool.workflows, onCard(tool, inv, idx).choice, inv, idx);
     studios.push({ href: row.href, label: row.label, group: row.group, tool: { ...t, needs: t.needs.slice(0, 12), have: [] }, others, ...(tier && { gpuTier: tier }) });
   }
   const badges: BadgeMap = { connected: true, checkedAt: inv.checkedAt, models: {}, presets: {} };

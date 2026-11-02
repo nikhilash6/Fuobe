@@ -291,7 +291,7 @@ describe("the pre-flight board", () => {
 
   it("says plainly that swaps and removals still need the full model", () => {
     const swap = row("/character-swap", inventory({ gb: 16, name: RTX4070 }));
-    expect(swap.gpuTier?.note).toMatch(/Needs the full MiniMax H3 \(32 GB\)/);
+    expect(swap.gpuTier?.note).toMatch(/Runs on the full MiniMax H3: there's no smaller build for swaps and removals yet/);
     expect(row("/character-swap", inventory({ gb: 48, name: RTX4090 })).gpuTier).toBeUndefined();
     // The Video row's own tool is the full model's three modes (the board swaps them per card).
     expect(studioTool(STUDIO_ROWS.find((r) => r.href === "/video")!)!.workflows).toEqual(expect.arrayContaining(["minimax-h3-t2v", "minimax-h3-i2v", "minimax-h3-flf2v"]));

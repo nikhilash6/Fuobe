@@ -306,16 +306,18 @@ export function tierOnCard(
 export const REF2VA_H3 = /^video-(character-swap-h3|person-remove-h3)/;
 
 /** What the pre-flight board says next to a row (src/server/gpu/readiness-service.ts): the build this card runs, or why none. */
-export function tierRowNote(workflows: string[], choice: H3TierChoice | undefined, inv: GpuInventory): { label: string; note?: string } | undefined {
+export function tierRowNote(workflows: string[], choice: H3TierChoice | undefined, inv: GpuInventory, idx: RequirementIndex): { label: string; note?: string } | undefined {
   if (choice && choice.tier !== "standard") {
     const textOnly = choice.tier === "trim" ? "text to video only" : undefined;
     const offload = choice.offload ? "part of it waits in system memory" : undefined;
     const note = [textOnly, offload].filter(Boolean).join("; ");
     return { label: choice.label, ...(note && { note: note[0].toUpperCase() + note.slice(1) }) };
   }
+  // A card too small for the reference graphs (the GPU check's own reading, as their "Needs … GB" line says it).
   const gb = gpuVramGb(inv);
-  if (typeof gb === "number" && gb < H3_STANDARD_GB && workflows.some((w) => REF2VA_H3.test(w))) {
-    return { label: "Standard", note: "Needs the full MiniMax H3 (32 GB): there's no smaller build for swaps and removals yet" };
+  const need = Math.max(0, ...workflows.filter((w) => REF2VA_H3.test(w)).map((w) => idx.workflows[w]?.vramGb ?? 0));
+  if (typeof gb === "number" && need > 0 && gb < need) {
+    return { label: "Standard", note: "Runs on the full MiniMax H3: there's no smaller build for swaps and removals yet" };
   }
   return undefined;
 }
