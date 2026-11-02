@@ -3561,6 +3561,1825 @@
    "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=blackforestlabs/flux-3/klein/base/edit-image",
    "capability": "edit",
    "fetched": "2026-11-01"
+  },
+  {
+   "family": "h3-lite",
+   "model": "MiniMax H3 Lite",
+   "title": "MiniMax H3 Lite",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v+flf2v+ref2v",
+   "provider": "replicate",
+   "endpoint": "minimax/h3-lite",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "first_frame_image",
+    "endImage": "last_frame_image",
+    "images": "reference_image_urls",
+    "video": "reference_video_urls",
+    "audio": "reference_audio_urls",
+    "duration": "duration",
+    "aspectRatio": "ratio",
+    "resolution": "resolution"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "Text prompt for generation"
+    },
+    "first_frame_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "First frame image for video generation. The output video will have the same aspect ratio as this image."
+    },
+    "last_frame_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "Last frame image for video generation. The final frame of the output video will match this image."
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 9 reference images."
+    },
+    "reference_video_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 3 reference videos."
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 3 reference audio clips."
+    },
+    "duration": {
+     "type": "enum",
+     "values": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "valueType": "integer",
+     "required": false,
+     "default": 5,
+     "desc": "Output duration in seconds."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "Output resolution."
+    },
+    "ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Output aspect ratio. Ignored for image-to-video, which uses the aspect ratio of the input image."
+    }
+   },
+   "version": "df0b0d5fa519ac9fbb06d6c2c824f1f41a71d5d1836c1a8f0495705370fce500",
+   "versionDate": "2026-10-29",
+   "price": "480P output: $0.025 per second of output video; 768P output: $0.04 per second of output video",
+   "output": "output",
+   "sourceUrl": "https://replicate.com/minimax/h3-lite",
+   "apiUrl": "https://api.replicate.com/v1/models/minimax/h3-lite/predictions"
+  },
+  {
+   "family": "h3-highspeed",
+   "model": "MiniMax H3 HighSpeed",
+   "title": "MiniMax H3 HighSpeed",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v+flf2v+ref2v",
+   "provider": "replicate",
+   "endpoint": "minimax/h3-highspeed",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "first_frame_image",
+    "endImage": "last_frame_image",
+    "images": "reference_image_urls",
+    "video": "reference_video_urls",
+    "audio": "reference_audio_urls",
+    "duration": "duration",
+    "aspectRatio": "ratio"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "desc": "Text prompt for generation"
+    },
+    "first_frame_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "First frame image for video generation. The output video will have the same aspect ratio as this image."
+    },
+    "last_frame_image": {
+     "type": "string(uri)",
+     "required": false,
+     "nullable": true,
+     "desc": "Last frame image for video generation. The final frame of the output video will match this image."
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 9 reference images."
+    },
+    "reference_video_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 3 reference videos."
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "default": [],
+     "desc": "Public URLs for up to 3 reference audio clips."
+    },
+    "duration": {
+     "type": "enum",
+     "values": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+     ],
+     "valueType": "integer",
+     "required": false,
+     "default": 5,
+     "desc": "Output duration in seconds."
+    },
+    "ratio": {
+     "type": "enum",
+     "values": [
+      "adaptive",
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Output aspect ratio. Required for text-to-video; adaptive for image-to-video."
+    }
+   },
+   "version": "b86d4aad81903a69e89f509f4bf8d0a6244ec6c3d0d2e048c01579e20255162a",
+   "versionDate": "2026-10-29",
+   "price": ": $0.06 per second of output video",
+   "output": "output",
+   "sourceUrl": "https://replicate.com/minimax/h3-highspeed",
+   "apiUrl": "https://api.replicate.com/v1/models/minimax/h3-highspeed/predictions"
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Lip Sync",
+   "title": "MiniMax H3 Max Lip Sync",
+   "vendor": "MiniMax",
+   "operation": "avatar",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/lip-sync/image-to-video",
+   "keyFields": {
+    "image": "image_url",
+    "audio": "audio_url",
+    "resolution": "resolution",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Image to animate. The aspect ratio must be between 0.4 and 2.5."
+    },
+    "audio_url": {
+     "type": "string",
+     "required": true,
+     "desc": "Audio to synchronize the mouth movements to, at least 5 seconds long. Supports up to 15 minutes. The output video matches the supplied audio duration."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P",
+      "2K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "Output resolution. Uses the supported aspect ratio nearest the image."
+    },
+    "enable_transcription": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Transcribe the supplied audio to guide lip synchronization. When disabled, synchronize to the audio without a transcript."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2147483647,
+     "desc": "Random seed; selected randomly if omitted."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Enable content safety checks."
+    }
+   },
+   "price": "Billing is calculated per second of generated video. Video costs $0.05 per second at 480p, $0.08 per second at 768p, $0.16 per second at 1080p, and $0.32 per second at 2K. A 1.2x multiplier is added to videos over 15 seconds. A 5-second video at 768p costs $0.40. A 30-second video at 768p costs $2.88.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/lip-sync/image-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/lip-sync/image-to-video",
+   "notes": "Image (aspect 0.4-2.5) + 5 s to 15 min of audio; the video is as long as the audio. Billed per second, x1.2 over 15 s."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Relight",
+   "title": "MiniMax H3 Max Relight",
+   "vendor": "MiniMax",
+   "operation": "relight-video",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/relight",
+   "keyFields": {
+    "video": "video_url",
+    "image": "reference_image_url",
+    "resolution": "resolution",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "desc": "Source video up to 15 seconds long. Converted to constant 24 fps and trimmed at the end to the closest 17n+5 frame count, with at least 56 frames (about 2.33 seconds) remaining. The output matches this prepared video's frame count and duration."
+    },
+    "reference_image_url": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "desc": "Sphere render showing the target lighting."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P",
+      "2K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "Output video resolution. 480P and 768P generate natively; 1080P and 2K (1440p) use latent upscaling and refinement from 768P."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "adaptive",
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Output video aspect ratio."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for video generation."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Enable safety checking."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Return video as a data URI."
+    }
+   },
+   "price": "Billing is calculated per second of generated video, which matches the source video length. Video costs $0.05 per second at 480p, $0.08 per second at 768p, $0.16 per second at 1080p, and $0.32 per second at 2K. A 5-second video at 768p costs $0.40.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/relight",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/relight",
+   "notes": "reference_image_url is a render of a lit sphere showing the target light (Fuobe draws it in the browser from its light presets). Source up to 15 s, resampled to 24 fps and trimmed to 17n+5 frames, at least 56."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Insert Video",
+   "title": "MiniMax H3 Max Insert Video",
+   "vendor": "MiniMax",
+   "operation": "insert-moment",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/insert-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "video": "video_url",
+    "images": "reference_image_urls",
+    "videos": "reference_video_urls",
+    "startTime": "start_time",
+    "endTime": "resume_time",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "minLength": 1
+    },
+    "prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "maxLength": 50000
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 9,
+     "required": false
+    },
+    "reference_video_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false
+    },
+    "start_time": {
+     "type": "number",
+     "required": true,
+     "minimum": 1.625,
+     "maximum": 60
+    },
+    "resume_time": {
+     "type": "number",
+     "required": true,
+     "maximum": 60,
+     "minimumExclusive": 1.625
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 13
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480p",
+      "768p"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768p"
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 0,
+     "maximum": 2147483647
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": true
+    },
+    "color_match": {
+     "type": "boolean",
+     "required": false,
+     "default": true
+    }
+   },
+   "price": "Your request will cost $0.05 per second of generated scene at 480p or $0.06 per second at 768p. Only the newly generated scene duration is billed, not the full output video. The first 4,096 reference tokens are included; additional reference tokens cost $0.02 per 1,000 tokens, prorated.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/insert-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/insert-video",
+   "notes": "A new scene of `duration` seconds generated between start_time and resume_time of the clip (both within 60 s, start at least 1.625 s); only the new scene is billed."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max 16-bit Pixel",
+   "title": "MiniMax H3 Max 16-bit Pixel",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/16bit-pixel",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49815,
+     "desc": "Describe the scene, action, camera and sound. The 16-bit pixel style is applied automatically.",
+     "examples": [
+      "A young bicycle courier pedals through a sunlit flower market. Medium side view, steady tracking camera, measured pedaling. Bicycle chain clicks and gentle market ambience."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use pixel artwork for the most consistent style. When provided, its aspect ratio determines the output canvas."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/16bit-pixel",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/16bit-pixel",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Hand-drawn",
+   "title": "MiniMax H3 Max Hand-drawn",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/hand-drawn",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49868,
+     "desc": "Describe the scene, action, camera and sound. The Hand drawn style is applied automatically.",
+     "examples": [
+      "A weary office worker watches his neck stretch upward as a tiny bird lands on his head. Medium locked shot, exaggerated surprise. Soft wing flutters and distant city ambience, no speech."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use pencil artwork for the most consistent look; the image's aspect ratio determines the output canvas."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/hand-drawn",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/hand-drawn",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Low Poly",
+   "title": "MiniMax H3 Max Low Poly",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/low-poly",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49914,
+     "desc": "Describe the scene, action, camera and sound. The retro low-poly 3D style is applied automatically.",
+     "examples": [
+      "A woman in a red coat runs across a rainy rooftop at night, jumps over a low ventilation duct and keeps running. A helicopter searchlight sweeps the buildings behind her. The camera tracks alongside her."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use low-poly or retro 3D artwork for the most consistent look; the image's aspect ratio determines the output canvas."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/low-poly",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/low-poly",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max Retro Toon 70s",
+   "title": "MiniMax H3 Max Retro Toon 70s",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/retro-toon-70s",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49864,
+     "desc": "Describe the scene, action, camera and sound. The retro 1970s hand-painted animation style is applied automatically.",
+     "examples": [
+      "A lone warrior with a broadsword stands on a windswept rocky ridge at sunset as an enormous dragon glides past below him. Wide heroic shot. Wind and the slow beat of dragon wings, no speech."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use painted-style artwork for the most consistent look; the image's aspect ratio determines the output canvas."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/retro-toon-70s",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/retro-toon-70s",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max",
+   "model": "MiniMax H3 Max VHS",
+   "title": "MiniMax H3 Max VHS",
+   "vendor": "MiniMax",
+   "operation": "t2v+i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max/styles/vhs",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed",
+    "damageLevel": "damage_level"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 49910,
+     "desc": "Describe the scene, action, camera and sound. VHS style and tape damage are applied automatically.",
+     "examples": [
+      "A camcorder explores an abandoned shopping mall at midnight. A lone carousel starts turning beneath flickering fluorescent lights. Handheld push-in, mechanical creaks and distant music."
+     ]
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional first-frame image. Use a 4:3 image for the classic VHS frame; the image's aspect ratio determines the output canvas."
+    },
+    "damage_level": {
+     "type": "enum",
+     "values": [
+      "light",
+      "medium",
+      "heavy"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "medium",
+     "desc": "Tape wear: light adds subtle analog noise, medium adds visible damage, and heavy adds strong tracking errors and distortion."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 5,
+     "maximum": 15,
+     "desc": "Requested video duration in seconds."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "Video aspect ratio for text-only generation. Ignored when image_url is provided."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. Omit to choose one automatically."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Video at 768p costs $0.08 per second, with audio included. A 5-second video costs $0.40, and a 15-second video costs $1.20.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max/styles/vhs",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max/styles/vhs",
+   "notes": "Text or a first frame to a 5-15 s clip in the look, with sound; generation, not a restyle of a clip."
+  },
+  {
+   "family": "h3-max-turbo",
+   "model": "MiniMax H3 Max Turbo",
+   "title": "MiniMax H3 Max Turbo",
+   "vendor": "MiniMax",
+   "operation": "t2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max-turbo/text-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed",
+    "aspectRatio": "aspect_ratio"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 50000,
+     "desc": "Text prompt for video generation",
+     "examples": [
+      "A white kitten chases a butterfly across a sunlit garden. Gentle camera tracking, natural movement, soft afternoon light filtering through the leaves."
+     ]
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 0.92,
+     "maximum": 15,
+     "desc": "Video length in seconds. The output can run up to about 0.7 s longer than requested. Use at least 2 s with target_audio_url."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "The native generation resolution, or 1080P latent refinement from a native 768P source."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. A random seed is selected when omitted."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the safety checker will be enabled."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Return the generated video as base64 instead of a CDN URL."
+    },
+    "prompt_expansion_mode": {
+     "type": "string",
+     "required": true,
+     "default": "balanced",
+     "desc": "How much effort to spend rewriting the prompt before generation. 'disabled' skips prompt expansion. 'balanced' returns in about a second. 'quality' spends up to ~30s on a richer prompt.",
+     "examples": [
+      "disabled"
+     ]
+    },
+    "target_audio_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Optional URL of an audio clip at least 2 seconds long (maximum 15 MB) to pin to the generated soundtrack. Longer clips are trimmed to the generated video's length, keeping the beginning. The original audio replaces the output soundtrack, padded with silence if shorter than the video, without changing playback speed. Exceptionally high sample rates may be resampled to 96 kHz. Accepts an HTTP(S) URL or a base64 data URI."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "The aspect ratio of the generated video."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Through October 31, 2026, the 35% promotional discount applies: $0.01625 at 480p, $0.026 at 768p, and $0.052 at 1080p per second. From November 1 through November 15, 2026, get 30% off standard rates: $0.0175 at 480p, $0.028 at 768p, and $0.056 at 1080p per second. During the November promotion, 5 seconds of video at 768p costs $0.14. From November 16, 2026, standard rates are $0.025, $0.04, and $0.08 per second at 480p, 768p, and 1080p, respectively. Contact your sales representative to discuss permanent discounted pricing.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max-turbo/text-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max-turbo/text-to-video"
+  },
+  {
+   "family": "h3-max-turbo",
+   "model": "MiniMax H3 Max Turbo",
+   "title": "MiniMax H3 Max Turbo",
+   "vendor": "MiniMax",
+   "operation": "i2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max-turbo/image-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed",
+    "image": "image_url",
+    "endImage": "end_image_url"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 50000,
+     "desc": "Text prompt for video generation",
+     "examples": [
+      "The camera slowly pulls back from the scene, revealing the full landscape as clouds drift overhead and light shifts across the terrain."
+     ]
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 0.92,
+     "maximum": 15,
+     "desc": "Video length in seconds. The output can run up to about 0.7 s longer than requested. Use at least 2 s with target_audio_url."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "The native generation resolution, or 1080P latent refinement from a native 768P source."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. A random seed is selected when omitted."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the safety checker will be enabled."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Return the generated video as base64 instead of a CDN URL."
+    },
+    "prompt_expansion_mode": {
+     "type": "string",
+     "required": true,
+     "default": "balanced",
+     "desc": "How much effort to spend rewriting the prompt before generation. 'disabled' skips prompt expansion. 'balanced' returns in about a second. 'quality' spends up to ~30s on a richer prompt.",
+     "examples": [
+      "disabled"
+     ]
+    },
+    "target_audio_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "minLength": 1,
+     "desc": "Optional URL of an audio clip at least 2 seconds long (maximum 15 MB) to pin to the generated soundtrack. Longer clips are trimmed to the generated video's length, keeping the beginning. The original audio replaces the output soundtrack, padded with silence if shorter than the video, without changing playback speed. Exceptionally high sample rates may be resampled to 96 kHz. Accepts an HTTP(S) URL or a base64 data URI."
+    },
+    "image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional URL of the image to use as the first frame. When provided, the output canvas follows this image. If only end_image_url is provided, the canvas follows that last frame instead. If both images are omitted, the request is handled as text-to-video (16:9 by default).",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_inputs/hailuo23/pro_i2v_in.jpg"
+     ]
+    },
+    "end_image_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "Optional URL of the image to use as the last frame. It may be provided alone for end-only keyframe generation; in that case the output canvas follows this image."
+    }
+   },
+   "price": "Billing is calculated per second of video generated. Through October 31, 2026, the 35% promotional discount applies: $0.01625 at 480p, $0.026 at 768p, and $0.052 at 1080p per second. From November 1 through November 15, 2026, get 30% off standard rates: $0.0175 at 480p, $0.028 at 768p, and $0.056 at 1080p per second. During the November promotion, 5 seconds of video at 768p costs $0.14. From November 16, 2026, standard rates are $0.025, $0.04, and $0.08 per second at 480p, 768p, and 1080p, respectively. Contact your sales representative to discuss permanent discounted pricing.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max-turbo/image-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max-turbo/image-to-video"
+  },
+  {
+   "family": "h3-max-turbo",
+   "model": "MiniMax H3 Max Turbo",
+   "title": "MiniMax H3 Max Turbo",
+   "vendor": "MiniMax",
+   "operation": "ref2v",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max-turbo/reference-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed",
+    "aspectRatio": "aspect_ratio",
+    "images": "reference_image_urls",
+    "video": "reference_video_urls",
+    "audio": "reference_audio_urls"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 50000,
+     "desc": "Text prompt for video generation. Refer to reference assets by their modality and order in the reference lists: Image 1, Image 2, Video 1, Audio 1, and so on.",
+     "examples": [
+      "Image 1 is the female protagonist. Image 2 is her small dog. Keep the woman and dog consistent with their respective reference images while they walk together through a sunlit garden."
+     ]
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 9,
+     "required": false,
+     "desc": "URLs of subject/style reference images, referenced in the prompt as Image 1, Image 2, and so on. Reference images, videos, and audio clips must add up to at most 12 files.",
+     "examples": [
+      [
+       "https://storage.googleapis.com/falserverless/example_inputs/hailuo23/pro_i2v_in.jpg"
+      ]
+     ]
+    },
+    "reference_video_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false,
+     "desc": "URLs of motion/reference video clips (2-15 seconds each, combined duration at most 15 seconds), referenced in the prompt as Video 1, Video 2, and so on. Reference images, videos, and audio clips must add up to at most 12 files."
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false,
+     "desc": "URLs of reference audio clips (2-15 seconds each, combined duration at most 15 seconds), referenced in the prompt as Audio 1, Audio 2, and so on. Images, videos, and audio can be provided individually or together. Reference images, videos, and audio clips must add up to at most 12 files."
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 0.92,
+     "maximum": 15,
+     "desc": "Video length in seconds. The output can run up to about 0.7 s longer than requested."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "The native generation resolution, or 1080P latent refinement from a native 768P source."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed. A random seed is selected when omitted."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, the safety checker will be enabled."
+    },
+    "sync_mode": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Return the generated video as base64 instead of a CDN URL."
+    },
+    "prompt_expansion_mode": {
+     "type": "string",
+     "required": true,
+     "default": "balanced",
+     "desc": "How much effort to spend rewriting the prompt before generation. 'disabled' skips prompt expansion. 'balanced' returns in about a second. 'quality' spends up to ~30s on a richer prompt.",
+     "examples": [
+      "disabled"
+     ]
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "adaptive",
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "adaptive",
+     "desc": "The aspect ratio of the generated video."
+    },
+    "reference_conditions": {
+     "type": "array",
+     "items": "object",
+     "itemSchema": {
+      "url": {
+       "type": "string",
+       "required": false,
+       "minLength": 1,
+       "desc": "URL of the reference media."
+      },
+      "type": {
+       "type": "enum",
+       "values": [
+        "image",
+        "video",
+        "audio"
+       ],
+       "valueType": "string",
+       "required": false,
+       "desc": "Reference modality. Cross-modality list order is semantic."
+      }
+     },
+     "itemRequired": [
+      "type",
+      "url"
+     ],
+     "maxItems": 12,
+     "required": false,
+     "desc": "Ordered reference list; cross-modality order is semantic and is preserved end-to-end. Do not combine with reference_*_urls."
+    }
+   },
+   "price": "Billing is calculated per second of output video, plus reference inputs beyond the included allowance. Video costs $0.05 per second at 480p, $0.08 per second at 768p, and $0.16 per second at 1080p. A 5-second 768p clip costs $0.40 before additional reference charges. The first 4,096 reference tokens are included; additional reference tokens cost $0.016 per 1K tokens.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max-turbo/reference-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max-turbo/reference-to-video",
+   "notes": "Billed at H3 Max's own rates ($0.05-0.16/s), not Turbo's; references (images, clips, audio) add up to 12 files."
+  },
+  {
+   "family": "h3-max-turbo",
+   "model": "MiniMax H3 Max Turbo",
+   "title": "MiniMax H3 Max Turbo",
+   "vendor": "MiniMax",
+   "operation": "extend",
+   "provider": "fal",
+   "endpoint": "minimax/h3-max-turbo/extend-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "video": "video_url",
+    "audio": "reference_audio_urls",
+    "duration": "duration",
+    "resolution": "resolution",
+    "aspectRatio": "aspect_ratio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "video_url": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "desc": "URL of the video to extend. Must be 1.625 s to 60 s long, up to 50 MB, aspect ratio between 0.4 and 2.5.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/example_inputs/flux-3-red-panda.mp4"
+     ]
+    },
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 50000,
+     "desc": "What happens next. Describe the continuation, not the source.",
+     "examples": [
+      "The red panda keeps walking along the log, then looks up at a bird."
+     ]
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "maxItems": 3,
+     "required": false,
+     "desc": "Optional audio references for the continuation (2–15 seconds each, 15 seconds combined). The full extended video retains its original source soundtrack, and its ending still conditions the transition. These clips guide the newly generated audio instead of using that soundtrack as an audio reference. Assign each clip a role in the prompt, such as 'Audio 1 for the voice' and 'Audio 2 for background music'."
+    },
+    "enable_prompt_expansion": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Automatically enhance the prompt using the source video to help keep the continuation consistent. May increase processing time."
+    },
+    "duration": {
+     "type": "number",
+     "required": false,
+     "default": 5,
+     "minimum": 0.71,
+     "maximum": 15,
+     "desc": "Seconds of new footage to add. The continuation clip also includes 1.625 seconds from the source's ending and may be longer because of frame rounding."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "480P",
+      "768P",
+      "1080P",
+      "2K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "768P",
+     "desc": "Output video resolution."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "auto",
+      "21:9",
+      "16:9",
+      "4:3",
+      "1:1",
+      "3:4",
+      "9:16"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "auto",
+     "desc": "Output aspect ratio. 'auto' follows the source video. Other values crop the video to fit the selected ratio."
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Seed for the continuation. Random when omitted."
+    },
+    "output": {
+     "type": "enum",
+     "values": [
+      "extended",
+      "continuation"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "extended",
+     "desc": "'extended' returns the source and new footage as one video. 'continuation' returns a clip that starts with a 1.625-second repeat of the source's ending, then shows the new footage."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Moderate the source video and the prompt."
+    }
+   },
+   "price": "Billing is calculated per second of newly generated video. Your request will cost $0.025 per second at 480p, $0.04 per second at 768p, $0.08 per second at 1080p, and $0.16 per second at 2K. Billing applies to the requested continuation duration, not the original video.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/minimax/h3-max-turbo/extend-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=minimax/h3-max-turbo/extend-video",
+   "notes": "Source 1.625-60 s, up to 50 MB; duration is the seconds added, and only they are billed."
+  },
+  {
+   "family": "vidu",
+   "model": "Vidu Q4",
+   "title": "Vidu Q4",
+   "vendor": "Shengshu",
+   "operation": "i2v",
+   "provider": "fal",
+   "endpoint": "fal-ai/vidu/q4/image-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "image": "image_url",
+    "duration": "duration",
+    "resolution": "resolution",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": false,
+     "default": "",
+     "maxLength": 5000,
+     "desc": "Text prompt for video generation, max 5000 characters",
+     "examples": [
+      "The woman turns toward the camera and smiles, then the shot cuts to a close-up as she says: \"Let's go.\""
+     ]
+    },
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL or base64 data URI of the image to use as the first frame. Supports png, jpeg, jpg and webp up to 50 MB.",
+     "examples": [
+      "https://storage.googleapis.com/falserverless/web-examples/vidu/stylish_woman.webp"
+     ]
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 3,
+     "maximum": 16,
+     "desc": "Duration of the video in seconds (3-16)"
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for reproducibility. If None, a random seed is chosen."
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "540p",
+      "720p",
+      "1080p",
+      "2K",
+      "4K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "720p",
+     "desc": "Output video resolution"
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "price": "Billing is calculated per second of video generated: $0.0315 at 540p, $0.0665 at 720p, $0.084 at 1080p, $0.133 at 2K, and $0.273 at 4K. For example, a 5-second video at 720p costs $0.3325.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/fal-ai/vidu/q4/image-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/vidu/q4/image-to-video"
+  },
+  {
+   "family": "vidu",
+   "model": "Vidu Q4",
+   "title": "Vidu Q4",
+   "vendor": "Shengshu",
+   "operation": "ref2v",
+   "provider": "fal",
+   "endpoint": "fal-ai/vidu/q4/reference-to-video",
+   "keyFields": {
+    "prompt": "prompt",
+    "images": "reference_image_urls",
+    "audios": "reference_audio_urls",
+    "duration": "duration",
+    "aspectRatio": "aspect_ratio",
+    "resolution": "resolution",
+    "generateAudio": "audio",
+    "seed": "seed"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "prompt": {
+     "type": "string",
+     "required": true,
+     "minLength": 1,
+     "maxLength": 5000,
+     "desc": "Text prompt for video generation, max 5000 characters. Refer to references by their position in the lists: [@reference_image_1], [@reference_image_2], ... for images and [reference_audio_1], [reference_audio_2], ... for audio clips.",
+     "examples": [
+      "[@reference_image_1] walks along the beach at sunset holding [@reference_image_2], then turns to the camera and speaks in the voice of [reference_audio_1]."
+     ]
+    },
+    "reference_image_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "desc": "URLs or base64 data URIs of up to 12 reference images (png, jpeg, jpg, webp) used to keep subjects consistent.",
+     "examples": [
+      [
+       "https://storage.googleapis.com/falserverless/web-examples/vidu/new-examples/reference1.png",
+       "https://storage.googleapis.com/falserverless/web-examples/vidu/new-examples/reference2.png"
+      ]
+     ]
+    },
+    "reference_audio_urls": {
+     "type": "array",
+     "items": "string",
+     "required": false,
+     "desc": "URLs or base64 data URIs of up to 3 mp3 reference audio clips (3-12 seconds each, max 50 MB) used to keep voices consistent."
+    },
+    "duration": {
+     "type": "integer",
+     "required": false,
+     "default": 5,
+     "minimum": 3,
+     "maximum": 16,
+     "desc": "Duration of the video in seconds (3-16)"
+    },
+    "seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Random seed for reproducibility. If None, a random seed is chosen."
+    },
+    "aspect_ratio": {
+     "type": "enum",
+     "values": [
+      "16:9",
+      "9:16",
+      "4:3",
+      "3:4",
+      "1:1"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "16:9",
+     "desc": "The aspect ratio of the output video"
+    },
+    "resolution": {
+     "type": "enum",
+     "values": [
+      "540p",
+      "720p",
+      "1080p",
+      "2K",
+      "4K"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "720p",
+     "desc": "Output video resolution"
+    },
+    "audio": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Whether to generate audio (dialogue and sound effects) with the video. When false, the output video is silent."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "price": "Billing is calculated per second of video generated: $0.0315 at 540p, $0.0665 at 720p, $0.084 at 1080p, $0.133 at 2K, and $0.273 at 4K. Enabling audio does not change the price. For example, a 5-second video at 720p costs $0.3325.",
+   "output": "video.url",
+   "sourceUrl": "https://fal.ai/models/fal-ai/vidu/q4/reference-to-video",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=fal-ai/vidu/q4/reference-to-video",
+   "notes": "fal exposes up to 12 reference images and 3 mp3 voice clips (3-12 s), sound on request; Vidu's own 15 images and 4K references are not all in fal's schema."
+  },
+  {
+   "family": "v7",
+   "model": "Meshy 7 Retexture",
+   "title": "Meshy 7 Retexture",
+   "vendor": "Meshy",
+   "operation": "retexture-3d",
+   "provider": "fal",
+   "endpoint": "meshy/v7/retexture",
+   "keyFields": {
+    "model3d": "model_url",
+    "prompt": "text_style_prompt",
+    "image": "image_style_url"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "model_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL or base64 data URI of a 3D model to texture. Supports .glb, .gltf, .obj, .fbx, .stl formats. Can be a publicly accessible URL or data URI with MIME type application/octet-stream.",
+     "examples": [
+      "https://v3b.fal.media/files/b/penguin/DId89qXLu6BXu09RFAwAV_model.glb"
+     ]
+    },
+    "text_style_prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "maxLength": 600,
+     "desc": "Describe your desired texture style using text. Maximum 600 characters. Required if image_style_url is not provided.",
+     "examples": [
+      "red and black chest"
+     ]
+    },
+    "image_style_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "2D image to guide the texturing process. Supports .jpg, .jpeg, and .png formats. Required if text_style_prompt is not provided. If both are provided, image_style_url takes precedence."
+    },
+    "texture_resolution": {
+     "type": "enum",
+     "values": [
+      "2k",
+      "4k",
+      "8k"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "2k",
+     "desc": "Base color resolution: 2k (2048), 4k (4096), or 8k (8192). 4k and 8k require Meshy 6 or 7. At 8k, PBR maps are 4k and no emission map is generated."
+    },
+    "enable_original_uv": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Use the original UV mapping of the model instead of generating new UVs. If the model has no original UV, output quality may be reduced."
+    },
+    "enable_pbr": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Generate PBR Maps (metallic, roughness, normal) in addition to base color."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, input data will be checked for safety before processing."
+    }
+   },
+   "price": "Your request will cost $0.30 per retextured model at 2K or 4K resolution, or $0.45 at 8K resolution. PBR maps are included at no extra cost.",
+   "output": "model_glb.url",
+   "sourceUrl": "https://fal.ai/models/meshy/v7/retexture",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=meshy/v7/retexture"
+  },
+  {
+   "family": "v6",
+   "model": "Meshy 6 Retexture",
+   "title": "Meshy 6 Retexture",
+   "vendor": "Meshy",
+   "operation": "retexture-3d",
+   "provider": "fal",
+   "endpoint": "meshy/v6/retexture",
+   "keyFields": {
+    "model3d": "model_url",
+    "prompt": "text_style_prompt",
+    "image": "image_style_url"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "model_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL or base64 data URI of a 3D model to texture. Supports .glb, .gltf, .obj, .fbx, .stl formats. Can be a publicly accessible URL or data URI with MIME type application/octet-stream.",
+     "examples": [
+      "https://v3b.fal.media/files/b/penguin/DId89qXLu6BXu09RFAwAV_model.glb"
+     ]
+    },
+    "text_style_prompt": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "maxLength": 600,
+     "desc": "Describe your desired texture style using text. Maximum 600 characters. Required if image_style_url is not provided.",
+     "examples": [
+      "red and black chest"
+     ]
+    },
+    "image_style_url": {
+     "nullable": true,
+     "type": "string",
+     "required": false,
+     "desc": "2D image to guide the texturing process. Supports .jpg, .jpeg, and .png formats. Required if text_style_prompt is not provided. If both are provided, image_style_url takes precedence."
+    },
+    "texture_resolution": {
+     "type": "enum",
+     "values": [
+      "2k",
+      "4k",
+      "8k"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "2k",
+     "desc": "Base color resolution: 2k (2048), 4k (4096), or 8k (8192). 4k and 8k require Meshy 6 or 7. At 8k, PBR maps are 4k and no emission map is generated."
+    },
+    "enable_original_uv": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Use the original UV mapping of the model instead of generating new UVs. If the model has no original UV, output quality may be reduced."
+    },
+    "enable_pbr": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Generate PBR Maps (metallic, roughness, normal) in addition to base color."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "If set to true, input data will be checked for safety before processing."
+    }
+   },
+   "price": "Your request will cost $0.30 per retextured model at 2K or 4K resolution, or $0.45 at 8K resolution. PBR maps are included at no extra cost.",
+   "output": "model_glb.url",
+   "sourceUrl": "https://fal.ai/models/meshy/v6/retexture",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=meshy/v6/retexture"
+  },
+  {
+   "family": "p2",
+   "model": "Tripo P2",
+   "title": "Tripo P2",
+   "vendor": "Tripo",
+   "operation": "image-to-3d",
+   "provider": "fal",
+   "endpoint": "tripo3d/p2/image-to-3d",
+   "keyFields": {
+    "image": "image_url"
+   },
+   "licence": "proprietary paid API",
+   "verified": true,
+   "fetched": "2026-11-02",
+   "status": "active",
+   "inputs": {
+    "image_url": {
+     "type": "string",
+     "required": true,
+     "desc": "URL of the input image for 3D model creation.",
+     "examples": [
+      "https://v3b.fal.media/files/b/zebra/3osHJDI8IZ2wl6sGtEUeB_image.png"
+     ]
+    },
+    "face_limit": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "minimum": 48,
+     "maximum": 50000,
+     "desc": "Maximum number of faces for the generated mesh. Quad meshes support up to 25,000 faces."
+    },
+    "texture": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate textures for the model."
+    },
+    "pbr": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate PBR material maps. Enabling PBR also enables textures."
+    },
+    "model_seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Seed for geometry generation reproducibility."
+    },
+    "texture_seed": {
+     "nullable": true,
+     "type": "integer",
+     "required": false,
+     "desc": "Seed for texture generation reproducibility."
+    },
+    "texture_quality": {
+     "type": "enum",
+     "values": [
+      "fast",
+      "standard",
+      "detailed",
+      "extreme"
+     ],
+     "valueType": "string",
+     "required": false,
+     "default": "standard",
+     "desc": "Texture quality level."
+    },
+    "texture_version": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "v3.5-20260815",
+      "v3.0-20250812",
+      "v2.5-20250123"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Texture model version. The fast quality requires v3.5-20260815."
+    },
+    "delight": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Remove baked-in lighting before texturing with v3.5-20260815."
+    },
+    "auto_size": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Auto-scale the model to real-world dimensions in meters."
+    },
+    "export_uv": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Whether to generate UV coordinates for the model."
+    },
+    "export_orientation": {
+     "nullable": true,
+     "type": "enum",
+     "values": [
+      "+x",
+      "-x",
+      "-y",
+      "+y"
+     ],
+     "valueType": "string",
+     "required": false,
+     "desc": "Optional forward axis for the exported model."
+    },
+    "quad": {
+     "type": "boolean",
+     "required": false,
+     "default": false,
+     "desc": "Generate quad mesh topology instead of triangles."
+    },
+    "enable_safety_checker": {
+     "type": "boolean",
+     "required": false,
+     "default": true,
+     "desc": "Authorized callers may set false to request relaxed screening."
+    }
+   },
+   "price": "Billing is calculated per generated 3D model. Each request costs $1.00 without textures, $1.10 with fast or standard textures, $1.20 with detailed textures, or $1.30 with extreme textures. PBR enables textures and uses the selected texture rate. Quad topology adds no extra charge. For example, 10 models with standard textures cost $11.00. To generate without textures, set both texture and pbr to false.",
+   "output": "model_mesh.url",
+   "sourceUrl": "https://fal.ai/models/tripo3d/p2/image-to-3d",
+   "schemaUrl": "https://fal.ai/api/openapi/queue/openapi.json?endpoint_id=tripo3d/p2/image-to-3d"
   }
  ]
 }
