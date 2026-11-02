@@ -1,7 +1,18 @@
 import "server-only";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { heuristicScenes, MAX_FRAMES, parseScenes, planStoryboard, SPLIT_SYSTEM, STORYBOARD_PARTNER_IDS, type StoryboardLook, type StoryboardPartner } from "@/lib/catalog/storyboard";
+import {
+  heuristicScenes,
+  MAX_FRAMES,
+  parseScenes,
+  planStoryboard,
+  SPLIT_SYSTEM,
+  STORYBOARD_NEXT_SCENE_IDS,
+  STORYBOARD_PARTNER_IDS,
+  type StoryboardLook,
+  type StoryboardNextScene,
+  type StoryboardPartner,
+} from "@/lib/catalog/storyboard";
 import { soulLook } from "@/lib/catalog/soul";
 import type { Engine, Generation, GenerationRequest } from "@/lib/catalog/types";
 import { storyboardName } from "@/lib/storyboard-board";
@@ -16,6 +27,8 @@ export const StoryboardBodySchema = z.object({
   engine: z.enum(["cloud", "open"]),
   /** A partner model for every frame instead of Fuobe's open recipe (cloud only): "nano-banana-pro". */
   partner: z.enum(STORYBOARD_PARTNER_IDS).optional(),
+  /** The next frames on your GPU: "qwen-21" (Qwen-Image 2.1 + its Next-Scene LoRA, the default) or "classic" (Qwen-Image-Edit 2509). */
+  nextScene: z.enum(STORYBOARD_NEXT_SCENE_IDS).optional(),
   scenes: z.array(z.string().max(1000)).max(8).optional(),
   story: z.string().max(4000).optional(),
   frames: z.number().int().min(1).max(8).optional(),
@@ -32,6 +45,8 @@ export interface StoryboardRequest {
   engine: Engine;
   /** A partner model for the whole board (cloud only); unset: Fuobe's open recipe (Qwen-Image-Edit + next-scene). */
   partner?: StoryboardPartner;
+  /** The next frames' model on your GPU (open only): Qwen-Image 2.1's Next-Scene LoRA unless "classic". */
+  nextScene?: StoryboardNextScene;
   /** Manual: one prompt per frame. */
   scenes?: string[];
   /** Auto: one story, split into `frames`. */
@@ -66,7 +81,7 @@ function boardLook(r: Pick<StoryboardRequest, "look" | "lookStrength">): Storybo
 export function estimateStoryboard(r: StoryboardRequest): { costUsd: number | null; demo: boolean; frames: number; models: string[] } {
   const n = Math.max(1, Math.min(MAX_FRAMES, r.scenes?.filter((s) => s.trim()).length || r.frames || 4));
   const scenes = Array.from({ length: n }, (_, i) => r.scenes?.[i]?.trim() || `scene ${i + 1}`);
-  const frames = planStoryboard({ engine: r.engine, partner: r.partner, scenes, references: r.references, style: r.style, look: boardLook(r), aspectRatio: r.aspectRatio, resolution: r.resolution });
+  const frames = planStoryboard({ engine: r.engine, partner: r.partner, nextScene: r.nextScene, scenes, references: r.references, style: r.style, look: boardLook(r), aspectRatio: r.aspectRatio, resolution: r.resolution });
   let cost: number | null = 0;
   let demo = false;
   const models: string[] = [];
@@ -87,7 +102,7 @@ export async function createStoryboard(r: StoryboardRequest): Promise<{ batchId:
   const batchId = nanoid(10);
   // The board is named after the user's idea on every device (the Library's stack title too).
   const batchTitle = storyboardName(r.scenes?.length ? undefined : r.story, scenes);
-  const frames = planStoryboard({ engine: r.engine, partner: r.partner, scenes, references: r.references, style: r.style, look, aspectRatio: r.aspectRatio, resolution: r.resolution, batchTitle });
+  const frames = planStoryboard({ engine: r.engine, partner: r.partner, nextScene: r.nextScene, scenes, references: r.references, style: r.style, look, aspectRatio: r.aspectRatio, resolution: r.resolution, batchTitle });
   const items: Generation[] = [];
   let previous: string | undefined;
   for (const request of frames) {

@@ -2,8 +2,9 @@ import "server-only";
 import crypto from "node:crypto";
 import { accountGpu, requestViewer, validToken } from "../auth";
 import { fetchPublic, isPrivateAddress, type RemoteFetchOptions } from "../remote-fetch";
-import { comfyRequest } from "../providers/comfyui";
+import { comfyRequest, ownGpu } from "../providers/comfyui";
 import { getSetting } from "../settings";
+import { tenantAccount } from "../tenant";
 import { fetchTransport, type ComfyTransport } from "@/lib/gpu/transport";
 import { isInstallHost } from "./hosts";
 
@@ -41,6 +42,20 @@ export function gpuTargetFor(request: Request, purpose: "read" | "fix"): GpuTarg
   // The install's own ComfyUI under any scheme, port or path (its address may have changed since the link was saved).
   if (isInstallHost(gpu.url)) return { kind: "none", reason: "refused" };
   return { kind: "account", key: `acct:${viewer.account.id}`, accountId: viewer.account.id, via: "server", gpu };
+}
+
+/**
+ * The ComfyUI a run in the current scope goes to, as the target its last check is kept under (no request at hand: a run being
+ * planned or submitted). An account's run inside its own GPU's scope reads that GPU; the owner's (and a run on this install's
+ * GPUs) the install's, or the owner's computer. Null when no check could be read for it.
+ */
+export function runTarget(): ReadTarget | null {
+  const account = tenantAccount();
+  const own = ownGpu();
+  if (own?.kind === "computer") return { kind: "computer", key: own.principal, accountId: own.principal.slice(5), via: "browser" };
+  if (own) return account ? { kind: "account", key: `acct:${account}`, accountId: account, via: "server", gpu: { url: own.url, token: own.token } } : null;
+  if (account) return { kind: "install", key: "install", via: "server" };
+  return getSetting("comfyWhere") === "computer" ? { kind: "computer", key: "install", via: "browser" } : { kind: "install", key: "install", via: "server" };
 }
 
 /** The address a target reads, as hashed: a new address starts with an empty snapshot. */

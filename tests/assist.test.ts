@@ -54,7 +54,10 @@ describe("assist tools", () => {
       }
     };
     tools.forEach((t) => walk(t.input_schema));
-    expect(objects.every((o) => o.additionalProperties === false)).toBe(true);
+    // Closed, but for a map that says what its values are (run_skill's values by input id).
+    expect(objects.every((o) => o.additionalProperties === false || (!o.properties && typeof o.additionalProperties === "object"))).toBe(true);
+    expect(objects.some((o) => typeof o.additionalProperties === "object")).toBe(true);
+    expect(json).not.toMatch(/"propertyNames"/);
     // generate has more optional fields than strict mode allows per request (zod validates it instead).
     expect(tools.find((t) => t.name === "generate")?.strict).toBeUndefined();
     expect(tools.find((t) => t.name === "create_storyboard")?.strict).toBe(true);

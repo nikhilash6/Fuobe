@@ -49,6 +49,9 @@ import {
 import { db } from "./db";
 import { listElements } from "./elements";
 import { markStale } from "./gpu/snapshots";
+import { loadIndex } from "./gpu/index-file";
+import { qwen21Gpu } from "./qwen21-gpu";
+import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qwen21-speed";
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
 import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
@@ -736,6 +739,21 @@ function prepare(original: GenerationRequest) {
   else if (access.loras.some((l, i) => l !== plan.loras[i])) plan = { ...plan, loras: access.loras };
   // A preset can route to another model than the one asked for: its routes that are on (or the switch that's off).
   const { route, demo } = chooseRoute(offeredRoutes(plan.model, routesFor(plan.model, plan.op)), req.inputs?.images?.length ?? 0, plan.loras, seconds, !!worded.demo);
+  // Qwen-Image 2.1's Options → Speed loads its speed's LoRA in the graph: that LoRA switched off holds the speed.
+  const tier = route.provider === "comfyui" ? speedLora(route.endpoint, plan.params.extra) : undefined;
+  if (tier && offeredLoras([{ file: tier.file }]).dropped.length) {
+    const speed = QWEN21_SPEED.labels?.[tier.speed] ?? tier.speed;
+    throw new Error(
+      tenantAccount() ? `${speed} isn't available here. Pick another speed` : `${speed} runs with the LoRA “${loraName({ file: tier.file })}”, which is switched off in ${ACCESS_PLACE}. Pick another speed, or turn it back on there`,
+    );
+  }
+  // "Fast · writes the details" edits with at most 3 pictures (its LoRA's card).
+  if (tier?.speed === "details" && (req.inputs?.images?.length ?? 0) > DETAILS_MAX_IMAGES) {
+    throw new Error(`${QWEN21_SPEED.labels?.details ?? "Fast · writes the details"} edits with up to ${DETAILS_MAX_IMAGES} pictures. Remove one, or pick another speed`);
+  }
+  // Qwen-Image 2.1's Options → GPU, decided once here (src/server/qwen21-gpu.ts): the pre-flight and the run read the choice.
+  const gpu = route.provider === "comfyui" && !demo ? qwen21Gpu(route.endpoint, plan.params.extra ?? {}, (id) => !!loadIndex().workflows[id]) : undefined;
+  if (gpu) plan = { ...plan, params: { ...plan.params, extra: { ...plan.params.extra, [GPU_PARAM]: gpu.gpu } }, notes: [...(plan.notes ?? []), ...(gpu.note ? [gpu.note] : [])] };
   // What the cloud run can carry: a LoRA whose licence doesn't allow hosting stays on the GPU, and an API
   // takes at most so many (the plan's notes say which were left out). Open runs carry them all. Without a
   // civitai key a look's civitai LoRA the run can't get is left out (and said), rather than failing at the
@@ -790,7 +808,7 @@ function prepare(original: GenerationRequest) {
   const unreachable = asked.filter((l) => !reachable.loras.includes(l));
   // Priced for the clip the route makes: Replicate's Wan 2.2 fast makes 5 s when 3 s was asked.
   const priced = made !== undefined && plan.params.duration !== undefined ? { ...plan.params, duration: Math.round(made * 2) / 2 } : plan.params;
-  return { req, plan, route, demo, providerId, notes, asked, unreachable, switchedOff: access.dropped, cost: free ? 0 : estimateCost(plan.model, priced, 1, plan.op, withLoras) };
+  return { req, plan, route, demo, providerId, notes, asked, unreachable, switchedOff: access.dropped, gpu: gpu?.gpu, cost: free ? 0 : estimateCost(plan.model, priced, 1, plan.op, withLoras) };
 }
 
 /** The LoRA files a graph loads itself (not injected), so a run downloads the ones ComfyUI lacks before it starts. */
@@ -804,7 +822,7 @@ const MADE_LENGTH_OPS = new Set<Operation>(["t2v", "i2v", "flf2v", "ref2v", "ext
 export function previewGeneration(asked: GenerationRequest) {
   const moved = currentRequest(asked);
   const prepared = prepare(moved.request);
-  const { plan, route, demo, providerId, cost, asked: askedLoras, unreachable, switchedOff } = prepared;
+  const { plan, route, demo, providerId, cost, asked: askedLoras, unreachable, switchedOff, gpu } = prepared;
   const notes = moved.note ? [moved.note, ...prepared.notes] : prepared.notes;
   const fitted = routeLoras(route, askedLoras.filter((l) => !unreachable.includes(l)));
   const loras = {
@@ -828,6 +846,8 @@ export function previewGeneration(asked: GenerationRequest) {
     prompt: plan.prompt,
     loras,
     ...(notes.length && { notes }),
+    // Qwen-Image 2.1's Options → GPU as decided for this run: the GPU pre-flight checks the graph it picks.
+    ...(gpu && { gpu }),
     plan: { end: plan.end },
   };
 }

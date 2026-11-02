@@ -21,6 +21,8 @@ const script = (f: string) => fs.readFileSync(path.join(process.cwd(), "scripts/
 /** `[Name]="repo commit"` and `NODES[Name]="repo commit"` lines of an install script. */
 const scriptPins = (sh: string) => Object.fromEntries([...sh.matchAll(/\[([^\]]+)\]="(\S+) ([0-9a-f]{40})"/g)].map((m) => [m[1], { repo: m[2], commit: m[3] }]));
 const files = Object.entries(index.files);
+/** A pinned GitHub release asset: the one model file that isn't on Hugging Face. */
+const RELEASE_ASSET = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/releases\/download\/[\w.-]+\/[\w.-]+$/;
 
 describe("requirements.json", () => {
   it("is what build-requirements.mjs makes of the committed library (run node scripts/comfy/build-requirements.mjs)", () => {
@@ -49,10 +51,16 @@ describe("requirements.json", () => {
     }
   });
 
-  it("pins every file to a size, a Hugging Face URL and (unless gated) a revision", () => {
+  it("pins every file to a size, a Hugging Face URL and (unless gated) a revision, or a release asset to its tag and hash", () => {
     for (const [key, f] of files) {
       expect(f.sizeBytes, key).toBeGreaterThan(0);
       expect(f.pinnedUrl, key).toBeTruthy();
+      if (RELEASE_ASSET.test(f.url)) {
+        // A GitHub release asset (Zen Image Edit's adapter): its owner can replace it, so its sha256 rides along to be checked.
+        expect(f.pinnedUrl, key).toBe(f.url);
+        expect(f.sha256, key).toMatch(/^[0-9a-f]{64}$/);
+        continue;
+      }
       expect(hfParts(f.url), key).not.toBeNull();
       const rev = hfParts(f.pinnedUrl)!.rev;
       // Only gated files can't be read without a token: they keep the plain URL until a maintainer refreshes with HF_TOKEN.
@@ -60,14 +68,17 @@ describe("requirements.json", () => {
       if (f.sha256) expect(f.sha256, key).toMatch(/^[0-9a-f]{64}$/);
     }
     for (const [url, p] of Object.entries(pins)) {
-      expect(p.revision, url).toMatch(/^[0-9a-f]{40}$/);
+      // A release asset's revision is its tag, in its URL; a Hugging Face file's a commit.
+      if (RELEASE_ASSET.test(url)) expect(url, url).toContain(`/releases/download/${p.revision}/`);
+      else expect(p.revision, url).toMatch(/^[0-9a-f]{40}$/);
       expect(p.sizeBytes, url).toBeGreaterThan(0);
     }
   });
 
-  it("downloads only from huggingface.co", () => {
+  it("downloads from huggingface.co, and only Zen Image Edit's adapter from its GitHub release", () => {
     const hosts = new Set(files.flatMap(([, f]) => [new URL(f.url).host, new URL(f.pinnedUrl).host]));
-    expect([...hosts]).toEqual(["huggingface.co"]);
+    expect([...hosts].sort()).toEqual(["github.com", "huggingface.co"]);
+    expect(files.filter(([, f]) => new URL(f.url).host === "github.com").map(([k]) => k)).toEqual(["text_encoders/adapter_v12.safetensors"]);
   });
 
   it("marks exactly the LTX-2.5 files (the model's repo, and Lightricks' Restore and Detail Refine IC-LoRAs) and FLUX 3 Image Klein's as gated", () => {

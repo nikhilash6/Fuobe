@@ -142,12 +142,16 @@ function packLines(shell: Shell, l: Layout, name: string, p: IndexPack, kind: St
   return [`git clone ${p.repo} ${dest}`, `git -C ${dest} checkout ${p.commit}`, ...pip];
 }
 
-function download(shell: Shell, dir: string, target: string, url: string, auth: "" | "hf" | "civitai", replace: boolean): string[] {
+function download(shell: Shell, dir: string, target: string, url: string, auth: "" | "hf" | "civitai", replace: boolean, sha256?: string): string[] {
   const header =
     auth === "hf" ? (shell === "ps" ? ' -H "Authorization: Bearer $env:HF_TOKEN"' : ' -H "Authorization: Bearer $HF_TOKEN"') : auth === "civitai" ? (shell === "ps" ? ' -H "Authorization: Bearer $env:CIVITAI_KEY"' : ' -H "Authorization: Bearer $CIVITAI_KEY"') : "";
   const lines = [shell === "ps" ? `New-Item -ItemType Directory -Force -Path ${dir} | Out-Null` : `mkdir -p ${dir}`];
   if (replace) lines.push(shell === "ps" ? `Remove-Item -Force ${target}` : `rm -f ${target}`);
   lines.push(`${shell === "ps" ? "curl.exe" : "curl"} -L -C - --fail${header} -o ${target} "${url}"`);
+  // A file whose hash the index carries (a release asset outside Hugging Face, a format that can run code): checked once down.
+  if (sha256 && /^[0-9a-f]{64}$/.test(sha256)) {
+    lines.push(shell === "ps" ? `if ((Get-FileHash ${target} -Algorithm SHA256).Hash -ne "${sha256.toUpperCase()}") { throw "${sha256.slice(0, 8)}: the download doesn't match" }` : `echo "${sha256}  "${target} | (sha256sum -c - 2>/dev/null || shasum -a 256 -c -)`);
+  }
   return lines;
 }
 
@@ -188,7 +192,7 @@ function stepLines(shell: Shell, l: Layout, s: CommandStep, ctx: CommandContext)
       if (!f) return [];
       const url = cleanUrl(f.pinnedUrl) ?? cleanUrl(f.url);
       if (!url || !plain(f.file) || !plain(f.folder)) return [comment(shell, `Download ${f.file} into models/${f.folder}`)];
-      return download(shell, l.modelDir(shell, f.folder), l.modelDir(shell, f.folder, f.file), url, f.gated ? "hf" : "", s.kind === "model-replace");
+      return download(shell, l.modelDir(shell, f.folder), l.modelDir(shell, f.folder, f.file), url, f.gated ? "hf" : "", s.kind === "model-replace", f.sha256);
     }
     case "lora": {
       const lo = s.lora;

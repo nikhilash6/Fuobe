@@ -269,5 +269,14 @@
     "isolated": false,
     "subdir": null,
     "folders": []
+  },
+  "zen-image-edit-comfyui": {
+    "repo": "https://github.com/recoilme/zen-image-edit-comfyui",
+    "commit": "7a29e58c973b84798df926e3251727884fdacc2d",
+    "registry": null,
+    "requirementsTxt": true,
+    "isolated": false,
+    "subdir": null,
+    "folders": []
   }
 }
