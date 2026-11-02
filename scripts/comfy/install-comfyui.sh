@@ -48,6 +48,11 @@ declare -A NODES=(
   # dependencies) and PlagueKind's SLA attention and AdaLN LoRA fix (MIT, v1.5.6; the SLA kernel imports triton, installed below).
   [ComfyUI-MiniMax-H3-Turbo]="https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo 77bfa67575b14e3be6214f1747732e540c68b5dd"
   [plaguekind-nodes]="https://github.com/PlagueKind/ComfyUI-PlagueKind-Nodes d58d006a4ea32c25c06499f2ff104f0852a045a6"
+  # Idol 3D's clean splats (image-to-splat-idol-clean; docs/research/idol-9.md §5.1-5.2): Nynxz's Idol nodes (Preprocess
+  # Image, Camera, Prune Splat). Apache-2.0, no Python dependencies, no model code (the model runs on the core TripoSplat
+  # nodes). Read at this commit: 3 AI-assisted commits on 2026-10-30, not in the Comfy Registry. It goes in the main
+  # ComfyUI, not the isolated worker. Without it the provider runs image-to-splat-idol on core nodes.
+  [ComfyUI-Idol]="https://github.com/Nynxz/ComfyUI-Idol 4d3a4f671028f0e062d9f004cda1a2dd73360d35"
 )
 # Licences are information (Settings → Models & licences has the switches): every pack is installed, the
 # non-commercial ComfyUI-Whisper (CC-BY-NC-SA-4.0, used by the captions-whisper-burnin workflow) included.

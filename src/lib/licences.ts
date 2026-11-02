@@ -497,6 +497,13 @@ export const NODE_PACKS: NodePack[] = [
     url: SPDX("MIT"),
     note: "Dialogue, music and effects separation; MIT code, bundled DBS code Apache-2.0 with MIT notices. The DBS weights are Apache-2.0, trained on DnR v2 (CC BY 4.0), some of whose clips carry their own licences",
   }),
+  // Idol 3D's clean splats (idol-2, docs/research/idol-9.md §5.1-5.2), pinned in install-comfyui.sh.
+  pack("ComfyUI-Idol", "https://github.com/Nynxz/ComfyUI-Idol/tree/4d3a4f671028f0e062d9f004cda1a2dd73360d35", {
+    name: "Apache-2.0",
+    class: "commercial",
+    url: SPDX("Apache-2.0"),
+    note: "Idol's crop modes, predicted camera and splat pruning; Apache-2.0 code, no model code; ports idol-sdk's preprocess and camera code (Apache-2.0)",
+  }),
   // Krea 2's edits (the owner's SOTA image families, 2026-10-31).
   pack("comfyui-krea2edit", "https://github.com/lbouaraba/comfyui-krea2edit", {
     name: "Apache-2.0",

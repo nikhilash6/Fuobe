@@ -150,6 +150,8 @@ describe("round-4 ComfyUI workflows", () => {
       "video-character-swap-h3-relay",
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
+      // Idol 3D's clean splats (idol-2): ComfyUI-Idol isn't on the validation server (tests/idol-clean.test.ts).
+      "image-to-splat-idol-clean",
       "video-regenerate-h3",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);

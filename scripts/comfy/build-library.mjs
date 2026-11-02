@@ -136,6 +136,8 @@ export const BINDING_KEYS = new Set([
   'decimation', 'cutout', 'numGaussians', 'splatFormat', 'orbitFrames', 'frameWidth',
   // idol-1 (docs/research/idol-9.md §5.5): Idol 3D's looser photo crop (the sampler key is MOSS-Image's)
   'photoCrop',
+  // idol-2 (docs/research/idol-9.md §5.6): ComfyUI-Idol's crop mode and its splat pruning
+  'cropMode', 'minOpacity', 'maxScale',
   // round 4 (engine seams, see library.spec.mjs header)
   'curveMode', 'filterSpeckle', 'colorPrecision',
   // remove-object package (round 4)
