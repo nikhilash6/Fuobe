@@ -102,7 +102,17 @@ Measured by the pack's author (`docs/VERIFICATION.md` L96–108; Windows 11, RTX
   | DBS-TIGER | 10 s stereo WAV | each channel (2 passes) | 247.0 | 0.08x |
   | DBS-BSRNN | 10 s 5.1 WAV | each channel (6 passes) | 193.4 | 0.31x |
 
-  So DBS-BSRNN runs at about 0.27x real time here (a minute of audio in about 4 minutes, 3–6 on a busy host) and DBS-TIGER at about 0.09x (about 11 minutes a minute): 3x slower, not 4x. Stereo stems cost one pass per channel. On the 20 s test mix, against its known parts (a sanity check, not a benchmark): the dialogue stem scored 14.6 dB SI-SDR with DBS-BSRNN and 18.5 dB with DBS-TIGER (the mix itself scores −1.0 dB as "dialogue"); the music-and-effects bed 15.6 and 19.4 dB. Music + effects + speech matched the channel mean of the input to 3e-5 (16-bit FLAC). Split soundtrack's time estimate uses 0.27x / 0.09x per pass (`src/lib/av/split.ts` `DBS_SPEED`).
+  So DBS-BSRNN runs at about 0.27x real time here (a minute of audio in about 4 minutes, 3–6 on a busy host) and DBS-TIGER at about 0.09x (about 11 minutes a minute): 3x slower, not 4x. Stereo stems cost one pass per channel. On the 20 s test mix, against its known parts (a sanity check, not a benchmark): the dialogue stem scored 14.6 dB SI-SDR with DBS-BSRNN and 18.5 dB with DBS-TIGER (the mix itself scores −1.0 dB as "dialogue"); the music-and-effects bed 15.6 and 19.4 dB. Music + effects + speech matched the channel mean of the input to 3e-5 (16-bit FLAC). D1's time estimate used 0.27x / 0.09x per pass; since D4 it uses the quiet-host speeds below (`src/lib/av/split.ts` `DBS_SPEED`).
+- **Measured by the separation suite (package D4, 2026-11-02).** The same host and pack, ComfyUI started with `--cpu` and nothing else running (load average under 1 before each run), through a running Fuobe (`pnpm eval:run --suite separation --engine open`, run `20261102-111016-separation-open-ae7e`): 24 jobs, six 12 s synthetic stereo mixes at 44.1 kHz (five FLAC, one H.264 + AAC MP4) × four settings. "x real time" is the pack's own `times_real_time` (audio seconds per second of separation, every channel's pass counted); "wall" is the job from upload to the last stem, as a user waits for it.
+
+  | Model | Channels | x real time (pack) | Wall for 12 s | A minute of audio takes |
+  |---|---|---|---|---|
+  | DBS-BSRNN | mono | 0.22–0.28 (mean 0.25) | 45–55 s | about 4 minutes |
+  | DBS-BSRNN | each channel (2 passes) | 0.24–0.27 per pass | 92–100 s | about 8 minutes |
+  | DBS-TIGER | mono | 0.10–0.11 | 110–123 s | about 9–10 minutes |
+  | DBS-TIGER | each channel (2 passes) | 0.10–0.11 per pass | 219–246 s | about 19 minutes |
+
+  So on this 4-CPU host DBS-BSRNN is 2.4x faster than DBS-TIGER (not 3x: D1's runs shared the CPU). Split soundtrack's time estimate now uses 0.25x / 0.10x per pass (`DBS_SPEED`). Quality on the same mixes is in §9 D4.
 - **Threads.** The upstream demo runs DBS-TIGER on a CPU with one thread and NNPACK off and says that is faster and identical (`demo/README.md` L74–75; `demo/backend.py` L134–155). The pack measured that mode as 3.3x slower and not bit-identical (71.5 s against 21.4 s for 10 s of audio; VERIFICATION.md L112–114). Which wins on a 4-core host is unknown.
 - **Memory.** The stems of the whole input stay in memory until the end: 12 bytes per input sample at 44.1 kHz, about 0.3 GB per 10 minutes (VERIFICATION.md L107–108). An hour of audio would need about 1.9 GB on top of the decoded input (my arithmetic).
 
@@ -391,6 +401,24 @@ Open: graph B `dub-prepare-dbs-transcribe` and ModelDef `oss-dbs-voice-separate`
 
 A `separation` metric family in `scripts/eval/metrics/fuobe_metrics` (SI-SDR and SDR per stem, mixture-consistency check, peak and level of the bed, ASR WER of the voice stem against the known text), synthetic test mixes built from licensed or generated material (Fuobe TTS speech, generated music and effects) with known stems, cases in `scripts/eval/cases/separation.json` (DBS-TIGER, DBS-BSRNN, mono / fast stereo / each channel, MelBand, Demucs, SAM Audio), the existing blind A/B page for real clips, and a speed record on this host. Outputs decide D1's and D3's defaults.
 
+*As built (D4, 2026-11-02).* The `separation` and `wer` metric families (`scripts/eval/metrics/fuobe_metrics/separation.py`), the generated suite `scripts/eval/cases/separation.json`, test mixes from `scripts/eval/fixtures/make-separation.py` (12 s, 44.1 kHz stereo; speech: LibriSpeech dev-clean speaker 1272, CC BY 4.0, because no TTS weights were on this host; music, effects, hum and hiss synthesized by the script, CC0), Whisper base.en for WER (`pnpm eval:setup --asr`), audio players in the report and the blind review (dialogue and music & effects judged as separate pairs). Two real runs on the 4-CPU ComfyUI through a running Fuobe; the cloud variant (Demucs) was planned only (no key), and SAM Audio is not in the suite (`samAudioCloud` false). Means over the six mixes unless named (SI-SDR in dB; WER by Whisper):
+
+| Setting | Dialogue | Music | Effects | Music & effects | Bed stereo gap | Dialogue WER (input as is) | Wall for 12 s |
+|---|---|---|---|---|---|---|---|
+| DBS-BSRNN, mono (fast stereo bed) | 14.7 | 8.2 | 3.3 | 9.6 | 0.146 | 0.105 (0.117) | 48 s |
+| DBS-BSRNN, each channel | 14.4 | 9.0 | 4.1 | 11.2 | 0.027 | 0.152 | 93 s |
+| DBS-TIGER, mono | 16.1 | 10.5 | 3.5 | 10.9 | 0.138 | 0.154 | 116 s |
+| DBS-TIGER, each channel | 15.7 | 10.9 | 3.9 | 12.5 | 0.017 | 0.128 | 227 s |
+
+What the numbers say:
+- **DBS-TIGER is better on every mix** (dialogue +1.2 to +2.1 dB, music +2 dB) but 2.4x slower on this CPU: a minute of audio takes 9–10 minutes in mono. Kept: DBS-BSRNN on CPU hosts, DBS-TIGER on CUDA hosts (`dbsModelFor`, unchanged; no GPU here to measure).
+- **The fast stereo bed holds for centred dialogue and fails for panned dialogue.** Centred mixes: bed stereo gap 0.03–0.04 and level within 0.6 dB of the known bed (each channel: 0.02–0.04), at half the time. Dialogue panned left: the mono speech subtracted from both channels leaves the left-right difference in the bed (bed SI-SDR 1.0 dB against 11.2 with each channel, gap 0.71, the bed 1.7 dB too loud). Kept: mono by default; "Stereo stems" is the answer for off-centre dialogue (a hint for the tool's copy, not built here).
+- **AudioMerge's peak scaling was not triggered:** the master at −0.1 dBFS left a bed peaking at −7 dBFS (level −0.04 to −0.12 dB). A bed only goes over full scale when the music itself is near it; the metric is there for real clips.
+- **Where steady noise goes (§11):** a 50 Hz hum goes mostly to music with DBS-BSRNN (72 %; 14 % stays in the dialogue) and to effects with DBS-TIGER (54 %; 18 % in the dialogue); tape hiss splits across effects (49–59 %), music and dialogue (20–31 %). DBS doesn't clean hiss off a voice, as D5 says.
+- **Stems add up:** voice + bed match the input to −79 dB (FLAC) on every DBS run; the video source scores as the audio file does.
+- **The dub's voice split** (run `20261102-150312-separation-open-32a4`, centre, hum and video, Qwen3-ASR 0.6B in the graph): MelBand RoFormer scored higher than DBS on these mixes (dialogue 14.6–22.1 dB against 14.2–15.4; music & effects 10.2–16.8 against 9.8–10.5; Qwen3-ASR's own transcript WER 0–0.08 against 0.11–0.12), and took 128–190 s against 47–49 s for 12 s (DBS: 0.26x real time with the ASR). The test mixes have no singing and no recorded effects, which is where a vocals model goes wrong, so this decides nothing about films: the dub's default stays MelBand RoFormer (`DEFAULT_VOICE_SPLIT`), and the owner's real clips on the blind review page are the next step.
+- **"Clean the voice first" (D6, not built yet):** Whisper heard the input as is as well as the DBS dialogue stem (WER 0.117 against 0.105–0.154; the speech sits 6 dB over the music here). Separating first helped only with hiss and DBS-BSRNN (0.069 against 0.138). The evidence supports D6's default off for audio-only speech; on video, measure with real clips first.
+
 ### D5 · Clean up dialogue (P1)
 
 A "Clean up dialogue" preset in Split soundtrack plus a direct entry in the Audio hub and on videos. Open: DBS voice, optionally the bed at −18 dB (graph C or the browser mixer). There is no open denoiser in Fuobe's research, so the open route removes music and effects but not hiss or hum (say so). Cloud: add `veed/clean-audio` (research row exists) and `fal-ai/deepfilternet3` (needs a research record first) through `gen-cloud-models.py`; ElevenLabs isolation stays.
@@ -433,7 +461,7 @@ An ONNX export of the network core (§5, item 4) made by a script in the eval ve
 ## 11. Unknowns
 
 - Separation quality on real film and video soundtracks, other languages and music with vocals, compared with MelBand RoFormer, Demucs `htdemucs` and SAM Audio on the same clips (D4).
-- Speed on Fuobe's CPU-only host (4 logical CPUs, 14.3 GB RAM, torch 2.14.1+cpu, Python 3.13), and whether single-thread no-NNPACK helps DBS-TIGER there (D1, D4).
+- Speed on Fuobe's CPU-only host: measured (§2.4, D1 and D4). Whether single-thread no-NNPACK helps DBS-TIGER there is still unmeasured.
 - Whether the fast stereo bed (§2.1) sounds right on real stereo mixes.
 - Why the Comfy Registry flagged 0.1.0.
 - Whether an ONNX export of the network core works and matches PyTorch (`scatter_reduce` amax with `include_self`, TopK, dynamic-length windows), and which ops onnxruntime-web's WebGPU provider supports (bidirectional LSTM, `ScatterElements` max).
@@ -441,7 +469,7 @@ An ONNX export of the network core (§5, item 4) made by a script in the eval ve
 - Whether the authors will release more DBS checkpoints (MUSDB 4-stem, EchoSet), and whether fal or Replicate will host DBS. Replicate could not be ruled out with certainty.
 - AudioShake's dollar price per credit.
 - Replicate `ryan5453/demucs` hardware (A100 in the text, A40 in the page's JSON); all Replicate prices are page estimates.
-- Where steady noise (hiss, hum, room tone) lands: sfx or speech. It matters for "Clean up dialogue".
+- Where steady noise (hiss, hum, room tone) lands: measured on synthetic mixes in §9 D4 (hum mostly to music or effects, hiss spread with 20–31 % left in the dialogue); room tone and real recordings are unmeasured.
 - The licences of individual DnR v2 source clips and whether they matter for the Apache-2.0 weights or their outputs.
 
 ## Sources (read 2026-10-29)
