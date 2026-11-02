@@ -60,6 +60,7 @@ import { getModel } from "./index";
 import { REPLACED_BY } from "./replaced";
 import { soulLook } from "./soul";
 import type { ChainSlot, Engine, GenerationRequest, PixelPoint } from "./types";
+import { originalSoundProblem, separates, type SoundChoice } from "../av/original-sound";
 
 export type GenjutsuMode = "motion" | "character" | "swap" | "restyle" | "insert";
 /** How you say what changes (Object swap and Insert) or who (Character swap): words, clicks on the first frame, or paint on it. */
@@ -994,6 +995,8 @@ export interface GenjutsuPlanInput {
   seed?: number;
   /** Character swap's settings. */
   character?: CharacterOptions;
+  /** Original sound: what of the clip's sound goes back (src/lib/av/original-sound.ts; unset = Everything). */
+  sound?: SoundChoice;
 }
 
 export interface GenjutsuPlan {
@@ -1034,6 +1037,8 @@ function pinEngines(steps: PlanStep[], engine: Engine): PlanStep[] {
  * - then the pieces joined and the clip's own sound put back.
  */
 export function planGenjutsu(input: GenjutsuPlanInput): GenjutsuPlan {
+  const soundProblem = originalSoundProblem(input.maker.engine, input.sound);
+  if (soundProblem) throw new Error(soundProblem);
   const plan = planSteps(input);
   return { ...plan, steps: pinEngines(plan.steps, input.maker.engine) };
 }
@@ -1052,7 +1057,8 @@ function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {
   const helper = { feature: GENJUTSU.stepFeature, batchTitle: input.title };
   const steps: PlanStep[] = [];
   const op = OP[input.mode];
-  const sound = !!input.source.hasAudio && (n > 1 || !m.keepsSound);
+  // A maker that keeps the clip's sound still gets the chosen stems put back when the sound is split (Original sound).
+  const sound = !!input.source.hasAudio && (n > 1 || !m.keepsSound || separates(m.engine, input.sound));
   const own = (one: boolean) => (one && !sound ? { ...base, title: input.title } : helper);
   const refs = input.references.slice(0, m.refs.max);
   const images = refs.length ? { images: refs } : {};
@@ -1179,10 +1185,10 @@ function planSteps(input: GenjutsuPlanInput): GenjutsuPlan {
       });
     });
     const end = m.window ? pieces[n - 1].end : input.range.end;
-    const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound, end });
+    const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound, end, choice: input.sound });
     return { steps, final, pieces: n, sound, tracked };
   }
-  const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound });
+  const final = n === 1 && !sound ? keys[0] : joinWithSound(steps, { engine: m.engine, title: input.title, base, helper, source: input.source, range: input.range, pieces: keys, sound, choice: input.sound });
   return { steps, final, pieces: n, sound, tracked: false };
 }
 
@@ -1276,6 +1282,13 @@ function planCharacterSwap(input: GenjutsuPlanInput): GenjutsuPlan {
       },
       ...(anchorOn ? { after: ["anchor"], chain: [anchorSlot()] } : {}),
     });
+    // The graph keeps the clip's sound; Original sound other than Everything lays the chosen stems over it instead.
+    if (input.source.hasAudio && separates("open", input.sound)) {
+      const swap = steps.find((s) => s.key === "swap")!;
+      swap.request = { ...swap.request, ...helper };
+      const final = joinWithSound(steps, { engine: "open", title: input.title, base, helper, source: input.source, range: input.range, pieces: ["swap"], sound: true, choice: input.sound });
+      return { steps, final, pieces: 1, sound: true, tracked: false, anchors: anchorOn ? 1 : 0 };
+    }
     return { steps, final: "swap", pieces: 1, sound: false, tracked: false, anchors: anchorOn ? 1 : 0 };
   }
 
@@ -1377,6 +1390,7 @@ function planFuobeRestyle(input: GenjutsuPlanInput): GenjutsuPlan {
     maxRefs: m.readsLookImages ?? 0,
     ...(qualityFor(m, input.quality) ? { resolution: qualityFor(m, input.quality) } : {}),
     ...(input.seed !== undefined ? { seed: input.seed } : {}),
+    ...(input.sound && { sound: input.sound }),
   });
   // Only the finished video is a result; the segments are steps (Shorts keeps each take as a result of its own).
   const final = plan.final ?? plan.takes[0].look;

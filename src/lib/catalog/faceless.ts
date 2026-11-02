@@ -3,6 +3,7 @@ import { COPY_JOIN_VIDEOS, lengthRange, plannedDurations } from "./clip-lengths"
 import { estimateCost } from "./plan";
 import { pricingAt } from "./promo";
 import type { ChainSlot, Engine, Generation, GenerationRequest, ModelDef } from "./types";
+import { SPLIT_MODEL } from "../av/split";
 
 /*
  * Faceless Studio and the Explainer: the data and the pure planning shared by the browser (wizard,
@@ -413,7 +414,26 @@ export interface EpisodeSettings {
   auto?: boolean;
   /** Content Factory: a reference clip's style brief, applied to the script and the look. */
   brief?: BriefLook;
+  /**
+   * "Use a clip's soundtrack as the bed" (your GPU): the clip's music and effects, its dialogue taken out (DBS), looped
+   * under the voice instead of a generated bed. duration: the clip's seconds (the loop reads it).
+   */
+  musicClip?: MusicClip;
 }
+
+export interface MusicClip {
+  url: string;
+  name?: string;
+  duration: number;
+}
+
+/** The shortest clip whose soundtrack can be a bed (the loop crossfades 3 s at each seam). */
+export const MUSIC_CLIP_MIN_SECONDS = 8;
+/** What a clip's soundtrack as the bed does, and that it runs on your GPU. */
+export const MUSIC_CLIP_HINT: Record<Engine, string> = {
+  open: "Its music and sound effects, with the talking taken out, looped under the voice",
+  cloud: "Runs on your GPU (open source) — the cloud makes a new instrumental bed",
+};
 
 /**
  * How a style brief (src/lib/catalog/content-factory.ts) shapes an episode: lines for the script writer, words
@@ -831,6 +851,8 @@ export interface ResolvedModels {
   resolution: string;
   narration: string;
   music: string | null;
+  /** The bed is a clip's soundtrack split by DBS (its background stem), not a generated one (your GPU). */
+  bedClip?: MusicClip;
   /** Extends the bed past what the music model makes. */
   loop: string | null;
   /** Brings the bed down under the voice before the mix (cloud). */
@@ -867,7 +889,9 @@ export function resolveModels(settings: EpisodeSettings, narrationChars: number,
     video,
     resolution: wanted,
     narration,
-    music: settings.music ? m.music : null,
+    // A clip's soundtrack as the bed: DBS on your GPU (no hosted DBS; the cloud makes its own bed).
+    music: settings.music ? (settings.engine === "open" && settings.musicClip ? SPLIT_MODEL : m.music) : null,
+    ...(settings.music && settings.engine === "open" && settings.musicClip && { bedClip: settings.musicClip }),
     loop: settings.music ? m.loop : null,
     level: settings.music ? (m.levelMusic ?? null) : null,
     mux: settings.music ? m.mixMusic : m.mux,
@@ -1140,7 +1164,49 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
   });
 
   let bedKey = "music";
-  if (models.music) {
+  // The clip's split: its music and effects (the "background" stem) are the bed.
+  let bedStem: string | undefined;
+  if (models.music && models.bedClip) {
+    const clip = models.bedClip;
+    const clipSeconds = Math.max(1, clip.duration);
+    bedStem = "background";
+    steps.push({
+      key: "music",
+      part: "music",
+      label: "Music bed · from your clip",
+      seconds: clipSeconds,
+      request: {
+        ...base,
+        modelId: models.music,
+        op: "separate-audio",
+        title: `Stems · ${clip.name?.trim() || "music bed"}`,
+        inputs: { video: clip.url },
+        params: { sourceDuration: Math.round(clipSeconds * 1000) / 1000, extra: { channels: "mono" } },
+        step: { label: "Music bed", index: n, of: n },
+      },
+    });
+    const loopDef = models.loop ? lookup(models.loop) : undefined;
+    if (clipSeconds < length && loopDef) {
+      const duration = Math.min(LOOP_MAX[loopDef.id] ?? Infinity, Math.ceil(length) + 1);
+      steps.push({
+        key: "music-loop",
+        part: "music",
+        label: "Music bed · looped",
+        after: ["music"],
+        chain: [{ slot: "audio", stem: bedStem }],
+        seconds: duration,
+        request: {
+          ...base,
+          modelId: models.loop!,
+          op: "audio-loop",
+          params: { duration, sourceDuration: Math.round(clipSeconds * 1000) / 1000, crossfade: BED_CROSSFADE },
+          step: { label: "Music loop", index: n, of: n },
+        },
+      });
+      bedKey = "music-loop";
+      bedStem = undefined;
+    }
+  } else if (models.music) {
     const musicDef = pick(lookup, models.music);
     const plan = musicPlan(musicDef, models.loop ? lookup(models.loop) : undefined, length);
     const bed = plan.bed;
@@ -1201,7 +1267,7 @@ export function buildEpisodeGraph(input: GraphInput, lookup: ModelLookup): Graph
     label: mixLabel,
     seconds: length,
     after: models.music ? [film, "narration", bedKey] : [film, "narration"],
-    chain: models.music ? [{ slot: "video" }, { slot: "audio" }, { slot: "audio2" }] : [{ slot: "video" }, { slot: "audio" }],
+    chain: models.music ? [{ slot: "video" }, { slot: "audio" }, { slot: "audio2", ...(bedStem && { stem: bedStem }) }] : [{ slot: "video" }, { slot: "audio" }],
     request: {
       ...base,
       modelId: models.mux,

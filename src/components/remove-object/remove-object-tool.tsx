@@ -35,6 +35,8 @@ import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
+import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
+import { defaultSound, type SoundChoice } from "@/lib/av/original-sound";
 import { FrameStage, frameFromBlob, type Frame } from "./frame-stage";
 import { useRemovalActions, useRemovalEstimate, type RemovalBody } from "./hooks";
 import { VideoCompare } from "./video-compare";
@@ -84,6 +86,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const [mode, setMode] = useState<RemoveMode>("type");
   const [prompt, setPrompt] = useState("");
   const [effects, setEffects] = useState(false);
+  const [soundPick, setSoundPick] = useState<SoundChoice | null>(null);
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [points, setPoints] = useState<PixelPoint[]>([]);
   const [pointLabel, setPointLabel] = useState<"positive" | "negative">("positive");
@@ -171,6 +174,9 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
   const ready = !!clip?.url && !clip.uploading && !clip.error && !!duration && !!range;
   const marked =
     mode === "type" ? everyone || !!prompt.trim() : mode === "click" ? points.some((p) => p.label !== "negative") : !!paint;
+  // Original sound: a person removed suggests Music & effects only (their speech goes too); a pick of your own stays.
+  const soundSuggested = defaultSound(engine, { personReplaced: !!eraser?.cleanFrame });
+  const sound: SoundChoice = soundPick ?? { sound: soundSuggested };
   const body: RemovalBody | null =
     ready && eraser && marked
       ? {
@@ -184,6 +190,7 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
           ...(mode !== "type" && frame ? { frame: { width: frame.width, height: frame.height } } : {}),
           source: { url: clip.url!, name: clip.name, duration, fps: clip.info?.fps, width: size.width, height: size.height, hasAudio: clip.info?.hasAudio },
           range: { start: range.startTime, end: range.endTime },
+          ...soundBody(engine, sound),
         }
       : null;
   const estimate = useRemovalEstimate(body);
@@ -441,6 +448,8 @@ export function RemoveObjectTool({ tabs }: { tabs?: React.ReactNode }) {
                   <span className="font-medium text-foreground">{eraser.label}</span> · {eraser.note}
                 </p>
               )}
+
+              {clip && <OriginalSoundField engine={engine} value={sound} onChange={setSoundPick} hasAudio={clip.info?.hasAudio} suggested={soundSuggested} />}
 
               <div className="space-y-3 border-t pt-3">
                 {body && est?.previewUsd != null && (

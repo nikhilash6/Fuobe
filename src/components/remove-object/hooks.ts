@@ -5,6 +5,7 @@ import type { RemoveMode } from "@/lib/catalog/remove-object";
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
 import { useDebounced } from "@/components/faceless/hooks";
 import { send } from "@/components/shorts/hooks";
+import type { SoundChoice } from "@/lib/av/original-sound";
 
 /** React Query hooks for /api/remove-object/** (the Remove object tab of Video tools). */
 
@@ -19,6 +20,8 @@ export interface RemovalBody {
   mask?: string;
   source: { url: string; name?: string; duration?: number; fps?: number; width?: number; height?: number; hasAudio?: boolean };
   range?: { start: number; end: number };
+  /** Original sound (unset = Everything). */
+  sound?: SoundChoice;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }

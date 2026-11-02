@@ -1,4 +1,5 @@
 import "server-only";
+import { originalSoundProblem, sameSound, soundOf, type SoundChoice } from "@/lib/av/original-sound";
 import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import { ANCHOR_MODELS, anchorModel, characterLicenceLine, SWAP_LORAS, swapLoraRef, TURBO_LORA } from "@/lib/catalog/character-swap";
@@ -978,16 +979,20 @@ export async function stopTake(projectId: string, body: z.infer<typeof TakeRefSc
 // Assembly
 
 /** The clip with its chosen takes over the original timeline and its own sound (the result goes to the Library). */
-export function assemble(projectId: string, clipId: string): SwapProject {
+export function assemble(projectId: string, clipId: string, sound?: SoundChoice): SwapProject {
   const p = advanceProject(projectId);
   mustMatchMode(p.engine);
   const clip = mustClip(p, clipId);
+  const soundProblem = originalSoundProblem(p.engine, sound);
+  if (soundProblem) throw new ShortsError(soundProblem, 422);
+  // Original sound: Everything is stored as nothing (as before); another choice is kept with the assembly.
+  const choice = clip.source.hasAudio && soundOf(sound) !== "everything" ? sound : undefined;
   const look = lookup();
   const found = assemblyPieces(p, clip);
   if ("problem" in found) throw new ShortsError(found.problem, 422);
   const takes = assemblyTakes(found.pieces);
   const last = look(clip.assembly?.genId);
-  if (clip.assembly && last && last.status !== "failed" && last.status !== "canceled" && JSON.stringify(clip.assembly.takes) === JSON.stringify(takes)) {
+  if (clip.assembly && last && last.status !== "failed" && last.status !== "canceled" && JSON.stringify(clip.assembly.takes) === JSON.stringify(takes) && sameSound(clip.assembly.sound, choice)) {
     throw new ShortsError(ACTIVE.has(last.status) ? "This clip is being assembled" : "Already assembled with these takes — download it below", 409);
   }
   if (p.engine === "open" && !clip.normalized?.url) throw new ShortsError("The clip is still being prepared at 24 fps — wait for it", 409);
@@ -999,10 +1004,10 @@ export function assemble(projectId: string, clipId: string): SwapProject {
     existing[`take-${piece.take.id}`] = g!.id;
     return url;
   };
-  const plan = planAssembly({ engine: p.engine, clip, pieces: found.pieces, videoOf });
+  const plan = planAssembly({ engine: p.engine, clip, pieces: found.pieces, videoOf, ...(choice && { sound: choice }) });
   // The takes count as steps already made: a demo join of real takes is refused.
   const pipe = run(plan.steps, existing);
-  const assembly = { genId: pipe.byKey[plan.final].id, stepIds: pipe.items.map((g) => g.id), takes, createdAt: Date.now() };
+  const assembly = { genId: pipe.byKey[plan.final].id, stepIds: pipe.items.map((g) => g.id), takes, createdAt: Date.now(), ...(choice && { sound: choice }) };
   return mutate(projectId, (cur) => mapClip(cur, clipId, (c) => ({ ...c, assembly })));
 }
 

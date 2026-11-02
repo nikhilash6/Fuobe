@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { MediaThumb } from "@/components/studio/result-media";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Viewer } from "@/components/studio/viewer";
+import { soundSummary } from "@/lib/av/original-sound";
 import { chainState, formatSeconds, stitchCurrent, stitchSteps, takeSteps, type ChainState, type ShortsSessionSegment } from "@/lib/catalog/shorts";
 import type { Generation } from "@/lib/catalog/types";
 import { formatCost, ratioValue, timeAgo } from "@/lib/format";
@@ -204,6 +205,12 @@ function Session({ s }: { s: View }) {
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-xl bg-muted/50 p-3 text-[12px]">
             <dt className="text-muted-foreground">Preset</dt>
             <dd className="truncate">{s.look.name}</dd>
+            {s.source.hasAudio && (
+              <>
+                <dt className="text-muted-foreground">Sound</dt>
+                <dd className="truncate">{soundSummary(s.settings.sound)}</dd>
+              </>
+            )}
             <dt className="text-muted-foreground">Engine</dt>
             <dd className="flex items-center gap-1">
               {s.engine === "open" ? <Cpu className="size-3" /> : <Cloud className="size-3" />}

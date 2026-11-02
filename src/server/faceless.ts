@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getModel } from "@/lib/catalog";
 import {
   AUTO_SECONDS,
+  MUSIC_CLIP_MIN_SECONDS,
   blockCount,
   buildEpisodeGraph,
   CAMERA_WORDS,
@@ -1513,6 +1514,14 @@ export const SettingsSchema = z.object({
   resolution: z.string().max(10).optional(),
   auto: z.boolean().optional(),
   brief: BriefLookSchema.optional(),
+  /** "Use a clip's soundtrack as the bed" (your GPU): the clip, and its seconds as the browser read them. */
+  musicClip: z
+    .object({
+      url: FileUrl,
+      name: z.string().max(200).optional(),
+      duration: z.number().finite().min(MUSIC_CLIP_MIN_SECONDS, `Pick a clip of ${MUSIC_CLIP_MIN_SECONDS} s or more for the bed`).max(3600),
+    })
+    .optional(),
 });
 
 export const BlockSchema = z.object({

@@ -15,6 +15,8 @@ import { downloadHref } from "@/lib/library";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { decisionsHref, useAssemble, useStopJob } from "./hooks";
+import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
+import { defaultSound, sameSound, type SoundChoice } from "@/lib/av/original-sound";
 import { GenChip, JobError, Note, priceText, SavedText } from "./parts";
 import type { StageProps } from "./workbench";
 
@@ -180,7 +182,12 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
   const a = clip.assembly;
   const state = jobState(a?.genId, a?.stepIds, gens);
   const result = state.status === "succeeded" && a?.genId ? gens[a.genId]?.url : undefined;
-  const current = "pieces" in found && !!a && JSON.stringify(a.takes) === JSON.stringify(assemblyTakes(found.pieces));
+  // Original sound: the person is replaced, so their speech usually goes too (Music & effects only on your GPU).
+  const suggested = defaultSound(project.engine, { personReplaced: true });
+  const [soundPick, setSoundPick] = useState<SoundChoice | null>(null);
+  const sound: SoundChoice = soundPick ?? a?.sound ?? { sound: a ? "everything" : suggested };
+  const asked = soundBody(project.engine, sound).sound;
+  const current = "pieces" in found && !!a && JSON.stringify(a.takes) === JSON.stringify(assemblyTakes(found.pieces)) && sameSound(a.sound, asked);
   return (
     <div className="space-y-3">
       <Panel title="Assemble the clip" aside={<span className="font-mono text-[11px] text-muted-foreground">{priceText(estimate?.assembly[clip.id], { demo: estimate?.demo, engine: project.engine })}</span>}>
@@ -203,6 +210,7 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
             </ol>
             </>
           )}
+          {clip.source.hasAudio && <OriginalSoundField engine={project.engine} value={sound} onChange={setSoundPick} suggested={suggested} />}
           <p className="text-[12px] text-muted-foreground">
             {project.engine === "open"
               ? "Each piece is fitted to the clip's size at 24 fps, joined packet by packet, and the clip's own sound goes back on."
@@ -212,7 +220,7 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
             <Button
               className="h-9 rounded-full"
               disabled={"problem" in found || assemble.isPending || state.status === "queued" || state.status === "running" || (current && state.status === "succeeded")}
-              onClick={() => assemble.mutate({ clipId: clip.id }, { onSuccess: () => toast("Assembling the clip"), onError: (e) => toastError(e) })}
+              onClick={() => assemble.mutate({ clipId: clip.id, ...(asked && { sound: asked }) }, { onSuccess: () => toast("Assembling the clip"), onError: (e) => toastError(e) })}
             >
               {assemble.isPending ? <Loader2 className="size-4 animate-spin" /> : <Film className="size-4" />} {a ? "Assemble again" : "Assemble clip"}
             </Button>
@@ -222,7 +230,7 @@ export function AssembleStage({ id, project, clip, gens, estimate }: StageProps)
                 Stop
               </Button>
             )}
-            {a && !current && state.status === "succeeded" && <span className="text-[12px] text-muted-foreground">The chosen takes changed since — assemble again for the new ones.</span>}
+            {a && !current && state.status === "succeeded" && <span className="text-[12px] text-muted-foreground">{sameSound(a.sound, asked) ? "The chosen takes changed since — assemble again for the new ones." : "The sound choice changed — assemble again to hear it."}</span>}
           </div>
           <JobError genId={a?.genId} stepIds={a?.stepIds} gens={gens} />
           {result && (

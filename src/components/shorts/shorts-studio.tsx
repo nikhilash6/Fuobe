@@ -9,6 +9,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { OldFootageOffer } from "@/components/restore/old-footage";
 import { SelfHostNote } from "@/components/self-host-note";
 import { EngineSwitch } from "@/components/studio/engine-switch";
+import { OriginalSoundField, soundBody } from "@/components/studio/original-sound-field";
+import type { SoundChoice } from "@/lib/av/original-sound";
 import { VideoTrimmer } from "@/components/studio/video-trimmer";
 import { useEngine, useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import {
@@ -334,6 +336,7 @@ function SetupPanel({
   const { clip } = source;
   const [ratio, setRatio] = useState<ShortsRatio>("9:16");
   const [language, setLanguage] = useState("auto");
+  const [sound, setSound] = useState<SoundChoice>({ sound: "everything" });
   const [pickedModel, setModel] = useState<Record<Engine, string>>({ cloud: "", open: "" });
   // A custom preset is its reference images: on cloud, start on the first model that reads them
   // (Kling O3 4K Edit, then Happy Horse) unless a model was picked.
@@ -367,6 +370,7 @@ function SetupPanel({
           aspectRatio: ratio,
           language,
           modelId,
+          ...soundBody(engine, sound),
         }
       : null;
   const estimate = useShortsEstimate(estimateBody);
@@ -489,6 +493,8 @@ function SetupPanel({
           </SelectContent>
         </Select>
       </Field>
+
+      <OriginalSoundField engine={engine} value={sound} onChange={setSound} hasAudio={clip?.info?.hasAudio} />
 
       <Field label="Model" hint={engine === "open" ? <span className="inline-flex items-center gap-1"><Cpu className="size-3" /> Open source</span> : <span className="inline-flex items-center gap-1"><Cloud className="size-3" /> Cloud</span>}>
         {models.length > 1 ? (

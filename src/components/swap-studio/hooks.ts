@@ -5,6 +5,7 @@ import { studioHandOff, type HandOffInput, type QueueMode, type StudioEstimate, 
 import type { SwapEdit } from "@/lib/catalog/swap-studio-edit";
 import type { Engine, PixelPoint } from "@/lib/catalog/types";
 import { responseError } from "@/lib/refusals";
+import type { SoundChoice } from "@/lib/av/original-sound";
 
 /** React Query hooks for /api/swap-studio/** (Character Swap Studio). */
 
@@ -125,7 +126,7 @@ export const useQueue = (id: string) => useAction<{ clipId: string; shotId: stri
 export const useStopTake = (id: string) => useAction<{ clipId: string; shotId: string; segmentId: string; takeId: string }>(id, "takes/stop");
 export const useStopJob = (id: string) =>
   useAction<{ kind: "mask" | "anchor" | "assembly" | "normalize" | "transcribe"; clipId: string; shotId?: string; segmentId?: string; jobId?: string }>(id, "stop");
-export const useAssemble = (id: string) => useAction<{ clipId: string }>(id, "assemble");
+export const useAssemble = (id: string) => useAction<{ clipId: string; sound?: SoundChoice }>(id, "assemble");
 
 /**
  * Genjutsu's "Open in Character Swap Studio": a new project with the character, and the clip added (the clip's

@@ -6,6 +6,7 @@ import type { GenjutsuLook, GenjutsuMode, GenjutsuTarget, GenjutsuTier, MakerSou
 import type { Engine, Generation, PixelPoint } from "@/lib/catalog/types";
 import { useDebounced } from "@/components/faceless/hooks";
 import { send } from "@/components/shorts/hooks";
+import type { SoundChoice } from "@/lib/av/original-sound";
 
 /** React Query hooks for /api/genjutsu/**. */
 
@@ -30,6 +31,8 @@ export interface GenjutsuBody {
   character?: CharacterOptions;
   /** Hard cuts the browser found in the clip (seconds): the server warns when the part has one. */
   cuts?: number[];
+  /** Original sound (unset = Everything). */
+  sound?: SoundChoice;
   /** Client nonce: a repeat of it gets the first answer (see useSubmitGuard). */
   requestId?: string;
 }

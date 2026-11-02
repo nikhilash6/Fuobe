@@ -17,6 +17,7 @@ import { CHARACTER_SWAP, h3Canvas, HISTORY_CHOICES, WINDOW_CHOICES, whoWords, ty
 import { STUDIO_FPS } from "@/lib/av/scene-cuts";
 import { wholeClipBudget } from "@/lib/av/video-finish";
 import type { Engine, PixelPoint } from "./types";
+import type { SoundChoice } from "../av/original-sound";
 
 export const SWAP_STUDIO = {
   feature: "swap-studio",
@@ -300,7 +301,8 @@ export interface SwapClip {
   transcript: { genId?: string; modelId?: string; cues: TranscriptCue[] | null; voices: Record<string, SwapRole> } | null;
   review: Decision;
   reviewNotes: string;
-  assembly: { genId?: string; stepIds?: string[]; takes: string[]; createdAt: number } | null;
+  /** sound: the Original sound it was assembled with (unset = Everything). */
+  assembly: { genId?: string; stepIds?: string[]; takes: string[]; createdAt: number; sound?: SoundChoice } | null;
 }
 
 export interface SwapProject {

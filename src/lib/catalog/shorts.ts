@@ -16,6 +16,7 @@
 import { scenePoster, type PresetPreview, type PreviewFx, type PreviewScene } from "../preset-cards";
 import { templateCover, templatePreview } from "../template-covers";
 import type { ChainSlot, Engine, Generation, GenerationRequest } from "./types";
+import { soundBack, withSoundExtra, SOUND_STEP_LABEL, soundOf, type SoundChoice } from "../av/original-sound";
 
 // ---------------------------------------------------------------------------
 // Limits (Higgsfield's, from the upload dialog) and engine shapes
@@ -460,6 +461,8 @@ export interface ShortsPlanInput {
   resolution?: string;
   /** Extra params for the restyle model (e.g. a seed for a new take). */
   seed?: number;
+  /** Original sound: what of the clip's sound goes back (src/lib/av/original-sound.ts; unset = Everything). */
+  sound?: SoundChoice;
 }
 
 export const SHORTS_FEATURE = "shorts";
@@ -753,21 +756,26 @@ export function planStitch(input: ShortsPlanInput, clips: ClipRef[], suffix = ""
     after.push(picture.key);
     chain.push({ slot: "video" });
   } else inputs.video = picture.url;
-  if (whole) inputs.audio = input.source.url;
-  else {
+  let from: { url: string } | { key: string } = { url: input.source.url };
+  if (!whole) {
     // The sound of the selection: the source cut to the same window (the mux reads a clip's soundtrack).
     const key = `sound${suffix}`;
     steps.push({
       key,
       request: { ...helper, modelId: t.trim, op: "trim", inputs: { video: input.source.url }, params: { startTime: input.range.start, endTime: input.range.end }, step: { label: "Original sound", index: 1100, of: 1000 } },
     });
-    after.push(key);
-    chain.push({ slot: "audio" });
+    from = { key };
   }
+  // Original sound: all of it, or (open engine) the stems chosen from a split of that working clip.
+  const back = soundBack(steps, { engine: input.engine, choice: input.sound, from, helper, key: `split${suffix}`, seconds: input.range.end - input.range.start });
+  after.push(...back.after);
+  chain.push(...back.chain);
+  if (back.inputs) inputs.audio = back.inputs.audio;
   const key = `final${suffix}`;
+  const label = soundOf(input.sound) === "everything" ? "Final video" : `Final video · ${SOUND_STEP_LABEL[soundOf(input.sound)].toLowerCase()}`;
   steps.push({
     key,
-    request: { ...base, title: input.title, modelId: t.mux, op: "mux", inputs: Object.keys(inputs).length ? inputs : undefined, step: { label: "Final video", index: 1200, of: 1000 } },
+    request: withSoundExtra({ ...base, title: input.title, modelId: t.mux, op: "mux", inputs: Object.keys(inputs).length ? inputs : undefined, step: { label, index: 1200, of: 1000 } }, back),
     ...(after.length ? { after, chain } : {}),
   });
   return { steps, final: key };
@@ -823,7 +831,7 @@ export interface ShortsSession {
   look: ShortsLook;
   source: { url: string; name?: string; duration?: number; hasAudio?: boolean; width?: number; height?: number; fps?: number };
   range: ShortsRange;
-  settings: { aspectRatio: ShortsRatio; language: string; modelId: string; resolution?: string; maxRefs: number; reframes?: boolean };
+  settings: { aspectRatio: ShortsRatio; language: string; modelId: string; resolution?: string; maxRefs: number; reframes?: boolean; sound?: SoundChoice };
   segments: ShortsSessionSegment[];
   stitches: ShortsStitch[];
   createdAt: number;
@@ -844,6 +852,7 @@ export function sessionPlanInput(s: ShortsSession, seed?: number): ShortsPlanInp
     maxRefs: s.settings.maxRefs,
     resolution: s.settings.resolution,
     reframes: s.settings.reframes,
+    ...(s.settings.sound ? { sound: s.settings.sound } : {}),
     ...(seed !== undefined ? { seed } : {}),
   };
 }
@@ -917,7 +926,7 @@ export function stitchSteps(s: Pick<ShortsStitch, "ids" | "final">, gens: Record
   const ids = s.ids.includes(s.final) ? s.ids : [...s.ids, s.final];
   return ids.map((id) => {
     const g = gens[id];
-    const label = !g ? "A step" : g.op === "concat" ? "Stitching the segments" : g.op === "trim" ? "Cutting the original sound" : g.op === "mux" ? "Putting the sound back" : "Restyling";
+    const label = !g ? "A step" : g.op === "concat" ? "Stitching the segments" : g.op === "trim" ? "Cutting the original sound" : g.op === "separate-audio" ? "Splitting the sound" : g.op === "mux" ? "Putting the sound back" : "Restyling";
     return { g, label };
   });
 }
