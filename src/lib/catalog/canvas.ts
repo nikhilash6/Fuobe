@@ -2166,6 +2166,14 @@ const keyframesAnimation = tpl(
       ],
     );
 
+/** The outfit lookbook's four looks: one outfit and one place each, the model's face, hair and pose kept. */
+const LOOKBOOK_LOOKS = [
+  { label: "Paris balcony", prompt: "Dress the woman from the photo in an ivory tailored trouser suit on a Paris balcony in morning light, a wrought-iron rail and zinc rooftops behind her. Keep her face, hair and pose, full length." },
+  { label: "Opera staircase", prompt: "Dress the woman from the photo in a black velvet column gown on a grand opera staircase lit by crystal chandeliers, red carpet and gilded balustrades around her. Keep her face, hair and pose, full length." },
+  { label: "Alpine terrace", prompt: "Dress the woman from the photo in a long camel cashmere coat over a cream knit on a snowy Alpine hotel terrace at golden hour, the peaks glowing behind her. Keep her face, hair and pose, full length." },
+  { label: "Yacht deck", prompt: "Dress the woman from the photo in a white linen shirt and wide white trousers on the teak deck of a yacht off Capri in bright sun, the turquoise sea behind her. Keep her face, hair and pose, full length." },
+];
+
 export const CANVAS_TEMPLATES: CanvasTemplate[] = [
   {
     id: "keyframes-animation",
@@ -2241,6 +2249,95 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
         ["side", "video", "images"],
         ["top", "video", "images"],
         ["video", "out"],
+      ],
+    ),
+  },
+  {
+    id: "lookbook",
+    name: "Outfit lookbook",
+    description: "One model photo, four looks in four places, then one moving shot",
+    icon: "Shirt",
+    hue: 20,
+    rank: 2,
+    makes: "Four lookbook pictures of the model and a 5-second moving shot of the first look.",
+    flow: ["Model", "4 looks", "Film"],
+    steps: [
+      "A full-length photo of the model goes in.",
+      "Four edits dress her in four outfits, each in its own place: a Paris balcony, an opera staircase, an Alpine terrace and a yacht deck.",
+      "The four looks sit side by side as a lookbook.",
+      "The first look comes to life as a 5-second moving shot.",
+    ],
+    inputs: { model: "A full-length photo of a person, head to toe." },
+    samples: { model: { src: "/examples/app-3d-rotation/1/in-image.jpg", name: "Model photo.jpg" } },
+    build: tpl(
+      [
+        { id: "model", type: "image-input", x: 0, y: ROW + 160, data: { label: "Model photo" } },
+        ...LOOKBOOK_LOOKS.map((l, i) => ({
+          id: `look${i + 1}`,
+          type: "model" as const,
+          x: COL,
+          y: i * (ROW + 40),
+          data: { mediaKind: "image" as const, label: l.label, op: "edit" as const, prompt: l.prompt, params: { aspectRatio: "3:4" } },
+          models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" },
+        })),
+        { id: "book", type: "output", x: COL * 2, y: 0, data: { label: "Lookbook" }, width: 560 },
+        { id: "animate", type: "model", x: COL * 2, y: ROW * 2 + 200, data: { mediaKind: "video", label: "Moving shot", op: "i2v", prompt: "She turns slowly towards the camera and smiles, the ivory suit moving softly, morning light on her face, the Paris rooftops behind her", params: { aspectRatio: "3:4", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
+        { id: "out", type: "output", x: COL * 3, y: ROW * 2 + 240, data: { label: "Film" } },
+      ],
+      [
+        ...LOOKBOOK_LOOKS.map((_, i): [string, string, string] => ["model", `look${i + 1}`, "images"]),
+        ...LOOKBOOK_LOOKS.map((_, i): [string, string] => [`look${i + 1}`, "book"]),
+        ["look1", "animate", "images"],
+        ["animate", "out"],
+      ],
+    ),
+  },
+  {
+    id: "music-video",
+    name: "Music video",
+    description: "Three song scenes as moving shots, joined into one film, and a song in the same mood",
+    icon: "Music",
+    hue: 315,
+    rank: 4,
+    makes: "A film of the three scenes and a 30-second song to go with it.",
+    flow: ["Lyrics", "Scenes", "Film"],
+    steps: [
+      "Each row of the table is one scene: a line of the song and what the picture shows.",
+      "Every scene becomes a still.",
+      "Every still becomes a 5-second moving shot.",
+      "The shots are joined into one film.",
+      "A 30-second song is made in the same mood.",
+    ],
+    build: tpl(
+      [
+        {
+          id: "scenes",
+          type: "table",
+          x: 0,
+          y: 40,
+          width: 420,
+          data: {
+            label: "Scenes",
+            columns: ["Lyric", "Scene"],
+            rows: [
+              ["Midnight, the city is ours", "a fashion model in a silver sequin gown dancing on a Tokyo rooftop at night, neon signs glowing behind her"],
+              ["I keep the lights on for you", "the same model in the silver gown driving a red vintage convertible on a coast road at night, city lights below"],
+              ["Till the sun comes up", "the model laughing on a Malibu beach at sunrise, the silver gown catching the pink light"],
+            ],
+          },
+        },
+        { id: "still", type: "model", x: COL + 180, y: 0, data: { mediaKind: "image", label: "Still", prompt: "{Scene}, a music video still, glossy cinematic light, fashion film look", params: { aspectRatio: "16:9" } }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        { id: "animate", type: "model", x: COL * 2 + 180, y: 0, data: { mediaKind: "video", label: "Moving shot", op: "i2v", prompt: "She moves to the music, her sequin gown shimmering, the camera gliding slowly around her, lights glowing", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "minimax-h3", open: "oss-minimax-h3" } },
+        { id: "film", type: "concat", x: COL * 3 + 180, y: 0, data: { label: "Film", params: { aspectRatio: "16:9" } }, models: { cloud: CONCAT_MODELS.cloud, open: CONCAT_MODELS.open } },
+        { id: "song", type: "model", x: COL * 3 + 180, y: FILM_ROW, data: { mediaKind: "audio", label: "Song", op: "music", prompt: "Dreamy synth-pop, 104 bpm, a female vocal, glossy and cinematic, a warm night-drive mood", params: { duration: 30 } }, models: { cloud: "elevenlabs-music", open: "oss-ace-step" } },
+        { id: "out", type: "output", x: COL * 4 + 220, y: FILM_ROW / 2, data: { label: "Film and song" } },
+      ],
+      [
+        ["scenes", "still", "prompt"],
+        ["still", "animate", "images"],
+        ["animate", "film", "videos"],
+        ["film", "out"],
+        ["song", "out"],
       ],
     ),
   },

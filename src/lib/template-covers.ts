@@ -1,16 +1,16 @@
 /**
  * The real covers of the studios' template and style tiles (Marketing Studio's templates, Fashion Factory, Photodump
  * packs, the Shorts and Mixed Media looks, Canvas templates, Content Factory's trending styles, the Explainer styles,
- * Fuobe Soul's looks, AI Influencer's character types, and the example pictures of Character Sheet, Storyboard and
- * Elements), from template-covers.generated.ts (pnpm eval:covers --templates). A tile that isn't listed keeps its drawn
- * art. Every URL comes from the manifest with its version (?v=): never build one here without it.
+ * Fuobe Soul's looks, AI Influencer's character types, the example pictures of Character Sheet, Storyboard and
+ * Elements, and the studios' ready-made starters), from template-covers.generated.ts (pnpm eval:covers --templates). A
+ * tile that isn't listed keeps its drawn art. Every URL comes from the manifest with its version (?v=): never build one here without it.
  */
 import { thumbOf, type PresetPreview } from "./preset-cards";
 import { TEMPLATE_COVERS, type TemplateCoverEntry } from "./template-covers.generated";
 
-export type TemplateGroup = "marketing" | "fashion" | "photodump" | "shorts" | "mixed-media" | "canvas" | "content-factory" | "explainer" | "soul" | "influencer" | "examples";
+export type TemplateGroup = "marketing" | "fashion" | "photodump" | "shorts" | "mixed-media" | "canvas" | "content-factory" | "explainer" | "soul" | "influencer" | "examples" | "starters";
 
-export const TEMPLATE_GROUPS: readonly TemplateGroup[] = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer", "soul", "influencer", "examples"];
+export const TEMPLATE_GROUPS: readonly TemplateGroup[] = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer", "soul", "influencer", "examples", "starters"];
 
 /** One still of a cover, and its 320 px copy (thumbs/ next to it, with the same version). */
 export interface CoverFrame {

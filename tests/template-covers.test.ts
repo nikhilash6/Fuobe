@@ -16,6 +16,7 @@ import { lookSet } from "@/lib/catalog/soul-cards";
 import { CREATURE_TYPES, HUMAN_TIERS } from "@/lib/influencer";
 import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
+import { STARTERS } from "@/lib/starters/catalog";
 import { TEMPLATE_GROUPS, templateCover, type TemplateGroup } from "@/lib/template-covers";
 import { TEMPLATE_COVERS } from "@/lib/template-covers.generated";
 
@@ -54,6 +55,8 @@ const TILES: Record<TemplateGroup, string[]> = {
   influencer: [...HUMAN_TIERS, ...CREATURE_TYPES].map((t) => `tier-${t.id}`),
   // The example pictures of the empty pages: Character Sheet, Storyboard (six frames), Elements (four pictures).
   examples: ["character-sheet", "storyboard-heist", "element-maya", "element-rooftop-bar", "element-aurora", "element-together"],
+  // The studios' ready-made starters, by starter id (src/lib/starters/catalog.ts).
+  starters: STARTERS.map((s) => s.id),
 };
 const VERSIONED = /^(\/previews\/[^?]+)\?v=([0-9a-f]{8})$/;
 const sha8 = (...files: string[]) => {
@@ -122,13 +125,14 @@ describe("the template covers manifest", () => {
         else if (group === "fashion" || group === "photodump" || ["product-angles", "script-film", "table-film", "clips-film", "compare-image", "storyboard-heist"].includes(id))
           e = { poster: t(key, n), frames: [2, 3, 4, 5, 6].slice(0, id === "storyboard-heist" ? 5 : group === "photodump" ? 3 : 2).map((k) => t(key, n + k, `-${k}`)) };
         else if (group === "shorts") e = { poster: t(key, n), video: `/previews/templates/${key}.mp4?v=${v(n + 1)}`, at: 3.542 };
-        else if (group === "marketing" || group === "content-factory") e = { poster: t(key, n), video: `/previews/templates/${key}.mp4?v=${v(n + 1)}` };
+        else if (group === "marketing" || group === "content-factory" || group === "starters") e = { poster: t(key, n), video: `/previews/templates/${key}.mp4?v=${v(n + 1)}` };
         else e = { poster: t(key, n) };
         lines.push(`  ${JSON.stringify(key)}: ${JSON.stringify(gen.slimEntry(key, { poster: e.poster, ...(e.video && { video: e.video }), ...(e.at && { at: e.at }), ...(e.frames && { frames: e.frames }) }))}`);
       }
     }
-    // The studios' tiles (240, with Keyframes → animation), Fuobe Soul's looks (139), AI Influencer's types (9) and the empty pages' examples (6).
-    expect(lines).toHaveLength(240 + 139 + 9 + 6);
+    // The studios' tiles (242, with Keyframes → animation, Outfit lookbook and Music video), Fuobe Soul's looks (139),
+    // AI Influencer's types (9), the empty pages' examples (6) and the studios' ready-made starters (15).
+    expect(lines).toHaveLength(242 + 139 + 9 + 6 + 15);
     const text = `{\n${lines.join(",\n")}\n}`;
     expect(text.length).toBeLessThan(36_000);
     expect(gzipSync(text).length).toBeLessThan(8_000);

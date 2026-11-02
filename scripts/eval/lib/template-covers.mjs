@@ -18,7 +18,7 @@ export const TEMPLATE_MANIFEST = path.join(REPO_DIR, "src", "lib", "template-cov
 export const PEAKS_FILE = path.join(REPO_DIR, "src", "lib", "preset-peaks.generated.ts");
 
 /** The tile groups, as the manifest's keys start (`<group>/<tile id>`) and the folders under previews/templates/ are named. */
-export const TEMPLATE_GROUPS = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer", "soul", "influencer", "examples"];
+export const TEMPLATE_GROUPS = ["marketing", "fashion", "photodump", "shorts", "mixed-media", "canvas", "content-factory", "explainer", "soul", "influencer", "examples", "starters"];
 
 /** At most this many frames per tile: the cover and up to five more (a contact sheet's 2x2, a carousel's slides, an example storyboard). */
 const MAX_FRAMES = 6;

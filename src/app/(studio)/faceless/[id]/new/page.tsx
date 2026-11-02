@@ -4,20 +4,24 @@ import { Suspense } from "react";
 import { EpisodeWizard } from "@/components/faceless/episode-wizard";
 import { getModel } from "@/lib/catalog";
 import { pickerData } from "@/lib/catalog/faceless";
+import { facelessTopic } from "@/lib/starters/catalog";
 import { recordExists } from "@/server/records";
 
 export const metadata: Metadata = { title: "New episode" };
 
-async function Wizard({ params }: { params: PageProps<"/faceless/[id]/new">["params"] }) {
+async function Wizard({ params, searchParams }: Pick<PageProps<"/faceless/[id]/new">, "params" | "searchParams">) {
   const { id } = await params;
   if (!recordExists({ kind: "channel", ids: [id] })) notFound();
-  return <EpisodeWizard channelId={id} picker={pickerData(getModel)} />;
+  // A ready channel (?starter=<id>) opens with its first episode's topic written in.
+  const { starter } = await searchParams;
+  const topic = facelessTopic(typeof starter === "string" ? starter : undefined);
+  return <EpisodeWizard channelId={id} picker={pickerData(getModel)} initialTopic={topic} />;
 }
 
-export default function Page({ params }: PageProps<"/faceless/[id]/new">) {
+export default function Page({ params, searchParams }: PageProps<"/faceless/[id]/new">) {
   return (
     <Suspense fallback={null}>
-      <Wizard params={params} />
+      <Wizard params={params} searchParams={searchParams} />
     </Suspense>
   );
 }

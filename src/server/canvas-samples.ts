@@ -39,6 +39,12 @@ function storedSample(abs: string): string {
   return saveFile({ data, contentType: contentTypeFor(abs), name: key, source: "derived" }).url;
 }
 
+/** A sample's stored copy (/api/files/…), made once and reused, or null when it names no file Fuobe ships (other starters' photos). */
+export function adoptSample(src: string): string | null {
+  const abs = sampleFile(src);
+  return abs ? storedSample(abs) : null;
+}
+
 /**
  * The board with its starting files in place: each input node a sample names gets the stored copy and a plain name. A
  * sample whose file isn't there leaves its input empty (the board still opens, and asks for that one file).

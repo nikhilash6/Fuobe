@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { APPS } from "@/lib/catalog/apps";
 import { modeHref, type HubKind } from "@/lib/hubs";
-import { recordForPath, unknownHubMode } from "@/lib/record-pages";
+import { recordForPath, unknownHubMode, unknownStarterPage } from "@/lib/record-pages";
 import { countsAsView, SHARE_VIEW_HEADER, shareRoute } from "@/lib/share";
 import {
   ACCOUNT_LIBRARY_MESSAGE,
@@ -69,7 +69,7 @@ const APP_IDS = new Set(APPS.map((a) => a.id));
 function pass(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
   const app = /^\/apps\/([^/]+)\/?$/.exec(pathname)?.[1];
-  if ((app && !APP_IDS.has(safeDecode(app))) || unknownHubMode(pathname)) return notFound(request);
+  if ((app && !APP_IDS.has(safeDecode(app))) || unknownHubMode(pathname) || unknownStarterPage(pathname)) return notFound(request);
   const record = recordForPath(pathname);
   if (record && !recordExists(record)) return notFound(request);
   return NextResponse.next();

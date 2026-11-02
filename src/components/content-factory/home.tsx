@@ -3,7 +3,7 @@
 import { ArrowRight, Bot, Film, Link2, Loader2, Minus, Plus, Sparkles, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { Suspense, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,8 +16,10 @@ import { Segmented, usd } from "@/components/faceless/controls";
 import { NarratorChip } from "@/components/faceless/narrator";
 import { StyleArt } from "@/components/faceless/style-art";
 import { SelfHostNote } from "@/components/self-host-note";
+import { StarterParam } from "@/components/starters/starter-param";
+import { StarterSection } from "@/components/starters/starter-section";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
-import { uploadFile, useEngine, useHydrated, useLikelyVisitor } from "@/lib/api";
+import { uploadFile, useEngine, useHydrated, useIsOwner, useLikelyVisitor } from "@/lib/api";
 import {
   ANIMATION_STYLES,
   CF_LENGTHS,
@@ -31,6 +33,7 @@ import {
   type SeriesCard,
 } from "@/lib/catalog/content-factory";
 import { GENRES, type EpisodeAspect, type FacelessGenre, type NarratorVoice, type PickerData } from "@/lib/catalog/faceless";
+import { starterShown, type StarterCardData, type StarterFill } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { ApiError, discardDraft, useCreateSeries, useGenerateSeries, useRereadSeries, useSeries, useSeriesEstimate, useSeriesList, useUpdateSeries, type SeriesAsk } from "./hooks";
@@ -64,7 +67,11 @@ function chipTrigger(className?: string) {
   return cn("h-8 max-w-full gap-1 rounded-full border-0 bg-secondary px-3 text-[13px] font-medium shadow-none hover:bg-accent dark:bg-secondary dark:hover:bg-accent", className);
 }
 
-export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] }) {
+/**
+ * starters: the ready series (src/lib/starters/catalog.ts), right under the composer while you have none, one row under
+ * yours after; fills: what each one puts in the composer.
+ */
+export function ContentFactoryHome({ voices, starters = [], fills = {} }: { voices: PickerData["voices"]; starters?: StarterCardData[]; fills?: Record<string, StarterFill> }) {
   const router = useRouter();
   const [engine, setEngine] = useEngine();
   const [mode, setMode] = useState<"here" | "claude">("here");
@@ -105,6 +112,9 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
   const reread = useRereadSeries();
   const updateBrief = useUpdateSeries();
   const list = useSeriesList();
+  const owner = useIsOwner();
+  const hasSeries = !!list.data?.length;
+  const readyShown = starters.some((s) => starterShown(s, !owner));
 
   useEffect(() => {
     if (gone) writeDraft(null);
@@ -181,6 +191,21 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
     const checked = referenceLink(link);
     if ("error" in checked) return setLinkError({ message: checked.error, upload: false });
     startSeries({ kind: "link", link: checked.url }).catch((e: Error) => setLinkError({ message: e.message, upload: e instanceof ApiError && e.needsUpload }));
+  };
+
+  /** A ready series in the composer: its trending style, its idea, its length; the style brings its own look. */
+  const fill = (id: string) => {
+    const f = fills[id];
+    if (f?.kind !== "content-factory") return;
+    choosePreset(f.presetId);
+    setPrompt(f.prompt);
+    setLength(f.length);
+    setEpisodes(f.episodes);
+    setMode("here");
+    requestAnimationFrame(() => {
+      promptRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      promptRef.current?.focus({ preventScroll: true });
+    });
   };
 
   const blocker = !prompt.trim() ? "Say what the video is about" : reading ? "The reference is still being read — a moment" : !brief ? "Add a reference or pick a preset" : null;
@@ -480,6 +505,8 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
           )}
         </div>
 
+        {!list.isLoading && !hasSeries && <StarterSection starters={starters} onFill={fill} />}
+
         <section id="presets" aria-labelledby="presets-title" className="scroll-mt-16 space-y-4">
           <div>
             <h2 id="presets-title" className="font-heading text-[24px]">
@@ -490,32 +517,36 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
           <PresetGrid value={view ? (view.reference?.presetId ?? null) : presetId} onPick={(p) => choosePreset(p.id)} />
         </section>
 
-        <section aria-labelledby="series-title" className="space-y-4">
-          <h2 id="series-title" className="font-heading text-[24px]">
-            My series
-          </h2>
-          {list.isLoading ? (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
-              {Array.from({ length: 5 }, (_, i) => (
-                <Skeleton key={i} className="aspect-[4/5] rounded-xl" />
-              ))}
-            </div>
-          ) : list.data?.length ? (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
-              {list.data.map((s) => (
-                <SeriesTile key={s.id} s={s} />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center rounded-2xl border border-dashed px-6 py-10 text-center">
-              <div className="grid size-12 place-items-center rounded-2xl bg-brand-faint text-brand-text">
-                <Film className="size-5" />
+        {(list.isLoading || hasSeries || !readyShown) && (
+          <section aria-labelledby="series-title" className="space-y-4">
+            <h2 id="series-title" className="font-heading text-[24px]">
+              My series
+            </h2>
+            {list.isLoading ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Skeleton key={i} className="aspect-[4/5] rounded-xl" />
+                ))}
               </div>
-              <p className="mt-3 font-heading text-[22px]">No series yet</p>
-              <p className="mt-1 max-w-sm text-[13px] text-muted-foreground">Pick a style above and say what to make: every episode lands here, and in Faceless Studio as a channel.</p>
-            </div>
-          )}
-        </section>
+            ) : list.data?.length ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-5">
+                {list.data.map((s) => (
+                  <SeriesTile key={s.id} s={s} />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center rounded-2xl border border-dashed px-6 py-10 text-center">
+                <div className="grid size-12 place-items-center rounded-2xl bg-brand-faint text-brand-text">
+                  <Film className="size-5" />
+                </div>
+                <p className="mt-3 font-heading text-[22px]">No series yet</p>
+                <p className="mt-1 max-w-sm text-[13px] text-muted-foreground">Pick a style above and say what to make: every episode lands here, and in Faceless Studio as a channel.</p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {hasSeries && <StarterSection starters={starters} onFill={fill} row />}
 
         <section aria-label="How it works" className="grid gap-3 sm:grid-cols-3">
           {STEPS.map((s, i) => (
@@ -533,6 +564,9 @@ export function ContentFactoryHome({ voices }: { voices: PickerData["voices"] })
           ))}
         </section>
       </div>
+      <Suspense fallback={null}>
+        <StarterParam onStarter={fill} />
+      </Suspense>
       <ClaudeDialog open={claudeOpen} onOpenChange={setClaudeOpen} ask={claudeOpen ? { ...ask, ...source } : null} />
     </div>
   );

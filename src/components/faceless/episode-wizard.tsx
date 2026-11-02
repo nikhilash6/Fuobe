@@ -58,8 +58,11 @@ function Steps({ step }: { step: 1 | 2 }) {
   );
 }
 
-/** New episode: a topic (suggested or your own), the video settings and the script source; then the script is written for review. */
-export function EpisodeWizard({ channelId, picker }: { channelId: string; picker: PickerData }) {
+/**
+ * New episode: a topic (suggested or your own), the video settings and the script source; then the script is written for review.
+ * initialTopic: a ready channel's first topic (its starter), in "Or write your own".
+ */
+export function EpisodeWizard({ channelId, picker, initialTopic }: { channelId: string; picker: PickerData; initialTopic?: string }) {
   const router = useRouter();
   const { data, error } = useChannel(channelId);
   const [engine, setEngine] = useEngine();
@@ -70,7 +73,7 @@ export function EpisodeWizard({ channelId, picker }: { channelId: string; picker
   const [round, setRound] = useState(0);
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
-  const [own, setOwn] = useState("");
+  const [own, setOwn] = useState(initialTopic ?? "");
   const [scriptMode, setScriptMode] = useState<"ai" | "pasted">("ai");
   const [script, setScript] = useState("");
   const [draft, setDraft] = useState<EpisodeSettings | null>(null);

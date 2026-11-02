@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Clapperboard, Loader2, MousePointerClick, PenLine, RefreshCw, Wand2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -12,16 +12,19 @@ import { areaCls, ColorList, inputCls } from "@/components/brand/fields";
 import { ImageList } from "@/components/brand/image-list";
 import { AddFromLink, priceText, ProductThumb, UploadProductButton } from "@/components/brand/products";
 import { SelfHostNote } from "@/components/self-host-note";
+import { StarterSection } from "@/components/starters/starter-section";
 import { useCoverPlayback } from "@/components/template-cover";
 import type { SlotValue } from "@/components/studio/media-slot";
 import { uploadFile, useLikelyVisitor } from "@/lib/api";
 import { AD_STYLES, END_CARD, KIT_LABELS, type AdStyle, type BrandKit, type MarketingRun, type Product, type RunEstimate } from "@/lib/catalog/marketing";
 import { formatCost } from "@/lib/format";
+import type { StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { templateCover } from "@/lib/template-covers";
 import { recipeKey } from "@/lib/motion/recipe";
 import { endCardPng, siteLabel, type EndCardInput } from "./end-card";
+import { ProductParam } from "./product-param";
 import { EndCardMotionPanel, renderRecipe, useEndCardMotion, type EndCardChoice } from "./end-card-motion";
 import { addRuns, send, useBrand, useEstimate, useProductActions, useProducts, useReadingProduct, useUpdateBrand } from "./hooks";
 import type { ModelInfo } from "./model-info";
@@ -143,8 +146,11 @@ function KitBrand({ brand }: { brand: BrandKit }) {
   );
 }
 
-/** Click to Ad: product link → product kit → style → a 9:16 ad of up to 12 s with voiceover and captions. */
-export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
+/**
+ * Click to Ad: product link → product kit → style → a 9:16 ad of up to 12 s with voiceover and captions.
+ * starters: the ready products (src/lib/starters/catalog.ts), first while there are no saved products.
+ */
+export function ClickToAd({ models, starters = [] }: { models: Record<string, ModelInfo>; starters?: StarterCardData[] }) {
   const qc = useQueryClient();
   const { engine, setEngine } = useMarketingEngine();
   const products = useProducts();
@@ -317,6 +323,11 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
           <p className="mx-auto mt-2 max-w-xl text-[15px] text-muted-foreground">Drop a product link, get a 9:16 ad with voiceover and captions — ready for TikTok, Reels and Shorts. No filming, no editing, no brief.</p>
           {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Click to Ad isn&apos;t available here.</SelfHostNote>}
         </div>
+
+        <Suspense fallback={null}>
+          <ProductParam products={products.data} onProduct={choose} />
+        </Suspense>
+        {products.isSuccess && !products.data.length && <StarterSection starters={starters} className="pb-3" />}
 
         <Step n={1} title="Your product" hint="Paste the product's own page, or pick one you saved." done={!!product}>
           <AddFromLink limit={1} withBrand placeholder="https://yourshop.com/products/…" onAdded={(ps, extra) => ps[0] && choose(ps[0], extra.brand)} disabled={visitor} />
@@ -518,6 +529,8 @@ export function ClickToAd({ models }: { models: Record<string, ModelInfo> }) {
             }
           />
         </div>
+
+        {!!products.data?.length && <StarterSection starters={starters} row className="pt-8" />}
       </div>
     </div>
   );

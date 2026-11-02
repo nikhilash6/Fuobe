@@ -2,7 +2,7 @@
 
 import { Download, FileText, Image as ImageIcon, Link2, Loader2, Paperclip, Search, Settings2, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState } from "react";
+import { Suspense, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -16,7 +16,9 @@ import { grabFrames } from "@/components/restore/hooks";
 import { OldFootageOffer } from "@/components/restore/old-footage";
 import { fileToSlot } from "@/components/studio/media-slot";
 import { SelfHostNote } from "@/components/self-host-note";
-import { useEngine, useLikelyVisitor } from "@/lib/api";
+import { StarterParam } from "@/components/starters/starter-param";
+import { StarterSection } from "@/components/starters/starter-section";
+import { useEngine, useIsOwner, useLikelyVisitor } from "@/lib/api";
 import {
   ANIMATION_MODES,
   AUTO_SECONDS,
@@ -35,6 +37,7 @@ import {
   type ExplainerSource,
   type PickerData,
 } from "@/lib/catalog/faceless";
+import { starterShown, type StarterCardData, type StarterFill } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { EpisodeTile } from "../faceless/cards";
@@ -145,8 +148,12 @@ function LinkPopover({ engine, disabled, onAdd }: { engine: EpisodeSettings["eng
   );
 }
 
-/** Higgsfield Explainer's form: a style, what to explain, up to 3 sources, the format; plus your history. */
-export function ExplainerStudio({ picker }: { picker: PickerData }) {
+/**
+ * Higgsfield Explainer's form: a style, what to explain, up to 3 sources, the format; plus your history.
+ * starters: the ready explainers (src/lib/starters/catalog.ts), where the history is while it's empty, one row under it
+ * after; fills: what each one puts in the form.
+ */
+export function ExplainerStudio({ picker, starters = [], fills = {} }: { picker: PickerData; starters?: StarterCardData[]; fills?: Record<string, StarterFill> }) {
   const router = useRouter();
   const [engine, setEngine] = useEngine();
   // An explainer doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
@@ -170,6 +177,27 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
   const history = useExplainers({ q, liked: tab === "liked" });
   const like = useLikeEpisode();
   const promptId = useId();
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const owner = useIsOwner();
+  const readyShown = starters.some((s) => starterShown(s, !owner));
+  const noHistory = !history.isLoading && !history.data?.length && tab === "all" && !q;
+
+  /** A ready explainer in the form: its topic, style, length, shape and narrator. */
+  const fill = (id: string) => {
+    const f = fills[id];
+    if (f?.kind !== "explainer") return;
+    setPrompt(f.prompt);
+    set({ styleId: f.styleId, aspect: f.aspect, ...(f.voice && { voice: { kind: "preset" as const, id: f.voice } }) });
+    if (f.duration === "auto" || EXPLAINER_DURATIONS.some((d) => d.value === f.duration)) setDuration(String(f.duration));
+    else {
+      setDuration("manual");
+      setManual(String(f.duration));
+    }
+    requestAnimationFrame(() => {
+      promptRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      promptRef.current?.focus({ preventScroll: true });
+    });
+  };
 
   const manualSecs = Math.round(Number(manual));
   const manualBad = duration === "manual" && (!Number.isInteger(Number(manual)) || manualSecs < EXPLAINER_MIN || manualSecs > EXPLAINER_MAX);
@@ -309,6 +337,7 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
             </label>
             <textarea
               id={promptId}
+              ref={promptRef}
               value={prompt}
               maxLength={MAX_TOPIC}
               onChange={(e) => setPrompt(e.target.value)}
@@ -442,8 +471,9 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
           </ol>
         </section>
 
-        <section aria-labelledby="history-title" className="min-w-0 space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+        {/* While there is no history yet, the ready explainers stand in its place, without its tabs and search. */}
+        <section aria-labelledby={noHistory && readyShown ? "starters-title" : "history-title"} className="min-w-0 space-y-4">
+          <div className={cn("flex flex-wrap items-center gap-2", noHistory && readyShown && "hidden")}>
             <h2 id="history-title" className="mr-auto font-heading text-[24px]">
               History
             </h2>
@@ -473,6 +503,8 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
                 <EpisodeTile key={ep.id} ep={ep} href={`/explainer/${ep.id}`} onLike={() => like.mutate({ id: ep.id, favorite: !ep.favorite })} />
               ))}
             </div>
+          ) : noHistory && readyShown ? (
+            <StarterSection starters={starters} onFill={fill} narrow />
           ) : (
             <div className="flex flex-col items-center rounded-2xl border border-dashed px-6 py-12 text-center">
               <div className="grid size-12 place-items-center rounded-2xl bg-brand-faint text-brand-text">{tab === "liked" ? <ImageIcon className="size-5" /> : <Sparkles className="size-5" />}</div>
@@ -480,9 +512,13 @@ export function ExplainerStudio({ picker }: { picker: PickerData }) {
               <p className="mt-1 max-w-sm text-[13px] text-muted-foreground">{tab === "liked" ? "Like an explainer to keep it here." : "Pick a style, say what to explain, and press Generate."}</p>
             </div>
           )}
+          {!!history.data?.length && tab === "all" && !q && <StarterSection starters={starters} onFill={fill} headingLevel="h3" narrow row className="pt-6" />}
         </section>
       </div>
 
+      <Suspense fallback={null}>
+        <StarterParam onStarter={fill} />
+      </Suspense>
       <Sheet open={stylesOpen} onOpenChange={setStylesOpen}>
         {/* The Sheet's own width is set for its side (data-[side=right]:…): only the same variant overrides it. */}
         <SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-[640px]">

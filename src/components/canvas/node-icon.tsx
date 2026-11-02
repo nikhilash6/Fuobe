@@ -40,6 +40,8 @@ import {
   ZoomIn,
   type LucideIcon,
   Box,
+  Music,
+  Shirt,
 } from "lucide-react";
 
 export const ICONS: Record<string, LucideIcon> = {
@@ -82,6 +84,9 @@ export const ICONS: Record<string, LucideIcon> = {
   Building2,
   Fish,
   Dog,
+  // Outfit lookbook, music video
+  Shirt,
+  Music,
 };
 
 /** A node type's or template's icon, by lucide name. */

@@ -7,6 +7,8 @@
  * Pure, so the route table is tested without a server.
  */
 import { HUB_MODES, type HubKind } from "./hubs";
+import { STARTER_IDS } from "./starters/ids";
+import type { StarterSurface } from "./starters/types";
 
 export type RecordKind = "cinema" | "canvas" | "assist-project" | "layers" | "shorts" | "brand" | "element" | "channel" | "episode" | "explainer" | "series" | "swap-project";
 
@@ -38,6 +40,10 @@ const PAGES: [RegExp, (m: string[]) => RecordRef][] = [
 /** Static pages that a record pattern would also match (/ads/multiplier is not a brand). */
 const FIXED = new Set(["/ads/multiplier"]);
 
+/** A ready-made starter's page (/faceless/start/<id>…): catalog data, not a stored record. */
+const STARTER_PAGE = /^\/(faceless|content-factory|explainer|ads|marketing|marketing\/click-to-ad)\/start\/([^/]+)$/;
+const STARTER_BASE: Record<string, StarterSurface> = { faceless: "faceless", "content-factory": "content-factory", explainer: "explainer", ads: "ads", marketing: "marketing", "marketing/click-to-ad": "click-to-ad" };
+
 function decode(s: string): string {
   try {
     return decodeURIComponent(s);
@@ -49,12 +55,18 @@ function decode(s: string): string {
 /** The record a page path names (null for every other page). A trailing slash is ignored. */
 export function recordForPath(pathname: string): RecordRef | null {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
-  if (FIXED.has(path)) return null;
+  if (FIXED.has(path) || STARTER_PAGE.test(path)) return null;
   for (const [re, ref] of PAGES) {
     const m = re.exec(path);
     if (m) return ref(m.slice(1).map(decode));
   }
   return null;
+}
+
+/** A starter page (/faceless/start/<id>…) whose id isn't one of that studio's starters. A trailing slash is ignored. */
+export function unknownStarterPage(pathname: string): boolean {
+  const m = STARTER_PAGE.exec(pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname);
+  return !!m && !STARTER_IDS[STARTER_BASE[m[1]]].includes(decode(m[2]));
 }
 
 /** /audio/<mode>, /video-tools/<mode> and /upscale/<mode> with a mode the hub doesn't have. */

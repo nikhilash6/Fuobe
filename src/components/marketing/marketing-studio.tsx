@@ -15,16 +15,19 @@ import { withoutOwnGpu } from "@/lib/catalog/engines";
 import { Switch } from "@/components/ui/switch";
 import { DRAWN_WORDS_HINT, DRAWN_WORDS_LABEL, FORMATS, formatModels, looksLikeWebsite, pickable, MAX_PROMPT, openingAspect, TEMPLATE_INDEX, type FormatId, type MarketingCategory, type MarketingTemplate, type RunEstimate } from "@/lib/catalog/marketing";
 import { SelfHostNote } from "@/components/self-host-note";
+import { StarterSection } from "@/components/starters/starter-section";
 import { formatCost } from "@/lib/format";
 import { useIsOwner, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
+import type { StarterCardData } from "@/lib/starters/types";
 import { cn } from "@/lib/utils";
-import { addRuns, send, useBrands, useEstimate } from "./hooks";
+import { addRuns, send, useBrands, useEstimate, useProducts } from "./hooks";
 import type { MarketingRun } from "@/lib/catalog/marketing";
 import { toastError } from "@/lib/refusals";
 import { templateCover } from "@/lib/template-covers";
 import type { ModelInfo } from "./model-info";
-import { AvatarSlot, HookPicker, ProductSlot, SettingPicker, VoiceControl, type ProductChoice } from "./pickers";
+import { AvatarSlot, HookPicker, ProductSlot, productChoice, SettingPicker, VoiceControl, type ProductChoice } from "./pickers";
+import { ProductParam } from "./product-param";
 import { RunsList } from "./runs";
 import { EmptyIcon, MarketingHeader, useMarketingEngine } from "./shell";
 import { TemplateGallery, type MediaFilter } from "./template-gallery";
@@ -291,10 +294,11 @@ function FormatChip({ draft, onFormat }: { draft: Draft; onFormat: (f: FormatId)
 
 function UrlParams({ onTemplate, onTab }: { onTemplate: (t: MarketingTemplate) => void; onTab: (t: "templates" | "generations") => void }) {
   const q = useSearchParams();
-  const done = useRef(false);
+  // The address read last: a ready shoot opened from this page (?template=…&product=…) is read too, once.
+  const done = useRef<string | null>(null);
   useEffect(() => {
-    if (done.current) return;
-    done.current = true;
+    if (done.current === q.toString()) return;
+    done.current = q.toString();
     const t = q.get("template");
     if (t && TEMPLATE_INDEX.get(t)) onTemplate(TEMPLATE_INDEX.get(t)!);
     if (q.get("tab") === "generations") onTab("generations");
@@ -302,8 +306,12 @@ function UrlParams({ onTemplate, onTab }: { onTemplate: (t: MarketingTemplate) =
   return null;
 }
 
-/** Marketing Studio: pick a template (or a format), add your product, avatar, hook and brand kit, and generate. */
-export function MarketingStudio({ models }: { models: Record<string, ModelInfo> }) {
+/**
+ * Marketing Studio: pick a template (or a format), add your product, avatar, hook and brand kit, and generate.
+ * starters: the ready shoots (a product with its photo and a template; src/lib/starters/catalog.ts), above the templates
+ * while there are no saved products.
+ */
+export function MarketingStudio({ models, starters = [] }: { models: Record<string, ModelInfo>; starters?: StarterCardData[] }) {
   const qc = useQueryClient();
   const { engine, setEngine } = useMarketingEngine();
   const [tab, setTab] = useState<"templates" | "generations">("templates");
@@ -331,6 +339,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
   const [savedBrand, pickBrand] = useSavedBrand();
   const brands = useBrands();
   const brandId = savedBrand && brands.data?.some((b) => b.id === savedBrand) ? savedBrand : null;
+  const products = useProducts();
 
   const pickTemplate = (t: MarketingTemplate) => {
     setDraft((d) => withTemplate(d, t));
@@ -418,6 +427,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
       <MarketingHeader title="Marketing Studio" active="studio" engine={engine} onEngine={setEngine} selfHostedOnly />
       <Suspense fallback={null}>
         <UrlParams onTemplate={pickTemplate} onTab={setTab} />
+        <ProductParam products={products.data} onProduct={(p) => set({ product: productChoice(p) })} />
       </Suspense>
       <div className="mx-auto w-full min-w-0 max-w-[1240px] flex-1 px-3 pb-10 sm:px-6">
         <div className="pt-6 pb-2 text-center sm:pt-10">
@@ -427,6 +437,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
           </p>
           {visitor && <SelfHostNote className="mx-auto mt-3 max-w-xl">Marketing Studio isn&apos;t available here.</SelfHostNote>}
         </div>
+        {products.isSuccess && !products.data.length && <StarterSection starters={starters} className="mt-6 mb-4" />}
         <div role="tablist" aria-label="View" className="mx-auto mt-4 flex w-fit rounded-full bg-muted p-0.5">
           {(["templates", "generations"] as const).map((t) => (
             <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cn("h-8 rounded-full px-4 text-[13px] font-medium text-muted-foreground", tab === t && "bg-background text-foreground shadow-soft")}>
@@ -463,6 +474,7 @@ export function MarketingStudio({ models }: { models: Record<string, ModelInfo> 
             />
           )}
         </div>
+        {tab === "templates" && !!products.data?.length && <StarterSection starters={starters} row className="mt-12" />}
       </div>
 
       {/* Docked composer */}
