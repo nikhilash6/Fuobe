@@ -295,6 +295,8 @@ function demoOutputs(op: Operation | undefined, kind: MediaKind, prompt: string,
     case "separate-audio": {
       const stem = (name: string, wav: Buffer): DemoOutput => ({ url: toDataUri(wav, "audio/wav"), kind: "audio", contentType: "audio/wav", meta: { stem: name, demo: true } });
       // A dialogue / music / effects split (DBS) returns those three and the music-and-effects bed, voice first.
+      // A remix of the split at set levels (DBS graph C, Clean up dialogue): one track, the clean dialogue.
+      if (meta.remix) return [stem("voice", demoWav(3, [220, 330], 3))];
       const stems: DemoOutput[] = meta.threeStems
         ? [stem("voice", demoWav(3, [220, 330], 3)), stem("music", demoWav(3, [262, 392])), stem("effects", demoWav(3, [90, 140], 7)), stem("background", demoWav(3, [110, 165]))]
         : [stem("voice", demoWav(3, [220, 330], 3)), stem("background", demoWav(3, [110, 165]))];
@@ -424,6 +426,8 @@ export const mockProvider: ProviderAdapter = {
         transcript: route.op === "separate-audio" && route.provider === "comfyui" && route.endpoint.includes("transcribe"),
         // A dialogue / music / effects split (ComfyUI's separate-soundtrack-dbs): four stems.
         threeStems: route.op === "separate-audio" && route.endpoint === "separate-soundtrack-dbs",
+        // DBS graph C (soundtrack-remix-dbs): one remixed track.
+        remix: route.op === "separate-audio" && route.endpoint === "soundtrack-remix-dbs",
       },
       payload: { demo: true, ...input },
     };
