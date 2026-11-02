@@ -147,7 +147,7 @@ describe("round-4 cloud models", () => {
     expect(ids("video", ["interpolate"])).toEqual(["topaz-fps-boost", "rife-video-cloud"]);
     expect(ids("video", ["sdr-to-hdr"])).toEqual(["topaz-sdr-to-hdr", "ltx-2-3-hdr"]);
     expect(ids("text", ["ocr"])).toEqual(["florence-2-ocr"]);
-    expect(ids("model3d", ["splat"])).toEqual(["triposplat"]);
+    expect(ids("model3d", ["splat"])).toEqual(["triposplat", "idol-3d"]);
     expect(ids("model3d", ["text-to-3d"])).toEqual(["tripo-h3-1-text"]);
     expect(ids("model3d", ["rig-3d"])).toEqual(["meshy-rigging"]);
     expect(ids("video", ["keyframes"])).toEqual(["flux-3-max"]);
