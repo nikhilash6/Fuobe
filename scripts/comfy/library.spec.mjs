@@ -251,6 +251,12 @@ export const KNOWN_MODELS = {
   'wan_2.1_vae.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors' },
   'wan2.2_fun_vace_high_noise_14B_fp8_scaled.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_vace_high_noise_14B_fp8_scaled.safetensors' },
   'wan2.2_fun_vace_low_noise_14B_fp8_scaled.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_vace_low_noise_14B_fp8_scaled.safetensors' },
+  // Keyframe animation (wan22-inbetween-anisora): the Wan 2.2 I2V experts, the lightx2v 4-step low-noise LoRA, and AniSora 3.2's
+  // high-noise LoRA (bilibili Index-AniSora V3.2, Apache-2.0; Kijai's rank-64 extraction, model-pins.json pins its commit).
+  'wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors' },
+  'wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors' },
+  'wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors': { folder: 'loras', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors' },
+  'Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors': { folder: 'loras', url: 'https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/AniSora/Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors' },
   'wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors': { folder: 'loras', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors' },
   'wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors': { folder: 'loras', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors' },
   'qwen_image_edit_2509_fp8_e4m3fn.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors' },
@@ -1252,6 +1258,36 @@ export const SPEC = [
     limits: { maxWidth: 1280, maxHeight: 1280, maxFrames: 121, dimensionMultiple: 16, frameStep: 4 },
     vramGb: 24,
     notes: 'Uses the Wan 2.2 I2V high/low experts. High->low switch at step 10 (end_at_step of node 84 / start_at_step of node 87, not a binding). Start and end images should share the output aspect ratio.',
+  },
+  {
+    // Keyframe animation (package inbetweening): Fuobe Animation on your GPU. The library file holds two keyframes (one pass);
+    // the provider rewrites it for 2-10 keyframes (expand: 'keyframes', src/lib/av/inbetween-graph.ts), all passes on one set of loaders.
+    id: 'wan22-inbetween-anisora',
+    title: 'Keyframe animation: Wan 2.2 14B first/last-frame in-betweens with AniSora 3.2, every Nth frame per gap, one video',
+    capability: 'keyframes',
+    handBuilt: 'hand-built/wan22-inbetween-anisora.json',
+    bindings: {
+      prompt: [b('p1', 'text')],
+      negativePrompt: [b('9', 'text')],
+      image: [b('k1', 'image')],
+      endImage: [b('k2', 'image')],
+      width: [b('f1', 'width')],
+      height: [b('f1', 'height')],
+      frames: [b('f1', 'length')],
+      fps: [b('video', 'fps')],
+      seed: [b('h1', 'noise_seed')],
+      shift: [b('3', 'shift'), b('6', 'shift')],
+    },
+    outputs: [{ node: 'save', kind: 'video' }],
+    limits: { maxWidth: 1280, maxHeight: 1280, maxFrames: 81, dimensionMultiple: 16, frameStep: 4 },
+    expand: 'keyframes',
+    vramGb: 24,
+    license: 'Apache-2.0 (Wan 2.2 I2V A14B, lightx2v 4-step LoRA, bilibili Index-AniSora V3.2; Kijai\'s AniSora extraction states no licence of its own)',
+    notes:
+      'One Wan 2.2 FLF2V pass per pair of neighbouring keyframes, all sharing one set of loaders: the high-noise expert with AniSora 3.2 (strength 1) and the low-noise expert with the lightx2v 4-step LoRA (strength 1), ModelSamplingSD3 shift 5 on both, ' +
+      'KSamplerAdvanced 4 steps at CFG 1, euler / simple, high 0-2 with leftover noise, low 2-end; umt5 fp8, Wan 2.1 VAE, Wan\'s standard negative words. Each pass has its own length (4n + 1, 17-81 frames), words and seed. ' +
+      'VHS_SelectEveryNthImage keeps every Nth frame (1-4) counted back from the next keyframe (skip_first_images = ((length - 2) mod N) + 1), so each pose is on screen and no joint shows a frame twice; keyframe 1 (ImageFromBatch of pass 1) goes in front; ' +
+      'BatchImagesNode joins them in order and CreateVideo plays them at 24 fps (snappier, the passes are made at 16 fps) or 16 fps (true time). About 24 GB of VRAM at 720p; RAM for the decoded frames grows with the total length.',
   },
   {
     id: 'wan22-fun-camera-14b',

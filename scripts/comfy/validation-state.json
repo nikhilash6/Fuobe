@@ -935,6 +935,12 @@
     "error": null,
     "at": "2026-10-16T20:57:21.514Z"
   },
+  "wan22-inbetween-anisora": {
+    "sha256": "d39f4f7dd0eb49cf3369724ce11edc7c2b94f96342ea9b604d12625328f20d61",
+    "validated": true,
+    "error": null,
+    "at": "2026-11-02T01:08:20.854Z"
+  },
   "wan22-s2v-14b": {
     "sha256": "1b554529206f27dd9ebddf4a6ef60ad666e550fc64ed72c222f57bb1dacf7720",
     "validated": true,
