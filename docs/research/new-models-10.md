@@ -113,7 +113,7 @@ Columns: licence as written by the publisher; VRAM as published (guesses are mar
 | Model (date) | What | Licence | ComfyUI | Hosted | In Fuobe |
 |---|---|---|---|---|---|
 | Speridlabs **Idol** (10-28) | one image → Gaussian splat in 7.2 GB | Apache-2.0 | community node; core TripoSplat graph | **fal `speridlabs/idol` (10-30)** | queued `idol-1..9` (open only in the briefs) |
-| Hi3D v1.0 (10-16) | coarse mesh → 1536³ geometry | Hi3D Open License 1.0 | `t8star/Hi3d-Comfy` | no | queued `hi3d-refine` |
+| Hi3D v1.0 (10-23; corrected by `hi3d-refine`) | coarse mesh → 1536³ geometry | Hi3D Open License 1.0 | `T8mars/Comfyui-Hi3d-T8` (weights repo `t8star/Hi3d-Comfy`) | no | `hi3d-refine` (open engine only) |
 | UltraTex (10-03) | 2K multi-view texturing of meshes | unconfirmed | custom pack | no | no |
 | Meshy 6 / 7 Retexture (10-14), Meshy 7.1 text-to-3D, Tripo P2 (09-20) | retexture, production meshes | proprietary | — | fal | Meshy 7.1 image / multi-image yes; these no |
 | HairDeck (10-27, Apache-2.0), UniForge3D (10-10, CC-BY-NC-4.0), StableGen 0.4 (Blender + ComfyUI texturing / rigging, GPL-3.0) | hair, assets, texturing | as listed | various | no | no (watch) |
