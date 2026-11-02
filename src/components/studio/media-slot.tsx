@@ -25,6 +25,8 @@ export interface SlotValue {
   kind: MediaKind;
   name?: string;
   uploading?: boolean;
+  /** Picked from the library: whether it was an upload or a result made here. */
+  source?: "upload" | "generation";
   /** Drawings and masks: the strokes they were made from, so the editor reopens them (in image pixels). */
   sketch?: { mode: SketchMode; strokes: Stroke[] };
 }
@@ -174,7 +176,7 @@ export function LibraryGrid({ kinds, onPick }: { kinds: MediaKind[]; onPick: (v:
               key={a.id}
               className="aspect-square overflow-hidden rounded-md bg-muted ring-primary transition outline-none hover:ring-2 focus-visible:ring-2"
               aria-label={a.name ?? `${a.kind} from your library`}
-              onClick={() => onPick({ ref: a.url, preview: a.url, kind: a.kind, name: a.name ?? undefined })}
+              onClick={() => onPick({ ref: a.url, preview: a.url, kind: a.kind, name: a.name ?? undefined, source: a.source })}
             >
               <SlotPreview value={{ preview: a.url, kind: a.kind }} />
             </button>

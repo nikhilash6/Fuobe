@@ -56,6 +56,8 @@
 //   gridPrompt, sheetPrompt               (contact-sheet / turnaround framing text placed before the prompt)
 // Keys added with the nm10-flux3-klein workflows (research #10 §6.3):
 //   image5 … image10                      (further reference images: FLUX 3 Image Klein's edit takes up to 10)
+// Keys added with the nm10-music3 workflows (research #10 §6.6). * = the provider fills it from the canonical request:
+//   tiledDecode*                          (MiniMax Music 3: decode the song in tiles, less VRAM; on for songs over 2 minutes)
 // Keys added with the av-tools workflows (Wave B):
 //   frameIndex                            (Extract frame: which frame of the Trim Video window, -1 = its last, 0 = its first)
 // Keys added with the comfyui-oss-4 workflows (docs/research/comfyui-oss-4.md). * = the provider fills it from the
@@ -73,6 +75,7 @@
 //   peakNits                              (SDR to HDR: target peak white)
 //   resolutionLevel, fovX, decimation     (MoGe: inference detail 0-9, horizontal field of view in degrees (0 = estimate), mesh decimation)
 //   cutout, numGaussians, splatFormat     (TripoSplat: BiRefNet cut-out on/off, number of Gaussians, ply | ksplat | spz)
+//   photoCrop                             (Idol 3D, idol-9 §5.5: true = the looser photo crop, a core-node branch after TripoSplatPreprocessImage)
 //   orbitFrames                           (TripoSplat orbit preview length in frames)
 //   frameWidth                            (reference brief: width the clip's frames are scaled to, px)
 // Keys added with round 4 (engine seams):
@@ -243,6 +246,13 @@ export const PACK_CLASSES = {
 // Model download locations for files that the source workflow does not annotate
 // (UI templates usually carry node.properties.models; custom-node examples do not).
 export const KNOWN_MODELS = {
+  // nm10-music3: MiniMax Music 3 and YuE2 as Comfy-Org repacked them (the files the core templates audio_minimax_music_3,
+  // audio_yue2_text2music and audio_yue2_music_cover load), pinned in model-pins.json at the revisions read on 2026-11-01.
+  'minimax_music3_dit_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/diffusion_models/minimax_music3_dit_int8_convrot.safetensors' },
+  'minimax_music3_text_encoder_pruned_int8_convrot.safetensors': { folder: 'text_encoders', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/text_encoders/minimax_music3_text_encoder_pruned_int8_convrot.safetensors' },
+  'minimax_music3_dav.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-Music-3/resolve/main/vae/minimax_music3_dav.safetensors' },
+  'yue2_3b_int8_convrot.safetensors': { folder: 'checkpoints', url: 'https://huggingface.co/Comfy-Org/YuE2/resolve/main/checkpoints/yue2_3b_int8_convrot.safetensors' },
+  'sheetsage2_bf16.safetensors': { folder: 'audio_encoders', url: 'https://huggingface.co/Comfy-Org/YuE2/resolve/main/audio_encoders/sheetsage2_bf16.safetensors' },
   // archive-restore: Lightricks' Detail Refine IC-LoRA (stage 2 of Restore & colourise), gated, at the researched commit.
   'ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors': { folder: 'loras', url: 'https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details/resolve/4912c478b35dd96b6cdcc5f7c7ff9d72c2c57929/ltx-2.5-22b-ic-lora-refine-details-1.0.safetensors' },
   // Live edit: linoyts' 2-step DMD2 LoRA for Qwen-Image 2.1 (pytorch_lora_weights.safetensors upstream, kept under a
@@ -272,6 +282,12 @@ export const KNOWN_MODELS = {
   'wan_2.1_vae.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors' },
   'wan2.2_fun_vace_high_noise_14B_fp8_scaled.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_vace_high_noise_14B_fp8_scaled.safetensors' },
   'wan2.2_fun_vace_low_noise_14B_fp8_scaled.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_fun_vace_low_noise_14B_fp8_scaled.safetensors' },
+  // Keyframe animation (wan22-inbetween-anisora): the Wan 2.2 I2V experts, the lightx2v 4-step low-noise LoRA, and AniSora 3.2's
+  // high-noise LoRA (bilibili Index-AniSora V3.2, Apache-2.0; Kijai's rank-64 extraction, model-pins.json pins its commit).
+  'wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors' },
+  'wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors' },
+  'wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors': { folder: 'loras', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors' },
+  'Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors': { folder: 'loras', url: 'https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/LoRAs/AniSora/Wan2_2_I2V_AniSora_3_2_HIGH_rank_64_fp16.safetensors' },
   'wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors': { folder: 'loras', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors' },
   'wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors': { folder: 'loras', url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors' },
   'qwen_image_edit_2509_fp8_e4m3fn.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors' },
@@ -314,6 +330,17 @@ export const KNOWN_MODELS = {
   'minimax_h3_video_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors' },
   'minimax_h3_turbo_v4_step600_ema.safetensors': { folder: 'loras', url: 'https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/43a74557ac3f6539db8e0f2a959d03feb7a81480/minimax_h3_turbo_v4_step600_ema.safetensors' },
   'minimax_h3_flf2v_lora_v1.safetensors': { folder: 'loras', url: 'https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA/resolve/5ddbc2dbbe95edbbdaf5017c3e934b1d01791697/minimax_h3_flf2v_lora_v1.safetensors' },
+  // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu, research #10 §6.4): FastVideo's FastH3 V2 (8-step DMD2, int8 22.1 GB or
+  // NVFP4 13.6 GB for Blackwell) and FastH3 Trim (42 of 50 blocks, experimental; NVFP4 11.9 / fp8 19.7 / int8 ConvRot 18.9 GB),
+  // each at the revision read on 2026-11-02. MiniMax H3 Community License (the repos' cards).
+  'fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Comfy/resolve/ec1e3aa374a91c57b0b94a1623b7e657c0498cf2/diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors' },
+  'fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-8-Step-V2-NVFP4-Comfy/resolve/994a40beb8c8f15739e4f0fad96aec101bb7123c/diffusion_models/fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors' },
+  'fastvideo_fasth3_trim_8step_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_int8_convrot.safetensors' },
+  'fastvideo_fasth3_trim_8step_fp8.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_fp8.safetensors' },
+  'fastvideo_fasth3_trim_8step_nvfp4.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_nvfp4.safetensors' },
+  // Fast decode: Sol-H3-VAE (Efficient-Large-Model, distilled from the H3 VAE decoder; weights under the MiniMax H3 licence per
+  // its card, code Apache-2.0) as Comfy-Org repacked it for the core loader (ComfyUI #17411, master from 2026-10-28).
+  'minimax_h3_sol_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors' },
   'depth_anything_3_mono_large.safetensors': { folder: 'geometry_estimation', url: 'https://huggingface.co/Comfy-Org/Depth-Anything-3/resolve/main/geometry_estimation/depth_anything_3_mono_large.safetensors' },
   // comfyui-oss-3 additions (docs/research/comfyui-oss-3.json, sizes from the Hugging Face tree API)
   // MOSS-Image (research #7 §4.4): Comfy-Org's int8 / w4a8 set (the Comfy template's) at a pinned commit, and Spectrallic's SFT with the
@@ -381,6 +408,14 @@ export const KNOWN_MODELS = {
   'dino_v3_vit_h.safetensors': { folder: 'clip_vision', url: 'https://huggingface.co/VAST-AI/TripoSplat/resolve/main/clip_vision/dino_v3_vit_h.safetensors' },
   'triposplat_vae_decoder_fp16.safetensors': { folder: 'vae', url: 'https://huggingface.co/VAST-AI/TripoSplat/resolve/main/vae/triposplat_vae_decoder_fp16.safetensors' },
   'triposplat_fp16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/VAST-AI/TripoSplat/resolve/main/diffusion_models/triposplat_fp16.safetensors' },
+  // idol-1 (docs/research/idol-9.md §4.1): Speridlabs' Idol for the core TripoSplat nodes. A third-party conversion (ComfyUI-Idol
+  // scripts/convert.py at 4d3a4f6) of speridlabs/idol @ 2731c229 (Apache-2.0): pos_pe dropped (ComfyUI recomputes it), cast to fp16,
+  // the two decoders merged under octree./gs., and spot-checked as faithful on 10 tensor prefixes (idol-9 §3, §4.1). Pinned to
+  // nynxz/Idol @ c718f2b1: idol_fp16 741,107,210 B, sha256 cf452146f78e23a0d34be8f9f79bcde642b9a40ef493046c8e9d5f79096f6dd0;
+  // idol_decoder_fp16 576,148,658 B, sha256 c511d99eb668ec4b06d883cb6e43770bc35e3864e16e7058e8d6211ba5c509aa. dino_v3_vit_h,
+  // flux2-vae and birefnet are shared with TripoSplat, so 1.32 GB is new.
+  'idol_fp16.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/diffusion_models/idol_fp16.safetensors' },
+  'idol_decoder_fp16.safetensors': { folder: 'vae', url: 'https://huggingface.co/nynxz/Idol/resolve/c718f2b1b95b353edd07d17e845719fc10880a44/vae/idol_decoder_fp16.safetensors' },
   // round 4 (r4/video-finish): the chunked SeedVR2 graph is hand-built, so its files are named here (same files as the template).
   'seedvr2_3b_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_3b_int8_convrot.safetensors' },
   'seedvr2_ema_vae_fp16.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/vae/seedvr2_ema_vae_fp16.safetensors' },
@@ -494,7 +529,23 @@ const H3_NOTES_LAYOUT =
 const H3_NOTES_FILES =
   'Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) ' +
   'and the audio VAE (0.61 GB).';
-const H3_NOTES_COMMON = `${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FILES}`;
+// Options → Decoder "Fast decode" (nm10-h3-any-gpu): Sol-H3-VAE in the decode loader (136, binding vae); the stock VAE
+// still encodes the frames. Needs ComfyUI master from 2026-10-28 (#17411); not loadable by an older core.
+const H3_SOL_VAE = 'minimax_h3_sol_vae_int8_convrot.safetensors';
+const H3_NOTES_SOL =
+  'Fast decode (vae = minimax_h3_sol_vae_int8_convrot, 1.99 GB, optional): Sol-H3-VAE, a 24-layer whole-clip decoder distilled from the H3 VAE ' +
+  '(its card: 12.5 s -> 5.0 s for a 5 s 768p clip on an RTX 5090, 45.4 dB PSNR against the stock decoder); the core VAELoader reads it from ComfyUI master ' +
+  '0df1646a (2026-10-28, #17411) on, and its memory grows with the clip (about 24 GiB at 720p for 5 s, the card).';
+// Sol-H3-VAE's licence as recorded (the full graphs carry it as an optional file): its model page has no licence tag.
+const H3_LICENSE_SOL =
+  ' · Sol-H3-VAE (Efficient-Large-Model; the optional fast decoder): licence unconfirmed, no licence tag on its model page; its card says code Apache-2.0 ' +
+  'and weights under the MiniMax H3 Community License';
+// The FastH3 tiers (nm10-h3-any-gpu): FastVideo's distills carry the MiniMax H3 Community License (their cards).
+const H3_LICENSE_FASTH3 = `${H3_LICENSE} · FastH3 V2 and FastH3 Trim (FastVideo): MiniMax H3 Community License`;
+const H3_NOTES_FASTH3_FILES =
+  'Files: the FastH3 diffusion file, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB; every FastH3 template pairs it with every diffusion file; offloaded ' +
+  'after encoding), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB).';
+const H3_NOTES_COMMON = `${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FILES} ${H3_NOTES_SOL}`;
 const H3_NOTES_TIME = 'With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768.';
 
 const WAN_NEG_EN =
@@ -1292,6 +1343,36 @@ export const SPEC = [
     notes: 'Uses the Wan 2.2 I2V high/low experts. High->low switch at step 10 (end_at_step of node 84 / start_at_step of node 87, not a binding). Start and end images should share the output aspect ratio.',
   },
   {
+    // Keyframe animation (package inbetweening): Fuobe Animation on your GPU. The library file holds two keyframes (one pass);
+    // the provider rewrites it for 2-10 keyframes (expand: 'keyframes', src/lib/av/inbetween-graph.ts), all passes on one set of loaders.
+    id: 'wan22-inbetween-anisora',
+    title: 'Keyframe animation: Wan 2.2 14B first/last-frame in-betweens with AniSora 3.2, every Nth frame per gap, one video',
+    capability: 'keyframes',
+    handBuilt: 'hand-built/wan22-inbetween-anisora.json',
+    bindings: {
+      prompt: [b('p1', 'text')],
+      negativePrompt: [b('9', 'text')],
+      image: [b('k1', 'image')],
+      endImage: [b('k2', 'image')],
+      width: [b('f1', 'width')],
+      height: [b('f1', 'height')],
+      frames: [b('f1', 'length')],
+      fps: [b('video', 'fps')],
+      seed: [b('h1', 'noise_seed')],
+      shift: [b('3', 'shift'), b('6', 'shift')],
+    },
+    outputs: [{ node: 'save', kind: 'video' }],
+    limits: { maxWidth: 1280, maxHeight: 1280, maxFrames: 81, dimensionMultiple: 16, frameStep: 4 },
+    expand: 'keyframes',
+    vramGb: 24,
+    license: 'Apache-2.0 (Wan 2.2 I2V A14B, lightx2v 4-step LoRA, bilibili Index-AniSora V3.2; Kijai\'s AniSora extraction states no licence of its own)',
+    notes:
+      'One Wan 2.2 FLF2V pass per pair of neighbouring keyframes, all sharing one set of loaders: the high-noise expert with AniSora 3.2 (strength 1) and the low-noise expert with the lightx2v 4-step LoRA (strength 1), ModelSamplingSD3 shift 5 on both, ' +
+      'KSamplerAdvanced 4 steps at CFG 1, euler / simple, high 0-2 with leftover noise, low 2-end; umt5 fp8, Wan 2.1 VAE, Wan\'s standard negative words. Each pass has its own length (4n + 1, 17-81 frames), words and seed. ' +
+      'VHS_SelectEveryNthImage keeps every Nth frame (1-4) counted back from the next keyframe (skip_first_images = ((length - 2) mod N) + 1), so each pose is on screen and no joint shows a frame twice; keyframe 1 (ImageFromBatch of pass 1) goes in front; ' +
+      'BatchImagesNode joins them in order and CreateVideo plays them at 24 fps (snappier, the passes are made at 16 fps) or 16 fps (true time). About 24 GB of VRAM at 720p; RAM for the decoded frames grows with the total length.',
+  },
+  {
     id: 'wan22-fun-camera-14b',
     title: 'Wan 2.2 14B Fun Camera Control (image to video)',
     capability: 'camera-motion',
@@ -1588,13 +1669,15 @@ export const SPEC = [
       prompt: [b('131', 'prompt')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], loraStrength: [b('134', 'strength')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8, loraStrength: 1 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
-    license: H3_LICENSE_FAST,
+    optionalModels: [H3_SOL_VAE],
+    license: `${H3_LICENSE_FAST}${H3_LICENSE_SOL}`,
     notes:
       'Text to video with sound: MiniMaxH3ImageToVideo with no frames given, the fl2va pruned int8 model with the turbo v4 LoRA at 1.0 (MiniMaxH3TurboLoRA, ' +
       'MiniMaxH3TurboSampler), BasicScheduler simple 8 steps, H3SLAAttention (sparsity 0.85, block 64, int8 QK; needs Triton) and H3AdaLNLoRAFix (port), CFG 1. ' +
@@ -1610,13 +1693,15 @@ export const SPEC = [
       prompt: [b('131', 'prompt')], image: [b('138', 'image')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], loraStrength: [b('134', 'strength')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8, loraStrength: 1 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
-    license: H3_LICENSE_FAST,
+    optionalModels: [H3_SOL_VAE],
+    license: `${H3_LICENSE_FAST}${H3_LICENSE_SOL}`,
     notes:
       'Image to video with sound: image = the first frame (MiniMaxH3ImageToVideo first_frame), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, ' +
       `8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON} ${H3_NOTES_TIME}`,
@@ -1631,13 +1716,15 @@ export const SPEC = [
       prompt: [b('131', 'prompt')], image: [b('138', 'image')], endImage: [b('140', 'image')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], loraStrength: [b('134', 'strength')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8, loraStrength: 1 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
-    license: H3_LICENSE_FAST,
+    optionalModels: [H3_SOL_VAE],
+    license: `${H3_LICENSE_FAST}${H3_LICENSE_SOL}`,
     notes:
       'Start and end frame to video with sound: image = the first frame, endImage = the last (cover-cropped to the canvas), the fl2va pruned int8 model with ' +
       `the turbo v4 LoRA at 1.0, 8 steps, SLA attention (sparsity 0.85; needs Triton) and the AdaLN LoRA fix, CFG 1. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON} ${H3_NOTES_TIME}`,
@@ -1651,13 +1738,15 @@ export const SPEC = [
       prompt: [b('131', 'prompt')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 20 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
-    license: H3_LICENSE,
+    optionalModels: [H3_SOL_VAE],
+    license: `${H3_LICENSE}${H3_LICENSE_SOL}`,
     notes:
       'Text to video with sound, the sharper setting: the fl2va pruned int8 model without the turbo LoRA, BasicScheduler simple 20 steps, KSamplerSelect res_multistep, ' +
       `CFG 1; core nodes only. About 2.3 times as long as minimax-h3-t2v. ${H3_NOTES_COMMON}`,
@@ -1671,13 +1760,15 @@ export const SPEC = [
       prompt: [b('131', 'prompt')], image: [b('138', 'image')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 20 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
-    license: H3_LICENSE,
+    optionalModels: [H3_SOL_VAE],
+    license: `${H3_LICENSE}${H3_LICENSE_SOL}`,
     notes:
       'Image to video with sound, the sharper setting: image = the first frame, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; ' +
       `core nodes only. About 2.3 times as long as minimax-h3-i2v. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON}`,
@@ -1691,13 +1782,15 @@ export const SPEC = [
       prompt: [b('131', 'prompt')], image: [b('138', 'image')], endImage: [b('140', 'image')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 20 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
-    license: H3_LICENSE,
+    optionalModels: [H3_SOL_VAE],
+    license: `${H3_LICENSE}${H3_LICENSE_SOL}`,
     notes:
       'Start and end frame to video with sound, the sharper setting: image = the first frame, endImage = the last, the fl2va pruned int8 model without the turbo LoRA, ' +
       `20 steps res_multistep, CFG 1; core nodes only. About 2.3 times as long as minimax-h3-flf2v. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_COMMON}`,
@@ -1724,6 +1817,68 @@ export const SPEC = [
       "KSamplerSelect res_multistep, CFG 1; core nodes only. 73 frames (3.04 s) is the LoRA's training length. The prompt reads best in the LoRA's own caption style: " +
       'one frozen instant, the camera in one continuous 360-degree orbit, everything holding its place, camera parallax the only movement. The LoRA was trained ' +
       `without sound; the graph still decodes H3's audio. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_SIZE} ${H3_NOTES_FILES} With the Orbit LoRA (0.16 GB).`,
+  },
+  // ---- MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu, research #10 §6.4): Comfy-Org's "FastVideo FastH3" templates
+  // (workflow_templates video_fastvideo_fasth3_t2v / _i2v, the "First Last Frame to Video (FastVideo FastH3)" subgraph) as
+  // API graphs. src/lib/gpu/h3-tier.ts picks the tier and binds `unet` to the card's file (NVFP4 on Blackwell, else int8, or
+  // Trim's fp8 on a PyTorch without CUDA 13). Trim has text to video only: FastVideo's Trim cards name eight-step text-to-video.
+  ...[
+    ['minimax-h3-fast-t2v', 't2v', 'Text to Video', false, false],
+    ['minimax-h3-fast-i2v', 'i2v', 'Image to Video', true, false],
+    ['minimax-h3-fast-flf2v', 'flf2v', 'Start + End Frame to Video', true, true],
+  ].map(([id, capability, what, first, last]) => ({
+    id,
+    title: `MiniMax H3 ${what} + Audio on a 16 GB GPU (FastH3 V2, 8 steps)`,
+    capability,
+    handBuilt: `hand-built/${id}.json`,
+    bindings: {
+      prompt: [b('131', 'prompt')],
+      ...(first && { image: [b('138', 'image')] }),
+      ...(last && { endImage: [b('140', 'image')] }),
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], unet: [b('127', 'unet_name')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 16,
+    optionalModels: ['fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors'],
+    license: H3_LICENSE_FASTH3,
+    notes:
+      `${what} with sound on FastVideo's FastH3 8-Step V2 (DMD2, step 1300; FastVideo/FastVideo-FastH3-Comfy @ ec1e3aa3), as Comfy-Org's FastH3 template: ` +
+      'MiniMaxH3ImageToVideo' + (first ? (last ? ' with first_frame and last_frame' : ' with first_frame') : ' with no frames') + ', UNETLoader (unet: the pruned int8 ConvRot file, ' +
+      '22.13 GB, or the NVFP4 file, 13.61 GB, for Blackwell) -> MiniMaxH3SigmaShift 10 / 3 -> ModelAttentionBackend "comfy kitchen attention" (INT8 attention, ' +
+      'listed on NVIDIA and AMD GPUs only, so a CPU ComfyUI refuses the value) -> BlockSparseAttention vsa 10% from 20% of the steps, BasicScheduler simple 8 steps, ' +
+      'KSamplerSelect res_multistep, CFG 1; core nodes only (ComfyUI 0.36 or later). FastVideo: fits 16 GB, not 12 GB, in its tests; the int8 file is partly ' +
+      'offloaded under 24 GB. ' + (first ? 'FastVideo\'s card says FL2VA was not distilled; Comfy-Org\'s image-to-video template runs it, so a start frame is followed less closely than on minimax-h3-i2v. ' + H3_NOTES_FIRST_FRAME + ' ' : '') +
+      `${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FASTH3_FILES}`,
+  })),
+  {
+    id: 'minimax-h3-trim-t2v',
+    title: 'MiniMax H3 Text to Video + Audio on an 8-12 GB GPU (FastH3 Trim, 8 steps, experimental)',
+    capability: 't2v',
+    handBuilt: 'hand-built/minimax-h3-trim-t2v.json',
+    bindings: {
+      prompt: [b('131', 'prompt')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], unet: [b('127', 'unet_name')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 12,
+    optionalModels: ['fastvideo_fasth3_trim_8step_fp8.safetensors', 'fastvideo_fasth3_trim_8step_nvfp4.safetensors'],
+    license: H3_LICENSE_FASTH3,
+    notes:
+      "Text to video with sound on FastVideo's FastH3 Trim (FastVideo/FastVideo-FastH3-Trim-Comfy @ f66c13dc, 2026-10-06): 42 of H3's 50 blocks with a shared " +
+      'rank-16 timestep basis, 8-step DMD2 (checkpoint 300), experimental and below FastH3 V2 in quality. The FastH3 template\'s graph with unet = the Trim file: ' +
+      'int8 ConvRot (18.92 GB, the default, any recent NVIDIA card), fp8 (19.68 GB, Ada and newer, for a PyTorch without CUDA 13) or NVFP4 (11.89 GB, Blackwell); ' +
+      'MiniMaxH3SigmaShift 10 / 3, Comfy Kitchen attention, BlockSparseAttention vsa 10%, BasicScheduler simple 8 steps, res_multistep, CFG 1. vramGb 12 is the ' +
+      'int8 / fp8 file partly offloaded; the 8 GB figure is FastVideo\'s test with the NVFP4 file and memory capped at 8 GB on an RTX 4090 (82 s for 5 s at 480p). ' +
+      'FastVideo\'s timings (5 s with sound): RTX 5090 13.4 s at 480p, 35.4 s at 768p; RTX 4090 43.9 s / 132.8 s; none measured here. Text to video only: the Trim ' +
+      `cards name eight-step text-to-video and no frame conditioning. ${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FASTH3_FILES}`,
   },
   {
     id: 'infinitetalk-native',
@@ -1897,6 +2052,8 @@ export const SPEC = [
       { op: 'set', node: '94', input: 'bpm', value: 120 },
       { op: 'set', node: '94', input: 'duration', value: 60 },
       { op: 'set', node: '98', input: 'seconds', value: 60 },
+      // nm10-music3: a song with no words is an instrumental (the template's sample lyrics are never sung).
+      { op: 'set', node: '94', input: 'lyrics', value: '[Instrumental]' },
     ],
     bindings: {
       tags: [b('94', 'tags')],
@@ -1909,7 +2066,82 @@ export const SPEC = [
     outputs: [{ node: '106', kind: 'audio' }],
     limits: { maxDurationSec: 240 },
     vramGb: 8,
-    notes: 'Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers ("[Instrumental]" or empty for instrumental). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4).',
+    notes: 'Turbo AIO checkpoint (8 steps). tags = style description, lyrics with [Verse]/[Chorus] markers; "[Instrumental]" when there are no words (in place of the template sample lyrics). Output MP3 V0 (changed from FLAC). Defaults changed to 60 s / 120 bpm. Language/keyscale/timesignature stay at template values (en, E minor, 4).',
+  },
+  // nm10-music3 (research #10 §6.6): full songs on core nodes. MiniMax Music 3 from the template audio_minimax_music_3
+  // (Comfy-Org's int8 DiT in place of its fp16 one, as the template's own note offers for low VRAM; its Tiled decode switch
+  // kept, turned on by the provider for songs over 2 minutes); YuE2 from audio_yue2_text2music (ABC planning on, "full") and
+  // audio_yue2_music_cover (SheetSage2 reads the song's melody, "melody" mode). The templates' PreviewAny pass-throughs are left out.
+  {
+    id: 'music-minimax-3',
+    title: 'MiniMax Music 3: full songs with vocals up to 5 minutes (caption + lyrics)',
+    capability: 'music',
+    handBuilt: 'hand-built/music-minimax-3.json',
+    bindings: {
+      tags: [b('4', 'caption')],
+      lyrics: [b('4', 'lyrics')],
+      duration: [b('4', 'max_duration')],
+      seed: [b('4', 'seed'), b('7', 'seed')],
+      steps: [b('7', 'steps')],
+      tiledDecode: [b('10', 'switch')],
+    },
+    outputs: [{ node: '11', kind: 'audio' }],
+    defaults: { duration: 120, tiledDecode: false },
+    limits: { maxDurationSec: 300 },
+    vramGb: 24,
+    license: 'MiniMax-Music3 Community License (MiniMaxAI/MiniMax-Music3 @ 1b525ccb: MIT-style grant with the notice kept and an Acceptable Use Policy; a commercial product must show "MiniMax-Music3" in its interface; MiniMax\'s written authorisation above US$20M yearly revenue); the Comfy-Org repack @ 9e364ccd is tagged Apache-2.0',
+    notes:
+      'From the core template audio_minimax_music_3 from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: int8 DiT, MP3 V0. tags = the caption (style, mood, vocals, arrangement; the template suggests Global Metadata, Vocal Details and Arrangement), lyrics with section tags on lines of their own ' +
+      '([Intro] [Verse] [Pre-Chorus] [Chorus] [Post-Chorus] [Bridge] [Instrumental] [Solo] [Outro]); "[Instrumental]" when there are no words. duration = max_duration, an upper bound ' +
+      '(the model can end the song earlier; 9,000 acoustic frames at 25 fps = 5 min). KSampler 30 steps, cfg 1.7, euler / simple and the encoder\'s cfg_scale 1.7 / top_k 50, as the template. ' +
+      '32 kHz stereo. The template\'s Tiled decode switch (VAEDecodeAudioTiled 1536 / 64): less VRAM for long songs, a small risk of seams; tiledDecode true for songs over 120 s. ' +
+      'VRAM 24 GB, the card\'s figure: under 24 GB at full precision and about 22 GB with CPU offload; its 8 GB figure streams the language model layer by layer (diffusers group offload), ' +
+      'which the core node does not do (ComfyUI\'s own partial loading may still fit smaller cards). Files: DiT int8 2.5 GB (fp16 4.91, fp32 9.83), pruned int8 encoder 9.2 GB ' +
+      '(pruned bf16 16.71, full bf16 18.47), DAV VAE 0.22 GB.',
+  },
+  {
+    id: 'music-yue2-song',
+    title: 'YuE2 3B: lyrics to song (style + lyrics, ABC planning)',
+    capability: 'music',
+    handBuilt: 'hand-built/music-yue2-song.json',
+    bindings: {
+      tags: [b('2', 'style'), b('3', 'style')],
+      lyrics: [b('2', 'lyrics'), b('3', 'lyrics')],
+      duration: [b('3', 'max_duration')],
+      seed: [b('2', 'seed'), b('3', 'seed'), b('6', 'seed')],
+      steps: [b('6', 'steps')],
+    },
+    outputs: [{ node: '8', kind: 'audio' }],
+    defaults: { duration: 120 },
+    limits: { maxDurationSec: 300 },
+    vramGb: 12,
+    license: 'CC-BY-NC-4.0 (m-a-p/YuE2-3B @ 8f24312f weights; the Comfy-Org/YuE2 repack @ 2f76ca75 is tagged the same)',
+    notes:
+      'From the core template audio_yue2_text2music from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: MP3 V0. tags = the style (language, genre, vocal, tempo, instruments), lyrics with section tags ([Verse] [Chorus] [Bridge] [Outro]); only the words to be sung. YuE2 Generate ABC plans ' +
+      'melody and chords ("full") before the song; YuE2 Generate Music makes the tokens and the seconds the empty latent takes. duration = max_duration, an upper bound reduced for long prompts. ' +
+      'KSampler 32 steps, cfg 1, dpm_2 / sgm_uniform, as the template. Checkpoint int8 3.96 GB (bf16 7.8 GB). VRAM is not published: 12 GB is Fuobe\'s estimate for the int8 checkpoint.',
+  },
+  {
+    id: 'music-yue2-cover',
+    title: 'YuE2 3B: a cover of a song (its melody, new style and lyrics)',
+    capability: 'music',
+    handBuilt: 'hand-built/music-yue2-cover.json',
+    bindings: {
+      audio: [b('9', 'audio')],
+      tags: [b('3', 'style')],
+      lyrics: [b('3', 'lyrics')],
+      duration: [b('3', 'max_duration')],
+      seed: [b('3', 'seed'), b('6', 'seed')],
+      steps: [b('6', 'steps')],
+    },
+    outputs: [{ node: '8', kind: 'audio' }],
+    defaults: { duration: 300 },
+    limits: { maxDurationSec: 300 },
+    vramGb: 12,
+    license: 'CC-BY-NC-4.0 (m-a-p/YuE2-3B @ 8f24312f and m-a-p/SheetSage2 @ b83c3d79 weights; the Comfy-Org/YuE2 repack @ 2f76ca75 is tagged the same)',
+    notes:
+      'From the core template audio_yue2_music_cover from comfyui-workflow-templates 0.11.86 (comfyui_workflow_templates_json 0.1.112), hand-transcribed: MP3 V0. audio = the song to cover (LoadAudio). SheetSage2 transcribes its melody to ABC ("melody" mode, the template\'s), which YuE2 sings with the new style and lyrics: lyrics close to the ' +
+      'original\'s phrasing and syllable count fit the melody best. The source audio is not YuE2\'s conditioning, only its melody. SheetSage2 bf16 1.39 GB. VRAM is not published: 12 GB is Fuobe\'s estimate for the int8 checkpoint and SheetSage2.',
   },
   {
     id: 'v2a-mmaudio',
@@ -4315,16 +4547,39 @@ export const SPEC = [
       maskPrompt: [b('subject', 'text')], maskGrow: [b('grow_mask', 'expand')], seed: [b('plan', 'seed')], steps: [b('schedule', 'steps')],
       windowFrames: [b('plan', 'window_frames')], historyFrames: [b('plan', 'history_frames')],
       lora: [b('adapter', 'lora_name')], loraStrength: [b('adapter', 'strength_model')], filenamePrefix: [b('save', 'filename_prefix')],
+      windowControls: [b('review', 'window_controls')],
     },
     outputs: [{ node: 'save', kind: 'video' }],
-    defaults: { maskPrompt: 'person', maskGrow: 5, steps: 12, windowFrames: '22', historyFrames: '18', lora: 'H3-Person-Remover-V1.safetensors', loraStrength: 1 },
+    defaults: { maskPrompt: 'person', maskGrow: 5, steps: 12, windowFrames: '22', historyFrames: '18', lora: 'H3-Person-Remover-V1.safetensors', loraStrength: 1, windowControls: '{}' },
     limits: { maxDurationSec: 60, maxFrames: 3592 },
     vramGb: 24,
     license: 'MiniMax H3 Community License (H3 Ref2VA, its video and audio VAEs, the packaged Qwen3-VL text encoder, Akatz Labs\' Person Remover V1 LoRA): territory EXCLUDES the US, the EU, the UK and South Korea; commercial use above US$20M yearly revenue needs MiniMax\'s written authorization; show "MiniMax H3" on the product\'s interface; no outputs used to improve other AI models · Qwen3-VL-32B base Apache-2.0 · SAM 3.1 under Meta\'s SAM License (commercial use allowed under its terms) · H3 Relay nodes GPL-3.0 (Sendy Software LLC and contributors; vendored Context Loop and Spectrum GPL-3.0); the graph is H3 Relay\'s example workflow (GPL-3.0 repository)',
     notes:
       'H3 Relay\'s toolkit H3-Person-Removal.api.json at e2a7665b (Akatz Labs\' tool ships the same file). Changed: the clean first frame goes through an ImageScale (centre crop) to the video\'s exact size, so an edit that came back a little larger or smaller still fits; SAM 3.1\'s words default to "person"; the save prefix. ' +
       'video = the part already fitted to 24 fps on the 32-pixel grid (oss-fit-clip), image = the clean first frame (the app makes it with Qwen-Image-Edit from the part\'s first frame). 22-frame windows with 18 of history, 12 steps, er_sde / simple, CFG 1, LoRA 1.0, mask grown 5 px, seed 904234 by default (Akatz\'s settings). The output is silent: the app puts the clip\'s sound back. ' +
-      'Needs the h3-relay pack (H3_RELAY=1) and FFmpeg.',
+      'Needs the h3-relay pack (H3_RELAY=1) and FFmpeg. ' +
+      'windowControls = H3 Relay\'s Review Windows controls (originals o/person-remover-plus): {config_key, windows: {index: {seed, locked, record_id}}}; locked windows come back exactly from the checkpoints the Relay keeps in ComfyUI\'s output/__h3_removal_cache, the first unlocked one is drawn again with its seed (Redo from here). The provider reads the run\'s window previews from /h3_relay/removal/previews.',
+  },
+  // Remove object's mask first (originals o/person-remover-plus): the removal graph's own SAM 3.1 chain on the first seconds
+  // of the fitted part, the person filled green exactly as the removal will see it (the model card: "check the saved
+  // green-mask preview before running the full removal"). Native ComfyUI nodes only.
+  {
+    id: 'video-person-remove-h3-mask',
+    title: 'Remove a person, mask first: SAM 3.1 finds who you name, thresholds and grows the mask and fills it green over the clip, as H3 Person Removal sees it (core nodes)',
+    capability: 'person-mask',
+    handBuilt: 'hand-built/video-person-remove-h3-mask.json',
+    modelUrls: { 'sam3.1_multiplex_fp16.safetensors': 'https://huggingface.co/Comfy-Org/sam3.1/resolve/7bb8374780a725b4353ed31f3a9395c9742b5621/checkpoints/sam3.1_multiplex_fp16.safetensors' },
+    bindings: {
+      video: [b('source', 'file')], maskPrompt: [b('subject', 'text')], maskGrow: [b('grow_mask', 'expand')], filenamePrefix: [b('save', 'filename_prefix')],
+    },
+    outputs: [{ node: 'save', kind: 'video' }],
+    defaults: { maskPrompt: 'person', maskGrow: 5 },
+    limits: { maxDurationSec: 10, maxFrames: 240 },
+    vramGb: 6,
+    license: 'SAM 3.1 under Meta\'s SAM License (commercial use allowed under its terms); the chain is H3 Relay\'s Person Removal example (GPL-3.0 repository)',
+    notes:
+      'The SAM 3.1 part of video-person-remove-h3-relay, node for node (detect 0.4 with 2 refinements, track 0.5 with 1 object and detection every 12 frames, threshold 0.5, grow maskGrow px, green 0x00FF00), saved as a video instead of sampled. ' +
+      'video = the first seconds of the part, fitted to 24 fps on the 32-pixel grid like the removal (oss-fit-clip). Needs nothing but SAM 3.1.',
   },
 
   // Character Swap Studio (o/h3-studio; docs/research/openjutsu-6.md §4.2): Akatz Labs' H3 Character Swap workbench for whole
@@ -4646,6 +4901,35 @@ export const SPEC = [
       'cutout is true by default (manifest defaults). ' +
       'numGaussians up to 1,048,576 (262,144 by default); seed drives both the sampler and the decoder. RenderSplat also takes a look_at camera, so a view picked in the browser can be rendered on the server. ' +
       '3.78 GB of weights (TripoSplat 0.74, DINOv3 ViT-H 1.68, TripoSplat VAE decoder 0.58, FLUX.2 VAE 0.34, BiRefNet 0.44).',
+  },
+  {
+    // idol-1 (docs/research/idol-9.md §5.5): Speridlabs' Idol, TripoSplat's architecture retrained, on the same core nodes.
+    id: 'image-to-splat-idol',
+    title: 'Image to a Gaussian splat of one object (Idol on the TripoSplat core nodes) + an orbit video',
+    capability: 'splat',
+    handBuilt: 'hand-built/image-to-splat-idol.json',
+    bindings: {
+      image: [b('99', 'image')], cutout: [b('88:35', 'switch')], numGaussians: [b('88:55', 'num_gaussians')], steps: [b('88:6', 'steps')], cfg: [b('88:6', 'cfg')],
+      sampler: [b('88:6', 'sampler_name')], photoCrop: [b('88:104', 'switch')],
+      seed: [b('88:6', 'seed'), b('88:55', 'seed')], splatFormat: [b('92', 'format')], orbitFrames: [b('75', 'frames')],
+    },
+    outputs: [{ node: '51', kind: 'model3d', role: 'splat' }, { node: '42', kind: 'video', role: 'turntable' }],
+    defaults: { splatFormat: 'spz', cutout: true, photoCrop: false },
+    limits: { maxGaussians: 1048576 },
+    vramGb: 8,
+    license:
+      'Apache-2.0 (speridlabs/idol weights; the ComfyUI files are nynxz/Idol\'s conversion, Apache-2.0); Idol is VAST-AI-Research\'s TripoSplat architecture (MIT, code and weights); ' +
+      'the dino_v3_vit_h image encoder is under the DINOv3 License (royalty-free, commercial use allowed, trade-control limits; ' +
+      'the app must show a "Built with DINOv3" notice); FLUX.2 VAE Apache-2.0; BiRefNet MIT',
+    notes:
+      'Idol 3D (Speridlabs): one object from one picture -> a Gaussian splat (role splat) + a 75-frame orbit video (role turntable). A copy of image-to-splat-triposplat with the same node ids. ' +
+      'Reference settings (idol-sdk sampler.py L43-70): 50 Euler steps, simple schedule; Idol\'s CFG weight 3 in its (1+w)cond - w*uncond form is ComfyUI cfg 4.0, and its rescale_t 3 is TripoSplat\'s built-in shift 3 (comfy/supported_models.py), so no ModelSamplingSD3. ' +
+      'Quick look (set by the page as params.extra): 20 dpmpp_2m steps, cfg 4, 65,536 Gaussians, the ComfyUI-Idol README\'s "faster trade-off" and "fast preview"; quality unmeasured. ' +
+      'Photo crop (photoCrop, default false): TripoSplatPreprocessImage is Idol\'s "synthetic" 1.2 crop; scaled to 720 and centred on a black 1024 canvas (88:101-103) the object spans 600 px, where Idol\'s "real" 1.7 crop gives 602 px. ' +
+      'ComfySwitchNode 88:104 picks it; its inputs are lazy, so the branch not taken does not run. Not yet compared with IdolPreprocessImage "real". ' +
+      'About half the Gaussians are near-transparent: RenderSplat thresholds 0.05; the saved file is not pruned without the ComfyUI-Idol pack. ' +
+      '1.32 GB of new weights (idol_fp16 0.74, idol_decoder_fp16 0.58) plus the shared 2.46 GB (DINOv3 ViT-H 1.68, FLUX.2 VAE 0.34, BiRefNet 0.44). ' +
+      'VRAM: vendor peak 7.2 GB in the SDK; unmeasured in ComfyUI.',
   },
   {
     // N7-5: Cinema's "Film this path" on the open engine (docs/research/new-models-7.md §3.6, the wan21-i2v-uni3c-path table).

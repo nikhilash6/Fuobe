@@ -142,6 +142,26 @@ const sentence = (a: string | undefined, b: string): string => {
   return head ? `${head}. ${b}` : b;
 };
 
+/** Mureka's earlier song versions, run by the versioned route's model (mureka-8 · its Version control). */
+const MUREKA_EARLIER = new Set(["mureka-8", "mureka-o2", "mureka-7.6"]);
+
+/**
+ * A Mureka song saved with its Version (params.extra.model, when mureka-song ran every version on one route) goes to the
+ * model that runs that version now: Mureka 9 to its own model, 8, O2 and 7.6 to Mureka 8 with the Version kept; 9.5 stays
+ * (the setting is dropped). The same version runs, so nothing to say. Null for any other request.
+ */
+function murekaVersion<T extends StoredRequest>(req: T): T | null {
+  const version = req.modelId === "mureka-song" ? req.params?.extra?.model : undefined;
+  if (typeof version !== "string") return null;
+  if (MUREKA_EARLIER.has(version)) return { ...req, modelId: "mureka-8" };
+  if (version !== "mureka-9" && version !== "mureka-9.5") return null;
+  const extra = { ...req.params!.extra };
+  delete extra.model;
+  const params = { ...req.params, extra: Object.keys(extra).length ? extra : undefined };
+  if (!params.extra) delete params.extra;
+  return { ...req, ...(version === "mureka-9" && { modelId: "mureka-9" }), params };
+}
+
 /**
  * A stored request (Reuse, a saved project's step, an Assist plan, a retry, a script) moved to the model that does its
  * job now, with what still means something kept: a Soul style id becomes the Fuobe look that replaced it (`presetId`),
@@ -151,6 +171,8 @@ const sentence = (a: string | undefined, b: string): string => {
  * returned as it is. `note` says what changed, for a toast or the API's notes.
  */
 export function migrateRequest<T extends StoredRequest>(req: T, opts: MigrateOptions = {}): { request: T; note?: string } {
+  const version = murekaVersion(req);
+  if (version) return { request: version };
   const r = replacedBy(req.modelId);
   const refs = !!(req.inputs?.images?.length || req.inputs?.videos?.length || req.inputs?.audios?.length);
   const op = req.op ?? (r?.withReferences && refs ? r.withReferences : undefined);

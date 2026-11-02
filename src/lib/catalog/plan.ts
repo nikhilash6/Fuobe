@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { billedClipSeconds, editClipsProblem, insertRangeProblem, sourceSeconds } from "./clip-windows";
 import { chainGapProblem, chainTiming, FIRST_AT_ZERO, frameTimes, keyframeChain, MAX_KEYFRAMES, spread } from "./keyframes";
+import { requestTiming } from "@/lib/inbetween";
 import { cloudPath, fitLoras, gated, localOnly, loraCapacity, needsToken, routeLoraField, triggerOf } from "./loras";
 import { anglesPrompt, anglesWords, ANGLES_ORIGINAL } from "./open-tools";
 import { qmaRunPrompt } from "@/lib/qma";
@@ -21,6 +22,7 @@ import { characterScale, CINEMA_CROP, soulKind, soulMegapixels, soulRecipe, soul
 import { computeDimensions, fitCanvas } from "@/lib/comfy";
 import { carriesLayout, flux3Boxes, flux3Caption, layoutCompilerFor, LAYOUT_MAX_SIDE, LAYOUT_MULTIPLE, LAYOUT_PARAM, readLayout, validateLayout, type LayoutDraft, type LayoutFormat } from "@/lib/layout-prompt";
 import { pricingOn, type PriceClock } from "./promo";
+import { isInstrumental, lyricsOf, lyricsProblem, LYRICS_PARAM, promptLyricsProblem } from "@/lib/lyrics";
 import { presetRoutes } from "./preset-recipe-routes";
 
 export { pricingAt } from "./promo";
@@ -245,6 +247,8 @@ const PROMPTLESS = new Set<Operation>([
   "face-mosaic",
   // archive-restore: the scene's words help (period, place, light) but a run without them gets a neutral one
   "restore-video",
+  // nm10-music3: extending a song takes its lyrics, its stems nothing
+  "song-extend", "song-stems",
   // nm10-hosted-catchup: an inserted moment can be left to the model; a retexture takes words or a style picture
   "insert-moment", "retexture-3d",
 ]);
@@ -492,6 +496,39 @@ export function planGeneration(
   if (model.options.promptFormat === "minimax-h3" && op === "i2v" && params.extra?.orbit === true && req.params?.duration === undefined && params.duration === model.defaults?.duration) {
     params = { ...params, duration: 3 };
   }
+  // Song lyrics (params.extra.lyrics, Audio → Music's editor): normalized for a model that sings them, checked against its
+  // length; a model that writes its own words never gets them, and the run says so when they had words to sing.
+  if (params.extra && LYRICS_PARAM in params.extra) {
+    const words = lyricsOf(params.extra);
+    const rest = { ...params.extra };
+    delete rest[LYRICS_PARAM];
+    const spec = model.options.lyrics;
+    if (spec && words) {
+      // Lyrics read after the description (Lyria 3.5) share its limit with it.
+      const problem = spec.inPrompt && spec.max ? promptLyricsProblem(prompt, words, spec.max, model.name) : lyricsProblem(words, spec.max, model.name);
+      if (problem) throw new Error(problem);
+      // A model that sings words only (Mureka's songs): an instrumental is its maker's instrumental model.
+      const own = spec.instrumentalModel && op === "music" && isInstrumental(words) ? getModel(spec.instrumentalModel) : undefined;
+      if (own) throw new Error(`${model.name} sings the lyrics you write: for an instrumental, pick ${own.name}`);
+      params = { ...params, extra: { ...rest, [LYRICS_PARAM]: words } };
+    } else {
+      if (words && !isInstrumental(words) && op === "music") notes.push(`${model.name} writes its own words from your description: the lyrics aren't sent`);
+      params = { ...params, extra: Object.keys(rest).length ? rest : undefined };
+    }
+  }
+  // A model that needs words to sing: a song from lyrics (YuE2), the lyrics of a song's new part or of its remix (Mureka).
+  const sung = lyricsOf(params.extra);
+  if (model.options.lyrics?.required && (!sung || ((op === "music" || op === "song-remix") && isInstrumental(sung)))) {
+    throw new Error(
+      op === "song-extend"
+        ? "Write the lyrics of the new part"
+        : op === "song-remix"
+          ? "Write the remix's lyrics: the whole song, with [Verse] and [Chorus] on lines of their own (Mureka remixes songs with vocals, not instrumentals)"
+          : `${model.name} sings your lyrics: write them first, with [Verse] and [Chorus] on lines of their own`,
+    );
+  }
+  if (op === "song-remix" && !prompt) throw new Error("Describe the remix: its genre, mood and instruments");
+  if (op === "music" && req.inputs?.audio && !model.options.cover) throw new Error(`${model.name} makes a new song: remove the song you added, or pick YuE2 to cover it`);
   const hosted = hostedInputProblem(model, op, prompt, params, req);
   if (hosted) throw new Error(hosted);
   if (op === "finalize" && !params.draftId) throw new Error("Pick a draft to finish");
@@ -716,6 +753,11 @@ function checkVideoToolOptions(model: ModelDef, op: "bg-remove-video" | "depth-v
  * chain (one start/end-frame clip per pair) also needs every gap to be a clip its model can make.
  */
 function checkKeyframes(model: ModelDef, n: number, params: GenParams) {
+  // Keyframe animation: the film is as long as its gaps (params.extra.inbetween, else made from the times), each gap one pass.
+  if (model.options.inbetween) {
+    requestTiming(params.extra, n, params.keyframeTimes, model.engine);
+    return;
+  }
   const chain = keyframeChain(model);
   const max = chain ? MAX_KEYFRAMES : model.options.maxImages;
   if (max && n > max) throw new Error(`${model.name} takes up to ${max} keyframes`);
@@ -790,6 +832,9 @@ const NEEDS: Partial<
   "sdr-to-hdr": { video: true, msg: "Add the video to convert" },
   "face-mosaic": { images: 1, msg: "Add the picture whose faces to pixelate" },
   "restore-video": { video: true, msg: "Add the archive clip to restore" },
+  "song-extend": { audio: true, msg: "Add the song to extend" },
+  "song-remix": { audio: true, msg: "Add the song to remix" },
+  "song-stems": { audio: true, msg: "Add the song to split into stems" },
   "export-video": { video: true, msg: "Add the video to export" },
   ocr: { images: 1, msg: "Add the image to read" },
   "still-motion": { images: 1, msg: "Add the still to move over" },
@@ -1100,7 +1145,9 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   const res = params.resolution ?? model.defaults?.resolution;
   // A run with LoRAs goes to the LoRA endpoint, which has its own price.
   const at = (table: Record<string, number> | undefined) => (res && table ? (table[res] ?? table[res.toLowerCase()]) : undefined);
-  const usd = withLoras && p.withLoras !== undefined ? (at(p.withLorasByResolution) ?? p.withLoras) : at(p.byResolution) || p.usd;
+  // A song sung from the run's own lyrics costs less on Mureka (Pricing.withLyrics).
+  const sung = p.withLyrics !== undefined && !!model.options.lyrics && !!lyricsOf(params.extra);
+  const usd = withLoras && p.withLoras !== undefined ? (at(p.withLorasByResolution) ?? p.withLoras) : sung ? p.withLyrics! : at(p.byResolution) || p.usd;
   let per = usd;
   const clip = op && CLIP_LENGTH_OPS.has(op) && params.sourceDuration && params.sourceDuration > 0 ? params.sourceDuration * (op === "interpolate" ? Math.max(1, params.slowdown ?? 1) : 1) : undefined;
   // A talking avatar is as long as its voice (params.sourceDuration: the voice's header, read by the studio or the server).
@@ -1146,6 +1193,8 @@ export function estimateCost(model: ModelDef, params: GenParams, jobs = 1, op?: 
   if (params.generateAudio === false && model.options.audio === true && p.note?.includes("audio-off-half")) per /= 2;
   if (p.animationUsd && params.animation !== undefined && params.animation !== "") per += p.animationUsd;
   if (p.perRequest) per += p.perRequest;
+  // A song tool's song goes up first unless it is one of the provider's own (Mureka's files/upload).
+  if (p.uploadUsd && typeof params.extra?.songId !== "string") per += p.uploadUsd;
   if (p.generatedRefs && params.drawnRefs) per += p.generatedRefs.usd * Math.min(params.drawnRefs, p.generatedRefs.count);
   return Math.round(per * jobs * 1000) / 1000;
 }

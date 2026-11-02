@@ -3,6 +3,7 @@ import { HI3D_CHAIN_PARAM, HI3D_MODEL, HI3D_OP, HI3D_PARAM } from "@/lib/av/hi3d
 import type Anthropic from "@anthropic-ai/sdk";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { keyTimes, type InbetweenTiming, type PlaybackFps, type Speed } from "@/lib/inbetween";
 import { getModel, modelsFor } from "@/lib/catalog";
 import { offeredModels } from "../model-access";
 import { dualEngine, runsOn } from "@/lib/catalog/engines";
@@ -101,7 +102,7 @@ const searchModels = defineTool({
       .string()
       .optional()
       .describe(
-        "Operation id to filter by, e.g. t2i, edit, t2v, i2v, flf2v, ref2v, extend, lipsync, avatar, tts, upscale-image, layers, text-layers, trim, transcribe, captions, mux, separate-audio, translate, write, image-to-3d, refine-3d.",
+        "Operation id to filter by, e.g. t2i, edit, t2v, i2v, flf2v, ref2v, extend, lipsync, avatar, tts, upscale-image, layers, text-layers, trim, transcribe, captions, mux, separate-audio, translate, write, image-to-3d, refine-3d, splat.",
       ),
     query: z.string().optional().describe("Words to match in the model name, vendor or description, e.g. 'kling', 'cheap', 'photoreal'."),
   }),
@@ -262,7 +263,7 @@ const Job = z.object({
     .string()
     .optional()
     .describe(
-      "Operation id (t2i, edit, t2v, i2v, flf2v, ref2v, extend, tts, layers, transcribe, translate, write, trim, captions, mux, separate-audio, image-to-3d, refine-3d…). Usually inferred from the inputs; set it when ambiguous.",
+      "Operation id (t2i, edit, t2v, i2v, flf2v, ref2v, extend, tts, layers, transcribe, translate, write, trim, captions, mux, separate-audio, image-to-3d, refine-3d, splat…). Usually inferred from the inputs; set it when ambiguous.",
     ),
   images: z.array(ref).optional().describe("Input images: the image to edit, the start frame, or references, in order."),
   end_image: ref.optional().describe("End frame (first-and-last-frame video)."),
@@ -296,6 +297,15 @@ const Job = z.object({
     .describe(
       "Image models that place boxes (MOSS-Image, FLUX.3, Ideogram 4.5): a pixel layout draft {width, height, bbox_coord_space: \"abs\", bbox_format: \"xyxy\", summary: {caption, meta, canvas}, items: [{label: object|character|text, caption, text, bbox: [x_min, y_min, x_max, y_max]}]} (the layout-poster skill). Fuobe compiles it for the model at the size it renders; other models read it as sentences.",
     ),
+  keyframe_times: z.array(z.number()).optional().describe("Keyframes (2–10 images in order): each image's time in seconds, the first at 0."),
+  gaps: z
+    .array(z.object({ frames: z.number().int(), speed: z.number().int().optional(), words: z.string().optional() }))
+    .optional()
+    .describe(
+      "Keyframe animation (fuobe-animation): one entry per gap between neighbouring images: frames drawn (4n + 1, 17–81), speed (keep every Nth frame, 1–4; the cloud keeps every frame), and what happens in that gap.",
+    ),
+  playback_fps: z.number().int().optional().describe("Keyframe animation: 24 (snappier, the default on the GPU) or 16 (true time; the cloud plays at 16)."),
+  still_mouth: z.boolean().optional().describe("Keyframe animation: keep the character's mouth still between poses."),
   after: z
     .number()
     .int()
@@ -362,6 +372,7 @@ export function asRequest(j: JobInput): GenerationRequest {
     // Hi3D: the refine's own resolution, or on an image-to-3D model the refine step after it.
     ...(j.mesh_resolution && { [j.model_id === HI3D_MODEL || j.op === HI3D_OP ? HI3D_PARAM : HI3D_CHAIN_PARAM]: j.mesh_resolution }),
   };
+  const animation = animationOf(j);
   return {
     feature: "assist",
     modelId: j.model_id,
@@ -383,9 +394,27 @@ export function asRequest(j: JobInput): GenerationRequest {
       endTime: j.end_time,
       numLayers: j.num_layers,
       ...(shots && { shots }),
-      ...(Object.keys(extra).length && { extra }),
+      ...(j.keyframe_times?.length && { keyframeTimes: j.keyframe_times }),
+      ...((Object.keys(extra).length || animation) && { extra: { ...extra, ...animation } }),
+      ...(animation?.inbetween?.gaps && !j.keyframe_times?.length && { keyframeTimes: keyTimes({ ...animation.inbetween, fps: animation.inbetween.fps ?? (j.engine === "cloud" ? 16 : 24) }) }),
     },
   };
+}
+
+/** A keyframe animation's timing from a job (gaps, playback rate, still mouth), as the request carries it. */
+function animationOf(j: JobInput): { inbetween?: InbetweenTiming; stillMouth?: true } | undefined {
+  if (!j.gaps?.length && !j.playback_fps && !j.still_mouth) return undefined;
+  // Without a rate the engine's own plays it (24 fps on the GPU, 16 in the cloud: src/lib/inbetween.ts requestTiming).
+  // A rate with no gaps rides alone: the gaps then come from the keyframe times at that rate.
+  const inbetween = j.gaps?.length
+    ? ({
+        gaps: j.gaps.map((g) => ({ frames: g.frames, speed: (g.speed ?? 1) as Speed, ...(g.words?.trim() && { prompt: g.words.trim() }) })),
+        ...(j.playback_fps && { fps: j.playback_fps as PlaybackFps }),
+      } as InbetweenTiming)
+    : j.playback_fps
+      ? ({ fps: j.playback_fps as PlaybackFps } as InbetweenTiming)
+      : undefined;
+  return { ...(inbetween && { inbetween }), ...(j.still_mouth && { stillMouth: true as const }) };
 }
 
 /** Where an earlier job's result goes in a later one, by what it is and what the later job does. */

@@ -75,7 +75,18 @@ export function paintBackdrop(ctx: CanvasRenderingContext2D, w: number, h: numbe
   ctx.restore();
 }
 
-export async function recordTurntable(viewer: ViewerElement, o: { onProgress?: (p: number) => void; signal?: AbortSignal } = {}): Promise<Blob> {
+/** How many frames a recording has and how fast they play. */
+type Shape = { frames: number; fps: number };
+
+/**
+ * Record the model turning. By default one full turn (TURN_FRAMES at TURNTABLE_FPS); with `frames`, `fps` and `angle`,
+ * any turn frame by frame (Image to 3D's "Film it photoreal" records the camera path's 81 frames at 16 fps).
+ */
+export async function recordTurntable(
+  viewer: ViewerElement,
+  o: { onProgress?: (p: number) => void; signal?: AbortSignal; frames?: number; fps?: number; angle?: (i: number) => number } = {},
+): Promise<Blob> {
+  const shape: Shape = { frames: o.frames ?? TURN_FRAMES, fps: o.fps ?? TURNTABLE_FPS };
   if (!recordableType()) throw new Error("This browser can't record video — download the .glb instead");
   const { resetTurntableRotation, toBlob } = viewer;
   if (!resetTurntableRotation || !toBlob) throw new Error("The 3D viewer isn't ready yet");
@@ -91,7 +102,7 @@ export async function recordTurntable(viewer: ViewerElement, o: { onProgress?: (
     let canvas: HTMLCanvasElement | null = null;
     let ctx: CanvasRenderingContext2D | null = null;
     const grab = async (i: number) => {
-      turn(turnAngle(i));
+      turn(o.angle ? o.angle(i) : turnAngle(i));
       // The new angle renders on the next frame; one more for the contact shadow.
       for (let k = 0; k < 3; k++) await nextFrame();
       const bitmap = await createImageBitmap(await toBlob.call(viewer, { mimeType: "image/png" }));
@@ -116,10 +127,10 @@ export async function recordTurntable(viewer: ViewerElement, o: { onProgress?: (
     const first = await grab(0);
     stopped();
     const enc = await encoderConfig(first.width, first.height);
-    if (enc) return await withWebCodecs(first, grab, enc, o, stopped);
+    if (enc) return await withWebCodecs(first, grab, enc, o, stopped, shape);
     // WebCodecs without VP9 / VP8 (Safari encodes H.264 only) and no WebM MediaRecorder either.
     if (!mediaRecorderType()) throw new Error("This browser can't record video — download the .glb instead");
-    return await withMediaRecorder(first, grab, o, stopped);
+    return await withMediaRecorder(first, grab, o, stopped, shape);
   } finally {
     turn(0);
     if (auto) viewer.setAttribute("auto-rotate", "");
@@ -133,6 +144,7 @@ async function withWebCodecs(
   enc: { config: VideoEncoderConfig; codec: "V_VP9" | "V_VP8" },
   o: { onProgress?: (p: number) => void },
   stopped: () => void,
+  shape: Shape,
 ): Promise<Blob> {
   const frames: WebmFrame[] = [];
   let failure: Error | null = null;
@@ -145,40 +157,40 @@ async function withWebCodecs(
     error: (e) => (failure = e instanceof Error ? e : new Error(String(e))),
   });
   encoder.configure(enc.config);
-  const us = 1e6 / TURNTABLE_FPS;
+  const us = 1e6 / shape.fps;
   try {
-    for (let i = 0; i < TURN_FRAMES; i++) {
+    for (let i = 0; i < shape.frames; i++) {
       if (failure) throw failure;
       stopped();
       const c = i === 0 ? canvas : await grab(i);
       const frame = new VideoFrame(c, { timestamp: Math.round(i * us), duration: Math.round(us) });
-      encoder.encode(frame, { keyFrame: i % TURNTABLE_FPS === 0 });
+      encoder.encode(frame, { keyFrame: i % shape.fps === 0 });
       frame.close();
       while (encoder.encodeQueueSize > 4) await sleep(5);
-      o.onProgress?.((i + 1) / TURN_FRAMES);
+      o.onProgress?.((i + 1) / shape.frames);
     }
     await encoder.flush();
     if (failure) throw failure;
   } finally {
     if (encoder.state !== "closed") encoder.close();
   }
-  if (frames.length < TURN_FRAMES) throw new Error("The recording came out empty — download the .glb instead");
+  if (frames.length < shape.frames) throw new Error("The recording came out empty — download the .glb instead");
   frames.sort((a, b) => a.timestamp - b.timestamp);
-  return muxWebm({ codec: enc.codec, width: canvas.width, height: canvas.height, fps: TURNTABLE_FPS, frames });
+  return muxWebm({ codec: enc.codec, width: canvas.width, height: canvas.height, fps: shape.fps, frames });
 }
 
 /**
  * Without WebCodecs: collect the frames first (PNG blobs), then play them into MediaRecorder at the frame rate.
  * Drawing a decoded frame is quick, so the playback keeps time where rendering couldn't.
  */
-async function withMediaRecorder(canvas: HTMLCanvasElement, grab: (i: number) => Promise<HTMLCanvasElement>, o: { onProgress?: (p: number) => void }, stopped: () => void): Promise<Blob> {
+async function withMediaRecorder(canvas: HTMLCanvasElement, grab: (i: number) => Promise<HTMLCanvasElement>, o: { onProgress?: (p: number) => void }, stopped: () => void, shape: Shape): Promise<Blob> {
   const type = mediaRecorderType()!;
   const shot = (c: HTMLCanvasElement) => new Promise<Blob>((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error("The 3D viewer isn't ready yet"))), "image/png"));
   const stills: Blob[] = [await shot(canvas)];
-  for (let i = 1; i < TURN_FRAMES; i++) {
+  for (let i = 1; i < shape.frames; i++) {
     stopped();
     stills.push(await shot(await grab(i)));
-    o.onProgress?.((0.8 * (i + 1)) / TURN_FRAMES);
+    o.onProgress?.((0.8 * (i + 1)) / shape.frames);
   }
   const ctx = canvas.getContext("2d")!;
   // Frame rate 0: a frame is captured only when requested.
@@ -188,16 +200,16 @@ async function withMediaRecorder(canvas: HTMLCanvasElement, grab: (i: number) =>
   const chunks: Blob[] = [];
   rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   const done = new Promise<void>((resolve) => (rec.onstop = () => resolve()));
-  const step = 1000 / TURNTABLE_FPS;
+  const step = 1000 / shape.fps;
   let next = createImageBitmap(stills[0]);
   rec.start(250);
   const t0 = performance.now();
   try {
     // One more than the frames: the last request only closes the last frame's duration.
-    for (let i = 0; i <= TURN_FRAMES; i++) {
+    for (let i = 0; i <= shape.frames; i++) {
       stopped();
-      const bitmap = i < TURN_FRAMES ? await next : null;
-      if (i + 1 < TURN_FRAMES) next = createImageBitmap(stills[i + 1]);
+      const bitmap = i < shape.frames ? await next : null;
+      if (i + 1 < shape.frames) next = createImageBitmap(stills[i + 1]);
       const wait = t0 + i * step - performance.now();
       if (wait > 0) await sleep(wait);
       if (bitmap) {
@@ -205,7 +217,7 @@ async function withMediaRecorder(canvas: HTMLCanvasElement, grab: (i: number) =>
         bitmap.close();
       }
       track.requestFrame?.();
-      o.onProgress?.(0.8 + (0.2 * Math.min(i, TURN_FRAMES)) / TURN_FRAMES);
+      o.onProgress?.(0.8 + (0.2 * Math.min(i, shape.frames)) / shape.frames);
     }
   } finally {
     rec.stop();

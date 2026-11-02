@@ -3,7 +3,8 @@ import { nanoid } from "nanoid";
 import { getModel, supportsOp } from "@/lib/catalog";
 import { MODEL3D_STEP_FEATURE, stillPromptFor3d } from "@/lib/av/model3d";
 import { HI3D_CHAIN_PARAM, HI3D_MODEL, HI3D_OP, HI3D_PARAM, chainedRefine } from "@/lib/av/hi3d";
-import { chainTiming, chainedWaitMessage, frameTimes, framesWait, planKeyframeClips, spread } from "@/lib/catalog/keyframes";
+import { chainTiming, chainedWaitMessage, frameTimes, framesWait, planKeyframeClips, spread, type KeyframeClip } from "@/lib/catalog/keyframes";
+import { gapPrompt, MAKE_FPS, requestTiming } from "@/lib/inbetween";
 import { faceMosaicStep } from "@/lib/catalog/open-tools";
 import { dualEngine, onEngine } from "@/lib/catalog/engines";
 import { routesFor } from "@/lib/catalog/plan";
@@ -247,12 +248,18 @@ export function createKeyframeFilm(original: GenerationRequest, model: ModelDef,
   const duration = original.params?.duration ?? model.defaults?.duration ?? 5;
   const times = original.params?.keyframeTimes?.length ? original.params.keyframeTimes : frameTimes(spread(images.length), duration);
   const wf = loadManifest().workflows.find((w) => w.id === route.endpoint);
-  const clips = planKeyframeClips(times, duration, {
-    ...chainTiming(model),
-    fps: Number(wf?.defaults.fps ?? 16),
-    step: Number(wf?.defaults.frameStep ?? 4),
-    maxFrames: wf?.limits?.maxFrames,
-  });
+  // Keyframe animation in the cloud (Fuobe Animation): one hosted clip per gap, as long as the gap's own frames (made at 16 fps,
+  // every frame kept), each with its gap's words.
+  const animation = model.options.inbetween ? requestTiming(original.params?.extra, images.length, original.params?.keyframeTimes, "cloud") : null;
+  const stillMouth = original.params?.extra?.stillMouth === true;
+  const clips: (KeyframeClip & { prompt?: string })[] = animation
+    ? animation.gaps.map((g, i) => ({ from: i, to: i + 1, frames: g.frames, seconds: (g.frames - 1) / MAKE_FPS, prompt: gapPrompt(original.prompt, g, stillMouth) }))
+    : planKeyframeClips(times, duration, {
+        ...chainTiming(model),
+        fps: Number(wf?.defaults.fps ?? 16),
+        step: Number(wf?.defaults.frameStep ?? 4),
+        maxFrames: wf?.limits?.maxFrames,
+      });
   const tail = clips.some((c) => c.to === null);
   assertOneMode([
     { label: `${model.name} clips`, modelId: model.id, op: "flf2v", engine: model.engine },
@@ -262,6 +269,11 @@ export function createKeyframeFilm(original: GenerationRequest, model: ModelDef,
   const batchId = waits.batchId ?? nanoid(10);
   const params = { ...original.params };
   delete params.keyframeTimes;
+  if (params.extra) {
+    params.extra = { ...params.extra };
+    delete params.extra.inbetween;
+    delete params.extra.stillMouth;
+  }
   delete params.shots;
   delete params.multiShot;
   const rest = { ...original.inputs };
@@ -291,6 +303,7 @@ export function createKeyframeFilm(original: GenerationRequest, model: ModelDef,
       const request: GenerationRequest = {
         ...original,
         op: c.to === null ? "i2v" : "flf2v",
+        ...(c.prompt !== undefined && { prompt: c.prompt }),
         inputs: Object.keys(inputs).length ? inputs : undefined,
         chain: chain.length ? chain : undefined,
         params: { ...params, duration: c.seconds, numOutputs: 1 },
@@ -306,7 +319,7 @@ export function createKeyframeFilm(original: GenerationRequest, model: ModelDef,
         feature: original.feature,
         batchId,
         demo: original.demo,
-        title: original.title?.trim() || tidy(original.prompt) || "Keyframe film",
+        title: original.title?.trim() || tidy(original.prompt) || (animation ? "Animation" : "Keyframe film"),
         aspectRatio: params.aspectRatio,
         resolution: params.resolution,
         step: { label: `Film · ${images.length} frames`, index: n, of: n + 1 },
