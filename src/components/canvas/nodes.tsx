@@ -16,6 +16,7 @@ import {
   ImagePlus,
   Library,
   Loader2,
+  Maximize2,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -180,7 +181,7 @@ function OutPort({ type }: { type: PortType }) {
  * Split soundtrack's outputs: one row per stem, each with its own handle on the right, and the stem to play once the
  * node has run. A handle the node can't fill here is greyed out, with why.
  */
-function StemPorts({ ports, outputs }: { ports: OutputPortDef[]; outputs: OutputFile[] }) {
+function StemPorts({ ports, outputs, onOpen }: { ports: OutputPortDef[]; outputs: OutputFile[]; onOpen: (index: number) => void }) {
   return (
     <div className="border-b py-1" role="list" aria-label="Stems">
       {ports.map((p) => {
@@ -189,7 +190,17 @@ function StemPorts({ ports, outputs }: { ports: OutputPortDef[]; outputs: Output
           <div key={p.id} role="listitem" className="relative flex min-h-8 items-center gap-2 pr-3.5 pl-3 text-[11px]" title={p.disabled}>
             <span className={cn("w-24 shrink-0 font-medium", p.disabled ? "text-subtle-foreground" : o ? "text-foreground" : "text-muted-foreground")}>{p.label}</span>
             {o ? (
-              <audio src={o.url} controls preload="none" aria-label={`${p.label} stem`} className={cn("h-7 w-full min-w-0 flex-1", NO_DRAG)} />
+              <>
+                <audio src={o.url} controls preload="none" aria-label={`${p.label} stem`} className={cn("h-7 w-full min-w-0 flex-1", NO_DRAG)} />
+                <button
+                  onClick={() => onOpen(outputs.indexOf(o))}
+                  className={cn("grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground", NO_DRAG)}
+                  aria-label={`Open ${p.label.toLowerCase()} stem`}
+                  title="Open"
+                >
+                  <Maximize2 className="size-3.5" />
+                </button>
+              </>
             ) : (
               <span className="min-w-0 flex-1 truncate text-right text-subtle-foreground">{p.disabled ? "Not available here" : ""}</span>
             )}
@@ -782,7 +793,12 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
         ]),
     ...(running ? [{ label: "Cancel", icon: Square, onSelect: () => actions.cancel(id) }] : []),
     { label: data.pinned ? "Unpin result" : "Pin result", icon: data.pinned ? PinOff : Pin, onSelect: () => actions.update(id, { pinned: !data.pinned }), separatorBefore: !data.pinned },
-    ...(r.outputs.some((x) => ["image", "video", "audio"].includes(x.o.kind)) ? [{ label: "Use result as an input", icon: ImagePlus, onSelect: () => actions.toInput(id) }] : []),
+    // Split soundtrack: one item per stem it made ("Use music as an input").
+    ...(stems
+      ? stems.flatMap((p) => (p.stem && stemOutput(r.outputs.map((x) => x.o), p.stem) ? [{ label: `Use ${p.label.toLowerCase()} as an input`, icon: ImagePlus, onSelect: () => actions.toInput(id, p.stem) }] : []))
+      : r.outputs.some((x) => ["image", "video", "audio"].includes(x.o.kind))
+        ? [{ label: "Use result as an input", icon: ImagePlus, onSelect: () => actions.toInput(id) }]
+        : []),
     ...(r.outputs.length
       ? [
           {
@@ -872,7 +888,7 @@ const GeneratorNode = memo(function GeneratorNode({ id, type: flowType, data, se
       }
     >
       {ports.length > 0 && <div className="border-b py-1">{ports.map((p) => <InPort key={p.id} port={p} count={v.counts[p.id] ?? 0} />)}</div>}
-      {stems && <StemPorts ports={stems} outputs={r.state === "succeeded" ? r.outputs.map((x) => x.o) : []} />}
+      {stems && <StemPorts ports={stems} outputs={r.state === "succeeded" ? r.outputs.map((x) => x.o) : []} onOpen={(i) => actions.open(id, i)} />}
       <div className="space-y-2 p-3">
         {variants && (
           <div className={cn("inline-grid h-7 grid-cols-2 rounded-full bg-muted p-0.5 text-[12px] font-medium", NO_DRAG)} role="radiogroup" aria-label={`${variants[0]} or ${variants[1]}`}>
@@ -1680,6 +1696,7 @@ function SourcePreview({ node }: { node: Source }) {
     if (node.stem) {
       const o = r.state === "succeeded" ? stemOutput(r.outputs.map((x) => x.o), node.stem) : undefined;
       if (o) return <OutputThumb o={o} onOpen={() => actions.open(node.id, r.outputs.findIndex((x) => x.o === o))} large />;
+      if (r.state === "succeeded") return <div className="grid h-20 place-items-center rounded-lg bg-muted text-[11px] text-muted-foreground">No {stemLabel(node.stem).toLowerCase()} in this result</div>;
     } else if (r.outputs.length) return <OutputThumb o={r.outputs[0].o} onOpen={() => actions.open(node.id, 0)} large />;
     if (r.state !== "idle") return <Results id={node.id} r={r} compact />;
     return <div className="grid h-20 place-items-center rounded-lg bg-muted text-[11px] text-muted-foreground">Not run yet</div>;

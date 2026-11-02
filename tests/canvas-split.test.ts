@@ -143,16 +143,32 @@ describe("Split soundtrack node", () => {
     expect(connectionError(g, { source: "split", sourceHandle: "music", target: "out", targetHandle: "in" }, "cloud")).toBe(CLOUD_ONLY_PROBLEM);
   });
 
-  it("with no open model for it, says it runs on open source", () => {
+  it("with no model, asks for one and keeps its stem edges", () => {
     const g = board();
     const bare = { ...at(g, "split"), data: {} };
-    expect(describeNode(g, bare).error).toBe(CLOUD_SPLIT_PROBLEM);
-    expect(outputPorts(g, bare).every((p) => p.disabled === CLOUD_SPLIT_PROBLEM)).toBe(true);
-    // A board saved on another open separator (a vocals model with two stems) is told to pick DBS; a cloud one (Demucs)
-    // is not run in its place either.
-    expect(describeNode(g, { ...at(g, "split"), data: { modelId: "demucs" } }).error).toBe(CLOUD_SPLIT_PROBLEM);
-    const other = { ...at(g, "split"), data: { modelId: "oss-voice-separate" } };
-    expect(describeNode(g, other).error).toMatch(/can't split a soundtrack into its stems — pick DBS/);
+    expect(describeNode(g, bare).error).toBe("Pick a model");
+    expect(outputPorts(g, bare).every((p) => !p.disabled)).toBe(true);
+    // Saved without a model (a template, the API, or a model gone from the catalog): no edge out of it is lost.
+    const saved = { ...g, nodes: g.nodes.map((n) => (n.id === "split" ? bare : n)) };
+    expect(cleanGraph(saved).edges).toHaveLength(g.edges.length);
+    expect(parseGraph(saved)?.edges).toHaveLength(g.edges.length);
+    const gone = { ...at(g, "split"), data: { modelId: "no-such-model" } };
+    expect(describeNode(g, gone).error).toBe("That model is no longer in the catalog — pick another");
+  });
+
+  it("on another separator, is told to pick DBS (never run in its place) and keeps its edges", () => {
+    const g = board();
+    // A cloud one (Demucs) and an open one with two stems: both told to pick DBS, on an open board too.
+    for (const modelId of ["demucs", "oss-voice-separate"]) {
+      const other = { ...at(g, "split"), data: { modelId } };
+      expect(describeNode(g, other).error).toMatch(/can't split a soundtrack into its stems — pick DBS/);
+      expect(describeNode(g, other, { engineMode: "open" }).error).toMatch(/pick DBS/);
+      expect(describeNode(g, other).error).not.toBe(CLOUD_SPLIT_PROBLEM);
+      const saved = { ...g, nodes: g.nodes.map((n) => (n.id === "split" ? other : n)) };
+      expect(cleanGraph(saved).edges).toHaveLength(g.edges.length);
+    }
+    // The install alone shuts the handles.
+    expect(outputPorts(g, at(g, "split"), "cloud").every((p) => p.disabled === CLOUD_ONLY_PROBLEM)).toBe(true);
   });
 
   it("stays on the open engine when the board switches to the cloud", () => {

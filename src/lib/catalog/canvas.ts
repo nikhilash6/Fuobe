@@ -696,21 +696,27 @@ export function stemOutput<T extends { kind: string; meta?: Record<string, unkno
   return audio.find((o) => typeof o.meta?.stem === "string" && STEM_NAMES[stem].includes(o.meta.stem.toLowerCase()));
 }
 
-/** Why a Split soundtrack node can't run on this install or board engine (it runs on your GPU only), or null. */
+/**
+ * Why a Split soundtrack node can't run on this install (it runs on your GPU only), or null. A node with no model yet,
+ * or one the catalog no longer has, isn't an engine problem: describeNode asks for a model and its edges stay.
+ */
 export function splitProblem(n: Pick<CanvasNode, "data">, mode: "both" | Engine = "both"): string | null {
   if (mode === "cloud") return CLOUD_ONLY_PROBLEM;
   const model = nodeModel(n, mode);
-  return model && runsOn(model, "open") ? null : CLOUD_SPLIT_PROBLEM;
+  // A separator that isn't one of the node's (a cloud one such as Demucs, or a two-stem open one) is told to pick DBS.
+  return model && !SPLIT_STEMS[model.id] ? `${model.name} can't split a soundtrack into its stems — pick ${splitModels()[0]?.name ?? "another model"}` : null;
 }
 
 /** A node's output handles: OUT with its type, Split soundtrack's four stems, or none. */
 export function outputPorts(graph: CanvasGraph, n: CanvasNode, mode: "both" | Engine = "both"): OutputPortDef[] {
   if (n.type === "split-soundtrack") {
-    const why = splitProblem(n, mode);
+    // Only the install shuts the handles (a cloud-only one): a node still missing its model keeps its edges, and a
+    // separator that makes fewer stems shuts the ones it doesn't make.
+    const why = mode === "cloud" ? CLOUD_ONLY_PROBLEM : undefined;
     const model = nodeModel(n, mode);
-    const stems = (model && SPLIT_STEMS[model.id]) || [];
+    const stems = model && SPLIT_STEMS[model.id];
     return SPLIT_HANDLES.map((h) => {
-      const disabled = why ?? (model && !stems.includes(h.stem) ? `${model.name} doesn't make a ${h.label.toLowerCase()} stem` : undefined);
+      const disabled = why ?? (model && stems && !stems.includes(h.stem) ? `${model.name} doesn't make a ${h.label.toLowerCase()} stem` : undefined);
       return { id: h.id, label: h.label, type: "audio" as const, stem: h.stem, ...(disabled && { disabled }) };
     });
   }
@@ -1420,11 +1426,11 @@ export function describeNode(graph: CanvasGraph, n: CanvasNode, ctx: DescribeCon
   const mode = ctx.engineMode ?? "both";
   // A Fuobe Original as it runs on the node's engine (its routes, its price).
   const model = nodeModel(n, mode);
-  // Split soundtrack runs on your GPU only: a cloud-only install, or a board with no open model for it, says so.
+  // Split soundtrack runs on your GPU only: a cloud-only install says so, and a node on another separator is told to
+  // pick DBS (a node with no model asks for one below).
   if (n.type === "split-soundtrack") {
     const why = splitProblem(n, mode);
     if (why) return { ...(model && { model }), costUsd: null, error: why };
-    if (model && !SPLIT_STEMS[model.id]) return { model, costUsd: null, error: `${model.name} can't split a soundtrack into its stems — pick ${splitModels()[0]?.name ?? "another model"}` };
   }
   // Dubbing has no open model: an open-only install says where it dubs instead. The concatenator's tools are
   // picked by engine, not by model.

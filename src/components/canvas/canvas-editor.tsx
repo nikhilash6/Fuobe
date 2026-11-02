@@ -44,6 +44,7 @@ import { Viewer } from "@/components/studio/viewer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useElements, useEngine, useStatus, type EngineMode } from "@/lib/api";
 import { getModel } from "@/lib/catalog";
+import { stemLabel, type StemId } from "@/lib/av/split";
 import { dualEngine, onEngine, runsOn } from "@/lib/catalog/engines";
 import {
   BOARD_LIMITS,
@@ -78,6 +79,7 @@ import {
   OPEN_DUB_HINT,
   OUT,
   outputPorts,
+  stemOutput,
   outputType,
   paletteItems,
   planCanvas,
@@ -790,16 +792,17 @@ function Editor({ id, initial, view }: { id: string; initial: Canvas; view: Canv
       ...ns.map((n) => ({ ...n, selected: false })),
       { id: nid, type, position: snap({ x: src.position.x, y: src.position.y + (src.measured?.height ?? 360) + 48 }), data: { url: file.url, label: file.label ?? `From ${nodeLabel(toGraph([src], []).nodes[0])}` }, selected: true },
     ]);
-    // Split soundtrack hands its first file (the dialogue) over: only its Dialogue connections move.
-    const moves = (e: Edge) => e.source === nodeId && (src.type !== "split-soundtrack" || (e.sourceHandle ?? OUT) === OUT);
-    const moved = takeOver ? latest.current.edges.filter(moves).length : 0;
-    if (moved) setEdges((es) => es.map((e) => (moves(e) ? { ...e, id: newId("e"), source: nid, sourceHandle: OUT } : e)));
+    const moved = takeOver ? latest.current.edges.filter((e) => e.source === nodeId).length : 0;
+    if (moved) setEdges((es) => es.map((e) => (e.source === nodeId ? { ...e, id: newId("e"), source: nid, sourceHandle: OUT } : e)));
     touch();
     toast(moved ? `Added as an input, connected where “${nodeLabel(toGraph([src], []).nodes[0])}” was` : "Added as an input — connect it anywhere");
   };
-  const toInput = (nodeId: string) => {
-    const out = results.get(nodeId)?.outputs.find((x) => KIND_INPUT[x.o.kind]);
-    if (out) addInput(nodeId, { url: out.o.url, kind: out.o.kind });
+  /** `stem`: one of a Split soundtrack's stems, named on the new input ("Music from Split soundtrack"). */
+  const toInput = (nodeId: string, stem?: StemId) => {
+    const outputs = results.get(nodeId)?.outputs ?? [];
+    const o = stem ? stemOutput(outputs.map((x) => x.o), stem) : outputs.find((x) => KIND_INPUT[x.o.kind])?.o;
+    const src = latest.current.nodes.find((n) => n.id === nodeId);
+    if (o && src) addInput(nodeId, { url: o.url, kind: o.kind, ...(stem && { label: `${stemLabel(stem)} from ${nodeLabel(toGraph([src], []).nodes[0])}` }) });
   };
 
   /** One clip of a Video concatenator: merged into what the node holds now (several clips report their lengths at once). */

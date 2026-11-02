@@ -54,6 +54,7 @@ import {
   type RunReason,
 } from "@/lib/catalog/canvas";
 import type { Engine, Generation, GenerationStatus, ModelDef, Operation, OutputFile } from "@/lib/catalog/types";
+import type { StemId } from "@/lib/av/split";
 import type { EngineMode } from "@/lib/api";
 
 export const ICONS: Record<string, LucideIcon> = {
@@ -347,8 +348,8 @@ export interface EditorActions {
   patchClip: (nodeId: string, clipId: string, patch: Partial<ClipSettings>) => void;
   cancel: (id: string) => void;
   open: (id: string, index?: number) => void;
-  /** Add an input node holding this node's first output, wired nowhere yet. */
-  toInput: (id: string) => void;
+  /** Add an input node holding this node's first output (or, on Split soundtrack, one stem), wired nowhere yet. */
+  toInput: (id: string, stem?: StemId) => void;
   /**
    * Add an input node holding a file made for this node elsewhere (an open-engine dub), below it; `takeOver` moves
    * the node's outgoing connections onto it.
