@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, AudioLines, Box, Check, ChevronDown, Cloud, 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { RunSkillDialog } from "@/components/assist/run-skill-dialog";
-import { useDraftActions, useSkillDraft, type DraftCheckResult } from "@/components/assist/hooks";
+import { useDraftActions, useSkillDraft, type DraftCheckResult, type DraftSource } from "@/components/assist/hooks";
 import { radioKeys, radioTab } from "@/components/studio/radio-keys";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,13 +26,13 @@ import { cn } from "@/lib/utils";
  * the demo provider); then Save, which opens the Run form with the inputs it was made from ("Try it with new inputs").
  * A tall dialog on a desktop, the whole screen on a phone.
  */
-export function SkillBuilder({ ids, onClose }: { ids: string[]; onClose: () => void }) {
+export function SkillBuilder({ source, onClose }: { source: DraftSource; onClose: () => void }) {
   const [saved, setSaved] = useState<string | null>(null);
   return (
     <>
       <Dialog open={!saved} onOpenChange={(o) => !o && !saved && onClose()}>
         <DialogContent className="flex h-[min(94svh,960px)] flex-col gap-0 overflow-hidden p-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:rounded-none max-sm:ring-0 sm:max-w-[1120px]">
-          <Loader ids={ids} onClose={onClose} onSaved={setSaved} />
+          <Loader source={source} onClose={onClose} onSaved={setSaved} />
         </DialogContent>
       </Dialog>
       {saved && <RunSkillDialog name={saved} examples intro="Try it with new inputs: the form starts with the ones it was made from." onClose={onClose} />}
@@ -40,17 +40,21 @@ export function SkillBuilder({ ids, onClose }: { ids: string[]; onClose: () => v
   );
 }
 
-function Loader({ ids, onClose, onSaved }: { ids: string[]; onClose: () => void; onSaved: (name: string) => void }) {
-  const q = useSkillDraft(ids);
+function Loader({ source, onClose, onSaved }: { source: DraftSource; onClose: () => void; onSaved: (name: string) => void }) {
+  const q = useSkillDraft(source);
+  const chat = "thread" in source;
+  const count = chat ? 0 : source.generations.length;
   const header = (
     <DialogHeader className="border-b px-5 pt-5 pb-4 text-left">
-      <DialogTitle className="font-heading text-[24px] leading-tight font-normal">Make a skill</DialogTitle>
+      <DialogTitle className="font-heading text-[24px] leading-tight font-normal">{chat ? "Save as skill" : "Make a skill"}</DialogTitle>
       <DialogDescription>
-        From {ids.length === 1 ? "this result" : `${ids.length} results`}: Fuobe rebuilds the steps from what you made, so nothing has to be recorded.
+        {chat
+          ? "From this chat: Fuobe rebuilds the steps from the plans that ran, so next time it runs them again with new inputs."
+          : `From ${count === 1 ? "this result" : `${count} results`}: Fuobe rebuilds the steps from what you made, so nothing has to be recorded.`}
       </DialogDescription>
     </DialogHeader>
   );
-  if (q.data?.draft) return <Review draft={q.data.draft} refusals={q.data.refusals} ids={ids} onClose={onClose} onSaved={onSaved} header={header} />;
+  if (q.data?.draft) return <Review draft={q.data.draft} refusals={q.data.refusals} source={source} onClose={onClose} onSaved={onSaved} header={header} />;
   return (
     <>
       {header}
@@ -61,7 +65,7 @@ function Loader({ ids, onClose, onSaved }: { ids: string[]; onClose: () => void;
           </p>
         ) : q.data ? (
           <>
-            <p className="text-[14px]">{q.data.refusals.length === 1 ? "This result can't become a skill yet:" : "None of these results can become a skill yet:"}</p>
+            <p className="text-[14px]">{chat ? "This chat can't become a skill yet:" : q.data.refusals.length === 1 ? "This result can't become a skill yet:" : "None of these results can become a skill yet:"}</p>
             <Refusals list={q.data.refusals} open />
           </>
         ) : (
@@ -93,7 +97,7 @@ interface CheckState {
 
 const ENGINE_WORD = { cloud: "Cloud", open: "your GPU" } as const;
 
-function Review({ draft, refusals, ids, onClose, onSaved, header }: { draft: SkillDraft; refusals: DraftRefusal[]; ids: string[]; onClose: () => void; onSaved: (name: string) => void; header: React.ReactNode }) {
+function Review({ draft, refusals, source, onClose, onSaved, header }: { draft: SkillDraft; refusals: DraftRefusal[]; source: DraftSource; onClose: () => void; onSaved: (name: string) => void; header: React.ReactNode }) {
   const actions = useDraftActions();
   const [varies, setVaries] = useState<Record<string, boolean>>({});
   const [labels, setLabels] = useState<Record<string, string>>({});
@@ -171,7 +175,7 @@ function Review({ draft, refusals, ids, onClose, onSaved, header }: { draft: Ski
   const suggest = async () => {
     setNaming("asking");
     try {
-      const n = await actions.name(ids);
+      const n = await actions.name(source);
       setNaming(n ?? "none");
     } catch {
       setNaming("none");

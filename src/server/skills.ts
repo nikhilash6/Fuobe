@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { parseSkillMd, SKILL_LIMITS, SKILL_NAME_RE, toSkillMd, type Skill, type SkillMeta, type SkillSummary } from "@/lib/assist";
-import { parseRecipe, RECIPE_FILE, stripChecks, stripExamples, type Recipe } from "@/lib/recipe";
+import { NESTED_SKILL, parseRecipe, RECIPE_FILE, runsASkill, stripChecks, stripExamples, type Recipe } from "@/lib/recipe";
 import { unzip, ZipError } from "./assist/unzip";
 import { db } from "./db";
 import { zip } from "./zip";
@@ -196,6 +196,7 @@ export function setSkillFile(name: string, file: string, content: string | null)
   if (!cur) throw new SkillError("No such skill", 404);
   if (cur.source === "builtin") throw new SkillError("Built-in skills can't be changed — Duplicate it first, then change your copy", 403);
   if (!safeFilePath(file)) throw new SkillError(`“${file}” isn't a file name a skill can carry (a text file such as notes.md or recipe.json)`);
+  if (file === RECIPE_FILE && content !== null && runsASkill(content)) throw new SkillError(`Check recipe.json: ${NESTED_SKILL}`, 422);
   const r = db().prepare("SELECT files_json FROM skills WHERE name = ?").get(name) as { files_json: string };
   const files = (JSON.parse(r.files_json) as StoredFile[]).filter((f) => f.path !== file);
   if (content !== null) files.push({ path: file, content });
@@ -400,6 +401,7 @@ export function importSkill(file: { name: string; data: Buffer }, opts: { replac
         continue;
       }
       bytes += e.data.length;
+      if (rel === RECIPE_FILE && runsASkill(e.data.toString("utf8"))) throw new SkillError(`Check recipe.json and try again: ${NESTED_SKILL}.`);
       files.push({ path: rel, content: rel === RECIPE_FILE ? unverified(e.data.toString("utf8")) : e.data.toString("utf8") });
     }
   } else {
