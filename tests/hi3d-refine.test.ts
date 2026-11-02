@@ -161,6 +161,25 @@ describe("the chain per engine", () => {
 });
 
 describe("the graph", () => {
+  it("hands Hi3D the background as the mask (it reads 1 as transparent), and uses SDPA attention, which needs no flash-attn", () => {
+    for (const g of [JSON.parse(read("scripts/comfy/hand-built/mesh-refine-hi3d.json")), getWorkflow("mesh-refine-hi3d").workflow]) {
+      const [maskNode] = g["6"].inputs.mask as [string, number];
+      // Core RemoveBackground's mask is the subject (1 = foreground); the pack's image_to_pil sets alpha = 1 - mask.
+      expect(g[maskNode].class_type).toBe("InvertMask");
+      expect(g[g[maskNode].inputs.mask[0]].class_type).toBe("RemoveBackground");
+      // The pack's requirements carry no flash-attn, and 'flash' without it raises at run time.
+      expect(g["1"].inputs.attention).toBe("sdpa");
+    }
+    expect(read("scripts/comfy/install-comfyui.sh")).not.toMatch(/flash[-_]attn/);
+  });
+
+  it("the GPU pre-flight doesn't read Hi3D's weights as missing: ComfyUI never lists models/Hi3D", () => {
+    const index = JSON.parse(read("workflows/comfyui/requirements.json")) as { files: Record<string, { folder: string; presence: string }> };
+    const hi3dFiles = Object.values(index.files).filter((f) => f.folder === "Hi3D");
+    expect(hi3dFiles).toHaveLength(12);
+    for (const f of hi3dFiles) expect(f.presence).toBe("unobservable");
+  });
+
   it("binds the coarse GLB, the photo, the resolution and the steps; the pack and weights are pinned", () => {
     expect(Object.keys(wf.bindings)).toEqual(expect.arrayContaining(["image", "model3d", "meshResolution", "steps", "seed", "cpuOffload"]));
     expect(wf.customNodes.map((c) => c.name)).toEqual(["Comfyui-Hi3d-T8"]);

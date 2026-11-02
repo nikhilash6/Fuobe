@@ -168,7 +168,7 @@
     "workflow": "mesh-refine-hi3d",
     "model": "oss-hi3d-refine",
     "op": "refine-3d",
-    "graph": "LoadImage -> core RemoveBackground (BiRefNet) mask; Hi3DLoadMesh (the coarse GLB, uploaded as an input) ; Hi3DModelLoader (models/Hi3D, cpu_offload on, flash attention) -> Hi3DRefine (resolution, 25 steps, seed, mask) -> SaveGLB",
+    "graph": "LoadImage -> core RemoveBackground (BiRefNet) mask -> InvertMask (the pack reads mask 1 as transparent: comfy_nodes.py image_to_pil sets alpha = 1 - mask); Hi3DLoadMesh (the coarse GLB, uploaded as an input) ; Hi3DModelLoader (models/Hi3D, cpu_offload on, sdpa attention: the pack's requirements carry no flash-attn, and 'flash' without it raises at run time) -> Hi3DRefine (resolution, 25 steps, seed, mask) -> SaveGLB",
     "chain": "Image to 3D's 'Refine detail' runs the picked open model, then the refine step on its GLB (chain slot model3d) with the same photo.",
     "print": "The Print-ready export (STL / 3MF) is made in the browser from the finished GLB: watertight check, scaled to the height the user sets (Hi3D normalises size)."
   }

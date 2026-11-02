@@ -3,7 +3,7 @@
     "inputs": {
       "model_root": "",
       "cpu_offload": true,
-      "attention": "flash",
+      "attention": "sdpa",
       "keep_model_loaded": false,
       "download_missing": false
     },
@@ -73,7 +73,7 @@
         0
       ],
       "mask": [
-        "4",
+        "8",
         0
       ]
     },
@@ -93,6 +93,18 @@
     "class_type": "SaveGLB",
     "_meta": {
       "title": "Save GLB"
+    }
+  },
+  "8": {
+    "inputs": {
+      "mask": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "InvertMask",
+    "_meta": {
+      "title": "Invert Mask (1 = background, as Hi3D reads it)"
     }
   }
 }

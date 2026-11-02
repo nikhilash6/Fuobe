@@ -3859,8 +3859,8 @@ export const SPEC = [
       'notify the licensor and apply for a separate licence within 60 days; the app must show "Powered by Hi3D 1.0" linking to http://hi3d.ai/); T8star\'s ComfyUI nodes MIT; ' +
       'DINOv2-L Apache-2.0, CLIP ViT-L/14 MIT (OpenAI); BiRefNet MIT',
     notes:
-      'Hi3D v1.0 (Sparc3D\'s refinement stage; docs/research/hi3d-refine.json) through T8star\'s Comfyui-Hi3d-T8 0.5.1: LoadImage -> core BiRefNet RemoveBackground (the mask frames the subject) ' +
-      '-> Hi3DRefine with the coarse GLB (Hi3DLoadMesh reads it from ComfyUI\'s input folder, where Fuobe uploads it) and Hi3DModelLoader (models/Hi3D with hi3d/, dino/, clip/; sequential CPU offload on, flash attention) ' +
+      'Hi3D v1.0 (Sparc3D\'s refinement stage; docs/research/hi3d-refine.json) through T8star\'s Comfyui-Hi3d-T8 0.5.1: LoadImage -> core BiRefNet RemoveBackground -> InvertMask (Hi3D reads mask 1 as transparent, so the subject stays and the background goes) ' +
+      '-> Hi3DRefine with the coarse GLB (Hi3DLoadMesh reads it from ComfyUI\'s input folder, where Fuobe uploads it) and Hi3DModelLoader (models/Hi3D with hi3d/, dino/, clip/; sequential CPU offload on, SDPA attention, which needs no flash-attn build) ' +
       '-> SaveGLB. Resolution 512 runs one pass (transformer_512), 1024 two and 1536 three (transformer_1024), 25 scheduler steps each. Output: geometry only (no texture, material or vertex colour), ' +
       'recentred at unit radius, not guaranteed watertight; the Fuobe server finishes it like any image-to-3D GLB (web GLB + CPU turntable). Needs Linux or Windows with an NVIDIA GPU of compute capability 8.0+ ' +
       'and CUDA 12 (official stack: CUDA 12.0-12.5, torch 2.5.0+cu124, flash-attn 2.7.4.post1, spconv-cu120 2.3.6; the pack keeps ComfyUI\'s torch and pins spconv-cu126 2.3.8, with an SDPA attention option). ' +

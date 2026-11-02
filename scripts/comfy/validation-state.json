@@ -330,10 +330,10 @@
     "at": "2026-10-16T20:57:26.738Z"
   },
   "mesh-refine-hi3d": {
-    "sha256": "5f1532e11af684edb2c21f37afc1551bb2666af85abea3dfdb2596f3ee15c704",
+    "sha256": "e0c498e66fc81e427e624fa4ca1e7101819cf0a69a87b1680d225470e2ce75b9",
     "validated": false,
     "error": "HTTP 400: missing_node_type: Node 'Hi3D Model Loader' not found. The custom node may not be installed. (Node ID '#1')",
-    "at": "2026-11-02T11:04:50.609Z"
+    "at": "2026-11-02T15:11:18.633Z"
   },
   "mixed-media-zimage-frames": {
     "sha256": "0e78a2602566f88e12a48711caa67d604a6d4455031e71b08f9b3cd030778387",

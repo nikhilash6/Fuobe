@@ -507,13 +507,13 @@ node build-requirements.mjs
 
 | id | capability | what | validated here |
 |---|---|---|---|
-| `mesh-refine-hi3d` | refine-3d | `LoadImage` (2) → core BiRefNet `RemoveBackground` (4, its mask frames the subject) → `Hi3DRefine` (6) with the coarse GLB (`Hi3DLoadMesh` 5 reads it from ComfyUI's input folder, where Fuobe uploads it like any input) and `Hi3DModelLoader` (1: models/Hi3D, sequential CPU offload on, flash attention) → `SaveGLB` (7). Bindings: `image`, `model3d` (5's `mesh_file`), `meshResolution` (512 / 1024 / 1536: one, two or three passes), `steps` (25 a pass), `seed`, `cpuOffload`. The server finishes the GLB like any image-to-3D model (web GLB + CPU turntable). 24 GB (an estimate) | no: `missing_node_type` (the pack is not on the CPU validation server) |
+| `mesh-refine-hi3d` | refine-3d | `LoadImage` (2) → core BiRefNet `RemoveBackground` (4) → `InvertMask` (8: Hi3D reads a mask's 1 as transparent, so the inverted mask keeps the subject) → `Hi3DRefine` (6) with the coarse GLB (`Hi3DLoadMesh` 5 reads it from ComfyUI's input folder, where Fuobe uploads it like any input) and `Hi3DModelLoader` (1: models/Hi3D, sequential CPU offload on, SDPA attention) → `SaveGLB` (7). Bindings: `image`, `model3d` (5's `mesh_file`), `meshResolution` (512 / 1024 / 1536: one, two or three passes), `steps` (25 a pass), `seed`, `cpuOffload`. The server finishes the GLB like any image-to-3D model (web GLB + CPU turntable). 24 GB (an estimate) | no: `missing_node_type` (the pack is not on the CPU validation server) |
 
 - **Hardware**: an NVIDIA GPU of compute capability 8.0 or newer (RTX 30 series / A-series, Ada, Hopper, Blackwell) with
   CUDA 12, on Linux or Windows. There is no CPU path. The official stack is Python 3.10, CUDA 12.0-12.5, torch 2.5.0+cu124,
   flash-attn 2.7.4.post1 and spconv-cu120 2.3.6 (validated upstream on a 96 GB H20); T8's pack keeps ComfyUI's own torch,
-  installs spconv-cu126 2.3.8 and triton, and offers SDPA attention (`attention: sdpa` on node 1) where flash-attn isn't
-  built. Its author ran 512 to 1536 on a 24 GB laptop RTX 5090 with CPU offload; smaller cards are not established.
+  installs spconv-cu126 2.3.8 and triton, and offers SDPA attention. Fuobe's graph uses `attention: sdpa` on node 1, so no
+  flash-attn build is needed (the install doesn't add one); set it to `flash` by hand only where flash-attn is already built. Its author ran 512 to 1536 on a 24 GB laptop RTX 5090 with CPU offload; smaller cards are not established.
 - **Node pack** (opt-in, `HI3D=1` in `install-comfyui.sh`): T8mars/Comfyui-Hi3d-T8 at `7384849` (v0.5.1, MIT code; the
   Hi3D code it vendors is under the Hi3D Open License 1.0), with its `requirements.txt` installed into ComfyUI's Python.
   By hand: `git clone https://github.com/T8mars/Comfyui-Hi3d-T8 custom_nodes/Comfyui-Hi3d-T8 && git -C

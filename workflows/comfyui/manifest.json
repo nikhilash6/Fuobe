@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-02T11:06:25.465Z",
+  "generatedAt": "2026-11-02T15:11:05.081Z",
   "comfyuiCommit": "fc04da91b2ab12f99e4716371a7e4f98ac982597",
   "comfyuiVersion": "0.41.0",
   "workflowTemplatesVersion": "0.11.86",
@@ -17902,13 +17902,13 @@
       "vramGb": 24,
       "license": "Hi3D Open License Agreement 1.0 (Hi3D v1.0 weights and vendored code by OCEANO HK HOLDING LIMITED: commercial use permitted; above 200,000 monthly active users or USD 1,000,000 monthly revenue, notify the licensor and apply for a separate licence within 60 days; the app must show \"Powered by Hi3D 1.0\" linking to http://hi3d.ai/); T8star's ComfyUI nodes MIT; DINOv2-L Apache-2.0, CLIP ViT-L/14 MIT (OpenAI); BiRefNet MIT",
       "validated": false,
-      "notes": "Hi3D v1.0 (Sparc3D's refinement stage; docs/research/hi3d-refine.json) through T8star's Comfyui-Hi3d-T8 0.5.1: LoadImage -> core BiRefNet RemoveBackground (the mask frames the subject) -> Hi3DRefine with the coarse GLB (Hi3DLoadMesh reads it from ComfyUI's input folder, where Fuobe uploads it) and Hi3DModelLoader (models/Hi3D with hi3d/, dino/, clip/; sequential CPU offload on, flash attention) -> SaveGLB. Resolution 512 runs one pass (transformer_512), 1024 two and 1536 three (transformer_1024), 25 scheduler steps each. Output: geometry only (no texture, material or vertex colour), recentred at unit radius, not guaranteed watertight; the Fuobe server finishes it like any image-to-3D GLB (web GLB + CPU turntable). Needs Linux or Windows with an NVIDIA GPU of compute capability 8.0+ and CUDA 12 (official stack: CUDA 12.0-12.5, torch 2.5.0+cu124, flash-attn 2.7.4.post1, spconv-cu120 2.3.6; the pack keeps ComfyUI's torch and pins spconv-cu126 2.3.8, with an SDPA attention option). No CPU path. 1536 is validated upstream only on a 96 GB H20; the pack's author ran 512-1536 on a 24 GB laptop RTX 5090 with offload (vramGb is an estimate). Not yet run end to end through Fuobe. Weights: 7.73 GB Hi3D + 1.22 GB DINOv2-L + 1.71 GB CLIP ViT-L/14 at pinned revisions.",
-      "validationError": "HTTP 400: missing_node_type: Node 'Hi3D Model Loader' not found. The custom node may not be installed. (Node ID '#1')",
+      "notes": "Hi3D v1.0 (Sparc3D's refinement stage; docs/research/hi3d-refine.json) through T8star's Comfyui-Hi3d-T8 0.5.1: LoadImage -> core BiRefNet RemoveBackground -> InvertMask (Hi3D reads mask 1 as transparent, so the subject stays and the background goes) -> Hi3DRefine with the coarse GLB (Hi3DLoadMesh reads it from ComfyUI's input folder, where Fuobe uploads it) and Hi3DModelLoader (models/Hi3D with hi3d/, dino/, clip/; sequential CPU offload on, SDPA attention, which needs no flash-attn build) -> SaveGLB. Resolution 512 runs one pass (transformer_512), 1024 two and 1536 three (transformer_1024), 25 scheduler steps each. Output: geometry only (no texture, material or vertex colour), recentred at unit radius, not guaranteed watertight; the Fuobe server finishes it like any image-to-3D GLB (web GLB + CPU turntable). Needs Linux or Windows with an NVIDIA GPU of compute capability 8.0+ and CUDA 12 (official stack: CUDA 12.0-12.5, torch 2.5.0+cu124, flash-attn 2.7.4.post1, spconv-cu120 2.3.6; the pack keeps ComfyUI's torch and pins spconv-cu126 2.3.8, with an SDPA attention option). No CPU path. 1536 is validated upstream only on a 96 GB H20; the pack's author ran 512-1536 on a 24 GB laptop RTX 5090 with offload (vramGb is an estimate). Not yet run end to end through Fuobe. Weights: 7.73 GB Hi3D + 1.22 GB DINOv2-L + 1.71 GB CLIP ViT-L/14 at pinned revisions.",
       "buildWarnings": [
         "model hi3d/transformer_512/config.json: https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_512/config.json -> no size (HTTP 200)",
         "model hi3d/transformer_1024/config.json: https://huggingface.co/hi3d-official/Hi3Dv1.0/resolve/d502e938cbedc6e87aba8884614c5ca6d177a4b6/transformer_1024/config.json -> no size (HTTP 200)",
         "model clip/config.json: https://huggingface.co/openai/clip-vit-large-patch14/resolve/32bd64288804d66eefd0ccbe215aa642df71cc41/config.json -> no size (HTTP 200)"
-      ]
+      ],
+      "validationError": "HTTP 400: missing_node_type: Node 'Hi3D Model Loader' not found. The custom node may not be installed. (Node ID '#1')"
     },
     {
       "id": "tryon-flux2-klein-4b",
