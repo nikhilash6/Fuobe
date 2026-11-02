@@ -9,4 +9,29 @@
  */
 export type TemplateCoverEntry = string | [poster: string, clip: string] | { poster: string; video?: string; at?: number; frames?: string[] };
 
-export const TEMPLATE_COVERS: Record<string, TemplateCoverEntry> = {};
+export const TEMPLATE_COVERS: Record<string, TemplateCoverEntry> = {
+  "canvas/effect-chain-agamemnon": {"poster":"/previews/presets/peak/effect-agamemnon.jpg?v=665eb99f","video":"/previews/presets/effect-agamemnon.mp4?v=54eb9b67","at":3.5625},
+  "canvas/effect-chain-blue-depth": {"poster":"/previews/presets/peak/effect-blue-depth.jpg?v=d34ebadc","video":"/previews/presets/effect-blue-depth.mp4?v=82a75eae","at":3.5625},
+  "canvas/effect-chain-dolphin-ride": {"poster":"/previews/presets/peak/effect-dolphin-ride.jpg?v=8876d2b7","video":"/previews/presets/effect-dolphin-ride.mp4?v=49b7f290","at":3.5625},
+  "canvas/effect-chain-fairytale-castle": {"poster":"/previews/presets/peak/effect-fairytale-castle.jpg?v=f4f7fc3b","video":"/previews/presets/effect-fairytale-castle.mp4?v=58c4ae65","at":3.1875},
+  "canvas/effect-chain-pearl-earring": {"poster":"/previews/presets/peak/effect-pearl-earring.jpg?v=dbbf9f2f","video":"/previews/presets/effect-pearl-earring.mp4?v=b73f4ae9","at":2.3542},
+  "canvas/effect-chain-skatedog": {"poster":"/previews/presets/peak/effect-skatedog.jpg?v=90062c7b","video":"/previews/presets/effect-skatedog.mp4?v=af3f7f5c","at":3.5625},
+  "canvas/effect-chain-superstar": {"poster":"/previews/presets/peak/effect-superstar.jpg?v=8eb5e622","video":"/previews/presets/effect-superstar.mp4?v=c0066397","at":3.5625},
+  "mixed-media/mixed-acid": {"poster":"/previews/presets/peak/effect-acid.jpg?v=5dd1cc1f","video":"/previews/presets/effect-acid.mp4?v=eda1dc9e","at":3.5625},
+  "mixed-media/mixed-akrill": {"poster":"/previews/presets/peak/effect-akrill.jpg?v=a5148de3","video":"/previews/presets/effect-akrill.mp4?v=b09a4205","at":3.5625},
+  "mixed-media/mixed-bubbles": {"poster":"/previews/presets/peak/effect-bubbles.jpg?v=6cebaf31","video":"/previews/presets/effect-bubbles.mp4?v=0f81e24b","at":3.6875},
+  "mixed-media/mixed-comic": {"poster":"/previews/presets/peak/effect-comic.jpg?v=3579cae4","video":"/previews/presets/effect-comic.mp4?v=744e8e53","at":3.5625},
+  "mixed-media/mixed-fragments": {"poster":"/previews/presets/peak/effect-fragments.jpg?v=dba30306","video":"/previews/presets/effect-fragments.mp4?v=c27fac93","at":3.5625},
+  "mixed-media/mixed-lava": {"poster":"/previews/presets/peak/effect-lava.jpg?v=182b756e","video":"/previews/presets/effect-lava.mp4?v=47305cdc","at":3.3542},
+  "mixed-media/mixed-marble": {"poster":"/previews/presets/peak/effect-marble.jpg?v=339bc7bf","video":"/previews/presets/effect-marble.mp4?v=5a2db430","at":3.5625},
+  "mixed-media/mixed-multiverse": {"poster":"/previews/presets/peak/effect-multiverse.jpg?v=d511f53d","video":"/previews/presets/effect-multiverse.mp4?v=c81efde6","at":1.6875},
+  "mixed-media/mixed-noir": {"poster":"/previews/presets/peak/effect-noir.jpg?v=3bb96dc5","video":"/previews/presets/effect-noir.mp4?v=3e3ac107","at":3.1875},
+  "mixed-media/mixed-overexposed": {"poster":"/previews/presets/peak/effect-overexposed.jpg?v=5e499f55","video":"/previews/presets/effect-overexposed.mp4?v=bdbc6cf2","at":2.3542},
+  "mixed-media/mixed-paper": {"poster":"/previews/presets/peak/effect-paper.jpg?v=9ed040b9","video":"/previews/presets/effect-paper.mp4?v=e4242b6c","at":3.5208},
+  "mixed-media/mixed-particles": {"poster":"/previews/presets/peak/effect-particles.jpg?v=f5d797f7","video":"/previews/presets/effect-particles.mp4?v=d9a1a5dd","at":3.3958},
+  "mixed-media/mixed-random-glow": {"poster":"/previews/presets/peak/effect-random-glow.jpg?v=c243a3c6","video":"/previews/presets/effect-random-glow.mp4?v=a9964f90","at":3.2708},
+  "mixed-media/mixed-sketch": {"poster":"/previews/presets/peak/effect-sketch.jpg?v=24e23540","video":"/previews/presets/effect-sketch.mp4?v=4e4bc4c0","at":2.4375},
+  "mixed-media/mixed-toxic": {"poster":"/previews/presets/peak/effect-toxic.jpg?v=146b540c","video":"/previews/presets/effect-toxic.mp4?v=f160fa6a","at":3.3542},
+  "mixed-media/mixed-tracking": {"poster":"/previews/presets/peak/effect-tracking.jpg?v=820420f2","video":"/previews/presets/effect-tracking.mp4?v=b0482bde","at":3.5208},
+  "mixed-media/mixed-windows": {"poster":"/previews/presets/peak/effect-windows.jpg?v=6566b7b2","video":"/previews/presets/effect-windows.mp4?v=ddb89362","at":3.0208}
+};

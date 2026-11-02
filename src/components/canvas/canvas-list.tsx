@@ -341,6 +341,8 @@ function ListInner({ templates }: { templates: TemplateCardData[] }) {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {templates
                   .filter((t) => (t.group ?? "") === group)
+                  // Templates with a real cover lead their section; the rest keep their order after them.
+                  .sort((a, b) => Number(!templateCover("canvas", a.id)) - Number(!templateCover("canvas", b.id)))
                   .map((t) => (
                     <TemplateCard key={t.id} t={t} engine={engine} busy={creating === t.id} onUse={visitor ? undefined : () => void start(t.id, { templateId: t.id, engine })} />
                   ))}

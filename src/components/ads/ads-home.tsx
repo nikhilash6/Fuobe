@@ -10,10 +10,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from "@/components/ui/skeleton";
 import { BrandStart } from "@/components/brand/brand-dialog";
 import { SelfHostNote } from "@/components/self-host-note";
+import { ExampleRow } from "@/components/studio/example-row";
 import { useIsVisitor } from "@/lib/api";
 import { ResearchLabel } from "@/components/brand/research-progress";
 import type { BrandKit } from "@/lib/catalog/marketing";
 import { timeAgo } from "@/lib/format";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useBrandActions, useBrands } from "@/components/marketing/hooks";
@@ -95,8 +97,11 @@ function DeleteBrand({ brand, onClose }: { brand: BrandKit | null; onClose: () =
   );
 }
 
-/** Ads Studio home: start from a website (or by hand), and the brand shelf. */
-export function AdsHome() {
+/**
+ * Ads Studio home: start from a website (or by hand), and the brand shelf.
+ * examples: "See what it makes" (studioExamples("ads"), from the page), while there are no brands of one's own.
+ */
+export function AdsHome({ examples }: { examples?: StudioExampleRow }) {
   const router = useRouter();
   const { engine, setEngine } = useMarketingEngine();
   const brands = useBrands();
@@ -118,6 +123,8 @@ export function AdsHome() {
             )}
           </div>
         </section>
+
+        {examples && (visitor || (brands.isSuccess && !brands.data.length)) && <ExampleRow row={examples} className="mt-12" />}
 
         <section className="mt-14">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-3">

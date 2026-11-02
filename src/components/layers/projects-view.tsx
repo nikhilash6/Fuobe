@@ -13,12 +13,14 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ExampleRow } from "@/components/studio/example-row";
 import { LibraryGrid } from "@/components/studio/media-slot";
 import { PageShell } from "@/components/page-shell";
 import { SelfHostNote } from "@/components/self-host-note";
 import { uploadFile, useHydrated, useIsOwner, useLikelyVisitor, useViewer } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { LayerProject } from "@/lib/layers";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { loadImage, sizeOf } from "./render";
@@ -185,7 +187,7 @@ function Capabilities() {
   );
 }
 
-function ProjectsInner() {
+function ProjectsInner({ examples }: { examples?: StudioExampleRow }) {
   const params = useSearchParams();
   const projects = useLayerProjects();
   const { rename, remove } = useLayerActions();
@@ -307,6 +309,9 @@ function ProjectsInner() {
             <MonitorSmartphone className="size-3.5 shrink-0" /> Layers works best on a larger screen — on a phone you can preview and download.
           </p>
         </section>
+
+        {/* What it makes, while there are no projects of one's own to show (a guest or an account never has any). */}
+        {examples && (visitor || (projects.isSuccess && !items.length)) && <ExampleRow row={examples} className="mt-12" />}
 
         <section className={cn("mt-14", visitor && "hidden")} aria-labelledby="my-projects">
           <h2 id="my-projects" className="font-heading text-[24px]">
@@ -436,10 +441,11 @@ function ProjectsInner() {
   );
 }
 
-export function LayersProjects() {
+/** examples: "See what it makes" (studioExamples("layers"), from the page). */
+export function LayersProjects({ examples }: { examples?: StudioExampleRow }) {
   return (
     <Suspense fallback={null}>
-      <ProjectsInner />
+      <ProjectsInner examples={examples} />
     </Suspense>
   );
 }

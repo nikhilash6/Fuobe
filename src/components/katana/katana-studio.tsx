@@ -19,10 +19,12 @@ import { MediaDrop } from "@/components/av/media-drop";
 import { StepList, type StepRow } from "@/components/av/step-list";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { SelfHostNote } from "@/components/self-host-note";
+import { ExampleRow } from "@/components/studio/example-row";
 import { useEngine, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { formatCueTime } from "@/lib/av/cue-edit";
 import { detectCutIndices, KATANA_LIMITS, katanaProgress, katanaStage, motionModel, MOTION_MODELS, nearestAspect, OPEN_KEYFRAME_PHOTOS, planSegments, refineCut, refineTimes, type KatanaJobView, type Segment } from "@/lib/av/katana";
 import { keepOffered, offered } from "@/lib/model-access";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/refusals";
 import { useKatanaActions, useKatanaJobs, useKatanaPreview, type KatanaBody } from "./hooks";
@@ -59,8 +61,11 @@ async function findCuts(src: string, duration: number, onProgress: (p: number) =
 const money = (usd: number | null | undefined, demo?: boolean, open?: boolean, visitor?: boolean) =>
   visitor && (demo || open) ? "Not available here" : demo ? "Placeholder · free" : open ? "Free · your GPU" : usd == null ? "Price unknown" : `≈ $${usd.toFixed(2)}`;
 
-/** Katana: rebuild a reference edit with your subject, shot for shot. */
-export function KatanaStudio() {
+/**
+ * Katana: rebuild a reference edit with your subject, shot for shot.
+ * examples: "See what it makes" (studioExamples("katana"), from the page), where the runs go until there is one.
+ */
+export function KatanaStudio({ examples }: { examples?: StudioExampleRow }) {
   const [engine] = useEngine();
   // An edit doesn't run on an account's own GPU or key yet (only the studios' generations do): said up front, and the
   // uploads and Recreate are off, instead of a run the server refuses.
@@ -303,6 +308,7 @@ export function KatanaStudio() {
           </div>
         </div>
       </div>
+      {examples && (visitor || (jobs.isSuccess && !jobs.data.length)) && <ExampleRow row={examples} className="mt-12" />}
       <Runs jobs={jobs.data} loading={jobs.isLoading} />
     </ToolShell>
   );

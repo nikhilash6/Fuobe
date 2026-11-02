@@ -11,11 +11,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Panel, ToolHero, ToolShell } from "@/components/av/tool-shell";
 import { EngineSwitch } from "@/components/studio/engine-switch";
 import { SelfHostNote } from "@/components/self-host-note";
+import { ExampleRow } from "@/components/studio/example-row";
 import { useEngine, useLikelyVisitor } from "@/lib/api";
 import { characterLicenceLine } from "@/lib/catalog/character-swap";
 import { SWAP_STUDIO, type SwapProjectCard } from "@/lib/catalog/swap-studio";
 import { STUDIO_MODELS } from "@/lib/catalog/swap-studio-plan";
 import { toastError } from "@/lib/refusals";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { useCreateSwapProject, useDeleteSwapProject, useSwapProjects } from "./hooks";
 
@@ -34,7 +36,8 @@ const ago = (t: number) => {
   return new Date(t).toLocaleDateString();
 };
 
-export function SwapStudioHome() {
+/** examples: "See what it makes" (studioExamples("character-swap"), from the page), while there are no projects of one's own. */
+export function SwapStudioHome({ examples }: { examples?: StudioExampleRow }) {
   const router = useRouter();
   const [engine, setEngine] = useEngine();
   const projects = useSwapProjects();
@@ -87,6 +90,8 @@ export function SwapStudioHome() {
         </form>
         {visitor && <SelfHostNote className="mt-3 max-w-lg">Character Swap isn&apos;t available here.</SelfHostNote>}
       </ToolHero>
+
+      {examples && (visitor || (projects.isSuccess && !projects.data.length)) && <ExampleRow row={examples} className="mt-10" />}
 
       <ol className="mx-auto mt-8 grid max-w-[1040px] gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="How it works">
         {STEPS.map((s, i) => (

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import {
   AUDIO_STUDIO,
   DIALOGUE_STUDIO,
@@ -83,14 +84,14 @@ const HUB_TITLE: Record<HubKind, string> = { upscale: "Upscale", audio: "Audio",
  * component: the page is prerendered with that mode's hero, tabs and composer, and ships only
  * that mode's models. `mode` omitted = the first mode (the hub's own URL).
  */
-export function ModeSwitchStudio({ kind, mode }: { kind: HubKind; mode?: string }) {
+export function ModeSwitchStudio({ kind, mode, examples }: { kind: HubKind; mode?: string; examples?: StudioExampleRow }) {
   const current = mode ?? HUB_MODES[kind][0].id;
   const tabs = HUB_MODES[kind].map((m) => ({ id: m.id, label: m.label, href: modeHref(kind, m.id), ...(m.ownerOnly && { ownerOnly: true as const }) }));
   const Tool = TOOLS[kind]?.[current];
   if (Tool) return <Tool tabs={<ModeTabs tabs={tabs} current={current} />} />;
   const config = CONFIGS[kind][current];
   if (!config) notFound();
-  return <ModeStudio key={current} tabs={tabs} current={current} config={config} catalog={studioCatalog(config)} />;
+  return <ModeStudio key={current} tabs={tabs} current={current} config={config} catalog={studioCatalog(config)} examples={examples} />;
 }
 
 /** `generateStaticParams` for /<hub>/[mode]: every mode is prerendered. */

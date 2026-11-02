@@ -25,6 +25,7 @@ import { SketchEditor, type Stroke } from "@/components/studio/sketch-editor";
 import { VideoTrimmer, type TrimRange, type VideoTrimmerHandle } from "@/components/studio/video-trimmer";
 import { openInStudio } from "@/components/swap-studio/hooks";
 import { SelfHostNote } from "@/components/self-host-note";
+import { ExampleRow } from "@/components/studio/example-row";
 import { useEdgeFade } from "@/components/studio/use-edge-fade";
 import { useEngine, useGenerations, useLikelyVisitor, useModelAccess } from "@/lib/api";
 import { CHARACTER_SWAP, cutsInPart, cutWarning, partWords, seedProblem, type CharacterOptions, type CharacterQuality } from "@/lib/catalog/character-swap";
@@ -57,6 +58,7 @@ import { withoutOwnGpu } from "@/lib/catalog/engines";
 import type { Generation, PixelPoint } from "@/lib/catalog/types";
 import { downloadHref, downloadName } from "@/lib/library";
 import { keepOffered, offered } from "@/lib/model-access";
+import type { StudioExampleRow } from "@/lib/studio-examples";
 import { cn } from "@/lib/utils";
 import { refusalShown, toastError } from "@/lib/refusals";
 import { CharacterControls, CharacterFacts } from "./character-panel";
@@ -99,8 +101,9 @@ const seedOf = (s: string): number | undefined => (s.trim() === "" ? undefined :
  * and your references, say what changes, see the price (or "Free" on your ComfyUI), get the result with a before /
  * after wipe. Fuobe's Originals run by default on both engines; open weights and partners are labelled alternatives.
  * Setups copy and paste as a short code. The plan: src/lib/catalog/genjutsu.ts; the server: src/server/genjutsu.ts.
+ * examples: "See what it makes" (studioExamples("genjutsu"), from the page), under the clip drop until there is a run of one's own.
  */
-export function GenjutsuStudio() {
+export function GenjutsuStudio({ examples }: { examples?: StudioExampleRow }) {
   const [engine, setEngine, engineMode] = useEngine();
   // Genjutsu doesn't run on an account's own GPU yet (only the studios' generations do): said here, not after Generate.
   const visitor = useLikelyVisitor();
@@ -787,6 +790,8 @@ export function GenjutsuStudio() {
           </div>
         )}
       </div>
+
+      {examples && !clip && !run && (visitor || (history.isSuccess && !history.data.length)) && <ExampleRow row={examples} className="mt-12" />}
 
       {run && <RunPanel run={run} onAgain={() => start(run)} />}
 

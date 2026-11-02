@@ -92,17 +92,18 @@ export const HOME_REVEALS = [
 ];
 
 /**
- * Studio cards: a real cover (a clip, or a still: Mixed Media's looks, Marketing's product shot and Image to 3D's
- * turntable shot) and one line each; Audio shows its tools instead of a picture.
+ * Studio cards: a real cover (a clip, or a still: Marketing's product shot and Image to 3D's
+ * turntable shot) and one line each. Audio’s is the demo its Clean up voice tool opens on (a studio without a cover
+ * would show its tools by name: AudioCard).
  */
 export const HOME_STUDIOS: { href: string; id?: string; line: (f: HomeFacts) => string }[] = [
   { href: "/cinema", id: "motion-arc-left", line: (f) => `Direct a film shot by shot: camera, lens, light and ${f.cinemaMoves} moves.` },
   { href: "/genjutsu", id: "effect-turning-metal", line: () => "Keep a clip’s motion. Change what’s in it." },
   { href: "/character-swap", id: "app-character-swap", line: () => "Put your character into whole clips, shot by shot." },
   { href: "/marketing", id: "app-macroshot-product", line: (f) => `From a product link to a finished ad. ${f.adTemplates} ad templates.` },
-  { href: "/mixed-media", id: "effect-magazine", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },
+  { href: "/mixed-media", id: "effect-paper", line: (f) => `Redraw a clip as collage, paper or paint, in ${f.mixedLooks} looks.` },
   { href: "/motion-control", id: "motion-static", line: () => "Give anyone the moves from any clip." },
-  { href: "/audio", line: () => "Voices, music and sound for any clip, made or split apart." },
+  { href: "/audio", id: "app-clean-up-voice", line: () => "Voices, music and sound for any clip, made or split apart." },
   { href: "/image-to-3d", id: "app-3d-rotation", line: () => "A photo or a sentence to a 3D model you can spin." },
 ];
 

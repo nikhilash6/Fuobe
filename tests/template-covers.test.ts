@@ -12,6 +12,7 @@ import { TEMPLATES } from "@/lib/catalog/marketing";
 import { MIXED_PRESETS } from "@/lib/catalog/mixed-media";
 import { FASHION, PACKS } from "@/lib/catalog/packs";
 import { SHORTS_PRESETS } from "@/lib/catalog/shorts";
+import { PRESET_PEAKS } from "@/lib/preset-peaks.generated";
 import { PRESET_PREVIEWS } from "@/lib/preset-previews.generated";
 import { TEMPLATE_GROUPS, templateCover, type TemplateGroup } from "@/lib/template-covers";
 import { TEMPLATE_COVERS } from "@/lib/template-covers.generated";
@@ -79,8 +80,12 @@ describe("the template covers manifest", () => {
   });
 
   it("stays small with every tile listed: it ships with the studios' pages", () => {
-    const pick = (list: { poster: string; video?: string }[], i: number) => list[i % list.length];
-    const presetCovers = Object.values(PRESET_PREVIEWS);
+    const pick = <T,>(list: T[], i: number) => list[i % list.length];
+    // A tile that shows a preset's cover rests on its peak frame where it has one (the longer entry).
+    const presetCovers = Object.entries(PRESET_PREVIEWS).map(([id, c]): Entry => {
+      const peak = PRESET_PEAKS[id];
+      return c.video && peak ? { poster: `/previews/presets/peak/${id}.jpg?v=${peak.v}`, video: c.video, at: peak.at } : c;
+    });
     const v = (n: number) => n.toString(16).padStart(8, "0");
     const t = (key: string, n: number, more = "") => `/previews/templates/${key}${more}.jpg?v=${v(n)}`;
     const lines: string[] = [];
@@ -124,7 +129,16 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     }
   };
   const run = (opts: Record<string, unknown> = {}) => gen.templateCoversFromMasters(masters, { publicDir, manifest, ...opts });
-  const sameId = Object.keys(PRESET_PREVIEWS)[0];
+  // A preset with no peak frame, and a clip with one (a look that draws itself in, as Mixed Media's effects do).
+  const sameId = Object.keys(PRESET_PREVIEWS).find((id) => !PRESET_PEAKS[id])!;
+  const peakId = Object.keys(PRESET_PEAKS).find((id) => PRESET_PREVIEWS[id]?.video)!;
+  /** The site's copy of a file under public/, in the sample public folder (in this order, so a 320 px copy is never older than its still). */
+  const copyIn = (...urls: (string | undefined)[]) => {
+    for (const url of urls.filter((u): u is string => !!u)) {
+      fs.mkdirSync(path.dirname(fileOf(url, publicDir)), { recursive: true });
+      fs.copyFileSync(fileOf(url), fileOf(url, publicDir));
+    }
+  };
 
   it("encodes stills, clips, reveals and frames, versions every URL, and lists a preset's cover as it is", () => {
     spawnSync("ffmpeg", ["-v", "error", "-y", "-i", SAMPLE_CLIP, "-frames:v", "1", still]);
@@ -133,16 +147,23 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     put("shorts/shorts-warm-glow", { "clip.mp4": SAMPLE_CLIP, "meta.json": '{"rest":"end"}' });
     put("photodump/zen", { "still.png": still, "frame-2.png": still, "frame-3.png": still, "frame-4.png": still });
     put("mixed-media/mixed-sketch", { "meta.json": JSON.stringify({ same: sameId }) });
-    // The preset's own files, as the site has them.
+    put("mixed-media/mixed-paper", { "meta.json": JSON.stringify({ same: peakId }) });
+    // The presets' own files, as the site has them: their covers, and the one's peak frame.
     const p = PRESET_PREVIEWS[sameId];
-    for (const url of [p.poster, thumbOf(p.poster), p.video].filter((u): u is string => !!u)) {
-      fs.mkdirSync(path.dirname(fileOf(url, publicDir)), { recursive: true });
-      fs.copyFileSync(fileOf(url), fileOf(url, publicDir));
-    }
+    copyIn(p.poster, thumbOf(p.poster), p.video);
+    const peak = `/previews/presets/peak/${peakId}.jpg?v=${PRESET_PEAKS[peakId].v}`;
+    copyIn(PRESET_PREVIEWS[peakId].video, peak, thumbOf(peak));
     put("nope/x", { "still.png": still });
 
     const r = run();
-    expect(r.covers.map((c) => c.key).sort()).toEqual(["marketing/m2-sticker-pop", "marketing/ps-sunlit-plinth", "mixed-media/mixed-sketch", "photodump/zen", "shorts/shorts-warm-glow"]);
+    expect(r.covers.map((c) => c.key).sort()).toEqual([
+      "marketing/m2-sticker-pop",
+      "marketing/ps-sunlit-plinth",
+      "mixed-media/mixed-paper",
+      "mixed-media/mixed-sketch",
+      "photodump/zen",
+      "shorts/shorts-warm-glow",
+    ]);
     expect(r.skipped).toEqual([{ key: "nope", why: expect.stringMatching(/not a tile group/) }]);
     const m = gen.readTemplateManifest(manifest);
     const out = (f: string) => path.join(publicDir, "previews", "templates", f);
@@ -154,6 +175,9 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     expect(reveal.video).toMatch(VERSIONED);
     expect(m["photodump/zen"].frames).toEqual([2, 3, 4].map((k) => `/previews/templates/photodump/zen-${k}.jpg?v=${sha8(out(`photodump/zen-${k}.jpg`), out(`photodump/thumbs/zen-${k}.jpg`))}`));
     expect(m["mixed-media/mixed-sketch"]).toEqual({ poster: PRESET_PREVIEWS[sameId].poster, ...(PRESET_PREVIEWS[sameId].video && { video: PRESET_PREVIEWS[sameId].video }) });
+    // A clip with a peak rests on it: the look, not the photo the clip starts from (and the versions stay the peak's own).
+    expect(m["mixed-media/mixed-paper"]).toEqual({ poster: peak, video: PRESET_PREVIEWS[peakId].video, at: PRESET_PEAKS[peakId].at });
+    expect(templateCover("mixed-media", "mixed-paper", { "mixed-media/mixed-paper": gen.slimEntry("mixed-media/mixed-paper", m["mixed-media/mixed-paper"]) } as never)).toMatchObject({ poster: peak, at: PRESET_PEAKS[peakId].at });
     // The file lists a plain cover by its versions alone.
     const text = fs.readFileSync(manifest, "utf8");
     expect(text).toMatch(/"marketing\/ps-sunlit-plinth": "[0-9a-f]{8}"/);
@@ -175,11 +199,11 @@ describe.skipIf(!hasFfmpeg)("pnpm eval:covers --templates", () => {
     expect(fs.existsSync(path.join(publicDir, "previews/templates/photodump/zen-4.jpg"))).toBe(false);
     expect(fs.existsSync(path.join(publicDir, "previews/templates/photodump/thumbs/zen-4.jpg"))).toBe(false);
     // The other tiles stay as they were.
-    expect(Object.keys(m)).toHaveLength(5);
+    expect(Object.keys(m)).toHaveLength(6);
   });
 
   it("versions the manifest from the files as they are (--versions), and finds nothing to do when it's current", () => {
-    expect(gen.versionTemplateCovers({ publicDir, manifest, dryRun: true })).toMatchObject({ entries: 5, changed: 0, thumbs: [], unversioned: [] });
+    expect(gen.versionTemplateCovers({ publicDir, manifest, dryRun: true })).toMatchObject({ entries: 6, changed: 0, thumbs: [], unversioned: [] });
     // A still replaced by hand: its copy is made again first, then both get a new version.
     const poster = path.join(publicDir, "previews/templates/marketing/ps-sunlit-plinth.jpg");
     const was = gen.readTemplateManifest(manifest)["marketing/ps-sunlit-plinth"].poster;
