@@ -248,7 +248,8 @@ export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) 
               : estimate.isError
                 ? (estimate.error as Error).message
                 : null;
-  const blocker = visitor ? "Remove object isn't available here" : setupBlocker;
+  const toolName = personAsked ? "Remove a person" : "Remove object";
+  const blocker = visitor ? `${toolName} isn't available here` : setupBlocker;
 
   const start = () => {
     if (blocker || !body) return void toast(blocker ?? "Not ready yet", { id: "remove-blocker" });
@@ -283,7 +284,7 @@ export function RemoveObjectTool({ person = false }: { person?: boolean } = {}) 
               : `Type what goes, click it, or paint over it — the gap is filled frame by frame and the sound stays${visitor ? "." : ", free on your own ComfyUI."}`
           }
         >
-          {visitor && <SelfHostNote className="mt-3 max-w-xl">Remove object isn&apos;t available here.</SelfHostNote>}
+          {visitor && <SelfHostNote className="mt-3 max-w-xl">{toolName} isn&apos;t available here.</SelfHostNote>}
         </ToolHero>
       )}
       <div className={cn("mx-auto", clip ? "pt-4" : "mt-8 max-w-[640px]")}>
