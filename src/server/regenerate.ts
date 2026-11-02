@@ -2,7 +2,11 @@ import "server-only";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import {
+  h3TwoKRequests,
   isH3Source,
+  needsSmoothing,
+  REGEN_FPS,
+  REGEN_SMOOTH_MODEL,
   REGEN_COPY,
   REGEN_FILES,
   REGEN_LORA,
@@ -44,10 +48,10 @@ export function clipMaker(ref: string | undefined): string | undefined {
   return row?.model;
 }
 
-/** A stored clip's length and size from its header (none for a link or another's file). */
-function clipHeader(ref: string | undefined): { seconds?: number; width?: number; height?: number } {
+/** A stored clip's length, size and frame rate from its header (none for a link or another's file). */
+function clipHeader(ref: string | undefined): { seconds?: number; width?: number; height?: number; fps?: number } {
   const info = ref ? storedMedia(ref)?.info : undefined;
-  return info ? { seconds: info.videoDuration ?? info.duration, width: info.width, height: info.height } : {};
+  return info ? { seconds: info.videoDuration ?? info.duration, width: info.width, height: info.height, fps: info.fps } : {};
 }
 
 const positive = (n: number | undefined) => (typeof n === "number" && n > 0 ? n : undefined);
@@ -102,19 +106,50 @@ export function createRegenerateRun(
     ...(span === undefined ? [REGEN_ONE_PASS_NOTE] : []),
   ];
   const noted = (g: Generation) => (notes.length ? { ...g, notes: [...(g.notes ?? []), ...notes] } : g);
-  if (windows.length <= 1) return create({ ...original, params: { ...original.params, extra } }, opts).map(noted);
+  // A stored clip slower than 24 fps (a Wan VACE edit's 16 fps) goes through RIFE first, so Prepare Draft doesn't repeat
+  // frames to reach 24: the passes read RIFE's clip (package n7-10).
   const batchId = opts.batchId ?? nanoid(10);
+  let smooth: Generation | undefined;
+  let source = original;
+  let runOpts = opts;
+  if (!deps.length && video && needsSmoothing(header.fps)) {
+    [smooth] = create(
+      {
+        feature: original.feature,
+        modelId: REGEN_SMOOTH_MODEL,
+        op: "interpolate",
+        inputs: { video },
+        params: { targetFps: REGEN_FPS, numOutputs: 1 },
+        ...(original.demo && { demo: true }),
+        step: { label: `To ${REGEN_FPS} fps`, index: 0, of: 2 },
+      },
+      { batchId },
+    );
+    const inputs = { ...original.inputs };
+    delete inputs.video;
+    source = { ...original, inputs, chain: [{ slot: "video" }] };
+    runOpts = { batchId, dependsOn: smooth.id };
+  }
+  const withSmooth = (made: Generation[]) => (smooth ? [...made, smooth] : made);
+  if (windows.length <= 1) {
+    try {
+      return withSmooth(create({ ...source, params: { ...source.params, extra } }, runOpts).map(noted));
+    } catch (e) {
+      if (smooth) cancel(smooth.id);
+      throw e;
+    }
+  }
   const parts: Generation[] = [];
   try {
     for (const [i, w] of windows.entries()) {
       parts.push(
         create(
           {
-            ...original,
-            params: { ...original.params, startTime: round3(from + w.start), endTime: round3(from + w.start + w.duration), numOutputs: 1, extra },
+            ...source,
+            params: { ...source.params, startTime: round3(from + w.start), endTime: round3(from + w.start + w.duration), numOutputs: 1, extra },
             step: { label: `Part ${i + 1} of ${windows.length}`, index: i, of: windows.length + 1 },
           },
-          { batchId },
+          smooth ? { batchId, dependsOn: smooth.id } : { batchId },
         )[0],
       );
     }
@@ -130,9 +165,42 @@ export function createRegenerateRun(
         step: { label: `Regenerated · ${windows.length} parts joined`, index: windows.length, of: windows.length + 1 },
       },
     );
-    return [noted({ ...film, notes: [...(film.notes ?? []), REGEN_SEAM_NOTE] }), ...parts];
+    return withSmooth([noted({ ...film, notes: [...(film.notes ?? []), REGEN_SEAM_NOTE] }), ...parts]);
   } catch (e) {
-    for (const p of parts) cancel(p.id);
+    for (const p of [...parts, ...(smooth ? [smooth] : [])]) cancel(p.id);
     throw e;
   }
+}
+
+/**
+ * MiniMax H3 at 2K on your GPU (n7-10): each take is drafted at 768p, then redrawn at 2K by Open-H3 Regenerate
+ * (h3TwoKRequests). A text-to-video draft keeps its latent and the finish loads it by the draft's id; a take from a start
+ * frame is finished from its clip. Returns the finished takes first, then their drafts. `create` is createGenerations.
+ */
+export function createH3TwoKRun(
+  original: GenerationRequest,
+  op: string,
+  opts: { batchId?: string; dependsOn?: string | string[] },
+  create: (r: GenerationRequest, o?: { batchId?: string; dependsOn?: string | string[] }) => Generation[],
+  cancel: (id: string) => void,
+): Generation[] {
+  const off = regenSwitchedOff();
+  if (off) throw new Error(off);
+  const batchId = opts.batchId ?? nanoid(10);
+  const takes = Math.max(1, Math.min(4, Math.round(original.params?.numOutputs ?? 1)));
+  const finished: Generation[] = [];
+  const drafts: Generation[] = [];
+  try {
+    for (let i = 0; i < takes; i++) {
+      const { draft, finish, fromLatent } = h3TwoKRequests(original, op);
+      const [d] = create(draft, { ...opts, batchId });
+      drafts.push(d);
+      const [f] = create({ ...finish, params: { ...finish.params, extra: { ...finish.params?.extra, ...(fromLatent ? { latentFrom: d.id } : {}) } } }, { batchId, dependsOn: d.id });
+      finished.push(f);
+    }
+  } catch (e) {
+    for (const g of [...finished, ...drafts]) cancel(g.id);
+    throw e;
+  }
+  return [...finished, ...drafts];
 }

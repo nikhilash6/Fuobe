@@ -147,6 +147,8 @@ describe("round-4 ComfyUI workflows", () => {
       "video-character-swap-h3-segment",
       "video-mask-h3-relay",
       "video-regenerate-h3",
+      "video-h3-t2v-2k",
+      "video-regenerate-h3-latent",
     ]);
     for (const w of manifest.workflows) for (const o of w.outputs) if (o.role) expect(ROLES, `${w.id} ${o.role}`).toContain(o.role);
   });

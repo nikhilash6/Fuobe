@@ -242,6 +242,10 @@ describe("accounts never run on the owner's keys or GPU", () => {
       "/api/restore/prompt",
       // Character Swap Studio's Sharpen (n7-4): a studio job, like its assembly.
       "/api/swap-studio/projects/p1/sharpen",
+      // Regenerate in Faceless, Shorts segments and Cinema takes (n7-10): studio jobs, like their renders.
+      "/api/faceless/episodes/e1/regenerate",
+      "/api/shorts/sessions/s1/segments/0/enhance",
+      "/api/cinema/projects/p1/items/g1/finish",
     ]) {
       const r = proxy(req(p, { method: "POST", cookie }));
       expect(r.status, p).toBe(403);

@@ -56,8 +56,8 @@ import { DETAILS_MAX_IMAGES, GPU_PARAM, QWEN21_SPEED, speedLora } from "@/lib/qw
 import { BLOCKED_CARD_MESSAGE, looksBlocked } from "./safety-card";
 import { pollTrainings } from "./training";
 import { createEndFrameClip, createExtendChain, createKeyframeFilm, createMosaicRun, createRelitClip, createShotFilm, createStillTo3d, joinClips } from "./chains";
-import { createRegenerateRun } from "./regenerate";
-import { REGEN_MODEL, regenerateGraphLoras } from "@/lib/catalog/regenerate";
+import { createH3TwoKRun, createRegenerateRun } from "./regenerate";
+import { REGEN_MODEL, regenerateGraphLoras, wantsH3TwoK } from "@/lib/catalog/regenerate";
 import { enhancePrompt, enhanceSoulWords, ideogramCaption } from "./enhance";
 import { carriesLayout } from "@/lib/layout-prompt";
 import { setResolver, watchGenerations, type LiveEvent } from "./live";
@@ -939,6 +939,10 @@ export function createGenerations(given: GenerationRequest, opts: CreateOptions 
   if (shotModel?.id === REGEN_MODEL) {
     const run = createRegenerateRun(original, shotModel, opts, createGenerations, joinClips, (id) => void cancelGeneration(id));
     if (run) return run;
+  }
+  // MiniMax H3 at 2K on your GPU (n7-10): a 768p draft, then Open-H3 Regenerate at 2K from it (from its latent for text to video).
+  if (shotModel && wantsH3TwoK(shotModel.id, original.params?.resolution)) {
+    return createH3TwoKRun(original, inferOperation(shotModel, original), opts, createGenerations, (id) => void cancelGeneration(id));
   }
   const deps = opts.dependsOn === undefined ? [] : Array.isArray(opts.dependsOn) ? opts.dependsOn : [opts.dependsOn];
   const waits = deps.length > 0;

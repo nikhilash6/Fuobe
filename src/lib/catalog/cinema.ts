@@ -612,6 +612,17 @@ export const MAX_LIGHTS = 2;
 export const VIDEO_ASPECTS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
 export const IMAGE_ASPECTS = ["16:9", "21:9", "3:2", "4:3", "1:1", "3:4", "2:3", "9:16"];
 export const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"];
+/** MiniMax H3's 2K tier: fal renders it from a 768P base; on your GPU a 768p draft is finished by Open-H3 Regenerate. */
+export const H3_2K_TIER = "2K";
+
+/** Cinema's video tiers for a model: 480p / 720p / 1080p, and 2K for the MiniMax H3 models that offer it. */
+export function videoResolutionsFor(model: Pick<ModelDef, "family" | "options"> | undefined): string[] {
+  const twoK = !!model && (model.family === "minimax-h3" || model.family === "hailuo") && (model.options.resolutions ?? []).some((r) => r.toLowerCase() === "2k");
+  return twoK ? [...VIDEO_RESOLUTIONS, H3_2K_TIER] : VIDEO_RESOLUTIONS;
+}
+
+/** The 2K tier on your GPU, said under the prompt bar. */
+export const H3_2K_OPEN_NOTE = "2K on your GPU: each take is drafted at 768p, then redrawn at 2K with Open-H3 Regenerate (about 5 minutes per 5 s)";
 export const IMAGE_RESOLUTIONS = ["1K", "2K", "4K"];
 export const DURATION = { min: 4, max: 30, default: 5 } as const;
 export const BATCH = { min: 1, max: 4 } as const;
@@ -1378,6 +1389,7 @@ function fitParams(model: ModelDef, input: CinemaGenerateInput, notes: string[],
       notes.push(`${model.name} renders up to ${params.resolution} here`);
     }
   }
+  if (kind === "video" && model.engine === "open" && typeof params.resolution === "string" && params.resolution.toLowerCase() === "2k") notes.push(H3_2K_OPEN_NOTE);
   if (kind === "video" && model.kind === "video") {
     const want = Math.max(DURATION.min, Math.min(DURATION.max, Math.round(input.duration ?? DURATION.default)));
     const allowed = plannedDurations(model);

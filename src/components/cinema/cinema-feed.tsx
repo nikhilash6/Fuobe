@@ -20,6 +20,7 @@ import {
   RotateCcw,
   Rows3,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   UserRoundPlus,
   Video,
@@ -55,6 +56,8 @@ import { getModel } from "@/lib/catalog";
 import type { CinemaFolder } from "@/lib/catalog/cinema";
 import type { Generation, OutputFile } from "@/lib/catalog/types";
 import { formatCost, timeAgo } from "@/lib/format";
+import { useEngineMode } from "@/lib/api";
+import { finishIn2k } from "@/lib/catalog/regenerate";
 import { cn } from "@/lib/utils";
 import { copyWithToast } from "@/lib/clipboard";
 import { toastError } from "@/lib/refusals";
@@ -188,8 +191,13 @@ export function deleteLabel(g: CinemaGeneration): string {
 
 function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; folders: CinemaFolder[]; projectId: string; handlers: FeedHandlers; onDelete: (ids: string[]) => void }) {
   const actions = useItemActions(projectId);
+  const engineMode = useEngineMode();
   const o = u.output;
   const elsewhere = foreign(u.g, projectId);
+  // Finish in 2K: a MiniMax H3 take below 2K (fal renders it again at 2K; your GPU redraws it with Open-H3 Regenerate).
+  const finish = o?.kind === "video" && !u.tile ? finishIn2k(u.g, engineMode) : null;
+  const seconds = Number(u.g.request.params?.duration ?? 0);
+  const finishPrice = !finish ? "" : finish.perSecond === null ? "Free" : seconds > 0 ? `≈ ${formatCost(finish.perSecond * seconds)}` : `$${finish.perSecond.toFixed(2)}/s`;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -240,6 +248,18 @@ function TileMenu({ u, folders, projectId, handlers, onDelete }: { u: Unit; fold
             <DropdownMenuItem onClick={() => handlers.onReference(o.url, "video")}>
               <ImagePlus /> Use as reference clip
             </DropdownMenuItem>
+            {finish && (
+              <DropdownMenuItem
+                onClick={() =>
+                  void actions
+                    .finish2k(u.g)
+                    .then(() => toast(finish.perSecond === null ? "Finishing in 2K on your GPU" : "Rendering it again at 2K"))
+                    .catch((e) => toastError(e))
+                }
+              >
+                <Sparkles /> {finish.label} <span className="ml-auto text-[11.5px] text-muted-foreground">{finishPrice}</span>
+              </DropdownMenuItem>
+            )}
           </>
         )}
         {u.scene

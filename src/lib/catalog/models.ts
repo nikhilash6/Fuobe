@@ -615,7 +615,8 @@ const open: ModelDef[] = [
     options: {
       aspectRatios: ["auto", "16:9", "9:16", "1:1", "4:3", "3:4"],
       durations: [3, 5, 10, 15],
-      resolutions: ["768p"],
+      // 2K: a 768p draft, then Open-H3 Regenerate at 2K from it (from its latent for text to video), on your GPU only.
+      resolutions: ["768p", "2K"],
       seed: true,
       endFrame: true,
       audio: "always",

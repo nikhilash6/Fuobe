@@ -212,6 +212,113 @@ export function regenFinishSteps(o: FinishStepsInput): { steps: FinishStep[]; fi
   return { steps, final: key };
 }
 
+/** Edit video's results get "Enhance (H3 regenerate)" (a clip of at most 15 s, one pass). */
+export const ENHANCE_FEATURES = new Set(["video-edit"]);
+export const ENHANCE_LABEL = "Enhance (H3 regenerate) · 1080p";
+
+/** Whether a finished video result gets "Enhance (H3 regenerate)": an Edit video result up to 15 s (unknown counts). */
+export function canEnhance(g: Pick<Generation, "feature" | "status" | "request">, o: { kind: string; meta?: Record<string, unknown> }, engineMode?: "both" | "open" | "cloud"): boolean {
+  if (engineMode === "cloud" || o.kind !== "video" || g.status !== "succeeded" || !ENHANCE_FEATURES.has(g.feature)) return false;
+  const seconds = typeof o.meta?.duration === "number" ? o.meta.duration : (g.request.params?.duration ?? g.request.params?.sourceDuration);
+  return !finishLengthProblem(seconds);
+}
+
+/**
+ * The run behind "Enhance (H3 regenerate)" on an Edit video result: Open-H3 Regenerate at 1080p from the edit's own words,
+ * near the draft (sigma 0.8). The server picks the preset from the model that made it (576p for a Wan VACE edit) and runs
+ * RIFE to 24 fps first when the clip's header says it is slower (createRegenerateRun).
+ */
+export function enhanceRequest(g: Pick<Generation, "feature" | "request">, video: string): GenerationRequest {
+  return {
+    feature: g.feature,
+    modelId: REGEN_MODEL,
+    op: "upscale-video",
+    ...(g.request.prompt?.trim() ? { prompt: g.request.prompt.trim().slice(0, HANDOFF_PROMPT) } : {}),
+    inputs: { video },
+    params: { resolution: REGEN_FINISH_TIER, numOutputs: 1, extra: { startSigma: REGEN_FINISH_SIGMA } },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// MiniMax H3 at 2K on your GPU, and "Finish in 2K" (Cinema and the Video studio)
+
+/** The open MiniMax H3 model, whose 2K tier drafts at 768p and finishes with Open-H3 Regenerate. */
+export const H3_OPEN_MODEL = "oss-minimax-h3";
+/** The 768p text-to-video draft that keeps its latent, and the 2K finish that starts from it (rdh's "Prompt to 2K"). */
+export const H3_LATENT_DRAFT_WORKFLOW = "video-h3-t2v-2k";
+export const REGEN_LATENT_WORKFLOW = "video-regenerate-h3-latent";
+/** Regenerate's tier for a 2K take (the shorter edge: 2560 x 1440). */
+export const H3_FINISH_TIER = "1440p";
+
+/** Whether a request asks the open MiniMax H3 model for its 2K tier. */
+export function wantsH3TwoK(modelId: string | undefined, resolution: string | undefined): boolean {
+  return modelId === H3_OPEN_MODEL && /^(2k|1440p)$/i.test(resolution ?? "");
+}
+
+/** The name the draft's latent is saved under (Save Refined Latent's prefix), from the run's id. */
+export const latentPrefixFor = (generationId: string) => `fuobe_h3_${generationId.replace(/[^A-Za-z0-9_-]/g, "")}`;
+/** The file the finish loads: the pack numbers each prefix's files from 00001. */
+export const latentFileFor = (generationId: string) => `${latentPrefixFor(generationId)}_00001.safetensors`;
+
+/**
+ * The two steps of an open MiniMax H3 take at 2K: the take at 768p, then Open-H3 Regenerate at 2K from it, from the same
+ * words, near the draft (sigma 0.8) with the 768p preset. Text to video drafts on the graph that keeps its latent, and the
+ * finish starts from that latent (the server names it after the draft); a take from a start frame is finished from its clip.
+ */
+export function h3TwoKRequests(original: GenerationRequest, op: string): { draft: GenerationRequest; finish: GenerationRequest; fromLatent: boolean } {
+  const fromLatent = op === "t2v";
+  const params = original.params ?? {};
+  const draft: GenerationRequest = {
+    ...original,
+    op: op as GenerationRequest["op"],
+    params: { ...params, resolution: "768p", numOutputs: 1, extra: { ...params.extra, ...(fromLatent ? { latentDraft: true } : {}) } },
+    step: { label: "768p draft", index: 0, of: 2 },
+  };
+  const finish: GenerationRequest = {
+    feature: original.feature,
+    modelId: REGEN_MODEL,
+    op: "upscale-video",
+    ...(original.prompt !== undefined && { prompt: original.prompt }),
+    ...(original.title && { title: original.title }),
+    ...(original.batchTitle && { batchTitle: original.batchTitle }),
+    ...(original.demo && { demo: true }),
+    params: { resolution: H3_FINISH_TIER, numOutputs: 1, ...(params.duration ? { sourceDuration: params.duration } : {}), extra: { startSigma: REGEN_FINISH_SIGMA, draftFrom: "h3" } },
+    chain: [{ slot: "video" }],
+    step: { label: "Finished in 2K", index: 1, of: 2 },
+  };
+  return { draft, finish, fromLatent };
+}
+
+/** The open H3 takes "Finish in 2K" offers to finish (a take from your GPU, made below 2K). */
+export function canFinishOpen(g: Pick<Generation, "engine" | "modelId" | "status" | "kind" | "request">, engineMode?: "both" | "open" | "cloud"): boolean {
+  if (engineMode === "cloud" || g.engine !== "open" || g.kind !== "video" || g.status !== "succeeded" || !isH3Source(g.modelId) || g.modelId === REGEN_MODEL) return false;
+  return !AT_2K_OR_MORE.test(String(g.request.params?.resolution ?? ""));
+}
+
+/**
+ * "Finish in 2K" on a take: a fal H3 take renders again at 2K on the same hosted model (priced per second); a take from
+ * your GPU is redrawn at 2K by Open-H3 Regenerate (free), from its saved latent when its draft kept one. null: not offered.
+ */
+export function finishIn2k(g: Pick<Generation, "id" | "engine" | "provider" | "modelId" | "status" | "request" | "kind" | "outputs" | "op" | "feature">, engineMode?: "both" | "open" | "cloud"): { request: GenerationRequest; label: string; perSecond: number | null } | null {
+  if (canRerender(g, engineMode)) return { request: rerenderRequest(g), label: "Finish in 2K", perSecond: RERENDER[g.modelId].perSecond["2K"] };
+  if (!canFinishOpen(g, engineMode)) return null;
+  const video = g.outputs.find((o) => o.kind === "video")?.url;
+  if (!video) return null;
+  const latent = g.request.params?.extra?.latentDraft === true;
+  return {
+    request: {
+      feature: g.feature,
+      modelId: REGEN_MODEL,
+      op: "upscale-video",
+      ...(g.request.prompt?.trim() ? { prompt: g.request.prompt.trim() } : {}),
+      inputs: { video },
+      params: { resolution: H3_FINISH_TIER, numOutputs: 1, extra: { startSigma: REGEN_FINISH_SIGMA, ...(latent ? { latentFrom: g.id, draftFrom: "h3" } : {}) } },
+    },
+    label: "Finish in 2K",
+    perSecond: null,
+  };
+}
+
 /** The note for a clip that isn't 16:9 or 9:16. */
 export function regenCropNote(width: number, height: number): string {
   return `Regenerate makes ${regenShape(width, height)} video, so this ${width}×${height} clip is cropped to ${regenShape(width, height)} at the centre`;
@@ -261,7 +368,7 @@ export const REGEN_LORA: LoraRef = {
 
 /** The LoRA files a Regenerate graph loads itself, so a run downloads the ones ComfyUI lacks before it starts. */
 export function regenerateGraphLoras(endpoint: string): LoraRef[] {
-  return endpoint === REGEN_WORKFLOW ? [REGEN_LORA] : [];
+  return endpoint === REGEN_WORKFLOW || endpoint === "video-regenerate-h3-latent" ? [REGEN_LORA] : [];
 }
 
 /** The new files and their licences, as the research recorded them (§2.4, §2.5). */

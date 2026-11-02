@@ -44,7 +44,19 @@ import { fpsPlan } from "@/lib/av/fps";
 import { resolveWorkflowId } from "@/lib/comfy-variants";
 import { DECODER_PARAM, editCanvas, GPU_PARAM, LIGHTNING_GRAPHS, lightningSigmas, SPEED_PARAM, ZEN_ADAPTER, ZEN_ENCODER } from "@/lib/qwen21-speed";
 import { h3Canvas, h3Frames, isH3Graph } from "@/lib/h3-prompt";
-import { draftSizeFor, REGEN_COPY, REGEN_WINDOW_SECONDS, REGEN_WORKFLOW, regenFrames, regenOnePassRefusal, regenResolution } from "@/lib/catalog/regenerate";
+import {
+  draftSizeFor,
+  H3_LATENT_DRAFT_WORKFLOW,
+  latentFileFor,
+  latentPrefixFor,
+  REGEN_COPY,
+  REGEN_LATENT_WORKFLOW,
+  REGEN_WINDOW_SECONDS,
+  REGEN_WORKFLOW,
+  regenFrames,
+  regenOnePassRefusal,
+  regenResolution,
+} from "@/lib/catalog/regenerate";
 import { carriesBoxes, LAYOUT_PARAM } from "@/lib/layout-prompt";
 import { fixFromPromptError } from "@/lib/gpu/fix-codes";
 import { loadIndex } from "../gpu/index-file";
@@ -1381,6 +1393,20 @@ export async function prepareWorkflow(endpointTemplate: string, input: GenInput,
     values.frames = regenFrames(length);
     delete extra.draftFrom;
   }
+  // MiniMax H3 at 2K (n7-10): the 768p draft saves its latent under a name made from its run's id, and the finish loads
+  // that file (the same ComfyUI keeps it in output/open_h3_latents/), redrawing it at the size asked from the same words.
+  if (manifest.id === H3_LATENT_DRAFT_WORKFLOW) {
+    values.latentPrefix = latentPrefixFor(ctx.generationId);
+    delete extra.latentDraft;
+  }
+  if (manifest.id === REGEN_LATENT_WORKFLOW) {
+    if (!(typeof values.prompt === "string" && values.prompt.trim())) throw new ProviderError("Regenerate redraws the clip from words: describe what is in it", 400);
+    if (typeof extra.latentFrom !== "string" || !extra.latentFrom) throw new ProviderError("This take has no saved draft to finish from", 400);
+    values.latent = latentFileFor(extra.latentFrom);
+    values.resolution = regenResolution(input.resolution);
+    delete extra.latentFrom;
+    delete extra.draftFrom;
+  }
 
   // Drawn motion paths (normalised to the start frame) → one pixel point per output frame (Wan-Move).
   const paths = extra.motionPaths as MotionPaths | undefined;
@@ -1879,7 +1905,7 @@ export function promptRefusal(body: PromptRefusalBody, status: number, manifest:
   const packs = missingClass?.pack ? [missingClass.pack] : manifest.customNodes.map((c) => c.name);
   const where = worker === "isolated" ? "the isolated ComfyUI worker" : "your ComfyUI";
   const missingPack =
-    body.error?.type === "missing_node_type" && manifest.id === REGEN_WORKFLOW && worker === "main"
+    body.error?.type === "missing_node_type" && [REGEN_WORKFLOW, REGEN_LATENT_WORKFLOW, H3_LATENT_DRAFT_WORKFLOW].includes(manifest.id) && worker === "main"
       ? ownGpu()
         ? REGEN_COPY.missingVisitor
         : REGEN_COPY.missing
