@@ -21,6 +21,7 @@ import {
   type EpisodeSettings,
   type PickerData,
 } from "@/lib/catalog/faceless";
+import type { Engine } from "@/lib/catalog/types";
 import { cn } from "@/lib/utils";
 import { Section, Segmented, ToggleRow } from "./controls";
 import { NarratorList } from "./narrator";
