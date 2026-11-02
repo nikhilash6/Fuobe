@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownToLine, ClipboardCopy, FileJson, FlaskConical, Import, Plus, Trash2, Undo2, X } from "lucide-react";
+import { ArrowDownToLine, ClipboardCopy, FileJson, FlaskConical, Import, Loader2, Plus, Sparkles, Trash2, Undo2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { copyWithToast } from "@/lib/clipboard";
+import { useLikelyVisitor } from "@/lib/api";
+import { responseError, toastError } from "@/lib/refusals";
 import type { ModelDef } from "@/lib/catalog/types";
 import { boxesAt, drawnBox, inkOn, keyResizedBox, KIND_COLOR, movedBox, newBox, nudgedBox, pickBox, resizedBox, type Handle } from "@/lib/layout-edit";
 import { layoutCompilerFor, parseLayout, readsBoxes, type LayoutBox, type LayoutCanvas as CanvasType, type LayoutDraft, type LayoutItem, type LayoutLabel, type LayoutSource } from "@/lib/layout-prompt";
@@ -163,6 +165,9 @@ function LayoutBoard({
   const [history, setHistory] = useState<Snapshot[]>([]);
   const board = useRef<HTMLDivElement>(null);
   const lastPress = useRef<{ x: number; y: number } | null>(null);
+  const [planning, setPlanning] = useState(false);
+  // Plan layout plans with the studio's own AI helper: a visitor draws the boxes by hand.
+  const visitor = useLikelyVisitor();
   const size = canvasFor(aspect);
   const ratio = ratioOf(aspect);
 
@@ -343,13 +348,56 @@ function LayoutBoard({
     return true;
   };
 
+  /** Plan layout: a first draft from the whole picture's words, on this canvas (POST /api/layout/plan); Undo takes it back. */
+  const plan = async () => {
+    const words = caption.trim();
+    if (!words) return void toast("Describe the whole picture first, then plan its layout");
+    setPlanning(true);
+    try {
+      const res = await fetch("/api/layout/plan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ words, width: size.width, height: size.height }) });
+      const j = (await res.json().catch(() => ({}))) as { layout?: LayoutDraft; error?: string };
+      if (!res.ok || !j.layout) throw responseError(res, j.error ?? "Couldn't plan a layout. Try again, or draw the boxes");
+      remember();
+      setItems(j.layout.items);
+      if (j.layout.summary.meta.length && !tags.trim()) setTags(j.layout.summary.meta.join(", "));
+      setSelected(j.layout.items.length ? 0 : null);
+      setSheetOpen(true);
+      const n = j.layout.items.length;
+      toast(`Planned ${n} box${n === 1 ? "" : "es"}: move them, change the words, or Undo`, { id: "layout-plan" });
+    } catch (e) {
+      toastError(e);
+    } finally {
+      setPlanning(false);
+    }
+  };
+
   const rows = (
     <div className="space-y-3">
       <div className="space-y-2 rounded-xl border p-3">
-        <label htmlFor="layout-caption" className="text-[12px] font-medium">
-          The whole picture
-        </label>
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="layout-caption" className="text-[12px] font-medium">
+            The whole picture
+          </label>
+          {!visitor && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 rounded-full px-2.5 text-[12px]"
+              onClick={() => void plan()}
+              disabled={planning || !caption.trim()}
+              aria-describedby="layout-plan-hint"
+            >
+              {planning ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} Plan layout
+            </Button>
+          )}
+        </div>
         <Textarea id="layout-caption" value={caption} onChange={(e) => setCaption(e.target.value)} rows={2} placeholder="A warm autumn sale poster for a candle shop" className="min-h-0 resize-none text-[13px]" />
+        {!visitor && (
+          <p id="layout-plan-hint" className="text-[11px] leading-snug text-muted-foreground">
+            Plan layout turns these words into boxes to start from: “a sale poster for my candle shop, 30% off”.
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <span id="layout-canvas-label" className="text-[12px] text-muted-foreground">
             Canvas

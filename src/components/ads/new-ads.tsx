@@ -5,8 +5,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { AddFromLink, ProductCard, ProductDialog, UploadProductButton } from "@/components/brand/products";
-import { AD_VISUAL_MODELS, MAX_ADS_PER_PRODUCT, MAX_PRODUCTS_PER_RUN, type BrandKit, type Product } from "@/lib/catalog/marketing";
+import { AD_VISUAL_MODELS, DRAWN_WORDS_LABEL, DRAWN_WORDS_MODELS, MAX_ADS_PER_PRODUCT, MAX_PRODUCTS_PER_RUN, type BrandKit, type Product } from "@/lib/catalog/marketing";
 import { useModelAccess } from "@/lib/api";
 import { keepOffered, offered } from "@/lib/model-access";
 import { formatCost } from "@/lib/format";
@@ -55,13 +56,15 @@ export function NewAds({ brand, products, engine, onCreated }: { brand: BrandKit
   const [editing, setEditing] = useState<Product | null>(null);
   // The picture's model: Fuobe Marketing Image first; partner models as choices (those switched off in Settings leave).
   const access = useModelAccess();
-  const visuals = keepOffered(AD_VISUAL_MODELS[engine], (c) => offered(access, c.id, engine));
+  // "Words drawn by the model": the whole ad drawn from a layout of its places, by a model that reads boxes.
+  const [drawn, setDrawn] = useState(false);
+  const visuals = keepOffered(drawn ? DRAWN_WORDS_MODELS[engine] : AD_VISUAL_MODELS[engine], (c) => offered(access, c.id, engine));
   const [picked, setPicked] = useState<string>();
   const visual = visuals.find((c) => c.id === picked) ?? visuals[0];
   const items = selected.filter((id) => products.some((p) => p.id === id)).map((productId) => ({ productId, count: counts[productId] ?? 4 }));
   const total = items.reduce((n, i) => n + i.count, 0);
   // useEstimate keys on the body's JSON, so a fresh object each render is fine.
-  const body = items.length ? { brandId: brand.id, engine, items, ...(visual && { modelId: visual.id }) } : null;
+  const body = items.length ? { brandId: brand.id, engine, items, ...(visual && { modelId: visual.id }), ...(drawn && { drawnWords: true }) } : null;
   const est = useEstimate<BatchEstimate>("/api/ads/estimate", body);
   const toggle = (id: string) =>
     setSelected((s) => {
@@ -118,7 +121,9 @@ export function NewAds({ brand, products, engine, onCreated }: { brand: BrandKit
       {items.length > 0 && (
         <section className="rounded-2xl border bg-background p-4 sm:p-5">
           <h3 className="text-[16px] font-semibold">How many ads to create?</h3>
-          <p className="text-[13px] text-muted-foreground">Each ad comes in 1:1, 4:5 and 9:16, with a headline, copy and a call to action.</p>
+          <p className="text-[13px] text-muted-foreground">
+            {drawn ? "Each ad is drawn whole in 4:5, with its headline, copy and call to action in place." : "Each ad comes in 1:1, 4:5 and 9:16, with a headline, copy and a call to action."}
+          </p>
           <ul className="mt-4 divide-y">
             {items.map((i) => {
               const p = products.find((x) => x.id === i.productId)!;
@@ -134,6 +139,28 @@ export function NewAds({ brand, products, engine, onCreated }: { brand: BrandKit
               );
             })}
           </ul>
+          <div className="mt-4 flex items-start gap-3 rounded-xl bg-muted/60 p-3">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="ads-drawn-words" className="block text-[13px] font-medium">
+                {DRAWN_WORDS_LABEL}
+              </label>
+              <p id="ads-drawn-words-hint" className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+                {drawn
+                  ? "The model draws the headline, copy and button into the picture, in their places: its own lettering, one 4:5 format."
+                  : "Off: the words are set on top in your brand fonts, letter for letter, in every format."}
+              </p>
+            </div>
+            <Switch
+              id="ads-drawn-words"
+              checked={drawn}
+              onCheckedChange={(v) => {
+                setDrawn(v);
+                setPicked(undefined);
+              }}
+              aria-describedby="ads-drawn-words-hint"
+              className="mt-0.5 shrink-0"
+            />
+          </div>
           {visuals.length > 1 && visual && (
             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
               <label htmlFor="ads-visual" className="text-[13px] font-medium">
@@ -152,7 +179,7 @@ export function NewAds({ brand, products, engine, onCreated }: { brand: BrandKit
                 </SelectContent>
               </Select>
               <p id="ads-visual-note" className="w-full text-[12px] text-muted-foreground">
-                {visual.note}. Headlines, copy and your logo are set in your brand fonts on top.
+                {visual.note}.{drawn ? "" : " Headlines, copy and your logo are set in your brand fonts on top."}
               </p>
             </div>
           )}
