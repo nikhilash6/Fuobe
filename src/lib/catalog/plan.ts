@@ -886,6 +886,8 @@ export function hostedInputProblem(model: Pick<ModelDef, "name" | "routes" | "op
   return null;
 }
 
+/** Ops whose image, clip and sound lists are references (a join's clip list has its own limit: audio-join). */
+const REFERENCE_OPS = new Set<Operation>(["ref2v", "insert-moment", "extend"]);
 const plural = (n: number, [one, many]: readonly [string, string]) => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -895,6 +897,7 @@ const plural = (n: number, [one, many]: readonly [string, string]) => `${n} ${n 
  * route of `op` sends whole, so a start frame or an element's pictures are never counted; needs the routes' field maps.
  */
 function referenceProblem(model: Pick<ModelDef, "name" | "routes" | "options">, op: Operation, req: Pick<GenerationRequest, "inputs">): string | null {
+  if (!REFERENCE_OPS.has(op)) return null;
   const routes = model.routes.filter((r) => r.op === op);
   if (!routes.length || routes.some((r) => !r.map || r.map.elements || r.map.image)) return null;
   const sends = (k: "images" | "videos" | "audios") => routes.every((r) => !!r.map![k]);
