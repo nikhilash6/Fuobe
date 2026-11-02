@@ -15,6 +15,11 @@
  */
 import type { ScenePose } from "@/lib/scene3d";
 
+/** The model that runs it (src/lib/catalog/models.ts): Qwen-Image 2.1 with the QMA LoRA, on your GPU. */
+export const QMA_MODEL = "oss-qwen-image-21-qma";
+/** Its ComfyUI graph. */
+export const QMA_WORKFLOW = "qwen-image-21-qma";
+
 /** The LoRA's trigger: every prompt starts with it. */
 export const QMA_TRIGGER = "<qma>";
 

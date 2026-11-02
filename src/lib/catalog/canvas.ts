@@ -9,6 +9,7 @@
  */
 import type { CanvasComment, CanvasGroup, CanvasPage, CanvasShape } from "./canvas-board";
 import { EXAMPLE_SCENE, EXAMPLE_WORDS, beatsFrom, blockoutFramePrompt, compileBlockoutPrompt, type BlockoutRef } from "@/lib/blockout";
+import { QMA_MODEL } from "@/lib/qma";
 import { getModel, getPreset, MODELS, supportsOp } from "./index";
 import { dualEngine, onEngine, runsOn } from "./engines";
 import { chainedWaitMessage, keyframeChain } from "./keyframes";
@@ -1785,8 +1786,13 @@ interface TplNode {
   y: number;
   data?: CanvasNodeData;
   models?: ModelPair;
+  /** What changes on one engine (the product angles' QMA · 96 views on your GPU: its pose and shorter words). */
+  on?: Partial<Record<Engine, CanvasNodeData>>;
   width?: number;
 }
+
+/** The product angles' words on QMA · 96 views, after its camera words. */
+const QMA_STUDIO = "on a seamless studio background, soft key light, sharp details";
 
 function tpl(nodes: TplNode[], edges: [string, string, string?][]): (engine: Engine) => CanvasGraph {
   return (engine) => {
@@ -1795,7 +1801,7 @@ function tpl(nodes: TplNode[], edges: [string, string, string?][]): (engine: Eng
         id: t.id,
         type: t.type,
         position: { x: t.x, y: t.y },
-        data: { ...t.data, ...(t.models && { modelId: t.models[engine] }) },
+        data: { ...t.data, ...t.on?.[engine], ...(t.models && { modelId: t.models[engine] }) },
         ...(t.width && { width: t.width }),
       })),
       edges: [],
@@ -1912,9 +1918,11 @@ export const CANVAS_TEMPLATES: CanvasTemplate[] = [
     build: tpl(
       [
         { id: "product", type: "image-input", x: 0, y: ROW, data: { label: "Product photo" } },
-        { id: "front", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "Front ¾ angle", op: "edit", prompt: "The same product from a three-quarter front angle on a seamless studio background, soft key light, sharp details" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
-        { id: "side", type: "model", x: COL, y: ROW, data: { mediaKind: "image", label: "Side profile", op: "edit", prompt: "The same product in a clean side profile on a seamless studio background, rim light, sharp details" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
-        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: "oss-qwen-image-21" } },
+        // On your GPU the three angles are QMA · 96 views (qma-angles): the camera itself turns (its pose in params.extra), the
+        // words only set the studio look.
+        { id: "front", type: "model", x: COL, y: 0, data: { mediaKind: "image", label: "Front ¾ angle", op: "edit", prompt: "The same product from a three-quarter front angle on a seamless studio background, soft key light, sharp details" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL }, on: { open: { prompt: QMA_STUDIO, params: { extra: { horizontal_angle: 45, vertical_angle: 30, zoom: 5 } } } } },
+        { id: "side", type: "model", x: COL, y: ROW, data: { mediaKind: "image", label: "Side profile", op: "edit", prompt: "The same product in a clean side profile on a seamless studio background, rim light, sharp details" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL }, on: { open: { prompt: QMA_STUDIO, params: { extra: { horizontal_angle: 90, vertical_angle: 0, zoom: 5 } } } } },
+        { id: "top", type: "model", x: COL, y: ROW * 2, data: { mediaKind: "image", label: "Top-down", op: "edit", prompt: "The same product shot top-down as a flat lay on a seamless studio background, even light" }, models: { cloud: "nano-banana-pro", open: QMA_MODEL }, on: { open: { prompt: QMA_STUDIO, params: { extra: { horizontal_angle: 0, vertical_angle: 60, zoom: 5 } } } } },
         { id: "video", type: "model", x: COL * 2, y: ROW - 40, data: { mediaKind: "video", label: "Ad clip", op: "ref2v", prompt: "A premium product commercial: the camera orbits the product from the reference angles, studio lighting, slow and smooth", params: { aspectRatio: "16:9", duration: 5 } }, models: { cloud: "seedance-2-5", open: "oss-wan-vace" } },
         { id: "out", type: "output", x: COL * 3, y: ROW, data: { label: "Ad" } },
       ],

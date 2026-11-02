@@ -640,8 +640,10 @@ export interface ModelOptions {
    * "minimax-h3" = MiniMax H3's layout: an alignment line for the start (and end) frame, then integrated_multimodal_description,
    * overall_soundscape and non_diegetic_music. The server wraps the words in it (src/lib/h3-prompt.ts) and keeps the result
    * as the run's prompt; words already in the layout pass through.
+   * "qma" = the QMA camera-angles LoRA's "<qma> {azimuth} {elevation} {distance}": the plan writes it from the run's pose
+   * (params.extra horizontal_angle / vertical_angle / zoom, src/lib/qma.ts), the words after it.
    */
-  promptFormat?: "ideogram4" | "minimax-h3";
+  promptFormat?: "ideogram4" | "minimax-h3" | "qma";
   /**
    * LoRAs the model's recipe always loads (Fuobe Try-On's try-on LoRA): every run carries them before the user's own
    * (an API's LoRA cap leaves out the user's first), their trigger words leading the prompt. A ComfyUI graph that loads
@@ -1392,6 +1394,11 @@ export interface Preset {
   promptPlaceholder?: string;
   cloud: PresetRoute | null;
   open: PresetRoute | null;
+  /**
+   * More routes on your GPU after the open one, each its own pick in the app's model picker (the Angles app's QMA · 96 views):
+   * a model the cloud has no hosted version of keeps its place on the open engine.
+   */
+  openAlso?: PresetRoute[];
   /** Research confidence / parity notes shown in docs and the UI. */
   parity?: string;
   /** Fuobe DoP's colour-grade effects: a src/lib/grade.ts preset the browser applies to the finished clip. */

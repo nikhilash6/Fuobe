@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { useEngine, useGenerations } from "@/lib/api";
 import { SOUL_ID_COPY } from "@/lib/catalog/training";
 import {
+  FILL_NAMES,
   SIDE_NAMES,
   SIDES_HINT,
   TURN_PATHS,
@@ -24,6 +25,7 @@ import {
   elementPictures,
   startingViews,
   type TurnPicture,
+  type TurnFill,
   type TurnRoute,
   type TurnSide,
   type TurnaroundPreview,
@@ -40,6 +42,7 @@ export interface TurnaroundBody {
   sheet?: string;
   route?: TurnRoute;
   fill?: boolean;
+  fillWith?: TurnFill;
   path?: string;
   duration?: number;
   aspectRatio?: "9:16" | "16:9";
@@ -163,6 +166,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
   const [views, setViews] = useState<Partial<Record<TurnSide, string>>>(start.views);
   const [sheet, setSheet] = useState<string | undefined>(start.sheet);
   const [fill, setFill] = useState<boolean | undefined>(undefined);
+  const [fillWith, setFillWith] = useState<TurnFill>("angles");
   // The route and length picked hold for the engine they were picked on: another engine starts from its own defaults.
   const [picked, setPicked] = useState<{ engine: Engine; route?: TurnRoute; duration?: number }>({ engine });
   const route = picked.engine === engine ? picked.route : undefined;
@@ -182,6 +186,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
     ...(sheet && { sheet }),
     ...(route && { route }),
     ...(fill !== undefined && { fill }),
+    ...(engine === "open" && fillWith !== "angles" && { fillWith }),
     ...(path && { path }),
     ...(duration && { duration }),
     aspectRatio,
@@ -209,6 +214,9 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
 
   const usedRoute = p?.route ?? route;
   const camera = usedRoute === "camera";
+  const stills = usedRoute === "stills";
+  // QMA · 96 views is offered on your GPU when this install has it (its Stills route is listed then).
+  const qmaHere = engine === "open" && !!p?.routes.includes("stills");
   const slotUrl = (k: SlotKey) => (k === "sheet" ? sheet : views[k]);
   const setSlot = (k: SlotKey, url: string | undefined) => {
     if (k === "sheet") setSheet(url);
@@ -292,7 +300,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
             );
           })}
         </div>
-        {!camera && (
+        {!camera && !stills && (
           <label className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
             <span className="min-w-0">
               <span className="block text-[13px] font-medium">Draw the missing sides</span>
@@ -300,6 +308,15 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
             </span>
             <Switch checked={p?.fill ?? fill ?? true} onCheckedChange={(v) => setFill(v)} aria-label="Draw the missing sides" />
           </label>
+        )}
+        {qmaHere && !camera && !stills && (p?.fill ?? fill ?? true) && (
+          <Chips
+            label="Drawn with"
+            value={fillWith}
+            options={(Object.keys(FILL_NAMES) as TurnFill[]).map((k) => ({ value: k, label: FILL_NAMES[k] }))}
+            onChange={(v) => setFillWith(v as TurnFill)}
+            hint={fillWith === "qma" ? "Turns the camera round the front view on your GPU, one of 96 set angles" : undefined}
+          />
         )}
       </section>
 
@@ -309,8 +326,8 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
       {p && p.routes.length === 1 && usedRoute && <p className="text-[12px] text-muted-foreground">{TURN_ROUTES[usedRoute].detail}.</p>}
       {camera && <Chips label="Path" value={path ?? TURN_PATHS[0].id} options={TURN_PATHS.map((x) => ({ value: x.id, label: x.name }))} onChange={setPath} hint={TURN_PATHS.find((x) => x.id === (path ?? TURN_PATHS[0].id))?.description} />}
       <div className="flex flex-wrap gap-x-6 gap-y-3">
-        {p && <Chips label="Length" value={String(p.duration)} options={p.durations.map((d) => ({ value: String(d), label: `${d} s` }))} onChange={(v) => setDuration(Number(v))} />}
-        {!camera && (
+        {p && p.durations.length > 0 && <Chips label="Length" value={String(p.duration)} options={p.durations.map((d) => ({ value: String(d), label: `${d} s` }))} onChange={(v) => setDuration(Number(v))} />}
+        {!camera && !stills && (
           <Chips
             label="Shape"
             value={aspectRatio}
@@ -377,7 +394,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
           {preview.isFetching && !p ? "Pricing…" : price}
         </span>
         <Button onClick={makeIt} disabled={!p || !!p.blocker || preview.isError || make.isPending || preview.isFetching}>
-          {make.isPending ? <Loader2 className="animate-spin" /> : <Rotate3d />} {flyAround ? "Fly around" : "Make turnaround"}
+          {make.isPending ? <Loader2 className="animate-spin" /> : <Rotate3d />} {stills ? "Make 8 views" : flyAround ? "Fly around" : "Make turnaround"}
         </Button>
       </div>
     </>
@@ -439,13 +456,24 @@ export function useCharacterPictures(urls: string[]): TurnPicture[] {
 /** A run's progress, then the finished turnaround. */
 function RunView({ heading, state, elementId, onAgain }: { heading: string; state: ReturnType<typeof useRunState>; elementId?: string; onAgain: () => void }) {
   const { video, failed, done, total, working } = state;
+  // A still set (Stills · 8 views): its pictures once every one is drawn.
+  const pictures = !video && total > 0 && done === total ? state.rows.flatMap((g) => g.outputs.filter((o) => o.kind === "image")) : [];
   return (
     <>
       <DialogHeader>
         <DialogTitle className="font-heading text-[24px] font-normal">{heading}</DialogTitle>
-        <DialogDescription>{video ? "Your turnaround is ready." : failed ? "A step didn't finish." : "Making it now: you can close this, it carries on."}</DialogDescription>
+        <DialogDescription>{pictures.length ? "Your views are ready." : video ? "Your turnaround is ready." : failed ? "A step didn't finish." : "Making it now: you can close this, it carries on."}</DialogDescription>
       </DialogHeader>
-      {video ? (
+      {pictures.length > 0 ? (
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+          {pictures.map((o) => (
+            <a key={o.url} href={o.url} target="_blank" rel="noreferrer" className="overflow-hidden rounded-lg bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={o.url} alt="" className="aspect-[3/4] w-full object-cover" />
+            </a>
+          ))}
+        </div>
+      ) : video ? (
         <video src={video.url} controls loop playsInline autoPlay muted className="max-h-[60svh] w-full rounded-xl bg-black object-contain" aria-label={`${heading}, the video`} />
       ) : failed ? (
         <p role="alert" className="rounded-xl border border-destructive/40 p-3 text-[13px] text-destructive">
