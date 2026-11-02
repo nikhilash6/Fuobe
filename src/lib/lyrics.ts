@@ -11,6 +11,42 @@
 /** The params.extra key the lyrics travel in (the ComfyUI graphs' `lyrics` binding reads it as it is). */
 export const LYRICS_PARAM = "lyrics";
 
+/** params.extra key of a song tool's source when it is one of the provider's own songs (a result's meta.songId). */
+export const SONG_ID_PARAM = "songId";
+
+/**
+ * A past run's song, for Reuse: its lyrics (back in the editor) and its Mureka song id together with the song that id names
+ * (so the id goes again only while that song is the one attached); `extra` comes back without either.
+ */
+export function songFromRun(
+  extra: Record<string, unknown> | undefined,
+  audio: string | undefined,
+): { extra: Record<string, unknown> | undefined; lyrics?: string; song?: { id: string; url: string } } {
+  if (!extra || (!(LYRICS_PARAM in extra) && !(SONG_ID_PARAM in extra))) return { extra };
+  const { [LYRICS_PARAM]: words, [SONG_ID_PARAM]: id, ...rest } = extra;
+  return {
+    extra: Object.keys(rest).length ? rest : undefined,
+    ...(typeof words === "string" && { lyrics: words }),
+    ...(typeof id === "string" && id && audio && { song: { id, url: audio } }),
+  };
+}
+
+/**
+ * A request's song id, for a song tool: one of Mureka's own songs goes by its id only while it is still the song attached;
+ * any other song (one swapped in, or a stale id left in the settings) is sent as the file itself.
+ */
+export function withSongId(
+  extra: Record<string, unknown> | undefined,
+  song: { id: string; url: string } | undefined,
+  attached: string | undefined,
+  byId: boolean,
+): Record<string, unknown> | undefined {
+  const rest = { ...extra };
+  delete rest[SONG_ID_PARAM];
+  if (byId && song && attached && attached === song.url) rest[SONG_ID_PARAM] = song.id;
+  return Object.keys(rest).length ? rest : undefined;
+}
+
 /** The section tags the editor offers, in song order. */
 export const SECTION_TAGS = ["Intro", "Verse", "Pre-Chorus", "Chorus", "Post-Chorus", "Bridge", "Instrumental", "Solo", "Outro"] as const;
 

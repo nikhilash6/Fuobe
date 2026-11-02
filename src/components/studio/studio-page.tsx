@@ -1,6 +1,6 @@
 "use client";
 
-import { LYRICS_PARAM } from "@/lib/lyrics";
+import { songFromRun } from "@/lib/lyrics";
 import { ArrowRight, ArrowUp, Loader2, Upload, Zap } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -186,13 +186,11 @@ function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id:
   // A spoken language stored as a name (Assist's "Spanish") or a locale comes back as the model's own code.
   const languages = getModel(r.modelId)?.options.sourceLanguages;
   if (languages?.length && params.sourceLanguage) params.sourceLanguage = matchSpokenLanguage(params.sourceLanguage, languages) ?? params.sourceLanguage;
-  // A song's lyrics come back in the lyrics editor.
-  const lyrics = typeof params.extra?.[LYRICS_PARAM] === "string" ? (params.extra[LYRICS_PARAM] as string) : undefined;
-  if (lyrics !== undefined) {
-    const rest = { ...params.extra };
-    delete rest[LYRICS_PARAM];
-    params.extra = Object.keys(rest).length ? rest : undefined;
-  }
+  // A song's lyrics come back in the lyrics editor. One of Mureka's own songs (an extend or remix by its id) comes back as
+  // the attached song's id, so a song swapped in afterwards is sent as itself, never as the old id.
+  const sung = songFromRun(params.extra, r.inputs?.audio);
+  params.extra = sung.extra;
+  const { lyrics, song } = sung;
   // A layout run comes back in Layout mode (studios that have it): its boxes in the editor, the prompt as their caption.
   const laid = config.layout ? withoutLayout(params) : { params, layout: undefined };
   return {
@@ -210,6 +208,7 @@ function draftFromGeneration(g: Generation, config: StudioConfig, getModel: (id:
     mix: r.mix,
     signature: signed?.signature,
     lyrics,
+    song,
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { insertTag, isInstrumental, lyricsOf, lyricsProblem, normalizeLyrics, parseLyrics, promptWithLyrics, songLength, structureOf, tagName } from "@/lib/lyrics";
+import { insertTag, isInstrumental, lyricsOf, lyricsProblem, normalizeLyrics, parseLyrics, promptWithLyrics, songFromRun, songLength, structureOf, tagName, withSongId } from "@/lib/lyrics";
 import { durationLabel } from "@/lib/composer";
 
 // nm10-music3: the lyrics editor's words and section tags, as every music model reads them.
@@ -70,5 +70,23 @@ describe("lyrics with section tags", () => {
     expect(durationLabel(10)).toBe("10s");
     expect(durationLabel(120)).toBe("2:00");
     expect(durationLabel(270)).toBe("4:30");
+  });
+});
+
+describe("a song's Mureka id on Reuse", () => {
+  it("comes back as the attached song's id, out of the settings, with the lyrics in the editor", () => {
+    const r = songFromRun({ lyrics: "[Verse]\nmore", songId: "song_1", extend_type: "tail" }, "/api/files/a.mp3");
+    expect(r).toEqual({ extra: { extend_type: "tail" }, lyrics: "[Verse]\nmore", song: { id: "song_1", url: "/api/files/a.mp3" } });
+    expect(songFromRun({ songId: "song_1" }, undefined)).toEqual({ extra: undefined });
+    expect(songFromRun({ seed: 1 }, "/api/files/a.mp3")).toEqual({ extra: { seed: 1 } });
+  });
+
+  it("goes with the song it names only: a song swapped in, or a stale id, is sent as the file", () => {
+    const song = { id: "song_1", url: "/api/files/a.mp3" };
+    expect(withSongId({ lyrics: "x" }, song, "/api/files/a.mp3", true)).toEqual({ lyrics: "x", songId: "song_1" });
+    expect(withSongId({ lyrics: "x", songId: "song_1" }, song, "/api/files/b.mp3", true)).toEqual({ lyrics: "x" });
+    expect(withSongId({ songId: "song_1" }, undefined, "/api/files/b.mp3", true)).toBeUndefined();
+    // A model that isn't Mureka's never gets one.
+    expect(withSongId({ lyrics: "x" }, song, "/api/files/a.mp3", false)).toEqual({ lyrics: "x" });
   });
 });

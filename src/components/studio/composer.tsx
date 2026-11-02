@@ -14,8 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useToday } from "@/hooks/use-today";
 import { estimateCost, imageLimit, layoutCanvas, planGeneration, routesFor, type Plan } from "@/lib/catalog/plan";
 import type { Engine, GenerationRequest, InputSlot, MediaKind, ModelDef, Operation, Preset, PresetRoute, VideoFormat } from "@/lib/catalog/types";
-import { LYRICS_PARAM } from "@/lib/lyrics";
-import { SONG_ID_PARAM } from "@/lib/catalog/payload";
+import { LYRICS_PARAM, SONG_ID_PARAM, withSongId } from "@/lib/lyrics";
 import { dualEngine } from "@/lib/catalog/engines";
 import { locksByDefault } from "@/lib/catalog/palettes";
 import { DEFAULT_LOOK, lookCard } from "@/lib/catalog/soul-cards";
@@ -240,8 +239,10 @@ const SUNG_OPS = new Set<Operation>(["music", "song-extend", "song-remix"]);
 function songDraft<D extends Pick<Draft, "lyrics" | "params" | "slots" | "song">>(d: D, model: ModelDef | undefined, slots: InputSlot[]): D {
   let out = d;
   if (d.lyrics?.trim() && model?.options.lyrics) out = { ...out, params: { ...out.params, extra: { ...out.params.extra, [LYRICS_PARAM]: d.lyrics } } };
-  // One of Mureka's own songs, still the one attached: its tools take it by id (no upload).
-  if (d.song && d.slots.audio?.ref === d.song.url && model?.family === "mureka") out = { ...out, params: { ...out.params, extra: { ...out.params.extra, [SONG_ID_PARAM]: d.song.id } } };
+  // One of Mureka's own songs, still the one attached: its tools take it by id (no upload). Any other song goes as itself.
+  if (d.song || (out.params.extra && SONG_ID_PARAM in out.params.extra)) {
+    out = { ...out, params: { ...out.params, extra: withSongId(out.params.extra, d.song, d.slots.audio?.ref, model?.family === "mureka") } };
+  }
   const hidden = slots.filter((s) => s.cover && !model?.options.cover && out.slots[s.key]).map((s) => s.key);
   if (hidden.length) out = { ...out, slots: Object.fromEntries(Object.entries(out.slots).filter(([k]) => !hidden.includes(k as InputSlot["key"]))) };
   return out;

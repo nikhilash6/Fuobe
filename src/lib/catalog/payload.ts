@@ -1,5 +1,5 @@
 import { readTimeline, timelineTracks } from "@/lib/av/timeline";
-import { LYRICS_PARAM, lyricsOf, promptWithLyrics } from "@/lib/lyrics";
+import { LYRICS_PARAM, lyricsOf, promptWithLyrics, SONG_ID_PARAM } from "@/lib/lyrics";
 import { toH3MaxTrajectory, type CameraKey } from "@/lib/camera-path";
 import { upscaleFactorFor } from "@/lib/av/upscale";
 import { carriesBoxes, carriesLayout, LAYOUT_PARAM } from "@/lib/layout-prompt";
@@ -352,8 +352,7 @@ function elementList(e: NonNullable<FieldMap["elements"]>, images: string[], vid
   return { list, usedImages, usedVideos };
 }
 
-/** params.extra key of a song tool's source when it is one of the provider's own songs (a result's meta.songId). */
-export const SONG_ID_PARAM = "songId";
+export { SONG_ID_PARAM };
 
 /** Build a provider payload from canonical input using a route's {@link FieldMap}. Pure + unit-tested. */
 export function buildPayload(map: FieldMap, input: GenInput): Record<string, unknown> {
