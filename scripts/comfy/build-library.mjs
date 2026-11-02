@@ -158,6 +158,8 @@ export const BINDING_KEYS = new Set([
   'resolution', 'draftSize', 'startSigma',
   // Clean up voice (ComfyUI-RE-USE): the RE-USE file, the rate it runs at, room tone, level and the music & effects bed's level
   'reuseModel', 'rate', 'roomToneDb', 'level', 'bedDb',
+  // Clean up dialogue (DBS graph C, docs/research/dbs-separation-7.md §4.4): each stem's level in the remix
+  'voiceDb', 'musicDb', 'effectsDb',
   // Blockout to film: a near = dark depth pass (Blender's mist) inverted before VACE reads it
   'invertDepth',
   // nm10-qwen21-fast: the VAE file Options → Decoder picks (Qwen-Image 2.1) and a speed tier's sigma schedule for the canvas size

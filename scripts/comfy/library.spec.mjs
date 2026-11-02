@@ -126,6 +126,8 @@
 //                                          "auto" = the host's pick: the source's rate on CUDA, at most 24 kHz on a CPU, 16 kHz past 2 minutes)
 //   roomToneDb, level, bedDb              (REUSEEnhance room_tone_db (-60 = off), level match input | -16 LUFS | off, bed_db)
 //   channels*                             (REUSEEnhance channels, and DBSSeparate's in the bed graph: the DBS rules)
+// Keys added with Clean up dialogue (DBS D5, docs/research/dbs-separation-7.md §4.4 graph C), params.extra:
+//   voiceDb, musicDb, effectsDb          (AudioAdjustVolume volume on the speech, music and sfx stems: whole dB, -100..100, 0 = as is)
 // Keys added with the owner's SOTA image families (2026-10-31), model controls (params.extra):
 //   preset                                (Ideogram 4's sampling preset by name: Quality | Default | Turbo, the graph's own table)
 // Keys added with Open-H3 Regenerate (n7-3, docs/research/new-models-7.md §2.6). * = the provider fills it:
@@ -3416,6 +3418,37 @@ export const SPEC = [
       'Voice + background add up to the source, except on a loud master where AudioMerge had to lower the background to fit under full scale (FLAC holds no more). ' +
       'Voice is first, so a chain without a stem takes the dialogue. Trained on synthetic English mixes (DnR v2): dialogue separates well (15-16 dB), music against effects less so (5.7-7.8 dB). ' +
       'Some FSD50K and FMA clips inside DnR v2 carry their own CC licences, NC variants included; whether that reaches the weights or their outputs is unresolved (recorded as information).',
+  },
+  // DBS graph C (docs/research/dbs-separation-7.md §4.4): one remix of the split at set levels, for a server-side mix (Clean up
+  // dialogue: the dialogue with the music and effects under it, or alone). Same pack and weights as graph A.
+  {
+    id: 'soundtrack-remix-dbs',
+    title: 'Remix a soundtrack: dialogue, music and effects at set levels (DBS, ComfyUI-DBS)',
+    capability: 'separate-audio',
+    handBuilt: 'hand-built/soundtrack-remix-dbs.json',
+    packs: ['ComfyUI-DBS'],
+    requiredModels: ['DBS-BSRNN-DnR/model.safetensors', 'DBS-BSRNN-DnR/config.json', 'DBS-TIGER-DnR/model.safetensors', 'DBS-TIGER-DnR/config.json'],
+    bindings: {
+      audio: [b('1', 'audio')],
+      separationModel: [b('2', 'model')],
+      channels: [b('3', 'channels')],
+      voiceDb: [b('4', 'volume')],
+      musicDb: [b('5', 'volume')],
+      effectsDb: [b('6', 'volume')],
+    },
+    outputs: [
+      { node: '9', kind: 'audio', stem: 'voice' },
+      { node: '10', kind: 'text', role: 'report' },
+    ],
+    defaults: { separationModel: 'DBS-BSRNN-DnR', channels: 'mono', voiceDb: 0, musicDb: -18, effectsDb: -18 },
+    vramGb: 0,
+    license: 'DBS weights Apache-2.0 (JusperLee; trained on DnR v2, CC BY 4.0); ComfyUI-DBS code MIT; vendored DBS code Apache-2.0 with MIT notices (BS-RoFormer, MSST, TIGER)',
+    notes:
+      'CPU OK, about 1.7 GiB on CUDA. Graph A\'s split (LoadAudio reads a video\'s soundtrack too), then AudioAdjustVolume on the speech (voiceDb), music (musicDb) and sfx (effectsDb) stems ' +
+      '(whole dB, -100..100; -100 leaves a stem at 1e-5, below 16-bit FLAC\'s floor) and AudioMerge add twice, saved as one FLAC with the input\'s length, starting at 0, so it goes back on a picture with video-mux-audio-replace. ' +
+      'AudioMerge scales the whole mix down when it peaks over 1.0 (a crude limiter). channels mono gives a mono mix; each channel keeps stereo at twice the time. ' +
+      'A source with more than 2 channels is split in mono (ComfyUI saves mono or stereo only). The output is tagged as the voice stem (the cleaned dialogue), so a chain takes it. ' +
+      'DBS removes music and sound effects, not steady noise: hiss and hum stay with the dialogue or the effects (unmeasured, §11).',
   },
   // Clean up voice (NVIDIA NemotronLabs RE-USE, universal speech enhancement): Fuobe's own ComfyUI-RE-USE pack (no mamba-ssm).
   // Not on the validation server: checked statically there (core nodes) and run through the pack's own tests.
