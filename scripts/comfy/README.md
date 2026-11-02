@@ -493,6 +493,46 @@ node validate-workflows.mjs --subset-only video-regenerate-h3   # GET /object_in
 - **Not run**: nothing has run on a GPU, and the pack was tested by its author on ComfyUI 0.42.0. Validate on a disposable
   GPU ComfyUI with the packs: `node validate-workflows.mjs video-regenerate-h3`.
 
+## Hi3D 1.0 refine (hi3d-refine)
+
+One hand-built graph for Image to 3D's "Refine detail · Hi3D 1.0" (a switch, and "Refine this mesh" on a finished
+model), the open image-to-3D models' "Refine detail" control on the Canvas 3D node, and Assist / MCP's `refine-3d`
+(docs/research/hi3d-refine.json). Hi3D v1.0 refines a coarse mesh into finer geometry from a photo of the same object;
+it does not make a mesh from nothing, and its output is geometry only, recentred at unit radius.
+
+```bash
+npm run build -- mesh-refine-hi3d
+node validate-workflows.mjs mesh-refine-hi3d --shared   # missing_node_type here: the pack needs a CUDA GPU
+node build-requirements.mjs
+```
+
+| id | capability | what | validated here |
+|---|---|---|---|
+| `mesh-refine-hi3d` | refine-3d | `LoadImage` (2) → core BiRefNet `RemoveBackground` (4) → `InvertMask` (8: Hi3D reads a mask's 1 as transparent, so the inverted mask keeps the subject) → `Hi3DRefine` (6) with the coarse GLB (`Hi3DLoadMesh` 5 reads it from ComfyUI's input folder, where Fuobe uploads it like any input) and `Hi3DModelLoader` (1: models/Hi3D, sequential CPU offload on, SDPA attention) → `SaveGLB` (7). Bindings: `image`, `model3d` (5's `mesh_file`), `meshResolution` (512 / 1024 / 1536: one, two or three passes), `steps` (25 a pass), `seed`, `cpuOffload`. The server finishes the GLB like any image-to-3D model (web GLB + CPU turntable). 24 GB (an estimate) | no: `missing_node_type` (the pack is not on the CPU validation server) |
+
+- **Hardware**: an NVIDIA GPU of compute capability 8.0 or newer (RTX 30 series / A-series, Ada, Hopper, Blackwell) with
+  CUDA 12, on Linux or Windows. There is no CPU path. The official stack is Python 3.10, CUDA 12.0-12.5, torch 2.5.0+cu124,
+  flash-attn 2.7.4.post1 and spconv-cu120 2.3.6 (validated upstream on a 96 GB H20); T8's pack keeps ComfyUI's own torch,
+  installs spconv-cu126 2.3.8 and triton, and offers SDPA attention. Fuobe's graph uses `attention: sdpa` on node 1, so no
+  flash-attn build is needed (the install doesn't add one); set it to `flash` by hand only where flash-attn is already built. Its author ran 512 to 1536 on a 24 GB laptop RTX 5090 with CPU offload; smaller cards are not established.
+- **Node pack** (opt-in, `HI3D=1` in `install-comfyui.sh`): T8mars/Comfyui-Hi3d-T8 at `7384849` (v0.5.1, MIT code; the
+  Hi3D code it vendors is under the Hi3D Open License 1.0), with its `requirements.txt` installed into ComfyUI's Python.
+  By hand: `git clone https://github.com/T8mars/Comfyui-Hi3d-T8 custom_nodes/Comfyui-Hi3d-T8 && git -C
+  custom_nodes/Comfyui-Hi3d-T8 checkout 73848490976e6a9b0c735ce02984c03866a495e7 && python -m pip install -r
+  custom_nodes/Comfyui-Hi3d-T8/requirements.txt`, then restart ComfyUI.
+- **Weights** (10.66 GB, `HI3D_WEIGHTS=0` skips them): hi3d-official/Hi3Dv1.0 at `d502e93` (transformer_512 3.68 GB,
+  transformer_1024 3.68 GB, vae 0.38 GB and their JSON) into models/Hi3D/hi3d/, facebook/dinov2-large at `47b73ee`
+  (1.22 GB) into models/Hi3D/dino/ and openai/clip-vit-large-patch14 at `32bd642` (1.71 GB) into models/Hi3D/clip/, each
+  checked against its SHA-256 (also in `workflows/comfyui/model-pins.json`; the same files t8star/Hi3d-Comfy repackages).
+  ComfyUI doesn't list the Hi3D folder, so the GPU pre-flight reads these files as "unknown" rather than present.
+- **Licence**: the Hi3D Open License Agreement 1.0 allows commercial use; above 200,000 monthly active users or USD
+  1,000,000 monthly revenue, notify the licensor and apply for a separate licence; every result is shown with "Powered by
+  Hi3D 1.0" linking to http://hi3d.ai/ (the app does this on the result cards and the switch).
+- **Texture**: not on this graph. Core can bake TRELLIS.2's texture voxels onto another mesh (`BakeTextureFromVoxel`), but
+  only inside the run that made them and only in their frame, and Hi3D's output is recentred at unit radius with no core
+  node to move it back; see the research's `texture.ownerStep`.
+- **Not run**: nothing has run on a GPU yet. Validate on a GPU ComfyUI with the pack: `node validate-workflows.mjs mesh-refine-hi3d`.
+
 ## Fly path (N7-5)
 
 One hand-built graph films a still along a camera path keyframed in Cinema's 3D scene, on core nodes only
