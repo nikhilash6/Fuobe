@@ -133,11 +133,27 @@ for (const [size, scheme] of [
     const make = dialog.getByRole("button", { name: /Make 8 views/ });
     await until(async () => !(await make.isDisabled()), "Make 8 views", 20_000);
     await make.click();
-    await until(async () => (await dialog.locator("img").count()) >= 7 && /Your views are ready/.test(await dialog.innerText()), "the still set", 120_000).then(
-      () => check(`${tag}: the 7 drawn views show when they're done`, true),
-      () => check(`${tag}: the 7 drawn views show when they're done`, false),
+    await until(async () => (await dialog.locator("a img").count()) >= 8 && /Your views are ready/.test(await dialog.innerText()), "the still set", 120_000).then(
+      () => check(`${tag}: all 8 views show when they're done, the front first`, true),
+      () => check(`${tag}: all 8 views show when they're done, the front first`, false),
     );
+    const names = await dialog.locator("a img").evaluateAll((els) => els.map((e) => e.getAttribute("alt")));
+    check(`${tag}: each view is named by the person's side, going round`, names.join(",") === "Front,Front right,Right side,Back right,Back,Back left,Left side,Front left", names.join(","));
     await shoot(page, "stills-done");
+  }
+  if (scheme === "light") {
+    // The pre-flight board's link starts the dialog on the still set.
+    await page.keyboard.press("Escape");
+    await page.goto(`${app}/character-sheet?stills=1`, { waitUntil: "load", timeout: 120_000 });
+    const again = page.getByRole("button", { name: /^Turnaround video/ });
+    await again.waitFor({ timeout: 60_000 });
+    await again.click();
+    const r2 = page.getByRole("dialog").getByRole("radiogroup", { name: "Route" });
+    await r2.waitFor({ timeout: 30_000 });
+    await until(async () => (await r2.getByRole("radio", { name: "Stills · 8 views" }).getAttribute("aria-checked")) === "true", "stills from the link", 20_000).then(
+      () => check(`${tag}: ?stills=1 opens the dialog on Stills · 8 views`, true),
+      () => check(`${tag}: ?stills=1 opens the dialog on Stills · 8 views`, false),
+    );
   }
   await page.keyboard.press("Escape");
   check(`${tag}: no console errors`, errors.length === 0, errors.slice(0, 3).join(" | "));

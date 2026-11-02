@@ -71,6 +71,8 @@ interface Props {
   flyAround?: boolean;
   /** A person Fuobe made up (Soul Cast): no consent line to ask for. */
   fictional?: boolean;
+  /** The route the dialog starts on, on your GPU (the pre-flight board's "Turnaround stills · 8 views" link). */
+  route?: TurnRoute;
 }
 
 async function post<T>(url: string, body: unknown): Promise<T> {
@@ -80,7 +82,8 @@ async function post<T>(url: string, body: unknown): Promise<T> {
   return out;
 }
 
-type Run = { ids: string[]; filmId: string };
+/** A started run; `front`: a still set's own front picture (shown first with the drawn views). */
+type Run = { ids: string[]; filmId: string; front?: string };
 
 const runFeatures = (p: Pick<Props, "features" | "elementId">) => p.features ?? (p.elementId ? [`element:${p.elementId}`, "turnaround-step"] : ["turnaround", "turnaround-step"]);
 
@@ -144,7 +147,7 @@ export function TurnaroundButton({
             (e.currentTarget as HTMLElement | null)?.focus();
           }}
         >
-          {open && (run ? <RunView heading={headingOf(props)} state={state} elementId={props.elementId} onAgain={() => setRun(null)} /> : <TurnaroundForm {...props} onStarted={setRun} />)}
+          {open && (run ? <RunView heading={headingOf(props)} state={state} front={run.front} elementId={props.elementId} onAgain={() => setRun(null)} /> : <TurnaroundForm {...props} onStarted={setRun} />)}
         </DialogContent>
       </Dialog>
     </>
@@ -161,7 +164,7 @@ function Thumb({ url, className }: { url?: string; className?: string }) {
   return url ? <img src={url} alt="" className={cn("size-full object-cover", className)} /> : null;
 }
 
-function TurnaroundForm({ pictures, name, realPerson: realDefault = false, elementId, engine: fixedEngine, onRun, title, flyAround, fictional, onStarted }: Props & { onStarted: (run: Run) => void }) {
+function TurnaroundForm({ pictures, name, realPerson: realDefault = false, elementId, engine: fixedEngine, onRun, title, flyAround, fictional, route: startRoute, onStarted }: Props & { onStarted: (run: Run) => void }) {
   const [appEngine, setAppEngine] = useEngine();
   const engine = fixedEngine ?? appEngine;
   const start = useMemo(() => startingViews(pictures), [pictures]);
@@ -170,7 +173,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
   const [fill, setFill] = useState<boolean | undefined>(undefined);
   const [fillWith, setFillWith] = useState<TurnFill>("angles");
   // The route and length picked hold for the engine they were picked on: another engine starts from its own defaults.
-  const [picked, setPicked] = useState<{ engine: Engine; route?: TurnRoute; duration?: number }>({ engine });
+  const [picked, setPicked] = useState<{ engine: Engine; route?: TurnRoute; duration?: number }>({ engine, ...(engine === "open" && startRoute && { route: startRoute }) });
   const route = picked.engine === engine ? picked.route : undefined;
   const duration = picked.engine === engine ? picked.duration : undefined;
   const setRoute = (r: TurnRoute) => setPicked({ engine, route: r });
@@ -209,7 +212,10 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
     mutationFn: async ({ b, requestId }: { b: TurnaroundBody; requestId: string }): Promise<{ items: Generation[]; filmId?: string }> =>
       onRun ? { items: await onRun(b) } : post<{ items: Generation[]; filmId: string }>("/api/turnaround", { ...b, requestId }),
     // The film: the one the server names, else the joined clips, else the one video the run makes (drawn pictures are stills).
-    onSuccess: ({ items, filmId }) => onStarted({ ids: items.map((g) => g.id), filmId: filmId ?? (items.find((g) => g.op === "concat") ?? items.find((g) => g.kind === "video") ?? items[0])?.id }),
+    onSuccess: ({ items, filmId }) => {
+      const front = (p?.route ?? route) === "stills" ? p?.frames.find((f) => f.side === "front")?.url : undefined;
+      onStarted({ ids: items.map((g) => g.id), filmId: filmId ?? (items.find((g) => g.op === "concat") ?? items.find((g) => g.kind === "video") ?? items[0])?.id, ...(front && { front }) });
+    },
     onError: (e) => toastError(e),
   });
   const makeIt = () => void guard(JSON.stringify(body), (requestId) => make.mutateAsync({ b: body, requestId })).catch(() => {});
@@ -326,6 +332,7 @@ function TurnaroundForm({ pictures, name, realPerson: realDefault = false, eleme
         <Chips label="Route" value={usedRoute} options={p.routes.map((r) => ({ value: r, label: TURN_ROUTES[r].name }))} onChange={(v) => setRoute(v as TurnRoute)} hint={usedRoute ? TURN_ROUTES[usedRoute].detail : undefined} />
       )}
       {p && p.routes.length === 1 && usedRoute && <p className="text-[12px] text-muted-foreground">{TURN_ROUTES[usedRoute].detail}.</p>}
+      {engine === "cloud" && <p className="text-[12px] text-muted-foreground">The 8-view still set, and sides drawn with QMA · 96 views, run on your GPU (open source).</p>}
       {camera && <Chips label="Path" value={path ?? TURN_PATHS[0].id} options={TURN_PATHS.map((x) => ({ value: x.id, label: x.name }))} onChange={setPath} hint={TURN_PATHS.find((x) => x.id === (path ?? TURN_PATHS[0].id))?.description} />}
       <div className="flex flex-wrap gap-x-6 gap-y-3">
         {p && p.durations.length > 0 && <Chips label="Length" value={String(p.duration)} options={p.durations.map((d) => ({ value: String(d), label: `${d} s` }))} onChange={(v) => setDuration(Number(v))} />}
@@ -456,10 +463,16 @@ export function useCharacterPictures(urls: string[]): TurnPicture[] {
 }
 
 /** A run's progress, then the finished turnaround. */
-function RunView({ heading, state, elementId, onAgain }: { heading: string; state: ReturnType<typeof useRunState>; elementId?: string; onAgain: () => void }) {
+function RunView({ heading, state, front, elementId, onAgain }: { heading: string; state: ReturnType<typeof useRunState>; front?: string; elementId?: string; onAgain: () => void }) {
   const { video, failed, done, total, working } = state;
-  // A still set (Stills · 8 views): its pictures once every one is drawn.
-  const pictures = !video && total > 0 && done === total ? state.rows.flatMap((g) => g.outputs.filter((o) => o.kind === "image")) : [];
+  // A still set (Stills · 8 views): once every one is drawn, the front first, then the views in the run's order, each named.
+  const drawn =
+    !video && total > 0 && done === total
+      ? [...state.rows]
+          .sort((a, b) => (a.request.step?.index ?? 0) - (b.request.step?.index ?? 0))
+          .flatMap((g) => g.outputs.filter((o) => o.kind === "image").map((o) => ({ url: o.url, label: g.request.step?.label?.startsWith("Front view") ? "Front" : (g.request.step?.label ?? "") })))
+      : [];
+  const pictures = drawn.length ? [...(front ? [{ url: front, label: "Front" }] : []), ...drawn] : [];
   return (
     <>
       <DialogHeader>
@@ -469,9 +482,10 @@ function RunView({ heading, state, elementId, onAgain }: { heading: string; stat
       {pictures.length > 0 ? (
         <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
           {pictures.map((o) => (
-            <a key={o.url} href={o.url} target="_blank" rel="noreferrer" className="overflow-hidden rounded-lg bg-muted">
+            <a key={o.url} href={o.url} target="_blank" rel="noreferrer" className="group relative overflow-hidden rounded-lg bg-muted">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={o.url} alt="" className="aspect-[3/4] w-full object-cover" />
+              <img src={o.url} alt={o.label} className="aspect-[3/4] w-full object-cover" />
+              {o.label && <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1.5 py-0.5 text-[11.5px] font-medium text-white">{o.label}</span>}
             </a>
           ))}
         </div>

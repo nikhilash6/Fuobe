@@ -18,7 +18,7 @@ const { appModels } = await import("@/lib/catalog/preset-recipe-routes");
 const { libraryEntry } = await import("@/lib/catalog/loras");
 const { planCinema, RECOMPOSE_MODELS } = await import("@/lib/catalog/cinema");
 const { planTurnaround, qmaHorizontal, ROUTES_ON, TURN_ROUTES, anglesHorizontal } = await import("@/lib/catalog/turnaround");
-const { CANVAS_TEMPLATES } = await import("@/lib/catalog/canvas");
+const { CANVAS_TEMPLATES, convertEngine } = await import("@/lib/catalog/canvas");
 const { QMA_MODEL, QMA_WORKFLOW, parseQmaPrompt } = await import("@/lib/qma");
 const { STUDIO_ROWS, studioTool } = await import("@/server/gpu/tools");
 const { modelLicence } = await import("@/server/model-access");
@@ -183,7 +183,11 @@ describe("the turnaround", () => {
     expect(plan.route).toBe("stills");
     expect(plan.blocker).toBeUndefined();
     expect(plan.steps).toHaveLength(7);
-    expect(plan.steps.map((s) => s.request.params?.extra?.horizontal_angle)).toEqual([45, 90, 135, 180, 225, 270, 315]);
+    // Named by the person's own sides, going round to their right; QMA's camera turns the other way (as the fill's qmaHorizontal).
+    expect(plan.steps.map((s) => s.request.params?.extra?.horizontal_angle)).toEqual([315, 270, 225, 180, 135, 90, 45]);
+    expect(plan.steps.find((s) => s.request.step?.label === "Right side")!.request.params?.extra?.horizontal_angle).toBe(qmaHorizontal("right"));
+    expect(plan.steps.find((s) => s.request.step?.label === "Left side")!.request.params?.extra?.horizontal_angle).toBe(qmaHorizontal("left"));
+    expect(plan.steps[1].request.title).toBe("Turnaround stills · Ada · Right side");
     expect(plan.steps.every((s) => s.request.modelId === QMA_MODEL && s.request.inputs?.images?.[0] === "/api/files/front.png" && s.request.feature === "turnaround")).toBe(true);
     expect(plan.steps.map((s) => s.request.step?.label)).toEqual(["Front right", "Right side", "Back right", "Back", "Back left", "Left side", "Front left"]);
     expect(plan.steps[3].request.title).toBe("Turnaround stills · Ada · Back");
@@ -221,8 +225,25 @@ describe("the Canvas product angles and the GPU board", () => {
     }
     const top = open.nodes.find((n) => n.id === "top")!;
     expect(planGeneration({ feature: "canvas", modelId: QMA_MODEL, prompt: top.data.prompt ?? "", inputs: { images: ["/api/files/p.png"] }, params: top.data.params }, getModel, getPreset).prompt).toBe(
-      "<qma> front view high-angle shot medium shot on a seamless studio background, soft key light, sharp details",
+      "<qma> front view high-angle shot medium shot The same product shot top-down as a flat lay on a seamless studio background, even light",
     );
+  });
+
+  it("keeps each angle's words when the board moves to the cloud, and falls back when QMA is switched off", () => {
+    const t = CANVAS_TEMPLATES.find((x) => x.id === "product-angles")!;
+    const moved = convertEngine(t.build("open"), "cloud").graph;
+    const prompts = ["front", "side", "top"].map((id) => moved.nodes.find((n) => n.id === id)!.data.prompt);
+    expect(new Set(prompts).size).toBe(3);
+    expect(prompts[0]).toMatch(/three-quarter front/);
+    expect(prompts[1]).toMatch(/side profile/);
+    expect(prompts[2]).toMatch(/top-down/);
+    const off = t.build("open", (id) => id !== QMA_MODEL);
+    for (const id of ["front", "side", "top"]) {
+      const n = off.nodes.find((x) => x.id === id)!;
+      expect(n.data.modelId).toBe("oss-qwen-image-21");
+      expect(n.data.params?.extra).toBeUndefined();
+    }
+    expect(t.build("open", () => true).nodes.find((n) => n.id === "side")!.data.modelId).toBe(QMA_MODEL);
   });
 
   it("gives the 8-view stills a row on the pre-flight board", () => {

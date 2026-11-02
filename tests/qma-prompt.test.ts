@@ -92,6 +92,10 @@ describe("snapping a pose", () => {
     expect(qmaRunPrompt("", {})).toBe("<qma> front-right quarter view eye-level shot medium shot");
     // A trigger with no camera words after it isn't a QMA prompt: the pose's words go in, the stray trigger out.
     expect(qmaRunPrompt("<qma> a red car", { horizontal_angle: 180 })).toBe("<qma> back view eye-level shot medium shot a red car");
+    // A partial QMA prompt keeps the camera words it gives; the pose fills only the missing ones.
+    expect(qmaRunPrompt("<qma> back view", {})).toBe("<qma> back view eye-level shot medium shot");
+    expect(qmaRunPrompt("<qma> left side view high-angle shot, at night", { horizontal_angle: 0, zoom: 10 })).toBe("<qma> left side view high-angle shot close-up at night");
+    expect(qmaRunPrompt("<qma> wide shot a red car", { horizontal_angle: 90 })).toBe("<qma> right side view eye-level shot wide shot a red car");
   });
 });
 

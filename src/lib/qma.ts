@@ -161,7 +161,20 @@ export function qmaPoseOf(extra: Record<string, unknown> | undefined): ScenePose
  */
 export function qmaRunPrompt(words: string, extra: Record<string, unknown> | undefined): string {
   if (parseQmaPrompt(words)) return words.trim();
-  return qmaPrompt(qmaView(qmaPoseOf(extra)), words.replace(QMA_TRIGGER, "").trim());
+  const pose = qmaView(qmaPoseOf(extra));
+  const s = words.trim();
+  if (!s.startsWith(QMA_TRIGGER)) return qmaPrompt(pose, s.replaceAll(QMA_TRIGGER, "").trim());
+  // A partial QMA prompt ("<qma> back view …"): the camera words it gives hold, the pose fills only the missing ones.
+  let rest = s.slice(QMA_TRIGGER.length).trimStart();
+  const take = <T extends string>(list: readonly T[]): T | undefined => {
+    const hit = phrase(list, rest) as T | undefined;
+    if (hit) rest = rest.slice(hit.length).trimStart();
+    return hit;
+  };
+  const azimuth = take(QMA_AZIMUTHS) ?? pose.azimuth;
+  const elevation = take(QMA_ELEVATIONS) ?? pose.elevation;
+  const distance = take(QMA_DISTANCES) ?? pose.distance;
+  return qmaPrompt({ azimuth, elevation, distance }, rest.replaceAll(QMA_TRIGGER, "").replace(/^[\s.,;:]+/, "").trim());
 }
 
 /**

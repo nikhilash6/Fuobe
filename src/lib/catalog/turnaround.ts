@@ -15,7 +15,7 @@
  */
 import { DEFAULT_MOTION, PATH_PRESETS, presetKeys, type CameraKey } from "@/lib/camera-path";
 import { poseWords } from "@/lib/scene3d";
-import { QMA_MODEL, QMA_TURN_SET, qmaLabel, qmaPose } from "@/lib/qma";
+import { QMA_AZIMUTH_LABELS, QMA_MODEL, qmaAzimuth } from "@/lib/qma";
 import { getModel, getPreset } from "./index";
 import { onEngine } from "./engines";
 import { FRAMES_MODELS, chainGapProblem, chainTiming, frameTimes } from "./keyframes";
@@ -94,6 +94,17 @@ export function anglesHorizontal(side: TurnSide): number {
 export function qmaHorizontal(side: TurnSide): number {
   return (360 - viewAzimuth(side)) % 360;
 }
+
+/**
+ * A still's name by the person's own side (Character Sheet's way), for QMA's camera angle `horizontal`: the camera at 90°
+ * (QMA's "right side view") shows the person's left side. The camera's words stay in the prompt only.
+ */
+export function qmaStillName(horizontal: number): string {
+  return QMA_AZIMUTH_LABELS[qmaAzimuth(360 - horizontal)];
+}
+
+/** The still set's camera angles, going round the person to their right: front right, right side, … front left. */
+export const QMA_STILL_ANGLES: readonly number[] = [1, 2, 3, 4, 5, 6, 7].map((i) => (360 - i * 45) % 360);
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -516,19 +527,18 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
   if (stills) {
     // Eight eye-level pictures round the person, each drawn from the front view; the front's own picture stays the first.
     const src = sourceOf("front");
-    const turns = QMA_TURN_SET.filter((v) => v.azimuth !== "front view");
+    const turns = QMA_STILL_ANGLES;
     frames = src ? [{ side: "front", from: fromOf(src, "front"), ...("url" in src && { url: src.url }) }] : [];
-    for (const v of turns) {
-      const pose = qmaPose(v);
+    for (const h of turns) {
       const request: GenerationRequest = {
         feature,
         modelId: model.id,
         op: "edit",
         prompt: withWords(FILL_KEEP, input.prompt),
-        title: `${title.replace(/^Turnaround/, "Turnaround stills")} · ${qmaLabel(v).split(" · ")[0]}`,
-        params: { numOutputs: 1, extra: { horizontal_angle: pose.horizontal, vertical_angle: pose.vertical, zoom: pose.zoom }, ...seed },
+        title: `${title.replace(/^Turnaround/, "Turnaround stills")} · ${qmaStillName(h)}`,
+        params: { numOutputs: 1, extra: { horizontal_angle: h, vertical_angle: 0, zoom: 5 }, ...seed },
       };
-      const key = `still-${pose.horizontal}`;
+      const key = `still-${h}`;
       if (src && "key" in src) steps.push({ key, request: { ...request, chain: [{ slot: "images" }] }, after: [src.key] });
       else steps.push({ key, request: { ...request, ...(src && { inputs: { images: [src.url] } }) } });
     }
@@ -637,7 +647,7 @@ export function planTurnaround(input: TurnaroundInput, ctx: TurnaroundContext = 
     k === "front"
       ? "Front view from the sheet"
       : k.startsWith("still-")
-        ? qmaLabel(QMA_TURN_SET[Number(k.slice(6)) / 45]).split(" · ")[0]
+        ? qmaStillName(Number(k.slice(6)))
         : `${SIDE_NAMES[k.slice(5) as TurnSide]} (${byQma ? "QMA" : "Angles"})`;
   const total = steps.length + (main ? 1 : 0);
   steps.forEach((s, i) => (s.request.step = { label: stepLabel(s.key), index: i, of: total }));

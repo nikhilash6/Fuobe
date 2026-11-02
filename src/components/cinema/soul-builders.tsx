@@ -470,6 +470,7 @@ function SoulLocation({ projectId, folderId, engine, settings, context, brief, o
                   QMA · 96 views
                 </label>
               )}
+              {engine === "cloud" && <span className="mr-1 text-[11.5px] text-muted-foreground">(QMA · 96 views runs on your GPU)</span>}
               {LOCATION_VIEWS.map((v) => (
                 <button key={v.id} type="button" onClick={() => run({ view: v.id, url: chosen[0] })} className="h-7 rounded-full bg-secondary px-2.5 text-[12px] font-medium hover:bg-accent">
                   {v.name}
