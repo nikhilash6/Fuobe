@@ -13,6 +13,7 @@ import type { ChainSlot, Engine, GenerationRequest, Operation } from "@/lib/cata
 import { TOOL_MODELS } from "@/lib/layers";
 import { planCinema } from "@/lib/catalog/cinema";
 import { createPipeline, type PipelineStep } from "../chains";
+import { getEraser, planRemoval, REMOVE, removalTitle } from "@/lib/catalog/remove-object";
 import { blockoutFromFile, cinemaContext } from "../cinema-generate";
 import { db } from "../db";
 import { chooseRoute, ConnectComfyError, createGenerations, outputKind, previewChained } from "../generations";
@@ -154,6 +155,14 @@ const RestoreInput = z.object({
   resolution: z.enum(["720p", "1080p"]).optional().describe("Cloud size (default 720p)."),
 });
 
+const RemovePersonInput = z.object({
+  video: ref.describe("The clip to remove someone from."),
+  who: z.string().max(200).describe("Who to remove, as SAM 3.1 should find them: 'the man in the grey shirt', 'the woman on the left'."),
+  start: z.number().min(0).max(3600).optional().describe("Seconds into the clip where the part starts (default 0)."),
+  end: z.number().min(0).max(3600).optional().describe("Seconds where it ends (default the clip's end; up to 60 s at a time)."),
+  mask_grow: z.number().int().min(0).max(64).optional().describe("Grow the person's mask by this many pixels (default 5): more covers hands, hair and shadows, but H3 invents more background."),
+});
+
 const BlockoutInput = z.object({
   video: ref.describe("The grey-box blockout: a render from Blender, Unreal, Cinema 4D… (MP4 or MOV for the cloud), 2–60 s. It sets the camera, blocking and timing."),
   depth: ref.optional().describe("Your GPU: the blockout's depth pass (near = bright). Without it Depth Anything 3 reads the depth from the grey box."),
@@ -182,6 +191,7 @@ const BlockoutInput = z.object({
 export type LayersToolInput = z.infer<typeof LayersInput>;
 export type BlockoutToolInput = z.infer<typeof BlockoutInput>;
 export type RestoreToolInput = z.infer<typeof RestoreInput>;
+export type RemovePersonToolInput = z.infer<typeof RemovePersonInput>;
 export type RestyleToolInput = z.infer<typeof RestyleInput>;
 export type DubToolInput = z.infer<typeof DubInput>;
 export type FacelessToolInput = z.infer<typeof FacelessInput>;
@@ -197,6 +207,7 @@ export const STUDIO_ROUTES: {
   create_ads?: StudioRoute<AdsToolInput>;
   add_captions?: StudioRoute<CaptionsToolInput>;
   restore_video?: StudioRoute<RestoreToolInput>;
+  remove_person?: StudioRoute<RemovePersonToolInput>;
 } = {};
 
 // ---------------------------------------------------------------------------
@@ -705,6 +716,41 @@ const restoreVideo = defineTool({
 });
 
 /**
+ * A clip Remove a person can't read (its length and size unknown): the same H3 removal as separate steps in the Library,
+ * on the part asked for (else up to a minute from its start), without its sound.
+ */
+function removePersonSteps(i: RemovePersonToolInput): PipelineStep[] {
+  const start = i.start ?? 0;
+  const plan = planRemoval({
+    engine: "open",
+    mode: "type",
+    eraser: getEraser("oss-h3-person-remove")!,
+    title: removalTitle({ mode: "type", prompt: i.who }),
+    source: { url: i.video, hasAudio: false },
+    range: { start, end: i.end ?? start + REMOVE.maxSeconds },
+    prompt: i.who,
+    ...(i.mask_grow !== undefined && { maskGrow: i.mask_grow }),
+  });
+  return plan.steps.map((s) => ({ key: s.key, request: { ...s.request, feature: s.request.feature ?? "assist" }, ...(s.after?.length && { after: s.after, chain: s.chain }) }));
+}
+
+/** Remove a person (o/person-remover-plus): Video tools → Remove a person, H3 Person Removal on your GPU. */
+const removePerson = defineTool({
+  name: "remove_person",
+  description:
+    "Remove a person from a video and rebuild the scene behind them — Fuobe's Remove a person (Video tools → Remove a person): MiniMax H3 with Akatz Labs' Person Remover LoRA on your GPU (open source, free), from a clean first frame Qwen-Image 2.1 makes, in 22-frame windows; the clip's sound is kept. " +
+    "It runs on your GPU only (24 GB with offloading and the H3 Relay nodes). In the studio the user can check the green mask first and redo any weak window. For objects, or on the cloud, use generate with a remove-object model. Gated by the same approval card as generate.",
+  schema: RemovePersonInput,
+  gated: true,
+  title: (i) => `Remove · ${i.who.slice(0, 60)}`,
+  place: (i, ctx) => placeFor(STUDIO_ROUTES.remove_person, i, ctx),
+  plan: (i, ctx) => planVia("remove_person", STUDIO_ROUTES.remove_person, i, ctx, () => planSteps("remove_person", removePersonSteps(i))),
+  async run(i, ctx) {
+    return runVia(STUDIO_ROUTES.remove_person, i, ctx, "Started removing the person", () => startPipeline("Remove a person", removePersonSteps(i), removalTitle({ mode: "type", prompt: i.who })));
+  },
+});
+
+/**
  * Blockout to film (package blockout-film): Cinema's Blockout plan (src/lib/catalog/cinema.ts planBlockout), run as a
  * pipeline in the Library: one call or shots cut at the beats and joined in the cloud, 81-frame depth windows on the GPU.
  */
@@ -771,7 +817,7 @@ const blockoutFilm = defineTool({
   },
 });
 
-export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, blockoutFilm];
+export const STUDIO_TOOLS = [splitLayers, restyleFootage, dubVideo, facelessEpisode, createAds, addCaptions, restoreVideo, removePerson, blockoutFilm];
 
 /** For tests: the fallback pipelines, as they would be created. */
 export const fallbackSteps = { restore: restoreSteps, layers: layerSteps, restyle: restyleSteps, dub: dubSteps, faceless: facelessSteps, captions: captionSteps, ads: adRequests, blockout: blockoutSteps };

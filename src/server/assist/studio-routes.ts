@@ -24,10 +24,11 @@ import { createProject, deleteProject, FileUrl, jobSteps, startJob } from "../la
 import { firstOn } from "../model-access";
 import { engineMode } from "../settings";
 import { createRestore, estimateRestore, RestoreBodySchema, RestoreEstimateSchema } from "../restore";
+import { createRemoval, estimateRemovalNow, RemovalBodySchema, RemovalEstimateSchema } from "../remove-object";
 import { createSession, estimateWith, sourceInfo, type ShortsBody, type SourceInfo } from "../shorts";
 import { absolutePath, getAsset } from "../storage";
 import type { ToolContext } from "./define";
-import { planSteps, STUDIO_ROUTES, type AdsToolInput, type CaptionsToolInput, type DubToolInput, type FacelessToolInput, type LayersToolInput, type RestoreToolInput, type RestyleToolInput, type StudioRoute } from "./studio-tools";
+import { planSteps, STUDIO_ROUTES, type RemovePersonToolInput, type AdsToolInput, type CaptionsToolInput, type DubToolInput, type FacelessToolInput, type LayersToolInput, type RestoreToolInput, type RestyleToolInput, type StudioRoute } from "./studio-tools";
 
 /**
  * The Assist / MCP studio tools, wired to the studios' own server modules: each adapter turns a tool
@@ -699,6 +700,56 @@ function parsed<T>(schema: { safeParse: (v: unknown) => { success: true; data: T
   return r.data;
 }
 
+// ---------------------------------------------------------------------------
+// Remove a person: H3 Person Removal in Video tools → Remove a person (src/server/remove-object.ts)
+
+function removePersonBody(i: RemovePersonToolInput) {
+  const info = clipInfo(i.video);
+  const end = i.end ?? info?.duration;
+  return {
+    engine: "open" as const,
+    mode: "type" as const,
+    modelId: "oss-h3-person-remove",
+    prompt: i.who,
+    ...(i.mask_grow !== undefined && { maskGrow: i.mask_grow }),
+    source: { url: i.video, name: fileTitle(i.video), duration: info?.duration, fps: info?.fps, width: info?.width, height: info?.height, hasAudio: info?.hasAudio },
+    ...(end !== undefined && { range: { start: i.start ?? 0, end } }),
+  };
+}
+
+const removePersonRoute: StudioRoute<RemovePersonToolInput> = {
+  studio: "Remove a person",
+  page: modeHref("video-tools", "remove-person"),
+  // Only a clip Fuobe has (and can read) can be fitted to H3's frame rate and size.
+  refuse: (i) => (i.video.startsWith("/api/files/") && clipInfo(i.video)?.duration ? null : "Fuobe couldn't read this clip's length and frame rate"),
+  plan: (i) => {
+    const est = estimateRemovalNow(parsed(RemovalEstimateSchema, removePersonBody(i)));
+    return [
+      {
+        tool: "remove_person",
+        modelId: est.modelId,
+        modelName: est.modelName,
+        kind: "video",
+        op: "remove-object",
+        prompt: i.who,
+        count: 1,
+        costUsd: est.costUsd,
+        demo: est.demo,
+        note: [`${est.seconds} s`, ...est.notes].join(" · "),
+        atomic: true,
+      },
+    ];
+  },
+  async run(i) {
+    const r = await createRemoval(parsed(RemovalBodySchema, removePersonBody(i)));
+    return {
+      ids: [r.final.id],
+      href: modeHref("video-tools", "remove-person"),
+      info: { note: "The removal is listed under Your removals in Remove a person, beside the original with a Before/After wipe; each window there can be redone." },
+    };
+  },
+};
+
 const restoreRoute: StudioRoute<RestoreToolInput> = {
   studio: "Restore & colourise",
   page: modeHref("video-tools", "restore"),
@@ -738,3 +789,4 @@ STUDIO_ROUTES.faceless_episode = facelessRoute;
 STUDIO_ROUTES.create_ads = adsRoute;
 STUDIO_ROUTES.add_captions = captionsRoute;
 STUDIO_ROUTES.restore_video = restoreRoute;
+STUDIO_ROUTES.remove_person = removePersonRoute;

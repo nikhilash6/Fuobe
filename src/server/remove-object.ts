@@ -158,12 +158,18 @@ interface Planned {
 }
 
 async function planInput(body: RemovalBody, opts: { probe: boolean; preview?: boolean }): Promise<Planned> {
+  const info = opts.probe ? await probeSource(body.source.url) : {};
+  const painted = body.mode === "paint" && body.engine === "cloud" && opts.probe && body.mask ? await pointsFromPaint(body.mask, { width: info.width ?? body.source.width, height: info.height ?? body.source.height }) : undefined;
+  return planInputNow(body, opts, info, painted);
+}
+
+/** planInput once the clip's header and the paint's points are read (nothing to wait for). */
+function planInputNow(body: RemovalBody, opts: { probe: boolean; preview?: boolean }, info: Awaited<ReturnType<typeof probeSource>> | Record<string, never>, painted?: PixelPoint[]): Planned {
   mustMatchMode(body.engine);
   const picked = chooseEraser({ engine: body.engine, mode: body.mode, effects: body.effects, modelId: body.modelId, offered: (id) => isOffered(id, body.engine) });
   if ("problem" in picked) throw new ShortsError(picked.problem, 422);
   const eraser = picked.eraser;
   // The header's facts win over what the browser read (the estimate runs before the upload is read).
-  const info = opts.probe ? await probeSource(body.source.url) : {};
   const source: RemoveSource = {
     url: body.source.url,
     duration: info.duration ?? body.source.duration,
@@ -193,7 +199,7 @@ async function planInput(body: RemovalBody, opts: { probe: boolean; preview?: bo
   if (body.mode === "paint") {
     if (!body.mask) throw new ShortsError("Paint over what to remove first");
     // The cloud's tracker takes points, not paint; the open graph reads the mask itself.
-    if (eraser.engine === "cloud") points = opts.probe ? await pointsFromPaint(body.mask, source) : [{ x: 1, y: 1, label: "positive" }];
+    if (eraser.engine === "cloud") points = painted ?? [{ x: 1, y: 1, label: "positive" }];
   }
 
   const notes: string[] = [];
@@ -302,7 +308,12 @@ export interface RemovalEstimate {
 }
 
 export async function estimateRemoval(body: RemovalBody): Promise<RemovalEstimate> {
-  const { input, eraser, notes } = await planInput(body, { probe: false });
+  return estimateRemovalNow(body);
+}
+
+/** The estimate without waiting (it reads nothing: the browser's facts stand in for the header). */
+export function estimateRemovalNow(body: RemovalBody): RemovalEstimate {
+  const { input, eraser, notes } = planInputNow(body, { probe: false }, {});
   const plan = planRemoval(input);
   const preview = planMaskPreview(input);
   return {

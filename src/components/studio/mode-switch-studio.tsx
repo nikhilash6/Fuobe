@@ -68,6 +68,7 @@ const TOOLS: Partial<Record<HubKind, Record<string, (p: { tabs: React.ReactNode 
   },
   "video-tools": {
     "remove-object": ({ tabs }) => <RemoveObjectTool tabs={tabs} />,
+    "remove-person": ({ tabs }) => <RemoveObjectTool tabs={tabs} person />,
     "remove-dialogue": ({ tabs }) => <RemoveDialogueTool tabs={tabs} />,
     evolution: ({ tabs }) => <EvolutionTool tabs={tabs} />,
     restore: ({ tabs }) => <RestoreTool tabs={tabs} />,
