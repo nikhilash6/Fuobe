@@ -1128,7 +1128,7 @@ export const LAYER_ELEMENT_KINDS: { kind: LayerElementKind; label: string; hint:
   { kind: "style", label: "Style", hint: "A look, texture or background to reuse" },
 ];
 
-const GENERIC_NAME = /^(background|original image|layer \d+|cut-out|edited layer|text edit|upscaled|relit|new angle|inpainted|enhanced|edited region|expanded fill|color graded|generated layer|original|new)$/i;
+const GENERIC_NAME = /^(background|original image|layer \d+|cut-out|edited layer|text edit|upscaled|relit|new angle|inpainted|enhanced|edited region|expanded fill|color graded|generated layer|original|new|re-render)$/i;
 const PERSON = /\b(person|people|man|men|woman|women|girl|boy|child|kid|baby|face|portrait|model|character|subject|figure|hero|lady|guy|dancer|singer|athlete|cat|dog|animal|creature|robot|avatar|mascot)\b/i;
 const STYLE = /\b(background|backdrop|texture|pattern|sky|wall|floor|style|look|gradient|scene|landscape|scenery)\b/i;
 
@@ -1222,12 +1222,19 @@ function layerWords(n: Pick<LayerNode, "name" | "prompt">): string {
 export function layersLayout(doc: Pick<LayerDoc, "width" | "height" | "nodes">, text: PlacedText[] = [], words = ""): LayersLayout {
   const { width: W, height: H } = doc;
   const canvas: Box = [0, 0, W, H];
+  // The part on the canvas, when it is at least a pixel each way (a sliver would be a box with no size).
+  const onCanvas = (b: Box): Box | null => {
+    const box = intersect(b, canvas);
+    return box && box[2] >= 1 && box[3] >= 1 ? box : null;
+  };
   const frac = (b: Box): [number, number, number, number] => [r6(b[0] / W), r6(b[1] / H), r6((b[0] + b[2]) / W), r6((b[1] + b[3]) / H)];
   const backdrop: string[] = [];
   const layers: { z: number; area: number; item: LayoutItem }[] = [];
   for (const n of doc.nodes) {
     if (n.hidden || (n.opacity ?? 1) <= 0.05 || n.role === "original") continue;
-    const box = intersect(rotatedBounds(n.x, n.y, n.w, n.h, n.rotation), canvas);
+    // An earlier re-render is a repaint of the layers under it, not a layer of its own.
+    if (n.revisions[n.revision]?.label === TOOL_LABELS.rerender) continue;
+    const box = onCanvas(rotatedBounds(n.x, n.y, n.w, n.h, n.rotation));
     if (!box) continue;
     const area = (box[2] * box[3]) / (W * H);
     const what = layerWords(n);
@@ -1242,7 +1249,7 @@ export function layersLayout(doc: Pick<LayerDoc, "width" | "height" | "nodes">, 
   const lines = text
     .flatMap((t) => {
       const line = t.text.replace(/\s+/g, " ").trim();
-      const box = t.box && intersect(t.box, canvas);
+      const box = t.box && onCanvas(t.box);
       return line && box ? [{ label: "text" as const, caption: "Lettering in the same typeface, colour and size as now", text: line, box: frac(box) }] : [];
     })
     .slice(0, RERENDER_MAX_TEXT);

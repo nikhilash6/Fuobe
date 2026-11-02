@@ -66,6 +66,7 @@ import {
   textBlocksFrom,
   textChanges,
   textJobTitle,
+  TOOL_LABELS,
   TOOL_MODELS,
   type Box,
   type EnhanceLook,
@@ -1370,7 +1371,7 @@ function RerenderTool() {
   const plan = useMemo(() => layersLayout(doc, keepText ? (text?.lines ?? []) : [], words), [doc, keepText, text, words]);
   const { counts } = plan;
   const boxes = counts.layers + counts.text;
-  const run = () => void go({ tool: "rerender", target: { kind: "whole" }, modelId, prompt: words.trim() || undefined, settings: { layout: plan.draft }, label: "Re-render from layers" });
+  const run = () => void go({ tool: "rerender", target: { kind: "whole" }, modelId, prompt: words.trim() || undefined, settings: { layout: plan.draft }, label: TOOL_LABELS.rerender });
   const read = () => void go({ tool: "text-detect", target: { kind: "whole" }, modelId: detector.modelId, label: "Detect text" });
   const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
   return (

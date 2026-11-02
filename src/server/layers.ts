@@ -199,6 +199,19 @@ const RES_TIER = { "1K": "auto_1K", "1.5K": "auto_1.5K", "2K": "auto_2K" } as co
 /** Qwen-Image-Layered's longest side per tier (640 is the trained bucket; larger is slower). */
 const OPEN_MAX_SIZE = { "1K": 640, "1.5K": 832, "2K": 1024 } as const;
 
+/**
+ * The words for a re-render: the layout's caption, which the browser builds from the person's words plus the backdrop
+ * layers ("Behind everything: …"). Words sent beside a caption that doesn't already start with them go in front of it, so
+ * neither the person's words nor the backdrop are lost.
+ */
+export function rerenderCaption(caption: string, prompt?: string): string {
+  const said = caption.trim();
+  const words = prompt?.trim().replace(/[.\s]+$/, "") ?? "";
+  if (!words) return said;
+  if (!said || said.toLowerCase().startsWith(words.toLowerCase())) return said || words;
+  return `${words}. ${said}`;
+}
+
 /** The aspect ratio in `list` nearest to `aspect` ("1400:900"), compared on a log scale; `aspect` itself when there's no list. */
 export function nearestAspect(aspect: string | undefined, list: readonly string[] | undefined): string | undefined {
   const value = (a: string) => {
@@ -382,7 +395,7 @@ export function jobSteps(input: LayerJobInput, opts: { batchTitle?: string } = {
       // The picture's own shape, or the nearest one the model makes (the boxes are fractions, so they stay in place).
       const aspectRatio = nearestAspect(s.aspect, model.options.aspectRatios);
       // The plan compiles the layout for this model at the size it renders, and keeps prompt rewriting off.
-      add("rerender", base(model, { op: "t2i", prompt: prompt || layout.summary.caption, params: { ...(aspectRatio && { aspectRatio }), numOutputs: 1, extra: { [LAYOUT_PARAM]: layout } } }));
+      add("rerender", base(model, { op: "t2i", prompt: rerenderCaption(layout.summary.caption, prompt), params: { ...(aspectRatio && { aspectRatio }), numOutputs: 1, extra: { [LAYOUT_PARAM]: layout } } }));
       break;
     }
     case "expand": {

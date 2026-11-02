@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { applyMeasured, imagesToMeasure } from "@/components/layers/apply";
 import { getModel, getPreset } from "@/lib/catalog";
 import { planGeneration } from "@/lib/catalog/plan";
-import { planOneSheet, sheetCrop, sheetCrops, sheetGrid, sheetPanelLimit, sheetPanelStyle, SHEET_MODELS } from "@/lib/catalog/storyboard";
+import { planOneSheet, sheetCrop, sheetCrops, sheetGrid, sheetPanelLimit, sheetPanelStyle, sheetState, SHEET_MODELS } from "@/lib/catalog/storyboard";
 import type { GenerationRequest } from "@/lib/catalog/types";
 import { layersLayout, RERENDER_MAX_LAYERS, TOOL_MODELS, type LayerDoc, type LayerJob, type LayerJobInput, type LayerNode } from "@/lib/layers";
 import { readLayout } from "@/lib/layout-prompt";
@@ -19,7 +19,7 @@ process.env.COMFYUI_URL = "http://127.0.0.1:9";
 
 const { setSetting } = await import("@/server/settings");
 const { createStoryboard, estimateStoryboard } = await import("@/server/storyboard");
-const { jobSteps, nearestAspect } = await import("@/server/layers");
+const { jobSteps, nearestAspect, rerenderCaption } = await import("@/server/layers");
 const { getGeneration } = await import("@/server/generations");
 
 beforeAll(() => setSetting("demoMode", "auto"));
@@ -109,6 +109,23 @@ describe("one-sheet storyboard: who gets it", () => {
     const test = { date: "2026-11-02", gpu: "RTX 4090 24 GB", maxPanels: 6 };
     expect(sheetPanelLimit(false, test)).toBe(6);
     expect(sheetPanelLimit(true, test)).toBe(6);
+  });
+
+  it("holds the panel count a GPU render showed on the server too, not only in the browser", () => {
+    const seven = Array.from({ length: 7 }, (_, i) => `scene ${i + 1}`);
+    const test = { date: "2026-11-02", gpu: "RTX 4090 24 GB", maxPanels: 6 };
+    expect(() => planOneSheet({ engine: "open", scenes: seven }, test)).toThrow(/at most 6 panels/);
+    expect(planOneSheet({ engine: "open", scenes: seven.slice(0, 6) }, test).frame?.sheet?.panels).toHaveLength(6);
+    expect(() => planOneSheet({ engine: "open", scenes: seven }, { ...test, maxPanels: 0 })).toThrow(/isn't available yet/);
+    expect(planOneSheet({ engine: "open", scenes: seven }).frame?.sheet?.panels).toHaveLength(7);
+  });
+
+  it("says in the board's header when the sheet failed or was cancelled, not that it is on the way", () => {
+    expect(sheetState("succeeded")).toBe("done");
+    expect(sheetState("failed")).toBe("failed");
+    expect(sheetState("canceled")).toBe("cancelled");
+    expect(sheetState("queued")).toBe("on the way");
+    expect(sheetState("running")).toBe("on the way");
   });
 });
 
@@ -225,6 +242,25 @@ describe("re-render from layers: the layout", () => {
     expect(draft.items[0].caption).toBe("L5");
     expect(draft.items.some((i) => i.caption === "Original")).toBe(false);
   });
+
+  it("leaves out an earlier re-render, which repaints the layers under it rather than being a backdrop", () => {
+    const earlier = node("Re-render", 2, { w: 400, h: 200, revisions: [{ src: "/api/files/r.png", natural: [400, 200], label: "Re-render from layers", at: 2 }] });
+    const { counts, caption } = layersLayout(doc([node("Sky", 0, { w: 400, h: 200 }), node("Red mug", 1, { x: 40, y: 40 }), earlier]));
+    expect(counts).toEqual({ layers: 1, text: 0, backdrop: 1 });
+    expect(caption).not.toMatch(/Re-render/);
+    // Renamed and kept as an ordinary layer, the name alone says nothing about what it shows.
+    const renamed = layersLayout(doc([node("Re-render", 0, { w: 400, h: 200 }), node("Red mug", 1, { x: 40, y: 40 })]));
+    expect(renamed.caption).toMatch(/Behind everything: a picture element/);
+  });
+
+  it("drops a layer whose part on the canvas is under a pixel, instead of a box with no size", () => {
+    const d = doc([node("Red mug", 0, { x: 40, y: 40 }), node("Sliver", 1, { x: 399.9999, y: 0 })], 400, 200);
+    const text = [{ text: "EDGE", box: [399.5, 10, 20, 20] as [number, number, number, number] }];
+    const { draft, counts } = layersLayout(d, text);
+    expect(counts).toEqual({ layers: 1, text: 0, backdrop: 0 });
+    expect(readLayout(draft)?.items).toHaveLength(1);
+    expect(() => jobSteps({ tool: "rerender", engine: "open", frame: [0, 0, 400, 200], settings: { aspect: "400:200", layout: draft } } as LayerJobInput)).not.toThrow();
+  });
 });
 
 describe("re-render from layers: the job", () => {
@@ -245,7 +281,22 @@ describe("re-render from layers: the job", () => {
     expect(p.params.enhancePrompt).toBe(false);
     const ideo = plan(steps({ engine: "cloud", modelId: "ideogram-4-5" })[0].request);
     expect(ideo.layout?.format).toBe("ideogram");
-    expect(steps({ engine: "cloud", prompt: "A cosy kitchen" })[0].request.prompt).toBe("A cosy kitchen");
+    // Words sent beside a caption made without them go in front of it.
+    expect(steps({ engine: "cloud", prompt: "A cosy kitchen" })[0].request.prompt).toMatch(/^A cosy kitchen\. One coherent picture that keeps this arrangement: red mug\./);
+  });
+
+  it("keeps the backdrop in the words the model reads when the person describes the picture", () => {
+    const d = doc([node("a beach at dusk", 0, { w: 1400, h: 900 }), node("Red mug", 1, { x: 40, y: 40 })], 1400, 900);
+    const typed = layersLayout(d, [], "warm photo").draft;
+    expect(typed.summary.caption).toBe("warm photo. Behind everything: a beach at dusk.");
+    for (const [engine, modelId] of [["open", "oss-moss-image"], ["cloud", "moss-image"], ["cloud", "ideogram-4-5"], ["cloud", "flux-3"]] as const) {
+      const [step] = jobSteps({ tool: "rerender", engine, modelId, frame, prompt: "warm photo", settings: { aspect: "1400:900", layout: typed } } as LayerJobInput);
+      expect(step.request.prompt, modelId).toBe("warm photo. Behind everything: a beach at dusk.");
+      expect(plan(step.request).prompt, modelId).toMatch(/a beach at dusk/);
+    }
+    expect(rerenderCaption("Warm photo. Behind everything: sand.", "warm photo.")).toBe("Warm photo. Behind everything: sand.");
+    expect(rerenderCaption("", "warm photo")).toBe("warm photo");
+    expect(rerenderCaption("A caption.", undefined)).toBe("A caption.");
   });
 
   it("refuses an empty arrangement and a model that doesn't read boxes", () => {
