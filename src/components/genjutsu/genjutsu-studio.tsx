@@ -214,7 +214,9 @@ export function GenjutsuStudio() {
   };
   const describeMutation = useDescribeCharacter();
   const transcribeMutation = useTranscribeClip();
-  const [clipWords, setClipWords] = useState<{ url: string; g: Generation } | null>(null);
+  // "Clean the voice first" for "Use the clip's words": on (a clip's music and effects blur the words).
+  const [cleanWords, setCleanWords] = useState(true);
+  const [clipWords, setClipWords] = useState<{ url: string; clean: boolean; g: Generation } | null>(null);
   const [listening, setListening] = useState(false);
   const alive = useRef<AbortController | null>(null);
   useEffect(() => () => alive.current?.abort(), []);
@@ -235,11 +237,11 @@ export function GenjutsuStudio() {
     const ctl = new AbortController();
     alive.current = ctl;
     try {
-      let g = clipWords?.url === url ? clipWords.g : null;
+      let g = clipWords?.url === url && clipWords.clean === cleanWords ? clipWords.g : null;
       if (!g) {
-        const { id } = await transcribeMutation.mutateAsync({ engine, source: { url, ...(duration ? { duration } : {}) } });
+        const { id } = await transcribeMutation.mutateAsync({ engine, source: { url, ...(duration ? { duration } : {}) }, ...(cleanWords && { voiceFirst: true }) });
         g = await waitForGeneration(id, { signal: ctl.signal });
-        setClipWords({ url, g });
+        setClipWords({ url, clean: cleanWords, g });
       }
       const out = g.outputs.find((o) => o.kind === "text");
       const cues = Array.isArray(out?.meta?.cues) ? (out.meta.cues as { start: number; end: number; text: string }[]) : undefined;
@@ -685,7 +687,12 @@ export function GenjutsuStudio() {
                   onSeed={setSeed}
                   seedProblem={seedProblem(seedNumber)}
                   describe={{ run: describeCharacter, busy: describeMutation.isPending, blocked: refs.some((r) => !r.uploading) ? null : "Add your character's picture to describe it" }}
-                  words={{ run: () => void fillClipWords(), busy: listening, blocked: clip?.url && !clip.uploading && range ? null : "Add the clip first" }}
+                  words={{
+                    run: () => void fillClipWords(),
+                    busy: listening,
+                    blocked: clip?.url && !clip.uploading && range ? null : "Add the clip first",
+                    ...(clip?.info?.hasAudio !== false && { voiceFirst: { on: cleanWords, onChange: setCleanWords, seconds: duration } }),
+                  }}
                 />
               )}
 

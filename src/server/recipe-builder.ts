@@ -88,7 +88,7 @@ function mosaicShape(req: GenerationRequest): string {
 }
 
 /** Request fields a step keeps (GenerationRequestSchema's, less the server's own): everything else is dropped. */
-const KEEP: (keyof GenerationRequest)[] = ["feature", "presetId", "modelId", "op", "prompt", "negativePrompt", "inputs", "params", "presetOptions", "presetStrength", "mix", "loras", "engine", "signature"];
+const KEEP: (keyof GenerationRequest)[] = ["feature", "presetId", "modelId", "op", "prompt", "negativePrompt", "inputs", "params", "presetOptions", "presetStrength", "mix", "loras", "engine", "signature", "voiceFirst"];
 
 function stepRequest(req: GenerationRequest): Record<string, unknown> {
   const out = Object.fromEntries(KEEP.flatMap((k) => (req[k] === undefined ? [] : [[k, JSON.parse(JSON.stringify(req[k]))]]))) as Record<string, unknown> & GenerationRequest;

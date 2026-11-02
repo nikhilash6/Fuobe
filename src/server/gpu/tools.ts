@@ -3,6 +3,8 @@ import { FLY_MODELS } from "@/lib/catalog/fly-around";
 import { DUB_STEP_MODELS } from "@/lib/av/dub";
 import { HI3D_MODEL } from "@/lib/av/hi3d";
 import { SPLIT_MODEL } from "@/lib/av/split";
+import { BED_MUX_MODEL, VOICE_FIRST_MODELS } from "@/lib/av/voice-first";
+import { BURN_MODELS } from "@/lib/av/captions";
 import { CLEAN_DIALOGUE_PRESET, OPEN_MODEL as CLEAN_DIALOGUE_MODEL, OPEN_MUX_MODEL as CLEAN_DIALOGUE_MUX } from "@/lib/av/clean-dialogue";
 import { REMOVE_DIALOGUE_MODELS } from "@/lib/av/remove-dialogue";
 import { CLEAN_MODEL } from "@/lib/av/clean-voice";
@@ -200,6 +202,18 @@ export const STUDIO_ROWS: StudioRowDef[] = [
   { href: "/extend", label: "Extend", group: "Video", config: S.EXTEND_STUDIO },
   { href: "/reframe", label: "Reframe", group: "Video", config: S.REFRAME_STUDIO },
   { href: "/lipsync", label: "Lipsync", group: "Video", config: S.LIPSYNC_STUDIO },
+  // Clean the voice first (DBS D6) on a lip re-sync of a clip: the voice cleaned, the re-sync on it, and the clip's music
+  // and effects put back by the stream-copy mux (its own DBS pass, the same graph).
+  {
+    href: "/lipsync?model=oss-infinitetalk-v2v",
+    label: "Lip re-sync, voice cleaned",
+    group: "Video",
+    steps: [
+      { modelId: VOICE_FIRST_MODELS.open, op: "separate-audio" },
+      { modelId: "oss-infinitetalk-v2v", op: "lipsync" },
+      { modelId: BED_MUX_MODEL, op: "mux" },
+    ],
+  },
   { href: "/character-swap", label: "Character swap", group: "Video", workflows: [STUDIO_WORKFLOWS.mask, STUDIO_WORKFLOWS.segment] },
   // Cinema's 3D scene films a still along a keyframed camera path (N7-5).
   { href: "/cinema", label: "Fly path", group: "Video", steps: [{ modelId: PATH_MODELS.open, op: "camera-path" }] },
@@ -325,6 +339,17 @@ export const STUDIO_ROWS: StudioRowDef[] = [
     steps: [
       { modelId: REMOVE_DIALOGUE_MODELS.split, op: "separate-audio" },
       { modelId: REMOVE_DIALOGUE_MODELS.mux, op: "mux" },
+    ],
+  },
+  // Captions on your GPU: the voice cleaned first (on by default for the clip, DBS D6), its words, and the burn-in.
+  {
+    href: "/video-tools/captions",
+    label: "Captions",
+    group: "Video tools",
+    steps: [
+      { modelId: VOICE_FIRST_MODELS.open, op: "separate-audio" },
+      { modelId: "oss-qwen3-asr", op: "transcribe" },
+      { modelId: BURN_MODELS.open, op: "captions" },
     ],
   },
   // Remove a person (o/person-remover-plus): the part fitted to 24 fps, its first frame cleaned by Qwen-Image 2.1, the green
