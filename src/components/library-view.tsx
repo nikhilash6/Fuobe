@@ -2,7 +2,7 @@
 
 import { ArchiveRestore, BookmarkPlus, CheckCheck, CheckSquare, ChevronUp, CircleDot, Download, FolderInput, Globe, Heart, Loader2, MoreHorizontal, Pin, PinOff, Search, Trash2, X } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AssetCard, cardRatio, type CardApi } from "@/components/library/asset-card";
@@ -224,8 +224,12 @@ function Cards({ entries, prefs, expanded, render, panel }: { entries: LibraryEn
 }
 
 function Inner() {
-  const sp = useSearchParams();
-  const router = useRouter();
+  const routed = useSearchParams();
+  // The params just set by go(): the History API hands them to useSearchParams in a transition, a frame later; shown at
+  // once until the router has them.
+  const [set, setSet] = useState<{ from: string; to: URLSearchParams } | null>(null);
+  if (set && set.from !== routed.toString()) setSet(null);
+  const sp = set && set.from === routed.toString() ? set.to : routed;
   const pathname = usePathname();
   const tab = TABS.find((t) => t.id === sp.get("tab")) ?? TABS[0];
   const folderId = sp.get("folder") ?? undefined;
@@ -411,7 +415,10 @@ function Inner() {
       else next.delete(k);
     }
     const s = next.toString();
-    router.replace(s ? `${pathname}?${s}` : pathname, { scroll: false });
+    setSet({ from: routed.toString(), to: next });
+    // The page reads no search params on the server: the native History API updates the address with no request (a
+    // router.replace waited a round trip before the tab moved), and useSearchParams follows.
+    window.history.replaceState(null, "", s ? `${pathname}?${s}` : pathname);
     window.scrollTo({ top: 0 });
   };
 

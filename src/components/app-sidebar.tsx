@@ -90,7 +90,7 @@ function Items({ group, pathname, search }: { group: NavGroupDef; pathname: stri
             group.compact && "h-7 gap-1.5 px-2 text-[12px]",
           )}
         >
-          <IntentLink href={item.href} eager={item.eager} aria-current={active ? "page" : undefined} title={group.compact && item.short ? item.label : undefined}>
+          <IntentLink href={item.href} eager={item.eager} settled aria-current={active ? "page" : undefined} title={group.compact && item.short ? item.label : undefined}>
             <item.icon />
             <NavLabel>{group.compact ? (item.short ?? item.label) : item.label}</NavLabel>
           </IntentLink>
