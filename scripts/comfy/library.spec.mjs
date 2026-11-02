@@ -293,6 +293,17 @@ export const KNOWN_MODELS = {
   'minimax_h3_video_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Kijai/MiniMax-H3-experimental/resolve/f5c3b1d5a63e008a691fca1b6096fd57a5307536/minimax_h3_video_vae_int8_convrot.safetensors' },
   'minimax_h3_turbo_v4_step600_ema.safetensors': { folder: 'loras', url: 'https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/43a74557ac3f6539db8e0f2a959d03feb7a81480/minimax_h3_turbo_v4_step600_ema.safetensors' },
   'minimax_h3_flf2v_lora_v1.safetensors': { folder: 'loras', url: 'https://huggingface.co/pablodawson/MiniMax-H3-360-Orbit-LoRA/resolve/5ddbc2dbbe95edbbdaf5017c3e934b1d01791697/minimax_h3_flf2v_lora_v1.safetensors' },
+  // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu, research #10 §6.4): FastVideo's FastH3 V2 (8-step DMD2, int8 22.1 GB or
+  // NVFP4 13.6 GB for Blackwell) and FastH3 Trim (42 of 50 blocks, experimental; NVFP4 11.9 / fp8 19.7 / int8 ConvRot 18.9 GB),
+  // each at the revision read on 2026-11-02. MiniMax H3 Community License (the repos' cards).
+  'fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Comfy/resolve/ec1e3aa374a91c57b0b94a1623b7e657c0498cf2/diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors' },
+  'fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-8-Step-V2-NVFP4-Comfy/resolve/994a40beb8c8f15739e4f0fad96aec101bb7123c/diffusion_models/fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors' },
+  'fastvideo_fasth3_trim_8step_int8_convrot.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_int8_convrot.safetensors' },
+  'fastvideo_fasth3_trim_8step_fp8.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_fp8.safetensors' },
+  'fastvideo_fasth3_trim_8step_nvfp4.safetensors': { folder: 'diffusion_models', url: 'https://huggingface.co/FastVideo/FastVideo-FastH3-Trim-Comfy/resolve/f66c13dc17391dd4da99242a407918b92bf7d5fc/diffusion_models/fastvideo_fasth3_trim_8step_nvfp4.safetensors' },
+  // Fast decode: Sol-H3-VAE (Efficient-Large-Model, distilled from the H3 VAE decoder; weights under the MiniMax H3 licence per
+  // its card, code Apache-2.0) as Comfy-Org repacked it for the core loader (ComfyUI #17411, master from 2026-10-28).
+  'minimax_h3_sol_vae_int8_convrot.safetensors': { folder: 'vae', url: 'https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/912b6e38b2092ec4d2e86d24183e0d59ea059d48/vae/minimax_h3_sol_vae_int8_convrot.safetensors' },
   'depth_anything_3_mono_large.safetensors': { folder: 'geometry_estimation', url: 'https://huggingface.co/Comfy-Org/Depth-Anything-3/resolve/main/geometry_estimation/depth_anything_3_mono_large.safetensors' },
   // comfyui-oss-3 additions (docs/research/comfyui-oss-3.json, sizes from the Hugging Face tree API)
   // MOSS-Image (research #7 §4.4): Comfy-Org's int8 / w4a8 set (the Comfy template's) at a pinned commit, and Spectrallic's SFT with the
@@ -456,7 +467,19 @@ const H3_NOTES_LAYOUT =
 const H3_NOTES_FILES =
   'Files: fl2va pruned int8 (20.97 GB), the Qwen3-VL 32B NVFP4 text encoder (15.69 GB; native on compute capability 10+), the int8 video VAE (3.17 GB) ' +
   'and the audio VAE (0.61 GB).';
-const H3_NOTES_COMMON = `${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FILES}`;
+// Options → Decoder "Fast decode" (nm10-h3-any-gpu): Sol-H3-VAE in the decode loader (136, binding vae); the stock VAE
+// still encodes the frames. Needs ComfyUI master from 2026-10-28 (#17411); not loadable by an older core.
+const H3_SOL_VAE = 'minimax_h3_sol_vae_int8_convrot.safetensors';
+const H3_NOTES_SOL =
+  'Fast decode (vae = minimax_h3_sol_vae_int8_convrot, 1.99 GB, optional): Sol-H3-VAE, a 24-layer whole-clip decoder distilled from the H3 VAE ' +
+  '(its card: 12.5 s -> 5.0 s for a 5 s 768p clip on an RTX 5090, 45.4 dB PSNR against the stock decoder); the core VAELoader reads it from ComfyUI master ' +
+  '0df1646a (2026-10-28, #17411) on, and its memory grows with the clip (about 24 GiB at 720p for 5 s, the card).';
+// The FastH3 tiers (nm10-h3-any-gpu): FastVideo's distills carry the MiniMax H3 Community License (their cards).
+const H3_LICENSE_FASTH3 = `${H3_LICENSE} · FastH3 V2 and FastH3 Trim (FastVideo): MiniMax H3 Community License`;
+const H3_NOTES_FASTH3_FILES =
+  'Files: the FastH3 diffusion file, the Qwen3-VL 32B NVFP4-AWQ text encoder (15.69 GB; every FastH3 template pairs it with every diffusion file; offloaded ' +
+  'after encoding), the int8 video VAE (3.17 GB) and the audio VAE (0.61 GB).';
+const H3_NOTES_COMMON = `${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FILES} ${H3_NOTES_SOL}`;
 const H3_NOTES_TIME = 'With the turbo v4 LoRA (0.78 GB). Tested on an RTX 5090 (32 GB): about 2-3 min for a 124-frame clip at 1024x768.';
 
 const WAN_NEG_EN =
@@ -1550,12 +1573,14 @@ export const SPEC = [
       prompt: [b('131', 'prompt')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], loraStrength: [b('134', 'strength')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8, loraStrength: 1 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
+    optionalModels: [H3_SOL_VAE],
     license: H3_LICENSE_FAST,
     notes:
       'Text to video with sound: MiniMaxH3ImageToVideo with no frames given, the fl2va pruned int8 model with the turbo v4 LoRA at 1.0 (MiniMaxH3TurboLoRA, ' +
@@ -1572,12 +1597,14 @@ export const SPEC = [
       prompt: [b('131', 'prompt')], image: [b('138', 'image')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], loraStrength: [b('134', 'strength')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8, loraStrength: 1 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
+    optionalModels: [H3_SOL_VAE],
     license: H3_LICENSE_FAST,
     notes:
       'Image to video with sound: image = the first frame (MiniMaxH3ImageToVideo first_frame), the fl2va pruned int8 model with the turbo v4 LoRA at 1.0, ' +
@@ -1593,12 +1620,14 @@ export const SPEC = [
       prompt: [b('131', 'prompt')], image: [b('138', 'image')], endImage: [b('140', 'image')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], loraStrength: [b('134', 'strength')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8, loraStrength: 1 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
+    optionalModels: [H3_SOL_VAE],
     license: H3_LICENSE_FAST,
     notes:
       'Start and end frame to video with sound: image = the first frame, endImage = the last (cover-cropped to the canvas), the fl2va pruned int8 model with ' +
@@ -1613,12 +1642,14 @@ export const SPEC = [
       prompt: [b('131', 'prompt')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 20 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
+    optionalModels: [H3_SOL_VAE],
     license: H3_LICENSE,
     notes:
       'Text to video with sound, the sharper setting: the fl2va pruned int8 model without the turbo LoRA, BasicScheduler simple 20 steps, KSamplerSelect res_multistep, ' +
@@ -1633,12 +1664,14 @@ export const SPEC = [
       prompt: [b('131', 'prompt')], image: [b('138', 'image')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 20 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
+    optionalModels: [H3_SOL_VAE],
     license: H3_LICENSE,
     notes:
       'Image to video with sound, the sharper setting: image = the first frame, the fl2va pruned int8 model without the turbo LoRA, 20 steps res_multistep, CFG 1; ' +
@@ -1653,12 +1686,14 @@ export const SPEC = [
       prompt: [b('131', 'prompt')], image: [b('138', 'image')], endImage: [b('140', 'image')],
       width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
       seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')],
+      vae: [b('136', 'vae_name')],
       filenamePrefix: [b('174', 'filename_prefix')],
     },
     outputs: [{ node: '174', kind: 'video' }],
     defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 20 },
     limits: { maxFrames: 362, dimensionMultiple: 32 },
     vramGb: 32,
+    optionalModels: [H3_SOL_VAE],
     license: H3_LICENSE,
     notes:
       'Start and end frame to video with sound, the sharper setting: image = the first frame, endImage = the last, the fl2va pruned int8 model without the turbo LoRA, ' +
@@ -1686,6 +1721,68 @@ export const SPEC = [
       "KSamplerSelect res_multistep, CFG 1; core nodes only. 73 frames (3.04 s) is the LoRA's training length. The prompt reads best in the LoRA's own caption style: " +
       'one frozen instant, the camera in one continuous 360-degree orbit, everything holding its place, camera parallax the only movement. The LoRA was trained ' +
       `without sound; the graph still decodes H3's audio. ${H3_NOTES_FIRST_FRAME} ${H3_NOTES_SIZE} ${H3_NOTES_FILES} With the Orbit LoRA (0.16 GB).`,
+  },
+  // ---- MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu, research #10 §6.4): Comfy-Org's "FastVideo FastH3" templates
+  // (workflow_templates video_fastvideo_fasth3_t2v / _i2v, the "First Last Frame to Video (FastVideo FastH3)" subgraph) as
+  // API graphs. src/lib/gpu/h3-tier.ts picks the tier and binds `unet` to the card's file (NVFP4 on Blackwell, else int8, or
+  // Trim's fp8 on a PyTorch without CUDA 13). Trim has text to video only: FastVideo's Trim cards name eight-step text-to-video.
+  ...[
+    ['minimax-h3-fast-t2v', 't2v', 'Text to Video', false, false],
+    ['minimax-h3-fast-i2v', 'i2v', 'Image to Video', true, false],
+    ['minimax-h3-fast-flf2v', 'flf2v', 'Start + End Frame to Video', true, true],
+  ].map(([id, capability, what, first, last]) => ({
+    id,
+    title: `MiniMax H3 ${what} + Audio on a 16 GB GPU (FastH3 V2, 8 steps)`,
+    capability,
+    handBuilt: `hand-built/${id}.json`,
+    bindings: {
+      prompt: [b('131', 'prompt')],
+      ...(first && { image: [b('138', 'image')] }),
+      ...(last && { endImage: [b('140', 'image')] }),
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], unet: [b('127', 'unet_name')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 16,
+    optionalModels: ['fastvideo_fasth3_8step_v2_pruned_nvfp4.safetensors'],
+    license: H3_LICENSE_FASTH3,
+    notes:
+      `${what} with sound on FastVideo's FastH3 8-Step V2 (DMD2, step 1300; FastVideo/FastVideo-FastH3-Comfy @ ec1e3aa3), as Comfy-Org's FastH3 template: ` +
+      'MiniMaxH3ImageToVideo' + (first ? (last ? ' with first_frame and last_frame' : ' with first_frame') : ' with no frames') + ', UNETLoader (unet: the pruned int8 ConvRot file, ' +
+      '22.13 GB, or the NVFP4 file, 13.61 GB, for Blackwell) -> MiniMaxH3SigmaShift 10 / 3 -> ModelAttentionBackend "comfy kitchen attention" (INT8 attention, ' +
+      'listed on NVIDIA and AMD GPUs only, so a CPU ComfyUI refuses the value) -> BlockSparseAttention vsa 10% from 20% of the steps, BasicScheduler simple 8 steps, ' +
+      'KSamplerSelect res_multistep, CFG 1; core nodes only (ComfyUI 0.36 or later). FastVideo: fits 16 GB, not 12 GB, in its tests; the int8 file is partly ' +
+      'offloaded under 24 GB. ' + (first ? 'FastVideo\'s card says FL2VA was not distilled; Comfy-Org\'s image-to-video template runs it, so a start frame is followed less closely than on minimax-h3-i2v. ' + H3_NOTES_FIRST_FRAME + ' ' : '') +
+      `${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FASTH3_FILES}`,
+  })),
+  {
+    id: 'minimax-h3-trim-t2v',
+    title: 'MiniMax H3 Text to Video + Audio on an 8-12 GB GPU (FastH3 Trim, 8 steps, experimental)',
+    capability: 't2v',
+    handBuilt: 'hand-built/minimax-h3-trim-t2v.json',
+    bindings: {
+      prompt: [b('131', 'prompt')],
+      width: [b('131', 'width')], height: [b('131', 'height')], frames: [b('131', 'length')],
+      seed: [b('129', 'noise_seed')], steps: [b('124', 'steps')], unet: [b('127', 'unet_name')],
+      filenamePrefix: [b('174', 'filename_prefix')],
+    },
+    outputs: [{ node: '174', kind: 'video' }],
+    defaults: { width: 1344, height: 768, frames: 124, fps: 24, steps: 8 },
+    limits: { maxFrames: 362, dimensionMultiple: 32 },
+    vramGb: 12,
+    optionalModels: ['fastvideo_fasth3_trim_8step_fp8.safetensors', 'fastvideo_fasth3_trim_8step_nvfp4.safetensors'],
+    license: H3_LICENSE_FASTH3,
+    notes:
+      "Text to video with sound on FastVideo's FastH3 Trim (FastVideo/FastVideo-FastH3-Trim-Comfy @ f66c13dc, 2026-10-06): 42 of H3's 50 blocks with a shared " +
+      'rank-16 timestep basis, 8-step DMD2 (checkpoint 300), experimental and below FastH3 V2 in quality. The FastH3 template\'s graph with unet = the Trim file: ' +
+      'int8 ConvRot (18.92 GB, the default, any recent NVIDIA card), fp8 (19.68 GB, Ada and newer, for a PyTorch without CUDA 13) or NVFP4 (11.89 GB, Blackwell); ' +
+      'MiniMaxH3SigmaShift 10 / 3, Comfy Kitchen attention, BlockSparseAttention vsa 10%, BasicScheduler simple 8 steps, res_multistep, CFG 1. vramGb 12 is the ' +
+      'int8 / fp8 file partly offloaded; the 8 GB figure is FastVideo\'s test with the NVFP4 file and memory capped at 8 GB on an RTX 4090 (82 s for 5 s at 480p). ' +
+      'FastVideo\'s timings (5 s with sound): RTX 5090 13.4 s at 480p, 35.4 s at 768p; RTX 4090 43.9 s / 132.8 s; none measured here. Text to video only: the Trim ' +
+      `cards name eight-step text-to-video and no frame conditioning. ${H3_NOTES_CANVAS} ${H3_NOTES_LAYOUT} ${H3_NOTES_FASTH3_FILES}`,
   },
   {
     id: 'infinitetalk-native',

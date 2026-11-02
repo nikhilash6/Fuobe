@@ -100,6 +100,11 @@ describe("round-4 ComfyUI workflows", () => {
       "minimax-h3-i2v-hq",
       "minimax-h3-flf2v-hq",
       "minimax-h3-orbit",
+      // MiniMax H3 on 8-31 GB cards (nm10-h3-any-gpu): FastH3 V2 and Trim, unvalidated like the H3 graphs until a GPU run.
+      "minimax-h3-fast-t2v",
+      "minimax-h3-fast-i2v",
+      "minimax-h3-fast-flf2v",
+      "minimax-h3-trim-t2v",
       "qwen-image-21-t2i",
       "qwen-image-21-edit",
       "qwen-image-21-turbo-edit",
